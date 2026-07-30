@@ -34,8 +34,8 @@ uv run --with marimo-studio \
 view is available at `/`. A view named `executive` is available at
 `/executive/`.
 
-Each browser receives Marimo's regular run-mode session. Controls, widgets,
-downloads, and reactive updates continue to use the notebook's Python kernel.
+Each browser receives an isolated Marimo run-mode session. Controls, widgets,
+downloads, and reactive updates continue to use that session's Python kernel.
 
 ## Protect a public endpoint
 
@@ -51,8 +51,8 @@ uv run --with marimo-studio \
   --token-password-file /run/secrets/marimo-token
 ```
 
-The file must contain the token used to open the app. Run
-`uv run marimo run --help` for CORS, session lifetime, and other server
+The file must contain the token used to open the app. Run `marimo run --help`
+in the deployment environment for CORS, session lifetime, and other server
 settings.
 
 ## Use a locked project environment

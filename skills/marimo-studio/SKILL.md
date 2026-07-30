@@ -12,7 +12,7 @@ description: >-
 
 Keep the notebook as the source of calculations, reactive state, controls, and
 widgets. Put authored HTML, CSS, and static files under
-`__marimo__/studio/<notebook>/<view>/`.
+`__marimo__/studio/<notebook-stem>/<view>/`.
 
 Use the installed `marimo-studio` executable. Prefix commands with `uvx` when
 the executable is unavailable.
@@ -246,7 +246,9 @@ refresh in the preview. View switching keeps the preview runtime, WebSocket,
 kernel state, and widget models mounted.
 
 Pass `--host`, `--port`, `--base-url`, and `--headless` before `--`. Trailing
-arguments go to `marimo edit`.
+arguments go to `marimo edit`. The direct launcher prepares the notebook
+environment, so remove `--sandbox` and `--no-sandbox` from trailing arguments.
+Use a native `marimo edit` command when a proxy URL is required.
 
 The Studio preview iframe has `[data-preview-frame]`. Read its readiness:
 

@@ -25,7 +25,7 @@ uvx marimo-studio analysis.py
 The command opens the native Marimo editor beside a blank `dashboard` preview.
 Keep this browser window open while you edit the view.
 
-On the first run, the command adds Studio setup to the notebook's PEP 723
+On the first run, the command configures Studio in the notebook's PEP 723
 metadata and creates:
 
 ```text
@@ -38,10 +38,8 @@ __marimo__/
         app.css
 ```
 
-The metadata records `marimo-studio` as an unversioned dependency and sets the
-default view. Notebook code outside that block stays byte-identical. Unrelated
-dependencies, uv sources, indexes, and Marimo settings remain in
-place.
+The metadata records `marimo-studio` as an unversioned dependency and selects
+the default view. Notebook code outside the PEP 723 block stays byte-identical.
 
 ## Choose an output
 
@@ -51,14 +49,7 @@ List cells that display a result:
 uvx marimo-studio inspect analysis.py --display
 ```
 
-A named cell appears with its name in the last column. For example:
-
-```text
-  3  bkHC   output  line 66   summary
-     defines: summary_view
-```
-
-Use the cell name directly in a view. When the row ends with `cell 3`, give
+Use a native cell name directly in a view. When a row ends with `cell 3`, give
 that anonymous cell a stable alias:
 
 ```console
@@ -88,23 +79,6 @@ Open `__marimo__/studio/analysis/dashboard/index.html`. Replace its empty
 
 Save the file. The preview refreshes around the current Python session and
 renders the notebook output under **Summary**.
-
-Add page-level styling in `app.css`:
-
-```css
-body {
-  margin: 0;
-  color: #202124;
-  background: #f7f7f5;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-}
-
-#app-shell {
-  width: min(72rem, calc(100% - 2rem));
-  margin: 0 auto;
-  padding: 4rem 0;
-}
-```
 
 Change a notebook control or rerun the cell that feeds `summary`. The mounted
 output follows the notebook's reactive update.
@@ -137,9 +111,8 @@ uvx marimo-studio inspect analysis.py --display --format json
 uvx marimo-studio check analysis.py --runtime --format json
 ```
 
-The notebook remains the source of Python behavior. The agent can focus on
-page structure, copy, responsive layout, and which existing outputs belong in
-the view.
+The agent can focus on page structure, wording, responsive layout, and which
+existing outputs belong in the view.
 
 ## Add a view for another audience
 
@@ -151,9 +124,9 @@ uvx marimo-studio analysis.py --view executive
 ```
 
 The new view lives at `__marimo__/studio/analysis/executive/` and can reuse the
-`summary` alias. Keep the view directories in source control with the
-notebook. See [CLI and configuration](reference.md#source-control) when the
-repository ignores `__marimo__`.
+`summary` alias. Keep view directories in source control with the notebook.
+See [Source control](reference.md#source-control) when the repository ignores
+`__marimo__`.
 
 Continue with [Design a view](build-pages.md) to combine complete cells,
 individual Python values, loading space, and on-demand detail.

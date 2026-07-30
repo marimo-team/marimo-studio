@@ -13,8 +13,8 @@ wording, navigation, and visual design in the view.
 | A large detail region that should appear on demand | An HTMX cell route |
 | New formatting or derived presentation data | A small notebook cell |
 
-Start with existing notebook outputs. Add presentation-specific Python when
-the page needs a value the notebook does not yet expose cleanly.
+Start with existing notebook outputs. Add a small presentation value cell when
+the notebook does not expose the required value.
 
 ## Place a complete notebook output
 
@@ -145,8 +145,7 @@ The response inserts `<marimo-cell name="detail_table">` into `#details`. The
 cell connects to the current Marimo session, so the page keeps its controls,
 widget models, and reactive state.
 
-Use this pattern for secondary tables, diagnostics, and other regions that do
-not need to occupy the initial page.
+Use this pattern for secondary tables, diagnostics, and other deferred regions.
 
 ## Keep the layout steady while cells load
 

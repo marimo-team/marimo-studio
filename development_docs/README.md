@@ -1,6 +1,6 @@
 # Development docs
 
-- [Architecture](architecture.md) covers ownership, activation, sessions, and
+- [Architecture](architecture.md) covers command, server, session, and
   compatibility boundaries.
 - [Frontend](frontend.md) covers browser state, source layout, and generated
   assets.

@@ -45,7 +45,7 @@ export default defineConfig({
     outline: [2, 3],
     search: { provider: "local" },
     sidebar: [
-      { text: "Why Studio", link: "/" },
+      { text: "Build a custom view", link: "/" },
       {
         text: "Build and share",
         items: [

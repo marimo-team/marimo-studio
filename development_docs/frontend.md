@@ -23,8 +23,8 @@ lives in `frontend/`. `make build` writes package assets to
 value hosts project current store state into `#app-shell`.
 
 HTMX observes the visible document. A development refresh parses the selected
-view document and swaps its shell through HTMX. Stable cell-host IDs preserve
-matching output DOM. New hosts attach to the current runtime store.
+view document and swaps its shell through HTMX. Generated cell-host IDs
+preserve matching output DOM. New hosts attach to the current runtime store.
 
 View switching commits the support URL, runtime configuration, title, styles,
 and shell as one transition.
@@ -36,7 +36,8 @@ make install
 make build
 ```
 
-Set `MARIMO_REPO` to build against a local Marimo checkout:
+Set `MARIMO_REPO` to build against a local Marimo checkout whose version
+matches `uv.lock`:
 
 ```console
 MARIMO_REPO=/path/to/marimo make build
@@ -49,7 +50,6 @@ After a Marimo upgrade:
 
 ```console
 make check
-make build
 make package
 ```
 

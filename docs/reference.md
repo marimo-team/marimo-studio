@@ -1,18 +1,19 @@
 # CLI and configuration
 
-Use this page to look up Studio commands, notebook configuration, HTML
-elements, browser state, and server routes. Start with
-[Create your first view](getting-started.md) for the shortest working path.
+`marimo-studio` configures views, inspects notebook cells, records aliases, and
+validates projections. This reference also defines notebook configuration,
+view elements, browser state, and routes. See
+[Create your first view](getting-started.md) for a complete first run.
 
 ## Command line
 
 ```text
-marimo-studio [NOTEBOOK] [OPTIONS]
-marimo-studio inspect [NOTEBOOK] [OPTIONS]
-marimo-studio bind ALIAS [NOTEBOOK] --cell INDEX [OPTIONS]
-marimo-studio view add NAME [NOTEBOOK] [OPTIONS]
-marimo-studio view list [NOTEBOOK] [OPTIONS]
-marimo-studio check [NOTEBOOK] [OPTIONS]
+marimo-studio [NOTEBOOK] [OPTIONS] [-- MARIMO_ARGS]
+marimo-studio inspect [OPTIONS] [NOTEBOOK]
+marimo-studio bind [OPTIONS] ALIAS [NOTEBOOK]
+marimo-studio view add [OPTIONS] NAME [NOTEBOOK]
+marimo-studio view list [OPTIONS] [NOTEBOOK]
+marimo-studio check [OPTIONS] [NOTEBOOK]
 ```
 
 Pass a notebook path when creating the first view. After setup, commands can
@@ -155,6 +156,8 @@ Every event contains `schema`, `event`, `command`, `severity`, `code`, and
 | `7` | The notebook environment cannot be prepared |
 | `130` | The command was interrupted |
 
+Direct launch returns the exit status from the `marimo edit` process.
+
 ## Notebook configuration
 
 Direct launch and `view add` store the default configuration in the notebook's
@@ -169,7 +172,6 @@ PEP 723 block:
 #
 # [tool.marimo-studio]
 # default = "dashboard"
-# preserve_session = false
 #
 # [tool.marimo-studio.cells]
 # summary = { ref = "cell:v3:<semantic-sha256>:<layout-sha256>:0" }
@@ -183,9 +185,9 @@ PEP 723 block:
 | `cells` | Table | Empty | Stores aliases shared by every view |
 
 The setup records `marimo-studio` without a version constraint. `uv` resolves
-the current release, while a source checkout supplies its local editable
-package. Your unrelated dependencies, uv sources, indexes, and tool settings
-stay in place.
+the current release. When the Studio CLI runs from a source checkout, it uses
+that checkout as an editable package. Existing dependencies, indexes, and tool
+settings stay in place.
 
 Views for `analysis.py` live at:
 

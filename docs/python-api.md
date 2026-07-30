@@ -1,14 +1,14 @@
 # Python API
 
-Use the Python API when a tool needs notebook structure or an existing Python
-server needs a configured Studio app.
+The Python API exposes static notebook inspection and a configured Marimo ASGI
+application.
 
 | Job | API |
 | --- | --- |
 | Discover cells, names, definitions, and dependencies | `inspect_notebook` |
 | Build one run-mode ASGI application | `create_asgi_app` |
 
-For a regular deployment, run the notebook through Marimo:
+For command-line deployment, run the notebook through Marimo:
 
 ```console
 uv run --with marimo-studio \

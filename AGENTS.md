@@ -1,7 +1,8 @@
 # AGENTS.md
 
-Marimo Studio presents custom views inside Marimo's server. Preserve Marimo as
-the owner of notebook execution, sessions, authentication, and native routes.
+Keep Marimo as the runtime server. Marimo Studio adds custom view documents,
+projection routes, and an editor workspace while Marimo owns notebook
+execution, sessions, authentication, and native APIs.
 
 ## Commands
 
@@ -18,8 +19,9 @@ the owner of notebook execution, sessions, authentication, and native routes.
 | Serve docs | `make docs-serve` |
 | Build distributions | `make package` |
 
-Run the narrow gate while working. Run `make check`, `make build`, and browser
-acceptance when a change crosses the Python and TypeScript boundary.
+Run focused checks while working and `make check` before handoff. Run
+`make build` and browser acceptance when a change crosses the Python and
+TypeScript boundary.
 
 ## Ownership
 
@@ -35,7 +37,7 @@ acceptance when a change crosses the Python and TypeScript boundary.
 | `development_docs/` | Architecture, frontend maintenance, releases |
 
 Authored view source lives at
-`__marimo__/studio/<notebook>/<view>/` beside its notebook.
+`__marimo__/studio/<notebook-stem>/<view>/` beside its notebook.
 
 ## Invariants
 
@@ -54,7 +56,8 @@ Authored view source lives at
 - Every projection host lives inside the single `#app-shell`.
 - Template refresh keeps the last valid shell when the replacement fails.
 - Support URLs honor both the parent ASGI mount and Marimo `base_url`.
-- Requests outside `/_marimo-studio/` pass through to Marimo.
+- Studio owns `/studio/`, `/{view}/`, and `/_marimo-studio/`. Native Marimo
+  routes pass through unchanged.
 
 ## Compatibility
 
