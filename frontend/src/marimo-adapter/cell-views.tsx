@@ -33,11 +33,18 @@ import {
   setCellHostState,
   subscribeCellHosts,
 } from "../cell-host";
+import {
+  cellBindingKey,
+  type CellIndex,
+  indexCells,
+  resolveCellBinding,
+} from "../cell-bindings";
 import { setRuntimeConnectionState } from "../readiness";
 import {
-  getRuntimeCells,
+  type CellBindingConfig,
+  getRuntimeCellBindings,
   getRuntimeConfig,
-  subscribeRuntimeCells,
+  subscribeRuntimeCellBindings,
   subscribeRuntimeConfig,
   type ValueBindingConfig,
 } from "../runtime-config";
@@ -219,6 +226,7 @@ const RuntimeValueCell = ({
   runtimeReady: boolean;
   sessionId: string;
 }) => {
+  const cellId = cell?.id ?? null;
   const version = cell?.lastRunStartTimestamp ?? null;
   const status = cell?.status ?? "missing";
   const errored = cell?.errored ?? false;
@@ -305,6 +313,7 @@ const RuntimeValueCell = ({
       controller.abort();
     };
   }, [
+    cellId,
     connectionState,
     phase,
     sessionId,
@@ -317,35 +326,43 @@ const RuntimeValueCell = ({
 
 const RuntimeValues = ({
   bindings,
-  cellsById,
+  cells,
   connectionState,
   runtimeReady,
   sessionId,
 }: {
   bindings: Record<string, ValueBindingConfig>;
-  cellsById: Map<string, RuntimeCell>;
+  cells: CellIndex<RuntimeCell>;
   connectionState: WebSocketState;
   runtimeReady: boolean;
   sessionId: string;
 }) => {
   const groups = useMemo(() => {
-    const byCell = new Map<string, Set<string>>();
+    const byCell = new Map<
+      string,
+      { binding: CellBindingConfig; selectors: Set<string> }
+    >();
     Object.entries(bindings).forEach(([selector, binding]) => {
-      const selectors = byCell.get(binding.cellId) ?? new Set<string>();
-      selectors.add(selector);
-      byCell.set(binding.cellId, selectors);
+      const key = cellBindingKey(binding.cell);
+      const group = byCell.get(key) ?? {
+        binding: binding.cell,
+        selectors: new Set<string>(),
+      };
+      group.selectors.add(selector);
+      byCell.set(key, group);
     });
-    return Array.from(byCell, ([cellId, selectors]) => ({
-      cellId,
-      selectors: Array.from(selectors).sort(),
+    return Array.from(byCell, ([key, group]) => ({
+      key,
+      binding: group.binding,
+      selectors: Array.from(group.selectors).sort(),
     }));
   }, [bindings]);
 
-  return groups.map(({ cellId, selectors }) => (
+  return groups.map(({ key, binding, selectors }) => (
     <RuntimeValueCell
-      key={cellId}
+      key={key}
       selectors={selectors}
-      cell={cellsById.get(cellId)}
+      cell={resolveCellBinding(binding, cells)}
       connectionState={connectionState}
       runtimeReady={runtimeReady}
       sessionId={sessionId}
@@ -380,20 +397,20 @@ const DuplicateCellView = ({ host }: { host: MarimoCellElement }) => {
 };
 
 const RuntimeCellPortals = ({
-  cellsById,
+  cells,
   hosts,
   runtimeReady,
   onSubmitStdin,
 }: {
-  cellsById: Map<string, RuntimeCell>;
+  cells: CellIndex<RuntimeCell>;
   hosts: readonly MarimoCellElement[];
   runtimeReady: boolean;
   onSubmitStdin: CellViewProps["onSubmitStdin"];
 }) => {
-  const runtimeCells = useSyncExternalStore(
-    subscribeRuntimeCells,
-    getRuntimeCells,
-    getRuntimeCells,
+  const bindings = useSyncExternalStore(
+    subscribeRuntimeCellBindings,
+    getRuntimeCellBindings,
+    getRuntimeCellBindings,
   );
   const primaryHosts = new Map<string, MarimoCellElement>();
   hosts.forEach((host) => {
@@ -408,7 +425,7 @@ const RuntimeCellPortals = ({
         <CellView
           key={getHostId(host)}
           host={host}
-          cell={cellsById.get(runtimeCells[host.cellName])}
+          cell={resolveCellBinding(bindings[host.cellName], cells)}
           runtimeReady={runtimeReady}
           onSubmitStdin={onSubmitStdin}
         />
@@ -455,8 +472,8 @@ export const RuntimeCellViews = ({
     () => flattenTopLevelNotebookCells(notebook),
     [notebook],
   );
-  const cellsById: Map<string, RuntimeCell> = useMemo(
-    () => new Map(cells.map((cell) => [cell.id, cell])),
+  const cellIndex = useMemo(
+    () => indexCells(cells),
     [cells],
   );
   const runtimeReady = connection.state === WebSocketState.OPEN &&
@@ -476,13 +493,13 @@ export const RuntimeCellViews = ({
   return (
     <Fragment>
       <ConfiguredRuntimeValues
-        cellsById={cellsById}
+        cells={cellIndex}
         connectionState={connection.state}
         runtimeReady={runtimeReady}
         sessionId={sessionId}
       />
       <RuntimeCellPortals
-        cellsById={cellsById}
+        cells={cellIndex}
         hosts={hosts}
         runtimeReady={runtimeReady}
         onSubmitStdin={submitStdin}

@@ -8,24 +8,29 @@ import {
 import {
   commitRuntimeConfig,
   fetchRuntimeConfig,
-  getRuntimeCells,
+  fetchRuntimeConfigWithRetry,
+  getRuntimeCellBindings,
+  getRuntimeConfig,
   parseRuntimeConfig,
   type RuntimeConfig,
-  subscribeRuntimeCells,
+  runtimeConfigSessionId,
+  subscribeRuntimeCellBindings,
 } from "../src/runtime-config.ts";
 
 const baseRuntimeConfig = {
-  schema: 1,
+  schema: 2,
   view: "dashboard",
   views: ["dashboard", "executive"],
   fileKey: "/workspace/notebook.py",
   runtimeUrl: "/proxy/app/",
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
-  cells: { plot: "cell-id" },
+  cellBindings: {
+    plot: { kind: "name", value: "plot" },
+  },
   valueBindings: {
     "context.label": {
       variable: "context",
-      cellId: "context-cell-id",
+      cell: { kind: "id", value: "context-cell-id" },
     },
   },
   appConfig: {},
@@ -51,12 +56,12 @@ Deno.test("parseRuntimeConfig accepts the browser contract", () => {
 Deno.test("parseRuntimeConfig rejects malformed server contracts", () => {
   const { preserveSession: _, ...missingPolicy } = baseRuntimeConfig;
   const malformed = [
-    runtimeConfig({ cells: { plot: 42 } }),
+    runtimeConfig({ cellBindings: { plot: { kind: "index", value: "plot" } } }),
     runtimeConfig({
       valueBindings: {
         "context.label": {
           variable: "context",
-          cellId: 42,
+          cell: { kind: "id", value: 42 },
         },
       },
     }),
@@ -99,25 +104,102 @@ Deno.test("fetchRuntimeConfig reports the configuration diagnostic", async () =>
   }
 });
 
+Deno.test("runtime refresh targets the connected Marimo session", async () => {
+  const originalFetch = globalThis.fetch;
+  const browser = globalThis as typeof globalThis & Window;
+  const previousSession = browser.__MARIMO_STUDIO_SESSION_ID__;
+  let sessionHeader: string | null = null;
+  browser.__MARIMO_STUDIO_SESSION_ID__ = "s_abc123";
+  globalThis.fetch = (_input, init) => {
+    sessionHeader = new Headers(init?.headers).get("Marimo-Session-Id");
+    return Promise.resolve(Response.json(baseRuntimeConfig));
+  };
+
+  try {
+    await fetchRuntimeConfig("/_marimo-studio/views/dashboard");
+  } finally {
+    globalThis.fetch = originalFetch;
+    browser.__MARIMO_STUDIO_SESSION_ID__ = previousSession;
+  }
+
+  assertEquals(sessionHeader, "s_abc123");
+});
+
+Deno.test("a resumed document targets its remembered session", () => {
+  assertEquals(
+    runtimeConfigSessionId({
+      href: "https://example.test/?session_id=s_abc123&marimo_studio_resume=1",
+    }),
+    "s_abc123",
+  );
+  assertEquals(
+    runtimeConfigSessionId({
+      href: "https://example.test/?session_id=s_new123",
+    }),
+    undefined,
+  );
+  assertEquals(
+    runtimeConfigSessionId({
+      connected: "s_live12",
+      href: "https://example.test/?session_id=s_abc123&marimo_studio_resume=1",
+    }),
+    "s_live12",
+  );
+});
+
+Deno.test("runtime config retries a transient session mismatch", async () => {
+  const originalFetch = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = () => {
+    attempts += 1;
+    return Promise.resolve(
+      attempts === 1
+        ? Response.json(
+          {
+            error: "runtime-sync-pending",
+            message: "The Marimo session is still connecting.",
+            transient: true,
+          },
+          { status: 409 },
+        )
+        : Response.json(baseRuntimeConfig),
+    );
+  };
+
+  try {
+    await fetchRuntimeConfigWithRetry("/_marimo-studio/views/dashboard");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assertEquals(attempts, 2);
+});
+
 Deno.test("cell subscribers observe alias mapping changes", () => {
   commitRuntimeConfig(baseRuntimeConfig);
-  const initial = getRuntimeCells();
+  const initial = getRuntimeCellBindings();
+  const initialValues = getRuntimeConfig().valueBindings;
   let calls = 0;
-  const unsubscribe = subscribeRuntimeCells(() => calls++);
+  const unsubscribe = subscribeRuntimeCellBindings(() => calls++);
 
   commitRuntimeConfig({
     ...baseRuntimeConfig,
     view: "executive",
     supportUrl: "/proxy/app/_marimo-studio/views/executive",
-    cells: { plot: "cell-id" },
+    cellBindings: {
+      plot: { kind: "name", value: "plot" },
+    },
   });
 
-  assertStrictEquals(getRuntimeCells(), initial);
+  assertStrictEquals(getRuntimeCellBindings(), initial);
+  assertStrictEquals(getRuntimeConfig().valueBindings, initialValues);
   assertEquals(calls, 0);
 
   commitRuntimeConfig({
     ...baseRuntimeConfig,
-    cells: { plot: "next-cell-id" },
+    cellBindings: {
+      plot: { kind: "id", value: "next-cell-id" },
+    },
   });
 
   assertEquals(calls, 1);

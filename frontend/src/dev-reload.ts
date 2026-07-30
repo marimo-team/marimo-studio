@@ -4,11 +4,20 @@ import { prepareCellHosts } from "./cell-host.ts";
 import { notifyPageTheme } from "./page-theme.ts";
 import {
   commitRuntimeConfig,
-  fetchRuntimeConfig,
+  fetchRuntimeConfigWithRetry,
   getRuntimeConfig,
   getSupportUrl,
+  hasRuntimeConfig,
   setSupportUrl,
+  subscribeRuntimeConfig,
 } from "./runtime-config.ts";
+import {
+  BaselineReconciler,
+  type ShellChangeKind,
+  ShellChangeQueue,
+  ShellRefreshState,
+  type ShellTarget,
+} from "./shell-refresh-state.ts";
 
 declare global {
   var __MARIMO_STUDIO_SESSION_ID__: string | undefined;
@@ -197,15 +206,38 @@ export const refreshStylesheets = async (): Promise<void> => {
 let documentUrl = globalThis.location.href;
 let events: EventSource | undefined;
 let activeTransition: AbortController | undefined;
+let activeConfigRefresh: AbortController | undefined;
 let transitionGeneration = 0;
-let pendingChange: "css" | "html" | undefined;
+const shellRefreshState = new ShellRefreshState();
+const shellChangeQueue = new ShellChangeQueue();
+const baselineReconciler = new BaselineReconciler(hasRuntimeConfig());
 
-const reload = (kind: "css" | "html") => {
+const queueChange = (kind: ShellChangeKind) => {
+  shellChangeQueue.push(kind);
+};
+
+const refreshRuntimeConfig = async (): Promise<void> => {
+  activeConfigRefresh?.abort();
+  const controller = new AbortController();
+  activeConfigRefresh = controller;
+  try {
+    commitRuntimeConfig(
+      await fetchRuntimeConfigWithRetry(getSupportUrl(), controller.signal),
+    );
+    clearDiagnostic();
+  } finally {
+    if (activeConfigRefresh === controller) {
+      activeConfigRefresh = undefined;
+    }
+  }
+};
+
+const reload = (kind: ShellChangeKind) => {
   if (activeTransition) {
-    pendingChange = kind === "html" ? "html" : pendingChange ?? "css";
+    queueChange(kind);
     return;
   }
-  if (kind === "css") {
+  if (kind === "css" && !shellRefreshState.pending) {
     void refreshStylesheets().catch((error: unknown) => {
       if (!isAbortError(error)) {
         showDiagnostic(error instanceof Error ? error.message : String(error));
@@ -213,7 +245,22 @@ const reload = (kind: "css" | "html") => {
     });
     return;
   }
-  void refreshShell()
+  if (kind === "runtime" && !shellRefreshState.pending) {
+    void refreshRuntimeConfig().catch((error: unknown) => {
+      if (!isAbortError(error)) {
+        showDiagnostic(error instanceof Error ? error.message : String(error));
+      }
+    });
+    return;
+  }
+  const target = shellRefreshState.targetForChange(kind, {
+    documentUrl,
+    supportUrl: getSupportUrl(),
+  });
+  if (!target) {
+    return;
+  }
+  void refreshShell(target.documentUrl, target.supportUrl)
     .then(() => notifyReady(getRuntimeConfig().view))
     .catch((error: unknown) => {
       if (!isAbortError(error)) {
@@ -222,16 +269,27 @@ const reload = (kind: "css" | "html") => {
     });
 };
 
+const reconcileBaseline = () => {
+  if (baselineReconciler.ready()) {
+    reload("html");
+  }
+};
+
+subscribeRuntimeConfig(() => {
+  if (baselineReconciler.configure()) {
+    reload("html");
+  }
+});
+
 const connectEvents = () => {
   events?.close();
   events = new EventSource(`${getSupportUrl()}/dev/events`);
+  events.addEventListener("ready", reconcileBaseline);
   events.addEventListener("change", (event) => {
     const data = JSON.parse((event as MessageEvent<string>).data) as {
-      kind: "css" | "html" | "views";
+      kind: ShellChangeKind;
     };
-    if (data.kind !== "views") {
-      reload(data.kind);
-    }
+    reload(data.kind);
   });
 };
 
@@ -239,8 +297,13 @@ export const refreshShell = async (
   nextDocumentUrl = documentUrl,
   nextSupportUrl = getSupportUrl(),
 ) => {
+  const target: ShellTarget = {
+    documentUrl: nextDocumentUrl,
+    supportUrl: nextSupportUrl,
+  };
   const generation = ++transitionGeneration;
   activeStyleRefresh?.abort();
+  activeConfigRefresh?.abort();
   activeTransition?.abort();
   const controller = new AbortController();
   activeTransition = controller;
@@ -251,7 +314,7 @@ export const refreshShell = async (
         cache: "no-store",
         signal: controller.signal,
       }),
-      fetchRuntimeConfig(nextSupportUrl, controller.signal),
+      fetchRuntimeConfigWithRetry(nextSupportUrl, controller.signal),
     ]);
     if (!response.ok) {
       const detail = (await response.text()).trim();
@@ -322,12 +385,17 @@ export const refreshShell = async (
     if (previousSupportUrl !== nextSupportUrl) {
       connectEvents();
     }
+    shellRefreshState.complete(target);
+  } catch (error) {
+    if (!isAbortError(error)) {
+      shellRefreshState.rememberFailure(target);
+    }
+    throw error;
   } finally {
     stagedStyles?.discard();
     if (generation === transitionGeneration) {
       activeTransition = undefined;
-      const queued = pendingChange;
-      pendingChange = undefined;
+      const queued = shellChangeQueue.take();
       if (queued) {
         queueMicrotask(() => reload(queued));
       }
@@ -355,6 +423,7 @@ globalThis.addEventListener("message", (event: MessageEvent<unknown>) => {
     return;
   }
   const view = data.view;
+  shellRefreshState.supersede();
   void refreshShell(data.documentUrl, data.supportUrl)
     .then(() => notifyReady(view))
     .catch((error: unknown) => {

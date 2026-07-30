@@ -13,7 +13,9 @@ import marimo
 from packaging.version import InvalidVersion, Version
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from marimo_studio.errors import ProtocolError
+from marimo_studio._cell_refs import cell_refs
+from marimo_studio.errors import ProtocolError, RuntimeSyncError
+from marimo_studio.types import CellRef
 
 ServerMode = Literal["edit", "run"]
 DOCUMENT_REPLAY_QUERY_PARAM = "marimo_studio_resume"
@@ -353,3 +355,25 @@ def has_notebook_session(context: ServerContext) -> bool:
     return (
         context._session_manager.get_session_by_file_key(context.file_key) is not None
     )
+
+
+def live_cell_ids(
+    context: ServerContext,
+    session_id: str | None,
+) -> dict[CellRef, str] | None:
+    """Map semantic cell references to IDs in one active document."""
+    if session_id is not None:
+        session = current_session(context, session_id)
+    elif context.mode == "edit":
+        session = context._session_manager.get_session_by_file_key(context.file_key)
+    else:
+        return None
+    if session is None:
+        if session_id is None or context.mode == "run":
+            return None
+        raise RuntimeSyncError(
+            "The Marimo session is still connecting. Studio will retry shortly."
+        )
+    rows = tuple(session.document.cells)
+    refs = cell_refs(row.code for row in rows)
+    return {ref: str(row.id) for ref, row in zip(refs, rows, strict=True)}

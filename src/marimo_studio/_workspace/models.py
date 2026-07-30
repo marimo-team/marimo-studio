@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from marimo_studio._cell_refs import cell_ref_candidates
+from marimo_studio.errors import RuntimeSyncError
 from marimo_studio.types import CellRef, CellSpec, NotebookSpec, ValueBinding
 
 PYPROJECT_NAME = "pyproject.toml"
@@ -84,9 +87,19 @@ class ResolvedView:
     cell_aliases: tuple[str, ...]
     value_bindings: dict[str, ValueBinding]
 
-    def runtime_value_bindings(self) -> dict[str, dict[str, object]]:
+    def runtime_value_bindings(
+        self,
+        live_ids: Mapping[CellRef, str] | None,
+    ) -> dict[str, dict[str, object]]:
         return {
-            source: binding.to_runtime_dict()
+            source: {
+                "variable": binding.reference.variable,
+                "cell": _runtime_cell_target(
+                    binding.cell,
+                    live_ids,
+                    f"value selector {source!r}",
+                ),
+            }
             for source, binding in sorted(self.value_bindings.items())
         }
 
@@ -101,8 +114,36 @@ class ResolvedStudio:
     def view(self, name: str | None = None) -> ResolvedView:
         return self.views[name or self.studio.default_view]
 
-    def runtime_cells(self) -> dict[str, str]:
-        return {alias: cell.runtime_id for alias, cell in sorted(self.aliases.items())}
+    def runtime_cell_bindings(
+        self,
+        live_ids: Mapping[CellRef, str] | None,
+    ) -> dict[str, dict[str, str]]:
+        return {
+            alias: _runtime_cell_target(
+                cell,
+                live_ids,
+                f"cell alias {alias!r}",
+            )
+            for alias, cell in sorted(self.aliases.items())
+        }
+
+
+def _runtime_cell_target(
+    cell: CellSpec,
+    live_ids: Mapping[CellRef, str] | None,
+    label: str,
+) -> dict[str, str]:
+    if cell.name is not None:
+        return {"kind": "name", "value": cell.name}
+    if live_ids is None:
+        return {"kind": "id", "value": cell.runtime_id}
+    matches = cell_ref_candidates(cell.ref, live_ids.items())
+    if len(matches) != 1:
+        raise RuntimeSyncError(
+            f"The active Marimo session has not synchronized {label}. "
+            "Studio will retry after the notebook updates."
+        )
+    return {"kind": "id", "value": matches[0]}
 
 
 @dataclass(frozen=True)

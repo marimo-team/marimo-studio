@@ -133,12 +133,6 @@ class ValueBinding:
     reference: ValueReference
     cell: CellSpec
 
-    def to_runtime_dict(self) -> dict[str, object]:
-        return {
-            "variable": self.reference.variable,
-            "cellId": self.cell.runtime_id,
-        }
-
 
 @dataclass(frozen=True)
 class NotebookSpec:

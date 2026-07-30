@@ -2,7 +2,13 @@ import htmx from "htmx.org";
 
 import { registerMarimoCellElement } from "./cell-host";
 import { setRuntimeConnectionState, startReadiness } from "./readiness";
-import { getRuntimeConfig, loadRuntimeConfig } from "./runtime-config";
+import {
+  commitRuntimeConfig,
+  fetchRuntimeConfigWithRetry,
+  getRuntimeConfig,
+  getSupportUrl,
+  loadRuntimeConfig,
+} from "./runtime-config";
 import {
   finishSessionRefresh,
   prepareSessionRefresh,
@@ -27,9 +33,12 @@ const bootstrap = async () => {
   registerMarimoCellElement();
   (globalThis as typeof globalThis & Window).htmx = htmx;
 
-  const config = await loadRuntimeConfig();
+  let config = await loadRuntimeConfig();
   const resumingDocument = prepareSessionRefresh(config);
   if (resumingDocument) {
+    config = commitRuntimeConfig(
+      await fetchRuntimeConfigWithRetry(getSupportUrl()),
+    );
     document.addEventListener(
       "marimo-studio:runtime-ready",
       () => finishSessionRefresh(),

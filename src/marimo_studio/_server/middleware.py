@@ -332,7 +332,12 @@ class PresentationMiddleware:
         view = resolved.views[view_name]
         if route == "config" and request.method == "GET":
             return JSONResponse(
-                presentation.runtime_config(resolved, context, view_name),
+                presentation.runtime_config(
+                    resolved,
+                    context,
+                    view_name,
+                    request.headers.get("Marimo-Session-Id"),
+                ),
                 headers=_NO_STORE,
             )
         if route == "values" and request.method == "POST":
@@ -463,14 +468,20 @@ class PresentationMiddleware:
 
     @staticmethod
     def _error_response(relative: str, error: Exception) -> Response:
+        code = getattr(error, "code", "configuration-error")
+        status_code = getattr(error, "status_code", 500)
+        transient = getattr(error, "transient", False)
         if not relative.startswith(SUPPORT_PATH):
             return PlainTextResponse(
                 f"Marimo Studio configuration error\n\n{error}",
-                status_code=500,
+                status_code=status_code,
                 headers=_DOCUMENT_HEADERS,
             )
+        payload: dict[str, object] = {"error": code, "message": str(error)}
+        if transient:
+            payload["transient"] = True
         return JSONResponse(
-            {"error": "configuration-error", "message": str(error)},
-            status_code=500,
+            payload,
+            status_code=status_code,
             headers=_NO_STORE,
         )

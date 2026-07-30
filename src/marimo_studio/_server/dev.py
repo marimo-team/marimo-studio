@@ -13,26 +13,34 @@ from marimo_studio._workspace.metadata import notebook_config
 from marimo_studio._workspace.models import StudioConfig
 from marimo_studio.errors import ConfigurationError
 
+_WatchKey = tuple[str, Path]
 
-def _files(studio: StudioConfig) -> tuple[Path, ...]:
+
+def _files(studio: StudioConfig) -> tuple[_WatchKey, ...]:
     try:
         view_files = tuple(
             path for path in studio.view_root.rglob("*") if path.is_file()
         )
     except OSError:
         view_files = ()
-    return (studio.config_path, *view_files)
+    return (
+        ("config", studio.config_path),
+        ("notebook", studio.notebook),
+        *(("view", path) for path in view_files),
+    )
 
 
-def _file_stamps(studio: StudioConfig) -> dict[Path, int | str]:
-    result: dict[Path, int | str] = {}
-    for path in _files(studio):
+def _file_stamps(studio: StudioConfig) -> dict[_WatchKey, int | str]:
+    result: dict[_WatchKey, int | str] = {}
+    for kind, path in _files(studio):
         try:
-            if studio.uses_notebook_config and path == studio.config_path:
+            if kind == "config" and studio.uses_notebook_config:
                 config = notebook_config(path)
-                result[path] = hashlib.sha256(repr(config).encode("utf-8")).hexdigest()
+                result[(kind, path)] = hashlib.sha256(
+                    repr(config).encode("utf-8")
+                ).hexdigest()
             else:
-                result[path] = path.stat().st_mtime_ns
+                result[(kind, path)] = path.stat().st_mtime_ns
         except (OSError, ConfigurationError):
             continue
     return result
@@ -40,24 +48,30 @@ def _file_stamps(studio: StudioConfig) -> dict[Path, int | str]:
 
 def _event_kind(
     studio: StudioConfig,
-    changed: set[Path],
+    changed: set[_WatchKey],
     view_name: str | None,
 ) -> str:
     if view_name is None:
         return "views"
-    if studio.config_path in changed:
+    if any(kind == "config" for kind, _ in changed):
         return "html"
     view_root = (studio.view_root / view_name).resolve()
-    selected = []
-    for path in changed:
+    selected: list[Path] = []
+    for kind, path in changed:
+        if kind != "view":
+            continue
         try:
             path.resolve().relative_to(view_root)
         except ValueError:
             continue
         selected.append(path)
-    if not selected:
-        return "views"
-    return "css" if all(path.suffix == ".css" for path in selected) else "html"
+    if selected:
+        selected_css = all(path.suffix == ".css" for path in selected)
+        notebook_changed = any(kind == "notebook" for kind, _ in changed)
+        return "css" if selected_css and not notebook_changed else "html"
+    if any(kind == "notebook" for kind, _ in changed):
+        return "runtime"
+    return "views"
 
 
 async def change_events(
@@ -66,6 +80,7 @@ async def change_events(
 ) -> AsyncIterator[bytes]:
     """Yield change events until the requesting client disconnects."""
     stamps = _file_stamps(studio)
+    yield b"event: ready\ndata: {}\n\n"
     last_heartbeat = time.monotonic()
     while True:
         await asyncio.sleep(0.25)

@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import ast
 import hashlib
-import textwrap
-from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from marimo_studio._cell_refs import cell_refs
 from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.runtime_probe import (
     RuntimeProbe,
@@ -17,7 +16,6 @@ from marimo_studio._compat.runtime_probe import (
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.types import (
     CellConfigSpec,
-    CellRef,
     CellSpec,
     NotebookSpec,
     SourceSpan,
@@ -113,118 +111,6 @@ def _preview(code: str) -> str:
     return preview
 
 
-def _canonical_ast(
-    value: object,
-    *,
-    normalize_marimo_layout: bool = False,
-    normalize_markdown_text: bool = False,
-) -> object:
-    if normalize_markdown_text and isinstance(value, ast.JoinedStr):
-        expressions: list[object] = []
-        template = ""
-        for child in value.values:
-            if isinstance(child, ast.Constant) and isinstance(child.value, str):
-                template += child.value
-            else:
-                marker = f"\0{len(expressions)}\0"
-                template += marker
-                expressions.append(
-                    _canonical_ast(
-                        child,
-                        normalize_marimo_layout=normalize_marimo_layout,
-                    )
-                )
-        return (
-            "JoinedStr",
-            textwrap.dedent(template).strip("\n"),
-            tuple(expressions),
-        )
-    if isinstance(value, ast.AST):
-        fields: list[tuple[str, object]] = []
-        for name, child in ast.iter_fields(value):
-            if child is None or child == []:
-                continue
-            normalize_child_text = normalize_markdown_text
-            if (
-                normalize_marimo_layout
-                and isinstance(value, ast.Call)
-                and name == "args"
-                and _is_marimo_markdown_call(value)
-            ):
-                arguments = list(child)
-                child = [
-                    _canonical_ast(
-                        argument,
-                        normalize_marimo_layout=True,
-                        normalize_markdown_text=index == 0,
-                    )
-                    for index, argument in enumerate(arguments)
-                ]
-                normalize_child_text = False
-            if (
-                normalize_markdown_text
-                and isinstance(value, ast.Constant)
-                and name == "value"
-                and isinstance(child, str)
-                and "\n" in child
-            ):
-                child = textwrap.dedent(child).strip("\n")
-            fields.append(
-                (
-                    name,
-                    _canonical_ast(
-                        child,
-                        normalize_marimo_layout=normalize_marimo_layout,
-                        normalize_markdown_text=normalize_child_text,
-                    ),
-                )
-            )
-        return type(value).__name__, tuple(fields)
-    if isinstance(value, list):
-        return tuple(
-            _canonical_ast(
-                item,
-                normalize_marimo_layout=normalize_marimo_layout,
-                normalize_markdown_text=normalize_markdown_text,
-            )
-            for item in value
-        )
-    return value
-
-
-def _is_marimo_markdown_call(value: ast.Call) -> bool:
-    return (
-        isinstance(value.func, ast.Attribute)
-        and isinstance(value.func.value, ast.Name)
-        and value.func.value.id == "mo"
-        and value.func.attr == "md"
-        and bool(value.args)
-    )
-
-
-def _ast_fingerprint(code: str, *, normalize_marimo_layout: bool) -> str:
-    try:
-        payload = repr(
-            _canonical_ast(
-                ast.parse(code),
-                normalize_marimo_layout=normalize_marimo_layout,
-            )
-        ).encode("utf-8")
-    except SyntaxError:
-        payload = code.strip().encode("utf-8")
-    return hashlib.sha256(payload).hexdigest()
-
-
-def _cell_fingerprint(code: str) -> str:
-    """Hash parsed Python while preserving every runtime value."""
-    return _ast_fingerprint(code, normalize_marimo_layout=False)
-
-
-def _layout_fingerprint(code: str) -> str:
-    """Hash Marimo's normalized markdown-cell serialization."""
-    return _ast_fingerprint(code, normalize_marimo_layout=True)
-
-
 def inspect_notebook(
     path: str | Path,
     *,
@@ -242,23 +128,7 @@ def inspect_notebook(
     source_digests = [
         hashlib.sha256(cell.code.encode("utf-8")).hexdigest() for cell in static.cells
     ]
-    fingerprints = [_cell_fingerprint(cell.code) for cell in static.cells]
-    layout_fingerprints = [_layout_fingerprint(cell.code) for cell in static.cells]
-    occurrences: Counter[str] = Counter()
-    refs: list[CellRef] = []
-    for fingerprint, layout_fingerprint in zip(
-        fingerprints,
-        layout_fingerprints,
-        strict=True,
-    ):
-        refs.append(
-            CellRef(
-                fingerprint,
-                layout_fingerprint,
-                occurrences[fingerprint],
-            )
-        )
-        occurrences[fingerprint] += 1
+    refs = cell_refs(cell.code for cell in static.cells)
 
     by_runtime_id = {
         cell.runtime_id: refs[index] for index, cell in enumerate(static.cells)

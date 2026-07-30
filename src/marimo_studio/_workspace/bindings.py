@@ -7,6 +7,7 @@ from typing import Any
 
 import tomlkit
 
+from marimo_studio._cell_refs import cell_ref_candidates
 from marimo_studio._workspace.config import (
     TemplateParser,
     editable_studio_config,
@@ -62,7 +63,8 @@ def _resolve_view(
     if unknown:
         raise BindingError(
             f"{view.template}: unbound cell aliases: {', '.join(unknown)}. "
-            "Add them to [tool.marimo-studio.cells]."
+            "Name the notebook cells or add aliases to "
+            "[tool.marimo-studio.cells]."
         )
     unknown_variables = sorted(
         {
@@ -114,32 +116,22 @@ def resolve_studio(
     notebook = inspect_notebook(studio.notebook, include_code=include_code)
     aliases = notebook.named_cells()
     for alias, ref in studio.cells.items():
-        semantic_matches = [
-            cell
-            for cell in notebook.cells
-            if cell.ref.fingerprint == ref.fingerprint
-            and cell.ref.occurrence == ref.occurrence
-        ]
-        if semantic_matches:
-            cell = semantic_matches[0]
-        else:
-            layout_matches = [
-                cell
-                for cell in notebook.cells
-                if cell.ref.layout_fingerprint == ref.layout_fingerprint
-            ]
-            if len(layout_matches) > 1:
-                raise BindingError(
-                    f"Binding {alias!r} became ambiguous after notebook "
-                    "serialization. Inspect the notebook and bind the alias "
-                    "again with --overwrite."
-                )
-            cell = layout_matches[0] if layout_matches else None
-        if cell is None:
+        matches = cell_ref_candidates(
+            ref,
+            ((cell.ref, cell) for cell in notebook.cells),
+        )
+        if len(matches) > 1:
+            raise BindingError(
+                f"Binding {alias!r} became ambiguous after notebook "
+                "serialization. Inspect the notebook and bind the alias "
+                "again with --overwrite."
+            )
+        if not matches:
             raise BindingError(
                 f"Binding {alias!r} points to changed or missing cell {ref}. "
                 "Inspect the notebook and bind the alias again with --overwrite."
             )
+        cell = matches[0]
         native = aliases.get(alias)
         if native is not None and native.runtime_id != cell.runtime_id:
             raise BindingError(

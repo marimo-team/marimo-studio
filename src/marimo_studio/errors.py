@@ -8,6 +8,8 @@ class MarimoStudioError(Exception):
 
     code = "marimo-studio-error"
     exit_code = 3
+    status_code = 500
+    transient = False
 
 
 class ConfigurationError(MarimoStudioError):
@@ -35,3 +37,11 @@ class DependencyError(ConfigurationError):
 
     code = "dependency-error"
     exit_code = 7
+
+
+class RuntimeSyncError(MarimoStudioError):
+    """The browser session and inspected notebook have not synchronized."""
+
+    code = "runtime-sync-pending"
+    status_code = 409
+    transient = True

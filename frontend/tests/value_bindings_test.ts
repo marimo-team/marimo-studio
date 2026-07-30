@@ -13,17 +13,17 @@ globalThis.__MARIMO_MOUNT_CONFIG__ = {
 };
 
 const config = {
-  schema: 1,
+  schema: 2,
   view: "dashboard",
   views: ["dashboard"],
   fileKey: "/workspace/notebook.py",
   runtimeUrl: "/proxy/app/",
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
-  cells: {},
+  cellBindings: {},
   valueBindings: {
     "context.label": {
       variable: "context",
-      cellId: "cell-id",
+      cell: { kind: "id", value: "cell-id" },
     },
   },
   appConfig: {},

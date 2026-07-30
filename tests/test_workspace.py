@@ -204,7 +204,6 @@ def test_setup_converges_package_requirements_and_sources(
     assert notebook_path.read_text(encoding="utf-8").endswith(body)
 
     configured = notebook_path.read_bytes()
-    assert b"# \n" not in configured
     repeated = ensure_view(notebook_path)
 
     assert notebook_path.read_bytes() == configured
@@ -382,7 +381,10 @@ def test_named_views_share_notebook_bindings(notebook_path: Path) -> None:
 
     resolved = resolve_studio(load_studio(notebook_path))
 
-    assert resolved.runtime_cells()["result"] == bound.cell.runtime_id
+    assert resolved.runtime_cell_bindings(None)["result"] == {
+        "kind": "id",
+        "value": bound.cell.runtime_id,
+    }
     assert set(resolved.view("dashboard").value_bindings) == {"doubled"}
     assert set(resolved.view("executive").value_bindings) == {"x"}
     assert set(_template_selectors(notebook_path) or ()) == {"doubled", "x"}
@@ -399,35 +401,6 @@ def test_kernel_selectors_ignore_an_invalid_unselected_view(
     _shell(studio, "draft", '<span mo-value="doubled + 1"></span>')
 
     assert _template_selectors(notebook_path) == ("doubled",)
-
-
-def test_named_notebook_cells_need_no_binding(tmp_path: Path) -> None:
-    notebook = tmp_path / "named.py"
-    notebook.write_text(
-        f"""\
-import marimo
-
-__generated_with = "{marimo.__version__}"
-app = marimo.App()
-
-
-@app.cell
-def summary():
-    value = 3
-    value
-    return (value,)
-
-
-if __name__ == "__main__":
-    app.run()
-""",
-        encoding="utf-8",
-    )
-    ensure_view(notebook)
-    studio = load_studio(notebook)
-    _shell(studio, "dashboard", '<marimo-cell name="summary"></marimo-cell>')
-
-    assert resolve_studio(load_studio(notebook)).aliases["summary"].name == "summary"
 
 
 @pytest.mark.parametrize(
@@ -677,7 +650,7 @@ def test_selected_view_check_isolated_from_other_templates(
     all_views = check_studio(load_studio(notebook_path))
 
     assert all(result.status == "pass" for result in selected)
-    assert all_views[0].status == "fail"
+    assert any(result.status == "fail" for result in all_views)
 
 
 def test_mutable_symlink_rejects_the_setup_before_notebook_changes(

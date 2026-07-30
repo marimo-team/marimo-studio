@@ -8,7 +8,7 @@ from threading import RLock
 
 from htpy import base
 
-from marimo_studio._compat.server import ServerContext
+from marimo_studio._compat.server import ServerContext, live_cell_ids
 from marimo_studio._html import render, runtime_head, runtime_metadata, runtime_root
 from marimo_studio._server.routes import SUPPORT_PATH, public_url
 from marimo_studio._workspace import discover_studio, resolve_studio
@@ -161,9 +161,11 @@ class NotebookPresentation:
         resolved: ResolvedStudio,
         context: ServerContext,
         view_name: str,
+        session_id: str | None = None,
     ) -> dict[str, object]:
+        cell_ids = live_cell_ids(context, session_id)
         return {
-            "schema": 1,
+            "schema": 2,
             "view": view_name,
             "views": list(resolved.studio.views),
             "fileKey": context.file_key,
@@ -172,8 +174,8 @@ class NotebookPresentation:
                 context.base_url,
                 f"{SUPPORT_PATH}/views/{view_name}",
             ),
-            "cells": resolved.runtime_cells(),
-            "valueBindings": resolved.views[view_name].runtime_value_bindings(),
+            "cellBindings": resolved.runtime_cell_bindings(cell_ids),
+            "valueBindings": resolved.views[view_name].runtime_value_bindings(cell_ids),
             "appConfig": resolved.notebook.app_config,
             "userConfig": context.user_config,
             "configOverrides": context.config_overrides,

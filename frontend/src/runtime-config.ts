@@ -6,19 +6,24 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
+export interface CellBindingConfig {
+  kind: "id" | "name";
+  value: string;
+}
+
 export interface ValueBindingConfig {
   variable: string;
-  cellId: string;
+  cell: CellBindingConfig;
 }
 
 export interface RuntimeConfig {
-  schema: 1;
+  schema: 2;
   view: string;
   views: string[];
   fileKey: string;
   runtimeUrl: string;
   supportUrl: string;
-  cells: Record<string, string>;
+  cellBindings: Record<string, CellBindingConfig>;
   valueBindings: Record<string, ValueBindingConfig>;
   appConfig: Record<string, unknown>;
   userConfig: Record<string, unknown>;
@@ -27,6 +32,12 @@ export interface RuntimeConfig {
   dev: boolean;
   mode: "edit" | "run";
   preserveSession: boolean;
+}
+
+declare global {
+  interface Window {
+    __MARIMO_STUDIO_SESSION_ID__?: string;
+  }
 }
 
 interface MountConfig {
@@ -48,32 +59,75 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
 const responseError = async (
   response: Response,
   fallback: string,
-): Promise<string> => {
+): Promise<{ code: string; message: string; transient: boolean }> => {
   const payload: unknown = await response.clone().json().catch(() => undefined);
-  if (isRecord(payload) && typeof payload.message === "string") {
-    return payload.message;
+  return {
+    code: isRecord(payload) && typeof payload.error === "string"
+      ? payload.error
+      : "runtime-config-failed",
+    message: isRecord(payload) && typeof payload.message === "string"
+      ? payload.message
+      : (await response.text()).trim() || fallback,
+    transient: isRecord(payload) && payload.transient === true,
+  };
+};
+
+export class RuntimeConfigRequestError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly transient: boolean,
+  ) {
+    super(message);
+    this.name = "RuntimeConfigRequestError";
   }
-  return (await response.text()).trim() || fallback;
+}
+
+export const runtimeConfigSessionId = ({
+  connected,
+  href,
+}: {
+  connected?: string;
+  href?: string;
+}): string | undefined => {
+  if (connected) {
+    return connected;
+  }
+  try {
+    const url = new URL(href ?? "");
+    if (url.searchParams.get("marimo_studio_resume") === "1") {
+      return url.searchParams.get("session_id") ?? undefined;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+};
+
+const isCellBinding = (value: unknown): value is CellBindingConfig => {
+  return isRecord(value) &&
+    (value.kind === "id" || value.kind === "name") &&
+    typeof value.value === "string";
 };
 
 const isValueBinding = (value: unknown): value is ValueBindingConfig => {
   return isRecord(value) &&
     typeof value.variable === "string" &&
-    typeof value.cellId === "string";
+    isCellBinding(value.cell);
 };
 
 export const parseRuntimeConfig = (value: unknown): RuntimeConfig => {
   if (
     !isRecord(value) ||
-    value.schema !== 1 ||
+    value.schema !== 2 ||
     typeof value.view !== "string" ||
     !Array.isArray(value.views) ||
     !value.views.every((view) => typeof view === "string") ||
     typeof value.fileKey !== "string" ||
     typeof value.runtimeUrl !== "string" ||
     typeof value.supportUrl !== "string" ||
-    !isRecord(value.cells) ||
-    !Object.values(value.cells).every((cell) => typeof cell === "string") ||
+    !isRecord(value.cellBindings) ||
+    !Object.values(value.cellBindings).every(isCellBinding) ||
     !isRecord(value.valueBindings) ||
     !Object.values(value.valueBindings).every(isValueBinding) ||
     !isRecord(value.appConfig) ||
@@ -118,26 +172,52 @@ export const getRuntimeConfig = (): RuntimeConfig => {
   return current;
 };
 
+export const hasRuntimeConfig = (): boolean => current !== undefined;
+
 export const subscribeRuntimeConfig = (listener: Listener) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
 };
 
-const sameStringRecord = (
-  left: Record<string, string>,
-  right: Record<string, string>,
+const sameCellBindings = (
+  left: Record<string, CellBindingConfig>,
+  right: Record<string, CellBindingConfig>,
 ): boolean => {
   const keys = Object.keys(left);
   return keys.length === Object.keys(right).length &&
-    keys.every((key) => left[key] === right[key]);
+    keys.every((key) =>
+      left[key]?.kind === right[key]?.kind &&
+      left[key]?.value === right[key]?.value
+    );
+};
+
+const sameValueBindings = (
+  left: Record<string, ValueBindingConfig>,
+  right: Record<string, ValueBindingConfig>,
+): boolean => {
+  const keys = Object.keys(left);
+  return keys.length === Object.keys(right).length &&
+    keys.every((key) =>
+      left[key]?.variable === right[key]?.variable &&
+      left[key]?.cell.kind === right[key]?.cell.kind &&
+      left[key]?.cell.value === right[key]?.cell.value
+    );
 };
 
 const publish = (config: RuntimeConfig): RuntimeConfig => {
-  const cells = current && sameStringRecord(current.cells, config.cells)
-    ? current.cells
-    : config.cells;
-  const cellsChanged = current?.cells !== cells;
-  current = cells === config.cells ? config : { ...config, cells };
+  const cellBindings = current &&
+      sameCellBindings(current.cellBindings, config.cellBindings)
+    ? current.cellBindings
+    : config.cellBindings;
+  const valueBindings = current &&
+      sameValueBindings(current.valueBindings, config.valueBindings)
+    ? current.valueBindings
+    : config.valueBindings;
+  const cellsChanged = current?.cellBindings !== cellBindings;
+  current = cellBindings === config.cellBindings &&
+      valueBindings === config.valueBindings
+    ? config
+    : { ...config, cellBindings, valueBindings };
   listeners.forEach((listener) => listener());
   if (cellsChanged) {
     cellListeners.forEach((listener) => listener());
@@ -149,34 +229,86 @@ export const fetchRuntimeConfig = async (
   supportUrl: string,
   signal?: AbortSignal,
 ): Promise<RuntimeConfig> => {
+  const browser = globalThis as typeof globalThis & Window;
+  const sessionId = runtimeConfigSessionId({
+    connected: browser.__MARIMO_STUDIO_SESSION_ID__,
+    href: browser.location?.href,
+  });
   const response = await fetch(`${supportUrl}/config`, {
     cache: "no-store",
+    headers: sessionId ? { "Marimo-Session-Id": sessionId } : undefined,
     signal,
   });
   if (!response.ok) {
-    throw new Error(
-      await responseError(
-        response,
-        `Runtime config failed with ${response.status}`,
-      ),
+    const detail = await responseError(
+      response,
+      `Runtime config failed with ${response.status}`,
+    );
+    throw new RuntimeConfigRequestError(
+      detail.message,
+      detail.code,
+      detail.transient,
     );
   }
   return parseRuntimeConfig(await response.json());
 };
 
-export const commitRuntimeConfig = publish;
+const retryDelays = [100, 250, 500, 1_000];
 
-export const getRuntimeCells = (): Record<string, string> => {
-  return getRuntimeConfig().cells;
+const waitForRetry = (delay: number, signal?: AbortSignal): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("The request was aborted", "AbortError"));
+      return;
+    }
+    const aborted = () => {
+      clearTimeout(timeout);
+      reject(new DOMException("The request was aborted", "AbortError"));
+    };
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener("abort", aborted);
+      resolve();
+    }, delay);
+    signal?.addEventListener("abort", aborted, { once: true });
+  });
 };
 
-export const subscribeRuntimeCells = (listener: Listener) => {
+export const fetchRuntimeConfigWithRetry = async (
+  supportUrl: string,
+  signal?: AbortSignal,
+): Promise<RuntimeConfig> => {
+  for (let attempt = 0;; attempt += 1) {
+    try {
+      return await fetchRuntimeConfig(supportUrl, signal);
+    } catch (error) {
+      if (
+        !(error instanceof RuntimeConfigRequestError) ||
+        !error.transient ||
+        attempt >= retryDelays.length
+      ) {
+        throw error;
+      }
+      await waitForRetry(retryDelays[attempt], signal);
+    }
+  }
+};
+
+export const commitRuntimeConfig = publish;
+
+export const getRuntimeCellBindings = (): Record<
+  string,
+  CellBindingConfig
+> => {
+  return getRuntimeConfig().cellBindings;
+};
+
+export const subscribeRuntimeCellBindings = (listener: Listener) => {
   cellListeners.add(listener);
   return () => cellListeners.delete(listener);
 };
 
 export const loadRuntimeConfig = async (): Promise<RuntimeConfig> => {
-  return publish(await fetchRuntimeConfig(mountConfig().supportUrl));
+  return publish(await fetchRuntimeConfigWithRetry(mountConfig().supportUrl));
 };
 
 declare global {

@@ -3,11 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from marimo_studio import inspect_notebook
-from marimo_studio.inspect import (
+from marimo_studio._cell_refs import (
     _cell_fingerprint,
     _layout_fingerprint,
-    select_cells,
 )
+from marimo_studio.inspect import select_cells
 
 
 def test_inspection_builds_graph_without_executing_cells(
@@ -52,32 +52,22 @@ def test_cell_fingerprint_survives_marimo_string_formatting() -> None:
     legacy = '''\
 mo.md(
     f"""
-    ## Interactive Normal CDF Calculator
-
-    Use the sliders below to explore different probability calculations:
-
-    **Query value (x):** {x_slider}
-
-    **Mean (μ):** {mu_slider}
+    ## Report
+    Value: {value}
     """
 )
 '''
     serialized = '''\
 mo.md(f"""
-## Interactive Normal CDF Calculator
-
-Use the sliders below to explore different probability calculations:
-
-**Query value (x):** {x_slider}
-
-**Mean (μ):** {mu_slider}
+## Report
+Value: {value}
 """)
 '''
 
     assert _cell_fingerprint(legacy) != _cell_fingerprint(serialized)
     assert _layout_fingerprint(legacy) == _layout_fingerprint(serialized)
     assert _layout_fingerprint(serialized) != _layout_fingerprint(
-        serialized.replace("CDF Calculator", "PDF Calculator")
+        serialized.replace("Report", "Forecast")
     )
 
 
