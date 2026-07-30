@@ -28,7 +28,7 @@ class CellRef:
     layout_fingerprint: str
     occurrence: int = 0
 
-    PREFIX = "cell:v3:"
+    PREFIX = "cell:v1:"
 
     def __post_init__(self) -> None:
         fingerprint = self._digest(self.fingerprint)

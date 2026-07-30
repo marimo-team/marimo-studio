@@ -12,7 +12,7 @@ const config = (
   preserveSession: boolean,
   mode: RuntimeConfig["mode"] = "run",
 ): RuntimeConfig => ({
-  schema: 2,
+  schema: 1,
   view: "dashboard",
   views: ["dashboard"],
   fileKey: "/workspace/analysis.py",

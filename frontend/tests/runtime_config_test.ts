@@ -18,7 +18,7 @@ import {
 } from "../src/runtime-config.ts";
 
 const baseRuntimeConfig = {
-  schema: 2,
+  schema: 1,
   view: "dashboard",
   views: ["dashboard", "executive"],
   fileKey: "/workspace/notebook.py",

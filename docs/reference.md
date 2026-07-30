@@ -174,7 +174,7 @@ PEP 723 block:
 # default = "dashboard"
 #
 # [tool.marimo-studio.cells]
-# summary = { ref = "cell:v3:<semantic-sha256>:<layout-sha256>:0" }
+# summary = { ref = "cell:v1:<semantic-sha256>:<layout-sha256>:0" }
 # ///
 ```
 
@@ -214,7 +214,7 @@ default = "dashboard"
 preserve_session = false
 
 [tool.marimo-studio.cells]
-summary = { ref = "cell:v3:<semantic-sha256>:<layout-sha256>:0" }
+summary = { ref = "cell:v1:<semantic-sha256>:<layout-sha256>:0" }
 ```
 
 `notebook` is required in project configuration and resolves relative to

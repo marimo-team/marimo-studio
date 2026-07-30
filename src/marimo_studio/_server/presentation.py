@@ -165,7 +165,7 @@ class NotebookPresentation:
     ) -> dict[str, object]:
         cell_ids = live_cell_ids(context, session_id)
         return {
-            "schema": 2,
+            "schema": 1,
             "view": view_name,
             "views": list(resolved.studio.views),
             "fileKey": context.file_key,

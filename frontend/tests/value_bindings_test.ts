@@ -13,7 +13,7 @@ globalThis.__MARIMO_MOUNT_CONFIG__ = {
 };
 
 const config = {
-  schema: 2,
+  schema: 1,
   view: "dashboard",
   views: ["dashboard"],
   fileKey: "/workspace/notebook.py",

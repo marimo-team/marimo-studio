@@ -17,7 +17,7 @@ export interface ValueBindingConfig {
 }
 
 export interface RuntimeConfig {
-  schema: 2;
+  schema: 1;
   view: string;
   views: string[];
   fileKey: string;
@@ -119,7 +119,7 @@ const isValueBinding = (value: unknown): value is ValueBindingConfig => {
 export const parseRuntimeConfig = (value: unknown): RuntimeConfig => {
   if (
     !isRecord(value) ||
-    value.schema !== 2 ||
+    value.schema !== 1 ||
     typeof value.view !== "string" ||
     !Array.isArray(value.views) ||
     !value.views.every((view) => typeof view === "string") ||

@@ -209,7 +209,7 @@ def test_named_cells_resolve_against_the_live_notebook_name(tmp_path: Path) -> N
     with TestClient(create_asgi_app(notebook)) as client:
         config = client.get("/_marimo-studio/views/dashboard/config").json()
 
-    assert config["schema"] == 2
+    assert config["schema"] == 1
     assert config["cellBindings"]["imports"] == {
         "kind": "name",
         "value": "imports",
