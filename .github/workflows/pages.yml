@@ -1,0 +1,89 @@
+name: GitHub Pages
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Configure GitHub Pages
+        if: github.event_name != 'pull_request'
+        id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Build documentation
+        env:
+          GITHUB_PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: make docs-build
+
+      - name: Check GitHub Pages paths
+        env:
+          GITHUB_PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: |
+          base_path="${GITHUB_PAGES_BASE_PATH:-}"
+          base="/${base_path#/}"
+          base="${base%/}/"
+          index="docs/.vitepress/dist/index.html"
+          test -f docs/.vitepress/dist/getting-started.html
+          test -f docs/.vitepress/dist/reference.html
+          grep -q "href=\"${base}assets/" "$index"
+          grep -q "src=\"${base}assets/" "$index"
+          grep -q "href=\"${base}favicon.svg\"" "$index"
+          grep -q "href=\"${base}getting-started\"" "$index"
+
+      - name: Upload GitHub Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

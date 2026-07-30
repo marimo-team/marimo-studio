@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+frontend/.cache
+
+# Node-generated files
+node_modules/
+docs/.vitepress/cache/
+
+# Generated frontend assets
+src/marimo_studio/_static/

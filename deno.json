@@ -1,0 +1,28 @@
+{
+  "tasks": {
+    "build": "deno run --allow-env --allow-read --allow-run --allow-write frontend/build.ts",
+    "check": "deno check frontend/build.ts frontend/vite.config.ts frontend/tests/*.ts frontend/src/dev-reload.ts frontend/src/marimo-adapter/server-only-bridge.ts && deno run --allow-env --allow-read --allow-run --allow-write frontend/typecheck.ts",
+    "docs:build": "node node_modules/vitepress/bin/vitepress.js build docs",
+    "docs:dev": "node node_modules/vitepress/bin/vitepress.js dev docs --host 127.0.0.1 --port 4173 --strictPort",
+    "docs:preview": "node node_modules/vitepress/bin/vitepress.js preview docs --host 127.0.0.1 --port 4173 --strictPort",
+    "fmt": "deno fmt deno.json docs/.vitepress/config.mts frontend",
+    "fmt:check": "deno fmt --check deno.json docs/.vitepress/config.mts frontend",
+    "lint": "deno lint frontend/src frontend/tests frontend/build.ts frontend/typecheck.ts frontend/vite.config.ts frontend/build-vite.mjs",
+    "test": "deno test --allow-read frontend/tests"
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1",
+    "@std/toml": "jsr:@std/toml@^1.0.11",
+    "htmx.org": "npm:htmx.org@2.0.10",
+    "vitepress": "npm:vitepress@2.0.0-alpha.18",
+    "vue": "npm:vue@3.5.40"
+  },
+  "nodeModulesDir": "auto",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "deno.ns", "es2023"],
+    "strict": true
+  },
+  "exclude": [
+    "src/marimo_studio/_static"
+  ]
+}

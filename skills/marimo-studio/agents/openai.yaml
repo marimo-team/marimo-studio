@@ -1,0 +1,4 @@
+interface:
+  display_name: "Marimo Studio"
+  short_description: "Build custom views from Marimo notebooks"
+  default_prompt: "Use $marimo-studio to build and verify a custom server-backed view for this Marimo notebook."

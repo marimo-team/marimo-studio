@@ -1,0 +1,223 @@
+#marimo-runtime-root {
+  display: none;
+}
+
+:where(body) {
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+}
+
+[data-marimo-studio-diagnostic] {
+  background: Canvas;
+  border: 1px solid color-mix(in srgb, #b42318 45%, transparent);
+  border-radius: 4px;
+  bottom: 1rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
+  color: #8f261c;
+  font: 0.8125rem/1.35 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  left: 50%;
+  max-height: min(16rem, 40vh);
+  max-width: min(46rem, calc(100vw - 2rem));
+  overflow: auto;
+  padding: 0.75rem 0.9rem;
+  position: fixed;
+  transform: translateX(-50%);
+  white-space: pre-wrap;
+  z-index: 2147483647;
+}
+
+:where([mo-value]) {
+  color: inherit;
+  font: inherit;
+}
+
+:where([mo-value]):is(:not([data-state]), [data-state="connecting"], [data-state="loading"]):empty::before {
+  background: var(
+    --marimo-value-skeleton-color,
+    color-mix(in srgb, currentColor 11%, transparent)
+  );
+  block-size: var(--marimo-value-skeleton-height, 0.72em);
+  border-radius: var(--marimo-value-skeleton-radius, 2px);
+  content: "";
+  display: inline-block;
+  inline-size: var(--marimo-value-skeleton-width, 8ch);
+  vertical-align: -0.04em;
+}
+
+:where(marimo-cell) {
+  color: inherit;
+  display: block;
+  font: inherit;
+  max-width: 100%;
+  min-block-size: var(--marimo-cell-skeleton-height, 0);
+  min-width: 0;
+}
+
+:where(marimo-cell):is(:not(:defined), [data-state="connecting"], [data-state="loading"]):empty::before {
+  --_marimo-cell-skeleton-color: var(
+    --marimo-cell-skeleton-color,
+    color-mix(in srgb, currentColor 11%, transparent)
+  );
+
+  background:
+    linear-gradient(
+    var(--_marimo-cell-skeleton-color),
+    var(--_marimo-cell-skeleton-color)
+  )
+    0 0.2rem / 34% 0.7rem no-repeat,
+    linear-gradient(
+    var(--_marimo-cell-skeleton-color),
+    var(--_marimo-cell-skeleton-color)
+  )
+    0 1.7rem / 86% 0.55rem no-repeat,
+    linear-gradient(
+    var(--_marimo-cell-skeleton-color),
+    var(--_marimo-cell-skeleton-color)
+  )
+    0 2.85rem / 64% 0.55rem no-repeat;
+  block-size: var(
+    --marimo-cell-skeleton-height,
+    var(--_marimo-cell-measured-height, 4.5rem)
+  );
+  border-radius: var(
+    --marimo-cell-skeleton-radius,
+    var(--marimo-cell-radius, 3px)
+  );
+  content: "";
+  display: block;
+  min-block-size: 1rem;
+  pointer-events: none;
+  width: 100%;
+}
+
+:where(marimo-cell)[data-skeleton="none"]:empty::before {
+  display: none;
+}
+
+:where(marimo-cell)[data-skeleton="none"] {
+  min-block-size: 0;
+}
+
+:where(marimo-cell) > [data-marimo-cell-output] {
+  --text-font: var(--marimo-cell-font, inherit);
+  --heading-font: var(--marimo-cell-heading-font, var(--text-font));
+  --monospace-font: var(
+    --marimo-cell-monospace-font,
+    ui-monospace,
+    "SFMono-Regular",
+    Consolas,
+    monospace
+  );
+  --background: var(--marimo-cell-background, transparent);
+  --foreground: var(--marimo-cell-foreground, currentColor);
+  --card: var(--marimo-cell-surface, Canvas);
+  --card-foreground: var(--marimo-cell-foreground, CanvasText);
+  --popover: var(--marimo-cell-surface, Canvas);
+  --popover-foreground: var(--marimo-cell-foreground, CanvasText);
+  --muted: var(
+    --marimo-cell-muted,
+    color-mix(in srgb, currentColor 6%, transparent)
+  );
+  --muted-foreground: var(
+    --marimo-cell-muted-foreground,
+    color-mix(in srgb, currentColor 66%, transparent)
+  );
+  --border: var(
+    --marimo-cell-border-color,
+    color-mix(in srgb, currentColor 18%, transparent)
+  );
+  --input: var(--marimo-cell-border-color, var(--border));
+  --primary: var(--marimo-cell-accent, currentColor);
+  --primary-foreground: var(--marimo-cell-accent-foreground, Canvas);
+  --secondary: var(--marimo-cell-muted, var(--muted));
+  --secondary-foreground: var(--marimo-cell-foreground, currentColor);
+  --accent: var(--marimo-cell-muted, var(--muted));
+  --accent-foreground: var(--marimo-cell-accent, currentColor);
+  --ring: var(--marimo-cell-accent, currentColor);
+  --radius: var(--marimo-cell-radius, 3px);
+  --gray-1: var(--marimo-cell-background, transparent);
+  --gray-2: var(--marimo-cell-muted, var(--muted));
+  --gray-3: var(--marimo-cell-muted, var(--muted));
+  --gray-4: var(--marimo-cell-border-color, var(--border));
+  --gray-5: var(--marimo-cell-border-color, var(--border));
+  --gray-6: var(--marimo-cell-border-color, var(--border));
+  --gray-7: var(--marimo-cell-border-color, var(--border));
+  --gray-8: var(--marimo-cell-muted-foreground, var(--muted-foreground));
+  --gray-9: var(--marimo-cell-muted-foreground, var(--muted-foreground));
+  --gray-10: var(--marimo-cell-muted-foreground, var(--muted-foreground));
+  --gray-11: var(--marimo-cell-muted-foreground, var(--muted-foreground));
+  --gray-12: var(--marimo-cell-foreground, currentColor);
+
+  background: var(--marimo-cell-background, transparent);
+  border: var(--marimo-cell-border, 0);
+  border-radius: var(--marimo-cell-radius, 0);
+  color: var(--marimo-cell-foreground, inherit);
+  font-family: var(--marimo-cell-font, inherit);
+  min-width: 0;
+  padding: var(--marimo-cell-padding, 0);
+  width: 100%;
+}
+
+:where(marimo-cell) :where(.output) {
+  margin: 0;
+  max-width: 100%;
+}
+
+:where(marimo-cell) :where(.markdown.prose) {
+  color: inherit;
+  max-width: var(--marimo-cell-content-width, none);
+}
+
+:where(marimo-cell) [data-marimo-cell-output] .markdown.prose :where(h1, h2, h3, h4, h5, h6, p, li, strong, em, blockquote) {
+  color: var(--marimo-cell-foreground, inherit);
+}
+
+:where(marimo-cell) [data-marimo-cell-output] .markdown.prose blockquote {
+  border-color: var(--marimo-cell-border-color, currentColor);
+}
+
+:where(marimo-cell) :where(marimo-ui-element) {
+  max-width: 100%;
+}
+
+:where(marimo-cell) :where(img, video) {
+  height: auto;
+  max-width: 100%;
+}
+
+:where(marimo-cell) :where(.vega-embed, .js-plotly-plot, .plot-container) {
+  max-width: 100%;
+  width: 100%;
+}
+
+:where(marimo-cell) :where(.console-output-area) {
+  border-radius: 0;
+  gap: 0;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+}
+
+:where(marimo-cell) :where(marimo-tex) {
+  display: inline-block;
+  max-inline-size: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: middle;
+}
+
+:where(marimo-cell)[data-state="loading"] > [data-marimo-cell-output],
+:where(marimo-cell)[data-state="stale"] > [data-marimo-cell-output] {
+  opacity: 0.68;
+}
+
+:where(marimo-cell) :where(.marimo-cell-error) {
+  background: var(
+    --marimo-cell-muted,
+    color-mix(in srgb, #b5472b 8%, Canvas)
+  );
+  border-inline-start: 3px solid var(--marimo-cell-error, #a33f25);
+  color: var(--marimo-cell-error, #712e1c);
+  padding: 0.75rem;
+}
