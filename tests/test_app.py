@@ -287,6 +287,28 @@ def test_parent_asgi_mount_preserves_public_routes(notebook_path: Path) -> None:
     assert studio_asset.status_code == 200
 
 
+def test_edit_mode_public_routes_honor_parent_mount(notebook_path: Path) -> None:
+    studio = _configured(notebook_path)
+    child = _marimo_app(
+        studio.notebook,
+        path="/base",
+        programmatic=True,
+    )
+    _edit_mode(child)
+    parent = Starlette(routes=[Mount("/parent", app=child)])
+
+    with TestClient(parent) as client:
+        workspace = client.get("/parent/base/studio/executive/")
+        config = client.get("/parent/base/_marimo-studio/views/executive/config").json()
+
+    assert workspace.status_code == 200
+    assert 'data-editor-frame src="/parent/base/"' in workspace.text
+    assert 'href="/parent/base/executive/"' in workspace.text
+    assert 'data-view-prefix="/parent/base/"' in workspace.text
+    assert 'data-studio-prefix="/parent/base/studio/"' in workspace.text
+    assert config["runtimeUrl"] == "/parent/base/"
+
+
 def test_edit_mode_keeps_the_editor_at_root_and_adds_studio(
     notebook_path: Path,
 ) -> None:
@@ -296,28 +318,67 @@ def test_edit_mode_keeps_the_editor_at_root_and_adds_studio(
 
     with TestClient(app) as client:
         editor = client.get("/")
-        studio = client.get("/_marimo-studio/studio/?view=executive")
-        waiting = client.get("/_marimo-studio/preview/executive/?kiosk=true")
-        preview_redirect = client.get(
-            "/_marimo-studio/preview/dashboard/?view=compact",
+        default_workspace = client.get("/studio/")
+        workspace_redirect = client.get(
+            "/studio/executive?layout=preview",
             follow_redirects=False,
         )
-        missing_preview = client.get("/_marimo-studio/preview/missing/?kiosk=true")
+        workspace = client.get("/studio/executive/")
+        view_redirect = client.get(
+            "/executive?region=emea",
+            follow_redirects=False,
+        )
+        waiting = client.get("/executive/")
+        missing_view = client.get("/studio/missing/")
+        config = client.get("/_marimo-studio/views/executive/config").json()
+
+        mounted: Any = next(
+            route.app for route in app.routes if isinstance(route, Mount)
+        )
+        mounted.state.session_manager.get_session_by_file_key = Mock(
+            return_value=object()
+        )
+        view = client.get("/executive/")
 
     assert editor.status_code == 200
     assert "data-marimo-studio-runtime" not in editor.text
-    assert studio.status_code == 200
-    assert "data-view-select" in studio.text
-    assert '<option value="executive" selected>' in studio.text
-    assert 'data-editor-frame src="/"' in studio.text
-    assert 'data-preview-frame src="about:blank"' in studio.text
+    assert default_workspace.status_code == 200
+    assert '<option value="dashboard" selected>' in default_workspace.text
+    assert workspace_redirect.status_code == 307
+    assert workspace_redirect.headers["location"] == (
+        "/studio/executive/?layout=preview"
+    )
+    assert workspace.status_code == 200
+    assert "data-view-select" in workspace.text
+    assert '<option value="executive" selected>' in workspace.text
+    assert 'data-editor-frame src="/"' in workspace.text
+    assert 'data-preview-frame src="about:blank"' in workspace.text
+    assert 'href="/executive/"' in workspace.text
+    assert 'data-view-prefix="/"' in workspace.text
+    assert 'data-studio-prefix="/studio/"' in workspace.text
+    assert "kiosk=true" not in workspace.text
+    assert view_redirect.status_code == 307
+    assert view_redirect.headers["location"] == "/executive/?region=emea"
     assert waiting.status_code == 503
     assert waiting.headers["retry-after"] == "1"
-    assert preview_redirect.status_code == 303
-    assert preview_redirect.headers["location"] == (
-        "/_marimo-studio/preview/dashboard/?view=compact&kiosk=true"
-    )
-    assert missing_preview.status_code == 404
+    assert missing_view.status_code == 404
+    assert view.status_code == 200
+    assert config["runtimeUrl"] == "/"
+
+
+def test_support_namespace_does_not_serve_page_documents(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        workspace = client.get("/_marimo-studio/studio/")
+        preview = client.get("/_marimo-studio/preview/executive/")
+
+    assert workspace.status_code == 404
+    assert preview.status_code == 404
 
 
 def test_view_list_tracks_new_folders_without_restarting_marimo(
@@ -354,7 +415,7 @@ def test_template_errors_stay_scoped_to_the_selected_view(
         stylesheet = client.get("/_marimo-studio/views/executive/static/app.css")
         views = client.get("/_marimo-studio/views")
     with TestClient(edit_app) as client:
-        studio = client.get("/_marimo-studio/studio/?view=executive")
+        studio = client.get("/studio/executive/")
 
     assert dashboard.status_code == 200
     assert executive.status_code == 500
@@ -380,6 +441,11 @@ def test_marimo_authentication_owns_document_login(
         )
         page = client.get(establish.headers["location"])
         protected = client.get("/_marimo-studio/views/executive/config")
+        missing = client.get("/definitely-missing/", follow_redirects=False)
+        missing_studio = client.get(
+            "/studio/definitely-missing/",
+            follow_redirects=False,
+        )
 
     assert root.status_code == 303
     assert root.headers["location"].startswith("/auth/login")
@@ -392,7 +458,37 @@ def test_marimo_authentication_owns_document_login(
     assert "session=" in establish.headers["set-cookie"]
     assert page.status_code == 200
     assert protected.status_code == 200
+    assert missing.status_code == 404
+    assert missing_studio.status_code == 404
     assert "test-token" not in page.text
+
+
+def test_edit_mode_public_pages_use_marimo_authentication(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook, token="test-token")
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        workspace = client.get("/studio/executive/", follow_redirects=False)
+        view = client.get("/executive/", follow_redirects=False)
+        establish = client.get(
+            "/studio/executive/?access_token=test-token",
+            follow_redirects=False,
+        )
+        page = client.get(establish.headers["location"])
+
+    workspace_login = parse_qs(urlsplit(workspace.headers["location"]).query)
+    view_login = parse_qs(urlsplit(view.headers["location"]).query)
+    assert workspace.status_code == 303
+    assert workspace_login["next"] == ["/studio/executive/"]
+    assert view.status_code == 303
+    assert view_login["next"] == ["/executive/"]
+    assert establish.status_code == 303
+    assert establish.headers["location"] == "/studio/executive/"
+    assert "session=" in establish.headers["set-cookie"]
+    assert page.status_code == 200
 
 
 def test_authentication_precedes_project_diagnostics(
@@ -419,6 +515,32 @@ def test_authentication_precedes_project_diagnostics(
     )
 
 
+def test_invalid_studio_config_does_not_intercept_marimo_routes(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+
+    def invalidate(config: MutableMapping[str, object]) -> None:
+        del config["default"]
+
+    update_notebook_config(studio.notebook, invalidate)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        native = [
+            client.get("/health"),
+            client.get("/sse"),
+            client.get("/favicon.ico"),
+            client.get("/public-files-sw.js"),
+        ]
+        presentation = client.get("/dashboard/")
+
+    assert all(response.status_code == 200 for response in native)
+    assert presentation.status_code == 500
+    assert presentation.text.startswith("Marimo Studio configuration error")
+
+
 def test_middleware_is_inert_for_an_unconfigured_notebook(tmp_path: Path) -> None:
     notebook = tmp_path / "plain.py"
     notebook.write_text(
@@ -429,10 +551,13 @@ def test_middleware_is_inert_for_an_unconfigured_notebook(tmp_path: Path) -> Non
     with TestClient(_marimo_app(notebook)) as client:
         page = client.get("/")
         support = client.get("/_marimo-studio/views")
+    with TestClient(_marimo_app(notebook, token="test-token")) as client:
+        missing = client.get("/definitely-missing/", follow_redirects=False)
 
     assert page.status_code == 200
     assert "data-marimo-studio-runtime" not in page.text
     assert support.status_code == 404
+    assert missing.status_code == 404
 
 
 def test_static_route_rejects_parent_paths(notebook_path: Path) -> None:

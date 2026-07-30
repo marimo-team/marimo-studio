@@ -37,22 +37,6 @@ export const marimoVersionFromUvLock = (source: string): string => {
   return marimo.version;
 };
 
-const marimoVersionFromPyproject = (source: string): string => {
-  const document = parse(source);
-  const project = isRecord(document) ? document.project : undefined;
-  const dependencies = isRecord(project) ? project.dependencies : undefined;
-  if (!Array.isArray(dependencies)) {
-    throw new Error("pyproject.toml must declare project dependencies");
-  }
-  const requirement = dependencies.find((value) =>
-    typeof value === "string" && value.startsWith("marimo==")
-  );
-  if (typeof requirement !== "string") {
-    throw new Error("pyproject.toml must pin marimo with marimo==VERSION");
-  }
-  return requirement.slice("marimo==".length);
-};
-
 const marimoVersionFromCheckout = (source: string): string => {
   const document = parse(source);
   const project = isRecord(document) ? document.project : undefined;
@@ -185,14 +169,6 @@ const build = async (): Promise<void> => {
   const marimoVersion = marimoVersionFromUvLock(
     await Deno.readTextFile(join(root, "uv.lock")),
   );
-  const packageVersion = marimoVersionFromPyproject(
-    await Deno.readTextFile(join(root, "pyproject.toml")),
-  );
-  if (packageVersion !== marimoVersion) {
-    throw new Error(
-      `pyproject.toml pins marimo ${packageVersion}, but uv.lock resolves ${marimoVersion}`,
-    );
-  }
   const marimo = await prepareMarimo(marimoVersion);
   const htmx = await resolveHtmx();
   await run(

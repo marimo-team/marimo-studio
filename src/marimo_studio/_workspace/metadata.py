@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, MutableMapping
-from importlib.metadata import metadata, version
+from importlib.metadata import metadata
 from pathlib import Path
 from typing import Any
 
@@ -92,7 +92,8 @@ def notebook_config(path: Path) -> Mapping[str, Any] | None:
 def _render(document: TOMLDocument, newline: str) -> str:
     content = tomlkit.dumps(document).rstrip("\n")
     lines = content.split("\n") if content else []
-    return newline.join((SCRIPT_START, *(f"# {line}" for line in lines), SCRIPT_END))
+    comments = ("#" if not line else f"# {line}" for line in lines)
+    return newline.join((SCRIPT_START, *comments, SCRIPT_END))
 
 
 def _replace_metadata(source: str, path: Path, document: TOMLDocument) -> str:
@@ -192,8 +193,7 @@ def configured_notebook_source(path: Path, default_view: str) -> str:
             current_python,
             package_python,
         )
-    requirement = f"marimo-studio=={version('marimo-studio')}"
-    set_package_requirement(document, requirement)
+    set_package_requirement(document, "marimo-studio")
 
     tool = document.get("tool")
     if tool is None:

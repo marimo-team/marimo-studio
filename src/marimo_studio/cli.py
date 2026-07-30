@@ -20,6 +20,7 @@ from urllib.parse import urlencode
 
 import click
 
+from marimo_studio._server.routes import studio_url, view_url
 from marimo_studio._workspace import (
     bind_cell,
     check_runtime_studio,
@@ -724,14 +725,17 @@ def _launch_command(
     assert studio is not None
     selected = result.name
     public_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
-    path = base_url.rstrip("/") + "/_marimo-studio/studio/"
-    query = {"view": selected}
+    query: dict[str, str] = {}
     if access_token is not None:
         query["access_token"] = access_token
-    url = f"http://{public_host}:{port}{path}?{urlencode(query)}"
-    click.echo(f"Studio: {url}")
+    suffix = f"?{urlencode(query)}" if query else ""
+    origin = f"http://{public_host}:{port}"
+    workspace_url = f"{origin}{studio_url(base_url, selected)}{suffix}"
+    presentation_url = f"{origin}{view_url(base_url, selected)}{suffix}"
+    click.echo(f"Studio: {workspace_url}")
+    click.echo(f"View:   {presentation_url}")
     if open_browser:
-        _open_later(url)
+        _open_later(workspace_url)
     command = environment_command(
         studio,
         [

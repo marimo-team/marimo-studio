@@ -1,4 +1,4 @@
-"""Build uv arguments with Marimo's pinned notebook sandbox adapter."""
+"""Build uv arguments with Marimo's notebook sandbox adapter."""
 
 from __future__ import annotations
 

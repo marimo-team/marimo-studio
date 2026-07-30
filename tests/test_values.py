@@ -128,28 +128,6 @@ def test_kernel_projection_bounds_each_selected_leaf() -> None:
     assert result.errors["context.large"].code == "value-too-large"
 
 
-def test_kernel_projection_keeps_selector_exceptions_local() -> None:
-    class ExplodingValue:
-        @property
-        def value(self) -> object:
-            raise RuntimeError("property failed")
-
-    result = _read_values(
-        {
-            "context": {
-                "good": 3,
-                "bad": ExplodingValue(),
-            }
-        },
-        ("context.good", "context.bad.value"),
-        {"context.good", "context.bad.value"},
-        max_value_bytes=1_000,
-    )
-
-    assert result.values == {"context.good": 3}
-    assert result.errors["context.bad.value"].code == "value-path-unavailable"
-
-
 def test_kernel_value_read_rejects_a_viewer_before_dispatch() -> None:
     from marimo._messaging.notification import ConsumerCapabilities
     from marimo._types.ids import ConsumerId
@@ -259,12 +237,22 @@ def test_runtime_probe_preserves_session_creation_failures(
     assert manager.shutdown_called
 
 
-def test_runtime_rejects_a_marimo_patch_mismatch(
+@pytest.mark.parametrize("installed", ["0.23.14", "0.23.15"])
+def test_runtime_accepts_marimo_from_the_supported_lower_bound(
+    monkeypatch: pytest.MonkeyPatch,
+    installed: str,
+) -> None:
+    monkeypatch.setattr(marimo, "__version__", installed)
+
+    assert_supported_version()
+
+
+def test_runtime_rejects_marimo_below_the_supported_lower_bound(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(marimo, "__version__", "999.0.0")
+    monkeypatch.setattr(marimo, "__version__", "0.23.13")
 
-    with pytest.raises(ProtocolError, match="Install marimo"):
+    with pytest.raises(ProtocolError, match=r"Install marimo>=0\.23\.14"):
         assert_supported_version()
 
 

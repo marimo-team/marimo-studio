@@ -1,6 +1,6 @@
 [project]
 name = "marimo-studio"
-version = "0.1.0"
+version = "0.0.1"
 description = "Design custom views for Marimo notebooks"
 readme = "README.md"
 authors = [
@@ -9,7 +9,7 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "htpy>=26.5.1,<27",
-    "marimo==0.23.15",
+    "marimo>=0.23.14",
     "markupsafe>=3",
     "packaging>=25",
     "tomlkit>=0.14",
@@ -42,7 +42,7 @@ test = [
 dev = [
     { include-group = "test" },
     "deno>=2.9.4",
-    "marimo[recommended]==0.23.15",
+    "marimo[recommended]>=0.23.14",
     "pyrefly>=1.1.1",
     "ruff>=0.16.0",
     "ty>=0.0.64",

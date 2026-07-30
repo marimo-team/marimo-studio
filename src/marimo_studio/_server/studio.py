@@ -25,7 +25,12 @@ from htpy import (
 )
 
 from marimo_studio._html import node_list, render
-from marimo_studio._server.presentation import SUPPORT_PATH, public_url
+from marimo_studio._server.routes import (
+    SUPPORT_PATH,
+    public_url,
+    studio_url,
+    view_url,
+)
 from marimo_studio._workspace.models import StudioConfig
 
 _IFRAME = Element("iframe")
@@ -35,7 +40,7 @@ def studio_document(config: StudioConfig, base_url: str, selected: str) -> str:
     """Return the Studio shell for one active view."""
     root_url = public_url(base_url, "/")
     support_url = public_url(base_url, SUPPORT_PATH)
-    preview_url = f"{support_url}/preview/{selected}/?kiosk=true"
+    preview_url = view_url(base_url, selected)
     view_selector = select(
         {
             "aria-label": "Custom view",
@@ -155,7 +160,8 @@ def studio_document(config: StudioConfig, base_url: str, selected: str) -> str:
             "data-studio": True,
             "data-events-url": f"{support_url}/dev/events",
             "data-views-url": f"{support_url}/views",
-            "data-preview-prefix": f"{support_url}/preview",
+            "data-view-prefix": root_url,
+            "data-studio-prefix": studio_url(base_url),
             "data-support-prefix": f"{support_url}/views",
         }
     )[node_list(toolbar, workspace)]

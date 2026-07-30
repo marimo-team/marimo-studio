@@ -15,7 +15,6 @@ from marimo_studio._workspace import ensure_view, load_studio
 from marimo_studio._workspace.environment import (
     environment_command,
     run_in_notebook_environment,
-    should_reenter,
 )
 
 from .helpers import notebook_source
@@ -27,16 +26,6 @@ class _Target:
     notebook: Path
 
 
-def test_notebook_runtime_checks_reenter_the_script_environment(
-    notebook_path: Path,
-) -> None:
-    ensure_view(notebook_path)
-    studio = load_studio(notebook_path)
-
-    assert should_reenter(studio, None) is True
-    assert should_reenter(studio, False) is False
-
-
 def test_project_reentry_uses_the_lock_and_relays_stderr(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -45,8 +34,8 @@ def test_project_reentry_uses_the_lock_and_relays_stderr(
         f"""\
 [project]
 name = "analysis"
-version = "0.1.0"
-dependencies = ["marimo-studio==0.0.1"]
+version = "0.0.1"
+dependencies = ["marimo-studio==1.2.3"]
 
 [tool.marimo-studio]
 notebook = "{notebook_path.name}"
@@ -66,11 +55,19 @@ default = "dashboard"
         return SimpleNamespace(returncode=17, stderr="native warning\n")
 
     monkeypatch.setattr(environment_module.shutil, "which", lambda _: "/usr/bin/uv")
-    monkeypatch.setattr(
-        environment_module,
-        "inline_environment_flags",
-        lambda *_args, **_kwargs: ["--python", ">=3.11"],
-    )
+    monkeypatch.setattr(environment_module, "package_source_root", lambda: None)
+
+    def inline_flags(
+        _notebook: Path,
+        package_requirement: str | None,
+        *,
+        compose_project: bool,
+    ) -> list[str]:
+        captured["package_requirement"] = package_requirement
+        captured["compose_project"] = compose_project
+        return ["--python", ">=3.11"]
+
+    monkeypatch.setattr(environment_module, "inline_environment_flags", inline_flags)
     monkeypatch.setattr(subprocess, "run", run)
 
     result = run_in_notebook_environment(
@@ -86,11 +83,13 @@ default = "dashboard"
     assert "--frozen" in command
     assert command[command.index("--") + 1] == "marimo-studio"
     assert command[-3:] == ["check", str(studio.root), "--runtime"]
+    assert captured["package_requirement"] == "marimo-studio"
+    assert captured["compose_project"] is True
     assert captured["stderr"] == subprocess.PIPE
     assert lines == ["native warning"]
 
 
-def test_source_checkout_reentry_supersedes_a_stale_notebook_pin(
+def test_source_checkout_reentry_uses_local_package_for_unversioned_requirement(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "analysis.py"
@@ -98,7 +97,7 @@ def test_source_checkout_reentry_supersedes_a_stale_notebook_pin(
         """\
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["marimo-studio==0.0.0"]
+# dependencies = ["marimo-studio"]
 # ///
 """,
         encoding="utf-8",
@@ -109,7 +108,8 @@ def test_source_checkout_reentry_supersedes_a_stale_notebook_pin(
         [
             "python",
             "-c",
-            "from importlib.metadata import version; print(version('marimo-studio'))",
+            "from pathlib import Path; import marimo_studio; "
+            "print(Path(marimo_studio.__file__).resolve())",
         ],
     )
 
@@ -123,7 +123,10 @@ def test_source_checkout_reentry_supersedes_a_stale_notebook_pin(
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == version("marimo-studio")
+    source_root = environment_module.package_source_root()
+    assert source_root is not None
+    assert Path(result.stdout.strip()).is_relative_to(source_root)
+    assert command[command.index("--with-editable") + 1] == str(source_root)
 
 
 def test_notebook_environment_composes_project_and_pep_723_sources(
@@ -176,7 +179,7 @@ version = "1.0.0"
         """\
 [project]
 name = "analysis"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = ["project-demo"]
 
 [tool.uv.sources]
@@ -209,7 +212,7 @@ project-demo = { path = "./project-demo" }
     assert result.stdout.strip() == "project-source:notebook-source"
 
 
-def test_inline_environment_replaces_a_stale_package_requirement(
+def test_inline_environment_uses_the_unversioned_package_requirement(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "analysis.py"
@@ -217,7 +220,7 @@ def test_inline_environment_replaces_a_stale_package_requirement(
         """\
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["humanize>=4", "marimo-studio==0.0.1"]
+# dependencies = ["humanize>=4", "marimo-studio==1.2.3"]
 #
 # [tool.uv.sources]
 # marimo-studio = { git = "https://example.test/old.git" }
@@ -232,14 +235,16 @@ def test_inline_environment_replaces_a_stale_package_requirement(
 
     flags = inline_environment_flags(
         notebook,
-        "marimo-studio==9.8.7",
+        "marimo-studio",
         compose_project=False,
     )
     requirements = Path(flags[flags.index("--with-requirements") + 1]).read_text(
         encoding="utf-8"
     )
 
-    assert "humanize>=4" in requirements.splitlines()
-    assert "marimo-studio==9.8.7" in requirements.splitlines()
-    assert "https://example.test/old.git" not in requirements
+    assert set(requirements.splitlines()) == {
+        "humanize>=4",
+        f"marimo=={version('marimo')}",
+        "marimo-studio",
+    }
     assert flags[flags.index("--index") + 1] == "https://packages.example/simple"

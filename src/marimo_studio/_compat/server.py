@@ -10,13 +10,14 @@ from urllib.parse import parse_qs
 from weakref import WeakSet
 
 import marimo
+from packaging.version import InvalidVersion, Version
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from marimo_studio._assets import runtime_marimo_version
 from marimo_studio.errors import ProtocolError
 
 ServerMode = Literal["edit", "run"]
 DOCUMENT_REPLAY_QUERY_PARAM = "marimo_studio_resume"
+_MINIMUM_MARIMO_VERSION = Version("0.23.14")
 
 _DOCUMENT_REPLAY_MANAGERS: WeakSet[Any] = WeakSet()
 _DOCUMENT_REPLAY_LOCK = Lock()
@@ -66,12 +67,17 @@ def _reconnect_with_document_replay(
 
 
 def assert_supported_version() -> None:
-    """Require the Marimo version used to build the browser adapter."""
-    expected = runtime_marimo_version()
-    if marimo.__version__ != expected:
+    """Require Marimo 0.23.14 or newer."""
+    try:
+        installed = Version(marimo.__version__)
+    except InvalidVersion as error:
+        raise ProtocolError(
+            f"Cannot parse installed marimo version {marimo.__version__!r}."
+        ) from error
+    if installed < _MINIMUM_MARIMO_VERSION:
         raise ProtocolError(
             f"marimo {marimo.__version__} is incompatible with this runtime. "
-            f"Install marimo {expected}."
+            "Install marimo>=0.23.14."
         )
 
 

@@ -8,7 +8,6 @@ import marimo
 import pytest
 
 import marimo_studio._workspace.checks as checks_module
-import marimo_studio._workspace.metadata as metadata_module
 import marimo_studio._workspace.setup as workspace_setup
 from marimo_studio._compat.kernel_values import (
     ValueReadError,
@@ -60,18 +59,13 @@ def test_first_view_configures_the_notebook_in_place(notebook_path: Path) -> Non
     assert studio.views["dashboard"].template.is_file()
     assert document is not None
     assert document["tool"]["marimo-studio"]["default"] == "dashboard"
-    assert any(
-        str(dependency).startswith("marimo-studio==")
-        for dependency in document["dependencies"]
-    )
+    assert "marimo-studio" in document["dependencies"]
     assert notebook_path.read_text(encoding="utf-8").endswith(original)
 
 
 def test_setup_preserves_other_pep_723_metadata_and_notebook_body(
     notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(metadata_module, "version", lambda _: "9.8.7")
     body = notebook_path.read_text(encoding="utf-8")
     notebook_path.write_text(
         """\
@@ -100,7 +94,7 @@ def test_setup_preserves_other_pep_723_metadata_and_notebook_body(
         for value in document["dependencies"]
         if "marimo-studio" in str(value)
     ]
-    assert package_dependencies == ["marimo-studio==9.8.7"]
+    assert package_dependencies == ["marimo-studio"]
     assert notebook_path.read_text(encoding="utf-8").endswith(body)
 
 
@@ -174,9 +168,7 @@ def test_setup_rolls_back_notebook_and_view_files_after_write_failure(
 
 def test_setup_converges_package_requirements_and_sources(
     notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(metadata_module, "version", lambda _: "9.8.7")
     body = notebook_path.read_text(encoding="utf-8")
     notebook_path.write_text(
         """\
@@ -203,7 +195,7 @@ def test_setup_converges_package_requirements_and_sources(
 
     assert document is not None
     assert list(document["dependencies"]) == [
-        "marimo-studio==9.8.7",
+        "marimo-studio",
         "humanize>=4",
     ]
     assert dict(document["tool"]["uv"]["sources"]) == {
@@ -212,6 +204,7 @@ def test_setup_converges_package_requirements_and_sources(
     assert notebook_path.read_text(encoding="utf-8").endswith(body)
 
     configured = notebook_path.read_bytes()
+    assert b"# \n" not in configured
     repeated = ensure_view(notebook_path)
 
     assert notebook_path.read_bytes() == configured
@@ -280,17 +273,22 @@ def test_setup_rejects_non_notebooks_without_mutation(
 def test_project_configuration_uses_the_notebook_local_view_directory(
     notebook_path: Path,
 ) -> None:
-    original = notebook_path.read_bytes()
-    pyproject = notebook_path.parent / "pyproject.toml"
+    project_root = notebook_path.parent
+    notebook_dir = project_root / "notebooks"
+    notebook_dir.mkdir()
+    notebook = notebook_dir / notebook_path.name
+    notebook.write_bytes(notebook_path.read_bytes())
+    original = notebook.read_bytes()
+    pyproject = project_root / "pyproject.toml"
     pyproject.write_text(
         f"""\
 [project]
 name = "analysis"
-version = "0.1.0"
-dependencies = ["marimo-studio==0.0.1"]
+version = "0.0.1"
+dependencies = ["marimo-studio==1.2.3"]
 
 [tool.marimo-studio]
-notebook = "{notebook_path.name}"
+notebook = "notebooks/{notebook.name}"
 default = "executive"
 
 [tool.marimo-studio.cells]
@@ -298,16 +296,15 @@ default = "executive"
         encoding="utf-8",
     )
 
-    ensure_view(notebook_path)
-    studio = load_studio(notebook_path)
+    ensure_view(notebook)
+    studio = load_studio(notebook)
 
     assert studio.config_source == "pyproject"
     assert studio.config_path == pyproject
     assert studio.default_view == "executive"
     assert set(studio.views) == {"executive"}
-    assert studio.view_root.name == notebook_path.stem
-    assert studio.view_root.parent.name == "studio"
-    assert notebook_path.read_bytes() == original
+    assert studio.view_root == notebook_dir / "__marimo__" / "studio" / notebook.stem
+    assert notebook.read_bytes() == original
 
 
 def test_notebooks_with_the_same_parent_have_independent_presentations(
@@ -482,10 +479,14 @@ def test_each_view_enforces_the_projection_shell(
         resolve_studio(load_studio(notebook_path))
 
 
-def test_view_names_cannot_claim_native_routes(notebook_path: Path) -> None:
+@pytest.mark.parametrize("name", ["lsp", "mcp", "sse", "studio"])
+def test_view_names_cannot_claim_application_routes(
+    notebook_path: Path,
+    name: str,
+) -> None:
     ensure_view(notebook_path)
-    with pytest.raises(ConfigurationError, match="View names"):
-        ensure_view(notebook_path, "sse")
+    with pytest.raises(ConfigurationError, match=f"{name!r} is reserved"):
+        ensure_view(notebook_path, name)
 
 
 def test_changed_binding_has_one_recovery_path(notebook_path: Path) -> None:

@@ -52,7 +52,7 @@ const environment = (
   return { value, replaced };
 };
 
-Deno.test("a reload restores the session remembered for its View path", () => {
+Deno.test("a reload restores the session remembered for its view path", () => {
   const storage = new Map<string, string>();
   const first = environment(storage);
   rememberSession(config(true), "s_abc123", first.value);

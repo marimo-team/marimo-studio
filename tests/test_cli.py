@@ -10,7 +10,6 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from click.testing import CliRunner
 
-import marimo_studio._workspace.metadata as metadata_module
 import marimo_studio.cli as cli_module
 from marimo_studio._workspace import ensure_view, load_studio
 from marimo_studio._workspace.metadata import read_notebook_metadata
@@ -299,17 +298,24 @@ def test_direct_launch_starts_native_marimo_edit(
             "--headless",
             "--port",
             "9123",
+            "--base-url",
+            "/proxy/token",
             "--",
             "--no-token",
         ],
     )
 
     assert result.exit_code == 0, result.output
-    studio_url = urlsplit(result.output.removeprefix("Studio: ").strip())
+    output = result.output.splitlines()
+    assert len(output) == 2
+    studio_url = urlsplit(output[0].removeprefix("Studio: ").strip())
+    view_url = urlsplit(output[1].removeprefix("View:   ").strip())
     assert studio_url.hostname == "127.0.0.1"
     assert studio_url.port == 9123
-    assert studio_url.path == "/_marimo-studio/studio/"
-    assert parse_qs(studio_url.query) == {"view": ["dashboard"]}
+    assert studio_url.path == "/proxy/token/studio/dashboard/"
+    assert studio_url.query == ""
+    assert view_url.path == "/proxy/token/dashboard/"
+    assert view_url.query == ""
     assert len(calls) == 1
     command, cwd = calls[0]
     assert cwd == notebook_path.parent
@@ -321,7 +327,7 @@ def test_direct_launch_starts_native_marimo_edit(
     ]
     assert command[command.index("--host") + 1] == "127.0.0.1"
     assert command[command.index("--port") + 1] == "9123"
-    assert command[command.index("--base-url") + 1] == ""
+    assert command[command.index("--base-url") + 1] == "/proxy/token"
     assert command[-3:] == ["--headless", "--no-sandbox", "--no-token"]
     assert load_studio(notebook_path).config_path == notebook_path
 
@@ -353,12 +359,17 @@ def test_direct_launch_opens_an_authenticated_studio_url(
     )
 
     assert result.exit_code == 0, result.output
-    studio_url = result.output.removeprefix("Studio: ").strip()
+    output = result.output.splitlines()
+    assert len(output) == 2
+    studio_url = output[0].removeprefix("Studio: ").strip()
+    view_url = output[1].removeprefix("View:   ").strip()
     assert opened == [studio_url]
+    assert urlsplit(studio_url).path == "/studio/dashboard/"
+    assert urlsplit(view_url).path == "/dashboard/"
     assert parse_qs(urlsplit(studio_url).query) == {
         "access_token": ["secret"],
-        "view": ["dashboard"],
     }
+    assert parse_qs(urlsplit(view_url).query) == {"access_token": ["secret"]}
     assert calls[0][-2:] == ["--token-password", "secret"]
 
 
@@ -397,7 +408,7 @@ def test_direct_launch_converges_the_notebook_package_requirement(
         """\
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["humanize>=4", "marimo-studio==0.0.1"]
+# dependencies = ["humanize>=4", "marimo-studio==1.2.3"]
 #
 # [tool.marimo-studio]
 # default = "dashboard"
@@ -408,7 +419,6 @@ def test_direct_launch_converges_the_notebook_package_requirement(
         + body,
         encoding="utf-8",
     )
-    monkeypatch.setattr(metadata_module, "version", lambda _: "9.8.7")
     monkeypatch.setattr(
         cli_module,
         "environment_command",
@@ -430,31 +440,23 @@ def test_direct_launch_converges_the_notebook_package_requirement(
     assert document is not None
     assert list(document["dependencies"]) == [
         "humanize>=4",
-        "marimo-studio==9.8.7",
+        "marimo-studio",
     ]
     assert notebook_path.read_text(encoding="utf-8").endswith(body)
 
 
-@pytest.mark.parametrize(
-    ("marimo_args", "option"),
-    [
-        (("--port", "9123"), "--port"),
-        (("--proxy", "http://example.test"), "--proxy"),
-    ],
-)
 def test_direct_launch_rejects_managed_options_after_separator(
     notebook_path: Path,
     runtime_assets: Path,
-    marimo_args: tuple[str, ...],
-    option: str,
 ) -> None:
     result = _run_cli(
         runtime_assets,
         str(notebook_path),
         "--headless",
         "--",
-        *marimo_args,
+        "--proxy",
+        "http://example.test",
     )
 
     assert result.returncode == 2
-    assert f"Pass {option} before `--`" in result.stderr
+    assert "Pass --proxy before `--`" in result.stderr

@@ -34,13 +34,21 @@ if (
 
 const eventsUrl = studio.dataset.eventsUrl;
 const viewsUrl = studio.dataset.viewsUrl;
-const previewPrefix = studio.dataset.previewPrefix;
+const viewPrefix = studio.dataset.viewPrefix;
+const studioPrefix = studio.dataset.studioPrefix;
 const supportPrefix = studio.dataset.supportPrefix;
-if (!eventsUrl || !viewsUrl || !previewPrefix || !supportPrefix) {
+if (
+  !eventsUrl ||
+  !viewsUrl ||
+  !viewPrefix ||
+  !studioPrefix ||
+  !supportPrefix
+) {
   throw new Error("Studio route configuration is incomplete");
 }
 
-const previewUrl = (view: string) => `${previewPrefix}/${view}/?kiosk=true`;
+const viewUrl = (view: string) => `${viewPrefix}${view}/`;
+const studioUrl = (view: string) => `${studioPrefix}${view}/`;
 const supportUrl = (view: string) => `${supportPrefix}/${view}`;
 
 const setStatus = (message = "", error = false) => {
@@ -56,7 +64,7 @@ const postSwitch = (view: string) => {
     {
       type: "marimo-studio:switch-view",
       view,
-      documentUrl: previewUrl(view),
+      documentUrl: viewUrl(view),
       supportUrl: supportUrl(view),
     },
     globalThis.location.origin,
@@ -77,12 +85,10 @@ const setLayout = (layout: string) => {
 };
 
 const selectView = (view: string) => {
-  const nextPreview = previewUrl(view);
+  const nextPreview = viewUrl(view);
   preview.title = `${view} custom view`;
   popout.href = nextPreview;
-  const parentUrl = new URL(globalThis.location.href);
-  parentUrl.searchParams.set("view", view);
-  globalThis.history.replaceState({}, "", parentUrl);
+  globalThis.history.replaceState({}, "", studioUrl(view));
   setStatus("Updating preview");
   if (receiverReady) {
     postSwitch(view);
@@ -225,7 +231,7 @@ const startPreview = () => {
   if (preview.src === "about:blank") {
     receiverReady = false;
     setStatus("Connecting preview");
-    preview.src = previewUrl(selector.value);
+    preview.src = viewUrl(selector.value);
   }
 };
 editor.addEventListener("load", startPreview, { once: true });

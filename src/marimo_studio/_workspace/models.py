@@ -23,9 +23,12 @@ RESERVED_VIEW_NAMES = frozenset(
         "favicon.ico",
         "health",
         "healthz",
+        "lsp",
+        "mcp",
         "og",
         "public",
         "sse",
+        "studio",
         "terminal",
         "ws",
     }

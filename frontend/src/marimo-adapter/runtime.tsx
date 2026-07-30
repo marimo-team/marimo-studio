@@ -26,7 +26,10 @@ import { connectionAtom } from "@marimo-team/frontend/unstable_internal/core/net
 import { requestClientAtom } from "@marimo-team/frontend/unstable_internal/core/network/requests";
 import { createNetworkRequests } from "@marimo-team/frontend/unstable_internal/core/network/requests-network";
 import { createErrorToastingRequests } from "@marimo-team/frontend/unstable_internal/core/network/requests-toasting";
-import { runtimeConfigAtom } from "@marimo-team/frontend/unstable_internal/core/runtime/config";
+import {
+  getRuntimeManager,
+  runtimeConfigAtom,
+} from "@marimo-team/frontend/unstable_internal/core/runtime/config";
 import { store } from "@marimo-team/frontend/unstable_internal/core/state/jotai";
 import { WebSocketState } from "@marimo-team/frontend/unstable_internal/core/websocket/types";
 import { initializePlugins } from "@marimo-team/frontend/unstable_internal/plugins/plugins";
@@ -35,6 +38,7 @@ import { ThemeProvider } from "@marimo-team/frontend/unstable_internal/theme/The
 import { PAGE_THEME_EVENT, themeFromColorScheme } from "../page-theme";
 import { getRuntimeConfig, type RuntimeConfig } from "../runtime-config";
 import { RuntimeCellViews } from "./cell-views";
+import { configureKioskTransport } from "./transport";
 
 const preferredColorScheme = globalThis.matchMedia(
   "(prefers-color-scheme: dark)",
@@ -97,6 +101,9 @@ export const mountMarimoRuntime = (
     lazy: false,
     serverToken: config.serverToken,
   });
+  // Marimo selects kiosk consumers from transport query parameters. Apply the
+  // marker at that boundary so the HTTP API keeps the configured base URL.
+  configureKioskTransport(getRuntimeManager(), config.mode === "edit");
   const initialMode = config.mode === "edit" ? "edit" : "read";
   const viewMode = config.mode === "edit" ? "present" : "read";
   store.set(initialModeAtom, initialMode);

@@ -44,6 +44,19 @@ jobs:
           --python "${{ matrix.python-version }}"
           pytest
 
+      - name: Test Marimo lower bound
+        if: matrix.python-version == '3.11'
+        run: >-
+          uv run
+          --no-project
+          --isolated
+          --python "${{ matrix.python-version }}"
+          --with-editable .
+          --with marimo==0.23.14
+          --with pytest==9.1.1
+          --with httpx2==2.9.1
+          pytest
+
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 30

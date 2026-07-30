@@ -37,13 +37,19 @@ from marimo_studio._compat.server import (
 )
 from marimo_studio._html import cell_host, render
 from marimo_studio._server.dev import change_events
-from marimo_studio._server.presentation import (
+from marimo_studio._server.presentation import NotebookPresentation
+from marimo_studio._server.routes import (
+    STUDIO_PATH,
     SUPPORT_PATH,
-    NotebookPresentation,
     public_url,
 )
 from marimo_studio._server.studio import studio_document
-from marimo_studio._workspace.models import ResolvedView, StudioConfig
+from marimo_studio._workspace.models import (
+    RESERVED_VIEW_NAMES,
+    VIEW_PATTERN,
+    ResolvedView,
+    StudioConfig,
+)
 from marimo_studio.errors import MarimoStudioError
 
 _NO_STORE = {"Cache-Control": "no-store"}
@@ -78,6 +84,32 @@ class PresentationMiddleware:
         if relative is None or not self._could_handle(relative, location.mode):
             await self.app(scope, receive, send)
             return
+        presentation = self._presentations.setdefault(
+            location.notebook,
+            NotebookPresentation(location.notebook),
+        )
+        try:
+            studio = presentation.discover()
+            discovery_error = None
+        except MarimoStudioError as error:
+            studio = None
+            discovery_error = error
+        if studio is None:
+            if discovery_error is None:
+                await self.app(scope, receive, send)
+                return
+            document_view = None
+            studio_view = None
+        else:
+            document_view = self._document_view(relative, studio, location.mode)
+            studio_view = self._studio_view(relative, studio, location.mode)
+            if (
+                document_view is None
+                and studio_view is None
+                and not relative.startswith(SUPPORT_PATH)
+            ):
+                await self.app(scope, receive, send)
+                return
         if has_access_token(scope) or not has_read_access(scope):
             if relative in {"", "/"} or relative.startswith(f"{SUPPORT_PATH}/assets/"):
                 await self.app(scope, receive, send)
@@ -88,25 +120,16 @@ class PresentationMiddleware:
                 )
                 await response(scope, receive, send)
             return
-        presentation = self._presentations.setdefault(
-            location.notebook,
-            NotebookPresentation(location.notebook),
-        )
+        if discovery_error is not None:
+            response = self._error_response(relative, discovery_error)
+            await response(scope, receive, send)
+            return
+        assert studio is not None
         try:
-            studio = presentation.discover()
-            if studio is None:
-                await self.app(scope, receive, send)
-                return
-            document_view = self._run_document_view(relative, studio, location.mode)
-            is_preview = relative.startswith(f"{SUPPORT_PATH}/preview/")
-            if document_view is None and not relative.startswith(SUPPORT_PATH):
-                await self.app(scope, receive, send)
-                return
-            redirect = self._document_redirect(
+            redirect = self._page_redirect(
                 Request(scope, receive),
                 relative,
-                location.mode,
-                is_preview,
+                document_view is not None or studio_view is not None,
             )
             if redirect is not None:
                 await redirect(scope, receive, send)
@@ -122,6 +145,7 @@ class PresentationMiddleware:
                 studio,
                 presentation,
                 document_view,
+                studio_view,
             )
         except MarimoStudioError as error:
             response = self._error_response(relative, error)
@@ -150,55 +174,59 @@ class PresentationMiddleware:
     def _could_handle(relative: str, mode: str) -> bool:
         if relative == SUPPORT_PATH or relative.startswith(f"{SUPPORT_PATH}/"):
             return True
-        if mode != "run":
-            return False
-        stripped = relative.strip("/")
-        return relative in {"", "/"} or bool(stripped and "/" not in stripped)
+        if mode == "run" and relative in {"", "/"}:
+            return True
+        parts = relative.strip("/").split("/")
+        if mode == "edit" and parts[0] == STUDIO_PATH.strip("/"):
+            return len(parts) in {1, 2}
+        return (
+            len(parts) == 1
+            and VIEW_PATTERN.fullmatch(parts[0]) is not None
+            and parts[0] not in RESERVED_VIEW_NAMES
+        )
 
     @staticmethod
-    def _run_document_view(
+    def _document_view(
         relative: str,
         studio: StudioConfig,
         mode: str,
     ) -> str | None:
-        if mode != "run":
-            return None
-        if relative in {"", "/"}:
+        if mode == "run" and relative in {"", "/"}:
             return studio.default_view
         name = relative.strip("/")
         return name if "/" not in name and name in studio.views else None
 
     @staticmethod
-    def _document_redirect(
+    def _studio_view(
+        relative: str,
+        studio: StudioConfig,
+        mode: str,
+    ) -> str | None:
+        if mode != "edit":
+            return None
+        parts = relative.strip("/").split("/")
+        if parts == [STUDIO_PATH.strip("/")]:
+            return studio.default_view
+        if len(parts) == 2 and parts[0] == STUDIO_PATH.strip("/"):
+            return parts[1] if parts[1] in studio.views else None
+        return None
+
+    @staticmethod
+    def _page_redirect(
         request: Request,
         relative: str,
-        mode: str,
-        preview: bool,
+        page: bool,
     ) -> Response | None:
-        if mode == "run":
-            name = relative.strip("/")
-            if name and "/" not in name and not relative.endswith("/"):
-                target = request.url.path + "/"
-                if request.url.query:
-                    target += f"?{request.url.query}"
-                return RedirectResponse(
-                    target,
-                    status_code=307,
-                    headers=_DOCUMENT_HEADERS,
-                )
+        if not page or relative in {"", "/"} or relative.endswith("/"):
             return None
-        if not preview:
-            return None
-        query = [
-            (key, value)
-            for key, value in request.query_params.multi_items()
-            if key not in {"access_token", "kiosk"}
-        ]
-        query.append(("kiosk", "true"))
-        if list(request.query_params.multi_items()) == query:
-            return None
-        target = request.url.path + "?" + urlencode(query)
-        return RedirectResponse(target, status_code=303, headers=_DOCUMENT_HEADERS)
+        target = request.url.path + "/"
+        if request.url.query:
+            target += f"?{request.url.query}"
+        return RedirectResponse(
+            target,
+            status_code=307,
+            headers=_DOCUMENT_HEADERS,
+        )
 
     async def _response(
         self,
@@ -209,16 +237,21 @@ class PresentationMiddleware:
         studio: StudioConfig,
         presentation: NotebookPresentation,
         document_view: str | None,
+        studio_view: str | None,
     ) -> Response:
         request = Request(scope, receive)
         if document_view is not None:
             if request.method not in {"GET", "HEAD"}:
                 return Response(status_code=405)
+            if context.mode == "edit" and not has_notebook_session(context):
+                return self._waiting_response()
             resolved = presentation.resolve(studio, document_view)
             return HTMLResponse(
                 presentation.render_document(resolved, context, document_view),
                 headers=_DOCUMENT_HEADERS,
             )
+        if studio_view is not None:
+            return self._studio_response(request, context, studio, studio_view)
         support_path = relative.removeprefix(SUPPORT_PATH)
         if support_path.startswith("/assets/"):
             return self._file_response(
@@ -234,8 +267,6 @@ class PresentationMiddleware:
                 status_code=401,
                 headers=_NO_STORE,
             )
-        if support_path in {"/studio", "/studio/"}:
-            return self._studio_response(request, context, studio)
         if support_path == "/views" and request.method == "GET":
             return JSONResponse(
                 {
@@ -247,15 +278,6 @@ class PresentationMiddleware:
             )
         if support_path == "/dev/events" and request.method == "GET" and context.dev:
             return self._events_response(studio)
-        if support_path.startswith("/preview/"):
-            view_name = support_path.removeprefix("/preview/").strip("/")
-            return self._preview_response(
-                request,
-                context,
-                studio,
-                presentation,
-                view_name,
-            )
         if support_path.startswith("/views/"):
             return await self._view_response(
                 request,
@@ -271,12 +293,12 @@ class PresentationMiddleware:
         request: Request,
         context: ServerContext,
         studio: StudioConfig,
+        selected: str,
     ) -> Response:
         if context.mode != "edit":
             return Response(status_code=404)
         if request.method not in {"GET", "HEAD"}:
             return Response(status_code=405)
-        selected = request.query_params.get("view", studio.default_view)
         if selected not in studio.views:
             return PlainTextResponse(
                 f"Unknown view {selected!r}",
@@ -285,26 +307,6 @@ class PresentationMiddleware:
             )
         return HTMLResponse(
             studio_document(studio, context.base_url, selected),
-            headers=_DOCUMENT_HEADERS,
-        )
-
-    def _preview_response(
-        self,
-        request: Request,
-        context: ServerContext,
-        studio: StudioConfig,
-        presentation: NotebookPresentation,
-        view_name: str,
-    ) -> Response:
-        if context.mode != "edit" or view_name not in studio.views:
-            return Response(status_code=404)
-        if request.method not in {"GET", "HEAD"}:
-            return Response(status_code=405)
-        if not has_notebook_session(context):
-            return self._waiting_response()
-        resolved = presentation.resolve(studio, view_name)
-        return HTMLResponse(
-            presentation.render_document(resolved, context, view_name),
             headers=_DOCUMENT_HEADERS,
         )
 
@@ -461,12 +463,7 @@ class PresentationMiddleware:
 
     @staticmethod
     def _error_response(relative: str, error: Exception) -> Response:
-        document = (
-            relative.startswith(f"{SUPPORT_PATH}/preview/")
-            or relative in {f"{SUPPORT_PATH}/studio", f"{SUPPORT_PATH}/studio/"}
-            or not relative.startswith(SUPPORT_PATH)
-        )
-        if document:
+        if not relative.startswith(SUPPORT_PATH):
             return PlainTextResponse(
                 f"Marimo Studio configuration error\n\n{error}",
                 status_code=500,

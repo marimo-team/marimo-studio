@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tomllib
 from collections.abc import Callable
-from importlib.metadata import metadata, version
+from importlib.metadata import metadata
 from pathlib import Path
 from typing import Protocol
 
@@ -161,11 +161,7 @@ def environment_command(
         if (root / "uv.lock").is_file():
             command.append("--frozen")
     source_root = package_source_root()
-    package_requirement = (
-        None
-        if source_root is not None
-        else f"marimo-studio=={version('marimo-studio')}"
-    )
+    package_requirement = None if source_root is not None else "marimo-studio"
     command.extend(
         inline_environment_flags(
             target.notebook,

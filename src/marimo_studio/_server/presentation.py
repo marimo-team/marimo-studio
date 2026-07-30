@@ -10,6 +10,7 @@ from htpy import base
 
 from marimo_studio._compat.server import ServerContext
 from marimo_studio._html import render, runtime_head, runtime_metadata, runtime_root
+from marimo_studio._server.routes import SUPPORT_PATH, public_url
 from marimo_studio._workspace import discover_studio, resolve_studio
 from marimo_studio._workspace.config import (
     TemplateParser,
@@ -17,14 +18,6 @@ from marimo_studio._workspace.config import (
 )
 from marimo_studio._workspace.models import ResolvedStudio, StudioConfig
 from marimo_studio.errors import ConfigurationError
-
-SUPPORT_PATH = "/_marimo-studio"
-
-
-def public_url(base_url: str, path: str = "") -> str:
-    base_path = base_url.rstrip("/")
-    suffix = path if path.startswith("/") or not path else f"/{path}"
-    return f"{base_path}{suffix}" or "/"
 
 
 class _DocumentLayout(HTMLParser):

@@ -185,11 +185,13 @@ def validate_template_structure(parser: TemplateParser, source: Path | str) -> N
 
 
 def validate_view_name(name: str) -> str:
-    if not VIEW_PATTERN.fullmatch(name) or name in RESERVED_VIEW_NAMES:
+    if not VIEW_PATTERN.fullmatch(name):
         raise ConfigurationError(
             "View names must start with a lowercase letter and contain lowercase "
             "letters, digits, or hyphens."
         )
+    if name in RESERVED_VIEW_NAMES:
+        raise ConfigurationError(f"View name {name!r} is reserved.")
     return name
 
 
