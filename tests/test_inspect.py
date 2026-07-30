@@ -3,7 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from marimo_studio import inspect_notebook
-from marimo_studio.inspect import _cell_fingerprint, _layout_fingerprint
+from marimo_studio.inspect import (
+    _cell_fingerprint,
+    _layout_fingerprint,
+    select_cells,
+)
 
 
 def test_inspection_builds_graph_without_executing_cells(
@@ -32,6 +36,16 @@ def test_inspection_can_return_complete_cell_code(notebook_path: Path) -> None:
     assert spec.cells[1].code is not None
     assert "doubled = x * 2" in spec.cells[1].code
     assert spec.cells[1].preview == spec.cells[1].code
+
+
+def test_inspection_selects_display_cells_before_applying_the_limit(
+    notebook_path: Path,
+) -> None:
+    spec = inspect_notebook(notebook_path)
+
+    selected = select_cells(spec, output_expressions=True, limit=1)
+
+    assert selected == (spec.cells[1],)
 
 
 def test_cell_fingerprint_survives_marimo_string_formatting() -> None:

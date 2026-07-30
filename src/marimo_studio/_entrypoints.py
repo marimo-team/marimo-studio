@@ -3,7 +3,7 @@
 from starlette.middleware import Middleware
 
 from marimo_studio._compat.kernel_values import kernel_lifespan
-from marimo_studio._server import PresentationMiddleware
+from marimo_studio._server.middleware import PresentationMiddleware
 
 server_middleware = Middleware(PresentationMiddleware)
 

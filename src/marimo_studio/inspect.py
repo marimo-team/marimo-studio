@@ -34,6 +34,21 @@ class RuntimeInspection:
     runtime: RuntimeProbe
 
 
+def select_cells(
+    notebook: NotebookSpec,
+    *,
+    output_expressions: bool = False,
+    limit: int | None = None,
+) -> tuple[CellSpec, ...]:
+    """Select notebook cells for an inspection result."""
+    cells = tuple(
+        cell
+        for cell in notebook.cells
+        if not output_expressions or cell.has_output_expression
+    )
+    return cells if limit is None else cells[:limit]
+
+
 def _source_spans(path: Path, source_lines: list[int]) -> list[SourceSpan]:
     source = path.read_text(encoding="utf-8")
     try:

@@ -33,12 +33,17 @@ view URLs. It opens the workspace with the selected view.
 | `--view NAME` | Configured default | Opens the named view |
 | `--host HOST` | `127.0.0.1` | Binds the Marimo server to this host |
 | `--port PORT` | `8000` | Binds to a port from `1` through `65535` |
-| `--base-url PATH` | Empty | Serves beneath a path that begins with `/` |
+| `--base-url PATH` | Empty | Serves beneath a path such as `/proxy/app` |
 | `--open / --headless` | `--open` | Controls browser launch |
 | `-- MARIMO_ARGS` | Empty | Forwards trailing arguments to `marimo edit` |
 
-Put Marimo host, port, base URL, proxy, browser, and sandbox options before
-`--`.
+Put host, port, base URL, and browser options before `--`. Studio prepares the
+notebook environment, so omit Marimo sandbox flags. Run the native command when
+the server needs `--proxy`:
+
+```console
+uv run --with marimo-studio marimo edit analysis.py --proxy PROXY_URL
+```
 
 ### Inspect notebook cells
 

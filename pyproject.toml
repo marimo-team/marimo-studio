@@ -22,7 +22,7 @@ Repository = "https://github.com/peter-gy/marimo-studio"
 Issues = "https://github.com/peter-gy/marimo-studio/issues"
 
 [project.scripts]
-marimo-studio = "marimo_studio.cli:main"
+marimo-studio = "marimo_studio._cli:main"
 
 [project.entry-points."marimo.server.asgi.middleware"]
 marimo-studio = "marimo_studio._entrypoints:server_middleware"

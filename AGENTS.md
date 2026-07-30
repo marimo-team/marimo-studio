@@ -25,7 +25,8 @@ acceptance when a change crosses the Python and TypeScript boundary.
 
 | Path | Responsibility |
 | --- | --- |
-| `src/marimo_studio/_workspace/` | Configuration, metadata, view files, cell bindings, checks |
+| `src/marimo_studio/_cli/` | Command registration, Click adapters, diagnostics, terminal output |
+| `src/marimo_studio/_workspace/` | Configuration, views, bindings, checks, targets, launch services |
 | `src/marimo_studio/_server/` | View documents, Studio, support routes, development events |
 | `src/marimo_studio/_compat/` | Private Marimo Python integration |
 | `frontend/src/` | Projection hosts, readiness, HTMX, refresh, Studio |

@@ -8,12 +8,13 @@ from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from click import unstyle
 from click.testing import CliRunner
 
-import marimo_studio.cli as cli_module
+import marimo_studio._workspace.launch as launch_module
+from marimo_studio._cli import cli, main
 from marimo_studio._workspace import ensure_view, load_studio
 from marimo_studio._workspace.metadata import read_notebook_metadata
-from marimo_studio.cli import cli, main
 
 
 def _run_cli(
@@ -28,7 +29,7 @@ import marimo_studio._assets as assets
 
 runtime_assets = Path(sys.argv[1])
 assets.runtime_assets_path = lambda: runtime_assets
-from marimo_studio.cli import main
+from marimo_studio._cli import main
 
 sys.argv = ["marimo-studio", *sys.argv[2:]]
 main()
@@ -146,6 +147,42 @@ def test_help_presents_direct_launch_as_the_root_command() -> None:
     )
 
 
+def test_human_output_uses_color_and_json_remains_machine_readable(
+    notebook_path: Path,
+) -> None:
+    runner = CliRunner()
+    human = runner.invoke(
+        cli,
+        [
+            "view",
+            "add",
+            "dashboard",
+            str(notebook_path),
+            "--dry-run",
+        ],
+        color=True,
+    )
+    machine = runner.invoke(
+        cli,
+        [
+            "view",
+            "add",
+            "dashboard",
+            str(notebook_path),
+            "--dry-run",
+            "--format",
+            "json",
+        ],
+        color=True,
+    )
+
+    assert human.exit_code == 0, human.output
+    assert "\x1b[" in human.output
+    assert "Would add view dashboard" in unstyle(human.output)
+    assert "\x1b[" not in machine.output
+    assert json.loads(machine.output)["view"] == "dashboard"
+
+
 def test_launch_validates_options_before_bootstrap(notebook_path: Path) -> None:
     original = notebook_path.read_bytes()
     runner = CliRunner()
@@ -247,6 +284,61 @@ def test_check_emits_structured_diagnostics(
     )
 
 
+def test_static_check_emits_jsonl_with_embedded_click_streams(
+    notebook_path: Path,
+) -> None:
+    ensure_view(notebook_path)
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "check",
+            str(notebook_path),
+            "--format",
+            "json",
+            "--diagnostics",
+            "jsonl",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    events = [json.loads(line) for line in result.stderr.splitlines()]
+    assert payload["ok"] is True
+    assert [event["code"] for event in events] == [
+        check["name"] for check in payload["checks"]
+    ]
+
+
+def test_failed_check_reports_exit_status_and_error_diagnostic(
+    notebook_path: Path,
+) -> None:
+    setup = ensure_view(notebook_path)
+    setup.root.joinpath("index.html").write_text(
+        '<main id="app-shell"><marimo-cell name="missing"></marimo-cell></main>',
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "check",
+            str(notebook_path),
+            "--format",
+            "json",
+            "--diagnostics",
+            "jsonl",
+        ],
+    )
+
+    payload = json.loads(result.stdout)
+    events = [json.loads(line) for line in result.stderr.splitlines()]
+    assert result.exit_code == 1
+    assert payload["ok"] is False
+    assert events[0]["severity"] == "error"
+    assert events[0]["code"] == "configuration"
+
+
 def test_main_structures_configuration_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -277,12 +369,12 @@ def test_direct_launch_starts_native_marimo_edit(
 ) -> None:
     calls: list[tuple[list[str], Path | None]] = []
     monkeypatch.setattr(
-        cli_module,
+        launch_module,
         "environment_command",
         lambda _target, args: ["notebook-environment", *args],
     )
     monkeypatch.setattr(
-        cli_module.subprocess,
+        launch_module.subprocess,
         "run",
         lambda command, **kwargs: (
             calls.append((command, kwargs.get("cwd"))) or SimpleNamespace(returncode=0)
@@ -338,15 +430,15 @@ def test_direct_launch_opens_an_authenticated_studio_url(
 ) -> None:
     calls: list[list[str]] = []
     opened: list[str] = []
-    monkeypatch.setattr(cli_module.secrets, "token_urlsafe", lambda _size: "secret")
-    monkeypatch.setattr(cli_module, "_open_later", opened.append)
+    monkeypatch.setattr(launch_module.secrets, "token_urlsafe", lambda _size: "secret")
+    monkeypatch.setattr(launch_module, "_open_later", opened.append)
     monkeypatch.setattr(
-        cli_module,
+        launch_module,
         "environment_command",
         lambda _target, args: ["notebook-environment", *args],
     )
     monkeypatch.setattr(
-        cli_module.subprocess,
+        launch_module.subprocess,
         "run",
         lambda command, **_kwargs: (
             calls.append(command) or SimpleNamespace(returncode=0)
@@ -381,12 +473,12 @@ def test_bare_launch_discovers_the_configured_notebook(
     calls: list[list[str]] = []
     monkeypatch.chdir(notebook_path.parent)
     monkeypatch.setattr(
-        cli_module,
+        launch_module,
         "environment_command",
         lambda _target, args: ["notebook-environment", *args],
     )
     monkeypatch.setattr(
-        cli_module.subprocess,
+        launch_module.subprocess,
         "run",
         lambda command, **_kwargs: (
             calls.append(command) or SimpleNamespace(returncode=0)
@@ -420,12 +512,12 @@ def test_direct_launch_converges_the_notebook_package_requirement(
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        cli_module,
+        launch_module,
         "environment_command",
         lambda _target, _args: ["true"],
     )
     monkeypatch.setattr(
-        cli_module.subprocess,
+        launch_module.subprocess,
         "run",
         lambda _command, **_kwargs: SimpleNamespace(returncode=0),
     )
@@ -445,7 +537,7 @@ def test_direct_launch_converges_the_notebook_package_requirement(
     assert notebook_path.read_text(encoding="utf-8").endswith(body)
 
 
-def test_direct_launch_rejects_managed_options_after_separator(
+def test_direct_launch_rejects_unsupported_proxy_passthrough(
     notebook_path: Path,
     runtime_assets: Path,
 ) -> None:
@@ -459,4 +551,5 @@ def test_direct_launch_rejects_managed_options_after_separator(
     )
 
     assert result.returncode == 2
-    assert "Pass --proxy before `--`" in result.stderr
+    assert "direct launcher does not support --proxy" in result.stderr
+    assert "\N{ZERO WIDTH SPACE}launch" not in result.stderr
