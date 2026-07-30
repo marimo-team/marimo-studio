@@ -18,7 +18,8 @@ const base = normalizeBasePath(pagesBasePath);
 export default defineConfig({
   base,
   cleanUrls: true,
-  description: "Build custom Python-backed views from Marimo notebook cells.",
+  description:
+    "Turn Marimo notebooks into focused, Python-backed apps and dashboards.",
   head: [
     ["link", {
       href: `${base}favicon.svg`,
@@ -35,27 +36,28 @@ export default defineConfig({
       text: "Edit this page on GitHub",
     },
     nav: [
-      { text: "Getting started", link: "/getting-started" },
-      { text: "Build a view", link: "/build-pages" },
+      { text: "Create a view", link: "/getting-started" },
+      { text: "Design a view", link: "/build-pages" },
+      { text: "Share a view", link: "/deployment" },
       { text: "Reference", link: "/reference" },
       { text: "GitHub", link: repository },
     ],
     outline: [2, 3],
     search: { provider: "local" },
     sidebar: [
-      { text: "Introduction", link: "/" },
+      { text: "Why Studio", link: "/" },
       {
-        text: "Guide",
+        text: "Build and share",
         items: [
-          { text: "Getting started", link: "/getting-started" },
-          { text: "Build a view", link: "/build-pages" },
-          { text: "Deploy", link: "/deployment" },
+          { text: "Create your first view", link: "/getting-started" },
+          { text: "Design a view", link: "/build-pages" },
+          { text: "Share a view", link: "/deployment" },
         ],
       },
       {
         text: "Reference",
         items: [
-          { text: "Studio reference", link: "/reference" },
+          { text: "CLI and configuration", link: "/reference" },
           { text: "Python API", link: "/python-api" },
         ],
       },

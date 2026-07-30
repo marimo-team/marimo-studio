@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Revenue at a glance</title>
+    <link
+      rel="stylesheet"
+      href="./_marimo-studio/views/dashboard/static/app.css"
+    >
+  </head>
+  <body>
+    <main id="app-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Quarterly review</p>
+          <h1>Revenue at a glance</h1>
+          <p class="lede">
+            Explore the forecast while the notebook remains live behind the
+            page.
+          </p>
+        </div>
+        <dl class="page-meta">
+          <div>
+            <dt>Scenario</dt>
+            <dd mo-value="report.scenario"></dd>
+          </div>
+          <div>
+            <dt>Updated</dt>
+            <dd><time mo-value="report.updated_at"></time></dd>
+          </div>
+        </dl>
+      </header>
+
+      <section class="controls" aria-labelledby="controls-title">
+        <div class="section-heading">
+          <p class="eyebrow">Model inputs</p>
+          <h2 id="controls-title">Adjust the outlook</h2>
+        </div>
+        <marimo-cell name="controls"></marimo-cell>
+      </section>
+
+      <section class="metrics" aria-label="Forecast summary">
+        <article>
+          <p>Projected revenue</p>
+          <strong mo-value="report.total"></strong>
+        </article>
+        <article>
+          <p>Change from baseline</p>
+          <strong mo-value="report.change"></strong>
+        </article>
+        <article>
+          <p>Forecast period</p>
+          <strong mo-value="report.through"></strong>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel narrative" aria-labelledby="summary-title">
+          <p class="eyebrow">Interpretation</p>
+          <h2 id="summary-title">What the model says</h2>
+          <marimo-cell name="summary"></marimo-cell>
+        </article>
+
+        <article class="panel" aria-labelledby="table-title">
+          <p class="eyebrow">Quarterly detail</p>
+          <h2 id="table-title">Projection by quarter</h2>
+          <marimo-cell name="revenue_table"></marimo-cell>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

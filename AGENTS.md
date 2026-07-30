@@ -40,8 +40,10 @@ Authored view source lives at
 
 - Notebook authors keep ordinary Marimo cells.
 - One notebook can expose several views from one shared binding registry.
-- Edit mode keeps the native editor at `/`.
-- Studio attaches its preview to the editor kernel as a kiosk consumer.
+- Edit mode keeps the native editor at `/` and opens workspaces beneath
+  `/studio/`.
+- Edit-mode `/<view>/` documents attach to the editor kernel as kiosk
+  consumers.
 - Run-mode browser documents receive isolated Marimo sessions.
 - View switching preserves the preview runtime, WebSocket, kernel, and widget
   models.
@@ -64,8 +66,8 @@ Keep these contracts aligned:
 - `NotebookPresentation.runtime_config` and
   `frontend/src/runtime-config.ts`
 - the `mo-value` parser, view allowlist, kernel RPC, and browser binding
-- the exact Marimo version in `pyproject.toml`, `uv.lock`, and browser build
-  metadata
+- the Marimo lower bound in `pyproject.toml` and the resolved version in
+  `uv.lock` and browser build metadata
 - support routes, browser events, storage keys, and query parameters
 
 ## Mutation rules

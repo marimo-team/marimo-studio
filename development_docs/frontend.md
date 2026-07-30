@@ -42,7 +42,7 @@ Set `MARIMO_REPO` to build against a local Marimo checkout:
 MARIMO_REPO=/path/to/marimo make build
 ```
 
-The build checks out the exact Python dependency version and writes that
+The build checks out the Marimo version resolved in `uv.lock` and writes that
 version to `build-meta.json`.
 
 After a Marimo upgrade:

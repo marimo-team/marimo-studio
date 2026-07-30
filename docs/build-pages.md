@@ -1,28 +1,24 @@
-# Build a view
+# Design a view
 
-Keep calculations in the notebook. Arrange their outputs in
-`__marimo__/studio/<notebook>/<view>/index.html` and style them with files in
-the same view folder.
+Choose the notebook behavior an audience needs, then build the page around it.
+Keep calculations and interactive components in the notebook. Put layout,
+wording, navigation, and visual design in the view.
 
-## Define the view shell
+## Choose what to place in the page
 
-Each template is a complete HTML document with one `#app-shell`:
+| Need | Use |
+| --- | --- |
+| A complete control, plot, table, download, or anywidget | `<marimo-cell>` |
+| A date, count, label, or other JSON-compatible value | `mo-value` |
+| A large detail region that should appear on demand | An HTMX cell route |
+| New formatting or derived presentation data | A small notebook cell |
 
-```html
-<body>
-  <main id="app-shell">
-    <!-- Authored application markup -->
-  </main>
-</body>
-```
+Start with existing notebook outputs. Add presentation-specific Python when
+the page needs a value the notebook does not yet expose cleanly.
 
-Cell and value hosts belong inside this shell. Studio replaces the shell when
-HTML changes. The browser runtime stays mounted outside it and keeps the
-current Marimo session connected.
+## Place a complete notebook output
 
-## Mount a cell
-
-Use `<marimo-cell>` for a complete displayed output:
+Use `<marimo-cell>` with a native cell name or an alias created by `bind`:
 
 ```html
 <section aria-labelledby="revenue-title">
@@ -31,38 +27,47 @@ Use `<marimo-cell>` for a complete displayed output:
 </section>
 ```
 
-`name` accepts a native Marimo cell name or an alias recorded with `bind`. A
-cell name can appear once in each view.
+Marimo renders the cell through the same output plugins and model clients used
+by its native interface. Controls, tables, plots, downloads, and
+[anywidgets](https://anywidget.dev/) remain connected to the current Python
+session.
 
-Marimo renders through its regular output plugins and model clients. Controls,
-tables, plots, downloads, and [anywidgets](https://anywidget.dev/) remain
-connected to the current Python session.
+Each cell name can appear once in a view. Reuse the same name in another view
+when both audiences need that output.
 
-## Project a kernel value
+## Place a Python value in page text
 
-Use `mo-value` for a JSON-compatible value that belongs in semantic HTML:
+Use `mo-value` when the page needs one value rather than a complete cell:
 
 ```html
-<time mo-value="report.updated_at"></time>
-<strong mo-value="selection.count"></strong>
-<span mo-value="series[0].label"></span>
-<span mo-value='metadata["key.with.dots"]'></span>
+<dl>
+  <div>
+    <dt>Last updated</dt>
+    <dd><time mo-value="report.updated_at"></time></dd>
+  </div>
+  <div>
+    <dt>Selected records</dt>
+    <dd><strong mo-value="selection.count"></strong></dd>
+  </div>
+</dl>
 ```
 
-A selector starts with one notebook variable and continues through:
+A selector starts with one notebook variable and can continue through:
 
 - `.name` for a mapping key or Python attribute
 - `[0]` for a non-negative item index
 - `["key.with.dots"]` for a JSON string item key
 
-The root variable must have one defining cell. The kernel resolves the full
-selector and serializes the selected leaf. Intermediate objects stay in
-Python.
+```html
+<span mo-value="series[0].label"></span>
+<span mo-value='metadata["key.with.dots"]'></span>
+```
 
-Strings, numbers, and booleans render as text. `null` renders as empty text.
-Objects and arrays render as compact JSON.
+The root variable must have one defining cell. The selected leaf renders
+strings, numbers, and booleans as text. Objects and arrays render as compact
+JSON. A `null` value renders as empty text.
 
-Put formatting, arithmetic, slicing, and function calls in a notebook cell:
+Keep arithmetic, formatting, slicing, and function calls in Python:
 
 ```python
 @app.cell
@@ -74,12 +79,55 @@ def _(df):
     return (report,)
 ```
 
-Several small context cells keep unrelated reactive branches independent.
-Each view references the values it needs.
+The variable can be a dictionary, a list, a scalar, or another value with a
+JSON-compatible selected leaf. Several small context cells let unrelated
+reactive branches update independently.
 
-## Load a cell through HTMX
+## Structure the view as an ordinary web page
 
-The view-scoped cell route returns a fresh host:
+Each `index.html` is a complete HTML document with one `#app-shell`:
+
+```html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Revenue dashboard</title>
+    <link
+      rel="stylesheet"
+      href="./_marimo-studio/views/dashboard/static/app.css"
+    >
+  </head>
+  <body>
+    <main id="app-shell">
+      <h1>Revenue dashboard</h1>
+      <marimo-cell name="revenue_chart"></marimo-cell>
+    </main>
+  </body>
+</html>
+```
+
+Place every `<marimo-cell>` and `mo-value` inside `#app-shell`. Saving HTML
+replaces this shell, while CSS reloads independently. Your preview keeps its
+current kernel and widget models.
+
+Files in the view folder use the view's scoped static route:
+
+```html
+<img
+  src="./_marimo-studio/views/dashboard/static/logo.svg"
+  alt="Acme logo"
+>
+```
+
+Relative URLs continue to work when Marimo serves beneath a configured base
+path.
+
+## Reveal detail on demand
+
+[HTMX](https://htmx.org/) is available as `window.htmx`. A view can request a
+fresh cell element when the audience asks for more detail:
 
 ```html
 <button
@@ -90,37 +138,20 @@ The view-scoped cell route returns a fresh host:
 >
   Show details
 </button>
-<section id="details"></section>
+<section id="details" aria-live="polite"></section>
 ```
 
-The inserted host attaches to the existing browser runtime and kernel session.
-The HTTP request returns markup. Marimo remains responsible for notebook
-execution and cache decisions.
+The response inserts `<marimo-cell name="detail_table">` into `#details`. The
+cell connects to the current Marimo session, so the page keeps its controls,
+widget models, and reactive state.
 
-[HTMX](https://htmx.org/) is available as `window.htmx`. Standard HTMX
-attributes work throughout `#app-shell`.
+Use this pattern for secondary tables, diagnostics, and other regions that do
+not need to occupy the initial page.
 
-## Serve view files
+## Keep the layout steady while cells load
 
-Files in one view folder are available through its scoped static route:
-
-```html
-<link
-  rel="stylesheet"
-  href="./_marimo-studio/views/dashboard/static/app.css"
->
-<img
-  src="./_marimo-studio/views/dashboard/static/logo.svg"
-  alt="Company"
->
-```
-
-Relative URLs follow Marimo's configured base path.
-
-## Reserve loading space
-
-Cell hosts show a skeleton before their first output. Give substantial outputs
-a realistic height:
+Each cell shows a skeleton before its first output arrives. Reserve a realistic
+height for charts, tables, and other substantial regions:
 
 ```css
 marimo-cell[name="revenue_chart"] {
@@ -134,29 +165,28 @@ time[mo-value] {
 }
 ```
 
-The configured height remains the host's minimum block size while an output
-plugin mounts. The runtime also caches measured heights by view path and
-viewport class for later remounts.
+The cell keeps that minimum height while its output plugin mounts. After a
+successful render, the browser remembers the measured height for the same view
+and viewport class.
 
-Set `data-skeleton="none"` on a cell host whose empty first-load region is
-intentional:
+Use `data-skeleton="none"` when an empty first-load region is intentional:
 
 ```html
 <marimo-cell name="status" data-skeleton="none"></marimo-cell>
 ```
 
-## Theme mounted output
+## Match notebook output to the page
 
-Set the page color scheme so Marimo controls use the matching theme:
+Set the page color scheme so Marimo controls choose a matching theme:
 
 ```css
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 ```
 
-Mounted outputs inherit the surrounding font and color. CSS custom properties
-control their surfaces and accents:
+Mounted output inherits the surrounding font and color. Use Studio's CSS
+properties to align its surfaces and accents:
 
 ```css
 .chart-cell {
@@ -165,7 +195,6 @@ control their surfaces and accents:
   --marimo-cell-foreground: #202124;
   --marimo-cell-surface: #fff;
   --marimo-cell-muted: #f3f3f1;
-  --marimo-cell-muted-foreground: #66645f;
   --marimo-cell-border-color: #d8d7d2;
   --marimo-cell-accent: #315f82;
   --marimo-cell-radius: 0.25rem;
@@ -173,37 +202,37 @@ control their surfaces and accents:
 }
 ```
 
-Application CSS owns layout, spacing, borders, and responsive behavior around
-the projected output.
+Application CSS owns the layout, spacing, borders, and responsive behavior
+around the output. See [Loading and theming](reference.md#loading-and-theming)
+for the complete property list.
 
-## Observe readiness
+## Build a second experience from the same notebook
 
-Cell hosts publish:
+Add another view when an audience needs different results or page structure:
 
-```text
-connecting | loading | stale | ready | missing | error
+```console
+uvx marimo-studio view add operations analysis.py
+uvx marimo-studio analysis.py --view operations
 ```
 
-Value hosts publish:
+The `operations` view receives its own HTML, CSS, and static files. It reuses
+the notebook's cells and aliases.
 
-```text
-connecting | loading | stale | ready | error
-```
+## Wait for a settled view in browser automation
 
-Both use `data-state`. Pending hosts also use `aria-busy="true"`.
-
-Wait for the current hosts:
+Cell and value elements expose their current state through `data-state`.
+Browser tests and agents can wait until the current view settles:
 
 ```js
 await window.marimoStudio.ready();
 ```
 
-The root `<html>` element exposes combined state through
-`data-marimo-studio-state`. The document dispatches
-`marimo-studio:runtime-ready` and `marimo-studio:idle`.
+The promise resolves when every current cell and value has rendered content,
+retained content while updating, or reached a terminal error. See
+[Browser readiness](reference.md#browser-readiness) for state and event names.
 
-Cell hosts dispatch `marimo-cell-ready`, `marimo-cell-updated`, and
-`marimo-cell-error`. Value hosts dispatch `marimo-value-updated` and
-`marimo-value-error`.
+Run a runtime check before sharing the view:
 
-Retained stale content counts as settled for page readiness.
+```console
+uvx marimo-studio check analysis.py --view operations --runtime
+```

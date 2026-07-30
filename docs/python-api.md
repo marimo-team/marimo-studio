@@ -1,5 +1,22 @@
 # Python API
 
+Use the Python API when a tool needs notebook structure or an existing Python
+server needs a configured Studio app.
+
+| Job | API |
+| --- | --- |
+| Discover cells, names, definitions, and dependencies | `inspect_notebook` |
+| Build one run-mode ASGI application | `create_asgi_app` |
+
+For a regular deployment, run the notebook through Marimo:
+
+```console
+uv run --with marimo-studio \
+  marimo run analysis.py \
+  --sandbox \
+  --headless
+```
+
 ## `inspect_notebook`
 
 ```python
@@ -18,13 +35,24 @@ inspect_notebook(
 ) -> NotebookSpec
 ```
 
-Compiles the notebook graph and returns cell references, runtime IDs, source
-spans, definitions, dependencies, configuration, and final output-expression
-status. Cell bodies remain unevaluated.
+Compiles the notebook graph and returns a `NotebookSpec`. Inspection leaves
+cell bodies unevaluated.
 
-`include_code=True` adds each complete cell body to the result.
+Each `CellSpec` contains:
 
-Raises `ConfigurationError` when the path or notebook is invalid.
+- Its zero-based index and native Marimo name
+- A stable `CellRef`
+- Source location and optional complete code
+- Defined and referenced variables
+- Upstream and downstream cell references
+- Marimo cell configuration
+- Whether the cell ends with a displayed expression
+
+Set `include_code=True` to include each complete cell body. The default keeps
+code out of the returned object.
+
+Raises `ConfigurationError` when the path is missing, is not a Python
+notebook, or cannot be compiled by the installed Marimo version.
 
 ## `create_asgi_app`
 
@@ -40,14 +68,21 @@ create_asgi_app(
 ) -> ASGIApp
 ```
 
-Loads one configured notebook and builds Marimo's programmatic run-mode ASGI
-application. The default and named view routes share Marimo's notebook runtime.
+Loads the notebook's Studio configuration and returns a run-mode Marimo ASGI
+application. The default and named views use the same Marimo server process.
+Each browser receives its regular isolated run session.
 
-The factory validates the installed Marimo version before constructing the
-application. It raises `ConfigurationError` for invalid Studio configuration
-and `ProtocolError` for an incompatible Marimo version.
+The factory requires Marimo 0.23.14 or newer.
 
-Run the environment-configured entry point with Uvicorn:
+Raises:
+
+- `ConfigurationError` when the notebook or Studio configuration is invalid
+- `ProtocolError` when the installed Marimo version is older than 0.23.14
+
+### Run the environment-configured app
+
+`marimo_studio.asgi:app` reads the notebook path from
+`MARIMO_STUDIO_NOTEBOOK`:
 
 ```console
 MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
@@ -56,17 +91,8 @@ MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
   --port 8000
 ```
 
-`MARIMO_STUDIO_NOTEBOOK` points to the configured notebook. Install its
-dependencies in the Uvicorn environment before starting the server.
-
-The canonical deployment command remains:
-
-```console
-uv run --with marimo-studio \
-  marimo run analysis.py \
-  --sandbox \
-  --headless
-```
+Install the notebook dependencies in the Uvicorn environment before starting
+the server.
 
 ## Public types
 

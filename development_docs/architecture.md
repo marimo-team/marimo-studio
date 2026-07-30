@@ -60,12 +60,14 @@ Run mode presents the configured default view at `/` and named views at
 `/<view>/`. Each browser document receives Marimo's regular isolated run
 session.
 
-Edit mode keeps the native editor at `/`. Studio lives at
-`/_marimo-studio/studio/`. Its preview connects as a kiosk consumer after the
-editor has created the primary session, so editor and preview share one kernel.
+Edit mode keeps the native editor at `/`. `/studio/` opens the default Studio
+workspace and `/studio/<view>/` selects a named view. The standalone
+`/<view>/` document connects as a kiosk consumer after the editor creates the
+primary session, so editor and view share one kernel.
 
 Every Studio URL combines the parent ASGI mount path with Marimo's `base_url`.
-Requests outside the presentation namespace pass through to Marimo.
+Assets, value reads, cell fragments, and development events stay beneath
+`/_marimo-studio/`. Other requests pass through to Marimo.
 
 ## Browser state
 
@@ -92,9 +94,9 @@ Imports from Marimo private Python modules live in
 `@marimo-team/frontend/unstable_internal` live in
 `frontend/src/marimo-adapter/`.
 
-The package pins one Marimo release. An upgrade updates the Python dependency,
-frontend source checkout, browser build metadata, adapters, and acceptance
-tests together.
+The package supports Marimo 0.23.14 and newer. `uv.lock` selects the Marimo
+source used to build the browser runtime. Compatibility checks exercise the
+supported lower bound and the locked development version.
 
 Kernel sessions are process-local. Production deployments use one worker or
 sticky routing to the process that owns each session.

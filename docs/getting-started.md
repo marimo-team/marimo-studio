@@ -1,19 +1,32 @@
-# Getting started
+# Create your first view
 
-Start with a saved [Marimo](https://marimo.io/) notebook and
-[uv](https://docs.astral.sh/uv/).
+Create a live dashboard from one displayed notebook cell. Keep the Marimo
+editor open, place the cell in a custom page, and verify the result against the
+running Python kernel.
 
-## Open Studio
+## Before you start
 
-Pass the notebook directly:
+You need:
+
+- A saved [Marimo](https://marimo.io/) notebook
+- Python 3.11 or newer
+- [uv](https://docs.astral.sh/uv/)
+
+The example uses `analysis.py` and a displayed cell named `summary`.
+
+## Open the notebook and view together
+
+Run:
 
 ```console
 uvx marimo-studio analysis.py
 ```
 
-Studio opens the regular Marimo editor and a live custom view in one browser
-workspace. The first run adds the invoked `marimo-studio` release and
-`[tool.marimo-studio]` to the notebook's PEP 723 metadata. It also creates:
+The command opens the native Marimo editor beside a blank `dashboard` preview.
+Keep this browser window open while you edit the view.
+
+On the first run, the command adds Studio setup to the notebook's PEP 723
+metadata and creates:
 
 ```text
 analysis.py
@@ -25,95 +38,122 @@ __marimo__/
         app.css
 ```
 
-Notebook code outside the PEP 723 block stays byte-identical. Existing
-dependencies, uv sources, indexes, and `[tool.marimo.*]` settings remain in
-the metadata.
+The metadata records `marimo-studio` as an unversioned dependency and sets the
+default view. Notebook code outside that block stays byte-identical. Unrelated
+dependencies, uv sources, indexes, and Marimo settings remain in
+place.
 
-The view directory is authored source. Add `__marimo__/studio/` to version
-control with the notebook. The [configuration reference](reference.md#source-control)
-contains an ignore exception for repositories that ignore `__marimo__`.
+## Choose an output
 
-## Find notebook outputs
-
-Inspect cells with displayed expressions:
+List cells that display a result:
 
 ```console
 uvx marimo-studio inspect analysis.py --display
 ```
 
-A named Marimo cell works directly in a view. Bind an anonymous cell to a
-stable alias with its zero-based index:
+A named cell appears with its name in the last column. For example:
 
-```console
-uvx marimo-studio bind summary analysis.py --cell 12
+```text
+  3  bkHC   output  line 66   summary
+     defines: summary_view
 ```
 
-Runtime inspection executes the notebook and reports output MIME types and
-JSON-compatible values:
+Use the cell name directly in a view. When the row ends with `cell 3`, give
+that anonymous cell a stable alias:
 
 ```console
-uvx marimo-studio inspect analysis.py --runtime
+uvx marimo-studio bind summary analysis.py --cell 3
 ```
 
-Add `--format json` when an agent or script consumes the result. Runtime
-inspection performs the file, network, database, and data-access operations
-defined by the notebook.
+The alias belongs to the notebook and can be reused by every view.
 
-## Build the first view
+## Place the output in the page
 
-Edit `__marimo__/studio/analysis/dashboard/index.html` as a complete HTML
-document:
+Open `__marimo__/studio/analysis/dashboard/index.html`. Replace its empty
+`#app-shell` with:
 
 ```html
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Analysis dashboard</title>
-    <link
-      rel="stylesheet"
-      href="./_marimo-studio/views/dashboard/static/app.css"
-    >
-  </head>
-  <body>
-    <main id="app-shell">
-      <h1>Analysis</h1>
-      <marimo-cell name="summary"></marimo-cell>
-    </main>
-  </body>
-</html>
+<main id="app-shell">
+  <header>
+    <p>Quarterly review</p>
+    <h1>Revenue at a glance</h1>
+  </header>
+
+  <section aria-labelledby="summary-title">
+    <h2 id="summary-title">Summary</h2>
+    <marimo-cell name="summary"></marimo-cell>
+  </section>
+</main>
 ```
 
-Every cell and value host belongs inside the single `#app-shell` element. HTML
-changes replace that shell. CSS changes refresh independently. The preview
-keeps its current kernel and widget models.
+Save the file. The preview refreshes around the current Python session and
+renders the notebook output under **Summary**.
 
-## Add another view
+Add page-level styling in `app.css`:
 
-One notebook can serve several presentations:
+```css
+body {
+  margin: 0;
+  color: #202124;
+  background: #f7f7f5;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+#app-shell {
+  width: min(72rem, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 4rem 0;
+}
+```
+
+Change a notebook control or rerun the cell that feeds `summary`. The mounted
+output follows the notebook's reactive update.
+
+## Validate the view
+
+Run a static check while editing:
 
 ```console
-uvx marimo-studio view add executive analysis.py
-uvx marimo-studio view list analysis.py
+uvx marimo-studio check analysis.py
 ```
 
-Open the new view in Studio:
-
-```console
-uvx marimo-studio analysis.py --view executive
-```
-
-The view lives at `__marimo__/studio/analysis/executive/` and shares the
-notebook's cell bindings.
-
-## Validate
-
-Check templates, cell bindings, runtime outputs, and projected values:
+Run the runtime check before sharing:
 
 ```console
 uvx marimo-studio check analysis.py --runtime
 ```
 
-Continue with [Build a view](build-pages.md) for value selectors, HTMX
-fragments, loading space, and theming.
+The runtime check executes the projected cells and reads the Python values
+referenced by the view. It can perform the file, network, database, and data
+access defined by those notebook cells.
+
+## Let an agent shape the interface
+
+An agent can inspect the notebook as structured data, edit the view files, and
+validate the result while your editor and preview stay open:
+
+```console
+uvx marimo-studio inspect analysis.py --display --format json
+uvx marimo-studio check analysis.py --runtime --format json
+```
+
+The notebook remains the source of Python behavior. The agent can focus on
+page structure, copy, responsive layout, and which existing outputs belong in
+the view.
+
+## Add a view for another audience
+
+Create an `executive` view:
+
+```console
+uvx marimo-studio view add executive analysis.py
+uvx marimo-studio analysis.py --view executive
+```
+
+The new view lives at `__marimo__/studio/analysis/executive/` and can reuse the
+`summary` alias. Keep the view directories in source control with the
+notebook. See [CLI and configuration](reference.md#source-control) when the
+repository ignores `__marimo__`.
+
+Continue with [Design a view](build-pages.md) to combine complete cells,
+individual Python values, loading space, and on-demand detail.

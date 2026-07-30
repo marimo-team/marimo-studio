@@ -1,22 +1,25 @@
-# Deploy
+# Share a view
 
-Marimo serves the notebook and every named view from one ASGI process.
+Serve a Studio view with Marimo when the audience needs live controls, Python
+calculations, or widgets. Visitors land on the custom page while Marimo runs
+the notebook and manages their kernel sessions.
 
-## Validate the notebook
+## Check the view against the notebook
 
-Run the runtime check before deployment:
+Run the runtime check in the environment you plan to deploy:
 
 ```console
 uvx marimo-studio check analysis.py --runtime
 ```
 
-The command executes projected cells and resolves the value selectors used by
-the configured views.
+The check executes every cell projected by the configured views and reads each
+referenced Python value. It can perform the file, network, database, and data
+access defined by those notebook cells.
 
-## Start Marimo
+## Start the server
 
-Install Marimo Studio into the command environment and let Marimo prepare the
-notebook's PEP 723 dependencies:
+Install Studio into the command environment and run the notebook through
+Marimo:
 
 ```console
 uv run --with marimo-studio \
@@ -27,25 +30,16 @@ uv run --with marimo-studio \
   --port 8000
 ```
 
-The default view is available at `/`. A view named `executive` is available at
+`--sandbox` prepares the notebook's PEP 723 dependencies. The default Studio
+view is available at `/`. A view named `executive` is available at
 `/executive/`.
 
-Marimo continues to own authentication, WebSockets, kernel APIs, virtual
-files, health checks, and notebook assets. The installed Marimo Studio entry
-points discover the notebook configuration and present its views.
+Each browser receives Marimo's regular run-mode session. Controls, widgets,
+downloads, and reactive updates continue to use the notebook's Python kernel.
 
-For a lockfile-managed project, install the locked environment and run Marimo
-from it:
+## Protect a public endpoint
 
-```console
-uv sync --frozen
-uv run marimo run analysis.py \
-  --headless \
-  --host 0.0.0.0 \
-  --port 8000
-```
-
-Use Marimo's token options when the process is exposed directly:
+Use Marimo's token settings when clients can reach the process directly:
 
 ```console
 uv run --with marimo-studio \
@@ -57,12 +51,29 @@ uv run --with marimo-studio \
   --token-password-file /run/secrets/marimo-token
 ```
 
-Run `uv run marimo run --help` for CORS, session TTL, watch mode, and other
-server options.
+The file must contain the token used to open the app. Run
+`uv run marimo run --help` for CORS, session lifetime, and other server
+settings.
+
+## Use a locked project environment
+
+When `pyproject.toml` and `uv.lock` own the deployment environment, install the
+lock and run Marimo from it:
+
+```console
+uv sync --frozen
+uv run marimo run analysis.py \
+  --headless \
+  --host 0.0.0.0 \
+  --port 8000
+```
+
+Include `marimo-studio` in the project dependencies so Marimo discovers the
+presentation extension when the process starts.
 
 ## Serve beneath a proxy path
 
-Marimo's `--base-url` defines the public path:
+Set Marimo's public path with `--base-url`:
 
 ```console
 uv run --with marimo-studio \
@@ -72,11 +83,10 @@ uv run --with marimo-studio \
   --base-url /proxy/workspace-42
 ```
 
-The presentation derives scripts, styles, fragments, runtime configuration,
-and the WebSocket connection from that path. A reverse proxy should forward
-the complete path.
+Forward the complete path through the reverse proxy. Scripts, styles, cell
+requests, value reads, and the kernel connection resolve from that base URL.
 
-Templates use relative support URLs:
+Keep support URLs relative in view templates:
 
 ```html
 <link
@@ -85,10 +95,10 @@ Templates use relative support URLs:
 >
 ```
 
-## Preserve a session across reloads
+## Keep a session through a manual refresh
 
-Set `preserve_session = true` when a manual run-mode page refresh should
-reconnect to the current kernel:
+Enable session preservation when a page refresh should return the visitor to
+the current kernel:
 
 ```toml
 [tool.marimo-studio]
@@ -96,18 +106,17 @@ default = "dashboard"
 preserve_session = true
 ```
 
-The session remains available while Marimo retains it in the serving process.
-The deployment must route the reconnect to that process.
+The session remains available while the serving Marimo process retains it.
+Route the reconnect to that same process.
 
 ## Run in Marimo Hub
 
-Add `marimo-studio` to the workspace dependencies and keep the notebook's
-`__marimo__/studio/` source with the workspace. Hub can launch its regular
-`marimo run` process. The installed middleware activates at the exposed
-notebook URL.
+Add `marimo-studio` to the workspace dependencies and keep
+`__marimo__/studio/` with the notebook. Launch the regular `marimo run`
+process in Marimo Hub, then open the configured view at the notebook URL.
 
-## Process model
+## Choose a process model
 
 Marimo stores browser kernel sessions in the serving process. Use one worker
-for a standalone deployment. A multi-process platform needs sticky routing
-that returns each browser to its owning worker.
+for a standalone deployment. A platform with several workers needs sticky
+routing so each browser returns to the process that owns its session.

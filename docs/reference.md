@@ -1,14 +1,165 @@
-# Reference
+# CLI and configuration
+
+Use this page to look up Studio commands, notebook configuration, HTML
+elements, browser state, and server routes. Start with
+[Create your first view](getting-started.md) for the shortest working path.
+
+## Command line
+
+```text
+marimo-studio [NOTEBOOK] [OPTIONS]
+marimo-studio inspect [NOTEBOOK] [OPTIONS]
+marimo-studio bind ALIAS [NOTEBOOK] --cell INDEX [OPTIONS]
+marimo-studio view add NAME [NOTEBOOK] [OPTIONS]
+marimo-studio view list [NOTEBOOK] [OPTIONS]
+marimo-studio check [NOTEBOOK] [OPTIONS]
+```
+
+Pass a notebook path when creating the first view. After setup, commands can
+discover the configured notebook from its directory or project.
+
+### Open Studio
+
+```console
+uvx marimo-studio analysis.py --view executive
+```
+
+The direct command configures the notebook when needed, creates a blank view,
+starts the native Marimo editor, and prints the Studio workspace and standalone
+view URLs. It opens the workspace with the selected view.
+
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `--view NAME` | Configured default | Opens the named view |
+| `--host HOST` | `127.0.0.1` | Binds the Marimo server to this host |
+| `--port PORT` | `8000` | Binds to a port from `1` through `65535` |
+| `--base-url PATH` | Empty | Serves beneath a path that begins with `/` |
+| `--open / --headless` | `--open` | Controls browser launch |
+| `-- MARIMO_ARGS` | Empty | Forwards trailing arguments to `marimo edit` |
+
+Put Marimo host, port, base URL, proxy, browser, and sandbox options before
+`--`.
+
+### Inspect notebook cells
+
+```console
+uvx marimo-studio inspect analysis.py --display
+```
+
+Use `inspect` to compile the notebook graph and print one record per cell.
+
+| Option | Behavior |
+| --- | --- |
+| `--display` | Keeps cells with a final displayed expression |
+| `--include-code` | Adds each complete cell body |
+| `--runtime` | Executes the notebook and adds MIME output and JSON-compatible values |
+| `--limit N` | Returns at most `N` cell records |
+| `--format text\|json` | Selects human or machine output |
+
+Static inspection leaves cell bodies unevaluated. Runtime inspection executes
+the notebook in its configured environment and can perform its file, network,
+database, and data access.
+
+### Bind an anonymous cell
+
+```console
+uvx marimo-studio bind summary analysis.py --cell 12
+```
+
+Use `bind` to record a stable alias for the zero-based cell index.
+
+| Option | Behavior |
+| --- | --- |
+| `--cell INDEX` | Selects the zero-based notebook cell |
+| `--dry-run` | Reports the binding and leaves configuration unchanged |
+| `--overwrite` | Replaces an existing alias |
+| `--format text\|json` | Selects human or machine output |
+
+Native Marimo cell names need no binding. Alias names start with a letter and
+contain letters, digits, underscores, or hyphens.
+
+Your alias follows the bound cell across ordinary formatting and comment
+changes. When a cell's Python meaning changes or the match becomes ambiguous,
+inspect the notebook and bind the alias again with `--overwrite`.
+
+### Create and list views
+
+```console
+uvx marimo-studio view add executive analysis.py
+uvx marimo-studio view list analysis.py
+```
+
+Use `view add` to create the named view and configure the notebook when needed.
+Use `view list` to print each view's name, path, and default status.
+
+`view add` accepts `--dry-run`. Both commands accept
+`--format text|json`.
+
+A view name starts with a lowercase letter and contains lowercase letters,
+digits, or hyphens. Names claimed by Marimo or Studio routes are reserved.
+
+### Validate views
+
+```console
+uvx marimo-studio check analysis.py --view executive --runtime
+```
+
+`check` validates every configured view unless `--view` selects one. Static
+validation checks templates, aliases, and value selectors. `--runtime` also
+executes projected cells and resolves projected values.
+
+### Machine output and diagnostics
+
+Data commands accept `--format text` or `--format json`. Text is the default
+and JSON is written to standard output.
+
+Use `--diagnostics jsonl` for structured diagnostic events on standard error:
+
+```console
+uvx marimo-studio check analysis.py \
+  --runtime \
+  --format json \
+  --diagnostics jsonl
+```
+
+```json
+{
+  "schema": 1,
+  "event": "diagnostic",
+  "command": "check",
+  "severity": "info",
+  "code": "view:dashboard",
+  "message": "Validated 2 cell projections and 1 value selector",
+  "status": "pass"
+}
+```
+
+Every event contains `schema`, `event`, `command`, `severity`, `code`, and
+`message`. Check events add `status`. Command failures add `exit_code`.
+
+### Exit codes
+
+| Code | Meaning |
+| ---: | --- |
+| `0` | Command completed |
+| `1` | Validation completed and found failures |
+| `2` | CLI syntax or option usage is invalid |
+| `3` | Notebook or Studio configuration is invalid |
+| `4` | A cell binding cannot be resolved |
+| `6` | The installed Marimo version is incompatible |
+| `7` | The notebook environment cannot be prepared |
+| `130` | The command was interrupted |
 
 ## Notebook configuration
 
-The default configuration lives in the notebook's PEP 723 block:
+Direct launch and `view add` store the default configuration in the notebook's
+PEP 723 block:
 
 ```python
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#   "marimo-studio==0.1.0",
+#   "marimo-studio",
 # ]
 #
 # [tool.marimo-studio]
@@ -20,15 +171,16 @@ The default configuration lives in the notebook's PEP 723 block:
 # ///
 ```
 
-| Field | Type | Default | Contract |
+| Field | Type | Default | Behavior |
 | --- | --- | --- | --- |
-| `default` | String | Required | View served at the notebook root in run mode |
-| `preserve_session` | Boolean | `false` | Reconnect a manual run-mode reload to its current kernel |
-| `cells` | Table | Empty | Shared aliases for anonymous notebook cells |
+| `default` | String | Required | Selects the view served at `/` in run mode |
+| `preserve_session` | Boolean | `false` | Reconnects a manual run-mode refresh to its current kernel |
+| `cells` | Table | Empty | Stores aliases shared by every view |
 
-Direct launch and `view add` create notebook-local configuration when the
-notebook has no Studio configuration. They set one exact `marimo-studio`
-requirement to the invoked release and preserve unrelated PEP 723 data.
+The setup records `marimo-studio` without a version constraint. `uv` resolves
+the current release, while a source checkout supplies its local editable
+package. Your unrelated dependencies, uv sources, indexes, and tool settings
+stay in place.
 
 Views for `analysis.py` live at:
 
@@ -36,9 +188,8 @@ Views for `analysis.py` live at:
 __marimo__/studio/analysis/<view-name>/
 ```
 
-Every immediate child with an `index.html` becomes a view. A view name starts
-with a lowercase letter and contains lowercase letters, digits, or hyphens.
-The folder name is also its run-mode route.
+Every immediate child with an `index.html` becomes a view. The folder name is
+also its run-mode route.
 
 ### Project configuration
 
@@ -47,8 +198,8 @@ A managed project can place the configuration in `pyproject.toml`:
 ```toml
 [project]
 name = "analysis"
-version = "0.1.0"
-dependencies = ["marimo-studio==0.1.0"]
+version = "0.0.1"
+dependencies = ["marimo-studio"]
 
 [tool.marimo-studio]
 notebook = "analysis.py"
@@ -65,17 +216,16 @@ summary = { ref = "cell:v3:<semantic-sha256>:<layout-sha256>:0" }
 
 For an explicit notebook path, configuration resolves in this order:
 
-1. PEP 723 metadata in the notebook.
-2. The nearest parent `pyproject.toml` whose configuration names that
-   notebook.
+1. PEP 723 metadata in the notebook
+2. The nearest parent `pyproject.toml` whose configuration names that notebook
 
 Notebook metadata wins when both sources identify the same notebook. A
-conflict produces a configuration error that names both sources.
+conflict produces an error that names both sources.
 
 ### Source control
 
-View directories contain authored source. Add them to version control with the
-notebook. A repository that ignores `__marimo__` can add:
+View directories contain authored source. Keep them in version control with
+the notebook. A repository that ignores `__marimo__` can add:
 
 ```text
 !**/__marimo__/
@@ -84,53 +234,18 @@ notebook. A repository that ignores `__marimo__` can add:
 !**/__marimo__/studio/**
 ```
 
-This exception tracks Studio views while other Marimo runtime directories
-remain covered by the surrounding ignore rules.
-
-## Cell identity
-
-A cell reference has this form:
-
-```text
-cell:v3:<semantic-sha256>:<layout-sha256>:<duplicate-occurrence>
-```
-
-The semantic digest identifies parsed Python and preserves runtime values.
-Formatting and comments leave it unchanged. The occurrence distinguishes
-identical cells in one notebook.
-
-The layout digest recognizes Marimo Markdown serialization. A binding migrates
-through that digest when exactly one cell matches. Several matches require an
-explicit rebind.
-
-Native Marimo cell names need no binding. `bind` records an alias for an
-anonymous cell:
-
-```console
-uvx marimo-studio bind summary analysis.py --cell 12
-```
-
-Replace a changed binding explicitly:
-
-```console
-uvx marimo-studio bind summary analysis.py \
-  --cell 14 \
-  --overwrite
-```
-
-Alias names start with a letter and contain letters, digits, underscores, or
-hyphens.
+The exception tracks Studio views while preserving the surrounding ignore rule
+for other Marimo directories.
 
 ## View templates
 
 Each `index.html` is a complete HTML document with one `<head>`, one `<body>`,
 and one element with `id="app-shell"`.
 
-Every `<marimo-cell>` and `mo-value` host must be inside `#app-shell`. Marimo
-Studio inserts the runtime scripts, metadata, and hidden runtime root when it
-serves the document.
+Every `<marimo-cell>` and `mo-value` belongs inside `#app-shell`. Marimo serves
+the document with the browser runtime needed by those elements.
 
-Reference a view file through its scoped route:
+Reference a view-owned file through its scoped route:
 
 ```html
 <link
@@ -145,19 +260,19 @@ Reference a view file through its scoped route:
 <marimo-cell name="summary"></marimo-cell>
 ```
 
-`name` accepts a native cell name or configured alias. A name can appear once
-in each view.
+`name` accepts a native cell name or configured alias. Each name can appear
+once in a view.
 
-Host states:
+States:
 
 ```text
 connecting | loading | stale | ready | missing | error
 ```
 
-The host records output MIME data in `data-output-mime` and
+The element records output MIME data in `data-output-mime` and
 `data-output-mimes`.
 
-Host events:
+Events:
 
 - `marimo-cell-ready`
 - `marimo-cell-updated`
@@ -188,30 +303,32 @@ The kernel resolves the complete selector and serializes the selected value.
 Live reads accept up to 1,000,000 encoded bytes per value. Runtime inspection
 uses a 64 KiB limit.
 
-Host states:
+States:
 
 ```text
 connecting | loading | stale | ready | error
 ```
 
-Host events:
+Events:
 
 - `marimo-value-updated`
 - `marimo-value-error`
 
-Transient reads retry with bounded delays. A host with a cached value retains
-it while its state is `stale`.
+A value keeps its cached content while a new read is pending.
 
 ## Browser readiness
+
+Wait for the current view:
 
 ```js
 await window.marimoStudio.ready();
 ```
 
-The promise resolves when every current cell and value host has rendered
-content, retained stale content, or reached a terminal missing or error state.
+The promise resolves when every current cell and value has rendered content,
+retained content while updating, or reached a terminal missing or error state.
 
-`<html data-marimo-studio-state>` publishes:
+The root `<html>` element publishes combined state through
+`data-marimo-studio-state`:
 
 ```text
 connecting | loading | ready | error
@@ -223,7 +340,7 @@ Document events:
 - `marimo-studio:idle`
 - `marimo-studio:page-theme`
 
-Studio uses same-origin messages for view switching and preview status:
+View switching and preview status use same-origin messages:
 
 - `marimo-studio:switch-view`
 - `marimo-studio:receiver-ready`
@@ -264,107 +381,29 @@ Cell presentation properties:
 - `--marimo-cell-accent-foreground`
 - `--marimo-cell-error`
 
-Set `data-skeleton="none"` on a cell host to suppress its first-load skeleton.
+Set `data-skeleton="none"` on a cell element to suppress its first-load
+skeleton.
 
-## Command line
-
-```text
-marimo-studio [NOTEBOOK] [OPTIONS]
-marimo-studio inspect [NOTEBOOK] [OPTIONS]
-marimo-studio bind ALIAS [NOTEBOOK] --cell INDEX [OPTIONS]
-marimo-studio view add NAME [NOTEBOOK] [OPTIONS]
-marimo-studio view list [NOTEBOOK] [OPTIONS]
-marimo-studio check [NOTEBOOK] [OPTIONS]
-```
-
-### Direct launch
-
-```console
-uvx marimo-studio analysis.py --view executive
-```
-
-| Option | Default | Contract |
-| --- | --- | --- |
-| `--view NAME` | Configured default | Open a named view |
-| `--host HOST` | `127.0.0.1` | Bind Marimo to this host |
-| `--port PORT` | `8000` | Bind Marimo to this port |
-| `--base-url PATH` | Empty | Serve beneath a proxy path beginning with `/` |
-| `--open / --headless` | `--open` | Control browser launch |
-| `-- MARIMO_ARGS` | | Forward trailing arguments to `marimo edit` |
-
-Studio manages Marimo's host, port, base URL, proxy, browser, and sandbox
-options. Put those options before `--`.
-
-### Data commands
-
-| Command | Contract |
-| --- | --- |
-| `inspect [NOTEBOOK]` | Return static cell metadata. `--runtime` adds executed MIME and value data |
-| `bind ALIAS [NOTEBOOK] --cell N` | Bind an alias to a zero-based cell index |
-| `view add NAME [NOTEBOOK]` | Configure the notebook when needed and add a blank view |
-| `view list [NOTEBOOK]` | Return view names, paths, and the default |
-| `check [NOTEBOOK]` | Validate every view or one view selected with `--view` |
-
-Data commands accept `--format text` or `--format json`. Text is the default.
-Mutation commands also accept `--dry-run`. `bind` uses `--overwrite` to replace
-an existing alias.
-
-### Diagnostics
-
-Data commands accept `--diagnostics jsonl` for structured events on stderr.
-Command results remain on stdout.
-
-```json
-{
-  "schema": 1,
-  "event": "diagnostic",
-  "command": "check",
-  "severity": "info",
-  "code": "view:dashboard",
-  "message": "Validated 2 cell projections and 1 value selector",
-  "status": "pass"
-}
-```
-
-Required fields are `schema`, `event`, `command`, `severity`, `code`, and
-`message`. Check events include `status`. Command failures include
-`exit_code`.
-
-### Exit codes
-
-| Code | Meaning |
-| --- | --- |
-| `0` | Command completed |
-| `1` | Validation completed and found failures |
-| `2` | CLI syntax or option usage is invalid |
-| `3` | Notebook or Studio configuration is invalid |
-| `4` | A cell binding cannot be resolved |
-| `6` | The installed Marimo version is incompatible |
-| `7` | The notebook environment cannot be prepared |
-| `130` | The command was interrupted |
-
-## Runtime routes
+## Server routes
 
 Routes resolve beneath Marimo's configured `base_url`.
 
-| Mode | Route | Contract |
+| Mode | Route | Behavior |
 | --- | --- | --- |
 | Edit | `/` | Native Marimo editor |
-| Edit | `/_marimo-studio/studio/` | Editor and selected view |
-| Edit | `/_marimo-studio/preview/{view}/` | View attached to the editor session |
+| Edit | `/studio/` | Editor and default view |
+| Edit | `/studio/{view}/` | Editor and selected view |
+| Edit | `/{view}/` | View attached to the editor session |
 | Run | `/` | Default view |
 | Run | `/{view}/` | Selected named view |
 | Both | `/_marimo-studio/views` | Current view names and default |
 | Both | `/_marimo-studio/views/{view}/config` | Browser runtime configuration |
-| Both | `POST /_marimo-studio/views/{view}/values` | Read selectors permitted by the view |
-| Both | `/_marimo-studio/views/{view}/cells/{alias}` | Return one cell host |
-| Both | `/_marimo-studio/views/{view}/static/{path}` | Serve a view file |
-| Edit | `/_marimo-studio/dev/events` | Stream view-list changes |
-| Edit | `/_marimo-studio/views/{view}/dev/events` | Stream HTML and CSS changes |
-| Both | `/_marimo-studio/assets/{path}` | Serve packaged browser assets |
+| Both | `POST /_marimo-studio/views/{view}/values` | Reads selectors permitted by the view |
+| Both | `/_marimo-studio/views/{view}/cells/{alias}` | Returns one cell element |
+| Both | `/_marimo-studio/views/{view}/static/{path}` | Serves a view file |
+| Edit | `/_marimo-studio/dev/events` | Streams view-list changes |
+| Edit | `/_marimo-studio/views/{view}/dev/events` | Streams HTML and CSS changes |
+| Both | `/_marimo-studio/assets/{path}` | Serves packaged browser assets |
 
-Edit previews connect as kiosk consumers to the active editor kernel. Run-mode
-documents receive Marimo's regular isolated browser sessions.
-
-Marimo owns its WebSocket, API, authentication, health, virtual file, and
-notebook asset routes.
+Edit previews connect to the active editor kernel. Run-mode documents receive
+Marimo's regular isolated browser sessions.
