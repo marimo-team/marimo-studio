@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import MutableMapping
 from importlib.metadata import entry_points
 from pathlib import Path
@@ -21,6 +22,7 @@ from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.server import programmatic_middleware
 from marimo_studio._server import dev
 from marimo_studio._server.dev import _event_kind
+from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._workspace import (
     bind_cell,
     ensure_view,
@@ -29,7 +31,7 @@ from marimo_studio._workspace import (
 from marimo_studio._workspace.metadata import update_notebook_config
 from marimo_studio._workspace.models import StudioConfig
 
-from .helpers import notebook_source
+from .helpers import empty_notebook_source, notebook_source
 
 
 def _set_shell(studio: StudioConfig, view_name: str, content: str) -> None:
@@ -128,6 +130,23 @@ def test_run_mode_serves_default_and_named_view_documents(
     assert health.status_code == 200
 
 
+def test_empty_notebook_serves_a_ready_blank_presentation(tmp_path: Path) -> None:
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(empty_notebook_source(), encoding="utf-8")
+    ensure_view(notebook)
+
+    with TestClient(create_asgi_app(notebook)) as client:
+        page = client.get("/")
+        config = client.get("/_marimo-studio/views/dashboard/config")
+
+    assert page.status_code == 200
+    assert '<main id="app-shell"></main>' in page.text
+    assert config.status_code == 200
+    assert config.json()["cellBindings"] == {}
+    assert config.json()["valueBindings"] == {}
+    assert config.json()["diagnostics"] == []
+
+
 def test_runtime_injection_uses_structural_html_tags(
     notebook_path: Path,
 ) -> None:
@@ -214,6 +233,268 @@ def test_named_cells_resolve_against_the_live_notebook_name(tmp_path: Path) -> N
         "kind": "name",
         "value": "imports",
     }
+    assert config["diagnostics"] == []
+
+
+def test_deleted_named_cell_keeps_the_view_live_until_repaired(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "named.py"
+    source = notebook_source(tmp_path / "executed").replace(
+        "@app.cell\ndef _():",
+        "@app.cell\ndef imports():",
+        1,
+    )
+    notebook.write_text(source, encoding="utf-8")
+    ensure_view(notebook)
+    studio = load_studio(notebook)
+    _set_shell(studio, "dashboard", '<marimo-cell name="imports"></marimo-cell>')
+    configured_source = notebook.read_text(encoding="utf-8")
+
+    with TestClient(create_asgi_app(notebook)) as client:
+        notebook.write_text(
+            configured_source.replace("def imports():", "def _():", 1),
+            encoding="utf-8",
+        )
+        page = client.get("/")
+        broken = client.get("/_marimo-studio/views/dashboard/config").json()
+        fragment = client.get("/_marimo-studio/views/dashboard/cells/imports")
+
+        notebook.write_text(configured_source, encoding="utf-8")
+        repaired = client.get("/_marimo-studio/views/dashboard/config").json()
+
+    assert page.status_code == 200
+    assert '<marimo-cell name="imports"></marimo-cell>' in page.text
+    assert "imports" not in broken["cellBindings"]
+    assert len(broken["diagnostics"]) == 1
+    diagnostic = broken["diagnostics"][0]
+    assert diagnostic["code"] == "cell-not-found"
+    assert diagnostic["severity"] == "error"
+    assert diagnostic["view"] == "dashboard"
+    assert diagnostic["projection"] == "cell"
+    assert diagnostic["target"] == "imports"
+    assert diagnostic["source"]["path"] == str(
+        studio.views["dashboard"].template.relative_to(notebook.parent)
+    )
+    assert diagnostic["source"]["line"] == 10
+    assert diagnostic["hint"] == ""
+    assert fragment.text == '<marimo-cell name="imports"></marimo-cell>'
+    assert repaired["diagnostics"] == []
+    assert repaired["cellBindings"]["imports"] == {
+        "kind": "name",
+        "value": "imports",
+    }
+
+
+def test_notebook_syntax_error_has_a_browser_safe_repair_diagnostic(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        source = studio.notebook.read_text(encoding="utf-8")
+        studio.notebook.write_text(
+            source.replace("    doubled = x * 2", "    42doubled = x * 2"),
+            encoding="utf-8",
+        )
+        config = client.get("/_marimo-studio/views/dashboard/config")
+        page = client.get("/")
+
+    expected_message = (
+        "Marimo cannot inspect the notebook while a cell contains invalid code."
+    )
+    expected_hint = "Fix the highlighted cell in Marimo, then save it again."
+    assert config.status_code == 500
+    assert config.json() == {
+        "error": "notebook-source-error",
+        "message": expected_message,
+        "hint": expected_hint,
+    }
+    assert page.status_code == 500
+    assert page.headers["Marimo-Studio-Error"] == "notebook-source-error"
+    assert page.headers["Marimo-Studio-Hint"] == expected_hint
+    assert expected_message in page.text
+    assert str(notebook_path.parent) not in config.text
+    assert str(notebook_path.parent) not in page.text
+
+
+def test_template_error_has_a_repair_diagnostic(notebook_path: Path) -> None:
+    studio = _configured(notebook_path)
+    template = studio.views["dashboard"].template
+    template.write_text(
+        template.read_text(encoding="utf-8").replace(
+            'id="app-shell"',
+            'id="application"',
+        ),
+        encoding="utf-8",
+    )
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        config = client.get("/_marimo-studio/views/dashboard/config")
+        page = client.get("/")
+
+    expected_hint = "Fix the view template, then save it again."
+    assert config.status_code == 500
+    assert config.json()["error"] == "template-error"
+    assert config.json()["hint"] == expected_hint
+    assert page.status_code == 500
+    assert page.headers["Marimo-Studio-Error"] == "template-error"
+    assert page.headers["Marimo-Studio-Hint"] == expected_hint
+    assert "expected one element with id" in page.text
+
+
+def test_edit_view_error_document_watches_for_source_repairs(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    template = studio.views["dashboard"].template
+    template.write_text(
+        template.read_text(encoding="utf-8").replace(
+            'id="app-shell"',
+            'id="application"',
+        ),
+        encoding="utf-8",
+    )
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    _session_manager(app).get_session_by_file_key = Mock(return_value=object())
+
+    with TestClient(app) as client:
+        page = client.get("/dashboard/")
+
+    assert page.status_code == 500
+    assert page.headers["Marimo-Studio-Error"] == "template-error"
+    assert 'data-marimo-studio-preview-state="error"' in page.text
+    assert "View needs repair" in page.text
+    assert "/_marimo-studio/dev/events" in page.text
+
+
+def test_named_cell_binding_waits_for_the_active_document(tmp_path: Path) -> None:
+    notebook = tmp_path / "named.py"
+    notebook.write_text(
+        notebook_source(tmp_path / "executed").replace(
+            "@app.cell\ndef _():",
+            "@app.cell\ndef imports():",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    ensure_view(notebook)
+    studio = load_studio(notebook)
+    _set_shell(studio, "dashboard", '<marimo-cell name="imports"></marimo-cell>')
+    static = load_static_notebook(notebook)
+    app = _marimo_app(notebook)
+    _edit_mode(app)
+    session = SimpleNamespace(
+        document=SimpleNamespace(
+            cells=tuple(
+                SimpleNamespace(code=cell.code, id=cell.runtime_id, name="_")
+                for cell in static.cells
+            )
+        )
+    )
+    _session_manager(app).get_session_by_file_key = Mock(return_value=session)
+
+    with TestClient(app) as client:
+        pending = client.get("/_marimo-studio/views/dashboard/config")
+        session.document.cells = tuple(
+            SimpleNamespace(
+                code=cell.code,
+                id=cell.runtime_id,
+                name=cell.name,
+            )
+            for cell in static.cells
+        )
+        ready = client.get("/_marimo-studio/views/dashboard/config")
+
+    assert pending.status_code == 409
+    assert pending.json()["error"] == "runtime-sync-pending"
+    assert pending.json()["transient"] is True
+    assert ready.status_code == 200
+    assert ready.json()["cellBindings"]["imports"] == {
+        "kind": "name",
+        "value": "imports",
+    }
+
+
+def test_named_cell_binding_waits_for_matching_live_source(tmp_path: Path) -> None:
+    notebook = tmp_path / "named.py"
+    notebook.write_text(
+        notebook_source(tmp_path / "executed").replace(
+            "@app.cell\ndef _():",
+            "@app.cell\ndef imports():",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    ensure_view(notebook)
+    studio = load_studio(notebook)
+    _set_shell(studio, "dashboard", '<marimo-cell name="imports"></marimo-cell>')
+    static = load_static_notebook(notebook)
+    rows = [
+        SimpleNamespace(code=cell.code, id=cell.runtime_id, name=cell.name)
+        for cell in static.cells
+    ]
+    rows[0].code = rows[0].code.replace("x = 2", "x = 1")
+    app = _marimo_app(notebook)
+    _edit_mode(app)
+    session = SimpleNamespace(document=SimpleNamespace(cells=tuple(rows)))
+    _session_manager(app).get_session_by_file_key = Mock(return_value=session)
+
+    with TestClient(app) as client:
+        pending = client.get("/_marimo-studio/views/dashboard/config")
+        rows[0].code = static.cells[0].code
+        ready = client.get("/_marimo-studio/views/dashboard/config")
+
+    assert pending.status_code == 409
+    assert pending.json()["error"] == "runtime-sync-pending"
+    assert ready.status_code == 200
+
+
+def test_unrelated_named_cell_does_not_block_the_selected_view(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "named.py"
+    source = notebook_source(tmp_path / "executed").replace(
+        "@app.cell\ndef _():",
+        "@app.cell\ndef imports():",
+        1,
+    )
+    source = source.replace(
+        "@app.cell\ndef _(x):",
+        "@app.cell\ndef result(x):",
+        1,
+    )
+    notebook.write_text(source, encoding="utf-8")
+    ensure_view(notebook)
+    studio = load_studio(notebook)
+    _set_shell(studio, "dashboard", '<marimo-cell name="imports"></marimo-cell>')
+    static = load_static_notebook(notebook)
+    rows = (
+        SimpleNamespace(
+            code=static.cells[0].code,
+            id=static.cells[0].runtime_id,
+            name="imports",
+        ),
+        SimpleNamespace(
+            code=static.cells[1].code,
+            id=static.cells[1].runtime_id,
+            name="_",
+        ),
+    )
+    app = _marimo_app(notebook)
+    _edit_mode(app)
+    _session_manager(app).get_session_by_file_key = Mock(
+        return_value=SimpleNamespace(document=SimpleNamespace(cells=rows))
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/_marimo-studio/views/dashboard/config")
+
+    assert response.status_code == 200
+    assert response.json()["cellBindings"] == {
+        "imports": {"kind": "name", "value": "imports"}
+    }
 
 
 def test_edit_runtime_uses_live_ids_for_anonymous_bindings(
@@ -224,7 +505,7 @@ def test_edit_runtime_uses_live_ids_for_anonymous_bindings(
     _edit_mode(app)
     static = load_static_notebook(studio.notebook)
     rows = tuple(
-        SimpleNamespace(code=cell.code, id=f"live-{index}")
+        SimpleNamespace(code=cell.code, id=f"live-{index}", name=cell.name)
         for index, cell in enumerate(static.cells)
     )
     session = SimpleNamespace(document=SimpleNamespace(cells=rows))
@@ -246,6 +527,121 @@ def test_edit_runtime_uses_live_ids_for_anonymous_bindings(
         "kind": "id",
         "value": "live-1",
     }
+
+
+def test_view_document_and_runtime_config_publish_one_revision(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        first_page = client.get("/")
+        first_config = client.get("/_marimo-studio/views/dashboard/config").json()
+        template = studio.views["dashboard"].template
+        template.write_text(
+            template.read_text(encoding="utf-8") + "\n<!-- changed -->\n",
+            encoding="utf-8",
+        )
+        interleaved_config = client.get("/_marimo-studio/views/dashboard/config").json()
+        second_page = client.get("/")
+        second_config = client.get("/_marimo-studio/views/dashboard/config").json()
+
+    first_revision = first_page.headers["Marimo-Studio-Revision"]
+    second_revision = second_page.headers["Marimo-Studio-Revision"]
+    assert first_config["revision"] == first_revision
+    assert interleaved_config["revision"] != first_revision
+    assert second_config["revision"] == second_revision
+    assert second_revision != first_revision
+
+
+def test_root_document_tracks_a_changed_default_view(notebook_path: Path) -> None:
+    studio = _configured(notebook_path)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        dashboard = client.get("/")
+
+        def select_executive(config: MutableMapping[str, object]) -> None:
+            config["default"] = "executive"
+
+        update_notebook_config(studio.notebook, select_executive)
+        executive = client.get("/")
+        config = client.get("/_marimo-studio/views/executive/config").json()
+
+    assert dashboard.headers["Marimo-Studio-Support-Url"].endswith("/views/dashboard")
+    assert executive.headers["Marimo-Studio-Support-Url"].endswith("/views/executive")
+    assert executive.headers["Marimo-Studio-Revision"] == config["revision"]
+    assert (
+        executive.headers["Marimo-Studio-Revision"]
+        != dashboard.headers["Marimo-Studio-Revision"]
+    )
+
+
+def test_view_identity_is_part_of_the_presentation_revision(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    shared = "<html><head></head><body><main id='app-shell'></main></body></html>"
+    for view in studio.views.values():
+        view.template.write_text(shared, encoding="utf-8")
+    timestamp = studio.views["dashboard"].template.stat().st_mtime_ns
+    for view in studio.views.values():
+        os.utime(view.template, ns=(timestamp, timestamp))
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        dashboard = client.get("/")
+        executive = client.get("/executive/")
+
+    assert (
+        dashboard.headers["Marimo-Studio-Revision"]
+        != executive.headers["Marimo-Studio-Revision"]
+    )
+
+
+def test_presentation_revision_tracks_same_size_edits(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    template = studio.views["dashboard"].template
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        before = client.get("/")
+        source = template.read_text(encoding="utf-8")
+        stat = template.stat()
+        template.write_text(
+            source.replace("app.css", "alt.css"),
+            encoding="utf-8",
+        )
+        os.utime(template, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+        after = client.get("/")
+
+    assert (
+        before.headers["Marimo-Studio-Revision"]
+        != after.headers["Marimo-Studio-Revision"]
+    )
+
+
+def test_snapshot_reloads_configuration_changed_during_discovery(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    presentation = NotebookPresentation(studio.notebook)
+    stale = presentation.discover()
+    assert stale is not None
+    assert stale.preserve_session is False
+
+    def preserve(config: MutableMapping[str, object]) -> None:
+        config["preserve_session"] = True
+
+    update_notebook_config(studio.notebook, preserve)
+    current = presentation.discover()
+    assert current is not None
+    presentation.discover = Mock(
+        side_effect=[stale, current, current, current],
+    )
+
+    snapshot = presentation.snapshot("dashboard")
+
+    assert snapshot.resolved.studio.preserve_session is True
 
 
 def test_edit_runtime_matches_layout_equivalent_live_cells(tmp_path: Path) -> None:
@@ -292,9 +688,9 @@ def _(mo):
     app = _marimo_app(notebook)
     _edit_mode(app)
     rows = (
-        SimpleNamespace(code='inserted = "before"', id="live-inserted"),
-        SimpleNamespace(code=static.cells[0].code, id="live-import"),
-        SimpleNamespace(code=legacy, id="live-report"),
+        SimpleNamespace(code='inserted = "before"', id="live-inserted", name="_"),
+        SimpleNamespace(code=static.cells[0].code, id="live-import", name="_"),
+        SimpleNamespace(code=legacy, id="live-report", name="_"),
     )
     session = SimpleNamespace(document=SimpleNamespace(cells=rows))
     _session_manager(app).get_session_by_file_key = Mock(return_value=session)
@@ -317,7 +713,9 @@ def test_edit_runtime_rejects_an_unmatched_static_cell(
     _edit_mode(app)
     session = SimpleNamespace(
         document=SimpleNamespace(
-            cells=(SimpleNamespace(code="unrelated = 1", id="live-unrelated"),)
+            cells=(
+                SimpleNamespace(code="unrelated = 1", id="live-unrelated", name="_"),
+            )
         )
     )
     _session_manager(app).get_session_by_file_key = Mock(return_value=session)
@@ -339,12 +737,16 @@ def test_run_runtime_refreshes_bindings_for_each_browser_session(
 
     def session(prefix: str, *, inserted: bool) -> SimpleNamespace:
         rows = tuple(
-            SimpleNamespace(code=cell.code, id=f"{prefix}-{index}")
+            SimpleNamespace(code=cell.code, id=f"{prefix}-{index}", name=cell.name)
             for index, cell in enumerate(static.cells)
         )
         if inserted:
             rows = (
-                SimpleNamespace(code='inserted = "before"', id=f"{prefix}-inserted"),
+                SimpleNamespace(
+                    code='inserted = "before"',
+                    id=f"{prefix}-inserted",
+                    name="_",
+                ),
                 *rows,
             )
         return SimpleNamespace(document=SimpleNamespace(cells=rows))
@@ -432,6 +834,29 @@ def test_change_stream_detects_edits_after_its_ready_event(
     assert changed == b'event: change\ndata: {"kind":"html"}\n\n'
 
 
+def test_change_stream_detects_same_size_edits_with_restored_mtime(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    template = studio.views["dashboard"].template
+
+    async def events() -> bytes:
+        stream = dev.change_events(studio, "dashboard")
+        await anext(stream)
+        source = template.read_text(encoding="utf-8")
+        stat = template.stat()
+        template.write_text(
+            source.replace("app.css", "alt.css"),
+            encoding="utf-8",
+        )
+        os.utime(template, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+        return await asyncio.wait_for(anext(stream), timeout=1)
+
+    changed = asyncio.run(events())
+
+    assert changed == b'event: change\ndata: {"kind":"html"}\n\n'
+
+
 def test_document_replay_requires_an_opted_in_manager_and_query() -> None:
     class Manager:
         pass
@@ -476,6 +901,31 @@ def test_document_replay_requires_an_opted_in_manager_and_query() -> None:
     assert unregistered == ("fallback", "new")
     session.disconnect_main_consumer.assert_called_once_with()
     handler._reconnect_session.assert_called_once_with(session, replay=True)
+
+
+def test_document_replay_follows_the_verified_presentation(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+
+    def preserve(config: MutableMapping[str, object]) -> None:
+        config["preserve_session"] = True
+
+    update_notebook_config(studio.notebook, preserve)
+    app = create_asgi_app(studio.notebook)
+    manager = _session_manager(app)
+
+    with TestClient(app) as client:
+        assert client.get("/").status_code == 200
+        assert manager in server_compat._DOCUMENT_REPLAY_MANAGERS
+
+        def reset(config: MutableMapping[str, object]) -> None:
+            config["preserve_session"] = False
+
+        update_notebook_config(studio.notebook, reset)
+        assert client.get("/").status_code == 200
+
+    assert manager not in server_compat._DOCUMENT_REPLAY_MANAGERS
 
 
 def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
@@ -602,6 +1052,8 @@ def test_edit_mode_keeps_the_editor_at_root_and_adds_studio(
     assert view_redirect.headers["location"] == "/executive/?region=emea"
     assert waiting.status_code == 503
     assert waiting.headers["retry-after"] == "1"
+    assert 'data-marimo-studio-preview-state="waiting"' in waiting.text
+    assert "<script" not in waiting.text.split("<body>", 1)[1]
     assert missing_view.status_code == 404
     assert view.status_code == 200
     assert config["runtimeUrl"] == "/"
@@ -761,10 +1213,22 @@ def test_invalid_studio_config_does_not_intercept_marimo_routes(
             client.get("/public-files-sw.js"),
         ]
         presentation = client.get("/dashboard/")
+        refresh = client.get(
+            "/dashboard/",
+            headers={"Accept": "application/json"},
+        )
 
     assert all(response.status_code == 200 for response in native)
     assert presentation.status_code == 500
-    assert presentation.text.startswith("Marimo Studio configuration error")
+    assert presentation.headers["Marimo-Studio-Error"] == "configuration-error"
+    assert 'data-marimo-studio-preview-state="error"' in presentation.text
+    assert "data-marimo-studio-repair" in presentation.text
+    assert "data-marimo-studio-message" in presentation.text
+    assert "View needs repair" in presentation.text
+    assert refresh.status_code == 500
+    assert refresh.headers["content-type"].startswith("application/json")
+    assert refresh.json()["error"] == "configuration-error"
+    assert "<!doctype html>" not in refresh.json()["message"].lower()
 
 
 def test_middleware_is_inert_for_an_unconfigured_notebook(tmp_path: Path) -> None:

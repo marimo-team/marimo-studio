@@ -54,6 +54,12 @@ Authored view source lives at
 - `mo-value` reads selectors permitted by the active view through the kernel
   queue.
 - Every projection host lives inside the single `#app-shell`.
+- Missing cells and value roots keep the healthy shell active and publish
+  structured projection diagnostics.
+- Runtime configuration validates the selected view against the active Marimo
+  document by semantic cell identity.
+- A shell and its runtime configuration commit from the same content-derived
+  presentation revision.
 - Template refresh keeps the last valid shell when the replacement fails.
 - Support URLs honor both the parent ASGI mount and Marimo `base_url`.
 - Studio owns `/studio/`, `/{view}/`, and `/_marimo-studio/`. Native Marimo
@@ -69,6 +75,10 @@ Keep these contracts aligned:
 
 - `NotebookPresentation.runtime_config` and
   `frontend/src/runtime-config.ts`
+- workspace projection diagnostics, CLI check output, browser host state, and
+  Studio preview status
+- presentation revisions in injected mount data, document responses, runtime
+  configuration, and the browser refresh transaction
 - the `mo-value` parser, view allowlist, kernel RPC, and browser binding
 - the Marimo lower bound in `pyproject.toml` and the resolved version in
   `uv.lock` and browser build metadata

@@ -3,6 +3,21 @@ export interface ShellTarget {
   supportUrl: string;
 }
 
+export type PreviewLoadState = "ready" | "waiting" | "error";
+
+export const previewLoadState = ({
+  hasRuntimeRoot,
+  documentState,
+}: {
+  hasRuntimeRoot: boolean;
+  documentState?: string;
+}): PreviewLoadState => {
+  if (hasRuntimeRoot) {
+    return "ready";
+  }
+  return documentState === "waiting" ? "waiting" : "error";
+};
+
 export type ShellChangeKind = "css" | "html" | "runtime" | "views";
 
 const changePriority: Record<ShellChangeKind, number> = {
@@ -39,6 +54,34 @@ export class ShellChangeQueue {
   }
 }
 
+export class RefreshRetrySchedule {
+  #attempt = 0;
+
+  constructor(
+    private readonly delays: readonly number[] = [
+      1_000,
+      2_000,
+      5_000,
+      10_000,
+      30_000,
+    ],
+  ) {
+    if (delays.length === 0) {
+      throw new Error("Refresh retry schedule requires at least one delay");
+    }
+  }
+
+  next(): number {
+    const delay = this.delays[Math.min(this.#attempt, this.delays.length - 1)];
+    this.#attempt += 1;
+    return delay;
+  }
+
+  reset(): void {
+    this.#attempt = 0;
+  }
+}
+
 export class BaselineReconciler {
   #configured: boolean;
   #pending = false;
@@ -70,6 +113,10 @@ export class ShellRefreshState {
 
   get pending(): boolean {
     return this.#failedTarget !== undefined;
+  }
+
+  get failedTarget(): ShellTarget | undefined {
+    return this.#failedTarget && { ...this.#failedTarget };
   }
 
   rememberFailure(target: ShellTarget): void {

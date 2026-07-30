@@ -2,6 +2,8 @@ import { assertEquals } from "@std/assert";
 
 import {
   BaselineReconciler,
+  previewLoadState,
+  RefreshRetrySchedule,
   ShellChangeQueue,
   ShellRefreshState,
 } from "../src/shell-refresh-state.ts";
@@ -15,11 +17,24 @@ const executive = {
   supportUrl: "/_marimo-studio/views/executive",
 };
 
+Deno.test("preview loads distinguish startup waits from repair failures", () => {
+  assertEquals(
+    previewLoadState({ hasRuntimeRoot: false, documentState: "waiting" }),
+    "waiting",
+  );
+  assertEquals(
+    previewLoadState({ hasRuntimeRoot: true, documentState: "waiting" }),
+    "ready",
+  );
+  assertEquals(previewLoadState({ hasRuntimeRoot: false }), "error");
+});
+
 Deno.test("shell changes recover the exact failed view", () => {
   const state = new ShellRefreshState();
 
   state.rememberFailure(executive);
 
+  assertEquals(state.failedTarget, executive);
   assertEquals(state.targetForChange("runtime", dashboard), executive);
   assertEquals(state.targetForChange("views", dashboard), executive);
   assertEquals(state.targetForChange("html", dashboard), executive);
@@ -34,6 +49,7 @@ Deno.test("shell changes recover the exact failed view", () => {
   assertEquals(state.targetForChange("runtime", executive), dashboard);
 
   state.complete(dashboard);
+  assertEquals(state.failedTarget, undefined);
   assertEquals(state.targetForChange("runtime", dashboard), dashboard);
   assertEquals(state.targetForChange("views", dashboard), undefined);
   assertEquals(state.targetForChange("css", dashboard), undefined);
@@ -71,4 +87,15 @@ Deno.test("stream baselines reconcile after runtime configuration", () => {
 
   assertEquals(configured.ready(), true);
   assertEquals(configured.ready(), true);
+});
+
+Deno.test("refresh retries back off and reset after recovery", () => {
+  const schedule = new RefreshRetrySchedule([10, 20, 40]);
+
+  assertEquals(
+    [schedule.next(), schedule.next(), schedule.next(), schedule.next()],
+    [10, 20, 40, 40],
+  );
+  schedule.reset();
+  assertEquals(schedule.next(), 10);
 });

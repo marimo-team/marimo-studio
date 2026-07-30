@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, MutableMapping
+from collections.abc import Awaitable, Callable, Mapping, MutableMapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal, Protocol, TypeAlias
@@ -71,6 +71,22 @@ class CellRef:
 
 
 @dataclass(frozen=True)
+class LiveCellIdentity:
+    """One cell identity currently present in a Marimo session."""
+
+    ref: CellRef
+    runtime_id: str
+
+
+@dataclass(frozen=True)
+class LiveCellSnapshot:
+    """Cell identities currently present in one Marimo session."""
+
+    ids: Mapping[CellRef, str]
+    names: Mapping[str, tuple[LiveCellIdentity, ...]]
+
+
+@dataclass(frozen=True)
 class SourceSpan:
     start_line: int
     end_line: int
@@ -132,6 +148,9 @@ class ValueReference:
 class ValueBinding:
     reference: ValueReference
     cell: CellSpec
+    source: Path
+    line: int
+    column: int
 
 
 @dataclass(frozen=True)
@@ -163,6 +182,13 @@ class CheckResult:
     name: str
     status: CheckStatus
     message: str
+    code: str | None = None
+    details: dict[str, Any] | None = None
 
-    def to_dict(self) -> dict[str, str]:
-        return asdict(self)
+    def to_dict(self) -> dict[str, Any]:
+        value = asdict(self)
+        if self.code is None:
+            value.pop("code")
+        if self.details is None:
+            value.pop("details")
+        return value

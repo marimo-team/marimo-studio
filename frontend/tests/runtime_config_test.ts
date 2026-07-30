@@ -8,17 +8,23 @@ import {
 import {
   commitRuntimeConfig,
   fetchRuntimeConfig,
+  fetchRuntimeConfigForRevision,
   fetchRuntimeConfigWithRetry,
   getRuntimeCellBindings,
   getRuntimeConfig,
+  getRuntimeDiagnostics,
   parseRuntimeConfig,
+  readResponseError,
+  requireMatchingPresentationRevision,
   type RuntimeConfig,
+  RuntimeConfigRequestError,
   runtimeConfigSessionId,
   subscribeRuntimeCellBindings,
 } from "../src/runtime-config.ts";
 
 const baseRuntimeConfig = {
   schema: 1,
+  revision: "presentation-revision",
   view: "dashboard",
   views: ["dashboard", "executive"],
   fileKey: "/workspace/notebook.py",
@@ -33,6 +39,7 @@ const baseRuntimeConfig = {
       cell: { kind: "id", value: "context-cell-id" },
     },
   },
+  diagnostics: [],
   appConfig: {},
   userConfig: {},
   configOverrides: {},
@@ -53,6 +60,29 @@ Deno.test("parseRuntimeConfig accepts the browser contract", () => {
   assertEquals(parseRuntimeConfig(runtimeConfig()), baseRuntimeConfig);
 });
 
+Deno.test("parseRuntimeConfig accepts repairable projection diagnostics", () => {
+  const diagnostic = {
+    code: "cell-not-found",
+    severity: "error",
+    message: "Cell 'summary' is unavailable.",
+    hint: "Restore the cell or update the view.",
+    view: "dashboard",
+    projection: "cell",
+    target: "summary",
+    source: {
+      path: "/workspace/__marimo__/studio/notebook/dashboard/index.html",
+      line: 18,
+      column: 7,
+    },
+  };
+
+  assertEquals(
+    parseRuntimeConfig(runtimeConfig({ diagnostics: [diagnostic] }))
+      .diagnostics,
+    [diagnostic],
+  );
+});
+
 Deno.test("parseRuntimeConfig rejects malformed server contracts", () => {
   const { preserveSession: _, ...missingPolicy } = baseRuntimeConfig;
   const malformed = [
@@ -66,8 +96,21 @@ Deno.test("parseRuntimeConfig rejects malformed server contracts", () => {
       },
     }),
     runtimeConfig({ mode: "preview" }),
+    runtimeConfig({ revision: 42 }),
     runtimeConfig({ view: 42 }),
     runtimeConfig({ views: ["dashboard", 42] }),
+    runtimeConfig({
+      diagnostics: [{
+        code: "cell-not-found",
+        severity: "error",
+        message: "Missing cell",
+        hint: "Restore it",
+        view: "dashboard",
+        projection: "cell",
+        target: "summary",
+        source: { path: "index.html", line: "18", column: 7 },
+      }],
+    }),
     missingPolicy,
     runtimeConfig({ preserveSession: "yes" }),
   ];
@@ -77,14 +120,74 @@ Deno.test("parseRuntimeConfig rejects malformed server contracts", () => {
   });
 });
 
+Deno.test("presentation revisions must match before a shell commits", () => {
+  const config = parseRuntimeConfig(runtimeConfig());
+
+  requireMatchingPresentationRevision("presentation-revision", config);
+  assertThrows(
+    () => requireMatchingPresentationRevision("older-revision", config),
+    Error,
+    "one source revision",
+  );
+});
+
+Deno.test("session restoration keeps the document revision", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(
+      Response.json(runtimeConfig({ revision: "newer-revision" })),
+    );
+
+  try {
+    const error = await assertRejects(
+      () =>
+        fetchRuntimeConfigForRevision(
+          "/_marimo-studio/views/dashboard",
+          "presentation-revision",
+        ),
+      RuntimeConfigRequestError,
+      "one source revision",
+    );
+    assertEquals(error.code, "presentation-revision-mismatch");
+    assertEquals(error.transient, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("runtime diagnostics are exposed as defensive snapshots", () => {
+  const diagnostic = {
+    code: "cell-not-found",
+    severity: "error" as const,
+    message: "Missing cell",
+    hint: "Name the cell",
+    view: "dashboard",
+    projection: "cell" as const,
+    target: "summary",
+    source: { path: "index.html", line: 4, column: 3 },
+  };
+  commitRuntimeConfig({
+    ...baseRuntimeConfig,
+    diagnostics: [diagnostic],
+  });
+
+  const exposed = getRuntimeDiagnostics();
+
+  assertEquals(exposed, [diagnostic]);
+  assertEquals(exposed === getRuntimeConfig().diagnostics, false);
+  assertEquals(exposed[0].source === diagnostic.source, false);
+});
+
 Deno.test("fetchRuntimeConfig reports the configuration diagnostic", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = () =>
     Promise.resolve(
       new Response(
         JSON.stringify({
-          error: "configuration-error",
-          message: 'index.html: expected one element with id="app-shell"',
+          error: "notebook-source-error",
+          message:
+            "Marimo cannot inspect the notebook while a cell contains invalid code.",
+          hint: "Fix the highlighted cell in Marimo, then save it again.",
         }),
         {
           status: 500,
@@ -94,14 +197,58 @@ Deno.test("fetchRuntimeConfig reports the configuration diagnostic", async () =>
     );
 
   try {
-    await assertRejects(
+    const error = await assertRejects(
       () => fetchRuntimeConfig("/_marimo-studio/views/dashboard"),
-      Error,
-      'index.html: expected one element with id="app-shell"',
+      RuntimeConfigRequestError,
+      "Marimo cannot inspect the notebook while a cell contains invalid code.",
+    );
+    assertEquals(error.code, "notebook-source-error");
+    assertEquals(
+      error.hint,
+      "Fix the highlighted cell in Marimo, then save it again.",
     );
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+Deno.test("document refresh errors retain structured repair guidance", async () => {
+  const detail = await readResponseError(
+    new Response(
+      JSON.stringify({
+        error: "template-error",
+        message: "Template must contain #app-shell.",
+        hint: "Restore #app-shell, then save the view.",
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    ),
+    "Shell refresh failed",
+  );
+
+  assertEquals(detail, {
+    code: "template-error",
+    message: "Template must contain #app-shell.",
+    hint: "Restore #app-shell, then save the view.",
+    transient: false,
+  });
+});
+
+Deno.test("HTML error documents do not leak into diagnostics", async () => {
+  const detail = await readResponseError(
+    new Response(
+      "<!doctype html><script>location.reload()</script>",
+      {
+        status: 500,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      },
+    ),
+    "Shell refresh failed with 500",
+  );
+
+  assertEquals(detail.message, "Shell refresh failed with 500");
 });
 
 Deno.test("runtime refresh targets the connected Marimo session", async () => {

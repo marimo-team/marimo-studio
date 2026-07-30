@@ -133,15 +133,35 @@ uvx marimo-studio check analysis.py \
   "schema": 1,
   "event": "diagnostic",
   "command": "check",
-  "severity": "info",
-  "code": "view:dashboard",
-  "message": "Validated 2 cell projections and 1 value selector",
-  "status": "pass"
+  "severity": "error",
+  "code": "cell-not-found",
+  "message": "Cell 'summary' is not defined in the notebook.",
+  "status": "fail",
+  "details": {
+    "view": "dashboard",
+    "projection": "cell",
+    "target": "summary",
+    "source": {
+      "path": "/workspace/__marimo__/studio/analysis/dashboard/index.html",
+      "line": 24,
+      "column": 7
+    },
+    "hint": "Name a notebook cell, change the projection target, or remove it from the view."
+  }
 }
 ```
 
 Every event contains `schema`, `event`, `command`, `severity`, `code`, and
-`message`. Check events add `status`. Command failures add `exit_code`.
+`message`. Check events add `status`. Projection findings add `details` with
+the view target, template location, and repair hint. Command failures add
+`exit_code`.
+
+Runtime failures use the same shape. Their codes identify the failed cell,
+value, or runtime boundary. Cell failures use the defining notebook cell as
+`details.source`. Value failures use the `mo-value` location in `index.html` as
+`details.source` and retain the defining notebook cell as
+`details.definition`. Each record includes the affected view, projection
+target, and repair hint.
 
 ### Exit codes
 
@@ -277,7 +297,9 @@ connecting | loading | stale | ready | missing | error
 ```
 
 The element records output MIME data in `data-output-mime` and
-`data-output-mimes`.
+`data-output-mimes`. An unresolved cell uses the `missing` state and records
+`data-marimo-diagnostic-code`, `data-marimo-diagnostic-message`, and
+`data-marimo-diagnostic-hint`.
 
 Events:
 
@@ -321,7 +343,10 @@ Events:
 - `marimo-value-updated`
 - `marimo-value-error`
 
-A value keeps its cached content while a new read is pending.
+A value keeps its cached content while a new kernel read is pending. An
+unresolved selector clears the previous value and uses the `error` state. Edit
+mode renders `Unavailable`. Run mode renders an em dash. Both record the same
+`data-marimo-diagnostic-*` attributes and expose an accessible description.
 
 ## Browser readiness
 
@@ -329,10 +354,21 @@ Wait for the current view:
 
 ```js
 await window.marimoStudio.ready();
+const diagnostics = window.marimoStudio.diagnostics();
 ```
 
 The promise resolves when every current cell and value has rendered content,
 retained content while updating, or reached a terminal missing or error state.
+It remains pending while Studio applies an HTML, CSS, or notebook refresh.
+`diagnostics()` returns a defensive snapshot containing:
+
+- projection findings from the current runtime configuration
+- presentation refresh failures with `scope: "presentation"`
+- browser delivery failures with `scope: "host"`
+- runtime connection failures with `scope: "runtime"`
+
+Projection source paths are relative to the notebook in browser responses.
+Local CLI diagnostics retain absolute paths.
 
 The root `<html>` element publishes combined state through
 `data-marimo-studio-state`:
@@ -352,6 +388,8 @@ View switching and preview status use same-origin messages:
 - `marimo-studio:switch-view`
 - `marimo-studio:receiver-ready`
 - `marimo-studio:view-ready`
+- `marimo-studio:view-diagnostics`
+- `marimo-studio:view-sync-pending`
 - `marimo-studio:view-error`
 
 ## Loading and theming

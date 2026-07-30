@@ -14,6 +14,7 @@ from marimo_studio._workspace.models import StudioConfig
 from marimo_studio.errors import ConfigurationError
 
 _WatchKey = tuple[str, Path]
+_FileStamp = str | tuple[int, int, int, int]
 
 
 def _files(studio: StudioConfig) -> tuple[_WatchKey, ...]:
@@ -30,8 +31,8 @@ def _files(studio: StudioConfig) -> tuple[_WatchKey, ...]:
     )
 
 
-def _file_stamps(studio: StudioConfig) -> dict[_WatchKey, int | str]:
-    result: dict[_WatchKey, int | str] = {}
+def _file_stamps(studio: StudioConfig) -> dict[_WatchKey, _FileStamp]:
+    result: dict[_WatchKey, _FileStamp] = {}
     for kind, path in _files(studio):
         try:
             if kind == "config" and studio.uses_notebook_config:
@@ -40,7 +41,13 @@ def _file_stamps(studio: StudioConfig) -> dict[_WatchKey, int | str]:
                     repr(config).encode("utf-8")
                 ).hexdigest()
             else:
-                result[(kind, path)] = path.stat().st_mtime_ns
+                stat = path.stat()
+                result[(kind, path)] = (
+                    stat.st_mtime_ns,
+                    stat.st_ctime_ns,
+                    stat.st_size,
+                    stat.st_ino,
+                )
         except (OSError, ConfigurationError):
             continue
     return result

@@ -7,6 +7,7 @@
   --studio-surface: #f8fafc;
   --studio-border: #e2e8f0;
   --studio-primary: #0b68cb;
+  --studio-warning: #8a5b00;
   --studio-error: #b42318;
 }
 
@@ -18,6 +19,7 @@
     --studio-surface: #252927;
     --studio-border: #3b403e;
     --studio-primary: #479bf5;
+    --studio-warning: #f0b95a;
     --studio-error: #ff8a80;
   }
 }
@@ -146,6 +148,10 @@ body {
 
 .studio-status[data-state="error"] {
   color: var(--studio-error);
+}
+
+.studio-status[data-state="warning"] {
+  color: var(--studio-warning);
 }
 
 .studio-workspace {

@@ -16,8 +16,58 @@ export interface ValueBindingConfig {
   cell: CellBindingConfig;
 }
 
+export interface ProjectionDiagnostic {
+  code: string;
+  severity: "warning" | "error";
+  message: string;
+  hint: string;
+  view: string;
+  projection: "cell" | "value";
+  target: string;
+  source: {
+    path: string;
+    line: number;
+    column: number;
+  };
+}
+
+export interface PresentationDiagnostic {
+  code: string;
+  severity: "warning" | "error";
+  message: string;
+  hint: string;
+  view: string;
+  scope: "presentation";
+}
+
+export interface HostDiagnostic {
+  code: string;
+  severity: "error";
+  message: string;
+  hint: string;
+  view: string;
+  scope: "host";
+  target: string;
+}
+
+export interface RuntimeDiagnostic {
+  code: string;
+  severity: "warning" | "error";
+  message: string;
+  hint: string;
+  view: string;
+  scope: "runtime";
+}
+
+export type StudioDiagnostic =
+  | ProjectionDiagnostic
+  | PresentationDiagnostic
+  | HostDiagnostic
+  | RuntimeDiagnostic;
+
 export interface RuntimeConfig {
   schema: 1;
+  revision: string;
   view: string;
   views: string[];
   fileKey: string;
@@ -25,6 +75,7 @@ export interface RuntimeConfig {
   supportUrl: string;
   cellBindings: Record<string, CellBindingConfig>;
   valueBindings: Record<string, ValueBindingConfig>;
+  diagnostics: ProjectionDiagnostic[];
   appConfig: Record<string, unknown>;
   userConfig: Record<string, unknown>;
   configOverrides: Record<string, unknown>;
@@ -43,6 +94,7 @@ declare global {
 interface MountConfig {
   supportUrl: string;
   version: string;
+  revision: string;
 }
 
 type Listener = () => void;
@@ -56,10 +108,22 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 };
 
-const responseError = async (
+const responseText = async (response: Response, fallback: string) => {
+  if (response.headers.get("content-type")?.includes("text/html")) {
+    return fallback;
+  }
+  return (await response.text()).trim() || fallback;
+};
+
+export const readResponseError = async (
   response: Response,
   fallback: string,
-): Promise<{ code: string; message: string; transient: boolean }> => {
+): Promise<{
+  code: string;
+  message: string;
+  hint: string;
+  transient: boolean;
+}> => {
   const payload: unknown = await response.clone().json().catch(() => undefined);
   return {
     code: isRecord(payload) && typeof payload.error === "string"
@@ -67,7 +131,10 @@ const responseError = async (
       : "runtime-config-failed",
     message: isRecord(payload) && typeof payload.message === "string"
       ? payload.message
-      : (await response.text()).trim() || fallback,
+      : await responseText(response, fallback),
+    hint: isRecord(payload) && typeof payload.hint === "string"
+      ? payload.hint
+      : "",
     transient: isRecord(payload) && payload.transient === true,
   };
 };
@@ -77,6 +144,7 @@ export class RuntimeConfigRequestError extends Error {
     message: string,
     readonly code: string,
     readonly transient: boolean,
+    readonly hint = "",
   ) {
     super(message);
     this.name = "RuntimeConfigRequestError";
@@ -116,10 +184,31 @@ const isValueBinding = (value: unknown): value is ValueBindingConfig => {
     isCellBinding(value.cell);
 };
 
+const isProjectionDiagnostic = (
+  value: unknown,
+): value is ProjectionDiagnostic => {
+  if (!isRecord(value) || !isRecord(value.source)) {
+    return false;
+  }
+  return typeof value.code === "string" &&
+    (value.severity === "warning" || value.severity === "error") &&
+    typeof value.message === "string" &&
+    typeof value.hint === "string" &&
+    typeof value.view === "string" &&
+    (value.projection === "cell" || value.projection === "value") &&
+    typeof value.target === "string" &&
+    typeof value.source.path === "string" &&
+    typeof value.source.line === "number" &&
+    Number.isInteger(value.source.line) &&
+    typeof value.source.column === "number" &&
+    Number.isInteger(value.source.column);
+};
+
 export const parseRuntimeConfig = (value: unknown): RuntimeConfig => {
   if (
     !isRecord(value) ||
     value.schema !== 1 ||
+    typeof value.revision !== "string" ||
     typeof value.view !== "string" ||
     !Array.isArray(value.views) ||
     !value.views.every((view) => typeof view === "string") ||
@@ -130,6 +219,8 @@ export const parseRuntimeConfig = (value: unknown): RuntimeConfig => {
     !Object.values(value.cellBindings).every(isCellBinding) ||
     !isRecord(value.valueBindings) ||
     !Object.values(value.valueBindings).every(isValueBinding) ||
+    !Array.isArray(value.diagnostics) ||
+    !value.diagnostics.every(isProjectionDiagnostic) ||
     !isRecord(value.appConfig) ||
     !isRecord(value.userConfig) ||
     !isRecord(value.configOverrides) ||
@@ -151,7 +242,8 @@ const mountConfig = (): MountConfig => {
   if (
     !isRecord(value) ||
     typeof value.supportUrl !== "string" ||
-    typeof value.version !== "string"
+    typeof value.version !== "string" ||
+    typeof value.revision !== "string"
   ) {
     throw new Error("Runtime mount config has an invalid shape");
   }
@@ -170,6 +262,13 @@ export const getRuntimeConfig = (): RuntimeConfig => {
     throw new Error("Runtime config has not loaded");
   }
   return current;
+};
+
+export const getRuntimeDiagnostics = (): readonly ProjectionDiagnostic[] => {
+  return getRuntimeConfig().diagnostics.map((diagnostic) => ({
+    ...diagnostic,
+    source: { ...diagnostic.source },
+  }));
 };
 
 export const hasRuntimeConfig = (): boolean => current !== undefined;
@@ -240,7 +339,7 @@ export const fetchRuntimeConfig = async (
     signal,
   });
   if (!response.ok) {
-    const detail = await responseError(
+    const detail = await readResponseError(
       response,
       `Runtime config failed with ${response.status}`,
     );
@@ -248,6 +347,7 @@ export const fetchRuntimeConfig = async (
       detail.message,
       detail.code,
       detail.transient,
+      detail.hint,
     );
   }
   return parseRuntimeConfig(await response.json());
@@ -293,6 +393,32 @@ export const fetchRuntimeConfigWithRetry = async (
   }
 };
 
+export const requireMatchingPresentationRevision = (
+  documentRevision: string | null,
+  config: RuntimeConfig,
+): void => {
+  if (documentRevision === config.revision) {
+    return;
+  }
+  throw new RuntimeConfigRequestError(
+    "The view document and notebook bindings changed at the same time. " +
+      "Studio will retry with one source revision.",
+    "presentation-revision-mismatch",
+    true,
+    "Wait for the current view sources to settle.",
+  );
+};
+
+export const fetchRuntimeConfigForRevision = async (
+  supportUrl: string,
+  documentRevision: string,
+  signal?: AbortSignal,
+): Promise<RuntimeConfig> => {
+  const config = await fetchRuntimeConfigWithRetry(supportUrl, signal);
+  requireMatchingPresentationRevision(documentRevision, config);
+  return config;
+};
+
 export const commitRuntimeConfig = publish;
 
 export const getRuntimeCellBindings = (): Record<
@@ -308,7 +434,11 @@ export const subscribeRuntimeCellBindings = (listener: Listener) => {
 };
 
 export const loadRuntimeConfig = async (): Promise<RuntimeConfig> => {
-  return publish(await fetchRuntimeConfigWithRetry(mountConfig().supportUrl));
+  const config = await fetchRuntimeConfigForRevision(
+    mountConfig().supportUrl,
+    mountConfig().revision,
+  );
+  return publish(config);
 };
 
 declare global {

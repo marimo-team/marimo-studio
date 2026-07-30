@@ -13,6 +13,7 @@ const config = (
   mode: RuntimeConfig["mode"] = "run",
 ): RuntimeConfig => ({
   schema: 1,
+  revision: "presentation-revision",
   view: "dashboard",
   views: ["dashboard"],
   fileKey: "/workspace/analysis.py",
@@ -20,6 +21,7 @@ const config = (
   supportUrl: "/_marimo-studio/views/dashboard",
   cellBindings: {},
   valueBindings: {},
+  diagnostics: [],
   appConfig: {},
   userConfig: {},
   configOverrides: {},
@@ -46,6 +48,7 @@ const environment = (
     replaceUrl: (url) => replaced.push(url),
     storage: {
       getItem: (key) => storage.get(key) ?? null,
+      removeItem: (key) => storage.delete(key),
       setItem: (key, item) => storage.set(key, item),
     },
   };
@@ -104,7 +107,8 @@ Deno.test("session preservation stays scoped to a run-mode page reload", () => {
 
 Deno.test("the replay marker is removed after the runtime opens", () => {
   const browser = environment(new Map(), {
-    href: "https://example.test/dashboard/?marimo_studio_resume=1&view=summary",
+    href:
+      "https://example.test/dashboard/?session_id=s_abc123&marimo_studio_resume=1&view=summary",
   });
 
   finishSessionRefresh(browser.value);
@@ -112,4 +116,24 @@ Deno.test("the replay marker is removed after the runtime opens", () => {
   assertEquals(browser.replaced, [
     "https://example.test/dashboard/?view=summary",
   ]);
+});
+
+Deno.test("disabling preservation cancels a pending replay", () => {
+  const storage = new Map([
+    [
+      "marimo-studio:session:v1:/workspace/analysis.py:/dashboard/",
+      "s_abc123",
+    ],
+  ]);
+  const browser = environment(storage, {
+    href:
+      "https://example.test/dashboard/?session_id=s_abc123&marimo_studio_resume=1&view=summary",
+    navigationType: "reload",
+  });
+
+  assertEquals(prepareSessionRefresh(config(false), browser.value), false);
+  assertEquals(browser.replaced, [
+    "https://example.test/dashboard/?view=summary",
+  ]);
+  assertEquals(storage.size, 0);
 });

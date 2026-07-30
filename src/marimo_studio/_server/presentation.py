@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 from threading import RLock
 
 from htpy import base
 
-from marimo_studio._compat.server import ServerContext, live_cell_ids
+from marimo_studio._compat.server import ServerContext, live_cells
 from marimo_studio._html import render, runtime_head, runtime_metadata, runtime_root
 from marimo_studio._server.routes import SUPPORT_PATH, public_url
 from marimo_studio._workspace import discover_studio, resolve_studio
@@ -16,8 +18,17 @@ from marimo_studio._workspace.config import (
     TemplateParser,
     validate_template_structure,
 )
-from marimo_studio._workspace.models import ResolvedStudio, StudioConfig
-from marimo_studio.errors import ConfigurationError
+from marimo_studio._workspace.models import (
+    ProjectionDiagnostic,
+    ResolvedStudio,
+    StudioConfig,
+)
+from marimo_studio.errors import (
+    ConfigurationError,
+    MarimoStudioError,
+    RuntimeSyncError,
+    TemplateError,
+)
 
 
 class _DocumentLayout(HTMLParser):
@@ -63,7 +74,7 @@ def _inject_runtime(document: str, head_content: str, body_content: str) -> str:
         or layout.head_close is None
         or layout.body_close is None
     ):
-        raise ConfigurationError("Template must contain <head>, </head>, and </body>")
+        raise TemplateError("Template must contain <head>, </head>, and </body>")
     return (
         document[: layout.head_open_end]
         + head_content
@@ -74,25 +85,94 @@ def _inject_runtime(document: str, head_content: str, body_content: str) -> str:
     )
 
 
-def _stamp(path: Path) -> tuple[int, int]:
-    try:
-        stat = path.stat()
-    except OSError:
-        return (-1, -1)
-    return stat.st_mtime_ns, stat.st_size
-
-
-def _source_stamp(
+def _configuration_identity(
     studio: StudioConfig,
     view_name: str,
 ) -> tuple[object, ...]:
     view = studio.views[view_name]
     return (
-        _stamp(studio.config_path),
-        _stamp(studio.notebook),
-        tuple(studio.views),
-        _stamp(view.template),
+        view_name,
+        str(view.template),
+        str(studio.config_path),
+        studio.config_source,
+        str(studio.notebook),
+        str(studio.view_root),
+        studio.default_view,
+        studio.preserve_session,
+        tuple((name, str(item.root)) for name, item in studio.views.items()),
+        tuple(
+            (alias, str(reference)) for alias, reference in sorted(studio.cells.items())
+        ),
     )
+
+
+@dataclass(frozen=True)
+class _PresentationSources:
+    document: str
+    identity: tuple[object, ...]
+
+    @property
+    def revision(self) -> str:
+        return hashlib.sha256(repr(self.identity).encode()).hexdigest()
+
+
+def _read_sources(
+    studio: StudioConfig,
+    view_name: str,
+) -> _PresentationSources:
+    view = studio.views[view_name]
+    paths = tuple(dict.fromkeys((studio.config_path, studio.notebook, view.template)))
+    contents = {path: path.read_bytes() for path in paths}
+    try:
+        document = contents[view.template].decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise TemplateError(
+            f"Could not decode {view.template} as UTF-8: {error}",
+            source=view.template,
+        ) from error
+    identity = (
+        _configuration_identity(studio, view_name),
+        tuple(
+            (str(path), hashlib.sha256(contents[path]).hexdigest()) for path in paths
+        ),
+    )
+    return _PresentationSources(document=document, identity=identity)
+
+
+@dataclass(frozen=True)
+class PresentationSnapshot:
+    """A view document and its bindings from one stable source revision."""
+
+    resolved: ResolvedStudio
+    view_name: str
+    document: str
+    revision: str
+
+
+def _browser_diagnostic(
+    diagnostic: ProjectionDiagnostic,
+    *,
+    notebook: Path,
+    developer: bool,
+) -> dict[str, object]:
+    try:
+        source = diagnostic.source.relative_to(notebook.parent)
+    except ValueError:
+        source = Path(diagnostic.source.name)
+    return {
+        "code": diagnostic.code,
+        "severity": diagnostic.severity,
+        "message": diagnostic.message,
+        "hint": diagnostic.hint if developer else "",
+        "view": diagnostic.view,
+        "projection": diagnostic.projection,
+        "target": diagnostic.target,
+        "source": {
+            "path": str(source),
+            "line": diagnostic.line,
+            "column": diagnostic.column,
+        },
+    }
 
 
 class NotebookPresentation:
@@ -101,37 +181,82 @@ class NotebookPresentation:
     def __init__(self, notebook: Path) -> None:
         self.notebook = notebook
         self._lock = RLock()
-        self._resolved: dict[str, ResolvedStudio] = {}
-        self._source_stamps: dict[str, tuple[object, ...]] = {}
+        self._snapshots: dict[str, PresentationSnapshot] = {}
 
     def discover(self) -> StudioConfig | None:
         return discover_studio(self.notebook)
 
-    def resolve(
+    def snapshot(
         self,
-        studio: StudioConfig,
-        view_name: str,
-    ) -> ResolvedStudio:
+        view_name: str | None,
+    ) -> PresentationSnapshot:
         with self._lock:
-            stamp = _source_stamp(studio, view_name)
-            if view_name not in self._resolved or stamp != self._source_stamps.get(
-                view_name
-            ):
-                self._resolved[view_name] = resolve_studio(
-                    studio,
-                    view_name=view_name,
+            for _attempt in range(3):
+                studio = self.discover()
+                if studio is None:
+                    raise ConfigurationError(
+                        f"No Marimo Studio configuration found for {self.notebook}"
+                    )
+                selected = view_name or studio.default_view
+                if selected not in studio.views:
+                    raise ConfigurationError(f"Unknown view {selected!r}")
+                try:
+                    before = _read_sources(studio, selected)
+                except OSError:
+                    continue
+                revision = before.revision
+                cached = self._snapshots.get(selected)
+                if cached is not None and cached.revision == revision:
+                    return cached
+                try:
+                    resolved = resolve_studio(
+                        studio,
+                        view_name=selected,
+                        view_documents={selected: before.document},
+                    )
+                except MarimoStudioError:
+                    try:
+                        current = self.discover()
+                        if (
+                            current is None
+                            or selected not in current.views
+                            or before.identity
+                            != _read_sources(current, selected).identity
+                        ):
+                            continue
+                    except OSError:
+                        continue
+                    raise
+                verified = self.discover()
+                if verified is None:
+                    continue
+                verified_selected = view_name or verified.default_view
+                if verified_selected != selected or selected not in verified.views:
+                    continue
+                try:
+                    after = _read_sources(verified, selected)
+                except OSError:
+                    continue
+                if before.identity != after.identity:
+                    continue
+                snapshot = PresentationSnapshot(
+                    resolved=resolved,
+                    view_name=selected,
+                    document=before.document,
+                    revision=revision,
                 )
-                self._source_stamps[view_name] = stamp
-            return self._resolved[view_name]
+                self._snapshots[selected] = snapshot
+                return snapshot
+        raise RuntimeSyncError(
+            "The view sources are still changing. Studio will retry shortly."
+        )
 
     def render_document(
         self,
-        resolved: ResolvedStudio,
+        snapshot: PresentationSnapshot,
         context: ServerContext,
-        view_name: str,
     ) -> str:
-        view = resolved.views[view_name].view
-        document = view.template.read_text(encoding="utf-8")
+        view_name = snapshot.view_name
         root_url = public_url(context.base_url, "/")
         support_url = public_url(
             context.base_url,
@@ -147,6 +272,7 @@ class NotebookPresentation:
                         f"{SUPPORT_PATH}/assets",
                     ),
                     dev=context.dev,
+                    revision=snapshot.revision,
                 )
             )
             + "\n"
@@ -154,18 +280,21 @@ class NotebookPresentation:
         runtime = (
             render(runtime_root()) + "\n" + render(runtime_metadata(context.file_key))
         )
-        return _inject_runtime(document, head_content, f"\n{runtime}\n")
+        return _inject_runtime(snapshot.document, head_content, f"\n{runtime}\n")
 
     def runtime_config(
         self,
-        resolved: ResolvedStudio,
+        snapshot: PresentationSnapshot,
         context: ServerContext,
-        view_name: str,
         session_id: str | None = None,
     ) -> dict[str, object]:
-        cell_ids = live_cell_ids(context, session_id)
+        resolved = snapshot.resolved
+        view_name = snapshot.view_name
+        view = resolved.views[view_name]
+        cells = live_cells(context, session_id)
         return {
             "schema": 1,
+            "revision": snapshot.revision,
             "view": view_name,
             "views": list(resolved.studio.views),
             "fileKey": context.file_key,
@@ -174,8 +303,19 @@ class NotebookPresentation:
                 context.base_url,
                 f"{SUPPORT_PATH}/views/{view_name}",
             ),
-            "cellBindings": resolved.runtime_cell_bindings(cell_ids),
-            "valueBindings": resolved.views[view_name].runtime_value_bindings(cell_ids),
+            "cellBindings": resolved.runtime_cell_bindings(
+                cells,
+                required_aliases=view.cell_aliases,
+            ),
+            "valueBindings": view.runtime_value_bindings(cells),
+            "diagnostics": [
+                _browser_diagnostic(
+                    diagnostic,
+                    notebook=resolved.studio.notebook,
+                    developer=context.dev or context.mode == "edit",
+                )
+                for diagnostic in view.diagnostics
+            ],
             "appConfig": resolved.notebook.app_config,
             "userConfig": context.user_config,
             "configOverrides": context.config_overrides,

@@ -6,7 +6,7 @@ import json
 import os
 import sys
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 
@@ -48,6 +48,7 @@ class DiagnosticStream:
         severity: str,
         exit_code: int | None = None,
         status: str | None = None,
+        details: Mapping[str, object] | None = None,
     ) -> bool:
         """Write one diagnostic and return whether JSON Lines is active."""
         if self.format != "jsonl":
@@ -66,6 +67,8 @@ class DiagnosticStream:
             event["exit_code"] = exit_code
         if status is not None:
             event["status"] = status
+        if details:
+            event["details"] = dict(details)
         self._write(event)
         return True
 

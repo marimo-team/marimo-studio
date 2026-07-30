@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
 
 from marimo_studio._cell_refs import cell_ref_candidates
 from marimo_studio.errors import RuntimeSyncError
-from marimo_studio.types import CellRef, CellSpec, NotebookSpec, ValueBinding
+from marimo_studio.types import (
+    CellRef,
+    CellSpec,
+    LiveCellSnapshot,
+    NotebookSpec,
+    ValueBinding,
+)
 
 PYPROJECT_NAME = "pyproject.toml"
 MARIMO_DIRECTORY = "__marimo__"
@@ -86,17 +91,18 @@ class ResolvedView:
     view: View
     cell_aliases: tuple[str, ...]
     value_bindings: dict[str, ValueBinding]
+    diagnostics: tuple[ProjectionDiagnostic, ...]
 
     def runtime_value_bindings(
         self,
-        live_ids: Mapping[CellRef, str] | None,
+        live_cells: LiveCellSnapshot | None,
     ) -> dict[str, dict[str, object]]:
         return {
             source: {
                 "variable": binding.reference.variable,
                 "cell": _runtime_cell_target(
                     binding.cell,
-                    live_ids,
+                    live_cells,
                     f"value selector {source!r}",
                 ),
             }
@@ -114,36 +120,115 @@ class ResolvedStudio:
     def view(self, name: str | None = None) -> ResolvedView:
         return self.views[name or self.studio.default_view]
 
+    @property
+    def diagnostics(self) -> tuple[ProjectionDiagnostic, ...]:
+        return tuple(
+            diagnostic
+            for view in self.views.values()
+            for diagnostic in view.diagnostics
+        )
+
     def runtime_cell_bindings(
         self,
-        live_ids: Mapping[CellRef, str] | None,
+        live_cells: LiveCellSnapshot | None,
+        *,
+        required_aliases: tuple[str, ...] | None = None,
     ) -> dict[str, dict[str, str]]:
-        return {
-            alias: _runtime_cell_target(
+        required = (
+            frozenset(self.aliases)
+            if required_aliases is None
+            else frozenset(required_aliases)
+        )
+        bindings: dict[str, dict[str, str]] = {}
+        for alias, cell in sorted(self.aliases.items()):
+            target = _runtime_cell_target(
                 cell,
-                live_ids,
+                live_cells,
                 f"cell alias {alias!r}",
+                required=alias in required,
             )
-            for alias, cell in sorted(self.aliases.items())
-        }
+            if target is not None:
+                bindings[alias] = target
+        return bindings
 
 
 def _runtime_cell_target(
     cell: CellSpec,
-    live_ids: Mapping[CellRef, str] | None,
+    live_cells: LiveCellSnapshot | None,
     label: str,
-) -> dict[str, str]:
+    *,
+    required: bool = True,
+) -> dict[str, str] | None:
     if cell.name is not None:
-        return {"kind": "name", "value": cell.name}
-    if live_ids is None:
+        if live_cells is None:
+            return {"kind": "name", "value": cell.name}
+        matches = cell_ref_candidates(
+            cell.ref,
+            (
+                (identity.ref, identity)
+                for identity in live_cells.names.get(cell.name, ())
+            ),
+        )
+        if len(matches) == 1:
+            return {"kind": "name", "value": cell.name}
+        if not required:
+            return None
+        raise RuntimeSyncError(
+            f"The active Marimo session has not synchronized {label}. "
+            "Studio will retry after the notebook updates."
+        )
+    if live_cells is None:
         return {"kind": "id", "value": cell.runtime_id}
-    matches = cell_ref_candidates(cell.ref, live_ids.items())
+    matches = cell_ref_candidates(cell.ref, live_cells.ids.items())
     if len(matches) != 1:
+        if not required:
+            return None
         raise RuntimeSyncError(
             f"The active Marimo session has not synchronized {label}. "
             "Studio will retry after the notebook updates."
         )
     return {"kind": "id", "value": matches[0]}
+
+
+ProjectionKind = Literal["cell", "value"]
+ProjectionSeverity = Literal["warning", "error"]
+
+
+@dataclass(frozen=True)
+class ProjectionDiagnostic:
+    """Describe one view projection that needs author attention."""
+
+    code: str
+    severity: ProjectionSeverity
+    message: str
+    hint: str
+    view: str
+    projection: ProjectionKind
+    target: str
+    source: Path
+    line: int
+    column: int
+
+    def details(self) -> dict[str, object]:
+        return {
+            "view": self.view,
+            "projection": self.projection,
+            "target": self.target,
+            "source": {
+                "path": str(self.source),
+                "line": self.line,
+                "column": self.column,
+            },
+            "hint": self.hint,
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "code": self.code,
+            "severity": self.severity,
+            "message": self.message,
+            **self.details(),
+        }
 
 
 @dataclass(frozen=True)

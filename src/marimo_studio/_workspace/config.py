@@ -20,7 +20,7 @@ from marimo_studio._workspace.models import (
     StudioConfig,
     View,
 )
-from marimo_studio.errors import ConfigurationError
+from marimo_studio.errors import ConfigurationError, TemplateError
 from marimo_studio.types import CellRef, ValueReference
 from marimo_studio.values import parse_value_reference
 
@@ -33,6 +33,9 @@ class TemplateParser(HTMLParser):
         self.aliases: list[str] = []
         self.fragment_aliases: list[str] = []
         self.value_references: list[ValueReference] = []
+        self.alias_positions: dict[str, tuple[int, int]] = {}
+        self.fragment_alias_positions: dict[str, tuple[int, int]] = {}
+        self.value_positions: dict[str, tuple[int, int]] = {}
         self.app_shells = 0
         self.heads = 0
         self.bodies = 0
@@ -79,6 +82,8 @@ class TemplateParser(HTMLParser):
         self_closing: bool,
     ) -> None:
         attributes = dict(attrs)
+        line, column = self.getpos()
+        position = (line, column + 1)
         if tag == "head":
             self.heads += 1
         elif tag == "body":
@@ -101,26 +106,36 @@ class TemplateParser(HTMLParser):
         if tag == "marimo-cell":
             alias = attributes.get("name")
             if alias is None or not alias.strip():
-                raise ConfigurationError(
-                    "Every <marimo-cell> requires a non-empty name"
+                raise TemplateError(
+                    "Every <marimo-cell> requires a non-empty name",
+                    line=line,
+                    column=column + 1,
                 )
-            self.aliases.append(alias.strip())
+            alias = alias.strip()
+            self.aliases.append(alias)
+            self.alias_positions.setdefault(alias, position)
         fragment_alias = _cell_fragment_alias(attributes.get("hx-get"))
         if fragment_alias is not None:
             self.fragment_aliases.append(fragment_alias)
+            self.fragment_alias_positions.setdefault(fragment_alias, position)
         if "mo-value" in attributes:
             source = attributes["mo-value"]
             if source is None:
-                raise ConfigurationError(
-                    "Every mo-value attribute requires a reference"
+                raise TemplateError(
+                    "Every mo-value attribute requires a reference",
+                    line=line,
+                    column=column + 1,
                 )
             try:
-                self.value_references.append(parse_value_reference(source))
+                reference = parse_value_reference(source)
             except ValueError as error:
-                line, _ = self.getpos()
-                raise ConfigurationError(
-                    f"Invalid mo-value reference {source!r} at line {line}: {error}"
+                raise TemplateError(
+                    f"Invalid mo-value reference {source!r} at line {line}: {error}",
+                    line=line,
+                    column=column + 1,
                 ) from error
+            self.value_references.append(reference)
+            self.value_positions.setdefault(reference.source, position)
         if self_closing:
             if is_shell:
                 self._shell_depth -= 1
@@ -177,11 +192,15 @@ def validate_template_structure(parser: TemplateParser, source: Path | str) -> N
         or parser.bodies != 1
         or parser.body_closes != 1
     ):
-        raise ConfigurationError(
-            f"{source}: expected one <head>, </head>, <body>, and </body>"
+        raise TemplateError(
+            f"{source}: expected one <head>, </head>, <body>, and </body>",
+            source=source,
         )
     if parser.app_shells != 1:
-        raise ConfigurationError(f'{source}: expected one element with id="app-shell"')
+        raise TemplateError(
+            f'{source}: expected one element with id="app-shell"',
+            source=source,
+        )
 
 
 def validate_view_name(name: str) -> str:

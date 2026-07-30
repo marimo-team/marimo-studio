@@ -172,6 +172,21 @@ def render_checks(results: tuple[CheckResult, ...]) -> None:
     for result in results:
         status = styles[result.status](f"{result.status.upper():<4}")
         echo(f"{status} {result.name}: {result.message}")
+        if result.details is None:
+            continue
+        source = result.details.get("source")
+        if isinstance(source, dict):
+            path = source.get("path")
+            line = source.get("line")
+            column = source.get("column")
+            if isinstance(path, str) and isinstance(line, int):
+                location = f"{path}:{line}"
+                if isinstance(column, int):
+                    location += f":{column}"
+                echo(f"     {location}")
+        hint = result.details.get("hint")
+        if isinstance(hint, str):
+            echo(f"     {hint}")
 
 
 def render_launch(plan: LaunchPlan) -> None:

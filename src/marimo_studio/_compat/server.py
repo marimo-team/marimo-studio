@@ -15,7 +15,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from marimo_studio._cell_refs import cell_refs
 from marimo_studio.errors import ProtocolError, RuntimeSyncError
-from marimo_studio.types import CellRef
+from marimo_studio.types import LiveCellIdentity, LiveCellSnapshot
 
 ServerMode = Literal["edit", "run"]
 DOCUMENT_REPLAY_QUERY_PARAM = "marimo_studio_resume"
@@ -83,13 +83,16 @@ def assert_supported_version() -> None:
         )
 
 
-def enable_document_replay(context: ServerContext) -> None:
-    """Replay session state for an opted-in document refresh."""
+def configure_document_replay(context: ServerContext, enabled: bool) -> None:
+    """Configure session replay for documents served by this manager."""
     global _DOCUMENT_REPLAY_PATCHED
 
     with _DOCUMENT_REPLAY_LOCK:
-        _DOCUMENT_REPLAY_MANAGERS.add(context._session_manager)
-        if _DOCUMENT_REPLAY_PATCHED:
+        if enabled:
+            _DOCUMENT_REPLAY_MANAGERS.add(context._session_manager)
+        else:
+            _DOCUMENT_REPLAY_MANAGERS.discard(context._session_manager)
+        if not enabled or _DOCUMENT_REPLAY_PATCHED:
             return
 
         from marimo._runtime.params import QueryParams
@@ -357,11 +360,11 @@ def has_notebook_session(context: ServerContext) -> bool:
     )
 
 
-def live_cell_ids(
+def live_cells(
     context: ServerContext,
     session_id: str | None,
-) -> dict[CellRef, str] | None:
-    """Map semantic cell references to IDs in one active document."""
+) -> LiveCellSnapshot | None:
+    """Read cell identities from one active Marimo document."""
     if session_id is not None:
         session = current_session(context, session_id)
     elif context.mode == "edit":
@@ -376,4 +379,14 @@ def live_cell_ids(
         )
     rows = tuple(session.document.cells)
     refs = cell_refs(row.code for row in rows)
-    return {ref: str(row.id) for ref, row in zip(refs, rows, strict=True)}
+    names: dict[str, list[LiveCellIdentity]] = {}
+    for ref, row in zip(refs, rows, strict=True):
+        if row.name == "_":
+            continue
+        names.setdefault(row.name, []).append(
+            LiveCellIdentity(ref=ref, runtime_id=str(row.id))
+        )
+    return LiveCellSnapshot(
+        ids={ref: str(row.id) for ref, row in zip(refs, rows, strict=True)},
+        names={name: tuple(identities) for name, identities in names.items()},
+    )

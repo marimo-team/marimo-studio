@@ -25,11 +25,18 @@ def render(node: Node) -> str:
     return str.__new__(str, rendered)
 
 
-def runtime_head(*, support_url: str, assets_url: str, dev: bool) -> Renderable:
+def runtime_head(
+    *,
+    support_url: str,
+    assets_url: str,
+    dev: bool,
+    revision: str,
+) -> Renderable:
     mount_config = json.dumps(
         {
             "supportUrl": support_url,
             "version": runtime_marimo_version(),
+            "revision": revision,
         },
         separators=(",", ":"),
     ).replace("<", "\\u003c")

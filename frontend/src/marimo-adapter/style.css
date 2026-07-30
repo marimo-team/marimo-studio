@@ -8,7 +8,8 @@
   font-family: inherit;
 }
 
-[data-marimo-studio-diagnostic] {
+[data-marimo-studio-diagnostic],
+[data-marimo-studio-runtime-diagnostic] {
   background: Canvas;
   border: 1px solid color-mix(in srgb, #b42318 45%, transparent);
   border-radius: 4px;
@@ -27,6 +28,12 @@
   z-index: 2147483647;
 }
 
+[data-marimo-studio-diagnostic][data-state="waiting"],
+[data-marimo-studio-runtime-diagnostic][data-state="waiting"] {
+  border-color: color-mix(in srgb, #d69e2e 52%, transparent);
+  color: color-mix(in srgb, #8a5b00 78%, CanvasText);
+}
+
 :where([mo-value]) {
   color: inherit;
   font: inherit;
@@ -43,6 +50,20 @@
   display: inline-block;
   inline-size: var(--marimo-value-skeleton-width, 8ch);
   vertical-align: -0.04em;
+}
+
+:where([mo-value])[data-state="error"] {
+  color: var(
+    --marimo-value-error,
+    color-mix(in srgb, #d69e2e 68%, currentColor)
+  );
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.18em;
+}
+
+:where([mo-value])[data-state="error"]:empty::before {
+  content: "—";
 }
 
 :where(marimo-cell) {
@@ -220,4 +241,30 @@
   border-inline-start: 3px solid var(--marimo-cell-error, #a33f25);
   color: var(--marimo-cell-error, #712e1c);
   padding: 0.75rem;
+}
+
+:where(marimo-cell) :where(.marimo-cell-diagnostic) {
+  background: var(
+    --marimo-cell-diagnostic-background,
+    color-mix(in srgb, #b7791f 7%, Canvas)
+  );
+  border-inline-start: 2px solid
+    var(
+    --marimo-cell-diagnostic,
+    color-mix(in srgb, #d69e2e 68%, currentColor)
+  );
+  color: var(--marimo-cell-diagnostic-foreground, inherit);
+  display: grid;
+  font-size: 0.875rem;
+  gap: 0.25rem;
+  line-height: 1.4;
+  padding: 0.7rem 0.8rem;
+}
+
+:where(marimo-cell) :where(.marimo-cell-diagnostic strong) {
+  font-weight: 600;
+}
+
+:where(marimo-cell) :where(.marimo-cell-diagnostic span) {
+  color: color-mix(in srgb, currentColor 72%, transparent);
 }

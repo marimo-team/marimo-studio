@@ -217,6 +217,31 @@ uvx marimo-studio analysis.py --view operations
 The `operations` view receives its own HTML, CSS, and static files. It reuses
 the notebook's cells and aliases.
 
+## Repair a projection after notebook changes
+
+Saving the notebook refreshes each view against the current cell graph. When a
+view references an undefined cell or variable, the rest of the page stays
+active and the affected projection shows a compact issue. Studio shows repair
+details while you edit. Shared run views keep the message audience-safe.
+
+Restore the notebook definition, update `index.html`, or rebind an anonymous
+cell. Studio clears the issue after the next successful save:
+
+```console
+uvx marimo-studio inspect analysis.py --display
+uvx marimo-studio bind summary analysis.py --cell 4 --overwrite
+uvx marimo-studio check analysis.py --view operations
+```
+
+Agents can request the same findings as JSON and JSON Lines:
+
+```console
+uvx marimo-studio check analysis.py \
+  --view operations \
+  --format json \
+  --diagnostics jsonl
+```
+
 ## Wait for a settled view in browser automation
 
 Cell and value elements expose their current state through `data-state`.
@@ -224,11 +249,14 @@ Browser tests and agents can wait until the current view settles:
 
 ```js
 await window.marimoStudio.ready();
+const diagnostics = window.marimoStudio.diagnostics();
 ```
 
 The promise resolves when every current cell and value has rendered content,
-retained content while updating, or reached a terminal error. See
-[Browser readiness](reference.md#browser-readiness) for state and event names.
+retained content while updating, or reached a terminal error. It also waits
+for an in-flight HTML, CSS, or notebook refresh. `diagnostics()` returns
+projection findings and browser lifecycle failures. See
+[Browser readiness](reference.md#browser-readiness) for the complete contract.
 
 Run a runtime check before sharing the view:
 

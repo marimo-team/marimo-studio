@@ -83,6 +83,39 @@ queue.
 View switches and HTML refreshes replace `#app-shell` while the runtime root
 stays mounted. See [Frontend](frontend.md) for refresh and build contracts.
 
+## Projection lifecycle
+
+Workspace resolution treats document structure and projection identity as
+separate contracts. Invalid HTML structure stops the selected document.
+Missing cells, stale aliases, and undefined value roots remain attached to the
+resolved view as structured diagnostics. Valid bindings continue into the
+runtime configuration.
+
+The browser renders each projection diagnostic at its host.
+`window.marimoStudio.diagnostics()` combines those records with presentation
+refresh failures and browser delivery failures. `check` serializes projection
+findings to JSON and JSON Lines with the view, target, template location, and
+repair hint. A notebook or template save recomputes the records and clears a
+repaired host without replacing the kernel session.
+
+Before publishing new bindings, the server compares the selected view's named
+and anonymous cells with the active Marimo document by semantic identity. An
+unrelated notebook edit cannot block the view. A document that is still
+receiving a required edit returns a transient sync response. The browser keeps
+the last healthy configuration, reports a loading state, and retries with
+capped backoff.
+
+Every view document and runtime configuration carries a presentation revision.
+The browser commits a shell refresh after both responses report the same
+revision. The revision includes the selected view and source content. A
+concurrent file save produces a transient retry while the last coherent
+presentation stays active.
+
+A value projection clears its rendered value when its notebook root
+disappears. Cached values remain visible during transient kernel reads. A cell
+binding that never reaches the browser store changes from a loading skeleton
+to a local runtime diagnostic after the delivery window.
+
 ## Compatibility
 
 Private Marimo Python imports stay in `src/marimo_studio/_compat/`. Imports from

@@ -8,6 +8,7 @@ export type ValuePhase =
 export interface ValueReadError {
   code: string;
   message: string;
+  hint?: string;
 }
 
 export interface ValueState {
@@ -41,5 +42,9 @@ export class ValueStates {
     const state: ValueState = { phase: "ready" };
     this.#states.set(selector, state);
     return state;
+  }
+
+  clear(selector: string): void {
+    this.#states.delete(selector);
   }
 }

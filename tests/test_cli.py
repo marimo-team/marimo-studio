@@ -287,8 +287,12 @@ def test_failed_check_reports_exit_status_and_error_diagnostic(
     notebook_path: Path,
 ) -> None:
     setup = ensure_view(notebook_path)
-    setup.root.joinpath("index.html").write_text(
-        '<main id="app-shell"><marimo-cell name="missing"></marimo-cell></main>',
+    template = setup.root / "index.html"
+    template.write_text(
+        template.read_text(encoding="utf-8").replace(
+            '<main id="app-shell"></main>',
+            '<main id="app-shell"><marimo-cell name="missing"></marimo-cell></main>',
+        ),
         encoding="utf-8",
     )
 
@@ -308,8 +312,85 @@ def test_failed_check_reports_exit_status_and_error_diagnostic(
     events = [json.loads(line) for line in result.stderr.splitlines()]
     assert result.exit_code == 1
     assert payload["ok"] is False
-    assert events[0]["severity"] == "error"
-    assert events[0]["code"] == "configuration"
+    event = next(event for event in events if event["severity"] == "error")
+    check = next(check for check in payload["checks"] if check["status"] == "fail")
+    assert event["code"] == "cell-not-found"
+    assert event["details"] == check["details"]
+    assert event["details"]["view"] == "dashboard"
+    assert event["details"]["projection"] == "cell"
+    assert event["details"]["target"] == "missing"
+    assert event["details"]["source"]["path"] == str(template)
+    assert "Name a notebook cell" in event["details"]["hint"]
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_code", "expected_hint"),
+    [
+        (
+            "notebook",
+            "notebook-source-error",
+            "Fix the highlighted cell in Marimo, then save it again.",
+        ),
+        (
+            "template",
+            "template-error",
+            "Fix the view template, then save it again.",
+        ),
+    ],
+)
+def test_check_preserves_repair_diagnostics(
+    notebook_path: Path,
+    failure: str,
+    expected_code: str,
+    expected_hint: str,
+) -> None:
+    setup = ensure_view(notebook_path)
+    if failure == "notebook":
+        notebook_path.write_text(
+            notebook_path.read_text(encoding="utf-8").replace(
+                "    doubled = x * 2",
+                "    42doubled = x * 2",
+            ),
+            encoding="utf-8",
+        )
+    else:
+        template = setup.root / "index.html"
+        template.write_text(
+            template.read_text(encoding="utf-8").replace(
+                '<main id="app-shell"></main>',
+                "<main></main>",
+            ),
+            encoding="utf-8",
+        )
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "check",
+            str(notebook_path),
+            "--format",
+            "json",
+            "--diagnostics",
+            "jsonl",
+        ],
+    )
+
+    assert result.exit_code == 1
+    payload = json.loads(result.stdout)
+    failed = next(check for check in payload["checks"] if check["status"] == "fail")
+    event = next(
+        json.loads(line)
+        for line in result.stderr.splitlines()
+        if json.loads(line)["severity"] == "error"
+    )
+    assert failed["code"] == expected_code
+    assert failed["details"]["hint"] == expected_hint
+    expected_source = (
+        notebook_path if failure == "notebook" else setup.root / "index.html"
+    )
+    assert failed["details"]["source"]["path"] == str(expected_source)
+    assert event["code"] == expected_code
+    assert event["details"] == failed["details"]
 
 
 def test_main_structures_configuration_errors(

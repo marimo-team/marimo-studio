@@ -26,8 +26,8 @@ from marimo_studio._compat.kernel_values import (
 )
 from marimo_studio._compat.server import (
     ServerContext,
+    configure_document_replay,
     current_session,
-    enable_document_replay,
     has_access_token,
     has_notebook_session,
     has_read_access,
@@ -43,7 +43,7 @@ from marimo_studio._server.routes import (
     SUPPORT_PATH,
     public_url,
 )
-from marimo_studio._server.studio import studio_document
+from marimo_studio._server.studio import repair_document, studio_document
 from marimo_studio._workspace.models import (
     RESERVED_VIEW_NAMES,
     VIEW_PATTERN,
@@ -84,6 +84,9 @@ class PresentationMiddleware:
         if relative is None or not self._could_handle(relative, location.mode):
             await self.app(scope, receive, send)
             return
+        dev = location.mode == "edit" or bool(
+            getattr(location._session_manager, "watch", False)
+        )
         presentation = self._presentations.setdefault(
             location.notebook,
             NotebookPresentation(location.notebook),
@@ -121,7 +124,14 @@ class PresentationMiddleware:
                 await response(scope, receive, send)
             return
         if discovery_error is not None:
-            response = self._error_response(relative, discovery_error)
+            response = self._error_response(
+                relative,
+                discovery_error,
+                presentation.notebook,
+                base_url=location.base_url,
+                dev=dev,
+                structured=self._accepts_json(scope),
+            )
             await response(scope, receive, send)
             return
         assert studio is not None
@@ -135,8 +145,6 @@ class PresentationMiddleware:
                 await redirect(scope, receive, send)
                 return
             context = server_context(location)
-            if studio.preserve_session and context.mode == "run":
-                enable_document_replay(context)
             response = await self._response(
                 scope,
                 receive,
@@ -148,7 +156,14 @@ class PresentationMiddleware:
                 studio_view,
             )
         except MarimoStudioError as error:
-            response = self._error_response(relative, error)
+            response = self._error_response(
+                relative,
+                error,
+                presentation.notebook,
+                base_url=location.base_url,
+                dev=dev,
+                structured=self._accepts_json(scope),
+            )
         await response(scope, receive, send)
 
     @staticmethod
@@ -245,10 +260,27 @@ class PresentationMiddleware:
                 return Response(status_code=405)
             if context.mode == "edit" and not has_notebook_session(context):
                 return self._waiting_response()
-            resolved = presentation.resolve(studio, document_view)
+            selected = (
+                None
+                if context.mode == "run" and relative in {"", "/"}
+                else document_view
+            )
+            snapshot = presentation.snapshot(selected)
+            if context.mode == "run":
+                configure_document_replay(
+                    context,
+                    snapshot.resolved.studio.preserve_session,
+                )
             return HTMLResponse(
-                presentation.render_document(resolved, context, document_view),
-                headers=_DOCUMENT_HEADERS,
+                presentation.render_document(snapshot, context),
+                headers={
+                    **_DOCUMENT_HEADERS,
+                    "Marimo-Studio-Revision": snapshot.revision,
+                    "Marimo-Studio-Support-Url": public_url(
+                        context.base_url,
+                        f"{SUPPORT_PATH}/views/{snapshot.view_name}",
+                    ),
+                },
             )
         if studio_view is not None:
             return self._studio_response(request, context, studio, studio_view)
@@ -328,14 +360,14 @@ class PresentationMiddleware:
             )
         if route == "dev/events" and request.method == "GET" and context.dev:
             return self._events_response(studio, view_name)
-        resolved = presentation.resolve(studio, view_name)
+        snapshot = presentation.snapshot(view_name)
+        resolved = snapshot.resolved
         view = resolved.views[view_name]
         if route == "config" and request.method == "GET":
             return JSONResponse(
                 presentation.runtime_config(
-                    resolved,
+                    snapshot,
                     context,
-                    view_name,
                     request.headers.get("Marimo-Session-Id"),
                 ),
                 headers=_NO_STORE,
@@ -344,7 +376,9 @@ class PresentationMiddleware:
             return await self._values_response(request, context, view)
         if route.startswith("cells/") and request.method == "GET":
             alias = route.removeprefix("cells/")
-            if "/" in alias or alias not in resolved.aliases:
+            if "/" in alias or (
+                alias not in resolved.aliases and alias not in view.cell_aliases
+            ):
                 return JSONResponse(
                     {"error": "unknown-cell", "message": f"Unknown cell {alias!r}."},
                     status_code=404,
@@ -368,11 +402,12 @@ class PresentationMiddleware:
     def _waiting_response() -> Response:
         return HTMLResponse(
             (
-                '<!doctype html><html><head><meta charset="utf-8">'
+                '<!doctype html><html data-marimo-studio-preview-state="waiting">'
+                '<head><meta charset="utf-8">'
                 '<meta name="viewport" content="width=device-width">'
-                "<title>Connecting to notebook</title></head>"
+                "<title>Connecting to notebook</title>"
+                "<script>setTimeout(()=>location.reload(),300)</script></head>"
                 "<body><p>Connecting to the notebook session</p>"
-                "<script>setTimeout(()=>location.reload(),300)</script>"
                 "</body></html>"
             ),
             status_code=503,
@@ -467,19 +502,66 @@ class PresentationMiddleware:
         return FileResponse(candidate, headers={"Cache-Control": "no-cache"})
 
     @staticmethod
-    def _error_response(relative: str, error: Exception) -> Response:
+    def _accepts_json(scope: Scope) -> bool:
+        return "application/json" in Request(scope).headers.get("accept", "")
+
+    @staticmethod
+    def _error_response(
+        relative: str,
+        error: MarimoStudioError,
+        notebook: Path,
+        *,
+        base_url: str,
+        dev: bool,
+        structured: bool,
+    ) -> Response:
         code = getattr(error, "code", "configuration-error")
         status_code = getattr(error, "status_code", 500)
         transient = getattr(error, "transient", False)
-        if not relative.startswith(SUPPORT_PATH):
-            return PlainTextResponse(
-                f"Marimo Studio configuration error\n\n{error}",
-                status_code=status_code,
-                headers=_DOCUMENT_HEADERS,
-            )
-        payload: dict[str, object] = {"error": code, "message": str(error)}
+        message = error.public_message()
+        for root in {notebook.parent, notebook.parent.resolve()}:
+            message = message.replace(f"{root}/", "")
+        hint = error.public_hint
+        payload: dict[str, object] = {"error": code, "message": message}
+        if hint:
+            payload["hint"] = hint
         if transient:
             payload["transient"] = True
+        if not relative.startswith(SUPPORT_PATH):
+            headers = {
+                **_DOCUMENT_HEADERS,
+                "Marimo-Studio-Error": code,
+            }
+            if hint:
+                headers["Marimo-Studio-Hint"] = hint
+            if transient:
+                headers.update(
+                    {
+                        "Marimo-Studio-Transient": "true",
+                        "Retry-After": "1",
+                    }
+                )
+            if structured:
+                return JSONResponse(
+                    payload,
+                    status_code=status_code,
+                    headers=headers,
+                )
+            if dev:
+                return HTMLResponse(
+                    repair_document(
+                        message,
+                        hint,
+                        public_url(base_url, f"{SUPPORT_PATH}/dev/events"),
+                    ),
+                    status_code=status_code,
+                    headers=headers,
+                )
+            return PlainTextResponse(
+                f"Marimo Studio configuration error\n\n{message}",
+                status_code=status_code,
+                headers=headers,
+            )
         return JSONResponse(
             payload,
             status_code=status_code,

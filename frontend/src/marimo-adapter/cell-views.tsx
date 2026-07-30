@@ -5,6 +5,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useState,
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
@@ -42,9 +43,8 @@ import {
 import { setRuntimeConnectionState } from "../readiness";
 import {
   type CellBindingConfig,
-  getRuntimeCellBindings,
   getRuntimeConfig,
-  subscribeRuntimeCellBindings,
+  type ProjectionDiagnostic,
   subscribeRuntimeConfig,
   type ValueBindingConfig,
 } from "../runtime-config";
@@ -55,7 +55,12 @@ import {
   readValuesWithRetry,
   ValueRequestError,
 } from "../value-bindings";
-import { cellPhase } from "./cell-state";
+import {
+  CELL_DELIVERY_TIMEOUT_MS,
+  cellDeliveryPhase,
+  cellPhase,
+  runtimeConnectionDiagnostic,
+} from "./cell-state";
 import { valueCellPhase } from "./value-cell-state";
 
 type RuntimeCell = ReturnType<typeof flattenTopLevelNotebookCells>[number];
@@ -77,10 +82,27 @@ const useCellHosts = () => {
   return useSyncExternalStore(subscribeCellHosts, getCellHosts, getCellHosts);
 };
 
-const CellNotFound = ({ alias }: { alias: string }) => {
+type CellDiagnostic = Pick<
+  ProjectionDiagnostic,
+  "code" | "message" | "hint"
+>;
+
+const CellNotFound = ({
+  alias,
+  developer,
+  diagnostic,
+}: {
+  alias: string;
+  developer: boolean;
+  diagnostic?: CellDiagnostic;
+}) => {
+  const message = developer
+    ? diagnostic?.message ?? `Cell ${JSON.stringify(alias)} is unavailable.`
+    : "This section is unavailable.";
   return (
-    <div className="marimo-cell-error" role="alert">
-      Cell alias <code>{alias}</code> is unavailable in this runtime.
+    <div className="marimo-cell-diagnostic" role="status">
+      <strong>{message}</strong>
+      {developer && diagnostic?.hint ? <span>{diagnostic.hint}</span> : null}
     </div>
   );
 };
@@ -96,6 +118,10 @@ const CellUnavailable = ({ alias }: { alias: string }) => {
 interface CellViewProps {
   host: MarimoCellElement;
   cell: RuntimeCell | undefined;
+  bindingPresent: boolean;
+  bindingKey?: string;
+  developer: boolean;
+  diagnostic?: CellDiagnostic;
   runtimeReady: boolean;
   onSubmitStdin: (
     cell: RuntimeCell,
@@ -107,9 +133,31 @@ interface CellViewProps {
 const CellView = memo(function CellView({
   host,
   cell,
+  bindingPresent,
+  bindingKey,
+  developer,
+  diagnostic,
   runtimeReady,
   onSubmitStdin,
 }: CellViewProps) {
+  const [deliveryTimedOut, setDeliveryTimedOut] = useState(false);
+  useEffect(() => {
+    setDeliveryTimedOut(false);
+    if (
+      !runtimeReady ||
+      !bindingPresent ||
+      cell !== undefined ||
+      diagnostic !== undefined
+    ) {
+      return;
+    }
+    const timeout = setTimeout(
+      () => setDeliveryTimedOut(true),
+      CELL_DELIVERY_TIMEOUT_MS,
+    );
+    return () => clearTimeout(timeout);
+  }, [bindingKey, bindingPresent, cell, diagnostic, runtimeReady]);
+
   const stale = cell ? outputIsStale(cell, cell.edited) : false;
   const disabled = cell
     ? cell.config.disabled === true || cell.status === "disabled-transitively"
@@ -141,15 +189,51 @@ const CellView = memo(function CellView({
       output.mimetype === "application/vnd.marimo+error" ||
       output.mimetype === "application/vnd.marimo+traceback"
     );
-  const state = cellPhase({
+  const delivery = cellDeliveryPhase({
     runtimeReady,
+    bindingPresent,
     hasCell: cell !== undefined,
-    loading,
-    disabled,
-    hasOutput,
-    failed,
-    stale,
+    hasDiagnostic: diagnostic !== undefined,
+    timedOut: deliveryTimedOut,
   });
+  const deliveryDiagnostic: CellDiagnostic | undefined =
+    delivery === "timed-out"
+      ? {
+        code: "runtime-cell-not-received",
+        message: `Cell ${
+          JSON.stringify(host.cellName)
+        } did not reach the browser.`,
+        hint: "Wait for the notebook to settle, then reload the view.",
+      }
+      : undefined;
+  const cellDiagnostic: CellDiagnostic | undefined = disabled && !hasOutput
+    ? {
+      code: "cell-disabled",
+      message: `Cell ${JSON.stringify(host.cellName)} is disabled.`,
+      hint: "Enable the cell in Marimo or remove this projection.",
+    }
+    : failed
+    ? {
+      code: "cell-execution-error",
+      message: `Cell ${JSON.stringify(host.cellName)} failed during execution.`,
+      hint: "Fix the cell error in Marimo, then run it again.",
+    }
+    : undefined;
+  const effectiveDiagnostic = diagnostic ?? deliveryDiagnostic ??
+    cellDiagnostic;
+  const state = delivery === "waiting"
+    ? "loading"
+    : delivery === "timed-out"
+    ? "error"
+    : cellPhase({
+      runtimeReady,
+      hasCell: cell !== undefined,
+      loading,
+      disabled,
+      hasOutput,
+      failed,
+      stale,
+    });
 
   useLayoutEffect(() => {
     if (cell) {
@@ -164,18 +248,44 @@ const CellView = memo(function CellView({
       delete host.dataset.outputMime;
       delete host.dataset.outputMimes;
     }
+    if (effectiveDiagnostic) {
+      host.dataset.marimoDiagnosticCode = effectiveDiagnostic.code;
+      host.dataset.marimoDiagnosticMessage = effectiveDiagnostic.message;
+      host.dataset.marimoDiagnosticHint = effectiveDiagnostic.hint;
+    } else {
+      delete host.dataset.marimoDiagnosticCode;
+      delete host.dataset.marimoDiagnosticMessage;
+      delete host.dataset.marimoDiagnosticHint;
+    }
     setCellHostState(host, state, {
       alias: host.cellName,
       runtimeId: cell?.id,
       outputMime,
+      code: effectiveDiagnostic?.code,
+      message: effectiveDiagnostic?.message,
+      hint: effectiveDiagnostic?.hint,
     });
-  }, [cell, host, outputMime, outputMimesValue, state]);
+  }, [
+    cell,
+    effectiveDiagnostic,
+    host,
+    outputMime,
+    outputMimesValue,
+    state,
+  ]);
 
   if (!cell) {
-    if (!runtimeReady) {
+    if (!runtimeReady || delivery === "waiting") {
       return null;
     }
-    return createPortal(<CellNotFound alias={host.cellName} />, host);
+    return createPortal(
+      <CellNotFound
+        alias={host.cellName}
+        developer={developer}
+        diagnostic={effectiveDiagnostic}
+      />,
+      host,
+    );
   }
   if (loading && !hasOutput) {
     return null;
@@ -227,10 +337,23 @@ const RuntimeValueCell = ({
   sessionId: string;
 }) => {
   const cellId = cell?.id ?? null;
+  const hasCell = cell !== undefined;
+  const [deliveryTimedOut, setDeliveryTimedOut] = useState(false);
+  useEffect(() => {
+    setDeliveryTimedOut(false);
+    if (!runtimeReady || hasCell) {
+      return;
+    }
+    const timeout = setTimeout(
+      () => setDeliveryTimedOut(true),
+      CELL_DELIVERY_TIMEOUT_MS,
+    );
+    return () => clearTimeout(timeout);
+  }, [cellId, hasCell, runtimeReady]);
+
   const version = cell?.lastRunStartTimestamp ?? null;
   const status = cell?.status ?? "missing";
   const errored = cell?.errored ?? false;
-  const hasCell = cell !== undefined;
   const stale = cell ? outputIsStale(cell, cell.edited) : false;
   const phase = valueCellPhase({
     runtimeReady,
@@ -240,6 +363,7 @@ const RuntimeValueCell = ({
     version,
     errored,
     stale,
+    deliveryTimedOut,
   });
 
   useLayoutEffect(() => {
@@ -249,15 +373,26 @@ const RuntimeValueCell = ({
     }
     if (phase === "error") {
       selectors.forEach((selector) => {
-        markValueError(selector, {
-          code: "defining-cell-error",
-          message: `The cell backing ${
-            JSON.stringify(selector)
-          } is unavailable.`,
-        });
+        markValueError(
+          selector,
+          !hasCell && deliveryTimedOut
+            ? {
+              code: "runtime-cell-not-received",
+              message: `The cell backing ${
+                JSON.stringify(selector)
+              } did not reach the browser.`,
+              hint: "Wait for the notebook to settle, then reload the view.",
+            }
+            : {
+              code: "defining-cell-error",
+              message: `The cell backing ${
+                JSON.stringify(selector)
+              } is unavailable.`,
+            },
+        );
       });
     }
-  }, [phase, selectors]);
+  }, [deliveryTimedOut, hasCell, phase, selectors]);
 
   useEffect(() => {
     if (
@@ -383,10 +518,22 @@ const ConfiguredRuntimeValues = (
 
 const DuplicateCellView = ({ host }: { host: MarimoCellElement }) => {
   useLayoutEffect(() => {
+    const message = `Cell ${JSON.stringify(host.cellName)} is mounted twice.`;
+    const hint = "Keep one host for each projected cell.";
+    host.dataset.marimoDiagnosticCode = "duplicate-cell-host";
+    host.dataset.marimoDiagnosticMessage = message;
+    host.dataset.marimoDiagnosticHint = hint;
     setCellHostState(host, "error", {
       alias: host.cellName,
       code: "duplicate-cell-host",
+      message,
+      hint,
     });
+    return () => {
+      delete host.dataset.marimoDiagnosticCode;
+      delete host.dataset.marimoDiagnosticMessage;
+      delete host.dataset.marimoDiagnosticHint;
+    };
   }, [host]);
   return createPortal(
     <div className="marimo-cell-error" role="alert">
@@ -407,30 +554,41 @@ const RuntimeCellPortals = ({
   runtimeReady: boolean;
   onSubmitStdin: CellViewProps["onSubmitStdin"];
 }) => {
-  const bindings = useSyncExternalStore(
-    subscribeRuntimeCellBindings,
-    getRuntimeCellBindings,
-    getRuntimeCellBindings,
+  const config = useSyncExternalStore(
+    subscribeRuntimeConfig,
+    getRuntimeConfig,
+    getRuntimeConfig,
   );
+  const diagnostics = new Map(
+    config.diagnostics
+      .filter((diagnostic) => diagnostic.projection === "cell")
+      .map((diagnostic) => [diagnostic.target, diagnostic]),
+  );
+  const developer = config.dev || config.mode === "edit";
   const primaryHosts = new Map<string, MarimoCellElement>();
   hosts.forEach((host) => {
     if (!primaryHosts.has(host.cellName)) {
       primaryHosts.set(host.cellName, host);
     }
   });
-  return hosts.map((host) =>
-    primaryHosts.get(host.cellName) !== host
+  return hosts.map((host) => {
+    const binding = config.cellBindings[host.cellName];
+    return primaryHosts.get(host.cellName) !== host
       ? <DuplicateCellView key={getHostId(host)} host={host} />
       : (
         <CellView
           key={getHostId(host)}
           host={host}
-          cell={resolveCellBinding(bindings[host.cellName], cells)}
+          cell={resolveCellBinding(binding, cells)}
+          bindingPresent={binding !== undefined}
+          bindingKey={binding && cellBindingKey(binding)}
+          developer={developer}
+          diagnostic={diagnostics.get(host.cellName)}
           runtimeReady={runtimeReady}
           onSubmitStdin={onSubmitStdin}
         />
-      )
-  );
+      );
+  });
 };
 
 export const RuntimeCellViews = ({
@@ -462,11 +620,14 @@ export const RuntimeCellViews = ({
       return;
     }
     if (connection.state === WebSocketState.CLOSED) {
-      setRuntimeConnectionState("error");
+      setRuntimeConnectionState(
+        "error",
+        runtimeConnectionDiagnostic(connection),
+      );
       return;
     }
     setRuntimeConnectionState("connecting");
-  }, [connection.state]);
+  }, [connection]);
 
   const cells = useMemo(
     () => flattenTopLevelNotebookCells(notebook),
@@ -476,8 +637,7 @@ export const RuntimeCellViews = ({
     () => indexCells(cells),
     [cells],
   );
-  const runtimeReady = connection.state === WebSocketState.OPEN &&
-    cells.length > 0;
+  const runtimeReady = connection.state === WebSocketState.OPEN;
   const submitStdin = useCallback(
     (cell: RuntimeCell, text: string, outputIndex: number) => {
       setStdinResponse({

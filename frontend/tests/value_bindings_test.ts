@@ -10,10 +10,12 @@ import {
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
   version: "test-version",
+  revision: "presentation-revision",
 };
 
 const config = {
   schema: 1,
+  revision: "presentation-revision",
   view: "dashboard",
   views: ["dashboard"],
   fileKey: "/workspace/notebook.py",
@@ -26,6 +28,7 @@ const config = {
       cell: { kind: "id", value: "cell-id" },
     },
   },
+  diagnostics: [],
   appConfig: {},
   userConfig: {},
   configOverrides: {},

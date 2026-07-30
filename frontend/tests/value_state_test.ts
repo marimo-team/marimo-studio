@@ -18,4 +18,9 @@ Deno.test("a host connected during a value refresh inherits the pending phase", 
   assertEquals(states.connected("context", true), {
     phase: "stale",
   });
+
+  states.clear("context");
+  assertEquals(states.connected("context", false), {
+    phase: "connecting",
+  });
 });

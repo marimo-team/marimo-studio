@@ -6,7 +6,7 @@ export interface SessionEnvironment {
   href: string;
   navigationType: NavigationType | undefined;
   replaceUrl: (url: string) => void;
-  storage: Pick<Storage, "getItem" | "setItem">;
+  storage: Pick<Storage, "getItem" | "removeItem" | "setItem">;
 }
 
 const SESSION_ID_PATTERN = /^s_[\da-z]{6}$/;
@@ -33,15 +33,21 @@ export const prepareSessionRefresh = (
   config: RuntimeConfig,
   environment?: SessionEnvironment,
 ): boolean => {
-  if (!config.preserveSession || config.mode !== "run") {
-    return false;
-  }
   try {
     const browser = environment ?? browserEnvironment();
+    const url = new URL(browser.href);
+    if (!config.preserveSession || config.mode !== "run") {
+      browser.storage.removeItem(storageKey(config, url));
+      if (url.searchParams.has(DOCUMENT_REPLAY_PARAM)) {
+        url.searchParams.delete("session_id");
+        url.searchParams.delete(DOCUMENT_REPLAY_PARAM);
+        browser.replaceUrl(url.toString());
+      }
+      return false;
+    }
     if (browser.navigationType !== "reload") {
       return false;
     }
-    const url = new URL(browser.href);
     const explicit = url.searchParams.get("session_id");
     if (explicit && SESSION_ID_PATTERN.test(explicit)) {
       url.searchParams.set(DOCUMENT_REPLAY_PARAM, "1");
@@ -73,6 +79,7 @@ export const finishSessionRefresh = (
     if (!url.searchParams.has(DOCUMENT_REPLAY_PARAM)) {
       return;
     }
+    url.searchParams.delete("session_id");
     url.searchParams.delete(DOCUMENT_REPLAY_PARAM);
     browser.replaceUrl(url.toString());
   } catch {

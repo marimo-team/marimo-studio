@@ -5,6 +5,19 @@ from pathlib import Path
 import marimo
 
 
+def empty_notebook_source() -> str:
+    return (
+        "import marimo\n"
+        "\n"
+        f'__generated_with = "{marimo.__version__}"\n'
+        "app = marimo.App()\n"
+        "\n"
+        "\n"
+        'if __name__ == "__main__":\n'
+        "    app.run()\n"
+    )
+
+
 def notebook_source(marker: Path, *, dependencies: tuple[str, ...] = ()) -> str:
     metadata = ""
     if dependencies:

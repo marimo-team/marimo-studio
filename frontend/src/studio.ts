@@ -1,7 +1,16 @@
+import {
+  previewLoadState,
+  RefreshRetrySchedule,
+} from "./shell-refresh-state.ts";
+
 interface ViewList {
   schema: 1;
   default_view: string;
   views: string[];
+}
+
+interface ViewDiagnostic {
+  message: string;
 }
 
 const studio = document.querySelector<HTMLElement>("[data-studio]");
@@ -51,13 +60,66 @@ const viewUrl = (view: string) => `${viewPrefix}${view}/`;
 const studioUrl = (view: string) => `${studioPrefix}${view}/`;
 const supportUrl = (view: string) => `${supportPrefix}/${view}`;
 
-const setStatus = (message = "", error = false) => {
+const setStatus = (
+  message = "",
+  state: "loading" | "warning" | "error" = "loading",
+  title = "",
+) => {
   status.textContent = message;
   status.hidden = !message;
-  status.dataset.state = error ? "error" : "loading";
+  if (message) {
+    status.dataset.state = state;
+  } else {
+    delete status.dataset.state;
+  }
+  if (title) {
+    status.title = title;
+  } else {
+    status.removeAttribute("title");
+  }
 };
 
 let receiverReady = false;
+let viewDiagnostics: ViewDiagnostic[] = [];
+let previewRetryTimer: ReturnType<typeof setTimeout> | undefined;
+const previewRetrySchedule = new RefreshRetrySchedule();
+
+const cancelPreviewRetry = () => {
+  if (previewRetryTimer !== undefined) {
+    clearTimeout(previewRetryTimer);
+    previewRetryTimer = undefined;
+  }
+};
+
+const reloadPreview = () => {
+  cancelPreviewRetry();
+  receiverReady = false;
+  setStatus("Connecting preview");
+  preview.src = viewUrl(selector.value);
+};
+
+const schedulePreviewRetry = (delay = previewRetrySchedule.next()) => {
+  cancelPreviewRetry();
+  previewRetryTimer = setTimeout(() => {
+    previewRetryTimer = undefined;
+    if (!receiverReady) {
+      reloadPreview();
+    }
+  }, delay);
+};
+
+const showViewStatus = () => {
+  if (!viewDiagnostics.length) {
+    setStatus();
+    return;
+  }
+  const count = viewDiagnostics.length;
+  setStatus(
+    `${count} view ${count === 1 ? "issue" : "issues"}`,
+    "warning",
+    viewDiagnostics.map((diagnostic) => diagnostic.message).join("\n"),
+  );
+};
 
 const postSwitch = (view: string) => {
   preview.contentWindow?.postMessage(
@@ -89,9 +151,13 @@ const selectView = (view: string) => {
   preview.title = `${view} custom view`;
   popout.href = nextPreview;
   globalThis.history.replaceState({}, "", studioUrl(view));
+  viewDiagnostics = [];
   setStatus("Updating preview");
   if (receiverReady) {
     postSwitch(view);
+  } else {
+    previewRetrySchedule.reset();
+    reloadPreview();
   }
 };
 
@@ -173,11 +239,13 @@ globalThis.addEventListener("message", (event: MessageEvent<unknown>) => {
   }
   if (data.type === "marimo-studio:receiver-ready") {
     receiverReady = true;
+    cancelPreviewRetry();
+    previewRetrySchedule.reset();
     const active = "view" in data && typeof data.view === "string"
       ? data.view
       : undefined;
     if (active === selector.value) {
-      setStatus();
+      showViewStatus();
     } else {
       postSwitch(selector.value);
     }
@@ -191,13 +259,42 @@ globalThis.addEventListener("message", (event: MessageEvent<unknown>) => {
     return;
   }
   if (data.type === "marimo-studio:view-ready") {
-    setStatus();
+    showViewStatus();
+  } else if (
+    data.type === "marimo-studio:view-sync-pending" &&
+    "message" in data &&
+    typeof data.message === "string"
+  ) {
+    setStatus(
+      "Waiting for notebook",
+      "loading",
+      "hint" in data && typeof data.hint === "string"
+        ? data.hint
+        : data.message,
+    );
+  } else if (
+    data.type === "marimo-studio:view-diagnostics" &&
+    "diagnostics" in data &&
+    Array.isArray(data.diagnostics) &&
+    data.diagnostics.every((diagnostic) =>
+      typeof diagnostic === "object" &&
+      diagnostic !== null &&
+      "message" in diagnostic &&
+      typeof diagnostic.message === "string"
+    )
+  ) {
+    viewDiagnostics = data.diagnostics as ViewDiagnostic[];
+    showViewStatus();
   } else if (
     data.type === "marimo-studio:view-error" &&
     "message" in data &&
     typeof data.message === "string"
   ) {
-    setStatus(data.message, true);
+    setStatus(
+      data.message,
+      "error",
+      "hint" in data && typeof data.hint === "string" ? data.hint : "",
+    );
   }
 });
 
@@ -221,19 +318,68 @@ const refreshViews = async () => {
 
 const events = new EventSource(eventsUrl);
 events.addEventListener("change", () => {
-  void refreshViews().catch((error: unknown) => {
-    setStatus(error instanceof Error ? error.message : String(error), true);
-  });
+  void refreshViews()
+    .then(() => {
+      if (!receiverReady) {
+        previewRetrySchedule.reset();
+        reloadPreview();
+      }
+    })
+    .catch((error: unknown) => {
+      setStatus(
+        error instanceof Error ? error.message : String(error),
+        "error",
+      );
+    });
 });
-globalThis.addEventListener("pagehide", () => events.close(), { once: true });
+globalThis.addEventListener(
+  "pagehide",
+  () => {
+    cancelPreviewRetry();
+    events.close();
+  },
+  { once: true },
+);
 
 const startPreview = () => {
   if (preview.src === "about:blank") {
-    receiverReady = false;
-    setStatus("Connecting preview");
-    preview.src = viewUrl(selector.value);
+    reloadPreview();
   }
 };
+preview.addEventListener("load", () => {
+  if (receiverReady) {
+    return;
+  }
+  const previewDocument = preview.contentDocument;
+  const state = previewLoadState({
+    hasRuntimeRoot: Boolean(
+      previewDocument?.querySelector("#marimo-runtime-root"),
+    ),
+    documentState: previewDocument?.documentElement.dataset
+      .marimoStudioPreviewState,
+  });
+  if (state === "ready") {
+    schedulePreviewRetry(10_000);
+    return;
+  }
+  const repair = previewDocument?.querySelector<HTMLElement>(
+    "[data-marimo-studio-repair]",
+  );
+  const detail = repair
+    ? [repair.dataset.marimoStudioMessage, repair.dataset.marimoStudioHint]
+      .filter(Boolean)
+      .join(" ")
+    : previewDocument?.querySelector<HTMLElement>(
+      "main, [role='status'], body > p",
+    )?.textContent?.trim() ?? "";
+  if (state === "waiting") {
+    setStatus("Waiting for notebook", "loading", detail);
+    schedulePreviewRetry(500);
+    return;
+  }
+  setStatus("Preview needs repair", "error", detail);
+  schedulePreviewRetry();
+});
 editor.addEventListener("load", startPreview, { once: true });
 if (editor.contentDocument?.readyState === "complete") {
   startPreview();

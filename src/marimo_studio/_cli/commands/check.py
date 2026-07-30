@@ -57,10 +57,11 @@ def check(
     stream = diagnostics()
     for result in results:
         stream.emit(
-            code=result.name,
+            code=result.code or result.name,
             message=result.message,
             severity=_CHECK_SEVERITY[result.status],
             status=result.status,
+            details=result.details,
         )
     payload = checks_payload(studio, results, view_name=view_name)
     if output_format == "json":

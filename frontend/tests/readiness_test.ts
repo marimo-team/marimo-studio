@@ -13,6 +13,7 @@ const valueCell = (
   version: 1,
   errored: false,
   stale: false,
+  deliveryTimedOut: false,
   ...overrides,
 });
 
@@ -20,6 +21,14 @@ Deno.test("page readiness accounts for pending and retained hosts", () => {
   assertEquals(pageReadinessState("ready", ["error", "loading"]), "loading");
   assertEquals(pageReadinessState("ready", ["error", "ready"]), "error");
   assertEquals(pageReadinessState("ready", ["stale", "ready"]), "ready");
+  assertEquals(
+    pageReadinessState("ready", ["ready"], "loading"),
+    "loading",
+  );
+  assertEquals(
+    pageReadinessState("ready", ["ready"], "error"),
+    "error",
+  );
 });
 
 Deno.test("value cell phases follow the defining Marimo cell", () => {
@@ -29,7 +38,7 @@ Deno.test("value cell phases follow the defining Marimo cell", () => {
       status: "missing",
       version: null,
     })),
-    "error",
+    "loading",
   );
   assertEquals(
     valueCellPhase(valueCell({
@@ -46,6 +55,15 @@ Deno.test("value cell phases follow the defining Marimo cell", () => {
       version: null,
     })),
     "loading",
+  );
+  assertEquals(
+    valueCellPhase(valueCell({
+      hasCell: false,
+      status: "missing",
+      version: null,
+      deliveryTimedOut: true,
+    })),
+    "error",
   );
   assertEquals(
     valueCellPhase(valueCell({

@@ -8,6 +8,7 @@ export const valueCellPhase = ({
   version,
   errored,
   stale,
+  deliveryTimedOut,
 }: {
   runtimeReady: boolean;
   hasCell: boolean;
@@ -16,12 +17,15 @@ export const valueCellPhase = ({
   version: number | null;
   errored: boolean;
   stale: boolean;
+  deliveryTimedOut: boolean;
 }): ValueCellPhase => {
   if (!runtimeReady) {
     return "loading";
   }
+  if (!hasCell) {
+    return deliveryTimedOut ? "error" : "loading";
+  }
   if (
-    !hasCell ||
     disabled ||
     status === "disabled-transitively" ||
     errored

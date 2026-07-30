@@ -29,7 +29,9 @@ from marimo_studio._workspace.metadata import (
     update_notebook_config,
 )
 from marimo_studio._workspace.models import StudioConfig
-from marimo_studio.errors import BindingError, ConfigurationError
+from marimo_studio.errors import ConfigurationError, NotebookSourceError
+
+from .helpers import empty_notebook_source
 
 
 def _shell(studio: StudioConfig, view_name: str, content: str) -> None:
@@ -61,6 +63,42 @@ def test_first_view_configures_the_notebook_in_place(notebook_path: Path) -> Non
     assert document["tool"]["marimo-studio"]["default"] == "dashboard"
     assert "marimo-studio" in document["dependencies"]
     assert notebook_path.read_text(encoding="utf-8").endswith(original)
+
+
+def test_first_view_accepts_a_new_empty_notebook(tmp_path: Path) -> None:
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(empty_notebook_source(), encoding="utf-8")
+
+    ensure_view(notebook)
+    resolved = resolve_studio(load_studio(notebook))
+
+    assert resolved.notebook.cells == ()
+    assert resolved.view("dashboard").cell_aliases == ()
+    assert resolved.view("dashboard").value_bindings == {}
+    assert resolved.view("dashboard").diagnostics == ()
+
+
+@pytest.mark.parametrize(
+    "extra_source",
+    [
+        "\nvalue = 1\n",
+        "\ndef helper():\n    return 1\n",
+    ],
+)
+def test_zero_cell_notebook_rejects_non_notebook_source(
+    tmp_path: Path,
+    extra_source: str,
+) -> None:
+    notebook = tmp_path / "analysis.py"
+    notebook.write_text(
+        empty_notebook_source().replace(
+            "\n\nif __name__",
+            f"{extra_source}\nif __name__",
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(NotebookSourceError):
+        ensure_view(notebook)
 
 
 def test_setup_preserves_other_pep_723_metadata_and_notebook_body(
@@ -424,14 +462,6 @@ def test_kernel_selectors_ignore_an_invalid_unselected_view(
             "Invalid mo-value reference",
         ),
         (
-            '<main id="app-shell"><span mo-value="missing"></span></main>',
-            "undefined notebook variables",
-        ),
-        (
-            '<main id="app-shell"><marimo-cell name="missing"></marimo-cell></main>',
-            "unbound cell aliases",
-        ),
-        (
             "<main id='app-shell' data-marimo-studio-runtime></main>",
             "reserved runtime markup",
         ),
@@ -452,6 +482,69 @@ def test_each_view_enforces_the_projection_shell(
         resolve_studio(load_studio(notebook_path))
 
 
+def test_view_reports_each_unresolved_projection_with_its_source(
+    notebook_path: Path,
+) -> None:
+    ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+    studio.views["dashboard"].template.write_text(
+        """\
+<html>
+<head></head>
+<body>
+<main id="app-shell">
+  <marimo-cell name="missing"></marimo-cell>
+  <span mo-value="absent.label"></span>
+</main>
+</body>
+</html>
+""",
+        encoding="utf-8",
+    )
+
+    view = resolve_studio(load_studio(notebook_path)).view("dashboard")
+
+    assert [diagnostic.to_dict() for diagnostic in view.diagnostics] == [
+        {
+            "code": "cell-not-found",
+            "severity": "error",
+            "message": "Cell 'missing' is not defined in the notebook.",
+            "hint": (
+                "Name a notebook cell, change the projection target, or remove "
+                "it from the view."
+            ),
+            "view": "dashboard",
+            "projection": "cell",
+            "target": "missing",
+            "source": {
+                "path": str(studio.views["dashboard"].template),
+                "line": 5,
+                "column": 3,
+            },
+        },
+        {
+            "code": "value-variable-not-found",
+            "severity": "error",
+            "message": (
+                "Value 'absent.label' depends on notebook variable 'absent', "
+                "which has no defining cell."
+            ),
+            "hint": (
+                "Define the variable, change the selector, or remove the value "
+                "projection from the view."
+            ),
+            "view": "dashboard",
+            "projection": "value",
+            "target": "absent.label",
+            "source": {
+                "path": str(studio.views["dashboard"].template),
+                "line": 6,
+                "column": 3,
+            },
+        },
+    ]
+
+
 @pytest.mark.parametrize("name", ["lsp", "mcp", "sse", "studio"])
 def test_view_names_cannot_claim_application_routes(
     notebook_path: Path,
@@ -462,7 +555,7 @@ def test_view_names_cannot_claim_application_routes(
         ensure_view(notebook_path, name)
 
 
-def test_changed_binding_has_one_recovery_path(notebook_path: Path) -> None:
+def test_changed_binding_reports_one_recovery_path(notebook_path: Path) -> None:
     ensure_view(notebook_path)
     studio = load_studio(notebook_path)
     bind_cell(studio, "result", 1)
@@ -475,8 +568,34 @@ def test_changed_binding_has_one_recovery_path(notebook_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(BindingError, match="bind the alias again with --overwrite"):
-        resolve_studio(load_studio(notebook_path))
+    resolved = resolve_studio(load_studio(notebook_path))
+
+    assert "result" not in resolved.aliases
+    diagnostic = resolved.view("dashboard").diagnostics[0]
+    assert diagnostic.code == "cell-binding-stale"
+    assert diagnostic.target == "result"
+    assert "--overwrite" in diagnostic.hint
+
+
+def test_native_cell_name_supersedes_a_stale_configured_alias(
+    notebook_path: Path,
+) -> None:
+    ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+    bind_cell(studio, "result", 1)
+    _shell(studio, "dashboard", '<marimo-cell name="result"></marimo-cell>')
+    source = notebook_path.read_text(encoding="utf-8")
+    source = source.replace(
+        "@app.cell\ndef _(x):",
+        "@app.cell\ndef result(x):",
+        1,
+    ).replace("doubled = x * 2", "doubled = x * 3")
+    notebook_path.write_text(source, encoding="utf-8")
+
+    resolved = resolve_studio(load_studio(notebook_path))
+
+    assert resolved.aliases["result"].name == "result"
+    assert resolved.view("dashboard").diagnostics == ()
 
 
 def test_binding_survives_reorder_and_rejects_ambiguous_serialization(
@@ -543,8 +662,12 @@ app = marimo.App()
     source = source.replace(first, serialized, 1).replace(second, serialized, 1)
     notebook.write_text(source, encoding="utf-8")
 
-    with pytest.raises(BindingError, match="became ambiguous"):
-        resolve_studio(load_studio(notebook))
+    ambiguous = resolve_studio(load_studio(notebook))
+
+    assert "report" not in ambiguous.aliases
+    diagnostic = ambiguous.view("dashboard").diagnostics[0]
+    assert diagnostic.code == "cell-binding-ambiguous"
+    assert diagnostic.target == "report"
 
 
 def test_runtime_check_scopes_values_to_the_selected_view(
@@ -590,12 +713,123 @@ def test_runtime_check_scopes_values_to_the_selected_view(
     results = asyncio.run(
         check_runtime_studio(load_studio(notebook_path), view_name="dashboard")
     )
+    current = resolve_studio(
+        load_studio(notebook_path),
+        view_name="dashboard",
+    ).aliases["result"]
+    value_binding = (
+        resolve_studio(
+            load_studio(notebook_path),
+            view_name="dashboard",
+        )
+        .view("dashboard")
+        .value_bindings["doubled.missing"]
+    )
 
     assert captured["variables"] == ("doubled.missing",)
     assert {result.name for result in results if result.status == "fail"} == {
         "runtime-cell:result",
         "runtime-value:doubled.missing",
     }
+    failures = {result.name: result for result in results if result.status == "fail"}
+    assert failures["runtime-cell:result"].code == "projected-cell-empty"
+    assert failures["runtime-cell:result"].details == {
+        "projection": "cell",
+        "target": "result",
+        "source": {
+            "path": str(notebook_path),
+            "line": current.source.start_line,
+            "column": 1,
+        },
+        "hint": "Return a display value from the cell or remove its projection.",
+        "view": "dashboard",
+    }
+    assert failures["runtime-value:doubled.missing"].code == ("value-path-unavailable")
+    assert failures["runtime-value:doubled.missing"].message == "Missing key"
+    assert failures["runtime-value:doubled.missing"].details is not None
+    assert failures["runtime-value:doubled.missing"].details["target"] == (
+        "doubled.missing"
+    )
+    assert failures["runtime-value:doubled.missing"].details["projection"] == "value"
+    assert failures["runtime-value:doubled.missing"].details["view"] == "dashboard"
+    value_details = failures["runtime-value:doubled.missing"].details
+    assert value_details["source"] == {
+        "path": str(value_binding.source),
+        "line": value_binding.line,
+        "column": value_binding.column,
+    }
+    assert value_details["definition"] == {
+        "path": str(notebook_path),
+        "line": value_binding.cell.source.start_line,
+        "column": 1,
+    }
+    assert value_details["hint"] == (
+        "Fix the mo-value selector in the view template or the value shape "
+        "in Marimo, then rerun the check."
+    )
+
+
+def test_runtime_check_reports_disabled_projection_causes(tmp_path: Path) -> None:
+    notebook = tmp_path / "disabled.py"
+    notebook.write_text(
+        f"""\
+import marimo
+
+__generated_with = "{marimo.__version__}"
+app = marimo.App()
+
+
+@app.cell(disabled=True)
+def disabled_cell():
+    blocked = 1
+    blocked
+    return (blocked,)
+
+
+@app.cell
+def dependent_cell(blocked):
+    result = blocked + 1
+    result
+    return (result,)
+
+
+if __name__ == "__main__":
+    app.run()
+""",
+        encoding="utf-8",
+    )
+    ensure_view(notebook)
+    studio = load_studio(notebook)
+    _shell(
+        studio,
+        "dashboard",
+        '<marimo-cell name="disabled_cell"></marimo-cell>'
+        '<marimo-cell name="dependent_cell"></marimo-cell>',
+    )
+
+    results = asyncio.run(
+        check_runtime_studio(load_studio(notebook), view_name="dashboard")
+    )
+    failures = {result.name: result for result in results if result.status == "fail"}
+
+    assert failures["runtime-cell:disabled_cell"].code == "cell-disabled"
+    assert failures["runtime-cell:disabled_cell"].message == (
+        "Projected cell is disabled"
+    )
+    disabled_details = failures["runtime-cell:disabled_cell"].details
+    assert disabled_details is not None
+    assert disabled_details["hint"] == (
+        "Enable the cell in Marimo or remove its projection."
+    )
+    assert failures["runtime-cell:dependent_cell"].code == "cell-disabled"
+    assert failures["runtime-cell:dependent_cell"].message == (
+        "Projected cell has a disabled upstream dependency"
+    )
+    dependent_details = failures["runtime-cell:dependent_cell"].details
+    assert dependent_details is not None
+    assert dependent_details["hint"] == (
+        "Enable the disabled upstream cell in Marimo or remove this projection."
+    )
 
 
 def test_runtime_check_includes_cells_loaded_through_htmx(
@@ -635,6 +869,7 @@ def test_runtime_check_includes_cells_loaded_through_htmx(
     assert captured["cell_ids"] == (bound.cell.runtime_id,)
     assert [result.name for result in results] == ["runtime-cell:result"]
     assert results[0].status == "fail"
+    assert results[0].code == "projected-cell-empty"
 
 
 def test_selected_view_check_isolated_from_other_templates(
