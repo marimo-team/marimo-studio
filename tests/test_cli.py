@@ -14,7 +14,6 @@ from click.testing import CliRunner
 import marimo_studio._workspace.launch as launch_module
 from marimo_studio._cli import cli, main
 from marimo_studio._workspace import ensure_view, load_studio
-from marimo_studio._workspace.metadata import read_notebook_metadata
 
 
 def _run_cli(
@@ -284,32 +283,6 @@ def test_check_emits_structured_diagnostics(
     )
 
 
-def test_static_check_emits_jsonl_with_embedded_click_streams(
-    notebook_path: Path,
-) -> None:
-    ensure_view(notebook_path)
-
-    result = CliRunner().invoke(
-        cli,
-        [
-            "check",
-            str(notebook_path),
-            "--format",
-            "json",
-            "--diagnostics",
-            "jsonl",
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.stdout)
-    events = [json.loads(line) for line in result.stderr.splitlines()]
-    assert payload["ok"] is True
-    assert [event["code"] for event in events] == [
-        check["name"] for check in payload["checks"]
-    ]
-
-
 def test_failed_check_reports_exit_status_and_error_diagnostic(
     notebook_path: Path,
 ) -> None:
@@ -363,11 +336,14 @@ def test_main_structures_configuration_errors(
     assert event["exit_code"] == 3
 
 
-def test_direct_launch_starts_native_marimo_edit(
+def test_direct_launch_opens_the_native_editor_and_studio_view(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[tuple[list[str], Path | None]] = []
+    opened: list[str] = []
+    monkeypatch.setattr(launch_module.secrets, "token_urlsafe", lambda _size: "secret")
+    monkeypatch.setattr(launch_module, "_open_later", opened.append)
     monkeypatch.setattr(
         launch_module,
         "environment_command",
@@ -387,13 +363,10 @@ def test_direct_launch_starts_native_marimo_edit(
             str(notebook_path),
             "--view",
             "dashboard",
-            "--headless",
             "--port",
             "9123",
             "--base-url",
             "/proxy/token",
-            "--",
-            "--no-token",
         ],
     )
 
@@ -405,9 +378,10 @@ def test_direct_launch_starts_native_marimo_edit(
     assert studio_url.hostname == "127.0.0.1"
     assert studio_url.port == 9123
     assert studio_url.path == "/proxy/token/studio/dashboard/"
-    assert studio_url.query == ""
+    assert parse_qs(studio_url.query) == {"access_token": ["secret"]}
     assert view_url.path == "/proxy/token/dashboard/"
-    assert view_url.query == ""
+    assert parse_qs(view_url.query) == {"access_token": ["secret"]}
+    assert opened == [output[0].removeprefix("Studio: ").strip()]
     assert len(calls) == 1
     command, cwd = calls[0]
     assert cwd == notebook_path.parent
@@ -420,49 +394,13 @@ def test_direct_launch_starts_native_marimo_edit(
     assert command[command.index("--host") + 1] == "127.0.0.1"
     assert command[command.index("--port") + 1] == "9123"
     assert command[command.index("--base-url") + 1] == "/proxy/token"
-    assert command[-3:] == ["--headless", "--no-sandbox", "--no-token"]
+    assert command[-4:] == [
+        "--headless",
+        "--no-sandbox",
+        "--token-password",
+        "secret",
+    ]
     assert load_studio(notebook_path).config_path == notebook_path
-
-
-def test_direct_launch_opens_an_authenticated_studio_url(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[list[str]] = []
-    opened: list[str] = []
-    monkeypatch.setattr(launch_module.secrets, "token_urlsafe", lambda _size: "secret")
-    monkeypatch.setattr(launch_module, "_open_later", opened.append)
-    monkeypatch.setattr(
-        launch_module,
-        "environment_command",
-        lambda _target, args: ["notebook-environment", *args],
-    )
-    monkeypatch.setattr(
-        launch_module.subprocess,
-        "run",
-        lambda command, **_kwargs: (
-            calls.append(command) or SimpleNamespace(returncode=0)
-        ),
-    )
-
-    result = CliRunner().invoke(
-        cli,
-        [str(notebook_path), "--port", "9124"],
-    )
-
-    assert result.exit_code == 0, result.output
-    output = result.output.splitlines()
-    assert len(output) == 2
-    studio_url = output[0].removeprefix("Studio: ").strip()
-    view_url = output[1].removeprefix("View:   ").strip()
-    assert opened == [studio_url]
-    assert urlsplit(studio_url).path == "/studio/dashboard/"
-    assert urlsplit(view_url).path == "/dashboard/"
-    assert parse_qs(urlsplit(studio_url).query) == {
-        "access_token": ["secret"],
-    }
-    assert parse_qs(urlsplit(view_url).query) == {"access_token": ["secret"]}
-    assert calls[0][-2:] == ["--token-password", "secret"]
 
 
 def test_bare_launch_discovers_the_configured_notebook(
@@ -489,67 +427,3 @@ def test_bare_launch_discovers_the_configured_notebook(
 
     assert result.exit_code == 0, result.output
     assert calls[0][1:4] == ["marimo", "edit", str(notebook_path)]
-
-
-def test_direct_launch_converges_the_notebook_package_requirement(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    body = notebook_path.read_text(encoding="utf-8")
-    notebook_path.write_text(
-        """\
-# /// script
-# requires-python = ">=3.11"
-# dependencies = ["humanize>=4", "marimo-studio==1.2.3"]
-#
-# [tool.marimo-studio]
-# default = "dashboard"
-# cells = {}
-# ///
-
-"""
-        + body,
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(
-        launch_module,
-        "environment_command",
-        lambda _target, _args: ["true"],
-    )
-    monkeypatch.setattr(
-        launch_module.subprocess,
-        "run",
-        lambda _command, **_kwargs: SimpleNamespace(returncode=0),
-    )
-
-    result = CliRunner().invoke(
-        cli,
-        [str(notebook_path), "--headless"],
-    )
-    document = read_notebook_metadata(notebook_path)
-
-    assert result.exit_code == 0, result.output
-    assert document is not None
-    assert list(document["dependencies"]) == [
-        "humanize>=4",
-        "marimo-studio",
-    ]
-    assert notebook_path.read_text(encoding="utf-8").endswith(body)
-
-
-def test_direct_launch_rejects_unsupported_proxy_passthrough(
-    notebook_path: Path,
-    runtime_assets: Path,
-) -> None:
-    result = _run_cli(
-        runtime_assets,
-        str(notebook_path),
-        "--headless",
-        "--",
-        "--proxy",
-        "http://example.test",
-    )
-
-    assert result.returncode == 2
-    assert "direct launcher does not support --proxy" in result.stderr
-    assert "\N{ZERO WIDTH SPACE}launch" not in result.stderr

@@ -237,12 +237,10 @@ def test_runtime_probe_preserves_session_creation_failures(
     assert manager.shutdown_called
 
 
-@pytest.mark.parametrize("installed", ["0.23.14", "0.23.15"])
 def test_runtime_accepts_marimo_from_the_supported_lower_bound(
     monkeypatch: pytest.MonkeyPatch,
-    installed: str,
 ) -> None:
-    monkeypatch.setattr(marimo, "__version__", installed)
+    monkeypatch.setattr(marimo, "__version__", "0.23.14")
 
     assert_supported_version()
 

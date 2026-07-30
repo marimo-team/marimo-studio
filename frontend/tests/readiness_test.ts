@@ -16,12 +16,9 @@ const valueCell = (
   ...overrides,
 });
 
-Deno.test("readiness waits for pending hosts before publishing errors", () => {
+Deno.test("page readiness accounts for pending and retained hosts", () => {
   assertEquals(pageReadinessState("ready", ["error", "loading"]), "loading");
   assertEquals(pageReadinessState("ready", ["error", "ready"]), "error");
-});
-
-Deno.test("readiness settles when a host retains stale output", () => {
   assertEquals(pageReadinessState("ready", ["stale", "ready"]), "ready");
 });
 

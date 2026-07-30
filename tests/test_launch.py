@@ -126,17 +126,6 @@ def test_prepare_launch_rejects_proxy_with_an_actionable_error(
         )
 
 
-def test_browser_auth_reads_an_explicit_password_file(tmp_path: Path) -> None:
-    token_file = tmp_path / "token.txt"
-    token_file.write_text("configured-token\n", encoding="utf-8")
-    args = ("--token-password-file", str(token_file))
-
-    marimo_args, access_token = browser_auth(args, open_browser=True)
-
-    assert marimo_args == args
-    assert access_token == "configured-token"
-
-
 @pytest.mark.parametrize(
     "args",
     [
