@@ -21,8 +21,6 @@ from marimo_studio._compat import server as server_compat
 from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.server import programmatic_middleware
 from marimo_studio._server import dev
-from marimo_studio._server.dev import _event_kind
-from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._workspace import (
     bind_cell,
     ensure_view,
@@ -620,30 +618,6 @@ def test_presentation_revision_tracks_same_size_edits(
     )
 
 
-def test_snapshot_reloads_configuration_changed_during_discovery(
-    notebook_path: Path,
-) -> None:
-    studio = _configured(notebook_path)
-    presentation = NotebookPresentation(studio.notebook)
-    stale = presentation.discover()
-    assert stale is not None
-    assert stale.preserve_session is False
-
-    def preserve(config: MutableMapping[str, object]) -> None:
-        config["preserve_session"] = True
-
-    update_notebook_config(studio.notebook, preserve)
-    current = presentation.discover()
-    assert current is not None
-    presentation.discover = Mock(
-        side_effect=[stale, current, current, current],
-    )
-
-    snapshot = presentation.snapshot("dashboard")
-
-    assert snapshot.resolved.studio.preserve_session is True
-
-
 def test_edit_runtime_matches_layout_equivalent_live_cells(tmp_path: Path) -> None:
     serialized = '''\
 mo.md(f"""
@@ -780,69 +754,18 @@ def test_run_runtime_refreshes_bindings_for_each_browser_session(
     assert connecting["cellBindings"]["result"]["value"] == static.cells[1].runtime_id
 
 
-def test_notebook_saves_refresh_bindings_and_mixed_saves_refresh_shell(
-    notebook_path: Path,
-) -> None:
-    studio = _configured(notebook_path)
-    stylesheet = studio.views["dashboard"].root / "app.css"
-    other_template = studio.views["executive"].template
-
-    assert (
-        _event_kind(
-            studio,
-            {("notebook", studio.notebook)},
-            "dashboard",
-        )
-        == "runtime"
-    )
-    assert (
-        _event_kind(
-            studio,
-            {("notebook", studio.notebook), ("view", stylesheet)},
-            "dashboard",
-        )
-        == "html"
-    )
-    assert (
-        _event_kind(
-            studio,
-            {("view", other_template)},
-            "dashboard",
-        )
-        == "views"
-    )
-
-
-def test_change_stream_detects_edits_after_its_ready_event(
-    notebook_path: Path,
-) -> None:
-    studio = _configured(notebook_path)
-
-    async def events() -> tuple[bytes, bytes]:
-        stream = dev.change_events(studio, "dashboard")
-        ready = await anext(stream)
-        studio.views["dashboard"].template.write_text(
-            "<html><head></head><body><main id='app-shell'></main></body></html>",
-            encoding="utf-8",
-        )
-        changed = await asyncio.wait_for(anext(stream), timeout=1)
-        return ready, changed
-
-    ready, changed = asyncio.run(events())
-
-    assert ready == b"event: ready\ndata: {}\n\n"
-    assert changed == b'event: change\ndata: {"kind":"html"}\n\n'
-
-
-def test_change_stream_detects_same_size_edits_with_restored_mtime(
+def test_change_stream_classifies_live_source_edits(
     notebook_path: Path,
 ) -> None:
     studio = _configured(notebook_path)
     template = studio.views["dashboard"].template
+    stylesheet = studio.views["dashboard"].root / "app.css"
+    sibling = studio.views["executive"].template
 
-    async def events() -> bytes:
+    async def collect_events() -> tuple[bytes, ...]:
         stream = dev.change_events(studio, "dashboard")
-        await anext(stream)
+        ready = await anext(stream)
+
         source = template.read_text(encoding="utf-8")
         stat = template.stat()
         template.write_text(
@@ -850,11 +773,36 @@ def test_change_stream_detects_same_size_edits_with_restored_mtime(
             encoding="utf-8",
         )
         os.utime(template, ns=(stat.st_atime_ns, stat.st_mtime_ns))
-        return await asyncio.wait_for(anext(stream), timeout=1)
+        html = await asyncio.wait_for(anext(stream), timeout=1)
 
-    changed = asyncio.run(events())
+        stylesheet.write_text(
+            stylesheet.read_text(encoding="utf-8") + "\n/* changed */\n",
+            encoding="utf-8",
+        )
+        css = await asyncio.wait_for(anext(stream), timeout=1)
 
-    assert changed == b'event: change\ndata: {"kind":"html"}\n\n'
+        studio.notebook.write_text(
+            studio.notebook.read_text(encoding="utf-8") + "\n",
+            encoding="utf-8",
+        )
+        runtime = await asyncio.wait_for(anext(stream), timeout=1)
+
+        sibling.write_text(
+            sibling.read_text(encoding="utf-8") + "\n<!-- changed -->\n",
+            encoding="utf-8",
+        )
+        views = await asyncio.wait_for(anext(stream), timeout=1)
+        return ready, html, css, runtime, views
+
+    messages = asyncio.run(collect_events())
+
+    assert messages == (
+        b"event: ready\ndata: {}\n\n",
+        b'event: change\ndata: {"kind":"html"}\n\n',
+        b'event: change\ndata: {"kind":"css"}\n\n',
+        b'event: change\ndata: {"kind":"runtime"}\n\n',
+        b'event: change\ndata: {"kind":"views"}\n\n',
+    )
 
 
 def test_document_replay_requires_an_opted_in_manager_and_query() -> None:

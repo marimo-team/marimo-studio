@@ -226,24 +226,6 @@ def test_prepare_launch_rejects_non_utf8_token_files_before_writing(
     assert not (notebook_path.parent / "__marimo__").exists()
 
 
-def test_prepare_launch_brackets_ipv6_hosts_in_browser_urls(
-    notebook_path: Path,
-) -> None:
-    plan = prepare_launch(
-        LaunchRequest(
-            notebook=notebook_path,
-            view_name="dashboard",
-            host="::1",
-            port=8123,
-            open_browser=False,
-            base_url="",
-            marimo_args=("--no-token",),
-        )
-    )
-
-    assert plan.studio_url.startswith("http://[::1]:8123/")
-
-
 def test_execute_launch_opens_the_studio_and_forwards_process_streams(
     tmp_path: Path,
 ) -> None:

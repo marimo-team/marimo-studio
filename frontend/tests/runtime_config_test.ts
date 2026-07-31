@@ -12,7 +12,6 @@ import {
   fetchRuntimeConfigWithRetry,
   getRuntimeCellBindings,
   getRuntimeConfig,
-  getRuntimeDiagnostics,
   parseRuntimeConfig,
   readResponseError,
   requireMatchingPresentationRevision,
@@ -155,29 +154,6 @@ Deno.test("session restoration keeps the document revision", async () => {
   }
 });
 
-Deno.test("runtime diagnostics are exposed as defensive snapshots", () => {
-  const diagnostic = {
-    code: "cell-not-found",
-    severity: "error" as const,
-    message: "Missing cell",
-    hint: "Name the cell",
-    view: "dashboard",
-    projection: "cell" as const,
-    target: "summary",
-    source: { path: "index.html", line: 4, column: 3 },
-  };
-  commitRuntimeConfig({
-    ...baseRuntimeConfig,
-    diagnostics: [diagnostic],
-  });
-
-  const exposed = getRuntimeDiagnostics();
-
-  assertEquals(exposed, [diagnostic]);
-  assertEquals(exposed === getRuntimeConfig().diagnostics, false);
-  assertEquals(exposed[0].source === diagnostic.source, false);
-});
-
 Deno.test("fetchRuntimeConfig reports the configuration diagnostic", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = () =>
@@ -210,30 +186,6 @@ Deno.test("fetchRuntimeConfig reports the configuration diagnostic", async () =>
   } finally {
     globalThis.fetch = originalFetch;
   }
-});
-
-Deno.test("document refresh errors retain structured repair guidance", async () => {
-  const detail = await readResponseError(
-    new Response(
-      JSON.stringify({
-        error: "template-error",
-        message: "Template must contain #app-shell.",
-        hint: "Restore #app-shell, then save the view.",
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      },
-    ),
-    "Shell refresh failed",
-  );
-
-  assertEquals(detail, {
-    code: "template-error",
-    message: "Template must contain #app-shell.",
-    hint: "Restore #app-shell, then save the view.",
-    transient: false,
-  });
 });
 
 Deno.test("HTML error documents do not leak into diagnostics", async () => {

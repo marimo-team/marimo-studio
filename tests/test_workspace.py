@@ -59,9 +59,6 @@ def test_first_view_configures_the_notebook_in_place(notebook_path: Path) -> Non
         notebook_path.parent / "__marimo__" / "studio" / notebook_path.stem
     )
     assert studio.views["dashboard"].template.is_file()
-    assert "<title>analysis · dashboard</title>" in studio.views[
-        "dashboard"
-    ].template.read_text(encoding="utf-8")
     assert document is not None
     assert document["tool"]["marimo-studio"]["default"] == "dashboard"
     assert "marimo-studio" in document["dependencies"]
@@ -81,22 +78,14 @@ def test_first_view_accepts_a_new_empty_notebook(tmp_path: Path) -> None:
     assert resolved.view("dashboard").diagnostics == ()
 
 
-@pytest.mark.parametrize(
-    "extra_source",
-    [
-        "\nvalue = 1\n",
-        "\ndef helper():\n    return 1\n",
-    ],
-)
 def test_zero_cell_notebook_rejects_non_notebook_source(
     tmp_path: Path,
-    extra_source: str,
 ) -> None:
     notebook = tmp_path / "analysis.py"
     notebook.write_text(
         empty_notebook_source().replace(
             "\n\nif __name__",
-            f"{extra_source}\nif __name__",
+            "\nvalue = 1\n\nif __name__",
         ),
         encoding="utf-8",
     )

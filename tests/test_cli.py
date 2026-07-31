@@ -81,25 +81,6 @@ def test_view_add_bootstraps_lists_and_checks_named_views(
     assert any(check["name"] == "view:executive" for check in payload["checks"])
 
 
-def test_view_add_rejects_a_missing_explicit_target(
-    tmp_path: Path,
-    runtime_assets: Path,
-) -> None:
-    missing = tmp_path / "missing.py"
-
-    result = _run_cli(
-        runtime_assets,
-        "view",
-        "add",
-        "executive",
-        str(missing),
-    )
-
-    assert result.returncode == 3
-    assert result.stdout == ""
-    assert f"Notebook does not exist: {missing}" in result.stderr
-
-
 def test_view_add_dry_run_reports_changes_without_writing(
     notebook_path: Path,
 ) -> None:

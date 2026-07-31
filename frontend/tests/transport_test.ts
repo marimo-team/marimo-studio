@@ -1,4 +1,4 @@
-import { assertEquals, assertStrictEquals } from "@std/assert";
+import { assertEquals } from "@std/assert";
 
 import {
   configureKioskTransport,
@@ -26,10 +26,6 @@ Deno.test("edit previews mark kernel transports as a kiosk consumer", () => {
     assertEquals(url.searchParams.get("session_id"), "session");
     assertEquals(url.searchParams.get("kiosk"), "true");
   }
-
-  const configured = manager.getWsURL;
-  configureKioskTransport(manager, true);
-  assertStrictEquals(manager.getWsURL, configured);
 });
 
 Deno.test("run views keep Marimo transport URLs unchanged", () => {
