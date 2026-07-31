@@ -18,7 +18,6 @@ from marimo_studio.types import (
     CellConfigSpec,
     CellSpec,
     NotebookSpec,
-    SourceSpan,
 )
 
 _PREVIEW_LINES = 8
@@ -45,52 +44,6 @@ def select_cells(
         if not output_expressions or cell.has_output_expression
     )
     return cells if limit is None else cells[:limit]
-
-
-def _source_spans(path: Path, source_lines: list[int]) -> list[SourceSpan]:
-    source = path.read_text(encoding="utf-8")
-    try:
-        module = ast.parse(source, filename=str(path))
-    except SyntaxError as error:
-        raise ConfigurationError(f"Could not parse notebook {path}: {error}") from error
-
-    functions = {
-        node.lineno: node
-        for node in module.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and any(
-            (
-                isinstance(decorator, ast.Attribute)
-                and decorator.attr in {"cell", "setup"}
-            )
-            or (
-                isinstance(decorator, ast.Call)
-                and isinstance(decorator.func, ast.Attribute)
-                and decorator.func.attr in {"cell", "setup"}
-            )
-            for decorator in node.decorator_list
-        )
-    }
-
-    spans: list[SourceSpan] = []
-    for source_line in source_lines:
-        node = functions.get(source_line)
-        if node is None:
-            spans.append(SourceSpan(source_line, source_line))
-            continue
-        decorator_lines = [
-            decorator.lineno for decorator in node.decorator_list if decorator.lineno
-        ]
-        start_line = min([node.lineno, *decorator_lines])
-        spans.append(
-            SourceSpan(
-                start_line=start_line,
-                end_line=node.end_lineno or node.lineno,
-                start_column=node.col_offset,
-                end_column=node.end_col_offset or node.col_offset,
-            )
-        )
-    return spans
 
 
 def _has_output_expression(code: str) -> bool:
@@ -133,18 +86,13 @@ def inspect_notebook(
     by_runtime_id = {
         cell.runtime_id: refs[index] for index, cell in enumerate(static.cells)
     }
-    source_spans = _source_spans(
-        notebook_path,
-        [cell.source_line for cell in static.cells],
-    )
-
     cells = tuple(
         CellSpec(
             ref=refs[index],
             runtime_id=cell.runtime_id,
             index=index,
             name=cell.name if cell.name != "_" else None,
-            source=source_spans[index],
+            source=cell.source,
             code_sha256=source_digests[index],
             preview=_preview(cell.code),
             definitions=cell.definitions,

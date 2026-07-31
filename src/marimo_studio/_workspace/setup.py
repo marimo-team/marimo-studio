@@ -143,7 +143,7 @@ def ensure_view(
         for path, content in _view_files(
             view_root,
             view_name,
-            notebook_path.stem,
+            f"{notebook_path.stem} · {view_name}",
         ).items():
             if not path.exists():
                 writes[path] = content

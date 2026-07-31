@@ -13,6 +13,7 @@ from click.testing import CliRunner
 
 import marimo_studio._workspace.launch as launch_module
 from marimo_studio._cli import cli, main
+from marimo_studio._cli.diagnostics import DiagnosticStream
 from marimo_studio._workspace import ensure_view, load_studio
 
 
@@ -281,6 +282,77 @@ def test_check_emits_structured_diagnostics(
         and event["severity"] == "info"
         for event in events
     )
+
+
+def test_structured_diagnostics_group_multiline_process_output(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    stream = DiagnosticStream(format="jsonl", command="check")
+
+    stream.relay_output("Traceback (most recent call last):\nValueError: bad input\n")
+
+    event = json.loads(capsys.readouterr().err)
+    assert event["code"] == "process-output"
+    assert event["message"] == (
+        "Traceback (most recent call last):\nValueError: bad input"
+    )
+    assert event["details"] == {"line_count": 2}
+
+
+def test_structured_diagnostics_preserve_child_events(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    stream = DiagnosticStream(format="jsonl", command="check")
+    child = {
+        "schema": 1,
+        "event": "diagnostic",
+        "command": "check",
+        "severity": "error",
+        "code": "cell-execution-error",
+        "message": "ValueError: bad input",
+    }
+
+    stream.relay_output(json.dumps(child) + "\nshutdown warning\n")
+
+    events = [json.loads(line) for line in capsys.readouterr().err.splitlines()]
+    assert events[0] == child
+    assert events[1]["code"] == "process-output"
+    assert events[1]["message"] == "shutdown warning"
+    assert stream.error_count == 1
+
+
+def test_structured_diagnostics_preserve_unicode_line_separators(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    stream = DiagnosticStream(format="jsonl", command="check")
+    child = {
+        "schema": 1,
+        "event": "diagnostic",
+        "command": "check",
+        "severity": "error",
+        "code": "cell-execution-error",
+        "message": "bad\u2028input",
+    }
+
+    stream.relay_output(json.dumps(child, ensure_ascii=False) + "\r\n")
+
+    assert json.loads(capsys.readouterr().err) == child
+    assert stream.error_count == 1
+
+
+def test_structured_diagnostics_bound_large_process_output(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    stream = DiagnosticStream(format="jsonl", command="check")
+
+    stream.relay_output("x" * 20_000)
+
+    event = json.loads(capsys.readouterr().err)
+    assert event["details"]["line_count"] == 1
+    assert event["details"]["truncated"] is True
+    assert event["details"]["omitted_chars"] > 0
+    assert event["message"].endswith("x" * 100)
+    assert len(event["message"]) <= 16 * 1024
 
 
 def test_failed_check_reports_exit_status_and_error_diagnostic(

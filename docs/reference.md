@@ -385,6 +385,7 @@ Document events:
 
 View switching and preview status use same-origin messages:
 
+- `marimo-studio:navigate-view`
 - `marimo-studio:switch-view`
 - `marimo-studio:receiver-ready`
 - `marimo-studio:view-ready`

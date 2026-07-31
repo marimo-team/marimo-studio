@@ -3,6 +3,19 @@ export interface ShellTarget {
   supportUrl: string;
 }
 
+export interface VersionedShellTarget extends ShellTarget {
+  revision: string;
+}
+
+export const sameShellPresentation = (
+  current: VersionedShellTarget,
+  next: VersionedShellTarget,
+): boolean => {
+  return current.documentUrl === next.documentUrl &&
+    current.supportUrl === next.supportUrl &&
+    current.revision === next.revision;
+};
+
 export type PreviewLoadState = "ready" | "waiting" | "error";
 
 export const previewLoadState = ({

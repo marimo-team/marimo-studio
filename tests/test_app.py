@@ -1050,7 +1050,7 @@ def test_edit_mode_keeps_the_editor_at_root_and_adds_studio(
     assert 'data-studio-prefix="/studio/"' in workspace.text
     assert view_redirect.status_code == 307
     assert view_redirect.headers["location"] == "/executive/?region=emea"
-    assert waiting.status_code == 503
+    assert waiting.status_code == 202
     assert waiting.headers["retry-after"] == "1"
     assert 'data-marimo-studio-preview-state="waiting"' in waiting.text
     assert "<script" not in waiting.text.split("<body>", 1)[1]

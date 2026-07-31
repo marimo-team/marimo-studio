@@ -6,11 +6,12 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
 from collections.abc import Callable
 from importlib.metadata import metadata
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, TextIO
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import Version
@@ -123,20 +124,24 @@ def should_reenter(target: EnvironmentTarget, requested: bool | None) -> bool:
 def _run_command(
     command: list[str],
     child_env: dict[str, str],
-    diagnostic_line: Callable[[str], None] | None,
+    diagnostic_stream: Callable[[TextIO], None] | None,
 ) -> int:
-    result = subprocess.run(
-        command,
-        env=child_env,
-        check=False,
-        stderr=subprocess.PIPE if diagnostic_line is not None else None,
-        encoding="utf-8" if diagnostic_line is not None else None,
-        errors="replace" if diagnostic_line is not None else None,
-    )
-    if diagnostic_line is not None and result.stderr is not None:
-        for line in result.stderr.splitlines():
-            diagnostic_line(line)
-    return result.returncode
+    if diagnostic_stream is None:
+        return subprocess.run(command, env=child_env, check=False).returncode
+    with tempfile.TemporaryFile(
+        mode="w+t",
+        encoding="utf-8",
+        errors="replace",
+    ) as stderr:
+        result = subprocess.run(
+            command,
+            env=child_env,
+            check=False,
+            stderr=stderr,
+        )
+        stderr.seek(0)
+        diagnostic_stream(stderr)
+        return result.returncode
 
 
 def environment_command(
@@ -179,7 +184,7 @@ def run_in_notebook_environment(
     target: EnvironmentTarget,
     args: list[str],
     *,
-    diagnostic_line: Callable[[str], None] | None = None,
+    diagnostic_stream: Callable[[TextIO], None] | None = None,
 ) -> int:
     """Re-enter the CLI through the notebook's Python environment."""
     child_env = os.environ.copy()
@@ -188,6 +193,6 @@ def run_in_notebook_environment(
     command = environment_command(
         target,
         ["marimo-studio", *args],
-        quiet=diagnostic_line is not None,
+        quiet=diagnostic_stream is not None,
     )
-    return _run_command(command, child_env, diagnostic_line)
+    return _run_command(command, child_env, diagnostic_stream)

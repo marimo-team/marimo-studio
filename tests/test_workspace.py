@@ -59,6 +59,9 @@ def test_first_view_configures_the_notebook_in_place(notebook_path: Path) -> Non
         notebook_path.parent / "__marimo__" / "studio" / notebook_path.stem
     )
     assert studio.views["dashboard"].template.is_file()
+    assert "<title>analysis · dashboard</title>" in studio.views[
+        "dashboard"
+    ].template.read_text(encoding="utf-8")
     assert document is not None
     assert document["tool"]["marimo-studio"]["default"] == "dashboard"
     assert "marimo-studio" in document["dependencies"]
@@ -830,6 +833,40 @@ if __name__ == "__main__":
     assert dependent_details["hint"] == (
         "Enable the disabled upstream cell in Marimo or remove this projection."
     )
+
+
+def test_runtime_check_reports_the_original_cell_exception(tmp_path: Path) -> None:
+    notebook = tmp_path / "broken.py"
+    notebook.write_text(
+        f"""\
+import marimo
+
+__generated_with = "{marimo.__version__}"
+app = marimo.App()
+
+
+@app.cell
+def broken():
+    raise ValueError("bad input")
+
+
+if __name__ == "__main__":
+    app.run()
+""",
+        encoding="utf-8",
+    )
+    ensure_view(notebook)
+    studio = load_studio(notebook)
+    _shell(studio, "dashboard", '<marimo-cell name="broken"></marimo-cell>')
+
+    results = asyncio.run(
+        check_runtime_studio(load_studio(notebook), view_name="dashboard")
+    )
+    failure = next(result for result in results if result.status == "fail")
+
+    assert failure.code == "cell-execution-error"
+    assert "ValueError: bad input" in failure.message
+    assert "An internal error occurred" not in failure.message
 
 
 def test_runtime_check_includes_cells_loaded_through_htmx(

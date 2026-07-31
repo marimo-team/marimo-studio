@@ -13,6 +13,7 @@ from marimo_studio.errors import (
     NotebookSourceError,
     ProtocolError,
 )
+from marimo_studio.types import SourceSpan
 
 
 @dataclass(frozen=True)
@@ -27,7 +28,7 @@ class StaticCell:
     column: int | None
     disabled: bool
     hide_code: bool
-    source_line: int
+    source: SourceSpan
 
 
 @dataclass(frozen=True)
@@ -36,10 +37,10 @@ class StaticNotebook:
     app_config: dict[str, Any]
 
 
-def _is_canonical_empty_notebook(path: Path) -> bool:
+def _is_canonical_empty_notebook(source: str) -> bool:
     try:
-        body = ast.parse(path.read_text(encoding="utf-8"), filename=str(path)).body
-    except (OSError, UnicodeError, SyntaxError):
+        body = ast.parse(source).body
+    except SyntaxError:
         return False
     if len(body) != 4:
         return False
@@ -99,7 +100,9 @@ def load_static_notebook(path: Path) -> StaticNotebook:
     assert_supported_version()
     try:
         from marimo._ast.load import get_notebook_status, load_app
+        from marimo._ast.scanner import scan_notebook
 
+        source = path.read_text(encoding="utf-8")
         status = get_notebook_status(str(path))
         if status.notebook is None:
             raise NotebookSourceError(f"marimo could not parse notebook: {path}")
@@ -122,7 +125,7 @@ def load_static_notebook(path: Path) -> StaticNotebook:
         and rows[0].cell is None
         and rows[0].code == ""
         and rows[0].name == "_"
-        and _is_canonical_empty_notebook(path)
+        and _is_canonical_empty_notebook(source)
     )
     if empty_placeholder:
         return StaticNotebook(cells=(), app_config=app._config.asdict())
@@ -130,13 +133,22 @@ def load_static_notebook(path: Path) -> StaticNotebook:
         raise NotebookSourceError(f"marimo could not parse notebook: {path}")
 
     source_lines = [cell.lineno for cell in serialized_cells]
-    if len(rows) != len(source_lines):
+    scanned_cells = scan_notebook(source).cells
+    if len(rows) != len(source_lines) or len(rows) != len(scanned_cells):
         raise ProtocolError("marimo returned inconsistent notebook cell metadata")
 
+    lines = source.splitlines()
     cells: list[StaticCell] = []
     for index, row in enumerate(rows):
         if row.cell is None:
             raise ProtocolError(f"marimo did not compile cell {row.cell_id}")
+        scanned = scanned_cells[index]
+        source_line = source_lines[index]
+        if not scanned.start_line <= source_line <= scanned.end_line:
+            raise ProtocolError(
+                f"marimo returned inconsistent source location for cell {row.cell_id}"
+            )
+        end_column = len(lines[scanned.end_line - 1])
         cells.append(
             StaticCell(
                 runtime_id=row.cell_id,
@@ -149,7 +161,11 @@ def load_static_notebook(path: Path) -> StaticNotebook:
                 column=row.config.column,
                 disabled=row.config.disabled,
                 hide_code=row.config.hide_code,
-                source_line=source_lines[index],
+                source=SourceSpan(
+                    start_line=scanned.start_line,
+                    end_line=scanned.end_line,
+                    end_column=end_column,
+                ),
             )
         )
     return StaticNotebook(cells=tuple(cells), app_config=app._config.asdict())

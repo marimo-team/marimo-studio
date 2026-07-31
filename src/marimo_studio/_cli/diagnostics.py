@@ -9,6 +9,8 @@ import tempfile
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from io import StringIO
+from typing import TextIO
 
 import click
 
@@ -19,6 +21,25 @@ from marimo_studio._workspace.environment import (
 )
 
 _COMMAND_NAMES = frozenset({"bind", "check", "inspect", "view"})
+_MAX_PROCESS_OUTPUT_CHARS = 16 * 1024
+
+
+@dataclass
+class _PlainOutput:
+    line_count: int = 0
+    char_count: int = 0
+    tail: str = ""
+    has_content: bool = False
+
+    def append(self, line: str) -> None:
+        piece = f"\n{line}" if self.line_count else line
+        self.line_count += 1
+        self.char_count += len(piece)
+        self.has_content = self.has_content or bool(line.strip())
+        if len(piece) >= _MAX_PROCESS_OUTPUT_CHARS:
+            self.tail = piece[-_MAX_PROCESS_OUTPUT_CHARS:]
+        else:
+            self.tail = (self.tail + piece)[-_MAX_PROCESS_OUTPUT_CHARS:]
 
 
 @dataclass
@@ -72,14 +93,12 @@ class DiagnosticStream:
         self._write(event)
         return True
 
-    def relay(self, line: str) -> None:
-        """Forward a child diagnostic or wrap plain child stderr."""
-        if not line:
-            return
+    @staticmethod
+    def _diagnostic_event(line: str) -> dict[str, object] | None:
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
-            event = None
+            return None
         if (
             isinstance(event, dict)
             and event.get("schema") == 1
@@ -88,11 +107,50 @@ class DiagnosticStream:
             and isinstance(event.get("code"), str)
             and isinstance(event.get("message"), str)
         ):
-            if event["severity"] == "error":
-                self.error_count += 1
-            self._write(event)
+            return event
+        return None
+
+    def _relay_event(self, event: dict[str, object]) -> None:
+        if event["severity"] == "error":
+            self.error_count += 1
+        self._write(event)
+
+    def _relay_plain(self, output: _PlainOutput) -> None:
+        if not output.has_content:
             return
-        self.emit(code="process-output", message=line, severity="warning")
+        details: dict[str, object] = {"line_count": output.line_count}
+        if output.char_count > _MAX_PROCESS_OUTPUT_CHARS:
+            prefix = "[Earlier process output omitted]\n"
+            retained = _MAX_PROCESS_OUTPUT_CHARS - len(prefix)
+            details["omitted_chars"] = output.char_count - retained
+            message = prefix + output.tail[-retained:].rstrip()
+            details["truncated"] = True
+        else:
+            message = output.tail.strip()
+        self.emit(
+            code="process-output",
+            message=message,
+            severity="warning",
+            details=details,
+        )
+
+    def relay_output(self, output: str) -> None:
+        """Relay child JSON Lines and group adjacent plain stderr."""
+        self.relay_stream(StringIO(output))
+
+    def relay_stream(self, output: TextIO) -> None:
+        """Relay child diagnostics from a text stream with bounded buffering."""
+        plain = _PlainOutput()
+        for record in output:
+            line = record.removesuffix("\n").removesuffix("\r")
+            event = self._diagnostic_event(line)
+            if event is None:
+                plain.append(line)
+                continue
+            self._relay_plain(plain)
+            plain = _PlainOutput()
+            self._relay_event(event)
+        self._relay_plain(plain)
 
 
 def _command_from_argv(args: list[str]) -> str:
@@ -159,7 +217,11 @@ def capture_runtime_stderr() -> Iterator[None]:
     if stream.format != "jsonl":
         yield
         return
-    with tempfile.TemporaryFile(mode="w+b") as captured:
+    with tempfile.TemporaryFile(
+        mode="w+t",
+        encoding="utf-8",
+        errors="replace",
+    ) as captured:
         sys.stderr.flush()
         stderr_fd = sys.stderr.fileno()
         saved_fd = os.dup(stderr_fd)
@@ -171,12 +233,7 @@ def capture_runtime_stderr() -> Iterator[None]:
             os.dup2(saved_fd, stderr_fd)
             os.close(saved_fd)
             captured.seek(0)
-            for line in captured.read().decode("utf-8", errors="replace").splitlines():
-                stream.emit(
-                    code="process-output",
-                    message=line,
-                    severity="warning",
-                )
+            stream.relay_stream(captured)
 
 
 def run_in_environment(target: EnvironmentTarget, args: list[str]) -> int:
@@ -186,7 +243,7 @@ def run_in_environment(target: EnvironmentTarget, args: list[str]) -> int:
     exit_code = run_in_notebook_environment(
         target,
         args,
-        diagnostic_line=stream.relay if stream.format == "jsonl" else None,
+        diagnostic_stream=stream.relay_stream if stream.format == "jsonl" else None,
     )
     if exit_code and stream.format == "jsonl" and stream.error_count == errors_before:
         stream.emit(

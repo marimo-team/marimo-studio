@@ -147,6 +147,10 @@ const setLayout = (layout: string) => {
 };
 
 const selectView = (view: string) => {
+  if (!Array.from(selector.options).some((option) => option.value === view)) {
+    return;
+  }
+  selector.value = view;
   const nextPreview = viewUrl(view);
   preview.title = `${view} custom view`;
   popout.href = nextPreview;
@@ -235,6 +239,14 @@ globalThis.addEventListener("message", (event: MessageEvent<unknown>) => {
   }
   const data = event.data;
   if (typeof data !== "object" || data === null || !("type" in data)) {
+    return;
+  }
+  if (
+    data.type === "marimo-studio:navigate-view" &&
+    "view" in data &&
+    typeof data.view === "string"
+  ) {
+    selectView(data.view);
     return;
   }
   if (data.type === "marimo-studio:receiver-ready") {

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from importlib.metadata import version
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, TextIO, cast
 
 import pytest
 
@@ -51,8 +51,10 @@ default = "dashboard"
 
     def run(command: list[str], **kwargs: object) -> SimpleNamespace:
         captured["command"] = command
-        captured["stderr"] = kwargs["stderr"]
-        return SimpleNamespace(returncode=17, stderr="native warning\n")
+        stderr = cast(TextIO, kwargs["stderr"])
+        stderr.write("native warning\n")
+        stderr.flush()
+        return SimpleNamespace(returncode=17)
 
     monkeypatch.setattr(environment_module.shutil, "which", lambda _: "/usr/bin/uv")
     monkeypatch.setattr(environment_module, "package_source_root", lambda: None)
@@ -73,7 +75,7 @@ default = "dashboard"
     result = run_in_notebook_environment(
         studio,
         ["check", str(studio.root), "--runtime"],
-        diagnostic_line=lines.append,
+        diagnostic_stream=lambda output: lines.append(output.read()),
     )
 
     assert result == 17
@@ -85,8 +87,7 @@ default = "dashboard"
     assert command[-3:] == ["check", str(studio.root), "--runtime"]
     assert captured["package_requirement"] == "marimo-studio"
     assert captured["compose_project"] is True
-    assert captured["stderr"] == subprocess.PIPE
-    assert lines == ["native warning"]
+    assert lines == ["native warning\n"]
 
 
 def test_source_checkout_reentry_uses_local_package_for_unversioned_requirement(

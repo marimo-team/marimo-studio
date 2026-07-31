@@ -23,11 +23,13 @@ import {
 import {
   BaselineReconciler,
   RefreshRetrySchedule,
+  sameShellPresentation,
   type ShellChangeKind,
   ShellChangeQueue,
   ShellRefreshState,
   type ShellTarget,
 } from "./shell-refresh-state.ts";
+import { viewNavigationForUrl } from "./view-navigation.ts";
 
 declare global {
   var __MARIMO_STUDIO_SESSION_ID__: string | undefined;
@@ -560,6 +562,28 @@ export const refreshShell = async (
       response.headers.get("Marimo-Studio-Revision"),
       nextConfig,
     );
+    const resolveUrl = (value: string) =>
+      new URL(value, globalThis.location.href).href;
+    if (
+      sameShellPresentation(
+        {
+          documentUrl: resolveUrl(documentUrl),
+          supportUrl: resolveUrl(getSupportUrl()),
+          revision: getRuntimeConfig().revision,
+        },
+        {
+          documentUrl: resolveUrl(nextDocumentUrl),
+          supportUrl: resolveUrl(target.supportUrl),
+          revision: nextConfig.revision,
+        },
+      )
+    ) {
+      await response.body?.cancel();
+      documentUrl = nextDocumentUrl;
+      clearDiagnostic();
+      shellRefreshState.complete(target);
+      return;
+    }
     const documentSource = await response.text();
     const nextDocument = new DOMParser().parseFromString(
       documentSource,
@@ -645,7 +669,10 @@ export const refreshShell = async (
 };
 
 globalThis.addEventListener("message", (event: MessageEvent<unknown>) => {
-  if (event.origin !== globalThis.location.origin) {
+  if (
+    event.origin !== globalThis.location.origin ||
+    event.source !== globalThis.parent
+  ) {
     return;
   }
   const data = event.data;
@@ -672,6 +699,51 @@ globalThis.addEventListener("message", (event: MessageEvent<unknown>) => {
     .catch((error: unknown) => {
       handleRefreshError(error, "html", generation, view);
     });
+});
+
+document.addEventListener("click", (event) => {
+  if (
+    globalThis.parent === globalThis.window ||
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    !(event.target instanceof Element)
+  ) {
+    return;
+  }
+  const anchor = event.target.closest<HTMLAnchorElement>("a[href]");
+  if (
+    !anchor ||
+    anchor.hasAttribute("download") ||
+    (anchor.target && anchor.target !== "_self")
+  ) {
+    return;
+  }
+  if (!hasRuntimeConfig()) {
+    return;
+  }
+  const config = getRuntimeConfig();
+  const navigation = viewNavigationForUrl({
+    href: anchor.href,
+    origin: globalThis.location.origin,
+    runtimeUrl: config.runtimeUrl,
+    views: config.views,
+    currentView: config.view,
+  });
+  if (!navigation) {
+    return;
+  }
+  event.preventDefault();
+  if (navigation.current) {
+    return;
+  }
+  globalThis.parent.postMessage(
+    { type: "marimo-studio:navigate-view", view: navigation.view },
+    globalThis.location.origin,
+  );
 });
 
 connectEvents();

@@ -262,6 +262,7 @@ async def check_runtime_studio(
             studio.notebook,
             cell_ids=tuple(dict.fromkeys(cell.runtime_id for cell in cells.values())),
             variables=tuple(sorted(selectors)),
+            show_tracebacks=True,
         )
     except MarimoStudioError as error:
         return (_error_result("runtime", error, studio),)

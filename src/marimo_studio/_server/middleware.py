@@ -410,7 +410,7 @@ class PresentationMiddleware:
                 "<body><p>Connecting to the notebook session</p>"
                 "</body></html>"
             ),
-            status_code=503,
+            status_code=202,
             headers={**_DOCUMENT_HEADERS, "Retry-After": "1"},
         )
 

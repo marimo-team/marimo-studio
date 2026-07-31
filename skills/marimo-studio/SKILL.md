@@ -14,8 +14,8 @@ Keep the notebook as the source of calculations, reactive state, controls, and
 widgets. Put authored HTML, CSS, and static files under
 `__marimo__/studio/<notebook-stem>/<view>/`.
 
-Use the installed `marimo-studio` executable. Prefix commands with `uvx` when
-the executable is unavailable.
+Use the installed `marimo-studio` executable. In the package checkout, fall
+back to `uv run marimo-studio`. Elsewhere, use `uvx marimo-studio`.
 
 ## 1. Inspect the notebook
 
@@ -29,21 +29,28 @@ marimo-studio inspect analysis.py --display
 Identify native cell names, anonymous cell indexes, definitions, controls,
 anywidgets, and independent reactive branches.
 
-Request structured records after narrowing the inventory:
+Write structured records to a file so a large notebook does not fill the
+terminal:
 
 ```console
-marimo-studio inspect analysis.py --display --format json
+marimo-studio inspect analysis.py --display --format json \
+  > /tmp/marimo-studio-cells.json
 ```
 
 Execute the notebook when MIME types or kernel values affect the design:
 
 ```console
-marimo-studio inspect analysis.py --display --runtime --format json
+marimo-studio inspect analysis.py --display --runtime --format json \
+  > /tmp/marimo-studio-runtime.json
 ```
 
 Runtime inspection performs the notebook's file, network, database, and data
 access. Inspect `runtime.errors` before selecting a value for projection. Add
 `--include-code` after narrowing the inventory when cell source is required.
+Studio resolves the notebook's PEP 723 metadata together with its surrounding
+project when present. When a runtime probe fails, confirm the same notebook and
+branch in plain Marimo before changing a view. Repair incompatible Python or
+dependency constraints in the resolved notebook environment.
 
 ## 2. Create or select a view
 
@@ -134,6 +141,24 @@ Write one complete `index.html` with a single `#app-shell`:
 Place every cell and value host inside `#app-shell`. Mount each cell name once
 per view. `<marimo-cell>` uses Marimo's output plugins and model clients, so
 controls, tables, plots, downloads, and anywidgets stay attached to Python.
+
+Link configured sibling views with their relative view URLs:
+
+```html
+<nav aria-label="Audience">
+  <a href="./novice/">Novice</a>
+  <a href="./intermediate/">Intermediate</a>
+  <a href="./expert/">Expert</a>
+</nav>
+```
+
+Studio routes these links through its view switch so the preview keeps its
+kernel session and widget models.
+
+Keep scripts that wire shell elements inside `#app-shell`. A saved HTML change
+replaces that element while the Marimo runtime stays mounted. Initialize direct
+listeners idempotently, or delegate events from `document`. Use the
+`marimo-studio:idle` document event when setup must wait for projected outputs.
 
 Follow the product's design system. When none exists, use
 [Marimo's design guide](https://github.com/marimo-team/marimo/blob/main/DESIGN.md)
@@ -245,6 +270,9 @@ Open the printed Studio URL with a unique browser session. HTML and CSS changes
 refresh in the preview. View switching keeps the preview runtime, WebSocket,
 kernel state, and widget models mounted.
 
+Select the Preview layout before capturing the custom view. Use absolute paths
+for browser screenshots and other evidence files.
+
 Pass `--host`, `--port`, `--base-url`, and `--headless` before `--`. Trailing
 arguments go to `marimo edit`. The direct launcher prepares the notebook
 environment, so remove `--sandbox` and `--no-sandbox` from trailing arguments.
@@ -285,14 +313,16 @@ In a real browser:
 
 1. Wait for `window.marimoStudio.ready()` in the preview.
 2. Require `data-marimo-studio-state="ready"`.
-3. Exercise projected controls, anywidgets, HTMX fragments, and every view.
-4. Confirm each `mo-value` follows its kernel value.
-5. Edit HTML and CSS, then confirm the preview session ID stays unchanged.
-6. Temporarily break the template and confirm the last valid shell remains.
-7. Fix the template and confirm the Studio diagnostic clears.
-8. Check skeleton space, desktop and mobile layout, console errors, and failed
+3. Exercise authored controls once before the first source edit.
+4. Exercise projected controls, anywidgets, HTMX fragments, and every view.
+5. Confirm each `mo-value` follows its kernel value.
+6. Edit HTML and CSS, then confirm authored controls still work and the preview
+   session ID stays unchanged.
+7. Temporarily break the template and confirm the last valid shell remains.
+8. Fix the template and confirm the Studio diagnostic clears.
+9. Check skeleton space, desktop and mobile layout, console errors, and failed
    requests.
-9. Capture evidence and close the browser session.
+10. Capture evidence to absolute paths and close the browser session.
 
 ## 11. Deploy through Marimo
 

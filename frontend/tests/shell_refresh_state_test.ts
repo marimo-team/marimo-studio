@@ -4,6 +4,7 @@ import {
   BaselineReconciler,
   previewLoadState,
   RefreshRetrySchedule,
+  sameShellPresentation,
   ShellChangeQueue,
   ShellRefreshState,
 } from "../src/shell-refresh-state.ts";
@@ -27,6 +28,27 @@ Deno.test("preview loads distinguish startup waits from repair failures", () => 
     "ready",
   );
   assertEquals(previewLoadState({ hasRuntimeRoot: false }), "error");
+});
+
+Deno.test("unchanged presentation revisions preserve the current shell", () => {
+  const current = { ...dashboard, revision: "same" };
+
+  assertEquals(sameShellPresentation(current, { ...current }), true);
+  assertEquals(
+    sameShellPresentation(current, { ...current, revision: "changed" }),
+    false,
+  );
+  assertEquals(
+    sameShellPresentation(current, { ...current, documentUrl: "/other/" }),
+    false,
+  );
+  assertEquals(
+    sameShellPresentation(current, {
+      ...current,
+      supportUrl: "/_marimo-studio/views/other",
+    }),
+    false,
+  );
 });
 
 Deno.test("shell changes recover the exact failed view", () => {
