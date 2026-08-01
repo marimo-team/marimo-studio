@@ -1,5 +1,7 @@
 import { join } from "node:path";
 
+import { resolveOwnedDependency } from "./upstream-dependency.ts";
+
 interface BuildOptions {
   root: string;
   marimoRepo: string;
@@ -10,6 +12,16 @@ interface BuildOptions {
 export const createViteConfig = (options: BuildOptions) => {
   const frontend = join(options.marimoRepo, "frontend");
   const modules = join(frontend, "node_modules");
+  const htmlLanguage = resolveOwnedDependency(
+    frontend,
+    "@uiw/codemirror-extensions-langs",
+    "@codemirror/lang-html",
+  );
+  const cssLanguage = resolveOwnedDependency(
+    frontend,
+    "@uiw/codemirror-extensions-langs",
+    "@codemirror/lang-css",
+  );
   const bridge = join(
     options.root,
     "frontend",
@@ -79,6 +91,18 @@ export const createViteConfig = (options: BuildOptions) => {
         {
           find: "jotai",
           replacement: join(modules, "jotai"),
+        },
+        {
+          find: "@uiw/react-codemirror",
+          replacement: join(modules, "@uiw", "react-codemirror"),
+        },
+        {
+          find: "@codemirror/lang-html",
+          replacement: htmlLanguage,
+        },
+        {
+          find: "@codemirror/lang-css",
+          replacement: cssLanguage,
         },
       ],
     },

@@ -188,6 +188,17 @@ const build = async (): Promise<void> => {
     join(here, "src", "studio.css"),
     join(output, "studio.css"),
   );
+  const styleSource = join(here, "src", "studio", "styles");
+  const styleOutput = join(output, "studio", "styles");
+  await Deno.mkdir(styleOutput, { recursive: true });
+  for await (const entry of Deno.readDir(styleSource)) {
+    if (entry.isFile && entry.name.endsWith(".css")) {
+      await Deno.copyFile(
+        join(styleSource, entry.name),
+        join(styleOutput, entry.name),
+      );
+    }
+  }
   await Deno.writeTextFile(
     join(output, "build-meta.json"),
     JSON.stringify(

@@ -2,6 +2,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { marimoVersionFromUvLock, prepareMarimo } from "./build.ts";
+import { resolveOwnedDependency } from "./upstream-dependency.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -13,6 +14,16 @@ const typecheck = async (): Promise<void> => {
   const marimo = await prepareMarimo(version);
   const upstreamFrontend = join(marimo.path, "frontend");
   const modules = join(upstreamFrontend, "node_modules");
+  const htmlLanguage = resolveOwnedDependency(
+    upstreamFrontend,
+    "@uiw/codemirror-extensions-langs",
+    "@codemirror/lang-html",
+  );
+  const cssLanguage = resolveOwnedDependency(
+    upstreamFrontend,
+    "@uiw/codemirror-extensions-langs",
+    "@codemirror/lang-css",
+  );
   const htmx = fileURLToPath(import.meta.resolve("htmx.org")).replace(
     /\.js$/,
     ".d.ts",
@@ -29,6 +40,15 @@ const typecheck = async (): Promise<void> => {
       noEmit: true,
       paths: {
         "@codemirror/state": [join(modules, "@codemirror", "state")],
+        "@codemirror/view": [join(modules, "@codemirror", "view")],
+        "@codemirror/language": [join(modules, "@codemirror", "language")],
+        "@codemirror/autocomplete": [
+          join(modules, "@codemirror", "autocomplete"),
+        ],
+        "@codemirror/commands": [join(modules, "@codemirror", "commands")],
+        "@codemirror/search": [join(modules, "@codemirror", "search")],
+        "@codemirror/lang-html": [htmlLanguage],
+        "@codemirror/lang-css": [cssLanguage],
         "@/core/codemirror/rtc/extension": [
           join(
             here,
@@ -40,6 +60,9 @@ const typecheck = async (): Promise<void> => {
         "@/*": [join(upstreamFrontend, "src", "*")],
         "@marimo-team/frontend/unstable_internal/*": [
           join(upstreamFrontend, "src", "*"),
+        ],
+        "@uiw/react-codemirror": [
+          join(modules, "@uiw", "react-codemirror"),
         ],
         "htmx.org": [htmx],
         "jotai": [join(modules, "jotai")],
@@ -55,8 +78,10 @@ const typecheck = async (): Promise<void> => {
       join(upstreamFrontend, "node_modules", "vite", "client.d.ts"),
       join(upstreamFrontend, "src", "custom.d.ts"),
       join(here, "src", "main.ts"),
+      join(here, "src", "studio.ts"),
       join(here, "src", "marimo-adapter", "runtime.tsx"),
       join(here, "src", "marimo-adapter", "cell-views.tsx"),
+      join(here, "src", "marimo-adapter", "source-editor.tsx"),
       join(here, "src", "marimo-adapter", "server-only-bridge.ts"),
       join(here, "src", "marimo-adapter", "server-only-rtc.ts"),
     ],
