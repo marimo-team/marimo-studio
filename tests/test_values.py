@@ -11,10 +11,10 @@ import pytest
 import marimo_studio._compat.runtime_probe as runtime_probe_module
 from marimo_studio._compat.kernel_values import (
     ValueReadUnavailable,
-    _FunctionResultWaiter,
-    _read_values,
     read_session_values,
 )
+from marimo_studio._compat.kernel_values.selectors import _read_values
+from marimo_studio._compat.kernel_values.session import _FunctionResultWaiter
 from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.runtime_probe import probe_runtime
 from marimo_studio._compat.server import assert_supported_version

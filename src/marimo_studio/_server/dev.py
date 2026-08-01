@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import json
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
 from marimo_studio._workspace.metadata import notebook_config
@@ -81,16 +81,44 @@ def _event_kind(
     return "views"
 
 
+def _changed_files(
+    studio: StudioConfig,
+    changed: set[_WatchKey],
+    view_name: str | None,
+) -> list[dict[str, object]]:
+    if view_name is None:
+        return []
+    root = (studio.view_root / view_name).resolve()
+    files: list[dict[str, object]] = []
+    for kind, path in sorted(changed, key=lambda item: str(item[1])):
+        if kind != "view":
+            continue
+        try:
+            relative = path.resolve().relative_to(root)
+        except ValueError:
+            continue
+        try:
+            revision = f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+        except OSError:
+            revision = None
+        files.append({"path": relative.as_posix(), "revision": revision})
+    return files
+
+
 async def change_events(
     studio: StudioConfig,
     view_name: str | None = None,
+    stop_requested: Callable[[], bool] | None = None,
 ) -> AsyncIterator[bytes]:
-    """Yield change events until the requesting client disconnects."""
+    """Yield filesystem events until the client disconnects or shutdown begins."""
+    should_stop = stop_requested or (lambda: False)
     stamps = _file_stamps(studio)
     yield b"event: ready\ndata: {}\n\n"
     last_heartbeat = time.monotonic()
-    while True:
+    while not should_stop():
         await asyncio.sleep(0.25)
+        if should_stop():
+            return
         current = _file_stamps(studio)
         changed = {
             path for path, stamp in current.items() if stamps.get(path) != stamp
@@ -104,7 +132,11 @@ async def change_events(
             continue
         last_heartbeat = time.monotonic()
         payload = json.dumps(
-            {"kind": _event_kind(studio, changed, view_name)},
+            {
+                "schema": 1,
+                "kind": _event_kind(studio, changed, view_name),
+                "files": _changed_files(studio, changed, view_name),
+            },
             separators=(",", ":"),
         )
         yield f"event: change\ndata: {payload}\n\n".encode()

@@ -8,12 +8,12 @@ import marimo
 import pytest
 
 import marimo_studio._workspace.checks as checks_module
-import marimo_studio._workspace.setup as workspace_setup
+import marimo_studio._workspace.transactions as workspace_transactions
 from marimo_studio._compat.kernel_values import (
     ValueReadError,
     ValueReadResult,
-    _template_selectors,
 )
+from marimo_studio._compat.kernel_values.selectors import _template_selectors
 from marimo_studio._compat.runtime_probe import RuntimeCell, RuntimeProbe
 from marimo_studio._workspace import (
     bind_cell,
@@ -29,18 +29,16 @@ from marimo_studio._workspace.metadata import (
     update_notebook_config,
 )
 from marimo_studio._workspace.models import StudioConfig
+from marimo_studio._workspace.views import delete_view
 from marimo_studio.errors import ConfigurationError, NotebookSourceError
 
-from .helpers import empty_notebook_source
+from .helpers import empty_notebook_source, replace_app_shell
 
 
 def _shell(studio: StudioConfig, view_name: str, content: str) -> None:
     template = studio.views[view_name].template
     template.write_text(
-        template.read_text(encoding="utf-8").replace(
-            '<main id="app-shell"></main>',
-            f'<main id="app-shell">{content}</main>',
-        ),
+        replace_app_shell(template.read_text(encoding="utf-8"), content),
         encoding="utf-8",
     )
 
@@ -63,6 +61,45 @@ def test_first_view_configures_the_notebook_in_place(notebook_path: Path) -> Non
     assert document["tool"]["marimo-studio"]["default"] == "dashboard"
     assert "marimo-studio" in document["dependencies"]
     assert notebook_path.read_text(encoding="utf-8").endswith(original)
+
+
+def test_new_view_projects_every_cell_in_notebook_order(
+    notebook_path: Path,
+) -> None:
+    result = ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+    template = result.root.joinpath("index.html").read_text(encoding="utf-8")
+    document = read_notebook_metadata(notebook_path)
+
+    assert template.index('name="cell-1"') < template.index('name="cell-2"')
+    assert "<h1>Dashboard</h1>" in template
+    assert document is not None
+    assert list(document["tool"]["marimo-studio"]["cells"]) == [
+        "cell-1",
+        "cell-2",
+    ]
+    assert resolve_studio(studio).view().cell_aliases == ("cell-1", "cell-2")
+
+
+def test_new_view_uses_native_cell_names_and_binds_anonymous_cells(
+    notebook_path: Path,
+) -> None:
+    notebook_path.write_text(
+        notebook_path.read_text(encoding="utf-8").replace(
+            "@app.cell\ndef _():",
+            "@app.cell\ndef setup():",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    result = ensure_view(notebook_path)
+    template = result.root.joinpath("index.html").read_text(encoding="utf-8")
+    document = read_notebook_metadata(notebook_path)
+
+    assert template.index('name="setup"') < template.index('name="cell-2"')
+    assert document is not None
+    assert list(document["tool"]["marimo-studio"]["cells"]) == ["cell-2"]
 
 
 def test_first_view_accepts_a_new_empty_notebook(tmp_path: Path) -> None:
@@ -177,7 +214,7 @@ def test_setup_rolls_back_notebook_and_view_files_after_write_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     original = notebook_path.read_bytes()
-    write = workspace_setup.atomic_write_text
+    write = workspace_transactions.atomic_write_text
     calls = 0
 
     def fail_second_write(path: Path, content: str) -> None:
@@ -187,7 +224,11 @@ def test_setup_rolls_back_notebook_and_view_files_after_write_failure(
         if calls == 2:
             raise OSError("simulated write failure")
 
-    monkeypatch.setattr(workspace_setup, "atomic_write_text", fail_second_write)
+    monkeypatch.setattr(
+        workspace_transactions,
+        "atomic_write_text",
+        fail_second_write,
+    )
 
     with pytest.raises(OSError, match="simulated write failure"):
         ensure_view(notebook_path)
@@ -332,8 +373,54 @@ default = "executive"
     assert studio.config_path == pyproject
     assert studio.default_view == "executive"
     assert set(studio.views) == {"executive"}
+    assert set(studio.cells) == {"cell-1", "cell-2"}
+    assert resolve_studio(studio).view().cell_aliases == ("cell-1", "cell-2")
     assert studio.view_root == notebook_dir / "__marimo__" / "studio" / notebook.stem
     assert notebook.read_bytes() == original
+
+
+def test_project_configuration_tracks_a_removed_default_view(
+    notebook_path: Path,
+) -> None:
+    project_root = notebook_path.parent
+    pyproject = project_root / "pyproject.toml"
+    pyproject.write_text(
+        f"""\
+[tool.marimo-studio]
+notebook = "{notebook_path.name}"
+default = "dashboard"
+""",
+        encoding="utf-8",
+    )
+    ensure_view(notebook_path)
+    ensure_view(notebook_path, "executive")
+
+    delete_view(load_studio(pyproject), "dashboard")
+
+    updated = load_studio(pyproject)
+    assert updated.default_view == "executive"
+    assert list(updated.views) == ["executive"]
+
+
+def test_view_deletion_rejects_a_symlinked_view_directory(
+    notebook_path: Path,
+) -> None:
+    ensure_view(notebook_path)
+    ensure_view(notebook_path, "executive")
+    studio = load_studio(notebook_path)
+    external = notebook_path.parent / "external-view"
+    external.mkdir()
+    (external / "index.html").write_text("external", encoding="utf-8")
+    target = studio.view_root / "executive"
+    for path in target.iterdir():
+        path.unlink()
+    target.rmdir()
+    target.symlink_to(external, target_is_directory=True)
+
+    with pytest.raises(ConfigurationError, match="symlink"):
+        delete_view(studio, "executive")
+
+    assert (external / "index.html").read_text(encoding="utf-8") == "external"
 
 
 def test_notebooks_with_the_same_parent_have_independent_presentations(

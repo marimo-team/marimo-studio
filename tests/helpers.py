@@ -1,8 +1,27 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import marimo
+
+
+def replace_app_shell(document: str, content: str) -> str:
+    """Replace the authored contents of the single application shell."""
+    opening = re.search(
+        r'<main\b[^>]*\bid=["\']app-shell["\'][^>]*>',
+        document,
+    )
+    if opening is None:
+        raise AssertionError("Document has no #app-shell main element")
+    closing = document.find("</main>", opening.end())
+    if closing < 0:
+        raise AssertionError("Document has no closing #app-shell tag")
+    return (
+        document[: opening.start()]
+        + f'<main id="app-shell">{content}</main>'
+        + document[closing + len("</main>") :]
+    )
 
 
 def empty_notebook_source() -> str:

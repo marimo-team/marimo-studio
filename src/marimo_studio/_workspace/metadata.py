@@ -18,6 +18,7 @@ from marimo_studio._workspace.python_requirement import (
     intersect_python_requirements,
 )
 from marimo_studio.errors import ConfigurationError, DependencyError
+from marimo_studio.types import CellRef
 
 SCRIPT_START = "# /// script"
 SCRIPT_END = "# ///"
@@ -178,7 +179,25 @@ def _package_python_requirement() -> str:
     return requirement
 
 
-def configured_notebook_source(path: Path, default_view: str) -> str:
+def set_cell_bindings(
+    config: MutableMapping[str, Any],
+    bindings: Mapping[str, CellRef],
+) -> None:
+    """Set cell aliases in a mutable Studio configuration."""
+    cells = config.setdefault("cells", tomlkit.table())
+    if not isinstance(cells, MutableMapping):
+        raise ConfigurationError("cells must be a TOML table")
+    for alias, ref in bindings.items():
+        value = tomlkit.inline_table()
+        value["ref"] = str(ref)
+        cells[alias] = value
+
+
+def configured_notebook_source(
+    path: Path,
+    default_view: str,
+    cell_bindings: Mapping[str, CellRef] | None = None,
+) -> str:
     """Return notebook source with the package dependency and view configuration."""
     source = read_text(path)
     document = _document(source, path) or tomlkit.document()
@@ -212,6 +231,7 @@ def configured_notebook_source(path: Path, default_view: str) -> str:
     else:
         config.setdefault("default", default_view)
         config.setdefault("cells", tomlkit.table())
+    set_cell_bindings(config, cell_bindings or {})
     return _replace_metadata(source, path, document)
 
 

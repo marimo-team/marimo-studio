@@ -260,3 +260,34 @@ def test_execute_launch_opens_the_studio_and_forwards_process_streams(
     assert options["check"] is False
     assert options["stdout"] is sys.stderr
     assert options["stderr"] is sys.stderr
+
+
+def test_execute_launch_leaves_interrupt_shutdown_to_marimo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    waits = 0
+
+    class Process:
+        def wait(self) -> int:
+            nonlocal waits
+            waits += 1
+            if waits == 1:
+                raise KeyboardInterrupt
+            return 0
+
+    monkeypatch.setattr(
+        launch_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: Process(),
+    )
+    plan = LaunchPlan(
+        studio_url="http://127.0.0.1:8000/studio/dashboard/",
+        view_url="http://127.0.0.1:8000/dashboard/",
+        command=("marimo", "edit", "analysis.py"),
+        working_directory=tmp_path,
+        open_browser=False,
+    )
+
+    assert execute_launch(plan) == 0
+    assert waits == 2

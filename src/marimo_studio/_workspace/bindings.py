@@ -9,13 +9,12 @@ from typing import Any
 import tomlkit
 
 from marimo_studio._cell_refs import cell_ref_candidates
-from marimo_studio._workspace.config import (
-    TemplateParser,
-    editable_studio_config,
-    validate_template_structure,
-)
+from marimo_studio._workspace.config import editable_studio_config
 from marimo_studio._workspace.files import atomic_write_text, reject_mutable_symlinks
-from marimo_studio._workspace.metadata import update_notebook_config
+from marimo_studio._workspace.metadata import (
+    set_cell_bindings,
+    update_notebook_config,
+)
 from marimo_studio._workspace.models import (
     ALIAS_PATTERN,
     BindingResult,
@@ -25,6 +24,10 @@ from marimo_studio._workspace.models import (
     ResolvedView,
     StudioConfig,
     View,
+)
+from marimo_studio._workspace.templates import (
+    TemplateParser,
+    validate_template_structure,
 )
 from marimo_studio.errors import BindingError, ConfigurationError, TemplateError
 from marimo_studio.inspect import inspect_notebook
@@ -288,12 +291,6 @@ def resolve_studio(
     return ResolvedStudio(studio, notebook, aliases, resolved_views)
 
 
-def binding_value(cell: CellSpec) -> Any:
-    value = tomlkit.inline_table()
-    value["ref"] = str(cell.ref)
-    return value
-
-
 def bind_cell(
     studio: StudioConfig,
     alias: str,
@@ -328,19 +325,13 @@ def bind_cell(
         reject_mutable_symlinks(studio.notebook.parent, {studio.notebook})
 
         def update(config: MutableMapping[str, Any]) -> None:
-            cells = config.setdefault("cells", tomlkit.table())
-            if not isinstance(cells, MutableMapping):
-                raise ConfigurationError("cells must be a TOML table")
-            cells[alias] = binding_value(cell)
+            set_cell_bindings(config, {alias: cell.ref})
 
         update_notebook_config(studio.notebook, update)
     else:
         reject_mutable_symlinks(studio.root, {studio.config_path})
         document = tomlkit.parse(studio.config_path.read_text(encoding="utf-8"))
         config = editable_studio_config(document)
-        cells = config.setdefault("cells", tomlkit.table())
-        if not isinstance(cells, MutableMapping):
-            raise ConfigurationError("cells must be a TOML table")
-        cells[alias] = binding_value(cell)
+        set_cell_bindings(config, {alias: cell.ref})
         atomic_write_text(studio.config_path, tomlkit.dumps(document))
     return result

@@ -2,104 +2,35 @@
 
 from __future__ import annotations
 
-from contextlib import suppress
-from html import escape
+from collections.abc import Mapping
 from pathlib import Path
 
-from marimo_studio._compat.notebook import load_static_notebook
+import tomlkit
+
 from marimo_studio._workspace.config import (
     canonical_view_root,
     discover_studio_definition,
+    editable_studio_config,
     load_studio,
     validate_view_name,
 )
-from marimo_studio._workspace.files import (
-    atomic_write_text,
-    read_text,
-    reject_mutable_symlinks,
-)
+from marimo_studio._workspace.files import read_text
 from marimo_studio._workspace.metadata import (
     configured_notebook_source,
-    notebook_config,
+    set_cell_bindings,
 )
 from marimo_studio._workspace.models import ViewSetupResult
+from marimo_studio._workspace.scaffold import starter_aliases, starter_view_files
+from marimo_studio._workspace.transactions import write_text_transaction
 from marimo_studio.errors import ConfigurationError
+from marimo_studio.inspect import inspect_notebook
+from marimo_studio.types import CellRef
 
 
-def _blank_template(name: str, title_text: str) -> str:
-    title = escape(title_text)
-    return f"""\
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{title}</title>
-    <link rel="stylesheet" href="./_marimo-studio/views/{name}/static/app.css">
-  </head>
-  <body>
-    <main id="app-shell"></main>
-  </body>
-</html>
-"""
-
-
-_BLANK_CSS = """\
-:root {
-  color-scheme: light dark;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-}
-"""
-
-
-def _view_files(view_root: Path, name: str, title_text: str) -> dict[Path, str]:
-    root = view_root / name
-    return {
-        root / "index.html": _blank_template(name, title_text),
-        root / "app.css": _BLANK_CSS,
-    }
-
-
-def _write_transaction(root: Path, writes: dict[Path, str]) -> None:
-    reject_mutable_symlinks(root, set(writes))
-    snapshots = {path: read_text(path) if path.is_file() else None for path in writes}
-    created_directories: set[Path] = set()
-    for path in writes:
-        current = path.parent
-        while current != root and not current.exists():
-            created_directories.add(current)
-            parent = current.parent
-            if parent == current:
-                raise ConfigurationError(
-                    f"Mutable view path is outside the notebook directory: {path}"
-                )
-            current = parent
-    try:
-        for path, content in writes.items():
-            path.parent.mkdir(parents=True, exist_ok=True)
-            atomic_write_text(path, content)
-    except Exception:
-        for path, content in snapshots.items():
-            if content is None:
-                path.unlink(missing_ok=True)
-            else:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                atomic_write_text(path, content)
-        for directory in sorted(
-            created_directories,
-            key=lambda path: len(path.parts),
-            reverse=True,
-        ):
-            with suppress(OSError):
-                directory.rmdir()
-        raise
+def _updated_project_config(path: Path, bindings: Mapping[str, CellRef]) -> str:
+    document = tomlkit.parse(read_text(path))
+    set_cell_bindings(editable_studio_config(document), bindings)
+    return tomlkit.dumps(document)
 
 
 def ensure_view(
@@ -114,36 +45,49 @@ def ensure_view(
         raise ConfigurationError(f"Notebook does not exist: {notebook_path}")
     if notebook_path.suffix != ".py":
         raise ConfigurationError(f"Expected a Python Marimo notebook: {notebook_path}")
-    load_static_notebook(notebook_path)
-
-    inline = notebook_config(notebook_path)
-    studio = None if inline is not None else discover_studio_definition(notebook_path)
-    configured_default = inline.get("default") if inline is not None else None
-    if configured_default is not None and not isinstance(configured_default, str):
-        raise ConfigurationError("default must name a view")
-    selected = (
-        name
-        or configured_default
-        or (studio.default_view if studio is not None else "dashboard")
-    )
+    notebook_spec = inspect_notebook(notebook_path)
+    studio = discover_studio_definition(notebook_path)
+    selected = name or (studio.default_view if studio is not None else "dashboard")
     validate_view_name(selected)
+    default_view = studio.default_view if studio is not None else selected
+    view_root = canonical_view_root(notebook_path)
+    view_names = tuple(dict.fromkeys((default_view, selected)))
+    new_templates = tuple(
+        view_name
+        for view_name in view_names
+        if not (view_root / view_name / "index.html").is_file()
+    )
+    aliases, bindings = starter_aliases(
+        notebook_spec.cells,
+        studio.cells if studio is not None else {},
+    )
+    new_bindings = bindings if new_templates else {}
+
     writes: dict[Path, str] = {}
-    if studio is None:
-        configured = configured_notebook_source(notebook_path, selected)
+    if studio is None or studio.uses_notebook_config:
+        configured = configured_notebook_source(
+            notebook_path,
+            default_view,
+            new_bindings,
+        )
         if configured != read_text(notebook_path):
             writes[notebook_path] = configured
         config_path = notebook_path
-        default_view = configured_default or selected
+        transaction_root = notebook_path.parent
     else:
         config_path = studio.config_path
-        default_view = studio.default_view
+        transaction_root = studio.root
+        if new_bindings:
+            configured = _updated_project_config(config_path, new_bindings)
+            if configured != read_text(config_path):
+                writes[config_path] = configured
 
-    view_root = canonical_view_root(notebook_path)
-    for view_name in dict.fromkeys((default_view, selected)):
-        for path, content in _view_files(
+    for view_name in view_names:
+        for path, content in starter_view_files(
             view_root,
             view_name,
-            f"{notebook_path.stem} · {view_name}",
+            notebook_path.stem,
+            aliases,
         ).items():
             if not path.exists():
                 writes[path] = content
@@ -151,7 +95,7 @@ def ensure_view(
     created = tuple(sorted(path for path in writes if not path.exists()))
     updated = tuple(sorted(path for path in writes if path.exists()))
     if not dry_run and writes:
-        _write_transaction(notebook_path.parent, writes)
+        write_text_transaction(transaction_root, writes)
     loaded = load_studio(notebook_path) if not dry_run else None
     return ViewSetupResult(
         studio=loaded,

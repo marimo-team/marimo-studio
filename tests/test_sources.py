@@ -1,0 +1,89 @@
+from pathlib import Path
+
+import pytest
+
+from marimo_studio._workspace import ensure_view, load_studio
+from marimo_studio._workspace.sources import read_source, write_source
+from marimo_studio.errors import (
+    ConfigurationError,
+    SourceConflictError,
+    SourceEncodingError,
+    SourceNotFoundError,
+)
+
+from .helpers import replace_app_shell
+
+
+def test_source_write_preserves_exact_text_and_requires_the_loaded_revision(
+    notebook_path: Path,
+) -> None:
+    ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+    loaded = read_source(studio, "dashboard", "index.html")
+    replacement = replace_app_shell(
+        loaded.content,
+        "\r\n  <h1>Report</h1>\r\n",
+    )
+
+    saved = write_source(
+        studio,
+        "dashboard",
+        "index.html",
+        replacement,
+        loaded.revision,
+    )
+
+    assert saved.content == replacement
+    assert studio.views["dashboard"].template.read_bytes() == replacement.encode()
+    with pytest.raises(SourceConflictError) as conflict:
+        write_source(
+            studio,
+            "dashboard",
+            "index.html",
+            "stale browser edit",
+            loaded.revision,
+        )
+    assert conflict.value.revision == saved.revision
+
+
+def test_source_files_are_limited_to_the_authored_html_and_css(
+    notebook_path: Path,
+) -> None:
+    ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+
+    with pytest.raises(SourceNotFoundError):
+        read_source(studio, "dashboard", "../analysis.py")
+
+
+def test_source_write_rejects_a_view_file_replaced_by_a_symlink(
+    notebook_path: Path,
+    tmp_path: Path,
+) -> None:
+    ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+    stylesheet = studio.views["dashboard"].root / "app.css"
+    external = tmp_path / "external.css"
+    external.write_text("body { color: red; }", encoding="utf-8")
+    stylesheet.unlink()
+    stylesheet.symlink_to(external)
+
+    with pytest.raises(ConfigurationError, match="symlink"):
+        write_source(
+            studio,
+            "dashboard",
+            "app.css",
+            "body { color: blue; }",
+            "sha256:untrusted",
+        )
+
+    assert external.read_text(encoding="utf-8") == "body { color: red; }"
+
+
+def test_source_read_reports_invalid_utf8(notebook_path: Path) -> None:
+    ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+    (studio.views["dashboard"].root / "app.css").write_bytes(b"body {\xff}")
+
+    with pytest.raises(SourceEncodingError, match="must be UTF-8 text"):
+        read_source(studio, "dashboard", "app.css")

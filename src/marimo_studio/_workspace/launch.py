@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlencode
 
-from marimo_studio._server.routes import studio_url, view_url
+from marimo_studio._urls import studio_url, view_url
 from marimo_studio._workspace.environment import environment_command
 from marimo_studio._workspace.setup import ensure_view
 
@@ -294,11 +294,25 @@ def execute_launch(
     """Open the selected Studio URL and run the planned Marimo process."""
     if plan.open_browser:
         (open_url or _open_later)(plan.studio_url)
-    runner = run_process or subprocess.run
-    return runner(
+    if run_process is not None:
+        return run_process(
+            list(plan.command),
+            cwd=plan.working_directory,
+            check=False,
+            stdout=sys.stderr,
+            stderr=sys.stderr,
+        ).returncode
+
+    process = subprocess.Popen(
         list(plan.command),
         cwd=plan.working_directory,
-        check=False,
         stdout=sys.stderr,
         stderr=sys.stderr,
-    ).returncode
+    )
+    while True:
+        try:
+            return process.wait()
+        except KeyboardInterrupt:
+            # Marimo receives the same terminal interrupt and owns its
+            # confirmation and shutdown lifecycle. Keep Studio waiting for it.
+            continue

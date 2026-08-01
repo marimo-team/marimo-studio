@@ -1,4 +1,4 @@
-"""Build public and support URLs beneath Marimo's base URL."""
+"""Build Studio URLs beneath Marimo's public base path."""
 
 STUDIO_PATH = "/studio"
 SUPPORT_PATH = "/_marimo-studio"

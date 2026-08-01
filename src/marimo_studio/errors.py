@@ -106,3 +106,63 @@ class RuntimeSyncError(MarimoStudioError):
     code = "runtime-sync-pending"
     status_code = 409
     transient = True
+
+
+class SourceNotFoundError(MarimoStudioError):
+    """A requested authored view file is unavailable."""
+
+    code = "source-not-found"
+    status_code = 404
+
+
+class SourceEncodingError(MarimoStudioError):
+    """An authored view file is not valid UTF-8 text."""
+
+    code = "invalid-source-encoding"
+    status_code = 400
+
+
+class SourceConflictError(MarimoStudioError):
+    """An authored view file changed after the browser loaded it."""
+
+    code = "source-conflict"
+    status_code = 412
+
+    def __init__(self, name: str, revision: str) -> None:
+        super().__init__(f"{name} changed on disk.")
+        self.revision = revision
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {"revision": self.revision}
+
+
+class ViewNotFoundError(MarimoStudioError):
+    """A requested Studio view does not exist."""
+
+    code = "view-not-found"
+    status_code = 404
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"View {name!r} does not exist.")
+
+
+class LastViewError(MarimoStudioError):
+    """A notebook must retain one Studio view."""
+
+    code = "last-view"
+    status_code = 409
+
+    def __init__(self) -> None:
+        super().__init__("Keep at least one view.")
+
+
+class ViewDeletionError(MarimoStudioError):
+    """A removed view's authored files could not be fully deleted."""
+
+    code = "view-deletion-error"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "The view was removed from Studio, but its files could not be "
+            "fully deleted."
+        )

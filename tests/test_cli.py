@@ -16,6 +16,8 @@ from marimo_studio._cli import cli, main
 from marimo_studio._cli.diagnostics import DiagnosticStream
 from marimo_studio._workspace import ensure_view, load_studio
 
+from .helpers import replace_app_shell
+
 
 def _run_cli(
     runtime_assets: Path,
@@ -342,9 +344,9 @@ def test_failed_check_reports_exit_status_and_error_diagnostic(
     setup = ensure_view(notebook_path)
     template = setup.root / "index.html"
     template.write_text(
-        template.read_text(encoding="utf-8").replace(
-            '<main id="app-shell"></main>',
-            '<main id="app-shell"><marimo-cell name="missing"></marimo-cell></main>',
+        replace_app_shell(
+            template.read_text(encoding="utf-8"),
+            '<marimo-cell name="missing"></marimo-cell>',
         ),
         encoding="utf-8",
     )
@@ -409,9 +411,8 @@ def test_check_preserves_repair_diagnostics(
     else:
         template = setup.root / "index.html"
         template.write_text(
-            template.read_text(encoding="utf-8").replace(
-                '<main id="app-shell"></main>',
-                "<main></main>",
+            replace_app_shell(template.read_text(encoding="utf-8"), "").replace(
+                '<main id="app-shell"></main>', "<main></main>"
             ),
             encoding="utf-8",
         )
@@ -485,9 +486,9 @@ def test_direct_launch_opens_the_native_editor_and_studio_view(
     )
     monkeypatch.setattr(
         launch_module.subprocess,
-        "run",
-        lambda command, **kwargs: (
-            calls.append((command, kwargs.get("cwd"))) or SimpleNamespace(returncode=0)
+        "Popen",
+        lambda command, **kwargs: SimpleNamespace(
+            wait=lambda: calls.append((command, kwargs.get("cwd"))) or 0
         ),
     )
 
@@ -551,9 +552,9 @@ def test_bare_launch_discovers_the_configured_notebook(
     )
     monkeypatch.setattr(
         launch_module.subprocess,
-        "run",
-        lambda command, **_kwargs: (
-            calls.append(command) or SimpleNamespace(returncode=0)
+        "Popen",
+        lambda command, **_kwargs: SimpleNamespace(
+            wait=lambda: calls.append(command) or 0
         ),
     )
 

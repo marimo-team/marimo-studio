@@ -12,16 +12,16 @@ from htpy import base
 
 from marimo_studio._compat.server import ServerContext, live_cells
 from marimo_studio._html import render, runtime_head, runtime_metadata, runtime_root
-from marimo_studio._server.routes import SUPPORT_PATH, public_url
+from marimo_studio._urls import SUPPORT_PATH, public_url
 from marimo_studio._workspace import discover_studio, resolve_studio
-from marimo_studio._workspace.config import (
-    TemplateParser,
-    validate_template_structure,
-)
 from marimo_studio._workspace.models import (
     ProjectionDiagnostic,
     ResolvedStudio,
     StudioConfig,
+)
+from marimo_studio._workspace.templates import (
+    TemplateParser,
+    validate_template_structure,
 )
 from marimo_studio.errors import (
     ConfigurationError,

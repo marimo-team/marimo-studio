@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from collections.abc import MutableMapping
 from importlib.metadata import entry_points
@@ -11,15 +12,16 @@ from unittest.mock import Mock
 from urllib.parse import parse_qs, urlsplit
 
 import marimo
+import pytest
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.routing import Mount
 from starlette.testclient import TestClient
 
 from marimo_studio import create_asgi_app
-from marimo_studio._compat import server as server_compat
 from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.server import programmatic_middleware
+from marimo_studio._compat.server import replay as replay_compat
 from marimo_studio._server import dev
 from marimo_studio._workspace import (
     bind_cell,
@@ -29,16 +31,13 @@ from marimo_studio._workspace import (
 from marimo_studio._workspace.metadata import update_notebook_config
 from marimo_studio._workspace.models import StudioConfig
 
-from .helpers import empty_notebook_source, notebook_source
+from .helpers import empty_notebook_source, notebook_source, replace_app_shell
 
 
 def _set_shell(studio: StudioConfig, view_name: str, content: str) -> None:
     template = studio.views[view_name].template
     template.write_text(
-        template.read_text(encoding="utf-8").replace(
-            '<main id="app-shell"></main>',
-            f'<main id="app-shell">{content}</main>',
-        ),
+        replace_app_shell(template.read_text(encoding="utf-8"), content),
         encoding="utf-8",
     )
 
@@ -64,9 +63,14 @@ def _marimo_app(
     path: str = "/",
     token: str = "",
     programmatic: bool = False,
+    skew_protection: bool = False,
 ) -> Any:
     return (
-        marimo.create_asgi_app(quiet=True, token=token)
+        marimo.create_asgi_app(
+            quiet=True,
+            token=token,
+            skew_protection=skew_protection,
+        )
         .with_app(
             path=path,
             root=str(notebook),
@@ -128,7 +132,7 @@ def test_run_mode_serves_default_and_named_view_documents(
     assert health.status_code == 200
 
 
-def test_empty_notebook_serves_a_ready_blank_presentation(tmp_path: Path) -> None:
+def test_empty_notebook_serves_a_ready_starter_view(tmp_path: Path) -> None:
     notebook = tmp_path / "analysis.py"
     notebook.write_text(empty_notebook_source(), encoding="utf-8")
     ensure_view(notebook)
@@ -138,7 +142,9 @@ def test_empty_notebook_serves_a_ready_blank_presentation(tmp_path: Path) -> Non
         config = client.get("/_marimo-studio/views/dashboard/config")
 
     assert page.status_code == 200
-    assert '<main id="app-shell"></main>' in page.text
+    assert '<main id="app-shell" class="studio-view">' in page.text
+    assert "<h1>Dashboard</h1>" in page.text
+    assert "<marimo-cell" not in page.text
     assert config.status_code == 200
     assert config.json()["cellBindings"] == {}
     assert config.json()["valueBindings"] == {}
@@ -796,13 +802,40 @@ def test_change_stream_classifies_live_source_edits(
 
     messages = asyncio.run(collect_events())
 
-    assert messages == (
-        b"event: ready\ndata: {}\n\n",
-        b'event: change\ndata: {"kind":"html"}\n\n',
-        b'event: change\ndata: {"kind":"css"}\n\n',
-        b'event: change\ndata: {"kind":"runtime"}\n\n',
-        b'event: change\ndata: {"kind":"views"}\n\n',
-    )
+    assert messages[0] == b"event: ready\ndata: {}\n\n"
+    payloads = [json.loads(message.split(b"data: ", 1)[1]) for message in messages[1:]]
+    assert [payload["kind"] for payload in payloads] == [
+        "html",
+        "css",
+        "runtime",
+        "views",
+    ]
+    assert payloads[0]["files"][0]["path"] == "index.html"
+    assert payloads[0]["files"][0]["revision"].startswith("sha256:")
+    assert payloads[1]["files"][0]["path"] == "app.css"
+    assert payloads[2]["files"] == []
+    assert payloads[3]["files"] == []
+
+
+def test_change_stream_closes_when_the_server_starts_shutting_down(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    stopping = False
+
+    async def consume() -> None:
+        nonlocal stopping
+        stream = dev.change_events(
+            studio,
+            "dashboard",
+            stop_requested=lambda: stopping,
+        )
+        assert await anext(stream) == b"event: ready\ndata: {}\n\n"
+        stopping = True
+        with pytest.raises(StopAsyncIteration):
+            await asyncio.wait_for(anext(stream), timeout=0.5)
+
+    asyncio.run(consume())
 
 
 def test_document_replay_requires_an_opted_in_manager_and_query() -> None:
@@ -815,29 +848,29 @@ def test_document_replay_requires_an_opted_in_manager_and_query() -> None:
     handler = SimpleNamespace(_reconnect_session=Mock())
     reconnect = Mock(return_value=("fallback", "new"))
 
-    server_compat._DOCUMENT_REPLAY_MANAGERS.add(manager)
+    replay_compat._DOCUMENT_REPLAY_MANAGERS.add(manager)
 
     def connector(active_manager: Manager, requested: bool) -> SimpleNamespace:
-        query = {server_compat.DOCUMENT_REPLAY_QUERY_PARAM: "1"} if requested else {}
+        query = {replay_compat.DOCUMENT_REPLAY_QUERY_PARAM: "1"} if requested else {}
         return SimpleNamespace(
             manager=active_manager,
             connection=SimpleNamespace(query_params=query),
             handler=handler,
         )
 
-    replayed = server_compat._reconnect_with_document_replay(
+    replayed = replay_compat._reconnect_with_document_replay(
         connector(manager, True),
         session,
         reconnect,
         "reconnect",
     )
-    unmarked = server_compat._reconnect_with_document_replay(
+    unmarked = replay_compat._reconnect_with_document_replay(
         connector(manager, False),
         session,
         reconnect,
         "reconnect",
     )
-    unregistered = server_compat._reconnect_with_document_replay(
+    unregistered = replay_compat._reconnect_with_document_replay(
         connector(other_manager, True),
         session,
         reconnect,
@@ -865,7 +898,7 @@ def test_document_replay_follows_the_verified_presentation(
 
     with TestClient(app) as client:
         assert client.get("/").status_code == 200
-        assert manager in server_compat._DOCUMENT_REPLAY_MANAGERS
+        assert manager in replay_compat._DOCUMENT_REPLAY_MANAGERS
 
         def reset(config: MutableMapping[str, object]) -> None:
             config["preserve_session"] = False
@@ -873,7 +906,7 @@ def test_document_replay_follows_the_verified_presentation(
         update_notebook_config(studio.notebook, reset)
         assert client.get("/").status_code == 200
 
-    assert manager not in server_compat._DOCUMENT_REPLAY_MANAGERS
+    assert manager not in replay_compat._DOCUMENT_REPLAY_MANAGERS
 
 
 def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
@@ -983,14 +1016,19 @@ def test_edit_mode_keeps_the_editor_at_root_and_adds_studio(
     assert editor.status_code == 200
     assert "data-marimo-studio-runtime" not in editor.text
     assert default_workspace.status_code == 200
-    assert '<option value="dashboard" selected>' in default_workspace.text
+    assert "data-view-trigger-label>dashboard</span>" in default_workspace.text
     assert workspace_redirect.status_code == 307
     assert workspace_redirect.headers["location"] == (
         "/studio/executive/?layout=preview"
     )
     assert workspace.status_code == 200
-    assert "data-view-select" in workspace.text
-    assert '<option value="executive" selected>' in workspace.text
+    assert "data-view-trigger-label>executive</span>" in workspace.text
+    assert 'data-source-editor="index.html"' in workspace.text
+    assert 'data-source-editor="app.css"' in workspace.text
+    assert '<input id="studio-view-name"' in workspace.text
+    assert 'data-surface="notebook"' in workspace.text
+    assert 'data-surface="source"' in workspace.text
+    assert 'data-surface="preview"' in workspace.text
     assert 'data-editor-frame src="/"' in workspace.text
     assert 'data-preview-frame src="about:blank"' in workspace.text
     assert 'href="/executive/"' in workspace.text
@@ -1022,6 +1060,229 @@ def test_view_list_tracks_new_folders_without_restarting_marimo(
     assert before["views"] == ["dashboard", "executive"]
     assert after["views"] == ["dashboard", "executive", "operations"]
     assert page.status_code == 200
+
+
+def test_edit_workspace_creates_views_and_conditionally_updates_source(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    mutation_headers = {
+        "Marimo-Server-Token": str(_session_manager(app).skew_protection_token)
+    }
+
+    with TestClient(app) as client:
+        loaded = client.get("/_marimo-studio/views/dashboard/source/index.html")
+        replacement = loaded.text.replace(
+            '<main id="app-shell">',
+            '<main id="app-shell"><h1>Updated in Studio</h1>',
+        )
+        saved = client.put(
+            "/_marimo-studio/views/dashboard/source/index.html",
+            content=replacement,
+            headers={"If-Match": loaded.headers["etag"], **mutation_headers},
+        )
+        stale = client.put(
+            "/_marimo-studio/views/dashboard/source/index.html",
+            content="stale",
+            headers={"If-Match": loaded.headers["etag"], **mutation_headers},
+        )
+        created = client.post(
+            "/_marimo-studio/views",
+            json={"name": "operations"},
+            headers=mutation_headers,
+        )
+        duplicate = client.post(
+            "/_marimo-studio/views",
+            json={"name": "operations"},
+            headers=mutation_headers,
+        )
+        invalid = client.post(
+            "/_marimo-studio/views",
+            json={"name": "Operations Report"},
+            headers=mutation_headers,
+        )
+
+    assert loaded.status_code == 200
+    assert loaded.headers["content-type"].startswith("text/plain")
+    assert loaded.headers["etag"].startswith('"sha256:')
+    assert saved.status_code == 204
+    assert saved.headers["etag"] != loaded.headers["etag"]
+    assert studio.views["dashboard"].template.read_text(encoding="utf-8") == replacement
+    assert stale.status_code == 412
+    assert stale.json()["error"] == "source-conflict"
+    assert stale.json()["revision"] == saved.headers["etag"].strip('"')
+    assert created.status_code == 201
+    assert created.json()["studio_url"] == "/studio/operations/"
+    assert created.json()["view_url"] == "/operations/"
+    assert (studio.view_root / "operations" / "index.html").is_file()
+    assert (studio.view_root / "operations" / "app.css").is_file()
+    operations = (studio.view_root / "operations" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert operations.index('name="cell-1"') < operations.index('name="cell-2"')
+    assert duplicate.status_code == 409
+    assert duplicate.json()["error"] == "view-exists"
+    assert invalid.status_code == 400
+    assert invalid.json()["error"] == "invalid-view-name"
+
+
+def test_edit_workspace_removes_a_view_and_its_files(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    asset = studio.view_root / "executive" / "assets" / "note.txt"
+    asset.parent.mkdir()
+    asset.write_text("authored view asset", encoding="utf-8")
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
+
+    with TestClient(app) as client:
+        removed = client.delete(
+            "/_marimo-studio/views/executive",
+            headers=headers,
+        )
+        views = client.get("/_marimo-studio/views")
+
+    assert removed.status_code == 200
+    assert removed.json() == {
+        "schema": 1,
+        "name": "executive",
+        "default_view": "dashboard",
+        "views": ["dashboard"],
+    }
+    assert views.json()["views"] == ["dashboard"]
+    assert not (studio.view_root / "executive").exists()
+    assert studio.views["dashboard"].template.is_file()
+
+
+def test_removing_the_default_view_promotes_the_remaining_view(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
+
+    with TestClient(app) as client:
+        removed = client.delete(
+            "/_marimo-studio/views/dashboard",
+            headers=headers,
+        )
+        views = client.get("/_marimo-studio/views")
+
+    updated = load_studio(studio.notebook)
+    assert removed.status_code == 200
+    assert removed.json()["default_view"] == "executive"
+    assert views.json() == {
+        "schema": 1,
+        "default_view": "executive",
+        "views": ["executive"],
+    }
+    assert updated.default_view == "executive"
+    assert not (studio.view_root / "dashboard").exists()
+
+
+def test_edit_workspace_keeps_its_last_view(notebook_path: Path) -> None:
+    ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
+
+    with TestClient(app) as client:
+        response = client.delete(
+            "/_marimo-studio/views/dashboard",
+            headers=headers,
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": "last-view",
+        "message": "Keep at least one view.",
+    }
+    assert studio.views["dashboard"].template.is_file()
+
+
+def test_edit_workspace_mutations_require_the_current_server_token(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook, skew_protection=True)
+    _edit_mode(app)
+    token = str(_session_manager(app).skew_protection_token)
+
+    with TestClient(app) as client:
+        loaded = client.get("/_marimo-studio/views/dashboard/source/index.html")
+        source_headers = {"If-Match": loaded.headers["etag"]}
+        missing = client.put(
+            "/_marimo-studio/views/dashboard/source/index.html",
+            content=loaded.text,
+            headers=source_headers,
+        )
+        invalid = client.put(
+            "/_marimo-studio/views/dashboard/source/index.html",
+            content=loaded.text,
+            headers={
+                **source_headers,
+                "Marimo-Server-Token": "stale-token",
+            },
+        )
+        valid = client.put(
+            "/_marimo-studio/views/dashboard/source/index.html",
+            content=loaded.text,
+            headers={**source_headers, "Marimo-Server-Token": token},
+        )
+        missing_delete = client.delete("/_marimo-studio/views/executive")
+        invalid_delete = client.delete(
+            "/_marimo-studio/views/executive",
+            headers={"Marimo-Server-Token": "stale-token"},
+        )
+
+    assert missing.status_code == 401
+    assert missing.json()["error"] == "missing-server-token"
+    assert invalid.status_code == 401
+    assert invalid.json()["error"] == "invalid-server-token"
+    assert valid.status_code == 204
+    assert missing_delete.status_code == 401
+    assert missing_delete.json()["error"] == "missing-server-token"
+    assert invalid_delete.status_code == 401
+    assert invalid_delete.json()["error"] == "invalid-server-token"
+
+
+def test_run_mode_keeps_studio_source_mutations_read_only(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        loaded = client.get("/_marimo-studio/views/dashboard/source/index.html")
+        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        headers = {"Marimo-Server-Token": config["serverToken"]}
+        write = client.put(
+            "/_marimo-studio/views/dashboard/source/index.html",
+            content=loaded.text,
+            headers={"If-Match": loaded.headers["etag"], **headers},
+        )
+        create = client.post(
+            "/_marimo-studio/views",
+            json={"name": "operations"},
+            headers=headers,
+        )
+        delete = client.delete(
+            "/_marimo-studio/views/executive",
+            headers=headers,
+        )
+
+    assert loaded.status_code == 200
+    assert write.status_code == 403
+    assert write.json()["error"] == "edit-access-required"
+    assert create.status_code == 403
+    assert create.json()["error"] == "edit-access-required"
+    assert delete.status_code == 403
+    assert delete.json()["error"] == "edit-access-required"
 
 
 def test_template_errors_stay_scoped_to_the_selected_view(
