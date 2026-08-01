@@ -12,10 +12,9 @@ from marimo_studio._compat.kernel_values.models import (
     DEFAULT_MAX_VALUE_BYTES,
     FUNCTION_NAME,
     NAMESPACE,
-    ValueReadError,
-    ValueReadResult,
     ValueReadUnavailable,
 )
+from marimo_studio.types import ValueReadError, ValueReadResult
 
 
 class _FunctionResultWaiter(EventAwareExtension):

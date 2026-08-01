@@ -1,8 +1,11 @@
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { marimoVersionFromUvLock, prepareMarimo } from "./build.ts";
-import { resolveOwnedDependency } from "./upstream-dependency.ts";
+import { marimoVersionFromUvLock, prepareMarimo } from "./marimo-source.ts";
+import {
+  resolveOwnedDependency,
+  resolveProjectDependency,
+} from "./upstream-dependency.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -27,6 +30,10 @@ const typecheck = async (): Promise<void> => {
   const htmx = fileURLToPath(import.meta.resolve("htmx.org")).replace(
     /\.js$/,
     ".d.ts",
+  );
+  const nodeTypes = resolveProjectDependency(
+    upstreamFrontend,
+    "@types/node/index.d.ts",
   );
   const temporary = await Deno.makeTempDir({
     prefix: "marimo-studio-typecheck-",
@@ -72,9 +79,9 @@ const typecheck = async (): Promise<void> => {
         "react-dom": [join(modules, "@types", "react-dom", "index.d.ts")],
         "react-dom/*": [join(modules, "@types", "react-dom", "*")],
       },
-      types: [],
     },
     files: [
+      nodeTypes,
       join(upstreamFrontend, "node_modules", "vite", "client.d.ts"),
       join(upstreamFrontend, "src", "custom.d.ts"),
       join(here, "src", "main.ts"),

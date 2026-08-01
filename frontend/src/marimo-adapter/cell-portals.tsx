@@ -7,13 +7,13 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { cellDomProps } from "@marimo-team/frontend/unstable_internal/components/editor/common";
-import { OutputArea } from "@marimo-team/frontend/unstable_internal/components/editor/Output";
-import { ConsoleOutput } from "@marimo-team/frontend/unstable_internal/components/editor/output/console/ConsoleOutput";
 import {
+  cellDomProps,
+  ConsoleOutput,
+  OutputArea,
   outputIsLoading,
   outputIsStale,
-} from "@marimo-team/frontend/unstable_internal/core/cells/cell";
+} from "./upstream/cells";
 
 import {
   getCellHosts,

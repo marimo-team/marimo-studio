@@ -23,6 +23,8 @@ lives in `frontend/`. `make build` writes package assets to
 | `frontend/src/studio/*-controller.ts` | Studio workflow orchestration |
 | `frontend/src/marimo-adapter/source-editor.tsx` | CodeMirror adapter for HTML and CSS |
 | `frontend/src/marimo-adapter/` | Marimo runtime, output portals, value readers, and editors |
+| `frontend/src/marimo-adapter/upstream/` | Unstable Marimo imports exposed through local adapters |
+| `frontend/marimo-source.ts` | Locked Marimo checkout used by build and type checking |
 | `frontend/tests/` | Runtime state and protocol tests |
 
 ## Runtime flow

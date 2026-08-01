@@ -7,7 +7,7 @@
     "docs:preview": "node node_modules/vitepress/bin/vitepress.js preview docs --host 127.0.0.1 --port 4173 --strictPort",
     "fmt": "deno fmt deno.json docs/.vitepress/config.mts frontend",
     "fmt:check": "deno fmt --check deno.json docs/.vitepress/config.mts frontend",
-    "lint": "deno lint frontend/src frontend/tests frontend/build.ts frontend/typecheck.ts frontend/vite.config.ts frontend/build-vite.mjs",
+    "lint": "deno lint frontend/src frontend/tests frontend/build.ts frontend/command.ts frontend/marimo-source.ts frontend/typecheck.ts frontend/upstream-dependency.ts frontend/vite.config.ts frontend/build-vite.mjs",
     "test": "deno test --allow-read frontend/tests"
   },
   "imports": {

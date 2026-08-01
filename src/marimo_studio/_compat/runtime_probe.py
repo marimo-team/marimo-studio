@@ -6,7 +6,6 @@ import asyncio
 import threading
 from collections.abc import Generator
 from contextlib import contextmanager
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -15,48 +14,20 @@ import marimo
 
 from marimo_studio._compat.kernel_values import (
     DEFAULT_MAX_VALUE_BYTES,
-    ValueReadResult,
     inspection_selectors,
     read_session_values,
 )
+from marimo_studio._compat.runtime_requests import instantiate_notebook_request
 from marimo_studio._compat.server import assert_supported_version
 from marimo_studio.errors import ProtocolError
+from marimo_studio.types import (
+    RuntimeCell,
+    RuntimeOutput,
+    RuntimeProbe,
+    ValueReadResult,
+)
 
 _NOTEBOOK_CONFIG_LOCK = threading.RLock()
-
-
-@dataclass(frozen=True)
-class RuntimeOutput:
-    channel: str
-    mimetype: str
-    empty: bool
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "channel": self.channel,
-            "mimetype": self.mimetype,
-            "empty": self.empty,
-        }
-
-
-@dataclass(frozen=True)
-class RuntimeCell:
-    status: str | None
-    outputs: tuple[RuntimeOutput, ...]
-    errors: tuple[str, ...]
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "status": self.status,
-            "outputs": [output.to_dict() for output in self.outputs],
-            "errors": list(self.errors),
-        }
-
-
-@dataclass(frozen=True)
-class RuntimeProbe:
-    cells: dict[str, RuntimeCell]
-    values: ValueReadResult
 
 
 @contextmanager
@@ -117,7 +88,6 @@ async def probe_runtime(
     from marimo._messaging.cell_output import CellChannel
     from marimo._messaging.notification import CompletedRunNotification
     from marimo._messaging.serde import deserialize_kernel_message
-    from marimo._server.models.models import InstantiateNotebookRequest
     from marimo._session.consumer import SessionConsumer
     from marimo._session.model import ConnectionState
     from marimo._session.types import KernelState
@@ -166,11 +136,7 @@ async def probe_runtime(
                 auto_instantiate=True,
             )
             session.instantiate(
-                InstantiateNotebookRequest(
-                    object_ids=[],
-                    values=[],
-                    auto_run=True,
-                ),
+                instantiate_notebook_request(auto_run=True),
                 http_request=None,
             )
             try:

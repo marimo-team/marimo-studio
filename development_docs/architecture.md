@@ -26,6 +26,11 @@ ASGI requests into workspace operations. Compatibility packages are the sole
 Python adapters to private Marimo APIs. Browser entrypoints compose transport,
 state, DOM, and Marimo adapters.
 
+Compatibility adapters return Studio-owned records from
+`marimo_studio.types`. Workspace and server modules consume those records or
+accept adapter callables. Marimo request models, session objects, and kernel
+messages stay inside `_compat`.
+
 ## Activation
 
 The package registers two Marimo entry points:
@@ -145,7 +150,13 @@ to a local runtime diagnostic after the delivery window.
 
 Private Marimo Python imports stay in `src/marimo_studio/_compat/`. Imports from
 `@marimo-team/frontend/unstable_internal` stay in
-`frontend/src/marimo-adapter/`.
+`frontend/src/marimo-adapter/upstream/`. Runtime and projection modules import
+the local adapter surface.
+
+`frontend/marimo-source.ts` prepares the exact Marimo version in `uv.lock` for
+browser builds and type checks. `frontend/build.ts` composes that checkout with
+HTMX and Vite. A Marimo upgrade should require changes near these adapter
+surfaces when private paths or frontend declarations move.
 
 The package supports Marimo 0.23.14 and newer. CI tests the lower bound and the
 version resolved in `uv.lock`. The browser build uses that locked version.

@@ -2,14 +2,16 @@ import { Fragment, useCallback, useEffect, useMemo } from "react";
 
 import {
   flattenTopLevelNotebookCells,
+  RuntimeState,
   useCellActions,
   useNotebook,
-} from "@marimo-team/frontend/unstable_internal/core/cells/cells";
-import { RuntimeState } from "@marimo-team/frontend/unstable_internal/core/kernel/RuntimeState";
-import type { SessionId } from "@marimo-team/frontend/unstable_internal/core/kernel/session";
-import { useRequestClient } from "@marimo-team/frontend/unstable_internal/core/network/requests";
-import { WebSocketState } from "@marimo-team/frontend/unstable_internal/core/websocket/types";
-import { useMarimoKernelConnection } from "@marimo-team/frontend/unstable_internal/core/websocket/useMarimoKernelConnection";
+} from "./upstream/cells";
+import {
+  type SessionId,
+  useMarimoKernelConnection,
+  useRequestClient,
+  WebSocketState,
+} from "./upstream/runtime";
 
 import { indexCells } from "../cell-bindings";
 import { setRuntimeConnectionState } from "../readiness";

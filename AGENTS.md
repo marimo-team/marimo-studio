@@ -29,13 +29,17 @@ TypeScript boundary.
 | --- | --- |
 | `src/marimo_studio/_cli/` | Command registration, Click adapters, diagnostics, terminal output |
 | `src/marimo_studio/_workspace/` | Configuration, views, bindings, checks, targets, launch services |
+| `src/marimo_studio/types.py` | Studio-owned records shared across runtime boundaries |
 | `src/marimo_studio/_server/middleware.py` | Request dispatch into page and support adapters |
 | `src/marimo_studio/_server/` | View documents, support routes, development events, HTTP translation |
 | `src/marimo_studio/_compat/server/` | Marimo server state, sessions, replay, programmatic mounts |
 | `src/marimo_studio/_compat/kernel_values/` | Marimo kernel registration and value RPC |
+| `src/marimo_studio/_compat/runtime_requests.py` | Marimo request construction across supported versions |
 | `frontend/src/runtime-config/` | Runtime contract, store, and HTTP client |
 | `frontend/src/studio/` | Studio state, remote clients, DOM views, and controllers |
 | `frontend/src/marimo-adapter/` | Marimo store, output, widget, and editor adapters |
+| `frontend/src/marimo-adapter/upstream/` | Imports from Marimo's unstable frontend surface |
+| `frontend/marimo-source.ts` | Locked Marimo source checkout and preparation |
 | `docs/` | User workflows and reference |
 | `development_docs/` | Architecture, frontend maintenance, releases |
 
@@ -49,6 +53,10 @@ Authored view source lives at
 - Starlette request and response translation stays in `_server` or the
   programmatic ASGI adapter.
 - Imports beginning with `marimo._` stay in `_compat`.
+- Compatibility modules translate Marimo objects into records from
+  `marimo_studio.types` before workspace and server code consume them.
+- Frontend code imports Marimo's unstable surface through
+  `marimo-adapter/upstream`.
 - Middleware, browser entrypoints, and top-level controllers compose concrete
   services. Parsing, filesystem mutation, transport, state transitions, and
   DOM rendering stay in their owning modules.

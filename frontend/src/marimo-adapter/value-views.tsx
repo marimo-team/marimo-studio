@@ -6,8 +6,8 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { outputIsStale } from "@marimo-team/frontend/unstable_internal/core/cells/cell";
-import { WebSocketState } from "@marimo-team/frontend/unstable_internal/core/websocket/types";
+import { outputIsStale } from "./upstream/cells";
+import { WebSocketState } from "./upstream/runtime";
 
 import {
   cellBindingKey,

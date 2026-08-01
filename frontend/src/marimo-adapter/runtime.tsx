@@ -1,39 +1,33 @@
-import "@marimo-team/frontend/unstable_internal/css/index.css";
+import "./upstream/style";
 import "./style.css";
 
 import { Provider } from "jotai";
 import { createRoot } from "react-dom/client";
 
-import { ErrorBoundary } from "@marimo-team/frontend/unstable_internal/components/editor/boundary/ErrorBoundary";
-import { ModalProvider } from "@marimo-team/frontend/unstable_internal/components/modal/ImperativeModal";
-import { TooltipProvider } from "@marimo-team/frontend/unstable_internal/components/ui/tooltip";
 import {
   appConfigAtom,
   configOverridesAtom,
-  userConfigAtom,
-} from "@marimo-team/frontend/unstable_internal/core/config/config";
-import {
+  connectionAtom,
+  createErrorToastingRequests,
+  createNetworkRequests,
+  ErrorBoundary,
+  getRuntimeManager,
+  getSessionId,
+  initializePlugins,
+  initialModeAtom,
+  ModalProvider,
   parseAppConfig,
   parseConfigOverrides,
   parseUserConfig,
-} from "@marimo-team/frontend/unstable_internal/core/config/config-schema";
-import {
-  initialModeAtom,
-  viewStateAtom,
-} from "@marimo-team/frontend/unstable_internal/core/mode";
-import { getSessionId } from "@marimo-team/frontend/unstable_internal/core/kernel/session";
-import { connectionAtom } from "@marimo-team/frontend/unstable_internal/core/network/connection";
-import { requestClientAtom } from "@marimo-team/frontend/unstable_internal/core/network/requests";
-import { createNetworkRequests } from "@marimo-team/frontend/unstable_internal/core/network/requests-network";
-import { createErrorToastingRequests } from "@marimo-team/frontend/unstable_internal/core/network/requests-toasting";
-import {
-  getRuntimeManager,
+  requestClientAtom,
   runtimeConfigAtom,
-} from "@marimo-team/frontend/unstable_internal/core/runtime/config";
-import { store } from "@marimo-team/frontend/unstable_internal/core/state/jotai";
-import { WebSocketState } from "@marimo-team/frontend/unstable_internal/core/websocket/types";
-import { initializePlugins } from "@marimo-team/frontend/unstable_internal/plugins/plugins";
-import { ThemeProvider } from "@marimo-team/frontend/unstable_internal/theme/ThemeProvider";
+  store,
+  ThemeProvider,
+  TooltipProvider,
+  userConfigAtom,
+  viewStateAtom,
+  WebSocketState,
+} from "./upstream/runtime";
 
 import { PAGE_THEME_EVENT, themeFromColorScheme } from "../page-theme";
 import { getRuntimeConfig, type RuntimeConfig } from "../runtime-config";

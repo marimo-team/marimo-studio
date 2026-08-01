@@ -13,8 +13,6 @@ from marimo_studio._compat.kernel_values.models import (
     FUNCTION_NAME,
     NAMESPACE,
     ReadValuesArgs,
-    ValueReadError,
-    ValueReadResult,
 )
 from marimo_studio._compat.kernel_values.selectors import (
     _read_values,
@@ -22,6 +20,7 @@ from marimo_studio._compat.kernel_values.selectors import (
 )
 from marimo_studio._workspace.config import discover_studio
 from marimo_studio.errors import ConfigurationError
+from marimo_studio.types import ValueReadError, ValueReadResult
 
 _INSPECTION_SELECTORS: dict[Path, tuple[str, ...]] = {}
 

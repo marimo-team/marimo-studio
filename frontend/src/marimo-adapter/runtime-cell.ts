@@ -1,4 +1,4 @@
-import type { flattenTopLevelNotebookCells } from "@marimo-team/frontend/unstable_internal/core/cells/cells";
+import type { flattenTopLevelNotebookCells } from "./upstream/cells";
 
 export type RuntimeCell = ReturnType<
   typeof flattenTopLevelNotebookCells

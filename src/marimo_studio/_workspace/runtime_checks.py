@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-from marimo_studio._compat.runtime_probe import RuntimeProbe
 from marimo_studio._workspace.bindings import resolve_studio
 from marimo_studio._workspace.check_results import (
     error_result,
@@ -17,7 +16,7 @@ from marimo_studio._workspace.check_results import (
 )
 from marimo_studio._workspace.models import StudioConfig
 from marimo_studio.errors import MarimoStudioError
-from marimo_studio.types import CheckResult, ValueBinding
+from marimo_studio.types import CheckResult, RuntimeProbe, ValueBinding
 
 RuntimeProbeFunction = Callable[..., Awaitable[RuntimeProbe]]
 

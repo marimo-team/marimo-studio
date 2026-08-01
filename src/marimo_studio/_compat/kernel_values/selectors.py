@@ -6,13 +6,10 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
-from marimo_studio._compat.kernel_values.models import (
-    ValueReadError,
-    ValueReadResult,
-)
 from marimo_studio._workspace.config import discover_studio
 from marimo_studio._workspace.templates import TemplateParser
 from marimo_studio.errors import ConfigurationError
+from marimo_studio.types import ValueReadError, ValueReadResult
 from marimo_studio.values import parse_value_reference, resolve_value_reference
 
 

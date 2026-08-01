@@ -9,15 +9,13 @@ from pathlib import Path
 
 from marimo_studio._cell_refs import cell_refs
 from marimo_studio._compat.notebook import load_static_notebook
-from marimo_studio._compat.runtime_probe import (
-    RuntimeProbe,
-    probe_runtime,
-)
+from marimo_studio._compat.runtime_probe import probe_runtime
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.types import (
     CellConfigSpec,
     CellSpec,
     NotebookSpec,
+    RuntimeProbe,
 )
 
 _PREVIEW_LINES = 8

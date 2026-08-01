@@ -9,12 +9,7 @@ import pytest
 
 import marimo_studio._workspace.checks as checks_module
 import marimo_studio._workspace.transactions as workspace_transactions
-from marimo_studio._compat.kernel_values import (
-    ValueReadError,
-    ValueReadResult,
-)
 from marimo_studio._compat.kernel_values.selectors import _template_selectors
-from marimo_studio._compat.runtime_probe import RuntimeCell, RuntimeProbe
 from marimo_studio._workspace import (
     bind_cell,
     check_runtime_studio,
@@ -31,6 +26,12 @@ from marimo_studio._workspace.metadata import (
 from marimo_studio._workspace.models import StudioConfig
 from marimo_studio._workspace.views import delete_view
 from marimo_studio.errors import ConfigurationError, NotebookSourceError
+from marimo_studio.types import (
+    RuntimeCell,
+    RuntimeProbe,
+    ValueReadError,
+    ValueReadResult,
+)
 
 from .helpers import empty_notebook_source, replace_app_shell
 
