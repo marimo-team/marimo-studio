@@ -14,9 +14,11 @@ From a checkout with [uv](https://docs.astral.sh/uv/) installed, run:
 uv run marimo-studio examples/analysis.py
 ```
 
-The native notebook editor opens beside a finished dashboard. Change the
-scenario or quarter and watch the metrics, summary, and table update from the
-same Python session.
+The workspace opens with the notebook and finished dashboard side by side.
+Change the scenario or quarter and watch the metrics, summary, and table update
+from the same Python session. Split either pane when you want the HTML or CSS
+source in the workspace. Open **Pane**, choose **Add Source**, then place it on
+any side of the current pane.
 
 The [example](https://github.com/peter-gy/marimo-studio/tree/main/examples)
 pairs an ordinary notebook with one view under

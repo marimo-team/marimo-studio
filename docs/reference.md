@@ -25,9 +25,10 @@ discover the configured notebook from its directory or project.
 uvx marimo-studio analysis.py --view executive
 ```
 
-The direct command configures the notebook when needed, creates a blank view,
-starts the native Marimo editor, and prints the Studio workspace and standalone
-view URLs. It opens the workspace with the selected view.
+The direct command configures the notebook when needed, creates a starter view
+with every notebook cell in source order, starts the native Marimo editor, and
+prints the Studio workspace and standalone view URLs. It opens the workspace
+with the selected view.
 
 | Option | Default | Behavior |
 | --- | --- | --- |
@@ -443,7 +444,11 @@ Routes resolve beneath Marimo's configured `base_url`.
 | Run | `/` | Default view |
 | Run | `/{view}/` | Selected named view |
 | Both | `/_marimo-studio/views` | Current view names and default |
+| Edit | `POST /_marimo-studio/views` | Creates a named view with the notebook's cells in source order |
+| Edit | `DELETE /_marimo-studio/views/{view}` | Deletes a view's authored directory and returns the remaining views |
 | Both | `/_marimo-studio/views/{view}/config` | Browser runtime configuration |
+| Both | `GET /_marimo-studio/views/{view}/source/{file}` | Reads `index.html` or `app.css` with an ETag |
+| Edit | `PUT /_marimo-studio/views/{view}/source/{file}` | Replaces source when `If-Match` names the current ETag |
 | Both | `POST /_marimo-studio/views/{view}/values` | Reads selectors permitted by the view |
 | Both | `/_marimo-studio/views/{view}/cells/{alias}` | Returns one cell element |
 | Both | `/_marimo-studio/views/{view}/static/{path}` | Serves a view file |
@@ -453,3 +458,7 @@ Routes resolve beneath Marimo's configured `base_url`.
 
 Edit previews connect to the active editor kernel. Run-mode documents receive
 Marimo's regular isolated browser sessions.
+
+Studio sends Marimo's server token on mutation requests. Source writes preserve
+UTF-8 content and line endings exactly. A stale `If-Match` returns `412` with
+the current source revision so the browser can present an explicit conflict.

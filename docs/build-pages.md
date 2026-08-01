@@ -4,6 +4,25 @@ Choose the notebook behavior an audience needs, then build the page around it.
 Keep calculations and interactive components in the notebook. Put layout,
 wording, navigation, and visual design in the view.
 
+## Arrange the workspace
+
+Studio keeps three surfaces alive while you work:
+
+- **Notebook** runs the native Marimo editor.
+- **Source** edits `index.html` and `app.css`.
+- **Preview** renders the selected view against the notebook kernel.
+
+The default layout places the notebook and Preview side by side at equal size.
+Open **Pane** in any pane header to add a hidden surface on any side, swap two
+visible panes, or close a pane. Each divider moves independently. Use
+**Layout** to equalize split sizes or restore the default. **Focus** temporarily
+fills the workspace with one pane. Press Escape to restore the saved
+arrangement.
+
+Narrow windows show one surface at a time while keeping the full layout and its
+ratios. Studio stores layout and source-tab choices in the browser for each
+view.
+
 ## Choose what to place in the page
 
 | Need | Use |
@@ -207,15 +226,24 @@ for the complete property list.
 
 ## Build a second experience from the same notebook
 
-Add another view when an audience needs different results or page structure:
+Add another view when an audience needs different results or page structure.
+Open the current view menu and select **New view**. Studio opens the notebook on
+the left, the new HTML on the upper right, and its live preview below. The
+starter HTML places every notebook cell in source order, and `app.css` provides
+a small responsive base.
+
+The same operation is available from the command line:
 
 ```console
 uvx marimo-studio view add operations analysis.py
-uvx marimo-studio analysis.py --view operations
 ```
 
 The `operations` view receives its own HTML, CSS, and static files. It reuses
 the notebook's cells and aliases.
+
+Remove a view from the same menu. Studio confirms the exact view before it
+deletes that view's HTML, CSS, and static files. Removing the default view
+promotes the first remaining view. A notebook always keeps at least one view.
 
 ## Repair a projection after notebook changes
 

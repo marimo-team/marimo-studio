@@ -29,15 +29,31 @@ TypeScript boundary.
 | --- | --- |
 | `src/marimo_studio/_cli/` | Command registration, Click adapters, diagnostics, terminal output |
 | `src/marimo_studio/_workspace/` | Configuration, views, bindings, checks, targets, launch services |
-| `src/marimo_studio/_server/` | View documents, Studio, support routes, development events |
-| `src/marimo_studio/_compat/` | Private Marimo Python integration |
-| `frontend/src/` | Projection hosts, readiness, HTMX, refresh, Studio |
-| `frontend/src/marimo-adapter/` | Unstable Marimo frontend integration |
+| `src/marimo_studio/_server/middleware.py` | Request dispatch into page and support adapters |
+| `src/marimo_studio/_server/` | View documents, support routes, development events, HTTP translation |
+| `src/marimo_studio/_compat/server/` | Marimo server state, sessions, replay, programmatic mounts |
+| `src/marimo_studio/_compat/kernel_values/` | Marimo kernel registration and value RPC |
+| `frontend/src/runtime-config/` | Runtime contract, store, and HTTP client |
+| `frontend/src/studio/` | Studio state, remote clients, DOM views, and controllers |
+| `frontend/src/marimo-adapter/` | Marimo store, output, widget, and editor adapters |
 | `docs/` | User workflows and reference |
 | `development_docs/` | Architecture, frontend maintenance, releases |
 
 Authored view source lives at
 `__marimo__/studio/<notebook-stem>/<view>/` beside its notebook.
+
+## Dependency rule
+
+- Click imports stay in `_cli`. Command handlers pass Python values to
+  workspace services.
+- Starlette request and response translation stays in `_server` or the
+  programmatic ASGI adapter.
+- Imports beginning with `marimo._` stay in `_compat`.
+- Middleware, browser entrypoints, and top-level controllers compose concrete
+  services. Parsing, filesystem mutation, transport, state transitions, and
+  DOM rendering stay in their owning modules.
+- Frontend remote clients perform HTTP. State modules remain independent of
+  the DOM. Controllers connect remotes, state, and DOM views.
 
 ## Invariants
 
@@ -50,6 +66,10 @@ Authored view source lives at
 - Run-mode browser documents receive isolated Marimo sessions.
 - View switching preserves the preview runtime, WebSocket, kernel, and widget
   models.
+- Pane layout changes preserve the notebook iframe, source editors, preview
+  iframe, and their browser state.
+- Source saves use content revisions and atomic replacement. External edits
+  refresh clean editors and surface a conflict beside dirty editors.
 - `<marimo-cell>` renders through Marimo's output and widget clients.
 - `mo-value` reads selectors permitted by the active view through the kernel
   queue.
@@ -86,16 +106,17 @@ Keep these contracts aligned:
 
 ## Mutation rules
 
-Direct launch and `view add` may update PEP 723 metadata. Preserve every
-notebook byte outside that block, unrelated dependencies, tool tables, uv
-sources, indexes, encoding cookies, and line endings.
+Direct launch, `view add`, and Studio view management may update PEP 723
+metadata. Preserve every notebook byte outside that block, unrelated
+dependencies, tool tables, uv sources, indexes, encoding cookies, and line
+endings.
 
 Validate launch options before writing. Use atomic writes and reject mutable
 symlink traversal. A repeated setup or binding command should converge without
 rewriting unchanged files.
 
-New views start as a blank `#app-shell`. Keep their HTML, CSS, and static files
-as authored source.
+New views project each notebook cell in source order through a small HTML and
+CSS starter. Keep their HTML, CSS, and static files as authored source.
 
 ## Tests
 

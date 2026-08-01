@@ -20,6 +20,12 @@ inside that process.
 HTMX can add or remove projection hosts. Marimo remains responsible for kernel
 creation, execution, invalidation, and caching.
 
+Dependencies follow the runtime boundary. CLI modules translate Click values.
+Workspace modules own notebook and view operations. Server modules translate
+ASGI requests into workspace operations. Compatibility packages are the sole
+Python adapters to private Marimo APIs. Browser entrypoints compose transport,
+state, DOM, and Marimo adapters.
+
 ## Activation
 
 The package registers two Marimo entry points:
@@ -72,6 +78,16 @@ Studio support routes live under `/_marimo-studio/`. Public and support URLs
 include the parent ASGI mount and Marimo `base_url`. Native Marimo routes pass
 through the middleware.
 
+Edit-mode support routes create and remove views and conditionally replace
+authored HTML or CSS. Workspace services own validation, symlink checks, exact
+text reads, and atomic writes. HTTP adapters translate those outcomes into
+ETags and structured errors.
+
+`_server.middleware` dispatches requests. `_server.routing` recognizes route
+shapes. `_server.pages` builds documents and redirects. `_server.support` owns
+projection and development routes. `_server.studio_api` translates source and
+view mutations.
+
 ## Browser flow
 
 Each custom document contains one hidden `#marimo-runtime-root`. It owns the
@@ -82,6 +98,15 @@ queue.
 
 View switches and HTML refreshes replace `#app-shell` while the runtime root
 stays mounted. See [Frontend](frontend.md) for refresh and build contracts.
+
+The browser runtime configuration has three parts: schema validation, the
+active store, and HTTP retrieval. Presentation refresh uses a document adapter
+for atomic shell and stylesheet commits. The refresh coordinator owns retries,
+event streams, and failure recovery.
+
+Studio's three workspace surfaces remain mounted as direct children of one
+surface layer. A serializable pane tree controls their rectangles, focus, and
+narrow-screen projection without moving an iframe or editor node.
 
 ## Projection lifecycle
 

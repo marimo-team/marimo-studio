@@ -10,12 +10,19 @@ lives in `frontend/`. `make build` writes package assets to
 | --- | --- |
 | `frontend/src/cell-host.ts` | `<marimo-cell>` lifecycle and measured loading space |
 | `frontend/src/cell-bindings.ts` | Live cell lookup by Marimo name or editor ID |
-| `frontend/src/value-bindings.ts` | `mo-value` reads, caching, and retry |
+| `frontend/src/value-bindings.ts` | Public value-host and value-request surface |
+| `frontend/src/value-hosts.ts` | `mo-value` DOM state and cached rendering |
+| `frontend/src/value-remote.ts` | Kernel value requests and retry policy |
 | `frontend/src/readiness.ts` | Page readiness state and browser API |
-| `frontend/src/runtime-config.ts` | Active view runtime configuration |
-| `frontend/src/dev-reload.ts` | Stylesheet refresh, shell swap, and view switch |
-| `frontend/src/studio.ts` | Studio layout, view selector, and preview lifecycle |
-| `frontend/src/marimo-adapter/` | Private Marimo imports and output portals |
+| `frontend/src/runtime-config/` | Runtime schema, active store, and HTTP client |
+| `frontend/src/presentation-document.ts` | Atomic shell and stylesheet commit |
+| `frontend/src/dev-reload.ts` | Development events, retries, and refresh coordination |
+| `frontend/src/studio.ts` | Studio controller composition |
+| `frontend/src/studio/*-remote.ts` | Source and view HTTP clients |
+| `frontend/src/studio/*-sync.ts` | Source synchronization state |
+| `frontend/src/studio/*-controller.ts` | Studio workflow orchestration |
+| `frontend/src/marimo-adapter/source-editor.tsx` | CodeMirror adapter for HTML and CSS |
+| `frontend/src/marimo-adapter/` | Marimo runtime, output portals, value readers, and editors |
 | `frontend/tests/` | Runtime state and protocol tests |
 
 ## Runtime flow
@@ -41,6 +48,15 @@ If an HTML save reaches Studio before the corresponding notebook autosave, the
 next notebook or target-view save retries that view's pending shell.
 Each development event stream reconciles the shell after establishing its file
 baseline, including after a reconnect.
+
+Studio keeps the notebook iframe, source editors, and preview iframe as stable
+DOM nodes. The layout tree computes rectangles for those nodes and never moves
+them between parents. Pointer drags update rectangles in animation frames and
+commit one ratio on release.
+
+The Source controllers read `index.html` and `app.css` with content-derived
+ETags. Saves use `If-Match`. Development events refresh a clean editor from
+disk and turn a concurrent local edit into an explicit conflict.
 
 ## Build
 
