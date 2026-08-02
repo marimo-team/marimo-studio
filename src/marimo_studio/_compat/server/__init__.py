@@ -12,6 +12,7 @@ from marimo_studio._compat.server.models import (
     ServerLocation,
     ServerMode,
 )
+from marimo_studio._compat.server.peer_controls import enable_peer_control_sync
 from marimo_studio._compat.server.programmatic import programmatic_middleware
 from marimo_studio._compat.server.replay import (
     DOCUMENT_REPLAY_QUERY_PARAM,
@@ -35,6 +36,7 @@ __all__ = [
     "assert_supported_version",
     "configure_document_replay",
     "current_session",
+    "enable_peer_control_sync",
     "has_access_token",
     "has_edit_access",
     "has_notebook_session",

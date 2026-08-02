@@ -14,7 +14,7 @@ inside that process.
 | Presentation | `marimo_studio._server` | View documents, Studio workspace, and support routes |
 | Kernel session | Marimo | Reactive graph, execution, caches, controls, and widget models |
 | Value bridge | `marimo_studio._compat` | Read permitted selectors through the kernel command queue |
-| Browser runtime | Marimo adapter | WebSocket, store, output plugins, and widget models |
+| Browser runtime | Marimo adapter | Transport connection, store, output plugins, and widget models |
 | View source | Notebook author | HTML, CSS, static files, cell hosts, and value hosts |
 
 HTMX can add or remove projection hosts. Marimo remains responsible for kernel
@@ -45,8 +45,9 @@ marimo-studio = "marimo_studio._entrypoints:kernel_lifespan"
 
 The middleware discovers Studio configuration from the active notebook before
 handling a presentation route. The kernel extension registers the value reader
-for configured notebooks. An unconfigured notebook continues through Marimo's
-regular server and kernel paths.
+for configured notebooks. In edit mode, the middleware also activates control
+updates between consumers of the same Marimo session. An unconfigured notebook
+continues through Marimo's regular server and kernel paths.
 
 Configuration resolves from notebook PEP 723 metadata or the nearest parent
 `pyproject.toml` that names the notebook. Views resolve from
@@ -79,6 +80,10 @@ while `/studio/<view>/` selects another view. A standalone `/<view>/` document
 connects to the editor kernel as a kiosk consumer after the primary editor
 session exists.
 
+Accepted Marimo control writes and anywidget model updates are relayed to the
+other consumers in that edit session. The source consumer is excluded from the
+peer notification. Run sessions keep their per-browser isolation.
+
 Studio support routes live under `/_marimo-studio/`. Public and support URLs
 include the parent ASGI mount and Marimo `base_url`. Native Marimo routes pass
 through the middleware.
@@ -96,10 +101,10 @@ view mutations.
 ## Browser flow
 
 Each custom document contains one hidden `#marimo-runtime-root`. It owns the
-Marimo store, WebSocket, output plugins, and widget models for the document
-lifetime. React portals render cell outputs into `<marimo-cell>` hosts. Value
-requests travel through the active browser consumer and the kernel command
-queue.
+Marimo store, transport connection, output plugins, and widget models for the
+document lifetime. React portals render cell outputs into `<marimo-cell>`
+hosts. Value requests travel through the active browser consumer and the kernel
+command queue.
 
 View switches and HTML refreshes replace `#app-shell` while the runtime root
 stays mounted. See [Frontend](frontend.md) for refresh and build contracts.
@@ -158,7 +163,7 @@ browser builds and type checks. `frontend/build.ts` composes that checkout with
 HTMX and Vite. A Marimo upgrade should require changes near these adapter
 surfaces when private paths or frontend declarations move.
 
-The package supports Marimo 0.23.14 and newer. CI tests the lower bound and the
+The package supports Marimo 0.23.16 and newer. CI tests the lower bound and the
 version resolved in `uv.lock`. The browser build uses that locked version.
 
 Kernel sessions live in one process. Production deployments use one worker or

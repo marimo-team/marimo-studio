@@ -72,12 +72,12 @@ Loads the notebook's Studio configuration and returns a run-mode Marimo ASGI
 application. The default and named views use the same Marimo server process.
 Each browser receives its regular isolated run session.
 
-The factory requires Marimo 0.23.14 or newer.
+The factory requires Marimo 0.23.16 or newer.
 
 Raises:
 
 - `ConfigurationError` when the notebook or Studio configuration is invalid
-- `ProtocolError` when the installed Marimo version is older than 0.23.14
+- `ProtocolError` when the installed Marimo version is older than 0.23.16
 
 ### Run the environment-configured app
 

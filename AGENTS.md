@@ -71,9 +71,11 @@ Authored view source lives at
   `/studio/`.
 - Edit-mode `/<view>/` documents attach to the editor kernel as kiosk
   consumers.
+- Controls and anywidget models synchronize between consumers of the same edit
+  session.
 - Run-mode browser documents receive isolated Marimo sessions.
-- View switching preserves the preview runtime, WebSocket, kernel, and widget
-  models.
+- View switching preserves the preview runtime, transport connection, kernel,
+  and widget models.
 - Pane layout changes preserve the notebook iframe, source editors, preview
   iframe, and their browser state.
 - Source saves use content revisions and atomic replacement. External edits

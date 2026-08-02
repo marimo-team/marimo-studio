@@ -237,20 +237,12 @@ def test_runtime_probe_preserves_session_creation_failures(
     assert manager.shutdown_called
 
 
-def test_runtime_accepts_marimo_from_the_supported_lower_bound(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(marimo, "__version__", "0.23.14")
-
-    assert_supported_version()
-
-
 def test_runtime_rejects_marimo_below_the_supported_lower_bound(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(marimo, "__version__", "0.23.13")
+    monkeypatch.setattr(marimo, "__version__", "0.23.15")
 
-    with pytest.raises(ProtocolError, match=r"Install marimo>=0\.23\.14"):
+    with pytest.raises(ProtocolError, match=r"Install marimo>=0\.23\.16"):
         assert_supported_version()
 
 

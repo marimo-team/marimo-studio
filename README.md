@@ -35,6 +35,8 @@ uvx marimo-studio analysis.py
 Studio creates a blank `dashboard` view beside the notebook. Place complete
 cell outputs with `<marimo-cell>` and JSON-compatible Python values with
 `mo-value`. Controls and widgets remain connected to the notebook kernel.
+In edit mode, a control change in the editor or any attached preview updates
+the other open views.
 
 Keep the editor and preview open while you or an agent edits the view. Saved
 HTML and CSS refresh around the running Python session. The CLI exposes
@@ -68,7 +70,7 @@ uv run --with marimo-studio \
 Visitors receive the custom view backed by a live Python session. Marimo keeps
 ownership of notebook execution, authentication, sessions, and server APIs.
 
-Use Python 3.11 or newer with Marimo 0.23.14 or newer.
+Use Python 3.11 or newer with Marimo 0.23.16 or newer.
 
 ## Documentation
 

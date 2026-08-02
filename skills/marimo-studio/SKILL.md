@@ -267,7 +267,7 @@ marimo-studio analysis.py \
 ```
 
 Open the printed Studio URL with a unique browser session. HTML and CSS changes
-refresh in the preview. View switching keeps the preview runtime, WebSocket,
+refresh in the preview. View switching keeps the preview runtime, connection,
 kernel state, and widget models mounted.
 
 Select the Preview layout before capturing the custom view. Use absolute paths

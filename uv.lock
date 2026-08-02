@@ -831,7 +831,7 @@ test = [
 requires-dist = [
     { name = "click", specifier = ">=8.2" },
     { name = "htpy", specifier = ">=26.5.1,<27" },
-    { name = "marimo", specifier = ">=0.23.14" },
+    { name = "marimo", specifier = ">=0.23.16" },
     { name = "markupsafe", specifier = ">=3" },
     { name = "packaging", specifier = ">=25" },
     { name = "tomlkit", specifier = ">=0.14" },
@@ -841,7 +841,7 @@ requires-dist = [
 dev = [
     { name = "deno", specifier = ">=2.9.4" },
     { name = "httpx2", specifier = "==2.9.1" },
-    { name = "marimo", extras = ["recommended"], specifier = ">=0.23.14" },
+    { name = "marimo", extras = ["recommended"], specifier = ">=0.23.16" },
     { name = "pyrefly", specifier = ">=1.1.1" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "ruff", specifier = ">=0.16.0" },

@@ -8,6 +8,7 @@ from starlette.requests import Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from marimo_studio._compat.server import (
+    enable_peer_control_sync,
     has_access_token,
     has_read_access,
     relative_request_path,
@@ -123,6 +124,7 @@ class PresentationMiddleware:
                 response = redirect
             else:
                 context = server_context(location)
+                enable_peer_control_sync(location)
                 if selected_document is not None:
                     response = document_response(
                         request,

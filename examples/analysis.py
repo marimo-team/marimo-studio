@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#   "marimo>=0.23.14",
+#   "marimo>=0.23.16",
 #   "marimo-studio",
 # ]
 #

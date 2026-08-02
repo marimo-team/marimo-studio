@@ -32,7 +32,9 @@ import {
 import { PAGE_THEME_EVENT, themeFromColorScheme } from "../page-theme";
 import { getRuntimeConfig, type RuntimeConfig } from "../runtime-config";
 import { RuntimeCellViews } from "./cell-views";
+import { retainUnmountedUIValues } from "./peer-controls";
 import { configureKioskTransport } from "./transport";
+import { UI_ELEMENT_REGISTRY } from "./upstream/controls";
 
 const preferredColorScheme = globalThis.matchMedia(
   "(prefers-color-scheme: dark)",
@@ -86,6 +88,7 @@ export const mountMarimoRuntime = (
   runtimeRoot: HTMLElement,
 ) => {
   const sessionId = getSessionId();
+  retainUnmountedUIValues(UI_ELEMENT_REGISTRY);
   initializeMovablePlugins();
 
   store.set(runtimeConfigAtom, {

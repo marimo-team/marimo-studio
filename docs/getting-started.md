@@ -86,8 +86,9 @@ You can edit the same file in another editor. Studio follows changes from disk
 and keeps the browser editor current. If both editors change the file before a
 save completes, Studio shows both versions and asks which one to keep.
 
-Change a notebook control or rerun the cell that feeds `summary`. The mounted
-output follows the notebook's reactive update.
+Change a control in the notebook or preview. Every open view attached to that
+edit session receives Marimo control values and anywidget trait updates. Marimo
+reruns cells affected by reactive controls.
 
 ## Validate the view
 

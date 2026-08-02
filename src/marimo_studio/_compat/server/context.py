@@ -16,11 +16,11 @@ from marimo_studio._compat.server.models import (
 )
 from marimo_studio.errors import ProtocolError
 
-_MINIMUM_MARIMO_VERSION = Version("0.23.14")
+_MINIMUM_MARIMO_VERSION = Version("0.23.16")
 
 
 def assert_supported_version() -> None:
-    """Require Marimo 0.23.14 or newer."""
+    """Require Marimo 0.23.16 or newer."""
     try:
         installed = Version(marimo.__version__)
     except InvalidVersion as error:
@@ -30,7 +30,7 @@ def assert_supported_version() -> None:
     if installed < _MINIMUM_MARIMO_VERSION:
         raise ProtocolError(
             f"marimo {marimo.__version__} is incompatible with this runtime. "
-            "Install marimo>=0.23.14."
+            "Install marimo>=0.23.16."
         )
 
 

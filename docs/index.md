@@ -33,8 +33,9 @@ Place a JSON-compatible Python value in page text with:
 <time mo-value="report.updated_at"></time>
 ```
 
-Both remain connected to the notebook kernel. A control change reruns affected
-cells and updates the mounted view.
+Both remain connected to the notebook kernel. While editing, a control change
+in the notebook or an attached preview updates the other open views and reruns
+the affected cells.
 
 ## Build for each audience
 
