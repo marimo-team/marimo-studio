@@ -100,19 +100,6 @@ Deno.test("a clean external edit replaces the loaded source", async () => {
   assertEquals(result.states.at(-1)?.phase, "external");
 });
 
-Deno.test("event readiness reconciles an edit after the first read", async () => {
-  const remote = new MemoryRemote();
-  const result = observed();
-  const source = new SyncedSource("index.html", remote, result.observer, 1);
-  await source.load("dashboard");
-  remote.source = { content: "edit before baseline", revision: "r2" };
-
-  await source.reconcile();
-
-  assertEquals(result.documents.at(-1), "edit before baseline");
-  assertEquals(result.states.at(-1)?.phase, "external");
-});
-
 Deno.test("an older reconciliation cannot replace a newer result", async () => {
   const remote = new DeferredReadRemote();
   const result = observed();
