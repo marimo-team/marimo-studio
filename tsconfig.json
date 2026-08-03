@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "erasableSyntaxOnly": false,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "forceConsistentCasingInFileNames": true,
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noUncheckedSideEffectImports": true,
+    "noUnusedLocals": true,
+    "paths": {
+      "@/*": ["./packages/marimo-frontend/.cache/marimo/frontend/src/*"],
+      "@marimo-studio/marimo-frontend/*": ["./packages/marimo-frontend/src/*"],
+      "@marimo-team/frontend/unstable_internal/*": [
+        "./packages/marimo-frontend/.cache/marimo/frontend/src/*"
+      ]
+    },
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2023",
+    "types": ["node", "vite/client"],
+    "useDefineForClassFields": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["apps/**/*.ts", "packages/**/*.ts", "packages/**/*.tsx"],
+  "exclude": [
+    "apps/docs/.vitepress/cache",
+    "apps/docs/.vitepress/dist",
+    "packages/marimo-frontend/.cache",
+    "packages/marimo-studio/src/marimo_studio/_static"
+  ]
+}

@@ -1,0 +1,54 @@
+packages:
+  - apps/*
+  - packages/*
+
+publicHoistPattern:
+  - vue
+  - "@vue/*"
+  - "@vueuse/*"
+  - vitepress
+
+catalogMode: prefer
+
+catalog:
+  "@codemirror/lang-css": ^6.3.1
+  "@codemirror/lang-html": ^6.4.9
+  "@codemirror/state": ^6.7.1
+  "@types/node": ^22.20.1
+  "@types/react": ^19.2.10
+  "@types/react-dom": ^19.2.3
+  "@uiw/react-codemirror": 4.25.4
+  htmx.org: 2.0.10
+  jotai: ^2.17.0
+  react: ^19.2.4
+  react-dom: ^19.2.4
+  typescript: ^6.0.3
+  vite: npm:@voidzero-dev/vite-plus-core@0.2.4
+  vite-plugin-top-level-await: ^1.6.0
+  vite-plus: 0.2.4
+  vitepress: ^1.6.4
+  vue: ^3.5.39
+  zod: 4.3.6
+
+overrides:
+  vite: "catalog:"
+  vitepress>vite: ^5.4.0
+
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
+
+allowBuilds:
+  "@swc/core": true
+  esbuild: true
+
+minimumReleaseAge: 20160
+verifyDepsBeforeRun: install
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  - undici-types@6.21.0
+  - vite@5.4.21
+onlyBuiltDependencies: []

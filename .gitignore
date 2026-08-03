@@ -6,13 +6,16 @@ dist/
 wheels/
 *.egg-info
 
-# Virtual environments
+# Local environments
 .venv
-frontend/.cache
+packages/marimo-frontend/.cache/
 
 # Node-generated files
 node_modules/
-docs/.vitepress/cache/
+apps/docs/.vitepress/cache/
+apps/docs/.vitepress/dist/
+packages/*/dist/
+pnpm-debug.log*
 
 # Generated frontend assets
-src/marimo_studio/_static/
+packages/marimo-studio/src/marimo_studio/_static/

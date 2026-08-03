@@ -1,83 +1,78 @@
-# Marimo Studio
+<p align="center">
+  <a href="https://peter-gy.github.io/marimo-studio/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://peter-gy.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-dark.svg">
+      <img alt="Marimo Studio" src="https://peter-gy.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-light.svg" width="620">
+    </picture>
+  </a>
+</p>
 
-Build focused dashboards, reports, and tools from a
-[Marimo](https://marimo.io/) notebook. Keep calculations, reactive controls,
-plots, tables, and [anywidgets](https://anywidget.dev/) in Python, then arrange
-the cells and values each audience needs in custom HTML and CSS views. One
-notebook can serve several views.
+<p align="center">
+  <a href="https://github.com/peter-gy/marimo-studio/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/peter-gy/marimo-studio/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://pypi.org/project/marimo-studio/"><img alt="PyPI" src="https://img.shields.io/pypi/v/marimo-studio.svg"></a>
+  <a href="https://pypi.org/project/marimo-studio/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/marimo-studio.svg"></a>
+</p>
+
+<p align="center"><strong>Tune your notebook for every audience.</strong></p>
+
+Keep calculations, reactive controls, plots, tables, downloads, and
+[anywidgets](https://anywidget.dev/) in one [Marimo](https://marimo.io/)
+notebook. Tune the interface for each audience as a focused dashboard, report,
+or tool in custom HTML and CSS, with every view connected to the notebook's
+live state.
 
 ## Try the example
 
-From a checkout with [uv](https://docs.astral.sh/uv/) installed, run:
+Clone the repository, then open the included notebook:
 
 ```console
+make install build
 uv run marimo edit examples/analysis.py --no-sandbox
 ```
 
-The workspace opens with the notebook and finished dashboard side by side.
-Change the scenario or quarter and watch the metrics, summary, and table update
-from the same Python session. Split either pane when you want the HTML or CSS
-source in the workspace. Open **Pane**, choose **Add Source**, then place it on
-any side of the current pane.
+The browser opens the notebook beside its dashboard. Change the scenario or
+quarter in either pane. Both panes update through the same Python session.
 
-The [example](https://github.com/peter-gy/marimo-studio/tree/main/examples)
-pairs an ordinary notebook with one view under
-`examples/__marimo__/studio/analysis/dashboard/`.
+## Create a view
 
-## Build a view
-
-Create its first view, then open the notebook through Marimo:
+Add a dashboard to an existing notebook, then open it through Marimo:
 
 ```console
 uvx marimo-studio view add dashboard analysis.py
 uv run --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-`view add` creates a starter `dashboard` beside the notebook. Marimo discovers
-the Studio extension when its server starts and opens the notebook, source,
-and live preview in one workspace. Place complete cell outputs with
-`<marimo-cell>` and JSON-compatible Python values with `mo-value`. Controls and
-widgets remain connected to the notebook kernel. In edit mode, a control
-change in the editor or any attached preview updates the other open views.
+The new view starts with every notebook cell in source order. Studio gives you
+the Marimo editor, HTML and CSS editors, and a live preview in one workspace.
+Saved source changes refresh around the running notebook.
 
-Keep the editor and preview open while you or an agent edits the view. Saved
-HTML and CSS refresh around the running Python session. Authoring commands
-expose notebook discovery and runtime validation as structured output:
+Place a named cell or a JSON-compatible Python value in the view:
 
-```console
-uvx marimo-studio inspect analysis.py --display --format json
-uvx marimo-studio check analysis.py --runtime --format json
+```html
+<marimo-cell name="revenue_chart"></marimo-cell> <time mo-value="report.updated_at"></time>
 ```
 
-Create another view from the same notebook:
+Add more views when the same notebook needs a different page for another
+audience.
+
+## Share a view
+
+Serve the notebook with Marimo:
 
 ```console
-uvx marimo-studio view add executive analysis.py
+uv run --with marimo-studio marimo run analysis.py --sandbox --headless
 ```
 
-View source stays under `__marimo__/studio/` with the notebook. Python remains
-the source of calculations and reactive behavior.
+The default view opens at `/`. A view named `report` opens at `/report/`. Each
+browser receives its own Marimo run session.
 
-## Run the view
+Marimo Studio supports Python 3.11 or newer and Marimo 0.23.16 or newer.
 
-Serve the default view through Marimo's server:
-
-```console
-uv run --with marimo-studio \
-  marimo run analysis.py \
-  --sandbox \
-  --headless
-```
-
-Visitors receive the custom view backed by a live Python session. Marimo keeps
-ownership of notebook execution, authentication, sessions, and server APIs.
-
-Use Python 3.11 or newer with Marimo 0.23.16 or newer.
-
-## Documentation
+## Learn more
 
 - [Create your first view](https://peter-gy.github.io/marimo-studio/getting-started)
-- [Design a view](https://peter-gy.github.io/marimo-studio/build-pages)
-- [Share a view](https://peter-gy.github.io/marimo-studio/deployment)
+- [How Marimo Studio works](https://peter-gy.github.io/marimo-studio/how-it-works)
+- [Design a view](https://peter-gy.github.io/marimo-studio/design-views)
+- [Share a view](https://peter-gy.github.io/marimo-studio/share-views)
 - [Commands and configuration](https://peter-gy.github.io/marimo-studio/reference)
 - [Python API](https://peter-gy.github.io/marimo-studio/python-api)

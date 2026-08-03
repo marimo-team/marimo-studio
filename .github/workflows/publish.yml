@@ -29,14 +29,23 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Install Python dependencies
+        run: uv sync --locked
+
+      - name: Set up Socket Firewall
+        uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
+        with:
+          mode: firewall-free
+
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
         with:
           node-version-file: .node-version
-          package-manager-cache: false
-
-      - name: Install dependencies
-        run: make install
+          version: 0.2.4
+          cache: true
+          sfw: true
+          run-install: |
+            - args: ["--frozen-lockfile"]
 
       - name: Build release
         run: |
@@ -64,11 +73,6 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
       - name: Set up uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
@@ -116,13 +120,22 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Set up Socket Firewall
+        uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
+        with:
+          mode: firewall-free
+
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
         with:
           node-version-file: .node-version
-          package-manager-cache: false
+          version: 0.2.4
+          cache: true
+          sfw: true
+          run-install: |
+            - args: ["--frozen-lockfile"]
 
       - name: Update release notes
-        run: npx --yes changelogithub@14.0.0
+        run: pnpm exec changelogithub
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,51 @@
+import { createMarimoViteIntegration } from "@marimo-studio/marimo-frontend/vite";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import topLevelAwait from "vite-plugin-top-level-await";
+import { defineConfig } from "vite-plus";
+
+const packageRoot = dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = resolve(packageRoot, "../..");
+const marimo = createMarimoViteIntegration();
+const entrypoint = (specifier: string) => fileURLToPath(import.meta.resolve(specifier));
+
+export default defineConfig({
+  base: "./",
+  css: {
+    postcss: marimo.postcss,
+  },
+  plugins: [marimo.bridgePlugin, topLevelAwait()],
+  resolve: {
+    alias: marimo.aliases,
+  },
+  build: {
+    outDir: join(
+      workspaceRoot,
+      "packages",
+      "marimo-studio",
+      "src",
+      "marimo_studio",
+      "_static",
+      "server-runtime",
+    ),
+    emptyOutDir: true,
+    cssCodeSplit: false,
+    rollupOptions: {
+      input: {
+        runtime: entrypoint("@marimo-studio/presentation/runtime"),
+        "dev-reload": entrypoint("@marimo-studio/presentation/dev-reload"),
+        studio: entrypoint("@marimo-studio/studio"),
+      },
+      output: {
+        entryFileNames: "[name].js",
+        chunkFileNames: "chunks/[name]-[hash].js",
+        assetFileNames(assetInfo) {
+          if (assetInfo.names.some((name) => name.endsWith(".css"))) {
+            return "runtime.css";
+          }
+          return "assets/[name]-[hash][extname]";
+        },
+      },
+    },
+  },
+});

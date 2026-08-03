@@ -1,227 +1,139 @@
 ---
 name: marimo-studio
 description: >-
-  Build, run, and verify custom server-backed views from a Marimo notebook with
-  Marimo Studio. Use when an agent needs to inspect notebook cells, compose a
-  dashboard or application, project kernel values, preserve Marimo controls or
-  anywidgets, work beside the live notebook editor, add HTMX interactions, or
-  prepare a notebook view for deployment.
+  Build, run, and verify custom server-backed views from a Marimo notebook.
+  Use when an agent needs to inspect notebook cells, compose a dashboard or
+  tool, project Python values, preserve Marimo controls or anywidgets, work
+  beside the live editor, add HTMX interactions, or prepare a view to share.
 ---
 
 # Marimo Studio
 
-Keep the notebook as the source of calculations, reactive state, controls, and
-widgets. Put authored HTML, CSS, and static files under
-`__marimo__/studio/<notebook-stem>/<view>/`.
-
-Use the installed `marimo-studio` executable for view authoring and
-diagnostics. In the package checkout, fall back to `uv run marimo-studio`.
-Elsewhere, use `uvx marimo-studio`. Start live notebooks with Marimo's `edit`
-and `run` commands.
-
-## 1. Inspect the notebook
-
-Confirm the executable and scan displayed cells:
-
-```console
-marimo-studio --version
-marimo-studio inspect analysis.py --display
-```
-
-Identify native cell names, anonymous cell indexes, definitions, controls,
-anywidgets, and independent reactive branches.
-
-Write structured records to a file so a large notebook does not fill the
-terminal:
-
-```console
-marimo-studio inspect analysis.py --display --format json \
-  > /tmp/marimo-studio-cells.json
-```
-
-Execute the notebook when MIME types or kernel values affect the design:
-
-```console
-marimo-studio inspect analysis.py --display --runtime --format json \
-  > /tmp/marimo-studio-runtime.json
-```
-
-Runtime inspection performs the notebook's file, network, database, and data
-access. Inspect `runtime.errors` before selecting a value for projection. Add
-`--include-code` after narrowing the inventory when cell source is required.
-Studio resolves the notebook's PEP 723 metadata together with its surrounding
-project when present. When a runtime probe fails, confirm the same notebook and
-branch in plain Marimo before changing a view. Repair incompatible Python or
-dependency constraints in the resolved notebook environment.
-
-## 2. Create or select a view
-
-Create a starter dashboard:
-
-```console
-marimo-studio view add dashboard analysis.py --format json
-```
-
-For `analysis.py`, use the returned root:
+Keep calculations, reactive state, controls, and widgets in the notebook.
+Author each view under:
 
 ```text
-__marimo__/studio/analysis/dashboard/
+__marimo__/studio/<notebook-stem>/<view>/
   index.html
   app.css
 ```
 
-The command adds notebook-local PEP 723 configuration when needed. Preserve
-notebook code outside that metadata block and keep existing view files intact.
+Use `marimo-studio` when it is installed. Use `uvx marimo-studio` from another
+project. Start the live notebook with Marimo's `edit` and `run` commands.
 
-List and add views:
+## 1. Discover the notebook
+
+Inspect displayed cells before choosing page content:
 
 ```console
+marimo-studio inspect analysis.py --display
+```
+
+Use JSON for automation. Add `--runtime` when MIME output or a Python value
+affects the design:
+
+```console
+marimo-studio inspect analysis.py --display --format json > /tmp/studio-cells.json
+marimo-studio inspect analysis.py --display --runtime --format json > /tmp/studio-runtime.json
+```
+
+Runtime inspection executes the notebook's file, network, database, and data
+access. Check runtime errors before selecting projections. Confirm a failing
+notebook in plain Marimo before changing its view.
+
+## 2. Create a view
+
+```console
+marimo-studio view add dashboard analysis.py --format json
 marimo-studio view list analysis.py --format json
-marimo-studio view add executive analysis.py --format json
 ```
 
-Treat the view directory as authored source. Check its repository status:
+The first command adds Studio to the notebook's PEP 723 dependencies when
+needed. Preserve notebook code outside that metadata block. The starter view
+contains every notebook cell in source order.
+
+Native Marimo cell names work directly. Bind an anonymous cell when the view
+needs a stable name:
 
 ```console
-git check-ignore __marimo__/studio/analysis/dashboard/index.html
-git status --short __marimo__/studio/analysis/dashboard
+marimo-studio bind summary analysis.py --cell 4
 ```
 
-When the repository ignores `__marimo__`, add an exception scoped to
-`__marimo__/studio/`.
+Bindings belong to the notebook and are shared by every view. Reinspect and
+bind with `--overwrite` after a bound cell changes meaning or becomes
+ambiguous. Ask before adding presentation-specific cells to the notebook.
 
-## 3. Bind anonymous cells
+## 3. Author the document
 
-Use native Marimo cell names directly. Bind each anonymous displayed cell the
-view needs:
-
-```console
-marimo-studio bind filters analysis.py --cell 4
-marimo-studio bind chart analysis.py --cell 9
-marimo-studio bind table analysis.py --cell 12
-```
-
-Bindings belong to the notebook and are shared by every view.
-
-After a cell's Python structure or content changes, inspect the graph and
-replace its binding explicitly:
-
-```console
-marimo-studio bind chart analysis.py --cell 10 --overwrite
-```
-
-Prefer existing outputs and JSON-compatible variables. Ask the developer
-before adding presentation-specific cells to the notebook.
-
-## 4. Compose the document
-
-Write one complete `index.html` with a single `#app-shell`:
+Write one complete HTML document with one `#app-shell`:
 
 ```html
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Executive summary</title>
-    <link
-      rel="stylesheet"
-      href="./_marimo-studio/views/executive/static/app.css"
-    >
+    <link rel="stylesheet" href="./_marimo-studio/views/executive/static/app.css" />
   </head>
   <body>
     <main id="app-shell">
-      <section aria-labelledby="chart-title">
-        <h1 id="chart-title">Performance</h1>
-        <marimo-cell class="chart-cell" name="chart"></marimo-cell>
-      </section>
+      <h1>Performance</h1>
+      <marimo-cell name="chart"></marimo-cell>
+      <p>Updated <time mo-value="report.updated_at"></time></p>
     </main>
   </body>
 </html>
 ```
 
-Place every cell and value host inside `#app-shell`. Mount each cell name once
-per view. `<marimo-cell>` uses Marimo's output plugins and model clients, so
-controls, tables, plots, downloads, and anywidgets stay attached to Python.
+Place every cell and value host inside `#app-shell`. Mount a cell name once per
+view. `<marimo-cell>` uses Marimo's output plugins and widget models, so
+controls, tables, plots, downloads, and anywidgets stay connected to Python.
 
-Link configured sibling views with their relative view URLs:
-
-```html
-<nav aria-label="Audience">
-  <a href="./novice/">Novice</a>
-  <a href="./intermediate/">Intermediate</a>
-  <a href="./expert/">Expert</a>
-</nav>
-```
-
-Studio routes these links through its view switch so the preview keeps its
-kernel session and widget models.
-
-Keep scripts that wire shell elements inside `#app-shell`. A saved HTML change
-replaces that element while the Marimo runtime stays mounted. Initialize direct
-listeners idempotently, or delegate events from `document`. Use the
-`marimo-studio:idle` document event when setup must wait for projected outputs.
-
-Follow the product's design system. When none exists, use
-[Marimo's design guide](https://github.com/marimo-team/marimo/blob/main/DESIGN.md)
-as the visual baseline.
-
-## 5. Project kernel values
-
-Use `mo-value` for a JSON-compatible leaf in semantic HTML:
+`mo-value` accepts a root variable followed by attribute, mapping, or item
+selection:
 
 ```html
-<time mo-value="report.updated_at"></time>
 <strong mo-value="selection.count"></strong>
 <span mo-value="series[0].label"></span>
 <span mo-value='metadata["key.with.dots"]'></span>
 ```
 
-Use a root variable followed by dot selection, non-negative item indexes, or
-JSON string item keys. Dot selection reads a mapping key first, then a Python
-attribute.
-
 Keep formatting, arithmetic, calls, comprehensions, and slicing in notebook
-cells. Prefer several small context cells when their reactive branches update
+cells. Several small context cells let unrelated reactive branches update
 independently.
 
-## 6. Add HTMX behavior
-
-Use view-scoped relative routes:
+Use view-scoped routes for HTMX and static files:
 
 ```html
 <button
   type="button"
-  hx-get="./_marimo-studio/views/executive/cells/table"
-  hx-target="#table-region"
-  hx-swap="innerHTML"
+  hx-get="./_marimo-studio/views/executive/cells/detail_table"
+  hx-target="#details"
 >
-  Show table
+  Show details
 </button>
-<section id="table-region"></section>
+<section id="details"></section>
+<img src="./_marimo-studio/views/executive/static/logo.svg" alt="Company" />
 ```
 
-The response contains a `<marimo-cell>` host that attaches to the current
-browser store and kernel.
-
-Serve view-owned files through the same scope:
+Link another configured view relative to the document base:
 
 ```html
-<img
-  src="./_marimo-studio/views/executive/static/logo.svg"
-  alt="Company"
->
+<a href="./report/">Open report</a>
 ```
 
-## 7. Reserve loading space and theme outputs
+Studio handles configured view links as in-place preview switches. Saved HTML
+replaces `#app-shell` while the Marimo runtime remains mounted. Initialize
+direct event listeners idempotently, or delegate events from `document`.
 
-Set realistic skeleton dimensions for substantial outputs:
+## 4. Reserve loading space
+
+Give substantial outputs realistic skeleton dimensions:
 
 ```css
 marimo-cell[name="chart"] {
   --marimo-cell-skeleton-height: 30rem;
-  --marimo-cell-skeleton-color: rgb(20 24 32 / 9%);
-  --marimo-cell-skeleton-radius: 0.35rem;
 }
 
 time[mo-value] {
@@ -229,44 +141,50 @@ time[mo-value] {
 }
 ```
 
-The runtime also caches measured cell heights by view path and viewport class.
-Verify first load in a fresh browser session.
+Set `color-scheme` and the `--marimo-cell-*` properties to match the view.
+Verify first load in a fresh browser session. Use
+[`DESIGN.md`](https://github.com/marimo-team/marimo/blob/main/DESIGN.md) when
+the project has no visual system.
 
-Align mounted output with the page:
-
-```css
-:root {
-  color-scheme: light;
-}
-
-.chart-cell {
-  --marimo-cell-background: transparent;
-  --marimo-cell-foreground: #202124;
-  --marimo-cell-surface: #fff;
-  --marimo-cell-border-color: #d8d7d2;
-  --marimo-cell-accent: #315f82;
-  --marimo-cell-padding: 0;
-}
-```
-
-## 8. Work beside the editor
-
-Start Marimo with Studio installed as an extension:
+## 5. Work beside the notebook
 
 ```console
 uv run --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-Inside a Marimo Studio source checkout, exercise the checkout directly:
+The authenticated root opens Studio. The default layout places the Marimo
+editor beside the live preview. Add the source pane to edit `index.html` and
+`app.css` in the browser. External editor changes arrive through the same
+source revision flow.
+
+Open another view from the toolbar or at `/studio/<view>/`. View switches and
+source refreshes keep the preview runtime, kernel session, controls, and widget
+models mounted.
+
+## 6. Validate
+
+Run the selected view through static and runtime checks:
 
 ```console
-uv run marimo edit analysis.py --no-sandbox
+marimo-studio check analysis.py --view dashboard --runtime
 ```
 
-The authenticated root opens the configured default Studio workspace. Select
-`executive` from the view menu or open `/studio/executive/` on the same server.
+Use structured output in an agent loop:
 
-For browser automation:
+```console
+marimo-studio check analysis.py \
+  --view dashboard \
+  --runtime \
+  --format json \
+  --diagnostics jsonl
+```
+
+Repair the reported source location, cell name, binding, or value selector.
+Repeat until the command exits with status 0.
+
+## 7. Exercise the browser
+
+Start a token-free local editor on an unused port:
 
 ```console
 uv run --with marimo-studio \
@@ -277,18 +195,7 @@ uv run --with marimo-studio \
   --no-token
 ```
 
-Open the URL printed by Marimo with a unique browser session. The root enters
-Studio and `/studio/executive/` selects the named view. HTML and CSS changes
-refresh in the preview. View switching keeps the preview runtime, connection,
-kernel state, and widget models mounted.
-
-Select the Preview layout before capturing the custom view. Use absolute paths
-for browser screenshots and other evidence files.
-
-Use `marimo edit --help` for host, port, base URL, proxy, authentication, and
-browser options.
-
-The Studio preview iframe has `[data-preview-frame]`. Read its readiness:
+Use `$agent-browser` with a unique session. In the preview iframe:
 
 ```js
 const frame = document.querySelector("[data-preview-frame]");
@@ -296,45 +203,20 @@ await frame.contentWindow.marimoStudio.ready();
 frame.contentDocument.documentElement.dataset.marimoStudioState;
 ```
 
-Record `frame.contentWindow.__MARIMO_STUDIO_SESSION_ID__` before view or shell
-changes and compare it after the preview settles.
+Verify:
 
-## 9. Validate in the runtime
+1. Notebook and projected controls stay synchronized.
+2. `mo-value` follows the kernel value.
+3. Anywidgets and HTMX fragments remain interactive.
+4. HTML and CSS edits refresh with the same preview session ID.
+5. An invalid template keeps the last valid shell and publishes a diagnostic.
+6. The repaired template clears the diagnostic.
+7. Loading space, desktop layout, and mobile layout remain stable.
+8. The console and network log contain no unexpected errors.
 
-Run the selected view through static and runtime checks:
+Close the browser session after collecting evidence.
 
-```console
-marimo-studio check analysis.py --view executive --runtime
-```
-
-Use structured streams for automation:
-
-```console
-marimo-studio check analysis.py \
-  --view executive \
-  --runtime \
-  --format json \
-  --diagnostics jsonl
-```
-
-## 10. Exercise the view in a browser
-
-In a real browser:
-
-1. Wait for `window.marimoStudio.ready()` in the preview.
-2. Require `data-marimo-studio-state="ready"`.
-3. Exercise authored controls once before the first source edit.
-4. Exercise projected controls, anywidgets, HTMX fragments, and every view.
-5. Confirm each `mo-value` follows its kernel value.
-6. Edit HTML and CSS, then confirm authored controls still work and the preview
-   session ID stays unchanged.
-7. Temporarily break the template and confirm the last valid shell remains.
-8. Fix the template and confirm the Studio diagnostic clears.
-9. Check skeleton space, desktop and mobile layout, console errors, and failed
-   requests.
-10. Capture evidence to absolute paths and close the browser session.
-
-## 11. Deploy through Marimo
+## 8. Share the view
 
 ```console
 uv run --with marimo-studio \

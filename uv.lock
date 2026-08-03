@@ -2,6 +2,25 @@ version = 1
 revision = 3
 requires-python = ">=3.11"
 
+[manifest]
+members = [
+    "marimo-studio",
+]
+
+[manifest.dependency-groups]
+dev = [
+    { name = "httpx2", specifier = "==2.9.1" },
+    { name = "marimo", extras = ["recommended"], specifier = ">=0.23.16" },
+    { name = "pyrefly", specifier = ">=1.1.1" },
+    { name = "pytest", specifier = "==9.1.1" },
+    { name = "ruff", specifier = ">=0.16.0" },
+    { name = "ty", specifier = ">=0.0.64" },
+]
+test = [
+    { name = "httpx2", specifier = "==2.9.1" },
+    { name = "pytest", specifier = "==9.1.1" },
+]
+
 [[package]]
 name = "altair"
 version = "6.2.2"
@@ -305,19 +324,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/1a/15b92b25eb6ce3089cd49377ae990a0f3ad485a510f968aed1f19dbdcdf2/cryptography-50.0.0-pp311-pypy311_pp73-manylinux_2_34_aarch64.whl", hash = "sha256:62598a8a57f815db4c6259a4e97d857dab56697e7de8e8ab02352ab74da1995d", size = 4691924, upload-time = "2026-07-31T14:24:58.082Z" },
     { url = "https://files.pythonhosted.org/packages/62/15/219075012ab13e8905f3cd572204f4acb4b111df787104346b9bc0cea789/cryptography-50.0.0-pp311-pypy311_pp73-manylinux_2_34_x86_64.whl", hash = "sha256:07479a1cb08219ab719147e742e76090c9c773321959bb94946fffdd397a6437", size = 4699593, upload-time = "2026-07-31T14:24:59.951Z" },
     { url = "https://files.pythonhosted.org/packages/8e/b5/c2c5fce26f0ee40d21bafe7f191d29a34b35a65ac4fe8a1191d1983612e9/cryptography-50.0.0-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:c99c003e088647b8a5b7c145d6f78c335f6348332b62e142d411c4b63d1460b9", size = 3813796, upload-time = "2026-07-31T14:25:02.298Z" },
-]
-
-[[package]]
-name = "deno"
-version = "2.9.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/41/65/5c2b5f7200f73f894f593924ceb2587f72921856633a6872a0e65838a086/deno-2.9.4.tar.gz", hash = "sha256:7a1e8c13ff875ab9fce9ef46a7a3e57f2e88ed913f12e9573774f2e13bc655cd", size = 8167, upload-time = "2026-07-23T17:03:17.114Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6f/81/af65625100a206af5c41cef87261b45f02dca1276d067778d6c94f41f884/deno-2.9.4-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:b28fb101c676827361cf16b8056cab4a245c2fc0403a470b1ef505fa5ab3ebc2", size = 42253165, upload-time = "2026-07-23T17:02:58.945Z" },
-    { url = "https://files.pythonhosted.org/packages/dc/01/4341080e37b433f83a0b3721b8d412cd2df1d2e8bb83ec21d5a784e84038/deno-2.9.4-py3-none-macosx_11_0_arm64.whl", hash = "sha256:0bf192f7b2801ea1ecacaefec31d64b70aa7725c8f7ae1ae5e9caadf10934e4e", size = 37852489, upload-time = "2026-07-23T17:03:02.386Z" },
-    { url = "https://files.pythonhosted.org/packages/28/67/fe20c2a97eaf9a0bd4039bc6891ecdcc42e7882e2cfce88788e2118ca1fc/deno-2.9.4-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:31c9d8e88fc47076601d84a9eec6da3516aadffe1dececc41e4f95c2368176c0", size = 41975689, upload-time = "2026-07-23T17:03:05.847Z" },
-    { url = "https://files.pythonhosted.org/packages/f8/78/2fdff277226b744dd6e9377d6bcc99e0103413d98c4c29beccad3a288bb3/deno-2.9.4-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:cff3d7da3aaf12b71747e13d6a43ccc4c684301cff211ca6563836b4e45d1490", size = 43826629, upload-time = "2026-07-23T17:03:10.119Z" },
-    { url = "https://files.pythonhosted.org/packages/82/47/8dd9fbf96c70751a3cd8e4d4bcc73c6aef9375e6f7909d7e809020a26c60/deno-2.9.4-py3-none-win_amd64.whl", hash = "sha256:c13b5e6e52b6facccccdbf62f0f23354616b0f2fe95d2c935491dbb749986dbb", size = 41516521, upload-time = "2026-07-23T17:03:14.189Z" },
 ]
 
 [[package]]
@@ -802,7 +808,7 @@ recommended = [
 [[package]]
 name = "marimo-studio"
 version = "0.0.2"
-source = { editable = "." }
+source = { editable = "packages/marimo-studio" }
 dependencies = [
     { name = "click" },
     { name = "htpy" },
@@ -810,21 +816,6 @@ dependencies = [
     { name = "markupsafe" },
     { name = "packaging" },
     { name = "tomlkit" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "deno" },
-    { name = "httpx2" },
-    { name = "marimo", extra = ["recommended"] },
-    { name = "pyrefly" },
-    { name = "pytest" },
-    { name = "ruff" },
-    { name = "ty" },
-]
-test = [
-    { name = "httpx2" },
-    { name = "pytest" },
 ]
 
 [package.metadata]
@@ -835,21 +826,6 @@ requires-dist = [
     { name = "markupsafe", specifier = ">=3" },
     { name = "packaging", specifier = ">=25" },
     { name = "tomlkit", specifier = ">=0.14" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "deno", specifier = ">=2.9.4" },
-    { name = "httpx2", specifier = "==2.9.1" },
-    { name = "marimo", extras = ["recommended"], specifier = ">=0.23.16" },
-    { name = "pyrefly", specifier = ">=1.1.1" },
-    { name = "pytest", specifier = "==9.1.1" },
-    { name = "ruff", specifier = ">=0.16.0" },
-    { name = "ty", specifier = ">=0.0.64" },
-]
-test = [
-    { name = "httpx2", specifier = "==2.9.1" },
-    { name = "pytest", specifier = "==9.1.1" },
 ]
 
 [[package]]

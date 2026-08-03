@@ -1,0 +1,63 @@
+[project]
+name = "marimo-studio"
+version = "0.0.2"
+description = "Design custom views for Marimo notebooks"
+readme = "README.md"
+authors = [{ name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }]
+requires-python = ">=3.11"
+dependencies = [
+  "click>=8.2",
+  "htpy>=26.5.1,<27",
+  "marimo>=0.23.16",
+  "markupsafe>=3",
+  "packaging>=25",
+  "tomlkit>=0.14",
+]
+
+[project.urls]
+Homepage = "https://peter-gy.github.io/marimo-studio/"
+Documentation = "https://peter-gy.github.io/marimo-studio/"
+Repository = "https://github.com/peter-gy/marimo-studio"
+Issues = "https://github.com/peter-gy/marimo-studio/issues"
+
+[project.scripts]
+marimo-studio = "marimo_studio._cli:main"
+
+[project.entry-points."marimo.server.asgi.middleware"]
+marimo-studio = "marimo_studio._entrypoints:server_middleware"
+
+[project.entry-points."marimo.kernel.lifespan"]
+marimo-studio = "marimo_studio._entrypoints:kernel_lifespan"
+
+[tool.ruff]
+src = ["src"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"marimo._ast" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo._cli" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo._config" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo._messaging" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo._runtime" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo._server" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo._session" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo._types" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo._utils" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo_studio._compat" = { msg = "Compose compatibility adapters at an application or server boundary" }
+
+[tool.ruff.lint.per-file-ignores]
+"src/marimo_studio/_compat/**/*.py" = ["TID251"]
+"src/marimo_studio/_server/**/*.py" = ["TID251"]
+"src/marimo_studio/_entrypoints.py" = ["TID251"]
+"src/marimo_studio/app.py" = ["TID251"]
+"src/marimo_studio/checks.py" = ["TID251"]
+"src/marimo_studio/environment.py" = ["TID251"]
+"src/marimo_studio/inspect.py" = ["TID251"]
+"tests/**/*.py" = ["TID251"]
+
+[build-system]
+requires = ["uv_build>=0.11.32,<0.13.0"]
+build-backend = "uv_build"

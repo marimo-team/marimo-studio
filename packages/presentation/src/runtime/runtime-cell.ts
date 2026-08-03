@@ -1,0 +1,3 @@
+import type { flattenTopLevelNotebookCells } from "@marimo-studio/marimo-frontend/cells";
+
+export type RuntimeCell = ReturnType<typeof flattenTopLevelNotebookCells>[number];

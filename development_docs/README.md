@@ -1,10 +1,9 @@
 # Development docs
 
-- [Architecture](architecture.md) covers command, server, session, and
-  compatibility boundaries.
-- [Frontend](frontend.md) covers browser state, source layout, and generated
-  assets.
-- [Releasing](releasing.md) covers the tag-driven PyPI flow.
+- [Architecture](architecture.md) defines runtime ownership, route behavior,
+  session boundaries, and Python dependencies.
+- [Frontend workspace](frontend.md) defines pnpm packages, Marimo adapters,
+  generated assets, and browser checks.
+- [Releasing](releasing.md) defines the version, tag, and publishing flow.
 
-Repository commands and review gates live in [AGENTS.md](../AGENTS.md). Public
-workflows live in the [user docs](../docs/index.md).
+Repository commands and universal rules live in [AGENTS.md](../AGENTS.md).

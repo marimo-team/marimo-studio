@@ -1,0 +1,28 @@
+{
+  "name": "marimo-studio-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vp run --filter @marimo-studio/browser build",
+    "check": "pnpm prepare:frontend && vp check README.md AGENTS.md .github apps development_docs docs examples packages skills package.json pnpm-workspace.yaml tsconfig.json vite.config.ts",
+    "docs:build": "vp run --filter @marimo-studio/docs build",
+    "docs:dev": "vp run --filter @marimo-studio/docs dev",
+    "format": "vp fmt README.md AGENTS.md .github apps development_docs docs examples packages skills package.json pnpm-workspace.yaml tsconfig.json vite.config.ts",
+    "format:check": "vp fmt --check README.md AGENTS.md .github apps development_docs docs examples packages skills package.json pnpm-workspace.yaml tsconfig.json vite.config.ts",
+    "lint": "pnpm prepare:frontend && vp lint apps packages vite.config.ts",
+    "prepare:frontend": "pnpm --filter @marimo-studio/marimo-frontend prepare:upstream",
+    "test": "vp run -r test",
+    "typecheck": "pnpm prepare:frontend && vp check --no-fmt --no-lint apps/browser apps/docs/.vitepress packages/presentation packages/protocol packages/studio packages/marimo-frontend/src vite.config.ts"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "changelogithub": "14.0.0",
+    "typescript": "catalog:",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4",
+    "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "packageManager": "pnpm@11.18.0+sha512.33d83c77da82f49fba836925c6f1b841181ec3132b670639bd012f7075f5c7cf634c5f870147c19aae7478fac01df09d8892e880454896edd23ee9b33757563c"
+}

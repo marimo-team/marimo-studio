@@ -1,28 +1,15 @@
 # Create your first view
 
-Create a live dashboard from one displayed notebook cell. Keep the Marimo
-editor open, place the cell in a custom page, and verify the result against the
-running Python kernel.
+Start with a saved [Marimo](https://marimo.io/) notebook, Python 3.11 or newer,
+and [uv](https://docs.astral.sh/uv/). The commands below use `analysis.py`.
 
-## Before you start
-
-You need:
-
-- A saved [Marimo](https://marimo.io/) notebook
-- Python 3.11 or newer
-- [uv](https://docs.astral.sh/uv/)
-
-The example uses `analysis.py` and a displayed cell named `summary`.
-
-## Create the view
-
-Run:
+## Add a dashboard
 
 ```console
 uvx marimo-studio view add dashboard analysis.py
 ```
 
-The command configures Studio in the notebook's PEP 723 metadata and creates:
+The command adds Studio to the notebook's PEP 723 dependencies and creates:
 
 ```text
 analysis.py
@@ -34,42 +21,41 @@ __marimo__/
         app.css
 ```
 
-The metadata records `marimo-studio` as an unversioned dependency and selects
-the default view. Notebook code outside the PEP 723 block stays byte-identical.
+The starter page contains every notebook cell in source order, so the first
+preview already shows the available outputs.
 
-## Open the notebook and view together
-
-Start Marimo with the Studio extension available:
+## Open Studio through Marimo
 
 ```console
 uv run --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-Marimo opens one workspace with the notebook on the left and its live preview
-on the right. Keep this browser window open while you work. To edit HTML or CSS
-in Studio, open **Pane** in either pane, choose **Add Source**, then place it on
-the left, right, above, or below.
+Marimo opens the Studio workspace at its regular server URL. The notebook is
+on the left and the live view is on the right. Both use the same edit session.
 
-## Choose an output
+Open **Pane** in either pane to add the source editor. Place it beside, above,
+or below the current pane. Use its **HTML** and **CSS** tabs to edit the view.
 
-List cells that display a result:
+## Choose a notebook output
+
+Inspect cells that display a result:
 
 ```console
 uvx marimo-studio inspect analysis.py --display
 ```
 
-Use a native cell name directly in a view. When a row ends with `cell 3`, give
-that anonymous cell a stable alias:
+Use a native Marimo cell name directly. Bind an anonymous cell when the view
+needs a stable name:
 
 ```console
 uvx marimo-studio bind summary analysis.py --cell 3
 ```
 
-The alias belongs to the notebook and can be reused by every view.
+The cell index above is an example. Use the index reported by `inspect`.
 
-## Place the output in the page
+## Place the output
 
-Select **HTML** in the Source pane. Replace the contents of `#app-shell` with:
+Select **HTML** and replace the contents of `#app-shell`:
 
 ```html
 <main id="app-shell">
@@ -85,70 +71,34 @@ Select **HTML** in the Source pane. Replace the contents of `#app-shell` with:
 </main>
 ```
 
-Studio saves the edit to
-`__marimo__/studio/analysis/dashboard/index.html`. The preview refreshes around
-the current Python session and renders the notebook output under **Summary**.
+Studio saves the file at
+`__marimo__/studio/analysis/dashboard/index.html`. The preview refreshes and
+renders the notebook output under **Summary**.
 
-You can edit the same file in another editor. Studio follows changes from disk
-and keeps the browser editor current. If both editors change the file before a
-save completes, Studio shows both versions and asks which one to keep.
+Change a control in the notebook or preview. Marimo sends the value to the
+other surface and reruns affected cells. Anywidget model changes follow the
+same session path.
 
-Change a control in the notebook or preview. Every open view attached to that
-edit session receives Marimo control values and anywidget trait updates. Marimo
-reruns cells affected by reactive controls.
+You can also edit `index.html` and `app.css` in another editor. Studio follows
+changes from disk. If the browser and another editor change the same file,
+Studio shows both versions for an explicit choice.
 
-## Validate the view
+## Check the view
 
-Run a static check while editing:
+Validate templates, cell names, bindings, and value selectors:
 
 ```console
 uvx marimo-studio check analysis.py
 ```
 
-Run the runtime check before sharing:
+Execute projected cells and resolve projected values before sharing:
 
 ```console
 uvx marimo-studio check analysis.py --runtime
 ```
 
-The runtime check executes the projected cells and reads the Python values
-referenced by the view. It can perform the file, network, database, and data
-access defined by those notebook cells.
+The runtime check can perform the file, network, database, and data access used
+by those cells.
 
-## Let an agent shape the interface
-
-An agent can inspect the notebook as structured data, edit the same view files,
-and validate the result while your notebook, source editor, and preview stay
-open:
-
-```console
-uvx marimo-studio inspect analysis.py --display --format json
-uvx marimo-studio check analysis.py --runtime --format json
-```
-
-The agent can focus on page structure, wording, responsive layout, and which
-existing outputs belong in the view.
-
-## Add a view for another audience
-
-Open the view menu beside `dashboard`, select **New view**, and enter
-`executive`. Studio opens the new HTML above its live preview and keeps the
-notebook beside both. The starter view contains every notebook cell in source
-order.
-
-The equivalent command is:
-
-```console
-uvx marimo-studio view add executive analysis.py
-```
-
-The new view lives at `__marimo__/studio/analysis/executive/` and can reuse the
-`summary` alias. Keep view directories in source control with the notebook.
-See [Source control](reference.md#source-control) when the repository ignores
-`__marimo__`.
-
-The same menu removes views. Studio shows the files it will delete before the
-removal runs.
-
-Continue with [Design a view](build-pages.md) to combine complete cells,
-individual Python values, loading space, and on-demand detail.
+Continue with [Create and manage views](views.md) for another audience or
+[Design a view](design-views.md) for values, loading space, theming, and HTMX.

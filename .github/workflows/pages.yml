@@ -27,50 +27,48 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Set up Socket Firewall
+        uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
+        with:
+          mode: firewall-free
+
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
         with:
           node-version-file: .node-version
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
+          version: 0.2.4
+          cache: true
+          sfw: true
+          run-install: |
+            - args: ["--frozen-lockfile"]
 
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'
         id: pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
-      - name: Install dependencies
-        run: make install
-
       - name: Build documentation
         env:
-          GITHUB_PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}
         run: make docs-build
 
       - name: Check GitHub Pages paths
         env:
-          GITHUB_PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}
         run: |
-          base_path="${GITHUB_PAGES_BASE_PATH:-}"
-          base="/${base_path#/}"
-          base="${base%/}/"
-          index="docs/.vitepress/dist/index.html"
-          test -f docs/.vitepress/dist/getting-started.html
-          test -f docs/.vitepress/dist/reference.html
-          grep -q "href=\"${base}assets/" "$index"
-          grep -q "src=\"${base}assets/" "$index"
-          grep -q "href=\"${base}favicon.svg\"" "$index"
-          grep -q "href=\"${base}getting-started\"" "$index"
+          index="apps/docs/.vitepress/dist/index.html"
+          test -f apps/docs/.vitepress/dist/getting-started.html
+          test -f apps/docs/.vitepress/dist/reference.html
+          grep -q "href=\"${BASE_PATH}/assets/" "$index"
+          grep -q "src=\"${BASE_PATH}/assets/" "$index"
+          grep -q "href=\"${BASE_PATH}/favicon.svg\"" "$index"
+          grep -q "href=\"${BASE_PATH}/getting-started\"" "$index"
 
       - name: Upload GitHub Pages artifact
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: docs/.vitepress/dist
+          path: apps/docs/.vitepress/dist
 
   deploy:
     if: github.event_name != 'pull_request'

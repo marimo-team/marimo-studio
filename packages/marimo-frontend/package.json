@@ -1,0 +1,32 @@
+{
+  "name": "@marimo-studio/marimo-frontend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./build-metadata": "./scripts/metadata.mjs",
+    "./cells": "./src/upstream/cells.ts",
+    "./controls": "./src/upstream/controls.ts",
+    "./runtime": "./src/upstream/runtime.ts",
+    "./style": "./src/upstream/style.ts",
+    "./vite": "./src/vite.ts"
+  },
+  "scripts": {
+    "prepare:upstream": "node scripts/prepare.mjs",
+    "test": "vp test tests/source.test.mjs"
+  },
+  "dependencies": {
+    "@codemirror/state": "catalog:",
+    "jotai": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@marimo-studio/presentation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./dev-reload": "./src/dev-reload.ts",
+    "./runtime": "./src/main.ts"
+  },
+  "scripts": {
+    "prepare:upstream": "pnpm --filter @marimo-studio/marimo-frontend prepare:upstream",
+    "test": "pnpm prepare:upstream && vp test"
+  },
+  "dependencies": {
+    "@marimo-studio/marimo-frontend": "workspace:*",
+    "@marimo-studio/protocol": "workspace:*",
+    "htmx.org": "catalog:",
+    "jotai": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

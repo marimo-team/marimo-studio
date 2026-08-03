@@ -14,7 +14,7 @@ and pushes the annotated vX.Y.Z tag that starts trusted publishing.
 
 Add the version change to the release pull request with:
 
-  uv version --bump patch
+  uv version --package marimo-studio --bump patch
 EOF
 }
 
@@ -79,7 +79,7 @@ if [[ "$COMMIT" != "$REMOTE_COMMIT" ]]; then
 	exit 1
 fi
 
-VERSION="$(uv version --short)"
+VERSION="$(uv version --package marimo-studio --short)"
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	error "Package version must be a final X.Y.Z version. Current version: $VERSION"
 	exit 1

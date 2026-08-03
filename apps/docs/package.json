@@ -1,0 +1,17 @@
+{
+  "name": "@marimo-studio/docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vitepress build",
+    "dev": "vitepress dev --host 127.0.0.1 --port 4173 --strictPort",
+    "preview": "vitepress preview --host 127.0.0.1 --port 4173 --strictPort"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitepress": "catalog:",
+    "vue": "catalog:"
+  }
+}

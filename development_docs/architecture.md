@@ -1,39 +1,47 @@
 # Architecture
 
-Marimo owns the application process, notebook sessions, kernels, and native
-routes. Marimo Studio registers presentation middleware and a kernel extension
-inside that process.
+Marimo Studio loads inside Marimo through server middleware and a kernel
+extension. Marimo remains responsible for the ASGI process, authentication,
+notebook execution, session ownership, native routes, and virtual files.
 
 ## Boundaries
 
-| Boundary | Owner | Contract |
-| --- | --- | --- |
-| Command line | `marimo_studio._cli` | Parse arguments, call services, render text or JSON |
-| Workspace | `marimo_studio._workspace` | Resolve configuration, views, aliases, and checks |
-| ASGI process | Marimo | Lifecycle, authentication, native routes, and session manager |
-| Presentation | `marimo_studio._server` | View documents, Studio workspace, and support routes |
-| Kernel session | Marimo | Reactive graph, execution, caches, controls, and widget models |
-| Value bridge | `marimo_studio._compat` | Read permitted selectors through the kernel command queue |
-| Browser runtime | Marimo adapter | Transport connection, store, output plugins, and widget models |
-| View source | Notebook author | HTML, CSS, static files, cell hosts, and value hosts |
+| Boundary       | Owner                      | Contract                                                         |
+| -------------- | -------------------------- | ---------------------------------------------------------------- |
+| Command line   | `marimo_studio._cli`       | Inspect notebooks and manage Studio configuration                |
+| Workspace      | `marimo_studio._workspace` | Resolve configuration, bindings, views, and authored files       |
+| ASGI process   | Marimo                     | Lifecycle, authentication, native APIs, and sessions             |
+| Server adapter | `marimo_studio._server`    | Studio pages, custom views, support routes, and HTTP translation |
+| Compatibility  | `marimo_studio._compat`    | Translate private Marimo APIs into Studio-owned types            |
+| Kernel session | Marimo                     | Reactive execution, caches, controls, and widget models          |
+| Browser build  | `apps/browser`             | Compose entrypoints and finalize packaged assets                 |
+| View document  | `packages/presentation`    | Render the custom view and mount the Marimo runtime              |
+| Studio         | `packages/studio`          | Coordinate panes, source editors, views, and preview             |
+| Wire protocol  | `packages/protocol`        | Define Zod schemas for messages and server responses             |
+| Marimo adapter | `packages/marimo-frontend` | Contain unstable Marimo frontend imports and build integration   |
 
-HTMX can add or remove projection hosts. Marimo remains responsible for kernel
-creation, execution, invalidation, and caching.
+Dependencies follow two inward paths:
 
-Dependencies follow the runtime boundary. CLI modules translate Click values.
-Workspace modules own notebook and view operations. Server modules translate
-ASGI requests into workspace operations. Compatibility packages are the sole
-Python adapters to private Marimo APIs. Browser entrypoints compose transport,
-state, DOM, and Marimo adapters.
+```text
+Python entrypoints -> application services -> _workspace -> records and primitives
+                  \-> server composition --> _compat ----/
 
-Compatibility adapters return Studio-owned records from
-`marimo_studio.types`. Workspace and server modules consume those records or
-accept adapter callables. Marimo request models, session objects, and kernel
-messages stay inside `_compat`.
+apps/browser -> presentation -> protocol
+             |              \-> marimo-frontend
+             \-> studio ------> protocol
+```
+
+Use the `marimo-studio` commands for notebook inspection, aliases, checks, and
+view management. Start the runtime through Marimo:
+
+```console
+uv run --with marimo-studio marimo edit analysis.py
+uv run --with marimo-studio marimo run analysis.py
+```
 
 ## Activation
 
-The package registers two Marimo entry points:
+The Python distribution registers these entry points:
 
 ```toml
 [project.entry-points."marimo.server.asgi.middleware"]
@@ -43,123 +51,75 @@ marimo-studio = "marimo_studio._entrypoints:server_middleware"
 marimo-studio = "marimo_studio._entrypoints:kernel_lifespan"
 ```
 
-The middleware discovers Studio configuration from the active notebook before
-handling a presentation route. The kernel extension registers the value reader
-for configured notebooks. In edit mode, the middleware also activates control
-updates between consumers of the same Marimo session. An unconfigured notebook
-continues through Marimo's regular server and kernel paths.
+The middleware discovers configuration from notebook PEP 723 metadata or the
+nearest matching `pyproject.toml`. Configured views resolve from
+`__marimo__/studio/<notebook-stem>/<view>/`. Requests for unconfigured
+notebooks continue through Marimo.
 
-Configuration resolves from notebook PEP 723 metadata or the nearest parent
-`pyproject.toml` that names the notebook. Views resolve from
-`__marimo__/studio/<notebook-stem>/<view-name>/`.
+The kernel extension registers value reads for configured notebooks. Values
+travel through Marimo's kernel queue and remain scoped to selectors permitted
+by the active view.
 
-## Command flow
+## Routes and sessions
 
-`marimo_studio._cli.main` registers each command explicitly. Command modules
-translate Click values into calls to notebook inspection and workspace
-services. Output modules own human text, terminal color, JSON, and diagnostic
-events.
+Run mode serves the default view at `/` and named views at `/<view>/`. Each
+browser receives an isolated run session.
 
-Keep Click imports and terminal presentation inside `_cli`. Workspace services
-should accept Python values and raise domain errors that tests can exercise
-directly.
+Edit mode sends the authenticated root to `/studio/<default-view>/`. The
+workspace embeds Marimo's native editor through its `file` selector. A custom
+view connects as a kiosk consumer after the editor session exists. Accepted
+control writes and anywidget model changes propagate between consumers in that
+session.
 
-## Server and session flow
+Studio support routes live under `/_marimo-studio/`. Route construction must
+include the parent ASGI mount and Marimo `base_url`. Authentication and native
+Marimo routes pass through the middleware.
 
-Run mode serves the configured default view at `/` and named views at
-`/<view>/`. Each browser document receives an isolated Marimo run session.
+Notebook query parameters synchronize across the Studio URL, native editor,
+and preview. File selection, authentication, transport, and session parameters
+remain scoped to the document that owns them.
 
-In edit mode, the authenticated root redirects to
-`/studio/<default-view>/`. The Studio shell embeds Marimo's native editor at
-`/?file=<file-key>`, which the middleware delegates to Marimo. A standalone
-`/<view>/` document connects to the editor kernel as a kiosk consumer after the
-primary editor session exists.
+## Presentation lifecycle
 
-Accepted Marimo control writes and anywidget model updates are relayed to the
-other consumers in that edit session. The source consumer is excluded from the
-peer notification. Run sessions keep their per-browser isolation.
+Each custom document keeps one Marimo runtime root mounted for its lifetime.
+React portals project cell outputs into `<marimo-cell>` hosts. `mo-value` hosts
+read permitted kernel values. HTMX may replace authored shell markup while the
+runtime, transport connection, output plugins, and widget models stay mounted.
 
-Studio support routes live under `/_marimo-studio/`. Public and support URLs
-include the parent ASGI mount and Marimo `base_url`. Native Marimo routes pass
-through the middleware.
+The server validates bindings against the active Marimo document by semantic
+cell identity. Missing cells and values become structured projection
+diagnostics while healthy hosts continue rendering. A source refresh commits
+HTML, CSS, runtime configuration, and the selected view at one presentation
+revision. The browser keeps the last valid shell during transient or invalid
+updates.
 
-Edit-mode support routes create and remove views and conditionally replace
-authored HTML or CSS. Workspace services own validation, symlink checks, exact
-text reads, and atomic writes. HTTP adapters translate those outcomes into
-ETags and structured errors.
+View source reads and writes use content revisions. Writes use atomic
+replacement and reject mutable symlink traversal. External edits refresh clean
+editors and produce a conflict beside dirty editors.
 
-`_server.middleware` dispatches requests. `_server.routing` recognizes route
-shapes. `_server.pages` builds documents and redirects. `_server.support` owns
-projection and development routes. `_server.studio_api` translates source and
-view mutations.
+## Python dependency direction
 
-## Browser flow
+`_workspace` owns project rules and imports no Marimo adapter. Operations that
+need notebook data depend on the `NotebookInspector` or `RuntimeProber` port.
+Top-level application services compose those operations with `_compat`
+adapters. `environment.py` likewise composes uv process orchestration with
+Marimo's notebook sandbox flags.
 
-Each custom document contains one hidden `#marimo-runtime-root`. It owns the
-Marimo store, transport connection, output plugins, and widget models for the
-document lifetime. React portals render cell outputs into `<marimo-cell>`
-hosts. Value requests travel through the active browser consumer and the kernel
-command queue.
+Click imports stay in `_cli`. Starlette request and response translation stays
+in `_server`. The CLI resolves workspace targets and calls application
+services with Python values and Studio-owned records. Server composition may
+call `_compat` where a request depends on the active Marimo session.
 
-View switches and HTML refreshes replace `#app-shell` while the runtime root
-stays mounted. See [Frontend](frontend.md) for refresh and build contracts.
+Private Marimo imports stay in `_compat`. Adapters translate Marimo requests,
+sessions, kernel messages, and graph state into records from
+`marimo_studio.types`.
 
-The browser runtime configuration has three parts: schema validation, the
-active store, and HTTP retrieval. Presentation refresh uses a document adapter
-for atomic shell and stylesheet commits. The refresh coordinator owns retries,
-event streams, and failure recovery.
+Keep protocol changes aligned across Python response models, browser schemas,
+diagnostic output, support routes, storage keys, and query parameters.
 
-Studio's three workspace surfaces remain mounted as direct children of one
-surface layer. A serializable pane tree controls their rectangles, focus, and
-narrow-screen projection without moving an iframe or editor node.
+## Runtime checks
 
-## Projection lifecycle
-
-Workspace resolution treats document structure and projection identity as
-separate contracts. Invalid HTML structure stops the selected document.
-Missing cells, stale aliases, and undefined value roots remain attached to the
-resolved view as structured diagnostics. Valid bindings continue into the
-runtime configuration.
-
-The browser renders each projection diagnostic at its host.
-`window.marimoStudio.diagnostics()` combines those records with presentation
-refresh failures and browser delivery failures. `check` serializes projection
-findings to JSON and JSON Lines with the view, target, template location, and
-repair hint. A notebook or template save recomputes the records and clears a
-repaired host without replacing the kernel session.
-
-Before publishing new bindings, the server compares the selected view's named
-and anonymous cells with the active Marimo document by semantic identity. An
-unrelated notebook edit cannot block the view. A document that is still
-receiving a required edit returns a transient sync response. The browser keeps
-the last healthy configuration, reports a loading state, and retries with
-capped backoff.
-
-Every view document and runtime configuration carries a presentation revision.
-The browser commits a shell refresh after both responses report the same
-revision. The revision includes the selected view and source content. A
-concurrent file save produces a transient retry while the last coherent
-presentation stays active.
-
-A value projection clears its rendered value when its notebook root
-disappears. Cached values remain visible during transient kernel reads. A cell
-binding that never reaches the browser store changes from a loading skeleton
-to a local runtime diagnostic after the delivery window.
-
-## Compatibility
-
-Private Marimo Python imports stay in `src/marimo_studio/_compat/`. Imports from
-`@marimo-team/frontend/unstable_internal` stay in
-`frontend/src/marimo-adapter/upstream/`. Runtime and projection modules import
-the local adapter surface.
-
-`frontend/marimo-source.ts` prepares the exact Marimo version in `uv.lock` for
-browser builds and type checks. `frontend/build.ts` composes that checkout with
-HTMX and Vite. A Marimo upgrade should require changes near these adapter
-surfaces when private paths or frontend declarations move.
-
-The package supports Marimo 0.23.16 and newer. CI tests the lower bound and the
-version resolved in `uv.lock`. The browser build uses that locked version.
-
-Kernel sessions live in one process. Production deployments use one worker or
-route each browser back to the process that owns its session.
+Changes to server or session behavior should cover configured and unconfigured
+notebooks, edit and run modes, default and named views, authentication, and a
+nonempty `base_url`. Exercise cell output, values, controls, anywidgets, HTMX,
+virtual files, source refresh, and view switching in a real browser.

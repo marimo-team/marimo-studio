@@ -21,7 +21,7 @@ if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	exit 1
 fi
 
-package_version="$(uv version --short)"
+package_version="$(uv version --package marimo-studio --short)"
 if [[ "v$package_version" != "$GITHUB_REF_NAME" ]]; then
 	error "Package version $package_version does not match tag $GITHUB_REF_NAME"
 	exit 1

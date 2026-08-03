@@ -1,0 +1,84 @@
+import type {
+  ViewDiagnosticsMessage,
+  ViewErrorMessage,
+  ViewReadyMessage,
+  ViewSyncPendingMessage,
+} from "@marimo-studio/protocol/preview-messages";
+
+import type { PresentationDiagnostic } from "../diagnostics.ts";
+
+import { getSupportUrl, type ProjectionDiagnostic } from "../runtime-config/index.ts";
+
+export const supportView = (supportUrl = getSupportUrl()): string => {
+  try {
+    const path = new URL(supportUrl, globalThis.location.origin).pathname;
+    const value = path.split("/").filter(Boolean).at(-1);
+    return value ? decodeURIComponent(value) : "";
+  } catch {
+    return "";
+  }
+};
+
+export const showDiagnostic = (
+  detail: PresentationDiagnostic,
+  state: "error" | "waiting" = "error",
+): void => {
+  const host = diagnosticHost();
+  host.textContent = detail.message;
+  if (detail.hint) {
+    host.title = detail.hint;
+  } else {
+    host.removeAttribute("title");
+  }
+  host.dataset.state = state;
+  host.setAttribute("role", state === "waiting" ? "status" : "alert");
+  host.hidden = state === "waiting" && globalThis.parent !== globalThis.window;
+  const message: ViewSyncPendingMessage | ViewErrorMessage = {
+    type: state === "waiting" ? "marimo-studio:view-sync-pending" : "marimo-studio:view-error",
+    message: detail.message,
+    hint: detail.hint,
+    view: detail.view,
+  };
+  globalThis.parent.postMessage(message, globalThis.location.origin);
+};
+
+export const clearDiagnostic = (): void => {
+  const host = diagnosticHost();
+  host.hidden = true;
+  delete host.dataset.state;
+  host.removeAttribute("title");
+};
+
+export const notifyReady = (view = supportView()): void => {
+  const message: ViewReadyMessage = {
+    type: "marimo-studio:view-ready",
+    view,
+    sessionId: globalThis.__MARIMO_STUDIO_SESSION_ID__,
+  };
+  globalThis.parent.postMessage(message, globalThis.location.origin);
+};
+
+export const notifyDiagnostics = (
+  diagnostics: ProjectionDiagnostic[],
+  view = supportView(),
+): void => {
+  const message: ViewDiagnosticsMessage = {
+    type: "marimo-studio:view-diagnostics",
+    view,
+    diagnostics,
+  };
+  globalThis.parent.postMessage(message, globalThis.location.origin);
+};
+
+const diagnosticHost = (): HTMLElement => {
+  const existing = document.querySelector<HTMLElement>("[data-marimo-studio-diagnostic]");
+  if (existing) {
+    return existing;
+  }
+  const created = document.createElement("aside");
+  created.dataset.marimoStudioDiagnostic = "";
+  created.setAttribute("role", "alert");
+  created.hidden = true;
+  document.body.append(created);
+  return created;
+};

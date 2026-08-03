@@ -1,35 +1,40 @@
 # Releasing
 
-Releases use annotated `vX.Y.Z` tags from a clean `main` branch with passing CI.
+An annotated `vX.Y.Z` tag on `main` starts the PyPI publishing workflow.
 
 ## Prepare
 
-Update the package version:
+Update the package version and run the repository gates:
 
 ```console
-uv version --bump patch
+uv version --package marimo-studio --bump patch
+make install
+make check
+make package
 ```
 
-Commit `pyproject.toml` and `uv.lock`, merge the change, and wait for CI on
-`main`.
+Commit `packages/marimo-studio/pyproject.toml` and `uv.lock`. Merge them to
+`main` and wait for the CI run on that commit. Regenerate `uv.lock` or
+`pnpm-lock.yaml` when the release also changes its corresponding dependency
+inputs.
 
-## Verify and tag
+## Tag
 
-Check the release state:
+Verify the clean, synchronized branch and successful CI:
 
 ```console
 ./scripts/release.sh --dry-run
 ```
 
-Create and push the tag:
+Create and push the annotated tag:
 
 ```console
 ./scripts/release.sh
 ```
 
-The publish workflow builds the wheel and source distribution, publishes
-through PyPI Trusted Publishing, verifies a fresh public installation, and
-generates GitHub release notes.
+The publish workflow builds the wheel and source distribution, publishes with
+PyPI Trusted Publishing, verifies a fresh public installation, and creates the
+GitHub release notes.
 
 The repository's `pypi` environment must be configured as a
 [PyPI Trusted Publisher](https://docs.pypi.org/trusted-publishers/).
