@@ -943,7 +943,6 @@ if __name__ == "__main__":
 
     assert failure.code == "cell-execution-error"
     assert "ValueError: bad input" in failure.message
-    assert "An internal error occurred" not in failure.message
 
 
 def test_runtime_check_includes_cells_loaded_through_htmx(

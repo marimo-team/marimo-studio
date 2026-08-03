@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Sequence
 from typing import cast
 
 from htpy import Node, body, div, head, html, link, meta, script, title
@@ -10,7 +11,13 @@ from htpy import Node, body, div, head, html, link, meta, script, title
 from marimo_studio._html import node_list, render
 from marimo_studio._server.studio.menus import toolbar
 from marimo_studio._server.studio.panes import workspace
-from marimo_studio._urls import SUPPORT_PATH, public_url, studio_url, view_url
+from marimo_studio._urls import (
+    SUPPORT_PATH,
+    editor_url,
+    public_url,
+    studio_url,
+    view_url,
+)
 from marimo_studio._workspace.models import StudioConfig
 
 
@@ -19,6 +26,8 @@ def studio_document(
     base_url: str,
     selected: str,
     server_token: str,
+    file_key: str,
+    query: Sequence[tuple[str, str]],
 ) -> str:
     """Return the Studio shell for one active view."""
     root_url = public_url(base_url, "/")
@@ -40,7 +49,11 @@ def studio_document(
     )[
         node_list(
             toolbar(config, selected),
-            workspace(root_url, preview_url, selected),
+            workspace(
+                editor_url(base_url, file_key, query),
+                preview_url,
+                selected,
+            ),
         )
     ]
     node = html(lang="en")[

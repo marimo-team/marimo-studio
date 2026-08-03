@@ -6,11 +6,13 @@ reactive controls, plots, tables, and widgets. Studio keeps each view in HTML
 and CSS beside the notebook.
 
 ```console
-uvx marimo-studio analysis.py
+uvx marimo-studio view add dashboard analysis.py
+uv run --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-The command opens the Marimo editor and a live view preview in one workspace.
-Saved view changes refresh around the running Python session.
+The first command creates a starter view. Marimo then loads Studio as an
+extension and opens the editor and live preview in one workspace. Saved view
+changes refresh around the running Python session.
 
 ## Keep Python and presentation together
 
@@ -55,6 +57,7 @@ static files.
 - [Design a view](build-pages.md) with cells, values, loading space, and
   on-demand regions.
 - [Share a view](deployment.md) through Marimo's server.
-- Look up commands and settings in [CLI and configuration](reference.md).
+- Look up authoring commands and settings in
+  [Commands and configuration](reference.md).
 - Use the [Python API](python-api.md) for notebook inspection or ASGI
   composition.

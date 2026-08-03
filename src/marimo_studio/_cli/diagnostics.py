@@ -14,7 +14,6 @@ from typing import TextIO
 
 import click
 
-from marimo_studio._cli.help import LAUNCH_COMMAND
 from marimo_studio._workspace.environment import (
     EnvironmentTarget,
     run_in_notebook_environment,
@@ -155,11 +154,11 @@ class DiagnosticStream:
 
 def _command_from_argv(args: list[str]) -> str:
     if not args:
-        return "launch"
+        return "marimo-studio"
     first = args[0]
     if first == "view" and len(args) > 1 and args[1] in {"add", "list"}:
         return f"view {args[1]}"
-    return first if first in _COMMAND_NAMES else "launch"
+    return first if first in _COMMAND_NAMES else "marimo-studio"
 
 
 def diagnostics_from_argv(args: list[str]) -> DiagnosticStream:
@@ -190,11 +189,7 @@ def _configure_diagnostics(
     stream = context.find_root().ensure_object(DiagnosticStream)
     stream.format = value
     command = context.command_path.removeprefix("cli ")
-    stream.command = (
-        "launch"
-        if command.endswith(LAUNCH_COMMAND)
-        else command.removeprefix("marimo-studio ")
-    )
+    stream.command = command.removeprefix("marimo-studio ")
     return value
 
 

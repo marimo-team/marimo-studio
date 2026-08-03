@@ -14,21 +14,15 @@ You need:
 
 The example uses `analysis.py` and a displayed cell named `summary`.
 
-## Open the notebook and view together
+## Create the view
 
 Run:
 
 ```console
-uvx marimo-studio analysis.py
+uvx marimo-studio view add dashboard analysis.py
 ```
 
-The command opens one workspace with the Marimo notebook on the left and its
-live preview on the right. Keep this browser window open while you work. To
-edit HTML or CSS in Studio, open **Pane** in either pane, choose **Add Source**,
-then place it on the left, right, above, or below.
-
-On the first run, the command configures Studio in the notebook's PEP 723
-metadata and creates:
+The command configures Studio in the notebook's PEP 723 metadata and creates:
 
 ```text
 analysis.py
@@ -42,6 +36,19 @@ __marimo__/
 
 The metadata records `marimo-studio` as an unversioned dependency and selects
 the default view. Notebook code outside the PEP 723 block stays byte-identical.
+
+## Open the notebook and view together
+
+Start Marimo with the Studio extension available:
+
+```console
+uv run --with marimo-studio marimo edit analysis.py --sandbox
+```
+
+Marimo opens one workspace with the notebook on the left and its live preview
+on the right. Keep this browser window open while you work. To edit HTML or CSS
+in Studio, open **Pane** in either pane, choose **Add Source**, then place it on
+the left, right, above, or below.
 
 ## Choose an output
 
@@ -62,7 +69,7 @@ The alias belongs to the notebook and can be reused by every view.
 
 ## Place the output in the page
 
-Select **HTML** in the Source pane. Replace its empty `#app-shell` with:
+Select **HTML** in the Source pane. Replace the contents of `#app-shell` with:
 
 ```html
 <main id="app-shell">

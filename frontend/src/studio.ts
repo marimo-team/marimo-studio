@@ -5,6 +5,7 @@ import type { Surface } from "./studio/layout.ts";
 import { ViewTransition } from "./studio/view-transition.ts";
 import { ViewController } from "./studio/view-controller.ts";
 import { createViewRemote } from "./studio/view-remote.ts";
+import { publicNotebookQuery } from "./query-sync.ts";
 
 const required = <T extends Element>(selector: string): T => {
   const element = document.querySelector<T>(selector);
@@ -53,9 +54,24 @@ const panes = new Map<Surface, HTMLElement>(
   ]),
 );
 const storagePrefix = `marimo-studio:layout:v1:${workspaceId}`;
-const viewUrl = (view: string) => `${viewPrefix}${view}/`;
-const studioUrl = (view: string) => `${studioPrefix}${view}/`;
+let notebookQuery = publicNotebookQuery(globalThis.location.search);
+const viewUrl = (view: string) => `${viewPrefix}${view}/${notebookQuery}`;
+const studioUrl = (view: string) => `${studioPrefix}${view}/${notebookQuery}`;
 const supportUrl = (view: string) => `${supportPrefix}/${view}`;
+const syncNotebookQuery = (query: string) => {
+  const next = publicNotebookQuery(query);
+  if (next === notebookQuery) {
+    return;
+  }
+  notebookQuery = next;
+  const url = new URL(globalThis.location.href);
+  url.search = next;
+  globalThis.history.replaceState(
+    globalThis.history.state,
+    "",
+    `${url.pathname}${url.search}${url.hash}`,
+  );
+};
 
 const controllers: {
   source?: SourceController;
@@ -85,6 +101,7 @@ controllers.preview = new PreviewController(
   status,
   viewUrl,
   supportUrl,
+  syncNotebookQuery,
   (view) => void controllers.views?.choose(view),
 );
 

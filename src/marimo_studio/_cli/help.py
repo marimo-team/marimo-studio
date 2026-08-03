@@ -1,12 +1,10 @@
-"""Colored Click help and direct notebook dispatch."""
+"""Colored Click help for Studio authoring commands."""
 
 from __future__ import annotations
 
 import click
 
 from marimo_studio._cli.print import bright_green, light_blue
-
-_LAUNCH_COMMAND = "\N{ZERO WIDTH SPACE}launch"
 
 
 def section(text: str) -> str:
@@ -92,44 +90,3 @@ class ColoredGroup(click.Group):
         if rows:
             with formatter.section(section("Commands")):
                 formatter.write_dl(rows)
-
-
-class DirectGroup(ColoredGroup):
-    """Dispatch notebook paths and launch options to the launch command."""
-
-    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
-        commands = {
-            name for name, command in self.commands.items() if not command.hidden
-        }
-        root_options = {"-h", "--help", "--version"}
-        if not args or args[0] not in commands | root_options:
-            args.insert(0, _LAUNCH_COMMAND)
-        return super().parse_args(ctx, args)
-
-    def format_usage(
-        self,
-        ctx: click.Context,
-        formatter: click.HelpFormatter,
-    ) -> None:
-        formatter.write(section("Usage:") + "\n")
-        formatter.write(f"  {ctx.command_path} [NOTEBOOK] [OPTIONS]\n")
-        formatter.write(f"  {ctx.command_path} COMMAND [ARGS]...\n")
-
-
-class LaunchCommand(ColoredCommand):
-    """Render direct-launch help under the root command name."""
-
-    def format_usage(
-        self,
-        ctx: click.Context,
-        formatter: click.HelpFormatter,
-    ) -> None:
-        command_path = ctx.parent.command_path if ctx.parent else "marimo-studio"
-        formatter.write_usage(
-            command_path,
-            "[NOTEBOOK] [OPTIONS] [-- MARIMO_ARGS]",
-            section("Usage: "),
-        )
-
-
-LAUNCH_COMMAND = _LAUNCH_COMMAND

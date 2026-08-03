@@ -9,18 +9,17 @@ import click
 from marimo_studio._cli.commands.bind import bind
 from marimo_studio._cli.commands.check import check
 from marimo_studio._cli.commands.inspect import inspect
-from marimo_studio._cli.commands.launch import launch
 from marimo_studio._cli.commands.view import view
 from marimo_studio._cli.diagnostics import diagnostics_from_argv
-from marimo_studio._cli.help import LAUNCH_COMMAND, DirectGroup
+from marimo_studio._cli.help import ColoredGroup
 from marimo_studio._cli.output import echo_error
 from marimo_studio.errors import MarimoStudioError
 
 
 @click.group(
-    cls=DirectGroup,
+    cls=ColoredGroup,
     context_settings={"help_option_names": ["-h", "--help"]},
-    no_args_is_help=False,
+    no_args_is_help=True,
 )
 @click.version_option(prog_name="marimo-studio", package_name="marimo-studio")
 def cli() -> None:
@@ -31,17 +30,10 @@ cli.add_command(bind)
 cli.add_command(check)
 cli.add_command(inspect)
 cli.add_command(view)
-cli.add_command(launch)
 
 
 def _show_click_error(error: click.ClickException) -> None:
     context = error.ctx if isinstance(error, click.UsageError) else None
-    if (
-        context is not None
-        and context.command.name == LAUNCH_COMMAND
-        and context.parent is not None
-    ):
-        context = context.parent
     if context is not None:
         click.echo(context.get_usage().rstrip(), err=True, color=context.color)
         help_option = context.command.get_help_option(context)

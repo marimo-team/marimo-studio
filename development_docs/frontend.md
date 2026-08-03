@@ -51,6 +51,11 @@ next notebook or target-view save retries that view's pending shell.
 Each development event stream reconciles the shell after establishing its file
 baseline, including after a reconnect.
 
+The custom preview observes Marimo's same-document query history writes and
+reports notebook parameters to the Studio shell. The shell updates its own URL
+and subsequent view targets. File selection, authentication, transport, and
+session parameters remain scoped to Marimo's owning document.
+
 Studio keeps the notebook iframe, source editors, and preview iframe as stable
 DOM nodes. The layout tree computes rectangles for those nodes and never moves
 them between parents. Pointer drags update rectangles in animation frames and

@@ -1,6 +1,7 @@
 import htmx from "htmx.org";
 
 import { registerMarimoCellElement } from "./cell-host";
+import { startQuerySync } from "./query-sync";
 import { setRuntimeConnectionState, startReadiness } from "./readiness";
 import {
   commitRuntimeConfig,
@@ -27,6 +28,7 @@ declare global {
 
 const browser = globalThis as typeof globalThis & Window;
 browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "booting";
+startQuerySync();
 
 const showRuntimeError = (error: unknown) => {
   browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "failed";

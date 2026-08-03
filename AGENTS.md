@@ -28,7 +28,7 @@ TypeScript boundary.
 | Path | Responsibility |
 | --- | --- |
 | `src/marimo_studio/_cli/` | Command registration, Click adapters, diagnostics, terminal output |
-| `src/marimo_studio/_workspace/` | Configuration, views, bindings, checks, targets, launch services |
+| `src/marimo_studio/_workspace/` | Configuration, views, bindings, checks, and targets |
 | `src/marimo_studio/types.py` | Studio-owned records shared across runtime boundaries |
 | `src/marimo_studio/_server/middleware.py` | Request dispatch into page and support adapters |
 | `src/marimo_studio/_server/` | View documents, support routes, development events, HTTP translation |
@@ -67,12 +67,15 @@ Authored view source lives at
 
 - Notebook authors keep ordinary Marimo cells.
 - One notebook can expose several views from one shared binding registry.
-- Edit mode keeps the native editor at `/` and opens workspaces beneath
-  `/studio/`.
+- Edit mode sends the authenticated root to the default workspace beneath
+  `/studio/` and embeds the native editor through Marimo's `file` selector.
 - Edit-mode `/<view>/` documents attach to the editor kernel as kiosk
   consumers.
 - Controls and anywidget models synchronize between consumers of the same edit
   session.
+- Notebook query parameters synchronize across the Studio URL, native editor,
+  and preview. Transport and authentication parameters stay private to their
+  owning document.
 - Run-mode browser documents receive isolated Marimo sessions.
 - View switching preserves the preview runtime, transport connection, kernel,
   and widget models.
@@ -92,8 +95,9 @@ Authored view source lives at
   presentation revision.
 - Template refresh keeps the last valid shell when the replacement fails.
 - Support URLs honor both the parent ASGI mount and Marimo `base_url`.
-- Studio owns `/studio/`, `/{view}/`, and `/_marimo-studio/`. Native Marimo
-  routes pass through unchanged.
+- Studio owns configured page landings at `/`, `/studio/`, `/{view}/`, and
+  `/_marimo-studio/`. The native editor selector and other Marimo routes pass
+  through unchanged.
 
 ## Compatibility
 
@@ -116,12 +120,11 @@ Keep these contracts aligned:
 
 ## Mutation rules
 
-Direct launch, `view add`, and Studio view management may update PEP 723
-metadata. Preserve every notebook byte outside that block, unrelated
-dependencies, tool tables, uv sources, indexes, encoding cookies, and line
-endings.
+`view add` and Studio view management may update PEP 723 metadata. Preserve
+every notebook byte outside that block, unrelated dependencies, tool tables,
+uv sources, indexes, encoding cookies, and line endings.
 
-Validate launch options before writing. Use atomic writes and reject mutable
+Validate view mutations before writing. Use atomic writes and reject mutable
 symlink traversal. A repeated setup or binding command should converge without
 rewriting unchanged files.
 

@@ -21,8 +21,17 @@ from marimo_studio._compat.server import (
 )
 from marimo_studio._server.headers import DOCUMENT_HEADERS
 from marimo_studio._server.presentation import NotebookPresentation
-from marimo_studio._server.studio import repair_document, studio_document
-from marimo_studio._urls import SUPPORT_PATH, public_url
+from marimo_studio._server.studio import (
+    repair_document,
+    studio_document,
+    waiting_document,
+)
+from marimo_studio._urls import (
+    SUPPORT_PATH,
+    public_url,
+    studio_url,
+    with_notebook_query,
+)
 from marimo_studio._workspace.models import StudioConfig
 from marimo_studio.errors import MarimoStudioError
 
@@ -50,6 +59,19 @@ def page_redirect(request: Request, relative: str, page: bool) -> Response | Non
     target = request.url.path + "/"
     if request.url.query:
         target += f"?{request.url.query}"
+    return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
+
+
+def studio_landing_redirect(
+    request: Request,
+    base_url: str,
+    view_name: str,
+) -> Response:
+    """Redirect the edit root to its configured Studio workspace."""
+    target = with_notebook_query(
+        studio_url(base_url, view_name),
+        request.query_params.multi_items(),
+    )
     return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
 
 
@@ -108,6 +130,8 @@ def studio_response(
             context.base_url,
             selected,
             context.server_token,
+            context.file_key,
+            request.query_params.multi_items(),
         ),
         headers=DOCUMENT_HEADERS,
     )
@@ -172,15 +196,7 @@ def error_response(
 
 def _waiting_response() -> Response:
     return HTMLResponse(
-        (
-            '<!doctype html><html data-marimo-studio-preview-state="waiting">'
-            '<head><meta charset="utf-8">'
-            '<meta name="viewport" content="width=device-width">'
-            "<title>Connecting to notebook</title>"
-            "<script>setTimeout(()=>location.reload(),300)</script></head>"
-            "<body><p>Connecting to the notebook session</p>"
-            "</body></html>"
-        ),
+        waiting_document(),
         status_code=202,
         headers={**DOCUMENT_HEADERS, "Retry-After": "1"},
     )

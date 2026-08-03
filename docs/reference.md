@@ -1,14 +1,14 @@
-# CLI and configuration
+# Commands and configuration
 
 `marimo-studio` configures views, inspects notebook cells, records aliases, and
-validates projections. This reference also defines notebook configuration,
-view elements, browser state, and routes. See
-[Create your first view](getting-started.md) for a complete first run.
+validates projections. Marimo starts the editor and serving process. This
+reference also defines notebook configuration, view elements, browser state,
+and routes. See [Create your first view](getting-started.md) for a complete
+first run.
 
 ## Command line
 
 ```text
-marimo-studio [NOTEBOOK] [OPTIONS] [-- MARIMO_ARGS]
 marimo-studio inspect [OPTIONS] [NOTEBOOK]
 marimo-studio bind [OPTIONS] ALIAS [NOTEBOOK]
 marimo-studio view add [OPTIONS] NAME [NOTEBOOK]
@@ -19,33 +19,28 @@ marimo-studio check [OPTIONS] [NOTEBOOK]
 Pass a notebook path when creating the first view. After setup, commands can
 discover the configured notebook from its directory or project.
 
-### Open Studio
+### Open Studio through Marimo
 
 ```console
-uvx marimo-studio analysis.py --view executive
+uvx marimo-studio view add dashboard analysis.py
+uv run --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-The direct command configures the notebook when needed, creates a starter view
-with every notebook cell in source order, starts the native Marimo editor, and
-prints the Studio workspace and standalone view URLs. It opens the workspace
-with the selected view.
-
-| Option | Default | Behavior |
-| --- | --- | --- |
-| `--view NAME` | Configured default | Opens the named view |
-| `--host HOST` | `127.0.0.1` | Binds the Marimo server to this host |
-| `--port PORT` | `8000` | Binds to a port from `1` through `65535` |
-| `--base-url PATH` | Empty | Serves beneath a path such as `/proxy/app` |
-| `--open / --headless` | `--open` | Controls browser launch |
-| `-- MARIMO_ARGS` | Empty | Forwards trailing arguments to `marimo edit` |
-
-Put host, port, base URL, and browser options before `--`. Studio prepares the
-notebook environment, so omit Marimo sandbox flags. Run the native command when
-the server needs `--proxy`:
+The authoring command creates a starter view and records the extension in the
+notebook metadata. Marimo owns host, port, authentication, sandbox, proxy, and
+browser options:
 
 ```console
-uv run --with marimo-studio marimo edit analysis.py --proxy PROXY_URL
+uv run --with marimo-studio \
+  marimo edit analysis.py \
+  --sandbox \
+  --host 127.0.0.1 \
+  --port 8000
 ```
+
+For a configured notebook, Marimo's edit URL enters the default Studio
+workspace. Select another view from the workspace menu or open
+`/studio/<view>/` directly.
 
 ### Inspect notebook cells
 
@@ -177,12 +172,9 @@ target, and repair hint.
 | `7` | The notebook environment cannot be prepared |
 | `130` | The command was interrupted |
 
-Direct launch returns the exit status from the `marimo edit` process.
-
 ## Notebook configuration
 
-Direct launch and `view add` store the default configuration in the notebook's
-PEP 723 block:
+`view add` stores the default configuration in the notebook's PEP 723 block:
 
 ```python
 # /// script
@@ -205,10 +197,9 @@ PEP 723 block:
 | `preserve_session` | Boolean | `false` | Reconnects a manual run-mode refresh to its current kernel |
 | `cells` | Table | Empty | Stores aliases shared by every view |
 
-The setup records `marimo-studio` without a version constraint. `uv` resolves
-the current release. When the Studio CLI runs from a source checkout, it uses
-that checkout as an editable package. Existing dependencies, indexes, and tool
-settings stay in place.
+The authoring command records `marimo-studio` without a version constraint.
+`uv` resolves the current release when it prepares the notebook sandbox.
+Existing dependencies, indexes, and tool settings stay in place.
 
 Views for `analysis.py` live at:
 
@@ -241,6 +232,13 @@ summary = { ref = "cell:v1:<semantic-sha256>:<layout-sha256>:0" }
 `notebook` is required in project configuration and resolves relative to
 `pyproject.toml`. View files remain beside the notebook under
 `__marimo__/studio/`.
+
+Run a project-configured notebook from its locked environment:
+
+```console
+uv sync --frozen
+uv run marimo edit analysis.py --no-sandbox
+```
 
 For an explicit notebook path, configuration resolves in this order:
 
@@ -437,7 +435,8 @@ Routes resolve beneath Marimo's configured `base_url`.
 
 | Mode | Route | Behavior |
 | --- | --- | --- |
-| Edit | `/` | Native Marimo editor |
+| Edit | `GET /` or `HEAD /` | Redirects to the default Studio workspace when configuration is valid |
+| Edit | `/?file={file-key}` | Native Marimo editor selected by Studio |
 | Edit | `/studio/` | Editor and default view |
 | Edit | `/studio/{view}/` | Editor and selected view |
 | Edit | `/{view}/` | View attached to the editor session |
@@ -458,6 +457,10 @@ Routes resolve beneath Marimo's configured `base_url`.
 
 Edit previews connect to the active editor kernel. Run-mode documents receive
 Marimo's regular isolated browser sessions.
+
+In the edit workspace, `mo.query_params()` updates the Studio URL, native
+editor, and preview. The current notebook parameters remain in place when you
+switch views or reload the workspace.
 
 Studio sends Marimo's server token on mutation requests. Source writes preserve
 UTF-8 content and line endings exactly. A stale `If-Match` returns `412` with

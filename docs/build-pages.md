@@ -232,7 +232,7 @@ the left, the new HTML on the upper right, and its live preview below. The
 starter HTML places every notebook cell in source order, and `app.css` provides
 a small responsive base.
 
-The same operation is available from the command line:
+The authoring command performs the same operation:
 
 ```console
 uvx marimo-studio view add operations analysis.py

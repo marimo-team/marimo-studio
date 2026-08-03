@@ -20,12 +20,14 @@ from marimo_studio._server.pages import (
     document_response,
     error_response,
     page_redirect,
+    studio_landing_redirect,
     studio_response,
 )
 from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._server.routing import (
     could_handle,
     document_view,
+    is_studio_landing,
     studio_view,
 )
 from marimo_studio._server.support import support_response
@@ -58,6 +60,17 @@ class PresentationMiddleware:
             await self.app(scope, receive, send)
             return
 
+        request = Request(scope, receive)
+        landing = is_studio_landing(relative, location.mode)
+        if landing and (
+            request.method not in {"GET", "HEAD"} or "file" in request.query_params
+        ):
+            await self.app(scope, receive, send)
+            return
+        if landing and (has_access_token(scope) or not has_read_access(scope)):
+            await self.app(scope, receive, send)
+            return
+
         presentation = self._presentations.setdefault(
             location.notebook,
             NotebookPresentation(location.notebook),
@@ -68,6 +81,10 @@ class PresentationMiddleware:
         except MarimoStudioError as error:
             studio = None
             discovery_error = error
+
+        if discovery_error is not None and landing:
+            await self.app(scope, receive, send)
+            return
 
         if studio is None:
             if discovery_error is None:
@@ -81,12 +98,12 @@ class PresentationMiddleware:
             if (
                 selected_document is None
                 and selected_studio is None
+                and not landing
                 and not relative.startswith(SUPPORT_PATH)
             ):
                 await self.app(scope, receive, send)
                 return
 
-        request = Request(scope, receive)
         if has_access_token(scope) or not has_read_access(scope):
             if relative in {"", "/"} or relative.startswith(f"{SUPPORT_PATH}/assets/"):
                 await self.app(scope, receive, send)
@@ -122,6 +139,12 @@ class PresentationMiddleware:
             )
             if redirect is not None:
                 response = redirect
+            elif landing:
+                response = studio_landing_redirect(
+                    request,
+                    location.base_url,
+                    studio.default_view,
+                )
             else:
                 context = server_context(location)
                 enable_peer_control_sync(location)

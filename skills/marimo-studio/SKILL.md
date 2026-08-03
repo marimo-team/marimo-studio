@@ -14,8 +14,10 @@ Keep the notebook as the source of calculations, reactive state, controls, and
 widgets. Put authored HTML, CSS, and static files under
 `__marimo__/studio/<notebook-stem>/<view>/`.
 
-Use the installed `marimo-studio` executable. In the package checkout, fall
-back to `uv run marimo-studio`. Elsewhere, use `uvx marimo-studio`.
+Use the installed `marimo-studio` executable for view authoring and
+diagnostics. In the package checkout, fall back to `uv run marimo-studio`.
+Elsewhere, use `uvx marimo-studio`. Start live notebooks with Marimo's `edit`
+and `run` commands.
 
 ## 1. Inspect the notebook
 
@@ -54,7 +56,7 @@ dependency constraints in the resolved notebook environment.
 
 ## 2. Create or select a view
 
-Create a blank dashboard:
+Create a starter dashboard:
 
 ```console
 marimo-studio view add dashboard analysis.py --format json
@@ -249,34 +251,42 @@ Align mounted output with the page:
 
 ## 8. Work beside the editor
 
-Launch the editor and selected view:
+Start Marimo with Studio installed as an extension:
 
 ```console
-marimo-studio analysis.py --view executive
+uv run --with marimo-studio marimo edit analysis.py --sandbox
 ```
+
+Inside a Marimo Studio source checkout, exercise the checkout directly:
+
+```console
+uv run marimo edit analysis.py --no-sandbox
+```
+
+The authenticated root opens the configured default Studio workspace. Select
+`executive` from the view menu or open `/studio/executive/` on the same server.
 
 For browser automation:
 
 ```console
-marimo-studio analysis.py \
-  --view executive \
+uv run --with marimo-studio \
+  marimo edit analysis.py \
+  --sandbox \
   --headless \
   --port 8000 \
-  -- \
   --no-token
 ```
 
-Open the printed Studio URL with a unique browser session. HTML and CSS changes
+Open the URL printed by Marimo with a unique browser session. The root enters
+Studio and `/studio/executive/` selects the named view. HTML and CSS changes
 refresh in the preview. View switching keeps the preview runtime, connection,
 kernel state, and widget models mounted.
 
 Select the Preview layout before capturing the custom view. Use absolute paths
 for browser screenshots and other evidence files.
 
-Pass `--host`, `--port`, `--base-url`, and `--headless` before `--`. Trailing
-arguments go to `marimo edit`. The direct launcher prepares the notebook
-environment, so remove `--sandbox` and `--no-sandbox` from trailing arguments.
-Use a native `marimo edit` command when a proxy URL is required.
+Use `marimo edit --help` for host, port, base URL, proxy, authentication, and
+browser options.
 
 The Studio preview iframe has `[data-preview-frame]`. Read its readiness:
 

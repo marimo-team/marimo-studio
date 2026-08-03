@@ -6,7 +6,6 @@ import json
 from typing import Any
 
 from marimo_studio._cli.print import echo, green, light_blue, red, yellow
-from marimo_studio._workspace.launch import LaunchPlan
 from marimo_studio._workspace.models import (
     BindingResult,
     StudioConfig,
@@ -187,9 +186,3 @@ def render_checks(results: tuple[CheckResult, ...]) -> None:
         hint = result.details.get("hint")
         if isinstance(hint, str):
             echo(f"     {hint}")
-
-
-def render_launch(plan: LaunchPlan) -> None:
-    """Write the Studio and selected view URLs."""
-    echo(f"{light_blue('Studio:')} {plan.studio_url}")
-    echo(f"{light_blue('View:  ')} {plan.view_url}")

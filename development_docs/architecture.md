@@ -9,7 +9,7 @@ inside that process.
 | Boundary | Owner | Contract |
 | --- | --- | --- |
 | Command line | `marimo_studio._cli` | Parse arguments, call services, render text or JSON |
-| Workspace | `marimo_studio._workspace` | Resolve configuration, views, aliases, checks, and launch plans |
+| Workspace | `marimo_studio._workspace` | Resolve configuration, views, aliases, and checks |
 | ASGI process | Marimo | Lifecycle, authentication, native routes, and session manager |
 | Presentation | `marimo_studio._server` | View documents, Studio workspace, and support routes |
 | Kernel session | Marimo | Reactive graph, execution, caches, controls, and widget models |
@@ -60,12 +60,6 @@ translate Click values into calls to notebook inspection and workspace
 services. Output modules own human text, terminal color, JSON, and diagnostic
 events.
 
-The direct launcher passes a `LaunchRequest` to
-`marimo_studio._workspace.launch`. The service validates arguments before
-creating view files, resolves authentication, and returns a `LaunchPlan`.
-Execution opens the Studio URL when requested and starts `marimo edit` in the
-notebook environment.
-
 Keep Click imports and terminal presentation inside `_cli`. Workspace services
 should accept Python values and raise domain errors that tests can exercise
 directly.
@@ -75,10 +69,11 @@ directly.
 Run mode serves the configured default view at `/` and named views at
 `/<view>/`. Each browser document receives an isolated Marimo run session.
 
-Edit mode keeps the editor at `/`. `/studio/` opens the editor and default view,
-while `/studio/<view>/` selects another view. A standalone `/<view>/` document
-connects to the editor kernel as a kiosk consumer after the primary editor
-session exists.
+In edit mode, the authenticated root redirects to
+`/studio/<default-view>/`. The Studio shell embeds Marimo's native editor at
+`/?file=<file-key>`, which the middleware delegates to Marimo. A standalone
+`/<view>/` document connects to the editor kernel as a kiosk consumer after the
+primary editor session exists.
 
 Accepted Marimo control writes and anywidget model updates are relayed to the
 other consumers in that edit session. The source consumer is excluded from the

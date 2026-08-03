@@ -11,7 +11,7 @@ notebook can serve several views.
 From a checkout with [uv](https://docs.astral.sh/uv/) installed, run:
 
 ```console
-uv run marimo-studio examples/analysis.py
+uv run marimo edit examples/analysis.py --no-sandbox
 ```
 
 The workspace opens with the notebook and finished dashboard side by side.
@@ -26,21 +26,23 @@ pairs an ordinary notebook with one view under
 
 ## Build a view
 
-Open any notebook with Studio:
+Create its first view, then open the notebook through Marimo:
 
 ```console
-uvx marimo-studio analysis.py
+uvx marimo-studio view add dashboard analysis.py
+uv run --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-Studio creates a blank `dashboard` view beside the notebook. Place complete
-cell outputs with `<marimo-cell>` and JSON-compatible Python values with
-`mo-value`. Controls and widgets remain connected to the notebook kernel.
-In edit mode, a control change in the editor or any attached preview updates
-the other open views.
+`view add` creates a starter `dashboard` beside the notebook. Marimo discovers
+the Studio extension when its server starts and opens the notebook, source,
+and live preview in one workspace. Place complete cell outputs with
+`<marimo-cell>` and JSON-compatible Python values with `mo-value`. Controls and
+widgets remain connected to the notebook kernel. In edit mode, a control
+change in the editor or any attached preview updates the other open views.
 
 Keep the editor and preview open while you or an agent edits the view. Saved
-HTML and CSS refresh around the running Python session. The CLI exposes
-notebook discovery and runtime validation as structured output:
+HTML and CSS refresh around the running Python session. Authoring commands
+expose notebook discovery and runtime validation as structured output:
 
 ```console
 uvx marimo-studio inspect analysis.py --display --format json
@@ -77,5 +79,5 @@ Use Python 3.11 or newer with Marimo 0.23.16 or newer.
 - [Create your first view](https://peter-gy.github.io/marimo-studio/getting-started)
 - [Design a view](https://peter-gy.github.io/marimo-studio/build-pages)
 - [Share a view](https://peter-gy.github.io/marimo-studio/deployment)
-- [CLI and configuration](https://peter-gy.github.io/marimo-studio/reference)
+- [Commands and configuration](https://peter-gy.github.io/marimo-studio/reference)
 - [Python API](https://peter-gy.github.io/marimo-studio/python-api)

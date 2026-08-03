@@ -4,14 +4,11 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from types import SimpleNamespace
-from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from click import unstyle
 from click.testing import CliRunner
 
-import marimo_studio._workspace.launch as launch_module
 from marimo_studio._cli import cli, main
 from marimo_studio._cli.diagnostics import DiagnosticStream
 from marimo_studio._workspace import ensure_view, load_studio
@@ -110,26 +107,6 @@ def test_view_add_dry_run_reports_changes_without_writing(
     assert not (notebook_path.parent / "__marimo__").exists()
 
 
-def test_help_presents_direct_launch_as_the_root_command() -> None:
-    root = CliRunner().invoke(cli, ["--help"], prog_name="marimo-studio")
-    direct = CliRunner().invoke(
-        cli,
-        ["analysis.py", "--help"],
-        prog_name="marimo-studio",
-    )
-
-    assert root.exit_code == 0
-    assert root.output.startswith(
-        "Usage:\n"
-        "  marimo-studio [NOTEBOOK] [OPTIONS]\n"
-        "  marimo-studio COMMAND [ARGS]...\n"
-    )
-    assert direct.exit_code == 0
-    assert direct.output.startswith(
-        "Usage: marimo-studio [NOTEBOOK] [OPTIONS] [-- MARIMO_ARGS]\n"
-    )
-
-
 def test_human_output_uses_color_and_json_remains_machine_readable(
     notebook_path: Path,
 ) -> None:
@@ -164,25 +141,6 @@ def test_human_output_uses_color_and_json_remains_machine_readable(
     assert "Would add view dashboard" in unstyle(human.output)
     assert "\x1b[" not in machine.output
     assert json.loads(machine.output)["view"] == "dashboard"
-
-
-def test_launch_validates_options_before_bootstrap(notebook_path: Path) -> None:
-    original = notebook_path.read_bytes()
-    runner = CliRunner()
-
-    base_url = runner.invoke(
-        cli,
-        [str(notebook_path), "--base-url", "invalid"],
-    )
-    compact_port = runner.invoke(
-        cli,
-        [str(notebook_path), "--", "-p9000"],
-    )
-
-    assert base_url.exit_code == 2
-    assert compact_port.exit_code == 2
-    assert notebook_path.read_bytes() == original
-    assert not (notebook_path.parent / "__marimo__").exists()
 
 
 def test_cli_bind_updates_the_shared_cell_registry(
@@ -469,96 +427,3 @@ def test_main_structures_configuration_errors(
     assert event["code"] == "configuration-error"
     assert event["severity"] == "error"
     assert event["exit_code"] == 3
-
-
-def test_direct_launch_opens_the_native_editor_and_studio_view(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[tuple[list[str], Path | None]] = []
-    opened: list[str] = []
-    monkeypatch.setattr(launch_module.secrets, "token_urlsafe", lambda _size: "secret")
-    monkeypatch.setattr(launch_module, "_open_later", opened.append)
-    monkeypatch.setattr(
-        launch_module,
-        "environment_command",
-        lambda _target, args: ["notebook-environment", *args],
-    )
-    monkeypatch.setattr(
-        launch_module.subprocess,
-        "Popen",
-        lambda command, **kwargs: SimpleNamespace(
-            wait=lambda: calls.append((command, kwargs.get("cwd"))) or 0
-        ),
-    )
-
-    result = CliRunner().invoke(
-        cli,
-        [
-            str(notebook_path),
-            "--view",
-            "dashboard",
-            "--port",
-            "9123",
-            "--base-url",
-            "/proxy/token",
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    output = result.output.splitlines()
-    assert len(output) == 2
-    studio_url = urlsplit(output[0].removeprefix("Studio: ").strip())
-    view_url = urlsplit(output[1].removeprefix("View:   ").strip())
-    assert studio_url.hostname == "127.0.0.1"
-    assert studio_url.port == 9123
-    assert studio_url.path == "/proxy/token/studio/dashboard/"
-    assert parse_qs(studio_url.query) == {"access_token": ["secret"]}
-    assert view_url.path == "/proxy/token/dashboard/"
-    assert parse_qs(view_url.query) == {"access_token": ["secret"]}
-    assert opened == [output[0].removeprefix("Studio: ").strip()]
-    assert len(calls) == 1
-    command, cwd = calls[0]
-    assert cwd == notebook_path.parent
-    assert command[:4] == [
-        "notebook-environment",
-        "marimo",
-        "edit",
-        str(notebook_path),
-    ]
-    assert command[command.index("--host") + 1] == "127.0.0.1"
-    assert command[command.index("--port") + 1] == "9123"
-    assert command[command.index("--base-url") + 1] == "/proxy/token"
-    assert command[-4:] == [
-        "--headless",
-        "--no-sandbox",
-        "--token-password",
-        "secret",
-    ]
-    assert load_studio(notebook_path).config_path == notebook_path
-
-
-def test_bare_launch_discovers_the_configured_notebook(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    ensure_view(notebook_path)
-    calls: list[list[str]] = []
-    monkeypatch.chdir(notebook_path.parent)
-    monkeypatch.setattr(
-        launch_module,
-        "environment_command",
-        lambda _target, args: ["notebook-environment", *args],
-    )
-    monkeypatch.setattr(
-        launch_module.subprocess,
-        "Popen",
-        lambda command, **_kwargs: SimpleNamespace(
-            wait=lambda: calls.append(command) or 0
-        ),
-    )
-
-    result = CliRunner().invoke(cli, ["--headless"])
-
-    assert result.exit_code == 0, result.output
-    assert calls[0][1:4] == ["marimo", "edit", str(notebook_path)]

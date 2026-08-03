@@ -57,7 +57,7 @@ export default defineConfig({
       {
         text: "Reference",
         items: [
-          { text: "CLI and configuration", link: "/reference" },
+          { text: "Commands and configuration", link: "/reference" },
           { text: "Python API", link: "/python-api" },
         ],
       },

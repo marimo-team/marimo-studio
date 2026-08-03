@@ -128,12 +128,30 @@ def relative_request_path(scope: Scope, base_url: str) -> str | None:
     base = base_url.rstrip("/")
     if not base:
         return path
+
+    relative = _path_beneath(path, base)
+    if relative is not None:
+        return relative
+
+    root_path = str(scope.get("root_path", "")).rstrip("/")
+    if not root_path:
+        return None
+    if base == root_path:
+        mounted_base = ""
+    elif base.startswith(f"{root_path}/"):
+        mounted_base = base[len(root_path) :]
+    else:
+        return None
+    return _path_beneath(path, mounted_base)
+
+
+def _path_beneath(path: str, base: str) -> str | None:
+    if not base:
+        return path
     if path == base:
         return "/"
     if path.startswith(f"{base}/"):
         return path[len(base) :] or "/"
-    if path.startswith("/"):
-        return path
     return None
 
 

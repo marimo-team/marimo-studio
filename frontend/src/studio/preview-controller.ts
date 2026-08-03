@@ -2,6 +2,7 @@ import {
   previewLoadState,
   RefreshRetrySchedule,
 } from "../shell-refresh-state.ts";
+import { observeFrameQuery } from "../query-sync.ts";
 
 interface ViewDiagnostic {
   message: string;
@@ -13,6 +14,7 @@ export class PreviewController {
   private diagnostics: ViewDiagnostic[] = [];
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly retrySchedule = new RefreshRetrySchedule();
+  private stopEditorQuerySync: (() => void) | undefined;
 
   constructor(
     initialView: string,
@@ -22,6 +24,7 @@ export class PreviewController {
     private readonly status: HTMLElement,
     private readonly viewUrl: (view: string) => string,
     private readonly supportUrl: (view: string) => string,
+    private readonly syncQuery: (query: string) => void,
     private readonly navigate: (view: string) => void,
   ) {
     this.view = initialView;
@@ -50,12 +53,17 @@ export class PreviewController {
 
   dispose(): void {
     this.cancelRetry();
+    this.stopEditorQuerySync?.();
     globalThis.removeEventListener("message", this.message);
   }
 
   private bind(): void {
     globalThis.addEventListener("message", this.message);
     this.preview.addEventListener("load", () => this.loaded());
+    this.stopEditorQuerySync = observeFrameQuery(
+      this.editor,
+      (query) => this.editorQueryChanged(query),
+    );
     const start = () => {
       if (this.preview.src === "about:blank") {
         this.reload();
@@ -84,6 +92,14 @@ export class PreviewController {
       typeof data.view === "string"
     ) {
       this.navigate(data.view);
+      return;
+    }
+    if (
+      data.type === "marimo-studio:query-change" &&
+      "query" in data &&
+      typeof data.query === "string"
+    ) {
+      this.queryChanged(data.query);
       return;
     }
     if (data.type === "marimo-studio:receiver-ready") {
@@ -152,6 +168,23 @@ export class PreviewController {
     }
   };
 
+  private queryChanged(query: string): void {
+    this.syncQuery(query);
+    this.popout.href = this.viewUrl(this.view);
+  }
+
+  private editorQueryChanged(query: string): void {
+    this.queryChanged(query);
+    if (
+      !this.receiverReady &&
+      this.preview.src !== "about:blank" &&
+      this.preview.src !==
+        new URL(this.viewUrl(this.view), globalThis.location.href).href
+    ) {
+      this.reload();
+    }
+  }
+
   private postSwitch(): void {
     this.preview.contentWindow?.postMessage(
       {
@@ -199,7 +232,6 @@ export class PreviewController {
       )?.textContent?.trim() ?? "";
     if (state === "waiting") {
       this.setStatus("Waiting for notebook", "loading", detail);
-      this.scheduleRetry(500);
       return;
     }
     this.setStatus("Needs repair", "error", detail);

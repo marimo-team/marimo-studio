@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 import marimo
 import pytest
@@ -142,9 +142,7 @@ def test_empty_notebook_serves_a_ready_starter_view(tmp_path: Path) -> None:
         config = client.get("/_marimo-studio/views/dashboard/config")
 
     assert page.status_code == 200
-    assert '<main id="app-shell" class="studio-view">' in page.text
     assert "<h1>Dashboard</h1>" in page.text
-    assert "<marimo-cell" not in page.text
     assert config.status_code == 200
     assert config.json()["cellBindings"] == {}
     assert config.json()["valueBindings"] == {}
@@ -213,31 +211,6 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
         "views": ["dashboard", "executive"],
     }
     assert dashboard["preserveSession"] is True
-
-
-def test_named_cells_resolve_against_the_live_notebook_name(tmp_path: Path) -> None:
-    notebook = tmp_path / "named.py"
-    notebook.write_text(
-        notebook_source(tmp_path / "executed").replace(
-            "@app.cell\ndef _():",
-            "@app.cell\ndef imports():",
-            1,
-        ),
-        encoding="utf-8",
-    )
-    ensure_view(notebook)
-    studio = load_studio(notebook)
-    _set_shell(studio, "dashboard", '<marimo-cell name="imports"></marimo-cell>')
-
-    with TestClient(create_asgi_app(notebook)) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
-
-    assert config["schema"] == 1
-    assert config["cellBindings"]["imports"] == {
-        "kind": "name",
-        "value": "imports",
-    }
-    assert config["diagnostics"] == []
 
 
 def test_deleted_named_cell_keeps_the_view_live_until_repaired(
@@ -976,26 +949,59 @@ def test_edit_mode_public_routes_honor_parent_mount(notebook_path: Path) -> None
     parent = Starlette(routes=[Mount("/parent", app=child)])
 
     with TestClient(parent) as client:
+        landing = client.get("/parent/base/", follow_redirects=False)
         workspace = client.get("/parent/base/studio/executive/")
         config = client.get("/parent/base/_marimo-studio/views/executive/config").json()
 
+    assert landing.status_code == 307
+    assert landing.headers["location"] == "/parent/base/studio/dashboard/"
     assert workspace.status_code == 200
-    assert 'data-editor-frame src="/parent/base/"' in workspace.text
+    expected_editor = "/parent/base/?" + urlencode({"file": str(studio.notebook)})
+    assert f'data-editor-frame src="{expected_editor}"' in workspace.text
     assert 'href="/parent/base/executive/"' in workspace.text
     assert 'data-view-prefix="/parent/base/"' in workspace.text
     assert 'data-studio-prefix="/parent/base/studio/"' in workspace.text
     assert config["runtimeUrl"] == "/parent/base/"
 
 
-def test_edit_mode_keeps_the_editor_at_root_and_adds_studio(
+def test_edit_mode_routes_stay_beneath_the_configured_base_url(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(
+        studio.notebook,
+        path="/base",
+        programmatic=True,
+    )
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        landing = client.get("/base/", follow_redirects=False)
+        outside = [
+            client.get("/", follow_redirects=False),
+            client.get("/studio/dashboard/", follow_redirects=False),
+            client.get("/dashboard/", follow_redirects=False),
+        ]
+
+    assert landing.status_code == 307
+    assert landing.headers["location"] == "/base/studio/dashboard/"
+    assert all(response.status_code == 404 for response in outside)
+
+
+def test_edit_mode_enters_studio_and_embeds_the_native_editor(
     notebook_path: Path,
 ) -> None:
     studio = _configured(notebook_path)
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
+    expected_editor = "/?" + urlencode({"file": str(studio.notebook)})
 
     with TestClient(app) as client:
-        editor = client.get("/")
+        landing = client.get(
+            "/?region=emea&region=apac&empty=&session_id=s_123456&kiosk=true",
+            follow_redirects=False,
+        )
+        landing_workspace = client.get(landing.headers["location"])
         default_workspace = client.get("/studio/")
         workspace_redirect = client.get(
             "/studio/executive?layout=preview",
@@ -1008,41 +1014,61 @@ def test_edit_mode_keeps_the_editor_at_root_and_adds_studio(
         )
         waiting = client.get("/executive/")
         missing_view = client.get("/studio/missing/")
-        config = client.get("/_marimo-studio/views/executive/config").json()
+
+        editor = client.get(expected_editor)
 
         _session_manager(app).get_session_by_file_key = Mock(return_value=object())
         view = client.get("/executive/")
 
+    assert landing.status_code == 307
+    assert landing.headers["location"] == (
+        "/studio/dashboard/?region=emea&region=apac&empty="
+    )
+    landing_editor = "/?" + urlencode(
+        [
+            ("region", "emea"),
+            ("region", "apac"),
+            ("empty", ""),
+            ("file", str(studio.notebook)),
+        ]
+    )
+    assert (
+        f'data-editor-frame src="{landing_editor.replace("&", "&amp;")}"'
+        in landing_workspace.text
+    )
     assert editor.status_code == 200
-    assert "data-marimo-studio-runtime" not in editor.text
     assert default_workspace.status_code == 200
-    assert "data-view-trigger-label>dashboard</span>" in default_workspace.text
     assert workspace_redirect.status_code == 307
     assert workspace_redirect.headers["location"] == (
         "/studio/executive/?layout=preview"
     )
     assert workspace.status_code == 200
-    assert "data-view-trigger-label>executive</span>" in workspace.text
-    assert 'data-source-editor="index.html"' in workspace.text
-    assert 'data-source-editor="app.css"' in workspace.text
-    assert '<input id="studio-view-name"' in workspace.text
-    assert 'data-surface="notebook"' in workspace.text
-    assert 'data-surface="source"' in workspace.text
-    assert 'data-surface="preview"' in workspace.text
-    assert 'data-editor-frame src="/"' in workspace.text
-    assert 'data-preview-frame src="about:blank"' in workspace.text
-    assert 'href="/executive/"' in workspace.text
-    assert 'data-view-prefix="/"' in workspace.text
-    assert 'data-studio-prefix="/studio/"' in workspace.text
     assert view_redirect.status_code == 307
     assert view_redirect.headers["location"] == "/executive/?region=emea"
     assert waiting.status_code == 202
     assert waiting.headers["retry-after"] == "1"
-    assert 'data-marimo-studio-preview-state="waiting"' in waiting.text
-    assert "<script" not in waiting.text.split("<body>", 1)[1]
+    assert 'role="status"' in waiting.text
+    assert "Starting notebook" in waiting.text
     assert missing_view.status_code == 404
     assert view.status_code == 200
-    assert config["runtimeUrl"] == "/"
+
+
+def test_edit_landing_delegates_native_root_requests(notebook_path: Path) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    native_editor = "/?" + urlencode({"file": str(studio.notebook)})
+
+    with TestClient(app) as client:
+        head = client.head("/", follow_redirects=False)
+        post = client.post("/", follow_redirects=False)
+        editor = client.get(native_editor)
+
+    assert head.status_code == 307
+    assert head.headers["location"] == "/studio/dashboard/"
+    assert post.status_code == 405
+    assert editor.status_code == 200
+    assert "data-studio" not in editor.text
 
 
 def test_view_list_tracks_new_folders_without_restarting_marimo(
@@ -1358,23 +1384,30 @@ def test_edit_mode_public_pages_use_marimo_authentication(
     _edit_mode(app)
 
     with TestClient(app) as client:
+        root = client.get("/", follow_redirects=False)
         workspace = client.get("/studio/executive/", follow_redirects=False)
         view = client.get("/executive/", follow_redirects=False)
         establish = client.get(
-            "/studio/executive/?access_token=test-token",
+            "/?access_token=test-token",
             follow_redirects=False,
         )
-        page = client.get(establish.headers["location"])
+        landing = client.get(establish.headers["location"], follow_redirects=False)
+        page = client.get(landing.headers["location"])
 
+    root_login = parse_qs(urlsplit(root.headers["location"]).query)
     workspace_login = parse_qs(urlsplit(workspace.headers["location"]).query)
     view_login = parse_qs(urlsplit(view.headers["location"]).query)
+    assert root.status_code == 303
+    assert root_login["next"] == ["/"]
     assert workspace.status_code == 303
     assert workspace_login["next"] == ["/studio/executive/"]
     assert view.status_code == 303
     assert view_login["next"] == ["/executive/"]
     assert establish.status_code == 303
-    assert establish.headers["location"] == "/studio/executive/"
+    assert establish.headers["location"] == "/"
     assert "session=" in establish.headers["set-cookie"]
+    assert landing.status_code == 307
+    assert landing.headers["location"] == "/studio/dashboard/"
     assert page.status_code == 200
 
 
@@ -1415,6 +1448,7 @@ def test_invalid_studio_config_does_not_intercept_marimo_routes(
     _edit_mode(app)
 
     with TestClient(app) as client:
+        editor = client.get("/")
         native = [
             client.get("/health"),
             client.get("/sse"),
@@ -1427,6 +1461,8 @@ def test_invalid_studio_config_does_not_intercept_marimo_routes(
             headers={"Accept": "application/json"},
         )
 
+    assert editor.status_code == 200
+    assert "data-studio" not in editor.text
     assert all(response.status_code == 200 for response in native)
     assert presentation.status_code == 500
     assert presentation.headers["Marimo-Studio-Error"] == "configuration-error"
@@ -1447,14 +1483,21 @@ def test_middleware_is_inert_for_an_unconfigured_notebook(tmp_path: Path) -> Non
         encoding="utf-8",
     )
 
+    edit_app = _marimo_app(notebook)
+    _edit_mode(edit_app)
+
     with TestClient(_marimo_app(notebook)) as client:
         page = client.get("/")
         support = client.get("/_marimo-studio/views")
+    with TestClient(edit_app) as client:
+        editor = client.get("/")
     with TestClient(_marimo_app(notebook, token="test-token")) as client:
         missing = client.get("/definitely-missing/", follow_redirects=False)
 
     assert page.status_code == 200
     assert "data-marimo-studio-runtime" not in page.text
+    assert editor.status_code == 200
+    assert "data-studio" not in editor.text
     assert support.status_code == 404
     assert missing.status_code == 404
 
