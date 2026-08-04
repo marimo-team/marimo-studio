@@ -6,7 +6,9 @@ from typing import cast
 
 from htpy import (
     Node,
+    a,
     button,
+    circle,
     details,
     div,
     form,
@@ -24,6 +26,7 @@ from htpy import (
 from htpy import input as input_element
 
 from marimo_studio._html import node_list
+from marimo_studio._server.studio.brand import marimo_mark
 from marimo_studio._workspace.models import StudioConfig
 
 
@@ -44,6 +47,50 @@ def menu_chevron() -> Node:
                 "focusable": "false",
             }
         )[node_list(path(d="m6 9 6 6 6-6"))],
+    )
+
+
+def popout_icon() -> Node:
+    return cast(
+        Node,
+        svg(
+            {
+                "class": "studio-toolbar-icon",
+                "viewBox": "0 0 24 24",
+                "fill": "none",
+                "stroke": "currentColor",
+                "stroke-width": "1.8",
+                "stroke-linecap": "round",
+                "stroke-linejoin": "round",
+                "aria-hidden": "true",
+            }
+        )[
+            node_list(
+                path(d="M14 5h5v5"),
+                path(d="m10 14 9-9"),
+                path(d="M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"),
+            )
+        ],
+    )
+
+
+def more_icon() -> Node:
+    return cast(
+        Node,
+        svg(
+            {
+                "class": "studio-toolbar-icon",
+                "viewBox": "0 0 24 24",
+                "fill": "currentColor",
+                "aria-hidden": "true",
+            }
+        )[
+            node_list(
+                circle(cx="12", cy="5", r="1.35"),
+                circle(cx="12", cy="12", r="1.35"),
+                circle(cx="12", cy="19", r="1.35"),
+            )
+        ],
     )
 
 
@@ -233,17 +280,118 @@ def _remove_view_confirmation() -> Node:
     )
 
 
-def layout_menu() -> Node:
+def _runtime_description(runtime_id: str) -> str:
+    if runtime_id == "server":
+        return "Uses the notebook kernel"
+    if runtime_id == "wasm":
+        return "Runs locally in your browser"
+    return "Custom preview runtime"
+
+
+def _runtime_option(
+    runtime_id: str,
+    label_text: str,
+    selected: str,
+) -> Node:
     return cast(
         Node,
-        details(class_="studio-menu studio-layout-menu", data_layout_menu=True)[
+        button(
+            {
+                "type": "button",
+                "class": "studio-runtime-option",
+                "data-preview-runtime": runtime_id,
+                "aria-pressed": str(runtime_id == selected).lower(),
+            }
+        )[
             node_list(
-                summary(class_="studio-menu-trigger")[
-                    node_list("Layout", menu_chevron())
-                ],
-                div(class_="studio-menu-popover studio-layout-popover")[
+                span(class_="studio-runtime-copy")[
                     node_list(
-                        strong(class_="studio-menu-heading")["Layout"],
+                        strong[label_text],
+                        span[_runtime_description(runtime_id)],
+                    )
+                ],
+                span(
+                    class_="studio-runtime-check",
+                    aria_hidden="true",
+                )["✓"],
+            )
+        ],
+    )
+
+
+def _overflow_preview_controls(
+    runtimes: tuple[tuple[str, str], ...],
+    selected: str,
+    preview_url: str,
+) -> Node:
+    return cast(
+        Node,
+        div(
+            {
+                "class": "studio-overflow-preview",
+                "data-preview-control": True,
+            }
+        )[
+            node_list(
+                strong(class_="studio-menu-heading")["Preview runtime"],
+                div(class_="studio-overflow-runtime-status")[
+                    node_list(
+                        span(class_="studio-runtime-dot", aria_hidden="true"),
+                        span(data_studio_status=True)["Connecting"],
+                    )
+                ],
+                *[
+                    _runtime_option(runtime_id, label_text, selected)
+                    for runtime_id, label_text in runtimes
+                ],
+                a(
+                    {
+                        "class": "studio-menu-item studio-overflow-popout",
+                        "data-preview-popout": True,
+                        "href": preview_url,
+                        "target": "_blank",
+                        "rel": "noopener",
+                    }
+                )[node_list(popout_icon(), span["Open preview in new tab"])],
+                div(class_="studio-menu-separator"),
+            )
+        ],
+    )
+
+
+def workspace_menu(
+    runtimes: tuple[tuple[str, str], ...],
+    selected: str,
+    preview_url: str,
+) -> Node:
+    return cast(
+        Node,
+        details(class_="studio-menu studio-workspace-menu", data_layout_menu=True)[
+            node_list(
+                summary(
+                    class_="studio-toolbar-action",
+                    aria_label="Workspace options",
+                )[node_list(more_icon())],
+                div(class_="studio-menu-popover studio-workspace-popover")[
+                    node_list(
+                        _overflow_preview_controls(
+                            runtimes,
+                            selected,
+                            preview_url,
+                        ),
+                        mode_navigation(overflow=True),
+                        strong(class_="studio-menu-heading")["Workspace"],
+                        button(
+                            type="button",
+                            class_="studio-menu-item",
+                            data_layout_action="workspace",
+                        )["Open custom workspace"],
+                        button(
+                            type="button",
+                            class_="studio-menu-item",
+                            data_layout_action="arrange",
+                        )["Arrange panes"],
+                        div(class_="studio-menu-separator"),
                         button(
                             type="button",
                             class_="studio-menu-item",
@@ -253,7 +401,7 @@ def layout_menu() -> Node:
                             type="button",
                             class_="studio-menu-item",
                             data_layout_action="reset",
-                        )["Restore default"],
+                        )["Restore workspace"],
                     )
                 ],
             )
@@ -290,17 +438,66 @@ def compact_tabs() -> Node:
     )
 
 
-def _runtime_switch(
+def _runtime_menu(
     runtimes: tuple[tuple[str, str], ...],
     selected: str,
 ) -> Node:
+    selected_label = next(
+        label for runtime_id, label in runtimes if runtime_id == selected
+    )
     return cast(
         Node,
-        div(
+        details(
             {
-                "class": "studio-runtime-switch",
-                "role": "group",
-                "aria-label": "Preview runtime",
+                "class": "studio-menu studio-runtime-menu",
+                "data-preview-control": True,
+                "data-runtime-menu": True,
+            }
+        )[
+            node_list(
+                summary(
+                    {
+                        "class": "studio-runtime-trigger",
+                        "aria-label": f"{selected_label} preview runtime",
+                        "data-runtime-trigger": True,
+                    }
+                )[
+                    node_list(
+                        span(class_="studio-runtime-dot", aria_hidden="true"),
+                        span(data_preview_runtime_label=True)[selected_label],
+                        span(
+                            {
+                                "class": "studio-visually-hidden",
+                                "data-studio-status": True,
+                            }
+                        )["Connecting"],
+                        menu_chevron(),
+                    )
+                ],
+                div(class_="studio-menu-popover studio-runtime-popover")[
+                    node_list(
+                        strong(class_="studio-menu-heading")["Preview runtime"],
+                        *[
+                            _runtime_option(runtime_id, label_text, selected)
+                            for runtime_id, label_text in runtimes
+                        ],
+                    )
+                ],
+            )
+        ],
+    )
+
+
+def mode_navigation(*, overflow: bool = False) -> Node:
+    classes = (
+        "studio-overflow-modes" if overflow else "studio-modes studio-primary-modes"
+    )
+    return cast(
+        Node,
+        nav(
+            {
+                "class": classes,
+                "aria-label": "Studio mode",
             }
         )[
             node_list(
@@ -308,11 +505,16 @@ def _runtime_switch(
                     button(
                         {
                             "type": "button",
-                            "data-preview-runtime": runtime_id,
-                            "aria-pressed": str(runtime_id == selected).lower(),
+                            "class": "studio-menu-item" if overflow else None,
+                            "data-studio-mode": mode,
+                            "aria-pressed": str(mode == "notebook").lower(),
                         }
                     )[label_text]
-                    for runtime_id, label_text in runtimes
+                    for mode, label_text in (
+                        ("notebook", "Notebook"),
+                        ("preview", "Preview"),
+                        ("code", "Code"),
+                    )
                 ]
             )
         ],
@@ -323,6 +525,7 @@ def toolbar(
     config: StudioConfig,
     selected: str,
     runtimes: tuple[tuple[str, str], ...],
+    preview_url: str,
 ) -> Node:
     return cast(
         Node,
@@ -330,19 +533,43 @@ def toolbar(
             node_list(
                 div(class_="studio-title")[
                     node_list(
-                        span(class_="studio-wordmark")["Studio"],
+                        span(class_="studio-brand-mark")[marimo_mark()],
                         span(class_="studio-notebook")[config.notebook.name],
                         span(class_="studio-title-separator")["/"],
                         view_menu(config, selected),
                     )
                 ],
+                mode_navigation(),
                 div(class_="studio-controls")[
                     node_list(
-                        _runtime_switch(runtimes, config.default_runtime),
-                        compact_tabs(),
-                        layout_menu(),
+                        _runtime_menu(runtimes, config.default_runtime),
+                        a(
+                            {
+                                "class": "studio-toolbar-action",
+                                "data-preview-control": True,
+                                "data-preview-popout": True,
+                                "href": preview_url,
+                                "target": "_blank",
+                                "rel": "noopener",
+                                "aria-label": "Open preview in a new tab",
+                            }
+                        )[popout_icon()],
+                        workspace_menu(
+                            runtimes,
+                            config.default_runtime,
+                            preview_url,
+                        ),
                     )
                 ],
+                compact_tabs(),
+                span(
+                    {
+                        "class": "studio-visually-hidden",
+                        "data-studio-status": True,
+                        "data-studio-live-status": True,
+                        "role": "status",
+                    }
+                )["Connecting"],
             )
         ],
     )
@@ -358,7 +585,7 @@ def pane_menu(surface: str) -> Node:
                     aria_label=f"Arrange {surface} pane",
                 )[
                     node_list(
-                        span(class_="studio-pane-menu-label")["Pane"],
+                        span(class_="studio-pane-menu-label")["Arrange"],
                         menu_chevron(),
                     )
                 ],

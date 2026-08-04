@@ -31,7 +31,8 @@ uv run --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
 Marimo opens the Studio workspace at its regular server URL. The notebook is
-on the left and the live view is on the right.
+the initial canvas. Use **Preview** to inspect the complete view or **Code** to
+edit `index.html` or `app.css` beside the live preview.
 
 Use the runtime control in the toolbar to test both execution modes:
 
@@ -43,11 +44,13 @@ Use the runtime control in the toolbar to test both execution modes:
   graph. Cell output, tables, and anywidgets stay interactive in the preview.
   Anywidget state belongs to that Pyodide kernel.
 
-Changing the runtime reloads the preview document. The notebook editor and
-unsaved view source remain mounted.
+The runtime control appears whenever the preview is visible. Changing the
+runtime reloads the preview document. The notebook editor and unsaved view
+source remain mounted.
 
-Open **Pane** in either pane to add the source editor. Place it beside, above,
-or below the current pane. Use its **HTML** and **CSS** tabs to edit the view.
+For another arrangement, open the workspace menu and choose **Open custom
+workspace**. Choose **Arrange panes** to place Notebook, Code, and Preview
+beside, above, or below one another.
 
 ## Choose a notebook output
 
@@ -68,7 +71,7 @@ The cell index above is an example. Use the index reported by `inspect`.
 
 ## Place the output
 
-Select **HTML** and replace the contents of `#app-shell`:
+Open **Code**, select **index.html**, and replace the contents of `#app-shell`:
 
 ```html
 <main id="app-shell">

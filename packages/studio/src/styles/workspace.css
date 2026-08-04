@@ -23,35 +23,48 @@
   position: absolute;
 }
 
-.studio-pane-header {
+.studio-pane-content {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.studio-pane iframe {
+  background: var(--studio-background);
+  border: 0;
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.studio-arrange-chrome {
   align-items: center;
-  background: var(--studio-surface);
-  border-block-end: 1px solid var(--studio-border);
+  background: color-mix(in srgb, var(--studio-background) 92%, transparent);
+  border: 1px solid var(--studio-border);
+  border-radius: 5px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+  display: none;
+  gap: 0.3rem;
+  padding: 0.2rem 0.25rem 0.2rem 0.5rem;
+  position: absolute;
+  right: 0.45rem;
+  top: 0.45rem;
+  z-index: 30;
+}
+
+.studio-workspace[data-arranging="true"] .studio-pane:not([hidden]) {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--studio-primary) 48%, transparent);
+}
+
+.studio-workspace[data-arranging="true"] .studio-arrange-chrome {
   display: flex;
-  flex: 0 0 var(--studio-pane-header);
-  font-size: 0.75rem;
-  gap: 0.5rem;
-  justify-content: space-between;
-  min-width: 0;
-  padding-inline: 0.55rem;
 }
 
-.studio-pane-header strong {
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.studio-pane-actions,
-.studio-source-meta {
-  gap: 0.25rem;
-  min-width: 0;
-}
-
-.studio-icon-action {
-  color: var(--studio-muted);
+.studio-arrange-chrome > strong {
   font-size: 0.6875rem;
-  height: 1.55rem;
-  padding-inline: 0.4rem;
+  font-weight: 600;
 }
 
 .studio-pane-menu > summary {
@@ -61,19 +74,19 @@
   cursor: pointer;
   display: flex;
   font-size: 0.6875rem;
-  gap: 0.25rem;
-  height: 1.55rem;
-  justify-content: center;
-  padding-inline: 0.4rem;
+  gap: 0.2rem;
+  height: 1.45rem;
+  padding-inline: 0.35rem;
 }
 
-.studio-pane-menu > summary:hover {
+.studio-pane-menu > summary:hover,
+.studio-pane-menu[open] > summary {
   background: var(--studio-hover);
 }
 
 .studio-pane-menu .studio-menu-chevron {
-  height: 0.625rem;
-  width: 0.625rem;
+  height: 0.6rem;
+  width: 0.6rem;
 }
 
 .studio-pane-popover {
@@ -133,20 +146,4 @@
 .studio-placement-icon[data-placement="below"]::after {
   height: calc(50% - 1px);
   inset: auto 1px 1px;
-}
-
-.studio-pane-content {
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
-  position: relative;
-}
-
-.studio-pane iframe {
-  background: var(--studio-background);
-  border: 0;
-  display: block;
-  height: 100%;
-  width: 100%;
 }

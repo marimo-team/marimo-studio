@@ -1,15 +1,17 @@
-import { defaultLayout, visibleSurfaces } from "./model.ts";
-import { type LayoutNode, storedLayoutCodec, type Surface } from "./schema.ts";
+import { codeLayout, defaultWorkspaceLayout, layoutForMode, visibleSurfaces } from "./model.ts";
+import { type LayoutNode, storedLayoutCodec, type StudioMode, type Surface } from "./schema.ts";
 
 export type LayoutState = {
-  tree: LayoutNode;
-  focused: Surface | null;
+  mode: StudioMode;
+  code: LayoutNode;
+  workspace: LayoutNode;
   compact: Surface;
 };
 
 const initialState = (): LayoutState => ({
-  tree: defaultLayout(),
-  focused: null,
+  mode: "notebook",
+  code: codeLayout(),
+  workspace: defaultWorkspaceLayout(),
   compact: "notebook",
 });
 
@@ -25,11 +27,12 @@ export class LayoutStorage {
     if (!result.success) {
       return initialState();
     }
-    const { tree, focused, compact } = result.data;
-    const visible = visibleSurfaces(tree);
+    const { mode, code, workspace, compact } = result.data;
+    const visible = visibleSurfaces(layoutForMode(mode, code, workspace));
     return {
-      tree,
-      focused: focused && visible.includes(focused) ? focused : null,
+      mode,
+      code,
+      workspace,
       compact: compact && visible.includes(compact) ? compact : visible[0],
     };
   }

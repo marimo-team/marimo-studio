@@ -44,8 +44,8 @@ export class PreviewController {
     initialRuntime: string,
     private readonly editor: HTMLIFrameElement,
     private readonly preview: HTMLIFrameElement,
-    private readonly popout: HTMLAnchorElement,
-    private readonly status: HTMLElement,
+    private readonly popouts: readonly HTMLAnchorElement[],
+    private readonly statuses: readonly HTMLElement[],
     private readonly viewUrl: (view: string, runtime: string) => string,
     private readonly supportUrl: (view: string) => string,
     private readonly syncQuery: (query: string) => void,
@@ -77,7 +77,7 @@ export class PreviewController {
     this.view = view;
     const nextPreview = this.viewUrl(view, this.runtime);
     this.preview.title = `${view} custom view`;
-    this.popout.href = nextPreview;
+    this.setPopoutUrl(nextPreview);
     this.diagnostics = [];
     this.setStatus("Updating preview");
     if (this.receiverReady) {
@@ -204,7 +204,7 @@ export class PreviewController {
     }
     this.notebookQuery = next;
     this.syncQuery(query);
-    this.popout.href = this.viewUrl(this.view, this.runtime);
+    this.setPopoutUrl(this.viewUrl(this.view, this.runtime));
     return true;
   }
 
@@ -273,8 +273,14 @@ export class PreviewController {
     this.viewReady = false;
     this.setStatus(this.runtime === "wasm" ? "Starting WebAssembly" : "Connecting to server");
     const next = this.viewUrl(this.view, this.runtime);
-    this.popout.href = next;
+    this.setPopoutUrl(next);
     this.navigatePreview(next);
+  }
+
+  private setPopoutUrl(url: string): void {
+    this.popouts.forEach((popout) => {
+      popout.href = url;
+    });
   }
 
   private navigatePreview(next: string): void {
@@ -482,13 +488,17 @@ export class PreviewController {
     state: "loading" | "ready" | "warning" | "error" = "loading",
     title = "",
   ): void {
-    this.status.textContent = message;
-    this.status.dataset.state = state;
-    if (title) {
-      this.status.title = title;
-    } else {
-      this.status.removeAttribute("title");
-    }
+    this.statuses.forEach((status) => {
+      status.textContent = message;
+      status.dataset.state = state;
+      const detail = title ? `${message}: ${title}` : message;
+      status.closest<HTMLElement>("[data-runtime-trigger]")?.setAttribute("title", detail);
+      if (title) {
+        status.title = title;
+      } else {
+        status.removeAttribute("title");
+      }
+    });
   }
 
   private scheduleRetry(delay = this.retrySchedule.next()): void {

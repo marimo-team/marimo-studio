@@ -20,9 +20,11 @@ const jsonCodec = <T extends z.core.$ZodType>(schema: T) =>
 
 export const surfaceSchema = z.enum(["notebook", "source", "preview"]);
 export const axisSchema = z.enum(["x", "y"]);
+export const studioModeSchema = z.enum(["notebook", "preview", "code", "workspace"]);
 
 export type Surface = z.infer<typeof surfaceSchema>;
 export type Axis = z.infer<typeof axisSchema>;
+export type StudioMode = z.infer<typeof studioModeSchema>;
 
 export interface PaneNode {
   type: "pane";
@@ -85,8 +87,9 @@ export const layoutNodeSchema = layoutNodeShapeSchema.refine(hasUniqueNodes, {
 
 export const storedLayoutSchema = z.object({
   schema: z.literal(1),
-  tree: layoutNodeSchema,
-  focused: surfaceSchema.nullable().optional().catch(null),
+  mode: studioModeSchema,
+  code: layoutNodeSchema,
+  workspace: layoutNodeSchema,
   compact: surfaceSchema.optional().catch(undefined),
 });
 

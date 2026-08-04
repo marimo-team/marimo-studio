@@ -36,8 +36,14 @@ export const startStudio = async ({ connectControlFrame }: StudioOptions = {}): 
   const workspace = required<HTMLElement>("[data-workspace]");
   const editor = required<HTMLIFrameElement>("[data-editor-frame]");
   const preview = required<HTMLIFrameElement>("[data-preview-frame]");
-  const popout = required<HTMLAnchorElement>("[data-preview-popout]");
-  const status = required<HTMLElement>("[data-studio-status]");
+  const popouts = Array.from(studio.querySelectorAll<HTMLAnchorElement>("[data-preview-popout]"));
+  if (!popouts.length) {
+    throw new Error("Studio markup is missing [data-preview-popout]");
+  }
+  const statuses = Array.from(studio.querySelectorAll<HTMLElement>("[data-studio-status]"));
+  if (!statuses.length) {
+    throw new Error("Studio markup is missing [data-studio-status]");
+  }
   const dividerLayer = required<HTMLElement>("[data-divider-layer]");
   const scrim = required<HTMLElement>("[data-resize-scrim]");
   const compactTabs = required<HTMLElement>("[data-compact-tabs]");
@@ -87,7 +93,7 @@ export const startStudio = async ({ connectControlFrame }: StudioOptions = {}): 
       required<HTMLElement>(`[data-surface="${surface}"]`),
     ]),
   );
-  const storagePrefix = `marimo-studio:layout:v1:${workspaceId}`;
+  const storagePrefix = `marimo-studio:workspace:v1:${workspaceId}`;
   let notebookQuery = publicNotebookQuery(globalThis.location.search);
   const runtimeStorageKey = previewRuntimeStorageKey(workspaceId);
   const initialRuntime = initialPreviewRuntime({
@@ -125,6 +131,7 @@ export const startStudio = async ({ connectControlFrame }: StudioOptions = {}): 
   } = {};
 
   const layout = new LayoutController(
+    studio,
     workspace,
     dividerLayer,
     scrim,
@@ -138,17 +145,22 @@ export const startStudio = async ({ connectControlFrame }: StudioOptions = {}): 
     },
   );
 
-  const runtimeControl = new RuntimeControl(initialRuntime, runtimeStorageKey, (runtime) => {
-    controllers.preview?.switchRuntime(runtime);
-  });
+  const runtimeControl = new RuntimeControl(
+    studio,
+    initialRuntime,
+    runtimeStorageKey,
+    (runtime) => {
+      controllers.preview?.switchRuntime(runtime);
+    },
+  );
 
   controllers.preview = new PreviewController(
     initialView,
     initialRuntime,
     editor,
     preview,
-    popout,
-    status,
+    popouts,
+    statuses,
     viewUrl,
     supportUrl,
     syncNotebookQuery,

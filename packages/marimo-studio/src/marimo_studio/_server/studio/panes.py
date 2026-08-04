@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from htpy import Element, Node, a, button, div, header, main, pre, section, span, strong
+from htpy import Element, Node, button, div, header, main, pre, section, span, strong
 
 from marimo_studio._html import node_list
 from marimo_studio._server.studio.menus import pane_menu
@@ -17,22 +17,7 @@ def _notebook_pane(root_url: str) -> Node:
         Node,
         section(class_="studio-pane", data_surface="notebook", aria_label="Notebook")[
             node_list(
-                header(class_="studio-pane-header")[
-                    node_list(
-                        strong["Notebook"],
-                        div(class_="studio-pane-actions")[
-                            node_list(
-                                button(
-                                    type="button",
-                                    class_="studio-icon-action",
-                                    data_focus_surface="notebook",
-                                    aria_label="Focus notebook",
-                                )["Focus"],
-                                pane_menu("notebook"),
-                            )
-                        ],
-                    )
-                ],
+                _arrange_chrome("notebook", "Notebook"),
                 div(class_="studio-pane-content")[
                     node_list(
                         _IFRAME(
@@ -50,11 +35,12 @@ def _notebook_pane(root_url: str) -> Node:
     )
 
 
-def _source_pane(selected: str) -> Node:
+def _source_pane() -> Node:
     return cast(
         Node,
         section(class_="studio-pane", data_surface="source", aria_label="View source")[
             node_list(
+                _arrange_chrome("source", "Code"),
                 header(class_="studio-pane-header studio-source-header")[
                     node_list(
                         div(
@@ -75,7 +61,7 @@ def _source_pane(selected: str) -> Node:
                                         "aria-controls": "studio-source-html",
                                         "tabindex": "0",
                                     }
-                                )["HTML"],
+                                )["index.html"],
                                 button(
                                     {
                                         "id": "studio-source-tab-css",
@@ -86,12 +72,11 @@ def _source_pane(selected: str) -> Node:
                                         "aria-controls": "studio-source-css",
                                         "tabindex": "-1",
                                     }
-                                )["CSS"],
+                                )["app.css"],
                             )
                         ],
                         div(class_="studio-source-meta")[
                             node_list(
-                                span(data_source_path=True)[f"{selected}/index.html"],
                                 span(
                                     {
                                         "class": "studio-source-status",
@@ -99,13 +84,6 @@ def _source_pane(selected: str) -> Node:
                                         "role": "status",
                                     }
                                 )["Loading"],
-                                button(
-                                    type="button",
-                                    class_="studio-icon-action",
-                                    data_focus_surface="source",
-                                    aria_label="Focus source",
-                                )["Focus"],
-                                pane_menu("source"),
                             )
                         ],
                     )
@@ -184,44 +162,12 @@ def _source_conflict() -> Node:
     )
 
 
-def _preview_pane(preview_url: str, selected: str) -> Node:
+def _preview_pane(selected: str) -> Node:
     return cast(
         Node,
         section(class_="studio-pane", data_surface="preview", aria_label="Preview")[
             node_list(
-                header(class_="studio-pane-header")[
-                    node_list(
-                        strong["Preview"],
-                        div(class_="studio-pane-actions")[
-                            node_list(
-                                span(
-                                    {
-                                        "class": "studio-status",
-                                        "data-studio-status": True,
-                                        "role": "status",
-                                    }
-                                )["Connecting"],
-                                a(
-                                    {
-                                        "class": "studio-icon-action",
-                                        "data-preview-popout": True,
-                                        "href": preview_url,
-                                        "target": "_blank",
-                                        "rel": "noopener",
-                                        "aria-label": "Open preview in a new tab",
-                                    }
-                                )["Open ↗"],
-                                button(
-                                    type="button",
-                                    class_="studio-icon-action",
-                                    data_focus_surface="preview",
-                                    aria_label="Focus preview",
-                                )["Focus"],
-                                pane_menu("preview"),
-                            )
-                        ],
-                    )
-                ],
+                _arrange_chrome("preview", "Preview"),
                 div(class_="studio-pane-content")[
                     node_list(
                         _IFRAME(
@@ -239,7 +185,16 @@ def _preview_pane(preview_url: str, selected: str) -> Node:
     )
 
 
-def workspace(root_url: str, preview_url: str, selected: str) -> Node:
+def _arrange_chrome(surface: str, label_text: str) -> Node:
+    return cast(
+        Node,
+        div(class_="studio-arrange-chrome", data_arrange_chrome=True)[
+            node_list(strong[label_text], pane_menu(surface))
+        ],
+    )
+
+
+def workspace(root_url: str, selected: str) -> Node:
     """Render stable hosts for the three Studio surfaces."""
     return cast(
         Node,
@@ -252,8 +207,8 @@ def workspace(root_url: str, preview_url: str, selected: str) -> Node:
                 div(class_="studio-surface-layer")[
                     node_list(
                         _notebook_pane(root_url),
-                        _source_pane(selected),
-                        _preview_pane(preview_url, selected),
+                        _source_pane(),
+                        _preview_pane(selected),
                     )
                 ],
                 div(class_="studio-divider-layer", data_divider_layer=True),

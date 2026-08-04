@@ -4,10 +4,11 @@ import {
   type LayoutNode,
   type PaneNode,
   type SplitNode,
+  type StudioMode,
   type Surface,
 } from "./schema.ts";
 
-export type { Axis, LayoutNode, PaneNode, SplitNode, Surface } from "./schema.ts";
+export type { Axis, LayoutNode, PaneNode, SplitNode, StudioMode, Surface } from "./schema.ts";
 
 export type Placement = "left" | "right" | "above" | "below";
 
@@ -57,7 +58,14 @@ const split = (
   ratio = 0.5,
 ): SplitNode => ({ type: "split", id, axis, ratio, first, second });
 
-export const defaultLayout = (): LayoutNode =>
+export const notebookLayout = (): LayoutNode => pane("notebook");
+
+export const previewLayout = (): LayoutNode => pane("preview");
+
+export const codeLayout = (): LayoutNode =>
+  split("source-preview", "x", pane("source"), pane("preview"));
+
+export const defaultWorkspaceLayout = (): LayoutNode =>
   split("notebook-preview", "x", pane("notebook"), pane("preview"));
 
 export const newViewLayout = (): LayoutNode =>
@@ -68,10 +76,29 @@ export const newViewLayout = (): LayoutNode =>
     split("source-preview", "y", pane("source"), pane("preview")),
   );
 
-export const visibleSurfaces = (node: LayoutNode): Surface[] =>
-  node.type === "pane"
-    ? [node.surface]
-    : [...visibleSurfaces(node.first), ...visibleSurfaces(node.second)];
+export const layoutForMode = (
+  mode: StudioMode,
+  code: LayoutNode,
+  workspace: LayoutNode,
+): LayoutNode => {
+  switch (mode) {
+    case "notebook":
+      return notebookLayout();
+    case "preview":
+      return previewLayout();
+    case "code":
+      return code;
+    case "workspace":
+      return workspace;
+  }
+};
+
+export const visibleSurfaces = (node: LayoutNode): Surface[] => {
+  if (node.type === "pane") {
+    return [node.surface];
+  }
+  return [...visibleSurfaces(node.first), ...visibleSurfaces(node.second)];
+};
 
 const minimumSize = (node: LayoutNode): { width: number; height: number } => {
   if (node.type === "pane") {
@@ -79,15 +106,16 @@ const minimumSize = (node: LayoutNode): { width: number; height: number } => {
   }
   const first = minimumSize(node.first);
   const second = minimumSize(node.second);
-  return node.axis === "x"
-    ? {
-        width: first.width + second.width + DIVIDER_SIZE,
-        height: Math.max(first.height, second.height),
-      }
-    : {
-        width: Math.max(first.width, second.width),
-        height: first.height + second.height + DIVIDER_SIZE,
-      };
+  if (node.axis === "x") {
+    return {
+      width: first.width + second.width + DIVIDER_SIZE,
+      height: Math.max(first.height, second.height),
+    };
+  }
+  return {
+    width: Math.max(first.width, second.width),
+    height: first.height + second.height + DIVIDER_SIZE,
+  };
 };
 
 export const needsCompactLayout = (node: LayoutNode, bounds: Rectangle): boolean => {
@@ -174,15 +202,17 @@ export const updateRatio = (node: LayoutNode, id: string, ratio: number): Layout
   };
 };
 
-export const equalizeLayout = (node: LayoutNode): LayoutNode =>
-  node.type === "pane"
-    ? node
-    : {
-        ...node,
-        ratio: 0.5,
-        first: equalizeLayout(node.first),
-        second: equalizeLayout(node.second),
-      };
+export const equalizeLayout = (node: LayoutNode): LayoutNode => {
+  if (node.type === "pane") {
+    return node;
+  }
+  return {
+    ...node,
+    ratio: 0.5,
+    first: equalizeLayout(node.first),
+    second: equalizeLayout(node.second),
+  };
+};
 
 const removeSurface = (node: LayoutNode, surface: Surface): LayoutNode | null => {
   if (node.type === "pane") {
@@ -271,5 +301,8 @@ export const swapSurfaces = (node: LayoutNode, first: Surface, second: Surface):
 };
 
 export const parseLayout = (value: string | null): LayoutNode | null => {
-  return value ? decodeLayout(value) : null;
+  if (!value) {
+    return null;
+  }
+  return decodeLayout(value);
 };

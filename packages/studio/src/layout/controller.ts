@@ -1,35 +1,55 @@
 import { DividerLayer } from "./divider-layer.ts";
 import {
+  codeLayout,
+  type ComputedLayout,
   computeLayout,
-  defaultLayout,
+  defaultWorkspaceLayout,
   equalizeLayout,
+  layoutForMode,
   type LayoutNode,
   needsCompactLayout,
   newViewLayout,
-  splitSurface,
+  type Rectangle,
   type Surface,
   visibleSurfaces,
 } from "./model.ts";
 import { renderPaneActions } from "./pane-actions.ts";
-import { surfaceSchema } from "./schema.ts";
+import { studioModeSchema, surfaceSchema, type StudioMode } from "./schema.ts";
 import { LayoutStorage } from "./storage.ts";
 
+const computeVisibleLayout = (
+  tree: LayoutNode,
+  bounds: Rectangle,
+  active: Surface | null,
+): ComputedLayout => {
+  if (active) {
+    return {
+      panes: new Map<Surface, Rectangle>([[active, bounds]]),
+      dividers: [],
+    };
+  }
+  return computeLayout(tree, bounds);
+};
+
 export class LayoutController {
-  private tree: LayoutNode = defaultLayout();
-  private focused: Surface | null = null;
+  private mode: StudioMode = "notebook";
+  private code: LayoutNode = codeLayout();
+  private workspaceTree: LayoutNode = defaultWorkspaceLayout();
   private compactSurface: Surface = "notebook";
+  private arranging = false;
   private view: string;
   private readonly storage: LayoutStorage;
   private readonly dividers: DividerLayer;
   private readonly resizeObserver: ResizeObserver;
   private readonly onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === "Escape" && this.focused) {
-      this.focused = null;
-      this.commit();
+    if (event.key === "Escape" && this.arranging) {
+      this.arranging = false;
+      this.render();
     }
   };
 
   constructor(
+    private readonly root: HTMLElement,
     private readonly workspace: HTMLElement,
     dividerLayer: HTMLElement,
     scrim: HTMLElement,
@@ -49,7 +69,7 @@ export class LayoutController {
       () => this.tree,
       (tree) => this.render(tree, false),
       (tree) => {
-        this.tree = tree;
+        this.setTree(tree);
         this.commit();
       },
     );
@@ -63,9 +83,11 @@ export class LayoutController {
     this.persist();
     this.view = view;
     if (created) {
-      this.tree = newViewLayout();
-      this.focused = null;
+      this.mode = "workspace";
+      this.code = codeLayout();
+      this.workspaceTree = newViewLayout();
       this.compactSurface = "source";
+      this.arranging = false;
       this.persist();
     } else {
       this.restore(view);
@@ -74,12 +96,12 @@ export class LayoutController {
   }
 
   reveal(surface: Surface): void {
-    if (!visibleSurfaces(this.tree).includes(surface)) {
-      const target = this.focused ?? this.compactSurface ?? visibleSurfaces(this.tree)[0];
-      this.tree = splitSurface(this.tree, target, surface, "right");
+    const visible = visibleSurfaces(this.tree);
+    if (!visible.includes(surface)) {
+      this.mode = this.modeForSurface(surface);
     }
-    this.focused = null;
     this.compactSurface = surface;
+    this.arranging = false;
     this.commit();
     this.closeMenus();
   }
@@ -92,31 +114,27 @@ export class LayoutController {
   }
 
   private bindControls(): void {
-    document.querySelectorAll<HTMLButtonElement>("[data-layout-action]").forEach((button) => {
+    this.root.querySelectorAll<HTMLButtonElement>("[data-studio-mode]").forEach((button) => {
       button.addEventListener("click", () => {
-        const action = button.dataset.layoutAction;
-        if (action === "equalize") {
-          this.tree = equalizeLayout(this.tree);
-        } else if (action === "reset") {
-          this.tree = defaultLayout();
-          this.focused = null;
-          this.compactSurface = "notebook";
-        } else {
+        const mode = studioModeSchema.safeParse(button.dataset.studioMode);
+        if (!mode.success || mode.data === "workspace") {
           return;
         }
+        this.mode = mode.data;
+        this.arranging = false;
+        this.ensureCompactSurface();
         this.commit();
         this.closeMenus();
       });
     });
-    document.querySelectorAll<HTMLButtonElement>("[data-focus-surface]").forEach((button) => {
+    this.root.querySelectorAll<HTMLButtonElement>("[data-layout-action]").forEach((button) => {
       button.addEventListener("click", () => {
-        const surface = surfaceSchema.safeParse(button.dataset.focusSurface);
-        if (!surface.success) {
+        const action = button.dataset.layoutAction;
+        if (!this.applyLayoutAction(action)) {
           return;
         }
-        this.focused = this.focused === surface.data ? null : surface.data;
-        this.compactSurface = surface.data;
         this.commit();
+        this.closeMenus();
       });
     });
     this.compactTabs
@@ -131,7 +149,7 @@ export class LayoutController {
           }
         });
       });
-    document.querySelectorAll<HTMLDetailsElement>("[data-pane-menu]").forEach((menu) => {
+    this.root.querySelectorAll<HTMLDetailsElement>("[data-pane-menu]").forEach((menu) => {
       menu.addEventListener("toggle", () => {
         const target = menu.dataset.paneMenu;
         const surface = surfaceSchema.safeParse(target);
@@ -145,11 +163,14 @@ export class LayoutController {
 
   private renderPaneActions(menu: HTMLDetailsElement, target: Surface): void {
     renderPaneActions(menu, target, this.tree, ({ tree, compact }) => {
-      this.tree = tree;
-      this.focused = null;
+      this.mode = "workspace";
+      this.workspaceTree = tree;
       const visible = visibleSurfaces(tree);
-      this.compactSurface =
-        compact ?? (visible.includes(this.compactSurface) ? this.compactSurface : visible[0]);
+      if (compact) {
+        this.compactSurface = compact;
+      } else if (!visible.includes(this.compactSurface)) {
+        this.compactSurface = visible[0];
+      }
       this.commit();
       this.closeMenus();
     });
@@ -167,11 +188,9 @@ export class LayoutController {
     if (!visible.includes(this.compactSurface)) {
       this.compactSurface = visible[0];
     }
-    const active = this.focused ?? (compact ? this.compactSurface : null);
+    const active = compact ? this.compactSurface : null;
     this.renderCompactTabs(compact, visible);
-    const layout = active
-      ? { panes: new Map([[active, bounds]]), dividers: [] }
-      : computeLayout(tree, bounds);
+    const layout = computeVisibleLayout(tree, bounds, active);
     for (const [surface, pane] of this.panes) {
       const rectangle = layout.panes.get(surface);
       pane.hidden = rectangle === undefined;
@@ -187,14 +206,17 @@ export class LayoutController {
     }
     this.dividers.render(layout.dividers);
     this.workspace.dataset.compact = String(compact);
-    this.workspace.dataset.focused = this.focused ?? "";
+    this.workspace.dataset.arranging = String(this.arranging);
+    this.renderModes();
+    this.renderWorkspaceControls();
+    this.renderPreviewControls(layout.panes.has("preview"));
     if (measure) {
       this.onMeasure();
     }
   }
 
   private renderCompactTabs(compact: boolean, visible: Surface[]): void {
-    this.compactTabs.hidden = !compact;
+    this.compactTabs.hidden = !compact || visible.length < 2;
     this.compactTabs
       .querySelectorAll<HTMLButtonElement>("[data-compact-surface]")
       .forEach((button) => {
@@ -214,21 +236,112 @@ export class LayoutController {
 
   private persist(): void {
     this.storage.write(this.view, {
-      tree: this.tree,
-      focused: this.focused,
+      mode: this.mode,
+      code: this.code,
+      workspace: this.workspaceTree,
       compact: this.compactSurface,
     });
   }
 
   private restore(view: string): void {
     const state = this.storage.read(view);
-    this.tree = state.tree;
-    this.focused = state.focused;
+    this.mode = state.mode;
+    this.code = state.code;
+    this.workspaceTree = state.workspace;
     this.compactSurface = state.compact;
+    this.arranging = false;
+  }
+
+  private get tree(): LayoutNode {
+    return layoutForMode(this.mode, this.code, this.workspaceTree);
+  }
+
+  private setTree(tree: LayoutNode): void {
+    if (this.mode === "code") {
+      this.code = tree;
+      return;
+    }
+    if (this.mode !== "workspace") {
+      this.mode = "workspace";
+    }
+    this.workspaceTree = tree;
+  }
+
+  private applyLayoutAction(action: string | undefined): boolean {
+    switch (action) {
+      case "workspace":
+        this.mode = "workspace";
+        this.arranging = false;
+        this.ensureCompactSurface();
+        return true;
+      case "arrange":
+        this.mode = "workspace";
+        this.arranging = !this.arranging;
+        this.ensureCompactSurface();
+        return true;
+      case "equalize":
+        if (this.mode === "code") {
+          this.code = equalizeLayout(this.code);
+        } else {
+          this.mode = "workspace";
+          this.workspaceTree = equalizeLayout(this.workspaceTree);
+        }
+        return true;
+      case "reset":
+        this.mode = "workspace";
+        this.workspaceTree = defaultWorkspaceLayout();
+        this.compactSurface = "notebook";
+        this.arranging = false;
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private modeForSurface(surface: Surface): StudioMode {
+    if (surface === "source") {
+      return "code";
+    }
+    return surface;
+  }
+
+  private ensureCompactSurface(): void {
+    const visible = visibleSurfaces(this.tree);
+    if (!visible.includes(this.compactSurface)) {
+      this.compactSurface = visible[0];
+    }
+  }
+
+  private renderModes(): void {
+    this.root.querySelectorAll<HTMLButtonElement>("[data-studio-mode]").forEach((button) => {
+      const mode = studioModeSchema.safeParse(button.dataset.studioMode);
+      const selected = mode.success && mode.data === this.mode;
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    this.root.dataset.mode = this.mode;
+  }
+
+  private renderWorkspaceControls(): void {
+    const menu = this.root.querySelector<HTMLDetailsElement>("[data-layout-menu]");
+    if (!menu) {
+      return;
+    }
+    menu.dataset.active = String(this.mode === "workspace");
+    menu.dataset.arranging = String(this.arranging);
+    const workspace = menu.querySelector<HTMLButtonElement>("[data-layout-action='workspace']");
+    workspace?.setAttribute("aria-current", this.mode === "workspace" ? "true" : "false");
+    const arrange = menu.querySelector<HTMLButtonElement>("[data-layout-action='arrange']");
+    arrange?.setAttribute("aria-pressed", String(this.arranging));
+  }
+
+  private renderPreviewControls(visible: boolean): void {
+    this.root.querySelectorAll<HTMLElement>("[data-preview-control]").forEach((control) => {
+      control.hidden = !visible;
+    });
   }
 
   private closeMenus(): void {
-    document
+    this.root
       .querySelectorAll<HTMLDetailsElement>("details[open]")
       .forEach((menu) => menu.removeAttribute("open"));
   }

@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
 import {
+  codeLayout,
   computeLayout,
-  defaultLayout,
+  defaultWorkspaceLayout,
   equalizeLayout,
+  layoutForMode,
   needsCompactLayout,
   newViewLayout,
   parseLayout,
@@ -15,14 +17,14 @@ import {
 } from "../src/layout/model.ts";
 import { LayoutStorage } from "../src/layout/storage.ts";
 
-test("the default workspace splits notebook and preview evenly", () => {
+test("the custom workspace splits notebook and preview evenly", () => {
   const bounds = {
     left: 0,
     top: 0,
     width: 1205,
     height: 805,
   };
-  const layout = computeLayout(defaultLayout(), bounds);
+  const layout = computeLayout(defaultWorkspaceLayout(), bounds);
   const notebook = layout.panes.get("notebook")!;
   const preview = layout.panes.get("preview")!;
 
@@ -34,6 +36,19 @@ test("the default workspace splits notebook and preview evenly", () => {
   assert.equal(preview.height, bounds.height);
   assert.ok(preview.left > notebook.left + notebook.width);
   assert.deepEqual(layout.panes.has("source"), false);
+});
+
+test("task modes resolve to their surface layouts", () => {
+  const code = codeLayout();
+  const workspace = defaultWorkspaceLayout();
+
+  assert.deepEqual(visibleSurfaces(layoutForMode("notebook", code, workspace)), ["notebook"]);
+  assert.deepEqual(visibleSurfaces(layoutForMode("preview", code, workspace)), ["preview"]);
+  assert.deepEqual(visibleSurfaces(layoutForMode("code", code, workspace)), ["source", "preview"]);
+  assert.deepEqual(visibleSurfaces(layoutForMode("workspace", code, workspace)), [
+    "notebook",
+    "preview",
+  ]);
 });
 
 test("a new view opens source above preview beside the notebook", () => {
@@ -67,7 +82,7 @@ test("compact mode follows the minimum size of the visible layout", () => {
 });
 
 test("nested ratios update and equalize independently", () => {
-  const tree = splitSurface(defaultLayout(), "preview", "source", "below");
+  const tree = splitSurface(defaultWorkspaceLayout(), "preview", "source", "below");
   const changed = updateRatio(updateRatio(tree, "notebook-preview", 0.6), "custom-1", 0.3);
   const equalized = equalizeLayout(changed);
 
@@ -77,9 +92,9 @@ test("nested ratios update and equalize independently", () => {
 });
 
 test("pane operations keep each surface unique", () => {
-  const restored = splitSurface(defaultLayout(), "preview", "source", "below");
+  const restored = splitSurface(defaultWorkspaceLayout(), "preview", "source", "below");
 
-  assert.deepEqual(visibleSurfaces(defaultLayout()), ["notebook", "preview"]);
+  assert.deepEqual(visibleSurfaces(defaultWorkspaceLayout()), ["notebook", "preview"]);
   assert.deepEqual(visibleSurfaces(restored).sort(), ["notebook", "preview", "source"]);
   assert.deepEqual(
     computeLayout(restored, { left: 0, top: 0, width: 1000, height: 805 }).dividers.find(
@@ -87,7 +102,7 @@ test("pane operations keep each surface unique", () => {
     )?.ratio,
     0.5,
   );
-  assert.deepEqual(visibleSurfaces(swapSurfaces(defaultLayout(), "notebook", "preview")), [
+  assert.deepEqual(visibleSurfaces(swapSurfaces(defaultWorkspaceLayout(), "notebook", "preview")), [
     "preview",
     "notebook",
   ]);
@@ -95,12 +110,15 @@ test("pane operations keep each surface unique", () => {
 
 test("a pane can be placed on any side of its target", () => {
   const place = (placement: "left" | "right" | "above" | "below") => {
-    const panes = computeLayout(splitSurface(defaultLayout(), "preview", "source", placement), {
-      left: 0,
-      top: 0,
-      width: 1205,
-      height: 805,
-    }).panes;
+    const panes = computeLayout(
+      splitSurface(defaultWorkspaceLayout(), "preview", "source", placement),
+      {
+        left: 0,
+        top: 0,
+        width: 1205,
+        height: 805,
+      },
+    ).panes;
     return {
       source: panes.get("source")!,
       preview: panes.get("preview")!,
@@ -125,7 +143,7 @@ test("a pane can be placed on any side of its target", () => {
 });
 
 test("saved layouts validate shape, ratios, and unique surfaces", () => {
-  const saved = updateRatio(defaultLayout(), "notebook-preview", 0.6);
+  const saved = updateRatio(defaultWorkspaceLayout(), "notebook-preview", 0.6);
   const serialized = JSON.stringify(saved);
 
   assert.deepEqual(parseLayout(serialized), saved);
@@ -179,8 +197,9 @@ test("layout storage round-trips valid state and recovers invalid data", () => {
   try {
     const storage = new LayoutStorage("studio-layout");
     const state = {
-      tree: newViewLayout(),
-      focused: "source" as const,
+      mode: "workspace" as const,
+      code: codeLayout(),
+      workspace: newViewLayout(),
       compact: "preview" as const,
     };
 
@@ -191,19 +210,26 @@ test("layout storage round-trips valid state and recovers invalid data", () => {
       "studio-layout:dashboard",
       JSON.stringify({
         schema: 1,
-        tree: defaultLayout(),
-        focused: "source",
+        mode: "notebook",
+        code: codeLayout(),
+        workspace: defaultWorkspaceLayout(),
         compact: "source",
       }),
     );
     assert.deepEqual(storage.read("dashboard"), {
-      tree: defaultLayout(),
-      focused: null,
+      mode: "notebook",
+      code: codeLayout(),
+      workspace: defaultWorkspaceLayout(),
       compact: "notebook",
     });
 
     values.set("studio-layout:dashboard", "invalid");
-    assert.deepEqual(storage.read("dashboard").tree, defaultLayout());
+    assert.deepEqual(storage.read("dashboard"), {
+      mode: "notebook",
+      code: codeLayout(),
+      workspace: defaultWorkspaceLayout(),
+      compact: "notebook",
+    });
   } finally {
     if (previous) {
       Object.defineProperty(globalThis, "localStorage", previous);

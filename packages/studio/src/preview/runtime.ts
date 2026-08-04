@@ -26,16 +26,24 @@ export const initialPreviewRuntime = ({
 export class RuntimeControl {
   private current: string;
   private readonly buttons: HTMLButtonElement[];
+  private readonly label: HTMLElement;
+  private readonly trigger: HTMLElement;
 
   constructor(
+    root: ParentNode,
     initial: string,
     private readonly storageKey: string,
     private readonly select: (runtime: string) => void,
   ) {
     this.current = initial;
-    this.buttons = Array.from(
-      document.querySelectorAll<HTMLButtonElement>("[data-preview-runtime]"),
-    );
+    this.buttons = Array.from(root.querySelectorAll<HTMLButtonElement>("[data-preview-runtime]"));
+    const label = root.querySelector<HTMLElement>("[data-preview-runtime-label]");
+    const trigger = root.querySelector<HTMLElement>("[data-runtime-trigger]");
+    if (!label || !trigger) {
+      throw new Error("Studio runtime controls are incomplete");
+    }
+    this.label = label;
+    this.trigger = trigger;
     this.buttons.forEach((button) => button.addEventListener("click", this.clicked));
     this.render();
   }
@@ -45,7 +53,9 @@ export class RuntimeControl {
   }
 
   private readonly clicked = (event: MouseEvent): void => {
-    const runtime = (event.currentTarget as HTMLButtonElement).dataset.previewRuntime;
+    const button = event.currentTarget as HTMLButtonElement;
+    button.closest("details")?.removeAttribute("open");
+    const runtime = button.dataset.previewRuntime;
     if (!runtime || runtime === this.current) {
       return;
     }
@@ -57,7 +67,12 @@ export class RuntimeControl {
 
   private render(): void {
     this.buttons.forEach((button) => {
-      button.setAttribute("aria-pressed", String(button.dataset.previewRuntime === this.current));
+      const selected = button.dataset.previewRuntime === this.current;
+      button.setAttribute("aria-pressed", String(selected));
+      if (selected) {
+        this.label.textContent = button.querySelector("strong")?.textContent ?? this.current;
+        this.trigger.setAttribute("aria-label", `${this.label.textContent} preview runtime`);
+      }
     });
   }
 }

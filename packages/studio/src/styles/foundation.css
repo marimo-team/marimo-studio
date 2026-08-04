@@ -3,18 +3,20 @@
   font-family: "PT Sans", ui-sans-serif, system-ui, sans-serif;
   --studio-background: #fff;
   --studio-foreground: #202124;
-  --studio-muted: #686a6d;
-  --studio-surface: #f7f7f6;
-  --studio-hover: #f0f1ef;
-  --studio-border: #dedfdd;
-  --studio-strong-border: #c8cac7;
+  --studio-muted: #667085;
+  --studio-subtle: #f8f9fa;
+  --studio-hover: #f1f3f4;
+  --studio-border: #e0e3e7;
+  --studio-strong-border: #c7ccd1;
   --studio-primary: #1473e6;
-  --studio-primary-soft: #e8f2ff;
+  --studio-primary-soft: #eaf3ff;
+  --studio-success: #1f9d74;
   --studio-warning: #8a5b00;
   --studio-warning-soft: #fff7df;
   --studio-error: #b42318;
   --studio-error-soft: #fff0ee;
-  --studio-pane-header: 2.25rem;
+  --studio-toolbar-height: 2.75rem;
+  --studio-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,12 +24,13 @@
     --studio-background: #181a19;
     --studio-foreground: #eceeed;
     --studio-muted: #aab0ad;
-    --studio-surface: #222523;
+    --studio-subtle: #222523;
     --studio-hover: #2a2e2b;
     --studio-border: #3b403d;
     --studio-strong-border: #505652;
     --studio-primary: #61a8f5;
     --studio-primary-soft: #183450;
+    --studio-success: #50c49b;
     --studio-warning: #f0bd60;
     --studio-warning-soft: #3b301d;
     --studio-error: #ff9087;
@@ -68,7 +71,23 @@ summary {
   -webkit-tap-highlight-color: transparent;
 }
 
+button:active,
+summary:active,
+.studio-toolbar-action:active {
+  transform: scale(0.97);
+}
+
+.studio-visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
 .studio {
   display: grid;
-  grid-template-rows: 2.75rem minmax(0, 1fr);
+  grid-template-rows: var(--studio-toolbar-height) minmax(0, 1fr);
 }

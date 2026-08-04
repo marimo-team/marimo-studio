@@ -4,7 +4,7 @@
 }
 
 .studio-divider {
-  background: var(--studio-border);
+  background: transparent;
   pointer-events: auto;
   position: absolute;
   touch-action: none;
@@ -18,23 +18,38 @@
   cursor: row-resize;
 }
 
+.studio-divider::before,
 .studio-divider::after {
   content: "";
   position: absolute;
+}
+
+.studio-divider[data-axis="x"]::before {
+  background: var(--studio-border);
+  inset: 0 auto 0 2px;
+  width: 1px;
 }
 
 .studio-divider[data-axis="x"]::after {
   inset: 0 -4px;
 }
 
+.studio-divider[data-axis="y"]::before {
+  background: var(--studio-border);
+  height: 1px;
+  inset: 2px 0 auto;
+}
+
 .studio-divider[data-axis="y"]::after {
   inset: -4px 0;
 }
 
-.studio-divider:hover,
-.studio-divider:focus-visible,
-.studio-workspace[data-resizing="true"] .studio-divider {
+.studio-divider:is(:hover, :focus-visible)::before,
+.studio-workspace[data-resizing="true"] .studio-divider::before {
   background: var(--studio-primary);
+}
+
+.studio-divider:focus-visible {
   outline: 0;
 }
 
@@ -60,62 +75,25 @@
   outline-offset: 1px;
 }
 
-@container (max-width: 480px) {
-  [data-source-path],
-  .studio-pane-actions > .studio-icon-action[data-focus-surface],
-  .studio-source-meta > .studio-icon-action[data-focus-surface] {
-    display: none;
+@media (max-width: 840px) {
+  .studio-notebook {
+    max-width: 9rem;
+  }
+
+  .studio-modes button {
+    min-width: 4.4rem;
+    padding-inline: 0.7rem;
   }
 }
 
 @media (max-width: 680px) {
-  .studio-toolbar {
-    gap: 0.35rem;
-    padding-inline: 0.45rem;
-  }
-
-  .studio-wordmark,
-  .studio-notebook,
-  .studio-title-separator {
-    display: none;
-  }
-
-  .studio-title {
-    flex: 1;
-  }
-
-  .studio-view-menu,
-  .studio-view-menu > summary {
-    width: 100%;
-  }
-
-  .studio-view-menu > summary {
-    justify-content: space-between;
-  }
-
-  .studio-layout-menu > summary {
-    font-size: 0;
-  }
-
-  .studio-layout-menu > summary::before {
-    content: "Layout";
-    font-size: 0.8125rem;
-  }
-
-  .studio-menu-popover {
-    max-width: calc(100vw - 1rem);
-  }
-}
-
-@media (max-width: 480px) {
   .studio {
-    grid-template-rows: 5.5rem minmax(0, 1fr);
+    grid-template-rows: calc(var(--studio-toolbar-height) * 2) minmax(0, 1fr);
   }
 
   .studio-toolbar {
-    display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: repeat(2, 2.75rem);
+    grid-template-rows: repeat(2, var(--studio-toolbar-height));
   }
 
   .studio-title {
@@ -124,21 +102,96 @@
   }
 
   .studio-controls {
-    display: contents;
-  }
-
-  .studio-layout-menu {
     grid-column: 2;
     grid-row: 1;
   }
 
-  .studio-compact-tabs {
+  .studio-modes {
     grid-column: 1 / -1;
     grid-row: 2;
     justify-self: stretch;
   }
 
-  .studio-compact-tabs button {
+  .studio-modes button {
     flex: 1;
+  }
+
+  .studio-notebook,
+  .studio-title-separator {
+    display: none;
+  }
+
+  .studio-title {
+    gap: 0.2rem;
+  }
+
+  .studio-view-menu,
+  .studio-view-menu > summary {
+    min-width: 0;
+  }
+
+  .studio-menu-popover {
+    max-width: calc(100vw - 1rem);
+  }
+
+  .studio-runtime-trigger {
+    min-width: auto;
+  }
+
+  .studio-controls > :is(.studio-runtime-menu, [data-preview-popout]) {
+    display: none;
+  }
+
+  .studio-overflow-preview:not([hidden]) {
+    display: grid;
+    gap: 0.15rem;
+  }
+
+  .studio-workspace-popover:has(.studio-overflow-preview:not([hidden])) {
+    min-width: 17rem;
+  }
+
+  .studio:is([data-mode="code"], [data-mode="workspace"]):has(.studio-compact-tabs:not([hidden]))
+    .studio-primary-modes {
+    display: none;
+  }
+
+  .studio:is([data-mode="code"], [data-mode="workspace"]) .studio-compact-tabs:not([hidden]) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: stretch;
+  }
+
+  .studio:is([data-mode="code"], [data-mode="workspace"])
+    .studio-compact-tabs:not([hidden])
+    button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 440px) {
+  .studio-brand-mark {
+    flex-basis: 2.4rem;
+  }
+
+  .studio-controls {
+    gap: 0.15rem;
+    padding-inline: 0.25rem;
+  }
+
+  .studio-runtime-trigger {
+    padding-inline: 0.4rem;
+  }
+
+  .studio-runtime-trigger .studio-menu-chevron {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:active,
+  summary:active,
+  .studio-toolbar-action:active {
+    transform: none;
   }
 }

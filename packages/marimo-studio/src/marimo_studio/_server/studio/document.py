@@ -56,10 +56,10 @@ def studio_document(
                 config,
                 selected,
                 runtimes,
+                preview_url,
             ),
             workspace(
                 editor_url(base_url, file_key, query),
-                preview_url,
                 selected,
             ),
         )

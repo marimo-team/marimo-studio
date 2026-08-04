@@ -273,8 +273,14 @@ def test_edit_mode_offers_both_preview_runtimes(notebook_path: Path) -> None:
 
     assert config["runtime"]["id"] == "wasm"
     assert config["runtime"]["available"] == ["server", "wasm"]
+    assert 'data-studio-mode="notebook"' in workspace.text
+    assert 'data-studio-mode="preview"' in workspace.text
+    assert 'data-studio-mode="code"' in workspace.text
     assert 'data-preview-runtime="server"' in workspace.text
     assert 'data-preview-runtime="wasm"' in workspace.text
+    assert "Uses the notebook kernel" in workspace.text
+    assert "Runs locally in your browser" in workspace.text
+    assert "data-studio-live-status" in workspace.text
     assert 'data-query-url="/_marimo-studio/query"' in workspace.text
 
 

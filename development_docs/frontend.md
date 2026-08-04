@@ -96,9 +96,9 @@ view switch replaces `#app-shell`. Matching cell hosts reconnect to the current
 store and preserve output DOM when possible.
 
 Studio keeps the notebook iframe, source editors, and preview iframe mounted as
-stable nodes. Its pane tree changes their rectangles and focus without moving
-the nodes between parents. Source editors use content-derived ETags and
-`If-Match` writes.
+stable nodes. Task modes and the custom pane tree change their rectangles
+without moving the nodes between parents. Source editors use content-derived
+ETags and `If-Match` writes.
 
 When a WebAssembly preview becomes ready, Studio requests the server and
 preview semantic cell maps at the same presentation revision. The browser app
