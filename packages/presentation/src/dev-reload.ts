@@ -15,7 +15,6 @@ import {
 import {
   clearDiagnostic,
   notifyDiagnostics,
-  notifyReady,
   showDiagnostic,
   supportView,
 } from "./document/status.ts";
@@ -25,12 +24,15 @@ import { beginPresentationRefresh, setPresentationRefreshState } from "./readine
 import {
   commitRuntimeConfig,
   fetchRuntimeConfig,
+  getMountConfig,
   getRuntimeConfig,
   getSupportUrl,
   hasRuntimeConfig,
+  requestedRuntimeId,
   RuntimeConfigRequestError,
   subscribeRuntimeConfig,
 } from "./runtime-config/index.ts";
+import { updateConfiguredRuntime } from "./runtime/coordinator.ts";
 
 declare global {
   var __MARIMO_STUDIO_SESSION_ID__: string | undefined;
@@ -141,7 +143,16 @@ const refreshRuntimeConfig = async (): Promise<void> => {
   const controller = new AbortController();
   activeConfigRefresh = controller;
   try {
-    commitRuntimeConfig(await fetchRuntimeConfig(getSupportUrl(), controller.signal));
+    const config = commitRuntimeConfig(
+      await fetchRuntimeConfig(
+        getSupportUrl(),
+        controller.signal,
+        hasRuntimeConfig() ? getRuntimeConfig().runtime.id : requestedRuntimeId(),
+      ),
+    );
+    if (updateConfiguredRuntime(config) === "reload") {
+      globalThis.location.reload();
+    }
     clearDiagnostic();
   } finally {
     if (activeConfigRefresh === controller) {
@@ -155,17 +166,13 @@ const beginRefresh = (): number => {
   return latestRefreshGeneration;
 };
 
-const completeRefresh = (
-  generation: number,
-  view = hasRuntimeConfig() ? getRuntimeConfig().view : supportView(),
-) => {
+const completeRefresh = (generation: number) => {
   if (generation !== latestRefreshGeneration) {
     return;
   }
   resetRetry();
   clearDiagnostic();
   setPresentationRefreshState(generation, "ready");
-  notifyReady(view);
 };
 
 const reload = (kind: ShellChangeKind, resetBackoff = true) => {
@@ -266,6 +273,10 @@ export const refreshShell = async (
         target = resolvedTarget;
       },
     );
+    if (updateConfiguredRuntime(getRuntimeConfig()) === "reload") {
+      globalThis.location.reload();
+      return;
+    }
     clearDiagnostic();
     if (commit.supportChanged) {
       connectEvents();
@@ -292,7 +303,7 @@ const unbindViewSwitches = bindViewSwitches((request) => {
   shellRefreshState.supersede();
   const generation = beginRefresh();
   void refreshShell(request.documentUrl, request.supportUrl)
-    .then(() => completeRefresh(generation, request.view))
+    .then(() => completeRefresh(generation))
     .catch((error: unknown) => {
       handleRefreshError(error, "html", generation, request.view);
     });
@@ -302,6 +313,9 @@ const unbindViewNavigation = bindViewNavigation();
 connectEvents();
 const receiverReady: ReceiverReadyMessage = {
   type: "marimo-studio:receiver-ready",
+  runtime: hasRuntimeConfig()
+    ? getRuntimeConfig().runtime.id
+    : requestedRuntimeId(getMountConfig().runtime),
   view: supportView(),
 };
 globalThis.parent.postMessage(receiverReady, globalThis.location.origin);

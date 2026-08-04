@@ -9,18 +9,18 @@ export const createMarimoViteIntegration = () => {
   const source = readMarimoSourceSync();
   const frontend = join(source.path, "frontend");
   const modules = join(frontend, "node_modules");
-  const bridge = join(packageRoot, "src", "server-only-bridge.ts");
   const rtc = join(packageRoot, "src", "server-only-rtc.ts");
+  const logger = join(packageRoot, "src", "runtime-logger.ts");
 
   return {
     aliases: [
       {
-        find: join(frontend, "src", "core", "wasm", "bridge.ts"),
-        replacement: bridge,
-      },
-      {
         find: "@/core/codemirror/rtc/extension",
         replacement: rtc,
+      },
+      {
+        find: "@/utils/Logger",
+        replacement: logger,
       },
       {
         find: /^@marimo-team\/frontend\/unstable_internal\/(.*)$/,
@@ -49,16 +49,6 @@ export const createMarimoViteIntegration = () => {
         replacement: join(modules, "zod"),
       },
     ],
-    bridgePlugin: {
-      name: "marimo-studio-server-runtime",
-      enforce: "pre" as const,
-      resolveId(id: string, importer?: string) {
-        if (id === "../wasm/bridge" && importer?.endsWith("/core/websocket/useWebSocket.tsx")) {
-          return bridge;
-        }
-        return null;
-      },
-    },
     postcss: join(frontend, "postcss.config.cjs"),
     source,
   };

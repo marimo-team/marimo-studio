@@ -108,6 +108,13 @@ class RuntimeSyncError(MarimoStudioError):
     transient = True
 
 
+class RuntimeSelectionError(MarimoStudioError):
+    """A requested presentation runtime is unavailable."""
+
+    code = "runtime-unavailable"
+    status_code = 400
+
+
 class SourceNotFoundError(MarimoStudioError):
     """A requested authored view file is unavailable."""
 

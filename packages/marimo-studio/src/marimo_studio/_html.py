@@ -31,12 +31,14 @@ def runtime_head(
     assets_url: str,
     dev: bool,
     revision: str,
+    runtime: str,
 ) -> Renderable:
     mount_config = json.dumps(
         {
             "supportUrl": support_url,
             "version": runtime_marimo_version(),
             "revision": revision,
+            "runtime": runtime,
         },
         separators=(",", ":"),
     ).replace("<", "\\u003c")

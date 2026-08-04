@@ -12,6 +12,23 @@ export interface SessionEnvironment {
 const SESSION_ID_PATTERN = /^s_[\da-z]{6}$/;
 const DOCUMENT_REPLAY_PARAM = "marimo_studio_resume";
 
+interface ServerSessionConfig {
+  fileKey: string;
+  preserve: boolean;
+}
+
+const serverSessionConfig = (config: RuntimeConfig): ServerSessionConfig | undefined => {
+  if (config.runtime.id !== "server") {
+    return undefined;
+  }
+  const fileKey = config.runtime.data.fileKey;
+  const preserve = config.runtime.data.preserveSession;
+  if (typeof fileKey !== "string" || typeof preserve !== "boolean") {
+    return undefined;
+  }
+  return { fileKey, preserve };
+};
+
 const browserEnvironment = (): SessionEnvironment => {
   const navigation = performance.getEntriesByType("navigation")[0] as
     | PerformanceNavigationTiming
@@ -25,7 +42,8 @@ const browserEnvironment = (): SessionEnvironment => {
 };
 
 const storageKey = (config: RuntimeConfig, url: URL): string => {
-  return `marimo-studio:session:v1:${config.fileKey}:${url.pathname}`;
+  const runtime = serverSessionConfig(config);
+  return `marimo-studio:session:v1:server:${runtime?.fileKey ?? "unknown"}:${url.pathname}`;
 };
 
 export const prepareSessionRefresh = (
@@ -35,8 +53,11 @@ export const prepareSessionRefresh = (
   try {
     const browser = environment ?? browserEnvironment();
     const url = new URL(browser.href);
-    if (!config.preserveSession || config.mode !== "run") {
-      browser.storage.removeItem(storageKey(config, url));
+    const runtime = serverSessionConfig(config);
+    if (!runtime || !runtime.preserve || config.mode !== "run") {
+      if (runtime) {
+        browser.storage.removeItem(storageKey(config, url));
+      }
       if (url.searchParams.has(DOCUMENT_REPLAY_PARAM)) {
         url.searchParams.delete("session_id");
         url.searchParams.delete(DOCUMENT_REPLAY_PARAM);
@@ -91,7 +112,8 @@ export const rememberSession = (
   sessionId: string,
   environment?: SessionEnvironment,
 ): void => {
-  if (!config.preserveSession || config.mode !== "run" || !SESSION_ID_PATTERN.test(sessionId)) {
+  const runtime = serverSessionConfig(config);
+  if (!runtime?.preserve || config.mode !== "run" || !SESSION_ID_PATTERN.test(sessionId)) {
     return;
   }
   try {

@@ -1,6 +1,9 @@
 import type { QueryChangeMessage } from "@marimo-studio/protocol/preview-messages";
 
 import { publicNotebookQuery } from "@marimo-studio/protocol/query";
+import { runtimeIdFromSearch } from "@marimo-studio/protocol/runtime-selection";
+
+import { getMountConfig, getRuntimeConfig, hasRuntimeConfig } from "../runtime-config";
 
 export const startQuerySync = (): void => {
   const frame = globalThis.frameElement;
@@ -10,6 +13,9 @@ export const startQuerySync = (): void => {
   const notify = () => {
     const message: QueryChangeMessage = {
       type: "marimo-studio:query-change",
+      runtime: hasRuntimeConfig()
+        ? getRuntimeConfig().runtime.id
+        : runtimeIdFromSearch(globalThis.location.search, getMountConfig().runtime),
       query: publicNotebookQuery(globalThis.location.search),
     };
     globalThis.parent.postMessage(message, globalThis.location.origin);

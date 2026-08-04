@@ -83,6 +83,30 @@ export default defineConfig({
         },
       },
       {
+        files: ["packages/runtime/src/**"],
+        rules: {
+          "eslint/no-restricted-imports": [
+            "error",
+            {
+              patterns: [
+                "@marimo-studio/marimo-frontend",
+                "@marimo-studio/marimo-frontend/*",
+                "@marimo-studio/presentation",
+                "@marimo-studio/presentation/*",
+                "@marimo-studio/studio",
+                "@marimo-studio/studio/*",
+                "@marimo-team/*",
+                "htmx.org",
+                "jotai",
+                "react",
+                "react-dom",
+                "react-dom/*",
+              ],
+            },
+          ],
+        },
+      },
+      {
         files: ["packages/presentation/**"],
         rules: {
           "eslint/no-restricted-imports": [

@@ -29,13 +29,33 @@ export type CellBindingConfig = z.infer<typeof cellBindingConfigSchema>;
 export type ValueBindingConfig = z.infer<typeof valueBindingConfigSchema>;
 export type ProjectionDiagnostic = z.infer<typeof projectionDiagnosticSchema>;
 
+export const runtimeIdSchema = z.string().regex(/^[a-z][a-z0-9-]*$/);
+export const runtimeControlsSchema = z.object({
+  cells: z.record(z.string().min(1), z.string().min(1)),
+});
+export const runtimeEnvelopeSchema = z
+  .object({
+    id: runtimeIdSchema,
+    instance: z.string().min(1),
+    available: z.array(runtimeIdSchema).min(1),
+    data: z.record(z.string(), z.unknown()),
+    controls: runtimeControlsSchema.optional(),
+  })
+  .refine((runtime) => runtime.available.includes(runtime.id), {
+    message: "The active runtime must be present in the available runtime list.",
+    path: ["id"],
+  });
+
+export type RuntimeEnvelope = z.infer<typeof runtimeEnvelopeSchema>;
+export type RuntimeControls = z.infer<typeof runtimeControlsSchema>;
+
 const runtimeConfigFields = {
   schema: z.literal(1),
   revision: z.string(),
   view: z.string(),
   views: z.array(z.string()),
-  fileKey: z.string(),
-  runtimeUrl: z.string(),
+  runtime: runtimeEnvelopeSchema,
+  rootUrl: z.string(),
   supportUrl: z.string(),
   cellBindings: z.record(z.string(), cellBindingConfigSchema),
   valueBindings: z.record(z.string(), valueBindingConfigSchema),
@@ -43,10 +63,8 @@ const runtimeConfigFields = {
   appConfig: z.record(z.string(), z.unknown()),
   userConfig: z.record(z.string(), z.unknown()),
   configOverrides: z.record(z.string(), z.unknown()),
-  serverToken: z.string(),
   dev: z.boolean(),
   mode: z.enum(["edit", "run"]),
-  preserveSession: z.boolean(),
 };
 
 export const runtimeConfigSchema = z
@@ -59,6 +77,7 @@ export const mountConfigSchema = z.object({
   supportUrl: z.string(),
   version: z.string(),
   revision: z.string(),
+  runtime: runtimeIdSchema,
 });
 
 export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;

@@ -6,19 +6,22 @@ tests, builds, and task orchestration.
 
 ## Packages
 
-| Path                                     | Responsibility                                          |
-| ---------------------------------------- | ------------------------------------------------------- |
-| `apps/browser/`                          | Vite entrypoints, shared chunks, and asset finalization |
-| `packages/presentation/`                 | Custom-view document, projections, and runtime mount    |
-| `packages/studio/`                       | Workspace layout, editors, remotes, and controllers     |
-| `packages/protocol/`                     | Browser messages and validated server response records  |
-| `packages/marimo-frontend/src/upstream/` | Imports from Marimo's unstable frontend surface         |
-| `packages/marimo-frontend/src/vite.ts`   | Marimo aliases, PostCSS, and bridge plugin              |
-| `packages/marimo-frontend/scripts/`      | Locked Marimo source preparation and build metadata     |
-| `apps/docs/`                             | VitePress application and site configuration            |
+| Path                                            | Responsibility                                          |
+| ----------------------------------------------- | ------------------------------------------------------- |
+| `apps/browser/`                                 | Vite entrypoints, shared chunks, and asset finalization |
+| `packages/runtime/`                             | Runtime adapter and session lifecycle contracts         |
+| `packages/presentation/`                        | Custom-view document, projections, and runtime mount    |
+| `packages/studio/`                              | Workspace layout, editors, remotes, and controllers     |
+| `packages/protocol/`                            | Browser messages and validated server response records  |
+| `packages/marimo-frontend/src/upstream/`        | Imports from Marimo's unstable frontend surface         |
+| `packages/marimo-frontend/src/control-frame.ts` | Adapt a Marimo frame to native control operations       |
+| `packages/marimo-frontend/src/vite.ts`          | Marimo aliases and PostCSS                              |
+| `packages/marimo-frontend/scripts/`             | Locked Marimo source preparation and build metadata     |
+| `apps/docs/`                                    | VitePress application and site configuration            |
 
-`packages/presentation` renders the custom view and keeps its React runtime as
-a private module. `packages/studio` renders the workspace document.
+`packages/runtime` defines the transport-independent adapter contract.
+`packages/presentation` renders the custom view and keeps the shared React
+renderer as a private module. `packages/studio` renders the workspace document.
 `packages/protocol` is the shared wire boundary. Zod 4 schemas validate input
 and define the TypeScript types consumed by both documents. The package
 contains no fetch, EventSource, DOM, or window access.
@@ -79,7 +82,7 @@ Marimo upgrade should concentrate path and declaration changes in
 
 `pnpm build` prepares Marimo source, builds the entrypoints from
 `apps/browser`, and writes one browser bundle to
-`packages/marimo-studio/src/marimo_studio/_static/server-runtime/`. The
+`packages/marimo-studio/src/marimo_studio/_static/browser/`. The
 finalizer copies authored Studio styles and writes `build-meta.json` with the
 Marimo and HTMX versions.
 
@@ -96,6 +99,14 @@ Studio keeps the notebook iframe, source editors, and preview iframe mounted as
 stable nodes. Its pane tree changes their rectangles and focus without moving
 the nodes between parents. Source editors use content-derived ETags and
 `If-Match` writes.
+
+When a WebAssembly preview becomes ready, Studio requests the server and
+preview semantic cell maps at the same presentation revision. The browser app
+injects Marimo frame adapters into Studio, subscribes to control registration,
+and sends the editor snapshot to the preview in one kernel request. Later
+JSON-compatible native control updates travel in both directions. The Marimo
+compatibility package owns registry and request-client access. Studio owns
+translation, lifecycle, retry, and cancellation.
 
 Tests live with their owner. Protocol tests exercise schemas and concrete
 envelopes. Presentation and Studio tests exercise their state and lifecycle

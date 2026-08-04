@@ -1,5 +1,6 @@
 import { parseErrorResponse } from "@marimo-studio/protocol/errors";
 import { parseRuntimeConfig, type RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
+import { DEFAULT_RUNTIME_ID, runtimeIdFromSearch } from "@marimo-studio/protocol/runtime-selection";
 
 import { retry } from "../retry.ts";
 
@@ -65,16 +66,28 @@ export const runtimeConfigSessionId = ({
   return undefined;
 };
 
+export const requestedRuntimeId = (fallback = DEFAULT_RUNTIME_ID): string =>
+  runtimeIdFromSearch(globalThis.location?.search ?? "", fallback);
+
+export const runtimeSelectionChanged = (
+  active: string,
+  fallback = DEFAULT_RUNTIME_ID,
+  search = globalThis.location?.search ?? "",
+): boolean => runtimeIdFromSearch(search, fallback) !== active;
+
 export const fetchRuntimeConfig = async (
   supportUrl: string,
   signal?: AbortSignal,
+  fallbackRuntime = DEFAULT_RUNTIME_ID,
 ): Promise<RuntimeConfig> => {
   const browser = globalThis as typeof globalThis & Window;
   const sessionId = runtimeConfigSessionId({
     connected: browser.__MARIMO_STUDIO_SESSION_ID__,
     href: browser.location?.href,
   });
-  const response = await fetch(`${supportUrl}/config`, {
+  const runtime = requestedRuntimeId(fallbackRuntime);
+  const url = `${supportUrl}/config?${new URLSearchParams({ runtime })}`;
+  const response = await fetch(url, {
     cache: "no-store",
     headers: sessionId ? { "Marimo-Session-Id": sessionId } : undefined,
     signal,
@@ -86,7 +99,15 @@ export const fetchRuntimeConfig = async (
     );
     throw new RuntimeConfigRequestError(detail.message, detail.code, detail.transient, detail.hint);
   }
-  return parseRuntimeConfig(await response.json());
+  const config = parseRuntimeConfig(await response.json());
+  if (config.runtime.id !== runtime) {
+    throw new RuntimeConfigRequestError(
+      `The server selected ${JSON.stringify(config.runtime.id)} instead of ${JSON.stringify(runtime)}.`,
+      "runtime-selection-mismatch",
+      false,
+    );
+  }
+  return config;
 };
 
 const RETRY_DELAYS = [100, 250, 500, 1_000] as const;
@@ -94,9 +115,10 @@ const RETRY_DELAYS = [100, 250, 500, 1_000] as const;
 export const fetchRuntimeConfigWithRetry = async (
   supportUrl: string,
   signal?: AbortSignal,
+  fallbackRuntime = DEFAULT_RUNTIME_ID,
 ): Promise<RuntimeConfig> =>
   retry({
-    operation: () => fetchRuntimeConfig(supportUrl, signal),
+    operation: () => fetchRuntimeConfig(supportUrl, signal, fallbackRuntime),
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof RuntimeConfigRequestError && error.transient,
     signal,
@@ -122,8 +144,9 @@ export const fetchRuntimeConfigForRevision = async (
   supportUrl: string,
   documentRevision: string,
   signal?: AbortSignal,
+  fallbackRuntime = DEFAULT_RUNTIME_ID,
 ): Promise<RuntimeConfig> => {
-  const config = await fetchRuntimeConfigWithRetry(supportUrl, signal);
+  const config = await fetchRuntimeConfigWithRetry(supportUrl, signal, fallbackRuntime);
   requireMatchingPresentationRevision(documentRevision, config);
   return config;
 };

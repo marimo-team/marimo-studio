@@ -13,6 +13,7 @@ from marimo_studio._workspace.models import (
     MARIMO_DIRECTORY,
     PYPROJECT_NAME,
     RESERVED_VIEW_NAMES,
+    RUNTIME_PATTERN,
     STUDIO_DIRECTORY,
     VIEW_PATTERN,
     StudioConfig,
@@ -31,6 +32,28 @@ def validate_view_name(name: str) -> str:
     if name in RESERVED_VIEW_NAMES:
         raise ConfigurationError(f"View name {name!r} is reserved.")
     return name
+
+
+def _runtime_id(value: object, field: str) -> str:
+    if not isinstance(value, str) or not RUNTIME_PATTERN.fullmatch(value):
+        raise ConfigurationError(
+            f"{field} must start with a lowercase letter and contain lowercase "
+            "letters, digits, or hyphens"
+        )
+    return value
+
+
+def _runtimes(data: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
+    default = _runtime_id(data.get("runtime", "server"), "runtime")
+    raw = data.get("runtimes", [default])
+    if not isinstance(raw, list) or not raw:
+        raise ConfigurationError("runtimes must be a non-empty array")
+    values = tuple(_runtime_id(value, "runtimes entries") for value in raw)
+    if len(set(values)) != len(values):
+        raise ConfigurationError("runtimes must not contain duplicates")
+    if default not in values:
+        raise ConfigurationError("runtime must be present in runtimes")
+    return default, values
 
 
 def read_toml(path: Path) -> dict[str, Any]:
@@ -215,6 +238,7 @@ def _load_studio(
     if not isinstance(default_view, str):
         raise ConfigurationError("default must name a view")
     validate_view_name(default_view)
+    default_runtime, runtimes = _runtimes(data)
     preserve_session = data.get("preserve_session", False)
     if not isinstance(preserve_session, bool):
         raise ConfigurationError("preserve_session must be a boolean")
@@ -245,6 +269,8 @@ def _load_studio(
         notebook=notebook,
         view_root=view_root,
         default_view=default_view,
+        default_runtime=default_runtime,
+        runtimes=runtimes,
         preserve_session=preserve_session,
         views=views,
         cells=cells,

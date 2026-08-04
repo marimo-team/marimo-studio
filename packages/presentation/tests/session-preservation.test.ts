@@ -15,8 +15,18 @@ const config = (preserveSession: boolean, mode: RuntimeConfig["mode"] = "run"): 
   revision: "presentation-revision",
   view: "dashboard",
   views: ["dashboard"],
-  fileKey: "/workspace/analysis.py",
-  runtimeUrl: "/",
+  runtime: {
+    id: "server",
+    instance: "server-instance",
+    available: ["server"],
+    data: {
+      fileKey: "/workspace/analysis.py",
+      serverToken: "token",
+      preserveSession,
+      url: "/",
+    },
+  },
+  rootUrl: "/",
   supportUrl: "/_marimo-studio/views/dashboard",
   cellBindings: {},
   valueBindings: {},
@@ -24,10 +34,8 @@ const config = (preserveSession: boolean, mode: RuntimeConfig["mode"] = "run"): 
   appConfig: {},
   userConfig: {},
   configOverrides: {},
-  serverToken: "token",
   dev: false,
   mode,
-  preserveSession,
 });
 
 const environment = (
@@ -110,7 +118,7 @@ test("the replay marker is removed after the runtime opens", () => {
 
 test("disabling preservation cancels a pending replay", () => {
   const storage = new Map([
-    ["marimo-studio:session:v1:/workspace/analysis.py:/dashboard/", "s_abc123"],
+    ["marimo-studio:session:v1:server:/workspace/analysis.py:/dashboard/", "s_abc123"],
   ]);
   const browser = environment(storage, {
     href: "https://example.test/dashboard/?session_id=s_abc123&marimo_studio_resume=1&view=summary",

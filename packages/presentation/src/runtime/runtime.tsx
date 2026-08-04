@@ -1,14 +1,14 @@
 import "@marimo-studio/marimo-frontend/style";
 import "./style.css";
+import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
+import type { RuntimeSession } from "@marimo-studio/runtime";
+
 import { UI_ELEMENT_REGISTRY } from "@marimo-studio/marimo-frontend/controls";
 import {
   appConfigAtom,
   configOverridesAtom,
   connectionAtom,
-  createErrorToastingRequests,
-  createNetworkRequests,
   ErrorBoundary,
-  getRuntimeManager,
   getSessionId,
   initializePlugins,
   initialModeAtom,
@@ -16,8 +16,6 @@ import {
   parseAppConfig,
   parseConfigOverrides,
   parseUserConfig,
-  requestClientAtom,
-  runtimeConfigAtom,
   store,
   ThemeProvider,
   TooltipProvider,
@@ -28,11 +26,25 @@ import {
 import { Provider } from "jotai";
 import { createRoot } from "react-dom/client";
 
+import type { ValueReader } from "../values/reader";
+
 import { PAGE_THEME_EVENT, themeFromColorScheme } from "../document/theme";
-import { getRuntimeConfig, type RuntimeConfig } from "../runtime-config/index";
 import { RuntimeCellViews } from "./cell-views";
 import { retainUnmountedUIValues } from "./peer-controls";
-import { configureKioskTransport } from "./transport";
+
+type InitialMode = "edit" | "read";
+type ViewMode = "present" | "read";
+
+export interface RuntimeMountOptions {
+  id: string;
+  instance: string;
+  initialMode: InitialMode;
+  viewMode: ViewMode;
+  exposeSession: boolean;
+  configureTransport(): void | Promise<void>;
+  updateQuery(query: string): Promise<void>;
+  valueReader(sessionId: string, initialized: Promise<void>): ValueReader;
+}
 
 const preferredColorScheme = globalThis.matchMedia("(prefers-color-scheme: dark)");
 
@@ -79,49 +91,71 @@ const syncPageTheme = (config: RuntimeConfig) => {
   );
 };
 
-export const mountMarimoRuntime = (config: RuntimeConfig, runtimeRoot: HTMLElement) => {
-  const sessionId = getSessionId();
-  retainUnmountedUIValues(UI_ELEMENT_REGISTRY);
-  initializeMovablePlugins();
-
-  store.set(runtimeConfigAtom, {
-    url: new URL(config.runtimeUrl, globalThis.location.origin).toString(),
-    // Marimo uses this flag to defer a remote connection. Native local run
-    // pages connect immediately, while graph laziness remains kernel-owned.
-    lazy: false,
-    serverToken: config.serverToken,
-  });
-  // Marimo selects kiosk consumers from transport query parameters. Apply the
-  // marker at that boundary so the HTTP API keeps the configured base URL.
-  configureKioskTransport(getRuntimeManager(), config.mode === "edit");
-  const initialMode = config.mode === "edit" ? "edit" : "read";
-  const viewMode = config.mode === "edit" ? "present" : "read";
+const configurePresentation = (
+  config: RuntimeConfig,
+  initialMode: InitialMode,
+  viewMode: ViewMode,
+) => {
   store.set(initialModeAtom, initialMode);
   store.set(viewStateAtom, { mode: viewMode, cellAnchor: null });
   store.set(configOverridesAtom, parseConfigOverrides(config.configOverrides));
-  syncPageTheme(config);
-  globalThis.addEventListener(PAGE_THEME_EVENT, () => {
-    syncPageTheme(getRuntimeConfig());
-  });
-  preferredColorScheme.addEventListener("change", () => {
-    syncPageTheme(getRuntimeConfig());
-  });
   store.set(appConfigAtom, parseAppConfig(config.appConfig));
-  store.set(connectionAtom, { state: WebSocketState.CONNECTING });
-  store.set(requestClientAtom, createErrorToastingRequests(createNetworkRequests()));
+  syncPageTheme(config);
+};
 
-  createRoot(runtimeRoot).render(
+export const mountSharedRuntime = (
+  config: RuntimeConfig,
+  runtimeRoot: HTMLElement,
+  options: RuntimeMountOptions,
+): RuntimeSession => {
+  const sessionId = getSessionId();
+  let currentConfig = config;
+  retainUnmountedUIValues(UI_ELEMENT_REGISTRY);
+  initializeMovablePlugins();
+  configurePresentation(currentConfig, options.initialMode, options.viewMode);
+  const initialized = Promise.resolve(options.configureTransport());
+  store.set(connectionAtom, { state: WebSocketState.CONNECTING });
+
+  const syncTheme = () => syncPageTheme(currentConfig);
+  globalThis.addEventListener(PAGE_THEME_EVENT, syncTheme);
+  preferredColorScheme.addEventListener("change", syncTheme);
+
+  const root = createRoot(runtimeRoot);
+  root.render(
     <Provider store={store}>
       <ThemeProvider>
         <ErrorBoundary>
           <TooltipProvider>
             <ModalProvider>
-              <RuntimeCellViews sessionId={sessionId} />
+              <RuntimeCellViews
+                exposeSession={options.exposeSession}
+                initialized={initialized}
+                readValues={options.valueReader(sessionId, initialized)}
+                sessionId={sessionId}
+              />
             </ModalProvider>
           </TooltipProvider>
         </ErrorBoundary>
       </ThemeProvider>
     </Provider>,
   );
-  return sessionId;
+
+  return {
+    id: options.id,
+    sessionId: options.exposeSession ? sessionId : undefined,
+    update(next) {
+      if (next.runtime.id !== options.id || next.runtime.instance !== options.instance) {
+        return "reload";
+      }
+      currentConfig = next;
+      configurePresentation(next, options.initialMode, options.viewMode);
+      return "applied";
+    },
+    updateQuery: (query) => options.updateQuery(query),
+    dispose() {
+      root.unmount();
+      globalThis.removeEventListener(PAGE_THEME_EVENT, syncTheme);
+      preferredColorScheme.removeEventListener("change", syncTheme);
+    },
+  };
 };

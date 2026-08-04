@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
 import { loadRuntimeConfig } from "../src/runtime-config/index.ts";
-import { readValues, readValuesWithRetry, ValueRequestError } from "../src/values/index.ts";
+import {
+  readServerValues,
+  readServerValuesWithRetry,
+  ValueRequestError,
+} from "../src/values/index.ts";
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "presentation-revision",
+  runtime: "server",
 };
 
 const config = {
@@ -15,8 +20,18 @@ const config = {
   revision: "presentation-revision",
   view: "dashboard",
   views: ["dashboard"],
-  fileKey: "/workspace/notebook.py",
-  runtimeUrl: "/proxy/app/",
+  runtime: {
+    id: "server",
+    instance: "server-instance",
+    available: ["server", "wasm"],
+    data: {
+      fileKey: "/workspace/notebook.py",
+      serverToken: "server-token",
+      preserveSession: false,
+      url: "/proxy/app/",
+    },
+  },
+  rootUrl: "/proxy/app/",
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
   cellBindings: {},
   valueBindings: {
@@ -29,10 +44,8 @@ const config = {
   appConfig: {},
   userConfig: {},
   configOverrides: {},
-  serverToken: "server-token",
   dev: false,
   mode: "run",
-  preserveSession: false,
 };
 
 const requestUrl = (input: RequestInfo | URL): string => {
@@ -71,7 +84,7 @@ test("value reads send exact selectors through the configured base URL", async (
     return Promise.resolve(Response.json({ values: { "context.label": "ready" }, errors: {} }));
   };
   try {
-    const result = await readValues("session-id", ["context.label"]);
+    const result = await readServerValues("session-id", ["context.label"]);
     assert.deepEqual(result.values, { "context.label": "ready" });
     assert.deepEqual(url, "/proxy/app/_marimo-studio/views/dashboard/values");
     assert.deepEqual(headers.get("Marimo-Session-Id"), "session-id");
@@ -101,7 +114,7 @@ test("terminal value failures do not retry", async () => {
   };
   try {
     await assert.rejects(
-      () => readValuesWithRetry("session", ["context.label"]),
+      () => readServerValuesWithRetry("session", ["context.label"]),
       (error: unknown) => {
         assert.ok(error instanceof ValueRequestError);
         assert.match(error.message, /Unknown selector/);

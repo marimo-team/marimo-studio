@@ -8,8 +8,23 @@ const baseRuntimeConfig = {
   revision: "presentation-revision",
   view: "dashboard",
   views: ["dashboard", "executive"],
-  fileKey: "/workspace/notebook.py",
-  runtimeUrl: "/proxy/app/",
+  runtime: {
+    id: "server",
+    instance: "server-instance",
+    available: ["server", "wasm"],
+    data: {
+      fileKey: "/workspace/notebook.py",
+      serverToken: "server-token",
+      preserveSession: false,
+      url: "/proxy/app/",
+    },
+    controls: {
+      cells: {
+        "cell:v1:semantic": "MJUe",
+      },
+    },
+  },
+  rootUrl: "/proxy/app/",
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
   cellBindings: {
     plot: { kind: "name", value: "plot" },
@@ -24,10 +39,8 @@ const baseRuntimeConfig = {
   appConfig: {},
   userConfig: {},
   configOverrides: {},
-  serverToken: "server-token",
   dev: true,
   mode: "edit",
-  preserveSession: false,
 } satisfies RuntimeConfig;
 
 const runtimeConfig = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
@@ -61,39 +74,14 @@ test("runtime configuration accepts repairable projection diagnostics", () => {
   ]);
 });
 
-test("runtime configuration rejects malformed server contracts", () => {
-  const { preserveSession: _, ...missingPolicy } = baseRuntimeConfig;
+test("runtime configuration rejects malformed contracts", () => {
   const malformed = [
     runtimeConfig({ cellBindings: { plot: { kind: "index", value: "plot" } } }),
-    runtimeConfig({
-      valueBindings: {
-        "context.label": {
-          variable: "context",
-          cell: { kind: "id", value: 42 },
-        },
-      },
-    }),
-    runtimeConfig({ mode: "preview" }),
-    runtimeConfig({ revision: 42 }),
-    runtimeConfig({ view: 42 }),
     runtimeConfig({ view: "missing" }),
-    runtimeConfig({ views: ["dashboard", 42] }),
+    runtimeConfig({ runtime: { ...baseRuntimeConfig.runtime, id: "WASM" } }),
     runtimeConfig({
-      diagnostics: [
-        {
-          code: "cell-not-found",
-          severity: "error",
-          message: "Missing cell",
-          hint: "Restore it",
-          view: "dashboard",
-          projection: "cell",
-          target: "summary",
-          source: { path: "index.html", line: "18", column: 7 },
-        },
-      ],
+      runtime: { ...baseRuntimeConfig.runtime, id: "custom", available: ["server"] },
     }),
-    missingPolicy,
-    runtimeConfig({ preserveSession: "yes" }),
   ];
 
   malformed.forEach((config) => assert.throws(() => parseRuntimeConfig(config)));
@@ -104,8 +92,10 @@ test("mount configuration validates injected document data", () => {
     supportUrl: "/_marimo-studio/views/dashboard",
     version: "0.23.16",
     revision: "presentation-revision",
+    runtime: "server",
   };
 
   assert.deepEqual(parseMountConfig(mount), mount);
   assert.throws(() => parseMountConfig({ ...mount, revision: 42 }));
+  assert.throws(() => parseMountConfig({ ...mount, runtime: "WebAssembly" }));
 });

@@ -11,8 +11,8 @@ from threading import RLock
 from htpy import base
 
 from marimo_studio._compat.server.models import ServerContext
-from marimo_studio._compat.server.sessions import live_cells
 from marimo_studio._html import render, runtime_head, runtime_metadata, runtime_root
+from marimo_studio._server.runtimes import DEFAULT_RUNTIME_REGISTRY
 from marimo_studio._urls import SUPPORT_PATH, public_url
 from marimo_studio._workspace import discover_studio
 from marimo_studio._workspace.models import (
@@ -30,6 +30,7 @@ from marimo_studio.errors import (
     RuntimeSyncError,
     TemplateError,
 )
+from marimo_studio.types import ValueReference
 from marimo_studio.workspace import resolve_studio
 
 
@@ -100,6 +101,8 @@ def _configuration_identity(
         str(studio.notebook),
         str(studio.view_root),
         studio.default_view,
+        studio.default_runtime,
+        studio.runtimes,
         studio.preserve_session,
         tuple((name, str(item.root)) for name, item in studio.views.items()),
         tuple(
@@ -110,7 +113,8 @@ def _configuration_identity(
 
 @dataclass(frozen=True)
 class _PresentationSources:
-    document: str
+    documents: dict[str, str]
+    notebook_source: str
     identity: tuple[object, ...]
 
     @property
@@ -122,15 +126,30 @@ def _read_sources(
     studio: StudioConfig,
     view_name: str,
 ) -> _PresentationSources:
-    view = studio.views[view_name]
-    paths = tuple(dict.fromkeys((studio.config_path, studio.notebook, view.template)))
+    paths = tuple(
+        dict.fromkeys(
+            (
+                studio.config_path,
+                studio.notebook,
+                *(view.template for view in studio.views.values()),
+            )
+        )
+    )
     contents = {path: path.read_bytes() for path in paths}
+    documents: dict[str, str] = {}
+    for name, view in studio.views.items():
+        try:
+            documents[name] = contents[view.template].decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise TemplateError(
+                f"Could not decode {view.template} as UTF-8: {error}",
+                source=view.template,
+            ) from error
     try:
-        document = contents[view.template].decode("utf-8")
+        notebook_source = contents[studio.notebook].decode("utf-8")
     except UnicodeDecodeError as error:
-        raise TemplateError(
-            f"Could not decode {view.template} as UTF-8: {error}",
-            source=view.template,
+        raise ConfigurationError(
+            f"Could not decode {studio.notebook} as UTF-8: {error}"
         ) from error
     identity = (
         _configuration_identity(studio, view_name),
@@ -138,7 +157,11 @@ def _read_sources(
             (str(path), hashlib.sha256(contents[path]).hexdigest()) for path in paths
         ),
     )
-    return _PresentationSources(document=document, identity=identity)
+    return _PresentationSources(
+        documents=documents,
+        notebook_source=notebook_source,
+        identity=identity,
+    )
 
 
 @dataclass(frozen=True)
@@ -148,7 +171,24 @@ class PresentationSnapshot:
     resolved: ResolvedStudio
     view_name: str
     document: str
+    notebook_source: str
+    value_references: dict[str, ValueReference]
     revision: str
+
+
+def _value_references(documents: dict[str, str]) -> dict[str, ValueReference]:
+    references: dict[str, ValueReference] = {}
+    for document in documents.values():
+        parser = TemplateParser()
+        try:
+            parser.feed(document)
+            validate_template_structure(parser, "Template")
+        except (TemplateError, ValueError):
+            continue
+        references.update(
+            (reference.source, reference) for reference in parser.value_references
+        )
+    return references
 
 
 def _browser_diagnostic(
@@ -180,7 +220,10 @@ def _browser_diagnostic(
 class NotebookPresentation:
     """Cache notebook inspection while configuration inputs stay unchanged."""
 
-    def __init__(self, notebook: Path) -> None:
+    def __init__(
+        self,
+        notebook: Path,
+    ) -> None:
         self.notebook = notebook
         self._lock = RLock()
         self._snapshots: dict[str, PresentationSnapshot] = {}
@@ -214,7 +257,7 @@ class NotebookPresentation:
                     resolved = resolve_studio(
                         studio,
                         view_name=selected,
-                        view_documents={selected: before.document},
+                        view_documents={selected: before.documents[selected]},
                     )
                 except MarimoStudioError:
                     try:
@@ -244,7 +287,9 @@ class NotebookPresentation:
                 snapshot = PresentationSnapshot(
                     resolved=resolved,
                     view_name=selected,
-                    document=before.document,
+                    document=before.documents[selected],
+                    notebook_source=before.notebook_source,
+                    value_references=_value_references(before.documents),
                     revision=revision,
                 )
                 self._snapshots[selected] = snapshot
@@ -275,6 +320,7 @@ class NotebookPresentation:
                     ),
                     dev=context.dev,
                     revision=snapshot.revision,
+                    runtime=snapshot.resolved.studio.default_runtime,
                 )
             )
             + "\n"
@@ -288,28 +334,41 @@ class NotebookPresentation:
         self,
         snapshot: PresentationSnapshot,
         context: ServerContext,
+        runtime_id: str | None = None,
         session_id: str | None = None,
     ) -> dict[str, object]:
         resolved = snapshot.resolved
         view_name = snapshot.view_name
         view = resolved.views[view_name]
-        cells = live_cells(context, session_id)
+        provider, available = DEFAULT_RUNTIME_REGISTRY.select(
+            resolved.studio,
+            context,
+            runtime_id,
+        )
+        projection = provider.project(snapshot, context, session_id)
         return {
             "schema": 1,
             "revision": snapshot.revision,
             "view": view_name,
             "views": list(resolved.studio.views),
-            "fileKey": context.file_key,
-            "runtimeUrl": public_url(context.base_url, "/"),
+            "runtime": {
+                "id": provider.id,
+                "instance": projection.instance,
+                "available": list(available),
+                "data": projection.data,
+                **(
+                    {"controls": {"cells": projection.control_cells}}
+                    if projection.control_cells is not None
+                    else {}
+                ),
+            },
+            "rootUrl": public_url(context.base_url, "/"),
             "supportUrl": public_url(
                 context.base_url,
                 f"{SUPPORT_PATH}/views/{view_name}",
             ),
-            "cellBindings": resolved.runtime_cell_bindings(
-                cells,
-                required_aliases=view.cell_aliases,
-            ),
-            "valueBindings": view.runtime_value_bindings(cells),
+            "cellBindings": projection.cell_bindings,
+            "valueBindings": projection.value_bindings,
             "diagnostics": [
                 _browser_diagnostic(
                     diagnostic,
@@ -321,8 +380,6 @@ class NotebookPresentation:
             "appConfig": resolved.notebook.app_config,
             "userConfig": context.user_config,
             "configOverrides": context.config_overrides,
-            "serverToken": context.server_token,
             "dev": context.dev,
             "mode": context.mode,
-            "preserveSession": resolved.studio.preserve_session,
         }

@@ -12,12 +12,15 @@ from marimo_studio._compat.kernel_values.models import (
     DEFAULT_MAX_VALUE_BYTES,
     FUNCTION_NAME,
     NAMESPACE,
+    QUERY_FUNCTION_NAME,
     ReadValuesArgs,
+    SyncQueryArgs,
 )
 from marimo_studio._compat.kernel_values.selectors import (
     _read_values,
     _template_selectors,
 )
+from marimo_studio._urls import PRIVATE_QUERY_KEYS
 from marimo_studio._workspace.config import discover_studio
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.types import ValueReadError, ValueReadResult
@@ -92,6 +95,23 @@ class _KernelValueLifespan:
         function = Function(FUNCTION_NAME, ReadValuesArgs, read)
         function.cell_id = CellId_t("__marimo_studio_values__")
         context.function_registry.register(NAMESPACE, function)
+
+        def sync_query(args: SyncQueryArgs) -> None:
+            params = context.query_params
+            current = dict(params.to_dict())
+            for key in current.keys() - args.query.keys() - PRIVATE_QUERY_KEYS:
+                params.remove(key)
+            for key, value in args.query.items():
+                if current.get(key) != value:
+                    params.set(key, value)
+
+        query_function = Function(
+            QUERY_FUNCTION_NAME,
+            SyncQueryArgs,
+            sync_query,
+        )
+        query_function.cell_id = CellId_t("__marimo_studio_query__")
+        context.function_registry.register(NAMESPACE, query_function)
         self._registry = context.function_registry
 
     async def __aexit__(

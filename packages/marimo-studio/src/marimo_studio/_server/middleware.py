@@ -29,6 +29,7 @@ from marimo_studio._server.routing import (
     is_studio_landing,
     studio_view,
 )
+from marimo_studio._server.runtimes import DEFAULT_RUNTIME_REGISTRY
 from marimo_studio._server.support import support_response
 from marimo_studio._urls import SUPPORT_PATH
 from marimo_studio.errors import MarimoStudioError
@@ -37,7 +38,10 @@ from marimo_studio.errors import MarimoStudioError
 class PresentationMiddleware:
     """Present configured notebook views while delegating Marimo-owned routes."""
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+    ) -> None:
         self.app = app
         self._presentations: dict[Path, NotebookPresentation] = {}
 
@@ -161,6 +165,7 @@ class PresentationMiddleware:
                         context,
                         studio,
                         selected_studio,
+                        DEFAULT_RUNTIME_REGISTRY.options,
                     )
                 else:
                     response = await support_response(

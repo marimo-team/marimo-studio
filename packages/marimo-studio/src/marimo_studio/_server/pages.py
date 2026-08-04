@@ -110,6 +110,7 @@ def studio_response(
     context: ServerContext,
     studio: StudioConfig,
     selected: str,
+    runtimes: tuple[tuple[str, str], ...],
 ) -> Response:
     """Render the edit workspace for one selected view."""
     if context.mode != "edit":
@@ -130,6 +131,7 @@ def studio_response(
             context.server_token,
             context.file_key,
             request.query_params.multi_items(),
+            runtimes,
         ),
         headers=DOCUMENT_HEADERS,
     )

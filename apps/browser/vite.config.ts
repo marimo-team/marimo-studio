@@ -14,7 +14,7 @@ export default defineConfig({
   css: {
     postcss: marimo.postcss,
   },
-  plugins: [marimo.bridgePlugin, topLevelAwait()],
+  plugins: [topLevelAwait()],
   resolve: {
     alias: marimo.aliases,
   },
@@ -26,15 +26,15 @@ export default defineConfig({
       "src",
       "marimo_studio",
       "_static",
-      "server-runtime",
+      "browser",
     ),
     emptyOutDir: true,
     cssCodeSplit: false,
     rollupOptions: {
       input: {
-        runtime: entrypoint("@marimo-studio/presentation/runtime"),
+        runtime: join(packageRoot, "src", "runtime.ts"),
         "dev-reload": entrypoint("@marimo-studio/presentation/dev-reload"),
-        studio: entrypoint("@marimo-studio/studio"),
+        studio: join(packageRoot, "src", "studio.ts"),
       },
       output: {
         entryFileNames: "[name].js",

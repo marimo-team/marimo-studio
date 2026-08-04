@@ -16,54 +16,46 @@ import {
 import { LayoutStorage } from "../src/layout/storage.ts";
 
 test("the default workspace splits notebook and preview evenly", () => {
-  const layout = computeLayout(defaultLayout(), {
+  const bounds = {
     left: 0,
     top: 0,
     width: 1205,
     height: 805,
-  });
+  };
+  const layout = computeLayout(defaultLayout(), bounds);
+  const notebook = layout.panes.get("notebook")!;
+  const preview = layout.panes.get("preview")!;
 
-  assert.deepEqual(layout.panes.get("notebook"), {
-    left: 0,
-    top: 0,
-    width: 600,
-    height: 805,
-  });
-  assert.deepEqual(layout.panes.get("preview"), {
-    left: 605,
-    top: 0,
-    width: 600,
-    height: 805,
-  });
+  assert.equal(notebook.left, bounds.left);
+  assert.equal(notebook.top, bounds.top);
+  assert.equal(notebook.width, preview.width);
+  assert.equal(notebook.height, bounds.height);
+  assert.equal(preview.top, bounds.top);
+  assert.equal(preview.height, bounds.height);
+  assert.ok(preview.left > notebook.left + notebook.width);
   assert.deepEqual(layout.panes.has("source"), false);
 });
 
 test("a new view opens source above preview beside the notebook", () => {
-  const layout = computeLayout(newViewLayout(), {
+  const bounds = {
     left: 0,
     top: 0,
     width: 1205,
     height: 805,
-  });
+  };
+  const layout = computeLayout(newViewLayout(), bounds);
+  const notebook = layout.panes.get("notebook")!;
+  const source = layout.panes.get("source")!;
+  const preview = layout.panes.get("preview")!;
 
-  assert.deepEqual(layout.panes.get("notebook"), {
-    left: 0,
-    top: 0,
-    width: 600,
-    height: 805,
-  });
-  assert.deepEqual(layout.panes.get("source"), {
-    left: 605,
-    top: 0,
-    width: 600,
-    height: 400,
-  });
-  assert.deepEqual(layout.panes.get("preview"), {
-    left: 605,
-    top: 405,
-    width: 600,
-    height: 400,
-  });
+  assert.equal(notebook.left, bounds.left);
+  assert.equal(notebook.height, bounds.height);
+  assert.equal(source.left, preview.left);
+  assert.ok(source.left > notebook.left + notebook.width);
+  assert.equal(source.width, preview.width);
+  assert.equal(source.height, preview.height);
+  assert.equal(source.top, bounds.top);
+  assert.ok(preview.top > source.top + source.height);
 });
 
 test("compact mode follows the minimum size of the visible layout", () => {

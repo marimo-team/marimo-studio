@@ -13,7 +13,7 @@ const output = join(
   "src",
   "marimo_studio",
   "_static",
-  "server-runtime",
+  "browser",
 );
 
 const packageManifestCodec = z.codec(z.string(), z.object({ version: z.string().min(1) }), {

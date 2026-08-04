@@ -1,13 +1,22 @@
 import type {
   ViewDiagnosticsMessage,
   ViewErrorMessage,
-  ViewReadyMessage,
   ViewSyncPendingMessage,
 } from "@marimo-studio/protocol/preview-messages";
 
 import type { PresentationDiagnostic } from "../diagnostics.ts";
 
-import { getSupportUrl, type ProjectionDiagnostic } from "../runtime-config/index.ts";
+import {
+  getRuntimeConfig,
+  getMountConfig,
+  getSupportUrl,
+  hasRuntimeConfig,
+  requestedRuntimeId,
+  type ProjectionDiagnostic,
+} from "../runtime-config/index.ts";
+
+const runtimeId = (): string =>
+  hasRuntimeConfig() ? getRuntimeConfig().runtime.id : requestedRuntimeId(getMountConfig().runtime);
 
 export const supportView = (supportUrl = getSupportUrl()): string => {
   try {
@@ -35,6 +44,7 @@ export const showDiagnostic = (
   host.hidden = state === "waiting" && globalThis.parent !== globalThis.window;
   const message: ViewSyncPendingMessage | ViewErrorMessage = {
     type: state === "waiting" ? "marimo-studio:view-sync-pending" : "marimo-studio:view-error",
+    runtime: runtimeId(),
     message: detail.message,
     hint: detail.hint,
     view: detail.view,
@@ -49,21 +59,13 @@ export const clearDiagnostic = (): void => {
   host.removeAttribute("title");
 };
 
-export const notifyReady = (view = supportView()): void => {
-  const message: ViewReadyMessage = {
-    type: "marimo-studio:view-ready",
-    view,
-    sessionId: globalThis.__MARIMO_STUDIO_SESSION_ID__,
-  };
-  globalThis.parent.postMessage(message, globalThis.location.origin);
-};
-
 export const notifyDiagnostics = (
   diagnostics: ProjectionDiagnostic[],
   view = supportView(),
 ): void => {
   const message: ViewDiagnosticsMessage = {
     type: "marimo-studio:view-diagnostics",
+    runtime: runtimeId(),
     view,
     diagnostics,
   };
@@ -75,7 +77,7 @@ const diagnosticHost = (): HTMLElement => {
   if (existing) {
     return existing;
   }
-  const created = document.createElement("aside");
+  const created = document.createElement("div");
   created.dataset.marimoStudioDiagnostic = "";
   created.setAttribute("role", "alert");
   created.hidden = true;

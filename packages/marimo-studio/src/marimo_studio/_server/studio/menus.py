@@ -290,7 +290,40 @@ def compact_tabs() -> Node:
     )
 
 
-def toolbar(config: StudioConfig, selected: str) -> Node:
+def _runtime_switch(
+    runtimes: tuple[tuple[str, str], ...],
+    selected: str,
+) -> Node:
+    return cast(
+        Node,
+        div(
+            {
+                "class": "studio-runtime-switch",
+                "role": "group",
+                "aria-label": "Preview runtime",
+            }
+        )[
+            node_list(
+                *[
+                    button(
+                        {
+                            "type": "button",
+                            "data-preview-runtime": runtime_id,
+                            "aria-pressed": str(runtime_id == selected).lower(),
+                        }
+                    )[label_text]
+                    for runtime_id, label_text in runtimes
+                ]
+            )
+        ],
+    )
+
+
+def toolbar(
+    config: StudioConfig,
+    selected: str,
+    runtimes: tuple[tuple[str, str], ...],
+) -> Node:
     return cast(
         Node,
         header(class_="studio-toolbar")[
@@ -303,7 +336,13 @@ def toolbar(config: StudioConfig, selected: str) -> Node:
                         view_menu(config, selected),
                     )
                 ],
-                div(class_="studio-controls")[node_list(compact_tabs(), layout_menu())],
+                div(class_="studio-controls")[
+                    node_list(
+                        _runtime_switch(runtimes, config.default_runtime),
+                        compact_tabs(),
+                        layout_menu(),
+                    )
+                ],
             )
         ],
     )

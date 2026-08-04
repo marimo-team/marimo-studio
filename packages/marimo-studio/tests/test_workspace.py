@@ -475,6 +475,28 @@ def test_notebook_configuration_controls_session_preservation(
         load_studio(notebook_path)
 
 
+def test_notebook_configuration_selects_presentation_runtimes(
+    notebook_path: Path,
+) -> None:
+    ensure_view(notebook_path)
+
+    def configure(config: MutableMapping[str, object]) -> None:
+        config["runtime"] = "wasm"
+        config["runtimes"] = ["server", "wasm"]
+
+    update_notebook_config(notebook_path, configure)
+    studio = load_studio(notebook_path)
+    assert studio.default_runtime == "wasm"
+    assert studio.runtimes == ("server", "wasm")
+
+    def remove_default(config: MutableMapping[str, object]) -> None:
+        config["runtimes"] = ["server"]
+
+    update_notebook_config(notebook_path, remove_default)
+    with pytest.raises(ConfigurationError, match="runtime must be present"):
+        load_studio(notebook_path)
+
+
 def test_named_views_share_notebook_bindings(notebook_path: Path) -> None:
     ensure_view(notebook_path)
     studio = load_studio(notebook_path)

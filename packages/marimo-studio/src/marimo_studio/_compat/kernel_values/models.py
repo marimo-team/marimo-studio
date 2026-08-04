@@ -1,4 +1,4 @@
-"""Messages shared by the Studio kernel value bridge."""
+"""Messages shared by Studio's kernel functions."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from marimo_studio.errors import ProtocolError
 
 NAMESPACE = "_marimo_studio"
 FUNCTION_NAME = "read_values"
+QUERY_FUNCTION_NAME = "sync_query"
 DEFAULT_MAX_VALUE_BYTES = 1_000_000
 
 
@@ -32,3 +33,8 @@ class ValueReadUnavailable(ProtocolError):
 class ReadValuesArgs:
     selectors: list[str]
     max_value_bytes: int = DEFAULT_MAX_VALUE_BYTES
+
+
+@dataclass
+class SyncQueryArgs:
+    query: dict[str, str | list[str]]

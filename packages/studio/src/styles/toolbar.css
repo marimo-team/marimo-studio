@@ -21,6 +21,40 @@
   display: flex;
 }
 
+.studio-runtime-switch {
+  align-items: center;
+  background: var(--studio-surface);
+  border: 1px solid var(--studio-border);
+  border-radius: 5px;
+  display: inline-flex;
+  gap: 1px;
+  padding: 1px;
+}
+
+.studio-runtime-switch button {
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  color: var(--studio-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  height: 1.65rem;
+  padding-inline: 0.55rem;
+}
+
+.studio-runtime-switch button:hover {
+  background: var(--studio-hover);
+  color: var(--studio-foreground);
+}
+
+.studio-runtime-switch button[aria-pressed="true"] {
+  background: var(--studio-background);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+  color: var(--studio-primary);
+  font-weight: 600;
+}
+
 .studio-title {
   gap: 0.45rem;
   min-width: 0;

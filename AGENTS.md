@@ -40,9 +40,12 @@ TypeScript boundary.
 - **`packages/protocol` owns browser wire records.** Zod schemas validate
   messages and server responses and provide their inferred TypeScript types.
   The package performs no network, filesystem, DOM, or window I/O.
+- **`packages/runtime` owns the adapter contract.** Runtime definitions
+  validate provider data and return a document-scoped session.
 - **Each browser document has one package.** `packages/presentation` owns the
   custom view and its React runtime. `packages/studio` owns panes, source
-  editors, view management, and preview coordination.
+  editors, view management, preview coordination, and cross-runtime native
+  control sync.
   `packages/marimo-frontend` isolates Marimo's unstable frontend API.
 - **Apps compose packages.** `apps/browser` owns the Vite build and packaged
   asset names. `apps/docs` owns VitePress while authored pages remain in
@@ -64,6 +67,8 @@ session lifecycle.
   `packages/marimo-studio/src/marimo_studio/_compat`. Compatibility tests may
   import private Marimo types to exercise that boundary.
 - `packages/protocol` performs no I/O and imports no workspace package.
+- `packages/runtime` imports protocol and has no Marimo, React, or browser I/O
+  dependency.
 - `packages/studio` imports protocol, never presentation or Marimo frontend
   modules.
 - `packages/presentation` imports protocol and named Marimo adapter exports.
@@ -80,10 +85,21 @@ Python compatibility boundary.
 - Notebook authors keep ordinary Marimo cells and can expose several views.
 - `marimo edit` embeds the native editor and shares its session with custom
   previews. `marimo run` creates an isolated Marimo session per browser.
-- View switches and shell refreshes preserve the preview runtime, WebSocket,
-  kernel, output plugins, and widget models.
+- View switches and shell refreshes preserve the active adapter, output
+  plugins, and widget models. Changing adapter or execution instance reloads
+  the preview document and keeps the Studio workspace mounted.
 - `<marimo-cell>` uses Marimo's output and widget clients. `mo-value` reads
-  selectors permitted by the active view through the kernel queue.
+  selectors permitted by the active view through the adapter's value reader.
+- Server previews use Marimo sessions. WebAssembly previews run the derived
+  notebook in a Pyodide worker. Both use the shared presentation renderer.
+- Studio synchronizes JSON-compatible native `mo.ui` values between the edit
+  kernel and a WebAssembly preview. Semantic cell references translate runtime
+  cell IDs. Each cell must construct the same native controls in the same order
+  in both runtimes. Anywidget comm state remains scoped to its originating
+  runtime.
+- Notebook query parameters synchronize through each adapter's kernel queue.
+  Runtime selection and Marimo transport parameters stay outside notebook
+  query state.
 - Runtime configuration validates cell identity against the active notebook.
   Missing projections publish structured diagnostics while healthy hosts keep
   rendering.

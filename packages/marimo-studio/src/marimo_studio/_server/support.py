@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import cast
+from urllib.parse import parse_qs
 
 from starlette.requests import Request
 from starlette.responses import (
@@ -20,9 +21,17 @@ from marimo_studio._compat.kernel_values import (
     ValueReadUnavailable,
     read_session_values,
 )
+from marimo_studio._compat.kernel_values.query import (
+    QuerySyncUnavailable,
+    queue_query_sync,
+)
 from marimo_studio._compat.server.context import server_shutdown_requested
 from marimo_studio._compat.server.models import ServerContext
-from marimo_studio._compat.server.sessions import current_session, has_read_access
+from marimo_studio._compat.server.sessions import (
+    current_session,
+    has_read_access,
+    server_token_matches,
+)
 from marimo_studio._html import cell_host, render
 from marimo_studio._server.dev import change_events
 from marimo_studio._server.headers import NO_STORE
@@ -75,6 +84,8 @@ async def support_response(
         )
     if support_path == "/dev/events" and request.method == "GET" and context.dev:
         return events_response(studio, context=context)
+    if support_path == "/query" and request.method == "POST":
+        return await _query_response(request, context)
     if support_path.startswith("/views/"):
         return await _view_response(
             request,
@@ -126,6 +137,7 @@ async def _view_response(
             presentation.runtime_config(
                 snapshot,
                 context,
+                request.query_params.get("runtime"),
                 request.headers.get("Marimo-Session-Id"),
             ),
             headers=NO_STORE,
@@ -236,6 +248,69 @@ async def _values_response(
             headers=NO_STORE,
         )
     return JSONResponse(result.to_dict(), headers=NO_STORE)
+
+
+async def _query_response(
+    request: Request,
+    context: ServerContext,
+) -> Response:
+    if context.mode != "edit" or not server_token_matches(
+        request.scope,
+        context.server_token,
+    ):
+        return JSONResponse(
+            {
+                "error": "edit-required",
+                "message": "Query synchronization requires the active Studio editor.",
+            },
+            status_code=403,
+            headers=NO_STORE,
+        )
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        body = None
+    query = body.get("query") if isinstance(body, dict) else None
+    if not isinstance(query, str) or len(query) > 16_384:
+        return JSONResponse(
+            {
+                "error": "invalid-query",
+                "message": "query must be a string of at most 16384 characters.",
+            },
+            status_code=400,
+            headers=NO_STORE,
+        )
+    try:
+        parsed = parse_qs(
+            query.removeprefix("?"),
+            keep_blank_values=True,
+            max_num_fields=100,
+        )
+    except ValueError:
+        return JSONResponse(
+            {
+                "error": "invalid-query",
+                "message": "query may contain at most 100 fields.",
+            },
+            status_code=400,
+            headers=NO_STORE,
+        )
+    values = {
+        key: items[0] if len(items) == 1 else items for key, items in parsed.items()
+    }
+    try:
+        queue_query_sync(context, values)
+    except QuerySyncUnavailable as error:
+        return JSONResponse(
+            {
+                "error": "query-sync-unavailable",
+                "message": str(error),
+                "transient": True,
+            },
+            status_code=409,
+            headers=NO_STORE,
+        )
+    return Response(status_code=202, headers=NO_STORE)
 
 
 def file_response(root: Path, relative: str) -> Response:

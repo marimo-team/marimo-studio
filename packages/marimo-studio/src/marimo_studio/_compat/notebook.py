@@ -37,6 +37,14 @@ class StaticNotebook:
     app_config: dict[str, Any]
 
 
+def run_guard_line(source: str) -> int | None:
+    """Return the standard Marimo run guard line for notebook source."""
+    assert_supported_version()
+    from marimo._ast.scanner import scan_notebook
+
+    return scan_notebook(source).run_guard_line
+
+
 def _is_canonical_empty_notebook(source: str) -> bool:
     try:
         body = ast.parse(source).body

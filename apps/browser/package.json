@@ -10,6 +10,7 @@
   "dependencies": {
     "@marimo-studio/marimo-frontend": "workspace:*",
     "@marimo-studio/presentation": "workspace:*",
+    "@marimo-studio/runtime": "workspace:*",
     "@marimo-studio/studio": "workspace:*",
     "htmx.org": "catalog:",
     "zod": "catalog:"

@@ -10,7 +10,7 @@ from marimo_studio.errors import ProtocolError
 
 
 def runtime_assets_path() -> Path:
-    return Path(str(files("marimo_studio").joinpath("_static", "server-runtime")))
+    return Path(str(files("marimo_studio").joinpath("_static", "browser")))
 
 
 def runtime_marimo_version() -> str:

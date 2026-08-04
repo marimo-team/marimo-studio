@@ -43,6 +43,9 @@ for filename in (
 ):
     assert (assets / filename).is_file(), filename
 
+assert any((assets / "assets").glob("*worker*.js")), "WebAssembly worker asset"
+assert any((assets / "chunks").glob("*.js")), "browser runtime chunks"
+
 result = subprocess.run(
     ["marimo-studio", "--version"],
     check=True,

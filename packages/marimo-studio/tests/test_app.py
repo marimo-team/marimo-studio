@@ -207,7 +207,139 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
         "default_view": "dashboard",
         "views": ["dashboard", "executive"],
     }
-    assert dashboard["preserveSession"] is True
+    assert dashboard["runtime"]["data"]["preserveSession"] is True
+
+
+def test_run_mode_exposes_wasm_source_only_when_configured(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        unavailable = client.get("/_marimo-studio/views/dashboard/config?runtime=wasm")
+
+    source = studio.notebook.read_text(encoding="utf-8")
+    studio.notebook.write_text(
+        source.replace(
+            "# [tool.marimo-studio]",
+            '# [tool.uv]\n# prerelease = "allow"\n#\n# [tool.marimo-studio]',
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    def enable_wasm(config: MutableMapping[str, object]) -> None:
+        config["runtimes"] = ["server", "wasm"]
+
+    update_notebook_config(studio.notebook, enable_wasm)
+    configured = studio.notebook.read_bytes()
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        dashboard = client.get(
+            "/_marimo-studio/views/dashboard/config?runtime=wasm"
+        ).json()
+        executive = client.get(
+            "/_marimo-studio/views/executive/config?runtime=wasm"
+        ).json()
+
+    assert unavailable.status_code == 400
+    assert unavailable.json()["error"] == "runtime-unavailable"
+    assert dashboard["runtime"]["id"] == "wasm"
+    assert dashboard["runtime"]["available"] == ["server", "wasm"]
+    assert dashboard["runtime"]["instance"] == executive["runtime"]["instance"]
+    code = dashboard["runtime"]["data"]["code"]
+    compile(code, "notebook.py", "exec")
+    assert "[tool.marimo-studio]" not in code
+    assert "[tool.uv]" not in code
+    assert '"marimo-studio"' not in code.split("import marimo", 1)[0]
+    assert "'doubled': ('doubled', ())" in code
+    assert "'x': ('x', ())" in code
+    assert '"sync_query"' in code
+    assert code.index("def __marimo_studio_values") < code.index(
+        'if __name__ == "__main__"'
+    )
+    assert studio.notebook.read_bytes() == configured
+
+
+def test_edit_mode_offers_both_preview_runtimes(notebook_path: Path) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        config = client.get(
+            "/_marimo-studio/views/dashboard/config?runtime=wasm"
+        ).json()
+        workspace = client.get("/studio/dashboard/")
+
+    assert config["runtime"]["id"] == "wasm"
+    assert config["runtime"]["available"] == ["server", "wasm"]
+    assert 'data-preview-runtime="server"' in workspace.text
+    assert 'data-preview-runtime="wasm"' in workspace.text
+    assert 'data-query-url="/_marimo-studio/query"' in workspace.text
+
+
+def test_edit_workspace_queues_public_query_state(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    received: list[dict[str, str | list[str]]] = []
+    monkeypatch.setattr(
+        "marimo_studio._server.support.queue_query_sync",
+        lambda _context, query: received.append(query),
+    )
+    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/_marimo-studio/query",
+            headers=headers,
+            json={"query": "?region=emea&region=apac&empty="},
+        )
+
+    assert response.status_code == 202
+    assert received == [{"region": ["emea", "apac"], "empty": ""}]
+
+
+def test_run_mode_document_uses_its_configured_default_runtime(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+
+    def select_wasm(config: MutableMapping[str, object]) -> None:
+        config["runtime"] = "wasm"
+        config["runtimes"] = ["wasm"]
+
+    update_notebook_config(studio.notebook, select_wasm)
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        page = client.get("/")
+        config = client.get("/_marimo-studio/views/dashboard/config").json()
+
+    assert '"runtime":"wasm"' in page.text
+    assert config["runtime"]["id"] == "wasm"
+
+
+def test_server_runtime_instance_changes_with_transport_token(
+    notebook_path: Path,
+) -> None:
+    from marimo._server.tokens import SkewProtectionToken
+
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    manager = _session_manager(app)
+
+    with TestClient(app) as client:
+        first = client.get("/_marimo-studio/views/dashboard/config").json()
+        manager._token_manager.skew_protection_token = SkewProtectionToken.random()
+        second = client.get("/_marimo-studio/views/dashboard/config").json()
+
+    assert (
+        first["runtime"]["data"]["serverToken"]
+        != second["runtime"]["data"]["serverToken"]
+    )
+    assert first["runtime"]["instance"] != second["runtime"]["instance"]
 
 
 def test_deleted_named_cell_keeps_the_view_live_until_repaired(
@@ -728,6 +860,11 @@ def test_run_runtime_refreshes_bindings_for_each_browser_session(
     assert first["cellBindings"]["result"]["value"] == "first-1"
     assert second["cellBindings"]["result"]["value"] == "second-1"
     assert connecting["cellBindings"]["result"]["value"] == static.cells[1].runtime_id
+    static_indexes = {cell.runtime_id: index for index, cell in enumerate(static.cells)}
+    for identity, runtime_id in initial["runtime"]["controls"]["cells"].items():
+        index = static_indexes[runtime_id]
+        assert first["runtime"]["controls"]["cells"][identity] == f"first-{index}"
+        assert second["runtime"]["controls"]["cells"][identity] == f"second-{index}"
 
 
 def test_change_stream_classifies_live_source_edits(
@@ -885,7 +1022,7 @@ def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
     with TestClient(create_asgi_app(studio.notebook)) as client:
         config = client.get("/_marimo-studio/views/dashboard/config").json()
         headers = {
-            "Marimo-Server-Token": config["serverToken"],
+            "Marimo-Server-Token": config["runtime"]["data"]["serverToken"],
             "Marimo-Session-Id": "s_unknown",
         }
         allowed = client.post(
@@ -930,7 +1067,8 @@ def test_parent_asgi_mount_preserves_public_routes(notebook_path: Path) -> None:
     assert named.status_code == 200
     assert '<base href="/parent/base/">' in page.text
     assert 'src="/parent/base/_marimo-studio/assets/runtime.js"' in page.text
-    assert config["runtimeUrl"] == "/parent/base/"
+    assert config["rootUrl"] == "/parent/base/"
+    assert config["runtime"]["data"]["url"] == "/parent/base/"
     assert config["supportUrl"] == "/parent/base/_marimo-studio/views/dashboard"
     assert studio_asset.status_code == 200
 
@@ -958,7 +1096,8 @@ def test_edit_mode_public_routes_honor_parent_mount(notebook_path: Path) -> None
     assert 'href="/parent/base/executive/"' in workspace.text
     assert 'data-view-prefix="/parent/base/"' in workspace.text
     assert 'data-studio-prefix="/parent/base/studio/"' in workspace.text
-    assert config["runtimeUrl"] == "/parent/base/"
+    assert config["rootUrl"] == "/parent/base/"
+    assert config["runtime"]["data"]["url"] == "/parent/base/"
 
 
 def test_edit_mode_routes_stay_beneath_the_configured_base_url(
@@ -1284,7 +1423,7 @@ def test_run_mode_keeps_studio_source_mutations_read_only(
     with TestClient(create_asgi_app(studio.notebook)) as client:
         loaded = client.get("/_marimo-studio/views/dashboard/source/index.html")
         config = client.get("/_marimo-studio/views/dashboard/config").json()
-        headers = {"Marimo-Server-Token": config["serverToken"]}
+        headers = {"Marimo-Server-Token": config["runtime"]["data"]["serverToken"]}
         write = client.put(
             "/_marimo-studio/views/dashboard/source/index.html",
             content=loaded.text,

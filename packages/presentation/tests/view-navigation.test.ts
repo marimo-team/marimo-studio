@@ -7,7 +7,7 @@ const selection = (href: string, currentView = "novice") =>
   viewNavigationForUrl({
     href,
     origin: "https://example.test",
-    runtimeUrl: "/proxy/token/",
+    rootUrl: "/proxy/token/",
     views: ["novice", "intermediate", "expert"],
     currentView,
   });

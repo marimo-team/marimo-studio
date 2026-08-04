@@ -28,6 +28,7 @@ def studio_document(
     server_token: str,
     file_key: str,
     query: Sequence[tuple[str, str]],
+    runtimes: tuple[tuple[str, str], ...],
 ) -> str:
     """Return the Studio shell for one active view."""
     root_url = public_url(base_url, "/")
@@ -42,13 +43,20 @@ def studio_document(
             "data-views-url": f"{support_url}/views",
             "data-view-prefix": root_url,
             "data-studio-prefix": studio_url(base_url),
-            "data-support-prefix": f"{support_url}/views",
+            "data-view-support-prefix": f"{support_url}/views",
+            "data-query-url": f"{support_url}/query",
             "data-workspace-id": workspace_id,
             "data-server-token": server_token,
+            "data-default-runtime": config.default_runtime,
+            "data-runtimes": " ".join(runtime_id for runtime_id, _ in runtimes),
         }
     )[
         node_list(
-            toolbar(config, selected),
+            toolbar(
+                config,
+                selected,
+                runtimes,
+            ),
             workspace(
                 editor_url(base_url, file_key, query),
                 preview_url,

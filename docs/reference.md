@@ -151,17 +151,33 @@ point to the `mo-value` host and include the defining notebook cell.
 #
 # [tool.marimo-studio]
 # default = "dashboard"
+# runtime = "server"
+# runtimes = ["server", "wasm"]
 #
 # [tool.marimo-studio.cells]
 # summary = { ref = "cell:v1:<semantic-sha256>:<layout-sha256>:0" }
 # ///
 ```
 
-| Field              | Type    | Default  | Behavior                                                  |
-| ------------------ | ------- | -------- | --------------------------------------------------------- |
-| `default`          | String  | Required | Select the view served at `/` in run mode                 |
-| `preserve_session` | Boolean | `false`  | Reconnect a manual run-mode refresh to its current kernel |
-| `cells`            | Table   | Empty    | Store aliases shared by every view                        |
+| Field              | Type     | Default     | Behavior                                                |
+| ------------------ | -------- | ----------- | ------------------------------------------------------- |
+| `default`          | String   | Required    | Select the view served at `/` in run mode               |
+| `runtime`          | String   | `"server"`  | Select the runtime used when a view URL has no override |
+| `runtimes`         | String[] | `[runtime]` | Permit runtimes in run mode                             |
+| `preserve_session` | Boolean  | `false`     | Reconnect a manual server-runtime refresh to its kernel |
+| `cells`            | Table    | Empty       | Store aliases shared by every view                      |
+
+Edit mode offers every runtime bundled with Studio. Run mode exposes the
+entries in `runtimes`. Enabling `wasm` sends a derived copy of the notebook
+source to the browser so Pyodide can execute it. Studio leaves the saved
+notebook unchanged and omits Studio-specific and uv metadata from that copy.
+
+In the Studio workspace, JSON-compatible values from native `mo.ui` controls
+synchronize between the editor and a WebAssembly preview. Each kernel reruns
+its own reactive graph. Matching requires each cell to construct the same
+native controls in the same order in both runtimes. Anywidgets remain
+interactive in each runtime, and their comm state stays with the runtime that
+created the model.
 
 The dependency entry is `marimo-studio` with no version constraint. Existing
 dependencies, indexes, and tool settings remain in place.
@@ -188,6 +204,8 @@ dependencies = ["marimo-studio"]
 [tool.marimo-studio]
 notebook = "analysis.py"
 default = "dashboard"
+runtime = "server"
+runtimes = ["server", "wasm"]
 preserve_session = false
 
 [tool.marimo-studio.cells]

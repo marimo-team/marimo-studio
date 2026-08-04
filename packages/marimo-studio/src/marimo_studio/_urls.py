@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 
 STUDIO_PATH = "/studio"
 SUPPORT_PATH = "/_marimo-studio"
-_PRIVATE_QUERY_KEYS = frozenset(
+PRIVATE_QUERY_KEYS = frozenset(
     {
         "access_token",
         "file",
@@ -13,6 +13,7 @@ _PRIVATE_QUERY_KEYS = frozenset(
         "marimo_studio_resume",
         "refresh_token",
         "session_id",
+        "runtime",
     }
 )
 
@@ -53,7 +54,7 @@ def with_notebook_query(
 def _notebook_query(
     query: Sequence[tuple[str, str]],
 ) -> list[tuple[str, str]]:
-    return [(key, value) for key, value in query if key not in _PRIVATE_QUERY_KEYS]
+    return [(key, value) for key, value in query if key not in PRIVATE_QUERY_KEYS]
 
 
 def view_url(base_url: str, view_name: str) -> str:

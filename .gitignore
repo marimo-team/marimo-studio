@@ -19,3 +19,6 @@ pnpm-debug.log*
 
 # Generated frontend assets
 packages/marimo-studio/src/marimo_studio/_static/
+
+# Marimo execution snapshots
+**/__marimo__/session/

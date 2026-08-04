@@ -77,7 +77,11 @@ export class PresentationDocument {
           detail.hint,
         );
       }
-      const nextConfig = await fetchRuntimeConfig(target.supportUrl, signal);
+      const nextConfig = await fetchRuntimeConfig(
+        target.supportUrl,
+        signal,
+        getRuntimeConfig().runtime.id,
+      );
       requireMatchingPresentationRevision(
         response.headers.get("Marimo-Studio-Revision"),
         nextConfig,

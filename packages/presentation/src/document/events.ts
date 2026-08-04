@@ -35,7 +35,10 @@ export const bindViewSwitches = (callback: (request: SwitchViewMessage) => void)
       return;
     }
     const request = parsePreviewMessage(event.data);
-    if (request?.type === "marimo-studio:switch-view") {
+    if (
+      request?.type === "marimo-studio:switch-view" &&
+      (!hasRuntimeConfig() || request.runtime === getRuntimeConfig().runtime.id)
+    ) {
       callback(request);
     }
   };
@@ -70,7 +73,7 @@ export const bindViewNavigation = (): (() => void) => {
     const navigation = viewNavigationForUrl({
       href: anchor.href,
       origin: globalThis.location.origin,
-      runtimeUrl: config.runtimeUrl,
+      rootUrl: config.rootUrl,
       views: config.views,
       currentView: config.view,
     });
@@ -81,6 +84,7 @@ export const bindViewNavigation = (): (() => void) => {
     if (!navigation.current) {
       const message: NavigateViewMessage = {
         type: "marimo-studio:navigate-view",
+        runtime: config.runtime.id,
         view: navigation.view,
       };
       globalThis.parent.postMessage(message, globalThis.location.origin);

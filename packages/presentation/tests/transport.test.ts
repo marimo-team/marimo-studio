@@ -1,28 +1,31 @@
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
-import { configureKioskTransport, type RuntimeTransport } from "../src/runtime/transport.ts";
+import { configureServerTransport, type RuntimeTransport } from "../src/runtime/transport.ts";
 
 const runtime = (): RuntimeTransport<string> => ({
-  getWsURL: (sessionId) => new URL(`ws://example.test/base/ws?session_id=${sessionId}`),
-  getSseURL: (sessionId) => new URL(`https://example.test/base/sse?session_id=${sessionId}`),
+  getWsURL: (sessionId) =>
+    new URL(`ws://example.test/base/ws?session_id=${sessionId}&runtime=wasm`),
+  getSseURL: (sessionId) =>
+    new URL(`https://example.test/base/sse?session_id=${sessionId}&runtime=wasm`),
 });
 
 test("edit previews mark kernel transports as a kiosk consumer", () => {
   const manager = runtime();
 
-  configureKioskTransport(manager, true);
+  configureServerTransport(manager, true);
 
   for (const url of [manager.getWsURL("session"), manager.getSseURL("session")]) {
     assert.deepEqual(url.searchParams.get("session_id"), "session");
     assert.deepEqual(url.searchParams.get("kiosk"), "true");
+    assert.deepEqual(url.searchParams.has("runtime"), false);
   }
 });
 
-test("run views keep Marimo transport URLs unchanged", () => {
+test("run views remove Studio query state from Marimo transports", () => {
   const manager = runtime();
 
-  configureKioskTransport(manager, false);
+  configureServerTransport(manager, false);
 
   assert.deepEqual(
     manager.getWsURL("session").toString(),

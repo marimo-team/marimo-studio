@@ -1,3 +1,5 @@
+import type { RuntimeRegistry } from "@marimo-studio/runtime";
+
 import htmx from "htmx.org";
 
 import { registerMarimoCellElement } from "./cells/host";
@@ -13,10 +15,20 @@ import {
   commitRuntimeConfig,
   fetchRuntimeConfigForRevision,
   getRuntimeConfig,
+  getMountConfig,
   getSupportUrl,
+  hasRuntimeConfig,
   loadRuntimeConfig,
+  runtimeSelectionChanged,
   RuntimeConfigRequestError,
 } from "./runtime-config/index";
+import {
+  disposeConfiguredRuntime,
+  mountConfiguredRuntime,
+  RuntimeMountCancelledError,
+  updateConfiguredRuntimeQuery,
+} from "./runtime/coordinator";
+import { restorePendingRuntimeSelection } from "./runtime/selection";
 import { startValueBindings } from "./values/index";
 
 declare global {
@@ -29,6 +41,7 @@ declare global {
 
 const browser = globalThis as typeof globalThis & Window;
 browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "booting";
+restorePendingRuntimeSelection();
 startQuerySync();
 
 const showRuntimeError = (error: unknown) => {
@@ -44,16 +57,38 @@ const showRuntimeError = (error: unknown) => {
   console.error("marimo-studio runtime error", error);
 };
 
-const bootstrap = async () => {
-  startReadiness();
+const bindRuntimeNavigation = (): (() => void) => {
+  const reloadWhenChanged = () => {
+    if (
+      hasRuntimeConfig() &&
+      runtimeSelectionChanged(getRuntimeConfig().runtime.id, getMountConfig().runtime)
+    ) {
+      globalThis.location.reload();
+    }
+  };
+  globalThis.addEventListener("popstate", reloadWhenChanged);
+  return () => {
+    globalThis.removeEventListener("popstate", reloadWhenChanged);
+  };
+};
+
+const bootstrap = async (registry: RuntimeRegistry) => {
+  startReadiness(updateConfiguredRuntimeQuery);
   registerMarimoCellElement();
   (globalThis as typeof globalThis & Window).htmx = htmx;
 
   let config = await loadRuntimeConfig();
+  const stopRuntimeNavigation = bindRuntimeNavigation();
+  globalThis.addEventListener("pagehide", stopRuntimeNavigation, { once: true });
   const resumingDocument = prepareSessionRefresh(config);
   if (resumingDocument) {
     config = commitRuntimeConfig(
-      await fetchRuntimeConfigForRevision(getSupportUrl(), config.revision),
+      await fetchRuntimeConfigForRevision(
+        getSupportUrl(),
+        config.revision,
+        undefined,
+        config.runtime.id,
+      ),
     );
     document.addEventListener("marimo-studio:runtime-ready", () => finishSessionRefresh(), {
       once: true,
@@ -64,18 +99,28 @@ const bootstrap = async () => {
   if (!runtimeRoot) {
     throw new Error("Missing #marimo-runtime-root");
   }
-  // Marimo selects its module-level session ID when this adapter loads.
-  const { mountMarimoRuntime } = await import("./runtime/runtime");
-  const sessionId = mountMarimoRuntime(config, runtimeRoot);
+  globalThis.addEventListener("pagehide", disposeConfiguredRuntime, { once: true });
+  const session = await mountConfiguredRuntime(registry, config, runtimeRoot);
+  if (session.update(getRuntimeConfig()) === "reload") {
+    globalThis.location.reload();
+    return;
+  }
   browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "mounted";
-  rememberSession(config, sessionId);
-  globalThis.addEventListener("pagehide", () => rememberSession(getRuntimeConfig(), sessionId), {
-    once: true,
-  });
+  if (session.sessionId) {
+    rememberSession(config, session.sessionId);
+    globalThis.addEventListener(
+      "pagehide",
+      () => rememberSession(getRuntimeConfig(), session.sessionId ?? ""),
+      { once: true },
+    );
+  }
 };
 
-const start = () => {
-  void bootstrap().catch((error: unknown) => {
+const start = (registry: RuntimeRegistry) => {
+  void bootstrap(registry).catch((error: unknown) => {
+    if (error instanceof RuntimeMountCancelledError) {
+      return;
+    }
     if (error instanceof RuntimeConfigRequestError && error.transient) {
       setRuntimeConnectionState("connecting", {
         code: error.code,
@@ -85,7 +130,7 @@ const start = () => {
       if (error.code === "presentation-revision-mismatch") {
         setTimeout(() => globalThis.location.reload(), 250);
       } else {
-        setTimeout(start, 1_000);
+        setTimeout(() => start(registry), 1_000);
       }
       return;
     }
@@ -93,4 +138,6 @@ const start = () => {
   });
 };
 
-start();
+export const startPresentation = (registry: RuntimeRegistry): void => {
+  start(registry);
+};

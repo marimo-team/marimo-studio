@@ -31,7 +31,20 @@ uv run --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
 Marimo opens the Studio workspace at its regular server URL. The notebook is
-on the left and the live view is on the right. Both use the same edit session.
+on the left and the live view is on the right.
+
+Use the runtime control in the toolbar to test both execution modes:
+
+- **Server** connects the preview to the editor's Python kernel. Controls and
+  widget models stay synchronized between both panes.
+- **WebAssembly** runs a separate copy of the notebook in a Pyodide worker.
+  Studio synchronizes JSON-compatible values from native Marimo controls such
+  as sliders, dropdowns, and switches. Each kernel reruns its own reactive
+  graph. Cell output, tables, and anywidgets stay interactive in the preview.
+  Anywidget state belongs to that Pyodide kernel.
+
+Changing the runtime reloads the preview document. The notebook editor and
+unsaved view source remain mounted.
 
 Open **Pane** in either pane to add the source editor. Place it beside, above,
 or below the current pane. Use its **HTML** and **CSS** tabs to edit the view.
@@ -75,9 +88,12 @@ Studio saves the file at
 `__marimo__/studio/analysis/dashboard/index.html`. The preview refreshes and
 renders the notebook output under **Summary**.
 
-Change a control in the notebook or preview. Marimo sends the value to the
-other surface and reruns affected cells. Anywidget model changes follow the
-same session path.
+Change a control in the notebook or preview. With **Server**, Marimo propagates
+native control and anywidget model changes through the shared session. With
+**WebAssembly**, Studio mirrors native control values between kernels and each
+kernel reruns the affected cells. Anywidget comm state belongs to the runtime
+that created the model. Build the same native controls in the same order in
+both runtimes so Studio can match each value to its counterpart.
 
 You can also edit `index.html` and `app.css` in another editor. Studio follows
 changes from disk. If the browser and another editor change the same file,

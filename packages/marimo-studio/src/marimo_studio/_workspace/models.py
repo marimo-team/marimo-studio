@@ -22,6 +22,7 @@ MARIMO_DIRECTORY = "__marimo__"
 STUDIO_DIRECTORY = "studio"
 ALIAS_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 VIEW_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
+RUNTIME_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 RESERVED_VIEW_NAMES = frozenset(
     {
         "_marimo-studio",
@@ -67,6 +68,8 @@ class StudioConfig:
     notebook: Path
     view_root: Path
     default_view: str
+    default_runtime: str
+    runtimes: tuple[str, ...]
     preserve_session: bool
     views: dict[str, View]
     cells: dict[str, CellRef]
@@ -150,6 +153,20 @@ class ResolvedStudio:
             if target is not None:
                 bindings[alias] = target
         return bindings
+
+    def runtime_control_cells(
+        self,
+        live_cells: LiveCellSnapshot | None,
+    ) -> dict[str, str]:
+        """Map semantic cell identities to IDs in one runtime."""
+        if live_cells is None:
+            return {str(cell.ref): cell.runtime_id for cell in self.notebook.cells}
+        cells: dict[str, str] = {}
+        for cell in self.notebook.cells:
+            matches = cell_ref_candidates(cell.ref, live_cells.ids.items())
+            if len(matches) == 1:
+                cells[str(cell.ref)] = matches[0]
+        return cells
 
 
 def _runtime_cell_target(

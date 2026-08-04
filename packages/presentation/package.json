@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./dev-reload": "./src/dev-reload.ts",
-    "./runtime": "./src/main.ts"
+    "./runtime": "./src/main.ts",
+    "./runtimes": "./src/runtime/catalog.ts"
   },
   "scripts": {
     "prepare:upstream": "pnpm --filter @marimo-studio/marimo-frontend prepare:upstream",
@@ -14,6 +15,7 @@
   "dependencies": {
     "@marimo-studio/marimo-frontend": "workspace:*",
     "@marimo-studio/protocol": "workspace:*",
+    "@marimo-studio/runtime": "workspace:*",
     "htmx.org": "catalog:",
     "jotai": "catalog:",
     "react": "catalog:",

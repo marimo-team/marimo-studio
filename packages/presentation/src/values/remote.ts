@@ -17,17 +17,24 @@ export class ValueRequestError extends Error {
   }
 }
 
-export const readValues = async (
+export const readServerValues = async (
   sessionId: string,
   selectors: string[],
   signal?: AbortSignal,
 ): Promise<ValueReadResponse> => {
   const config = getRuntimeConfig();
+  if (config.runtime.id !== "server") {
+    throw new ValueRequestError("The server value reader is inactive.", "wrong-runtime", false);
+  }
+  const serverToken = config.runtime.data.serverToken;
+  if (typeof serverToken !== "string") {
+    throw new ValueRequestError("The server token is unavailable.", "invalid-runtime", false);
+  }
   const response = await fetch(`${config.supportUrl}/values`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Marimo-Server-Token": config.serverToken,
+      "Marimo-Server-Token": serverToken,
       "Marimo-Session-Id": sessionId,
     },
     body: JSON.stringify({ selectors }),
@@ -46,13 +53,13 @@ export const readValues = async (
 
 const RETRY_DELAYS = [250, 500, 1_000, 2_000] as const;
 
-export const readValuesWithRetry = async (
+export const readServerValuesWithRetry = async (
   sessionId: string,
   selectors: string[],
   signal?: AbortSignal,
 ): Promise<ValueReadResponse> =>
   retry({
-    operation: () => readValues(sessionId, selectors, signal),
+    operation: () => readServerValues(sessionId, selectors, signal),
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof ValueRequestError && error.transient,
     signal,

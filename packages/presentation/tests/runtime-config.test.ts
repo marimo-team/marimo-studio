@@ -21,8 +21,18 @@ const baseRuntimeConfig = {
   revision: "presentation-revision",
   view: "dashboard",
   views: ["dashboard", "executive"],
-  fileKey: "/workspace/notebook.py",
-  runtimeUrl: "/proxy/app/",
+  runtime: {
+    id: "server",
+    instance: "server-instance",
+    available: ["server", "wasm"],
+    data: {
+      fileKey: "/workspace/notebook.py",
+      serverToken: "server-token",
+      preserveSession: false,
+      url: "/proxy/app/",
+    },
+  },
+  rootUrl: "/proxy/app/",
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
   cellBindings: {
     plot: { kind: "name", value: "plot" },
@@ -37,10 +47,8 @@ const baseRuntimeConfig = {
   appConfig: {},
   userConfig: {},
   configOverrides: {},
-  serverToken: "server-token",
   dev: true,
   mode: "edit",
-  preserveSession: false,
 } satisfies RuntimeConfig;
 
 const runtimeConfig = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({

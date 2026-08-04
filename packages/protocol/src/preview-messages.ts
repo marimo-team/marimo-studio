@@ -1,44 +1,57 @@
 import { z } from "zod";
 
+import { runtimeIdSchema } from "./runtime-config";
+
 export const viewDiagnosticSchema = z.object({ message: z.string() });
+
+const runtimeField = { runtime: runtimeIdSchema };
 
 const previewMessageInputSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("marimo-studio:navigate-view"),
+    ...runtimeField,
     view: z.string(),
   }),
   z.object({
     type: z.literal("marimo-studio:query-change"),
+    ...runtimeField,
     query: z.string(),
   }),
   z.object({
     type: z.literal("marimo-studio:receiver-ready"),
+    ...runtimeField,
     view: z.string().optional(),
   }),
   z.object({
     type: z.literal("marimo-studio:switch-view"),
+    ...runtimeField,
     view: z.string(),
     documentUrl: z.string(),
     supportUrl: z.string(),
   }),
   z.object({
     type: z.literal("marimo-studio:view-ready"),
+    ...runtimeField,
     view: z.string(),
+    revision: z.string().min(1),
     sessionId: z.string().optional(),
   }),
   z.object({
     type: z.literal("marimo-studio:view-sync-pending"),
+    ...runtimeField,
     view: z.string(),
     message: z.string(),
     hint: z.string().optional(),
   }),
   z.object({
     type: z.literal("marimo-studio:view-diagnostics"),
+    ...runtimeField,
     view: z.string(),
     diagnostics: z.array(viewDiagnosticSchema),
   }),
   z.object({
     type: z.literal("marimo-studio:view-error"),
+    ...runtimeField,
     view: z.string(),
     message: z.string(),
     hint: z.string().optional(),

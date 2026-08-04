@@ -14,8 +14,10 @@ import type {
 import {
   getRuntimeConfig,
   getRuntimeDiagnostics,
+  getMountConfig,
   getSupportUrl,
   hasRuntimeConfig,
+  requestedRuntimeId,
 } from "./runtime-config/index.ts";
 
 type RuntimeConnectionState = "connecting" | "ready" | "error";
@@ -25,6 +27,7 @@ export type PageReadinessState = "connecting" | "loading" | "ready" | "error";
 interface MarimoStudioApi {
   ready: () => Promise<void>;
   diagnostics: () => readonly StudioDiagnostic[];
+  updateQuery: (query: string) => Promise<void>;
 }
 
 interface Deferred {
@@ -47,6 +50,7 @@ let presentationDiagnostic: PresentationDiagnostic | undefined;
 let presentationGeneration = 0;
 let waiter = deferred();
 let settled = false;
+let pageState: PageReadinessState = "connecting";
 let observer: MutationObserver | undefined;
 
 const runtimeView = (): string => {
@@ -70,7 +74,7 @@ const runtimeDiagnosticHost = (): HTMLElement => {
   if (existing) {
     return existing;
   }
-  const host = document.createElement("aside");
+  const host = document.createElement("div");
   host.dataset.marimoStudioRuntimeDiagnostic = "";
   host.setAttribute("role", "alert");
   host.hidden = true;
@@ -82,11 +86,6 @@ const publishRuntimeDiagnostic = () => {
   const host = runtimeDiagnosticHost();
   if (!runtimeDiagnostic) {
     host.hidden = true;
-    const message: ViewReadyMessage = {
-      type: "marimo-studio:view-ready",
-      view: runtimeView(),
-    };
-    globalThis.parent.postMessage(message, globalThis.location.origin);
     return;
   }
   host.textContent = runtimeDiagnostic.message;
@@ -99,6 +98,9 @@ const publishRuntimeDiagnostic = () => {
       runtimeDiagnostic.severity === "warning"
         ? "marimo-studio:view-sync-pending"
         : "marimo-studio:view-error",
+    runtime: hasRuntimeConfig()
+      ? getRuntimeConfig().runtime.id
+      : requestedRuntimeId(getMountConfig().runtime),
     message: runtimeDiagnostic.message,
     hint: runtimeDiagnostic.hint,
     view: runtimeDiagnostic.view,
@@ -152,6 +154,19 @@ const evaluate = () => {
       }),
     );
   }
+  if (next === "ready" && pageState !== "ready") {
+    const message: ViewReadyMessage = {
+      type: "marimo-studio:view-ready",
+      runtime: hasRuntimeConfig()
+        ? getRuntimeConfig().runtime.id
+        : requestedRuntimeId(getMountConfig().runtime),
+      view: runtimeView(),
+      revision: hasRuntimeConfig() ? getRuntimeConfig().revision : getMountConfig().revision,
+      sessionId: globalThis.__MARIMO_STUDIO_SESSION_ID__,
+    };
+    globalThis.parent.postMessage(message, globalThis.location.origin);
+  }
+  pageState = next;
   settled = nextSettled;
 };
 
@@ -239,7 +254,7 @@ const diagnostics = (): readonly StudioDiagnostic[] => {
   ];
 };
 
-export const startReadiness = () => {
+export const startReadiness = (updateQuery: (query: string) => Promise<void>) => {
   document.documentElement.dataset.marimoStudioState = "connecting";
   globalThis.marimoStudio = {
     ready: () => {
@@ -247,6 +262,7 @@ export const startReadiness = () => {
       return settled ? Promise.resolve() : waiter.promise;
     },
     diagnostics,
+    updateQuery,
   };
   observer?.disconnect();
   observer = new MutationObserver(notifyReadinessChanged);

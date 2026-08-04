@@ -1,7 +1,7 @@
 export { applyValues, markValueError, markValuePending, startValueBindings } from "./hosts.ts";
 export {
-  readValues,
-  readValuesWithRetry,
+  readServerValues,
+  readServerValuesWithRetry,
   type ValueReadResponse,
   ValueRequestError,
 } from "./remote.ts";

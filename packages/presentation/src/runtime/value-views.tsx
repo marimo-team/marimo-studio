@@ -2,6 +2,7 @@ import { outputIsStale } from "@marimo-studio/marimo-frontend/cells";
 import { WebSocketState } from "@marimo-studio/marimo-frontend/runtime";
 import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from "react";
 
+import type { ValueReader } from "../values/reader";
 import type { RuntimeCell } from "./runtime-cell";
 
 import { cellBindingKey, type CellIndex, resolveCellBinding } from "../cells/bindings";
@@ -13,7 +14,7 @@ import {
   type ValueBindingConfig,
 } from "../runtime-config/index";
 import { applyValues, markValueError, markValuePending } from "../values/index";
-import { readValuesWithRetry, ValueRequestError } from "../values/remote";
+import { ValueRequestError } from "../values/remote";
 import { CELL_DELIVERY_TIMEOUT_MS } from "./cell-state";
 import { valueCellPhase } from "./value-cell-state";
 
@@ -22,13 +23,13 @@ const RuntimeValueCell = ({
   cell,
   connectionState,
   runtimeReady,
-  sessionId,
+  readValues,
 }: {
   selectors: string[];
   cell: RuntimeCell | undefined;
   connectionState: WebSocketState;
   runtimeReady: boolean;
-  sessionId: string;
+  readValues: ValueReader;
 }) => {
   const cellId = cell?.id ?? null;
   const hasCell = cell !== undefined;
@@ -89,7 +90,7 @@ const RuntimeValueCell = ({
     selectors.forEach(markValuePending);
     const controller = new AbortController();
     let current = true;
-    void readValuesWithRetry(sessionId, selectors, controller.signal)
+    void readValues(selectors, controller.signal)
       .then((response) => {
         if (!current) {
           return;
@@ -124,7 +125,7 @@ const RuntimeValueCell = ({
       current = false;
       controller.abort();
     };
-  }, [cellId, connectionState, phase, sessionId, selectors, version]);
+  }, [cellId, connectionState, phase, readValues, selectors, version]);
 
   return null;
 };
@@ -134,13 +135,13 @@ const RuntimeValues = ({
   cells,
   connectionState,
   runtimeReady,
-  sessionId,
+  readValues,
 }: {
   bindings: Record<string, ValueBindingConfig>;
   cells: CellIndex<RuntimeCell>;
   connectionState: WebSocketState;
   runtimeReady: boolean;
-  sessionId: string;
+  readValues: ValueReader;
 }) => {
   const groups = useMemo(() => {
     const byCell = new Map<string, { binding: CellBindingConfig; selectors: Set<string> }>();
@@ -167,7 +168,7 @@ const RuntimeValues = ({
       cell={resolveCellBinding(binding, cells)}
       connectionState={connectionState}
       runtimeReady={runtimeReady}
-      sessionId={sessionId}
+      readValues={readValues}
     />
   ));
 };

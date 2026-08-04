@@ -34,6 +34,26 @@ available at `/report/`.
 Each browser receives an isolated Marimo run session. Controls, widgets,
 downloads, and reactive updates use that browser's Python kernel.
 
+## Run Python in the browser
+
+Enable Marimo's WebAssembly runtime for a view that can execute in Pyodide:
+
+```toml
+[tool.marimo-studio]
+default = "dashboard"
+runtime = "wasm"
+runtimes = ["server", "wasm"]
+```
+
+The default URL now runs the notebook in the browser. Add `?runtime=server` to
+select the server runtime for that browser. With `runtime = "server"`, use
+`?runtime=wasm` for the browser runtime. Studio removes this parameter before
+Marimo initializes `mo.query_params()`.
+
+WebAssembly clients receive the notebook source and install its compatible
+PEP 723 dependencies in Pyodide. Keep credentials and server-only code out of
+a view configured for this runtime.
+
 ## Protect a public endpoint
 
 Use Marimo's token settings when clients can reach the process directly:
@@ -90,8 +110,8 @@ Keep support URLs relative in view templates:
 
 ## Preserve a session across refreshes
 
-Enable session preservation when a manual page refresh should return the
-browser to its current run-mode kernel:
+Enable session preservation when a manual server-runtime refresh should
+return the browser to its current run-mode kernel:
 
 ```toml
 [tool.marimo-studio]

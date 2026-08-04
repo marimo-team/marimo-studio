@@ -6,18 +6,18 @@ export interface ViewNavigation {
 export const viewNavigationForUrl = ({
   href,
   origin,
-  runtimeUrl,
+  rootUrl,
   views,
   currentView,
 }: {
   href: string;
   origin: string;
-  runtimeUrl: string;
+  rootUrl: string;
   views: readonly string[];
   currentView: string;
 }): ViewNavigation | undefined => {
   const candidate = new URL(href);
-  const runtimeRoot = new URL(runtimeUrl, origin);
+  const runtimeRoot = new URL(rootUrl, origin);
   if (candidate.origin !== runtimeRoot.origin || candidate.search || candidate.hash) {
     return undefined;
   }

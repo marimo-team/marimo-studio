@@ -20,8 +20,8 @@ Studio workspace, and custom views.
     <span>Middleware recognizes configured view URLs and delegates native Marimo traffic unchanged.</span>
   </li>
   <li>
-    <strong>The view connects</strong>
-    <span>The custom document mounts Marimo's browser runtime and connects to the active kernel session.</span>
+    <strong>The view starts</strong>
+    <span>A presentation adapter connects to the Python kernel or starts the notebook in a Pyodide worker.</span>
   </li>
   <li>
     <strong>Marimo reacts</strong>
@@ -73,16 +73,42 @@ experience.
 
 ## What each side owns
 
-| Owner          | Responsibility                                                                                                                    |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Marimo         | Python kernels, reactive execution, sessions, authentication, WebSockets, controls, widget models, native APIs, and virtual files |
-| Studio server  | View discovery, custom documents, the Studio workspace, projection diagnostics, source editing, and support routes                |
-| Studio browser | The authored page shell, view navigation, live source refresh, and hosts for native Marimo outputs                                |
+| Owner                | Responsibility                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Marimo               | Reactive execution, controls, output plugins, widget models, native APIs, and virtual files                        |
+| Studio server        | View discovery, custom documents, the Studio workspace, projection diagnostics, source editing, and support routes |
+| Presentation adapter | Start one Marimo runtime and provide cell output and permitted value reads                                         |
+| Studio browser       | The authored page shell, view navigation, live source refresh, cross-runtime control sync, and output hosts        |
 
-Studio also registers a `marimo.kernel.lifespan` entry point. It adds a
-kernel-side reader for the `mo-value` selectors permitted by the active view.
-Reads travel through Marimo's kernel command queue and run against that
+For the server runtime, Studio also registers a `marimo.kernel.lifespan` entry
+point. It adds a reader for the `mo-value` selectors permitted by the active
+view. Reads travel through Marimo's kernel command queue and run against that
 browser's Python session.
+
+## Presentation runtimes
+
+Every custom document mounts one `PresentationRuntime`. Each adapter receives
+the same validated presentation configuration and returns a session with a
+small lifecycle contract: update the current view, request a document reload
+when its execution instance changes, and dispose its resources.
+
+**Server** configures Marimo's network request client and joins a Marimo kernel
+session. It reads values through Studio's authenticated support route. In edit
+mode, the preview joins the editor session as a kiosk consumer, so controls and
+anywidget models synchronize between both documents.
+
+**WebAssembly** inserts Marimo's browser-runtime marker, loads the notebook
+into a Pyodide worker, and uses Marimo's in-browser request client. Studio
+derives the browser source in memory, adds a hidden value reader, and leaves
+the notebook file unchanged. Value hosts call that reader through Marimo's
+function registry. In the Studio workspace, native control values synchronize
+with the editor while each kernel executes its own reactive updates.
+
+Both adapters feed the same renderer. The renderer owns cell portals, value
+hosts, output plugins, the UI registry, and anywidget views. A future adapter
+implements the Python `RuntimeProvider` for configuration and the browser
+`PresentationRuntime` for execution. The adapter ID joins both halves while
+its validated `data` record remains adapter-specific.
 
 ## From a cell to the page
 
@@ -90,24 +116,66 @@ A view starts as an ordinary HTML document with an `#app-shell`. Before
 returning it, Studio injects runtime assets, connection metadata, and one
 hidden `#marimo-runtime-root` near the end of the document.
 
-The runtime root mounts Marimo's frontend store and providers once. It owns the
-WebSocket connection, cell state, UI values, output plugins, and widget
-models. `<marimo-cell name="revenue_chart">` resolves the configured alias to
-a live Marimo cell, then a React portal renders that cell's native output into
-the element. Tables, controls, downloads, and anywidgets keep their Marimo
+The runtime root mounts Marimo's frontend store and providers once.
+`<marimo-cell name="revenue_chart">` resolves the configured alias to a live
+Marimo cell, then a React portal renders that cell's native output into the
+element. Tables, controls, downloads, and anywidgets keep their Marimo
 behavior because Studio projects the native output instead of translating it
 to server-rendered HTML.
 
-`mo-value="report.updated_at"` follows a smaller path. The browser requests an
-allowed selector from Studio's support route. The kernel reader resolves it
-under Marimo's globals lock and returns a JSON-compatible value for the host
-element.
+`mo-value="report.updated_at"` follows a smaller path. The active adapter reads
+an allowed selector from its Python namespace and returns a JSON-compatible
+value for the host element. Both adapters use Marimo's globals lock.
 
 HTML and CSS edits refresh the authored shell around the runtime root. The
-kernel connection and widget models remain mounted while HTMX swaps the
-`#app-shell`. Notebook edits continue through Marimo's reactive scheduler.
+active runtime and widget models remain mounted while HTMX swaps the
+`#app-shell`. Changing adapters reloads the preview document because Marimo's
+transport and Pyodide bridge are document-scoped. Studio keeps the notebook
+editor and source editors mounted during that switch.
 
-## One edit-mode interaction
+## Native controls across runtimes
+
+Marimo identifies a UI element as a cell ID followed by its ordinal within the
+cell. Those raw cell IDs can differ between the live editor and the derived
+WebAssembly notebook. Studio therefore publishes an optional control map for
+each runtime:
+
+```text
+semantic cell reference -> runtime cell ID -> UI element ordinal
+```
+
+After the WebAssembly preview reports that its runtime is ready, Studio reads
+the editor's current UI values and translates them into the preview's IDs. It
+then forwards JSON-compatible native control updates in both directions. Each
+target runtime receives the value through Marimo's UI registry and sends it to
+its own kernel, which reruns the affected graph.
+
+The bridge covers native `mo.ui` values such as sliders, dropdowns, switches,
+text fields, and compatible selections. Values that are not JSON-compatible
+stay in their originating runtime. Anywidget comm models also stay in their
+originating runtime because their model IDs and custom messages have no stable
+cross-kernel identity.
+
+Control identity uses the element ordinal within its cell. A notebook must
+construct the same native controls in the same order in both runtimes. A cell
+that branches on its Python environment can produce a different control at the
+same ordinal, so Studio leaves that layout outside the cross-runtime contract.
+
+Anywidgets remain native Marimo outputs in both runtimes. The Server preview
+uses the editor's Python models through the shared kernel session. Each
+document keeps its own frontend view registry. Trait updates and
+kernel-originated custom messages reach both documents. A frontend-originated
+custom message runs once against the shared Python model. A WebAssembly preview
+creates another Python object and model registry in Pyodide. Its anywidgets
+render and interact through that registry. Their trait and custom-message state
+remains local to the Pyodide kernel.
+
+Marimo frontend registry access stays inside the `marimo-frontend`
+compatibility package. The Studio package consumes a small control endpoint
+with `snapshot`, `subscribe`, and batched `apply` operations. A future runtime can opt
+into the bridge by exposing the same semantic cell map.
+
+## Server edit-mode interaction
 
 1. A browser opens `/studio/dashboard/` and receives the Studio workspace.
 2. The workspace loads Marimo's native editor and `/dashboard/` preview.
@@ -115,12 +183,27 @@ kernel connection and widget models remain mounted while HTMX swaps the
 4. Moving a slider in either document updates the same Marimo UI value.
 5. Marimo reruns dependent cells and sends their outputs to both documents.
 
-Run mode uses the same integration with an isolated kernel session for each
-browser. The deployed command remains a Marimo command:
+## WebAssembly edit-mode interaction
+
+1. The workspace keeps the native editor connected to its Python kernel.
+2. The preview starts the notebook in a Pyodide worker.
+3. Studio connects after both request clients start, subscribes to controls
+   that mount later, then sends the editor's current native control values to
+   the preview in one kernel request.
+4. Moving a native control in either pane sends the translated value to the
+   other kernel.
+5. Each kernel reruns its own dependent cells and updates its own document.
+6. `mo.query_params()` changes enter the other runtime through its kernel
+   queue, so filter updates keep both panes on the same query state.
+
+Run mode uses the configured presentation runtime. The deployed command
+remains a Marimo command:
 
 ```console
 uv run --with marimo-studio marimo run analysis.py --sandbox --headless
 ```
 
-Studio views are server-backed. Their controls and outputs stay connected to
-the live Python kernel that Marimo serves.
+The server runtime creates an isolated kernel session for each browser. The
+WebAssembly runtime creates an isolated Pyodide worker in each browser. A
+standalone view has no editor peer, so its runtime state remains local to that
+document.

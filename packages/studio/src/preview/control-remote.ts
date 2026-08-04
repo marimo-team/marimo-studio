@@ -1,0 +1,31 @@
+import { parseRuntimeConfig, type RuntimeControls } from "@marimo-studio/protocol/runtime-config";
+
+export interface RuntimeControlSnapshot {
+  revision: string;
+  runtime: string;
+  controls?: RuntimeControls;
+}
+
+export const fetchRuntimeControls = async (
+  supportUrl: string,
+  runtime: string,
+  signal?: AbortSignal,
+): Promise<RuntimeControlSnapshot> => {
+  const url = new URL(`${supportUrl}/config`, globalThis.location.origin);
+  url.searchParams.set("runtime", runtime);
+  const response = await fetch(url, { cache: "no-store", signal });
+  if (!response.ok) {
+    throw new Error(`Control configuration failed with ${response.status}`);
+  }
+  const config = parseRuntimeConfig(await response.json());
+  if (config.runtime.id !== runtime) {
+    throw new Error(
+      `Control configuration selected ${JSON.stringify(config.runtime.id)} instead of ${JSON.stringify(runtime)}.`,
+    );
+  }
+  return {
+    revision: config.revision,
+    runtime: config.runtime.id,
+    controls: config.runtime.controls,
+  };
+};

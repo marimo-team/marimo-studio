@@ -90,6 +90,9 @@ importers:
       '@marimo-studio/presentation':
         specifier: workspace:*
         version: link:../../packages/presentation
+      '@marimo-studio/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@marimo-studio/studio':
         specifier: workspace:*
         version: link:../../packages/studio
@@ -173,6 +176,9 @@ importers:
       '@marimo-studio/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@marimo-studio/runtime':
+        specifier: workspace:*
+        version: link:../runtime
       htmx.org:
         specifier: 'catalog:'
         version: 2.0.10
@@ -210,6 +216,19 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 4.3.6
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.2.4(@types/node@22.20.1)(@voidzero-dev/vite-plus-core@0.2.4(@types/node@22.20.1)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0)
+
+  packages/runtime:
+    dependencies:
+      '@marimo-studio/protocol':
+        specifier: workspace:*
+        version: link:../protocol
     devDependencies:
       typescript:
         specifier: 'catalog:'

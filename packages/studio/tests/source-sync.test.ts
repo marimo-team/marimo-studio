@@ -116,6 +116,9 @@ test("the newest reconciliation applies after an older read finishes", async () 
   const newer = source.reconcile();
   remote.reads[0].resolve({ content: "older", revision: "r1" });
   await older;
+
+  assert.deepEqual(result.documents.at(-1), "initial");
+
   remote.reads[1].resolve({ content: "newest", revision: "r2" });
   await newer;
 
