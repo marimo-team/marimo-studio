@@ -4,6 +4,16 @@ export type CellDeliveryPhase = "received" | "waiting" | "timed-out" | "missing"
 
 export const CELL_DELIVERY_TIMEOUT_MS = 10_000;
 
+export interface DeliveryTimeout {
+  identity: string | null | undefined;
+}
+
+export const deliveryTimedOut = (
+  waiting: boolean,
+  identity: string | null | undefined,
+  timeout: DeliveryTimeout | null,
+): boolean => waiting && timeout !== null && Object.is(timeout.identity, identity);
+
 export interface RuntimeConnectionDiagnostic {
   code: string;
   message: string;

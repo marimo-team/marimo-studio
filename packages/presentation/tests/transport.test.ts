@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
-import { configureServerTransport, type RuntimeTransport } from "../src/runtime/transport.ts";
+import {
+  configureServerTransport,
+  type RuntimeTransport,
+  startRuntimeTransport,
+} from "../src/runtime/transport.ts";
 
 const runtime = (): RuntimeTransport<string> => ({
   getWsURL: (sessionId) =>
@@ -35,4 +39,12 @@ test("run views remove Studio query state from Marimo transports", () => {
     manager.getSseURL("session").toString(),
     "https://example.test/base/sse?session_id=session",
   );
+});
+
+test("transport setup exposes synchronous failures through initialization", async () => {
+  const initialized = startRuntimeTransport(() => {
+    throw new Error("transport unavailable");
+  });
+
+  await assert.rejects(initialized, /transport unavailable/);
 });

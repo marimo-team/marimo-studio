@@ -7,6 +7,14 @@ export interface RuntimeTransport<SessionId> {
 
 const configuredTransports = new WeakSet<object>();
 
+export const startRuntimeTransport = (configure: () => void | Promise<void>): Promise<void> => {
+  try {
+    return Promise.resolve(configure());
+  } catch (error) {
+    return Promise.reject(error);
+  }
+};
+
 export const configureServerTransport = <SessionId>(
   runtime: RuntimeTransport<SessionId>,
   editMode: boolean,

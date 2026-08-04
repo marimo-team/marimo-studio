@@ -4,6 +4,7 @@ import { test } from "vite-plus/test";
 import {
   cellDeliveryPhase,
   cellPhase,
+  deliveryTimedOut,
   runtimeConnectionDiagnostic,
 } from "../src/runtime/cell-state.ts";
 
@@ -37,6 +38,14 @@ test("cell delivery bounds browser synchronization", () => {
   assert.deepEqual(cellDeliveryPhase({ ...pending, timedOut: true }), "timed-out");
   assert.deepEqual(cellDeliveryPhase({ ...pending, hasDiagnostic: true }), "missing");
   assert.deepEqual(cellDeliveryPhase({ ...pending, hasCell: true }), "received");
+});
+
+test("a delivery timeout belongs to one binding cycle", () => {
+  const timeout = { identity: "cell:v1:old" };
+
+  assert.equal(deliveryTimedOut(true, "cell:v1:old", timeout), true);
+  assert.equal(deliveryTimedOut(true, "cell:v1:new", timeout), false);
+  assert.equal(deliveryTimedOut(false, "cell:v1:old", timeout), false);
 });
 
 test("terminal Marimo connections preserve their diagnostic", () => {
