@@ -8,8 +8,8 @@ view for page structure, wording, navigation, and visual design.
 
 The toolbar controls the main canvas:
 
-- **Side by side** places the native Marimo editor beside the selected view.
 - **Notebook** opens the native Marimo editor.
+- **Build** places the native Marimo editor beside the selected view.
 - **Preview** fills the canvas with the selected view.
 
 Open **HTML & CSS** from the workspace menu to place `index.html` or `app.css`
@@ -23,7 +23,7 @@ any side, swap two panes, or close a pane. Drag a divider to resize a split.
 Studio keeps the notebook, source editors, and preview mounted while you move
 between task modes and custom arrangements. It remembers the mode, custom
 arrangement, split sizes, and source tab for each view in the current browser.
-Choosing a view from the toolbar opens **Side by side**. Links between authored
+Choosing a view from the toolbar opens **Build**. Links between authored
 views preserve the current mode.
 
 ## Choose a projection

@@ -37,7 +37,7 @@ Studio refreshes saved HTML and CSS around the current notebook session.
 
 Choose another name from the view menu. Studio keeps the notebook editor and
 prepared preview runtimes mounted while it changes the selected view. Toolbar
-selection opens **Side by side**. Links inside a view keep the current mode and
+selection opens **Build**. Links inside a view keep the current mode and
 compact pane while restoring the target view's saved split trees.
 
 You can also open a view directly:

@@ -495,15 +495,15 @@ def mode_navigation(*, overflow: bool = False) -> Node:
     )
     modes = (
         (
-            ("split", "Side by side"),
             ("notebook", "Notebook"),
+            ("split", "Build"),
             ("preview", "Preview"),
             ("code", "HTML & CSS"),
         )
         if overflow
         else (
-            ("split", "Side by side"),
             ("notebook", "Notebook"),
+            ("split", "Build"),
             ("preview", "Preview"),
         )
     )
