@@ -32,9 +32,9 @@ uv run marimo edit examples/analysis.py --no-sandbox
 
 The browser opens the notebook beside its dashboard. Choose **Server** to run
 both panes through the editor's Python session. Switch the preview to
-**WebAssembly** to run the same view in a separate Pyodide worker. Studio keeps
-native Marimo controls such as the scenario and quarter synchronized while
-each runtime updates its own reactive graph.
+**WebAssembly** to reveal the copy that Studio prepared in a background
+Pyodide worker. Studio keeps native Marimo controls such as the scenario and
+quarter synchronized while each runtime updates its own reactive graph.
 
 ## Create a view
 

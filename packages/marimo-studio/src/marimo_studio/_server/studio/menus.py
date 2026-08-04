@@ -379,13 +379,14 @@ def workspace_menu(
                             selected,
                             preview_url,
                         ),
+                        strong(class_="studio-menu-heading")["Show"],
                         mode_navigation(overflow=True),
                         strong(class_="studio-menu-heading")["Workspace"],
                         button(
                             type="button",
                             class_="studio-menu-item",
                             data_layout_action="workspace",
-                        )["Open custom workspace"],
+                        )["Open saved layout"],
                         button(
                             type="button",
                             class_="studio-menu-item",
@@ -429,7 +430,7 @@ def compact_tabs() -> Node:
                     )[label_text]
                     for surface, label_text in (
                         ("notebook", "Notebook"),
-                        ("source", "Source"),
+                        ("source", "HTML/CSS"),
                         ("preview", "Preview"),
                     )
                 ]
@@ -492,6 +493,20 @@ def mode_navigation(*, overflow: bool = False) -> Node:
     classes = (
         "studio-overflow-modes" if overflow else "studio-modes studio-primary-modes"
     )
+    modes = (
+        (
+            ("split", "Side by side"),
+            ("notebook", "Notebook"),
+            ("preview", "Preview"),
+            ("code", "HTML & CSS"),
+        )
+        if overflow
+        else (
+            ("split", "Side by side"),
+            ("notebook", "Notebook"),
+            ("preview", "Preview"),
+        )
+    )
     return cast(
         Node,
         nav(
@@ -507,14 +522,10 @@ def mode_navigation(*, overflow: bool = False) -> Node:
                             "type": "button",
                             "class": "studio-menu-item" if overflow else None,
                             "data-studio-mode": mode,
-                            "aria-pressed": str(mode == "notebook").lower(),
+                            "aria-pressed": str(mode == "split").lower(),
                         }
                     )[label_text]
-                    for mode, label_text in (
-                        ("notebook", "Notebook"),
-                        ("preview", "Preview"),
-                        ("code", "Code"),
-                    )
+                    for mode, label_text in modes
                 ]
             )
         ],

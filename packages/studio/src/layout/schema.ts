@@ -20,7 +20,7 @@ const jsonCodec = <T extends z.core.$ZodType>(schema: T) =>
 
 export const surfaceSchema = z.enum(["notebook", "source", "preview"]);
 export const axisSchema = z.enum(["x", "y"]);
-export const studioModeSchema = z.enum(["notebook", "preview", "code", "workspace"]);
+export const studioModeSchema = z.enum(["split", "notebook", "preview", "code", "workspace"]);
 
 export type Surface = z.infer<typeof surfaceSchema>;
 export type Axis = z.infer<typeof axisSchema>;

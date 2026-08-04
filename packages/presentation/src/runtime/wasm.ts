@@ -14,6 +14,7 @@ import {
 import { notebookQueryValues } from "@marimo-studio/protocol/query";
 
 import { createWasmValueReader, waitForWasmValueBridge } from "../values/wasm";
+import { awaitWasmStartup, retryWasmRpc } from "../wasm-rpc";
 import { waitForWasmInitialization } from "./initialization";
 import { mountSharedRuntime } from "./runtime";
 import { hideRuntimeSelectionDuringStartup } from "./selection";
@@ -24,19 +25,25 @@ export interface WasmRuntimeData {
   version: string;
 }
 
-const requestValues = (selectors: string[]) =>
-  FUNCTIONS_REGISTRY.request({
-    namespace: "_marimo_studio",
-    functionName: "read_values",
-    args: { selectors, max_value_bytes: 1_000_000 },
-  });
+const requestValues = (selectors: string[], signal?: AbortSignal) =>
+  retryWasmRpc(
+    () =>
+      FUNCTIONS_REGISTRY.request({
+        namespace: "_marimo_studio",
+        functionName: "read_values",
+        args: { selectors, max_value_bytes: 1_000_000 },
+      }),
+    signal,
+  );
 
 const updateQuery = async (query: string): Promise<void> => {
-  await FUNCTIONS_REGISTRY.request({
-    namespace: "_marimo_studio",
-    functionName: "sync_query",
-    args: { query: notebookQueryValues(query) },
-  });
+  await retryWasmRpc(() =>
+    FUNCTIONS_REGISTRY.request({
+      namespace: "_marimo_studio",
+      functionName: "sync_query",
+      args: { query: notebookQueryValues(query) },
+    }),
+  );
 };
 
 export const mountWasmRuntime = (context: RuntimeContext, data: WasmRuntimeData): RuntimeSession =>
@@ -58,8 +65,10 @@ export const mountWasmRuntime = (context: RuntimeContext, data: WasmRuntimeData)
       const restoreRuntimeSelection = hideRuntimeSelectionDuringStartup();
       const bridge = PyodideBridge.INSTANCE;
       store.set(requestClientAtom, resolveRequestClient());
-      return waitForWasmInitialization(bridge.initialized.promise, (signal) =>
-        waitForWasmValueBridge(requestValues, signal),
+      return awaitWasmStartup(
+        waitForWasmInitialization(bridge.initialized.promise, (signal) =>
+          waitForWasmValueBridge(requestValues, signal),
+        ),
       ).finally(restoreRuntimeSelection);
     },
     updateQuery,

@@ -1,3 +1,5 @@
+import type { ViewLanding } from "../views/transition.ts";
+
 import { DividerLayer } from "./divider-layer.ts";
 import {
   codeLayout,
@@ -15,7 +17,7 @@ import {
 } from "./model.ts";
 import { renderPaneActions } from "./pane-actions.ts";
 import { studioModeSchema, surfaceSchema, type StudioMode } from "./schema.ts";
-import { LayoutStorage } from "./storage.ts";
+import { applyActiveMode, type ActiveLayout, LayoutStorage } from "./storage.ts";
 
 const computeVisibleLayout = (
   tree: LayoutNode,
@@ -32,7 +34,7 @@ const computeVisibleLayout = (
 };
 
 export class LayoutController {
-  private mode: StudioMode = "notebook";
+  private mode: StudioMode = "split";
   private code: LayoutNode = codeLayout();
   private workspaceTree: LayoutNode = defaultWorkspaceLayout();
   private compactSurface: Surface = "notebook";
@@ -79,18 +81,26 @@ export class LayoutController {
     this.render();
   }
 
-  switchView(view: string, created = false): void {
+  switchView(view: string, landing: ViewLanding): void {
+    const active = { mode: this.mode, compact: this.compactSurface };
     this.persist();
     this.view = view;
-    if (created) {
+    if (landing === "authoring") {
       this.mode = "workspace";
       this.code = codeLayout();
       this.workspaceTree = newViewLayout();
       this.compactSurface = "source";
       this.arranging = false;
       this.persist();
-    } else {
+    } else if (landing === "split") {
       this.restore(view);
+      this.mode = "split";
+      this.compactSurface = "notebook";
+      this.arranging = false;
+      this.persist();
+    } else {
+      this.restore(view, active);
+      this.persist();
     }
     this.render();
   }
@@ -243,8 +253,9 @@ export class LayoutController {
     });
   }
 
-  private restore(view: string): void {
-    const state = this.storage.read(view);
+  private restore(view: string, active?: ActiveLayout): void {
+    const saved = this.storage.read(view);
+    const state = active ? applyActiveMode(saved, active) : saved;
     this.mode = state.mode;
     this.code = state.code;
     this.workspaceTree = state.workspace;

@@ -85,13 +85,17 @@ Python compatibility boundary.
 - Notebook authors keep ordinary Marimo cells and can expose several views.
 - `marimo edit` embeds the native editor and shares its session with custom
   previews. `marimo run` creates an isolated Marimo session per browser.
-- View switches and shell refreshes preserve the active adapter, output
-  plugins, and widget models. Changing adapter or execution instance reloads
-  the preview document and keeps the Studio workspace mounted.
+- View switches and shell refreshes preserve prepared adapters, output
+  plugins, and widget models. Runtime selection reveals an existing preview
+  frame. A changed execution instance reloads its owning document.
 - `<marimo-cell>` uses Marimo's output and widget clients. `mo-value` reads
   selectors permitted by the active view through the adapter's value reader.
 - Server previews use Marimo sessions. WebAssembly previews run the derived
-  notebook in a Pyodide worker. Both use the shared presentation renderer.
+  notebook in a background Pyodide worker. Both use the shared presentation
+  renderer.
+- The default Studio mode places the notebook beside the preview. Toolbar view
+  choices return to that mode. Links inside authored views preserve the active
+  mode.
 - Studio synchronizes JSON-compatible native `mo.ui` values between the edit
   kernel and a WebAssembly preview. Semantic cell references translate runtime
   cell IDs. Each cell must construct the same native controls in the same order

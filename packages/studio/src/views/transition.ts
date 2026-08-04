@@ -1,6 +1,8 @@
+export type ViewLanding = "split" | "preserve" | "authoring";
+
 export interface ViewTransitionHooks {
   prepare(view: string): Promise<boolean>;
-  commit(view: string, created: boolean): void;
+  commit(view: string, landing: ViewLanding, changed: boolean): void;
   cancel(): void;
 }
 
@@ -13,17 +15,18 @@ export class ViewTransition {
     private readonly hooks: ViewTransitionHooks,
   ) {}
 
-  async select(view: string, created = false): Promise<boolean> {
+  async select(view: string, landing: ViewLanding): Promise<boolean> {
     const generation = ++this.generation;
     if (view === this.current) {
       this.hooks.cancel();
+      this.hooks.commit(view, landing, false);
       return true;
     }
     if (!(await this.hooks.prepare(view)) || generation !== this.generation) {
       return false;
     }
     this.current = view;
-    this.hooks.commit(view, created);
+    this.hooks.commit(view, landing, true);
     return true;
   }
 }

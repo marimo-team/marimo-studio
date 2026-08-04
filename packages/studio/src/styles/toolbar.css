@@ -296,8 +296,15 @@
   color: var(--studio-primary);
 }
 
-.studio-overflow-preview,
+.studio-overflow-preview {
+  display: none;
+}
+
 .studio-overflow-modes {
+  display: grid;
+}
+
+.studio-overflow-modes button:not([data-studio-mode="code"]) {
   display: none;
 }
 
@@ -480,6 +487,10 @@
 
 .studio-toolbar:has(.studio-compact-tabs:not([hidden])) .studio-overflow-modes {
   display: grid;
+}
+
+.studio-toolbar:has(.studio-compact-tabs:not([hidden])) .studio-overflow-modes button {
+  display: block;
 }
 
 .studio-overflow-modes button[aria-pressed="true"] {

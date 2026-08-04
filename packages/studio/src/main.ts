@@ -7,7 +7,7 @@ import type { ControlFrameConnector } from "./preview/control-sync.ts";
 
 import { LayoutController } from "./layout/controller.ts";
 import { surfaceSchema } from "./layout/schema.ts";
-import { PreviewController } from "./preview/controller.ts";
+import { PreviewDeck } from "./preview/deck.ts";
 import { syncEditorQuery } from "./preview/query-remote.ts";
 import {
   initialPreviewRuntime,
@@ -93,7 +93,7 @@ export const startStudio = async ({ connectControlFrame }: StudioOptions = {}): 
       required<HTMLElement>(`[data-surface="${surface}"]`),
     ]),
   );
-  const storagePrefix = `marimo-studio:workspace:v1:${workspaceId}`;
+  const storagePrefix = `marimo-studio:workspace-layout:v1:${workspaceId}`;
   let notebookQuery = publicNotebookQuery(globalThis.location.search);
   const runtimeStorageKey = previewRuntimeStorageKey(workspaceId);
   const initialRuntime = initialPreviewRuntime({
@@ -126,7 +126,7 @@ export const startStudio = async ({ connectControlFrame }: StudioOptions = {}): 
 
   const controllers: {
     source?: SourceController;
-    preview?: PreviewController;
+    preview?: PreviewDeck;
     views?: ViewController;
   } = {};
 
@@ -154,20 +154,21 @@ export const startStudio = async ({ connectControlFrame }: StudioOptions = {}): 
     },
   );
 
-  controllers.preview = new PreviewController(
+  controllers.preview = new PreviewDeck({
     initialView,
     initialRuntime,
+    runtimes,
     editor,
     preview,
     popouts,
     statuses,
     viewUrl,
     supportUrl,
-    syncNotebookQuery,
-    (query, signal) => syncEditorQuery(queryUrl, serverToken, query, signal),
-    (view) => void controllers.views?.choose(view),
+    syncQuery: syncNotebookQuery,
+    syncEditorQuery: (query, signal) => syncEditorQuery(queryUrl, serverToken, query, signal),
+    navigate: (view) => void controllers.views?.choose(view, "preserve"),
     connectControlFrame,
-  );
+  });
 
   controllers.source = await SourceController.create(
     viewSupportPrefix,
@@ -185,11 +186,13 @@ export const startStudio = async ({ connectControlFrame }: StudioOptions = {}): 
 
   const transition = new ViewTransition(initialView, {
     prepare: async (view) => await controllers.source!.switchView(view),
-    commit: (view, created) => {
-      layout.switchView(view, created);
-      controllers.preview?.switchView(view);
-      globalThis.history.replaceState({}, "", studioUrl(view));
-      if (created) {
+    commit: (view, landing, changed) => {
+      layout.switchView(view, landing);
+      if (changed) {
+        controllers.preview?.switchView(view);
+        globalThis.history.replaceState({}, "", studioUrl(view));
+      }
+      if (landing === "authoring") {
         controllers.source?.focusHtml();
       }
     },
@@ -200,7 +203,7 @@ export const startStudio = async ({ connectControlFrame }: StudioOptions = {}): 
     parsedInitialViews,
     createViewRemote(viewsUrl, serverToken),
     eventsUrl,
-    (view, created) => transition.select(view, created),
+    (view, landing) => transition.select(view, landing),
     () => controllers.source!.prepareViewChange(),
     (view) => globalThis.location.assign(studioUrl(view)),
   );

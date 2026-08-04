@@ -1,4 +1,5 @@
 import type { ViewRemote } from "./remote.ts";
+import type { ViewLanding } from "./transition.ts";
 
 import { errorMessage } from "../errors.ts";
 import { ViewMenu } from "./menu.ts";
@@ -18,7 +19,7 @@ export class ViewController {
     initialViews: string[],
     private readonly remote: ViewRemote,
     eventsUrl: string,
-    private readonly selectView: (view: string, created: boolean) => Promise<boolean>,
+    private readonly selectView: (view: string, landing: ViewLanding) => Promise<boolean>,
     private readonly prepareCurrentView: () => Promise<boolean>,
     private readonly recoverView: (view: string) => void,
   ) {
@@ -39,11 +40,11 @@ export class ViewController {
     this.events.addEventListener("change", refresh);
   }
 
-  async choose(view: string, created = false): Promise<boolean> {
+  async choose(view: string, landing: ViewLanding = "split"): Promise<boolean> {
     if (!this.views.includes(view)) {
       return false;
     }
-    if (!(await this.selectView(view, created))) {
+    if (!(await this.selectView(view, landing))) {
       return false;
     }
     this.current = view;
@@ -79,7 +80,7 @@ export class ViewController {
         this.views = [...this.views, created.name].sort();
         this.render();
       }
-      if (await this.choose(created.name, true)) {
+      if (await this.choose(created.name, "authoring")) {
         this.menu.resetCreate();
       } else {
         this.menu.showCreateMessage(

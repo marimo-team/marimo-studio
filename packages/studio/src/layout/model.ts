@@ -82,6 +82,8 @@ export const layoutForMode = (
   workspace: LayoutNode,
 ): LayoutNode => {
   switch (mode) {
+    case "split":
+      return defaultWorkspaceLayout();
     case "notebook":
       return notebookLayout();
     case "preview":

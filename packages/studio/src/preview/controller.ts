@@ -8,28 +8,35 @@ import {
 import { publicNotebookQuery } from "@marimo-studio/protocol/query";
 import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
 
-import { observeFrameQuery } from "../query-sync.ts";
 import { fetchRuntimeControls } from "./control-remote.ts";
 import {
   type ControlFrameConnector,
   type ControlSync,
   synchronizeControlEndpoints,
 } from "./control-sync.ts";
-import { installEditorOutlineGuard } from "./editor-outline.ts";
 import { previewLoadState, RetrySchedule } from "./state.ts";
 
 const CONTROL_SYNC_RETRY_DELAYS = [100, 250, 500, 1_000, 2_000, 5_000] as const;
 
+export interface PreviewStatus {
+  message: string;
+  state: "loading" | "ready" | "warning" | "error";
+  title: string;
+}
+
+export interface PreviewFrameState {
+  url: string;
+  status: PreviewStatus;
+}
+
 export class PreviewController {
   private view: string;
-  private runtime: string;
+  private state: PreviewFrameState;
   private receiverReady = false;
   private viewReady = false;
   private diagnostics: ViewDiagnostic[] = [];
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly retrySchedule = new RetrySchedule();
-  private stopEditorQuerySync: (() => void) | undefined;
-  private stopEditorOutlineGuard: (() => void) | undefined;
   private controlSync: ControlSync | undefined;
   private controlSyncRevision: string | undefined;
   private controlSyncRequest: { controller: AbortController; revision: string } | undefined;
@@ -41,33 +48,27 @@ export class PreviewController {
 
   constructor(
     initialView: string,
-    initialRuntime: string,
+    private readonly runtime: string,
     private readonly editor: HTMLIFrameElement,
     private readonly preview: HTMLIFrameElement,
-    private readonly popouts: readonly HTMLAnchorElement[],
-    private readonly statuses: readonly HTMLElement[],
     private readonly viewUrl: (view: string, runtime: string) => string,
     private readonly supportUrl: (view: string) => string,
     private readonly syncQuery: (query: string) => void,
     private readonly syncEditorQuery: (query: string, signal: AbortSignal) => Promise<void>,
     private readonly navigate: (view: string) => void,
+    private readonly report: (state: PreviewFrameState) => void,
     private readonly connectControlFrame?: ControlFrameConnector,
   ) {
     this.view = initialView;
-    this.runtime = initialRuntime;
+    this.state = {
+      url: this.viewUrl(initialView, runtime),
+      status: {
+        message: runtime === "wasm" ? "Starting WebAssembly" : "Connecting to server",
+        state: "loading",
+        title: "",
+      },
+    };
     this.bind();
-  }
-
-  switchRuntime(runtime: string): void {
-    if (runtime === this.runtime) {
-      return;
-    }
-    this.runtime = runtime;
-    this.stopControlSync();
-    this.querySyncController?.abort();
-    this.preview.removeAttribute("data-session-id");
-    this.diagnostics = [];
-    this.reload();
   }
 
   switchView(view: string): void {
@@ -76,7 +77,7 @@ export class PreviewController {
     this.viewReady = false;
     this.view = view;
     const nextPreview = this.viewUrl(view, this.runtime);
-    this.preview.title = `${view} custom view`;
+    this.preview.title = `${view} custom view using ${this.runtime}`;
     this.setPopoutUrl(nextPreview);
     this.diagnostics = [];
     this.setStatus("Updating preview");
@@ -90,28 +91,27 @@ export class PreviewController {
 
   requestResize(): void {
     this.preview.contentWindow?.dispatchEvent(new Event("resize"));
-    this.editor.contentWindow?.dispatchEvent(new Event("resize"));
+  }
+
+  editorQueryChanged(query: string): void {
+    if (this.queryChanged(query)) {
+      void this.updatePreviewQuery(this.notebookQuery);
+    }
   }
 
   dispose(): void {
     this.cancelRetry();
     this.stopControlSync();
     this.querySyncController?.abort();
-    this.stopEditorQuerySync?.();
-    this.stopEditorOutlineGuard?.();
     this.editor.removeEventListener("load", this.editorLoaded);
     this.preview.removeEventListener("load", this.previewLoaded);
     globalThis.removeEventListener("message", this.message);
   }
 
   private bind(): void {
-    this.guardEditorOutline();
     globalThis.addEventListener("message", this.message);
     this.preview.addEventListener("load", this.previewLoaded);
     this.editor.addEventListener("load", this.editorLoaded);
-    this.stopEditorQuerySync = observeFrameQuery(this.editor, (query) =>
-      this.editorQueryChanged(query),
-    );
     const start = () => {
       if (this.preview.src === "about:blank") {
         this.reload();
@@ -228,12 +228,6 @@ export class PreviewController {
       });
   }
 
-  private editorQueryChanged(query: string): void {
-    if (this.queryChanged(query)) {
-      void this.updatePreviewQuery(this.notebookQuery);
-    }
-  }
-
   private async updatePreviewQuery(query: string): Promise<void> {
     if (this.runtime === DEFAULT_RUNTIME_ID || !this.viewReady) {
       return;
@@ -278,9 +272,8 @@ export class PreviewController {
   }
 
   private setPopoutUrl(url: string): void {
-    this.popouts.forEach((popout) => {
-      popout.href = url;
-    });
+    this.state = { ...this.state, url };
+    this.report(this.state);
   }
 
   private navigatePreview(next: string): void {
@@ -336,21 +329,11 @@ export class PreviewController {
   };
 
   private readonly editorLoaded = (): void => {
-    this.guardEditorOutline();
     this.stopControlSync();
     if (this.receiverReady && this.readyRevision) {
       this.beginControlSync(this.readyRevision);
     }
   };
-
-  private guardEditorOutline(): void {
-    this.stopEditorOutlineGuard?.();
-    this.stopEditorOutlineGuard = undefined;
-    const editorDocument = this.editor.contentDocument;
-    if (editorDocument) {
-      this.stopEditorOutlineGuard = installEditorOutlineGuard(editorDocument);
-    }
-  }
 
   private beginControlSync(revision: string): void {
     if (!this.connectControlFrame || this.runtime === DEFAULT_RUNTIME_ID) {
@@ -488,17 +471,8 @@ export class PreviewController {
     state: "loading" | "ready" | "warning" | "error" = "loading",
     title = "",
   ): void {
-    this.statuses.forEach((status) => {
-      status.textContent = message;
-      status.dataset.state = state;
-      const detail = title ? `${message}: ${title}` : message;
-      status.closest<HTMLElement>("[data-runtime-trigger]")?.setAttribute("title", detail);
-      if (title) {
-        status.title = title;
-      } else {
-        status.removeAttribute("title");
-      }
-    });
+    this.state = { ...this.state, status: { message, state, title } };
+    this.report(this.state);
   }
 
   private scheduleRetry(delay = this.retrySchedule.next()): void {

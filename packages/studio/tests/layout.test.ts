@@ -15,7 +15,7 @@ import {
   updateRatio,
   visibleSurfaces,
 } from "../src/layout/model.ts";
-import { LayoutStorage } from "../src/layout/storage.ts";
+import { applyActiveMode, LayoutStorage } from "../src/layout/storage.ts";
 
 test("the custom workspace splits notebook and preview evenly", () => {
   const bounds = {
@@ -42,6 +42,10 @@ test("task modes resolve to their surface layouts", () => {
   const code = codeLayout();
   const workspace = defaultWorkspaceLayout();
 
+  assert.deepEqual(visibleSurfaces(layoutForMode("split", code, workspace)), [
+    "notebook",
+    "preview",
+  ]);
   assert.deepEqual(visibleSurfaces(layoutForMode("notebook", code, workspace)), ["notebook"]);
   assert.deepEqual(visibleSurfaces(layoutForMode("preview", code, workspace)), ["preview"]);
   assert.deepEqual(visibleSurfaces(layoutForMode("code", code, workspace)), ["source", "preview"]);
@@ -225,7 +229,7 @@ test("layout storage round-trips valid state and recovers invalid data", () => {
 
     values.set("studio-layout:dashboard", "invalid");
     assert.deepEqual(storage.read("dashboard"), {
-      mode: "notebook",
+      mode: "split",
       code: codeLayout(),
       workspace: defaultWorkspaceLayout(),
       compact: "notebook",
@@ -237,4 +241,26 @@ test("layout storage round-trips valid state and recovers invalid data", () => {
       Reflect.deleteProperty(globalThis, "localStorage");
     }
   }
+});
+
+test("link navigation keeps the active mode and the target view split trees", () => {
+  const code = updateRatio(codeLayout(), "source-preview", 0.65);
+  const workspace = updateRatio(newViewLayout(), "notebook-authoring", 0.4);
+  const target = {
+    mode: "notebook" as const,
+    code,
+    workspace,
+    compact: "notebook" as const,
+  };
+
+  assert.deepEqual(applyActiveMode(target, { mode: "workspace", compact: "preview" }), {
+    mode: "workspace",
+    code,
+    workspace,
+    compact: "preview",
+  });
+  assert.equal(
+    applyActiveMode(target, { mode: "notebook", compact: "source" }).compact,
+    "notebook",
+  );
 });

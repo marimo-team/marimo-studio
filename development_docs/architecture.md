@@ -109,9 +109,10 @@ control endpoint and has no Marimo frontend import.
 
 React portals project cell outputs into `<marimo-cell>` hosts. `mo-value` hosts
 read permitted values through the active adapter. HTMX may replace authored
-shell markup while that adapter and its widget models stay mounted. A view
-change with the same adapter instance updates in place. An adapter or instance
-change reloads the preview document.
+shell markup while that adapter and its widget models stay mounted. Studio
+keeps prepared runtime documents in separate frames and updates each document
+in place when the view changes. An adapter instance change reloads its owning
+preview document.
 
 The server validates bindings against the active Marimo document by semantic
 cell identity. Missing cells and values become structured projection

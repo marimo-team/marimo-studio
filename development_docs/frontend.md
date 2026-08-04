@@ -95,18 +95,20 @@ The custom view keeps `#marimo-runtime-root` mounted while HTML refreshes or a
 view switch replaces `#app-shell`. Matching cell hosts reconnect to the current
 store and preserve output DOM when possible.
 
-Studio keeps the notebook iframe, source editors, and preview iframe mounted as
-stable nodes. Task modes and the custom pane tree change their rectangles
-without moving the nodes between parents. Source editors use content-derived
-ETags and `If-Match` writes.
+Studio keeps the notebook iframe, source editors, and prepared runtime preview
+frames mounted as stable nodes. Task modes and the custom pane tree change
+their rectangles while runtime selection changes which preview frame is
+visible. Source editors use content-derived ETags and `If-Match` writes.
 
-When a WebAssembly preview becomes ready, Studio requests the server and
-preview semantic cell maps at the same presentation revision. The browser app
-injects Marimo frame adapters into Studio, subscribes to control registration,
-and sends the editor snapshot to the preview in one kernel request. Later
-JSON-compatible native control updates travel in both directions. The Marimo
-compatibility package owns registry and request-client access. Studio owns
-translation, lifecycle, retry, and cancellation.
+Studio prepares the WebAssembly preview while the Server frame is active. When
+it becomes ready, Studio requests the server and preview semantic cell maps at
+the same presentation revision. The browser app injects Marimo frame adapters
+into Studio, subscribes to control registration, and sends the editor snapshot
+to the preview in one kernel request. Later JSON-compatible native control
+updates travel in both directions. Read-only value and query RPCs retry
+transient worker deadlines. The Marimo compatibility package owns registry
+and request-client access. Studio owns translation, lifecycle, retry, and
+cancellation.
 
 Tests live with their owner. Protocol tests exercise schemas and concrete
 envelopes. Presentation and Studio tests exercise their state and lifecycle

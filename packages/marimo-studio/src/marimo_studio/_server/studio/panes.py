@@ -38,9 +38,9 @@ def _notebook_pane(root_url: str) -> Node:
 def _source_pane() -> Node:
     return cast(
         Node,
-        section(class_="studio-pane", data_surface="source", aria_label="View source")[
+        section(class_="studio-pane", data_surface="source", aria_label="HTML and CSS")[
             node_list(
-                _arrange_chrome("source", "Code"),
+                _arrange_chrome("source", "HTML & CSS"),
                 header(class_="studio-pane-header studio-source-header")[
                     node_list(
                         div(

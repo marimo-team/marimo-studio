@@ -73,12 +73,12 @@ experience.
 
 ## What each side owns
 
-| Owner                | Responsibility                                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Marimo               | Reactive execution, controls, output plugins, widget models, native APIs, and virtual files                        |
-| Studio server        | View discovery, custom documents, the Studio workspace, projection diagnostics, source editing, and support routes |
-| Presentation adapter | Start one Marimo runtime and provide cell output and permitted value reads                                         |
-| Studio browser       | The authored page shell, view navigation, live source refresh, cross-runtime control sync, and output hosts        |
+| Owner                | Responsibility                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Marimo               | Reactive execution, controls, output plugins, widget models, native APIs, and virtual files                         |
+| Studio server        | View discovery, custom documents, the Studio workspace, projection diagnostics, source editing, and support routes  |
+| Presentation adapter | Start one Marimo runtime and provide cell output and permitted value reads                                          |
+| Studio browser       | Authored page shells, preview frames, view navigation, source refresh, cross-runtime control sync, and output hosts |
 
 For the server runtime, Studio also registers a `marimo.kernel.lifespan` entry
 point. It adds a reader for the `mo-value` selectors permitted by the active
@@ -104,11 +104,13 @@ the notebook file unchanged. Value hosts call that reader through Marimo's
 function registry. In the Studio workspace, native control values synchronize
 with the editor while each kernel executes its own reactive updates.
 
-Both adapters feed the same renderer. The renderer owns cell portals, value
-hosts, output plugins, the UI registry, and anywidget views. A future adapter
-implements the Python `RuntimeProvider` for configuration and the browser
-`PresentationRuntime` for execution. The adapter ID joins both halves while
-its validated `data` record remains adapter-specific.
+Both adapters feed the same renderer. Each preview document owns one adapter,
+its cell portals, value hosts, output plugins, UI registry, and anywidget
+views. Studio starts the WebAssembly document in the background while the
+Server document is active. Selecting a runtime reveals its existing frame. A
+future adapter implements the Python `RuntimeProvider` for configuration and
+the browser `PresentationRuntime` for execution. The adapter ID joins both
+halves while its validated `data` record remains adapter-specific.
 
 ## From a cell to the page
 
@@ -120,18 +122,19 @@ The runtime root mounts Marimo's frontend store and providers once.
 `<marimo-cell name="revenue_chart">` resolves the configured alias to a live
 Marimo cell, then a React portal renders that cell's native output into the
 element. Tables, controls, downloads, and anywidgets keep their Marimo
-behavior because Studio projects the native output instead of translating it
-to server-rendered HTML.
+behavior through the same output plugins and widget clients used by the
+notebook.
 
 `mo-value="report.updated_at"` follows a smaller path. The active adapter reads
 an allowed selector from its Python namespace and returns a JSON-compatible
 value for the host element. Both adapters use Marimo's globals lock.
 
 HTML and CSS edits refresh the authored shell around the runtime root. The
-active runtime and widget models remain mounted while HTMX swaps the
-`#app-shell`. Changing adapters reloads the preview document because Marimo's
-transport and Pyodide bridge are document-scoped. Studio keeps the notebook
-editor and source editors mounted during that switch.
+runtime and widget models remain mounted while HTMX swaps the `#app-shell`.
+Studio keeps one persistent preview frame per prepared runtime because
+Marimo's transport and Pyodide bridge are document-scoped. Runtime selection
+changes frame visibility while the notebook editor and source editors remain
+mounted.
 
 ## Native controls across runtimes
 
@@ -144,11 +147,11 @@ each runtime:
 semantic cell reference -> runtime cell ID -> UI element ordinal
 ```
 
-After the WebAssembly preview reports that its runtime is ready, Studio reads
-the editor's current UI values and translates them into the preview's IDs. It
-then forwards JSON-compatible native control updates in both directions. Each
-target runtime receives the value through Marimo's UI registry and sends it to
-its own kernel, which reruns the affected graph.
+After the background WebAssembly preview reports that its runtime is ready,
+Studio reads the editor's current UI values and translates them into the
+preview's IDs. It then forwards JSON-compatible native control updates in both
+directions. Each target runtime receives the value through Marimo's UI
+registry and sends it to its own kernel, which reruns the affected graph.
 
 The bridge covers native `mo.ui` values such as sliders, dropdowns, switches,
 text fields, and compatible selections. Values that are not JSON-compatible
@@ -186,14 +189,16 @@ into the bridge by exposing the same semantic cell map.
 ## WebAssembly edit-mode interaction
 
 1. The workspace keeps the native editor connected to its Python kernel.
-2. The preview starts the notebook in a Pyodide worker.
+2. Studio starts the WebAssembly preview in a hidden frame and runs the
+   notebook in a Pyodide worker.
 3. Studio connects after both request clients start, subscribes to controls
    that mount later, then sends the editor's current native control values to
    the preview in one kernel request.
-4. Moving a native control in either pane sends the translated value to the
+4. Selecting **WebAssembly** reveals the prepared frame.
+5. Moving a native control in either pane sends the translated value to the
    other kernel.
-5. Each kernel reruns its own dependent cells and updates its own document.
-6. `mo.query_params()` changes enter the other runtime through its kernel
+6. Each kernel reruns its own dependent cells and updates its own document.
+7. `mo.query_params()` changes enter the other runtime through its kernel
    queue, so filter updates keep both panes on the same query state.
 
 Run mode uses the configured presentation runtime. The deployed command

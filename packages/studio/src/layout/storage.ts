@@ -8,8 +8,19 @@ export type LayoutState = {
   compact: Surface;
 };
 
+export type ActiveLayout = Pick<LayoutState, "mode" | "compact">;
+
+export const applyActiveMode = (saved: LayoutState, active: ActiveLayout): LayoutState => {
+  const visible = visibleSurfaces(layoutForMode(active.mode, saved.code, saved.workspace));
+  let compact = active.compact;
+  if (!visible.includes(compact)) {
+    compact = visible.includes(saved.compact) ? saved.compact : visible[0];
+  }
+  return { ...saved, mode: active.mode, compact };
+};
+
 const initialState = (): LayoutState => ({
-  mode: "notebook",
+  mode: "split",
   code: codeLayout(),
   workspace: defaultWorkspaceLayout(),
   compact: "notebook",

@@ -167,9 +167,8 @@ Use a native cell name reported by `inspect`, or bind an anonymous cell:
 marimo-studio bind revenue-chart analysis.py --cell 4
 ```
 
-Render each cell name once per view. Keep the output connected to Marimo by
-rendering it through `<marimo-cell>` instead of copying its current value into
-HTML or rebuilding it in JavaScript.
+Render each cell name once per view. `<marimo-cell>` keeps the output connected
+to Marimo's output plugins and widget clients.
 
 `<marimo-cell>` renders a cell's displayed result. For a definition-only cell,
 project its JSON-compatible Python value with `mo-value`.
@@ -214,10 +213,10 @@ delegate from `document` or make initialization safe to repeat after a shell
 refresh.
 
 Studio's toolbar can run the preview through the Server or WebAssembly
-runtime. Establish the notebook session with Server first, change a native
-control, then switch to WebAssembly and confirm the control and its dependent
-outputs retain the value. Repeat the check in the other direction. Wait for
-the preview document to report `ready` after each switch.
+runtime. Studio prepares WebAssembly in a background frame while Server is
+active. Change a native control, switch to WebAssembly, wait for `ready` when
+warmup is still in progress, and confirm the control and its dependent outputs
+retain the value. Repeat the check in the other direction.
 
 Runtime state sharing belongs to the Studio workspace. A direct WebAssembly
 view opened in a separate browser session has its own kernel and control
@@ -307,9 +306,10 @@ http://127.0.0.1:8000/dashboard/
 ```
 
 `agent-browser wait --text` reads the top-level document. For workspace
-acceptance, inspect the preview iframe in the accessibility snapshot or query
-`iframe[data-preview-frame]` through `contentDocument`. Use the direct view
-for ordinary text waits and detailed content checks.
+acceptance, inspect the visible preview iframe in the accessibility snapshot or
+query `iframe[data-preview-runtime-frame]:not([hidden])` through
+`contentDocument`. Use the direct view for ordinary text waits and detailed
+content checks.
 
 The direct edit-mode view attaches to the editor kernel and cannot create that
 session by itself. Use `marimo run` when testing a standalone view that should

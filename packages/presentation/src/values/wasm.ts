@@ -13,7 +13,7 @@ const resultSchema = z.object({
 
 const BRIDGE_RETRY_DELAY_MS = 250;
 
-export type FunctionRequest = (selectors: string[]) => Promise<unknown>;
+export type FunctionRequest = (selectors: string[], signal?: AbortSignal) => Promise<unknown>;
 
 const abortError = (): DOMException =>
   new DOMException("The value request was cancelled.", "AbortError");
@@ -85,7 +85,7 @@ export const waitForWasmValueBridge = async (
   // instantiation. A successful call therefore proves that dependencies
   // loaded, the initial graph settled, and its Python controls exist.
   while (!signal.aborted) {
-    const result = resultSchema.parse(await waitForCaller(request([]), signal));
+    const result = resultSchema.parse(await waitForCaller(request([], signal), signal));
     if (result.found) {
       if (result.status.code !== "ok") {
         throw new ValueRequestError(
@@ -112,7 +112,7 @@ export const createWasmValueReader = (
       throwIfAborted(signal);
       await initialized;
       throwIfAborted(signal);
-      return readWasmValues(selectors, request);
+      return readWasmValues(selectors, (requested) => request(requested, signal));
     });
     queue = operation.then(
       () => undefined,

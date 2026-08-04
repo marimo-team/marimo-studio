@@ -273,6 +273,8 @@ def test_edit_mode_offers_both_preview_runtimes(notebook_path: Path) -> None:
 
     assert config["runtime"]["id"] == "wasm"
     assert config["runtime"]["available"] == ["server", "wasm"]
+    assert 'data-studio-mode="split"' in workspace.text
+    assert "Side by side" in workspace.text
     assert 'data-studio-mode="notebook"' in workspace.text
     assert 'data-studio-mode="preview"' in workspace.text
     assert 'data-studio-mode="code"' in workspace.text

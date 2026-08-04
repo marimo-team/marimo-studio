@@ -6,20 +6,25 @@ view for page structure, wording, navigation, and visual design.
 
 ## Arrange the workspace
 
-The toolbar opens each task in its own canvas:
+The toolbar controls the main canvas:
 
+- **Side by side** places the native Marimo editor beside the selected view.
 - **Notebook** opens the native Marimo editor.
 - **Preview** fills the canvas with the selected view.
-- **Code** places `index.html` or `app.css` beside the live preview.
+
+Open **HTML & CSS** from the workspace menu to place `index.html` or `app.css`
+beside the live preview.
 
 Open the toolbar's workspace menu when a task needs another arrangement.
-Choose **Open custom workspace**, then **Arrange panes** to add a surface on
+Choose **Open saved layout**, then **Arrange panes** to add a surface on
 any side, swap two panes, or close a pane. Drag a divider to resize a split.
 **Equalize split sizes** restores even proportions.
 
 Studio keeps the notebook, source editors, and preview mounted while you move
 between task modes and custom arrangements. It remembers the mode, custom
 arrangement, split sizes, and source tab for each view in the current browser.
+Choosing a view from the toolbar opens **Side by side**. Links between authored
+views preserve the current mode.
 
 ## Choose a projection
 

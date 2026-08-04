@@ -31,8 +31,9 @@ uv run --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
 Marimo opens the Studio workspace at its regular server URL. The notebook is
-the initial canvas. Use **Preview** to inspect the complete view or **Code** to
-edit `index.html` or `app.css` beside the live preview.
+on the left and the selected view is on the right. Use **Notebook** or
+**Preview** to give one pane the full canvas. Open **HTML & CSS** from the
+workspace menu to edit `index.html` or `app.css` beside the live preview.
 
 Use the runtime control in the toolbar to test both execution modes:
 
@@ -44,12 +45,13 @@ Use the runtime control in the toolbar to test both execution modes:
   graph. Cell output, tables, and anywidgets stay interactive in the preview.
   Anywidget state belongs to that Pyodide kernel.
 
-The runtime control appears whenever the preview is visible. Changing the
-runtime reloads the preview document. The notebook editor and unsaved view
-source remain mounted.
+Studio starts the WebAssembly preview in the background while **Server** is
+selected. The runtime control reveals that preview immediately and reports its
+startup status until it is ready. Both runtime documents remain mounted as you
+switch views and modes.
 
-For another arrangement, open the workspace menu and choose **Open custom
-workspace**. Choose **Arrange panes** to place Notebook, Code, and Preview
+For another arrangement, open the workspace menu and choose **Open saved
+layout**. Choose **Arrange panes** to place Notebook, HTML/CSS, and Preview
 beside, above, or below one another.
 
 ## Choose a notebook output
@@ -71,7 +73,8 @@ The cell index above is an example. Use the index reported by `inspect`.
 
 ## Place the output
 
-Open **Code**, select **index.html**, and replace the contents of `#app-shell`:
+Open **HTML & CSS**, select **index.html**, and replace the contents of
+`#app-shell`:
 
 ```html
 <main id="app-shell">
