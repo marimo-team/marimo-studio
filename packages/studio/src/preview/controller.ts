@@ -15,6 +15,7 @@ import {
   type ControlSync,
   synchronizeControlEndpoints,
 } from "./control-sync.ts";
+import { installEditorOutlineGuard } from "./editor-outline.ts";
 import { previewLoadState, RetrySchedule } from "./state.ts";
 
 const CONTROL_SYNC_RETRY_DELAYS = [100, 250, 500, 1_000, 2_000, 5_000] as const;
@@ -28,6 +29,7 @@ export class PreviewController {
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly retrySchedule = new RetrySchedule();
   private stopEditorQuerySync: (() => void) | undefined;
+  private stopEditorOutlineGuard: (() => void) | undefined;
   private controlSync: ControlSync | undefined;
   private controlSyncRevision: string | undefined;
   private controlSyncRequest: { controller: AbortController; revision: string } | undefined;
@@ -96,12 +98,14 @@ export class PreviewController {
     this.stopControlSync();
     this.querySyncController?.abort();
     this.stopEditorQuerySync?.();
+    this.stopEditorOutlineGuard?.();
     this.editor.removeEventListener("load", this.editorLoaded);
     this.preview.removeEventListener("load", this.previewLoaded);
     globalThis.removeEventListener("message", this.message);
   }
 
   private bind(): void {
+    this.guardEditorOutline();
     globalThis.addEventListener("message", this.message);
     this.preview.addEventListener("load", this.previewLoaded);
     this.editor.addEventListener("load", this.editorLoaded);
@@ -326,11 +330,21 @@ export class PreviewController {
   };
 
   private readonly editorLoaded = (): void => {
+    this.guardEditorOutline();
     this.stopControlSync();
     if (this.receiverReady && this.readyRevision) {
       this.beginControlSync(this.readyRevision);
     }
   };
+
+  private guardEditorOutline(): void {
+    this.stopEditorOutlineGuard?.();
+    this.stopEditorOutlineGuard = undefined;
+    const editorDocument = this.editor.contentDocument;
+    if (editorDocument) {
+      this.stopEditorOutlineGuard = installEditorOutlineGuard(editorDocument);
+    }
+  }
 
   private beginControlSync(revision: string): void {
     if (!this.connectControlFrame || this.runtime === DEFAULT_RUNTIME_ID) {
