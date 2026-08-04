@@ -1,23 +1,40 @@
 import type { SourceName } from "@marimo-studio/protocol/source-events";
 
 import { SourceEvents } from "./events.ts";
-import { SourcePanel } from "./panel.ts";
+import { SOURCE_NAMES } from "./files.ts";
 import { createSourceRemote, type SourceRemote } from "./remote.ts";
 import { type SourceObserver, type SourceState, SyncedSource } from "./sync.ts";
 
-const SOURCE_NAMES: readonly SourceName[] = ["index.html", "app.css"];
+export interface SourceDocumentSnapshot {
+  content: string;
+  state: SourceState;
+}
+
+export interface SourceSnapshot {
+  view: string;
+  active: SourceName;
+  documents: Record<SourceName, SourceDocumentSnapshot>;
+  focusRequest: number;
+}
+
+type Listener = () => void;
 
 export class SourceController {
-  private readonly documents = new Map<SourceName, SyncedSource>();
+  private readonly sources = new Map<SourceName, SyncedSource>();
+  private readonly contents = new Map<SourceName, string>();
   private readonly states = new Map<SourceName, SourceState>();
   private readonly events = new SourceEvents();
   private readonly remote: SourceRemote;
-  private panel!: SourcePanel;
+  private readonly listeners = new Set<Listener>();
   private view: string;
   private active: SourceName;
+  private focusRequest = 0;
   private transition = 0;
+  private started = false;
+  private disposed = false;
+  private snapshot!: SourceSnapshot;
 
-  private constructor(
+  constructor(
     private readonly supportPrefix: string,
     serverToken: string,
     initialView: string,
@@ -27,35 +44,60 @@ export class SourceController {
     this.view = initialView;
     this.active = this.readActiveTab(initialView);
     this.remote = createSourceRemote(this.supportPrefix, serverToken);
+    const observer: SourceObserver = {
+      document: (name, content) => {
+        this.contents.set(name, content);
+        this.publish();
+      },
+      state: (state) => this.updateState(state),
+    };
+    for (const name of SOURCE_NAMES) {
+      this.contents.set(name, "");
+      this.states.set(name, { name, phase: "loading" });
+      this.sources.set(name, new SyncedSource(name, this.remote, observer));
+    }
+    this.updateSnapshot();
   }
 
-  static async create(
-    supportPrefix: string,
-    serverToken: string,
-    initialView: string,
-    storagePrefix: string,
-    revealSource: () => void,
-  ): Promise<SourceController> {
-    const controller = new SourceController(
-      supportPrefix,
-      serverToken,
-      initialView,
-      storagePrefix,
-      revealSource,
+  readonly subscribe = (listener: Listener): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  readonly getSnapshot = (): SourceSnapshot => this.snapshot;
+
+  async start(): Promise<void> {
+    if (this.started || this.disposed) {
+      return;
+    }
+    this.started = true;
+    const loaded = await Promise.all(
+      SOURCE_NAMES.map(async (name) => await this.sources.get(name)!.load(this.view)),
     );
-    await controller.mount();
-    return controller;
+    if (this.disposed) {
+      return;
+    }
+    this.openEvents();
+    if (!loaded.every(Boolean)) {
+      this.revealBlockedSource();
+    }
   }
 
   async switchView(view: string): Promise<boolean> {
+    if (this.disposed) {
+      return false;
+    }
     const transition = ++this.transition;
-    if (!(await this.prepareViewChange()) || transition !== this.transition) {
+    if (!(await this.prepareViewChange()) || this.disposed || transition !== this.transition) {
       return false;
     }
     return await this.loadView(view, transition);
   }
 
   async prepareViewChange(): Promise<boolean> {
+    if (this.disposed) {
+      return false;
+    }
     if (await this.flush()) {
       return true;
     }
@@ -65,87 +107,74 @@ export class SourceController {
 
   cancelSwitch(): void {
     this.transition += 1;
-    this.documents.forEach((source) => source.cancelLoad());
+    this.sources.forEach((source) => source.cancelLoad());
   }
 
   async flush(): Promise<boolean> {
     const results = await Promise.all(
-      SOURCE_NAMES.map(async (name) => {
-        const source = this.documents.get(name);
-        return source ? await source.save() : true;
-      }),
+      SOURCE_NAMES.map(async (name) => await this.sources.get(name)!.save()),
     );
     return results.every(Boolean);
   }
 
   get hasPendingChanges(): boolean {
-    return SOURCE_NAMES.some((name) => this.documents.get(name)?.hasPendingChanges);
+    return SOURCE_NAMES.some((name) => this.sources.get(name)?.hasPendingChanges);
+  }
+
+  activate(name: SourceName): void {
+    this.setActive(name);
+    this.publish();
+  }
+
+  edit(name: SourceName, content: string): void {
+    this.contents.set(name, content);
+    this.sources.get(name)?.edit(content);
+  }
+
+  save(name: SourceName): void {
+    void this.sources.get(name)?.save();
+  }
+
+  useDisk(): void {
+    this.sources.get(this.active)?.useDisk();
+  }
+
+  keepLocal(): void {
+    void this.sources.get(this.active)?.keepLocal();
   }
 
   focusHtml(): void {
-    this.activate("index.html");
+    this.setActive("index.html");
+    this.focusRequest += 1;
     this.revealSource();
-    this.panel.focusHtml();
-  }
-
-  requestMeasure(): void {
-    this.panel.requestMeasure();
+    this.publish();
   }
 
   dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.transition += 1;
     this.events.close();
-    this.documents.forEach((document) => document.dispose());
-    this.panel.dispose();
-  }
-
-  private async mount(): Promise<void> {
-    const observer: SourceObserver = {
-      document: (name, content) => this.panel?.document(name, content),
-      state: (state) => this.updateState(state),
-    };
-    for (const name of SOURCE_NAMES) {
-      this.documents.set(name, new SyncedSource(name, this.remote, observer));
-    }
-    this.panel = await SourcePanel.create(this.view, this.active, {
-      edit: (name, content) => this.documents.get(name)?.edit(content),
-      save: (name) => void this.documents.get(name)?.save(),
-      activate: (name) => this.activate(name),
-      useDisk: () => this.documents.get(this.active)?.useDisk(),
-      keepLocal: () => void this.documents.get(this.active)?.keepLocal(),
-    });
-    const loaded = await Promise.all(
-      SOURCE_NAMES.map((name) => this.documents.get(name)!.load(this.view)),
-    );
-    this.openEvents();
-    if (!loaded.every(Boolean)) {
-      this.revealBlockedSource();
-    }
-  }
-
-  private activate(name: SourceName): void {
-    this.active = name;
-    globalThis.localStorage.setItem(this.tabKey(), name);
-    this.panel.activate(name);
-    const state = this.states.get(name);
-    if (state) {
-      this.panel.state(state);
-    }
+    this.sources.forEach((source) => source.dispose());
+    this.listeners.clear();
   }
 
   private updateState(state: SourceState): void {
     this.states.set(state.name, state);
-    this.panel?.state(state);
     if (state.phase === "conflict") {
-      this.activate(state.name);
+      this.setActive(state.name);
       this.revealSource();
     }
+    this.publish();
   }
 
   private revealBlockedSource(): void {
     const blocked = SOURCE_NAMES.find(
       (name) =>
-        this.documents.get(name)?.hasConflict ||
-        this.documents.get(name)?.hasPendingChanges ||
+        this.sources.get(name)?.hasConflict ||
+        this.sources.get(name)?.hasPendingChanges ||
         this.states.get(name)?.phase === "error",
     );
     if (blocked) {
@@ -155,28 +184,29 @@ export class SourceController {
   }
 
   private async loadView(view: string, transition: number): Promise<boolean> {
-    this.documents.forEach((source) => source.beginLoad());
+    this.sources.forEach((source) => source.beginLoad());
     const loaded = await Promise.allSettled(
       SOURCE_NAMES.map(async (name) => ({
         name,
-        source: await this.documents.get(name)!.read(view),
+        source: await this.sources.get(name)!.read(view),
       })),
     );
     if (transition !== this.transition) {
       return false;
     }
     if (this.hasPendingChanges) {
-      this.documents.forEach((source) => source.cancelLoad());
+      this.sources.forEach((source) => source.cancelLoad());
       this.revealBlockedSource();
       return false;
     }
     let failed = false;
     for (const [index, result] of loaded.entries()) {
+      const name = SOURCE_NAMES[index];
       if (result.status === "fulfilled") {
-        this.documents.get(SOURCE_NAMES[index])?.cancelLoad();
+        this.sources.get(name)?.cancelLoad();
       } else {
         failed = true;
-        this.documents.get(SOURCE_NAMES[index])?.loadError(result.reason);
+        this.sources.get(name)?.loadError(result.reason);
       }
     }
     if (failed) {
@@ -188,24 +218,23 @@ export class SourceController {
     for (const result of loaded) {
       if (result.status === "fulfilled") {
         const { name, source } = result.value;
-        this.documents.get(name)?.open(view, source);
+        this.sources.get(name)?.open(view, source);
       }
     }
-    this.panel.setView(view, this.active);
-    const state = this.states.get(this.active);
-    if (state) {
-      this.panel.state(state);
-    }
     this.openEvents();
+    this.publish();
     return true;
   }
 
   private openEvents(): void {
+    if (this.disposed) {
+      return;
+    }
     this.events.open(
       `${this.supportPrefix}/${encodeURIComponent(this.view)}/dev/events`,
-      () => this.documents.forEach((source) => void source.reconcile()),
+      () => this.sources.forEach((source) => void source.reconcile()),
       ({ path, revision }) => {
-        void this.documents.get(path)?.externalChange(revision);
+        void this.sources.get(path)?.externalChange(revision);
       },
     );
   }
@@ -214,9 +243,40 @@ export class SourceController {
     return `${this.storagePrefix}:source:${view}`;
   }
 
+  private setActive(name: SourceName): void {
+    this.active = name;
+    globalThis.localStorage.setItem(this.tabKey(), name);
+  }
+
   private readActiveTab(view: string): SourceName {
     return globalThis.localStorage.getItem(this.tabKey(view)) === "app.css"
       ? "app.css"
       : "index.html";
+  }
+
+  private publish(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.updateSnapshot();
+    this.listeners.forEach((listener) => listener());
+  }
+
+  private updateSnapshot(): void {
+    this.snapshot = {
+      view: this.view,
+      active: this.active,
+      focusRequest: this.focusRequest,
+      documents: {
+        "index.html": {
+          content: this.contents.get("index.html") ?? "",
+          state: this.states.get("index.html") ?? { name: "index.html", phase: "loading" },
+        },
+        "app.css": {
+          content: this.contents.get("app.css") ?? "",
+          state: this.states.get("app.css") ?? { name: "app.css", phase: "loading" },
+        },
+      },
+    };
   }
 }

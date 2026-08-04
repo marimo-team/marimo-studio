@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm prepare:upstream && vp build && node scripts/finalize-build.mjs",
+    "build": "pnpm prepare:upstream && vp build",
     "prepare:upstream": "pnpm --filter @marimo-studio/marimo-frontend prepare:upstream"
   },
   "dependencies": {

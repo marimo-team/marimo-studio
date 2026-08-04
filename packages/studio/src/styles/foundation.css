@@ -1,43 +1,35 @@
 :root {
   color-scheme: light dark;
   font-family: "PT Sans", ui-sans-serif, system-ui, sans-serif;
-  --studio-background: #fff;
-  --studio-foreground: #202124;
-  --studio-muted: #667085;
-  --studio-subtle: #f8f9fa;
-  --studio-hover: #f1f3f4;
-  --studio-border: #e0e3e7;
-  --studio-strong-border: #c7ccd1;
-  --studio-primary: #1473e6;
-  --studio-primary-soft: #eaf3ff;
-  --studio-connecting: #e66a14;
-  --studio-success: #1f9d74;
-  --studio-warning: #8a5b00;
-  --studio-warning-soft: #fff7df;
-  --studio-error: #b42318;
-  --studio-error-soft: #fff0ee;
+  --studio-background: light-dark(hsl(0deg 0% 100%), hsl(150deg 7.7% 10.2%));
+  --studio-foreground: light-dark(hsl(222.2deg 47.4% 11.2%), hsl(155deg 7% 93%));
+  --studio-muted: light-dark(hsl(215.4deg 16.3% 46.9%), hsl(155deg 5% 68.3%));
+  --studio-popover: light-dark(hsl(0deg 0% 100%), hsl(151deg 5.5% 15.2%));
+  --studio-subtle: light-dark(hsl(210deg 40% 96.1%), hsl(151deg 5.5% 18%));
+  --studio-hover: light-dark(hsl(210deg 25% 94%), hsl(151deg 5.5% 20.5%));
+  --studio-border: light-dark(hsl(214.3deg 31.8% 91.4%), hsl(153deg 3.7% 24.2%));
+  --studio-strong-border: light-dark(hsl(215deg 18% 76%), hsl(154deg 3.3% 35%));
+  --studio-primary: light-dark(hsl(211deg 90% 42%), hsl(190deg 80% 84%));
+  --studio-primary-soft: light-dark(hsl(209deg 100% 96.5%), hsl(192deg 56.6% 26.5%));
+  --studio-accent-foreground: light-dark(hsl(211deg 90% 42%), hsl(190deg 80% 84%));
+  --studio-on-primary: light-dark(hsl(210deg 40% 98%), hsl(222.2deg 47.4% 11.2%));
+  --studio-connecting: light-dark(hsl(24deg 85% 49%), hsl(24deg 100% 62%));
+  --studio-success: light-dark(hsl(161deg 67% 37%), hsl(161deg 52% 54%));
+  --studio-warning: light-dark(hsl(40deg 100% 27%), hsl(39deg 80% 66%));
+  --studio-warning-soft: light-dark(hsl(45deg 100% 94%), hsl(39deg 34% 17%));
+  --studio-error: light-dark(hsl(4deg 75% 40%), hsl(4deg 100% 77%));
+  --studio-error-soft: light-dark(hsl(7deg 100% 97%), hsl(5deg 30% 20%));
+  --studio-on-error: light-dark(hsl(210deg 40% 98%), hsl(222.2deg 47.4% 11.2%));
   --studio-toolbar-height: 2.75rem;
   --studio-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --studio-background: #181a19;
-    --studio-foreground: #eceeed;
-    --studio-muted: #aab0ad;
-    --studio-subtle: #222523;
-    --studio-hover: #2a2e2b;
-    --studio-border: #3b403d;
-    --studio-strong-border: #505652;
-    --studio-primary: #61a8f5;
-    --studio-primary-soft: #183450;
-    --studio-connecting: #ff8b3d;
-    --studio-success: #50c49b;
-    --studio-warning: #f0bd60;
-    --studio-warning-soft: #3b301d;
-    --studio-error: #ff9087;
-    --studio-error-soft: #422522;
-  }
+.studio[data-theme="light"] {
+  color-scheme: light;
+}
+
+.studio[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 * {
@@ -50,9 +42,44 @@
 
 html,
 body,
+#marimo-studio-root,
 .studio {
   height: 100%;
   margin: 0;
+}
+
+.studio-opening,
+.studio-startup-error {
+  align-items: center;
+  display: flex;
+  height: 100%;
+  justify-content: center;
+}
+
+.studio-opening {
+  color: var(--studio-muted);
+  flex-direction: column;
+  font-size: 0.875rem;
+  gap: 0.5rem;
+}
+
+.studio-startup-error {
+  align-content: center;
+  background: var(--studio-error-soft);
+  color: var(--studio-error);
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.studio-startup-error p {
+  margin: 0;
+}
+
+.studio-native-editor-link {
+  color: var(--studio-primary);
+  font-size: 0.8125rem;
 }
 
 body {
@@ -90,6 +117,8 @@ summary:active,
 }
 
 .studio {
+  background: var(--studio-background);
+  color: var(--studio-foreground);
   display: grid;
   grid-template-rows: var(--studio-toolbar-height) minmax(0, 1fr);
 }

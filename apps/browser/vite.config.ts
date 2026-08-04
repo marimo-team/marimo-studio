@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import topLevelAwait from "vite-plugin-top-level-await";
 import { defineConfig } from "vite-plus";
 
+import { buildMetadata } from "./build-metadata.ts";
+
 const packageRoot = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = resolve(packageRoot, "../..");
 const marimo = createMarimoViteIntegration();
@@ -14,7 +16,7 @@ export default defineConfig({
   css: {
     postcss: marimo.postcss,
   },
-  plugins: [topLevelAwait()],
+  plugins: [topLevelAwait(), buildMetadata()],
   resolve: {
     alias: marimo.aliases,
   },
@@ -29,7 +31,7 @@ export default defineConfig({
       "browser",
     ),
     emptyOutDir: true,
-    cssCodeSplit: false,
+    cssCodeSplit: true,
     rollupOptions: {
       input: {
         runtime: join(packageRoot, "src", "runtime.ts"),
@@ -41,7 +43,7 @@ export default defineConfig({
         chunkFileNames: "chunks/[name]-[hash].js",
         assetFileNames(assetInfo) {
           if (assetInfo.names.some((name) => name.endsWith(".css"))) {
-            return "runtime.css";
+            return "[name][extname]";
           }
           return "assets/[name]-[hash][extname]";
         },

@@ -112,10 +112,19 @@
 
 .studio-source-editor,
 .studio-source-editor > div,
+.studio-source-editor-root,
 .studio-source-editor .cm-theme,
 .studio-source-editor .cm-editor {
   height: 100%;
   min-height: 0;
+}
+
+.studio-source-loading {
+  align-items: center;
+  color: var(--studio-muted);
+  display: flex;
+  height: 100%;
+  justify-content: center;
 }
 
 .studio-source-editor .cm-editor {

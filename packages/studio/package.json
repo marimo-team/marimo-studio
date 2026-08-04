@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/main.ts",
+    ".": "./src/main.tsx",
     "./style.css": "./src/style.css"
   },
   "scripts": {
@@ -15,13 +15,18 @@
     "@codemirror/lang-html": "catalog:",
     "@marimo-studio/protocol": "workspace:*",
     "@uiw/react-codemirror": "catalog:",
+    "lucide-react": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@testing-library/user-event": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "jsdom": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:"
   }

@@ -1,17 +1,14 @@
 import type { ControlFrameConnector } from "./control-sync.ts";
 
 import { observeFrameQuery } from "../query-sync.ts";
-import { PreviewController, type PreviewFrameState, type PreviewStatus } from "./controller.ts";
+import { PreviewController, type PreviewFrameState } from "./controller.ts";
 import { installEditorOutlineGuard } from "./editor-outline.ts";
+import { previewStartingStatus } from "./status.ts";
 
 interface PreviewDeckOptions {
   initialView: string;
   initialRuntime: string;
   runtimes: readonly string[];
-  editor: HTMLIFrameElement;
-  preview: HTMLIFrameElement;
-  popouts: readonly HTMLAnchorElement[];
-  statuses: readonly HTMLElement[];
   viewUrl: (view: string, runtime: string) => string;
   supportUrl: (view: string) => string;
   syncQuery: (query: string) => void;
@@ -20,32 +17,52 @@ interface PreviewDeckOptions {
   connectControlFrame?: ControlFrameConnector;
 }
 
-interface PreviewRuntime {
-  controller: PreviewController;
-  frame: HTMLIFrameElement;
-  state: PreviewFrameState;
-  created: boolean;
+export interface PreviewDeckSnapshot {
+  runtime: string;
+  states: Readonly<Record<string, PreviewFrameState>>;
 }
 
-const startingStatus = (runtime: string): PreviewStatus => ({
-  message: runtime === "wasm" ? "Starting WebAssembly" : "Connecting to server",
-  state: "loading",
-  title: "",
-});
+type Listener = () => void;
 
 export class PreviewDeck {
-  private readonly previews = new Map<string, PreviewRuntime>();
+  private readonly previews = new Map<string, PreviewController>();
+  private readonly listeners = new Set<Listener>();
+  private readonly states = new Map<string, PreviewFrameState>();
   private runtime: string;
   private view: string;
+  private editor: HTMLIFrameElement | undefined;
+  private frames: ReadonlyMap<string, HTMLIFrameElement> | undefined;
+  private snapshot!: PreviewDeckSnapshot;
   private stopEditorQuerySync: (() => void) | undefined;
   private stopEditorOutlineGuard: (() => void) | undefined;
 
   constructor(private readonly options: PreviewDeckOptions) {
     this.runtime = options.initialRuntime;
     this.view = options.initialView;
-    this.ensure(options.initialRuntime, options.preview);
-    this.activate(options.initialRuntime);
-    if (options.runtimes.includes("wasm") && options.initialRuntime !== "wasm") {
+    for (const runtime of options.runtimes) {
+      this.states.set(runtime, {
+        url: options.viewUrl(this.view, runtime),
+        status: previewStartingStatus(runtime),
+      });
+    }
+    this.updateSnapshot();
+  }
+
+  readonly subscribe = (listener: Listener): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  readonly getSnapshot = (): PreviewDeckSnapshot => this.snapshot;
+
+  attach(editor: HTMLIFrameElement, frames: ReadonlyMap<string, HTMLIFrameElement>): void {
+    if (this.editor) {
+      return;
+    }
+    this.editor = editor;
+    this.frames = frames;
+    this.ensure(this.runtime);
+    if (this.options.runtimes.includes("wasm") && this.runtime !== "wasm") {
       this.ensure("wasm");
     }
     this.bindEditor();
@@ -55,37 +72,49 @@ export class PreviewDeck {
     if (runtime === this.runtime || !this.options.runtimes.includes(runtime)) {
       return;
     }
-    this.activate(runtime);
+    this.ensure(runtime);
+    this.runtime = runtime;
+    this.publish();
+    this.previews.get(runtime)?.requestResize();
   }
 
   switchView(view: string): void {
     this.view = view;
-    this.previews.forEach(({ controller }) => controller.switchView(view));
+    for (const runtime of this.options.runtimes) {
+      if (!this.previews.has(runtime)) {
+        this.states.set(runtime, {
+          url: this.options.viewUrl(view, runtime),
+          status: previewStartingStatus(runtime),
+        });
+      }
+    }
+    this.previews.forEach((controller) => controller.switchView(view));
+    this.publish();
   }
 
   requestResize(): void {
-    this.options.editor.contentWindow?.dispatchEvent(new Event("resize"));
-    this.previews.forEach(({ controller }) => controller.requestResize());
+    this.editor?.contentWindow?.dispatchEvent(new Event("resize"));
+    this.previews.forEach((controller) => controller.requestResize());
   }
 
   dispose(): void {
     this.stopEditorQuerySync?.();
     this.stopEditorOutlineGuard?.();
-    this.options.editor.removeEventListener("load", this.editorLoaded);
-    this.previews.forEach(({ controller, frame, created }) => {
-      controller.dispose();
-      if (created) {
-        frame.remove();
-      }
-    });
+    this.editor?.removeEventListener("load", this.editorLoaded);
+    this.previews.forEach((controller) => controller.dispose());
     this.previews.clear();
+    this.listeners.clear();
   }
 
   private bindEditor(): void {
+    const editor = this.editor;
+    if (!editor) {
+      return;
+    }
     this.guardEditorOutline();
-    this.options.editor.addEventListener("load", this.editorLoaded);
-    this.stopEditorQuerySync = observeFrameQuery(this.options.editor, (query) => {
-      this.previews.forEach(({ controller }) => controller.editorQueryChanged(query));
+    editor.addEventListener("load", this.editorLoaded);
+    this.stopEditorQuerySync = observeFrameQuery(editor, (query) => {
+      this.previews.forEach((controller) => controller.editorQueryChanged(query));
     });
   }
 
@@ -96,93 +125,56 @@ export class PreviewDeck {
   private guardEditorOutline(): void {
     this.stopEditorOutlineGuard?.();
     this.stopEditorOutlineGuard = undefined;
-    const editorDocument = this.options.editor.contentDocument;
+    const editorDocument = this.editor?.contentDocument;
     if (editorDocument) {
       this.stopEditorOutlineGuard = installEditorOutlineGuard(editorDocument);
     }
   }
 
-  private ensure(runtime: string, frame?: HTMLIFrameElement): PreviewRuntime {
+  private ensure(runtime: string): PreviewController | undefined {
     const existing = this.previews.get(runtime);
     if (existing) {
       return existing;
     }
-    const target = frame ?? this.createFrame();
-    target.dataset.previewRuntimeFrame = runtime;
-    target.title = `${this.view} custom view using ${runtime}`;
-    const initialState: PreviewFrameState = {
-      url: this.options.viewUrl(this.view, runtime),
-      status: startingStatus(runtime),
-    };
-    const entry: PreviewRuntime = {
-      frame: target,
-      state: initialState,
-      created: target !== this.options.preview,
-      controller: new PreviewController(
-        this.view,
-        runtime,
-        this.options.editor,
-        target,
-        this.options.viewUrl,
-        this.options.supportUrl,
-        this.options.syncQuery,
-        this.options.syncEditorQuery,
-        this.options.navigate,
-        (state) => this.receive(runtime, state),
-        this.options.connectControlFrame,
-      ),
-    };
-    this.previews.set(runtime, entry);
-    return entry;
-  }
-
-  private createFrame(): HTMLIFrameElement {
-    const frame = this.options.preview.cloneNode(false) as HTMLIFrameElement;
-    frame.removeAttribute("data-session-id");
-    frame.src = "about:blank";
-    frame.hidden = true;
-    frame.inert = true;
-    this.options.preview.parentElement?.append(frame);
-    return frame;
-  }
-
-  private activate(runtime: string): void {
-    const selected = this.ensure(runtime);
-    this.runtime = runtime;
-    this.previews.forEach(({ frame }, candidate) => {
-      const active = candidate === runtime;
-      frame.hidden = !active;
-      frame.inert = !active;
-    });
-    this.render(selected.state);
-    selected.controller.requestResize();
+    const editor = this.editor;
+    const frame = this.frames?.get(runtime);
+    if (!editor || !frame) {
+      return undefined;
+    }
+    const controller = new PreviewController(
+      this.view,
+      runtime,
+      editor,
+      frame,
+      this.options.viewUrl,
+      this.options.supportUrl,
+      this.options.syncQuery,
+      this.options.syncEditorQuery,
+      this.options.navigate,
+      (state) => this.receive(runtime, state),
+      this.options.connectControlFrame,
+    );
+    this.previews.set(runtime, controller);
+    return controller;
   }
 
   private receive(runtime: string, state: PreviewFrameState): void {
-    const preview = this.previews.get(runtime);
-    if (!preview) {
+    if (!this.states.has(runtime)) {
       return;
     }
-    preview.state = state;
-    if (runtime === this.runtime) {
-      this.render(state);
-    }
+    this.states.set(runtime, state);
+    this.publish();
   }
 
-  private render({ url, status }: PreviewFrameState): void {
-    this.options.popouts.forEach((popout) => {
-      popout.href = url;
-    });
-    this.options.statuses.forEach((target) => {
-      target.textContent = status.message;
-      target.dataset.state = status.state;
-      const detail = status.title ? `${status.message}: ${status.title}` : status.message;
-      target.closest<HTMLElement>("[data-runtime-trigger]")?.setAttribute("title", detail);
-      if (status.title) {
-        target.title = status.title;
-      } else {
-        target.removeAttribute("title");
-      }
-    });
+  private publish(): void {
+    this.updateSnapshot();
+    this.listeners.forEach((listener) => listener());
+  }
+
+  private updateSnapshot(): void {
+    this.snapshot = {
+      runtime: this.runtime,
+      states: Object.fromEntries(this.states),
+    };
   }
 }

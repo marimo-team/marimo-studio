@@ -138,7 +138,7 @@
     min-width: auto;
   }
 
-  .studio-controls > :is(.studio-runtime-menu, [data-preview-popout]) {
+  .studio-controls > :is(.studio-runtime-menu, a.studio-toolbar-action) {
     display: none;
   }
 

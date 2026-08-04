@@ -6,22 +6,25 @@ tests, builds, and task orchestration.
 
 ## Packages
 
-| Path                                            | Responsibility                                          |
-| ----------------------------------------------- | ------------------------------------------------------- |
-| `apps/browser/`                                 | Vite entrypoints, shared chunks, and asset finalization |
-| `packages/runtime/`                             | Runtime adapter and session lifecycle contracts         |
-| `packages/presentation/`                        | Custom-view document, projections, and runtime mount    |
-| `packages/studio/`                              | Workspace layout, editors, remotes, and controllers     |
-| `packages/protocol/`                            | Browser messages and validated server response records  |
-| `packages/marimo-frontend/src/upstream/`        | Imports from Marimo's unstable frontend surface         |
-| `packages/marimo-frontend/src/control-frame.ts` | Adapt a Marimo frame to native control operations       |
-| `packages/marimo-frontend/src/vite.ts`          | Marimo aliases and PostCSS                              |
-| `packages/marimo-frontend/scripts/`             | Locked Marimo source preparation and build metadata     |
-| `apps/docs/`                                    | VitePress application and site configuration            |
+| Path                                            | Responsibility                                         |
+| ----------------------------------------------- | ------------------------------------------------------ |
+| `apps/browser/`                                 | Vite entrypoints, shared chunks, and packaged metadata |
+| `packages/runtime/`                             | Runtime adapter and session lifecycle contracts        |
+| `packages/presentation/`                        | Custom-view document, projections, and runtime mount   |
+| `packages/studio/`                              | Workspace layout, editors, remotes, and controllers    |
+| `packages/protocol/`                            | Browser messages and validated server response records |
+| `packages/marimo-frontend/src/upstream/`        | Imports from Marimo's unstable frontend surface        |
+| `packages/marimo-frontend/src/control-frame.ts` | Adapt a Marimo frame to native control operations      |
+| `packages/marimo-frontend/src/theme-frame.ts`   | Read the resolved theme from the native editor frame   |
+| `packages/marimo-frontend/src/vite.ts`          | Marimo aliases and PostCSS                             |
+| `packages/marimo-frontend/scripts/`             | Locked Marimo source preparation and build metadata    |
+| `apps/docs/`                                    | VitePress application and site configuration           |
 
 `packages/runtime` defines the transport-independent adapter contract.
 `packages/presentation` renders the custom view and keeps the shared React
-renderer as a private module. `packages/studio` renders the workspace document.
+renderer as a private module. `packages/studio` mounts the workspace from the
+server's validated bootstrap record. React owns the toolbar, pane tree, source
+editors, and stable notebook and preview frames.
 `packages/protocol` is the shared wire boundary. Zod 4 schemas validate input
 and define the TypeScript types consumed by both documents. The package
 contains no fetch, EventSource, DOM, or window access.
@@ -82,9 +85,8 @@ Marimo upgrade should concentrate path and declaration changes in
 
 `pnpm build` prepares Marimo source, builds the entrypoints from
 `apps/browser`, and writes one browser bundle to
-`packages/marimo-studio/src/marimo_studio/_static/browser/`. The
-finalizer copies authored Studio styles and writes `build-meta.json` with the
-Marimo and HTMX versions.
+`packages/marimo-studio/src/marimo_studio/_static/browser/`. A Vite plugin emits
+`build-meta.json` with the Marimo and HTMX versions in the same build.
 
 The generated directory and Marimo source cache stay untracked. Change source
 under `packages/`, rebuild, and verify package contents with `make package`.
@@ -99,6 +101,9 @@ Studio keeps the notebook iframe, source editors, and prepared runtime preview
 frames mounted as stable nodes. Task modes and the custom pane tree change
 their rectangles while runtime selection changes which preview frame is
 visible. Source editors use content-derived ETags and `If-Match` writes.
+Studio follows the native editor's resolved light or dark theme. The browser
+app injects that frame adapter, while Studio applies its own theme tokens,
+source editor theme, and matching brand mark.
 
 Studio prepares the WebAssembly preview while the Server frame is active. When
 it becomes ready, Studio requests the server and preview semantic cell maps at

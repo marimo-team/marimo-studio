@@ -101,6 +101,17 @@ export class SyncedSource {
       if (generation !== this.generation) {
         return false;
       }
+      if (this.dirty) {
+        if (source.content === this.content) {
+          this.apply(source);
+          this.emit("saved");
+          return true;
+        }
+        this.conflict = { local: this.content, remote: source };
+        this.cancelSave();
+        this.emit("conflict");
+        return false;
+      }
       this.open(view, source);
       return true;
     } catch (error) {

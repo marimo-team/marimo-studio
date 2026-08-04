@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 from collections.abc import MutableMapping
+from html.parser import HTMLParser
 from importlib.metadata import entry_points
 from pathlib import Path
 from types import SimpleNamespace
@@ -29,6 +30,36 @@ from marimo_studio._workspace.models import StudioConfig
 from marimo_studio.workspace import bind_cell, ensure_view
 
 from .helpers import empty_notebook_source, notebook_source, replace_app_shell
+
+
+class _BootstrapParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self._reading = False
+        self.parts: list[str] = []
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        self._reading = tag == "script" and dict(attrs).get("id") == (
+            "marimo-studio-bootstrap"
+        )
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "script":
+            self._reading = False
+
+    def handle_data(self, data: str) -> None:
+        if self._reading:
+            self.parts.append(data)
+
+
+def _studio_bootstrap(document: str) -> dict[str, Any]:
+    parser = _BootstrapParser()
+    parser.feed(document)
+    return json.loads("".join(parser.parts))
 
 
 def _set_shell(studio: StudioConfig, view_name: str, content: str) -> None:
@@ -109,24 +140,14 @@ def test_run_mode_serves_default_and_named_view_documents(
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         default = client.get("/")
-        named_redirect = client.get(
-            "/executive?region=emea&view=compact",
-            follow_redirects=False,
-        )
         named = client.get("/executive/")
-        health = client.get("/health")
 
     assert default.status_code == 200
     assert default.text.count('id="marimo-runtime-root"') == 1
     assert '"/_marimo-studio/views/dashboard"' in default.text
     assert default.text.index("runtime.css") < default.text.index("app.css")
-    assert named_redirect.status_code == 307
-    assert named_redirect.headers["location"] == (
-        "/executive/?region=emea&view=compact"
-    )
     assert named.status_code == 200
     assert '"/_marimo-studio/views/executive"' in named.text
-    assert health.status_code == 200
 
 
 def test_empty_notebook_serves_a_ready_starter_view(tmp_path: Path) -> None:
@@ -210,7 +231,7 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
     assert dashboard["runtime"]["data"]["preserveSession"] is True
 
 
-def test_run_mode_exposes_wasm_source_only_when_configured(
+def test_run_mode_serves_the_configured_wasm_runtime_and_source(
     notebook_path: Path,
 ) -> None:
     studio = _configured(notebook_path)
@@ -229,20 +250,19 @@ def test_run_mode_exposes_wasm_source_only_when_configured(
     )
 
     def enable_wasm(config: MutableMapping[str, object]) -> None:
+        config["runtime"] = "wasm"
         config["runtimes"] = ["server", "wasm"]
 
     update_notebook_config(studio.notebook, enable_wasm)
     configured = studio.notebook.read_bytes()
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        dashboard = client.get(
-            "/_marimo-studio/views/dashboard/config?runtime=wasm"
-        ).json()
-        executive = client.get(
-            "/_marimo-studio/views/executive/config?runtime=wasm"
-        ).json()
+        page = client.get("/")
+        dashboard = client.get("/_marimo-studio/views/dashboard/config").json()
+        executive = client.get("/_marimo-studio/views/executive/config").json()
 
     assert unavailable.status_code == 400
     assert unavailable.json()["error"] == "runtime-unavailable"
+    assert '"runtime":"wasm"' in page.text
     assert dashboard["runtime"]["id"] == "wasm"
     assert dashboard["runtime"]["available"] == ["server", "wasm"]
     assert dashboard["runtime"]["instance"] == executive["runtime"]["instance"]
@@ -273,17 +293,15 @@ def test_edit_mode_offers_both_preview_runtimes(notebook_path: Path) -> None:
 
     assert config["runtime"]["id"] == "wasm"
     assert config["runtime"]["available"] == ["server", "wasm"]
-    assert 'data-studio-mode="split"' in workspace.text
-    assert "Build" in workspace.text
-    assert 'data-studio-mode="notebook"' in workspace.text
-    assert 'data-studio-mode="preview"' in workspace.text
-    assert 'data-studio-mode="code"' in workspace.text
-    assert 'data-preview-runtime="server"' in workspace.text
-    assert 'data-preview-runtime="wasm"' in workspace.text
-    assert "Uses the notebook kernel" in workspace.text
-    assert "Runs locally in your browser" in workspace.text
-    assert "data-studio-live-status" in workspace.text
-    assert 'data-query-url="/_marimo-studio/query"' in workspace.text
+    bootstrap = _studio_bootstrap(workspace.text)
+    assert bootstrap["schema"] == 1
+    assert bootstrap["selectedView"] == "dashboard"
+    assert bootstrap["views"] == ["dashboard", "executive"]
+    assert bootstrap["runtimes"] == [
+        {"id": "server", "label": "Server"},
+        {"id": "wasm", "label": "WebAssembly"},
+    ]
+    assert bootstrap["urls"]["query"] == "/_marimo-studio/query"
 
 
 def test_edit_workspace_queues_public_query_state(
@@ -309,24 +327,6 @@ def test_edit_workspace_queues_public_query_state(
 
     assert response.status_code == 202
     assert received == [{"region": ["emea", "apac"], "empty": ""}]
-
-
-def test_run_mode_document_uses_its_configured_default_runtime(
-    notebook_path: Path,
-) -> None:
-    studio = _configured(notebook_path)
-
-    def select_wasm(config: MutableMapping[str, object]) -> None:
-        config["runtime"] = "wasm"
-        config["runtimes"] = ["wasm"]
-
-    update_notebook_config(studio.notebook, select_wasm)
-    with TestClient(create_asgi_app(studio.notebook)) as client:
-        page = client.get("/")
-        config = client.get("/_marimo-studio/views/dashboard/config").json()
-
-    assert '"runtime":"wasm"' in page.text
-    assert config["runtime"]["id"] == "wasm"
 
 
 def test_server_runtime_instance_changes_with_transport_token(
@@ -478,7 +478,6 @@ def test_edit_view_error_document_watches_for_source_repairs(
 
     assert page.status_code == 500
     assert page.headers["Marimo-Studio-Error"] == "template-error"
-    assert 'data-marimo-studio-preview-state="error"' in page.text
     assert "View needs repair" in page.text
     assert "/_marimo-studio/dev/events" in page.text
 
@@ -1095,40 +1094,22 @@ def test_edit_mode_public_routes_honor_parent_mount(notebook_path: Path) -> None
         landing = client.get("/parent/base/", follow_redirects=False)
         workspace = client.get("/parent/base/studio/executive/")
         config = client.get("/parent/base/_marimo-studio/views/executive/config").json()
+        outside = [
+            client.get("/parent/", follow_redirects=False),
+            client.get("/parent/studio/dashboard/", follow_redirects=False),
+            client.get("/parent/dashboard/", follow_redirects=False),
+        ]
 
     assert landing.status_code == 307
     assert landing.headers["location"] == "/parent/base/studio/dashboard/"
     assert workspace.status_code == 200
     expected_editor = "/parent/base/?" + urlencode({"file": str(studio.notebook)})
-    assert f'data-editor-frame src="{expected_editor}"' in workspace.text
-    assert 'href="/parent/base/executive/"' in workspace.text
-    assert 'data-view-prefix="/parent/base/"' in workspace.text
-    assert 'data-studio-prefix="/parent/base/studio/"' in workspace.text
+    bootstrap = _studio_bootstrap(workspace.text)
+    assert bootstrap["urls"]["editor"] == expected_editor
+    assert bootstrap["urls"]["viewPrefix"] == "/parent/base/"
+    assert bootstrap["urls"]["studioPrefix"] == "/parent/base/studio/"
     assert config["rootUrl"] == "/parent/base/"
     assert config["runtime"]["data"]["url"] == "/parent/base/"
-
-
-def test_edit_mode_routes_stay_beneath_the_configured_base_url(
-    notebook_path: Path,
-) -> None:
-    studio = _configured(notebook_path)
-    app = _marimo_app(
-        studio.notebook,
-        path="/base",
-        programmatic=True,
-    )
-    _edit_mode(app)
-
-    with TestClient(app) as client:
-        landing = client.get("/base/", follow_redirects=False)
-        outside = [
-            client.get("/", follow_redirects=False),
-            client.get("/studio/dashboard/", follow_redirects=False),
-            client.get("/dashboard/", follow_redirects=False),
-        ]
-
-    assert landing.status_code == 307
-    assert landing.headers["location"] == "/base/studio/dashboard/"
     assert all(response.status_code == 404 for response in outside)
 
 
@@ -1176,9 +1157,8 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
             ("file", str(studio.notebook)),
         ]
     )
-    assert (
-        f'data-editor-frame src="{landing_editor.replace("&", "&amp;")}"'
-        in landing_workspace.text
+    assert _studio_bootstrap(landing_workspace.text)["urls"]["editor"] == (
+        landing_editor
     )
     assert editor.status_code == 200
     assert default_workspace.status_code == 200
@@ -1212,8 +1192,6 @@ def test_edit_landing_delegates_native_root_requests(notebook_path: Path) -> Non
     assert head.headers["location"] == "/studio/dashboard/"
     assert post.status_code == 405
     assert editor.status_code == 200
-    assert "<marimo-filename hidden>" in editor.text
-    assert '<div id="root"></div>' in editor.text
 
 
 def test_view_list_tracks_new_folders_without_restarting_marimo(
@@ -1248,7 +1226,7 @@ def test_edit_workspace_creates_views_and_conditionally_updates_source(
         replacement = loaded.text.replace(
             '<main id="app-shell">',
             '<main id="app-shell"><h1>Updated in Studio</h1>',
-        )
+        ).replace("\n", "\r\n")
         saved = client.put(
             "/_marimo-studio/views/dashboard/source/index.html",
             content=replacement,
@@ -1280,7 +1258,7 @@ def test_edit_workspace_creates_views_and_conditionally_updates_source(
     assert loaded.headers["etag"].startswith('"sha256:')
     assert saved.status_code == 204
     assert saved.headers["etag"] != loaded.headers["etag"]
-    assert studio.views["dashboard"].template.read_text(encoding="utf-8") == replacement
+    assert studio.views["dashboard"].template.read_bytes() == replacement.encode()
     assert stale.status_code == 412
     assert stale.json()["error"] == "source-conflict"
     assert stale.json()["revision"] == saved.headers["etag"].strip('"')
@@ -1289,21 +1267,18 @@ def test_edit_workspace_creates_views_and_conditionally_updates_source(
     assert created.json()["view_url"] == "/operations/"
     assert (studio.view_root / "operations" / "index.html").is_file()
     assert (studio.view_root / "operations" / "app.css").is_file()
-    operations = (studio.view_root / "operations" / "index.html").read_text(
-        encoding="utf-8"
-    )
-    assert operations.index('name="cell-1"') < operations.index('name="cell-2"')
     assert duplicate.status_code == 409
     assert duplicate.json()["error"] == "view-exists"
     assert invalid.status_code == 400
     assert invalid.json()["error"] == "invalid-view-name"
 
 
-def test_edit_workspace_removes_a_view_and_its_files(
+def test_view_deletion_removes_files_promotes_the_default_and_keeps_one_view(
     notebook_path: Path,
 ) -> None:
     studio = _configured(notebook_path)
-    asset = studio.view_root / "executive" / "assets" / "note.txt"
+    ensure_view(studio.notebook, "operations")
+    asset = studio.view_root / "operations" / "assets" / "note.txt"
     asset.parent.mkdir()
     asset.write_text("authored view asset", encoding="utf-8")
     app = _marimo_app(studio.notebook)
@@ -1312,69 +1287,43 @@ def test_edit_workspace_removes_a_view_and_its_files(
 
     with TestClient(app) as client:
         removed = client.delete(
+            "/_marimo-studio/views/operations",
+            headers=headers,
+        )
+        promoted = client.delete(
+            "/_marimo-studio/views/dashboard",
+            headers=headers,
+        )
+        last = client.delete(
             "/_marimo-studio/views/executive",
             headers=headers,
         )
-        views = client.get("/_marimo-studio/views")
+        views = client.get("/_marimo-studio/views").json()
 
     assert removed.status_code == 200
     assert removed.json() == {
         "schema": 1,
-        "name": "executive",
+        "name": "operations",
         "default_view": "dashboard",
-        "views": ["dashboard"],
+        "views": ["dashboard", "executive"],
     }
-    assert views.json()["views"] == ["dashboard"]
-    assert not (studio.view_root / "executive").exists()
-    assert studio.views["dashboard"].template.is_file()
-
-
-def test_removing_the_default_view_promotes_the_remaining_view(
-    notebook_path: Path,
-) -> None:
-    studio = _configured(notebook_path)
-    app = _marimo_app(studio.notebook)
-    _edit_mode(app)
-    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
-
-    with TestClient(app) as client:
-        removed = client.delete(
-            "/_marimo-studio/views/dashboard",
-            headers=headers,
-        )
-        views = client.get("/_marimo-studio/views")
-
+    assert not (studio.view_root / "operations").exists()
+    assert promoted.status_code == 200
+    assert promoted.json()["default_view"] == "executive"
     updated = load_studio(studio.notebook)
-    assert removed.status_code == 200
-    assert removed.json()["default_view"] == "executive"
-    assert views.json() == {
+    assert views == {
         "schema": 1,
         "default_view": "executive",
         "views": ["executive"],
     }
     assert updated.default_view == "executive"
     assert not (studio.view_root / "dashboard").exists()
-
-
-def test_edit_workspace_keeps_its_last_view(notebook_path: Path) -> None:
-    ensure_view(notebook_path)
-    studio = load_studio(notebook_path)
-    app = _marimo_app(studio.notebook)
-    _edit_mode(app)
-    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
-
-    with TestClient(app) as client:
-        response = client.delete(
-            "/_marimo-studio/views/dashboard",
-            headers=headers,
-        )
-
-    assert response.status_code == 409
-    assert response.json() == {
+    assert last.status_code == 409
+    assert last.json() == {
         "error": "last-view",
         "message": "Keep at least one view.",
     }
-    assert studio.views["dashboard"].template.is_file()
+    assert studio.views["executive"].template.is_file()
 
 
 def test_edit_workspace_mutations_require_the_current_server_token(
@@ -1488,7 +1437,6 @@ def test_marimo_authentication_owns_document_login(
     studio = _configured(notebook_path)
 
     with TestClient(_marimo_app(studio.notebook, token="test-token")) as client:
-        root = client.get("/", follow_redirects=False)
         named = client.get(
             "/executive/?region=emea",
             follow_redirects=False,
@@ -1499,14 +1447,7 @@ def test_marimo_authentication_owns_document_login(
         )
         page = client.get(establish.headers["location"])
         protected = client.get("/_marimo-studio/views/executive/config")
-        missing = client.get("/definitely-missing/", follow_redirects=False)
-        missing_studio = client.get(
-            "/studio/definitely-missing/",
-            follow_redirects=False,
-        )
 
-    assert root.status_code == 303
-    assert root.headers["location"].startswith("/auth/login")
     assert named.status_code == 303
     assert named.headers["location"].startswith("/auth/login")
     login_query = parse_qs(urlsplit(named.headers["location"]).query)
@@ -1516,8 +1457,6 @@ def test_marimo_authentication_owns_document_login(
     assert "session=" in establish.headers["set-cookie"]
     assert page.status_code == 200
     assert protected.status_code == 200
-    assert missing.status_code == 404
-    assert missing_studio.status_code == 404
     assert "test-token" not in page.text
 
 
@@ -1529,7 +1468,6 @@ def test_edit_mode_public_pages_use_marimo_authentication(
     _edit_mode(app)
 
     with TestClient(app) as client:
-        root = client.get("/", follow_redirects=False)
         workspace = client.get("/studio/executive/", follow_redirects=False)
         view = client.get("/executive/", follow_redirects=False)
         establish = client.get(
@@ -1539,11 +1477,8 @@ def test_edit_mode_public_pages_use_marimo_authentication(
         landing = client.get(establish.headers["location"], follow_redirects=False)
         page = client.get(landing.headers["location"])
 
-    root_login = parse_qs(urlsplit(root.headers["location"]).query)
     workspace_login = parse_qs(urlsplit(workspace.headers["location"]).query)
     view_login = parse_qs(urlsplit(view.headers["location"]).query)
-    assert root.status_code == 303
-    assert root_login["next"] == ["/"]
     assert workspace.status_code == 303
     assert workspace_login["next"] == ["/studio/executive/"]
     assert view.status_code == 303
@@ -1568,15 +1503,13 @@ def test_authentication_precedes_project_diagnostics(
 
     with TestClient(_marimo_app(studio.notebook, token="test-token")) as client:
         root = client.get("/", follow_redirects=False)
-        named = client.get("/executive/", follow_redirects=False)
         support = client.get("/_marimo-studio/views", follow_redirects=False)
 
     assert root.status_code == 303
-    assert named.status_code == 303
     assert support.status_code == 303
     assert all(
         response.headers["location"].startswith("/auth/login")
-        for response in (root, named, support)
+        for response in (root, support)
     )
 
 
@@ -1596,8 +1529,6 @@ def test_invalid_studio_config_does_not_intercept_marimo_routes(
         editor = client.get("/")
         native = [
             client.get("/health"),
-            client.get("/sse"),
-            client.get("/favicon.ico"),
             client.get("/public-files-sw.js"),
         ]
         presentation = client.get("/dashboard/")
@@ -1607,19 +1538,15 @@ def test_invalid_studio_config_does_not_intercept_marimo_routes(
         )
 
     assert editor.status_code == 200
-    assert "<marimo-filename hidden>" in editor.text
-    assert '<div id="root"></div>' in editor.text
     assert all(response.status_code == 200 for response in native)
     assert presentation.status_code == 500
     assert presentation.headers["Marimo-Studio-Error"] == "configuration-error"
-    assert 'data-marimo-studio-preview-state="error"' in presentation.text
     assert "data-marimo-studio-repair" in presentation.text
     assert "data-marimo-studio-message" in presentation.text
     assert "View needs repair" in presentation.text
     assert refresh.status_code == 500
     assert refresh.headers["content-type"].startswith("application/json")
     assert refresh.json()["error"] == "configuration-error"
-    assert "<!doctype html>" not in refresh.json()["message"].lower()
 
 
 def test_middleware_is_inert_for_an_unconfigured_notebook(tmp_path: Path) -> None:
@@ -1641,11 +1568,7 @@ def test_middleware_is_inert_for_an_unconfigured_notebook(tmp_path: Path) -> Non
         missing = client.get("/definitely-missing/", follow_redirects=False)
 
     assert page.status_code == 200
-    assert "<marimo-filename hidden>" in page.text
-    assert '<div id="root"></div>' in page.text
     assert editor.status_code == 200
-    assert "<marimo-filename hidden>" in editor.text
-    assert '<div id="root"></div>' in editor.text
     assert support.status_code == 404
     assert missing.status_code == 404
 

@@ -6,20 +6,20 @@ notebook execution, session ownership, native routes, and virtual files.
 
 ## Boundaries
 
-| Boundary       | Owner                      | Contract                                                           |
-| -------------- | -------------------------- | ------------------------------------------------------------------ |
-| Command line   | `marimo_studio._cli`       | Inspect notebooks and manage Studio configuration                  |
-| Workspace      | `marimo_studio._workspace` | Resolve configuration, bindings, views, and authored files         |
-| ASGI process   | Marimo                     | Lifecycle, authentication, native APIs, and sessions               |
-| Server adapter | `marimo_studio._server`    | Studio pages, custom views, support routes, and HTTP translation   |
-| Compatibility  | `marimo_studio._compat`    | Translate private Marimo APIs into Studio-owned types              |
-| Kernel session | Marimo                     | Reactive execution, caches, controls, and widget models            |
-| Browser build  | `apps/browser`             | Compose entrypoints and finalize packaged assets                   |
-| Runtime model  | `packages/runtime`         | Define presentation adapters and session lifecycle                 |
-| View document  | `packages/presentation`    | Render the custom view and mount the Marimo runtime                |
-| Studio         | `packages/studio`          | Coordinate panes, source editors, views, preview, and control sync |
-| Wire protocol  | `packages/protocol`        | Define Zod schemas for messages and server responses               |
-| Marimo adapter | `packages/marimo-frontend` | Contain unstable Marimo frontend imports and build integration     |
+| Boundary       | Owner                      | Contract                                                         |
+| -------------- | -------------------------- | ---------------------------------------------------------------- |
+| Command line   | `marimo_studio._cli`       | Inspect notebooks and manage Studio configuration                |
+| Workspace      | `marimo_studio._workspace` | Resolve configuration, bindings, views, and authored files       |
+| ASGI process   | Marimo                     | Lifecycle, authentication, native APIs, and sessions             |
+| Server adapter | `marimo_studio._server`    | Studio pages, custom views, support routes, and HTTP translation |
+| Compatibility  | `marimo_studio._compat`    | Translate private Marimo APIs into Studio-owned types            |
+| Kernel session | Marimo                     | Reactive execution, caches, controls, and widget models          |
+| Browser build  | `apps/browser`             | Compose entrypoints and emit packaged assets                     |
+| Runtime model  | `packages/runtime`         | Define presentation adapters and session lifecycle               |
+| View document  | `packages/presentation`    | Render the custom view and mount the Marimo runtime              |
+| Studio         | `packages/studio`          | Render the workspace and coordinate editors, views, and previews |
+| Wire protocol  | `packages/protocol`        | Define Zod schemas for messages and server responses             |
+| Marimo adapter | `packages/marimo-frontend` | Contain unstable Marimo frontend imports and build integration   |
 
 Dependencies follow two inward paths:
 
@@ -67,10 +67,11 @@ Run mode serves the default view at `/` and named views at `/<view>/`. Each
 browser receives an isolated run session.
 
 Edit mode sends the authenticated root to `/studio/<default-view>/`. The
-workspace embeds Marimo's native editor through its `file` selector. A custom
-view connects as a kiosk consumer after the editor session exists. Accepted
-control writes and anywidget model changes propagate between consumers in that
-session.
+server emits the document envelope and a validated JSON bootstrap record.
+`packages/studio` mounts one React root, then keeps the native editor and each
+prepared preview in stable frames as the visible layout changes. A custom view
+connects as a kiosk consumer after the editor session exists. Accepted control
+writes and anywidget model changes propagate between consumers in that session.
 
 A WebAssembly preview owns a separate Pyodide kernel. Studio synchronizes
 JSON-compatible native `mo.ui` values through two control endpoints. Runtime

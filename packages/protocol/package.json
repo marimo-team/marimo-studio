@@ -11,6 +11,7 @@
     "./runtime-config": "./src/runtime-config.ts",
     "./runtime-selection": "./src/runtime-selection.ts",
     "./source-events": "./src/source-events.ts",
+    "./studio-bootstrap": "./src/studio-bootstrap.ts",
     "./value-read": "./src/value-read.ts",
     "./views": "./src/views.ts"
   },

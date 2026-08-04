@@ -8,6 +8,7 @@ import {
 import { publicNotebookQuery } from "@marimo-studio/protocol/query";
 import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
 
+import { assertNever } from "../assertNever.ts";
 import { fetchRuntimeControls } from "./control-remote.ts";
 import {
   type ControlFrameConnector,
@@ -15,14 +16,9 @@ import {
   synchronizeControlEndpoints,
 } from "./control-sync.ts";
 import { previewLoadState, RetrySchedule } from "./state.ts";
+import { previewStartingMessage, type PreviewStatus } from "./status.ts";
 
 const CONTROL_SYNC_RETRY_DELAYS = [100, 250, 500, 1_000, 2_000, 5_000] as const;
-
-export interface PreviewStatus {
-  message: string;
-  state: "loading" | "ready" | "warning" | "error";
-  title: string;
-}
 
 export interface PreviewFrameState {
   url: string;
@@ -63,7 +59,7 @@ export class PreviewController {
     this.state = {
       url: this.viewUrl(initialView, runtime),
       status: {
-        message: runtime === "wasm" ? "Starting WebAssembly" : "Connecting to server",
+        message: previewStartingMessage(runtime),
         state: "loading",
         title: "",
       },
@@ -104,6 +100,7 @@ export class PreviewController {
     this.stopControlSync();
     this.querySyncController?.abort();
     this.editor.removeEventListener("load", this.editorLoaded);
+    this.editor.removeEventListener("load", this.startFromEditor);
     this.preview.removeEventListener("load", this.previewLoaded);
     globalThis.removeEventListener("message", this.message);
   }
@@ -112,16 +109,18 @@ export class PreviewController {
     globalThis.addEventListener("message", this.message);
     this.preview.addEventListener("load", this.previewLoaded);
     this.editor.addEventListener("load", this.editorLoaded);
-    const start = () => {
-      if (this.preview.src === "about:blank") {
-        this.reload();
-      }
-    };
-    this.editor.addEventListener("load", start, { once: true });
+    this.editor.addEventListener("load", this.startFromEditor, { once: true });
     if (this.editor.contentDocument?.readyState === "complete") {
-      start();
+      this.startFromEditor();
     }
   }
+
+  private readonly startFromEditor = (): void => {
+    this.editor.removeEventListener("load", this.startFromEditor);
+    if (this.preview.src === "about:blank") {
+      this.reload();
+    }
+  };
 
   private readonly message = (event: MessageEvent<unknown>) => {
     if (
@@ -157,15 +156,21 @@ export class PreviewController {
         this.cancelRetry();
         this.retrySchedule.reset();
         if (message.view === this.view) {
-          this.setStatus(this.runtime === "wasm" ? "Starting WebAssembly" : "Connecting to server");
+          this.setStatus(previewStartingMessage(this.runtime));
         } else {
           this.postSwitch();
         }
         return;
-      default:
+      case "marimo-studio:view-ready":
+      case "marimo-studio:view-sync-pending":
+      case "marimo-studio:view-diagnostics":
+      case "marimo-studio:view-error":
         if (message.view === this.view) {
           this.receiveView(message);
         }
+        return;
+      default:
+        assertNever(message);
     }
   }
 
@@ -194,6 +199,9 @@ export class PreviewController {
       case "marimo-studio:view-error":
         this.viewReady = false;
         this.setStatus("Needs repair", "error", message.hint);
+        return;
+      default:
+        assertNever(message);
     }
   }
 
@@ -265,7 +273,7 @@ export class PreviewController {
     this.readyRevision = undefined;
     this.receiverReady = false;
     this.viewReady = false;
-    this.setStatus(this.runtime === "wasm" ? "Starting WebAssembly" : "Connecting to server");
+    this.setStatus(previewStartingMessage(this.runtime));
     const next = this.viewUrl(this.view, this.runtime);
     this.setPopoutUrl(next);
     this.navigatePreview(next);
@@ -396,12 +404,22 @@ export class PreviewController {
         failure = new Error("Marimo control endpoints are still starting");
         return;
       }
-      this.controlSync = await synchronizeControlEndpoints({
+      const sync = await synchronizeControlEndpoints({
         editor,
         preview,
         editorControls: editorConfig.controls,
         previewControls: previewConfig.controls,
+        signal: controller.signal,
       });
+      if (
+        controller.signal.aborted ||
+        this.controlSyncRequest !== request ||
+        this.readyRevision !== revision
+      ) {
+        sync.dispose();
+        return;
+      }
+      this.controlSync = sync;
       this.controlSyncRevision = revision;
     } catch (error) {
       if (!controller.signal.aborted) {

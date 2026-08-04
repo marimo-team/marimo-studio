@@ -89,57 +89,43 @@ test("a clean external edit replaces the loaded source", async () => {
   assert.deepEqual(result.states.at(-1)?.phase, "external");
 });
 
-test("an older reconciliation cannot replace a newer result", async () => {
+test("the latest reconciliation wins across completion orders and stale failures", async () => {
   const remote = new DeferredReadRemote();
   const result = observed();
   const source = new SyncedSource("index.html", remote, result.observer, 1);
   source.open("dashboard", { content: "initial", revision: "r0" });
 
-  const older = source.reconcile();
-  const newer = source.reconcile();
+  const lateOlder = source.reconcile();
+  const earlyNewer = source.reconcile();
   remote.reads[1].resolve({ content: "newest", revision: "r2" });
-  await newer;
+  await earlyNewer;
   remote.reads[0].resolve({ content: "older", revision: "r1" });
-  await older;
+  await lateOlder;
 
   assert.deepEqual(result.documents.at(-1), "newest");
   assert.deepEqual(result.states.at(-1)?.phase, "external");
-});
 
-test("the newest reconciliation applies after an older read finishes", async () => {
-  const remote = new DeferredReadRemote();
-  const result = observed();
-  const source = new SyncedSource("index.html", remote, result.observer, 1);
-  source.open("dashboard", { content: "initial", revision: "r0" });
-
-  const older = source.reconcile();
-  const newer = source.reconcile();
-  remote.reads[0].resolve({ content: "older", revision: "r1" });
-  await older;
-
-  assert.deepEqual(result.documents.at(-1), "initial");
-
-  remote.reads[1].resolve({ content: "newest", revision: "r2" });
-  await newer;
+  const earlyOlder = source.reconcile();
+  const lateNewer = source.reconcile();
+  remote.reads[2].resolve({ content: "ignored", revision: "r3" });
+  await earlyOlder;
 
   assert.deepEqual(result.documents.at(-1), "newest");
+
+  remote.reads[3].resolve({ content: "current", revision: "r4" });
+  await lateNewer;
+
+  assert.deepEqual(result.documents.at(-1), "current");
   assert.deepEqual(result.states.at(-1)?.phase, "external");
-});
 
-test("a stale read failure cannot replace a newer result", async () => {
-  const remote = new DeferredReadRemote();
-  const result = observed();
-  const source = new SyncedSource("index.html", remote, result.observer, 1);
-  source.open("dashboard", { content: "initial", revision: "r0" });
+  const failingOlder = source.reconcile();
+  const successfulNewer = source.reconcile();
+  remote.reads[5].resolve({ content: "final", revision: "r6" });
+  await successfulNewer;
+  remote.reads[4].reject(new Error("stale request failed"));
+  await failingOlder;
 
-  const older = source.reconcile();
-  const newer = source.reconcile();
-  remote.reads[1].resolve({ content: "newest", revision: "r2" });
-  await newer;
-  remote.reads[0].reject(new Error("stale request failed"));
-  await older;
-
-  assert.deepEqual(result.documents.at(-1), "newest");
+  assert.deepEqual(result.documents.at(-1), "final");
   assert.deepEqual(result.states.at(-1)?.phase, "external");
 });
 
@@ -198,7 +184,29 @@ test("a failed view load never displays source from the previous view", async ()
   assert.deepEqual(result.states.at(-1)?.phase, "error");
 });
 
-test("concurrent local and disk edits require an explicit resolution", async () => {
+test("an edit made during the initial read is preserved as a conflict", async () => {
+  const remote = new DeferredReadRemote();
+  const result = observed();
+  const source = new SyncedSource("index.html", remote, result.observer, 60_000);
+
+  const loading = source.load("dashboard");
+  source.edit("local draft");
+  remote.reads[0].resolve({ content: "disk source", revision: "r1" });
+
+  assert.equal(await loading, false);
+  assert.equal(source.hasPendingChanges, true);
+  assert.deepEqual(result.states.at(-1), {
+    name: "index.html",
+    phase: "conflict",
+    conflict: {
+      local: "local draft",
+      remote: { content: "disk source", revision: "r1" },
+    },
+    message: undefined,
+  });
+});
+
+test("source conflicts accept explicit disk and local resolutions", async () => {
   const remote = new MemoryRemote();
   const result = observed();
   const source = new SyncedSource("index.html", remote, result.observer, 60_000);
@@ -215,25 +223,19 @@ test("concurrent local and disk edits require an explicit resolution", async () 
   });
   source.useDisk();
   assert.deepEqual(result.documents.at(-1), "agent edit");
-});
 
-test("keep mine writes against the latest disk revision", async () => {
-  const remote = new MemoryRemote();
-  const result = observed();
-  const source = new SyncedSource("app.css", remote, result.observer, 60_000);
-  await source.load("dashboard");
-  source.edit("body { color: red; }");
-  remote.source = { content: "body {}", revision: "r2" };
-  await source.externalChange("r2");
+  source.edit("second local edit");
+  remote.source = { content: "second agent edit", revision: "r3" };
+  await source.externalChange("r3");
 
   const saved = await source.keepLocal();
 
   assert.deepEqual(saved, true);
-  assert.deepEqual(remote.source.content, "body { color: red; }");
+  assert.deepEqual(remote.source.content, "second local edit");
   assert.deepEqual(result.states.at(-1)?.phase, "saved");
 });
 
-test("edits made during a save are written in revision order", async () => {
+test("active saves absorb filesystem events and flush later edits in revision order", async () => {
   const remote = new DeferredRemote();
   const result = observed();
   const source = new SyncedSource("index.html", remote, result.observer, 60_000);
@@ -243,9 +245,11 @@ test("edits made during a save are written in revision order", async () => {
   const autosave = source.save();
   source.edit("latest edit");
   const flush = source.save();
+  remote.source = { content: "first edit", revision: "r2" };
 
   assert.deepEqual(remote.writes.length, 1);
   assert.deepEqual(remote.writes[0].content, "first edit");
+  await source.externalChange("r2");
   remote.writes[0].resolve("r2");
   await Promise.resolve();
   assert.deepEqual(remote.writes.length, 2);
@@ -290,7 +294,7 @@ test("dirty text without a loaded revision cannot be discarded", async () => {
   assert.deepEqual(result.states.at(-1)?.phase, "error");
 });
 
-test("an external deletion clears clean source and reports repair", async () => {
+test("an external deletion survives a cancelled staged load", async () => {
   const remote = new MemoryRemote();
   const result = observed();
   const source = new SyncedSource("app.css", remote, result.observer, 60_000);
@@ -304,14 +308,6 @@ test("an external deletion clears clean source and reports repair", async () => 
     result.states.at(-1)?.message,
     "app.css was deleted on disk. Restore it before saving in Studio.",
   );
-});
-
-test("cancelling a staged load preserves a missing-source error", async () => {
-  const remote = new MemoryRemote();
-  const result = observed();
-  const source = new SyncedSource("app.css", remote, result.observer, 60_000);
-  await source.load("dashboard");
-  await source.externalChange(null);
 
   source.beginLoad();
   source.cancelLoad();
@@ -321,26 +317,4 @@ test("cancelling a staged load preserves a missing-source error", async () => {
     result.states.at(-1)?.message,
     "app.css was deleted on disk. Restore it before saving in Studio.",
   );
-});
-
-test("the filesystem event for an active save is not a conflict", async () => {
-  const remote = new DeferredRemote();
-  const result = observed();
-  const source = new SyncedSource("index.html", remote, result.observer, 60_000);
-  await source.load("dashboard");
-  source.edit("saved content");
-  const saving = source.save();
-  source.edit("newer content");
-  remote.source = { content: "saved content", revision: "r2" };
-
-  await source.externalChange("r2");
-  remote.writes[0].resolve("r2");
-  await Promise.resolve();
-  assert.deepEqual(remote.writes[1].content, "newer content");
-  assert.deepEqual(remote.writes[1].revision, "r2");
-  remote.writes[1].resolve("r3");
-
-  assert.deepEqual(await saving, true);
-  assert.deepEqual(source.hasConflict, false);
-  assert.deepEqual(source.hasPendingChanges, false);
 });

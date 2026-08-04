@@ -39,6 +39,24 @@ class MemoryEndpoint implements ControlEndpoint {
   }
 }
 
+class DeferredApplyEndpoint extends MemoryEndpoint {
+  private resolveApply: (() => void) | undefined;
+
+  override apply(updates: readonly ControlUpdate[]): Promise<void> {
+    this.applied.push(updates);
+    return new Promise((resolve) => {
+      this.resolveApply = () => {
+        updates.forEach((update) => this.values.set(update.objectId, update.value));
+        resolve();
+      };
+    });
+  }
+
+  resolve(): void {
+    this.resolveApply?.();
+  }
+}
+
 describe("control state synchronization", () => {
   it("translates stable cell identities between independent runtimes", async () => {
     const editor = new MemoryEndpoint({ "live-control-0": ["Growth"] });
@@ -79,6 +97,30 @@ describe("control state synchronization", () => {
 
     expect(preview.applied).toEqual([[{ objectId: "wasm-known-0", value: 2 }]]);
     editor.emit({ objectId: "live-known-0", value: undefined });
+    expect(preview.applied).toHaveLength(1);
+    sync.dispose();
+  });
+
+  it("disconnects endpoints while the initial synchronization is pending", async () => {
+    const editor = new MemoryEndpoint({ "live-control-0": "Initial" });
+    const preview = new DeferredApplyEndpoint({ "wasm-control-0": "Preview" });
+    const controller = new AbortController();
+    const synchronizing = synchronizeControlEndpoints({
+      editor,
+      preview,
+      editorControls: { cells: { controls: "live-control" } },
+      previewControls: { cells: { controls: "wasm-control" } },
+      signal: controller.signal,
+    });
+    await Promise.resolve();
+
+    controller.abort();
+    editor.emit({ objectId: "live-control-0", value: "After abort" });
+    expect(preview.applied).toHaveLength(1);
+
+    preview.resolve();
+    const sync = await synchronizing;
+    editor.emit({ objectId: "live-control-0", value: "Still disconnected" });
     expect(preview.applied).toHaveLength(1);
     sync.dispose();
   });

@@ -10,11 +10,12 @@
     "./controls": "./src/upstream/controls.ts",
     "./runtime": "./src/upstream/runtime.ts",
     "./style": "./src/upstream/style.ts",
+    "./theme-frame": "./src/theme-frame.ts",
     "./vite": "./src/vite.ts"
   },
   "scripts": {
     "prepare:upstream": "node scripts/prepare.mjs",
-    "test": "vp test tests/source.test.mjs tests/control-frame.test.ts tests/runtime-logger.test.ts"
+    "test": "vp test tests/source.test.mjs tests/control-frame.test.ts tests/runtime-logger.test.ts tests/theme-frame.test.ts"
   },
   "dependencies": {
     "@codemirror/state": "catalog:",

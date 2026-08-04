@@ -96,7 +96,7 @@
   top: calc(100% + 0.25rem);
 }
 
-.studio-pane-popover [data-pane-actions] {
+.studio-pane-action-section {
   display: grid;
   gap: 0.2rem;
 }

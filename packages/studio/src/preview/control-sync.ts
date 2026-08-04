@@ -56,11 +56,13 @@ export const synchronizeControlEndpoints = async ({
   preview,
   editorControls,
   previewControls,
+  signal,
 }: {
   editor: ControlEndpoint;
   preview: ControlEndpoint;
   editorControls: RuntimeControls;
   previewControls: RuntimeControls;
+  signal?: AbortSignal;
 }): Promise<ControlSync> => {
   const editorCells = cellsByRuntimeId(editorControls);
   const previewCells = cellsByRuntimeId(previewControls);
@@ -83,6 +85,24 @@ export const synchronizeControlEndpoints = async ({
 
   const stopEditor = editor.subscribe(editorToPreview);
   const stopPreview = preview.subscribe(previewToEditor);
+  let disposed = false;
+  const dispose = () => {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
+    signal?.removeEventListener("abort", dispose);
+    stopEditor();
+    stopPreview();
+    editor.dispose();
+    preview.dispose();
+  };
+  const sync = { dispose };
+  if (signal?.aborted) {
+    dispose();
+    return sync;
+  }
+  signal?.addEventListener("abort", dispose, { once: true });
   const initial = editor
     .snapshot()
     .map((update) => translate(update, editorCells, previewControls.cells))
@@ -90,18 +110,8 @@ export const synchronizeControlEndpoints = async ({
   try {
     await preview.apply(initial);
   } catch (error) {
-    stopEditor();
-    stopPreview();
-    editor.dispose();
-    preview.dispose();
+    dispose();
     throw error;
   }
-  return {
-    dispose() {
-      stopEditor();
-      stopPreview();
-      editor.dispose();
-      preview.dispose();
-    },
-  };
+  return sync;
 };
