@@ -337,7 +337,12 @@ def _overflow_preview_controls(
                 div(class_="studio-overflow-runtime-status")[
                     node_list(
                         span(class_="studio-runtime-dot", aria_hidden="true"),
-                        span(data_studio_status=True)["Connecting"],
+                        span(
+                            {
+                                "data-studio-status": True,
+                                "data-state": "loading",
+                            }
+                        )["Connecting"],
                     )
                 ],
                 *[
@@ -470,6 +475,7 @@ def _runtime_menu(
                             {
                                 "class": "studio-visually-hidden",
                                 "data-studio-status": True,
+                                "data-state": "loading",
                             }
                         )["Connecting"],
                         menu_chevron(),
@@ -578,6 +584,7 @@ def toolbar(
                         "class": "studio-visually-hidden",
                         "data-studio-status": True,
                         "data-studio-live-status": True,
+                        "data-state": "loading",
                         "role": "status",
                     }
                 )["Connecting"],

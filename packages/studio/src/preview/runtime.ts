@@ -1,18 +1,10 @@
-export const previewRuntimeStorageKey = (workspaceId: string): string =>
-  `marimo-studio:preview-runtime:v1:${workspaceId}`;
-
 export const initialPreviewRuntime = ({
   available,
   configured,
-  stored,
 }: {
   available: readonly string[];
   configured: string;
-  stored: string | null;
 }): string => {
-  if (stored && available.includes(stored)) {
-    return stored;
-  }
   if (available.includes(configured)) {
     return configured;
   }
@@ -32,7 +24,6 @@ export class RuntimeControl {
   constructor(
     root: ParentNode,
     initial: string,
-    private readonly storageKey: string,
     private readonly select: (runtime: string) => void,
   ) {
     this.current = initial;
@@ -60,7 +51,6 @@ export class RuntimeControl {
       return;
     }
     this.current = runtime;
-    globalThis.localStorage.setItem(this.storageKey, runtime);
     this.render();
     this.select(runtime);
   };

@@ -39,6 +39,7 @@ def studio_document(
         {
             "class": "studio",
             "data-studio": True,
+            "data-mode": "split",
             "data-events-url": f"{support_url}/dev/events",
             "data-views-url": f"{support_url}/views",
             "data-view-prefix": root_url,

@@ -9,11 +9,7 @@ import { LayoutController } from "./layout/controller.ts";
 import { surfaceSchema } from "./layout/schema.ts";
 import { PreviewDeck } from "./preview/deck.ts";
 import { syncEditorQuery } from "./preview/query-remote.ts";
-import {
-  initialPreviewRuntime,
-  previewRuntimeStorageKey,
-  RuntimeControl,
-} from "./preview/runtime.ts";
+import { initialPreviewRuntime, RuntimeControl } from "./preview/runtime.ts";
 import { SourceController } from "./source/controller.ts";
 import { ViewController } from "./views/controller.ts";
 import { createViewRemote } from "./views/remote.ts";
@@ -95,11 +91,9 @@ export const startStudio = async ({ connectControlFrame }: StudioOptions = {}): 
   );
   const storagePrefix = `marimo-studio:workspace-layout:v1:${workspaceId}`;
   let notebookQuery = publicNotebookQuery(globalThis.location.search);
-  const runtimeStorageKey = previewRuntimeStorageKey(workspaceId);
   const initialRuntime = initialPreviewRuntime({
     available: runtimes,
     configured: defaultRuntime,
-    stored: globalThis.localStorage.getItem(runtimeStorageKey),
   });
   const viewUrl = (view: string, runtime: string) =>
     selectRuntimeInUrl(
@@ -145,14 +139,9 @@ export const startStudio = async ({ connectControlFrame }: StudioOptions = {}): 
     },
   );
 
-  const runtimeControl = new RuntimeControl(
-    studio,
-    initialRuntime,
-    runtimeStorageKey,
-    (runtime) => {
-      controllers.preview?.switchRuntime(runtime);
-    },
-  );
+  const runtimeControl = new RuntimeControl(studio, initialRuntime, (runtime) => {
+    controllers.preview?.switchRuntime(runtime);
+  });
 
   controllers.preview = new PreviewDeck({
     initialView,

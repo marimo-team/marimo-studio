@@ -233,6 +233,13 @@
   width: 0.45rem;
 }
 
+.studio-runtime-menu:has([data-studio-status][data-state="loading"]) .studio-runtime-dot,
+.studio-overflow-runtime-status:has([data-studio-status][data-state="loading"])
+  .studio-runtime-dot {
+  animation: studio-runtime-pulse 1.4s ease-in-out infinite;
+  background: var(--studio-connecting);
+}
+
 .studio-runtime-menu:has([data-studio-status][data-state="ready"]) .studio-runtime-dot,
 .studio-overflow-runtime-status:has([data-studio-status][data-state="ready"]) .studio-runtime-dot {
   background: var(--studio-success);
@@ -247,6 +254,28 @@
 .studio-runtime-menu:has([data-studio-status][data-state="error"]) .studio-runtime-dot,
 .studio-overflow-runtime-status:has([data-studio-status][data-state="error"]) .studio-runtime-dot {
   background: var(--studio-error);
+}
+
+@keyframes studio-runtime-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--studio-connecting) 42%, transparent);
+    opacity: 0.72;
+  }
+
+  50% {
+    box-shadow: 0 0 0 0.22rem transparent;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-runtime-menu:has([data-studio-status][data-state="loading"]) .studio-runtime-dot,
+  .studio-overflow-runtime-status:has([data-studio-status][data-state="loading"])
+    .studio-runtime-dot {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 .studio-runtime-popover {

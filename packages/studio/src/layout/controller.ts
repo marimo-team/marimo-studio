@@ -63,7 +63,7 @@ export class LayoutController {
   ) {
     this.view = initialView;
     this.storage = new LayoutStorage(storagePrefix);
-    this.restore(initialView);
+    this.restore(initialView, { mode: "split", compact: "notebook" });
     this.dividers = new DividerLayer(
       workspace,
       dividerLayer,
@@ -326,7 +326,10 @@ export class LayoutController {
   private renderModes(): void {
     this.root.querySelectorAll<HTMLButtonElement>("[data-studio-mode]").forEach((button) => {
       const mode = studioModeSchema.safeParse(button.dataset.studioMode);
-      const selected = mode.success && mode.data === this.mode;
+      const selected =
+        mode.success &&
+        (mode.data === this.mode ||
+          (mode.data === "split" && (this.mode === "code" || this.mode === "workspace")));
       button.setAttribute("aria-pressed", String(selected));
     });
     this.root.dataset.mode = this.mode;
