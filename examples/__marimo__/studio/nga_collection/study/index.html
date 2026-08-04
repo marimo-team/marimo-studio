@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Index visual study</title>
+    <link rel="stylesheet" href="./_marimo-studio/views/study/static/app.css" />
+  </head>
+  <body>
+    <main id="app-shell">
+      <nav class="view-nav" aria-label="Collection workflow">
+        <a class="brand" href="./corpus/">
+          <span class="brand-mark">IAD</span>
+          <span>Collection research file</span>
+        </a>
+        <div class="view-nav__links">
+          <a href="./corpus/">Corpus</a>
+          <a href="./study/" aria-current="page">Study</a>
+          <a href="./packet/">Packet</a>
+        </div>
+      </nav>
+
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">Study 02 · Curatorial review</p>
+          <h1>Read the corpus through objects.</h1>
+        </div>
+        <div class="selection-tally">
+          <strong mo-value="study_summary.selection_progress"></strong>
+          <span mo-value="study_summary.selection_status"></span>
+        </div>
+      </header>
+
+      <section class="filter-ledger" aria-label="Inherited corpus filters">
+        <div>
+          <span>Recorded start year</span>
+          <strong mo-value="study_summary.date_range"></strong>
+        </div>
+        <div>
+          <span>Medium</span>
+          <strong mo-value="study_summary.medium"></strong>
+        </div>
+        <div>
+          <span>Creator</span>
+          <strong mo-value="study_summary.creator"></strong>
+        </div>
+        <div>
+          <span>Matching works</span>
+          <strong mo-value="study_summary.matching_count"></strong>
+        </div>
+      </section>
+
+      <section class="study-intro">
+        <div>
+          <p class="eyebrow">Visual tray</p>
+          <h2>Select six works for handoff</h2>
+        </div>
+        <div class="study-intro__copy">
+          <marimo-cell name="selection_status"></marimo-cell>
+          <p>
+            Browse all <span mo-value="study_summary.candidate_count"></span> matches with
+            open-access images in <span mo-value="study_summary.page_size"></span>-work pages. The
+            current tray covers <span mo-value="study_summary.page_window"></span>, ordered by
+            <span mo-value="study_summary.order_label"></span>.
+          </p>
+        </div>
+      </section>
+
+      <section class="study-controls" aria-label="Study tray controls">
+        <marimo-cell name="study_controls"></marimo-cell>
+        <p>
+          Page <strong mo-value="study_summary.page_number"></strong> of
+          <strong mo-value="study_summary.page_count"></strong>
+        </p>
+      </section>
+
+      <section class="gallery-panel" aria-label="Works in the current study set">
+        <marimo-cell name="study_gallery"></marimo-cell>
+      </section>
+
+      <footer class="study-footer">
+        <p>Selections retain their order as you browse pages and review the research packet.</p>
+        <a href="./packet/">
+          Review packet
+          <span aria-hidden="true">→</span>
+        </a>
+      </footer>
+    </main>
+  </body>
+</html>

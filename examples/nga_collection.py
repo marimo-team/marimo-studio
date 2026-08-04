@@ -1,0 +1,2063 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "marimo[recommended]>=0.23.16",
+#   "marimo-studio",
+#   "polars",
+#   "pyobservablejs",
+# ]
+#
+# [tool.marimo-studio]
+# default = "corpus"
+# preserve_session = false
+#
+# [tool.marimo-studio.cells]
+# corpus_controls = {ref = "cell:v1:1e7b1299b526e7923a360edddeec9f8d7420675ca1ba53bec9cdf29ee7e276e2:1e7b1299b526e7923a360edddeec9f8d7420675ca1ba53bec9cdf29ee7e276e2:0"}
+# corpus_index = {ref = "cell:v1:0ba2e93bffb9d0b12bd1495e431cbb520e2c3571c9b0ff0886cf114725efaa33:0ba2e93bffb9d0b12bd1495e431cbb520e2c3571c9b0ff0886cf114725efaa33:0"}
+# corpus_filter_chart = {ref = "cell:v1:3184d4f49953a63ff2568243345ad99eadd1008d84dd1d99253732b68f7e506a:3184d4f49953a63ff2568243345ad99eadd1008d84dd1d99253732b68f7e506a:0"}
+# study_controls = {ref = "cell:v1:f93846066b98b6d7f2af6e57fbc3d076287314ada5315296ba64dc0631764b89:f93846066b98b6d7f2af6e57fbc3d076287314ada5315296ba64dc0631764b89:0"}
+# study_gallery = {ref = "cell:v1:cd315dfd193bfe6a0985b4fb9bec8fbd2d2d4fe0994cbeacf3dfac31308c30d9:cd315dfd193bfe6a0985b4fb9bec8fbd2d2d4fe0994cbeacf3dfac31308c30d9:0"}
+# selection_status = {ref = "cell:v1:286cbc5de419e150bea06e30762e268d8aabe9a4bea9eda504309b5a6782ee27:de05ec8ddbf4fe275810c002d7dcfb9125fd1b9646746460ab2885f5499e7d31:0"}
+# packet_preview = {ref = "cell:v1:a628d3557c21e94f77eab871a78c9d99f70c38a9616e46f2a7619e644dc1f616:a628d3557c21e94f77eab871a78c9d99f70c38a9616e46f2a7619e644dc1f616:0"}
+# packet_table = {ref = "cell:v1:05ee2d4953707aa1f7f466228fc580dc02752e5e0f386fbcf9f028144f242d6e:05ee2d4953707aa1f7f466228fc580dc02752e5e0f386fbcf9f028144f242d6e:0"}
+# packet_download = {ref = "cell:v1:2ae0547579a92d71a40a002b59d6f923ee22b81554c7ace012bbdd1fd0feb3c1:2ae0547579a92d71a40a002b59d6f923ee22b81554c7ace012bbdd1fd0feb3c1:0"}
+# ///
+
+import marimo
+
+__generated_with = "0.23.16"
+app = marimo.App(width="full")
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Index of American Design: corpus review and research packet
+
+    This notebook prepares a focused research set from the National Gallery of
+    Art's open collection data. It establishes an object-grain model, locates
+    the Index of American Design in the collection timeline, supports visual
+    review, and packages six works with enough provenance for handoff.
+    """)
+
+
+@app.cell
+def _():
+    import marimo as mo
+
+    return (mo,)
+
+
+@app.cell
+def _():
+    from pathlib import Path as _Path
+
+    _revision = "e19fc9a6bf8167630be458f745dfff915fbe06ba"
+    _base_url = (
+        "https://raw.githubusercontent.com/NationalGalleryOfArt/opendata/"
+        f"{_revision}/data"
+    )
+    research_config = {
+        "dataset_revision": _revision,
+        "dataset_base_url": _base_url,
+        "cache_directory": (_Path.home() / ".cache" / "nga-collection-research"),
+        "creator_role_type": "artist",
+        "unknown_creator": "Unattributed",
+        "corpus_classification": "Index of American Design",
+        "gallery_page_size": 72,
+        "packet_limit": 6,
+    }
+    return (research_config,)
+
+
+@app.cell(hide_code=True)
+def _(mo, research_config):
+    mo.md(f"""
+    ## Source tables and grain
+
+    The [NGA Open Data Program](https://www.nga.gov/open-access-images/open-data.html)
+    publishes collection records under CC0. This run pins source revision
+    `{research_config["dataset_revision"][:12]}` so a saved packet can be traced
+    to the exact input.
+
+    Four tables carry different grains:
+
+    - `objects.csv` has one row per collection object.
+    - `objects_constituents.csv` has one row per object and constituent role.
+    - `constituents.csv` describes people and organizations.
+    - `published_images.csv` has one row per published image.
+
+    Keeping those grains explicit prevents objects with several creators or
+    images from being counted several times.
+    """)
+
+
+@app.cell
+def _(mo, research_config):
+    import polars as _pl
+
+    @mo.persistent_cache(
+        save_path=str(research_config["cache_directory"]),
+        pin_modules=True,
+    )
+    def _read_source_tables():
+        _dataset_url = lambda _filename: (
+            f"{research_config['dataset_base_url']}/{_filename}"
+        )
+        _objects = _pl.read_csv(
+            _dataset_url("objects.csv"),
+            infer_schema_length=10_000,
+        ).select(
+            "objectid",
+            "accessionnum",
+            "title",
+            "displaydate",
+            "beginyear",
+            "endyear",
+            "medium",
+            "attribution",
+            "creditline",
+            "classification",
+            "subclassification",
+            "visualbrowserclassification",
+        )
+        _constituents = _pl.read_csv(
+            _dataset_url("constituents.csv"),
+            infer_schema_length=10_000,
+        ).select(
+            "constituentid",
+            "forwarddisplayname",
+            "displaydate",
+            "visualbrowsernationality",
+            "constituenttype",
+        )
+        _relations = _pl.read_csv(
+            _dataset_url("objects_constituents.csv"),
+            quote_char='"',
+            infer_schema_length=None,
+        ).select(
+            "objectid",
+            "constituentid",
+            "displayorder",
+            "roletype",
+            "role",
+            "prefix",
+            "suffix",
+        )
+        _images = _pl.read_csv(
+            _dataset_url("published_images.csv"),
+            infer_schema_length=10_000,
+        ).select(
+            _pl.col("depictstmsobjectid").alias("objectid"),
+            "uuid",
+            "iiifurl",
+            "iiifthumburl",
+            "viewtype",
+            "sequence",
+            "width",
+            "height",
+            "openaccess",
+            "assistivetext",
+        )
+        return {
+            "objects": _objects,
+            "constituents": _constituents,
+            "relations": _relations,
+            "images": _images,
+        }
+
+    source_tables = _read_source_tables()
+    return (source_tables,)
+
+
+@app.cell
+def _(
+    mo,
+    source_tables,
+):
+    source_rows = [
+        {
+            "Table": "objects",
+            "Grain": "collection object",
+            "Rows": f"{source_tables['objects'].height:,}",
+        },
+        {
+            "Table": "objects_constituents",
+            "Grain": "object and constituent role",
+            "Rows": f"{source_tables['relations'].height:,}",
+        },
+        {
+            "Table": "constituents",
+            "Grain": "person or organization",
+            "Rows": f"{source_tables['constituents'].height:,}",
+        },
+        {
+            "Table": "published_images",
+            "Grain": "published image",
+            "Rows": f"{source_tables['images'].height:,}",
+        },
+    ]
+    mo.ui.table(
+        source_rows,
+        selection=None,
+        pagination=False,
+        show_column_summaries=False,
+        show_data_types=False,
+        show_download=False,
+        show_search=False,
+    )
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Attribution policy
+
+    The relation table distinguishes a broad `roletype` from a specific `role`.
+    A painter, engraver, designer, or related artist can all belong to the
+    `artist` role type. The
+    [NGA data dictionary](https://github.com/NationalGalleryOfArt/opendata/blob/e19fc9a6bf8167630be458f745dfff915fbe06ba/documentation/Data%20Dictionary.txt)
+    defines `displayorder` as source sequence. The model therefore names its
+    first relation `first_artist_name` and keeps the object's `attribution` as
+    the default display label.
+
+    Use the policy control below to compare the museum's display-ready
+    attribution with the first related artist in source display order. Every
+    gallery card and packet record recomputes while retaining both source
+    representations.
+    """)
+
+
+@app.cell
+def _(mo):
+    attribution_policy_control = mo.ui.dropdown(
+        options={
+            "Museum display attribution": "source",
+            "First artist relation": "first_relation",
+        },
+        value="Museum display attribution",
+        label="Display attribution policy",
+        full_width=True,
+    )
+    attribution_policy_control
+    return (attribution_policy_control,)
+
+
+@app.cell
+def _(attribution_policy_control):
+    attribution_policy = attribution_policy_control.value
+    return (attribution_policy,)
+
+
+@app.cell
+def _(
+    research_config,
+    source_tables,
+):
+    import polars as _pl
+
+    creator_relation_rows = (
+        source_tables["relations"]
+        .filter(_pl.col("roletype") == research_config["creator_role_type"])
+        .join(source_tables["constituents"], on="constituentid", how="left")
+        .with_columns(
+            _pl.col("forwarddisplayname")
+            .fill_null("Unidentified constituent")
+            .alias("creator_name"),
+            _pl.col("displayorder").fill_null(1_000_000),
+        )
+        .with_columns(
+            _pl.concat_str(
+                [
+                    _pl.col("prefix").fill_null("").str.strip_chars(),
+                    _pl.col("creator_name"),
+                    _pl.col("suffix").fill_null("").str.strip_chars(),
+                ],
+                separator=" ",
+            )
+            .str.replace_all(r"\s+", " ")
+            .str.strip_chars()
+            .alias("qualified_creator_name")
+        )
+        .with_columns(
+            _pl.concat_str(
+                [
+                    _pl.col("qualified_creator_name"),
+                    _pl.col("role").fill_null("artist relation"),
+                ],
+                separator=" · ",
+            ).alias("creator_relation_label")
+        )
+        .sort("objectid", "displayorder", "constituentid")
+    )
+
+    creators_by_object = (
+        creator_relation_rows.group_by("objectid", maintain_order=True)
+        .agg(
+            _pl.col("creator_name").first().alias("first_artist_name"),
+            _pl.col("creator_name").unique(maintain_order=True).alias("creator_names"),
+            _pl.col("creator_relation_label")
+            .unique(maintain_order=True)
+            .alias("creator_relation_labels"),
+            _pl.len().alias("creator_relation_count"),
+        )
+        .with_columns(
+            _pl.col("creator_names").list.join("; ").alias("creators"),
+            _pl.col("creator_relation_labels")
+            .list.join("; ")
+            .alias("creator_relations"),
+        )
+        .drop("creator_names", "creator_relation_labels")
+    )
+    return (creators_by_object,)
+
+
+@app.cell
+def _(source_tables):
+    import polars as _pl
+
+    ranked_images = (
+        source_tables["images"]
+        .with_columns(
+            _pl.when(_pl.col("openaccess").fill_null(0) == 1)
+            .then(0)
+            .otherwise(1)
+            .alias("access_rank"),
+            _pl.when(_pl.col("viewtype").str.to_lowercase() == "primary")
+            .then(0)
+            .otherwise(1)
+            .alias("view_rank"),
+            _pl.col("sequence").fill_null(1_000_000).alias("image_sequence"),
+        )
+        .sort("objectid", "access_rank", "view_rank", "image_sequence", "uuid")
+    )
+
+    images_by_object = ranked_images.group_by("objectid", maintain_order=True).agg(
+        _pl.len().alias("published_image_count"),
+        (_pl.col("openaccess").fill_null(0) == 1).sum().alias("open_image_count"),
+        _pl.col("uuid").first().alias("selected_image_uuid"),
+        _pl.col("iiifurl").first().alias("selected_image_url"),
+        _pl.col("iiifthumburl").first().alias("selected_thumbnail_url"),
+        _pl.col("assistivetext").first().alias("selected_image_alt"),
+        _pl.col("width").first().alias("selected_image_width"),
+        _pl.col("height").first().alias("selected_image_height"),
+        _pl.col("viewtype").first().alias("selected_image_view_type"),
+        (_pl.col("openaccess").first().fill_null(0) == 1).alias(
+            "selected_image_open_access"
+        ),
+    )
+    return (images_by_object,)
+
+
+@app.cell
+def _(creators_by_object, images_by_object):
+    object_relations = {
+        "creators": creators_by_object,
+        "images": images_by_object,
+    }
+    return (object_relations,)
+
+
+@app.cell
+def _(research_config, source_tables):
+    object_source = {
+        "objects": source_tables["objects"],
+        "unknown_creator": research_config["unknown_creator"],
+    }
+    return (object_source,)
+
+
+@app.cell
+def _(object_relations, object_source):
+    object_model_inputs = object_source | {"relations": object_relations}
+    return (object_model_inputs,)
+
+
+@app.cell
+def _(
+    attribution_policy,
+    object_model_inputs,
+):
+    import polars as _pl
+
+    if attribution_policy not in {"source", "first_relation"}:
+        raise ValueError("Attribution policy must be 'source' or 'first_relation'")
+
+    objects_core = (
+        object_model_inputs["objects"]
+        .join(object_model_inputs["relations"]["creators"], on="objectid", how="left")
+        .join(object_model_inputs["relations"]["images"], on="objectid", how="left")
+        .with_columns(
+            _pl.col("title").fill_null("Untitled"),
+            _pl.col("displaydate").fill_null("Date unknown"),
+            _pl.col("medium").fill_null("Medium not recorded"),
+            _pl.col("attribution").fill_null(object_model_inputs["unknown_creator"]),
+            _pl.col("creditline").fill_null("Credit line not recorded"),
+            _pl.col("classification").fill_null("Unclassified"),
+            _pl.col("subclassification").fill_null("Unclassified"),
+            _pl.col("visualbrowserclassification").fill_null("Other"),
+            _pl.col("first_artist_name").fill_null(
+                object_model_inputs["unknown_creator"]
+            ),
+            _pl.col("creators").fill_null(object_model_inputs["unknown_creator"]),
+            _pl.col("creator_relations").fill_null("Artist relation not recorded"),
+            _pl.col("creator_relation_count").fill_null(0),
+            _pl.col("published_image_count").fill_null(0),
+            _pl.col("open_image_count").fill_null(0),
+            _pl.col("selected_image_alt").fill_null(_pl.col("title")),
+        )
+        .with_columns(
+            (
+                _pl.col("attribution")
+                if attribution_policy == "source"
+                else _pl.col("first_artist_name")
+            ).alias("display_creator"),
+            (_pl.col("published_image_count") > 0).alias("has_published_image"),
+            (_pl.col("open_image_count") > 0).alias("has_open_image"),
+            _pl.col("beginyear").alias("start_year"),
+            (
+                _pl.lit("https://www.nga.gov/collection/art-object-page.")
+                + _pl.col("objectid").cast(_pl.String)
+                + _pl.lit(".html")
+            ).alias("object_url"),
+        )
+        .sort("start_year", "display_creator", "title", nulls_last=True)
+    )
+    return (objects_core,)
+
+
+@app.cell(hide_code=True)
+def _(mo, objects_core):
+    multi_creator_count = objects_core.filter(
+        objects_core["creator_relation_count"] > 1
+    ).height
+    multi_image_count = objects_core.filter(
+        objects_core["published_image_count"] > 1
+    ).height
+    mo.md(f"""
+    ### The shared object model
+
+    `objects_core` contains **{objects_core.height:,} rows for
+    {objects_core["objectid"].n_unique():,} objects**. The join preserves
+    **{multi_creator_count:,} objects with several creator relations** and
+    **{multi_image_count:,} objects with several published images** without
+    multiplying object counts.
+
+    The selected publication image is the first open-access primary view by
+    sequence, with another open-access view used when no primary view is
+    available. The packet records that image's access status and view type.
+    Object rights and reproduction details remain linked to the NGA record.
+    """)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Historical discovery
+
+    With one row per object, collection-level counts now answer questions about
+    works rather than image records. The first view compares the collection's
+    visual browser classifications.
+    """)
+
+
+@app.cell
+def _(objects_core):
+    import polars as _pl
+
+    collection_classifications = (
+        objects_core.group_by("visualbrowserclassification")
+        .agg(
+            _pl.len().alias("object_count"),
+            _pl.col("has_open_image").sum().alias("open_image_count"),
+        )
+        .sort("object_count", descending=True)
+    )
+    return (collection_classifications,)
+
+
+@app.cell
+def _():
+    import observablejs as _obs
+
+    _notebook = _obs.Notebook(
+        _obs.ojs(
+            """
+            Plot.plot({
+              width,
+              height: 420,
+              marginLeft: 120,
+              x: {grid: true, label: "Collection objects"},
+              y: {label: null},
+              marks: [
+                Plot.barX(collectionClassifications.slice(0, 18), {
+                  x: "object_count",
+                  y: "visualbrowserclassification",
+                  sort: {y: "-x"},
+                  fill: "#8b3a2b",
+                  tip: {format: {x: ",d"}}
+                }),
+                Plot.ruleX([0])
+              ]
+            })
+            """,
+            key="chart",
+        ),
+        variables={"collectionClassifications": []},
+    )
+    collection_classification_chart_model = {
+        "notebook": _notebook,
+        "view": _notebook.view("chart", capture_state=False),
+    }
+    return (collection_classification_chart_model,)
+
+
+@app.cell
+def _(
+    collection_classification_chart_model,
+    collection_classifications,
+):
+    collection_classification_chart_model["notebook"].update_variables(
+        {"collectionClassifications": collection_classifications}
+    )
+
+
+@app.cell
+def _(collection_classification_chart_model):
+    collection_classification_chart_model["view"]
+
+
+@app.cell
+def _(objects_core):
+    import polars as _pl
+
+    dated_collection = objects_core.filter(
+        _pl.col("start_year").is_between(1400, 2020)
+    ).select("objectid", "start_year", "visualbrowserclassification")
+    return (dated_collection,)
+
+
+@app.cell
+def _():
+    import observablejs as _obs
+
+    _notebook = _obs.Notebook(
+        _obs.ojs(
+            """
+            Plot.plot({
+              width,
+              height: 420,
+              marginLeft: 58,
+              x: {label: "Object start year"},
+              y: {grid: true, label: "Collection objects"},
+              color: {legend: true, label: "Classification"},
+              marks: [
+                Plot.rectY(
+                  datedCollection,
+                  Plot.binX(
+                    {y: "count"},
+                    {
+                      x: "start_year",
+                      fill: "visualbrowserclassification",
+                      interval: 5,
+                      tip: {format: {x: true, y: ",d", fill: true}}
+                    }
+                  )
+                ),
+                Plot.ruleY([0])
+              ]
+            })
+            """,
+            key="chart",
+        ),
+        variables={"datedCollection": []},
+    )
+    collection_timeline_chart_model = {
+        "notebook": _notebook,
+        "view": _notebook.view("chart", capture_state=False),
+    }
+    return (collection_timeline_chart_model,)
+
+
+@app.cell
+def _(collection_timeline_chart_model, dated_collection):
+    collection_timeline_chart_model["notebook"].update_variables(
+        {"datedCollection": dated_collection}
+    )
+
+
+@app.cell
+def _(collection_timeline_chart_model):
+    collection_timeline_chart_model["view"]
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Follow the drawing peak into the source classification
+
+    The timeline identifies a drawing peak, but the corpus field is a separate
+    source column. The next transformation filters drawings dated 1930 through
+    1945, then groups them by `classification` to expose the decisive link.
+    """)
+
+
+@app.cell
+def _(objects_core):
+    import polars as _pl
+
+    drawing_classification_counts = (
+        objects_core.filter(
+            _pl.col("start_year").is_between(1930, 1945),
+            _pl.col("visualbrowserclassification") == "drawing",
+        )
+        .group_by("classification")
+        .agg(_pl.len().alias("object_count"))
+        .sort("object_count", descending=True)
+    )
+    return (drawing_classification_counts,)
+
+
+@app.cell
+def _(drawing_classification_counts, mo):
+    mo.ui.table(
+        drawing_classification_counts.rename(
+            {
+                "classification": "Source classification",
+                "object_count": "Drawing objects, 1930 to 1945",
+            }
+        ),
+        selection=None,
+        pagination=False,
+        show_column_summaries=False,
+        show_data_types=False,
+        show_download=False,
+        show_search=False,
+    )
+
+
+@app.cell(hide_code=True)
+def _(drawing_classification_counts, mo):
+    index_drawing_count = drawing_classification_counts.filter(
+        drawing_classification_counts["classification"] == "Index of American Design"
+    )["object_count"].item()
+    drawing_count = drawing_classification_counts["object_count"].sum()
+    mo.md(f"""
+    **{index_drawing_count:,} of {drawing_count:,} drawings** in this period are
+    classified as the **Index of American Design**. The
+    [NGA archive finding aid](https://www.nga.gov/research/gallery-archives/finding-aids/index-of-american-design.html)
+    traces the collection to the Federal Art Project and its documentation of
+    American material culture.
+
+    The corpus rule stays explicit and editable. It is the root of the Index,
+    study gallery, and handoff packet.
+    """)
+
+
+@app.cell
+def _(objects_core, research_config):
+    import polars as _pl
+
+    index_objects = objects_core.filter(
+        _pl.col("classification") == research_config["corpus_classification"]
+    )
+    return (index_objects,)
+
+
+@app.cell
+def _(index_objects, mo):
+    works_with_open_images = index_objects["has_open_image"].sum()
+    creators_in_corpus = index_objects["display_creator"].n_unique()
+    date_min = index_objects["start_year"].min()
+    date_max = index_objects["start_year"].max()
+    mo.md(f"""
+    ### Index of American Design
+
+    The source revision contains **{index_objects.height:,} Index objects** and
+    **{works_with_open_images:,} with an open-access published image**. The
+    current attribution rule yields **{creators_in_corpus:,} display attribution
+    labels**. Recorded start years span **{date_min} to {date_max}**, with most
+    production concentrated from 1935 through 1942.
+    """)
+
+
+@app.cell
+def _(index_objects):
+    import polars as _pl
+
+    index_by_year = (
+        index_objects.filter(_pl.col("start_year").is_not_null())
+        .group_by("start_year")
+        .agg(
+            _pl.len().alias("object_count"),
+            _pl.col("display_creator").n_unique().alias("creator_count"),
+        )
+        .sort("start_year")
+    )
+    return (index_by_year,)
+
+
+@app.cell
+def _():
+    import observablejs as _obs
+
+    _notebook = _obs.Notebook(
+        _obs.ojs(
+            """
+            Plot.plot({
+              width,
+              height: 340,
+              marginLeft: 58,
+              x: {label: "Recorded start year", tickFormat: "d"},
+              y: {grid: true, label: "Index objects"},
+              marks: [
+                Plot.areaY(indexByYear, {
+                  x: "start_year",
+                  y: "object_count",
+                  curve: "step",
+                  fill: "#d7b98e"
+                }),
+                Plot.lineY(indexByYear, {
+                  x: "start_year",
+                  y: "object_count",
+                  curve: "step",
+                  stroke: "#6f2c22",
+                  strokeWidth: 2,
+                  tip: {format: {x: "d", y: ",d"}}
+                }),
+                Plot.ruleY([0])
+              ]
+            })
+            """,
+            key="chart",
+        ),
+        variables={"indexByYear": []},
+    )
+    index_timeline_chart_model = {
+        "notebook": _notebook,
+        "view": _notebook.view("chart", capture_state=False),
+    }
+    return (index_timeline_chart_model,)
+
+
+@app.cell
+def _(index_by_year, index_timeline_chart_model):
+    index_timeline_chart_model["notebook"].update_variables(
+        {"indexByYear": index_by_year}
+    )
+
+
+@app.cell
+def _(index_timeline_chart_model):
+    index_timeline_chart_model["view"]
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Build the working corpus
+
+    The classification rule above defines the starting corpus. Narrow it by
+    recorded date, medium, or creator, then inspect the matching records and
+    choose six works for a research packet.
+    """)
+
+
+@app.cell
+def _(index_objects, mo):
+    _year_values = index_objects["start_year"].drop_nulls()
+    _year_start = int(_year_values.min())
+    _year_end = int(_year_values.max())
+
+    _year_filter = mo.ui.range_slider(
+        start=_year_start,
+        stop=_year_end,
+        step=1,
+        value=[max(_year_start, 1935), min(_year_end, 1942)],
+        debounce=True,
+        show_value=True,
+        label="Recorded start year",
+        full_width=True,
+    )
+    _medium_filter = mo.ui.text(
+        placeholder="watercolor, graphite, photograph...",
+        debounce=250,
+        label="Medium contains",
+        full_width=True,
+    )
+    _creator_filter = mo.ui.text(
+        placeholder="creator or attribution",
+        debounce=250,
+        label="Creator contains",
+        full_width=True,
+    )
+
+    corpus_filters = mo.ui.dictionary(
+        {
+            "years": _year_filter,
+            "medium": _medium_filter,
+            "creator": _creator_filter,
+        }
+    )
+    corpus_filters.hstack(
+        widths="equal",
+        gap=1.5,
+        wrap=True,
+    )
+    return (corpus_filters,)
+
+
+@app.cell
+def _(corpus_filters, index_objects):
+    import polars as _pl
+
+    _filters = corpus_filters.value
+    _selected_start, _selected_end = (int(_value) for _value in _filters["years"])
+    _medium_query = _filters["medium"].strip().lower()
+    _creator_query = _filters["creator"].strip().lower()
+
+    _medium_predicate = (
+        _pl.col("medium").str.to_lowercase().str.contains(_medium_query, literal=True)
+        if _medium_query
+        else _pl.lit(True)
+    )
+    _creator_predicate = (
+        _pl.concat_str(
+            [_pl.col("creators"), _pl.col("attribution")],
+            separator=" | ",
+        )
+        .str.to_lowercase()
+        .str.contains(_creator_query, literal=True)
+        if _creator_query
+        else _pl.lit(True)
+    )
+
+    _objects = (
+        index_objects.filter(
+            _pl.col("start_year").is_between(_selected_start, _selected_end)
+        )
+        .filter(_medium_predicate)
+        .filter(_creator_predicate)
+        .sort("start_year", "display_creator", "title", nulls_last=True)
+    )
+    corpus_state = {
+        "objects": _objects,
+        "total_count": index_objects.height,
+        "selected_start": _selected_start,
+        "selected_end": _selected_end,
+        "medium_query": _medium_query,
+        "creator_query": _creator_query,
+    }
+    return (corpus_state,)
+
+
+@app.cell
+def _(corpus_state, research_config):
+    _objects = corpus_state["objects"]
+    corpus_summary = {
+        "name": research_config["corpus_classification"],
+        "filtered_count": f"{_objects.height:,}",
+        "total_count": f"{corpus_state['total_count']:,}",
+        "coverage": (f"{_objects.height / max(corpus_state['total_count'], 1):.1%}"),
+        "date_range": (
+            f"{corpus_state['selected_start']} to {corpus_state['selected_end']}"
+        ),
+        "medium": corpus_state["medium_query"] or "All media",
+        "creator": corpus_state["creator_query"] or "All creators",
+        "source_revision": research_config["dataset_revision"][:12],
+        "open_image_count": f"{_objects['has_open_image'].sum():,}",
+        "creator_count": f"{_objects['display_creator'].n_unique():,}",
+    }
+    return (corpus_summary,)
+
+
+@app.cell
+def _(corpus_state, mo):
+    import polars as _pl
+
+    _index_table_data = corpus_state["objects"].select(
+        _pl.col("objectid").alias("Object ID"),
+        _pl.col("title").alias("Title"),
+        _pl.col("display_creator").alias("Display attribution"),
+        _pl.col("displaydate").alias("Date"),
+        _pl.col("medium").alias("Medium"),
+        _pl.col("accessionnum").alias("Accession"),
+        _pl.col("published_image_count").alias("Images"),
+        _pl.when(_pl.col("has_open_image"))
+        .then(_pl.lit("Yes"))
+        .otherwise(_pl.lit("No"))
+        .alias("Open image"),
+    )
+    mo.ui.table(
+        _index_table_data,
+        selection=None,
+        page_size=12,
+        show_column_summaries=False,
+        show_data_types=False,
+        show_download=True,
+        show_search=True,
+        freeze_columns_left=["Title"],
+        wrapped_columns=["Title", "Display attribution", "Medium"],
+        column_widths={
+            "Title": 260,
+            "Display attribution": 220,
+            "Date": 100,
+            "Medium": 280,
+        },
+    )
+
+
+@app.cell
+def _(corpus_state):
+    import polars as _pl
+
+    filtered_by_year = (
+        corpus_state["objects"]
+        .group_by("start_year")
+        .agg(_pl.len().alias("object_count"))
+        .sort("start_year")
+    )
+    return (filtered_by_year,)
+
+
+@app.cell
+def _():
+    import observablejs as _obs
+
+    _notebook = _obs.Notebook(
+        _obs.ojs(
+            """
+            Plot.plot({
+              width,
+              height: 230,
+              marginLeft: 52,
+              x: {label: "Recorded start year", tickFormat: "d"},
+              y: {grid: true, label: "Works"},
+              marks: [
+                Plot.barY(filteredByYear, {
+                  x: "start_year",
+                  y: "object_count",
+                  fill: "#8b3a2b",
+                  tip: {format: {x: "d", y: ",d"}}
+                }),
+                Plot.ruleY([0])
+              ]
+            })
+            """,
+            key="chart",
+        ),
+        variables={"filteredByYear": []},
+    )
+    corpus_filter_chart_model = {
+        "notebook": _notebook,
+        "view": _notebook.view("chart", capture_state=False),
+    }
+    return (corpus_filter_chart_model,)
+
+
+@app.cell
+def _(corpus_filter_chart_model, filtered_by_year):
+    corpus_filter_chart_model["notebook"].update_variables(
+        {"filteredByYear": filtered_by_year}
+    )
+
+
+@app.cell
+def _(corpus_filter_chart_model):
+    corpus_filter_chart_model["view"]
+
+
+@app.cell
+def _(corpus_state, research_config):
+    import polars as _pl
+
+    _objects = corpus_state["objects"].filter(
+        _pl.col("selected_image_open_access")
+        & _pl.col("selected_thumbnail_url").is_not_null()
+    )
+    _page_size = research_config["gallery_page_size"]
+    gallery_pool = {
+        "objects": _objects,
+        "candidate_count": _objects.height,
+        "page_count": max((_objects.height + _page_size - 1) // _page_size, 1),
+        "page_size": _page_size,
+        "selection_limit": research_config["packet_limit"],
+        "corpus": {
+            "name": research_config["corpus_classification"],
+            "matching_count": corpus_state["objects"].height,
+            "selected_start": corpus_state["selected_start"],
+            "selected_end": corpus_state["selected_end"],
+            "medium_query": corpus_state["medium_query"],
+            "creator_query": corpus_state["creator_query"],
+            "date_range": (
+                f"{corpus_state['selected_start']} to {corpus_state['selected_end']}"
+            ),
+            "medium": corpus_state["medium_query"] or "All media",
+            "creator": corpus_state["creator_query"] or "All creators",
+        },
+    }
+    return (gallery_pool,)
+
+
+@app.cell
+def _(gallery_pool, mo):
+    _page = mo.ui.dropdown(
+        options={
+            f"Page {_page_number}": _page_number
+            for _page_number in range(1, gallery_pool["page_count"] + 1)
+        },
+        value="Page 1",
+        label="Tray page",
+        full_width=True,
+    )
+    _sort = mo.ui.dropdown(
+        options={
+            "Date, then creator": "chronological",
+            "Creator, then title": "creator",
+            "Title": "title",
+        },
+        value="Date, then creator",
+        label="Order works by",
+        full_width=True,
+    )
+    study_control_values = mo.ui.dictionary({"sort": _sort, "page": _page})
+    study_control_values.hstack(
+        widths="equal",
+        gap=1.5,
+        wrap=True,
+    )
+    return (study_control_values,)
+
+
+@app.cell
+def _():
+    gallery_styles_source = """
+            <style>
+              :scope {
+                color: #f4efe7;
+                font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont,
+                  "Segoe UI", sans-serif;
+              }
+
+              .study-gallery {
+                display: grid;
+                gap: 1rem;
+              }
+
+              .study-gallery__bar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 1rem;
+                padding-bottom: 0.8rem;
+                border-bottom: 1px solid rgb(244 239 231 / 20%);
+              }
+
+              .study-gallery__status {
+                margin: 0;
+                color: #d6cabd;
+                font-size: 0.82rem;
+                letter-spacing: 0.04em;
+              }
+
+              .study-gallery__clear {
+                border: 1px solid rgb(244 239 231 / 34%);
+                border-radius: 0.2rem;
+                padding: 0.45rem 0.7rem;
+                color: #f4efe7;
+                background: transparent;
+                font: inherit;
+                font-size: 0.78rem;
+                cursor: pointer;
+              }
+
+              .study-gallery__grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+                gap: 0.85rem;
+              }
+
+              .study-card {
+                position: relative;
+                display: grid;
+                grid-template-rows: 180px auto;
+                min-width: 0;
+                overflow: hidden;
+                border: 1px solid rgb(244 239 231 / 15%);
+                border-radius: 0.25rem;
+                padding: 0;
+                color: inherit;
+                background: #242625;
+                text-align: left;
+                cursor: pointer;
+              }
+
+              .study-card:hover,
+              .study-card:focus-visible {
+                border-color: #d2a45f;
+              }
+
+              .study-card[aria-pressed="true"] {
+                border-color: #d2a45f;
+                box-shadow: inset 0 0 0 2px #d2a45f;
+              }
+
+              .study-card__image {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+                background: #171918;
+              }
+
+              .study-card__copy {
+                display: grid;
+                gap: 0.35rem;
+                padding: 0.75rem;
+              }
+
+              .study-card__title {
+                display: -webkit-box;
+                overflow: hidden;
+                font-family: ui-serif, Georgia, Cambria, serif;
+                font-size: 0.92rem;
+                line-height: 1.25;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+              }
+
+              .study-card__meta {
+                overflow: hidden;
+                color: #bdb4aa;
+                font-size: 0.72rem;
+                line-height: 1.35;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+              }
+
+              .study-card__order {
+                position: absolute;
+                top: 0.55rem;
+                right: 0.55rem;
+                display: grid;
+                place-items: center;
+                width: 1.8rem;
+                height: 1.8rem;
+                border-radius: 50%;
+                color: #201d18;
+                background: #d2a45f;
+                font-size: 0.76rem;
+                font-weight: 750;
+              }
+
+              .study-gallery__empty {
+                margin: 0;
+                padding: 3rem 1rem;
+                border: 1px solid rgb(244 239 231 / 16%);
+                color: #d6cabd;
+                text-align: center;
+              }
+
+              @media (max-width: 600px) {
+                .study-gallery__grid {
+                  grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+
+                .study-card {
+                  grid-template-rows: 150px auto;
+                }
+              }
+            </style>
+            """
+    return (gallery_styles_source,)
+
+
+@app.cell
+def _():
+    gallery_controller_source = """
+            galleryController = {
+              const root = document.createElement("section");
+              root.className = "study-gallery";
+              root.setAttribute("aria-label", "Selectable works");
+
+              let objects = [];
+              let limit = 6;
+              let fingerprint = null;
+              let selected = [];
+              let notice = "";
+
+              function publish() {
+                root.dispatchEvent(new Event("input", {bubbles: true}));
+              }
+
+              function toggle(objectId) {
+                if (selected.includes(objectId)) {
+                  selected = selected.filter((id) => id !== objectId);
+                  notice = "Work removed from packet";
+                  render();
+                  publish();
+                  return;
+                }
+
+                if (selected.length >= limit) {
+                  notice = `The packet holds ${limit} works`;
+                  render();
+                  return;
+                }
+
+                selected = [...selected, objectId];
+                notice = "Work added to packet";
+                render();
+                publish();
+              }
+
+              function render() {
+                const bar = document.createElement("div");
+                bar.className = "study-gallery__bar";
+
+                const status = document.createElement("p");
+                status.className = "study-gallery__status";
+                status.setAttribute("aria-live", "polite");
+                status.textContent = notice ||
+                  `${selected.length} of ${limit} works selected`;
+
+                const clear = document.createElement("button");
+                clear.type = "button";
+                clear.className = "study-gallery__clear";
+                clear.textContent = "Clear selection";
+                clear.disabled = selected.length === 0;
+                clear.addEventListener("click", () => {
+                  selected = [];
+                  notice = "Selection cleared";
+                  render();
+                  publish();
+                });
+
+                bar.append(status, clear);
+
+                if (objects.length === 0) {
+                  const empty = document.createElement("p");
+                  empty.className = "study-gallery__empty";
+                  empty.textContent = "No works match the current corpus filters.";
+                  root.replaceChildren(bar, empty);
+                  return;
+                }
+
+                const grid = document.createElement("div");
+                grid.className = "study-gallery__grid";
+
+                for (const work of objects) {
+                  const card = document.createElement("button");
+                  const isSelected = selected.includes(work.objectid);
+                  card.type = "button";
+                  card.className = "study-card";
+                  card.setAttribute("aria-pressed", String(isSelected));
+                  card.setAttribute(
+                    "aria-label",
+                    `${isSelected ? "Remove" : "Add"} ${work.title} ${isSelected ? "from" : "to"} packet`
+                  );
+                  card.addEventListener("click", () => toggle(work.objectid));
+
+                  const image = document.createElement("img");
+                  image.className = "study-card__image";
+                  image.src = work.selected_thumbnail_url;
+                  image.alt = work.selected_image_alt || work.title;
+                  image.loading = "lazy";
+                  image.decoding = "async";
+
+                  const copy = document.createElement("span");
+                  copy.className = "study-card__copy";
+
+                  const title = document.createElement("strong");
+                  title.className = "study-card__title";
+                  title.textContent = work.title;
+
+                  const creator = document.createElement("span");
+                  creator.className = "study-card__meta";
+                  creator.textContent = work.display_creator;
+
+                  const details = document.createElement("span");
+                  details.className = "study-card__meta";
+                  details.textContent = `${work.displaydate} · ${work.accessionnum}`;
+
+                  copy.append(title, creator, details);
+                  card.append(image, copy);
+
+                  if (isSelected) {
+                    const order = document.createElement("span");
+                    order.className = "study-card__order";
+                    order.textContent = String(selected.indexOf(work.objectid) + 1);
+                    order.setAttribute("aria-hidden", "true");
+                    card.append(order);
+                  }
+
+                  grid.append(card);
+                }
+
+                root.replaceChildren(bar, grid);
+              }
+
+              Object.defineProperty(root, "value", {
+                get() {
+                  return [...selected];
+                },
+                set(next) {
+                  selected = Array.isArray(next)
+                    ? [...new Set(next)].slice(0, limit)
+                    : [];
+                  notice = "";
+                  render();
+                }
+              });
+
+              render();
+              return {
+                root,
+                update(nextObjects, nextLimit, nextFingerprint) {
+                  const corpusChanged = fingerprint !== null &&
+                    fingerprint !== nextFingerprint;
+                  objects = Array.isArray(nextObjects) ? nextObjects : [];
+                  limit = nextLimit;
+                  fingerprint = nextFingerprint;
+                  if (corpusChanged) {
+                    selected = [];
+                    notice = "Selection cleared after corpus filters changed";
+                  } else {
+                    selected = selected.slice(0, limit);
+                  }
+                  render();
+                  if (corpusChanged) setTimeout(publish, 0);
+                  return root;
+                }
+              };
+            }
+            """
+    return (gallery_controller_source,)
+
+
+@app.cell
+def _(gallery_controller_source, gallery_styles_source):
+    import observablejs as _obs
+
+    _notebook = _obs.Notebook(
+        _obs.html(gallery_styles_source, key="gallery_styles"),
+        _obs.ojs(
+            gallery_controller_source,
+            key="gallery_controller",
+            display=False,
+        ),
+        _obs.ojs(
+            """
+            viewof selectedObjectIds = galleryController.update(
+              galleryObjects,
+              selectionLimit,
+              corpusFingerprint
+            )
+            """,
+            key="selection_gallery",
+        ),
+        variables={
+            "corpusFingerprint": "",
+            "galleryObjects": [],
+            "selectionLimit": 6,
+        },
+        theme="near-midnight",
+    )
+    gallery_notebook = _notebook
+    gallery_view = _notebook.view("gallery_styles", "selection_gallery")
+    return gallery_notebook, gallery_view
+
+
+@app.cell
+def _(gallery_pool, study_control_values):
+    import json as _json
+
+    _controls = study_control_values.value
+    _order = _controls["sort"]
+    _order_columns = {
+        "chronological": ["start_year", "display_creator", "title", "objectid"],
+        "creator": ["display_creator", "title", "start_year", "objectid"],
+        "title": ["title", "display_creator", "start_year", "objectid"],
+    }
+    _order_labels = {
+        "chronological": "Date, then creator",
+        "creator": "Creator, then title",
+        "title": "Title",
+    }
+    _page_number = int(_controls["page"])
+    _offset = (_page_number - 1) * gallery_pool["page_size"]
+    _ordered_objects = gallery_pool["objects"].sort(
+        _order_columns[_order],
+        nulls_last=True,
+    )
+    _records = (
+        _ordered_objects.slice(_offset, gallery_pool["page_size"])
+        .select(
+            "objectid",
+            "title",
+            "display_creator",
+            "displaydate",
+            "accessionnum",
+            "selected_thumbnail_url",
+            "selected_image_alt",
+        )
+        .to_dicts()
+    )
+    _fingerprint = _json.dumps(
+        gallery_pool["corpus"],
+        sort_keys=True,
+    )
+    gallery_state = {
+        **gallery_pool,
+        "ordered_objects": _ordered_objects,
+        "records": _records,
+        "order": _order,
+        "order_label": _order_labels[_order],
+        "page_number": _page_number,
+        "page_window": (
+            f"{_offset + 1:,} to {_offset + len(_records):,}"
+            if _records
+            else "No works"
+        ),
+        "fingerprint": _fingerprint,
+    }
+    return (gallery_state,)
+
+
+@app.cell
+def _(gallery_notebook, gallery_state):
+    gallery_notebook.update_variables(
+        {
+            "corpusFingerprint": gallery_state["fingerprint"],
+            "galleryObjects": gallery_state["records"],
+            "selectionLimit": gallery_state["selection_limit"],
+        }
+    )
+
+
+@app.cell
+def _(gallery_view):
+    gallery_view
+
+
+@app.cell
+def _():
+    selection_cache = {"object_ids": []}
+    return (selection_cache,)
+
+
+@app.cell
+def _(gallery_view, selection_cache):
+    _ = gallery_view.value
+    _view_state = gallery_view.state
+    selected_object_ids = list(selection_cache["object_ids"])
+    if (
+        not _view_state.pending
+        and _view_state.input_revision is not None
+        and _view_state.settled_revision == _view_state.input_revision
+    ):
+        _result = _view_state.result("selection_gallery")
+        if _result.status == "success":
+            _next_ids = [
+                int(_object_id)
+                for _object_id in _result.values.get("selectedObjectIds", [])
+            ]
+            if _next_ids != selected_object_ids:
+                selected_object_ids = _next_ids
+                selection_cache["object_ids"] = _next_ids
+    return (selected_object_ids,)
+
+
+@app.cell
+def _(objects_core, selected_object_ids):
+    import polars as _pl
+
+    if selected_object_ids:
+        _selection_order = _pl.DataFrame(
+            {
+                "objectid": selected_object_ids,
+                "packet_order": range(1, len(selected_object_ids) + 1),
+            }
+        )
+        packet_objects = _selection_order.join(
+            objects_core, on="objectid", how="left"
+        ).sort("packet_order")
+    else:
+        packet_objects = objects_core.head(0).with_columns(
+            _pl.lit(None, dtype=_pl.Int64).alias("packet_order")
+        )
+    return (packet_objects,)
+
+
+@app.cell
+def _(gallery_state, packet_objects):
+    _selected_count = packet_objects.height
+    _selection_limit = gallery_state["selection_limit"]
+    _remaining_count = max(_selection_limit - _selected_count, 0)
+    study_summary = {
+        "matching_count": f"{gallery_state['corpus']['matching_count']:,}",
+        "shown_count": f"{len(gallery_state['records']):,}",
+        "candidate_count": f"{gallery_state['candidate_count']:,}",
+        "page_number": str(gallery_state["page_number"]),
+        "page_count": str(gallery_state["page_count"]),
+        "page_size": str(gallery_state["page_size"]),
+        "page_window": gallery_state["page_window"],
+        "order": gallery_state["order"],
+        "order_label": gallery_state["order_label"],
+        "selected_count": str(_selected_count),
+        "selection_limit": str(_selection_limit),
+        "selection_progress": f"{_selected_count} of {_selection_limit}",
+        "selection_status": (
+            "Packet ready"
+            if _selected_count == _selection_limit
+            else f"Choose {_remaining_count} more"
+        ),
+        "date_range": gallery_state["corpus"]["date_range"],
+        "medium": gallery_state["corpus"]["medium"],
+        "creator": gallery_state["corpus"]["creator"],
+    }
+    return (study_summary,)
+
+
+@app.cell
+def _(mo, study_summary):
+    mo.md(f"""
+    **{study_summary["selection_progress"]} works selected.**
+    {study_summary["selection_status"]} for the research packet.
+    """)
+
+
+@app.cell
+def _(gallery_state, packet_objects):
+    _objects = packet_objects.join(
+        gallery_state["ordered_objects"]
+        .select("objectid")
+        .with_row_index("study_position", offset=1),
+        on="objectid",
+        how="left",
+    )
+    packet_records = _objects.select(
+        "packet_order",
+        "objectid",
+        "study_position",
+        "title",
+        "display_creator",
+        "attribution",
+        "creators",
+        "creator_relations",
+        "displaydate",
+        "beginyear",
+        "endyear",
+        "medium",
+        "creditline",
+        "accessionnum",
+        "object_url",
+        "selected_image_url",
+        "selected_thumbnail_url",
+        "selected_image_uuid",
+        "selected_image_view_type",
+        "selected_image_open_access",
+    ).to_dicts()
+    return (packet_records,)
+
+
+@app.cell
+def _(attribution_policy, research_config):
+    packet_policy = {
+        "corpus": research_config["corpus_classification"],
+        "creator_role_type": research_config["creator_role_type"],
+        "display_attribution_policy": attribution_policy,
+        "dataset_revision": research_config["dataset_revision"],
+        "selection_limit": research_config["packet_limit"],
+    }
+    return (packet_policy,)
+
+
+@app.cell
+def _(gallery_state, packet_policy):
+    packet_context = {
+        **packet_policy,
+        "corpus_filters": gallery_state["corpus"],
+        "study": {
+            "order": gallery_state["order"],
+            "order_label": gallery_state["order_label"],
+            "page": gallery_state["page_number"],
+            "page_count": gallery_state["page_count"],
+            "page_size": gallery_state["page_size"],
+            "page_window": gallery_state["page_window"],
+            "candidate_count": gallery_state["candidate_count"],
+        },
+    }
+    return (packet_context,)
+
+
+@app.cell
+def _(packet_records):
+    import csv as _csv
+    import io as _io
+
+    _buffer = _io.StringIO()
+    if packet_records:
+        _writer = _csv.DictWriter(_buffer, fieldnames=packet_records[0].keys())
+        _writer.writeheader()
+        _writer.writerows(packet_records)
+    packet_csv = _buffer.getvalue()
+    return (packet_csv,)
+
+
+@app.cell
+def _(packet_context, packet_records):
+    _filters = packet_context["corpus_filters"]
+    _study = packet_context["study"]
+    _lines = [
+        "# Index of American Design research packet",
+        "",
+        f"Corpus: {packet_context['corpus']}",
+        f"Creator role type: {packet_context['creator_role_type']}",
+        (f"Display attribution policy: {packet_context['display_attribution_policy']}"),
+        f"NGA data revision: {packet_context['dataset_revision']}",
+        f"Recorded start year filter: {_filters['date_range']}",
+        f"Medium contains: {_filters['medium']}",
+        f"Creator contains: {_filters['creator']}",
+        f"Study order: {_study['order_label']}",
+        (
+            f"Study page: {_study['page']} of {_study['page_count']} "
+            f"({_study['page_window']})"
+        ),
+        "",
+        (
+            "Source data is CC0. Selected records link to NGA open-access "
+            "published images and object records."
+        ),
+        "",
+    ]
+    for _record in packet_records:
+        _lines.extend(
+            [
+                f"## {_record['packet_order']}. {_record['title']}",
+                "",
+                f"- Display attribution: {_record['display_creator']}",
+                f"- Source attribution: {_record['attribution']}",
+                f"- Artist relations: {_record['creator_relations']}",
+                f"- Date: {_record['displaydate']}",
+                f"- Medium: {_record['medium']}",
+                f"- Credit line: {_record['creditline']}",
+                f"- Accession: {_record['accessionnum']}",
+                f"- NGA record: {_record['object_url']}",
+                f"- IIIF image: {_record['selected_image_url']}",
+                f"- Image view type: {_record['selected_image_view_type']}",
+                f"- Image open access: {_record['selected_image_open_access']}",
+                "",
+            ]
+        )
+    packet_markdown = "\n".join(_lines)
+    return (packet_markdown,)
+
+
+@app.cell
+def _(packet_context, packet_records):
+    import html as _html
+
+    _cards = []
+    for _record in packet_records:
+        _title = _html.escape(str(_record["title"]))
+        _creator = _html.escape(str(_record["display_creator"]))
+        _source_attribution = _html.escape(str(_record["attribution"]))
+        _creator_relations = _html.escape(str(_record["creator_relations"]))
+        _date = _html.escape(str(_record["displaydate"]))
+        _medium = _html.escape(str(_record["medium"]))
+        _creditline = _html.escape(str(_record["creditline"]))
+        _accession = _html.escape(str(_record["accessionnum"]))
+        _object_url = _html.escape(str(_record["object_url"]), quote=True)
+        _thumbnail_url = _html.escape(
+            str(_record["selected_thumbnail_url"] or ""), quote=True
+        )
+        _cards.append(
+            f"""
+            <article class="work">
+              <p class="number">{_record["packet_order"]:02d}</p>
+              <img src="{_thumbnail_url}" alt="{_title}" />
+              <div>
+                <h2>{_title}</h2>
+                <p>{_creator} · {_date}</p>
+                <p>Source attribution: {_source_attribution}</p>
+                <p>Artist relations: {_creator_relations}</p>
+                <p>{_medium}</p>
+                <p>{_creditline}</p>
+                <p>Accession {_accession} · <a href="{_object_url}">NGA object record</a></p>
+              </div>
+            </article>
+            """
+        )
+
+    _filters = packet_context["corpus_filters"]
+    packet_html = f"""<!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Index of American Design research packet</title>
+        <style>
+          body {{ max-width: 72rem; margin: 3rem auto; padding: 0 2rem;
+            color: #26231e; font: 16px/1.5 system-ui, sans-serif; }}
+          header {{ padding-bottom: 2rem; border-bottom: 2px solid #26231e; }}
+          h1, h2 {{ font-family: Georgia, serif; font-weight: 500; }}
+          h1 {{ font-size: 3rem; line-height: 1; }}
+          .provenance {{ color: #6d665c; }}
+          .work {{ display: grid; grid-template-columns: 2rem 12rem 1fr; gap: 1.5rem;
+            padding: 2rem 0; border-bottom: 1px solid #c9c2b6; break-inside: avoid; }}
+          .work img {{ width: 100%; height: 11rem; object-fit: contain; background: #eee9df; }}
+          .work h2, .work p {{ margin: 0 0 0.5rem; }}
+          .number {{ color: #823629; font-family: Georgia, serif; font-size: 1.25rem; }}
+          a {{ color: #823629; }}
+          @media (max-width: 700px) {{ .work {{ grid-template-columns: 2rem 1fr; }}
+            .work img {{ grid-column: 2; }} }}
+          @media print {{ body {{ margin: 0; }} }}
+        </style>
+      </head>
+      <body>
+        <header>
+          <p>Research handoff · {len(packet_records)} of {packet_context["selection_limit"]} works</p>
+          <h1>Index of American Design</h1>
+          <p class="provenance">NGA data revision {packet_context["dataset_revision"]}.
+            Filters: years {_html.escape(_filters["date_range"])};
+            medium {_html.escape(_filters["medium"])};
+            creator {_html.escape(_filters["creator"])}.</p>
+        </header>
+        <main>{"".join(_cards)}</main>
+        <footer>
+          <p>Source data is CC0. Follow each NGA object record for image and credit details.</p>
+        </footer>
+      </body>
+    </html>
+    """
+    return (packet_html,)
+
+
+@app.cell
+def _(packet_context, packet_records):
+    import json as _json
+
+    _filters = packet_context["corpus_filters"]
+    _study = packet_context["study"]
+    packet_manifest = _json.dumps(
+        {
+            "source": {
+                "dataset": "National Gallery of Art Open Data",
+                "revision": packet_context["dataset_revision"],
+                "license": "CC0",
+                "program_url": (
+                    "https://www.nga.gov/open-access-images/open-data.html"
+                ),
+            },
+            "corpus": {
+                "classification": packet_context["corpus"],
+                "creator_role_type": packet_context["creator_role_type"],
+                "display_attribution_policy": packet_context[
+                    "display_attribution_policy"
+                ],
+                "filters": {
+                    "recorded_start_year": [
+                        _filters["selected_start"],
+                        _filters["selected_end"],
+                    ],
+                    "medium_contains": _filters["medium_query"] or None,
+                    "creator_contains": _filters["creator_query"] or None,
+                },
+                "matching_record_count": _filters["matching_count"],
+            },
+            "study": {
+                "order": _study["order"],
+                "page": _study["page"],
+                "page_count": _study["page_count"],
+                "page_size": _study["page_size"],
+                "page_window": _study["page_window"],
+                "open_image_candidate_count": _study["candidate_count"],
+                "image_selection_policy": (
+                    "Open-access images first, then primary view, source sequence, "
+                    "and UUID"
+                ),
+            },
+            "selection": {
+                "limit": packet_context["selection_limit"],
+                "items": [
+                    {
+                        "object_id": _record["objectid"],
+                        "study_position": _record["study_position"],
+                    }
+                    for _record in packet_records
+                ],
+                "record_count": len(packet_records),
+            },
+        },
+        indent=2,
+    )
+    return (packet_manifest,)
+
+
+@app.cell
+def _(packet_csv, packet_manifest):
+    packet_data_files = {
+        "index-research-packet.csv": packet_csv,
+        "manifest.json": packet_manifest,
+    }
+    return (packet_data_files,)
+
+
+@app.cell
+def _(packet_html, packet_markdown):
+    packet_reading_files = {
+        "index-research-packet.html": packet_html,
+        "index-research-packet.md": packet_markdown,
+    }
+    return (packet_reading_files,)
+
+
+@app.cell
+def _(packet_data_files, packet_reading_files):
+    packet_documents = packet_data_files | packet_reading_files
+    return (packet_documents,)
+
+
+@app.cell
+def _(packet_context, packet_records):
+    _selected_count = len(packet_records)
+    _selection_limit = packet_context["selection_limit"]
+    packet_summary = {
+        "title": "Index of American Design research packet",
+        "corpus": packet_context["corpus"],
+        "selected_count": str(_selected_count),
+        "selection_limit": str(_selection_limit),
+        "source_revision": packet_context["dataset_revision"][:12],
+        "status": (
+            "Ready for handoff"
+            if _selected_count == _selection_limit
+            else "Selection in progress"
+        ),
+    }
+    return (packet_summary,)
+
+
+@app.cell
+def _(mo, packet_records):
+    import html as _html
+
+    if packet_records:
+        _packet_style = """
+        <style>
+          .packet-works {
+            display: grid;
+            gap: 0;
+          }
+
+          .packet-work {
+            display: grid;
+            grid-template-columns: 2.5rem 12rem minmax(0, 1fr);
+            gap: 1.5rem;
+            padding: 1.5rem 0;
+            border-bottom: 1px solid #c9c2b6;
+          }
+
+          .packet-work__number {
+            color: #823629;
+            font-family: ui-serif, Georgia, Cambria, serif;
+            font-size: 1.25rem;
+          }
+
+          .packet-work__image {
+            display: grid;
+            place-items: center;
+            min-height: 9rem;
+            background: #eee9df;
+          }
+
+          .packet-work__image img {
+            width: 100%;
+            height: 10rem;
+            object-fit: contain;
+          }
+
+          .packet-work__image-missing {
+            color: #6d665c;
+            font-size: 0.72rem;
+          }
+
+          .packet-work__copy {
+            min-width: 0;
+          }
+
+          .packet-work__kicker {
+            margin: 0 0 0.35rem;
+            color: #823629;
+            font-size: 0.65rem;
+            font-weight: 750;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+          }
+
+          .packet-work h3 {
+            margin: 0;
+            font-family: ui-serif, Georgia, Cambria, serif;
+            font-size: 1.45rem;
+            font-weight: 500;
+            letter-spacing: -0.025em;
+            line-height: 1.05;
+          }
+
+          .packet-work__creator {
+            margin: 0.45rem 0 1rem;
+            color: #6d665c;
+            font-family: ui-serif, Georgia, Cambria, serif;
+            font-size: 0.95rem;
+          }
+
+          .packet-work dl {
+            display: grid;
+            gap: 0.4rem;
+            margin: 0 0 1rem;
+          }
+
+          .packet-work dl div {
+            display: grid;
+            grid-template-columns: 4rem minmax(0, 1fr);
+            gap: 0.75rem;
+          }
+
+          .packet-work dt {
+            color: #6d665c;
+            font-size: 0.65rem;
+            font-weight: 750;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+          }
+
+          .packet-work dd {
+            margin: 0;
+            font-size: 0.8rem;
+            line-height: 1.4;
+          }
+
+          .packet-work a {
+            border-bottom: 1px solid currentColor;
+            color: #823629;
+            font-size: 0.7rem;
+            font-weight: 750;
+            letter-spacing: 0.06em;
+            text-decoration: none;
+            text-transform: uppercase;
+          }
+
+          @media (max-width: 640px) {
+            .packet-work {
+              grid-template-columns: 2rem minmax(0, 1fr);
+            }
+
+            .packet-work__image {
+              grid-column: 2;
+            }
+
+            .packet-work__copy {
+              grid-column: 2;
+            }
+          }
+        </style>
+        """
+        _packet_items = []
+        for _record in packet_records:
+            _image = (
+                f'<img src="{_html.escape(_record["selected_thumbnail_url"] or "")}" '
+                f'alt="{_html.escape(_record["title"])}" loading="lazy">'
+                if _record["selected_thumbnail_url"]
+                else '<span class="packet-work__image-missing">Image unavailable</span>'
+            )
+            _packet_items.append(
+                f"""
+                <article class="packet-work">
+                  <div class="packet-work__number">{_record["packet_order"]:02d}</div>
+                  <div class="packet-work__image">{_image}</div>
+                  <div class="packet-work__copy">
+                    <p class="packet-work__kicker">{_html.escape(_record["accessionnum"] or "")}</p>
+                    <h3>{_html.escape(_record["title"])}</h3>
+                    <p class="packet-work__creator">{_html.escape(_record["display_creator"])}</p>
+                    <dl>
+                      <div><dt>Source</dt><dd>{_html.escape(_record["attribution"])}</dd></div>
+                      <div><dt>Relations</dt><dd>{_html.escape(_record["creator_relations"])}</dd></div>
+                      <div><dt>Date</dt><dd>{_html.escape(_record["displaydate"])}</dd></div>
+                      <div><dt>Medium</dt><dd>{_html.escape(_record["medium"])}</dd></div>
+                      <div><dt>Credit</dt><dd>{_html.escape(_record["creditline"])}</dd></div>
+                    </dl>
+                    <a href="{_html.escape(_record["object_url"])}" target="_blank" rel="noreferrer">Open NGA record</a>
+                  </div>
+                </article>
+                """
+            )
+        _packet_html = (
+            _packet_style
+            + '<section class="packet-works">'
+            + "".join(_packet_items)
+            + "</section>"
+        )
+        _preview = mo.Html(_packet_html)
+    else:
+        _preview = mo.md("Select works in the **Study** view to assemble the packet.")
+    _preview
+
+
+@app.cell
+def _(mo, packet_objects):
+    import polars as _pl
+
+    _table_data = packet_objects.select(
+        _pl.col("packet_order").alias("No."),
+        _pl.col("title").alias("Title"),
+        _pl.col("display_creator").alias("Display attribution"),
+        _pl.col("displaydate").alias("Date"),
+        _pl.col("medium").alias("Medium"),
+        _pl.col("accessionnum").alias("Accession"),
+    )
+    mo.ui.table(
+        _table_data,
+        selection=None,
+        pagination=False,
+        show_column_summaries=False,
+        show_data_types=False,
+        show_download=False,
+        show_search=False,
+        wrapped_columns=["Title", "Display attribution", "Medium"],
+        column_widths={"Title": 260, "Display attribution": 220, "Medium": 260},
+    )
+
+
+@app.cell
+def _(packet_documents, packet_summary):
+    import io as _io
+    import zipfile as _zipfile
+
+    _buffer = _io.BytesIO()
+    with _zipfile.ZipFile(
+        _buffer,
+        mode="w",
+        compression=_zipfile.ZIP_DEFLATED,
+    ) as _packet_zip:
+        for _filename, _contents in packet_documents.items():
+            _packet_zip.writestr(_filename, _contents)
+
+    packet_archive = {
+        "data": _buffer.getvalue(),
+        "ready": packet_summary["status"] == "Ready for handoff",
+    }
+    return (packet_archive,)
+
+
+@app.cell
+def _(mo, packet_archive):
+    mo.download(
+        data=packet_archive["data"],
+        filename="nga-index-research-packet.zip",
+        mimetype="application/zip",
+        disabled=not packet_archive["ready"],
+        label="Download handoff bundle",
+    )
+
+
+if __name__ == "__main__":
+    app.run()
