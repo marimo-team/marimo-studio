@@ -12,7 +12,7 @@ const selection = (href: string, currentView = "novice") =>
     currentView,
   });
 
-test("configured view URLs resolve beneath Marimo's base path", () => {
+test("configured view URLs resolve beneath Marimo's base path and identify the current view", () => {
   const base = new URL("/proxy/token/", "https://example.test");
 
   assert.deepEqual(selection(new URL("./intermediate/", base).href), {
@@ -23,9 +23,6 @@ test("configured view URLs resolve beneath Marimo's base path", () => {
     view: "expert",
     current: false,
   });
-});
-
-test("the active configured view resolves as a navigation no-op", () => {
   assert.deepEqual(selection("https://example.test/proxy/token/novice/"), {
     view: "novice",
     current: true,

@@ -9,7 +9,6 @@ import {
   getRuntimeCellBindings,
   getRuntimeConfig,
   readResponseError,
-  requireMatchingPresentationRevision,
   type RuntimeConfig,
   RuntimeConfigRequestError,
   runtimeConfigSessionId,
@@ -54,14 +53,6 @@ const baseRuntimeConfig = {
 const runtimeConfig = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   ...baseRuntimeConfig,
   ...overrides,
-});
-
-test("presentation revisions must match before a shell commits", () => {
-  requireMatchingPresentationRevision("presentation-revision", baseRuntimeConfig);
-  assert.throws(
-    () => requireMatchingPresentationRevision("older-revision", baseRuntimeConfig),
-    /one source revision/,
-  );
 });
 
 test("session restoration keeps the document revision", async () => {

@@ -67,59 +67,33 @@ test("source metadata validates the prepared checkout contract", () => {
   expect(() => decodeMarimoSource("invalid")).toThrow();
 });
 
-test("restores a dirty cached checkout", async () => {
-  const source = await createRepository("expected\n");
-  const checkout = await temporaryDirectory("marimo-studio-checkout-");
-
-  await prepareOwnedCheckout({
-    path: checkout,
-    repository: source.path,
-    commit: source.commit,
-  });
-  await writeFile(join(checkout, "tracked.txt"), "changed\n");
-  await writeFile(join(checkout, "untracked.txt"), "changed\n");
-
-  await prepareOwnedCheckout({
-    path: checkout,
-    repository: source.path,
-    commit: source.commit,
-  });
-
-  expect(await readFile(join(checkout, "tracked.txt"), "utf8")).toBe("expected\n");
-  expect(await isMissing(join(checkout, "untracked.txt"))).toBe(true);
-});
-
-test("replaces a checkout from another origin and commit", async () => {
+test("checkout preparation repairs ownership, dirt, and readiness", async () => {
   const expected = await createRepository("expected\n");
   const other = await createRepository("other\n");
   const checkout = await temporaryDirectory("marimo-studio-checkout-");
+  const preparation = {
+    path: checkout,
+    repository: expected.path,
+    commit: expected.commit,
+  };
 
   await prepareOwnedCheckout({
     path: checkout,
     repository: other.path,
     commit: other.commit,
   });
-  await prepareOwnedCheckout({
-    path: checkout,
-    repository: expected.path,
-    commit: expected.commit,
-  });
+  await prepareOwnedCheckout(preparation);
 
   expect(await git(checkout, "remote", "get-url", "origin")).toBe(expected.path);
   expect(await git(checkout, "rev-parse", "HEAD")).toBe(expected.commit);
   expect(await readFile(join(checkout, "tracked.txt"), "utf8")).toBe("expected\n");
-});
 
-test("reuses only a clean and fully prepared checkout", async () => {
-  const source = await createRepository("expected\n");
-  const checkout = await temporaryDirectory("marimo-studio-checkout-");
-  const preparation = {
-    path: checkout,
-    repository: source.path,
-    commit: source.commit,
-  };
-
+  await writeFile(join(checkout, "tracked.txt"), "changed\n");
+  await writeFile(join(checkout, "untracked.txt"), "changed\n");
   await prepareOwnedCheckout(preparation);
+
+  expect(await readFile(join(checkout, "tracked.txt"), "utf8")).toBe("expected\n");
+  expect(await isMissing(join(checkout, "untracked.txt"))).toBe(true);
   expect(await isPreparedOwnedCheckout(preparation)).toBe(false);
 
   await Promise.all([

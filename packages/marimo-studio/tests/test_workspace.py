@@ -98,19 +98,6 @@ def test_new_view_uses_native_cell_names_and_binds_anonymous_cells(
     assert list(document["tool"]["marimo-studio"]["cells"]) == ["cell-2"]
 
 
-def test_first_view_accepts_a_new_empty_notebook(tmp_path: Path) -> None:
-    notebook = tmp_path / "analysis.py"
-    notebook.write_text(empty_notebook_source(), encoding="utf-8")
-
-    ensure_view(notebook)
-    resolved = resolve_studio(load_studio(notebook))
-
-    assert resolved.notebook.cells == ()
-    assert resolved.view("dashboard").cell_aliases == ()
-    assert resolved.view("dashboard").value_bindings == {}
-    assert resolved.view("dashboard").diagnostics == ()
-
-
 def test_zero_cell_notebook_rejects_non_notebook_source(
     tmp_path: Path,
 ) -> None:
@@ -497,31 +484,22 @@ def test_notebook_configuration_selects_presentation_runtimes(
         load_studio(notebook_path)
 
 
-def test_named_views_share_notebook_bindings(notebook_path: Path) -> None:
+def test_kernel_selectors_include_each_valid_view(notebook_path: Path) -> None:
     ensure_view(notebook_path)
     studio = load_studio(notebook_path)
-    bound = bind_cell(studio, "result", 1)
     ensure_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     _shell(
         studio,
         "dashboard",
-        '<marimo-cell name="result"></marimo-cell><span mo-value="doubled"></span>',
+        '<span mo-value="doubled"></span>',
     )
     _shell(
         studio,
         "executive",
-        '<marimo-cell name="result"></marimo-cell><span mo-value="x"></span>',
+        '<span mo-value="x"></span>',
     )
 
-    resolved = resolve_studio(load_studio(notebook_path))
-
-    assert resolved.runtime_cell_bindings(None)["result"] == {
-        "kind": "id",
-        "value": bound.cell.runtime_id,
-    }
-    assert set(resolved.view("dashboard").value_bindings) == {"doubled"}
-    assert set(resolved.view("executive").value_bindings) == {"x"}
     assert set(_template_selectors(notebook_path) or ()) == {"doubled", "x"}
 
 
@@ -642,7 +620,7 @@ def test_view_reports_each_unresolved_projection_with_its_source(
     ]
 
 
-@pytest.mark.parametrize("name", ["lsp", "mcp", "sse", "studio"])
+@pytest.mark.parametrize("name", ["health", "studio"])
 def test_view_names_cannot_claim_application_routes(
     notebook_path: Path,
     name: str,

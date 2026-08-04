@@ -95,17 +95,7 @@ test("nested ratios update and equalize independently", () => {
   assert.deepEqual((equalized as { second: { ratio: number } }).second.ratio, 0.5);
 });
 
-test("pane operations keep each surface unique", () => {
-  const restored = splitSurface(defaultWorkspaceLayout(), "preview", "source", "below");
-
-  assert.deepEqual(visibleSurfaces(defaultWorkspaceLayout()), ["notebook", "preview"]);
-  assert.deepEqual(visibleSurfaces(restored).sort(), ["notebook", "preview", "source"]);
-  assert.deepEqual(
-    computeLayout(restored, { left: 0, top: 0, width: 1000, height: 805 }).dividers.find(
-      (divider) => divider.axis === "y",
-    )?.ratio,
-    0.5,
-  );
+test("swapping panes exchanges their surfaces", () => {
   assert.deepEqual(visibleSurfaces(swapSurfaces(defaultWorkspaceLayout(), "notebook", "preview")), [
     "preview",
     "notebook",

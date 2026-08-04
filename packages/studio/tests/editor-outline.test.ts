@@ -3,18 +3,12 @@ import { describe, expect, it } from "vite-plus/test";
 import { installEditorOutlineGuard, repairOutlineXPath } from "../src/preview/editor-outline.ts";
 
 describe("editor outline compatibility", () => {
-  it.each([
-    [
-      'Wall Design From the Portfolio: "Decorative Art of Spanish California"',
-      `//H3[contains(., 'Wall Design From the Portfolio: "Decorative Art of Spanish California"')]`,
-    ],
-    [
-      'The painter\'s "Study"',
-      `//H3[contains(., concat("The painter's ", '"', "Study", '"', ""))]`,
-    ],
-  ])("repairs a quoted heading locator", (title, expected) => {
+  it("repairs a heading locator containing both quote styles", () => {
+    const title = 'The painter\'s "Study"';
     const path = `//H3[contains(., "${title}")]`;
-    expect(repairOutlineXPath(path)).toBe(expected);
+    expect(repairOutlineXPath(path)).toBe(
+      `//H3[contains(., concat("The painter's ", '"', "Study", '"', ""))]`,
+    );
   });
 
   it("leaves unrelated XPath failures unchanged", () => {

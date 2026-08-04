@@ -3,6 +3,21 @@ import { test } from "vite-plus/test";
 
 import { parseMountConfig, parseRuntimeConfig, type RuntimeConfig } from "../src/runtime-config.ts";
 
+const diagnostic = {
+  code: "cell-not-found",
+  severity: "error",
+  message: "Cell 'summary' is unavailable.",
+  hint: "Restore the cell or update the view.",
+  view: "dashboard",
+  projection: "cell",
+  target: "summary",
+  source: {
+    path: "/workspace/__marimo__/studio/notebook/dashboard/index.html",
+    line: 18,
+    column: 7,
+  },
+} as const;
+
 const baseRuntimeConfig = {
   schema: 1,
   revision: "presentation-revision",
@@ -35,7 +50,7 @@ const baseRuntimeConfig = {
       cell: { kind: "id", value: "context-cell-id" },
     },
   },
-  diagnostics: [],
+  diagnostics: [diagnostic],
   appConfig: {},
   userConfig: {},
   configOverrides: {},
@@ -51,27 +66,6 @@ const runtimeConfig = (overrides: Record<string, unknown> = {}): Record<string, 
 test("runtime configuration accepts the browser contract", () => {
   assert.deepEqual(parseRuntimeConfig(runtimeConfig()), baseRuntimeConfig);
   assert.deepEqual(parseRuntimeConfig(runtimeConfig({ ignored: true })), baseRuntimeConfig);
-});
-
-test("runtime configuration accepts repairable projection diagnostics", () => {
-  const diagnostic = {
-    code: "cell-not-found",
-    severity: "error",
-    message: "Cell 'summary' is unavailable.",
-    hint: "Restore the cell or update the view.",
-    view: "dashboard",
-    projection: "cell",
-    target: "summary",
-    source: {
-      path: "/workspace/__marimo__/studio/notebook/dashboard/index.html",
-      line: 18,
-      column: 7,
-    },
-  };
-
-  assert.deepEqual(parseRuntimeConfig(runtimeConfig({ diagnostics: [diagnostic] })).diagnostics, [
-    diagnostic,
-  ]);
 });
 
 test("runtime configuration rejects malformed contracts", () => {

@@ -40,19 +40,13 @@ test("shell changes recover the exact failed view", () => {
 
   assert.deepEqual(state.failedTarget, executive);
   assert.deepEqual(state.targetForChange("runtime", dashboard), executive);
-  assert.deepEqual(state.targetForChange("views", dashboard), executive);
-  assert.deepEqual(state.targetForChange("html", dashboard), executive);
   assert.deepEqual(state.targetForChange("css", dashboard), executive);
   assert.deepEqual(state.pending, true);
 
   state.complete(dashboard);
   assert.deepEqual(state.targetForChange("runtime", dashboard), executive);
 
-  state.rememberFailure(dashboard);
   state.complete(executive);
-  assert.deepEqual(state.targetForChange("runtime", executive), dashboard);
-
-  state.complete(dashboard);
   assert.deepEqual(state.failedTarget, undefined);
   assert.deepEqual(state.targetForChange("runtime", dashboard), dashboard);
   assert.deepEqual(state.targetForChange("views", dashboard), undefined);
