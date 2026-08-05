@@ -38,10 +38,10 @@ quarter synchronized while each runtime updates its own reactive graph.
 
 Open **HTML & CSS** and inspect `index.html` and `app.css`. Layout and
 responsive behavior live in utility classes, while the top of `app.css` holds
-the semantic theme. The adjacent `app.js` module reads typed Python values from
-the page and copies them as a briefing. Change the scenario, edit a utility
-class or `--primary`, then save. The refreshed view keeps the current control
-values and rendered cell state.
+the semantic theme. The adjacent `app.js` module reads the projected `report`
+mapping and copies it as a briefing. Change the scenario, edit a utility class
+or `--primary`, then save. The refreshed view keeps the current control values
+and rendered cell state.
 
 For a multi-view workflow, open the collection research example:
 

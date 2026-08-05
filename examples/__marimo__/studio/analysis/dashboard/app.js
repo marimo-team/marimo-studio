@@ -1,26 +1,22 @@
-const copyButton = document.querySelector("[data-copy-briefing]");
-const copyStatus = document.querySelector("[data-copy-status]");
-const briefingSource = document.querySelector("#briefing-data");
+const source = document.querySelector("#briefing-data");
+const button = document.querySelector("#copy-briefing");
+const status = document.querySelector("#copy-status");
 
-const currentReport = () => {
-  const value = briefingSource?.marimoValue;
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : undefined;
+const sync = () => {
+  button.disabled = source.marimoValue === undefined;
+  status.textContent = "";
 };
 
-const updateCopyState = () => {
-  if (copyButton instanceof HTMLButtonElement) {
-    copyButton.disabled = currentReport() === undefined;
-  }
-};
+source.addEventListener("marimo-value-updated", sync);
+source.addEventListener("marimo-value-error", sync);
+sync();
 
-const currentBriefing = () => {
-  const report = currentReport();
-  if (!report) {
-    return "";
+button.addEventListener("click", async () => {
+  const report = source.marimoValue;
+  if (report === undefined) {
+    return;
   }
-  return [
+  const briefing = [
     "Revenue at a glance",
     `Scenario: ${report.scenario}`,
     `Projected revenue: ${report.total}`,
@@ -28,24 +24,10 @@ const currentBriefing = () => {
     `Forecast period: ${report.through}`,
     `Updated: ${report.updated_at}`,
   ].join("\n");
-};
-
-briefingSource?.addEventListener("marimo-value-updated", updateCopyState);
-briefingSource?.addEventListener("marimo-value-error", updateCopyState);
-updateCopyState();
-
-document.addEventListener("click", async (event) => {
-  const target =
-    event.target instanceof Element
-      ? event.target.closest("[data-copy-briefing]")
-      : null;
-  if (!(target instanceof HTMLButtonElement) || !(copyStatus instanceof HTMLElement)) {
-    return;
-  }
   try {
-    await navigator.clipboard.writeText(currentBriefing());
-    copyStatus.textContent = "Briefing copied";
+    await navigator.clipboard.writeText(briefing);
+    status.textContent = "Briefing copied";
   } catch {
-    copyStatus.textContent = "Clipboard unavailable";
+    status.textContent = "Clipboard unavailable";
   }
 });

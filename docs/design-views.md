@@ -217,7 +217,7 @@ The repository includes two view-authoring patterns:
 - `examples/analysis.py` is a compact dashboard. Its HTML uses responsive
   utilities, icons, and arbitrary properties for projected-cell loading space.
   The theme section in `app.css` defines its semantic palette. Its view-owned
-  `app.js` module reads typed projection snapshots when the reader copies the
+  `app.js` module reads the `report` JSON snapshot when the reader copies the
   current briefing.
 - `examples/nga_collection.py` is a three-view research workflow. **Corpus**,
   **Study**, and **Packet** apply different themes and page structures to the
