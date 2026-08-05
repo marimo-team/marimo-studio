@@ -89,6 +89,11 @@ Python compatibility boundary.
 ## Invariants
 
 - Notebook authors keep ordinary Marimo cells and can expose several views.
+- New views contain `index.html` and `app.css`. Relative modules, images,
+  fonts, and nested assets resolve from the named view directory.
+- `_marimo-studio`, `@file`, `public`, and `public-files-sw.js` remain owned by
+  Studio or Marimo beneath each view URL. Static export rejects destination
+  collisions before copying authored assets.
 - `marimo edit` embeds the native editor and shares its session with custom
   previews. `marimo run` creates an isolated Marimo session per browser.
 - View switches and shell refreshes preserve prepared adapters, output
@@ -115,8 +120,13 @@ Python compatibility boundary.
 - Runtime configuration validates cell identity against the active notebook.
   Missing projections publish structured diagnostics while healthy hosts keep
   rendering.
-- HTML, CSS, runtime configuration, and view selection commit at one
-  presentation revision. A failed refresh keeps the last valid shell.
+- HTML, runtime configuration, and view selection commit at one presentation
+  revision. CSS refreshes in place. Other view assets use their native browser
+  URLs, and a saved asset reloads a scripted document. A failed shell refresh
+  keeps the last valid shell.
+- Generated utilities use native CSS scope and cascade layers. Authored
+  `app.css` stays unlayered. Scripted views use a document reload for HTML and
+  module changes so the browser owns ESM evaluation.
 - Support routes honor the parent ASGI mount and Marimo `base_url`. Native
   authentication and unrelated Marimo routes pass through unchanged.
 - The browser build preserves `runtime.js`, `dev-reload.js`, `studio.js`,

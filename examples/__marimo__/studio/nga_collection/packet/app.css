@@ -1,0 +1,70 @@
+/* THEME */
+
+:root {
+  color-scheme: light;
+  --monospace-font: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --text-font: "Avenir Next", "Helvetica Neue", ui-sans-serif, sans-serif;
+  --heading-font: ui-serif, Georgia, Cambria, serif;
+  --background: #ded9ce;
+  --foreground: #26231e;
+  --card: #fbfaf6;
+  --card-foreground: var(--foreground);
+  --muted: #efebe1;
+  --muted-foreground: #6d665c;
+  --border: #c9c2b6;
+  --input: #b6ad9e;
+  --primary: #823629;
+  --primary-foreground: #fffaf4;
+  --accent: #f2e5dc;
+  --accent-foreground: #63261d;
+  --ring: var(--primary);
+  --link: #6f2d23;
+  --radius: 3px;
+}
+
+body {
+  margin: 0;
+  border-top: 3px solid var(--primary);
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--text-font);
+}
+
+a {
+  color: inherit;
+}
+
+h1,
+h2,
+p {
+  text-wrap: pretty;
+}
+
+marimo-cell {
+  --marimo-cell-font: var(--text-font);
+  --marimo-cell-heading-font: var(--heading-font);
+  --marimo-cell-monospace-font: var(--monospace-font);
+  --marimo-cell-background: transparent;
+  --marimo-cell-foreground: var(--foreground);
+  --marimo-cell-surface: #fffefa;
+  --marimo-cell-muted: var(--muted);
+  --marimo-cell-muted-foreground: var(--muted-foreground);
+  --marimo-cell-border-color: var(--border);
+  --marimo-cell-accent: var(--primary);
+  --marimo-cell-accent-foreground: var(--primary-foreground);
+  --marimo-cell-radius: var(--radius);
+  --marimo-cell-skeleton-color: rgb(38 35 30 / 7%);
+}
+
+[mo-value] {
+  --marimo-value-skeleton-color: rgb(38 35 30 / 8%);
+}
+
+/* APP */
+
+@media print {
+  body {
+    border: 0;
+    background: #ffffff;
+  }
+}

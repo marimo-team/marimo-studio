@@ -36,13 +36,11 @@ both panes through the editor's Python session. Switch the preview to
 Pyodide worker. Studio keeps native Marimo controls such as the scenario and
 quarter synchronized while each runtime updates its own reactive graph.
 
-Open **HTML & CSS** and inspect the dashboard's three view files. Layout and
-responsive behavior live in Wind4 classes in `index.html`, shared visual
-tokens live in `theme.css`, and loading dimensions use arbitrary property
-utilities on each projected cell. `app.css` remains available for selectors
-that need ordinary CSS. Change the scenario, edit a utility class or
-`--primary`, then save. The refreshed view keeps the current control values
-and rendered cell state.
+Open **HTML & CSS** and inspect the dashboard's two view files. Layout and
+responsive behavior live in `index.html`. The top of `app.css` holds the
+theme, followed by page-specific rules. Change the scenario, edit a utility
+class or `--primary`, then save. The refreshed view keeps the current control
+values and rendered cell state.
 
 For a multi-view workflow, open the collection research example:
 
@@ -67,9 +65,9 @@ uv run --with marimo-studio marimo edit analysis.py --sandbox
 The new view starts with every notebook cell in source order. Studio gives you
 the Marimo editor, view source editors, and a live preview in one workspace.
 Write [utility classes](https://unocss.dev/presets/wind4/) directly in
-`index.html`, tune semantic light and dark tokens in `theme.css`, and keep
-bespoke rules in `app.css`. Saved source changes refresh around the running
-notebook.
+`index.html`. Tune semantic light and dark tokens under `/* THEME */` in
+`app.css`, then write page rules under `/* APP */`. Saved source changes
+refresh around the running notebook.
 
 Place a named cell or a JSON-compatible Python value in the view:
 

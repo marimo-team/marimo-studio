@@ -18,7 +18,6 @@ __marimo__/
     analysis/
       dashboard/
         index.html
-        theme.css
         app.css
 ```
 
@@ -34,8 +33,7 @@ uv run --with marimo-studio marimo edit analysis.py --sandbox
 Marimo opens the Studio workspace at its regular server URL. The notebook is
 on the left and the selected view is on the right. Use **Notebook** or
 **Preview** to give one pane the full canvas. Open **HTML & CSS** from the
-workspace menu to edit `index.html`, `theme.css`, or `app.css` beside the live
-preview.
+workspace menu to edit `index.html` or `app.css` beside the live preview.
 
 Use the runtime control in the toolbar to test both execution modes:
 
@@ -107,7 +105,7 @@ kernel reruns the affected cells. Anywidget comm state belongs to the runtime
 that created the model. Build the same native controls in the same order in
 both runtimes so Studio can match each value to its counterpart.
 
-You can also edit all three view files in another editor. Studio follows
+You can also edit both view files in another editor. Studio follows
 changes from disk. If the browser and another editor change the same file,
 Studio shows both versions for an explicit choice.
 

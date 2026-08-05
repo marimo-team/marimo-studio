@@ -72,9 +72,13 @@ used by Studio's WebAssembly preview.
 
 The output includes the selected view files, Studio's styling runtime and
 browser assets, the notebook's `public/` directory, and static cell fragments
-used by HTMX. Utilities, theme tokens, and `app.css` keep the same cascade on
+used by HTMX. Utilities and `app.css` keep the same cascade on
 the static site. Upload the complete output directory to a static host. Pass
 `--force` to replace an existing export.
+
+Export validates the complete output path map before writing. A view asset
+that claims a Studio runtime path, a Marimo resource path, or another generated
+file stops the export with the conflicting path.
 
 The notebook source ships with the site. Its PEP 723 dependencies must install
 in Pyodide, and browser clients must be able to fetch any external data the
@@ -132,10 +136,10 @@ uv run --with marimo-studio \
 Forward the complete path through the reverse proxy. Scripts, styles, cell
 requests, value reads, and the kernel connection resolve from that base URL.
 
-Keep support URLs relative in view templates:
+Keep view assets relative to `index.html`:
 
 ```html
-<link rel="stylesheet" href="./_marimo-studio/views/dashboard/static/app.css" />
+<link rel="stylesheet" href="app.css" />
 ```
 
 ## Preserve a session across refreshes

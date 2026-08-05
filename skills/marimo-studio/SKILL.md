@@ -3,22 +3,23 @@ name: marimo-studio
 description: >-
   Design and maintain audience-specific Marimo Studio views for existing
   Marimo notebooks. Use when an agent needs to inspect notebook outputs,
-  create a view, edit its HTML, theme, and CSS, arrange live cells and Python
-  values, apply a clean visual system, or verify the result in a browser.
+  create a view, edit its HTML, CSS, and browser modules, arrange live cells
+  and Python values, apply a clean visual system, or verify the result in a
+  browser.
 ---
 
 # Design Marimo Studio views
 
 Treat the notebook as the source of computation, reactive state, controls,
 plots, tables, downloads, and anywidgets. A Studio view arranges selected
-notebook outputs into an audience-specific page with HTML and CSS.
+notebook outputs into an audience-specific page with HTML, CSS, and native
+browser modules.
 
 View source lives beside the notebook:
 
 ```text
 __marimo__/studio/<notebook-stem>/<view>/
   index.html
-  theme.css
   app.css
 ```
 
@@ -48,9 +49,10 @@ framed tools. Skip decorative gradients, nested cards, marketing-style hero
 sections, one-off palettes, and decorative animation.
 
 The packaged font stack follows Marimo and falls back to native system fonts.
-Set `--text-font`, `--heading-font`, or `--monospace-font` in `theme.css` when
-the supplied design system chooses another typeface. Add the corresponding
-font resource to `index.html` when the face is not already available.
+Set `--text-font`, `--heading-font`, or `--monospace-font` in the theme section
+of `app.css` when the supplied design system chooses another typeface. Add the
+corresponding font resource to `index.html` when the face is not already
+available.
 
 ## Discover the available material
 
@@ -71,10 +73,11 @@ Use `uvx marimo-studio` when the command is not installed. Add
 `--include-code` when cell previews and definitions do not reveal enough to
 choose the right output.
 
-Read `index.html` and `app.css` completely when the target view exists. Read
-`theme.css` when present. Preserve its working projections, source paths,
-interaction model, and visual language unless the user asks for a redesign.
-Create `theme.css` when the view needs shared semantic tokens.
+Read `index.html` and `app.css` completely when the target view exists.
+Preserve its working projections, source paths, interaction model, and visual
+language unless the user asks for a redesign. Treat files beside them as a
+standard web directory and inspect any modules or assets referenced by the
+document.
 
 Use runtime inspection when output MIME types or JSON-compatible values affect
 the design:
@@ -114,7 +117,7 @@ value projection inside that shell:
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Quarterly performance</title>
-    <link rel="stylesheet" href="./_marimo-studio/views/dashboard/static/app.css" />
+    <link rel="stylesheet" href="app.css" />
   </head>
   <body>
     <main id="app-shell" class="studio-view grid gap-6 lg:grid-cols-2">
@@ -187,10 +190,12 @@ the same class attribute:
 The stable shortcuts are `studio-view`, `studio-card`, `studio-button`, and
 `studio-eyebrow`. Use ordinary utilities for the rest of the layout.
 
-Set semantic variables in `theme.css`. Use `light-dark()` with
-`color-scheme: light dark` when the view should follow the browser theme:
+Set semantic variables under `/* THEME */` in `app.css`. Use `light-dark()`
+with `color-scheme: light dark` when the view should follow the browser theme:
 
 ```css
+/* THEME */
+
 :root {
   color-scheme: light dark;
   --background: light-dark(#ffffff, #111713);
@@ -201,12 +206,19 @@ Set semantic variables in `theme.css`. Use `light-dark()` with
   --primary: light-dark(#0877d1, #3ba7ad);
   --radius: 8px;
 }
+
+/* APP */
+
+.summary-grid {
+  align-items: start;
+}
 ```
 
 Semantic utilities such as `bg-card`, `text-foreground`, `border-border`, and
 `text-primary` read these tokens. Preserve the starter theme's `marimo-cell`
 mapping so projected outputs receive the palette. Put view-specific component
-selectors in `app.css`, which loads after utilities and `theme.css`.
+selectors below `/* APP */`. The file uses the regular CSS cascade and takes
+precedence over Studio's generated utility layer.
 
 Use `<iconify-icon>` with the same icon names accepted by `mo.icon()`:
 
@@ -232,14 +244,32 @@ notebook changes are in scope.
 
 ## Edit with the live preview
 
-Edit `index.html`, `theme.css`, and `app.css` in an external editor or in
-Studio's source panes. Saved source refreshes the visible shell while the
-Marimo runtime, kernel session, controls, and widget models stay mounted.
+Edit `index.html` and `app.css` in an external editor or in Studio's source
+panes. Saved source refreshes the visible shell while the Marimo runtime,
+kernel session, controls, and widget models stay mounted.
 
-Keep behavior in notebook cells and HTMX requests. Avoid copying reactive
-state into page JavaScript. When direct event listeners are necessary,
-delegate from `document` or make initialization safe to repeat after a shell
-refresh.
+Use relative paths for view assets:
+
+```html
+<link rel="stylesheet" href="app.css" />
+<img src="logo.svg" alt="Acme" />
+<script type="module" src="app.js"></script>
+```
+
+Native ESM imports, nested modules, CSS `url(...)` values, images, and fonts
+resolve from the view directory. Add extra files with an external editor. Keep
+notebook-owned reactive state in notebook cells and projections. Use module
+scripts for browser-owned interactions and delegate events from `document`
+when HTMX can replace their targets.
+
+Use ordinary top-level asset names such as `scripts/`, `images/`, and `fonts/`.
+`_marimo-studio`, `@file`, `public`, and `public-files-sw.js` belong to Studio
+or Marimo. Every other regular file in the view directory is served and copied
+into a static export, so keep credentials elsewhere.
+
+CSS saves reload styles in place. A saved HTML or module change reloads a
+scripted document so module initialization and imports follow the browser's
+regular page lifecycle.
 
 Studio's toolbar can run the preview through the Server or WebAssembly
 runtime. Studio prepares WebAssembly in a background frame while Server is
@@ -366,6 +396,9 @@ Verify the direct view at desktop and mobile widths, then check:
 6. Content remains readable without horizontal page overflow.
 7. Keyboard focus is visible and labels remain associated with controls.
 8. The console and network log contain no unexpected failures.
+9. Any module script imports resolve and its browser behavior works after a
+   document reload.
+10. An HTMX request written relative to the view reaches its Studio route.
 
 Fix accessibility and browser failures owned by the view's HTML and CSS.
 Report failures inside Marimo-rendered controls or anywidgets separately.

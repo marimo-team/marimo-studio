@@ -99,9 +99,19 @@ under `packages/`, rebuild, and verify package contents with `make package`.
 
 ## Browser contracts
 
-The custom view keeps `#marimo-runtime-root` mounted while HTML refreshes or a
-view switch replaces `#app-shell`. Matching cell hosts reconnect to the current
-store and preserve output DOM when possible.
+The custom view keeps `#marimo-runtime-root` mounted while scriptless HTML
+refreshes or a view switch replaces `#app-shell`. Matching cell hosts reconnect
+to the current store and preserve output DOM when possible. A document with an
+authored script reloads for HTML and module changes so the browser evaluates
+the native module graph through its normal lifecycle. Studio installs
+`window.htmx` and starts utility-class observation before authored modules can
+mutate the shell.
+
+Wind4 output is wrapped in native CSS `@scope` and stops at
+`[data-marimo-cell-output]`. Studio foundation and utility rules use named
+cascade layers. The authored `app.css` remains unlayered and follows standard
+cascade precedence. Unsupported `@scope` browsers retain authored CSS and the
+notebook runtime and receive a focused style diagnostic.
 
 Studio keeps the notebook iframe, source editors, and prepared runtime preview
 frames mounted as stable nodes. Task modes and the custom pane tree change

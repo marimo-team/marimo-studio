@@ -12,8 +12,8 @@ The toolbar controls the main canvas:
 - **Build** places the native Marimo editor beside the selected view.
 - **Preview** fills the canvas with the selected view.
 
-Open **HTML & CSS** from the workspace menu to place `index.html`, `theme.css`,
-or `app.css` beside the live preview.
+Open **HTML & CSS** from the workspace menu to place `index.html` or `app.css`
+beside the live preview.
 
 Open the toolbar's workspace menu when a task needs another arrangement.
 Choose **Open saved layout**, then **Arrange panes** to add a surface on
@@ -94,7 +94,7 @@ Each `index.html` is a complete document with one `#app-shell`:
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Revenue dashboard</title>
-    <link rel="stylesheet" href="./_marimo-studio/views/dashboard/static/app.css" />
+    <link rel="stylesheet" href="app.css" />
   </head>
   <body>
     <main id="app-shell">
@@ -135,10 +135,12 @@ shortcuts:
 - `studio-button` provides a compact interactive control.
 - `studio-eyebrow` provides a small uppercase section label.
 
-Edit `theme.css` for shared semantic tokens. The file is loaded automatically
-between Studio's foundation and `app.css`:
+The starter `app.css` separates theme tokens from page rules with plain CSS
+comments:
 
 ```css
+/* THEME */
+
 :root {
   color-scheme: light dark;
   --background: light-dark(#ffffff, #111713);
@@ -149,13 +151,19 @@ between Studio's foundation and `app.css`:
   --primary: light-dark(#0877d1, #3ba7ad);
   --radius: 8px;
 }
+
+/* APP */
+
+.summary-grid {
+  align-items: start;
+}
 ```
 
 Utilities such as `bg-card`, `text-foreground`, `border-border`, and
 `rounded-lg` read these variables. The starter theme maps them into projected
 Marimo outputs through its `marimo-cell` block. Keep that mapping when changing
-the palette. Put named components and view-specific selectors in `app.css`.
-Its rules load last.
+the palette. Rules in `app.css` use the normal CSS cascade and take precedence
+over Studio's generated utilities.
 
 `iconify-icon` accepts the same Iconify names as `mo.icon()`. Add
 `aria-hidden="true"` to decorative icons. An icon that carries meaning needs
@@ -168,8 +176,7 @@ The repository includes two view-authoring patterns:
 
 - `examples/analysis.py` is a compact dashboard. Its HTML uses responsive
   utilities, icons, and arbitrary properties for projected-cell loading space.
-  Its theme defines the semantic palette, keeping the complete layout readable
-  from `index.html`.
+  The theme section in `app.css` defines its semantic palette.
 - `examples/nga_collection.py` is a three-view research workflow. **Corpus**,
   **Study**, and **Packet** apply different themes and page structures to the
   same filters, selection order, notebook outputs, and download.
@@ -179,13 +186,44 @@ class or theme token. Saving the view source replaces the authored shell after
 its utility CSS is ready. Mounted cells and their widget models move into the
 new shell with their current state.
 
-Serve images and other view files through the scoped static route:
+Reference images, modules, fonts, and other files relative to `index.html`:
 
 ```html
-<img src="./_marimo-studio/views/dashboard/static/logo.svg" alt="Acme logo" />
+<img src="logo.svg" alt="Acme logo" />
 ```
 
-Relative support URLs continue to work beneath a configured Marimo base path.
+Studio serves the view as a web directory, including beneath a configured
+Marimo base path. Relative URLs inside CSS and imported modules resolve from
+their source file in the same directory.
+
+## Add browser behavior
+
+Use native module scripts when the page needs browser-side behavior:
+
+```html
+<script type="module" src="app.js"></script>
+```
+
+```js
+import { formatCurrency } from "./format.js";
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-copy-value]");
+  if (button) {
+    navigator.clipboard.writeText(formatCurrency(button.dataset.copyValue));
+  }
+});
+```
+
+The browser loads the module graph with standard ESM rules. CSS changes reload
+in place. A saved HTML or module change reloads a scripted document so module
+initialization and imports follow the browser's regular page lifecycle.
+`window.htmx` is ready before authored modules evaluate, so a module can
+register HTMX extensions or process browser-owned fragments during startup.
+
+Keep view assets under ordinary names such as `scripts/`, `images/`, and
+`fonts/`. The top-level paths `_marimo-studio`, `@file`, `public`, and
+`public-files-sw.js` route to Studio or Marimo.
 
 ## Reveal detail with HTMX
 
@@ -229,8 +267,8 @@ intentional.
 
 ## Match outputs to the page
 
-Set the page color scheme in `theme.css` so Marimo controls use the matching
-theme:
+Set the page color scheme in the `/* THEME */` section of `app.css` so Marimo
+controls use the matching theme:
 
 ```css
 :root {

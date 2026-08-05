@@ -27,7 +27,7 @@ features:
     details: Place native controls, plots, tables, downloads, and anywidgets in a view. Read JSON-compatible Python values into page text.
   - icon: 🎛️
     title: Tune for each audience
-    details: Give each audience its own HTML, CSS, and static files while every view uses the same notebook cells and reactive graph.
+    details: Give each audience its own HTML, CSS, modules, and assets while every view uses the same notebook cells and reactive graph.
   - icon: 🚀
     title: Choose where cells run
     details: Preview against Marimo's Python server or run the complete notebook locally in WebAssembly. Native controls stay aligned while you compare both runtimes.

@@ -129,8 +129,10 @@ notebook.
 an allowed selector from its Python namespace and returns a JSON-compatible
 value for the host element. Both adapters use Marimo's globals lock.
 
-HTML and CSS edits refresh the authored shell around the runtime root. The
-runtime and widget models remain mounted while HTMX swaps the `#app-shell`.
+CSS edits reload the page stylesheet. HTML edits refresh the authored shell
+around the runtime root. A view with native script tags uses a document reload
+for HTML and module changes, which gives ESM imports the browser's regular page
+lifecycle. Scriptless shell swaps keep the runtime and widget models mounted.
 Studio keeps one persistent preview frame per prepared runtime because
 Marimo's transport and Pyodide bridge are document-scoped. Runtime selection
 changes frame visibility while the notebook editor and source editors remain

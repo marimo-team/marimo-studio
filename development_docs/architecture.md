@@ -63,8 +63,10 @@ by the active view.
 
 ## Routes and sessions
 
-Run mode serves the default view at `/` and named views at `/<view>/`. Each
-browser receives an isolated run session.
+Run mode serves the default view at `/` and named views at `/<view>/`. A named
+view is also the base for its relative files, so `app.js` in the view directory
+is available at `/<view>/app.js`. Each browser receives an isolated run
+session.
 
 Edit mode sends the authenticated root to `/studio/<default-view>/`. The
 server emits the document envelope and a validated JSON bootstrap record.
@@ -115,12 +117,21 @@ keeps prepared runtime documents in separate frames and updates each document
 in place when the view changes. An adapter instance change reloads its owning
 preview document.
 
+The styling runtime scans classes outside Marimo-owned output boundaries and
+generates Wind4 CSS inside a native `@scope`. Named cascade layers keep Studio
+foundation and utility rules below unlayered `app.css`. The browser evaluates
+authored module scripts as ordinary ESM. A scripted document reloads after an
+HTML or module change so imports and initialization follow a page lifecycle.
+The view base keeps authored relative URLs native. View-relative Studio,
+virtual-file, notebook-public, and public-service-worker paths route back to
+their owning server handlers before authored asset lookup.
+
 The server validates bindings against the active Marimo document by semantic
 cell identity. Missing cells and values become structured projection
 diagnostics while healthy hosts continue rendering. A source refresh commits
-HTML, CSS, runtime configuration, and the selected view at one presentation
-revision. The browser keeps the last valid shell during transient or invalid
-updates.
+HTML, document-scoped assets, runtime configuration, and the selected view at
+one presentation revision. CSS reloads independently. The browser keeps the
+last valid shell during transient or invalid updates.
 
 View source reads and writes use content revisions. Writes use atomic
 replacement and reject mutable symlink traversal. External edits refresh clean
@@ -143,7 +154,8 @@ existing WebAssembly runtime.
 
 Output is staged beside the destination and moved into place after every file
 has been written. Replacing an existing bundle requires `--force`. Projection
-failures leave the destination unchanged.
+failures leave the destination unchanged. A destination manifest rejects
+reserved paths, duplicate files, and file-directory collisions before copying.
 
 Private Marimo access stays in `_compat/static_export.py` and the existing
 browser notebook adapter. These public Marimo APIs would narrow that boundary:
