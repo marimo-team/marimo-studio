@@ -22,3 +22,4 @@ packages/marimo-studio/src/marimo_studio/_static/
 
 # Marimo execution snapshots
 **/__marimo__/session/
+**/__marimo__/cache/

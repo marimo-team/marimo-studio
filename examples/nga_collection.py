@@ -3,9 +3,13 @@
 # dependencies = [
 #   "marimo[recommended]>=0.23.16",
 #   "marimo-studio",
+#   "numpy",
 #   "polars",
 #   "pyobservablejs",
 # ]
+#
+# [tool.marimo.runtime]
+# cache_cells = true
 #
 # [tool.marimo-studio]
 # default = "corpus"
@@ -13,14 +17,14 @@
 #
 # [tool.marimo-studio.cells]
 # corpus_controls = {ref = "cell:v1:1e7b1299b526e7923a360edddeec9f8d7420675ca1ba53bec9cdf29ee7e276e2:1e7b1299b526e7923a360edddeec9f8d7420675ca1ba53bec9cdf29ee7e276e2:0"}
-# corpus_index = {ref = "cell:v1:0ba2e93bffb9d0b12bd1495e431cbb520e2c3571c9b0ff0886cf114725efaa33:0ba2e93bffb9d0b12bd1495e431cbb520e2c3571c9b0ff0886cf114725efaa33:0"}
-# corpus_filter_chart = {ref = "cell:v1:3184d4f49953a63ff2568243345ad99eadd1008d84dd1d99253732b68f7e506a:3184d4f49953a63ff2568243345ad99eadd1008d84dd1d99253732b68f7e506a:0"}
-# study_controls = {ref = "cell:v1:f93846066b98b6d7f2af6e57fbc3d076287314ada5315296ba64dc0631764b89:f93846066b98b6d7f2af6e57fbc3d076287314ada5315296ba64dc0631764b89:0"}
-# study_gallery = {ref = "cell:v1:cd315dfd193bfe6a0985b4fb9bec8fbd2d2d4fe0994cbeacf3dfac31308c30d9:cd315dfd193bfe6a0985b4fb9bec8fbd2d2d4fe0994cbeacf3dfac31308c30d9:0"}
+# corpus_index = {ref = "cell:v1:2fb589cc8ede7aceb9f96c399816699d4d5d9bda13b43131fa11c601d06f7e80:2fb589cc8ede7aceb9f96c399816699d4d5d9bda13b43131fa11c601d06f7e80:0"}
+# corpus_filter_chart = {ref = "cell:v1:56890f3d9ed67d57e6aa28d6a6be5a6e746eb81bc403c0ae73eccb87f0ce8b2a:56890f3d9ed67d57e6aa28d6a6be5a6e746eb81bc403c0ae73eccb87f0ce8b2a:0"}
+# study_controls = {ref = "cell:v1:8b02c89d51b7852cba5e8d47ec911aaa04ac7acedc9b7c3396304770008232c0:8b02c89d51b7852cba5e8d47ec911aaa04ac7acedc9b7c3396304770008232c0:0"}
+# study_gallery = {ref = "cell:v1:bf7065e0cb4407b04ed39350dc67960716a84436d94ac213959c448bea9c7684:bf7065e0cb4407b04ed39350dc67960716a84436d94ac213959c448bea9c7684:0"}
 # selection_status = {ref = "cell:v1:286cbc5de419e150bea06e30762e268d8aabe9a4bea9eda504309b5a6782ee27:de05ec8ddbf4fe275810c002d7dcfb9125fd1b9646746460ab2885f5499e7d31:0"}
 # packet_preview = {ref = "cell:v1:a628d3557c21e94f77eab871a78c9d99f70c38a9616e46f2a7619e644dc1f616:a628d3557c21e94f77eab871a78c9d99f70c38a9616e46f2a7619e644dc1f616:0"}
-# packet_table = {ref = "cell:v1:05ee2d4953707aa1f7f466228fc580dc02752e5e0f386fbcf9f028144f242d6e:05ee2d4953707aa1f7f466228fc580dc02752e5e0f386fbcf9f028144f242d6e:0"}
-# packet_download = {ref = "cell:v1:2ae0547579a92d71a40a002b59d6f923ee22b81554c7ace012bbdd1fd0feb3c1:2ae0547579a92d71a40a002b59d6f923ee22b81554c7ace012bbdd1fd0feb3c1:0"}
+# packet_table = {ref = "cell:v1:446d594f529af70408d73eaf7049f31bcb36ad1f28dc46cbe55a31dc33701b04:446d594f529af70408d73eaf7049f31bcb36ad1f28dc46cbe55a31dc33701b04:0"}
+# packet_download = {ref = "cell:v1:e7a3a021a379707ab44ece668c53b832a320363fb90361d5ab5ec81a9a3939ae:e7a3a021a379707ab44ece668c53b832a320363fb90361d5ab5ec81a9a3939ae:0"}
 # ///
 
 import marimo
@@ -39,6 +43,7 @@ def _(mo):
     the Index of American Design in the collection timeline, supports visual
     review, and packages six works with enough provenance for handoff.
     """)
+    return
 
 
 @app.cell
@@ -50,8 +55,6 @@ def _():
 
 @app.cell
 def _():
-    from pathlib import Path as _Path
-
     _revision = "e19fc9a6bf8167630be458f745dfff915fbe06ba"
     _base_url = (
         "https://raw.githubusercontent.com/NationalGalleryOfArt/opendata/"
@@ -60,7 +63,6 @@ def _():
     research_config = {
         "dataset_revision": _revision,
         "dataset_base_url": _base_url,
-        "cache_directory": (_Path.home() / ".cache" / "nga-collection-research"),
         "creator_role_type": "artist",
         "unknown_creator": "Unattributed",
         "corpus_classification": "Index of American Design",
@@ -88,24 +90,21 @@ def _(mo, research_config):
     - `published_images.csv` has one row per published image.
 
     Keeping those grains explicit prevents objects with several creators or
-    images from being counted several times.
+    images from being counted several times. The object table stays complete
+    for historical discovery. Relation, constituent, and image rows are then
+    narrowed to the configured corpus after their source counts are recorded.
     """)
+    return
 
 
 @app.cell
-def _(mo, research_config):
+def _(research_config):
     import polars as _pl
 
-    @mo.persistent_cache(
-        save_path=str(research_config["cache_directory"]),
-        pin_modules=True,
-    )
-    def _read_source_tables():
-        _dataset_url = lambda _filename: (
-            f"{research_config['dataset_base_url']}/{_filename}"
-        )
+    def _load_source_tables():
+        _base_url = research_config["dataset_base_url"]
         _objects = _pl.read_csv(
-            _dataset_url("objects.csv"),
+            f"{_base_url}/objects.csv",
             infer_schema_length=10_000,
         ).select(
             "objectid",
@@ -121,83 +120,61 @@ def _(mo, research_config):
             "subclassification",
             "visualbrowserclassification",
         )
-        _constituents = _pl.read_csv(
-            _dataset_url("constituents.csv"),
-            infer_schema_length=10_000,
-        ).select(
-            "constituentid",
-            "forwarddisplayname",
-            "displaydate",
-            "visualbrowsernationality",
-            "constituenttype",
-        )
-        _relations = _pl.read_csv(
-            _dataset_url("objects_constituents.csv"),
-            quote_char='"',
-            infer_schema_length=None,
-        ).select(
+        _collection_objects = _objects.select(
             "objectid",
-            "constituentid",
-            "displayorder",
-            "roletype",
-            "role",
-            "prefix",
-            "suffix",
+            _pl.col("beginyear").alias("start_year"),
+            _pl.col("classification").fill_null("Unclassified"),
+            _pl.col("visualbrowserclassification").fill_null("Other"),
         )
-        _images = _pl.read_csv(
-            _dataset_url("published_images.csv"),
-            infer_schema_length=10_000,
-        ).select(
-            _pl.col("depictstmsobjectid").alias("objectid"),
-            "uuid",
-            "iiifurl",
-            "iiifthumburl",
-            "viewtype",
-            "sequence",
-            "width",
-            "height",
-            "openaccess",
-            "assistivetext",
+        _index_source_objects = _objects.filter(
+            _pl.col("classification") == research_config["corpus_classification"]
         )
-        return {
-            "objects": _objects,
-            "constituents": _constituents,
-            "relations": _relations,
-            "images": _images,
-        }
+        return (
+            _collection_objects,
+            _index_source_objects,
+            {"source": _objects.height, "working": _objects.height},
+        )
 
-    source_tables = _read_source_tables()
-    return (source_tables,)
+    collection_objects, index_source_objects, object_source_counts = (
+        _load_source_tables()
+    )
+    return collection_objects, index_source_objects, object_source_counts
 
 
 @app.cell
 def _(
+    creator_source_counts,
+    image_source_counts,
     mo,
-    source_tables,
+    object_source_counts,
 ):
     source_rows = [
         {
             "Table": "objects",
             "Grain": "collection object",
-            "Rows": f"{source_tables['objects'].height:,}",
+            "Source rows": f"{object_source_counts['source']:,}",
+            "Working rows": f"{object_source_counts['working']:,}",
         },
         {
             "Table": "objects_constituents",
             "Grain": "object and constituent role",
-            "Rows": f"{source_tables['relations'].height:,}",
+            "Source rows": f"{creator_source_counts['relations_source']:,}",
+            "Working rows": f"{creator_source_counts['relations_working']:,}",
         },
         {
             "Table": "constituents",
             "Grain": "person or organization",
-            "Rows": f"{source_tables['constituents'].height:,}",
+            "Source rows": f"{creator_source_counts['constituents_source']:,}",
+            "Working rows": f"{creator_source_counts['constituents_working']:,}",
         },
         {
             "Table": "published_images",
             "Grain": "published image",
-            "Rows": f"{source_tables['images'].height:,}",
+            "Source rows": f"{image_source_counts['source']:,}",
+            "Working rows": f"{image_source_counts['working']:,}",
         },
     ]
-    mo.ui.table(
+    source_table = mo.ui.table(
         source_rows,
         selection=None,
         pagination=False,
@@ -206,6 +183,8 @@ def _(
         show_download=False,
         show_search=False,
     )
+    source_table
+    return (source_table,)
 
 
 @app.cell(hide_code=True)
@@ -226,6 +205,7 @@ def _(mo):
     gallery card and packet record recomputes while retaining both source
     representations.
     """)
+    return
 
 
 @app.cell
@@ -250,156 +230,209 @@ def _(attribution_policy_control):
 
 
 @app.cell
-def _(
-    research_config,
-    source_tables,
-):
+def _(index_source_objects, research_config):
     import polars as _pl
 
-    creator_relation_rows = (
-        source_tables["relations"]
-        .filter(_pl.col("roletype") == research_config["creator_role_type"])
-        .join(source_tables["constituents"], on="constituentid", how="left")
-        .with_columns(
-            _pl.col("forwarddisplayname")
-            .fill_null("Unidentified constituent")
-            .alias("creator_name"),
-            _pl.col("displayorder").fill_null(1_000_000),
+    def _load_creator_relations():
+        _base_url = research_config["dataset_base_url"]
+        _all_relations = _pl.read_csv(
+            f"{_base_url}/objects_constituents.csv",
+            quote_char='"',
+            infer_schema_length=None,
+        ).select(
+            "objectid",
+            "constituentid",
+            "displayorder",
+            "roletype",
+            "role",
+            "prefix",
+            "suffix",
         )
-        .with_columns(
-            _pl.concat_str(
-                [
-                    _pl.col("prefix").fill_null("").str.strip_chars(),
-                    _pl.col("creator_name"),
-                    _pl.col("suffix").fill_null("").str.strip_chars(),
-                ],
-                separator=" ",
+        _relations = _all_relations.join(
+            index_source_objects.select("objectid"),
+            on="objectid",
+            how="semi",
+        )
+        _all_constituents = _pl.read_csv(
+            f"{_base_url}/constituents.csv",
+            infer_schema_length=10_000,
+        ).select(
+            "constituentid",
+            "forwarddisplayname",
+            "displaydate",
+            "visualbrowsernationality",
+            "constituenttype",
+        )
+        _constituents = _all_constituents.join(
+            _relations.select("constituentid").unique(),
+            on="constituentid",
+            how="semi",
+        )
+        _creators = (
+            _relations
+            .filter(_pl.col("roletype") == research_config["creator_role_type"])
+            .join(_constituents, on="constituentid", how="left")
+            .with_columns(
+                _pl.col("forwarddisplayname")
+                .fill_null("Unidentified constituent")
+                .alias("creator_name"),
+                _pl.col("displayorder").fill_null(1_000_000),
             )
-            .str.replace_all(r"\s+", " ")
-            .str.strip_chars()
-            .alias("qualified_creator_name")
+            .with_columns(
+                _pl.concat_str(
+                    [
+                        _pl.col("prefix").fill_null("").str.strip_chars(),
+                        _pl.col("creator_name"),
+                        _pl.col("suffix").fill_null("").str.strip_chars(),
+                    ],
+                    separator=" ",
+                )
+                .str.replace_all(r"\s+", " ")
+                .str.strip_chars()
+                .alias("qualified_creator_name")
+            )
+            .with_columns(
+                _pl.concat_str(
+                    [
+                        _pl.col("qualified_creator_name"),
+                        _pl.col("role").fill_null("artist relation"),
+                    ],
+                    separator=" · ",
+                ).alias("creator_relation_label")
+            )
+            .sort("objectid", "displayorder", "constituentid")
+            .group_by("objectid", maintain_order=True)
+            .agg(
+                _pl.col("creator_name").first().alias("first_artist_name"),
+                _pl.col("creator_name")
+                .unique(maintain_order=True)
+                .alias("creator_names"),
+                _pl.col("creator_relation_label")
+                .unique(maintain_order=True)
+                .alias("creator_relation_labels"),
+                _pl.len().alias("creator_relation_count"),
+            )
+            .with_columns(
+                _pl.col("creator_names").list.join("; ").alias("creators"),
+                _pl.col("creator_relation_labels")
+                .list.join("; ")
+                .alias("creator_relations"),
+            )
+            .drop("creator_names", "creator_relation_labels")
         )
-        .with_columns(
-            _pl.concat_str(
-                [
-                    _pl.col("qualified_creator_name"),
-                    _pl.col("role").fill_null("artist relation"),
-                ],
-                separator=" · ",
-            ).alias("creator_relation_label")
-        )
-        .sort("objectid", "displayorder", "constituentid")
-    )
+        return _creators, {
+            "relations_source": _all_relations.height,
+            "relations_working": _relations.height,
+            "constituents_source": _all_constituents.height,
+            "constituents_working": _constituents.height,
+        }
 
-    creators_by_object = (
-        creator_relation_rows.group_by("objectid", maintain_order=True)
-        .agg(
-            _pl.col("creator_name").first().alias("first_artist_name"),
-            _pl.col("creator_name").unique(maintain_order=True).alias("creator_names"),
-            _pl.col("creator_relation_label")
-            .unique(maintain_order=True)
-            .alias("creator_relation_labels"),
-            _pl.len().alias("creator_relation_count"),
-        )
-        .with_columns(
-            _pl.col("creator_names").list.join("; ").alias("creators"),
-            _pl.col("creator_relation_labels")
-            .list.join("; ")
-            .alias("creator_relations"),
-        )
-        .drop("creator_names", "creator_relation_labels")
-    )
-    return (creators_by_object,)
+    creators_by_object, creator_source_counts = _load_creator_relations()
+    return creators_by_object, creator_source_counts
 
 
 @app.cell
-def _(source_tables):
+def _(index_source_objects, research_config):
     import polars as _pl
 
-    ranked_images = (
-        source_tables["images"]
-        .with_columns(
-            _pl.when(_pl.col("openaccess").fill_null(0) == 1)
-            .then(0)
-            .otherwise(1)
-            .alias("access_rank"),
-            _pl.when(_pl.col("viewtype").str.to_lowercase() == "primary")
-            .then(0)
-            .otherwise(1)
-            .alias("view_rank"),
-            _pl.col("sequence").fill_null(1_000_000).alias("image_sequence"),
+    def _load_published_images():
+        _all_images = _pl.read_csv(
+            f"{research_config['dataset_base_url']}/published_images.csv",
+            infer_schema_length=10_000,
+        ).select(
+            _pl.col("depictstmsobjectid").alias("objectid"),
+            "uuid",
+            "iiifurl",
+            "iiifthumburl",
+            "viewtype",
+            "sequence",
+            "width",
+            "height",
+            "openaccess",
+            "assistivetext",
         )
-        .sort("objectid", "access_rank", "view_rank", "image_sequence", "uuid")
-    )
+        _images = _all_images.join(
+            index_source_objects.select("objectid"),
+            on="objectid",
+            how="semi",
+        )
+        _images_by_object = (
+            _images
+            .with_columns(
+                _pl.when(_pl.col("openaccess").fill_null(0) == 1)
+                .then(0)
+                .otherwise(1)
+                .alias("access_rank"),
+                _pl.when(_pl.col("viewtype").str.to_lowercase() == "primary")
+                .then(0)
+                .otherwise(1)
+                .alias("view_rank"),
+                _pl.col("sequence").fill_null(1_000_000).alias("image_sequence"),
+            )
+            .sort(
+                "objectid",
+                "access_rank",
+                "view_rank",
+                "image_sequence",
+                "uuid",
+            )
+            .group_by("objectid", maintain_order=True)
+            .agg(
+                _pl.len().alias("published_image_count"),
+                (_pl.col("openaccess").fill_null(0) == 1)
+                .sum()
+                .alias("open_image_count"),
+                _pl.col("uuid").first().alias("selected_image_uuid"),
+                _pl.col("iiifurl").first().alias("selected_image_url"),
+                _pl.col("iiifthumburl").first().alias("selected_thumbnail_url"),
+                _pl.col("assistivetext").first().alias("selected_image_alt"),
+                _pl.col("width").first().alias("selected_image_width"),
+                _pl.col("height").first().alias("selected_image_height"),
+                _pl.col("viewtype").first().alias("selected_image_view_type"),
+                (_pl.col("openaccess").first().fill_null(0) == 1).alias(
+                    "selected_image_open_access"
+                ),
+            )
+        )
+        return _images_by_object, {
+            "source": _all_images.height,
+            "working": _images.height,
+        }
 
-    images_by_object = ranked_images.group_by("objectid", maintain_order=True).agg(
-        _pl.len().alias("published_image_count"),
-        (_pl.col("openaccess").fill_null(0) == 1).sum().alias("open_image_count"),
-        _pl.col("uuid").first().alias("selected_image_uuid"),
-        _pl.col("iiifurl").first().alias("selected_image_url"),
-        _pl.col("iiifthumburl").first().alias("selected_thumbnail_url"),
-        _pl.col("assistivetext").first().alias("selected_image_alt"),
-        _pl.col("width").first().alias("selected_image_width"),
-        _pl.col("height").first().alias("selected_image_height"),
-        _pl.col("viewtype").first().alias("selected_image_view_type"),
-        (_pl.col("openaccess").first().fill_null(0) == 1).alias(
-            "selected_image_open_access"
-        ),
-    )
-    return (images_by_object,)
-
-
-@app.cell
-def _(creators_by_object, images_by_object):
-    object_relations = {
-        "creators": creators_by_object,
-        "images": images_by_object,
-    }
-    return (object_relations,)
-
-
-@app.cell
-def _(research_config, source_tables):
-    object_source = {
-        "objects": source_tables["objects"],
-        "unknown_creator": research_config["unknown_creator"],
-    }
-    return (object_source,)
-
-
-@app.cell
-def _(object_relations, object_source):
-    object_model_inputs = object_source | {"relations": object_relations}
-    return (object_model_inputs,)
+    images_by_object, image_source_counts = _load_published_images()
+    return image_source_counts, images_by_object
 
 
 @app.cell
 def _(
     attribution_policy,
-    object_model_inputs,
+    creators_by_object,
+    images_by_object,
+    index_source_objects,
+    research_config,
 ):
     import polars as _pl
 
     if attribution_policy not in {"source", "first_relation"}:
         raise ValueError("Attribution policy must be 'source' or 'first_relation'")
 
-    objects_core = (
-        object_model_inputs["objects"]
-        .join(object_model_inputs["relations"]["creators"], on="objectid", how="left")
-        .join(object_model_inputs["relations"]["images"], on="objectid", how="left")
+    index_objects = (
+        index_source_objects
+        .join(creators_by_object, on="objectid", how="left")
+        .join(images_by_object, on="objectid", how="left")
         .with_columns(
             _pl.col("title").fill_null("Untitled"),
             _pl.col("displaydate").fill_null("Date unknown"),
             _pl.col("medium").fill_null("Medium not recorded"),
-            _pl.col("attribution").fill_null(object_model_inputs["unknown_creator"]),
+            _pl.col("attribution").fill_null(research_config["unknown_creator"]),
             _pl.col("creditline").fill_null("Credit line not recorded"),
             _pl.col("classification").fill_null("Unclassified"),
             _pl.col("subclassification").fill_null("Unclassified"),
             _pl.col("visualbrowserclassification").fill_null("Other"),
             _pl.col("first_artist_name").fill_null(
-                object_model_inputs["unknown_creator"]
+                research_config["unknown_creator"]
             ),
-            _pl.col("creators").fill_null(object_model_inputs["unknown_creator"]),
+            _pl.col("creators").fill_null(research_config["unknown_creator"]),
             _pl.col("creator_relations").fill_null("Artist relation not recorded"),
             _pl.col("creator_relation_count").fill_null(0),
             _pl.col("published_image_count").fill_null(0),
@@ -423,31 +456,33 @@ def _(
         )
         .sort("start_year", "display_creator", "title", nulls_last=True)
     )
-    return (objects_core,)
+    return (index_objects,)
 
 
 @app.cell(hide_code=True)
-def _(mo, objects_core):
-    multi_creator_count = objects_core.filter(
-        objects_core["creator_relation_count"] > 1
+def _(collection_objects, index_objects, mo):
+    multi_creator_count = index_objects.filter(
+        index_objects["creator_relation_count"] > 1
     ).height
-    multi_image_count = objects_core.filter(
-        objects_core["published_image_count"] > 1
+    multi_image_count = index_objects.filter(
+        index_objects["published_image_count"] > 1
     ).height
     mo.md(f"""
-    ### The shared object model
+    ### Object-grain models
 
-    `objects_core` contains **{objects_core.height:,} rows for
-    {objects_core["objectid"].n_unique():,} objects**. The join preserves
-    **{multi_creator_count:,} objects with several creator relations** and
-    **{multi_image_count:,} objects with several published images** without
-    multiplying object counts.
+    `collection_objects` keeps **{collection_objects.height:,} collection
+    objects** for historical comparison. `index_objects` enriches the
+    **{index_objects.height:,} configured corpus objects** with creator and
+    image relationships. The joins preserve **{multi_creator_count:,} objects
+    with several creator relations** and **{multi_image_count:,} objects with
+    several published images** while retaining one row per object.
 
     The selected publication image is the first open-access primary view by
     sequence, with another open-access view used when no primary view is
     available. The packet records that image's access status and view type.
     Object rights and reproduction details remain linked to the NGA record.
     """)
+    return
 
 
 @app.cell(hide_code=True)
@@ -459,18 +494,16 @@ def _(mo):
     works rather than image records. The first view compares the collection's
     visual browser classifications.
     """)
+    return
 
 
 @app.cell
-def _(objects_core):
+def _(collection_objects):
     import polars as _pl
 
     collection_classifications = (
-        objects_core.group_by("visualbrowserclassification")
-        .agg(
-            _pl.len().alias("object_count"),
-            _pl.col("has_open_image").sum().alias("open_image_count"),
-        )
+        collection_objects.group_by("visualbrowserclassification")
+        .agg(_pl.len().alias("object_count"))
         .sort("object_count", descending=True)
     )
     return (collection_classifications,)
@@ -480,7 +513,7 @@ def _(objects_core):
 def _():
     import observablejs as _obs
 
-    _notebook = _obs.Notebook(
+    collection_classification_notebook = _obs.Notebook(
         _obs.ojs(
             """
             Plot.plot({
@@ -505,33 +538,31 @@ def _():
         ),
         variables={"collectionClassifications": []},
     )
-    collection_classification_chart_model = {
-        "notebook": _notebook,
-        "view": _notebook.view("chart", capture_state=False),
-    }
-    return (collection_classification_chart_model,)
+    collection_classification_chart = collection_classification_notebook.view(
+        "chart",
+        capture_state=False,
+    )
+    return collection_classification_chart, collection_classification_notebook
 
 
 @app.cell
 def _(
-    collection_classification_chart_model,
+    collection_classification_chart,
+    collection_classification_notebook,
     collection_classifications,
 ):
-    collection_classification_chart_model["notebook"].update_variables(
+    collection_classification_notebook.update_variables(
         {"collectionClassifications": collection_classifications}
     )
+    collection_classification_chart
+    return
 
 
 @app.cell
-def _(collection_classification_chart_model):
-    collection_classification_chart_model["view"]
-
-
-@app.cell
-def _(objects_core):
+def _(collection_objects):
     import polars as _pl
 
-    dated_collection = objects_core.filter(
+    dated_collection = collection_objects.filter(
         _pl.col("start_year").is_between(1400, 2020)
     ).select("objectid", "start_year", "visualbrowserclassification")
     return (dated_collection,)
@@ -541,7 +572,7 @@ def _(objects_core):
 def _():
     import observablejs as _obs
 
-    _notebook = _obs.Notebook(
+    collection_timeline_notebook = _obs.Notebook(
         _obs.ojs(
             """
             Plot.plot({
@@ -572,23 +603,20 @@ def _():
         ),
         variables={"datedCollection": []},
     )
-    collection_timeline_chart_model = {
-        "notebook": _notebook,
-        "view": _notebook.view("chart", capture_state=False),
-    }
-    return (collection_timeline_chart_model,)
+    collection_timeline_chart = collection_timeline_notebook.view(
+        "chart",
+        capture_state=False,
+    )
+    return collection_timeline_chart, collection_timeline_notebook
 
 
 @app.cell
-def _(collection_timeline_chart_model, dated_collection):
-    collection_timeline_chart_model["notebook"].update_variables(
+def _(collection_timeline_chart, collection_timeline_notebook, dated_collection):
+    collection_timeline_notebook.update_variables(
         {"datedCollection": dated_collection}
     )
-
-
-@app.cell
-def _(collection_timeline_chart_model):
-    collection_timeline_chart_model["view"]
+    collection_timeline_chart
+    return
 
 
 @app.cell(hide_code=True)
@@ -600,14 +628,15 @@ def _(mo):
     source column. The next transformation filters drawings dated 1930 through
     1945, then groups them by `classification` to expose the decisive link.
     """)
+    return
 
 
 @app.cell
-def _(objects_core):
+def _(collection_objects):
     import polars as _pl
 
     drawing_classification_counts = (
-        objects_core.filter(
+        collection_objects.filter(
             _pl.col("start_year").is_between(1930, 1945),
             _pl.col("visualbrowserclassification") == "drawing",
         )
@@ -620,7 +649,7 @@ def _(objects_core):
 
 @app.cell
 def _(drawing_classification_counts, mo):
-    mo.ui.table(
+    drawing_classification_table = mo.ui.table(
         drawing_classification_counts.rename(
             {
                 "classification": "Source classification",
@@ -634,6 +663,8 @@ def _(drawing_classification_counts, mo):
         show_download=False,
         show_search=False,
     )
+    drawing_classification_table
+    return (drawing_classification_table,)
 
 
 @app.cell(hide_code=True)
@@ -652,16 +683,7 @@ def _(drawing_classification_counts, mo):
     The corpus rule stays explicit and editable. It is the root of the Index,
     study gallery, and handoff packet.
     """)
-
-
-@app.cell
-def _(objects_core, research_config):
-    import polars as _pl
-
-    index_objects = objects_core.filter(
-        _pl.col("classification") == research_config["corpus_classification"]
-    )
-    return (index_objects,)
+    return
 
 
 @app.cell
@@ -679,6 +701,7 @@ def _(index_objects, mo):
     labels**. Recorded start years span **{date_min} to {date_max}**, with most
     production concentrated from 1935 through 1942.
     """)
+    return
 
 
 @app.cell
@@ -701,7 +724,7 @@ def _(index_objects):
 def _():
     import observablejs as _obs
 
-    _notebook = _obs.Notebook(
+    index_timeline_notebook = _obs.Notebook(
         _obs.ojs(
             """
             Plot.plot({
@@ -733,23 +756,20 @@ def _():
         ),
         variables={"indexByYear": []},
     )
-    index_timeline_chart_model = {
-        "notebook": _notebook,
-        "view": _notebook.view("chart", capture_state=False),
-    }
-    return (index_timeline_chart_model,)
+    index_timeline_chart = index_timeline_notebook.view(
+        "chart",
+        capture_state=False,
+    )
+    return index_timeline_chart, index_timeline_notebook
 
 
 @app.cell
-def _(index_by_year, index_timeline_chart_model):
-    index_timeline_chart_model["notebook"].update_variables(
+def _(index_by_year, index_timeline_chart, index_timeline_notebook):
+    index_timeline_notebook.update_variables(
         {"indexByYear": index_by_year}
     )
-
-
-@app.cell
-def _(index_timeline_chart_model):
-    index_timeline_chart_model["view"]
+    index_timeline_chart
+    return
 
 
 @app.cell(hide_code=True)
@@ -761,6 +781,7 @@ def _(mo):
     recorded date, medium, or creator, then inspect the matching records and
     choose six works for a research packet.
     """)
+    return
 
 
 @app.cell
@@ -809,39 +830,12 @@ def _(index_objects, mo):
 
 @app.cell
 def _(corpus_filters, index_objects):
-    import polars as _pl
-
     _filters = corpus_filters.value
     _selected_start, _selected_end = (int(_value) for _value in _filters["years"])
     _medium_query = _filters["medium"].strip().lower()
     _creator_query = _filters["creator"].strip().lower()
 
-    _medium_predicate = (
-        _pl.col("medium").str.to_lowercase().str.contains(_medium_query, literal=True)
-        if _medium_query
-        else _pl.lit(True)
-    )
-    _creator_predicate = (
-        _pl.concat_str(
-            [_pl.col("creators"), _pl.col("attribution")],
-            separator=" | ",
-        )
-        .str.to_lowercase()
-        .str.contains(_creator_query, literal=True)
-        if _creator_query
-        else _pl.lit(True)
-    )
-
-    _objects = (
-        index_objects.filter(
-            _pl.col("start_year").is_between(_selected_start, _selected_end)
-        )
-        .filter(_medium_predicate)
-        .filter(_creator_predicate)
-        .sort("start_year", "display_creator", "title", nulls_last=True)
-    )
     corpus_state = {
-        "objects": _objects,
         "total_count": index_objects.height,
         "selected_start": _selected_start,
         "selected_end": _selected_end,
@@ -852,44 +846,93 @@ def _(corpus_filters, index_objects):
 
 
 @app.cell
-def _(corpus_state, research_config):
-    _objects = corpus_state["objects"]
+def _(corpus_state, index_objects):
+    import polars as _pl
+
+    _medium_predicate = (
+        _pl.col("medium")
+        .str.to_lowercase()
+        .str.contains(corpus_state["medium_query"], literal=True)
+        if corpus_state["medium_query"]
+        else _pl.lit(True)
+    )
+    _creator_predicate = (
+        _pl.concat_str(
+            [_pl.col("creators"), _pl.col("attribution")],
+            separator=" | ",
+        )
+        .str.to_lowercase()
+        .str.contains(corpus_state["creator_query"], literal=True)
+        if corpus_state["creator_query"]
+        else _pl.lit(True)
+    )
+
+    filtered_object_ids = (
+        index_objects.filter(
+            _pl.col("start_year").is_between(
+                corpus_state["selected_start"],
+                corpus_state["selected_end"],
+            )
+        )
+        .filter(_medium_predicate)
+        .filter(_creator_predicate)
+        .select("objectid")
+    )
+    return (filtered_object_ids,)
+
+
+@app.cell
+def _(corpus_state, filtered_object_ids, index_objects, research_config):
+    import polars as _pl
+
+    _stats = (
+        index_objects.join(filtered_object_ids, on="objectid", how="inner")
+        .select(
+            _pl.len().alias("filtered_count"),
+            _pl.col("has_open_image").sum().alias("open_image_count"),
+            _pl.col("display_creator").n_unique().alias("creator_count"),
+        )
+        .row(0, named=True)
+    )
     corpus_summary = {
         "name": research_config["corpus_classification"],
-        "filtered_count": f"{_objects.height:,}",
+        "filtered_count": f"{_stats['filtered_count']:,}",
         "total_count": f"{corpus_state['total_count']:,}",
-        "coverage": (f"{_objects.height / max(corpus_state['total_count'], 1):.1%}"),
+        "coverage": (
+            f"{_stats['filtered_count'] / max(corpus_state['total_count'], 1):.1%}"
+        ),
         "date_range": (
             f"{corpus_state['selected_start']} to {corpus_state['selected_end']}"
         ),
         "medium": corpus_state["medium_query"] or "All media",
         "creator": corpus_state["creator_query"] or "All creators",
         "source_revision": research_config["dataset_revision"][:12],
-        "open_image_count": f"{_objects['has_open_image'].sum():,}",
-        "creator_count": f"{_objects['display_creator'].n_unique():,}",
+        "open_image_count": f"{_stats['open_image_count']:,}",
+        "creator_count": f"{_stats['creator_count']:,}",
     }
-    return (corpus_summary,)
+    return
 
 
 @app.cell
-def _(corpus_state, mo):
+def _(filtered_object_ids, index_objects, mo):
     import polars as _pl
 
-    _index_table_data = corpus_state["objects"].select(
-        _pl.col("objectid").alias("Object ID"),
-        _pl.col("title").alias("Title"),
-        _pl.col("display_creator").alias("Display attribution"),
-        _pl.col("displaydate").alias("Date"),
-        _pl.col("medium").alias("Medium"),
-        _pl.col("accessionnum").alias("Accession"),
-        _pl.col("published_image_count").alias("Images"),
-        _pl.when(_pl.col("has_open_image"))
-        .then(_pl.lit("Yes"))
-        .otherwise(_pl.lit("No"))
-        .alias("Open image"),
-    )
-    mo.ui.table(
-        _index_table_data,
+    corpus_index_table = mo.ui.table(
+        index_objects.join(filtered_object_ids, on="objectid", how="inner")
+        .sort("start_year", "display_creator", "title", nulls_last=True)
+        .select(
+            _pl.col("objectid").alias("Object ID"),
+            _pl.col("title").alias("Title"),
+            _pl.col("display_creator").alias("Display attribution"),
+            _pl.col("displaydate").alias("Date"),
+            _pl.col("medium").alias("Medium"),
+            _pl.col("accessionnum").alias("Accession"),
+            _pl.col("published_image_count").alias("Images"),
+            _pl.when(_pl.col("has_open_image"))
+            .then(_pl.lit("Yes"))
+            .otherwise(_pl.lit("No"))
+            .alias("Open image"),
+        ),
         selection=None,
         page_size=12,
         show_column_summaries=False,
@@ -905,14 +948,16 @@ def _(corpus_state, mo):
             "Medium": 280,
         },
     )
+    corpus_index_table
+    return (corpus_index_table,)
 
 
 @app.cell
-def _(corpus_state):
+def _(filtered_object_ids, index_objects):
     import polars as _pl
 
     filtered_by_year = (
-        corpus_state["objects"]
+        index_objects.join(filtered_object_ids, on="objectid", how="inner")
         .group_by("start_year")
         .agg(_pl.len().alias("object_count"))
         .sort("start_year")
@@ -924,7 +969,7 @@ def _(corpus_state):
 def _():
     import observablejs as _obs
 
-    _notebook = _obs.Notebook(
+    corpus_filter_notebook = _obs.Notebook(
         _obs.ojs(
             """
             Plot.plot({
@@ -948,43 +993,60 @@ def _():
         ),
         variables={"filteredByYear": []},
     )
-    corpus_filter_chart_model = {
-        "notebook": _notebook,
-        "view": _notebook.view("chart", capture_state=False),
-    }
-    return (corpus_filter_chart_model,)
+    corpus_filter_chart = corpus_filter_notebook.view(
+        "chart",
+        capture_state=False,
+    )
+    return corpus_filter_chart, corpus_filter_notebook
 
 
 @app.cell
-def _(corpus_filter_chart_model, filtered_by_year):
-    corpus_filter_chart_model["notebook"].update_variables(
+def _(corpus_filter_chart, corpus_filter_notebook, filtered_by_year):
+    corpus_filter_notebook.update_variables(
         {"filteredByYear": filtered_by_year}
     )
+    corpus_filter_chart
+    return
 
 
 @app.cell
-def _(corpus_filter_chart_model):
-    corpus_filter_chart_model["view"]
-
-
-@app.cell
-def _(corpus_state, research_config):
+def _(filtered_object_ids, index_objects):
     import polars as _pl
 
-    _objects = corpus_state["objects"].filter(
-        _pl.col("selected_image_open_access")
-        & _pl.col("selected_thumbnail_url").is_not_null()
+    gallery_objects = (
+        index_objects.join(filtered_object_ids, on="objectid", how="inner")
+        .filter(
+            _pl.col("selected_image_open_access")
+            & _pl.col("selected_thumbnail_url").is_not_null()
+        )
+        .select(
+            "objectid",
+            "title",
+            "display_creator",
+            "displaydate",
+            "accessionnum",
+            "selected_thumbnail_url",
+            "selected_image_alt",
+            "start_year",
+        )
     )
+    return (gallery_objects,)
+
+
+@app.cell
+def _(corpus_state, filtered_object_ids, gallery_objects, research_config):
     _page_size = research_config["gallery_page_size"]
-    gallery_pool = {
-        "objects": _objects,
-        "candidate_count": _objects.height,
-        "page_count": max((_objects.height + _page_size - 1) // _page_size, 1),
+    gallery_context = {
+        "candidate_count": gallery_objects.height,
+        "page_count": max(
+            (gallery_objects.height + _page_size - 1) // _page_size,
+            1,
+        ),
         "page_size": _page_size,
         "selection_limit": research_config["packet_limit"],
         "corpus": {
             "name": research_config["corpus_classification"],
-            "matching_count": corpus_state["objects"].height,
+            "matching_count": filtered_object_ids.height,
             "selected_start": corpus_state["selected_start"],
             "selected_end": corpus_state["selected_end"],
             "medium_query": corpus_state["medium_query"],
@@ -996,15 +1058,15 @@ def _(corpus_state, research_config):
             "creator": corpus_state["creator_query"] or "All creators",
         },
     }
-    return (gallery_pool,)
+    return (gallery_context,)
 
 
 @app.cell
-def _(gallery_pool, mo):
+def _(gallery_context, mo):
     _page = mo.ui.dropdown(
         options={
             f"Page {_page_number}": _page_number
-            for _page_number in range(1, gallery_pool["page_count"] + 1)
+            for _page_number in range(1, gallery_context["page_count"] + 1)
         },
         value="Page 1",
         label="Tray page",
@@ -1184,6 +1246,7 @@ def _():
               let fingerprint = null;
               let selected = [];
               let notice = "";
+              let action = "hydrate";
 
               function publish() {
                 root.dispatchEvent(new Event("input", {bubbles: true}));
@@ -1193,6 +1256,7 @@ def _():
                 if (selected.includes(objectId)) {
                   selected = selected.filter((id) => id !== objectId);
                   notice = "Work removed from packet";
+                  action = "changed";
                   render();
                   publish();
                   return;
@@ -1206,6 +1270,7 @@ def _():
 
                 selected = [...selected, objectId];
                 notice = "Work added to packet";
+                action = "changed";
                 render();
                 publish();
               }
@@ -1228,6 +1293,7 @@ def _():
                 clear.addEventListener("click", () => {
                   selected = [];
                   notice = "Selection cleared";
+                  action = "cleared";
                   render();
                   publish();
                 });
@@ -1298,12 +1364,13 @@ def _():
 
               Object.defineProperty(root, "value", {
                 get() {
-                  return [...selected];
+                  return {objectIds: [...selected], action};
                 },
                 set(next) {
-                  selected = Array.isArray(next)
-                    ? [...new Set(next)].slice(0, limit)
+                  selected = Array.isArray(next?.objectIds)
+                    ? [...new Set(next.objectIds)].slice(0, limit)
                     : [];
+                  action = next?.action || "hydrate";
                   notice = "";
                   render();
                 }
@@ -1312,7 +1379,7 @@ def _():
               render();
               return {
                 root,
-                update(nextObjects, nextLimit, nextFingerprint) {
+                update(nextObjects, nextLimit, nextFingerprint, nextSelection) {
                   const corpusChanged = fingerprint !== null &&
                     fingerprint !== nextFingerprint;
                   objects = Array.isArray(nextObjects) ? nextObjects : [];
@@ -1321,8 +1388,13 @@ def _():
                   if (corpusChanged) {
                     selected = [];
                     notice = "Selection cleared after corpus filters changed";
+                    action = "corpus";
                   } else {
-                    selected = selected.slice(0, limit);
+                    selected = Array.isArray(nextSelection)
+                      ? [...new Set(nextSelection)].slice(0, limit)
+                      : selected.slice(0, limit);
+                    notice = "";
+                    action = "hydrate";
                   }
                   render();
                   if (corpusChanged) setTimeout(publish, 0);
@@ -1347,10 +1419,11 @@ def _(gallery_controller_source, gallery_styles_source):
         ),
         _obs.ojs(
             """
-            viewof selectedObjectIds = galleryController.update(
+            viewof selectionState = galleryController.update(
               galleryObjects,
               selectionLimit,
-              corpusFingerprint
+              corpusFingerprint,
+              packetSelection
             )
             """,
             key="selection_gallery",
@@ -1358,6 +1431,7 @@ def _(gallery_controller_source, gallery_styles_source):
         variables={
             "corpusFingerprint": "",
             "galleryObjects": [],
+            "packetSelection": [],
             "selectionLimit": 6,
         },
         theme="near-midnight",
@@ -1368,9 +1442,7 @@ def _(gallery_controller_source, gallery_styles_source):
 
 
 @app.cell
-def _(gallery_pool, study_control_values):
-    import json as _json
-
+def _(study_control_values):
     _controls = study_control_values.value
     _order = _controls["sort"]
     _order_columns = {
@@ -1384,13 +1456,27 @@ def _(gallery_pool, study_control_values):
         "title": "Title",
     }
     _page_number = int(_controls["page"])
-    _offset = (_page_number - 1) * gallery_pool["page_size"]
-    _ordered_objects = gallery_pool["objects"].sort(
-        _order_columns[_order],
-        nulls_last=True,
-    )
+    study_order = {
+        "order": _order,
+        "order_columns": _order_columns[_order],
+        "order_label": _order_labels[_order],
+        "page_number": _page_number,
+    }
+    return (study_order,)
+
+
+@app.cell
+def _(gallery_context, gallery_objects, study_order):
+    import json as _json
+
+    _page_number = study_order["page_number"]
+    _offset = (_page_number - 1) * gallery_context["page_size"]
     _records = (
-        _ordered_objects.slice(_offset, gallery_pool["page_size"])
+        gallery_objects.sort(
+            study_order["order_columns"],
+            nulls_last=True,
+        )
+        .slice(_offset, gallery_context["page_size"])
         .select(
             "objectid",
             "title",
@@ -1403,15 +1489,14 @@ def _(gallery_pool, study_control_values):
         .to_dicts()
     )
     _fingerprint = _json.dumps(
-        gallery_pool["corpus"],
+        gallery_context["corpus"],
         sort_keys=True,
     )
     gallery_state = {
-        **gallery_pool,
-        "ordered_objects": _ordered_objects,
+        **gallery_context,
         "records": _records,
-        "order": _order,
-        "order_label": _order_labels[_order],
+        "order": study_order["order"],
+        "order_label": study_order["order_label"],
         "page_number": _page_number,
         "page_window": (
             f"{_offset + 1:,} to {_offset + len(_records):,}"
@@ -1424,32 +1509,35 @@ def _(gallery_pool, study_control_values):
 
 
 @app.cell
-def _(gallery_notebook, gallery_state):
+def _(
+    gallery_notebook,
+    gallery_state,
+    gallery_view,
+    get_selected_object_ids,
+):
     gallery_notebook.update_variables(
         {
             "corpusFingerprint": gallery_state["fingerprint"],
             "galleryObjects": gallery_state["records"],
+            "packetSelection": get_selected_object_ids(),
             "selectionLimit": gallery_state["selection_limit"],
         }
     )
-
-
-@app.cell
-def _(gallery_view):
     gallery_view
+    return
 
 
 @app.cell
-def _():
-    selection_cache = {"object_ids": []}
-    return (selection_cache,)
+def _(mo):
+    get_selected_object_ids, set_selected_object_ids = mo.state([])
+    return get_selected_object_ids, set_selected_object_ids
 
 
 @app.cell
-def _(gallery_view, selection_cache):
+def _(gallery_view, get_selected_object_ids, set_selected_object_ids):
     _ = gallery_view.value
     _view_state = gallery_view.state
-    selected_object_ids = list(selection_cache["object_ids"])
+    selected_object_ids = get_selected_object_ids()
     if (
         not _view_state.pending
         and _view_state.input_revision is not None
@@ -1457,18 +1545,22 @@ def _(gallery_view, selection_cache):
     ):
         _result = _view_state.result("selection_gallery")
         if _result.status == "success":
+            _selection = _result.values.get("selectionState", {})
             _next_ids = [
                 int(_object_id)
-                for _object_id in _result.values.get("selectedObjectIds", [])
+                for _object_id in _selection.get("objectIds", [])
             ]
-            if _next_ids != selected_object_ids:
+            if (
+                _selection.get("action") in {"changed", "cleared", "corpus"}
+                and _next_ids != selected_object_ids
+            ):
                 selected_object_ids = _next_ids
-                selection_cache["object_ids"] = _next_ids
+                set_selected_object_ids(_next_ids)
     return (selected_object_ids,)
 
 
 @app.cell
-def _(objects_core, selected_object_ids):
+def _(index_objects, selected_object_ids):
     import polars as _pl
 
     if selected_object_ids:
@@ -1479,10 +1571,10 @@ def _(objects_core, selected_object_ids):
             }
         )
         packet_objects = _selection_order.join(
-            objects_core, on="objectid", how="left"
+            index_objects, on="objectid", how="left"
         ).sort("packet_order")
     else:
-        packet_objects = objects_core.head(0).with_columns(
+        packet_objects = index_objects.head(0).with_columns(
             _pl.lit(None, dtype=_pl.Int64).alias("packet_order")
         )
     return (packet_objects,)
@@ -1524,16 +1616,20 @@ def _(mo, study_summary):
     **{study_summary["selection_progress"]} works selected.**
     {study_summary["selection_status"]} for the research packet.
     """)
+    return
 
 
 @app.cell
-def _(gallery_state, packet_objects):
-    _objects = packet_objects.join(
-        gallery_state["ordered_objects"]
+def _(gallery_objects, packet_objects, study_order):
+    _objects = (
+        gallery_objects.sort(
+            study_order["order_columns"],
+            nulls_last=True,
+        )
         .select("objectid")
-        .with_row_index("study_position", offset=1),
-        on="objectid",
-        how="left",
+        .with_row_index("study_position", offset=1)
+        .join(packet_objects, on="objectid", how="inner")
+        .sort("packet_order")
     )
     packet_records = _objects.select(
         "packet_order",
@@ -2000,6 +2096,7 @@ def _(mo, packet_records):
     else:
         _preview = mo.md("Select works in the **Study** view to assemble the packet.")
     _preview
+    return
 
 
 @app.cell
@@ -2014,7 +2111,7 @@ def _(mo, packet_objects):
         _pl.col("medium").alias("Medium"),
         _pl.col("accessionnum").alias("Accession"),
     )
-    mo.ui.table(
+    packet_object_table = mo.ui.table(
         _table_data,
         selection=None,
         pagination=False,
@@ -2025,6 +2122,8 @@ def _(mo, packet_objects):
         wrapped_columns=["Title", "Display attribution", "Medium"],
         column_widths={"Title": 260, "Display attribution": 220, "Medium": 260},
     )
+    packet_object_table
+    return (packet_object_table,)
 
 
 @app.cell
@@ -2050,13 +2149,15 @@ def _(packet_documents, packet_summary):
 
 @app.cell
 def _(mo, packet_archive):
-    mo.download(
+    packet_download_widget = mo.download(
         data=packet_archive["data"],
         filename="nga-index-research-packet.zip",
         mimetype="application/zip",
         disabled=not packet_archive["ready"],
         label="Download handoff bundle",
     )
+    packet_download_widget
+    return (packet_download_widget,)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import { defineConfig } from "vite-plus";
 
 const generated = [
+  "**/__marimo__/**",
   "apps/docs/.vitepress/cache/**",
   "apps/docs/.vitepress/dist/**",
   "dist/**",
