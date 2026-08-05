@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { ViewRemote } from "../src/views/remote.ts";
+import type { ViewRemote } from "../src/features/views/remote.ts";
 
-import { SourceController } from "../src/source/controller.ts";
-import { ViewController } from "../src/views/controller.ts";
+import { SourceController } from "../src/features/source-editor/controller.ts";
+import { ViewController } from "../src/features/views/controller.ts";
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void;

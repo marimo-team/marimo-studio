@@ -1,0 +1,70 @@
+.studio-divider-layer {
+  pointer-events: none;
+  z-index: 20;
+}
+
+.studio-divider {
+  background: transparent;
+  pointer-events: auto;
+  position: absolute;
+  touch-action: none;
+}
+
+.studio-divider[data-axis="x"] {
+  cursor: col-resize;
+}
+
+.studio-divider[data-axis="y"] {
+  cursor: row-resize;
+}
+
+.studio-divider::before,
+.studio-divider::after {
+  content: "";
+  position: absolute;
+}
+
+.studio-divider[data-axis="x"]::before {
+  background: var(--studio-border);
+  inset: 0 auto 0 2px;
+  width: 1px;
+}
+
+.studio-divider[data-axis="x"]::after {
+  inset: 0 -4px;
+}
+
+.studio-divider[data-axis="y"]::before {
+  background: var(--studio-border);
+  height: 1px;
+  inset: 2px 0 auto;
+}
+
+.studio-divider[data-axis="y"]::after {
+  inset: -4px 0;
+}
+
+.studio-divider:is(:hover, :focus-visible)::before,
+.studio-workspace[data-resizing="true"] .studio-divider::before {
+  background: var(--studio-primary);
+}
+
+.studio-divider:focus-visible {
+  outline: 0;
+}
+
+.studio-resize-scrim {
+  z-index: 19;
+}
+
+.studio-resize-scrim[data-axis="x"] {
+  cursor: col-resize;
+}
+
+.studio-resize-scrim[data-axis="y"] {
+  cursor: row-resize;
+}
+
+.studio-workspace[data-resizing="true"] .studio-resize-scrim {
+  display: block !important;
+}

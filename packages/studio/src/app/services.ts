@@ -1,16 +1,16 @@
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
-import type { ControlFrameConnector } from "../preview/control-sync.ts";
+import type { ControlFrameConnector } from "../features/preview/control-sync.ts";
 
-import { LayoutController } from "../layout/controller.ts";
-import { PreviewDeck } from "../preview/deck.ts";
-import { syncEditorQuery } from "../preview/query-remote.ts";
-import { initialPreviewRuntime } from "../preview/runtime.ts";
-import { StudioRoutes } from "../routes.ts";
-import { SourceController } from "../source/controller.ts";
-import { ViewController } from "../views/controller.ts";
-import { createViewRemote } from "../views/remote.ts";
-import { ViewTransition } from "../views/transition.ts";
+import { PreviewDeck } from "../features/preview/deck.ts";
+import { syncEditorQuery } from "../features/preview/query-remote.ts";
+import { initialPreviewRuntime } from "../features/preview/runtime.ts";
+import { SourceController } from "../features/source-editor/controller.ts";
+import { ViewController } from "../features/views/controller.ts";
+import { createViewRemote } from "../features/views/remote.ts";
+import { ViewTransition } from "../features/views/transition.ts";
+import { LayoutController } from "../features/workspace/controller.ts";
+import { StudioRoutes } from "./routes.ts";
 
 export interface StudioServices {
   layout: LayoutController;

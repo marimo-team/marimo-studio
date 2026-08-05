@@ -46,7 +46,8 @@ TypeScript boundary.
 - **Each browser document has one package.** `packages/presentation` owns the
   custom view and its React runtime. `packages/studio` owns panes, source
   editors, view management, preview coordination, and cross-runtime native
-  control sync.
+  control sync. Its `app/` layer constructs the root and services, `features/`
+  owns each user workflow, and `shared/` contains cross-feature primitives.
   `packages/marimo-frontend` isolates Marimo's unstable frontend API.
 - **Apps compose packages.** `apps/browser` owns the Vite build and packaged
   asset names. `apps/docs` owns VitePress while authored pages remain in
@@ -72,6 +73,10 @@ session lifecycle.
   dependency.
 - `packages/studio` imports protocol, never presentation or Marimo frontend
   modules.
+- Inside `packages/studio`, `main.tsx` enters `app/`. `navigation/` and
+  `workspace/` compose sibling feature slices through typed controllers.
+  Feature dependencies stay acyclic and may point to `shared/`. Shared
+  primitives import no app or feature modules.
 - `packages/presentation` imports protocol and named Marimo adapter exports.
 - Imports from `@marimo-team/frontend/unstable_internal` and Marimo's `@/`
   alias stay in `packages/marimo-frontend`.

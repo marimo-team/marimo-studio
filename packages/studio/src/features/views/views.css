@@ -1,0 +1,160 @@
+.studio-view-list {
+  display: grid;
+  gap: 1px;
+}
+
+.studio-view-row {
+  align-items: center;
+  border-radius: 4px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.studio-view-row[data-removing="true"] {
+  background: var(--studio-hover);
+}
+
+.studio-view-option {
+  min-width: 0;
+}
+
+.studio-view-remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--studio-muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 1.75rem;
+  justify-content: center;
+  margin-inline-end: 0.25rem;
+  opacity: 0;
+  padding: 0;
+  width: 1.75rem;
+}
+
+.studio-view-remove-icon {
+  height: 0.875rem;
+  width: 0.875rem;
+}
+
+.studio-view-row:is(:hover, :focus-within) .studio-view-remove,
+.studio-view-row[data-removing="true"] .studio-view-remove {
+  opacity: 1;
+}
+
+.studio-view-remove:hover,
+.studio-view-remove:focus-visible {
+  background: var(--studio-error-soft);
+  color: var(--studio-error);
+}
+
+.studio-view-remove:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.studio-menu-check {
+  color: transparent;
+  width: 0.75rem;
+}
+
+.studio-menu-item[aria-current="page"] .studio-menu-check {
+  color: var(--studio-primary);
+}
+
+.studio-new-view {
+  border-block-start: 1px solid var(--studio-border);
+  border-radius: 0 0 4px 4px;
+  margin-block-start: 0.2rem;
+  padding-block-start: 0.55rem;
+}
+
+.studio-new-view-form,
+.studio-remove-view-confirm {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 18rem;
+  padding: 0.5rem;
+}
+
+.studio-remove-view-confirm {
+  border-block-start: 1px solid var(--studio-border);
+  margin-block-start: 0.2rem;
+}
+
+.studio-remove-view-confirm > strong,
+.studio-new-view-form label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.studio-remove-view-detail,
+.studio-form-hint,
+.studio-form-message {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.studio-remove-view-detail,
+.studio-form-hint {
+  color: var(--studio-muted);
+}
+
+.studio-new-view-form input {
+  background: var(--studio-background);
+  border: 1px solid var(--studio-strong-border);
+  border-radius: 5px;
+  height: 2.1rem;
+  outline: 0;
+  padding-inline: 0.55rem;
+}
+
+.studio-new-view-form input:focus {
+  border-color: var(--studio-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--studio-primary) 20%, transparent);
+}
+
+.studio-form-message[data-state="warning"] {
+  color: var(--studio-warning);
+}
+
+.studio-form-message[data-state="error"] {
+  color: var(--studio-error);
+}
+
+.studio-form-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.studio-form-actions button {
+  border-color: var(--studio-border);
+}
+
+.studio-form-actions .studio-primary-action {
+  background: var(--studio-primary);
+  border-color: var(--studio-primary);
+  color: var(--studio-on-primary);
+}
+
+.studio-form-actions .studio-danger-action {
+  background: var(--studio-error);
+  border-color: var(--studio-error);
+  color: var(--studio-on-error);
+}
+
+.studio-form-actions :is(.studio-primary-action, .studio-danger-action):disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+@media (hover: none) {
+  .studio-view-remove {
+    opacity: 1;
+  }
+}

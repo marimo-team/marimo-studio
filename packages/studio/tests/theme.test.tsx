@@ -1,9 +1,9 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, test, vi } from "vite-plus/test";
 
-import type { StudioTheme, ThemeFrameConnector } from "../src/theme.tsx";
+import type { StudioTheme, ThemeFrameConnector } from "../src/shared/theme.tsx";
 
-import { useResolvedStudioTheme } from "../src/theme.tsx";
+import { useResolvedStudioTheme } from "../src/shared/theme.tsx";
 
 describe("Studio theme", () => {
   test("follows the native editor theme and disconnects with the shell", () => {

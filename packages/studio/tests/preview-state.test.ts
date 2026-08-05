@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
-import { previewLoadState, RetrySchedule } from "../src/preview/state.ts";
+import { previewLoadState, RetrySchedule } from "../src/features/preview/state.ts";
 
 test("preview loads distinguish startup waits from repair failures", () => {
   assert.deepEqual(

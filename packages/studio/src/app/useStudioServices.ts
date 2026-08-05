@@ -2,10 +2,10 @@ import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
 import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { ControlFrameConnector } from "../preview/control-sync.ts";
+import type { ControlFrameConnector } from "../features/preview/control-sync.ts";
 import type { StudioServices } from "./services.ts";
 
-import { errorMessage } from "../errors.ts";
+import { errorMessage } from "../shared/errors.ts";
 import { createStudioServices } from "./services.ts";
 
 interface StudioServiceBinding extends StudioServices {

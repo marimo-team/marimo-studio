@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { syncEditorQuery } from "../src/preview/query-remote";
+import { syncEditorQuery } from "../src/features/preview/query-remote";
 
 afterEach(() => {
   vi.unstubAllGlobals();

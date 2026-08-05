@@ -1,7 +1,7 @@
 import { parseStudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 import { createRoot } from "react-dom/client";
 
-import { StudioApp, type StudioOptions } from "./StudioApp.tsx";
+import { StudioApp, type StudioOptions } from "./app/StudioApp.tsx";
 import "./style.css";
 
 const required = <T extends Element>(selector: string): T => {
@@ -50,4 +50,4 @@ export const startStudio = async (options: StudioOptions): Promise<void> => {
   }
 };
 
-export type { StudioOptions } from "./StudioApp.tsx";
+export type { StudioOptions } from "./app/StudioApp.tsx";

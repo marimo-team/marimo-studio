@@ -1,5 +1,8 @@
-@import "./styles/foundation.css";
-@import "./styles/toolbar.css";
-@import "./styles/workspace.css";
-@import "./styles/source.css";
-@import "./styles/layout.css";
+@import "./app/studio.css";
+@import "./shared/ui/controls.css";
+@import "./features/navigation/navigation.css";
+@import "./features/views/views.css";
+@import "./features/workspace/workspace.css";
+@import "./features/source-editor/source-editor.css";
+@import "./features/workspace/resizing.css";
+@import "./app/responsive.css";

@@ -4,7 +4,7 @@ import {
   type ControlEndpoint,
   type ControlUpdate,
   synchronizeControlEndpoints,
-} from "../src/preview/control-sync";
+} from "../src/features/preview/control-sync";
 
 class MemoryEndpoint implements ControlEndpoint {
   readonly values = new Map<string, unknown>();

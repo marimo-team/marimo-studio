@@ -11,7 +11,7 @@ tests, builds, and task orchestration.
 | `apps/browser/`                                 | Vite entrypoints, shared chunks, and packaged metadata |
 | `packages/runtime/`                             | Runtime adapter and session lifecycle contracts        |
 | `packages/presentation/`                        | Custom-view document, projections, and runtime mount   |
-| `packages/studio/`                              | Workspace layout, editors, remotes, and controllers    |
+| `packages/studio/`                              | Studio composition, feature slices, and shared UI      |
 | `packages/protocol/`                            | Browser messages and validated server response records |
 | `packages/marimo-frontend/src/upstream/`        | Imports from Marimo's unstable frontend surface        |
 | `packages/marimo-frontend/src/control-frame.ts` | Adapt a Marimo frame to native control operations      |
@@ -31,8 +31,14 @@ contains no fetch, EventSource, DOM, or window access.
 
 Presentation groups code by lifecycle. `document/` owns the authored shell,
 `cells/` and `values/` own projection hosts, `runtime-config/` owns the server
-contract, and `runtime/` owns the Marimo React mount. Studio groups code into
-`layout/`, `preview/`, `source/`, and `views/`.
+contract, and `runtime/` owns the Marimo React mount.
+
+Studio follows `app → features → shared`. `app/` constructs services, routes,
+theme resolution, and the root document. Feature slices own their components,
+state, browser I/O, and styles. `navigation/` and `workspace/` compose sibling
+features through typed controllers. The feature graph stays acyclic. `shared/`
+contains theme state, external-store binding, errors, and UI primitives that
+several features consume.
 
 Keep upstream module paths, Marimo's `@/` alias, source checkout details, and
 build shims inside `packages/marimo-frontend`. Other packages consume its

@@ -3,8 +3,16 @@ import type { SourceName } from "@marimo-studio/protocol/source-events";
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
-import { type RemoteSource, RevisionConflict, type SourceRemote } from "../src/source/remote.ts";
-import { type SourceObserver, type SourceState, SyncedSource } from "../src/source/sync.ts";
+import {
+  type RemoteSource,
+  RevisionConflict,
+  type SourceRemote,
+} from "../src/features/source-editor/remote.ts";
+import {
+  type SourceObserver,
+  type SourceState,
+  SyncedSource,
+} from "../src/features/source-editor/sync.ts";
 
 class MemoryRemote implements SourceRemote {
   source: RemoteSource = { content: "initial", revision: "r1" };

@@ -5,21 +5,22 @@ import userEvent from "@testing-library/user-event";
 import { forwardRef, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import type { SourceEditorHandle } from "../src/source/SourceEditor.tsx";
-import type { ViewRemote } from "../src/views/remote.ts";
+import type { SourceEditorHandle } from "../src/features/source-editor/SourceEditor.tsx";
+import type { ViewRemote } from "../src/features/views/remote.ts";
 
+import { createStudioServices } from "../src/app/services.ts";
 import { StudioErrorBoundary } from "../src/app/StudioErrorBoundary.tsx";
-import { Toolbar } from "../src/components/toolbar/Toolbar.tsx";
-import { LayoutController } from "../src/layout/controller.ts";
-import { Divider } from "../src/layout/Divider.tsx";
-import { computeLayout, defaultWorkspaceLayout } from "../src/layout/model.ts";
-import { useWorkspace } from "../src/layout/useWorkspace.ts";
-import { Workspace } from "../src/layout/Workspace.tsx";
-import { PreviewDeck } from "../src/preview/deck.ts";
-import { SourceController } from "../src/source/controller.ts";
-import { ViewController } from "../src/views/controller.ts";
+import { Toolbar } from "../src/features/navigation/Toolbar.tsx";
+import { PreviewDeck } from "../src/features/preview/deck.ts";
+import { SourceController } from "../src/features/source-editor/controller.ts";
+import { ViewController } from "../src/features/views/controller.ts";
+import { LayoutController } from "../src/features/workspace/controller.ts";
+import { Divider } from "../src/features/workspace/Divider.tsx";
+import { computeLayout, defaultWorkspaceLayout } from "../src/features/workspace/model.ts";
+import { useWorkspace } from "../src/features/workspace/useWorkspace.ts";
+import { Workspace } from "../src/features/workspace/Workspace.tsx";
 
-vi.mock("../src/source/SourceEditor.tsx", () => ({
+vi.mock("../src/features/source-editor/SourceEditor.tsx", () => ({
   SourceEditor: forwardRef<SourceEditorHandle>(function Editor(_props, ref) {
     const element = useRef<HTMLTextAreaElement>(null);
     useImperativeHandle(ref, () => ({
@@ -85,7 +86,7 @@ const remote = (): ViewRemote => {
 };
 
 const controllers = () => {
-  const layout = new LayoutController("test-layout", bootstrap.selectedView);
+  const layout = new LayoutController("test-workspace", bootstrap.selectedView);
   const preview = new PreviewDeck({
     initialView: bootstrap.selectedView,
     initialRuntime: bootstrap.defaultRuntime,
@@ -109,7 +110,7 @@ const controllers = () => {
     bootstrap.urls.viewSupportPrefix,
     bootstrap.serverToken,
     bootstrap.selectedView,
-    "test-layout",
+    "test-workspace",
     () => layout.reveal("source"),
   );
   return { layout, preview, source, views };
@@ -153,9 +154,39 @@ const WorkspaceHarness = ({
 };
 
 describe("Studio shell", () => {
-  it("starts in Build and exposes the configured preview runtimes", async () => {
+  it("restores persisted layout trees and source tab from the application namespace", () => {
+    const storagePrefix = `marimo-studio:workspace-layout:v1:${bootstrap.workspaceId}`;
+    const persisted = {
+      schema: 1,
+      mode: "workspace",
+      code: { type: "pane", id: "pane-source", surface: "source" },
+      workspace: {
+        type: "split",
+        id: "saved-workspace",
+        axis: "x",
+        ratio: 0.4,
+        first: { type: "pane", id: "pane-notebook", surface: "notebook" },
+        second: { type: "pane", id: "pane-preview", surface: "preview" },
+      },
+      compact: "preview",
+    };
+    globalThis.localStorage.setItem(
+      `${storagePrefix}:${bootstrap.selectedView}`,
+      JSON.stringify(persisted),
+    );
+    globalThis.localStorage.setItem(`${storagePrefix}:source:${bootstrap.selectedView}`, "app.css");
+
+    const services = createStudioServices(bootstrap);
+
+    expect(services.layout.getSnapshot().code).toEqual(persisted.code);
+    expect(services.layout.getSnapshot().workspace).toEqual(persisted.workspace);
+    expect(services.source.getSnapshot().active).toBe("app.css");
+    services.dispose();
+  });
+
+  it("keeps toolbar modes and preview runtimes synchronized", async () => {
     const user = userEvent.setup();
-    const previousLayout = new LayoutController("test-layout", bootstrap.selectedView);
+    const previousLayout = new LayoutController("test-workspace", bootstrap.selectedView);
     previousLayout.selectMode("preview");
     previousLayout.dispose();
     const { layout, preview, views } = controllers();
@@ -165,9 +196,9 @@ describe("Studio shell", () => {
         brand={brand}
         compact={false}
         compactSurfaces={["notebook", "preview"]}
-        layout={layout}
         preview={preview}
         views={views}
+        layout={layout}
       />,
     );
 
@@ -176,6 +207,23 @@ describe("Studio shell", () => {
       "true",
     );
     expect(screen.getByLabelText("Server preview runtime")).toHaveTextContent("Server");
+
+    await user.click(screen.getByLabelText("Workspace options"));
+    let overflow = within(screen.getAllByRole("navigation", { name: "Studio mode" }).at(-1)!);
+    expect(overflow.getByRole("button", { name: "Build" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(overflow.getByRole("button", { name: "HTML & CSS" }));
+
+    await user.click(screen.getByLabelText("Workspace options"));
+    overflow = within(screen.getAllByRole("navigation", { name: "Studio mode" }).at(-1)!);
+    expect(overflow.getByRole("button", { name: "Build" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(overflow.getByRole("button", { name: "HTML & CSS" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await user.click(screen.getByLabelText("Workspace options"));
 
     await user.click(screen.getAllByRole("button", { name: "Preview" })[0]);
     expect(screen.getAllByRole("button", { name: "Preview" })[0]).toHaveAttribute(
@@ -201,9 +249,9 @@ describe("Studio shell", () => {
         brand={brand}
         compact={false}
         compactSurfaces={["notebook", "preview"]}
-        layout={layout}
         preview={preview}
         views={views}
+        layout={layout}
       />,
     );
 
@@ -229,9 +277,9 @@ describe("Studio shell", () => {
         brand={brand}
         compact={false}
         compactSurfaces={["notebook", "preview"]}
-        layout={layout}
         preview={preview}
         views={views}
+        layout={layout}
       />,
     );
 
@@ -245,39 +293,6 @@ describe("Studio shell", () => {
       await new Promise<void>((resolve) => globalThis.requestAnimationFrame(() => resolve()));
     });
     expect(origin).toHaveFocus();
-
-    layout.dispose();
-    preview.dispose();
-    views.dispose();
-  });
-
-  it("selects one mode in the expanded workspace menu", async () => {
-    const user = userEvent.setup();
-    const { layout, preview, views } = controllers();
-    layout.selectMode("code");
-    render(
-      <Toolbar
-        bootstrap={bootstrap}
-        brand={brand}
-        compact={false}
-        compactSurfaces={["source", "preview"]}
-        layout={layout}
-        preview={preview}
-        views={views}
-      />,
-    );
-
-    await user.click(screen.getByLabelText("Workspace options"));
-    const modes = screen.getAllByRole("navigation", { name: "Studio mode" });
-    const overflow = within(modes.at(-1)!);
-    expect(overflow.getByRole("button", { name: "Build" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-    expect(overflow.getByRole("button", { name: "HTML & CSS" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
 
     layout.dispose();
     preview.dispose();
@@ -327,10 +342,10 @@ describe("Studio shell", () => {
     render(
       <WorkspaceHarness
         frames={frames}
-        layout={layout}
         preview={preview}
         source={source}
         views={views}
+        layout={layout}
       />,
     );
 
@@ -382,9 +397,9 @@ describe("Studio shell", () => {
         brand={brand}
         compact
         compactSurfaces={["notebook"]}
-        layout={layout}
         preview={preview}
         views={views}
+        layout={layout}
       />,
     );
 

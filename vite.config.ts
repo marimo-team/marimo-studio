@@ -9,6 +9,22 @@ const generated = [
   "packages/marimo-studio/src/marimo_studio/_static/**",
 ];
 
+const studioPackageRestrictedImports = [
+  "@marimo-studio/marimo-frontend",
+  "@marimo-studio/marimo-frontend/*",
+  "@marimo-studio/presentation",
+  "@marimo-studio/presentation/*",
+  "@marimo-studio/studio",
+  "@marimo-studio/studio/*",
+  "@marimo-team/frontend",
+  "@marimo-team/frontend/*",
+  "@/*",
+  "../**/marimo-frontend/**",
+  "../**/presentation/**",
+  "../**/protocol/**",
+  "htmx.org",
+];
+
 export default defineConfig({
   fmt: {
     ignorePatterns: generated,
@@ -133,19 +149,29 @@ export default defineConfig({
           "eslint/no-restricted-imports": [
             "error",
             {
-              patterns: [
-                "@marimo-studio/marimo-frontend",
-                "@marimo-studio/marimo-frontend/*",
-                "@marimo-studio/presentation",
-                "@marimo-studio/presentation/*",
-                "@marimo-team/frontend",
-                "@marimo-team/frontend/*",
-                "@/*",
-                "../**/marimo-frontend/**",
-                "../**/presentation/**",
-                "../**/protocol/**",
-                "htmx.org",
-              ],
+              patterns: studioPackageRestrictedImports,
+            },
+          ],
+        },
+      },
+      {
+        files: ["packages/studio/src/features/**"],
+        rules: {
+          "eslint/no-restricted-imports": [
+            "error",
+            {
+              patterns: [...studioPackageRestrictedImports, "../**/app/**"],
+            },
+          ],
+        },
+      },
+      {
+        files: ["packages/studio/src/shared/**"],
+        rules: {
+          "eslint/no-restricted-imports": [
+            "error",
+            {
+              patterns: [...studioPackageRestrictedImports, "../**/app/**", "../**/features/**"],
             },
           ],
         },

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
-import { ViewTransition } from "../src/views/transition.ts";
+import { ViewTransition } from "../src/features/views/transition.ts";
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
