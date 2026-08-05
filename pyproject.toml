@@ -2,7 +2,7 @@
 members = ["packages/marimo-studio"]
 
 [dependency-groups]
-test = ["httpx2==2.9.1", "pytest==9.1.1"]
+test = ["httpx2==2.9.1", "polars==1.43.2", "pytest==9.1.1"]
 dev = [
   { include-group = "test" },
   "marimo[recommended]>=0.23.16",

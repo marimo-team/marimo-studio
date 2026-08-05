@@ -90,6 +90,9 @@ jobs:
           run-install: |
             - args: ["--frozen-lockfile"]
 
+      - name: Enable pnpm
+        run: corepack enable pnpm
+
       - name: Lint
         run: make lint
 

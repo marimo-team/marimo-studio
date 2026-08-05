@@ -47,6 +47,9 @@ jobs:
           run-install: |
             - args: ["--frozen-lockfile"]
 
+      - name: Enable pnpm
+        run: corepack enable pnpm
+
       - name: Build release
         run: |
           ./scripts/check-release.sh
@@ -134,6 +137,9 @@ jobs:
           sfw: true
           run-install: |
             - args: ["--frozen-lockfile"]
+
+      - name: Enable pnpm
+        run: corepack enable pnpm
 
       - name: Update release notes
         run: pnpm exec changelogithub

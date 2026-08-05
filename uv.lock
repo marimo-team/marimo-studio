@@ -11,6 +11,7 @@ members = [
 dev = [
     { name = "httpx2", specifier = "==2.9.1" },
     { name = "marimo", extras = ["recommended"], specifier = ">=0.23.16" },
+    { name = "polars", specifier = "==1.43.2" },
     { name = "pyrefly", specifier = ">=1.1.1" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "ruff", specifier = ">=0.16.0" },
@@ -18,6 +19,7 @@ dev = [
 ]
 test = [
     { name = "httpx2", specifier = "==2.9.1" },
+    { name = "polars", specifier = "==1.43.2" },
     { name = "pytest", specifier = "==9.1.1" },
 ]
 
