@@ -64,7 +64,8 @@ jobs:
           test -f apps/docs/.vitepress/dist/reference.html
           grep -q "href=\"${BASE_PATH}/assets/" "$index"
           grep -q "src=\"${BASE_PATH}/assets/" "$index"
-          grep -q "href=\"${BASE_PATH}/favicon.svg\"" "$index"
+          grep -q "href=\"${BASE_PATH}/brand/marimo-studio-mark-light.svg\"" "$index"
+          grep -q "href=\"${BASE_PATH}/brand/marimo-studio-mark-dark.svg\"" "$index"
           grep -q "href=\"${BASE_PATH}/getting-started\"" "$index"
 
       - name: Upload GitHub Pages artifact

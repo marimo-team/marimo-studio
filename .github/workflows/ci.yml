@@ -53,6 +53,7 @@ jobs:
           --python "${{ matrix.python-version }}"
           --with-editable packages/marimo-studio
           --with marimo==0.23.16
+          --with polars==1.43.2
           --with pytest==9.1.1
           --with httpx2==2.9.1
           pytest
