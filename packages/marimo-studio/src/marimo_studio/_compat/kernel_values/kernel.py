@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from types import TracebackType
 from typing import Any
 
+from marimo_studio._compat.cached_cells import keep_cached_cells_compatible
 from marimo_studio._compat.kernel_values.models import (
     DEFAULT_MAX_VALUE_BYTES,
     FUNCTION_NAME,
@@ -45,6 +46,7 @@ def inspection_selectors(
 class _KernelValueLifespan:
     def __init__(self) -> None:
         self._registry: Any | None = None
+        self._release_cached_ui: Callable[[], None] | None = None
 
     async def __aenter__(self) -> None:
         from marimo._runtime.context import get_context
@@ -113,6 +115,7 @@ class _KernelValueLifespan:
         query_function.cell_id = CellId_t("__marimo_studio_query__")
         context.function_registry.register(NAMESPACE, query_function)
         self._registry = context.function_registry
+        self._release_cached_ui = keep_cached_cells_compatible()
 
     async def __aexit__(
         self,
@@ -124,6 +127,9 @@ class _KernelValueLifespan:
         if self._registry is not None:
             self._registry.delete(NAMESPACE)
             self._registry = None
+        if self._release_cached_ui is not None:
+            self._release_cached_ui()
+            self._release_cached_ui = None
         return False
 
 
