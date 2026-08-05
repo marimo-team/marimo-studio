@@ -8,7 +8,7 @@ notebook execution, session ownership, native routes, and virtual files.
 
 | Boundary       | Owner                      | Contract                                                         |
 | -------------- | -------------------------- | ---------------------------------------------------------------- |
-| Command line   | `marimo_studio._cli`       | Inspect notebooks and manage Studio configuration                |
+| Command line   | `marimo_studio._cli`       | Inspect notebooks, manage views, and export static sites         |
 | Workspace      | `marimo_studio._workspace` | Resolve configuration, bindings, views, and authored files       |
 | ASGI process   | Marimo                     | Lifecycle, authentication, native APIs, and sessions             |
 | Server adapter | `marimo_studio._server`    | Studio pages, custom views, support routes, and HTTP translation |
@@ -125,6 +125,41 @@ updates.
 View source reads and writes use content revisions. Writes use atomic
 replacement and reject mutable symlink traversal. External edits refresh clean
 editors and produce a conflict beside dirty editors.
+
+## Static export
+
+`marimo_studio.export` turns one resolved view into an HTTP-hosted directory.
+It snapshots the authored document and notebook source, validates projections,
+derives the same browser notebook used by the WebAssembly preview, and writes
+an immutable runtime configuration. The output contains the custom document,
+selected view files, built-in cell fragments, notebook `public/` files, and the
+packaged Studio browser build.
+
+The exported document uses relative URLs so the directory can live beneath a
+static host's base path. Pyodide owns notebook execution. The presentation
+package still owns output plugins, controls, portals, value reads, and
+anywidget models. Export therefore adds a packaging boundary around the
+existing WebAssembly runtime.
+
+Output is staged beside the destination and moved into place after every file
+has been written. Replacing an existing bundle requires `--force`. Projection
+failures leave the destination unchanged.
+
+Private Marimo access stays in `_compat/static_export.py` and the existing
+browser notebook adapter. These public Marimo APIs would narrow that boundary:
+
+- A WASM preparation API that returns canonical notebook source, resolved
+  configuration, `public/` files, local wheel artifacts, and optional executed
+  snapshots and cache artifacts. Studio could then share Marimo's PEP 723,
+  local module, warm-cache, and wheel policy as one operation.
+- A stable browser embedding entry point for the Pyodide bridge, output
+  plugins, UI elements, and anywidget models. Studio currently contains this
+  dependency in `packages/marimo-frontend`.
+- A runtime asset manifest and copy API independent of Marimo's native notebook
+  document. Custom presentation exporters could consume the same versioned
+  worker and chunk graph through a supported contract.
+- A public path-scoped configuration resolver for export clients. Studio could
+  read the effective user and project settings through a typed API.
 
 ## Python dependency direction
 

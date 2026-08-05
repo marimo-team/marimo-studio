@@ -100,6 +100,12 @@ class DependencyError(ConfigurationError):
     exit_code = 7
 
 
+class StaticExportError(ConfigurationError):
+    """A static view bundle could not be created."""
+
+    code = "static-export-error"
+
+
 class RuntimeSyncError(MarimoStudioError):
     """The browser session and inspected notebook have not synchronized."""
 

@@ -12,6 +12,7 @@ marimo-studio bind [OPTIONS] ALIAS [NOTEBOOK]
 marimo-studio view add [OPTIONS] NAME [NOTEBOOK]
 marimo-studio view list [OPTIONS] [NOTEBOOK]
 marimo-studio check [OPTIONS] [NOTEBOOK]
+marimo-studio export [OPTIONS] [NOTEBOOK]
 ```
 
 Pass a notebook path when creating the first view. Later commands can discover
@@ -80,6 +81,29 @@ uvx marimo-studio check analysis.py --view executive --runtime
 Static checks validate templates, aliases, and value selectors. `--runtime`
 also executes projected cells and resolves projected values. Omit `--view` to
 check every configured view.
+
+### `export`
+
+```console
+uvx marimo-studio export analysis.py \
+  --view executive \
+  --output dist/executive
+```
+
+Writes the selected view as a static WebAssembly site. The configured default
+view is selected when `--view` is absent.
+
+| Option                | Behavior                                |
+| --------------------- | --------------------------------------- |
+| `--output DIR`        | Write the complete static site to `DIR` |
+| `--view NAME`         | Export a named view                     |
+| `--force`             | Replace an existing output directory    |
+| `--format text\|json` | Select human or machine output          |
+
+The command validates every projected cell and value before writing. A JSON
+result includes the selected view, runtime, output directory, entry point, and
+file count. Serve the output over HTTP so the browser can load worker modules
+and runtime assets.
 
 ### Machine output
 

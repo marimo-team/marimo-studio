@@ -55,6 +55,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID251"]
 "src/marimo_studio/app.py" = ["TID251"]
 "src/marimo_studio/checks.py" = ["TID251"]
 "src/marimo_studio/environment.py" = ["TID251"]
+"src/marimo_studio/export.py" = ["TID251"]
 "src/marimo_studio/inspect.py" = ["TID251"]
 "tests/**/*.py" = ["TID251"]
 

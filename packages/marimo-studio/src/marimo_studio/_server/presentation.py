@@ -4,14 +4,11 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from html.parser import HTMLParser
 from pathlib import Path
 from threading import RLock
 
-from htpy import base
-
 from marimo_studio._compat.server.models import ServerContext
-from marimo_studio._html import render, runtime_head, runtime_metadata, runtime_root
+from marimo_studio._html import runtime_document
 from marimo_studio._server.runtimes import DEFAULT_RUNTIME_REGISTRY
 from marimo_studio._urls import SUPPORT_PATH, public_url
 from marimo_studio._workspace import discover_studio
@@ -32,60 +29,6 @@ from marimo_studio.errors import (
 )
 from marimo_studio.types import ValueReference
 from marimo_studio.workspace import resolve_studio
-
-
-class _DocumentLayout(HTMLParser):
-    def __init__(self, source: str) -> None:
-        super().__init__(convert_charrefs=False)
-        self._line_starts = [0]
-        for line in source.splitlines(keepends=True):
-            self._line_starts.append(self._line_starts[-1] + len(line))
-        self.head_open_end: int | None = None
-        self.head_close: int | None = None
-        self.body_close: int | None = None
-
-    def _offset(self) -> int:
-        line, column = self.getpos()
-        return self._line_starts[line - 1] + column
-
-    def handle_starttag(
-        self,
-        tag: str,
-        attrs: list[tuple[str, str | None]],
-    ) -> None:
-        del attrs
-        if tag == "head" and self.head_open_end is None:
-            source = self.get_starttag_text()
-            if source is not None:
-                self.head_open_end = self._offset() + len(source)
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag == "head":
-            self.head_close = self._offset()
-        elif tag == "body":
-            self.body_close = self._offset()
-
-
-def _inject_runtime(document: str, head_content: str, body_content: str) -> str:
-    parser = TemplateParser()
-    parser.feed(document)
-    validate_template_structure(parser, "Template")
-    layout = _DocumentLayout(document)
-    layout.feed(document)
-    if (
-        layout.head_open_end is None
-        or layout.head_close is None
-        or layout.body_close is None
-    ):
-        raise TemplateError("Template must contain <head>, </head>, and </body>")
-    return (
-        document[: layout.head_open_end]
-        + head_content
-        + document[layout.head_open_end : layout.head_close]
-        + document[layout.head_close : layout.body_close]
-        + body_content
-        + document[layout.body_close :]
-    )
 
 
 def _configuration_identity(
@@ -309,26 +252,19 @@ class NotebookPresentation:
             context.base_url,
             f"{SUPPORT_PATH}/views/{view_name}",
         )
-        head_content = (
-            f"\n{base(href=root_url)}\n"
-            + render(
-                runtime_head(
-                    support_url=support_url,
-                    assets_url=public_url(
-                        context.base_url,
-                        f"{SUPPORT_PATH}/assets",
-                    ),
-                    dev=context.dev,
-                    revision=snapshot.revision,
-                    runtime=snapshot.resolved.studio.default_runtime,
-                )
-            )
-            + "\n"
+        return runtime_document(
+            snapshot.document,
+            root_url=root_url,
+            support_url=support_url,
+            assets_url=public_url(
+                context.base_url,
+                f"{SUPPORT_PATH}/assets",
+            ),
+            dev=context.dev,
+            revision=snapshot.revision,
+            runtime=snapshot.resolved.studio.default_runtime,
+            filename=context.file_key,
         )
-        runtime = (
-            render(runtime_root()) + "\n" + render(runtime_metadata(context.file_key))
-        )
-        return _inject_runtime(snapshot.document, head_content, f"\n{runtime}\n")
 
     def runtime_config(
         self,

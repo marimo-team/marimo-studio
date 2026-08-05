@@ -54,6 +54,31 @@ WebAssembly clients receive the notebook source and install its compatible
 PEP 723 dependencies in Pyodide. Keep credentials and server-only code out of
 a view configured for this runtime.
 
+## Export a static site
+
+Export one view as a directory that can run from a static host:
+
+```console
+uvx marimo-studio export analysis.py \
+  --view dashboard \
+  --output dist/dashboard
+python -m http.server --directory dist/dashboard
+```
+
+Open the URL printed by the HTTP server. The page loads the custom view, starts
+the notebook in a Pyodide worker, and renders Marimo cells, controls, tables,
+plots, `mo-value` projections, and anywidgets through the same browser runtime
+used by Studio's WebAssembly preview.
+
+The output includes the selected view files, Studio's browser assets, the
+notebook's `public/` directory, and static cell fragments used by HTMX. Upload
+the complete output directory to a static host. Pass `--force` to replace an
+existing export.
+
+The notebook source ships with the site. Its PEP 723 dependencies must install
+in Pyodide, and browser clients must be able to fetch any external data the
+notebook reads. Keep credentials and private source out of a static export.
+
 ## Protect a public endpoint
 
 Use Marimo's token settings when clients can reach the process directly:

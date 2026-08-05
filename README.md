@@ -69,6 +69,14 @@ uv run --with marimo-studio marimo run analysis.py --sandbox --headless
 The default view opens at `/`. A view named `report` opens at `/report/`. Each
 browser receives its own Marimo run session.
 
+Export a view when the notebook can run in WebAssembly and the destination is
+a static host:
+
+```console
+uvx marimo-studio export analysis.py --view report --output dist/report
+python -m http.server --directory dist/report
+```
+
 Marimo Studio supports Python 3.11 or newer and Marimo 0.23.16 or newer.
 
 ## Learn more

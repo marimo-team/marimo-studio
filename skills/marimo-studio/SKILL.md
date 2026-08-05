@@ -342,6 +342,28 @@ Report failures inside Marimo-rendered controls or anywidgets separately.
 Change notebook cells or runtime code only when the user includes them in
 scope.
 
+## Export for static hosting
+
+Export a selected view after its WebAssembly preview passes browser acceptance:
+
+```console
+marimo-studio export analysis.py \
+  --view dashboard \
+  --output dist/dashboard
+python -m http.server --directory dist/dashboard
+```
+
+Wait for `data-marimo-studio-state="ready"` at the HTTP URL, then repeat the
+control, projection, anywidget, responsive layout, console, and network checks.
+Verify HTMX interactions that load built-in cell fragments. Pass `--force`
+when replacing a previously reviewed output directory.
+
+The exported directory contains the notebook source and runs it in Pyodide.
+Confirm that PEP 723 dependencies install in the browser and that the notebook
+contains no credentials or private source before handoff. Deploy the complete
+directory. Treat it as generated output and make revisions in the notebook or
+view source.
+
 Close the browser session and stop the local server after collecting evidence.
 
 Report the view name, edited files, projected cells and values, check result,

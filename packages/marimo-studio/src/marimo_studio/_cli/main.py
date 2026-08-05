@@ -8,6 +8,7 @@ import click
 
 from marimo_studio._cli.commands.bind import bind
 from marimo_studio._cli.commands.check import check
+from marimo_studio._cli.commands.export import export as export_command
 from marimo_studio._cli.commands.inspect import inspect
 from marimo_studio._cli.commands.view import view
 from marimo_studio._cli.diagnostics import diagnostics_from_argv
@@ -28,6 +29,7 @@ def cli() -> None:
 
 cli.add_command(bind)
 cli.add_command(check)
+cli.add_command(export_command)
 cli.add_command(inspect)
 cli.add_command(view)
 

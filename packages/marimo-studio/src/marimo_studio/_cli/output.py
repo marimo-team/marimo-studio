@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from typing import Any
 
 from marimo_studio._cli.print import echo, green, light_blue, red, yellow
@@ -11,6 +12,7 @@ from marimo_studio._workspace.models import (
     StudioConfig,
     ViewSetupResult,
 )
+from marimo_studio.export import StaticExportResult
 from marimo_studio.inspect import RuntimeInspection
 from marimo_studio.types import CellSpec, CheckResult, NotebookSpec
 
@@ -57,6 +59,14 @@ def render_view_list(studio: StudioConfig) -> None:
     for name, view in studio.views.items():
         suffix = " (default)" if name == studio.default_view else ""
         echo(f"{light_blue(name)}{suffix}\n  {view.root}")
+
+
+def render_static_export(result: StaticExportResult) -> None:
+    """Write a static export result in human text."""
+    echo(f"{green('Exported')} {result.view} to {result.output}")
+    echo(f"  {light_blue('open')} {result.entrypoint}")
+    destination = shlex.quote(str(result.output))
+    echo(f"  {light_blue('serve')} python -m http.server --directory {destination}")
 
 
 def render_binding(result: BindingResult, *, dry_run: bool) -> None:

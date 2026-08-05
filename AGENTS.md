@@ -36,7 +36,8 @@ TypeScript boundary.
 - **`packages/marimo-studio` is the Python distribution.** `_workspace` owns
   configuration, views, bindings, checks, and authored files. `_server` owns
   Studio routes and HTTP translation. `_cli` adapts Click commands to
-  application services. `_compat` isolates private Marimo Python APIs.
+  application services. `export.py` packages one resolved view for a static
+  host. `_compat` isolates private Marimo Python APIs.
 - **`packages/protocol` owns browser wire records.** Zod schemas validate
   messages and server responses and provide their inferred TypeScript types.
   The package performs no network, filesystem, DOM, or window I/O.
@@ -93,6 +94,8 @@ Python compatibility boundary.
 - Server previews use Marimo sessions. WebAssembly previews run the derived
   notebook in a background Pyodide worker. Both use the shared presentation
   renderer.
+- Static exports package one selected view with that same WebAssembly runtime.
+  The bundle uses relative URLs and preserves the notebook's `public/` files.
 - The default Studio mode places the notebook beside the preview. Toolbar view
   choices return to that mode. Links inside authored views preserve the active
   mode.
