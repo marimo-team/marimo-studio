@@ -6,7 +6,7 @@ import type { SourceController, SourceSnapshot } from "./controller.ts";
 import type { SourceEditorHandle } from "./SourceEditor.tsx";
 
 import { useControllerSnapshot } from "../../shared/useControllerSnapshot.ts";
-import { sourceTabForKey } from "./files.ts";
+import { sourceRecord, sourceTabForKey } from "./files.ts";
 
 interface EditorActions {
   change: (content: string) => void;
@@ -42,42 +42,26 @@ export const useSourcePane = (controller: SourceController, visible: boolean): S
     }
   }, []);
   const editorRefs = useMemo<Readonly<Record<SourceName, RefCallback<SourceEditorHandle>>>>(
-    () => ({
-      "app.css": (handle) => registerEditor("app.css", handle),
-      "index.html": (handle) => registerEditor("index.html", handle),
-    }),
+    () => sourceRecord((name) => (handle) => registerEditor(name, handle)),
     [registerEditor],
   );
   const tabRefs = useMemo<Readonly<Record<SourceName, RefCallback<HTMLButtonElement>>>>(
-    () => ({
-      "app.css": (element) => {
+    () =>
+      sourceRecord((name) => (element) => {
         if (element) {
-          tabs.current.set("app.css", element);
+          tabs.current.set(name, element);
         } else {
-          tabs.current.delete("app.css");
+          tabs.current.delete(name);
         }
-      },
-      "index.html": (element) => {
-        if (element) {
-          tabs.current.set("index.html", element);
-        } else {
-          tabs.current.delete("index.html");
-        }
-      },
-    }),
+      }),
     [],
   );
   const editorActions = useMemo<Readonly<Record<SourceName, EditorActions>>>(
-    () => ({
-      "app.css": {
-        change: (content) => controller.edit("app.css", content),
-        save: () => controller.save("app.css"),
-      },
-      "index.html": {
-        change: (content) => controller.edit("index.html", content),
-        save: () => controller.save("index.html"),
-      },
-    }),
+    () =>
+      sourceRecord((name) => ({
+        change: (content) => controller.edit(name, content),
+        save: () => controller.save(name),
+      })),
     [controller],
   );
 

@@ -11,7 +11,8 @@ from pathlib import Path
 
 from marimo_studio._workspace.metadata import notebook_config
 from marimo_studio._workspace.models import StudioConfig
-from marimo_studio.errors import ConfigurationError
+from marimo_studio._workspace.sources import read_source
+from marimo_studio.errors import ConfigurationError, MarimoStudioError
 
 _WatchKey = tuple[str, Path]
 _FileStamp = str | tuple[int, int, int, int]
@@ -97,11 +98,15 @@ def _changed_files(
             relative = path.resolve().relative_to(root)
         except ValueError:
             continue
+        source_name = relative.as_posix()
         try:
             revision = f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
         except OSError:
-            revision = None
-        files.append({"path": relative.as_posix(), "revision": revision})
+            try:
+                revision = read_source(studio, view_name, source_name).revision
+            except (MarimoStudioError, OSError):
+                revision = None
+        files.append({"path": source_name, "revision": revision})
     return files
 
 

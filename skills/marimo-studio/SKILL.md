@@ -3,9 +3,8 @@ name: marimo-studio
 description: >-
   Design and maintain audience-specific Marimo Studio views for existing
   Marimo notebooks. Use when an agent needs to inspect notebook outputs,
-  create a view, edit its index.html and app.css, arrange live cells and
-  Python values, apply a clean visual system, or verify the result in a
-  browser.
+  create a view, edit its HTML, theme, and CSS, arrange live cells and Python
+  values, apply a clean visual system, or verify the result in a browser.
 ---
 
 # Design Marimo Studio views
@@ -19,6 +18,7 @@ View source lives beside the notebook:
 ```text
 __marimo__/studio/<notebook-stem>/<view>/
   index.html
+  theme.css
   app.css
 ```
 
@@ -47,32 +47,10 @@ full-width and overflow-safe. Reserve cards for repeated items or genuinely
 framed tools. Skip decorative gradients, nested cards, marketing-style hero
 sections, one-off palettes, and decorative animation.
 
-Use PT Sans for interface text and prose unless the supplied design system
-chooses another typeface. Add the font in `index.html`:
-
-```html
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link
-  href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap"
-  rel="stylesheet"
-/>
-```
-
-Set the family in `app.css`:
-
-```css
-:root {
-  font-family: "PT Sans", sans-serif;
-}
-```
-
-When font loading belongs in an existing `<style>` block, use the equivalent
-import:
-
-```css
-@import url("https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap");
-```
+The packaged font stack follows Marimo and falls back to native system fonts.
+Set `--text-font`, `--heading-font`, or `--monospace-font` in `theme.css` when
+the supplied design system chooses another typeface. Add the corresponding
+font resource to `index.html` when the face is not already available.
 
 ## Discover the available material
 
@@ -84,13 +62,19 @@ marimo-studio view list analysis.py --format json
 marimo-studio inspect analysis.py --display --format json
 ```
 
+If `view list` reports that a configured view directory is missing, recreate
+that view with `marimo-studio view add <view> analysis.py --format json` before
+continuing. This can happen when a notebook file was copied without its
+`__marimo__` directory.
+
 Use `uvx marimo-studio` when the command is not installed. Add
 `--include-code` when cell previews and definitions do not reveal enough to
 choose the right output.
 
-Read `index.html` and `app.css` completely when the target view exists.
-Preserve its working projections, source paths, interaction model, and visual
-language unless the user asks for a redesign.
+Read `index.html` and `app.css` completely when the target view exists. Read
+`theme.css` when present. Preserve its working projections, source paths,
+interaction model, and visual language unless the user asks for a redesign.
+Create `theme.css` when the view needs shared semantic tokens.
 
 Use runtime inspection when output MIME types or JSON-compatible values affect
 the design:
@@ -130,22 +114,19 @@ value projection inside that shell:
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Quarterly performance</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap"
-      rel="stylesheet"
-    />
     <link rel="stylesheet" href="./_marimo-studio/views/dashboard/static/app.css" />
   </head>
   <body>
-    <main id="app-shell">
-      <header class="page-header">
-        <p class="eyebrow">Quarterly review</p>
-        <h1>Performance at a glance</h1>
+    <main id="app-shell" class="studio-view grid gap-6 lg:grid-cols-2">
+      <header class="lg:col-span-2">
+        <p class="studio-eyebrow">Quarterly review</p>
+        <h1 class="text-4xl font-semibold tracking-tight">Performance at a glance</h1>
       </header>
-      <section aria-labelledby="trend-title">
-        <h2 id="trend-title">Trend</h2>
+      <section class="studio-card p-5" aria-labelledby="trend-title">
+        <h2 id="trend-title" class="flex items-center gap-2 text-lg font-semibold">
+          <iconify-icon icon="lucide:chart-no-axes-combined" aria-hidden="true"></iconify-icon>
+          Trend
+        </h2>
         <marimo-cell class="chart" name="revenue-chart"></marimo-cell>
       </section>
     </main>
@@ -188,6 +169,54 @@ Load a secondary cell after a user action with its view-scoped HTMX route:
 
 The response mounts `detail_table` through the current Marimo session.
 
+## Use the built-in styling vocabulary
+
+Write Wind4 utilities directly in `index.html`. Studio scans the initial shell,
+HTML refreshes, and later HTMX fragments. Use responsive and state variants in
+the same class attribute:
+
+```html
+<section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  <article class="studio-card p-5 hover:border-primary">
+    <p class="studio-eyebrow">Revenue</p>
+    <strong class="text-3xl font-semibold" mo-value="summary.revenue"></strong>
+  </article>
+</section>
+```
+
+The stable shortcuts are `studio-view`, `studio-card`, `studio-button`, and
+`studio-eyebrow`. Use ordinary utilities for the rest of the layout.
+
+Set semantic variables in `theme.css`. Use `light-dark()` with
+`color-scheme: light dark` when the view should follow the browser theme:
+
+```css
+:root {
+  color-scheme: light dark;
+  --background: light-dark(#ffffff, #111713);
+  --foreground: light-dark(#17201b, #edf3ef);
+  --card: light-dark(#f8faf9, #18201b);
+  --card-foreground: var(--foreground);
+  --border: light-dark(#dce3df, #344039);
+  --primary: light-dark(#0877d1, #3ba7ad);
+  --radius: 8px;
+}
+```
+
+Semantic utilities such as `bg-card`, `text-foreground`, `border-border`, and
+`text-primary` read these tokens. Preserve the starter theme's `marimo-cell`
+mapping so projected outputs receive the palette. Put view-specific component
+selectors in `app.css`, which loads after utilities and `theme.css`.
+
+Use `<iconify-icon>` with the same icon names accepted by `mo.icon()`:
+
+```html
+<iconify-icon icon="lucide:leaf" aria-hidden="true"></iconify-icon>
+```
+
+Icon data loads lazily from Iconify. Use `aria-hidden="true"` for decorative
+icons. Use `role="img"` and an `aria-label` when an icon carries meaning.
+
 Read existing Python values with selectors:
 
 ```html
@@ -203,9 +232,9 @@ notebook changes are in scope.
 
 ## Edit with the live preview
 
-Edit `index.html` and `app.css` in an external editor or in Studio's source
-panes. Saved source refreshes the visible shell while the Marimo runtime,
-kernel session, controls, and widget models stay mounted.
+Edit `index.html`, `theme.css`, and `app.css` in an external editor or in
+Studio's source panes. Saved source refreshes the visible shell while the
+Marimo runtime, kernel session, controls, and widget models stay mounted.
 
 Keep behavior in notebook cells and HTMX requests. Avoid copying reactive
 state into page JavaScript. When direct event listeners are necessary,
@@ -225,9 +254,10 @@ state.
 ## Integrate notebook output into the layout
 
 Build a clear reading order before styling individual regions. Use semantic
-landmarks and headings, then add responsive grid or flex layouts in
-`app.css`. Keep normal page sections visually open. Frame repeated records,
-filters, or tools when the boundary helps the reader act.
+landmarks and headings, then compose responsive grid or flex layouts with
+utilities. Keep normal page sections visually open. Frame repeated records,
+filters, or tools when the boundary helps the reader act. Reserve `app.css`
+for named components and selectors that are clearer as ordinary CSS.
 
 Let mounted outputs inherit the page typography and colors. Remove incidental
 cell framing when the surrounding section already provides structure:
@@ -236,7 +266,7 @@ cell framing when the surrounding section already provides structure:
 marimo-cell {
   display: block;
   min-width: 0;
-  --marimo-cell-font: "PT Sans", sans-serif;
+  --marimo-cell-font: var(--text-font);
   --marimo-cell-border: 0;
   --marimo-cell-radius: 0;
   --marimo-cell-padding: 0;

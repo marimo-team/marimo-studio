@@ -33,6 +33,7 @@ import {
 } from "./runtime/coordinator";
 import { restorePendingRuntimeSelection } from "./runtime/selection";
 import { startValueBindings } from "./values/index";
+import { initializeViewStyles } from "./view-styles/runtime";
 
 declare global {
   interface Window {
@@ -103,6 +104,7 @@ const bindStandaloneViewNavigation = (): (() => void) =>
   });
 
 const bootstrap = async (registry: RuntimeRegistry) => {
+  await initializeViewStyles();
   startReadiness(updateConfiguredRuntimeQuery);
   registerMarimoCellElement();
   (globalThis as typeof globalThis & Window).htmx = htmx;

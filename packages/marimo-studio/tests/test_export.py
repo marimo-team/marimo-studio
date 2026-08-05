@@ -45,6 +45,7 @@ def test_export_view_writes_a_complete_static_bundle(
     public = notebook_path.parent / "public"
     public.mkdir()
     public.joinpath("sample.txt").write_text("public asset", encoding="utf-8")
+    view_root.joinpath("theme.css").unlink()
     output = tmp_path / "site"
 
     result = export_view(notebook_path, output)
@@ -70,6 +71,7 @@ def test_export_view_writes_a_complete_static_bundle(
     assert "[tool.marimo-studio]" not in code
     assert 'src="./_marimo-studio/assets/runtime.js"' in document
     assert 'href="./_marimo-studio/assets/runtime.css"' in document
+    assert 'href="./_marimo-studio/views/dashboard/static/theme.css"' in document
     assert '"runtime":"wasm"' in document
     assert output.joinpath("_marimo-studio/views/dashboard/cells/cell-2").read_text(
         encoding="utf-8"
@@ -77,6 +79,12 @@ def test_export_view_writes_a_complete_static_bundle(
     assert (
         output.joinpath("_marimo-studio/views/dashboard/static/app.css").read_bytes()
         == view_root.joinpath("app.css").read_bytes()
+    )
+    assert (
+        output.joinpath("_marimo-studio/views/dashboard/static/theme.css").read_text(
+            encoding="utf-8"
+        )
+        == ""
     )
     assert output.joinpath("public/sample.txt").read_text(encoding="utf-8") == (
         "public asset"

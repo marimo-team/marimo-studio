@@ -18,6 +18,30 @@ from marimo_studio.errors import TemplateError
 
 _MARIMO_CELL = Element("marimo-cell")
 _MARIMO_FILENAME = Element("marimo-filename")
+_STYLE_LOADING_SCRIPT = """\
+(() => {
+  const root = document.documentElement;
+  root.dataset.marimoStudioStyles = "loading";
+  const reveal = () => {
+    if (root.dataset.marimoStudioStyles !== "loading") return;
+    root.dataset.marimoStudioStyles = "error";
+    const show = () => {
+      if (document.querySelector("[data-marimo-studio-style-error]")) return;
+      const status = document.createElement("div");
+      status.dataset.marimoStudioRuntimeDiagnostic = "";
+      status.dataset.marimoStudioStyleError = "";
+      status.dataset.state = "error";
+      status.setAttribute("role", "alert");
+      status.textContent =
+        "View styling could not start. The authored page remains available.";
+      document.body.append(status);
+    };
+    if (document.body) show();
+    else window.addEventListener("DOMContentLoaded", show, { once: true });
+  };
+  window.__MARIMO_STUDIO_STYLE_TIMEOUT__ = window.setTimeout(reveal, 3000);
+})();
+"""
 
 
 def node_list(*nodes: object) -> list[Node]:
@@ -58,8 +82,17 @@ def runtime_head(
                 }
             ),
             script({"data-marimo-studio-runtime": True})[
-                Markup(f"window.__MARIMO_MOUNT_CONFIG__=Object.freeze({mount_config});")
+                Markup(
+                    _STYLE_LOADING_SCRIPT
+                    + f"window.__MARIMO_MOUNT_CONFIG__=Object.freeze({mount_config});"
+                )
             ],
+            link(
+                {
+                    "rel": "stylesheet",
+                    "href": f"{support_url}/static/theme.css",
+                }
+            ),
             script(
                 {
                     "data-marimo-studio-runtime": True,

@@ -180,6 +180,7 @@ def _write_bundle(
 
     _copy_tree(_assets.runtime_assets_path(), support / "assets")
     _copy_tree(studio.views[view_name].root, view_support / "static")
+    view_support.joinpath("static/theme.css").touch(exist_ok=True)
     public = studio.notebook.parent / "public"
     if public.is_dir():
         _copy_tree(public, output / "public")

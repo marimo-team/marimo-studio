@@ -46,8 +46,11 @@ uv run --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
 The new view starts with every notebook cell in source order. Studio gives you
-the Marimo editor, HTML and CSS editors, and a live preview in one workspace.
-Saved source changes refresh around the running notebook.
+the Marimo editor, view source editors, and a live preview in one workspace.
+Write [utility classes](https://unocss.dev/presets/wind4/) directly in
+`index.html`, tune semantic light and dark tokens in `theme.css`, and keep
+bespoke rules in `app.css`. Saved source changes refresh around the running
+notebook.
 
 Place a named cell or a JSON-compatible Python value in the view:
 

@@ -9,55 +9,55 @@ from pathlib import Path
 from marimo_studio._cell_refs import cell_ref_candidates
 from marimo_studio.types import CellRef, CellSpec
 
-_STARTER_CSS = """\
+_STARTER_THEME_CSS = """\
 :root {
   color-scheme: light dark;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-}
-
-* {
-  box-sizing: border-box;
+  --background: light-dark(#ffffff, #111713);
+  --foreground: light-dark(#17201b, #edf3ef);
+  --card: light-dark(#f8faf9, #18201b);
+  --card-foreground: var(--foreground);
+  --muted: light-dark(#f0f4f2, #202923);
+  --muted-foreground: light-dark(#64716a, #a9b5ae);
+  --border: light-dark(#dce3df, #344039);
+  --input: light-dark(#c8d2cc, #435048);
+  --primary: light-dark(#0877d1, #3ba7ad);
+  --primary-foreground: light-dark(#ffffff, #111713);
+  --accent: light-dark(#edf7ff, #173d3e);
+  --accent-foreground: light-dark(#075fa8, #c4efeb);
+  --ring: var(--primary);
+  --link: light-dark(#075fa8, #7fc4ff);
+  --radius: 8px;
 }
 
 body {
   margin: 0;
-  background: Canvas;
-  color: CanvasText;
-}
-
-.studio-view {
-  width: min(100% - 2rem, 72rem);
-  margin-inline: auto;
-  padding-block: clamp(2rem, 5vw, 4rem);
-}
-
-.view-header {
-  margin-block-end: 2rem;
-}
-
-.view-header p {
-  margin: 0 0 0.35rem;
-  color: color-mix(in srgb, CanvasText 62%, transparent);
-  font-size: 0.75rem;
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.view-header h1 {
-  margin: 0;
-  font-size: clamp(1.75rem, 4vw, 2.75rem);
-  letter-spacing: -0.035em;
-}
-
-.notebook-cells {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--text-font);
 }
 
 marimo-cell {
-  display: block;
+  --marimo-cell-font: var(--text-font);
+  --marimo-cell-heading-font: var(--heading-font);
+  --marimo-cell-monospace-font: var(--monospace-font);
+  --marimo-cell-background: transparent;
+  --marimo-cell-foreground: var(--foreground);
+  --marimo-cell-surface: var(--card);
+  --marimo-cell-muted: var(--muted);
+  --marimo-cell-muted-foreground: var(--muted-foreground);
+  --marimo-cell-border-color: var(--border);
+  --marimo-cell-accent: var(--primary);
+  --marimo-cell-accent-foreground: var(--primary-foreground);
+  --marimo-cell-radius: var(--radius);
+}
+"""
+
+_STARTER_CSS = """\
+.view-header h1 {
+  text-wrap: balance;
+}
+
+marimo-cell {
   min-width: 0;
 }
 """
@@ -92,11 +92,15 @@ def _starter_template(
   </head>
   <body>
     <main id="app-shell" class="studio-view">
-      <header class="view-header">
-        <p>{notebook_title}</p>
-        <h1>{view_title}</h1>
+      <header class="view-header mb-8">
+        <p class="studio-eyebrow mb-2">{notebook_title}</p>
+        <h1
+          class="m-0 font-heading text-4xl font-semibold tracking-tight"
+        >
+          {view_title}
+        </h1>
       </header>
-      <section class="notebook-cells" aria-label="Notebook cells">
+      <section class="flex flex-col gap-6" aria-label="Notebook cells">
 {cells}      </section>
     </main>
   </body>
@@ -114,6 +118,7 @@ def starter_view_files(
     root = view_root / name
     return {
         root / "index.html": _starter_template(name, notebook_name, aliases),
+        root / "theme.css": _STARTER_THEME_CSS,
         root / "app.css": _STARTER_CSS,
     }
 

@@ -1,7 +1,7 @@
 import type { SourceName } from "@marimo-studio/protocol/source-events";
 
 import { SourceEvents } from "./events.ts";
-import { SOURCE_NAMES } from "./files.ts";
+import { SOURCE_NAMES, sourceRecord } from "./files.ts";
 import { createSourceRemote, type SourceRemote } from "./remote.ts";
 import { type SourceObserver, type SourceState, SyncedSource } from "./sync.ts";
 
@@ -249,9 +249,8 @@ export class SourceController {
   }
 
   private readActiveTab(view: string): SourceName {
-    return globalThis.localStorage.getItem(this.tabKey(view)) === "app.css"
-      ? "app.css"
-      : "index.html";
+    const stored = globalThis.localStorage.getItem(this.tabKey(view));
+    return SOURCE_NAMES.find((name) => name === stored) ?? "index.html";
   }
 
   private publish(): void {
@@ -267,16 +266,10 @@ export class SourceController {
       view: this.view,
       active: this.active,
       focusRequest: this.focusRequest,
-      documents: {
-        "index.html": {
-          content: this.contents.get("index.html") ?? "",
-          state: this.states.get("index.html") ?? { name: "index.html", phase: "loading" },
-        },
-        "app.css": {
-          content: this.contents.get("app.css") ?? "",
-          state: this.states.get("app.css") ?? { name: "app.css", phase: "loading" },
-        },
-      },
+      documents: sourceRecord((name) => ({
+        content: this.contents.get(name) ?? "",
+        state: this.states.get(name) ?? { name, phase: "loading" },
+      })),
     };
   }
 }

@@ -145,7 +145,8 @@ def test_run_mode_serves_default_and_named_view_documents(
     assert default.status_code == 200
     assert default.text.count('id="marimo-runtime-root"') == 1
     assert '"/_marimo-studio/views/dashboard"' in default.text
-    assert default.text.index("runtime.css") < default.text.index("app.css")
+    assert default.text.index("runtime.css") < default.text.index("theme.css")
+    assert default.text.index("theme.css") < default.text.index("app.css")
     assert named.status_code == 200
     assert '"/_marimo-studio/views/executive"' in named.text
 
@@ -160,7 +161,6 @@ def test_empty_notebook_serves_a_ready_starter_view(tmp_path: Path) -> None:
         config = client.get("/_marimo-studio/views/dashboard/config")
 
     assert page.status_code == 200
-    assert "<h1>Dashboard</h1>" in page.text
     assert config.status_code == 200
     assert config.json()["cellBindings"] == {}
     assert config.json()["valueBindings"] == {}
@@ -218,6 +218,7 @@ def test_runtime_injection_uses_structural_html_tags(
 
 def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
     studio = _configured(notebook_path)
+    studio.views["dashboard"].root.joinpath("theme.css").unlink()
 
     def preserve(config: MutableMapping[str, object]) -> None:
         config["preserve_session"] = True
@@ -229,6 +230,7 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
         executive = client.get("/_marimo-studio/views/executive/config").json()
         cell = client.get("/_marimo-studio/views/executive/cells/result")
         stylesheet = client.get("/_marimo-studio/views/executive/static/app.css")
+        optional_theme = client.get("/_marimo-studio/views/dashboard/static/theme.css")
         views = client.get("/_marimo-studio/views").json()
 
     assert dashboard["view"] == "dashboard"
@@ -240,6 +242,8 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
     assert dashboard["cellBindings"]["result"] == executive["cellBindings"]["result"]
     assert cell.text == '<marimo-cell name="result"></marimo-cell>'
     assert stylesheet.status_code == 200
+    assert optional_theme.status_code == 200
+    assert optional_theme.text == ""
     assert views == {
         "schema": 1,
         "default_view": "dashboard",
@@ -863,7 +867,7 @@ def test_change_stream_classifies_live_source_edits(
 ) -> None:
     studio = _configured(notebook_path)
     template = studio.views["dashboard"].template
-    stylesheet = studio.views["dashboard"].root / "app.css"
+    theme = studio.views["dashboard"].root / "theme.css"
     sibling = studio.views["executive"].template
     native_sleep = asyncio.sleep
 
@@ -891,10 +895,7 @@ def test_change_stream_classifies_live_source_edits(
         os.utime(template, ns=(stat.st_atime_ns, stat.st_mtime_ns))
         html = await asyncio.wait_for(anext(stream), timeout=1)
 
-        stylesheet.write_text(
-            stylesheet.read_text(encoding="utf-8") + "\n/* changed */\n",
-            encoding="utf-8",
-        )
+        theme.unlink()
         css = await asyncio.wait_for(anext(stream), timeout=1)
 
         studio.notebook.write_text(
@@ -925,7 +926,13 @@ def test_change_stream_classifies_live_source_edits(
     ]
     assert payloads[0]["files"][0]["path"] == "index.html"
     assert payloads[0]["files"][0]["revision"].startswith("sha256:")
-    assert payloads[1]["files"][0]["path"] == "app.css"
+    assert payloads[1]["files"] == [
+        {
+            "path": "theme.css",
+            "revision": "sha256:e3b0c44298fc1c149afbf4c8996fb924"
+            "27ae41e4649b934ca495991b7852b855",
+        }
+    ]
     assert payloads[2]["files"] == []
     assert payloads[3]["files"] == []
 

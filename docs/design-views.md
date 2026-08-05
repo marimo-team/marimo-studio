@@ -12,8 +12,8 @@ The toolbar controls the main canvas:
 - **Build** places the native Marimo editor beside the selected view.
 - **Preview** fills the canvas with the selected view.
 
-Open **HTML & CSS** from the workspace menu to place `index.html` or `app.css`
-beside the live preview.
+Open **HTML & CSS** from the workspace menu to place `index.html`, `theme.css`,
+or `app.css` beside the live preview.
 
 Open the toolbar's workspace menu when a task needs another arrangement.
 Choose **Open saved layout**, then **Arrange panes** to add a surface on
@@ -108,6 +108,60 @@ Each `index.html` is a complete document with one `#app-shell`:
 Place every cell and value host inside `#app-shell`. Studio replaces that shell
 when HTML changes and reloads CSS independently.
 
+## Style the view
+
+Write Wind4 utilities directly in `index.html`. Studio generates the matching
+CSS in the browser when the document loads and when HTMX inserts a fragment:
+
+```html
+<main id="app-shell" class="studio-view grid gap-6 lg:grid-cols-2">
+  <section class="studio-card p-5">
+    <h2 class="flex items-center gap-2 text-lg font-semibold">
+      <iconify-icon icon="lucide:chart-no-axes-combined" aria-hidden="true"></iconify-icon>
+      Revenue
+    </h2>
+    <marimo-cell name="revenue_chart"></marimo-cell>
+  </section>
+</main>
+```
+
+The utility vocabulary follows [UnoCSS Wind4](https://unocss.dev/presets/wind4)
+and covers Tailwind-style layout, spacing, typography, color, borders,
+responsive variants, and state variants. Studio also defines four stable
+shortcuts:
+
+- `studio-view` provides a centered responsive page width and padding.
+- `studio-card` provides a semantic bordered surface.
+- `studio-button` provides a compact interactive control.
+- `studio-eyebrow` provides a small uppercase section label.
+
+Edit `theme.css` for shared semantic tokens. The file is loaded automatically
+between Studio's foundation and `app.css`:
+
+```css
+:root {
+  color-scheme: light dark;
+  --background: light-dark(#ffffff, #111713);
+  --foreground: light-dark(#17201b, #edf3ef);
+  --card: light-dark(#f8faf9, #18201b);
+  --card-foreground: var(--foreground);
+  --border: light-dark(#dce3df, #344039);
+  --primary: light-dark(#0877d1, #3ba7ad);
+  --radius: 8px;
+}
+```
+
+Utilities such as `bg-card`, `text-foreground`, `border-border`, and
+`rounded-lg` read these variables. The starter theme maps them into projected
+Marimo outputs through its `marimo-cell` block. Keep that mapping when changing
+the palette. Put named components and view-specific selectors in `app.css`.
+Its rules load last.
+
+`iconify-icon` accepts the same Iconify names as `mo.icon()`. Add
+`aria-hidden="true"` to decorative icons. An icon that carries meaning needs
+`role="img"` and an `aria-label`. Icon data loads from Iconify's service when
+first requested.
+
 Serve images and other view files through the scoped static route:
 
 ```html
@@ -158,7 +212,8 @@ intentional.
 
 ## Match outputs to the page
 
-Set the page color scheme so Marimo controls use the matching theme:
+Set the page color scheme in `theme.css` so Marimo controls use the matching
+theme:
 
 ```css
 :root {

@@ -8,6 +8,7 @@ export interface SourceFile {
 
 const SOURCE_METADATA = {
   "index.html": { id: "html", language: "html" },
+  "theme.css": { id: "theme", language: "css" },
   "app.css": { id: "css", language: "css" },
 } as const satisfies Record<SourceName, Omit<SourceFile, "name">>;
 
@@ -17,6 +18,16 @@ export const SOURCE_FILES: readonly SourceFile[] = SOURCE_NAMES.map((name) => ({
   name,
   ...SOURCE_METADATA[name],
 }));
+
+export const sourceRecord = <Value>(
+  create: (name: SourceName) => Value,
+): Record<SourceName, Value> => {
+  const result = {} as Record<SourceName, Value>;
+  for (const name of SOURCE_NAMES) {
+    result[name] = create(name);
+  }
+  return result;
+};
 
 const SOURCE_TAB_MOVES: Readonly<Record<string, (index: number) => number>> = {
   ArrowLeft: (index) => (index - 1 + SOURCE_FILES.length) % SOURCE_FILES.length,

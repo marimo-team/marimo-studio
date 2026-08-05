@@ -264,6 +264,37 @@ Each `index.html` is a complete document with one `<head>`, one `<body>`, and
 one `#app-shell`. Every `<marimo-cell>` and `mo-value` host belongs inside that
 shell.
 
+New views contain three authored files:
+
+```text
+index.html
+theme.css
+app.css
+```
+
+Studio loads its foundation first, then generated Wind4 utilities,
+`theme.css`, and the stylesheets linked by `index.html`. The starter links
+`app.css`, so its rules take precedence over utilities at equal specificity.
+`theme.css` is optional for existing views and opens as an empty source tab
+until its first edit.
+
+Write Wind4 utilities directly on elements. Studio scans the initial
+`#app-shell`, HTML refreshes, and nodes inserted later by HTMX. The stable
+shortcuts are `studio-view`, `studio-card`, `studio-button`, and
+`studio-eyebrow`. Semantic color utilities resolve through `theme.css`,
+including `bg-background`, `text-foreground`, `bg-card`, `border-border`,
+`text-primary`, and `ring-ring`.
+
+Use the same Iconify element and icon names as Marimo:
+
+```html
+<iconify-icon icon="lucide:leaf" aria-hidden="true"></iconify-icon>
+```
+
+Iconify downloads icon data when the element first requests a name. Deployments
+that restrict outbound requests need to allow the Iconify API. Use an inline
+SVG when a static export must render fully offline.
+
 Reference a view-owned file through its scoped route:
 
 ```html
@@ -390,31 +421,32 @@ Set `data-skeleton="none"` on a cell to suppress its first-load skeleton.
 
 Routes resolve beneath Marimo's configured `base_url`.
 
-| Mode | Route                                            | Behavior                                    |
-| ---- | ------------------------------------------------ | ------------------------------------------- |
-| Edit | `/`                                              | Open the default Studio workspace           |
-| Edit | `/?file={file-key}`                              | Open Marimo's native editor inside Studio   |
-| Edit | `/studio/`                                       | Open the editor and default view            |
-| Edit | `/studio/{view}/`                                | Open the editor and selected view           |
-| Edit | `/{view}/`                                       | Attach a view to the editor session         |
-| Run  | `/`                                              | Serve the default view                      |
-| Run  | `/{view}/`                                       | Serve a named view                          |
-| Both | `/_marimo-studio/views`                          | List current views and the default          |
-| Edit | `POST /_marimo-studio/views`                     | Create a view                               |
-| Edit | `DELETE /_marimo-studio/views/{view}`            | Delete a view                               |
-| Both | `/_marimo-studio/views/{view}/config`            | Read runtime configuration                  |
-| Both | `GET /_marimo-studio/views/{view}/source/{file}` | Read `index.html` or `app.css` with an ETag |
-| Edit | `PUT /_marimo-studio/views/{view}/source/{file}` | Replace source with an `If-Match` revision  |
-| Both | `POST /_marimo-studio/views/{view}/values`       | Read selectors permitted by the view        |
-| Both | `/_marimo-studio/views/{view}/cells/{alias}`     | Create one cell host                        |
-| Both | `/_marimo-studio/views/{view}/static/{path}`     | Serve a view file                           |
-| Edit | `/_marimo-studio/dev/events`                     | Stream view-list changes                    |
-| Edit | `/_marimo-studio/views/{view}/dev/events`        | Stream HTML and CSS changes                 |
-| Both | `/_marimo-studio/assets/{path}`                  | Serve packaged browser assets               |
+| Mode | Route                                            | Behavior                                   |
+| ---- | ------------------------------------------------ | ------------------------------------------ |
+| Edit | `/`                                              | Open the default Studio workspace          |
+| Edit | `/?file={file-key}`                              | Open Marimo's native editor inside Studio  |
+| Edit | `/studio/`                                       | Open the editor and default view           |
+| Edit | `/studio/{view}/`                                | Open the editor and selected view          |
+| Edit | `/{view}/`                                       | Attach a view to the editor session        |
+| Run  | `/`                                              | Serve the default view                     |
+| Run  | `/{view}/`                                       | Serve a named view                         |
+| Both | `/_marimo-studio/views`                          | List current views and the default         |
+| Edit | `POST /_marimo-studio/views`                     | Create a view                              |
+| Edit | `DELETE /_marimo-studio/views/{view}`            | Delete a view                              |
+| Both | `/_marimo-studio/views/{view}/config`            | Read runtime configuration                 |
+| Both | `GET /_marimo-studio/views/{view}/source/{file}` | Read a view source file with an ETag       |
+| Edit | `PUT /_marimo-studio/views/{view}/source/{file}` | Replace source with an `If-Match` revision |
+| Both | `POST /_marimo-studio/views/{view}/values`       | Read selectors permitted by the view       |
+| Both | `/_marimo-studio/views/{view}/cells/{alias}`     | Create one cell host                       |
+| Both | `/_marimo-studio/views/{view}/static/{path}`     | Serve a view file                          |
+| Edit | `/_marimo-studio/dev/events`                     | Stream view-list changes                   |
+| Edit | `/_marimo-studio/views/{view}/dev/events`        | Stream HTML and CSS changes                |
+| Both | `/_marimo-studio/assets/{path}`                  | Serve packaged browser assets              |
 
 Edit previews connect to the active editor kernel. Run-mode documents receive
 Marimo's regular isolated browser sessions.
 
 Studio sends Marimo's server token on mutation requests. Source writes preserve
 UTF-8 content and line endings. A stale `If-Match` returns `412` with the
-current source revision.
+current source revision. `{file}` accepts `index.html`, `theme.css`, or
+`app.css`.

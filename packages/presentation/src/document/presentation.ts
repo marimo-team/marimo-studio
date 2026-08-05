@@ -1,6 +1,6 @@
 import htmx from "htmx.org";
 
-import { prepareCellHosts } from "../cells/host.ts";
+import { prepareCellHosts, syncPreservedCellHosts } from "../cells/host.ts";
 import {
   commitRuntimeConfig,
   fetchRuntimeConfig,
@@ -11,6 +11,7 @@ import {
   RuntimeConfigRequestError,
   setSupportUrl,
 } from "../runtime-config/index.ts";
+import { stageViewStyles, type StagedViewStyles } from "../view-styles/runtime.ts";
 import { sameShellPresentation, type ShellTarget } from "./refresh-state.ts";
 import { abortError, PageStyles, type StagedStyles } from "./styles.ts";
 
@@ -51,6 +52,7 @@ export class PresentationDocument {
     };
     onTarget(target);
     let stagedStyles: StagedStyles | undefined;
+    let stagedViewStyles: StagedViewStyles | undefined;
     try {
       const response = await fetch(nextDocumentUrl, {
         cache: "no-store",
@@ -105,6 +107,7 @@ export class PresentationDocument {
         throw new Error("Shell refresh requires #app-shell");
       }
       prepareCellHosts(nextDocument);
+      stagedViewStyles = await stageViewStyles(next);
       stagedStyles = await this.styles.stage(nextDocument, nextDocumentUrl, signal);
       if (signal.aborted) {
         throw abortError();
@@ -120,23 +123,28 @@ export class PresentationDocument {
         document.title = nextDocument.title;
         globalThis.history.replaceState(globalThis.history.state, "", nextDocumentUrl);
         this.swap(current, next);
+        syncPreservedCellHosts(next, document);
         stagedStyles.commit();
+        stagedViewStyles.commit();
       } catch (error) {
         setSupportUrl(previousSupportUrl);
         commitRuntimeConfig(previousConfig);
         document.title = previousTitle;
         globalThis.history.replaceState(globalThis.history.state, "", previousDocumentUrl);
         stagedStyles.discard();
+        stagedViewStyles.discard();
         throw error;
       }
       this.documentUrl = nextDocumentUrl;
       stagedStyles = undefined;
+      stagedViewStyles = undefined;
       return {
         target,
         supportChanged: previousSupportUrl !== target.supportUrl,
       };
     } finally {
       stagedStyles?.discard();
+      stagedViewStyles?.discard();
     }
   }
 

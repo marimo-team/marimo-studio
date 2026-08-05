@@ -115,9 +115,18 @@ async def _view_response(
     if view_name not in studio.views:
         return Response(status_code=404)
     if route.startswith("static/") and request.method in {"GET", "HEAD"}:
+        relative = route.removeprefix("static/")
+        if (
+            relative == "theme.css"
+            and not (studio.views[view_name].root / relative).exists()
+        ):
+            return Response(
+                media_type="text/css",
+                headers={"Cache-Control": "no-cache"},
+            )
         return file_response(
             studio.views[view_name].root,
-            route.removeprefix("static/"),
+            relative,
         )
     if route == "dev/events" and request.method == "GET" and context.dev:
         return events_response(studio, context=context, view_name=view_name)

@@ -7,6 +7,17 @@ type HostListener = () => void;
 const OUTPUT_SELECTOR = "[data-marimo-cell-output]";
 const MEASURED_HEIGHT_PROPERTY = "--_marimo-cell-measured-height";
 const PRESERVED_ID_PREFIX = "marimo-studio-cell-";
+const RUNTIME_ATTRIBUTES = new Set([
+  "aria-busy",
+  "data-hx-preserve",
+  "data-marimo-diagnostic-code",
+  "data-marimo-diagnostic-hint",
+  "data-marimo-diagnostic-message",
+  "data-output-mime",
+  "data-output-mimes",
+  "data-runtime-cell-id",
+  "data-state",
+]);
 const hosts = new Set<MarimoCellElement>();
 const listeners = new Set<HostListener>();
 const measuredHeights = new Map<string, number>();
@@ -160,6 +171,33 @@ export const prepareCellHost = (host: Element) => {
 
 export const prepareCellHosts = (root: ParentNode) => {
   root.querySelectorAll("marimo-cell").forEach(prepareCellHost);
+};
+
+const syncHostAttributes = (live: HTMLElement, source: Element): void => {
+  const measuredHeight = live.style.getPropertyValue(MEASURED_HEIGHT_PROPERTY);
+  for (const attribute of Array.from(live.attributes)) {
+    if (!RUNTIME_ATTRIBUTES.has(attribute.name) && !source.hasAttribute(attribute.name)) {
+      live.removeAttribute(attribute.name);
+    }
+  }
+  for (const attribute of Array.from(source.attributes)) {
+    if (!RUNTIME_ATTRIBUTES.has(attribute.name)) {
+      live.setAttribute(attribute.name, attribute.value);
+    }
+  }
+  live.style.removeProperty(MEASURED_HEIGHT_PROPERTY);
+  if (measuredHeight) {
+    live.style.setProperty(MEASURED_HEIGHT_PROPERTY, measuredHeight);
+  }
+};
+
+export const syncPreservedCellHosts = (source: ParentNode, live: Document): void => {
+  source.querySelectorAll<HTMLElement>("marimo-cell[data-hx-preserve][id]").forEach((host) => {
+    const preserved = live.getElementById(host.id);
+    if (preserved?.localName === "marimo-cell" && preserved !== host) {
+      syncHostAttributes(preserved, host);
+    }
+  });
 };
 
 export const registerMarimoCellElement = () => {

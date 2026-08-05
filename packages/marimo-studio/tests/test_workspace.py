@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import MutableMapping
 from pathlib import Path
 
@@ -39,12 +40,15 @@ def _shell(studio: StudioConfig, view_name: str, content: str) -> None:
     )
 
 
-def test_first_view_configures_the_notebook_in_place(notebook_path: Path) -> None:
+def test_view_setup_configures_the_notebook_and_scaffolds_each_view(
+    notebook_path: Path,
+) -> None:
     original = notebook_path.read_text(encoding="utf-8")
 
     result = ensure_view(notebook_path)
     studio = load_studio(notebook_path)
     document = read_notebook_metadata(notebook_path)
+    template = result.root.joinpath("index.html").read_text(encoding="utf-8")
 
     assert result.studio == studio
     assert studio.uses_notebook_config
@@ -52,29 +56,26 @@ def test_first_view_configures_the_notebook_in_place(notebook_path: Path) -> Non
     assert studio.view_root == (
         notebook_path.parent / "__marimo__" / "studio" / notebook_path.stem
     )
-    assert studio.views["dashboard"].template.is_file()
     assert document is not None
     assert document["tool"]["marimo-studio"]["default"] == "dashboard"
     assert "marimo-studio" in document["dependencies"]
     assert notebook_path.read_text(encoding="utf-8").endswith(original)
-
-
-def test_new_view_projects_every_cell_in_notebook_order(
-    notebook_path: Path,
-) -> None:
-    result = ensure_view(notebook_path)
-    studio = load_studio(notebook_path)
-    template = result.root.joinpath("index.html").read_text(encoding="utf-8")
-    document = read_notebook_metadata(notebook_path)
-
     assert template.index('name="cell-1"') < template.index('name="cell-2"')
-    assert "<h1>Dashboard</h1>" in template
-    assert document is not None
+    assert re.search(r"<h1[^>]*>\s*Dashboard\s*</h1>", template)
     assert list(document["tool"]["marimo-studio"]["cells"]) == [
         "cell-1",
         "cell-2",
     ]
     assert resolve_studio(studio).view().cell_aliases == ("cell-1", "cell-2")
+    theme = studio.views["dashboard"].root / "theme.css"
+    theme.unlink()
+
+    ensure_view(notebook_path, "report")
+
+    assert not theme.exists()
+    assert (
+        load_studio(notebook_path).views["report"].root.joinpath("theme.css").is_file()
+    )
 
 
 def test_new_view_uses_native_cell_names_and_binds_anonymous_cells(
@@ -148,48 +149,27 @@ def test_setup_preserves_other_pep_723_metadata_and_notebook_body(
     assert notebook_path.read_text(encoding="utf-8").endswith(body)
 
 
-def test_setup_preserves_crlf_notebook_body(tmp_path: Path) -> None:
+def test_setup_preserves_crlf_preamble_and_notebook_body(tmp_path: Path) -> None:
     notebook = tmp_path / "analysis.py"
-    body = (
-        "import marimo\r\n"
-        f'__generated_with = "{marimo.__version__}"\r\n'
+    source = (
+        "#!/usr/bin/env python\r\n"
+        "# -*- coding: utf-8 -*-\r\n"
+        f'import marimo\r\n__generated_with = "{marimo.__version__}"\r\n'
         "app = marimo.App()\r\n"
         "@app.cell\r\n"
         "def _():\r\n"
-        "    value = 1\r\n"
-        "    value\r\n"
-        "    return (value,)\r\n"
+        "    return\r\n"
     )
-    notebook.write_bytes(body.encode())
+    notebook.write_bytes(source.encode())
 
     ensure_view(notebook)
 
     updated = notebook.read_bytes()
-    assert updated.endswith(body.encode())
-    assert b"\r\n" in updated
-    assert b"\n" not in updated.replace(b"\r\n", b"")
-
-
-def test_setup_preserves_shebang_and_encoding_cookie(tmp_path: Path) -> None:
-    notebook = tmp_path / "analysis.py"
-    source = (
-        "#!/usr/bin/env python\n"
-        "# -*- coding: utf-8 -*-\n"
-        f'import marimo\n__generated_with = "{marimo.__version__}"\n'
-        "app = marimo.App()\n"
-        "@app.cell\n"
-        "def _():\n"
-        "    return\n"
-    )
-    notebook.write_text(source, encoding="utf-8")
-
-    ensure_view(notebook)
-
-    updated = notebook.read_text(encoding="utf-8")
     assert updated.startswith(
-        "#!/usr/bin/env python\n# -*- coding: utf-8 -*-\n# /// script\n"
+        b"#!/usr/bin/env python\r\n# -*- coding: utf-8 -*-\r\n# /// script\r\n"
     )
-    assert updated.endswith(source.split("# -*- coding: utf-8 -*-\n", 1)[1])
+    assert updated.endswith(source.split("# -*- coding: utf-8 -*-\r\n", 1)[1].encode())
+    assert b"\n" not in updated.replace(b"\r\n", b"")
 
 
 def test_setup_rolls_back_notebook_and_view_files_after_write_failure(

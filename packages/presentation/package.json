@@ -16,15 +16,21 @@
     "@marimo-studio/marimo-frontend": "workspace:*",
     "@marimo-studio/protocol": "workspace:*",
     "@marimo-studio/runtime": "workspace:*",
+    "@unocss/core": "catalog:",
+    "@unocss/preset-wind4": "catalog:",
+    "css-tree": "catalog:",
     "htmx.org": "catalog:",
+    "iconify-icon": "catalog:",
     "jotai": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@types/css-tree": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "jsdom": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:"

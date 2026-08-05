@@ -70,14 +70,19 @@ the notebook in a Pyodide worker, and renders Marimo cells, controls, tables,
 plots, `mo-value` projections, and anywidgets through the same browser runtime
 used by Studio's WebAssembly preview.
 
-The output includes the selected view files, Studio's browser assets, the
-notebook's `public/` directory, and static cell fragments used by HTMX. Upload
-the complete output directory to a static host. Pass `--force` to replace an
-existing export.
+The output includes the selected view files, Studio's styling runtime and
+browser assets, the notebook's `public/` directory, and static cell fragments
+used by HTMX. Utilities, theme tokens, and `app.css` keep the same cascade on
+the static site. Upload the complete output directory to a static host. Pass
+`--force` to replace an existing export.
 
 The notebook source ships with the site. Its PEP 723 dependencies must install
 in Pyodide, and browser clients must be able to fetch any external data the
 notebook reads. Keep credentials and private source out of a static export.
+
+Named Iconify icons load from the Iconify API in the visitor's browser. Allow
+that endpoint in the site's content security policy, or use inline SVG for an
+offline export.
 
 ## Protect a public endpoint
 

@@ -1,0 +1,78 @@
+:root {
+  color-scheme: light dark;
+  --monospace-font: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --text-font: "PT Sans", ui-sans-serif, system-ui, sans-serif;
+  --heading-font: var(--text-font);
+  --radius: 8px;
+  --background: light-dark(hsl(0deg 0% 100%), hsl(150deg 8% 10%));
+  --foreground: light-dark(hsl(222deg 47% 11%), hsl(155deg 7% 93%));
+  --muted: light-dark(hsl(210deg 40% 96%), hsl(150deg 5% 16%));
+  --muted-foreground: light-dark(hsl(215deg 16% 47%), hsl(155deg 5% 68%));
+  --popover: light-dark(hsl(0deg 0% 100%), hsl(151deg 6% 15%));
+  --popover-foreground: var(--foreground);
+  --card: light-dark(hsl(0deg 0% 100%), hsl(151deg 6% 15%));
+  --card-foreground: var(--foreground);
+  --border: light-dark(hsl(214deg 32% 91%), hsl(153deg 4% 24%));
+  --input: light-dark(hsl(214deg 20% 82%), hsl(154deg 3% 29%));
+  --primary: light-dark(#0877d1, #3ba7ad);
+  --primary-foreground: light-dark(#ffffff, #111713);
+  --secondary: light-dark(hsl(210deg 40% 96%), hsl(155deg 7% 93%));
+  --secondary-foreground: light-dark(hsl(222deg 47% 11%), hsl(151deg 6% 15%));
+  --accent: light-dark(hsl(209deg 100% 97%), hsl(192deg 57% 27%));
+  --accent-foreground: light-dark(hsl(211deg 90% 42%), hsl(190deg 80% 84%));
+  --destructive: light-dark(#c62f2f, #f87171);
+  --destructive-foreground: light-dark(#ffffff, #111713);
+  --ring: var(--primary);
+  --link: light-dark(hsl(211deg 90% 42%), hsl(211deg 90% 68%));
+}
+
+:where(#app-shell) {
+  min-inline-size: 0;
+}
+
+:where(#app-shell, #app-shell :not(marimo-cell *)) {
+  box-sizing: border-box;
+}
+
+:where(#app-shell iconify-icon) {
+  vertical-align: -0.125em;
+}
+
+html[data-marimo-studio-styles="loading"] #app-shell {
+  visibility: hidden;
+}
+
+html[data-marimo-studio-styles="loading"] body::before {
+  animation: marimo-studio-view-loading 1.4s ease-in-out infinite;
+  background:
+    linear-gradient(var(--muted), var(--muted)) 0 0 / 34% 1rem no-repeat,
+    linear-gradient(var(--muted), var(--muted)) 0 2.25rem / 82% 0.7rem no-repeat,
+    linear-gradient(var(--muted), var(--muted)) 0 3.7rem / 61% 0.7rem no-repeat;
+  border-radius: var(--radius);
+  content: "";
+  height: 5rem;
+  left: 50%;
+  max-width: 72rem;
+  pointer-events: none;
+  position: fixed;
+  top: 2rem;
+  transform: translateX(-50%);
+  width: calc(100% - 2rem);
+}
+
+@keyframes marimo-studio-view-loading {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-marimo-studio-styles="loading"] body::before {
+    animation: none;
+  }
+}

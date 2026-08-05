@@ -174,13 +174,16 @@ describe("Studio shell", () => {
       `${storagePrefix}:${bootstrap.selectedView}`,
       JSON.stringify(persisted),
     );
-    globalThis.localStorage.setItem(`${storagePrefix}:source:${bootstrap.selectedView}`, "app.css");
+    globalThis.localStorage.setItem(
+      `${storagePrefix}:source:${bootstrap.selectedView}`,
+      "theme.css",
+    );
 
     const services = createStudioServices(bootstrap);
 
     expect(services.layout.getSnapshot().code).toEqual(persisted.code);
     expect(services.layout.getSnapshot().workspace).toEqual(persisted.workspace);
-    expect(services.source.getSnapshot().active).toBe("app.css");
+    expect(services.source.getSnapshot().active).toBe("theme.css");
     services.dispose();
   });
 

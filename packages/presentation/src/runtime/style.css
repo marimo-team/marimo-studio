@@ -1,3 +1,5 @@
+@import "../view-styles/foundation.css";
+
 #marimo-runtime-root {
   display: none;
 }
