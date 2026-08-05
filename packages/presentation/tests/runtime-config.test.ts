@@ -33,6 +33,7 @@ const baseRuntimeConfig = {
   },
   rootUrl: "/proxy/app/",
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
+  showCellLogs: true,
   cellBindings: {
     plot: { kind: "name", value: "plot" },
   },

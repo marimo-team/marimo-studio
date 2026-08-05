@@ -242,6 +242,9 @@ def _load_studio(
     preserve_session = data.get("preserve_session", False)
     if not isinstance(preserve_session, bool):
         raise ConfigurationError("preserve_session must be a boolean")
+    show_cell_logs = data.get("show_cell_logs", True)
+    if not isinstance(show_cell_logs, bool):
+        raise ConfigurationError("show_cell_logs must be a boolean")
     views = _discover_views(view_root, required=require_view)
     if require_view and default_view not in views:
         raise ConfigurationError(
@@ -274,6 +277,7 @@ def _load_studio(
         preserve_session=preserve_session,
         views=views,
         cells=cells,
+        show_cell_logs=show_cell_logs,
     )
 
 

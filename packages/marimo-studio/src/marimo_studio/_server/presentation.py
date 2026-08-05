@@ -47,6 +47,7 @@ def _configuration_identity(
         studio.default_runtime,
         studio.runtimes,
         studio.preserve_session,
+        studio.show_cell_logs,
         tuple((name, str(item.root)) for name, item in studio.views.items()),
         tuple(
             (alias, str(reference)) for alias, reference in sorted(studio.cells.items())
@@ -303,6 +304,7 @@ class NotebookPresentation:
                 context.base_url,
                 f"{SUPPORT_PATH}/views/{view_name}",
             ),
+            "showCellLogs": resolved.studio.show_cell_logs,
             "cellBindings": projection.cell_bindings,
             "valueBindings": projection.value_bindings,
             "diagnostics": [

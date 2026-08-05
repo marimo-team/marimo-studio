@@ -16,7 +16,7 @@ export const CellOutput = ({
     <ConsoleOutput
       cellId={cell.id}
       cellName="_"
-      consoleOutputs={cell.consoleOutputs}
+      consoleOutputs={projection.consoleOutputs}
       stale={(cell.status === "queued" || cell.edited || cell.staleInputs) && !cell.interrupted}
       interrupted={cell.interrupted}
       debuggerActive={cell.debuggerActive}

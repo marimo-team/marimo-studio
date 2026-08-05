@@ -73,6 +73,7 @@ class StudioConfig:
     preserve_session: bool
     views: dict[str, View]
     cells: dict[str, CellRef]
+    show_cell_logs: bool = True
 
     @property
     def uses_notebook_config(self) -> bool:

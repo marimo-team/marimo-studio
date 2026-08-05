@@ -57,6 +57,7 @@ const runtimeConfigFields = {
   runtime: runtimeEnvelopeSchema,
   rootUrl: z.string(),
   supportUrl: z.string(),
+  showCellLogs: z.boolean().default(true),
   cellBindings: z.record(z.string(), cellBindingConfigSchema),
   valueBindings: z.record(z.string(), valueBindingConfigSchema),
   diagnostics: z.array(projectionDiagnosticSchema),

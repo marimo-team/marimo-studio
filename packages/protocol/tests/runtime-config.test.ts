@@ -41,6 +41,7 @@ const baseRuntimeConfig = {
   },
   rootUrl: "/proxy/app/",
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
+  showCellLogs: true,
   cellBindings: {
     plot: { kind: "name", value: "plot" },
   },
@@ -66,6 +67,9 @@ const runtimeConfig = (overrides: Record<string, unknown> = {}): Record<string, 
 test("runtime configuration accepts the browser contract", () => {
   assert.deepEqual(parseRuntimeConfig(runtimeConfig()), baseRuntimeConfig);
   assert.deepEqual(parseRuntimeConfig(runtimeConfig({ ignored: true })), baseRuntimeConfig);
+  assert.equal(parseRuntimeConfig(runtimeConfig({ showCellLogs: false })).showCellLogs, false);
+  const { showCellLogs: _, ...legacyRuntimeConfig } = runtimeConfig();
+  assert.equal(parseRuntimeConfig(legacyRuntimeConfig).showCellLogs, true);
 });
 
 test("runtime configuration rejects malformed contracts", () => {

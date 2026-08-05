@@ -462,6 +462,26 @@ def test_notebook_configuration_controls_session_preservation(
         load_studio(notebook_path)
 
 
+def test_notebook_configuration_controls_cell_log_visibility(
+    notebook_path: Path,
+) -> None:
+    ensure_view(notebook_path)
+    assert load_studio(notebook_path).show_cell_logs is True
+
+    def hide_logs(config: MutableMapping[str, object]) -> None:
+        config["show_cell_logs"] = False
+
+    update_notebook_config(notebook_path, hide_logs)
+    assert load_studio(notebook_path).show_cell_logs is False
+
+    def invalidate(config: MutableMapping[str, object]) -> None:
+        config["show_cell_logs"] = "no"
+
+    update_notebook_config(notebook_path, invalidate)
+    with pytest.raises(ConfigurationError, match="show_cell_logs must be a boolean"):
+        load_studio(notebook_path)
+
+
 def test_notebook_configuration_selects_presentation_runtimes(
     notebook_path: Path,
 ) -> None:

@@ -177,19 +177,25 @@ point to the `mo-value` host and include the defining notebook cell.
 # default = "dashboard"
 # runtime = "server"
 # runtimes = ["server", "wasm"]
+# show_cell_logs = false
 #
 # [tool.marimo-studio.cells]
 # summary = { ref = "cell:v1:<semantic-sha256>:<layout-sha256>:0" }
 # ///
 ```
 
-| Field              | Type     | Default     | Behavior                                                |
-| ------------------ | -------- | ----------- | ------------------------------------------------------- |
-| `default`          | String   | Required    | Select the view served at `/` in run mode               |
-| `runtime`          | String   | `"server"`  | Select the runtime used when a view URL has no override |
-| `runtimes`         | String[] | `[runtime]` | Permit runtimes in run mode                             |
-| `preserve_session` | Boolean  | `false`     | Reconnect a manual server-runtime refresh to its kernel |
-| `cells`            | Table    | Empty       | Store aliases shared by every view                      |
+| Field              | Type     | Default     | Behavior                                                  |
+| ------------------ | -------- | ----------- | --------------------------------------------------------- |
+| `default`          | String   | Required    | Select the view served at `/` in run mode                 |
+| `runtime`          | String   | `"server"`  | Select the runtime used when a view URL has no override   |
+| `runtimes`         | String[] | `[runtime]` | Permit runtimes in run mode                               |
+| `preserve_session` | Boolean  | `false`     | Reconnect a manual server-runtime refresh to its kernel   |
+| `show_cell_logs`   | Boolean  | `true`      | Render cell `stdout` and `stderr` in projected cell hosts |
+| `cells`            | Table    | Empty       | Store aliases shared by every view                        |
+
+Set `show_cell_logs = false` when projected views should exclude text written
+through `print`, Python logging, and warnings. Primary cell results, media,
+input prompts, and structured Marimo errors continue to render.
 
 Edit mode offers every runtime bundled with Studio. Run mode exposes the
 entries in `runtimes`. Enabling `wasm` sends a derived copy of the notebook
@@ -231,6 +237,7 @@ default = "dashboard"
 runtime = "server"
 runtimes = ["server", "wasm"]
 preserve_session = false
+show_cell_logs = false
 
 [tool.marimo-studio.cells]
 summary = { ref = "cell:v1:<semantic-sha256>:<layout-sha256>:0" }

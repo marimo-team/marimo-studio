@@ -9,10 +9,12 @@ import {
   type CellPhase,
   cellPhase,
 } from "../cell-state";
+import { filterCellLogs } from "./cell-output-policy";
 
 export type CellDiagnostic = Pick<ProjectionDiagnostic, "code" | "message" | "hint">;
 
 export interface CellProjection {
+  consoleOutputs: RuntimeCell["consoleOutputs"];
   delivery: CellDeliveryPhase;
   diagnostic?: CellDiagnostic;
   disabled: boolean;
@@ -31,18 +33,22 @@ interface CellProjectionInput {
   diagnostic?: CellDiagnostic;
   deliveryTimedOut: boolean;
   runtimeReady: boolean;
+  showCellLogs: boolean;
 }
 
 const ERROR_MIMES = new Set(["application/vnd.marimo+error", "application/vnd.marimo+traceback"]);
 
-const outputMessagesFor = (cell: RuntimeCell | undefined): RuntimeCell["consoleOutputs"] => {
+const outputMessagesFor = (
+  cell: RuntimeCell | undefined,
+  consoleOutputs: RuntimeCell["consoleOutputs"],
+): RuntimeCell["consoleOutputs"] => {
   if (!cell) {
     return [];
   }
   if (!cell.output) {
-    return cell.consoleOutputs;
+    return consoleOutputs;
   }
-  return [...cell.consoleOutputs, cell.output];
+  return [...consoleOutputs, cell.output];
 };
 
 const executionDiagnostic = ({
@@ -104,19 +110,21 @@ export const projectCell = ({
   diagnostic,
   deliveryTimedOut,
   runtimeReady,
+  showCellLogs,
 }: CellProjectionInput): CellProjection => {
   const stale = cell ? outputIsStale(cell, cell.edited) : false;
   const disabled = cell
     ? cell.config.disabled === true || cell.status === "disabled-transitively"
     : false;
+  const consoleOutputs = filterCellLogs(cell?.consoleOutputs ?? [], showCellLogs);
   const awaitingFirstRun =
     cell !== undefined &&
     cell.lastRunStartTimestamp === null &&
     cell.output === null &&
-    cell.consoleOutputs.length === 0 &&
+    consoleOutputs.length === 0 &&
     cell.status === "idle";
   const loading = cell ? !disabled && (outputIsLoading(cell.status) || awaitingFirstRun) : false;
-  const outputMessages = outputMessagesFor(cell);
+  const outputMessages = outputMessagesFor(cell, consoleOutputs);
   const visibleOutputs = outputMessages.filter(
     (output) => output.data !== "" && output.data !== null,
   );
@@ -150,6 +158,7 @@ export const projectCell = ({
   });
 
   return {
+    consoleOutputs,
     delivery,
     diagnostic: effectiveDiagnostic,
     disabled,

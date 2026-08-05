@@ -19,6 +19,7 @@ interface CellPortalProps {
   host: MarimoCellElement;
   onSubmitStdin: SubmitStdin;
   runtimeReady: boolean;
+  showCellLogs: boolean;
 }
 
 export const CellPortal = memo(function CellPortal({
@@ -30,6 +31,7 @@ export const CellPortal = memo(function CellPortal({
   host,
   onSubmitStdin,
   runtimeReady,
+  showCellLogs,
 }: CellPortalProps) {
   const projection = useCellProjection({
     alias: host.cellName,
@@ -38,6 +40,7 @@ export const CellPortal = memo(function CellPortal({
     cell,
     diagnostic,
     runtimeReady,
+    showCellLogs,
   });
   useCellHost(host, cell, projection);
 

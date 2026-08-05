@@ -12,6 +12,7 @@ interface CellProjectionOptions {
   cell: RuntimeCell | undefined;
   diagnostic?: CellDiagnostic;
   runtimeReady: boolean;
+  showCellLogs: boolean;
 }
 
 export const useCellProjection = ({
@@ -21,6 +22,7 @@ export const useCellProjection = ({
   cell,
   diagnostic,
   runtimeReady,
+  showCellLogs,
 }: CellProjectionOptions) => {
   const waiting = runtimeReady && bindingPresent && cell === undefined && diagnostic === undefined;
   const deliveryTimedOut = useDeliveryTimeout(waiting, bindingKey);
@@ -34,7 +36,8 @@ export const useCellProjection = ({
         diagnostic,
         deliveryTimedOut,
         runtimeReady,
+        showCellLogs,
       }),
-    [alias, bindingPresent, cell, deliveryTimedOut, diagnostic, runtimeReady],
+    [alias, bindingPresent, cell, deliveryTimedOut, diagnostic, runtimeReady, showCellLogs],
   );
 };

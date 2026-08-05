@@ -29,6 +29,7 @@ export type CellHostProjection =
       developer: boolean;
       diagnostic?: CellDiagnostic;
       host: MarimoCellElement;
+      showCellLogs: boolean;
     };
 
 export const projectCellHosts = (
@@ -65,6 +66,7 @@ export const projectCellHosts = (
       developer,
       diagnostic: diagnostics.get(host.cellName),
       host,
+      showCellLogs: config.showCellLogs,
     };
   });
 };

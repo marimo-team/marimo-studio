@@ -14,6 +14,7 @@
 # [tool.marimo-studio]
 # default = "corpus"
 # preserve_session = false
+# show_cell_logs = false
 #
 # [tool.marimo-studio.cells]
 # corpus_controls = {ref = "cell:v1:1e7b1299b526e7923a360edddeec9f8d7420675ca1ba53bec9cdf29ee7e276e2:1e7b1299b526e7923a360edddeec9f8d7420675ca1ba53bec9cdf29ee7e276e2:0"}

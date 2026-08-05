@@ -165,6 +165,23 @@ def test_empty_notebook_serves_a_ready_starter_view(tmp_path: Path) -> None:
     assert config.json()["cellBindings"] == {}
     assert config.json()["valueBindings"] == {}
     assert config.json()["diagnostics"] == []
+    assert config.json()["showCellLogs"] is True
+
+
+def test_runtime_configuration_hides_cell_logs_when_configured(
+    notebook_path: Path,
+) -> None:
+    ensure_view(notebook_path)
+
+    def configure(config: MutableMapping[str, object]) -> None:
+        config["show_cell_logs"] = False
+
+    update_notebook_config(notebook_path, configure)
+    with TestClient(create_asgi_app(notebook_path)) as client:
+        config = client.get("/_marimo-studio/views/dashboard/config")
+
+    assert config.status_code == 200
+    assert config.json()["showCellLogs"] is False
 
 
 def test_runtime_injection_uses_structural_html_tags(

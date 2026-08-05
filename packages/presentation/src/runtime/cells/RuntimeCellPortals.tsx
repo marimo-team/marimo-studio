@@ -37,6 +37,7 @@ export const RuntimeCellPortals = ({
         developer={projection.developer}
         diagnostic={projection.diagnostic}
         runtimeReady={runtimeReady}
+        showCellLogs={projection.showCellLogs}
         onSubmitStdin={onSubmitStdin}
       />
     );
