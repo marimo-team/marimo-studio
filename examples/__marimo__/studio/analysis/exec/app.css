@@ -1,0 +1,61 @@
+/* THEME */
+
+:root {
+  color-scheme: light dark;
+  --monospace-font: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --text-font: "PT Sans", ui-sans-serif, system-ui, sans-serif;
+  --heading-font: var(--text-font);
+  --background: light-dark(#ffffff, #111713);
+  --foreground: light-dark(#17201b, #edf3ef);
+  --card: light-dark(#f8faf9, #18201b);
+  --card-foreground: var(--foreground);
+  --muted: light-dark(#f0f4f2, #202923);
+  --muted-foreground: light-dark(#64716a, #a9b5ae);
+  --popover: light-dark(#ffffff, #18201b);
+  --popover-foreground: var(--foreground);
+  --border: light-dark(#dce3df, #344039);
+  --input: light-dark(#c8d2cc, #435048);
+  --primary: light-dark(#0877d1, #3ba7ad);
+  --primary-foreground: light-dark(#ffffff, #111713);
+  --secondary: light-dark(#f0f4f2, #edf3ef);
+  --secondary-foreground: light-dark(#17201b, #18201b);
+  --accent: light-dark(#edf7ff, #173d3e);
+  --accent-foreground: light-dark(#075fa8, #c4efeb);
+  --destructive: light-dark(#c62f2f, #f87171);
+  --destructive-foreground: light-dark(#ffffff, #111713);
+  --ring: var(--primary);
+  --link: light-dark(#075fa8, #7fc4ff);
+  --radius: 8px;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--text-font);
+}
+
+marimo-cell {
+  --marimo-cell-font: var(--text-font);
+  --marimo-cell-heading-font: var(--heading-font);
+  --marimo-cell-monospace-font: var(--monospace-font);
+  --marimo-cell-background: transparent;
+  --marimo-cell-foreground: var(--foreground);
+  --marimo-cell-surface: var(--card);
+  --marimo-cell-muted: var(--muted);
+  --marimo-cell-muted-foreground: var(--muted-foreground);
+  --marimo-cell-border-color: var(--border);
+  --marimo-cell-accent: var(--primary);
+  --marimo-cell-accent-foreground: var(--primary-foreground);
+  --marimo-cell-radius: var(--radius);
+}
+
+/* APP */
+
+.view-header h1 {
+  text-wrap: balance;
+}
+
+marimo-cell {
+  min-width: 0;
+}

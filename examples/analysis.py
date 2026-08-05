@@ -10,11 +10,12 @@
 # preserve_session = false
 #
 # [tool.marimo-studio.cells]
+# cell-3 = {ref = "cell:v1:4cb720fc5b853f4a4e9c1c993bb5634eb4e3f1ced59a1dcccdd0946c387d0251:4cb720fc5b853f4a4e9c1c993bb5634eb4e3f1ced59a1dcccdd0946c387d0251:0"}
 # ///
 
 import marimo
 
-__generated_with = "0.23.15"
+__generated_with = "0.23.16"
 app = marimo.App(width="medium")
 
 
@@ -44,6 +45,13 @@ def controls(mo):
     )
     mo.hstack([scenario, quarter], justify="start", wrap=True, gap=2)
     return quarter, scenario
+
+
+@app.cell
+def _():
+    a = 42*42
+    a
+    return
 
 
 @app.cell
