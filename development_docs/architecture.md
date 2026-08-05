@@ -111,11 +111,12 @@ preview runtime. Private UI registry access stays in
 control endpoint and has no Marimo frontend import.
 
 React portals project cell outputs into `<marimo-cell>` hosts. `mo-value` hosts
-read permitted values through the active adapter. HTMX may replace authored
-shell markup while that adapter and its widget models stay mounted. Studio
-keeps prepared runtime documents in separate frames and updates each document
-in place when the view changes. An adapter instance change reloads its owning
-preview document.
+read permitted values through the active adapter. Each value host exposes an
+isolated JSON snapshot through `marimoValue` and native DOM events. HTMX may
+replace authored shell markup while that adapter and its widget models stay
+mounted. Studio keeps prepared runtime documents in separate frames and
+updates each document in place when the view changes. An adapter instance
+change reloads its owning preview document.
 
 The styling runtime scans classes outside Marimo-owned output boundaries and
 generates Wind4 CSS inside a native `@scope`. Named cascade layers keep Studio

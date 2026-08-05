@@ -14,7 +14,7 @@ import {
   rememberSession,
 } from "./document/session-preservation";
 import { errorMessage } from "./errors";
-import { setRuntimeConnectionState, startReadiness } from "./readiness";
+import { setRuntimeConnectionState, startReadiness, stopReadiness } from "./readiness";
 import {
   commitRuntimeConfig,
   fetchRuntimeConfigForRevision,
@@ -34,7 +34,7 @@ import {
   updateConfiguredRuntimeQuery,
 } from "./runtime/coordinator";
 import { restorePendingRuntimeSelection } from "./runtime/selection";
-import { startValueBindings } from "./values/index";
+import { startValueBindings, stopValueBindings } from "./values/index";
 import { initializeViewStyles } from "./view-styles/runtime";
 
 declare global {
@@ -125,6 +125,7 @@ const bindStandaloneViewNavigation = (): (() => void) =>
 const bootstrap = async (registry: RuntimeRegistry) => {
   await initializeViewStyles();
   startReadiness(updateConfiguredRuntimeQuery);
+  globalThis.addEventListener("pagehide", stopReadiness, { once: true });
   registerMarimoCellElement();
 
   let config = await loadRuntimeConfig();
@@ -148,6 +149,7 @@ const bootstrap = async (registry: RuntimeRegistry) => {
     });
   }
   startValueBindings();
+  globalThis.addEventListener("pagehide", stopValueBindings, { once: true });
   const runtimeRoot = document.querySelector<HTMLElement>("#marimo-runtime-root");
   if (!runtimeRoot) {
     throw new Error("Missing #marimo-runtime-root");

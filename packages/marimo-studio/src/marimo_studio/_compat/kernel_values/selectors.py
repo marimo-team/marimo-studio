@@ -6,6 +6,7 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
+from marimo_studio._compat.kernel_values.models import DEFAULT_MAX_VALUE_BYTES
 from marimo_studio._workspace.config import discover_studio
 from marimo_studio._workspace.templates import TemplateParser
 from marimo_studio.errors import ConfigurationError
@@ -33,7 +34,7 @@ def _encode_value(
     value: object,
     *,
     max_value_bytes: int,
-) -> tuple[object | None, ValueReadError | None]:
+) -> tuple[object | None, ValueReadError | None, int]:
     try:
         encoded = json.dumps(
             value,
@@ -42,19 +43,28 @@ def _encode_value(
             separators=(",", ":"),
         )
     except (TypeError, ValueError, OverflowError, RecursionError) as error:
-        return None, ValueReadError(
-            "not-json-serializable",
-            (
-                f"Selector {selector!r} resolved to {type(value).__name__}, "
-                f"which cannot be serialized as JSON: {error}"
+        return (
+            None,
+            ValueReadError(
+                "not-json-serializable",
+                (
+                    f"Selector {selector!r} resolved to {type(value).__name__}, "
+                    f"which cannot be serialized as JSON: {error}"
+                ),
             ),
+            0,
         )
-    if len(encoded.encode("utf-8")) > max_value_bytes:
-        return None, ValueReadError(
-            "value-too-large",
-            f"Selector {selector!r} exceeds the {max_value_bytes}-byte limit.",
+    size = len(encoded.encode("utf-8"))
+    if size > max_value_bytes:
+        return (
+            None,
+            ValueReadError(
+                "value-too-large",
+                f"Selector {selector!r} exceeds the {max_value_bytes}-byte limit.",
+            ),
+            0,
         )
-    return json.loads(encoded), None
+    return json.loads(encoded), None, size
 
 
 def _read_values(
@@ -63,9 +73,11 @@ def _read_values(
     allowed: set[str],
     *,
     max_value_bytes: int,
+    max_response_bytes: int = DEFAULT_MAX_VALUE_BYTES,
 ) -> ValueReadResult:
     values: dict[str, object] = {}
     errors: dict[str, ValueReadError] = {}
+    total = 0
     for selector in selectors:
         if selector not in allowed:
             errors[selector] = ValueReadError(
@@ -92,13 +104,37 @@ def _read_values(
                 f"Selector {selector!r} could not be resolved: {error}",
             )
             continue
-        encoded, error = _encode_value(
+        encoded, error, size = _encode_value(
             selector,
             value,
             max_value_bytes=max_value_bytes,
         )
         if error is not None:
             errors[selector] = error
-        else:
-            values[selector] = encoded
-    return ValueReadResult(values, errors)
+            continue
+        if total + size > max_response_bytes:
+            errors[selector] = ValueReadError(
+                "response-too-large",
+                "The value response exceeds the aggregate byte limit.",
+            )
+            continue
+        total += size
+        values[selector] = encoded
+    result = ValueReadResult(values, errors)
+    payload = json.dumps(
+        result.to_dict(),
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    if len(payload.encode("utf-8")) <= max_response_bytes:
+        return result
+    return ValueReadResult(
+        {},
+        {
+            "*": ValueReadError(
+                "response-too-large",
+                "The value response exceeds the aggregate byte limit.",
+            )
+        },
+    )

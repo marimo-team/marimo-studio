@@ -125,6 +125,19 @@ def test_kernel_projection_bounds_each_selected_leaf() -> None:
     assert result.errors["context.large"].code == "value-too-large"
 
 
+def test_kernel_projection_bounds_the_aggregate_response() -> None:
+    result = _read_values(
+        {"context": {"first": "x" * 400, "second": "y" * 700}},
+        ("context.first", "context.second"),
+        {"context.first", "context.second"},
+        max_value_bytes=800,
+        max_response_bytes=1_000,
+    )
+
+    assert result.values == {"context.first": "x" * 400}
+    assert result.errors["context.second"].code == "response-too-large"
+
+
 def test_kernel_value_read_rejects_a_viewer_before_dispatch() -> None:
     from marimo._messaging.notification import ConsumerCapabilities
     from marimo._types.ids import ConsumerId

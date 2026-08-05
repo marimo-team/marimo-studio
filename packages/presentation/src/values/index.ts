@@ -1,4 +1,10 @@
-export { applyValues, markValueError, markValuePending, startValueBindings } from "./hosts.ts";
+export {
+  applyValues,
+  markValueError,
+  markValuePending,
+  startValueBindings,
+  stopValueBindings,
+} from "./hosts.ts";
 export {
   readServerValues,
   readServerValuesWithRetry,

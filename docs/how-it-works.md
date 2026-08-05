@@ -127,7 +127,9 @@ notebook.
 
 `mo-value="report.updated_at"` follows a smaller path. The active adapter reads
 an allowed selector from its Python namespace and returns a JSON-compatible
-value for the host element. Both adapters use Marimo's globals lock.
+value for the host element. Both adapters use Marimo's globals lock. The host
+publishes the typed snapshot through `marimoValue` and bubbling DOM events,
+while its text and `data-state` remain available to HTML and CSS.
 
 CSS edits reload the page stylesheet. HTML edits refresh the authored shell
 around the runtime root. A view with native script tags uses a document reload

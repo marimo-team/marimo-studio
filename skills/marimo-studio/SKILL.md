@@ -242,6 +242,38 @@ Selectors support attribute access and item lookup. Put formatting,
 arithmetic, calls, comprehensions, and slicing in a notebook cell when
 notebook changes are in scope.
 
+Pass a projected value to browser code through its host:
+
+```html
+<span id="chart-data" hidden mo-value="chart_data"></span>
+<sales-chart id="chart"></sales-chart>
+<script type="module" src="app.js"></script>
+```
+
+```js
+const source = document.querySelector("#chart-data");
+const chart = document.querySelector("#chart");
+
+const render = (value) => {
+  chart.data = value;
+};
+
+source.addEventListener("marimo-value-updated", (event) => {
+  render(event.detail.value);
+});
+
+if (source.marimoValue !== undefined) {
+  render(source.marimoValue);
+}
+```
+
+Register the listener before reading `marimoValue`, so the module covers both
+early and late value delivery. The property contains JSON-compatible data and
+stays available while the host is loading or stale. Use
+`marimo-value-error` for a component fallback, `data-state` and `aria-busy` for
+loading presentation, and `marimo-studio:idle` for a page operation that
+depends on several projections.
+
 ## Edit with the live preview
 
 Edit `index.html` and `app.css` in an external editor or in Studio's source

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Revenue at a glance</title>
     <link rel="stylesheet" href="app.css" />
+    <script type="module" src="app.js"></script>
   </head>
   <body>
     <main id="app-shell" class="studio-view">
@@ -18,16 +19,35 @@
             Explore the forecast while the notebook remains live behind the page.
           </p>
         </div>
-        <dl class="m-0 grid grid-cols-2 gap-6 lg:grid-cols-1">
-          <div>
-            <dt class="studio-eyebrow mb-1">Scenario</dt>
-            <dd class="m-0 font-semibold" mo-value="report.scenario"></dd>
+        <div class="grid gap-6">
+          <dl class="m-0 grid grid-cols-2 gap-6 lg:grid-cols-1">
+            <div>
+              <dt class="studio-eyebrow mb-1">Scenario</dt>
+              <dd class="m-0 font-semibold" mo-value="report.scenario"></dd>
+            </div>
+            <div>
+              <dt class="studio-eyebrow mb-1">Updated</dt>
+              <dd class="m-0 font-semibold"><time mo-value="report.updated_at"></time></dd>
+            </div>
+          </dl>
+          <div class="flex flex-wrap items-center gap-3">
+            <span id="briefing-data" hidden mo-value="report"></span>
+            <button
+              class="studio-button w-fit [&>iconify-icon]:size-4"
+              type="button"
+              data-copy-briefing
+              disabled
+            >
+              <iconify-icon icon="lucide:clipboard-copy" aria-hidden="true"></iconify-icon>
+              Copy briefing
+            </button>
+            <span
+              class="min-h-5 text-sm text-muted-foreground"
+              data-copy-status
+              role="status"
+            ></span>
           </div>
-          <div>
-            <dt class="studio-eyebrow mb-1">Updated</dt>
-            <dd class="m-0 font-semibold"><time mo-value="report.updated_at"></time></dd>
-          </div>
-        </dl>
+        </div>
       </header>
 
       <section

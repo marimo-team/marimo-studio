@@ -52,6 +52,7 @@ let waiter = deferred();
 let settled = false;
 let pageState: PageReadinessState = "connecting";
 let observer: MutationObserver | undefined;
+let readinessGeneration = 0;
 
 const runtimeView = (): string => {
   if (hasRuntimeConfig()) {
@@ -139,10 +140,16 @@ const evaluate = () => {
   const cells = Array.from(document.querySelectorAll("marimo-cell"));
   const values = Array.from(document.querySelectorAll("[mo-value]"));
   const hosts = [...cells, ...values];
-  const next = pageReadinessState(connectionState, hosts.map(hostState), presentationState);
+  const hostStates = hosts.map(hostState);
+  const next = pageReadinessState(connectionState, hostStates, presentationState);
 
   document.documentElement.dataset.marimoStudioState = next;
-  const nextSettled = next === "ready" || next === "error";
+  const nextSettled =
+    connectionState === "error" ||
+    presentationState === "error" ||
+    (connectionState === "ready" &&
+      presentationState === "ready" &&
+      !hostStates.some((state) => ["connecting", "loading", "stale"].includes(state)));
   if (!nextSettled && settled) {
     waiter = deferred();
   }
@@ -171,7 +178,12 @@ const evaluate = () => {
 };
 
 export const notifyReadinessChanged = () => {
-  queueMicrotask(evaluate);
+  const generation = readinessGeneration;
+  queueMicrotask(() => {
+    if (generation === readinessGeneration) {
+      evaluate();
+    }
+  });
 };
 
 export const setRuntimeConnectionState = (
@@ -273,6 +285,12 @@ export const startReadiness = (updateQuery: (query: string) => Promise<void>) =>
     subtree: true,
   });
   notifyReadinessChanged();
+};
+
+export const stopReadiness = () => {
+  readinessGeneration += 1;
+  observer?.disconnect();
+  observer = undefined;
 };
 
 declare global {

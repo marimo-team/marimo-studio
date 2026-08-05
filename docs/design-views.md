@@ -83,6 +83,46 @@ def _(df):
 Several small value cells let unrelated reactive branches update
 independently.
 
+## Pass a Python value to JavaScript
+
+Use a hidden `mo-value` host as the data source for a browser component:
+
+```html
+<span id="chart-data" hidden mo-value="chart_data"></span>
+<sales-chart id="chart"></sales-chart>
+<script type="module" src="app.js"></script>
+```
+
+Listen first, then read the current snapshot in `app.js`:
+
+```js
+const source = document.querySelector("#chart-data");
+const chart = document.querySelector("#chart");
+
+const render = (value) => {
+  chart.data = value;
+};
+
+source.addEventListener("marimo-value-updated", (event) => {
+  render(event.detail.value);
+});
+
+if (source.marimoValue !== undefined) {
+  render(source.marimoValue);
+}
+```
+
+`marimoValue` contains the current JSON-compatible Python value. `undefined`
+means that no value is available yet. The `marimo-value-updated` event fires
+after the property and `data-state="ready"` have been updated. This order
+covers modules that start before or after the first value arrives.
+
+Listen for `marimo-value-error` when the component needs a local fallback.
+Inspect `data-state` and `aria-busy` for loading UI. The last snapshot stays
+available while a reactive update is loading or stale. Use
+`marimo-studio:idle` on `document` when several projections must settle before
+one page-level operation.
+
 ## Structure the document
 
 Each `index.html` is a complete document with one `#app-shell`:
@@ -176,7 +216,9 @@ The repository includes two view-authoring patterns:
 
 - `examples/analysis.py` is a compact dashboard. Its HTML uses responsive
   utilities, icons, and arbitrary properties for projected-cell loading space.
-  The theme section in `app.css` defines its semantic palette.
+  The theme section in `app.css` defines its semantic palette. Its view-owned
+  `app.js` module reads typed projection snapshots when the reader copies the
+  current briefing.
 - `examples/nga_collection.py` is a three-view research workflow. **Corpus**,
   **Study**, and **Packet** apply different themes and page structures to the
   same filters, selection order, notebook outputs, and download.

@@ -7,8 +7,9 @@ import type { ValueReader } from "../../values/reader";
 import type { RuntimeCell } from "../runtime-cell";
 
 import { errorMessage } from "../../errors";
-import { applyValues, markValueError, markValuePending } from "../../values/hosts";
+import { markValueError, markValuePending } from "../../values/hosts";
 import { ValueRequestError } from "../../values/remote";
+import { applyValueReadResponse } from "../../values/response";
 import { useDeliveryTimeout } from "../use-delivery-timeout";
 import { valueCellFailure, valueCellModel } from "./value-cell-model";
 
@@ -62,20 +63,7 @@ export const useRuntimeValue = ({
         if (!current) {
           return;
         }
-        applyValues(response.values);
-        selectors.forEach((selector) => {
-          const error = response.errors[selector];
-          if (error) {
-            markValueError(selector, error);
-            return;
-          }
-          if (!Object.hasOwn(response.values, selector)) {
-            markValueError(selector, {
-              code: "missing-value-response",
-              message: `The kernel response omitted ${JSON.stringify(selector)}.`,
-            });
-          }
-        });
+        applyValueReadResponse(selectors, response);
       })
       .catch((error: unknown) => {
         if (!current || (error instanceof DOMException && error.name === "AbortError")) {

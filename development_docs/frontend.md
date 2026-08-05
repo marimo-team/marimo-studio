@@ -107,6 +107,14 @@ the native module graph through its normal lifecycle. Studio installs
 `window.htmx` and starts utility-class observation before authored modules can
 mutate the shell.
 
+`values/` owns the DOM contract for Python value projections. The active
+adapter supplies JSON values, then each matching host receives its own cloned
+snapshot. The host updates `marimoValue`, text content, and `data-state` before
+dispatching `marimo-value-updated`. Errors clear the snapshot and publish
+`marimo-value-error` after diagnostic attributes are ready. Readiness evaluates
+in a microtask, which keeps `marimo-studio:idle` as the batch boundary after
+per-host events.
+
 Wind4 output is wrapped in native CSS `@scope` and stops at
 `[data-marimo-cell-output]`. Studio foundation and utility rules use named
 cascade layers. The authored `app.css` remains unlayered and follows standard

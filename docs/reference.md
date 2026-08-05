@@ -371,14 +371,70 @@ States:
 connecting | loading | stale | ready | error
 ```
 
-Events:
+Every `[mo-value]` host exposes its current JSON snapshot:
 
-- `marimo-value-updated`
-- `marimo-value-error`
+```ts
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
-A value keeps cached content while a new kernel read is pending. An unresolved
-selector clears the value, records the diagnostic attributes, and exposes an
-accessible description.
+interface MarimoValueHost extends HTMLElement {
+  readonly marimoValue: JsonValue | undefined;
+}
+```
+
+`undefined` means that the first value has not arrived or the current selector
+is unavailable. JSON `null` remains a value. The property keeps its cached
+snapshot while `data-state` is `loading` or `stale`.
+
+Add the event listener before reading the property. This sequence observes the
+next update and also covers a value that arrived before the module loaded:
+
+```js
+source.addEventListener("marimo-value-updated", (event) => {
+  render(event.detail.value);
+});
+
+if (source.marimoValue !== undefined) {
+  render(source.marimoValue);
+}
+```
+
+### `marimo-value-updated`
+
+```ts
+interface MarimoValueUpdatedDetail {
+  selector: string;
+  value: JsonValue;
+}
+```
+
+The event fires for the first resolved value and each changed JSON encoding.
+Studio sets `host.marimoValue` and `data-state="ready"` before dispatch. The
+event bubbles, crosses shadow boundaries, and is not cancelable. Each host
+receives an isolated snapshot, so mutation by one consumer cannot change
+Studio's cached value or another host's event.
+
+A reactive rerun that produces the same encoded JSON updates the host state
+and does not dispatch another event.
+
+### `marimo-value-error`
+
+```ts
+interface MarimoValueErrorDetail {
+  selector: string;
+  code: string;
+  message: string;
+  hint?: string;
+}
+```
+
+The event fires once when a host enters an error state. Studio clears
+`host.marimoValue`, sets `data-state="error"`, and records the diagnostic
+attributes before dispatch. The event bubbles and crosses shadow boundaries.
+The host retains `data-marimo-diagnostic-code`,
+`data-marimo-diagnostic-message`, and `data-marimo-diagnostic-hint` for later
+inspection.
+
+An unresolved selector also exposes an accessible description on the host.
 
 ## Browser readiness
 
@@ -387,9 +443,10 @@ await window.marimoStudio.ready();
 const diagnostics = window.marimoStudio.diagnostics();
 ```
 
-`ready()` resolves after every current cell and value has content, retained
-content during an update, or a terminal diagnostic. It stays pending during an
-HTML, CSS, or notebook refresh.
+`ready()` resolves after every current cell and value reaches ready or a
+terminal diagnostic. Retained content remains visible during a reactive
+update while `ready()` waits for stale hosts to settle. It also stays pending
+during an HTML, CSS, or notebook refresh.
 
 `diagnostics()` returns a snapshot of projection, presentation, host, and
 runtime failures. Projection paths are relative to the notebook in browser
@@ -407,6 +464,9 @@ Document events:
 - `marimo-studio:runtime-ready`
 - `marimo-studio:idle`
 - `marimo-studio:page-theme`
+
+`marimo-studio:idle` fires after the current cells and values reach ready or
+terminal error states. Its detail is `{ state: "ready" | "error" }`.
 
 Same-origin preview messages:
 

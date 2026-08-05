@@ -36,9 +36,10 @@ both panes through the editor's Python session. Switch the preview to
 Pyodide worker. Studio keeps native Marimo controls such as the scenario and
 quarter synchronized while each runtime updates its own reactive graph.
 
-Open **HTML & CSS** and inspect the dashboard's two view files. Layout and
-responsive behavior live in `index.html`. The top of `app.css` holds the
-theme, followed by page-specific rules. Change the scenario, edit a utility
+Open **HTML & CSS** and inspect `index.html` and `app.css`. Layout and
+responsive behavior live in utility classes, while the top of `app.css` holds
+the semantic theme. The adjacent `app.js` module reads typed Python values from
+the page and copies them as a briefing. Change the scenario, edit a utility
 class or `--primary`, then save. The refreshed view keeps the current control
 values and rendered cell state.
 
