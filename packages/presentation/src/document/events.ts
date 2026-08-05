@@ -8,6 +8,11 @@ import {
 import { getRuntimeConfig, hasRuntimeConfig } from "../runtime-config/index.ts";
 import { viewNavigationForUrl } from "./view-navigation.ts";
 
+export interface DirectViewNavigation {
+  documentUrl: string;
+  view: string;
+}
+
 export class DevelopmentEvents {
   private source: EventSource | undefined;
 
@@ -46,10 +51,11 @@ export const bindViewSwitches = (callback: (request: SwitchViewMessage) => void)
   return () => globalThis.removeEventListener("message", listener);
 };
 
-export const bindViewNavigation = (): (() => void) => {
+export const bindViewNavigation = (
+  navigate: (request: DirectViewNavigation) => void,
+): (() => void) => {
   const listener = (event: MouseEvent) => {
     if (
-      globalThis.parent === globalThis.window ||
       event.defaultPrevented ||
       event.button !== 0 ||
       event.altKey ||
@@ -82,6 +88,10 @@ export const bindViewNavigation = (): (() => void) => {
     }
     event.preventDefault();
     if (!navigation.current) {
+      if (globalThis.parent === globalThis.window) {
+        navigate({ documentUrl: anchor.href, view: navigation.view });
+        return;
+      }
       const message: NavigateViewMessage = {
         type: "marimo-studio:navigate-view",
         runtime: config.runtime.id,

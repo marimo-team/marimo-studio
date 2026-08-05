@@ -3,6 +3,8 @@ import type { RuntimeRegistry } from "@marimo-studio/runtime";
 import htmx from "htmx.org";
 
 import { registerMarimoCellElement } from "./cells/host";
+import { bindViewNavigation } from "./document/events";
+import { PresentationDocument } from "./document/presentation";
 import { startQuerySync } from "./document/query-sync";
 import {
   finishSessionRefresh,
@@ -26,6 +28,7 @@ import {
   disposeConfiguredRuntime,
   mountConfiguredRuntime,
   RuntimeMountCancelledError,
+  updateConfiguredRuntime,
   updateConfiguredRuntimeQuery,
 } from "./runtime/coordinator";
 import { restorePendingRuntimeSelection } from "./runtime/selection";
@@ -40,6 +43,8 @@ declare global {
 }
 
 const browser = globalThis as typeof globalThis & Window;
+const presentationDocument = new PresentationDocument();
+let activeViewTransition: AbortController | undefined;
 browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "booting";
 restorePendingRuntimeSelection();
 startQuerySync();
@@ -72,6 +77,31 @@ const bindRuntimeNavigation = (): (() => void) => {
   };
 };
 
+const bindStandaloneViewNavigation = (): (() => void) =>
+  bindViewNavigation((request) => {
+    activeViewTransition?.abort();
+    const controller = new AbortController();
+    activeViewTransition = controller;
+    void presentationDocument
+      .replace(request.documentUrl, getSupportUrl(), controller.signal, () => {})
+      .then(() => {
+        if (updateConfiguredRuntime(getRuntimeConfig()) === "reload") {
+          globalThis.location.reload();
+        }
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        console.error("marimo-studio view navigation error", error);
+      })
+      .finally(() => {
+        if (activeViewTransition === controller) {
+          activeViewTransition = undefined;
+        }
+      });
+  });
+
 const bootstrap = async (registry: RuntimeRegistry) => {
   startReadiness(updateConfiguredRuntimeQuery);
   registerMarimoCellElement();
@@ -79,7 +109,10 @@ const bootstrap = async (registry: RuntimeRegistry) => {
 
   let config = await loadRuntimeConfig();
   const stopRuntimeNavigation = bindRuntimeNavigation();
+  const stopViewNavigation = config.dev ? () => {} : bindStandaloneViewNavigation();
   globalThis.addEventListener("pagehide", stopRuntimeNavigation, { once: true });
+  globalThis.addEventListener("pagehide", stopViewNavigation, { once: true });
+  globalThis.addEventListener("pagehide", () => activeViewTransition?.abort(), { once: true });
   const resumingDocument = prepareSessionRefresh(config);
   if (resumingDocument) {
     config = commitRuntimeConfig(

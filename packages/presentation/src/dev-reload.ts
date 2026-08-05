@@ -298,17 +298,23 @@ export const refreshShell = async (
   }
 };
 
-const unbindViewSwitches = bindViewSwitches((request) => {
+const transitionToView = (documentUrl: string, supportUrl: string, view: string) => {
   resetRetry();
   shellRefreshState.supersede();
   const generation = beginRefresh();
-  void refreshShell(request.documentUrl, request.supportUrl)
+  void refreshShell(documentUrl, supportUrl)
     .then(() => completeRefresh(generation))
     .catch((error: unknown) => {
-      handleRefreshError(error, "html", generation, request.view);
+      handleRefreshError(error, "html", generation, view);
     });
+};
+
+const unbindViewSwitches = bindViewSwitches((request) => {
+  transitionToView(request.documentUrl, request.supportUrl, request.view);
 });
-const unbindViewNavigation = bindViewNavigation();
+const unbindViewNavigation = bindViewNavigation((request) => {
+  transitionToView(request.documentUrl, getSupportUrl(), request.view);
+});
 
 connectEvents();
 const receiverReady: ReceiverReadyMessage = {
