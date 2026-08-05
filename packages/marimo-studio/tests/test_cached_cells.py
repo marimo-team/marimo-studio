@@ -21,25 +21,11 @@ def _ui_marker() -> SimpleNamespace:
     return SimpleNamespace(type_name="marimo._save.stubs.ui_element_stub.UIElementStub")
 
 
-def test_cached_ui_definition_runs_live() -> None:
+def test_cached_ui_values_run_live_while_data_results_remain_lazy() -> None:
     release = keep_cached_cells_compatible()
     try:
         assert CachedLifecycle._restored_ui_defs(_attempt(definition=_ui_marker()), {})
-    finally:
-        release()
-
-
-def test_cached_ui_return_runs_live() -> None:
-    release = keep_cached_cells_compatible()
-    try:
         assert CachedLifecycle._restored_ui_defs(_attempt(returned=_ui_marker()), {})
-    finally:
-        release()
-
-
-def test_cached_data_result_remains_lazy() -> None:
-    release = keep_cached_cells_compatible()
-    try:
         assert not CachedLifecycle._restored_ui_defs(
             _attempt(definition={"count": 18_259}, returned="ready"),
             {},

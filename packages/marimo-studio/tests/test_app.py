@@ -499,7 +499,9 @@ def test_edit_view_error_document_watches_for_source_repairs(
     assert "/_marimo-studio/dev/events" in page.text
 
 
-def test_named_cell_binding_waits_for_the_active_document(tmp_path: Path) -> None:
+def test_named_cell_binding_waits_for_active_name_and_source_sync(
+    tmp_path: Path,
+) -> None:
     notebook = tmp_path / "named.py"
     notebook.write_text(
         notebook_source(tmp_path / "executed").replace(
@@ -526,8 +528,8 @@ def test_named_cell_binding_waits_for_the_active_document(tmp_path: Path) -> Non
     _session_manager(app).get_session_by_file_key = Mock(return_value=session)
 
     with TestClient(app) as client:
-        pending = client.get("/_marimo-studio/views/dashboard/config")
-        session.document.cells = tuple(
+        name_pending = client.get("/_marimo-studio/views/dashboard/config")
+        named_rows = tuple(
             SimpleNamespace(
                 code=cell.code,
                 id=cell.runtime_id,
@@ -535,50 +537,26 @@ def test_named_cell_binding_waits_for_the_active_document(tmp_path: Path) -> Non
             )
             for cell in static.cells
         )
+        stale_rows = list(named_rows)
+        stale_rows[0] = SimpleNamespace(
+            code=stale_rows[0].code.replace("x = 2", "x = 1"),
+            id=stale_rows[0].id,
+            name=stale_rows[0].name,
+        )
+        session.document.cells = tuple(stale_rows)
+        source_pending = client.get("/_marimo-studio/views/dashboard/config")
+        session.document.cells = named_rows
         ready = client.get("/_marimo-studio/views/dashboard/config")
 
-    assert pending.status_code == 409
-    assert pending.json()["error"] == "runtime-sync-pending"
-    assert pending.json()["transient"] is True
+    for pending in (name_pending, source_pending):
+        assert pending.status_code == 409
+        assert pending.json()["error"] == "runtime-sync-pending"
+        assert pending.json()["transient"] is True
     assert ready.status_code == 200
     assert ready.json()["cellBindings"]["imports"] == {
         "kind": "name",
         "value": "imports",
     }
-
-
-def test_named_cell_binding_waits_for_matching_live_source(tmp_path: Path) -> None:
-    notebook = tmp_path / "named.py"
-    notebook.write_text(
-        notebook_source(tmp_path / "executed").replace(
-            "@app.cell\ndef _():",
-            "@app.cell\ndef imports():",
-            1,
-        ),
-        encoding="utf-8",
-    )
-    ensure_view(notebook)
-    studio = load_studio(notebook)
-    _set_shell(studio, "dashboard", '<marimo-cell name="imports"></marimo-cell>')
-    static = load_static_notebook(notebook)
-    rows = [
-        SimpleNamespace(code=cell.code, id=cell.runtime_id, name=cell.name)
-        for cell in static.cells
-    ]
-    rows[0].code = rows[0].code.replace("x = 2", "x = 1")
-    app = _marimo_app(notebook)
-    _edit_mode(app)
-    session = SimpleNamespace(document=SimpleNamespace(cells=tuple(rows)))
-    _session_manager(app).get_session_by_file_key = Mock(return_value=session)
-
-    with TestClient(app) as client:
-        pending = client.get("/_marimo-studio/views/dashboard/config")
-        rows[0].code = static.cells[0].code
-        ready = client.get("/_marimo-studio/views/dashboard/config")
-
-    assert pending.status_code == 409
-    assert pending.json()["error"] == "runtime-sync-pending"
-    assert ready.status_code == 200
 
 
 def test_unrelated_named_cell_does_not_block_the_selected_view(
@@ -627,7 +605,7 @@ def test_unrelated_named_cell_does_not_block_the_selected_view(
     }
 
 
-def test_edit_runtime_uses_live_ids_for_anonymous_bindings(
+def test_anonymous_bindings_wait_for_live_cell_identities(
     notebook_path: Path,
 ) -> None:
     studio = _configured(notebook_path)
@@ -638,13 +616,24 @@ def test_edit_runtime_uses_live_ids_for_anonymous_bindings(
         SimpleNamespace(code=cell.code, id=f"live-{index}", name=cell.name)
         for index, cell in enumerate(static.cells)
     )
-    session = SimpleNamespace(document=SimpleNamespace(cells=rows))
+    session = SimpleNamespace(
+        document=SimpleNamespace(
+            cells=(
+                SimpleNamespace(code="unrelated = 1", id="live-unrelated", name="_"),
+            )
+        )
+    )
     _session_manager(app).get_session_by_file_key = Mock(return_value=session)
 
     with TestClient(app) as client:
+        pending = client.get("/_marimo-studio/views/dashboard/config")
+        session.document.cells = rows
         dashboard = client.get("/_marimo-studio/views/dashboard/config").json()
         executive = client.get("/_marimo-studio/views/executive/config").json()
 
+    assert pending.status_code == 409
+    assert pending.json()["error"] == "runtime-sync-pending"
+    assert pending.json()["transient"] is True
     assert dashboard["cellBindings"]["result"] == {
         "kind": "id",
         "value": "live-1",
@@ -811,29 +800,6 @@ def _(mo):
     }
 
 
-def test_edit_runtime_rejects_an_unmatched_static_cell(
-    notebook_path: Path,
-) -> None:
-    studio = _configured(notebook_path)
-    app = _marimo_app(studio.notebook)
-    _edit_mode(app)
-    session = SimpleNamespace(
-        document=SimpleNamespace(
-            cells=(
-                SimpleNamespace(code="unrelated = 1", id="live-unrelated", name="_"),
-            )
-        )
-    )
-    _session_manager(app).get_session_by_file_key = Mock(return_value=session)
-
-    with TestClient(app) as client:
-        response = client.get("/_marimo-studio/views/dashboard/config")
-
-    assert response.status_code == 409
-    assert response.json()["error"] == "runtime-sync-pending"
-    assert response.json()["transient"] is True
-
-
 def test_run_runtime_refreshes_bindings_for_each_browser_session(
     notebook_path: Path,
 ) -> None:
@@ -893,14 +859,27 @@ def test_run_runtime_refreshes_bindings_for_each_browser_session(
 
 def test_change_stream_classifies_live_source_edits(
     notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = _configured(notebook_path)
     template = studio.views["dashboard"].template
     stylesheet = studio.views["dashboard"].root / "app.css"
     sibling = studio.views["executive"].template
+    native_sleep = asyncio.sleep
+
+    async def poll_immediately(_delay: float) -> None:
+        await native_sleep(0)
+
+    monkeypatch.setattr(dev.asyncio, "sleep", poll_immediately)
+    stopping = False
 
     async def collect_events() -> tuple[bytes, ...]:
-        stream = dev.change_events(studio, "dashboard")
+        nonlocal stopping
+        stream = dev.change_events(
+            studio,
+            "dashboard",
+            stop_requested=lambda: stopping,
+        )
         ready = await anext(stream)
 
         source = template.read_text(encoding="utf-8")
@@ -929,6 +908,9 @@ def test_change_stream_classifies_live_source_edits(
             encoding="utf-8",
         )
         views = await asyncio.wait_for(anext(stream), timeout=1)
+        stopping = True
+        with pytest.raises(StopAsyncIteration):
+            await asyncio.wait_for(anext(stream), timeout=0.5)
         return ready, html, css, runtime, views
 
     messages = asyncio.run(collect_events())
@@ -946,27 +928,6 @@ def test_change_stream_classifies_live_source_edits(
     assert payloads[1]["files"][0]["path"] == "app.css"
     assert payloads[2]["files"] == []
     assert payloads[3]["files"] == []
-
-
-def test_change_stream_closes_when_the_server_starts_shutting_down(
-    notebook_path: Path,
-) -> None:
-    studio = _configured(notebook_path)
-    stopping = False
-
-    async def consume() -> None:
-        nonlocal stopping
-        stream = dev.change_events(
-            studio,
-            "dashboard",
-            stop_requested=lambda: stopping,
-        )
-        assert await anext(stream) == b"event: ready\ndata: {}\n\n"
-        stopping = True
-        with pytest.raises(StopAsyncIteration):
-            await asyncio.wait_for(anext(stream), timeout=0.5)
-
-    asyncio.run(consume())
 
 
 def test_document_replay_requires_an_opted_in_manager_and_query() -> None:
@@ -1143,6 +1104,8 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
             "/?region=emea&region=apac&empty=&session_id=s_123456&kiosk=true",
             follow_redirects=False,
         )
+        head = client.head("/", follow_redirects=False)
+        post = client.post("/", follow_redirects=False)
         landing_workspace = client.get(landing.headers["location"])
         default_workspace = client.get("/studio/")
         workspace_redirect = client.get(
@@ -1177,6 +1140,9 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
     assert _studio_bootstrap(landing_workspace.text)["urls"]["editor"] == (
         landing_editor
     )
+    assert head.status_code == 307
+    assert head.headers["location"] == "/studio/dashboard/"
+    assert post.status_code == 405
     assert editor.status_code == 200
     assert default_workspace.status_code == 200
     assert workspace_redirect.status_code == 307
@@ -1192,23 +1158,6 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
     assert "Starting notebook" in waiting.text
     assert missing_view.status_code == 404
     assert view.status_code == 200
-
-
-def test_edit_landing_delegates_native_root_requests(notebook_path: Path) -> None:
-    studio = _configured(notebook_path)
-    app = _marimo_app(studio.notebook)
-    _edit_mode(app)
-    native_editor = "/?" + urlencode({"file": str(studio.notebook)})
-
-    with TestClient(app) as client:
-        head = client.head("/", follow_redirects=False)
-        post = client.post("/", follow_redirects=False)
-        editor = client.get(native_editor)
-
-    assert head.status_code == 307
-    assert head.headers["location"] == "/studio/dashboard/"
-    assert post.status_code == 405
-    assert editor.status_code == 200
 
 
 def test_view_list_tracks_new_folders_without_restarting_marimo(
