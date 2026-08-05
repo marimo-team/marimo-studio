@@ -18,24 +18,8 @@ from marimo_studio.errors import (
     SourceNotFoundError,
 )
 
-SourceName = Literal["index.html", "theme.css", "app.css"]
-
-
-@dataclass(frozen=True)
-class SourceSpec:
-    """One ordered authored file exposed by Studio."""
-
-    name: SourceName
-    optional: bool = False
-
-
-SOURCE_SPECS: Final = (
-    SourceSpec("index.html"),
-    SourceSpec("theme.css", optional=True),
-    SourceSpec("app.css"),
-)
-SOURCE_NAMES: Final = tuple(spec.name for spec in SOURCE_SPECS)
-_SOURCE_SPECS: Final = {spec.name: spec for spec in SOURCE_SPECS}
+SourceName = Literal["index.html", "app.css"]
+SOURCE_NAMES: Final = ("index.html", "app.css")
 
 
 @dataclass(frozen=True)
@@ -47,10 +31,10 @@ class SourceDocument:
     revision: str
 
 
-def _source_spec(name: str) -> SourceSpec:
-    if name not in _SOURCE_SPECS:
-        raise SourceNotFoundError(f"Unknown Studio source file {name!r}.")
-    return _SOURCE_SPECS[name]
+def _source_name(name: str) -> SourceName:
+    if name == "index.html" or name == "app.css":
+        return name
+    raise SourceNotFoundError(f"Unknown Studio source file {name!r}.")
 
 
 def _view(studio: StudioConfig, view_name: str) -> View:
@@ -71,20 +55,18 @@ def read_source(
     name: str,
 ) -> SourceDocument:
     """Return one supported source file with its current revision."""
-    source = _source_spec(name)
-    path = _view(studio, view_name).root / source.name
+    source = _source_name(name)
+    path = _view(studio, view_name).root / source
     reject_mutable_symlinks(studio.notebook.parent, {path})
     if not path.is_file():
-        if source.optional:
-            return SourceDocument(source.name, "", _revision(""))
-        raise SourceNotFoundError(f"{source.name} is missing from view {view_name!r}.")
+        raise SourceNotFoundError(f"{source} is missing from view {view_name!r}.")
     try:
         content = read_text(path)
     except UnicodeDecodeError as error:
         raise SourceEncodingError(
-            f"{source.name} in view {view_name!r} must be UTF-8 text."
+            f"{source} in view {view_name!r} must be UTF-8 text."
         ) from error
-    return SourceDocument(source.name, content, _revision(content))
+    return SourceDocument(source, content, _revision(content))
 
 
 def write_source(

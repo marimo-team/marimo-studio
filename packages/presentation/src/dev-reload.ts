@@ -12,6 +12,7 @@ import {
   ShellRefreshState,
   type ShellTarget,
 } from "./document/refresh-state.ts";
+import { preservedDocumentUrl } from "./document/session-preservation.ts";
 import {
   clearDiagnostic,
   notifyDiagnostics,
@@ -273,6 +274,16 @@ export const refreshShell = async (
         target = resolvedTarget;
       },
     );
+    if (commit.reloadDocument) {
+      globalThis.location.assign(
+        preservedDocumentUrl(
+          getRuntimeConfig(),
+          commit.target.documentUrl,
+          globalThis.__MARIMO_STUDIO_SESSION_ID__,
+        ),
+      );
+      return;
+    }
     if (updateConfiguredRuntime(getRuntimeConfig()) === "reload") {
       globalThis.location.reload();
       return;

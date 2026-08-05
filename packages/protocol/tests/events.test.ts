@@ -16,7 +16,6 @@ test("source events retain valid authored files", () => {
       JSON.stringify({
         files: [
           { path: "index.html", revision: "html-r2" },
-          { path: "theme.css", revision: "theme-r2" },
           { path: "app.css", revision: null },
           { path: "notes.txt", revision: "ignored" },
           { path: "index.html", revision: 42 },
@@ -25,7 +24,6 @@ test("source events retain valid authored files", () => {
     ),
     [
       { path: "index.html", revision: "html-r2" },
-      { path: "theme.css", revision: "theme-r2" },
       { path: "app.css", revision: null },
     ],
   );

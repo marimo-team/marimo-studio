@@ -7,6 +7,7 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
+from marimo_studio._workspace.files import reject_mutable_symlinks
 from marimo_studio._workspace.metadata import notebook_config
 from marimo_studio._workspace.models import (
     ALIAS_PATTERN,
@@ -214,6 +215,10 @@ def _discover_views(
     for directory in sorted(view_root.iterdir(), key=lambda path: path.name):
         if not directory.is_dir() or not (directory / "index.html").is_file():
             continue
+        reject_mutable_symlinks(
+            view_root,
+            {directory, directory / "index.html"},
+        )
         validate_view_name(directory.name)
         views[directory.name] = View(directory.name, directory.resolve())
     if required and not views:
@@ -234,6 +239,7 @@ def _load_studio(
         else config_path
     )
     view_root = canonical_view_root(notebook)
+    reject_mutable_symlinks(notebook.parent, {view_root})
     default_view = data.get("default")
     if not isinstance(default_view, str):
         raise ConfigurationError("default must name a view")

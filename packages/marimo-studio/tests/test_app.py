@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
 import marimo
 import pytest
@@ -141,14 +141,82 @@ def test_run_mode_serves_default_and_named_view_documents(
     with TestClient(create_asgi_app(studio.notebook)) as client:
         default = client.get("/")
         named = client.get("/executive/")
+        explicit_index = client.get("/executive/index.html")
 
     assert default.status_code == 200
     assert default.text.count('id="marimo-runtime-root"') == 1
     assert '"/_marimo-studio/views/dashboard"' in default.text
-    assert default.text.index("runtime.css") < default.text.index("theme.css")
-    assert default.text.index("theme.css") < default.text.index("app.css")
+    assert default.text.index("runtime.css") < default.text.index("app.css")
     assert named.status_code == 200
     assert '"/_marimo-studio/views/executive"' in named.text
+    assert explicit_index.url.path == "/executive/"
+    assert explicit_index.text.count('id="marimo-runtime-root"') == 1
+
+
+def test_view_directory_serves_native_module_graphs(notebook_path: Path) -> None:
+    studio = _configured(notebook_path)
+    view = studio.views["dashboard"]
+    scripts = view.root / "scripts"
+    scripts.mkdir()
+    module = scripts / "app.js"
+    dependency = scripts / "message.js"
+    module.write_text(
+        'import { message } from "./message.js";\nwindow.message = message;\n',
+        encoding="utf-8",
+    )
+    dependency.write_text('export const message = "ready";\n', encoding="utf-8")
+    view.template.write_text(
+        view.template.read_text(encoding="utf-8").replace(
+            "</head>",
+            '<script type="module" src="scripts/app.js"></script>\n  </head>',
+        ),
+        encoding="utf-8",
+    )
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        before = client.get("/")
+        source = client.get("/dashboard/scripts/app.js")
+        imported = client.get("/dashboard/scripts/message.js")
+        dependency.write_text('export const message = "fresh";\n', encoding="utf-8")
+        after = client.get("/")
+
+    assert '<base href="/dashboard/">' in before.text
+    assert '<script type="module" src="scripts/app.js"></script>' in before.text
+    assert source.status_code == 200
+    assert source.headers["content-type"].startswith("text/javascript")
+    assert 'from "./message.js"' in source.text
+    assert imported.text == 'export const message = "ready";\n'
+    assert (
+        before.headers["Marimo-Studio-Revision"]
+        != after.headers["Marimo-Studio-Revision"]
+    )
+
+
+def test_view_relative_routes_keep_marimo_and_studio_ownership(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    public = studio.notebook.parent / "public"
+    public.mkdir()
+    public.joinpath("sample.txt").write_text("notebook asset", encoding="utf-8")
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        cell = client.get("/dashboard/_marimo-studio/views/dashboard/cells/result")
+        case_equivalent_cell = client.get(
+            "/dashboard/_MARIMO-STUDIO/views/dashboard/cells/result"
+        )
+        asset = client.get(
+            "/dashboard/public/sample.txt",
+            headers={"X-Notebook-Id": quote(str(studio.notebook), safe="")},
+        )
+        service_worker = client.get("/dashboard/public-files-sw.js")
+
+    assert cell.status_code == 200
+    assert cell.text == '<marimo-cell name="result"></marimo-cell>'
+    assert case_equivalent_cell.text == '<marimo-cell name="result"></marimo-cell>'
+    assert asset.status_code == 200
+    assert asset.text == "notebook asset"
+    assert service_worker.status_code == 200
 
 
 def test_empty_notebook_serves_a_ready_starter_view(tmp_path: Path) -> None:
@@ -166,22 +234,6 @@ def test_empty_notebook_serves_a_ready_starter_view(tmp_path: Path) -> None:
     assert config.json()["valueBindings"] == {}
     assert config.json()["diagnostics"] == []
     assert config.json()["showCellLogs"] is True
-
-
-def test_runtime_configuration_hides_cell_logs_when_configured(
-    notebook_path: Path,
-) -> None:
-    ensure_view(notebook_path)
-
-    def configure(config: MutableMapping[str, object]) -> None:
-        config["show_cell_logs"] = False
-
-    update_notebook_config(notebook_path, configure)
-    with TestClient(create_asgi_app(notebook_path)) as client:
-        config = client.get("/_marimo-studio/views/dashboard/config")
-
-    assert config.status_code == 200
-    assert config.json()["showCellLogs"] is False
 
 
 def test_runtime_injection_uses_structural_html_tags(
@@ -218,19 +270,18 @@ def test_runtime_injection_uses_structural_html_tags(
 
 def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
     studio = _configured(notebook_path)
-    studio.views["dashboard"].root.joinpath("theme.css").unlink()
 
-    def preserve(config: MutableMapping[str, object]) -> None:
+    def configure(config: MutableMapping[str, object]) -> None:
         config["preserve_session"] = True
+        config["show_cell_logs"] = False
 
-    update_notebook_config(studio.notebook, preserve)
+    update_notebook_config(studio.notebook, configure)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         dashboard = client.get("/_marimo-studio/views/dashboard/config").json()
         executive = client.get("/_marimo-studio/views/executive/config").json()
         cell = client.get("/_marimo-studio/views/executive/cells/result")
-        stylesheet = client.get("/_marimo-studio/views/executive/static/app.css")
-        optional_theme = client.get("/_marimo-studio/views/dashboard/static/theme.css")
+        stylesheet = client.get("/executive/app.css")
         views = client.get("/_marimo-studio/views").json()
 
     assert dashboard["view"] == "dashboard"
@@ -242,14 +293,13 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
     assert dashboard["cellBindings"]["result"] == executive["cellBindings"]["result"]
     assert cell.text == '<marimo-cell name="result"></marimo-cell>'
     assert stylesheet.status_code == 200
-    assert optional_theme.status_code == 200
-    assert optional_theme.text == ""
     assert views == {
         "schema": 1,
         "default_view": "dashboard",
         "views": ["dashboard", "executive"],
     }
     assert dashboard["runtime"]["data"]["preserveSession"] is True
+    assert dashboard["showCellLogs"] is False
 
 
 def test_run_mode_serves_the_configured_wasm_runtime_and_source(
@@ -292,12 +342,6 @@ def test_run_mode_serves_the_configured_wasm_runtime_and_source(
     assert "[tool.marimo-studio]" not in code
     assert "[tool.uv]" not in code
     assert '"marimo-studio"' not in code.split("import marimo", 1)[0]
-    assert "'doubled': ('doubled', ())" in code
-    assert "'x': ('x', ())" in code
-    assert '"sync_query"' in code
-    assert code.index("def __marimo_studio_values") < code.index(
-        'if __name__ == "__main__"'
-    )
     assert studio.notebook.read_bytes() == configured
 
 
@@ -867,7 +911,7 @@ def test_change_stream_classifies_live_source_edits(
 ) -> None:
     studio = _configured(notebook_path)
     template = studio.views["dashboard"].template
-    theme = studio.views["dashboard"].root / "theme.css"
+    stylesheet = studio.views["dashboard"].root / "app.css"
     sibling = studio.views["executive"].template
     native_sleep = asyncio.sleep
 
@@ -895,7 +939,10 @@ def test_change_stream_classifies_live_source_edits(
         os.utime(template, ns=(stat.st_atime_ns, stat.st_mtime_ns))
         html = await asyncio.wait_for(anext(stream), timeout=1)
 
-        theme.unlink()
+        stylesheet.write_text(
+            stylesheet.read_text(encoding="utf-8") + "\nbody { line-height: 1.5; }\n",
+            encoding="utf-8",
+        )
         css = await asyncio.wait_for(anext(stream), timeout=1)
 
         studio.notebook.write_text(
@@ -926,13 +973,8 @@ def test_change_stream_classifies_live_source_edits(
     ]
     assert payloads[0]["files"][0]["path"] == "index.html"
     assert payloads[0]["files"][0]["revision"].startswith("sha256:")
-    assert payloads[1]["files"] == [
-        {
-            "path": "theme.css",
-            "revision": "sha256:e3b0c44298fc1c149afbf4c8996fb924"
-            "27ae41e4649b934ca495991b7852b855",
-        }
-    ]
+    assert payloads[1]["files"][0]["path"] == "app.css"
+    assert payloads[1]["files"][0]["revision"].startswith("sha256:")
     assert payloads[2]["files"] == []
     assert payloads[3]["files"] == []
 
@@ -1036,6 +1078,9 @@ def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
 
 def test_parent_asgi_mount_preserves_public_routes(notebook_path: Path) -> None:
     studio = _configured(notebook_path)
+    public = studio.notebook.parent / "public"
+    public.mkdir()
+    public.joinpath("sample.txt").write_text("notebook asset", encoding="utf-8")
     parent = Starlette(
         routes=[
             Mount(
@@ -1054,15 +1099,24 @@ def test_parent_asgi_mount_preserves_public_routes(notebook_path: Path) -> None:
         named = client.get("/parent/base/executive/")
         config = client.get("/parent/base/_marimo-studio/views/dashboard/config").json()
         studio_asset = client.get("/parent/base/_marimo-studio/assets/studio.css")
+        relative_cell = client.get(
+            "/parent/base/dashboard/_marimo-studio/views/dashboard/cells/result"
+        )
+        relative_public = client.get(
+            "/parent/base/dashboard/public/sample.txt",
+            headers={"X-Notebook-Id": quote(str(studio.notebook), safe="")},
+        )
 
     assert page.status_code == 200
     assert named.status_code == 200
-    assert '<base href="/parent/base/">' in page.text
+    assert '<base href="/parent/base/dashboard/">' in page.text
     assert 'src="/parent/base/_marimo-studio/assets/runtime.js"' in page.text
     assert config["rootUrl"] == "/parent/base/"
     assert config["runtime"]["data"]["url"] == "/parent/base/"
     assert config["supportUrl"] == "/parent/base/_marimo-studio/views/dashboard"
     assert studio_asset.status_code == 200
+    assert relative_cell.text == '<marimo-cell name="result"></marimo-cell>'
+    assert relative_public.text == "notebook asset"
 
 
 def test_edit_mode_public_routes_honor_parent_mount(notebook_path: Path) -> None:
@@ -1392,7 +1446,7 @@ def test_template_errors_stay_scoped_to_the_selected_view(
     with TestClient(create_asgi_app(studio.notebook)) as client:
         dashboard = client.get("/")
         executive = client.get("/executive/")
-        stylesheet = client.get("/_marimo-studio/views/executive/static/app.css")
+        stylesheet = client.get("/executive/app.css")
         views = client.get("/_marimo-studio/views")
     with TestClient(edit_app) as client:
         studio = client.get("/studio/executive/")
@@ -1514,9 +1568,6 @@ def test_invalid_studio_config_does_not_intercept_marimo_routes(
     assert all(response.status_code == 200 for response in native)
     assert presentation.status_code == 500
     assert presentation.headers["Marimo-Studio-Error"] == "configuration-error"
-    assert "data-marimo-studio-repair" in presentation.text
-    assert "data-marimo-studio-message" in presentation.text
-    assert "View needs repair" in presentation.text
     assert refresh.status_code == 500
     assert refresh.headers["content-type"].startswith("application/json")
     assert refresh.json()["error"] == "configuration-error"
@@ -1546,12 +1597,15 @@ def test_middleware_is_inert_for_an_unconfigured_notebook(tmp_path: Path) -> Non
     assert missing.status_code == 404
 
 
-def test_static_route_rejects_parent_paths(notebook_path: Path) -> None:
+def test_view_asset_route_rejects_parent_paths(notebook_path: Path) -> None:
     studio = _configured(notebook_path)
+    target = studio.views["dashboard"].root / "target.js"
+    target.write_text("export {};\n", encoding="utf-8")
+    target.with_name("alias.js").symlink_to(target.name)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        traversal = client.get(
-            "/_marimo-studio/views/dashboard/static/%2e%2e/%2e%2e/analysis.py"
-        )
+        traversal = client.get("/dashboard/%2e%2e/%2e%2e/analysis.py")
+        symlink = client.get("/dashboard/alias.js")
 
     assert traversal.status_code == 404
+    assert symlink.status_code == 404

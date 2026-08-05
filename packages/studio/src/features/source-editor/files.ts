@@ -8,7 +8,6 @@ export interface SourceFile {
 
 const SOURCE_METADATA = {
   "index.html": { id: "html", language: "html" },
-  "theme.css": { id: "theme", language: "css" },
   "app.css": { id: "css", language: "css" },
 } as const satisfies Record<SourceName, Omit<SourceFile, "name">>;
 

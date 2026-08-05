@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { jsonCodec } from "./json.ts";
 
-export const sourceNameSchema = z.enum(["index.html", "theme.css", "app.css"]);
+export const sourceNameSchema = z.enum(["index.html", "app.css"]);
 export const sourceFileChangeSchema = z.object({
   path: sourceNameSchema,
   revision: z.string().nullable(),

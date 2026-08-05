@@ -65,10 +65,17 @@ export const prepareSessionRefresh = (
       }
       return false;
     }
+    const explicit = url.searchParams.get("session_id");
+    if (
+      url.searchParams.get(DOCUMENT_REPLAY_PARAM) === "1" &&
+      explicit &&
+      SESSION_ID_PATTERN.test(explicit)
+    ) {
+      return true;
+    }
     if (browser.navigationType !== "reload") {
       return false;
     }
-    const explicit = url.searchParams.get("session_id");
     if (explicit && SESSION_ID_PATTERN.test(explicit)) {
       url.searchParams.set(DOCUMENT_REPLAY_PARAM, "1");
       browser.replaceUrl(url.toString());
@@ -88,6 +95,31 @@ export const prepareSessionRefresh = (
     return false;
   }
   return false;
+};
+
+export const preservedDocumentUrl = (
+  config: RuntimeConfig,
+  target: string,
+  sessionId: string | undefined,
+  href = globalThis.location.href,
+): string => {
+  const url = new URL(target, href);
+  const current = new URL(href);
+  const runtimeSelection = current.searchParams.get("runtime");
+  if (runtimeSelection && !url.searchParams.has("runtime")) {
+    url.searchParams.set("runtime", runtimeSelection);
+  }
+  const runtime = serverSessionConfig(config);
+  if (
+    runtime?.preserve &&
+    config.mode === "run" &&
+    sessionId &&
+    SESSION_ID_PATTERN.test(sessionId)
+  ) {
+    url.searchParams.set("session_id", sessionId);
+    url.searchParams.set(DOCUMENT_REPLAY_PARAM, "1");
+  }
+  return url.toString();
 };
 
 export const finishSessionRefresh = (

@@ -87,12 +87,6 @@ def runtime_head(
                     + f"window.__MARIMO_MOUNT_CONFIG__=Object.freeze({mount_config});"
                 )
             ],
-            link(
-                {
-                    "rel": "stylesheet",
-                    "href": f"{support_url}/static/theme.css",
-                }
-            ),
             script(
                 {
                     "data-marimo-studio-runtime": True,

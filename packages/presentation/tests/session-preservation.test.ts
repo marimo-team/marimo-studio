@@ -5,6 +5,7 @@ import type { RuntimeConfig } from "../src/runtime-config/index.ts";
 
 import {
   finishSessionRefresh,
+  preservedDocumentUrl,
   prepareSessionRefresh,
   rememberSession,
   type SessionEnvironment,
@@ -115,6 +116,25 @@ test("the replay marker is removed after the runtime opens", () => {
   finishSessionRefresh(browser.value);
 
   assert.deepEqual(browser.replaced, ["https://example.test/dashboard/?view=summary"]);
+});
+
+test("an intentional document navigation carries runtime and server session", () => {
+  const target = preservedDocumentUrl(
+    config(true),
+    "https://example.test/report/?region=emea",
+    "s_abc123",
+    "https://example.test/dashboard/?runtime=server",
+  );
+  const browser = environment(new Map(), {
+    href: target,
+    navigationType: "navigate",
+  });
+
+  assert.equal(
+    target,
+    "https://example.test/report/?region=emea&runtime=server&session_id=s_abc123&marimo_studio_resume=1",
+  );
+  assert.equal(prepareSessionRefresh(config(true), browser.value), true);
 });
 
 test("disabling preservation cancels a pending replay", () => {

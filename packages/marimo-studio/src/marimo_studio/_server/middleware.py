@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from starlette.requests import Request
+from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from marimo_studio._compat.server.context import (
@@ -14,6 +15,7 @@ from marimo_studio._compat.server.context import (
 )
 from marimo_studio._compat.server.peer_controls import enable_peer_control_sync
 from marimo_studio._compat.server.sessions import has_access_token, has_read_access
+from marimo_studio._server.files import file_response
 from marimo_studio._server.pages import (
     authentication_redirect,
     document_response,
@@ -28,6 +30,8 @@ from marimo_studio._server.routing import (
     document_view,
     is_studio_landing,
     studio_view,
+    view_asset,
+    view_route_alias,
 )
 from marimo_studio._server.runtimes import DEFAULT_RUNTIME_REGISTRY
 from marimo_studio._server.support import support_response
@@ -95,12 +99,25 @@ class PresentationMiddleware:
                 return
             selected_document = None
             selected_studio = None
+            selected_asset = None
         else:
+            alias = view_route_alias(relative, studio)
+            if alias is not None and not alias.startswith(SUPPORT_PATH):
+                await self.app(
+                    _replace_relative_path(scope, relative, alias),
+                    receive,
+                    send,
+                )
+                return
+            if alias is not None:
+                relative = alias
             selected_document = document_view(relative, studio, location.mode)
             selected_studio = studio_view(relative, studio, location.mode)
+            selected_asset = view_asset(relative, studio)
             if (
                 selected_document is None
                 and selected_studio is None
+                and selected_asset is None
                 and not landing
                 and not relative.startswith(SUPPORT_PATH)
             ):
@@ -167,6 +184,13 @@ class PresentationMiddleware:
                         selected_studio,
                         DEFAULT_RUNTIME_REGISTRY.options,
                     )
+                elif selected_asset is not None:
+                    view_name, asset = selected_asset
+                    response = (
+                        file_response(studio.views[view_name].root, asset)
+                        if request.method in {"GET", "HEAD"}
+                        else Response(status_code=405)
+                    )
                 else:
                     response = await support_response(
                         request,
@@ -189,3 +213,14 @@ class PresentationMiddleware:
 
 def _accepts_json(request: Request) -> bool:
     return "application/json" in request.headers.get("accept", "")
+
+
+def _replace_relative_path(scope: Scope, current: str, target: str) -> Scope:
+    """Replace one decoded relative path while preserving its ASGI mount."""
+    path = str(scope.get("path", "/"))
+    prefix = path[: -len(current)] if current and path.endswith(current) else ""
+    updated = dict(scope)
+    updated_path = f"{prefix}{target}"
+    updated["path"] = updated_path
+    updated["raw_path"] = updated_path.encode()
+    return updated

@@ -7,6 +7,8 @@ import json
 import os
 import shutil
 import tempfile
+import unicodedata
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,7 +17,11 @@ from marimo_studio._compat.browser_notebook import browser_notebook_source
 from marimo_studio._compat.static_export import static_runtime_config
 from marimo_studio._html import cell_host, render, runtime_document
 from marimo_studio._workspace.config import load_studio
-from marimo_studio._workspace.models import ResolvedStudio, StudioConfig
+from marimo_studio._workspace.models import (
+    RESERVED_VIEW_ASSET_NAMES,
+    ResolvedStudio,
+    StudioConfig,
+)
 from marimo_studio._workspace.templates import TemplateParser
 from marimo_studio.errors import StaticExportError
 from marimo_studio.types import ValueReference
@@ -48,6 +54,48 @@ class StaticExportResult:
             "entrypoint": str(self.entrypoint),
             "files": self.files,
         }
+
+
+@dataclass(frozen=True)
+class _AssetCopy:
+    source: Path
+    destination: Path
+    owner: str
+    stamp: tuple[int, int, int, int]
+
+
+@dataclass(frozen=True)
+class _OutputTarget:
+    path: Path
+    identity: tuple[tuple[object, ...], ...] | None
+
+
+def _file_stamp(path: Path) -> tuple[int, int, int, int]:
+    stat = path.stat()
+    return stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_ino
+
+
+def _directory_identity(path: Path) -> tuple[tuple[object, ...], ...] | None:
+    if not path.exists():
+        return None
+    identity: list[tuple[object, ...]] = []
+    for candidate in sorted(path.rglob("*")):
+        stat = candidate.lstat()
+        identity.append(
+            (
+                candidate.relative_to(path).as_posix(),
+                stat.st_mode,
+                stat.st_mtime_ns,
+                stat.st_ctime_ns,
+                stat.st_size,
+                stat.st_ino,
+            )
+        )
+    return tuple(identity)
+
+
+def _destination_key(path: Path) -> tuple[str, ...]:
+    return tuple(unicodedata.normalize("NFC", part).casefold() for part in path.parts)
 
 
 def _digest(*values: str) -> str:
@@ -146,18 +194,125 @@ def _runtime_config(
     return rendered, config
 
 
-def _copy_tree(source: Path, target: Path) -> None:
+def _asset_files(
+    source: Path,
+    destination: Path,
+    owner: str,
+    *,
+    skip: frozenset[str] = frozenset(),
+) -> list[_AssetCopy]:
     if source.is_symlink():
         raise StaticExportError(f"Static export source is a symlink: {source}")
-    target.mkdir(parents=True, exist_ok=True)
-    for child in source.iterdir():
-        if child.is_symlink():
-            raise StaticExportError(f"Static export source is a symlink: {child}")
-        destination = target / child.name
-        if child.is_dir():
-            _copy_tree(child, destination)
-        elif child.is_file():
-            shutil.copy2(child, destination)
+    assets: list[_AssetCopy] = []
+
+    def collect(directory: Path, relative: Path) -> None:
+        for child in sorted(directory.iterdir(), key=lambda path: path.name):
+            if not relative.parts and child.name in skip:
+                continue
+            if child.is_symlink():
+                raise StaticExportError(f"Static export source is a symlink: {child}")
+            child_relative = relative / child.name
+            if child.is_dir():
+                collect(child, child_relative)
+            elif child.is_file():
+                assets.append(
+                    _AssetCopy(
+                        source=child,
+                        destination=destination / child_relative,
+                        owner=owner,
+                        stamp=_file_stamp(child),
+                    )
+                )
+
+    collect(source, Path())
+    return assets
+
+
+def _claim_asset(
+    files: dict[tuple[str, ...], tuple[str, Path]],
+    directories: dict[tuple[str, ...], tuple[str, Path]],
+    destination: Path,
+    owner: str,
+) -> None:
+    key = _destination_key(destination)
+    conflict = files.get(key) or directories.get(key)
+    if conflict is None:
+        conflict = next(
+            (
+                claimed
+                for index in range(1, len(key))
+                if (claimed := files.get(key[:index])) is not None
+            ),
+            None,
+        )
+    if conflict is not None:
+        conflict_owner, conflict_path = conflict
+        raise StaticExportError(
+            f"Static export paths {conflict_path.as_posix()!r} and "
+            f"{destination.as_posix()!r} are owned by both {conflict_owner} and "
+            f"{owner}. Rename the view asset."
+        )
+    files[key] = owner, destination
+    for index in range(1, len(key)):
+        directories.setdefault(key[:index], (owner, Path(*destination.parts[:index])))
+
+
+def _asset_plan(
+    studio: StudioConfig,
+    resolved: ResolvedStudio,
+    view_name: str,
+) -> tuple[_AssetCopy, ...]:
+    support = SUPPORT_ROOT / "views" / view_name
+    generated = {
+        Path("index.html"): "the generated view document",
+        Path(".nojekyll"): "the generated site marker",
+        support / "config": "the generated runtime configuration",
+        **{
+            support / "cells" / alias: "a generated cell fragment"
+            for alias in resolved.views[view_name].cell_aliases
+        },
+    }
+    copies = _asset_files(
+        _assets.runtime_assets_path(),
+        SUPPORT_ROOT / "assets",
+        "the Studio runtime",
+    )
+    copies.extend(
+        _asset_files(
+            studio.views[view_name].root,
+            Path(),
+            f"view {view_name!r}",
+            skip=frozenset({"index.html"}),
+        )
+    )
+    public = studio.notebook.parent / "public"
+    if public.is_dir():
+        copies.extend(
+            _asset_files(
+                public,
+                Path("public"),
+                "the notebook public directory",
+            )
+        )
+
+    for asset in copies:
+        if asset.owner == f"view {view_name!r}" and (
+            asset.destination.parts
+            and unicodedata.normalize("NFC", asset.destination.parts[0]).casefold()
+            in RESERVED_VIEW_ASSET_NAMES
+        ):
+            raise StaticExportError(
+                f"View asset path {asset.destination.as_posix()!r} uses a reserved "
+                "Marimo or Studio route. Rename the view asset."
+            )
+
+    files: dict[tuple[str, ...], tuple[str, Path]] = {}
+    directories: dict[tuple[str, ...], tuple[str, Path]] = {}
+    for destination, owner in generated.items():
+        _claim_asset(files, directories, destination, owner)
+    for asset in copies:
+        _claim_asset(files, directories, asset.destination, asset.owner)
+    return tuple(copies)
 
 
 def _write_bundle(
@@ -178,12 +333,16 @@ def _write_bundle(
     support = output / SUPPORT_ROOT
     view_support = support / "views" / view_name
 
-    _copy_tree(_assets.runtime_assets_path(), support / "assets")
-    _copy_tree(studio.views[view_name].root, view_support / "static")
-    view_support.joinpath("static/theme.css").touch(exist_ok=True)
-    public = studio.notebook.parent / "public"
-    if public.is_dir():
-        _copy_tree(public, output / "public")
+    assets = _asset_plan(studio, resolved, view_name)
+    for asset in assets:
+        if _file_stamp(asset.source) != asset.stamp:
+            raise StaticExportError(
+                "The static export sources changed while the bundle was prepared. "
+                "Run the export again."
+            )
+        destination = output / asset.destination
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(asset.source, destination)
 
     output.joinpath("index.html").write_text(rendered, encoding="utf-8")
     view_support.mkdir(parents=True, exist_ok=True)
@@ -196,6 +355,19 @@ def _write_bundle(
     for alias in resolved.views[view_name].cell_aliases:
         cells.joinpath(alias).write_text(render(cell_host(alias)), encoding="utf-8")
     output.joinpath(".nojekyll").touch()
+    try:
+        stable = (
+            assets == _asset_plan(studio, resolved, view_name)
+            and document == studio.views[view_name].template.read_text(encoding="utf-8")
+            and notebook_source == studio.notebook.read_text(encoding="utf-8")
+        )
+    except OSError:
+        stable = False
+    if not stable:
+        raise StaticExportError(
+            "The static export sources changed while the bundle was written. "
+            "Run the export again."
+        )
     return sum(1 for path in output.rglob("*") if path.is_file())
 
 
@@ -205,7 +377,7 @@ def _validate_output(
     view_name: str,
     *,
     force: bool,
-) -> Path:
+) -> _OutputTarget:
     expanded = output.expanduser()
     if expanded.is_symlink():
         raise StaticExportError(f"Output is a symlink: {expanded}")
@@ -238,28 +410,75 @@ def _validate_output(
         raise StaticExportError(
             f"Output already exists: {resolved}. Pass --force to replace it."
         )
-    return resolved
+    return _OutputTarget(resolved, _directory_identity(resolved))
 
 
-def _commit_bundle(staged: Path, output: Path) -> None:
-    previous = staged.parent / "previous"
-    moved_previous = False
+def _publish_absent(staged: Path, output: Path) -> None:
     try:
-        if output.exists():
-            os.replace(output, previous)
-            moved_previous = True
+        output.mkdir()
+    except FileExistsError as error:
+        raise StaticExportError(
+            f"Output changed while the static export was prepared: {output}. "
+            "Run the export again."
+        ) from error
+    try:
+        os.replace(staged, output)
+    except OSError:
+        with suppress(OSError):
+            output.rmdir()
+        raise
+
+
+def _preserve_previous(previous: Path, output: Path) -> None:
+    recovery = Path(
+        tempfile.mkdtemp(
+            dir=output.parent,
+            prefix=f".{output.name}-recovery-",
+        )
+    )
+    recovery.rmdir()
+    os.replace(previous, recovery)
+    try:
+        _publish_absent(recovery, output)
+    except (OSError, StaticExportError) as error:
+        raise StaticExportError(
+            f"Output changed while the static export was committed: {output}. "
+            f"The previous output is preserved at {recovery}."
+        ) from error
+
+
+def _commit_bundle(staged: Path, target: _OutputTarget) -> None:
+    output = target.path
+    if target.identity is None:
         try:
-            os.replace(staged, output)
+            _publish_absent(staged, output)
+        except StaticExportError:
+            raise
+        except OSError as error:
+            raise StaticExportError(
+                f"Could not create static export directory {output}: {error}"
+            ) from error
+        return
+
+    previous = staged.parent / "previous"
+    try:
+        os.replace(output, previous)
+        if _directory_identity(previous) != target.identity:
+            _preserve_previous(previous, output)
+            raise StaticExportError(
+                f"Output changed while the static export was prepared: {output}. "
+                "Run the export again."
+            )
+        try:
+            _publish_absent(staged, output)
         except Exception:
-            if moved_previous:
-                os.replace(previous, output)
+            _preserve_previous(previous, output)
             raise
     except OSError as error:
         raise StaticExportError(
             f"Could not replace static export directory {output}: {error}"
         ) from error
-    if moved_previous:
-        shutil.rmtree(previous, ignore_errors=True)
+    shutil.rmtree(previous, ignore_errors=True)
 
 
 def export_view(
@@ -286,12 +505,13 @@ def export_view(
         view_documents={selected: document},
     )
     _projection_error(resolved, selected)
-    destination = _validate_output(
+    output_target = _validate_output(
         Path(output),
         studio,
         selected,
         force=force,
     )
+    destination = output_target.path
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     staging_root = Path(
@@ -311,7 +531,7 @@ def export_view(
             document,
             notebook_source,
         )
-        _commit_bundle(staged, destination)
+        _commit_bundle(staged, output_target)
     finally:
         shutil.rmtree(staging_root, ignore_errors=True)
 

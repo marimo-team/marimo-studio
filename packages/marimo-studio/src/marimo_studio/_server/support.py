@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import cast
 from urllib.parse import parse_qs
 
 from starlette.requests import Request
 from starlette.responses import (
-    FileResponse,
     HTMLResponse,
     JSONResponse,
     Response,
@@ -34,6 +32,7 @@ from marimo_studio._compat.server.sessions import (
 )
 from marimo_studio._html import cell_host, render
 from marimo_studio._server.dev import change_events
+from marimo_studio._server.files import file_response
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._server.studio_api import (
@@ -114,20 +113,6 @@ async def _view_response(
         )
     if view_name not in studio.views:
         return Response(status_code=404)
-    if route.startswith("static/") and request.method in {"GET", "HEAD"}:
-        relative = route.removeprefix("static/")
-        if (
-            relative == "theme.css"
-            and not (studio.views[view_name].root / relative).exists()
-        ):
-            return Response(
-                media_type="text/css",
-                headers={"Cache-Control": "no-cache"},
-            )
-        return file_response(
-            studio.views[view_name].root,
-            relative,
-        )
     if route == "dev/events" and request.method == "GET" and context.dev:
         return events_response(studio, context=context, view_name=view_name)
     if route.startswith("source/"):
@@ -138,10 +123,8 @@ async def _view_response(
             route.removeprefix("source/"),
             context.server_token,
         )
-    snapshot = presentation.snapshot(view_name)
-    resolved = snapshot.resolved
-    view = resolved.views[view_name]
     if route == "config" and request.method == "GET":
+        snapshot = presentation.snapshot(view_name)
         return JSONResponse(
             presentation.runtime_config(
                 snapshot,
@@ -151,6 +134,9 @@ async def _view_response(
             ),
             headers=NO_STORE,
         )
+    snapshot = presentation.latest_snapshot(view_name)
+    resolved = snapshot.resolved
+    view = resolved.views[view_name]
     if route == "values" and request.method == "POST":
         return await _values_response(request, context, view)
     if route.startswith("cells/") and request.method == "GET":
@@ -320,16 +306,3 @@ async def _query_response(
             headers=NO_STORE,
         )
     return Response(status_code=202, headers=NO_STORE)
-
-
-def file_response(root: Path, relative: str) -> Response:
-    """Serve one file beneath an explicit asset root."""
-    root = root.resolve()
-    candidate = (root / relative).resolve()
-    try:
-        candidate.relative_to(root)
-    except ValueError:
-        return Response(status_code=404)
-    if not candidate.is_file():
-        return Response(status_code=404)
-    return FileResponse(candidate, headers={"Cache-Control": "no-cache"})

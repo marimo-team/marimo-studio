@@ -22,28 +22,6 @@ def test_source_read_rejects_files_outside_the_view_contract(
         read_source(studio, "dashboard", "../analysis.py")
 
 
-def test_optional_theme_opens_empty_and_is_created_on_first_edit(
-    notebook_path: Path,
-) -> None:
-    ensure_view(notebook_path)
-    studio = load_studio(notebook_path)
-    theme = studio.views["dashboard"].root / "theme.css"
-    theme.unlink()
-
-    loaded = read_source(studio, "dashboard", "theme.css")
-    content = ":root { --primary: teal; }"
-    saved = write_source(
-        studio,
-        "dashboard",
-        "theme.css",
-        content,
-        loaded.revision,
-    )
-
-    assert loaded.content == ""
-    assert saved.content == theme.read_text(encoding="utf-8") == content
-
-
 def test_source_write_rejects_a_view_file_replaced_by_a_symlink(
     notebook_path: Path,
     tmp_path: Path,

@@ -84,14 +84,13 @@ def ensure_view(
                 writes[config_path] = configured
 
     for view_name in view_names:
-        creating_view = view_name in new_templates
         for path, content in starter_view_files(
             view_root,
             view_name,
             notebook_path.stem,
             aliases,
         ).items():
-            if not path.exists() and (creating_view or path.name != "theme.css"):
+            if not path.exists():
                 writes[path] = content
 
     created = tuple(sorted(path for path in writes if not path.exists()))

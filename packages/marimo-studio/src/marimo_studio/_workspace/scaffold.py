@@ -9,21 +9,32 @@ from pathlib import Path
 from marimo_studio._cell_refs import cell_ref_candidates
 from marimo_studio.types import CellRef, CellSpec
 
-_STARTER_THEME_CSS = """\
+_STARTER_CSS = """\
+/* THEME */
+
 :root {
   color-scheme: light dark;
+  --monospace-font: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --text-font: "PT Sans", ui-sans-serif, system-ui, sans-serif;
+  --heading-font: var(--text-font);
   --background: light-dark(#ffffff, #111713);
   --foreground: light-dark(#17201b, #edf3ef);
   --card: light-dark(#f8faf9, #18201b);
   --card-foreground: var(--foreground);
   --muted: light-dark(#f0f4f2, #202923);
   --muted-foreground: light-dark(#64716a, #a9b5ae);
+  --popover: light-dark(#ffffff, #18201b);
+  --popover-foreground: var(--foreground);
   --border: light-dark(#dce3df, #344039);
   --input: light-dark(#c8d2cc, #435048);
   --primary: light-dark(#0877d1, #3ba7ad);
   --primary-foreground: light-dark(#ffffff, #111713);
+  --secondary: light-dark(#f0f4f2, #edf3ef);
+  --secondary-foreground: light-dark(#17201b, #18201b);
   --accent: light-dark(#edf7ff, #173d3e);
   --accent-foreground: light-dark(#075fa8, #c4efeb);
+  --destructive: light-dark(#c62f2f, #f87171);
+  --destructive-foreground: light-dark(#ffffff, #111713);
   --ring: var(--primary);
   --link: light-dark(#075fa8, #7fc4ff);
   --radius: 8px;
@@ -50,9 +61,9 @@ marimo-cell {
   --marimo-cell-accent-foreground: var(--primary-foreground);
   --marimo-cell-radius: var(--radius);
 }
-"""
 
-_STARTER_CSS = """\
+/* APP */
+
 .view-header h1 {
   text-wrap: balance;
 }
@@ -88,7 +99,7 @@ def _starter_template(
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{title}</title>
-    <link rel="stylesheet" href="./_marimo-studio/views/{name}/static/app.css">
+    <link rel="stylesheet" href="app.css">
   </head>
   <body>
     <main id="app-shell" class="studio-view">
@@ -118,7 +129,6 @@ def starter_view_files(
     root = view_root / name
     return {
         root / "index.html": _starter_template(name, notebook_name, aliases),
-        root / "theme.css": _STARTER_THEME_CSS,
         root / "app.css": _STARTER_CSS,
     }
 

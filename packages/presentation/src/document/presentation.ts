@@ -12,12 +12,15 @@ import {
   setSupportUrl,
 } from "../runtime-config/index.ts";
 import { stageViewStyles, type StagedViewStyles } from "../view-styles/runtime.ts";
+import { documentBase, resolveDocumentBase } from "./base.ts";
 import { sameShellPresentation, type ShellTarget } from "./refresh-state.ts";
+import { requiresDocumentReload } from "./scripts.ts";
 import { abortError, PageStyles, type StagedStyles } from "./styles.ts";
 
 export interface DocumentCommit {
   target: ShellTarget;
   supportChanged: boolean;
+  reloadDocument: boolean;
 }
 
 export class PresentationDocument {
@@ -96,11 +99,18 @@ export class PresentationDocument {
       ) {
         await response.body?.cancel();
         this.documentUrl = nextDocumentUrl;
-        return { target, supportChanged: false };
+        return { target, supportChanged: false, reloadDocument: false };
       }
 
       const nextDocument = new DOMParser().parseFromString(await response.text(), "text/html");
       this.styles.mark(nextDocument);
+      if (requiresDocumentReload(document, nextDocument)) {
+        return {
+          target,
+          supportChanged: getSupportUrl() !== target.supportUrl,
+          reloadDocument: true,
+        };
+      }
       const current = document.querySelector<HTMLElement>("#app-shell");
       const next = nextDocument.querySelector<HTMLElement>("#app-shell");
       if (!current || !next) {
@@ -117,11 +127,14 @@ export class PresentationDocument {
       const previousConfig = getRuntimeConfig();
       const previousTitle = document.title;
       const previousDocumentUrl = this.documentUrl;
+      const previousBase = document.baseURI;
+      const nextBase = resolveDocumentBase(nextDocument, nextDocumentUrl);
       try {
         setSupportUrl(target.supportUrl);
         commitRuntimeConfig(nextConfig);
         document.title = nextDocument.title;
         globalThis.history.replaceState(globalThis.history.state, "", nextDocumentUrl);
+        documentBase.set(nextBase);
         this.swap(current, next);
         syncPreservedCellHosts(next, document);
         stagedStyles.commit();
@@ -131,6 +144,7 @@ export class PresentationDocument {
         commitRuntimeConfig(previousConfig);
         document.title = previousTitle;
         globalThis.history.replaceState(globalThis.history.state, "", previousDocumentUrl);
+        documentBase.set(previousBase);
         stagedStyles.discard();
         stagedViewStyles.discard();
         throw error;
@@ -141,6 +155,7 @@ export class PresentationDocument {
       return {
         target,
         supportChanged: previousSupportUrl !== target.supportUrl,
+        reloadDocument: false,
       };
     } finally {
       stagedStyles?.discard();

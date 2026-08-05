@@ -3,11 +3,13 @@ import type { RuntimeRegistry } from "@marimo-studio/runtime";
 import htmx from "htmx.org";
 
 import { registerMarimoCellElement } from "./cells/host";
+import { documentBase } from "./document/base";
 import { bindViewNavigation } from "./document/events";
 import { PresentationDocument } from "./document/presentation";
 import { startQuerySync } from "./document/query-sync";
 import {
   finishSessionRefresh,
+  preservedDocumentUrl,
   prepareSessionRefresh,
   rememberSession,
 } from "./document/session-preservation";
@@ -44,11 +46,18 @@ declare global {
 }
 
 const browser = globalThis as typeof globalThis & Window;
+browser.htmx = htmx;
+const viewBaseUrl = document.baseURI;
+// Marimo's server client points <base> at the API root during health checks.
+// Keep relative authored assets anchored to the active view directory.
+documentBase.start(viewBaseUrl);
 const presentationDocument = new PresentationDocument();
 let activeViewTransition: AbortController | undefined;
 browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "booting";
 restorePendingRuntimeSelection();
 startQuerySync();
+globalThis.addEventListener("pagehide", () => documentBase.stop());
+globalThis.addEventListener("pageshow", () => documentBase.start());
 
 const showRuntimeError = (error: unknown) => {
   browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "failed";
@@ -85,7 +94,17 @@ const bindStandaloneViewNavigation = (): (() => void) =>
     activeViewTransition = controller;
     void presentationDocument
       .replace(request.documentUrl, getSupportUrl(), controller.signal, () => {})
-      .then(() => {
+      .then((commit) => {
+        if (commit.reloadDocument) {
+          globalThis.location.assign(
+            preservedDocumentUrl(
+              getRuntimeConfig(),
+              commit.target.documentUrl,
+              browser.__MARIMO_STUDIO_SESSION_ID__,
+            ),
+          );
+          return;
+        }
         if (updateConfiguredRuntime(getRuntimeConfig()) === "reload") {
           globalThis.location.reload();
         }
@@ -107,7 +126,6 @@ const bootstrap = async (registry: RuntimeRegistry) => {
   await initializeViewStyles();
   startReadiness(updateConfiguredRuntimeQuery);
   registerMarimoCellElement();
-  (globalThis as typeof globalThis & Window).htmx = htmx;
 
   let config = await loadRuntimeConfig();
   const stopRuntimeNavigation = bindRuntimeNavigation();

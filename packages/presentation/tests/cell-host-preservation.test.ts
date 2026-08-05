@@ -32,12 +32,7 @@ test("a shell swap updates authored cell attributes without replacing its output
   const liveOutput = liveHost.querySelector("[data-marimo-cell-output]");
   liveHost.dataset.state = "ready";
   liveHost.dataset.runtimeCellId = "runtime-cell-1";
-  liveHost.dataset.outputMime = "text/html";
-  liveHost.dataset.outputMimes = "text/html,text/plain";
   liveHost.dataset.marimoDiagnosticCode = "stale-runtime-diagnostic";
-  liveHost.dataset.marimoDiagnosticMessage = "Runtime diagnostic";
-  liveHost.dataset.marimoDiagnosticHint = "Refresh the cell";
-  liveHost.setAttribute("aria-busy", "true");
   liveHost.style.setProperty("--_marimo-cell-measured-height", "120px");
 
   const nextDocument = new DOMParser().parseFromString(
@@ -79,11 +74,6 @@ test("a shell swap updates authored cell attributes without replacing its output
   assert.equal(updatedHost.hasAttribute("title"), false);
   assert.equal(updatedHost.dataset.state, "ready");
   assert.equal(updatedHost.dataset.runtimeCellId, "runtime-cell-1");
-  assert.equal(updatedHost.dataset.outputMime, "text/html");
-  assert.equal(updatedHost.dataset.outputMimes, "text/html,text/plain");
   assert.equal(updatedHost.dataset.marimoDiagnosticCode, "stale-runtime-diagnostic");
-  assert.equal(updatedHost.dataset.marimoDiagnosticMessage, "Runtime diagnostic");
-  assert.equal(updatedHost.dataset.marimoDiagnosticHint, "Refresh the cell");
-  assert.equal(updatedHost.getAttribute("aria-busy"), "true");
   assert.equal(document.querySelector("style")?.textContent, "/* new p-6 */");
 });

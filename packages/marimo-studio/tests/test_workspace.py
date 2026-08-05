@@ -67,15 +67,29 @@ def test_view_setup_configures_the_notebook_and_scaffolds_each_view(
         "cell-2",
     ]
     assert resolve_studio(studio).view().cell_aliases == ("cell-1", "cell-2")
-    theme = studio.views["dashboard"].root / "theme.css"
-    theme.unlink()
+    stylesheet = studio.views["dashboard"].root / "app.css"
+    stylesheet.write_text("/* THEME */\n\n/* APP */\n.custom {}\n", encoding="utf-8")
 
     ensure_view(notebook_path, "report")
 
-    assert not theme.exists()
-    assert (
-        load_studio(notebook_path).views["report"].root.joinpath("theme.css").is_file()
-    )
+    assert stylesheet.read_text(encoding="utf-8").endswith(".custom {}\n")
+    report = load_studio(notebook_path).views["report"].root
+    assert {path.name for path in report.iterdir()} == {"index.html", "app.css"}
+    report_css = report.joinpath("app.css").read_text(encoding="utf-8")
+    assert report_css.index("/* THEME */") < report_css.index("/* APP */")
+
+
+def test_view_discovery_rejects_a_symlinked_view_directory(
+    notebook_path: Path,
+    tmp_path: Path,
+) -> None:
+    setup = ensure_view(notebook_path)
+    external = tmp_path / "external-view"
+    setup.root.rename(external)
+    setup.root.symlink_to(external, target_is_directory=True)
+
+    with pytest.raises(ConfigurationError, match="symlink"):
+        load_studio(notebook_path)
 
 
 def test_new_view_uses_native_cell_names_and_binds_anonymous_cells(

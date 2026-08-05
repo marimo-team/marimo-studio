@@ -42,6 +42,9 @@ RESERVED_VIEW_NAMES = frozenset(
         "ws",
     }
 )
+RESERVED_VIEW_ASSET_NAMES = frozenset(
+    {"_marimo-studio", "@file", "public", "public-files-sw.js"}
+)
 
 
 @dataclass(frozen=True)

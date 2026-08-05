@@ -10,12 +10,13 @@ from threading import RLock
 from marimo_studio._compat.server.models import ServerContext
 from marimo_studio._html import runtime_document
 from marimo_studio._server.runtimes import DEFAULT_RUNTIME_REGISTRY
-from marimo_studio._urls import SUPPORT_PATH, public_url
+from marimo_studio._urls import SUPPORT_PATH, public_url, view_url
 from marimo_studio._workspace import discover_studio
 from marimo_studio._workspace.models import (
     ProjectionDiagnostic,
     ResolvedStudio,
     StudioConfig,
+    View,
 )
 from marimo_studio._workspace.templates import (
     TemplateParser,
@@ -100,12 +101,37 @@ def _read_sources(
         tuple(
             (str(path), hashlib.sha256(contents[path]).hexdigest()) for path in paths
         ),
+        _view_asset_identity(studio.views[view_name]),
     )
     return _PresentationSources(
         documents=documents,
         notebook_source=notebook_source,
         identity=identity,
     )
+
+
+def _view_asset_identity(view: View) -> tuple[tuple[object, ...], ...]:
+    """Return stamps for assets whose browser lifecycle follows the document."""
+    identity: list[tuple[object, ...]] = []
+    for path in sorted(view.root.rglob("*")):
+        if (
+            path == view.template
+            or path.suffix == ".css"
+            or path.is_symlink()
+            or not path.is_file()
+        ):
+            continue
+        stat = path.stat()
+        identity.append(
+            (
+                path.relative_to(view.root).as_posix(),
+                stat.st_mtime_ns,
+                stat.st_ctime_ns,
+                stat.st_size,
+                stat.st_ino,
+            )
+        )
+    return tuple(identity)
 
 
 @dataclass(frozen=True)
@@ -242,13 +268,19 @@ class NotebookPresentation:
             "The view sources are still changing. Studio will retry shortly."
         )
 
+    def latest_snapshot(self, view_name: str) -> PresentationSnapshot:
+        """Return the snapshot already mounted by a browser when available."""
+        with self._lock:
+            cached = self._snapshots.get(view_name)
+        return cached if cached is not None else self.snapshot(view_name)
+
     def render_document(
         self,
         snapshot: PresentationSnapshot,
         context: ServerContext,
     ) -> str:
         view_name = snapshot.view_name
-        root_url = public_url(context.base_url, "/")
+        root_url = view_url(context.base_url, view_name)
         support_url = public_url(
             context.base_url,
             f"{SUPPORT_PATH}/views/{view_name}",
