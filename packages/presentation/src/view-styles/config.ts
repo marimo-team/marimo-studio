@@ -1,48 +1,6 @@
 import type { Postprocessor } from "@unocss/core";
 
 import presetWind4, { type Theme } from "@unocss/preset-wind4";
-import { clone, generate, parse, type CssNode, type ListItem, type SelectorList } from "css-tree";
-
-const authoredTargetSelector = parse(":where([data-marimo-studio-authored])", {
-  context: "selectorList",
-}) as SelectorList;
-const authoredSelector = authoredTargetSelector.children.first;
-const AUTHORED_TARGET =
-  authoredSelector?.type === "Selector" ? authoredSelector.children.first : null;
-if (!AUTHORED_TARGET) {
-  throw new Error("Unable to create the authored view selector");
-}
-
-const targetAuthoredElement: Postprocessor = (utility) => {
-  if (utility.selector.startsWith("@")) {
-    return;
-  }
-  let selectors: SelectorList;
-  try {
-    selectors = parse(utility.selector, { context: "selectorList" }) as SelectorList;
-  } catch (error) {
-    throw new Error(`Unable to target authored view utility selector ${utility.selector}`, {
-      cause: error,
-    });
-  }
-  selectors.children.forEach((selector) => {
-    if (selector.type !== "Selector") {
-      return;
-    }
-    let pseudoElement: ListItem<CssNode> | null = null;
-    selector.children.forEach((node, item) => {
-      if (pseudoElement === null && node.type === "PseudoElementSelector") {
-        pseudoElement = item;
-      }
-    });
-    if (pseudoElement) {
-      selector.children.insertData(clone(AUTHORED_TARGET), pseudoElement);
-    } else {
-      selector.children.appendData(clone(AUTHORED_TARGET));
-    }
-  });
-  utility.selector = generate(selectors);
-};
 
 const completeBorderWidth: Postprocessor = (utility) => {
   const properties = new Set(utility.entries.map(([property]) => property));
@@ -117,18 +75,11 @@ const shortcuts = {
 } as const;
 
 export const createViewStyleDefaults = () => ({
-  postprocess: [targetAuthoredElement, completeBorderWidth],
+  postprocess: [completeBorderWidth],
   presets: [
     presetWind4({
       dark: "media",
-      preflights: {
-        property: {
-          selector:
-            "#app-shell, #app-shell :not([data-marimo-cell-output], [data-marimo-cell-output] *), #app-shell :not([data-marimo-cell-output], [data-marimo-cell-output] *)::before, #app-shell :not([data-marimo-cell-output], [data-marimo-cell-output] *)::after, #app-shell::backdrop",
-        },
-        reset: false,
-        theme: "on-demand",
-      },
+      preflights: { reset: false, theme: "on-demand" },
     }),
   ],
   shortcuts,

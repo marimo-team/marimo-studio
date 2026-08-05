@@ -1,5 +1,4 @@
 const APP_SHELL = "#app-shell";
-const AUTHORED_TARGET = "data-marimo-studio-authored";
 const OUTPUT_BOUNDARY = "[data-marimo-cell-output]";
 const RUNTIME_STYLE = "data-marimo-studio-runtime";
 const VIEW_STYLE = "data-marimo-studio-view-utilities";
@@ -18,14 +17,11 @@ const appShell = (): HTMLElement | undefined =>
 
 const classTokens = (element: Element): string[] => Array.from(element.classList).filter(Boolean);
 
-const viewClassTokens = (root: Element, markTargets: boolean): Set<string> => {
+export const collectViewClassTokens = (root: Element): Set<string> => {
   const tokens = new Set<string>();
   const visit = (element: Element) => {
     if (element.matches(OUTPUT_BOUNDARY)) {
       return;
-    }
-    if (markTargets) {
-      element.setAttribute(AUTHORED_TARGET, "");
     }
     classTokens(element).forEach((token) => tokens.add(token));
     Array.from(element.children).forEach(visit);
@@ -33,10 +29,6 @@ const viewClassTokens = (root: Element, markTargets: boolean): Set<string> => {
   visit(root);
   return tokens;
 };
-
-export const collectViewClassTokens = (root: Element): Set<string> => viewClassTokens(root, false);
-
-const prepareViewClassTokens = (root: Element): Set<string> => viewClassTokens(root, true);
 
 const containsIcon = (root: Element): boolean =>
   root.matches("iconify-icon") || root.querySelector("iconify-icon") !== null;
@@ -88,7 +80,9 @@ const insertRuntimeStyle = (style: HTMLStyleElement): void => {
 export class ViewStyleController {
   private readonly style: HTMLStyleElement;
   private readonly observer: MutationObserver;
-  private generation = 0;
+  private requestedGeneration = 0;
+  private completedGeneration = 0;
+  private activeRefresh: Promise<void> | undefined;
   private observed = false;
 
   constructor(private readonly generate: GenerateViewCss = defaultGenerator) {
@@ -113,7 +107,7 @@ export class ViewStyleController {
   }
 
   async stage(root: Element): Promise<StagedViewStyles> {
-    const css = await this.generate(prepareViewClassTokens(root));
+    const css = await this.generate(collectViewClassTokens(root));
     await prepareIcons(root);
     let discarded = false;
     return {
@@ -121,7 +115,8 @@ export class ViewStyleController {
         if (discarded) {
           return;
         }
-        this.generation += 1;
+        this.requestedGeneration += 1;
+        this.completedGeneration = this.requestedGeneration;
         this.style.textContent = css;
       },
       discard: () => {
@@ -146,18 +141,31 @@ export class ViewStyleController {
   disconnect(): void {
     this.observer.disconnect();
     this.observed = false;
-    this.generation += 1;
+    this.requestedGeneration += 1;
   }
 
-  private async refresh(): Promise<void> {
-    const root = appShell();
-    if (!root) {
-      return;
-    }
-    const generation = ++this.generation;
-    const css = await this.generate(prepareViewClassTokens(root));
-    if (generation === this.generation) {
-      this.style.textContent = css;
+  refresh(): Promise<void> {
+    this.requestedGeneration += 1;
+    this.activeRefresh ??= this.runRefreshes().finally(() => {
+      this.activeRefresh = undefined;
+    });
+    return this.activeRefresh;
+  }
+
+  private async runRefreshes(): Promise<void> {
+    while (this.completedGeneration < this.requestedGeneration) {
+      const generation = this.requestedGeneration;
+      const root = appShell();
+      if (!root) {
+        this.completedGeneration = generation;
+        continue;
+      }
+      const css = await this.generate(collectViewClassTokens(root));
+      await prepareIcons(root);
+      if (generation === this.requestedGeneration) {
+        this.style.textContent = css;
+      }
+      this.completedGeneration = generation;
     }
   }
 }
@@ -188,16 +196,27 @@ const styleFailure = (message: string): void => {
   document.body.append(status);
 };
 
-export const initializeViewStyles = async (): Promise<void> => {
+export const supportsViewStyleScope = (target: object = globalThis): boolean =>
+  "CSSScopeRule" in target;
+
+export const initializeViewStyles = async (
+  scopeSupported = supportsViewStyleScope(),
+): Promise<void> => {
   document.documentElement.dataset.marimoStudioStyles = "loading";
+  if (!scopeSupported) {
+    styleFailure(
+      "View utilities require a browser with CSS @scope support. Authored CSS and notebook outputs remain available.",
+    );
+    return;
+  }
   try {
     const shell = appShell();
     if (!shell) {
       throw new Error("Missing #app-shell");
     }
-    const staged = await stageViewStyles(shell);
-    staged.commit();
-    viewStyles().observe();
+    const styles = viewStyles();
+    styles.observe();
+    await styles.refresh();
     const browser = globalThis as typeof globalThis & {
       __MARIMO_STUDIO_STYLE_TIMEOUT__?: ReturnType<typeof setTimeout>;
     };
@@ -206,6 +225,6 @@ export const initializeViewStyles = async (): Promise<void> => {
     document.documentElement.dataset.marimoStudioStyles = "ready";
   } catch (error) {
     styleFailure("View styling could not start. The authored page remains available.");
-    throw error;
+    console.error("marimo-studio view styling error", error);
   }
 };

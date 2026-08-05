@@ -5,6 +5,7 @@ import { generateViewCss } from "../src/view-styles/generator.ts";
 import {
   collectViewClassTokens,
   initializeViewStyles,
+  supportsViewStyleScope,
   ViewStyleController,
 } from "../src/view-styles/runtime.ts";
 
@@ -18,7 +19,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-test("utility generation scopes variants and normalizes borders", async () => {
+test("utility generation uses a native scope around the authored shell", async () => {
   const css = await generateViewCss(
     new Set([
       "[&>p]:text-red-500",
@@ -29,17 +30,19 @@ test("utility generation scopes variants and normalizes borders", async () => {
     ]),
   );
 
+  assert.ok(css.startsWith("@layer marimo-studio-utilities{@scope (#app-shell)"));
+  assert.match(css, /to \(\[data-marimo-cell-output\]\)/);
   assert.match(css, /\\\[\\&\\>p\\\]\\:text-red-500>p/);
-  assert.match(css, />p:where\(\[data-marimo-studio-authored\]\)/);
-  assert.match(css, /:where\(\[data-marimo-studio-authored\]\)::before/);
-  assert.match(css, /#app-shell\{[^}]*--colors-red-500/);
-  assert.match(css, /border-width:1px;border-style:solid/);
-  assert.match(css, /border-inline-width:2px;border-inline-style:solid/);
+  assert.match(css, /:scope\{[^}]*--colors-red-500/);
+  assert.match(css, /border-width:1px/);
+  assert.match(css, /border-style:solid/);
+  assert.match(css, /border-inline-width:2px/);
+  assert.doesNotMatch(css, /margin:0/);
 });
 
-test("generations isolate theme tokens and namespace animation keyframes", async () => {
+test("concurrent generations isolate theme tokens and animation names", async () => {
   const [red, blue] = await Promise.all([
-    generateViewCss(new Set(["animate-spin", "text-red-500"])),
+    generateViewCss(new Set(["animate-spin", "animate-[2s_linear_infinite_spin]", "text-red-500"])),
     generateViewCss(new Set(["text-blue-600"])),
   ]);
 
@@ -47,7 +50,7 @@ test("generations isolate theme tokens and namespace animation keyframes", async
   assert.doesNotMatch(red, /--colors-blue-600/);
   assert.match(red, /@keyframes marimo-studio-view-spin/);
   assert.match(red, /animation:marimo-studio-view-spin /);
-  assert.doesNotMatch(red, /@keyframes spin/);
+  assert.match(red, /animation:2s linear infinite marimo-studio-view-spin/);
   assert.match(blue, /--colors-blue-600/);
   assert.doesNotMatch(blue, /--colors-red-500/);
 });
@@ -120,6 +123,37 @@ test("staged utility CSS commits atomically and ignores output mutations", async
   controller.disconnect();
 });
 
+test("initial generation includes classes added while the generator loads", async () => {
+  document.body.innerHTML = '<main id="app-shell" class="grid"></main>';
+  let release: (() => void) | undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let calls = 0;
+  const controller = new ViewStyleController(async (tokens) => {
+    calls += 1;
+    if (calls === 1) {
+      await gate;
+    }
+    return `/* ${[...tokens].sort().join(" ")} */`;
+  });
+  controller.observe();
+
+  const ready = controller.refresh();
+  document
+    .querySelector("#app-shell")!
+    .append(Object.assign(document.createElement("section"), { className: "pl-[37px]" }));
+  await settleMutations();
+  release?.();
+  await ready;
+
+  assert.equal(
+    document.querySelector<HTMLStyleElement>("style")!.textContent,
+    "/* grid pl-[37px] */",
+  );
+  controller.disconnect();
+});
+
 test("late style initialization clears the watchdog diagnostic", async () => {
   document.body.innerHTML = `
     <main id="app-shell" class="p-4"></main>
@@ -130,8 +164,21 @@ test("late style initialization clears the watchdog diagnostic", async () => {
   };
   browser.__MARIMO_STUDIO_STYLE_TIMEOUT__ = setTimeout(() => {}, 60_000);
 
-  await initializeViewStyles();
+  await initializeViewStyles(true);
 
   assert.equal(document.documentElement.dataset.marimoStudioStyles, "ready");
   assert.equal(document.querySelector("[data-marimo-studio-style-error]"), null);
+});
+
+test("unsupported scope leaves authored CSS available with a visible diagnostic", async () => {
+  document.body.innerHTML = '<main id="app-shell"></main>';
+
+  await initializeViewStyles(false);
+
+  assert.equal(supportsViewStyleScope({}), false);
+  assert.equal(document.documentElement.dataset.marimoStudioStyles, "error");
+  assert.match(
+    document.querySelector("[data-marimo-studio-style-error]")!.textContent ?? "",
+    /CSS @scope support/,
+  );
 });

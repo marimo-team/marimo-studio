@@ -42,16 +42,7 @@ const namespaceKeyframes = (css: string): string => {
       if (node.property !== "animation" || node.value.type !== "Value") {
         return;
       }
-      let groupStart = true;
-      node.value.children.forEach((value) => {
-        if (value.type === "Operator" && value.value === ",") {
-          groupStart = true;
-          return;
-        }
-        if (!groupStart) {
-          return;
-        }
-        groupStart = false;
+      walk(node.value, (value) => {
         if (value.type === "Identifier") {
           value.name = names.get(value.name) ?? value.name;
         }
@@ -75,6 +66,7 @@ export const generateViewCss = (tokens: ReadonlySet<string>): Promise<string> =>
   return generateExclusive(async () => {
     const generator = await createGenerator(createViewStyleDefaults());
     const result = await generator.generate(snapshot, { minify: true });
-    return namespaceKeyframes(result.css.replace(THEME_ROOT, "#app-shell{"));
+    const css = namespaceKeyframes(result.css.replace(THEME_ROOT, ":scope{"));
+    return `@layer marimo-studio-utilities{@scope (#app-shell) to ([data-marimo-cell-output]){${css}}}`;
   });
 };
