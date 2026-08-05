@@ -1,6 +1,38 @@
 import type { Postprocessor } from "@unocss/core";
 
 import presetWind4, { type Theme } from "@unocss/preset-wind4";
+import { clone, generate, parse, type SelectorList } from "css-tree";
+
+// A selector inside @scope starts below the scope root. Include :scope so
+// utilities on #app-shell follow the same rules as utilities on its children.
+const scopeSubjectSelector = parse(":where(:scope, *)", {
+  context: "selectorList",
+}) as SelectorList;
+const scopeSubject = scopeSubjectSelector.children.first;
+const SCOPE_SUBJECT = scopeSubject?.type === "Selector" ? scopeSubject.children.first : null;
+if (!SCOPE_SUBJECT) {
+  throw new Error("Unable to create the view scope subject");
+}
+
+const targetScopedElement: Postprocessor = (utility) => {
+  if (utility.selector.startsWith("@")) {
+    return;
+  }
+  let selectors: SelectorList;
+  try {
+    selectors = parse(utility.selector, { context: "selectorList" }) as SelectorList;
+  } catch (error) {
+    throw new Error(`Unable to scope view utility selector ${utility.selector}`, {
+      cause: error,
+    });
+  }
+  selectors.children.forEach((selector) => {
+    if (selector.type === "Selector") {
+      selector.children.prependData(clone(SCOPE_SUBJECT));
+    }
+  });
+  utility.selector = generate(selectors);
+};
 
 const completeBorderWidth: Postprocessor = (utility) => {
   const properties = new Set(utility.entries.map(([property]) => property));
@@ -75,7 +107,7 @@ const shortcuts = {
 } as const;
 
 export const createViewStyleDefaults = () => ({
-  postprocess: [completeBorderWidth],
+  postprocess: [targetScopedElement, completeBorderWidth],
   presets: [
     presetWind4({
       dark: "media",

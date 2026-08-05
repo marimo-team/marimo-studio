@@ -27,11 +27,13 @@ test("utility generation uses a native scope around the authored shell", async (
       "border",
       "border-border",
       "border-x-2",
+      "studio-view",
     ]),
   );
 
   assert.ok(css.startsWith("@layer marimo-studio-utilities{@scope (#app-shell)"));
   assert.match(css, /to \(\[data-marimo-cell-output\]\)/);
+  assert.match(css, /:where\(:scope,\*\)\.studio-view\{/);
   assert.match(css, /\\\[\\&\\>p\\\]\\:text-red-500>p/);
   assert.match(css, /:scope\{[^}]*--colors-red-500/);
   assert.match(css, /border-width:1px/);
