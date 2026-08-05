@@ -20,5 +20,5 @@ names and JSON-compatible Python values in the page:
 <marimo-cell name="revenue_chart"></marimo-cell> <time mo-value="report.updated_at"></time>
 ```
 
-Read the [Marimo Studio documentation](https://peter-gy.github.io/marimo-studio/)
+Read the [Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/)
 for view design, sharing, configuration, and the Python API.

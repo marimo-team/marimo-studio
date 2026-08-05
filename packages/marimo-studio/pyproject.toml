@@ -15,10 +15,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://peter-gy.github.io/marimo-studio/"
-Documentation = "https://peter-gy.github.io/marimo-studio/"
-Repository = "https://github.com/peter-gy/marimo-studio"
-Issues = "https://github.com/peter-gy/marimo-studio/issues"
+Homepage = "https://marimo-team.github.io/marimo-studio/"
+Documentation = "https://marimo-team.github.io/marimo-studio/"
+Repository = "https://github.com/marimo-team/marimo-studio"
+Issues = "https://github.com/marimo-team/marimo-studio/issues"
 
 [project.scripts]
 marimo-studio = "marimo_studio._cli:main"

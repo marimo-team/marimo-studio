@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitepress";
 
-const repository = "https://github.com/peter-gy/marimo-studio";
+const repository = "https://github.com/marimo-team/marimo-studio";
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const basePath = baseName ? `/${baseName}` : "";
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));

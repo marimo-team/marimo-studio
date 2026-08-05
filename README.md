@@ -1,14 +1,14 @@
 <p align="center">
-  <a href="https://peter-gy.github.io/marimo-studio/">
+  <a href="https://marimo-team.github.io/marimo-studio/">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://peter-gy.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-dark.svg">
-      <img alt="Marimo Studio" src="https://peter-gy.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-light.svg" width="620">
+      <source media="(prefers-color-scheme: dark)" srcset="https://marimo-team.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-dark.svg">
+      <img alt="Marimo Studio" src="https://marimo-team.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-light.svg" width="620">
     </picture>
   </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/peter-gy/marimo-studio/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/peter-gy/marimo-studio/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/marimo-team/marimo-studio/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/marimo-team/marimo-studio/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://pypi.org/project/marimo-studio/"><img alt="PyPI" src="https://img.shields.io/pypi/v/marimo-studio.svg"></a>
   <a href="https://pypi.org/project/marimo-studio/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/marimo-studio.svg"></a>
 </p>
@@ -102,9 +102,9 @@ Marimo Studio supports Python 3.11 or newer and Marimo 0.23.16 or newer.
 
 ## Learn more
 
-- [Create your first view](https://peter-gy.github.io/marimo-studio/getting-started)
-- [How Marimo Studio works](https://peter-gy.github.io/marimo-studio/how-it-works)
-- [Design a view](https://peter-gy.github.io/marimo-studio/design-views)
-- [Share a view](https://peter-gy.github.io/marimo-studio/share-views)
-- [Commands and configuration](https://peter-gy.github.io/marimo-studio/reference)
-- [Python API](https://peter-gy.github.io/marimo-studio/python-api)
+- [Create your first view](https://marimo-team.github.io/marimo-studio/getting-started)
+- [How Marimo Studio works](https://marimo-team.github.io/marimo-studio/how-it-works)
+- [Design a view](https://marimo-team.github.io/marimo-studio/design-views)
+- [Share a view](https://marimo-team.github.io/marimo-studio/share-views)
+- [Commands and configuration](https://marimo-team.github.io/marimo-studio/reference)
+- [Python API](https://marimo-team.github.io/marimo-studio/python-api)
