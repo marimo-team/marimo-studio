@@ -162,6 +162,23 @@ Its rules load last.
 `role="img"` and an `aria-label`. Icon data loads from Iconify's service when
 first requested.
 
+## Inspect the complete examples
+
+The repository includes two view-authoring patterns:
+
+- `examples/analysis.py` is a compact dashboard. Its HTML uses responsive
+  utilities, icons, and arbitrary properties for projected-cell loading space.
+  Its theme defines the semantic palette, keeping the complete layout readable
+  from `index.html`.
+- `examples/nga_collection.py` is a three-view research workflow. **Corpus**,
+  **Study**, and **Packet** apply different themes and page structures to the
+  same filters, selection order, notebook outputs, and download.
+
+Open either notebook in Studio, change a native control, then edit a utility
+class or theme token. Saving the view source replaces the authored shell after
+its utility CSS is ready. Mounted cells and their widget models move into the
+new shell with their current state.
+
 Serve images and other view files through the scoped static route:
 
 ```html

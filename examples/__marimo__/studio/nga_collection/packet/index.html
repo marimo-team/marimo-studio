@@ -7,82 +7,121 @@
     <link rel="stylesheet" href="./_marimo-studio/views/packet/static/app.css" />
   </head>
   <body>
-    <main id="app-shell">
-      <nav class="view-nav" aria-label="Collection workflow">
-        <a class="brand" href="./corpus/">
-          <span class="brand-mark">IAD</span>
-          <span>Collection research file</span>
+    <main
+      id="app-shell"
+      class="mx-auto mt-3 mb-20 w-[calc(100%_-_1.5rem)] max-w-7xl bg-card px-6 pb-16 shadow-xl md:mt-10 md:w-[calc(100%_-_3rem)] md:px-16 print:m-0 print:w-full print:max-w-none print:p-0 print:shadow-none"
+    >
+      <nav
+        class="flex min-h-16 items-stretch justify-between border-b border-border print:hidden"
+        aria-label="Collection workflow"
+      >
+        <a class="inline-flex items-center gap-3 text-xs font-bold uppercase tracking-widest no-underline" href="./corpus/">
+          <span class="grid size-9 place-items-center border border-foreground font-heading text-xs">IAD</span>
+          <span class="hidden sm:inline">Collection research file</span>
         </a>
-        <div class="view-nav__links">
-          <a href="./corpus/">Corpus</a>
-          <a href="./study/">Study</a>
-          <a href="./packet/" aria-current="page">Packet</a>
+        <div class="flex items-stretch gap-3 sm:gap-6">
+          <a
+            class="grid place-items-center border-b-2 border-transparent text-xs font-bold uppercase tracking-widest text-muted-foreground no-underline"
+            href="./corpus/"
+          >
+            Corpus
+          </a>
+          <a
+            class="grid place-items-center border-b-2 border-transparent text-xs font-bold uppercase tracking-widest text-muted-foreground no-underline"
+            href="./study/"
+          >
+            Study
+          </a>
+          <a
+            class="grid place-items-center border-b-2 border-primary text-xs font-bold uppercase tracking-widest text-foreground no-underline"
+            href="./packet/"
+            aria-current="page"
+          >
+            Packet
+          </a>
         </div>
       </nav>
 
-      <header class="packet-header">
-        <div class="packet-header__title">
-          <p class="eyebrow">Packet 03 · Research handoff</p>
-          <h1>Index of American Design</h1>
-          <p class="deck">
+      <header class="grid gap-10 border-b border-foreground py-14 lg:grid-cols-3 lg:py-20">
+        <div class="lg:col-span-2">
+          <p class="studio-eyebrow mb-3 text-primary">Packet 03 · Research handoff</p>
+          <h1 class="m-0 max-w-3xl font-heading text-[clamp(3rem,7vw,6.4rem)] leading-[0.9] font-medium tracking-tighter text-balance">
+            Index of American Design
+          </h1>
+          <p class="mt-6 max-w-xl font-heading text-xl leading-8 text-muted-foreground">
             <span mo-value="packet_summary.selected_count"></span> of
-            <span mo-value="packet_summary.selection_limit"></span> works prepared from the
-            curatorial study set.
+            <span mo-value="packet_summary.selection_limit"></span> works prepared from the curatorial study set.
           </p>
         </div>
-        <div class="packet-status">
-          <span>Status</span>
-          <strong mo-value="packet_summary.status"></strong>
-          <dl>
+        <div class="border-t border-border pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+          <span class="studio-eyebrow">Status</span>
+          <strong class="mt-2 block font-heading text-2xl font-medium text-primary" mo-value="packet_summary.status"></strong>
+          <dl class="my-6 grid grid-cols-2 gap-4 border-y border-border py-4">
             <div>
-              <dt>Works</dt>
-              <dd>
+              <dt class="studio-eyebrow mb-1">Works</dt>
+              <dd class="m-0 font-heading">
                 <span mo-value="packet_summary.selected_count"></span>
                 / <span mo-value="packet_summary.selection_limit"></span>
               </dd>
             </div>
             <div>
-              <dt>Source</dt>
-              <dd mo-value="packet_summary.source_revision"></dd>
+              <dt class="studio-eyebrow mb-1">Source</dt>
+              <dd class="m-0 font-heading" mo-value="packet_summary.source_revision"></dd>
             </div>
           </dl>
-          <marimo-cell name="packet_download"></marimo-cell>
+          <marimo-cell class="print:hidden" name="packet_download"></marimo-cell>
         </div>
       </header>
 
-      <section class="packet-note" aria-label="Packet contents">
-        <p>
-          The download contains a printable record sheet, research notes, structured CSV, and a
-          manifest with the exact selection, filters, study window, collection rules, and source
-          revision.
+      <section
+        class="flex flex-col items-start justify-between gap-4 border-b border-border py-6 sm:flex-row sm:items-center print:hidden"
+        aria-label="Packet contents"
+      >
+        <p class="m-0 max-w-3xl text-sm leading-6 text-muted-foreground">
+          The download contains a printable record sheet, research notes, structured CSV, and a manifest with the exact selection, filters, study window, collection rules, and source revision.
         </p>
-        <a href="./study/">Revise selection</a>
+        <a class="inline-flex shrink-0 items-center gap-2 border-b border-foreground pb-1 text-xs font-bold uppercase tracking-widest no-underline" href="./study/">
+          <iconify-icon icon="lucide:pencil-line" aria-hidden="true"></iconify-icon>
+          Revise selection
+        </a>
       </section>
 
-      <section class="packet-body" aria-labelledby="works-title">
-        <div class="section-heading">
-          <p class="eyebrow">Selected works</p>
-          <h2 id="works-title">Selected object records</h2>
+      <section class="py-12" aria-labelledby="works-title">
+        <div class="border-b border-border pb-5">
+          <p class="studio-eyebrow mb-2 text-primary">Selected works</p>
+          <h2 id="works-title" class="m-0 flex items-center gap-3 font-heading text-5xl font-medium tracking-tight">
+            <iconify-icon icon="lucide:images" aria-hidden="true"></iconify-icon>
+            Selected object records
+          </h2>
         </div>
-        <marimo-cell name="packet_preview"></marimo-cell>
+        <marimo-cell
+          class="mt-6 block min-w-0 [--marimo-cell-skeleton-height:48rem]"
+          name="packet_preview"
+        ></marimo-cell>
       </section>
 
-      <section class="manifest" aria-labelledby="manifest-title">
+      <section
+        class="grid gap-8 border-y border-border py-10 lg:grid-cols-4 print:hidden"
+        aria-labelledby="manifest-title"
+      >
         <div>
-          <p class="eyebrow">Manifest preview</p>
-          <h2 id="manifest-title">Handoff fields</h2>
+          <p class="studio-eyebrow mb-2 text-primary">Manifest preview</p>
+          <h2 id="manifest-title" class="m-0 font-heading text-4xl font-medium tracking-tight">Handoff fields</h2>
         </div>
-        <marimo-cell name="packet_table"></marimo-cell>
+        <marimo-cell
+          class="min-w-0 [--marimo-cell-skeleton-height:20rem] lg:col-span-3"
+          name="packet_table"
+        ></marimo-cell>
       </section>
 
-      <footer>
-        <p>
-          Generated from <strong mo-value="packet_summary.corpus"></strong> using NGA open data
-          revision <code mo-value="packet_summary.source_revision"></code>.
+      <footer class="pt-6">
+        <p class="m-0 text-xs leading-6 text-muted-foreground">
+          Generated from <strong mo-value="packet_summary.corpus"></strong> using NGA open data revision
+          <code class="text-foreground" mo-value="packet_summary.source_revision"></code>.
         </p>
       </footer>
 
-      <div class="state-anchor" aria-hidden="true">
+      <div class="hidden" aria-hidden="true">
         <marimo-cell name="study_gallery"></marimo-cell>
       </div>
     </main>

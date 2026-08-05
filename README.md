@@ -36,6 +36,25 @@ both panes through the editor's Python session. Switch the preview to
 Pyodide worker. Studio keeps native Marimo controls such as the scenario and
 quarter synchronized while each runtime updates its own reactive graph.
 
+Open **HTML & CSS** and inspect the dashboard's three view files. Layout and
+responsive behavior live in Wind4 classes in `index.html`, shared visual
+tokens live in `theme.css`, and loading dimensions use arbitrary property
+utilities on each projected cell. `app.css` remains available for selectors
+that need ordinary CSS. Change the scenario, edit a utility class or
+`--primary`, then save. The refreshed view keeps the current control values
+and rendered cell state.
+
+For a multi-view workflow, open the collection research example:
+
+```console
+uv run --with pyobservablejs --with polars \
+  marimo edit examples/nga_collection.py --no-sandbox
+```
+
+Narrow the corpus, select works in **Study**, and open **Packet**. The three
+pages apply separate semantic themes and responsive layouts to one notebook
+session, so the filters and ordered selection carry through the workflow.
+
 ## Create a view
 
 Add a dashboard to an existing notebook, then open it through Marimo:

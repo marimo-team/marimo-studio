@@ -86,7 +86,10 @@ Open **HTML & CSS**, select **index.html**, and replace the contents of
   </header>
 
   <section class="studio-card p-5" aria-labelledby="summary-title">
-    <h2 id="summary-title">Summary</h2>
+    <h2 id="summary-title" class="flex items-center gap-2 text-lg font-semibold">
+      <iconify-icon icon="lucide:scan-search" aria-hidden="true"></iconify-icon>
+      Summary
+    </h2>
     <marimo-cell name="summary"></marimo-cell>
   </section>
 </main>
@@ -94,7 +97,8 @@ Open **HTML & CSS**, select **index.html**, and replace the contents of
 
 Studio saves the file at
 `__marimo__/studio/analysis/dashboard/index.html`. The preview refreshes and
-renders the notebook output under **Summary**.
+renders the notebook output under **Summary**. Studio generates the utility
+CSS and loads the icon when the refreshed shell commits.
 
 Change a control in the notebook or preview. With **Server**, Marimo propagates
 native control and anywidget model changes through the shared session. With

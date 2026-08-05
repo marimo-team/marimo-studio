@@ -7,120 +7,171 @@
     <link rel="stylesheet" href="./_marimo-studio/views/corpus/static/app.css" />
   </head>
   <body>
-    <main id="app-shell">
-      <nav class="view-nav" aria-label="Collection workflow">
-        <a class="brand" href="./corpus/">
-          <span class="brand-mark">IAD</span>
-          <span>Collection research file</span>
+    <main id="app-shell" class="mx-auto w-full max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
+      <nav class="flex min-h-16 items-stretch justify-between border-b border-border" aria-label="Collection workflow">
+        <a class="inline-flex items-center gap-3 text-xs font-bold uppercase tracking-widest no-underline" href="./corpus/">
+          <span class="grid size-9 place-items-center border border-foreground font-heading text-xs">IAD</span>
+          <span class="hidden sm:inline">Collection research file</span>
         </a>
-        <div class="view-nav__links">
-          <a href="./corpus/" aria-current="page">Corpus</a>
-          <a href="./study/">Study</a>
-          <a href="./packet/">Packet</a>
+        <div class="flex items-stretch gap-3 sm:gap-6">
+          <a
+            class="grid place-items-center border-b-2 border-primary text-xs font-bold uppercase tracking-widest text-foreground no-underline"
+            href="./corpus/"
+            aria-current="page"
+          >
+            Corpus
+          </a>
+          <a
+            class="grid place-items-center border-b-2 border-transparent text-xs font-bold uppercase tracking-widest text-muted-foreground no-underline"
+            href="./study/"
+          >
+            Study
+          </a>
+          <a
+            class="grid place-items-center border-b-2 border-transparent text-xs font-bold uppercase tracking-widest text-muted-foreground no-underline"
+            href="./packet/"
+          >
+            Packet
+          </a>
         </div>
       </nav>
 
-      <header class="masthead">
-        <div>
-          <p class="eyebrow">Corpus 01 · Collection researcher</p>
-          <h1>Define the body of work.</h1>
+      <header class="grid items-end gap-10 border-b border-border py-14 lg:grid-cols-3 lg:gap-20 lg:py-20">
+        <div class="lg:col-span-2">
+          <p class="studio-eyebrow mb-3 text-primary">Corpus 01 · Collection researcher</p>
+          <h1 class="m-0 max-w-3xl font-heading text-[clamp(3.1rem,8vw,7.6rem)] leading-[0.88] font-medium tracking-tighter text-balance">
+            Define the body of work.
+          </h1>
         </div>
-        <div class="masthead__copy">
-          <p>
-            Review the Index of American Design at object grain. Narrow by recorded date, medium, or
-            creator, then carry the working set into visual review and research handoff.
+        <div>
+          <p class="m-0 text-base leading-7 text-muted-foreground">
+            Review the Index of American Design at object grain. Narrow by recorded date, medium, or creator, then carry the working set into visual review and research handoff.
           </p>
-          <dl>
+          <dl class="mt-8 grid grid-cols-2 gap-4 border-t border-border pt-5">
             <div>
-              <dt>Source revision</dt>
-              <dd mo-value="corpus_summary.source_revision"></dd>
+              <dt class="studio-eyebrow mb-1">Source revision</dt>
+              <dd class="m-0" mo-value="corpus_summary.source_revision"></dd>
             </div>
             <div>
-              <dt>Corpus objects</dt>
-              <dd mo-value="corpus_summary.total_count"></dd>
+              <dt class="studio-eyebrow mb-1">Corpus objects</dt>
+              <dd class="m-0" mo-value="corpus_summary.total_count"></dd>
             </div>
           </dl>
         </div>
       </header>
 
-      <section class="filter-panel" aria-labelledby="filters-title">
-        <div class="section-heading">
-          <p class="eyebrow">Working set</p>
-          <h2 id="filters-title">Narrow the Index</h2>
+      <section class="studio-card mt-8 grid items-center gap-6 p-6 lg:grid-cols-4" aria-labelledby="filters-title">
+        <div>
+          <p class="studio-eyebrow mb-2 text-primary">Working set</p>
+          <h2 id="filters-title" class="m-0 flex items-center gap-2 font-heading text-3xl font-medium tracking-tight">
+            <iconify-icon icon="lucide:list-filter" aria-hidden="true"></iconify-icon>
+            Narrow the Index
+          </h2>
         </div>
-        <marimo-cell name="corpus_controls"></marimo-cell>
+        <marimo-cell class="min-w-0 lg:col-span-3" name="corpus_controls"></marimo-cell>
       </section>
 
-      <section class="metrics" aria-label="Corpus summary">
-        <article>
-          <span>Matching works</span>
-          <strong mo-value="corpus_summary.filtered_count"></strong>
+      <section class="mt-8 grid border-y border-border sm:grid-cols-2 lg:grid-cols-4" aria-label="Corpus summary">
+        <article class="border-b border-border py-6 sm:pr-6 lg:border-b-0">
+          <span class="studio-eyebrow">Matching works</span>
+          <strong
+            class="mt-3 block min-h-[1em] font-heading text-5xl leading-none font-medium tracking-[-0.045em]"
+            mo-value="corpus_summary.filtered_count"
+          ></strong>
         </article>
-        <article>
-          <span>Creator labels</span>
-          <strong mo-value="corpus_summary.creator_count"></strong>
+        <article class="border-b border-border py-6 sm:border-l sm:pl-6 lg:border-b-0">
+          <span class="studio-eyebrow">Creator labels</span>
+          <strong
+            class="mt-3 block min-h-[1em] font-heading text-5xl leading-none font-medium tracking-[-0.045em]"
+            mo-value="corpus_summary.creator_count"
+          ></strong>
         </article>
-        <article>
-          <span>Works with open images</span>
-          <strong mo-value="corpus_summary.open_image_count"></strong>
+        <article class="border-b border-border py-6 sm:pr-6 lg:border-b-0 lg:border-l lg:pl-6">
+          <span class="studio-eyebrow">Works with open images</span>
+          <strong
+            class="mt-3 block min-h-[1em] font-heading text-5xl leading-none font-medium tracking-[-0.045em]"
+            mo-value="corpus_summary.open_image_count"
+          ></strong>
         </article>
-        <article>
-          <span>Corpus coverage</span>
-          <strong mo-value="corpus_summary.coverage"></strong>
+        <article class="py-6 sm:border-l sm:pl-6">
+          <span class="studio-eyebrow">Corpus coverage</span>
+          <strong
+            class="mt-3 block min-h-[1em] font-heading text-5xl leading-none font-medium tracking-[-0.045em]"
+            mo-value="corpus_summary.coverage"
+          ></strong>
         </article>
       </section>
 
-      <section class="analysis-grid">
-        <article class="panel chart-panel" aria-labelledby="distribution-title">
-          <div class="panel-heading">
+      <section class="mt-8 grid gap-6 lg:grid-cols-4">
+        <article class="studio-card p-6 lg:col-span-3" aria-labelledby="distribution-title">
+          <div class="flex flex-col gap-5 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p class="eyebrow">Distribution</p>
-              <h2 id="distribution-title">Works by recorded year</h2>
+              <p class="studio-eyebrow mb-2 text-primary">Distribution</p>
+              <h2 id="distribution-title" class="m-0 font-heading text-4xl font-medium tracking-tight">
+                Works by recorded year
+              </h2>
             </div>
-            <p>Counts follow the active filters.</p>
+            <p class="m-0 text-sm text-muted-foreground">Counts follow the active filters.</p>
           </div>
-          <marimo-cell name="corpus_filter_chart"></marimo-cell>
+          <marimo-cell
+            class="mt-5 block min-w-0 [--marimo-cell-skeleton-height:14.4rem]"
+            name="corpus_filter_chart"
+          ></marimo-cell>
         </article>
 
-        <aside class="panel criteria" aria-labelledby="criteria-title">
-          <p class="eyebrow">Active criteria</p>
-          <h2 id="criteria-title">Current reading</h2>
-          <dl>
-            <div>
-              <dt>Recorded start year</dt>
-              <dd mo-value="corpus_summary.date_range"></dd>
+        <aside class="studio-card flex flex-col p-6" aria-labelledby="criteria-title">
+          <p class="studio-eyebrow mb-2 text-primary">Active criteria</p>
+          <h2 id="criteria-title" class="m-0 font-heading text-4xl font-medium tracking-tight">Current reading</h2>
+          <dl class="my-8 grid gap-5">
+            <div class="border-b border-border pb-4">
+              <dt class="studio-eyebrow mb-1">Recorded start year</dt>
+              <dd
+                class="m-0 font-heading text-base leading-6 [overflow-wrap:anywhere]"
+                mo-value="corpus_summary.date_range"
+              ></dd>
             </div>
-            <div>
-              <dt>Medium</dt>
-              <dd mo-value="corpus_summary.medium"></dd>
+            <div class="border-b border-border pb-4">
+              <dt class="studio-eyebrow mb-1">Medium</dt>
+              <dd
+                class="m-0 font-heading text-base leading-6 [overflow-wrap:anywhere]"
+                mo-value="corpus_summary.medium"
+              ></dd>
             </div>
-            <div>
-              <dt>Creator</dt>
-              <dd mo-value="corpus_summary.creator"></dd>
+            <div class="border-b border-border pb-4">
+              <dt class="studio-eyebrow mb-1">Creator</dt>
+              <dd
+                class="m-0 font-heading text-base leading-6 [overflow-wrap:anywhere]"
+                mo-value="corpus_summary.creator"
+              ></dd>
             </div>
           </dl>
-          <a class="next-link" href="./study/">
+          <a class="mt-auto flex items-center justify-between gap-4 border-t border-foreground pt-4 text-xs font-bold uppercase tracking-widest no-underline" href="./study/">
             Inspect matching works
-            <span aria-hidden="true">→</span>
+            <iconify-icon icon="lucide:arrow-right" aria-hidden="true"></iconify-icon>
           </a>
         </aside>
       </section>
 
-      <section class="index-section" aria-labelledby="index-title">
-        <div class="index-heading">
+      <section class="studio-card mt-8 p-6" aria-labelledby="index-title">
+        <div class="flex flex-col gap-5 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p class="eyebrow">Object index</p>
-            <h2 id="index-title">Auditable records</h2>
+            <p class="studio-eyebrow mb-2 text-primary">Object index</p>
+            <h2 id="index-title" class="m-0 flex items-center gap-2 font-heading text-4xl font-medium tracking-tight">
+              <iconify-icon icon="lucide:rows-3" aria-hidden="true"></iconify-icon>
+              Auditable records
+            </h2>
           </div>
-          <p>
-            Search, sort, and download the current object-level result. Published image counts stay
-            separate from work counts.
+          <p class="m-0 max-w-xl text-sm leading-6 text-muted-foreground">
+            Search, sort, and download the current object-level result. Published image counts stay separate from work counts.
           </p>
         </div>
-        <marimo-cell name="corpus_index"></marimo-cell>
+        <marimo-cell
+          class="mt-5 block min-w-0 [--marimo-cell-skeleton-height:34rem]"
+          name="corpus_index"
+        ></marimo-cell>
       </section>
 
-      <div class="state-anchor" aria-hidden="true">
+      <div class="hidden" aria-hidden="true">
         <marimo-cell name="study_gallery"></marimo-cell>
       </div>
     </main>

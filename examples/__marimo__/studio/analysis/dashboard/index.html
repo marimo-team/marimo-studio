@@ -7,59 +7,93 @@
     <link rel="stylesheet" href="./_marimo-studio/views/dashboard/static/app.css" />
   </head>
   <body>
-    <main id="app-shell">
-      <header class="page-header">
-        <div>
-          <p class="eyebrow">Quarterly review</p>
-          <h1>Revenue at a glance</h1>
-          <p class="lede">Explore the forecast while the notebook remains live behind the page.</p>
+    <main id="app-shell" class="studio-view">
+      <header class="grid items-end gap-8 border-b border-border pb-10 lg:grid-cols-3">
+        <div class="lg:col-span-2">
+          <p class="studio-eyebrow mb-3">Quarterly review</p>
+          <h1 class="m-0 max-w-[12ch] font-heading text-[clamp(2.8rem,8vw,5.8rem)] leading-[0.96] font-semibold tracking-tight text-balance">
+            Revenue at a glance
+          </h1>
+          <p class="mt-5 max-w-2xl text-base leading-7 text-muted-foreground">
+            Explore the forecast while the notebook remains live behind the page.
+          </p>
         </div>
-        <dl class="page-meta">
+        <dl class="m-0 grid grid-cols-2 gap-6 lg:grid-cols-1">
           <div>
-            <dt>Scenario</dt>
-            <dd mo-value="report.scenario"></dd>
+            <dt class="studio-eyebrow mb-1">Scenario</dt>
+            <dd class="m-0 font-semibold" mo-value="report.scenario"></dd>
           </div>
           <div>
-            <dt>Updated</dt>
-            <dd><time mo-value="report.updated_at"></time></dd>
+            <dt class="studio-eyebrow mb-1">Updated</dt>
+            <dd class="m-0 font-semibold"><time mo-value="report.updated_at"></time></dd>
           </div>
         </dl>
       </header>
 
-      <section class="controls" aria-labelledby="controls-title">
-        <div class="section-heading">
-          <p class="eyebrow">Model inputs</p>
-          <h2 id="controls-title">Adjust the outlook</h2>
+      <section
+        class="grid items-center gap-6 border-b border-border py-8 lg:grid-cols-3"
+        aria-labelledby="controls-title"
+      >
+        <div>
+          <p class="studio-eyebrow mb-2">Model inputs</p>
+          <h2 id="controls-title" class="m-0 flex items-center gap-2 text-xl font-semibold">
+            <iconify-icon icon="lucide:sliders-horizontal" aria-hidden="true"></iconify-icon>
+            Adjust the outlook
+          </h2>
         </div>
-        <marimo-cell name="controls"></marimo-cell>
+        <marimo-cell
+          class="min-w-0 [--marimo-cell-padding:0] [--marimo-cell-skeleton-height:4rem] lg:col-span-2"
+          name="controls"
+        ></marimo-cell>
       </section>
 
-      <section class="metrics" aria-label="Forecast summary">
-        <article>
-          <p>Projected revenue</p>
-          <strong mo-value="report.total"></strong>
+      <section class="grid border-b border-border md:grid-cols-3" aria-label="Forecast summary">
+        <article class="py-7 md:pr-7">
+          <p class="m-0 text-sm text-muted-foreground">Projected revenue</p>
+          <strong
+            class="mt-3 block min-h-[1em] font-heading text-4xl leading-none font-semibold tracking-[-0.045em] [--marimo-value-skeleton-width:8ch]"
+            mo-value="report.total"
+          ></strong>
         </article>
-        <article>
-          <p>Change from baseline</p>
-          <strong mo-value="report.change"></strong>
+        <article class="border-t border-border py-7 md:border-l md:border-t-0 md:px-7">
+          <p class="m-0 text-sm text-muted-foreground">Change from baseline</p>
+          <strong
+            class="mt-3 block min-h-[1em] font-heading text-4xl leading-none font-semibold tracking-[-0.045em] [--marimo-value-skeleton-width:8ch]"
+            mo-value="report.change"
+          ></strong>
         </article>
-        <article>
-          <p>Forecast period</p>
-          <strong mo-value="report.through"></strong>
+        <article class="border-t border-border py-7 md:border-l md:border-t-0 md:pl-7">
+          <p class="m-0 text-sm text-muted-foreground">Forecast period</p>
+          <strong
+            class="mt-3 block min-h-[1em] font-heading text-4xl leading-none font-semibold tracking-[-0.045em] [--marimo-value-skeleton-width:8ch]"
+            mo-value="report.through"
+          ></strong>
         </article>
       </section>
 
-      <section class="content-grid">
-        <article class="panel narrative" aria-labelledby="summary-title">
-          <p class="eyebrow">Interpretation</p>
-          <h2 id="summary-title">What the model says</h2>
-          <marimo-cell name="summary"></marimo-cell>
+      <section class="mt-10 grid gap-6 lg:grid-cols-5">
+        <article class="studio-card min-w-0 p-6 lg:col-span-2" aria-labelledby="summary-title">
+          <p class="studio-eyebrow mb-2">Interpretation</p>
+          <h2 id="summary-title" class="m-0 mb-5 flex items-center gap-2 text-xl font-semibold">
+            <iconify-icon icon="lucide:scan-search" aria-hidden="true"></iconify-icon>
+            What the model says
+          </h2>
+          <marimo-cell
+            class="min-w-0 [--marimo-cell-padding:0] [--marimo-cell-skeleton-height:8rem]"
+            name="summary"
+          ></marimo-cell>
         </article>
 
-        <article class="panel" aria-labelledby="table-title">
-          <p class="eyebrow">Quarterly detail</p>
-          <h2 id="table-title">Projection by quarter</h2>
-          <marimo-cell name="revenue_table"></marimo-cell>
+        <article class="studio-card min-w-0 p-6 lg:col-span-3" aria-labelledby="table-title">
+          <p class="studio-eyebrow mb-2">Quarterly detail</p>
+          <h2 id="table-title" class="m-0 mb-5 flex items-center gap-2 text-xl font-semibold">
+            <iconify-icon icon="lucide:table-2" aria-hidden="true"></iconify-icon>
+            Projection by quarter
+          </h2>
+          <marimo-cell
+            class="min-w-0 overflow-x-auto [--marimo-cell-padding:0] [--marimo-cell-skeleton-height:18rem]"
+            name="revenue_table"
+          ></marimo-cell>
         </article>
       </section>
     </main>
