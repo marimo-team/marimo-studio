@@ -113,7 +113,7 @@
 .studio-source-editor,
 .studio-source-editor > div,
 .studio-source-editor-root,
-.studio-source-editor .cm-theme,
+.studio-source-editor-root > div,
 .studio-source-editor .cm-editor {
   height: 100%;
   min-height: 0;
