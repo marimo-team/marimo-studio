@@ -4,10 +4,13 @@ SHELL := /bin/bash
 
 UV ?= uv
 PNPM ?= pnpm
+VP := $(PNPM) exec vp
 DIST_DIR := $(CURDIR)/dist
 PY_PACKAGE := packages/marimo-studio
+FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples packages skills package.json pnpm-workspace.yaml tsconfig.json vite.config.ts
+TYPECHECK_PATHS := apps/browser apps/docs/.vitepress apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/src vite.config.ts
 
-.PHONY: help install format lint typecheck test e2e e2e-ui check build docs-build docs-serve package
+.PHONY: help install format lint typecheck test e2e e2e-ui check build docs-build docs-serve package prepare-frontend
 
 help: ## List development targets.
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -18,41 +21,41 @@ install: ## Install locked Python and JavaScript dependencies.
 
 format: ## Format Python and JavaScript sources.
 	cd $(PY_PACKAGE) && $(UV) run --project ../.. ruff format .
-	$(PNPM) format
+	$(VP) fmt $(FORMAT_PATHS)
 
-lint: ## Check formatting, source, workflows, and shell scripts.
+lint: prepare-frontend ## Check formatting, source, workflows, and shell scripts.
 	cd $(PY_PACKAGE) && $(UV) run --project ../.. ruff format --check .
 	cd $(PY_PACKAGE) && $(UV) run --project ../.. ruff check .
-	$(PNPM) format:check
-	$(PNPM) lint
+	$(VP) fmt --check $(FORMAT_PATHS)
+	$(VP) lint apps packages vite.config.ts
 	uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
 	shellcheck scripts/*.sh
 
-typecheck: ## Type-check Python and TypeScript sources.
+typecheck: prepare-frontend ## Type-check Python and TypeScript sources.
 	$(UV) run ty check
 	$(UV) run pyrefly check
-	$(PNPM) typecheck
+	$(VP) check --no-fmt --no-lint $(TYPECHECK_PATHS)
 
 test: ## Run Python and browser-runtime tests.
 	$(UV) run pytest
-	$(PNPM) test
+	$(VP) run -r test
 
-e2e: ## Test Studio in Chromium with a live Marimo kernel.
-	$(PNPM) e2e
+e2e: build ## Test Studio in Chromium with a live Marimo kernel.
+	$(PNPM) --filter @marimo-studio/e2e e2e
 
-e2e-ui: ## Open the browser test runner.
-	$(PNPM) e2e:ui
+e2e-ui: build ## Open the browser test runner.
+	$(PNPM) --filter @marimo-studio/e2e e2e:ui
 
 check: lint typecheck test ## Run the local quality gates.
 
 build: ## Build browser assets into the Python package.
-	$(PNPM) build
+	$(VP) run --filter @marimo-studio/browser build
 
 docs-build: ## Build the VitePress documentation.
-	$(PNPM) docs:build
+	$(VP) run --filter @marimo-studio/docs build
 
 docs-serve: ## Serve documentation at http://127.0.0.1:4173/.
-	BASE_PATH= $(PNPM) docs:dev
+	BASE_PATH= $(VP) run --filter @marimo-studio/docs dev
 
 package: build ## Build and validate the wheel and source distribution.
 	rm -rf "$(DIST_DIR)"
@@ -61,3 +64,6 @@ package: build ## Build and validate the wheel and source distribution.
 	mkdir -p "$(DIST_DIR)/from-sdist"
 	$(UV) build --wheel "$(DIST_DIR)"/*.tar.gz --out-dir "$(DIST_DIR)/from-sdist"
 	./scripts/verify-dist.sh
+
+prepare-frontend:
+	$(PNPM) --filter @marimo-studio/marimo-frontend prepare:upstream
