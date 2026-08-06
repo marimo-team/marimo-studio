@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 from collections.abc import MutableMapping
 from html.parser import HTMLParser
 from importlib.metadata import entry_points
@@ -956,10 +957,13 @@ def test_change_stream_classifies_live_source_edits(
             encoding="utf-8",
         )
         views = await asyncio.wait_for(anext(stream), timeout=1)
+
+        shutil.rmtree(studio.view_root / "dashboard")
+        removed = await asyncio.wait_for(anext(stream), timeout=1)
         stopping = True
         with pytest.raises(StopAsyncIteration):
             await asyncio.wait_for(anext(stream), timeout=0.5)
-        return ready, html, css, runtime, views
+        return ready, html, css, runtime, views, removed
 
     messages = asyncio.run(collect_events())
 
@@ -969,6 +973,7 @@ def test_change_stream_classifies_live_source_edits(
         "html",
         "css",
         "runtime",
+        "views",
         "views",
     ]
     assert payloads[0]["files"][0]["path"] == "index.html"

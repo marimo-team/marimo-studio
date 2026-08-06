@@ -61,6 +61,8 @@ def _event_kind(
 ) -> str:
     if view_name is None:
         return "views"
+    if not (studio.view_root / view_name).is_dir():
+        return "views"
     if any(kind == "config" for kind, _ in changed):
         return "html"
     view_root = (studio.view_root / view_name).resolve()
