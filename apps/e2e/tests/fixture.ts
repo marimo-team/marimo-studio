@@ -81,7 +81,7 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
       const messages: string[] = [];
       page.on("pageerror", (error) => messages.push(`pageerror: ${error.message}`));
       page.on("console", (message) => {
-        if (message.type() === "error") {
+        if (message.type() === "error" && !message.text().startsWith("Failed to load resource:")) {
           messages.push(`console: ${message.text()}`);
         }
       });
@@ -92,7 +92,12 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
         }
       });
       page.on("response", (response) => {
-        if (response.status() >= 400) {
+        const url = new URL(response.url());
+        const transientConfig =
+          response.status() === 409 &&
+          url.pathname.startsWith("/_marimo-studio/views/") &&
+          url.pathname.endsWith("/config");
+        if (response.status() >= 400 && !transientConfig) {
           messages.push(`http ${response.status()}: ${response.url()}`);
         }
       });

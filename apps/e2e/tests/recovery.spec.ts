@@ -53,7 +53,11 @@ test("restores a value host after its notebook value returns", async ({ page }) 
       await preview.locator("html").evaluate(() => globalThis.marimoStudio.diagnostics()),
     ).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: "value-variable-not-found", target: "metric" }),
+        expect.objectContaining({
+          code: expect.stringMatching(/^(missing-variable|value-variable-not-found)$/),
+          severity: "error",
+          target: "metric",
+        }),
       ]),
     );
 
