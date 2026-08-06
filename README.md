@@ -16,10 +16,9 @@
 <p align="center"><strong>Tune your notebook for every audience.</strong></p>
 
 Keep calculations, reactive controls, plots, tables, downloads, and
-[anywidgets](https://anywidget.dev/) in one [Marimo](https://marimo.io/)
-notebook. Tune the interface for each audience as a focused dashboard, report,
-or tool in custom HTML and CSS, with every view connected to the notebook's
-live state.
+[anywidgets](https://anywidget.dev/) in one [marimo](https://marimo.io/)
+notebook. Create focused views with plain HTML and CSS that you and your coding
+agent already write. Marimo keeps notebook logic, controls, and outputs live.
 
 ## Try the example
 
@@ -103,8 +102,8 @@ Marimo Studio supports Python 3.11 or newer and Marimo 0.23.16 or newer.
 ## Learn more
 
 - [Create your first view](https://marimo-team.github.io/marimo-studio/getting-started)
-- [How Marimo Studio works](https://marimo-team.github.io/marimo-studio/how-it-works)
+- [Overview](https://marimo-team.github.io/marimo-studio/how-it-works)
+- [Examples](https://marimo-team.github.io/marimo-studio/examples)
 - [Design a view](https://marimo-team.github.io/marimo-studio/design-views)
-- [Share a view](https://marimo-team.github.io/marimo-studio/share-views)
-- [Commands and configuration](https://marimo-team.github.io/marimo-studio/reference)
-- [Python API](https://marimo-team.github.io/marimo-studio/python-api)
+- [Run and share views](https://marimo-team.github.io/marimo-studio/share-views)
+- [Reference](https://marimo-team.github.io/marimo-studio/reference)

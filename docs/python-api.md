@@ -1,14 +1,19 @@
-# Python API
+---
+title: Python API reference
+description: Inspect Marimo notebook structure and create a configured run-mode ASGI application.
+---
 
-The Python API inspects notebook structure and creates a configured Marimo ASGI
-application for Python server composition.
+# Python API reference
 
-| Job                                                  | API                |
-| ---------------------------------------------------- | ------------------ |
-| Discover cells, names, definitions, and dependencies | `inspect_notebook` |
-| Build one run-mode ASGI application                  | `create_asgi_app`  |
+The public Python API inspects a notebook's static cell graph and creates one
+configured Marimo ASGI application.
 
-For a regular server process, run the notebook through Marimo:
+| Job                                                              | API                |
+| ---------------------------------------------------------------- | ------------------ |
+| Read cell names, definitions, dependencies, and source locations | `inspect_notebook` |
+| Build one run-mode server application                            | `create_asgi_app`  |
+
+For a regular standalone process, use Marimo's CLI:
 
 ```console
 uv run --with marimo-studio \
@@ -20,14 +25,6 @@ uv run --with marimo-studio \
 ## `inspect_notebook`
 
 ```python
-from marimo_studio import inspect_notebook
-
-notebook = inspect_notebook("analysis.py")
-for cell in notebook.cells:
-    print(cell.index, cell.name, cell.definitions, cell.ref)
-```
-
-```python
 inspect_notebook(
     path: str | pathlib.Path,
     *,
@@ -35,32 +32,63 @@ inspect_notebook(
 ) -> NotebookSpec
 ```
 
-Compiles the notebook graph and returns a `NotebookSpec`. Inspection leaves
-cell bodies unevaluated.
+Compiles the notebook graph and returns a `NotebookSpec`. It leaves cell bodies
+unevaluated.
 
-Each `CellSpec` contains:
+```python
+from marimo_studio import inspect_notebook
 
-- Its zero-based index and native Marimo name
-- A stable `CellRef`
-- Source location and optional complete code
-- Defined and referenced variables
-- Upstream and downstream cell references
-- Marimo cell configuration
-- Whether the cell ends with a displayed expression
+notebook = inspect_notebook("analysis.py")
+for cell in notebook.cells:
+    print(cell.index, cell.name, cell.definitions)
+```
 
-Set `include_code=True` to include each complete cell body. The default keeps
-code out of the returned object.
+Set `include_code=True` to include each complete cell body in `CellSpec.code`.
+The default leaves that field as `None`.
 
 Raises `ConfigurationError` when the path is missing, is not a Python
 notebook, or cannot be compiled by the installed Marimo version.
 
-## `create_asgi_app`
+## `NotebookSpec`
 
 ```python
-from marimo_studio import create_asgi_app
-
-app = create_asgi_app("analysis.py")
+@dataclass(frozen=True)
+class NotebookSpec:
+    path: pathlib.Path
+    cells: tuple[CellSpec, ...]
+    app_config: dict[str, Any]
 ```
+
+Methods:
+
+| Method          | Result                                                                      |
+| --------------- | --------------------------------------------------------------------------- |
+| `by_ref()`      | Map each `CellRef` to its `CellSpec`                                        |
+| `named_cells()` | Map native cell names to their `CellSpec`                                   |
+| `to_dict()`     | JSON-compatible record with `schema`, `notebook`, `app_config`, and `cells` |
+
+## `CellSpec`
+
+Each cell record contains:
+
+| Field                       | Shape                                                             |
+| --------------------------- | ----------------------------------------------------------------- |
+| `index`                     | Zero-based notebook position                                      |
+| `name`                      | Native Marimo cell name or `None`                                 |
+| `ref`                       | Stable `CellRef` used by Studio aliases                           |
+| `runtime_id`                | Marimo cell ID for the inspected notebook                         |
+| `source`                    | `SourceSpan` with start and end line and column values            |
+| `preview`                   | Bounded source preview                                            |
+| `definitions`, `references` | Variable-name tuples                                              |
+| `upstream`, `downstream`    | Tuples of related `CellRef` values                                |
+| `config`                    | `CellConfigSpec` with column, disabled, and code-visibility state |
+| `has_output_expression`     | Whether the cell body ends with a displayed expression            |
+| `code`                      | Complete source when `include_code=True`, otherwise `None`        |
+
+`CellRef.parse(value)` accepts a `cell:v1:...` string or an existing `CellRef`.
+`str(ref)` returns the serialized reference.
+
+## `create_asgi_app`
 
 ```python
 create_asgi_app(
@@ -69,17 +97,23 @@ create_asgi_app(
 ```
 
 Loads the notebook's Studio configuration and returns a run-mode Marimo ASGI
-application. The default and named views use the same Marimo server process.
-Each browser receives its regular isolated run session.
+application. The default and named views use the same server process. Each
+browser receives its regular isolated Marimo run session.
+
+```python
+from marimo_studio import create_asgi_app
+
+app = create_asgi_app("analysis.py")
+```
 
 The factory requires Marimo 0.23.16 or newer.
 
 Raises:
 
-- `ConfigurationError` when the notebook or Studio configuration is invalid
-- `ProtocolError` when the installed Marimo version is older than 0.23.16
+- `ConfigurationError` when the notebook or Studio configuration is invalid.
+- `ProtocolError` when the installed Marimo version is incompatible.
 
-### Run the environment-configured app
+### Environment-configured application
 
 `marimo_studio.asgi:app` reads the notebook path from
 `MARIMO_STUDIO_NOTEBOOK`:
@@ -94,7 +128,7 @@ MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
 Install the notebook dependencies in the Uvicorn environment before starting
 the server.
 
-## Public types
+## Public exports
 
 `marimo_studio` exports:
 
@@ -108,3 +142,6 @@ SourceSpan
 create_asgi_app
 inspect_notebook
 ```
+
+[Notebook configuration](configuration.md) defines how the application finds
+views and runtime settings.

@@ -3,10 +3,9 @@
 **Tune your notebook for every audience.**
 
 Keep calculations, reactive controls, plots, tables, downloads, and
-[anywidgets](https://anywidget.dev/) in one [Marimo](https://marimo.io/)
-notebook. Tune the interface for each audience as a focused dashboard, report,
-or tool in custom HTML and CSS, with every view connected to the notebook's
-live state.
+[anywidgets](https://anywidget.dev/) in one [marimo](https://marimo.io/)
+notebook. Create focused views with plain HTML and CSS that you and your coding
+agent already write. Marimo keeps notebook logic, controls, and outputs live.
 
 ```console
 uvx marimo-studio view add dashboard analysis.py

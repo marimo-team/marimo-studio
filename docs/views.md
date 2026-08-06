@@ -1,87 +1,85 @@
+---
+title: Create and manage views
+description: Give several audiences their own pages while reusing one Marimo notebook.
+---
+
 # Create and manage views
 
-One notebook can provide several views. Each view chooses its own notebook
-outputs and page structure while sharing the notebook's calculations,
-controls, and reactive graph.
+Create one view for each audience or task that needs a distinct page. Views
+reuse the notebook's cells and aliases while owning separate HTML, CSS,
+modules, assets, and routes.
 
-## Add a view in Studio
+## Plan each view around one job
 
-Open the view menu in the Studio toolbar and select **New view**. Enter a name
-such as `report` or `operations`.
+Start with the reader's first question, then choose the notebook results that
+answer it.
 
-Studio creates the HTML and CSS, then opens the new source above its live
-preview. The notebook remains beside both panes. The starter view places every
-notebook cell in source order.
+| View         | Reader job                           | Likely content                                        |
+| ------------ | ------------------------------------ | ----------------------------------------------------- |
+| `dashboard`  | Explore and adjust the current model | Controls, detailed measures, plots, and tables        |
+| `operations` | Find conditions that require action  | Exceptions, thresholds, owners, and next steps        |
+| `executive`  | Review the outcome and decision      | Headline measures, material risks, and recommendation |
 
-View names start with a lowercase letter and contain lowercase letters,
-numbers, or hyphens.
+The [collection research example](examples.md#collection-research-packet) uses
+one notebook for corpus discovery, visual study, and packet preparation.
 
-## Add a view from the terminal
+## Add a view
 
-The authoring command creates the same starter files:
+In Studio, open the view menu and choose **New view**. Enter a name such as
+`operations` or `executive`.
+
+The equivalent terminal command is:
 
 ```console
-uvx marimo-studio view add report analysis.py
+uvx marimo-studio view add executive analysis.py
 ```
 
-List the notebook's views and current default:
+A view name starts with a lowercase letter and contains lowercase letters,
+numbers, or hyphens. The new page starts with every notebook cell in source
+order.
+
+List the configured views and current default:
 
 ```console
 uvx marimo-studio view list analysis.py
 ```
 
-Keep Marimo running while an agent or another editor changes the new view.
-Studio refreshes saved HTML and CSS around the current notebook session.
+## Switch between views
 
-## Switch views while editing
+Choose a view from the Studio toolbar. Studio keeps the notebook editor and
+prepared preview runtimes mounted while the selected page changes.
 
-Choose another name from the view menu. Studio keeps the notebook editor and
-prepared preview runtimes mounted while it changes the selected view. Toolbar
-selection opens **Build**. Links inside a view keep the current mode and
-compact pane while restoring the target view's saved split trees.
+Link directly to another authored view with a relative URL:
 
-You can also open a view directly:
-
-```text
-/studio/report/
+```html
+<a href="../executive/">Open the executive brief</a>
 ```
 
-The notebook's `default` setting selects the workspace opened from Marimo's
-root URL. See [Notebook configuration](reference.md#notebook-configuration) to
-change it.
+In the Studio workspace, the link opens the target view while preserving the
+current workspace mode. In run mode, the same link opens the target view in
+the current browser session.
 
-## Design for different audiences
-
-Reuse one notebook source when audiences need different emphasis:
-
-| View        | Typical contents                                  |
-| ----------- | ------------------------------------------------- |
-| `dashboard` | Controls, current metrics, and operational detail |
-| `report`    | Narrative findings, selected charts, and tables   |
-| `executive` | Headline measures and decisions                   |
-
-Every view can use the same native cell names and configured aliases. Changes
-to notebook code apply to each view that projects the affected cells or
-values.
+The configured `default` view opens at `/`. Every named view is also available
+at `/<view-name>/`.
 
 ## Remove a view
 
-Open the view menu, select **Remove view**, and confirm the named view. Studio
-deletes that view's HTML, CSS, and static files. If you remove the default,
-Studio selects the first remaining view as the new default.
+Open the view menu, choose **Remove view**, and confirm the named view. Studio
+deletes that view directory and its files. If it was the default, Studio makes
+the first remaining view the new default.
 
-A notebook must retain one view. Studio leaves the final view in place.
+A configured notebook retains at least one view.
 
-## Keep views with the notebook
+## Commit view source
 
-View source for `analysis.py` lives at:
+The authored files for `analysis.py` live under:
 
 ```text
 __marimo__/studio/analysis/<view-name>/
 ```
 
-Commit these directories with the notebook. If the repository ignores
-`__marimo__`, keep Studio source with these exceptions:
+Commit this directory with the notebook. If the repository broadly ignores
+`__marimo__`, keep the Studio source with targeted rules:
 
 ```text
 !**/__marimo__/
@@ -90,5 +88,6 @@ Commit these directories with the notebook. If the repository ignores
 !**/__marimo__/studio/**
 ```
 
-Continue with [Design a view](design-views.md) to place notebook cells and
-Python values in the page.
+[Notebook configuration](configuration.md) defines the default view and
+runtime. [Design a view](design-views.md) covers projections, styling, assets,
+and loading states.

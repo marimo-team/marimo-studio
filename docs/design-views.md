@@ -1,41 +1,26 @@
+---
+title: Design a view
+description: Project notebook cells and Python values into a responsive web document with live Marimo behavior.
+---
+
 # Design a view
 
 Choose the notebook behavior an audience needs, then arrange it in HTML and
-CSS. Keep calculations and interactive components in the notebook. Use the
-view for page structure, wording, navigation, and visual design.
-
-## Arrange the workspace
-
-The toolbar controls the main canvas:
-
-- **Notebook** opens the native Marimo editor.
-- **Build** places the native Marimo editor beside the selected view.
-- **Preview** fills the canvas with the selected view.
-
-Open **HTML & CSS** from the workspace menu to place `index.html` or `app.css`
-beside the live preview.
-
-Open the toolbar's workspace menu when a task needs another arrangement.
-Choose **Open saved layout**, then **Arrange panes** to add a surface on
-any side, swap two panes, or close a pane. Drag a divider to resize a split.
-**Equalize split sizes** restores even proportions.
-
-Studio keeps the notebook, source editors, and preview mounted while you move
-between task modes and custom arrangements. It remembers the mode, custom
-arrangement, split sizes, and source tab for each view in the current browser.
-Choosing a view from the toolbar opens **Build**. Links between authored
-views preserve the current mode.
+CSS. Keep calculations, formatting logic, controls, and interactive outputs in
+the notebook. Use the view for page structure, wording, navigation, and visual
+design.
 
 ## Choose a projection
 
-| Page content                                         | Element            |
-| ---------------------------------------------------- | ------------------ |
-| A control, plot, table, download, or anywidget       | `<marimo-cell>`    |
-| A date, count, label, or other JSON-compatible value | `mo-value`         |
-| Detail loaded after a user action                    | An HTMX cell route |
+| Page content                                           | Projection                 |
+| ------------------------------------------------------ | -------------------------- |
+| Control, plot, table, download, Markdown, or anywidget | `<marimo-cell name="...">` |
+| JSON-compatible label, number, date, list, or mapping  | An element with `mo-value` |
+| Detail requested after a user action                   | An HTMX cell route         |
 
-Add formatting, slicing, or other presentation calculations as small notebook
-cells. The view references their displayed output or returned value.
+Use small notebook cells for presentation calculations such as labels,
+formatted dates, summaries, and selected records. This keeps the view
+declarative and lets Marimo track each dependency.
 
 ## Place a complete cell output
 
@@ -48,13 +33,13 @@ Use a native cell name or an alias created with `marimo-studio bind`:
 </section>
 ```
 
-Marimo renders the cell with its output plugins and widget clients. Controls,
-tables, plots, downloads, and anywidgets remain connected to the current
-Python session. A cell name can appear once in each view.
+Marimo mounts the cell through its regular output plugins and widget clients.
+Controls, plots, tables, downloads, and anywidgets remain connected to the
+active runtime. Place a cell name once in each view.
 
 ## Place a Python value
 
-Use `mo-value` for a JSON-compatible value from a notebook cell:
+Use `mo-value` when the page needs part of a JSON-compatible Python value:
 
 ```html
 <time mo-value="report.updated_at"></time>
@@ -63,10 +48,10 @@ Use `mo-value` for a JSON-compatible value from a notebook cell:
 <span mo-value='metadata["key.with.dots"]'></span>
 ```
 
-A selector starts with a notebook variable. It can continue through mappings,
-attributes, lists, and item keys. Strings, numbers, and booleans render as
-text. Objects and arrays render as compact JSON. A `null` leaf renders as empty
-text.
+A selector starts with one notebook variable. It can continue through mapping
+keys, attributes, list indexes, and item keys. Strings, numbers, and booleans
+render as text. Objects and arrays render as compact JSON. A JSON `null` leaf
+renders as empty text.
 
 Keep expressions in Python:
 
@@ -80,48 +65,8 @@ def _(df):
     return (report,)
 ```
 
-Several small value cells let unrelated reactive branches update
+Several small value cells allow unrelated reactive branches to update
 independently.
-
-## Pass a Python value to JavaScript
-
-Use a hidden `mo-value` host as the data source for a browser component:
-
-```html
-<span id="chart-data" hidden mo-value="chart_data"></span>
-<sales-chart id="chart"></sales-chart>
-<script type="module" src="app.js"></script>
-```
-
-Listen first, then read the current snapshot in `app.js`:
-
-```js
-const source = document.querySelector("#chart-data");
-const chart = document.querySelector("#chart");
-
-const render = (value) => {
-  chart.data = value;
-};
-
-source.addEventListener("marimo-value-updated", (event) => {
-  render(event.detail.value);
-});
-
-if (source.marimoValue !== undefined) {
-  render(source.marimoValue);
-}
-```
-
-`marimoValue` contains the current JSON-compatible Python value. `undefined`
-means that no value is available yet. The `marimo-value-updated` event fires
-after the property and `data-state="ready"` have been updated. This order
-covers modules that start before or after the first value arrives.
-
-Listen for `marimo-value-error` when the component needs a local fallback.
-Inspect `data-state` and `aria-busy` for loading UI. The last snapshot stays
-available while a reactive update is loading or stale. Use
-`marimo-studio:idle` on `document` when several projections must settle before
-one page-level operation.
 
 ## Structure the document
 
@@ -137,7 +82,7 @@ Each `index.html` is a complete document with one `#app-shell`:
     <link rel="stylesheet" href="app.css" />
   </head>
   <body>
-    <main id="app-shell">
+    <main id="app-shell" class="studio-view grid gap-6">
       <h1>Revenue dashboard</h1>
       <marimo-cell name="revenue_chart"></marimo-cell>
     </main>
@@ -145,13 +90,12 @@ Each `index.html` is a complete document with one `#app-shell`:
 </html>
 ```
 
-Place every cell and value host inside `#app-shell`. Studio replaces that shell
-when HTML changes and reloads CSS independently.
+Keep every cell and value projection inside `#app-shell`. Studio can then
+refresh the authored page while preserving the mounted Marimo runtime.
 
-## Style the view
+## Style with utilities and theme tokens
 
-Write Wind4 utilities directly in `index.html`. Studio generates the matching
-CSS in the browser when the document loads and when HTMX inserts a fragment:
+Write Wind4 utilities directly on elements:
 
 ```html
 <main id="app-shell" class="studio-view grid gap-6 lg:grid-cols-2">
@@ -166,17 +110,17 @@ CSS in the browser when the document loads and when HTMX inserts a fragment:
 ```
 
 The utility vocabulary follows [UnoCSS Wind4](https://unocss.dev/presets/wind4)
-and covers Tailwind-style layout, spacing, typography, color, borders,
-responsive variants, and state variants. Studio also defines four stable
-shortcuts:
+for responsive layout, spacing, typography, color, borders, and state variants.
+Studio also provides four shortcuts:
 
-- `studio-view` provides a centered responsive page width and padding.
-- `studio-card` provides a semantic bordered surface.
-- `studio-button` provides a compact interactive control.
-- `studio-eyebrow` provides a small uppercase section label.
+| Class            | Behavior                                          |
+| ---------------- | ------------------------------------------------- |
+| `studio-view`    | Centered page width with responsive outer padding |
+| `studio-card`    | Semantic bordered surface                         |
+| `studio-button`  | Compact interactive control                       |
+| `studio-eyebrow` | Small uppercase section label                     |
 
-The starter `app.css` separates theme tokens from page rules with plain CSS
-comments:
+Define the semantic palette near the top of `app.css`:
 
 ```css
 /* THEME */
@@ -191,86 +135,87 @@ comments:
   --primary: light-dark(#0877d1, #3ba7ad);
   --radius: 8px;
 }
-
-/* APP */
-
-.summary-grid {
-  align-items: start;
-}
 ```
 
 Utilities such as `bg-card`, `text-foreground`, `border-border`, and
-`rounded-lg` read these variables. The starter theme maps them into projected
-Marimo outputs through its `marimo-cell` block. Keep that mapping when changing
-the palette. Rules in `app.css` use the normal CSS cascade and take precedence
-over Studio's generated utilities.
+`rounded-lg` read these variables. Rules in `app.css` use the regular CSS
+cascade and take precedence over generated utilities.
 
-`iconify-icon` accepts the same Iconify names as `mo.icon()`. Add
-`aria-hidden="true"` to decorative icons. An icon that carries meaning needs
-`role="img"` and an `aria-label`. Icon data loads from Iconify's service when
-first requested.
+`iconify-icon` accepts the same Iconify names as `mo.icon()`. Decorative icons
+use `aria-hidden="true"`. Give an icon that carries meaning `role="img"` and
+an `aria-label`. Iconify fetches named icon data from its API when first used.
 
-## Inspect the complete examples
+## Add relative assets and modules
 
-The repository includes two view-authoring patterns:
-
-- `examples/analysis.py` is a compact dashboard. Its HTML uses responsive
-  utilities, icons, and arbitrary properties for projected-cell loading space.
-  The theme section in `app.css` defines its semantic palette. Its view-owned
-  `app.js` module reads the `report` JSON snapshot when the reader copies the
-  current briefing.
-- `examples/nga_collection.py` is a three-view research workflow. **Corpus**,
-  **Study**, and **Packet** apply different themes and page structures to the
-  same filters, selection order, notebook outputs, and download.
-
-Open either notebook in Studio, change a native control, then edit a utility
-class or theme token. Saving the view source replaces the authored shell after
-its utility CSS is ready. Mounted cells and their widget models move into the
-new shell with their current state.
-
-Reference images, modules, fonts, and other files relative to `index.html`:
+Reference images, modules, fonts, and nested files relative to `index.html`:
 
 ```html
-<img src="logo.svg" alt="Acme logo" />
+<img src="images/logo.svg" alt="Acme" />
+<script type="module" src="scripts/app.js"></script>
 ```
 
-Studio serves the view as a web directory, including beneath a configured
-Marimo base path. Relative URLs inside CSS and imported modules resolve from
-their source file in the same directory.
+Relative JavaScript imports and CSS `url(...)` references resolve from their
+source file. Studio reloads a scripted document after an HTML or module save so
+the browser evaluates the module graph through its regular page lifecycle.
 
-## Add browser behavior
+## Read a value in JavaScript
 
-Use native module scripts when the page needs browser-side behavior:
+Use a hidden `mo-value` host as the typed data source for browser behavior:
 
 ```html
+<span id="report-data" hidden mo-value="report"></span>
+<output id="report-total"></output>
 <script type="module" src="app.js"></script>
 ```
 
-```js
-import { formatCurrency } from "./format.js";
+Register the listener before reading the current snapshot in `app.js`:
 
-document.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-copy-value]");
-  if (button) {
-    navigator.clipboard.writeText(formatCurrency(button.dataset.copyValue));
-  }
+```js
+const source = document.querySelector("#report-data");
+const total = document.querySelector("#report-total");
+
+const render = (report) => {
+  total.textContent = report.total;
+};
+
+source.addEventListener("marimo-value-updated", (event) => {
+  render(event.detail.value);
 });
+
+if (source.marimoValue !== undefined) {
+  render(source.marimoValue);
+}
 ```
 
-The browser loads the module graph with standard ESM rules. CSS changes reload
-in place. A saved HTML or module change reloads a scripted document so module
-initialization and imports follow the browser's regular page lifecycle.
-`window.htmx` is ready before authored modules evaluate, so a module can
-register HTMX extensions or process browser-owned fragments during startup.
+`undefined` means the first value has not arrived or the selector is
+unavailable. JSON `null` remains a value. Listen for `marimo-value-error` when
+the component needs a local fallback.
 
-Keep view assets under ordinary names such as `scripts/`, `images/`, and
-`fonts/`. The top-level paths `_marimo-studio`, `@file`, `public`, and
-`public-files-sw.js` route to Studio or Marimo.
+The [view document reference](view-api.md#browser-value-api) defines property,
+event, loading, and readiness behavior.
 
-## Reveal detail with HTMX
+## Reserve loading space
 
-[HTMX](https://htmx.org/) is available as `window.htmx`. Load a secondary cell
-after a user action:
+Give substantial outputs a realistic first-load height:
+
+```css
+marimo-cell[name="revenue_chart"] {
+  --marimo-cell-skeleton-height: 28rem;
+}
+
+time[mo-value] {
+  --marimo-value-skeleton-width: 12ch;
+}
+```
+
+Mounted outputs inherit the surrounding font and color. Use the
+`--marimo-cell-*` properties when the view needs to align output surfaces,
+borders, spacing, and accents with the page.
+
+## Load detail on demand
+
+[HTMX](https://htmx.org/) is available as `window.htmx`. Request a secondary
+cell after a user action:
 
 ```html
 <button
@@ -283,76 +228,27 @@ after a user action:
 <section id="details" aria-live="polite"></section>
 ```
 
-The response inserts a `<marimo-cell>` host that attaches to the current
-Marimo session.
+The response inserts a `<marimo-cell>` host connected to the current Marimo
+session.
 
-## Reserve loading space
+## Check and repair projections
 
-Cells and values show skeletons before their first content arrives. Give
-charts, tables, and other substantial regions a realistic height:
+Run a static check while authoring:
 
-```css
-marimo-cell[name="revenue_chart"] {
-  --marimo-cell-skeleton-height: 28rem;
-  --marimo-cell-skeleton-color: rgb(20 24 32 / 9%);
-  --marimo-cell-skeleton-radius: 0.35rem;
-}
-
-time[mo-value] {
-  --marimo-value-skeleton-width: 12ch;
-}
+```console
+uvx marimo-studio check analysis.py --view dashboard
 ```
 
-The browser remembers the rendered cell height for the same view and viewport
-class. Set `data-skeleton="none"` when an empty first-load region is
-intentional.
-
-## Match outputs to the page
-
-Set the page color scheme in the `/* THEME */` section of `app.css` so Marimo
-controls use the matching theme:
-
-```css
-:root {
-  color-scheme: light;
-}
-```
-
-Mounted output inherits the surrounding font and color. The
-`--marimo-cell-*` properties control surfaces, borders, spacing, and accents.
-[Loading and theming](reference.md#loading-and-theming) lists the available
-properties.
-
-## Repair a projection
-
-Saving the notebook refreshes every open view against the current cell graph.
-If a view references a deleted cell or variable, the healthy page regions stay
-active. The affected projection shows a compact message, and Studio reports
-the source location and repair action.
-
-Restore the notebook definition, update `index.html`, or bind the anonymous
-cell again. Then validate the view:
+Execute projected cells and resolve values before sharing:
 
 ```console
 uvx marimo-studio check analysis.py --view dashboard --runtime
 ```
 
-Agents can request structured results:
+When a notebook edit removes a projected cell or variable, healthy page
+regions remain active and the affected host reports its source location and a
+repair hint. Restore the notebook definition, update `index.html`, or bind the
+intended cell again, then rerun the same check.
 
-```console
-uvx marimo-studio check analysis.py \
-  --view dashboard \
-  --runtime \
-  --format json \
-  --diagnostics jsonl
-```
-
-Browser automation can wait for the current view:
-
-```js
-await window.marimoStudio.ready();
-const diagnostics = window.marimoStudio.diagnostics();
-```
-
-[Browser readiness](reference.md#browser-readiness) defines the state and
-event contract.
+Use the [view document reference](view-api.md) for exact states and events.
+Use [Examples](examples.md) to inspect complete compact and multi-view designs.
