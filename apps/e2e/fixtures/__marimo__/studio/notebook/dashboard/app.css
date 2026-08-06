@@ -1,0 +1,21 @@
+/* THEME */
+
+:root {
+  color-scheme: light dark;
+  --background: light-dark(#ffffff, #161616);
+  --foreground: light-dark(#202124, #f5f5f5);
+  --border: light-dark(#d7d7d1, #444444);
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, sans-serif;
+}
+
+.studio-view {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 3rem;
+}

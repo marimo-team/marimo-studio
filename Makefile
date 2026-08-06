@@ -7,7 +7,7 @@ PNPM ?= pnpm
 DIST_DIR := $(CURDIR)/dist
 PY_PACKAGE := packages/marimo-studio
 
-.PHONY: help install format lint typecheck test check build docs-build docs-serve package
+.PHONY: help install format lint typecheck test e2e e2e-ui check build docs-build docs-serve package
 
 help: ## List development targets.
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -36,6 +36,12 @@ typecheck: ## Type-check Python and TypeScript sources.
 test: ## Run Python and browser-runtime tests.
 	$(UV) run pytest
 	$(PNPM) test
+
+e2e: ## Test Studio in Chromium with a live Marimo kernel.
+	$(PNPM) e2e
+
+e2e-ui: ## Open the browser test runner.
+	$(PNPM) e2e:ui
 
 check: lint typecheck test ## Run the local quality gates.
 

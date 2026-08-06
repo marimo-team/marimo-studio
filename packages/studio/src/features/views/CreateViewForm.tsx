@@ -38,7 +38,7 @@ export const CreateViewForm = ({
       autoComplete="off"
       autoCapitalize="none"
       spellCheck={false}
-      pattern="[a-z][a-z0-9-]*"
+      pattern="[a-z](?:[a-z0-9]|-)*"
       placeholder="executive-report"
       required
       value={name}

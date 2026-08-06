@@ -13,6 +13,8 @@ process.
 | Lint                 | `make lint`       |
 | Type-check           | `make typecheck`  |
 | Test                 | `make test`       |
+| Browser acceptance   | `make e2e`        |
+| Browser test runner  | `make e2e-ui`     |
 | Local gate           | `make check`      |
 | Build browser assets | `make build`      |
 | Build docs           | `make docs-build` |
@@ -51,7 +53,8 @@ TypeScript boundary.
   `packages/marimo-frontend` isolates Marimo's unstable frontend API.
 - **Apps compose packages.** `apps/browser` owns the Vite build and packaged
   asset names. `apps/docs` owns VitePress while authored pages remain in
-  `docs/`.
+  `docs/`. `apps/e2e` drives a copied notebook through a live `marimo edit`
+  process.
 
 See [Architecture](development_docs/architecture.md) for the runtime and
 session lifecycle.
@@ -150,6 +153,9 @@ Python compatibility boundary.
 - Validate visible changes in the running Studio document. Cover desktop and
   narrow layouts, console errors, failed requests, projections, controls,
   anywidgets, view switches, source saves, and external edits.
+- Keep browser tests focused on behavior that crosses the editor, kernel,
+  filesystem, and preview documents. Add focused regressions at the package
+  that owns each browser failure.
 - Keep comments for lifecycle, compatibility, serialization, and failure
   constraints. Remove comments that narrate ordinary code or the change itself.
 

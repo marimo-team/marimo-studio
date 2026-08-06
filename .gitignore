@@ -16,6 +16,9 @@ apps/docs/.vitepress/cache/
 apps/docs/.vitepress/dist/
 packages/*/dist/
 pnpm-debug.log*
+apps/e2e/.workspace/
+apps/e2e/playwright-report/
+apps/e2e/test-results/
 
 # Generated frontend assets
 packages/marimo-studio/src/marimo_studio/_static/

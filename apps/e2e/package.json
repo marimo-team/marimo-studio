@@ -1,0 +1,16 @@
+{
+  "name": "@marimo-studio/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "pnpm --workspace-root build && playwright test",
+    "e2e:ui": "pnpm --workspace-root build && playwright test --ui",
+    "install-browser": "playwright install --with-deps chromium",
+    "serve": "node scripts/serve.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "catalog:",
+    "@types/node": "catalog:"
+  }
+}

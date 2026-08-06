@@ -10,6 +10,7 @@ dev = [
   "ruff>=0.16.0",
   "ty>=0.0.64",
 ]
+e2e = ["anywidget==0.9.21"]
 
 [tool.pytest.ini_options]
 testpaths = ["packages/marimo-studio/tests"]

@@ -7,12 +7,14 @@
     "check": "pnpm prepare:frontend && vp check README.md AGENTS.md .github apps development_docs docs examples packages skills package.json pnpm-workspace.yaml tsconfig.json vite.config.ts",
     "docs:build": "vp run --filter @marimo-studio/docs build",
     "docs:dev": "vp run --filter @marimo-studio/docs dev",
+    "e2e": "pnpm --filter @marimo-studio/e2e e2e",
+    "e2e:ui": "pnpm --filter @marimo-studio/e2e e2e:ui",
     "format": "vp fmt README.md AGENTS.md .github apps development_docs docs examples packages skills package.json pnpm-workspace.yaml tsconfig.json vite.config.ts",
     "format:check": "vp fmt --check README.md AGENTS.md .github apps development_docs docs examples packages skills package.json pnpm-workspace.yaml tsconfig.json vite.config.ts",
     "lint": "pnpm prepare:frontend && vp lint apps packages vite.config.ts",
     "prepare:frontend": "pnpm --filter @marimo-studio/marimo-frontend prepare:upstream",
     "test": "vp run -r test",
-    "typecheck": "pnpm prepare:frontend && vp check --no-fmt --no-lint apps/browser apps/docs/.vitepress packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/src vite.config.ts"
+    "typecheck": "pnpm prepare:frontend && vp check --no-fmt --no-lint apps/browser apps/docs/.vitepress apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/src vite.config.ts"
   },
   "devDependencies": {
     "@types/node": "catalog:",
