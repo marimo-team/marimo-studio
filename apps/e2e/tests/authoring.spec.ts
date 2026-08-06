@@ -113,6 +113,14 @@ test("keeps browser and disk source edits in sync", async ({ page }) => {
 });
 
 test("creates a scaffolded view and removes its files", async ({ page }) => {
+  const deletedViewRequests: string[] = [];
+  let removalStarted = false;
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (removalStarted && url.pathname.startsWith("/qa-view/")) {
+      deletedViewRequests.push(request.url());
+    }
+  });
   await page.goto("/studio/dashboard/");
   await waitForPreview(page);
 
@@ -130,6 +138,7 @@ test("creates a scaffolded view and removes its files", async ({ page }) => {
   await expect.poll(async () => access(createdDirectory).then(() => true)).toBe(true);
   await page.getByLabel("Select or manage a view").click();
   await page.getByLabel("Remove qa-view view").click();
+  removalStarted = true;
   await page.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(page.getByLabel("Select or manage a view")).toContainText("dashboard");
   await expect
@@ -143,4 +152,5 @@ test("creates a scaffolded view and removes its files", async ({ page }) => {
   await expect(
     previewFrame(page).getByRole("heading", { name: "Studio browser fixture" }),
   ).toBeVisible();
+  expect(deletedViewRequests).toEqual([]);
 });

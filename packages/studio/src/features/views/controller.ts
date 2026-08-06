@@ -155,16 +155,30 @@ export class ViewController {
         this.update({ removeError: "Resolve the current source before removing this view." });
         return false;
       }
+      if (name === this.snapshot.current) {
+        const inventory = await this.remote.list();
+        if (this.disposed) {
+          return false;
+        }
+        const successor =
+          inventory.default_view !== name && inventory.views.includes(inventory.default_view)
+            ? inventory.default_view
+            : inventory.views.find((view) => view !== name);
+        if (!successor || !(await this.choose(successor))) {
+          if (!this.disposed) {
+            this.update({ removeError: "Select another view before removing this one." });
+          }
+          return false;
+        }
+      }
       const removed = await this.remote.remove(name);
       if (this.disposed) {
         return false;
       }
       this.update({ views: removed.views });
-      if (name === this.snapshot.current) {
-        if (!(await this.choose(removed.default_view))) {
-          this.recoverView(removed.default_view);
-          return false;
-        }
+      if (!removed.views.includes(this.snapshot.current)) {
+        this.recoverView(removed.default_view);
+        return false;
       }
       this.update({ removing: undefined });
       return true;
