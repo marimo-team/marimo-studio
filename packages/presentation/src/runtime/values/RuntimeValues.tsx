@@ -28,6 +28,7 @@ export const RuntimeValues = ({
   return groups.map(({ key, binding, selectors }) => (
     <RuntimeValueCell
       key={key}
+      revision={config.revision}
       selectors={selectors}
       cell={resolveCellBinding(binding, cells)}
       connectionState={connectionState}

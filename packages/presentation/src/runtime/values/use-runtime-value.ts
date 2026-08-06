@@ -19,12 +19,14 @@ const requestFailure = (error: unknown): ValueReadError => ({
 });
 
 export const useRuntimeValue = ({
+  revision,
   selectors,
   cell,
   connectionState,
   runtimeReady,
   readValues,
 }: {
+  revision: string;
   selectors: string[];
   cell: RuntimeCell | undefined;
   connectionState: WebSocketState;
@@ -58,7 +60,7 @@ export const useRuntimeValue = ({
     selectors.forEach(markValuePending);
     const controller = new AbortController();
     let current = true;
-    void readValues(selectors, controller.signal)
+    void readValues({ revision, selectors }, controller.signal)
       .then((response) => {
         if (!current) {
           return;
@@ -76,5 +78,5 @@ export const useRuntimeValue = ({
       current = false;
       controller.abort();
     };
-  }, [connectionState, model.cellId, model.phase, model.version, readValues, selectors]);
+  }, [connectionState, model.cellId, model.phase, model.version, readValues, revision, selectors]);
 };

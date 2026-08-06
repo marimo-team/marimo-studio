@@ -1067,18 +1067,60 @@ def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
         allowed = client.post(
             "/_marimo-studio/views/dashboard/values",
             headers=headers,
-            json={"selectors": ["doubled"]},
+            json={"revision": config["revision"], "selectors": ["doubled"]},
         )
         cross_view = client.post(
             "/_marimo-studio/views/dashboard/values",
             headers=headers,
-            json={"selectors": ["x"]},
+            json={"revision": config["revision"], "selectors": ["x"]},
         )
 
     assert allowed.status_code == 409
     assert allowed.json()["error"] == "unknown-session"
     assert cross_view.status_code == 400
     assert cross_view.json()["error"] == "unknown-selector"
+
+
+def test_value_permissions_follow_the_browser_presentation_revision(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        first = client.get("/_marimo-studio/views/dashboard/config").json()
+        _set_shell(studio, "dashboard", "<p>Updated dashboard</p>")
+        current = client.get("/_marimo-studio/views/dashboard/config").json()
+        headers = {
+            "Marimo-Server-Token": first["runtime"]["data"]["serverToken"],
+            "Marimo-Session-Id": "s_unknown",
+        }
+        in_flight = client.post(
+            "/_marimo-studio/views/dashboard/values",
+            headers=headers,
+            json={"revision": first["revision"], "selectors": ["doubled"]},
+        )
+        removed = client.post(
+            "/_marimo-studio/views/dashboard/values",
+            headers=headers,
+            json={"revision": current["revision"], "selectors": ["doubled"]},
+        )
+        unpublished = client.post(
+            "/_marimo-studio/views/dashboard/values",
+            headers=headers,
+            json={"revision": "unpublished", "selectors": ["doubled"]},
+        )
+
+    assert first["revision"] != current["revision"]
+    assert in_flight.status_code == 409
+    assert in_flight.json()["error"] == "unknown-session"
+    assert removed.status_code == 400
+    assert removed.json()["error"] == "unknown-selector"
+    assert unpublished.status_code == 409
+    assert unpublished.json() == {
+        "error": "presentation-revision-unavailable",
+        "message": "The requested presentation revision is no longer available.",
+        "transient": True,
+    }
 
 
 def test_parent_asgi_mount_preserves_public_routes(notebook_path: Path) -> None:

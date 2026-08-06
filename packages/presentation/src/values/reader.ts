@@ -1,3 +1,6 @@
-import type { ValueReadResponse } from "@marimo-studio/protocol/value-read";
+import type { ValueReadRequest, ValueReadResponse } from "@marimo-studio/protocol/value-read";
 
-export type ValueReader = (selectors: string[], signal?: AbortSignal) => Promise<ValueReadResponse>;
+export type ValueReader = (
+  request: ValueReadRequest,
+  signal?: AbortSignal,
+) => Promise<ValueReadResponse>;

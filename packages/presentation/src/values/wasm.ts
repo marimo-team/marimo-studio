@@ -107,7 +107,7 @@ export const createWasmValueReader = (
   request: FunctionRequest,
 ): ValueReader => {
   let queue: Promise<void> = Promise.resolve();
-  return (selectors, signal) => {
+  return ({ selectors }, signal) => {
     const operation = queue.then(async () => {
       throwIfAborted(signal);
       await initialized;

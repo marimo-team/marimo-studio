@@ -42,7 +42,7 @@ export const mountServerRuntime = (
       store.set(requestClientAtom, createErrorToastingRequests(createNetworkRequests()));
     },
     updateQuery: async () => {},
-    valueReader: (sessionId) => (selectors, signal) =>
-      readServerValuesWithRetry(sessionId, selectors, signal),
+    valueReader: (sessionId) => (request, signal) =>
+      readServerValuesWithRetry(sessionId, request, signal),
   });
 };

@@ -36,7 +36,13 @@ describe("WebAssembly value reads", () => {
       initialize = resolve;
     });
     const request = vi.fn(async () => response(3));
-    const reading = createWasmValueReader(initialized, request)(["total"]);
+    const reading = createWasmValueReader(
+      initialized,
+      request,
+    )({
+      revision: "presentation-revision",
+      selectors: ["total"],
+    });
 
     await Promise.resolve();
     expect(request).not.toHaveBeenCalled();
@@ -56,8 +62,9 @@ describe("WebAssembly value reads", () => {
       .mockResolvedValueOnce(response(2));
     const reader = createWasmValueReader(Promise.resolve(), request);
 
-    const first = reader(["total"]);
-    const second = reader(["total"]);
+    const valueRequest = { revision: "presentation-revision", selectors: ["total"] };
+    const first = reader(valueRequest);
+    const second = reader(valueRequest);
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
 
     complete(response(1));
@@ -75,8 +82,11 @@ describe("WebAssembly value reads", () => {
     const reader = createWasmValueReader(Promise.resolve(), request);
     const controller = new AbortController();
 
-    const first = reader(["first"]);
-    const stale = reader(["stale"], controller.signal);
+    const first = reader({ revision: "presentation-revision", selectors: ["first"] });
+    const stale = reader(
+      { revision: "presentation-revision", selectors: ["stale"] },
+      controller.signal,
+    );
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
     controller.abort();
 
