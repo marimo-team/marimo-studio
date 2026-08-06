@@ -1,147 +1,164 @@
 # Frontend workspace
 
-The root pnpm workspace contains two browser documents and one build
-composition root. Vite Plus provides formatting, linting, type-aware checks,
-tests, builds, and task orchestration.
+The pnpm workspace contains the custom view document, the editor workspace,
+their shared contracts, the browser build, the documentation site, and live
+browser acceptance tests.
 
-## Packages
+## Package responsibilities
 
-| Path                                            | Responsibility                                         |
-| ----------------------------------------------- | ------------------------------------------------------ |
-| `apps/browser/`                                 | Vite entrypoints, shared chunks, and packaged metadata |
-| `packages/runtime/`                             | Runtime adapter and session lifecycle contracts        |
-| `packages/presentation/`                        | Custom-view document, projections, and runtime mount   |
-| `packages/studio/`                              | Studio composition, feature slices, and shared UI      |
-| `packages/protocol/`                            | Browser messages and validated server response records |
-| `packages/marimo-frontend/src/upstream/`        | Imports from Marimo's unstable frontend surface        |
-| `packages/marimo-frontend/src/control-frame.ts` | Adapt a Marimo frame to native control operations      |
-| `packages/marimo-frontend/src/theme-frame.ts`   | Read the resolved theme from the native editor frame   |
-| `packages/marimo-frontend/src/vite.ts`          | Marimo aliases and PostCSS                             |
-| `packages/marimo-frontend/scripts/`             | Locked Marimo source preparation and build metadata    |
-| `apps/docs/`                                    | VitePress application and site configuration           |
+| Path                       | Responsibility                                                          |
+| -------------------------- | ----------------------------------------------------------------------- |
+| `packages/protocol`        | Zod schemas and inferred types for browser and server records           |
+| `packages/runtime`         | Runtime registry and document-scoped session interface                  |
+| `packages/presentation`    | Custom view document, projections, runtime adapters, and generated CSS  |
+| `packages/studio`          | Workspace UI, source editing, view management, and preview coordination |
+| `packages/marimo-frontend` | Adapters around Marimo's unstable frontend modules and build setup      |
+| `apps/browser`             | Vite entry points, shared chunks, browser assets, and build metadata    |
+| `apps/e2e`                 | Playwright fixture and live `marimo edit` acceptance tests              |
+| `apps/docs`                | VitePress application and site configuration                            |
 
-`packages/runtime` defines the transport-independent adapter contract.
-`packages/presentation` renders the custom view and keeps the shared React
-renderer as a private module. `packages/studio` mounts the workspace from the
-server's validated bootstrap record. React owns the toolbar, pane tree, source
-editors, and stable notebook and preview frames.
-`packages/protocol` is the shared wire boundary. Zod 4 schemas validate input
-and define the TypeScript types consumed by both documents. The package
-contains no fetch, EventSource, DOM, or window access.
+`apps/browser` is the composition root. Its runtime entry registers the
+Server and WebAssembly presentation runtimes. Its Studio entry injects the
+Marimo control and theme frame adapters into the workspace.
 
-Presentation groups code by lifecycle. `document/` owns the authored shell,
-`cells/` and `values/` own projection hosts, `runtime-config/` owns the server
-contract, and `runtime/` owns the Marimo React mount.
+Root `vite.config.ts` enforces package imports:
 
-Studio follows `app → features → shared`. `app/` constructs services, routes,
-theme resolution, and the root document. Feature slices own their components,
-state, browser I/O, and styles. `navigation/` and `workspace/` compose sibling
-features through typed controllers. The feature graph stays acyclic. `shared/`
-contains theme state, external-store binding, errors, and UI primitives that
-several features consume.
+- Protocol imports no Studio package and performs no network, filesystem, DOM,
+  or window I/O.
+- Runtime imports protocol and performs no Marimo, React, or browser I/O.
+- Presentation imports protocol, runtime, and named Marimo frontend adapters.
+- Studio imports protocol and stays independent of presentation and Marimo
+  frontend code.
+- Marimo frontend imports no Studio package.
 
-Keep upstream module paths, Marimo's `@/` alias, source checkout details, and
-build shims inside `packages/marimo-frontend`. Other packages consume its
-named adapter exports.
+## Studio feature ownership
 
-## Workspace policy
+Studio follows `app -> features -> shared`.
 
-`pnpm-workspace.yaml` owns package membership, dependency catalogs, overrides,
-and install policy. Add JavaScript dependencies to the package that imports
-them and reuse catalog versions for shared dependencies.
+| Slice                     | Responsibility                                                      |
+| ------------------------- | ------------------------------------------------------------------- |
+| `app/`                    | Construct services, routes, theme integration, and the React root   |
+| `features/navigation/`    | Mode, runtime, view, and workspace controls                         |
+| `features/preview/`       | Stable runtime frames, query sync, and native control sync          |
+| `features/source-editor/` | Source reads, edits, saves, external updates, and conflicts         |
+| `features/views/`         | View creation, selection, removal, and transition coordination      |
+| `features/workspace/`     | Pane tree, modes, geometry, resizing, and persisted layout          |
+| `shared/`                 | Theme state, external-store binding, errors, icons, and UI controls |
 
-Root `vite.config.ts` owns Vite Plus formatting, linting, type-aware checks,
-and cross-package import restrictions. Package scripts own package-specific
-build, test, source preparation, and documentation commands.
+`app/` may compose feature controllers. Feature slices stay independent of
+`app/` and communicate through typed controllers. `shared/` imports no app or
+feature module. Keep the graph acyclic.
 
-Use the root workspace commands:
+Presentation groups code by document responsibility:
+
+| Slice             | Responsibility                                                     |
+| ----------------- | ------------------------------------------------------------------ |
+| `document/`       | Authored shell, view navigation, query sync, styles, and refreshes |
+| `runtime-config/` | Fetch, validate, stage, and commit runtime configuration           |
+| `runtime/`        | Mount runtimes, output plugins, cells, controls, and anywidgets    |
+| `cells/`          | Discover and preserve `<marimo-cell>` hosts                        |
+| `values/`         | Read values and publish the `mo-value` DOM contract                |
+| `view-styles/`    | Generate scoped Wind4 utilities from authored classes              |
+
+## Work on one package
+
+Install the locked workspace once:
 
 ```console
-pnpm install --frozen-lockfile
-pnpm check
-pnpm test
-pnpm typecheck
-pnpm build
+make install
 ```
 
-The equivalent repository gates are available through `make install`,
-`make check`, and `make build`.
+Run the owning package test while iterating:
 
-## Marimo source adapter
+```console
+pnpm --filter @marimo-studio/protocol test
+pnpm --filter @marimo-studio/runtime test
+pnpm --filter @marimo-studio/presentation test
+pnpm --filter @marimo-studio/studio test
+pnpm --filter @marimo-studio/marimo-frontend test
+```
 
-`pnpm --filter @marimo-studio/marimo-frontend prepare:upstream` resolves the
-Marimo version installed by `uv.lock`. The adapter pins the matching Git commit,
-prepares a clean checkout under `packages/marimo-frontend/.cache/`, and records
-its version and commit. Repeated checks reuse a clean, fully installed checkout.
-A changed commit, tracked source edit, or incomplete install rebuilds the cache.
-Update the pinned commit in
-`packages/marimo-frontend/scripts/source.mjs` with a Marimo lockfile upgrade.
+Run the browser type and import-boundary checks from the repository root:
 
-Set `MARIMO_REPO` to use a local checkout with the same version:
+```console
+pnpm typecheck
+pnpm lint
+```
+
+Build the document entry points after changing presentation, Studio, runtime,
+protocol, or Marimo adapter code:
+
+```console
+make build
+```
+
+Run the live acceptance suite when a change affects sessions, frames, source
+files, projections, native controls, runtime switching, or responsive layout:
+
+```console
+make e2e
+```
+
+Use `make e2e-ui` to inspect the Playwright flow interactively.
+
+## Marimo frontend adapter
+
+`packages/marimo-frontend` contains every import from Marimo's unstable
+frontend surface, Marimo's `@/` alias, and the source preparation required by
+Vite.
+
+The preparation command reads the Marimo version resolved by `uv.lock`, checks
+out the pinned matching commit under `packages/marimo-frontend/.cache/`,
+installs its frontend workspace, and records the source metadata:
+
+```console
+pnpm --filter @marimo-studio/marimo-frontend prepare:upstream
+```
+
+A Marimo upgrade changes both the Python lockfile and `expectedCommit` in
+`packages/marimo-frontend/scripts/source.mjs`. Run adapter tests and rebuild
+the browser bundle after updating them.
+
+Set `MARIMO_REPO` to exercise a local checkout whose project version matches
+the Python environment:
 
 ```console
 MARIMO_REPO=/path/to/marimo make build
 ```
 
-Vite Plus checks the adapter against the prepared Marimo frontend source. A
-Marimo upgrade should concentrate path and declaration changes in
-`packages/marimo-frontend`.
+Keep upstream source paths, registry access, Marimo frame behavior, and build
+aliases inside this package. Other packages consume named adapters such as the
+control endpoint and theme frame.
 
-## Generated assets
+## Browser build
 
-`pnpm build` prepares Marimo source, builds the entrypoints from
-`apps/browser`, and writes one browser bundle to
-`packages/marimo-studio/src/marimo_studio/_static/browser/`. A Vite plugin emits
-`build-meta.json` with the Marimo and HTMX versions in the same build.
+`make build` prepares Marimo source and builds the entry points from
+`apps/browser` into:
 
-The generated directory and Marimo source cache stay untracked. Change source
-under `packages/`, rebuild, and verify package contents with `make package`.
+```text
+packages/marimo-studio/src/marimo_studio/_static/browser/
+```
 
-## Browser contracts
+The build emits `runtime.js`, `dev-reload.js`, `studio.js`, their CSS files,
+shared chunks, worker assets, and `build-meta.json`. The generated directory
+and prepared Marimo checkout stay untracked. Change workspace source, rebuild,
+then run `make package` when distribution contents are part of the change.
 
-The custom view keeps `#marimo-runtime-root` mounted while scriptless HTML
-refreshes or a view switch replaces `#app-shell`. Matching cell hosts reconnect
-to the current store and preserve output DOM when possible. A document with an
-authored script reloads for HTML and module changes so the browser evaluates
-the native module graph through its normal lifecycle. Studio installs
-`window.htmx` and starts utility-class observation before authored modules can
-mutate the shell.
+## Browser acceptance ownership
 
-`values/` owns the DOM contract for Python value projections. The active
-adapter supplies JSON values, then each matching host receives its own cloned
-snapshot. The host updates `marimoValue`, text content, and `data-state` before
-dispatching `marimo-value-updated`. Errors clear the snapshot and publish
-`marimo-value-error` after diagnostic attributes are ready. Readiness evaluates
-in a microtask, which keeps `marimo-studio:idle` as the batch boundary after
-per-host events.
+Package tests protect local contracts. `apps/e2e` protects flows that require a
+live Marimo kernel and several documents.
 
-Wind4 output is wrapped in native CSS `@scope` and stops at
-`[data-marimo-cell-output]`. Studio foundation and utility rules use named
-cascade layers. The authored `app.css` remains unlayered and follows standard
-cascade precedence. Unsupported `@scope` browsers retain authored CSS and the
-notebook runtime and receive a focused style diagnostic.
+| Acceptance area      | Current contract                                                           |
+| -------------------- | -------------------------------------------------------------------------- |
+| Runtime lifecycle    | Editor, Server, and WebAssembly frames remain mounted across mode changes  |
+| Control sync         | JSON-compatible native controls synchronize between editor and runtimes    |
+| Runtime isolation    | Anywidget state remains with the runtime that owns its model               |
+| Source authoring     | Studio and external edits update files and the live preview safely         |
+| View management      | Creating and removing a view updates source files and the selected preview |
+| Projection recovery  | A missing value host recovers after its notebook definition returns        |
+| Responsive workspace | The compact layout remains operable without page-level overflow            |
 
-Studio keeps the notebook iframe, source editors, and prepared runtime preview
-frames mounted as stable nodes. Task modes and the custom pane tree change
-their rectangles while runtime selection changes which preview frame is
-visible. Source editors use content-derived ETags and `If-Match` writes.
-Studio follows the native editor's resolved light or dark theme. The browser
-app injects that frame adapter, while Studio applies its own theme tokens,
-source editor theme, and matching brand mark.
-
-Studio prepares the WebAssembly preview while the Server frame is active. When
-it becomes ready, Studio requests the server and preview semantic cell maps at
-the same presentation revision. The browser app injects Marimo frame adapters
-into Studio, subscribes to control registration, and sends the editor snapshot
-to the preview in one kernel request. Later JSON-compatible native control
-updates travel in both directions. Read-only value and query RPCs retry
-transient worker deadlines. The Marimo compatibility package owns registry
-and request-client access. Studio owns translation, lifecycle, retry, and
-cancellation.
-
-Tests live with their owner. Protocol tests exercise schemas and concrete
-envelopes. Presentation and Studio tests exercise their state and lifecycle
-contracts. Exercise changes that cross documents or sessions in a real
-browser, including desktop and narrow layouts, failed requests, console
-errors, cell output, controls, anywidgets, view switching, source saves, and
-external edits.
+Add a focused regression to the owning package first. Add browser acceptance
+when the failure crosses the editor, kernel, filesystem, runtime, or document
+boundary.
