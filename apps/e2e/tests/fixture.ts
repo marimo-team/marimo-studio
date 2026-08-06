@@ -2,13 +2,25 @@ import { expect, test as base, type FrameLocator, type Page } from "@playwright/
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { fixtureDirectory, notebookPath, workspaceDirectory } from "../scripts/paths.mjs";
+import {
+  fixtureDirectory,
+  hostedFixtureDirectory,
+  hostedNotebookPath,
+  hostedWorkspaceDirectory,
+  notebookPath,
+  workspaceDirectory,
+} from "../scripts/paths.mjs";
 
 const dashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/notebook/dashboard");
 
 export const dashboardHtmlPath = resolve(dashboardDirectory, "index.html");
 export const dashboardCssPath = resolve(dashboardDirectory, "app.css");
 export const workspaceNotebookPath = notebookPath;
+export const hostedDashboardHtmlPath = resolve(
+  hostedWorkspaceDirectory,
+  "__marimo__/studio/notebook/dashboard/index.html",
+);
+export const hostedViewFixturePath = resolve(hostedFixtureDirectory, "dashboard.html");
 
 const copyFixtureFile = async (relativePath: string) => {
   const source = resolve(fixtureDirectory, relativePath);
@@ -31,6 +43,21 @@ export const restoreWorkspace = async () => {
     recursive: true,
   });
 };
+
+export const restoreHostedWorkspace = async () => {
+  for (const relativePath of ["notebook.py", "pyproject.toml", "dashboard.html"]) {
+    const source = resolve(hostedFixtureDirectory, relativePath);
+    const target = resolve(hostedWorkspaceDirectory, relativePath);
+    await mkdir(resolve(target, ".."), { recursive: true });
+    await cp(source, target, { force: true });
+  }
+  await rm(resolve(hostedWorkspaceDirectory, "__marimo__"), {
+    force: true,
+    recursive: true,
+  });
+};
+
+export const hostedWorkspaceNotebookPath = hostedNotebookPath;
 
 export const readWorkspaceFile = (path: string) => readFile(path, "utf8");
 export const writeWorkspaceFile = (path: string, content: string) => writeFile(path, content);
@@ -176,7 +203,7 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
         const url = new URL(response.url());
         const transientConfig =
           response.status() === 409 &&
-          url.pathname.startsWith("/_marimo-studio/views/") &&
+          url.pathname.includes("/_marimo-studio/views/") &&
           url.pathname.endsWith("/config");
         if (response.status() >= 400 && !transientConfig) {
           messages.push(`http ${response.status()}: ${response.url()}`);
@@ -185,6 +212,7 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
 
       await use({ messages });
 
+      const hosted = page.url().startsWith("http://127.0.0.1:4322/");
       try {
         if (messages.length > 0 || testInfo.status !== testInfo.expectedStatus) {
           await testInfo.attach("browser-diagnostics", {
@@ -201,7 +229,11 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
         expect(messages, "unexpected browser diagnostics").toEqual([]);
       } finally {
         await closeNotebookSessions(page);
-        await restoreWorkspace();
+        if (hosted) {
+          await restoreHostedWorkspace();
+        } else {
+          await restoreWorkspace();
+        }
       }
     },
     { auto: true },
