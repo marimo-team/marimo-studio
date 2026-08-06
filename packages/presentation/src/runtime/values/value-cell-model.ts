@@ -1,7 +1,5 @@
 import type { ValueReadError } from "@marimo-studio/protocol/value-read";
 
-import { outputIsStale } from "@marimo-studio/marimo-frontend/cells";
-
 import type { RuntimeCell } from "../runtime-cell";
 
 import { type ValueCellPhase, valueCellPhase } from "../value-cell-state";
@@ -46,7 +44,7 @@ export const valueCellModel = (
     status: cell?.status ?? "missing",
     version,
     errored: cell?.errored ?? false,
-    stale: cell ? outputIsStale(cell, cell.edited) : false,
+    stale: (cell?.staleInputs ?? false) && !(cell?.interrupted ?? false),
     deliveryTimedOut,
   });
 
