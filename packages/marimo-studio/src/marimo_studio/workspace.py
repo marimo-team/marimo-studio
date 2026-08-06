@@ -14,7 +14,7 @@ from marimo_studio._workspace.bindings import (
 from marimo_studio._workspace.models import (
     BindingResult,
     ResolvedStudio,
-    StudioConfig,
+    StudioWorkspace,
     ViewSetupResult,
 )
 from marimo_studio._workspace.setup import ensure_view as _ensure_view
@@ -22,7 +22,7 @@ from marimo_studio.inspect import inspect_notebook
 
 
 def resolve_studio(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     *,
     include_code: bool = False,
     view_name: str | None = None,
@@ -39,7 +39,7 @@ def resolve_studio(
 
 
 def bind_cell(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     alias: str,
     cell_index: int,
     *,

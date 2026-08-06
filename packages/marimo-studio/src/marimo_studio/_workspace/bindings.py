@@ -22,7 +22,7 @@ from marimo_studio._workspace.models import (
     ProjectionKind,
     ResolvedStudio,
     ResolvedView,
-    StudioConfig,
+    StudioWorkspace,
     View,
 )
 from marimo_studio._workspace.ports import NotebookInspector
@@ -204,7 +204,7 @@ def _resolve_view(
 
 
 def _resolve_aliases(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     notebook_cells: tuple[CellSpec, ...],
     native_aliases: dict[str, CellSpec],
 ) -> tuple[dict[str, CellSpec], dict[str, _AliasFailure]]:
@@ -250,7 +250,7 @@ def _resolve_aliases(
 
 
 def resolve_studio(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     *,
     inspect_notebook: NotebookInspector,
     include_code: bool = False,
@@ -293,7 +293,7 @@ def resolve_studio(
 
 
 def bind_cell(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     alias: str,
     cell_index: int,
     *,

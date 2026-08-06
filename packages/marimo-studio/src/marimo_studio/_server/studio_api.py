@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Collection
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
@@ -10,7 +11,7 @@ from starlette.responses import JSONResponse, PlainTextResponse, Response
 from marimo_studio._compat.server.sessions import has_edit_access, server_token_matches
 from marimo_studio._urls import studio_url, view_url
 from marimo_studio._workspace.config import validate_view_name
-from marimo_studio._workspace.models import StudioConfig
+from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
 from marimo_studio._workspace.sources import read_source, write_source
 from marimo_studio._workspace.views import delete_view
 from marimo_studio.errors import MarimoStudioError, SourceConflictError
@@ -62,11 +63,12 @@ def _invalid_server_token(request: Request, expected: str) -> JSONResponse | Non
 
 async def create_view_response(
     request: Request,
-    studio: StudioConfig,
+    definition: StudioDefinition,
+    existing_views: Collection[str],
     base_url: str,
     server_token: str,
 ) -> Response:
-    """Create a named view from an authenticated Studio workspace."""
+    """Create a named view from an authenticated Studio definition."""
     if request.method != "POST":
         return Response(status_code=405)
     if not has_edit_access(request.scope):
@@ -95,7 +97,7 @@ async def create_view_response(
             status_code=400,
             headers=_NO_STORE,
         )
-    if name in studio.views:
+    if name in existing_views:
         return JSONResponse(
             {
                 "error": "view-exists",
@@ -105,7 +107,7 @@ async def create_view_response(
             headers=_NO_STORE,
         )
     try:
-        ensure_view(studio.notebook, name)
+        ensure_view(definition.notebook, name)
     except MarimoStudioError as error:
         return _error(error)
     return JSONResponse(
@@ -122,7 +124,7 @@ async def create_view_response(
 
 async def delete_view_response(
     request: Request,
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     name: str,
     server_token: str,
 ) -> Response:
@@ -150,7 +152,7 @@ async def delete_view_response(
 
 async def source_response(
     request: Request,
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     view_name: str,
     name: str,
     server_token: str,

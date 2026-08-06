@@ -26,8 +26,9 @@ from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.server.programmatic import programmatic_middleware
 from marimo_studio._server import dev
 from marimo_studio._workspace import load_studio
+from marimo_studio._workspace.config import load_studio_definition
 from marimo_studio._workspace.metadata import update_notebook_config
-from marimo_studio._workspace.models import StudioConfig
+from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.workspace import bind_cell, ensure_view
 
 from .helpers import empty_notebook_source, notebook_source, replace_app_shell
@@ -63,7 +64,7 @@ def _studio_bootstrap(document: str) -> dict[str, Any]:
     return json.loads("".join(parser.parts))
 
 
-def _set_shell(studio: StudioConfig, view_name: str, content: str) -> None:
+def _set_shell(studio: StudioWorkspace, view_name: str, content: str) -> None:
     template = studio.views[view_name].template
     template.write_text(
         replace_app_shell(template.read_text(encoding="utf-8"), content),
@@ -71,7 +72,7 @@ def _set_shell(studio: StudioConfig, view_name: str, content: str) -> None:
     )
 
 
-def _configured(notebook: Path) -> StudioConfig:
+def _configured(notebook: Path) -> StudioWorkspace:
     ensure_view(notebook)
     studio = load_studio(notebook)
     bind_cell(studio, "result", 1)
@@ -1191,6 +1192,7 @@ def test_edit_mode_public_routes_honor_parent_mount(notebook_path: Path) -> None
     assert workspace.status_code == 200
     expected_editor = "/parent/base/?" + urlencode({"file": str(studio.notebook)})
     bootstrap = _studio_bootstrap(workspace.text)
+    assert 'href="/parent/base/favicon.ico"' in workspace.text
     assert bootstrap["urls"]["editor"] == expected_editor
     assert bootstrap["urls"]["viewPrefix"] == "/parent/base/"
     assert bootstrap["urls"]["studioPrefix"] == "/parent/base/studio/"
@@ -1283,6 +1285,104 @@ def test_view_list_tracks_new_folders_without_restarting_marimo(
     assert before["views"] == ["dashboard", "executive"]
     assert after["views"] == ["dashboard", "executive", "operations"]
     assert page.status_code == 200
+
+
+def test_unconfigured_notebook_delegates_workspace_status(
+    notebook_path: Path,
+) -> None:
+    with TestClient(_marimo_app(notebook_path)) as client:
+        response = client.get("/_marimo-studio/status")
+
+    assert response.status_code == 404
+
+
+def test_definition_state_initializes_the_first_view_from_edit_mode(
+    notebook_path: Path,
+) -> None:
+    setup = ensure_view(notebook_path)
+    assert setup.workspace is not None
+    shutil.rmtree(setup.workspace.view_root)
+    definition = load_studio_definition(notebook_path)
+    app = _marimo_app(notebook_path)
+    _edit_mode(app)
+    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
+
+    with TestClient(app) as client:
+        status_before = client.get("/_marimo-studio/status")
+        views_before = client.get("/_marimo-studio/views")
+        initializer = client.get("/")
+        created = client.post(
+            "/_marimo-studio/views",
+            json={"name": definition.default_view},
+            headers=headers,
+        )
+        status_after = client.get("/_marimo-studio/status")
+        workspace = client.get("/studio/dashboard/")
+
+    assert status_before.json() == {
+        "schema": 1,
+        "state": "needs-view",
+        "default_view": "dashboard",
+        "views": [],
+    }
+    assert views_before.json() == {
+        "schema": 1,
+        "default_view": "dashboard",
+        "views": [],
+    }
+    assert initializer.status_code == 200
+    assert 'data-marimo-studio-state="needs-view"' in initializer.text
+    assert "Create the first view" in initializer.text
+    assert created.status_code == 201
+    assert created.json()["studio_url"] == "/studio/dashboard/"
+    assert status_after.json() == {
+        "schema": 1,
+        "state": "ready",
+        "default_view": "dashboard",
+        "views": ["dashboard"],
+    }
+    assert workspace.status_code == 200
+    assert (definition.view_root / "dashboard" / "index.html").is_file()
+
+
+def test_definition_state_returns_structured_run_repair(
+    notebook_path: Path,
+) -> None:
+    setup = ensure_view(notebook_path)
+    assert setup.workspace is not None
+    shutil.rmtree(setup.workspace.view_root)
+
+    with TestClient(create_asgi_app(notebook_path)) as client:
+        response = client.get("/", headers={"Accept": "application/json"})
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "error": "workspace-not-initialized",
+        "message": "Studio is configured and needs its first view 'dashboard'.",
+        "state": "needs-view",
+        "default_view": "dashboard",
+        "views": [],
+        "hint": "Open the notebook in edit mode and create its first view.",
+    }
+
+
+def test_workspace_status_reports_configuration_errors(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+
+    def select_missing(config: MutableMapping[str, Any]) -> None:
+        config["default"] = "missing"
+
+    update_notebook_config(studio.notebook, select_missing)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        status = client.get("/_marimo-studio/status")
+
+    assert status.status_code == 200
+    assert status.json()["schema"] == 1
+    assert status.json()["state"] == "error"
+    assert status.json()["error"] == "configuration-error"
 
 
 def test_edit_workspace_creates_views_and_conditionally_updates_source(

@@ -17,7 +17,8 @@ from marimo_studio._workspace.models import (
     RUNTIME_PATTERN,
     STUDIO_DIRECTORY,
     VIEW_PATTERN,
-    StudioConfig,
+    StudioDefinition,
+    StudioWorkspace,
     View,
 )
 from marimo_studio.errors import ConfigurationError
@@ -204,12 +205,8 @@ def canonical_view_root(notebook: str | Path) -> Path:
 
 def _discover_views(
     view_root: Path,
-    *,
-    required: bool,
 ) -> dict[str, View]:
     if not view_root.is_dir():
-        if required:
-            raise ConfigurationError(f"View directory does not exist: {view_root}")
         return {}
     views: dict[str, View] = {}
     for directory in sorted(view_root.iterdir(), key=lambda path: path.name):
@@ -221,16 +218,13 @@ def _discover_views(
         )
         validate_view_name(directory.name)
         views[directory.name] = View(directory.name, directory.resolve())
-    if required and not views:
-        raise ConfigurationError(f"No named views found in {view_root}")
     return views
 
 
-def _load_studio(
-    target: str | Path | None,
-    *,
-    require_view: bool,
-) -> StudioConfig:
+def load_studio_definition(
+    target: str | Path | None = None,
+) -> StudioDefinition:
+    """Load the configuration that declares a Studio workspace."""
     config_path, data = _load_config(Path(target or ".").expanduser())
     config_source = "pyproject" if config_path.name == PYPROJECT_NAME else "notebook"
     notebook = (
@@ -251,12 +245,6 @@ def _load_studio(
     show_cell_logs = data.get("show_cell_logs", True)
     if not isinstance(show_cell_logs, bool):
         raise ConfigurationError("show_cell_logs must be a boolean")
-    views = _discover_views(view_root, required=require_view)
-    if require_view and default_view not in views:
-        raise ConfigurationError(
-            f"Default view {default_view!r} does not exist in {view_root}"
-        )
-
     raw_cells = data.get("cells", {})
     if not isinstance(raw_cells, dict):
         raise ConfigurationError("cells must be a TOML table")
@@ -271,7 +259,7 @@ def _load_studio(
             cells[alias] = CellRef.parse(raw_ref)
         except ValueError as error:
             raise ConfigurationError(f"Invalid binding for {alias}: {error}") from error
-    return StudioConfig(
+    return StudioDefinition(
         root=config_path.parent,
         config_path=config_path,
         config_source=config_source,
@@ -281,23 +269,38 @@ def _load_studio(
         default_runtime=default_runtime,
         runtimes=runtimes,
         preserve_session=preserve_session,
-        views=views,
         cells=cells,
         show_cell_logs=show_cell_logs,
     )
 
 
-def load_studio(target: str | Path | None = None) -> StudioConfig:
-    """Load a configured notebook and its named views."""
-    return _load_studio(target, require_view=True)
+def materialize_studio_workspace(
+    definition: StudioDefinition,
+) -> StudioWorkspace:
+    """Resolve a Studio definition into its initialized workspace."""
+    views = _discover_views(definition.view_root)
+    return StudioWorkspace(
+        root=definition.root,
+        config_path=definition.config_path,
+        config_source=definition.config_source,
+        notebook=definition.notebook,
+        view_root=definition.view_root,
+        default_view=definition.default_view,
+        default_runtime=definition.default_runtime,
+        runtimes=definition.runtimes,
+        preserve_session=definition.preserve_session,
+        cells=definition.cells,
+        show_cell_logs=definition.show_cell_logs,
+        views=views,
+    )
 
 
-def load_studio_definition(target: str | Path | None = None) -> StudioConfig:
-    """Load configuration before a view has been created."""
-    return _load_studio(target, require_view=False)
+def load_studio(target: str | Path | None = None) -> StudioWorkspace:
+    """Load an initialized Studio workspace."""
+    return materialize_studio_workspace(load_studio_definition(target))
 
 
-def discover_studio(notebook: str | Path) -> StudioConfig | None:
+def discover_studio(notebook: str | Path) -> StudioWorkspace | None:
     """Find a presentation configured for ``notebook``."""
     notebook_path = Path(notebook).expanduser().resolve()
     if notebook_config(notebook_path) is not None:
@@ -308,8 +311,8 @@ def discover_studio(notebook: str | Path) -> StudioConfig | None:
     return None
 
 
-def discover_studio_definition(notebook: str | Path) -> StudioConfig | None:
-    """Find notebook or project configuration before view creation."""
+def discover_studio_definition(notebook: str | Path) -> StudioDefinition | None:
+    """Find the Studio definition for a notebook."""
     notebook_path = Path(notebook).expanduser().resolve()
     if notebook_config(notebook_path) is not None:
         return load_studio_definition(notebook_path)

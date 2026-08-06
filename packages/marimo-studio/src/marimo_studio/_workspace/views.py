@@ -22,7 +22,7 @@ from marimo_studio._workspace.files import (
     reject_mutable_symlinks,
 )
 from marimo_studio._workspace.metadata import update_notebook_config
-from marimo_studio._workspace.models import StudioConfig
+from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import (
     LastViewError,
     ViewDeletionError,
@@ -30,7 +30,7 @@ from marimo_studio.errors import (
 )
 
 
-def _set_default(studio: StudioConfig, name: str) -> None:
+def _set_default(studio: StudioWorkspace, name: str) -> None:
     def update(config: MutableMapping[str, Any]) -> None:
         config["default"] = name
 
@@ -48,7 +48,7 @@ def _restore_view(staged: Path, target: Path, staging_root: Path) -> None:
     staging_root.rmdir()
 
 
-def delete_view(studio: StudioConfig, name: str) -> StudioConfig:
+def delete_view(studio: StudioWorkspace, name: str) -> StudioWorkspace:
     """Delete one view directory and return the updated workspace."""
     current = load_studio(studio.config_path)
     if name not in current.views:

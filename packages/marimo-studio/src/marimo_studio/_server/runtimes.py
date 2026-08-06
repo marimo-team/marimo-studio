@@ -11,7 +11,11 @@ from marimo_studio._compat.browser_notebook import browser_notebook_source
 from marimo_studio._compat.server.models import ServerContext
 from marimo_studio._compat.server.sessions import live_cells
 from marimo_studio._urls import public_url
-from marimo_studio._workspace.models import RUNTIME_PATTERN, ResolvedView, StudioConfig
+from marimo_studio._workspace.models import (
+    RUNTIME_PATTERN,
+    ResolvedView,
+    StudioWorkspace,
+)
 from marimo_studio.errors import RuntimeSelectionError
 
 if TYPE_CHECKING:
@@ -74,7 +78,7 @@ class ServerRuntime:
                 "url": public_url(context.base_url, "/"),
                 "serverToken": context.server_token,
                 "fileKey": context.file_key,
-                "preserveSession": snapshot.resolved.studio.preserve_session,
+                "preserveSession": snapshot.resolved.workspace.preserve_session,
             },
             cell_bindings=snapshot.resolved.runtime_cell_bindings(
                 cells,
@@ -99,7 +103,7 @@ class WasmRuntime:
         view = _view(snapshot)
         version = _assets.runtime_marimo_version()
         code = browser_notebook_source(
-            snapshot.resolved.studio.notebook,
+            snapshot.resolved.workspace.notebook,
             snapshot.notebook_source,
             snapshot.value_references,
         )
@@ -146,7 +150,7 @@ class RuntimeRegistry:
 
     def available(
         self,
-        studio: StudioConfig,
+        studio: StudioWorkspace,
         context: ServerContext,
     ) -> tuple[str, ...]:
         configured = self.ids if context.mode == "edit" else studio.runtimes
@@ -156,7 +160,7 @@ class RuntimeRegistry:
 
     def select(
         self,
-        studio: StudioConfig,
+        studio: StudioWorkspace,
         context: ServerContext,
         requested: str | None,
     ) -> tuple[RuntimeProvider, tuple[str, ...]]:

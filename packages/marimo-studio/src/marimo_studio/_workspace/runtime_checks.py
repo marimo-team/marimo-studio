@@ -12,14 +12,14 @@ from marimo_studio._workspace.check_results import (
     selected_views,
     source,
 )
-from marimo_studio._workspace.models import StudioConfig
+from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.ports import NotebookInspector, RuntimeProber
 from marimo_studio.errors import MarimoStudioError
 from marimo_studio.types import CheckResult, ValueBinding
 
 
 async def run_runtime_checks(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     *,
     inspect_notebook: NotebookInspector,
     view_name: str | None,

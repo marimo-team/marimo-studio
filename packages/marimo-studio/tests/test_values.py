@@ -8,11 +8,13 @@ from typing import cast
 import marimo
 import pytest
 
+import marimo_studio._compat.kernel_values.kernel as kernel_values_module
 import marimo_studio._compat.runtime_probe as runtime_probe_module
 from marimo_studio._compat.kernel_values import (
     ValueReadUnavailable,
     read_session_values,
 )
+from marimo_studio._compat.kernel_values.kernel import _KernelValueLifespan
 from marimo_studio._compat.kernel_values.selectors import _read_values
 from marimo_studio._compat.kernel_values.session import _FunctionResultWaiter
 from marimo_studio._compat.notebook import load_static_notebook
@@ -136,6 +138,62 @@ def test_kernel_projection_bounds_the_aggregate_response() -> None:
 
     assert result.values == {"context.first": "x" * 400}
     assert result.errors["context.second"].code == "response-too-large"
+
+
+def test_kernel_lifespan_registers_before_the_first_view_exists(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._runtime import context as runtime_context
+    from marimo._runtime.context import kernel_context as kernel_context_module
+
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+    tmp_path.joinpath("pyproject.toml").write_text(
+        """\
+[tool.marimo-studio]
+notebook = "notebook.py"
+default = "dashboard"
+""",
+        encoding="utf-8",
+    )
+
+    class Registry:
+        def __init__(self) -> None:
+            self.registered: list[str] = []
+            self.deleted: list[str] = []
+
+        def register(self, namespace: str, _: object) -> None:
+            self.registered.append(namespace)
+
+        def delete(self, namespace: str) -> None:
+            self.deleted.append(namespace)
+
+    class Context:
+        filename = str(notebook)
+        function_registry = Registry()
+        query_params = object()
+        _kernel = object()
+
+    context = Context()
+    monkeypatch.setattr(runtime_context, "get_context", lambda: context)
+    monkeypatch.setattr(kernel_context_module, "KernelRuntimeContext", Context)
+    monkeypatch.setattr(
+        kernel_values_module,
+        "keep_cached_cells_compatible",
+        lambda: lambda: None,
+    )
+
+    async def exercise() -> None:
+        async with _KernelValueLifespan():
+            assert context.function_registry.registered == [
+                "_marimo_studio",
+                "_marimo_studio",
+            ]
+
+    asyncio.run(exercise())
+
+    assert context.function_registry.deleted == ["_marimo_studio"]
 
 
 def test_kernel_value_read_rejects_a_viewer_before_dispatch() -> None:

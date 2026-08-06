@@ -20,7 +20,7 @@ from marimo_studio._workspace.config import load_studio
 from marimo_studio._workspace.models import (
     RESERVED_VIEW_ASSET_NAMES,
     ResolvedStudio,
-    StudioConfig,
+    StudioWorkspace,
 )
 from marimo_studio._workspace.templates import TemplateParser
 from marimo_studio.errors import StaticExportError
@@ -123,13 +123,13 @@ def _projection_error(resolved: ResolvedStudio, view_name: str) -> None:
     raise StaticExportError(
         f"View {view_name!r} has unresolved projections: "
         f"{first.message} ({location}){suffix}. "
-        f"Run `marimo-studio check {resolved.studio.notebook} "
+        f"Run `marimo-studio check {resolved.workspace.notebook} "
         f"--view {view_name}` for repair details."
     )
 
 
 def _runtime_config(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     resolved: ResolvedStudio,
     view_name: str,
     document: str,
@@ -258,7 +258,7 @@ def _claim_asset(
 
 
 def _asset_plan(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     resolved: ResolvedStudio,
     view_name: str,
 ) -> tuple[_AssetCopy, ...]:
@@ -317,7 +317,7 @@ def _asset_plan(
 
 def _write_bundle(
     output: Path,
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     resolved: ResolvedStudio,
     view_name: str,
     document: str,
@@ -373,7 +373,7 @@ def _write_bundle(
 
 def _validate_output(
     output: Path,
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     view_name: str,
     *,
     force: bool,

@@ -20,6 +20,7 @@ from marimo_studio._compat.server.sessions import has_notebook_session
 from marimo_studio._server.headers import DOCUMENT_HEADERS
 from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._server.studio import (
+    initialization_document,
     repair_document,
     studio_document,
     waiting_document,
@@ -30,7 +31,7 @@ from marimo_studio._urls import (
     studio_url,
     with_notebook_query,
 )
-from marimo_studio._workspace.models import StudioConfig
+from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
 
 
@@ -94,7 +95,7 @@ def document_response(
     if context.mode == "run":
         configure_document_replay(
             context,
-            snapshot.resolved.studio.preserve_session,
+            snapshot.resolved.workspace.preserve_session,
         )
     return HTMLResponse(
         presentation.render_document(snapshot, context),
@@ -112,7 +113,7 @@ def document_response(
 def studio_response(
     request: Request,
     context: ServerContext,
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     selected: str,
     runtimes: tuple[tuple[str, str], ...],
 ) -> Response:
@@ -141,6 +142,28 @@ def studio_response(
     )
 
 
+def initialization_response(
+    request: Request,
+    context: ServerContext,
+    definition: StudioDefinition,
+) -> Response:
+    """Render the authenticated first-view initializer in edit mode."""
+    if context.mode != "edit":
+        return Response(status_code=404)
+    if request.method not in {"GET", "HEAD"}:
+        return Response(status_code=405)
+    return HTMLResponse(
+        initialization_document(
+            definition,
+            context.base_url,
+            context.server_token,
+            context.file_key,
+            request.query_params.multi_items(),
+        ),
+        headers=DOCUMENT_HEADERS,
+    )
+
+
 def error_response(
     relative: str,
     error: MarimoStudioError,
@@ -158,7 +181,11 @@ def error_response(
     for root in {notebook.parent, notebook.parent.resolve()}:
         message = message.replace(f"{root}/", "")
     hint = error.public_hint
-    payload: dict[str, object] = {"error": code, "message": message}
+    payload: dict[str, object] = {
+        "error": code,
+        "message": message,
+        **error.diagnostic_details(),
+    }
     if hint:
         payload["hint"] = hint
     if transient:
@@ -191,8 +218,9 @@ def error_response(
             status_code=status_code,
             headers=headers,
         )
+    detail = f"\n\n{hint}" if hint else ""
     return PlainTextResponse(
-        f"Marimo Studio configuration error\n\n{message}",
+        f"Marimo Studio configuration error\n\n{message}{detail}",
         status_code=status_code,
         headers=headers,
     )
