@@ -2,46 +2,71 @@ import { spawn } from "node:child_process";
 import { cp, mkdir, rm } from "node:fs/promises";
 
 import {
+  configDirectory,
   fixtureDirectory,
+  hostedFixtureDirectory,
+  hostedNotebookPath,
+  hostedWorkspaceDirectory,
   notebookPath,
   repositoryDirectory,
   workspaceDirectory,
 } from "./paths.mjs";
 
-await rm(workspaceDirectory, { force: true, recursive: true });
-await mkdir(workspaceDirectory, { recursive: true });
-await cp(fixtureDirectory, workspaceDirectory, { recursive: true });
+await rm(configDirectory, { force: true, recursive: true });
+await mkdir(configDirectory, { recursive: true });
+for (const [fixture, workspace] of [
+  [fixtureDirectory, workspaceDirectory],
+  [hostedFixtureDirectory, hostedWorkspaceDirectory],
+]) {
+  await rm(workspace, { force: true, recursive: true });
+  await mkdir(workspace, { recursive: true });
+  await cp(fixture, workspace, { recursive: true });
+}
 
-const child = spawn(
-  "uv",
-  [
-    "run",
-    "--frozen",
-    "--group",
-    "e2e",
-    "marimo",
-    "edit",
-    notebookPath,
-    "--no-sandbox",
-    "--headless",
-    "--no-token",
-    "--host",
-    "127.0.0.1",
-    "--port",
-    "4321",
-  ],
-  {
+const startServer = (args) =>
+  spawn("uv", ["run", "--frozen", "--group", "e2e", "marimo", "edit", ...args], {
     cwd: repositoryDirectory,
     detached: process.platform !== "win32",
-    env: { ...process.env, PYTHONUNBUFFERED: "1" },
+    env: {
+      ...process.env,
+      PYTHONUNBUFFERED: "1",
+      XDG_CONFIG_HOME: configDirectory,
+      _MARIMO_CONFIG_OVERLOAD_RUNTIME_AUTO_INSTANTIATE: "true",
+    },
     stdio: "inherit",
-  },
-);
+  });
+
+const primary = startServer([
+  notebookPath,
+  "--no-sandbox",
+  "--headless",
+  "--no-token",
+  "--host",
+  "127.0.0.1",
+  "--port",
+  "4321",
+]);
+const hosted = startServer([
+  hostedNotebookPath,
+  "--no-sandbox",
+  "--headless",
+  "--token-password",
+  "studio-e2e-token",
+  "--base-url",
+  "/hosted",
+  "--host",
+  "127.0.0.1",
+  "--port",
+  "4322",
+]);
+const children = [primary, hosted];
 
 let stopping = false;
+let exitCode = 0;
+const exited = new Set();
 const serverUrl = "http://127.0.0.1:4321";
 
-const killChildTree = (signal) => {
+const killChildTree = (child, signal) => {
   if (process.platform === "win32" || child.pid === undefined) {
     child.kill(signal);
     return;
@@ -73,14 +98,21 @@ const requestGracefulShutdown = async () => {
 };
 
 const stop = (signal) => {
-  if (stopping || child.exitCode !== null) {
+  if (stopping) {
     return;
   }
   stopping = true;
-  requestGracefulShutdown().catch(() => killChildTree(signal));
+  if (primary.exitCode === null) {
+    requestGracefulShutdown().catch(() => killChildTree(primary, signal));
+  }
+  if (hosted.exitCode === null) {
+    killChildTree(hosted, signal);
+  }
   setTimeout(() => {
-    if (child.exitCode === null) {
-      killChildTree("SIGKILL");
+    for (const child of children) {
+      if (child.exitCode === null) {
+        killChildTree(child, "SIGKILL");
+      }
     }
   }, 5_000).unref();
 };
@@ -89,12 +121,26 @@ process.on("SIGINT", () => stop("SIGINT"));
 process.on("SIGTERM", () => stop("SIGTERM"));
 process.on("SIGHUP", () => stop("SIGTERM"));
 
-child.on("error", (error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
-
-child.on("exit", async (code, signal) => {
-  await rm(workspaceDirectory, { force: true, recursive: true });
-  process.exitCode = stopping && signal ? 0 : (code ?? 1);
-});
+for (const child of children) {
+  child.on("error", (error) => {
+    console.error(error);
+    exitCode = 1;
+    stop("SIGTERM");
+  });
+  child.on("exit", async (code, signal) => {
+    exited.add(child);
+    if (!stopping) {
+      exitCode = code === 0 && !signal ? 1 : (code ?? 1);
+      stop("SIGTERM");
+    }
+    if (exited.size !== children.length) {
+      return;
+    }
+    await Promise.all(
+      [configDirectory, workspaceDirectory, hostedWorkspaceDirectory].map(async (workspace) =>
+        rm(workspace, { force: true, recursive: true }),
+      ),
+    );
+    process.exitCode = exitCode;
+  });
+}
