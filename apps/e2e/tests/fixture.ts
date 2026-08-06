@@ -75,6 +75,87 @@ type BrowserDiagnostics = {
   messages: string[];
 };
 
+interface SessionAdmin {
+  apiRoot: string;
+  serverToken: string;
+}
+
+const sessionAdmin = async (page: Page): Promise<SessionAdmin | undefined> => {
+  if (page.isClosed()) {
+    return undefined;
+  }
+  const source = await page
+    .locator("#marimo-studio-bootstrap")
+    .textContent()
+    .catch(() => null);
+  if (!source) {
+    return undefined;
+  }
+  const bootstrap: unknown = JSON.parse(source);
+  if (
+    typeof bootstrap !== "object" ||
+    bootstrap === null ||
+    !("serverToken" in bootstrap) ||
+    typeof bootstrap.serverToken !== "string" ||
+    !("urls" in bootstrap) ||
+    typeof bootstrap.urls !== "object" ||
+    bootstrap.urls === null ||
+    !("query" in bootstrap.urls) ||
+    typeof bootstrap.urls.query !== "string"
+  ) {
+    throw new TypeError("Studio bootstrap is missing session administration fields");
+  }
+  const query = new URL(bootstrap.urls.query, page.url());
+  const queryPath = "/_marimo-studio/query";
+  if (!query.pathname.endsWith(queryPath)) {
+    throw new TypeError(`Unexpected Studio query URL ${query.pathname}`);
+  }
+  return {
+    apiRoot: new URL(`${query.pathname.slice(0, -queryPath.length)}/api/home`, query.origin).href,
+    serverToken: bootstrap.serverToken,
+  };
+};
+
+const closeNotebookSessions = async (page: Page): Promise<void> => {
+  const admin = await sessionAdmin(page);
+  const request = page.request;
+  await page.close();
+  if (!admin) {
+    return;
+  }
+  const headers = { "Marimo-Server-Token": admin.serverToken };
+  const running = await request.post(`${admin.apiRoot}/running_notebooks`, { headers });
+  if (!running.ok()) {
+    throw new Error(`Could not list Marimo sessions: ${running.status()}`);
+  }
+  const payload: unknown = await running.json();
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    !("files" in payload) ||
+    !Array.isArray(payload.files)
+  ) {
+    throw new TypeError("Marimo returned an invalid session inventory");
+  }
+  for (const file of payload.files) {
+    if (
+      typeof file !== "object" ||
+      file === null ||
+      !("sessionId" in file) ||
+      typeof file.sessionId !== "string"
+    ) {
+      throw new TypeError("Marimo returned an invalid session record");
+    }
+    const closed = await request.post(`${admin.apiRoot}/shutdown_session`, {
+      data: { sessionId: file.sessionId },
+      headers,
+    });
+    if (!closed.ok()) {
+      throw new Error(`Could not close Marimo session: ${closed.status()}`);
+    }
+  }
+};
+
 export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
   browserDiagnostics: [
     async ({ page }, use, testInfo) => {
@@ -104,27 +185,30 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
 
       await use({ messages });
 
-      if (messages.length > 0 || testInfo.status !== testInfo.expectedStatus) {
-        await testInfo.attach("browser-diagnostics", {
-          body: Buffer.from(messages.join("\n") || "No browser errors recorded."),
-          contentType: "text/plain",
-        });
-        await testInfo.attach("studio-document", {
-          body: Buffer.from(await page.content()),
-          contentType: "text/html",
-        });
+      try {
+        if (messages.length > 0 || testInfo.status !== testInfo.expectedStatus) {
+          await testInfo.attach("browser-diagnostics", {
+            body: Buffer.from(messages.join("\n") || "No browser errors recorded."),
+            contentType: "text/plain",
+          });
+          if (!page.isClosed()) {
+            await testInfo.attach("studio-document", {
+              body: Buffer.from(await page.content()),
+              contentType: "text/html",
+            });
+          }
+        }
+        expect(messages, "unexpected browser diagnostics").toEqual([]);
+      } finally {
+        await closeNotebookSessions(page);
+        await restoreWorkspace();
       }
-      expect(messages, "unexpected browser diagnostics").toEqual([]);
     },
     { auto: true },
   ],
 });
 
 test.beforeEach(async () => {
-  await restoreWorkspace();
-});
-
-test.afterEach(async () => {
   await restoreWorkspace();
 });
 
