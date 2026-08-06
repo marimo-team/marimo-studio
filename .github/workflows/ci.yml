@@ -101,7 +101,7 @@ jobs:
         run: make typecheck
 
       - name: Test frontend
-        run: pnpm test
+        run: pnpm exec vp run -r test
 
       - name: Build documentation
         run: make docs-build

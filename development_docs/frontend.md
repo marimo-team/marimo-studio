@@ -81,8 +81,8 @@ pnpm --filter @marimo-studio/marimo-frontend test
 Run the browser type and import-boundary checks from the repository root:
 
 ```console
-pnpm typecheck
-pnpm lint
+make typecheck
+make lint
 ```
 
 Build the document entry points after changing presentation, Studio, runtime,

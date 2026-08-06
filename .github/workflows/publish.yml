@@ -111,6 +111,7 @@ jobs:
         run: ./scripts/verify-pypi.sh
 
   release-notes:
+    name: Release notes
     needs: [publish, verify-pypi]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -123,25 +124,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Socket Firewall
-        uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
-        with:
-          mode: firewall-free
-
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
         with:
           node-version-file: .node-version
-          version: 0.2.4
-          cache: true
-          sfw: true
-          run-install: |
-            - args: ["--frozen-lockfile"]
-
-      - name: Enable pnpm
-        run: corepack enable pnpm
+          package-manager-cache: false
 
       - name: Update release notes
-        run: pnpm exec changelogithub
+        run: npx --yes changelogithub@14.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
