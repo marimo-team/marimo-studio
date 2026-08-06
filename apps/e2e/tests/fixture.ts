@@ -212,6 +212,7 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
 
       await use({ messages });
 
+      const hosted = page.url().startsWith("http://127.0.0.1:4322/");
       try {
         if (messages.length > 0 || testInfo.status !== testInfo.expectedStatus) {
           await testInfo.attach("browser-diagnostics", {
@@ -228,7 +229,11 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
         expect(messages, "unexpected browser diagnostics").toEqual([]);
       } finally {
         await closeNotebookSessions(page);
-        await restoreWorkspace();
+        if (hosted) {
+          await restoreHostedWorkspace();
+        } else {
+          await restoreWorkspace();
+        }
       }
     },
     { auto: true },

@@ -45,7 +45,9 @@ def metric(scale):
 
 @app.cell
 def summary(metric, mo):
-    mo.md(f"### Hosted total: {metric}")
+    mo.md(f"""
+    ### Hosted total: {metric}
+    """)
     return
 
 
