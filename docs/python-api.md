@@ -96,9 +96,10 @@ create_asgi_app(
 ) -> ASGIApp
 ```
 
-Loads the notebook's Studio configuration and returns a run-mode Marimo ASGI
-application. The default and named views use the same server process. Each
-browser receives its regular isolated Marimo run session.
+Loads the notebook's Studio definition and returns a run-mode Marimo ASGI
+application. The definition can precede authored view files. The default and
+named views use the same server process after the workspace is initialized.
+Each browser receives its regular isolated Marimo run session.
 
 ```python
 from marimo_studio import create_asgi_app
@@ -107,6 +108,11 @@ app = create_asgi_app("analysis.py")
 ```
 
 The factory requires Marimo 0.23.16 or newer.
+
+A definition with zero views still produces the ASGI application. Run-mode
+document requests return `409` with `workspace-not-initialized`, the configured
+default, and an edit-mode repair hint. Create the first view through a Marimo
+edit process or `marimo-studio view add` before serving traffic.
 
 Raises:
 

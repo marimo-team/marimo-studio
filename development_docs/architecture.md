@@ -15,16 +15,16 @@ Marimo process
 
 ## Python responsibilities
 
-| Owner                                                                 | Responsibility                                                           |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Marimo                                                                | ASGI lifecycle, auth, sessions, kernels, native APIs, and virtual files  |
-| `_entrypoints`                                                        | Register Studio middleware and the kernel lifespan extension             |
-| `_workspace`                                                          | Resolve configuration, targets, aliases, views, checks, and source files |
-| `app.py`, `checks.py`, `environment.py`, `inspect.py`, `workspace.py` | Compose workspace rules with Marimo adapters at public boundaries        |
-| `_compat`                                                             | Translate private Marimo APIs into Studio-owned records                  |
-| `_server`                                                             | Translate authenticated HTTP requests into Studio services               |
-| `export.py`                                                           | Package one resolved view as a static WebAssembly site                   |
-| `_cli`                                                                | Adapt Click commands and output formats to application services          |
+| Owner                                                                 | Responsibility                                                                     |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Marimo                                                                | ASGI lifecycle, auth, sessions, kernels, native APIs, and virtual files            |
+| `_entrypoints`                                                        | Register Studio middleware and the kernel lifespan extension                       |
+| `_workspace`                                                          | Resolve definitions, workspaces, targets, aliases, views, checks, and source files |
+| `app.py`, `checks.py`, `environment.py`, `inspect.py`, `workspace.py` | Compose workspace rules with Marimo adapters at public boundaries                  |
+| `_compat`                                                             | Translate private Marimo APIs into Studio-owned records                            |
+| `_server`                                                             | Translate authenticated HTTP requests into Studio services                         |
+| `export.py`                                                           | Package one resolved view as a static WebAssembly site                             |
+| `_cli`                                                                | Adapt Click commands and output formats to application services                    |
 
 `_workspace` accepts `NotebookInspector` and `RuntimeProber` ports when a
 rule needs notebook data. It imports no compatibility adapter. `_cli` also
@@ -76,14 +76,17 @@ marimo-studio = "marimo_studio._entrypoints:server_middleware"
 marimo-studio = "marimo_studio._entrypoints:kernel_lifespan"
 ```
 
-The middleware resolves notebook configuration from PEP 723 metadata or the
-nearest matching `pyproject.toml`. Configured view files live under
-`__marimo__/studio/<notebook-stem>/<view>/`. Requests for another notebook
-continue through Marimo.
+The middleware resolves a `StudioDefinition` from PEP 723 metadata or the
+nearest matching `pyproject.toml`. A definition contains notebook and runtime
+configuration and can exist before authored view files. Once at least one view
+exists and `default` selects it, Studio materializes a `StudioWorkspace`.
+Configured view files live under `__marimo__/studio/<notebook-stem>/<view>/`.
+Requests for another notebook continue through Marimo.
 
-The kernel extension registers value reads for configured notebooks. A view
-can read only the cell aliases and value selectors present in its resolved
-document. Requests travel through Marimo's kernel queue.
+The kernel extension activates from `StudioDefinition`, so value reads are
+registered before the first view is created. A materialized view can read the
+cell aliases and value selectors present in its resolved document. Requests
+travel through Marimo's kernel queue.
 
 ## Edit and run sessions
 
@@ -91,6 +94,12 @@ Edit mode serves the workspace at `/studio/<view>/`. The workspace keeps the
 native editor and one frame per available preview runtime mounted while the
 layout, selected view, or visible runtime changes. It prepares the selected
 runtime and the WebAssembly preview in the background.
+
+When a definition has zero views, authenticated edit mode serves the first-view
+initializer. `POST /_marimo-studio/views` creates the configured default and
+transitions the next request to a materialized workspace. Run mode returns a
+structured `workspace-not-initialized` repair response until that transition
+completes.
 
 The Server preview joins the editor's Marimo session as a kiosk consumer after
 the editor session exists. It reuses that kernel's outputs, native controls,
@@ -145,6 +154,10 @@ refresh keeps the last valid shell.
 Source reads and writes use content revisions. Writes use atomic replacement
 and reject mutable symlink traversal. An external edit refreshes a clean
 editor and produces a conflict beside a dirty editor.
+
+Removing the selected view is an ordered transition. Studio saves its source,
+selects and prepares the successor, retargets preview and source streams,
+deletes the old directory, then commits the returned inventory.
 
 ## Static export
 

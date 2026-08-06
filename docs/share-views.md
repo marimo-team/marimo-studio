@@ -42,6 +42,21 @@ The default view opens at `/`. A view named `report` opens at `/report/`.
 Each browser receives an isolated Marimo run session, so its controls, widgets,
 downloads, and reactive updates use that browser's Python kernel.
 
+Check the authenticated workspace lifecycle at `/_marimo-studio/status`:
+
+```json
+{
+  "schema": 1,
+  "state": "ready",
+  "default_view": "dashboard",
+  "views": ["dashboard"]
+}
+```
+
+`state` is `needs-view` while a definition awaits its first view and `error`
+when configuration cannot materialize a workspace. Run-mode document requests
+return a structured repair response in both cases.
+
 Use one worker for a standalone deployment. A multi-worker platform needs
 sticky routing so each browser returns to the process that owns its kernel.
 

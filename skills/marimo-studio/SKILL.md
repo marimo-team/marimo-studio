@@ -315,7 +315,7 @@ repair queue. Apply the smallest source change, then rerun the same check.
 | Stale or ambiguous alias | Reinspect the notebook, then bind with `--overwrite`      |
 | Unknown value selector   | Correct the root variable or selector path                |
 | Runtime value failure    | Inspect the defining cell and its current output          |
-| Missing view directory   | Recreate the named view with `view add`                   |
+| Workspace needs a view   | Open Studio and create the configured default view        |
 
 Inspect the running Studio preview after the checks pass:
 
