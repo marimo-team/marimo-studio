@@ -40,7 +40,7 @@ from marimo_studio._server.studio_api import (
     delete_view_response,
     source_response,
 )
-from marimo_studio._workspace.models import ResolvedView, StudioConfig
+from marimo_studio._workspace.models import StudioConfig
 
 
 async def support_response(
@@ -134,11 +134,11 @@ async def _view_response(
             ),
             headers=NO_STORE,
         )
+    if route == "values" and request.method == "POST":
+        return await _values_response(request, context, presentation, view_name)
     snapshot = presentation.latest_snapshot(view_name)
     resolved = snapshot.resolved
     view = resolved.views[view_name]
-    if route == "values" and request.method == "POST":
-        return await _values_response(request, context, view)
     if route.startswith("cells/") and request.method == "GET":
         alias = route.removeprefix("cells/")
         if "/" in alias or (
@@ -173,26 +173,47 @@ def events_response(
 async def _values_response(
     request: Request,
     context: ServerContext,
-    view: ResolvedView,
+    presentation: NotebookPresentation,
+    view_name: str,
 ) -> Response:
     try:
         body = await request.json()
     except (json.JSONDecodeError, UnicodeDecodeError):
         body = None
+    revision = body.get("revision") if isinstance(body, dict) else None
     selectors = body.get("selectors") if isinstance(body, dict) else None
     if (
-        not isinstance(selectors, list)
+        not isinstance(revision, str)
+        or not revision
+        or not isinstance(selectors, list)
         or len(selectors) > 100
         or not all(isinstance(selector, str) for selector in selectors)
     ):
         return JSONResponse(
             {
                 "error": "invalid-value-request",
-                "message": "selectors must be an array of at most 100 strings.",
+                "message": (
+                    "revision must be a non-empty string and selectors must be "
+                    "an array of at most 100 strings."
+                ),
             },
             status_code=400,
             headers=NO_STORE,
         )
+    snapshot = presentation.snapshot_for_revision(view_name, revision)
+    if snapshot is None:
+        return JSONResponse(
+            {
+                "error": "presentation-revision-unavailable",
+                "message": (
+                    "The requested presentation revision is no longer available."
+                ),
+                "transient": True,
+            },
+            status_code=409,
+            headers=NO_STORE,
+        )
+    view = snapshot.resolved.views[view_name]
     requested = tuple(dict.fromkeys(cast(list[str], selectors)))
     unknown = sorted(set(requested).difference(view.value_bindings))
     if unknown:

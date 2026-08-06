@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
 import { parseErrorResponse } from "../src/errors.ts";
-import { parseValueReadResponse } from "../src/value-read.ts";
+import { parseValueReadResponse, valueReadRequestSchema } from "../src/value-read.ts";
 import { parseCreatedView, parseDeletedView, parseViewList } from "../src/views.ts";
 
 test("view responses validate list, create, and delete envelopes", () => {
@@ -37,6 +37,14 @@ test("value responses validate errors before presentation consumes them", () => 
     parseValueReadResponse({ values: {}, errors: { broken: { code: 42, message: "bad" } } }),
   );
   assert.throws(() => parseValueReadResponse({ values: { missing: undefined }, errors: {} }));
+});
+
+test("value requests identify their presentation revision", () => {
+  const request = { revision: "presentation-revision", selectors: ["context.total"] };
+
+  assert.deepEqual(valueReadRequestSchema.parse(request), request);
+  assert.throws(() => valueReadRequestSchema.parse({ selectors: ["context.total"] }));
+  assert.throws(() => valueReadRequestSchema.parse({ revision: "", selectors: [] }));
 });
 
 test("error responses keep recognized diagnostic fields", () => {

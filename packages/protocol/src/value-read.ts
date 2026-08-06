@@ -2,6 +2,11 @@ import { z } from "zod";
 
 import { jsonValueSchema } from "./runtime-config.ts";
 
+export const valueReadRequestSchema = z.object({
+  revision: z.string().min(1),
+  selectors: z.array(z.string()).max(100),
+});
+
 export const valueReadErrorSchema = z.object({
   code: z.string(),
   message: z.string(),
@@ -14,6 +19,7 @@ export const valueReadResponseSchema = z.object({
 });
 
 export type ValueReadError = z.infer<typeof valueReadErrorSchema>;
+export type ValueReadRequest = z.infer<typeof valueReadRequestSchema>;
 export type ValueReadResponse = z.infer<typeof valueReadResponseSchema>;
 
 export const parseValueReadResponse = (value: unknown): ValueReadResponse => {

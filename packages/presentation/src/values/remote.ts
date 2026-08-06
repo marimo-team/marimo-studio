@@ -1,5 +1,9 @@
 import { parseErrorResponse } from "@marimo-studio/protocol/errors";
-import { parseValueReadResponse, type ValueReadResponse } from "@marimo-studio/protocol/value-read";
+import {
+  parseValueReadResponse,
+  type ValueReadRequest,
+  type ValueReadResponse,
+} from "@marimo-studio/protocol/value-read";
 
 import { retry } from "../retry.ts";
 import { getRuntimeConfig } from "../runtime-config/index.ts";
@@ -19,7 +23,7 @@ export class ValueRequestError extends Error {
 
 export const readServerValues = async (
   sessionId: string,
-  selectors: string[],
+  request: ValueReadRequest,
   signal?: AbortSignal,
 ): Promise<ValueReadResponse> => {
   const config = getRuntimeConfig();
@@ -37,7 +41,7 @@ export const readServerValues = async (
       "Marimo-Server-Token": serverToken,
       "Marimo-Session-Id": sessionId,
     },
-    body: JSON.stringify({ selectors }),
+    body: JSON.stringify(request),
     signal,
   });
   if (!response.ok) {
@@ -55,11 +59,11 @@ const RETRY_DELAYS = [250, 500, 1_000, 2_000] as const;
 
 export const readServerValuesWithRetry = async (
   sessionId: string,
-  selectors: string[],
+  request: ValueReadRequest,
   signal?: AbortSignal,
 ): Promise<ValueReadResponse> =>
   retry({
-    operation: () => readServerValues(sessionId, selectors, signal),
+    operation: () => readServerValues(sessionId, request, signal),
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof ValueRequestError && error.transient,
     signal,

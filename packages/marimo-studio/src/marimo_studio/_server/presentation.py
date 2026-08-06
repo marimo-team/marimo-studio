@@ -31,6 +31,8 @@ from marimo_studio.errors import (
 from marimo_studio.types import ValueReference
 from marimo_studio.workspace import resolve_studio
 
+_SNAPSHOT_HISTORY_LIMIT = 8
+
 
 def _configuration_identity(
     studio: StudioConfig,
@@ -197,6 +199,7 @@ class NotebookPresentation:
         self.notebook = notebook
         self._lock = RLock()
         self._snapshots: dict[str, PresentationSnapshot] = {}
+        self._snapshot_history: dict[str, dict[str, PresentationSnapshot]] = {}
 
     def discover(self) -> StudioConfig | None:
         return discover_studio(self.notebook)
@@ -212,6 +215,7 @@ class NotebookPresentation:
                     raise ConfigurationError(
                         f"No Marimo Studio configuration found for {self.notebook}"
                     )
+                self._prune_snapshots(studio)
                 selected = view_name or studio.default_view
                 if selected not in studio.views:
                     raise ConfigurationError(f"Unknown view {selected!r}")
@@ -262,7 +266,7 @@ class NotebookPresentation:
                     value_references=_value_references(before.documents),
                     revision=revision,
                 )
-                self._snapshots[selected] = snapshot
+                self._remember(snapshot)
                 return snapshot
         raise RuntimeSyncError(
             "The view sources are still changing. Studio will retry shortly."
@@ -273,6 +277,28 @@ class NotebookPresentation:
         with self._lock:
             cached = self._snapshots.get(view_name)
         return cached if cached is not None else self.snapshot(view_name)
+
+    def snapshot_for_revision(
+        self,
+        view_name: str,
+        revision: str,
+    ) -> PresentationSnapshot | None:
+        """Return a recently published snapshot for an in-flight browser read."""
+        with self._lock:
+            return self._snapshot_history.get(view_name, {}).get(revision)
+
+    def _remember(self, snapshot: PresentationSnapshot) -> None:
+        self._snapshots[snapshot.view_name] = snapshot
+        history = self._snapshot_history.setdefault(snapshot.view_name, {})
+        history[snapshot.revision] = snapshot
+        while len(history) > _SNAPSHOT_HISTORY_LIMIT:
+            del history[next(iter(history))]
+
+    def _prune_snapshots(self, studio: StudioConfig) -> None:
+        removed = set(self._snapshots).difference(studio.views)
+        for view_name in removed:
+            self._snapshots.pop(view_name, None)
+            self._snapshot_history.pop(view_name, None)
 
     def render_document(
         self,

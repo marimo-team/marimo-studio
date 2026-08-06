@@ -84,12 +84,18 @@ test("value reads send exact selectors through the configured base URL", async (
     return Promise.resolve(Response.json({ values: { "context.label": "ready" }, errors: {} }));
   };
   try {
-    const result = await readServerValues("session-id", ["context.label"]);
+    const result = await readServerValues("session-id", {
+      revision: "presentation-revision",
+      selectors: ["context.label"],
+    });
     assert.deepEqual(result.values, { "context.label": "ready" });
     assert.deepEqual(url, "/proxy/app/_marimo-studio/views/dashboard/values");
     assert.deepEqual(headers.get("Marimo-Session-Id"), "session-id");
     assert.deepEqual(headers.get("Marimo-Server-Token"), "server-token");
-    assert.deepEqual(JSON.parse(body), { selectors: ["context.label"] });
+    assert.deepEqual(JSON.parse(body), {
+      revision: "presentation-revision",
+      selectors: ["context.label"],
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -114,7 +120,11 @@ test("terminal value failures do not retry", async () => {
   };
   try {
     await assert.rejects(
-      () => readServerValuesWithRetry("session", ["context.label"]),
+      () =>
+        readServerValuesWithRetry("session", {
+          revision: "presentation-revision",
+          selectors: ["context.label"],
+        }),
       (error: unknown) => {
         assert.ok(error instanceof ValueRequestError);
         assert.match(error.message, /Unknown selector/);
