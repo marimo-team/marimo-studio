@@ -9,14 +9,14 @@ from marimo_studio._workspace.check_results import (
     projection_results,
     selected_views,
 )
-from marimo_studio._workspace.models import StudioConfig
+from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.ports import NotebookInspector
 from marimo_studio.errors import MarimoStudioError
 from marimo_studio.types import CheckResult
 
 
 def check_studio(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     *,
     inspect_notebook: NotebookInspector,
     view_name: str | None = None,

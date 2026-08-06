@@ -7,7 +7,7 @@ from marimo_studio._workspace.models import (
     RESERVED_VIEW_ASSET_NAMES,
     RESERVED_VIEW_NAMES,
     VIEW_PATTERN,
-    StudioConfig,
+    StudioWorkspace,
 )
 
 
@@ -27,7 +27,7 @@ def could_handle(relative: str, mode: str) -> bool:
     )
 
 
-def document_view(relative: str, studio: StudioConfig, mode: str) -> str | None:
+def document_view(relative: str, studio: StudioWorkspace, mode: str) -> str | None:
     """Resolve a presentation document path to its view name."""
     if mode == "run" and relative in {"", "/"}:
         return studio.default_view
@@ -39,7 +39,7 @@ def document_view(relative: str, studio: StudioConfig, mode: str) -> str | None:
     return None
 
 
-def view_asset(relative: str, studio: StudioConfig) -> tuple[str, str] | None:
+def view_asset(relative: str, studio: StudioWorkspace) -> tuple[str, str] | None:
     """Resolve a path below a named view to an authored static asset."""
     parts = relative.strip("/").split("/")
     if len(parts) < 2 or parts[0] not in studio.views:
@@ -47,7 +47,7 @@ def view_asset(relative: str, studio: StudioConfig) -> tuple[str, str] | None:
     return parts[0], "/".join(parts[1:])
 
 
-def view_route_alias(relative: str, studio: StudioConfig) -> str | None:
+def view_route_alias(relative: str, studio: StudioWorkspace) -> str | None:
     """Resolve browser-relative support and Marimo resource URLs."""
     parts = relative.strip("/").split("/")
     if len(parts) < 2 or parts[0] not in studio.views:
@@ -58,7 +58,7 @@ def view_route_alias(relative: str, studio: StudioConfig) -> str | None:
     return None
 
 
-def studio_view(relative: str, studio: StudioConfig, mode: str) -> str | None:
+def studio_view(relative: str, studio: StudioWorkspace, mode: str) -> str | None:
     """Resolve an edit workspace path to its selected view name."""
     if mode != "edit":
         return None

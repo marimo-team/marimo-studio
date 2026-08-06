@@ -11,7 +11,7 @@ from marimo_studio._workspace.files import (
     read_text,
     reject_mutable_symlinks,
 )
-from marimo_studio._workspace.models import StudioConfig, View
+from marimo_studio._workspace.models import StudioWorkspace, View
 from marimo_studio.errors import (
     SourceConflictError,
     SourceEncodingError,
@@ -37,7 +37,7 @@ def _source_name(name: str) -> SourceName:
     raise SourceNotFoundError(f"Unknown Studio source file {name!r}.")
 
 
-def _view(studio: StudioConfig, view_name: str) -> View:
+def _view(studio: StudioWorkspace, view_name: str) -> View:
     try:
         return studio.views[view_name]
     except KeyError as error:
@@ -50,7 +50,7 @@ def _revision(content: str) -> str:
 
 
 def read_source(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     view_name: str,
     name: str,
 ) -> SourceDocument:
@@ -70,7 +70,7 @@ def read_source(
 
 
 def write_source(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     view_name: str,
     name: str,
     content: str,

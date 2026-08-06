@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from marimo_studio._workspace.models import ResolvedStudio, StudioConfig
+from marimo_studio._workspace.models import ResolvedStudio, StudioWorkspace
 from marimo_studio.errors import (
     ConfigurationError,
     MarimoStudioError,
@@ -55,7 +55,7 @@ def source(path: object, cell: CellSpec | None = None) -> dict[str, object]:
 def error_result(
     name: str,
     error: MarimoStudioError,
-    studio: StudioConfig,
+    studio: StudioWorkspace,
 ) -> CheckResult:
     details = error.diagnostic_details()
     if isinstance(error, NotebookSourceError):
@@ -72,7 +72,7 @@ def error_result(
 
 
 def runtime_cell_details(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     target: str,
     cell: CellSpec,
     hint: str,
@@ -93,7 +93,7 @@ def runtime_cell_details(
 
 
 def runtime_value_details(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     target: str,
     bindings: tuple[ValueBinding, ...],
     hint: str,

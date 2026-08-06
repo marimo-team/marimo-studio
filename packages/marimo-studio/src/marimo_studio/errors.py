@@ -29,6 +29,27 @@ class ConfigurationError(MarimoStudioError):
     code = "configuration-error"
 
 
+class WorkspaceInitializationError(MarimoStudioError):
+    """A Studio definition needs its first authored view."""
+
+    code = "workspace-not-initialized"
+    status_code = 409
+    public_hint = "Open the notebook in edit mode and create its first view."
+
+    def __init__(self, default_view: str) -> None:
+        super().__init__(
+            f"Studio is configured and needs its first view {default_view!r}."
+        )
+        self.default_view = default_view
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {
+            "state": "needs-view",
+            "default_view": self.default_view,
+            "views": [],
+        }
+
+
 class NotebookSourceError(ConfigurationError):
     """Marimo cannot compile the current notebook source."""
 

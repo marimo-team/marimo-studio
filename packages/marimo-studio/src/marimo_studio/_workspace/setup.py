@@ -97,9 +97,9 @@ def ensure_view(
     updated = tuple(sorted(path for path in writes if path.exists()))
     if not dry_run and writes:
         write_text_transaction(transaction_root, writes)
-    loaded = load_studio(notebook_path) if not dry_run else None
+    workspace = load_studio(notebook_path) if not dry_run else None
     return ViewSetupResult(
-        studio=loaded,
+        workspace=workspace,
         notebook=notebook_path,
         config_path=config_path,
         name=selected,

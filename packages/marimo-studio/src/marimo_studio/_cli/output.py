@@ -9,7 +9,7 @@ from typing import Any
 from marimo_studio._cli.print import echo, green, light_blue, red, yellow
 from marimo_studio._workspace.models import (
     BindingResult,
-    StudioConfig,
+    StudioWorkspace,
     ViewSetupResult,
 )
 from marimo_studio.export import StaticExportResult
@@ -37,7 +37,7 @@ def render_view_setup(result: ViewSetupResult) -> None:
         echo(f"  {light_blue('update')} {path}")
 
 
-def view_list_payload(studio: StudioConfig) -> dict[str, object]:
+def view_list_payload(studio: StudioWorkspace) -> dict[str, object]:
     """Serialize the configured view inventory."""
     return {
         "schema": 1,
@@ -54,7 +54,7 @@ def view_list_payload(studio: StudioConfig) -> dict[str, object]:
     }
 
 
-def render_view_list(studio: StudioConfig) -> None:
+def render_view_list(studio: StudioWorkspace) -> None:
     """Write configured views in human text."""
     for name, view in studio.views.items():
         suffix = " (default)" if name == studio.default_view else ""
@@ -160,7 +160,7 @@ def render_inspection(
 
 
 def checks_payload(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     results: tuple[CheckResult, ...],
     *,
     view_name: str | None,

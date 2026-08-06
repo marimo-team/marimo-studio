@@ -186,7 +186,7 @@ project-demo = { path = "./project-demo" }
 """,
         encoding="utf-8",
     )
-    studio = ensure_view(notebook).studio
+    studio = ensure_view(notebook).workspace
     assert studio is not None
 
     command = environment_command(

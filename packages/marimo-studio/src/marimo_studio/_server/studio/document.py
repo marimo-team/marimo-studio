@@ -17,11 +17,11 @@ from marimo_studio._urls import (
     public_url,
     studio_url,
 )
-from marimo_studio._workspace.models import StudioConfig
+from marimo_studio._workspace.models import StudioWorkspace
 
 
 def studio_document(
-    config: StudioConfig,
+    config: StudioWorkspace,
     base_url: str,
     selected: str,
     server_token: str,
@@ -68,6 +68,7 @@ def studio_document(
                         content="width=device-width, initial-scale=1",
                     ),
                     title[f"{config.notebook.name} · Studio"],
+                    link(rel="icon", href=public_url(base_url, "/favicon.ico")),
                     link(rel="stylesheet", href=f"{support_url}/assets/studio.css"),
                 )
             ],

@@ -20,6 +20,7 @@ from marimo_studio._server.pages import (
     authentication_redirect,
     document_response,
     error_response,
+    initialization_response,
     page_redirect,
     studio_landing_redirect,
     studio_response,
@@ -34,9 +35,12 @@ from marimo_studio._server.routing import (
     view_route_alias,
 )
 from marimo_studio._server.runtimes import DEFAULT_RUNTIME_REGISTRY
-from marimo_studio._server.support import support_response
+from marimo_studio._server.support import (
+    lifecycle_status_response,
+    support_response,
+)
 from marimo_studio._urls import SUPPORT_PATH
-from marimo_studio.errors import MarimoStudioError
+from marimo_studio.errors import MarimoStudioError, WorkspaceInitializationError
 
 
 class PresentationMiddleware:
@@ -83,25 +87,36 @@ class PresentationMiddleware:
             NotebookPresentation(location.notebook),
         )
         try:
-            studio = presentation.discover()
-            discovery_error = None
+            definition = presentation.discover_definition()
+            lifecycle_error = None
         except MarimoStudioError as error:
-            studio = None
-            discovery_error = error
+            definition = None
+            lifecycle_error = error
 
-        if discovery_error is not None and landing:
+        if definition is None and lifecycle_error is None:
             await self.app(scope, receive, send)
             return
 
-        if studio is None:
-            if discovery_error is None:
-                await self.app(scope, receive, send)
-                return
+        if definition is not None:
+            try:
+                workspace = presentation.materialize(definition)
+            except MarimoStudioError as error:
+                workspace = None
+                lifecycle_error = error
+        else:
+            workspace = None
+
+        needs_view = isinstance(lifecycle_error, WorkspaceInitializationError)
+        if lifecycle_error is not None and landing and not needs_view:
+            await self.app(scope, receive, send)
+            return
+
+        if workspace is None:
             selected_document = None
             selected_studio = None
             selected_asset = None
         else:
-            alias = view_route_alias(relative, studio)
+            alias = view_route_alias(relative, workspace)
             if alias is not None and not alias.startswith(SUPPORT_PATH):
                 await self.app(
                     _replace_relative_path(scope, relative, alias),
@@ -111,9 +126,9 @@ class PresentationMiddleware:
                 return
             if alias is not None:
                 relative = alias
-            selected_document = document_view(relative, studio, location.mode)
-            selected_studio = studio_view(relative, studio, location.mode)
-            selected_asset = view_asset(relative, studio)
+            selected_document = document_view(relative, workspace, location.mode)
+            selected_studio = studio_view(relative, workspace, location.mode)
+            selected_asset = view_asset(relative, workspace)
             if (
                 selected_document is None
                 and selected_studio is None
@@ -138,10 +153,63 @@ class PresentationMiddleware:
         dev = location.mode == "edit" or bool(
             getattr(location._session_manager, "watch", False)
         )
-        if discovery_error is not None:
+        context = server_context(location)
+        if definition is None:
+            assert lifecycle_error is not None
+            response = (
+                lifecycle_status_response(lifecycle_error)
+                if relative == f"{SUPPORT_PATH}/status" and request.method == "GET"
+                else error_response(
+                    relative,
+                    lifecycle_error,
+                    presentation.notebook,
+                    base_url=location.base_url,
+                    dev=dev,
+                    structured=_accepts_json(request),
+                )
+            )
+            await response(scope, receive, send)
+            return
+
+        if workspace is None:
+            assert lifecycle_error is not None
+            if relative.startswith(SUPPORT_PATH):
+                response = await support_response(
+                    request,
+                    context,
+                    definition,
+                    None,
+                    lifecycle_error,
+                    presentation,
+                    relative.removeprefix(SUPPORT_PATH),
+                )
+            elif (
+                needs_view
+                and location.mode == "edit"
+                and (landing or relative.strip("/").split("/")[0] == "studio")
+            ):
+                redirect = page_redirect(request, relative, not landing)
+                response = redirect or initialization_response(
+                    request,
+                    context,
+                    definition,
+                )
+            else:
+                response = error_response(
+                    relative,
+                    lifecycle_error,
+                    presentation.notebook,
+                    base_url=location.base_url,
+                    dev=dev,
+                    structured=_accepts_json(request),
+                )
+            await response(scope, receive, send)
+            return
+
+        if lifecycle_error is not None:
             response = error_response(
                 relative,
-                discovery_error,
+                lifecycle_error,
                 presentation.notebook,
                 base_url=location.base_url,
                 dev=dev,
@@ -150,7 +218,6 @@ class PresentationMiddleware:
             await response(scope, receive, send)
             return
 
-        assert studio is not None
         try:
             redirect = page_redirect(
                 request,
@@ -163,10 +230,9 @@ class PresentationMiddleware:
                 response = studio_landing_redirect(
                     request,
                     location.base_url,
-                    studio.default_view,
+                    workspace.default_view,
                 )
             else:
-                context = server_context(location)
                 enable_peer_control_sync(location)
                 if selected_document is not None:
                     response = document_response(
@@ -180,14 +246,14 @@ class PresentationMiddleware:
                     response = studio_response(
                         request,
                         context,
-                        studio,
+                        workspace,
                         selected_studio,
                         DEFAULT_RUNTIME_REGISTRY.options,
                     )
                 elif selected_asset is not None:
                     view_name, asset = selected_asset
                     response = (
-                        file_response(studio.views[view_name].root, asset)
+                        file_response(workspace.views[view_name].root, asset)
                         if request.method in {"GET", "HEAD"}
                         else Response(status_code=405)
                     )
@@ -195,7 +261,9 @@ class PresentationMiddleware:
                     response = await support_response(
                         request,
                         context,
-                        studio,
+                        definition,
+                        workspace,
+                        None,
                         presentation,
                         relative.removeprefix(SUPPORT_PATH),
                     )

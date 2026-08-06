@@ -12,10 +12,15 @@ from marimo_studio._html import runtime_document
 from marimo_studio._server.runtimes import DEFAULT_RUNTIME_REGISTRY
 from marimo_studio._urls import SUPPORT_PATH, public_url, view_url
 from marimo_studio._workspace import discover_studio
+from marimo_studio._workspace.config import (
+    discover_studio_definition,
+    materialize_studio_workspace,
+)
 from marimo_studio._workspace.models import (
     ProjectionDiagnostic,
     ResolvedStudio,
-    StudioConfig,
+    StudioDefinition,
+    StudioWorkspace,
     View,
 )
 from marimo_studio._workspace.templates import (
@@ -35,7 +40,7 @@ _SNAPSHOT_HISTORY_LIMIT = 8
 
 
 def _configuration_identity(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     view_name: str,
 ) -> tuple[object, ...]:
     view = studio.views[view_name]
@@ -70,7 +75,7 @@ class _PresentationSources:
 
 
 def _read_sources(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     view_name: str,
 ) -> _PresentationSources:
     paths = tuple(
@@ -201,8 +206,16 @@ class NotebookPresentation:
         self._snapshots: dict[str, PresentationSnapshot] = {}
         self._snapshot_history: dict[str, dict[str, PresentationSnapshot]] = {}
 
-    def discover(self) -> StudioConfig | None:
+    def discover(self) -> StudioWorkspace | None:
         return discover_studio(self.notebook)
+
+    def discover_definition(self) -> StudioDefinition | None:
+        """Return configuration before workspace materialization."""
+        return discover_studio_definition(self.notebook)
+
+    def materialize(self, definition: StudioDefinition) -> StudioWorkspace:
+        """Resolve the current authored views for a definition."""
+        return materialize_studio_workspace(definition)
 
     def snapshot(
         self,
@@ -294,7 +307,7 @@ class NotebookPresentation:
         while len(history) > _SNAPSHOT_HISTORY_LIMIT:
             del history[next(iter(history))]
 
-    def _prune_snapshots(self, studio: StudioConfig) -> None:
+    def _prune_snapshots(self, studio: StudioWorkspace) -> None:
         removed = set(self._snapshots).difference(studio.views)
         for view_name in removed:
             self._snapshots.pop(view_name, None)
@@ -321,7 +334,7 @@ class NotebookPresentation:
             ),
             dev=context.dev,
             revision=snapshot.revision,
-            runtime=snapshot.resolved.studio.default_runtime,
+            runtime=snapshot.resolved.workspace.default_runtime,
             filename=context.file_key,
         )
 
@@ -336,7 +349,7 @@ class NotebookPresentation:
         view_name = snapshot.view_name
         view = resolved.views[view_name]
         provider, available = DEFAULT_RUNTIME_REGISTRY.select(
-            resolved.studio,
+            resolved.workspace,
             context,
             runtime_id,
         )
@@ -345,7 +358,7 @@ class NotebookPresentation:
             "schema": 1,
             "revision": snapshot.revision,
             "view": view_name,
-            "views": list(resolved.studio.views),
+            "views": list(resolved.workspace.views),
             "runtime": {
                 "id": provider.id,
                 "instance": projection.instance,
@@ -362,13 +375,13 @@ class NotebookPresentation:
                 context.base_url,
                 f"{SUPPORT_PATH}/views/{view_name}",
             ),
-            "showCellLogs": resolved.studio.show_cell_logs,
+            "showCellLogs": resolved.workspace.show_cell_logs,
             "cellBindings": projection.cell_bindings,
             "valueBindings": projection.value_bindings,
             "diagnostics": [
                 _browser_diagnostic(
                     diagnostic,
-                    notebook=resolved.studio.notebook,
+                    notebook=resolved.workspace.notebook,
                     developer=context.dev or context.mode == "edit",
                 )
                 for diagnostic in view.diagnostics

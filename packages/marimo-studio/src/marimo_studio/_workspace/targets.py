@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from marimo_studio._workspace.config import load_studio
-from marimo_studio._workspace.models import StudioConfig
+from marimo_studio._workspace.models import StudioWorkspace
 
 
 @dataclass(frozen=True)
@@ -17,7 +17,7 @@ class NotebookTarget:
     notebook: Path
 
 
-def load_studio_target(target: str | Path | None) -> StudioConfig:
+def load_studio_target(target: str | Path | None) -> StudioWorkspace:
     """Load the Studio configuration selected by a CLI target."""
     return load_studio(target or ".")
 
@@ -35,7 +35,7 @@ def resolve_notebook(target: str | Path | None) -> Path:
 def resolve_environment_target(
     target: str | Path | None,
     notebook: Path,
-) -> StudioConfig | NotebookTarget:
+) -> StudioWorkspace | NotebookTarget:
     """Return the project root and notebook used for uv composition."""
     if target is None:
         return load_studio_target(None)

@@ -22,7 +22,7 @@ from marimo_studio._compat.kernel_values.selectors import (
     _template_selectors,
 )
 from marimo_studio._urls import PRIVATE_QUERY_KEYS
-from marimo_studio._workspace.config import discover_studio
+from marimo_studio._workspace.config import discover_studio_definition
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.types import ValueReadError, ValueReadResult
 
@@ -61,7 +61,7 @@ class _KernelValueLifespan:
         inspection = _INSPECTION_SELECTORS.get(filename)
         if inspection is None:
             try:
-                if discover_studio(filename) is None:
+                if discover_studio_definition(filename) is None:
                     return
             except (OSError, UnicodeError, ConfigurationError):
                 return

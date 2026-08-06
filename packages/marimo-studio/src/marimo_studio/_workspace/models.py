@@ -8,7 +8,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 from marimo_studio._cell_refs import cell_ref_candidates
-from marimo_studio.errors import RuntimeSyncError
+from marimo_studio.errors import (
+    ConfigurationError,
+    RuntimeSyncError,
+    WorkspaceInitializationError,
+)
 from marimo_studio.types import (
     CellRef,
     CellSpec,
@@ -64,7 +68,7 @@ class View:
 
 
 @dataclass(frozen=True)
-class StudioConfig:
+class StudioDefinition:
     root: Path
     config_path: Path
     config_source: Literal["notebook", "pyproject"]
@@ -74,13 +78,25 @@ class StudioConfig:
     default_runtime: str
     runtimes: tuple[str, ...]
     preserve_session: bool
-    views: dict[str, View]
     cells: dict[str, CellRef]
-    show_cell_logs: bool = True
+    show_cell_logs: bool
 
     @property
     def uses_notebook_config(self) -> bool:
         return self.config_source == "notebook"
+
+
+@dataclass(frozen=True)
+class StudioWorkspace(StudioDefinition):
+    views: dict[str, View]
+
+    def __post_init__(self) -> None:
+        if not self.views:
+            raise WorkspaceInitializationError(self.default_view)
+        if self.default_view not in self.views:
+            raise ConfigurationError(
+                f"Default view {self.default_view!r} does not exist in {self.view_root}"
+            )
 
     def view(self, name: str | None = None) -> View:
         selected = name or self.default_view
@@ -119,13 +135,13 @@ class ResolvedView:
 
 @dataclass(frozen=True)
 class ResolvedStudio:
-    studio: StudioConfig
+    workspace: StudioWorkspace
     notebook: NotebookSpec
     aliases: dict[str, CellSpec]
     views: dict[str, ResolvedView]
 
     def view(self, name: str | None = None) -> ResolvedView:
-        return self.views[name or self.studio.default_view]
+        return self.views[name or self.workspace.default_view]
 
     @property
     def diagnostics(self) -> tuple[ProjectionDiagnostic, ...]:
@@ -254,7 +270,7 @@ class ProjectionDiagnostic:
 
 @dataclass(frozen=True)
 class ViewSetupResult:
-    studio: StudioConfig | None
+    workspace: StudioWorkspace | None
     notebook: Path
     config_path: Path
     name: str

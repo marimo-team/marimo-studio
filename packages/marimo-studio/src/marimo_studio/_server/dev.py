@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
 from marimo_studio._workspace.metadata import notebook_config
-from marimo_studio._workspace.models import StudioConfig
+from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.sources import read_source
 from marimo_studio.errors import ConfigurationError, MarimoStudioError
 
@@ -18,7 +18,7 @@ _WatchKey = tuple[str, Path]
 _FileStamp = str | tuple[int, int, int, int]
 
 
-def _files(studio: StudioConfig) -> tuple[_WatchKey, ...]:
+def _files(studio: StudioWorkspace) -> tuple[_WatchKey, ...]:
     try:
         view_files = tuple(
             path for path in studio.view_root.rglob("*") if path.is_file()
@@ -32,7 +32,7 @@ def _files(studio: StudioConfig) -> tuple[_WatchKey, ...]:
     )
 
 
-def _file_stamps(studio: StudioConfig) -> dict[_WatchKey, _FileStamp]:
+def _file_stamps(studio: StudioWorkspace) -> dict[_WatchKey, _FileStamp]:
     result: dict[_WatchKey, _FileStamp] = {}
     for kind, path in _files(studio):
         try:
@@ -55,7 +55,7 @@ def _file_stamps(studio: StudioConfig) -> dict[_WatchKey, _FileStamp]:
 
 
 def _event_kind(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     changed: set[_WatchKey],
     view_name: str | None,
 ) -> str:
@@ -85,7 +85,7 @@ def _event_kind(
 
 
 def _changed_files(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     changed: set[_WatchKey],
     view_name: str | None,
 ) -> list[dict[str, object]]:
@@ -113,7 +113,7 @@ def _changed_files(
 
 
 async def change_events(
-    studio: StudioConfig,
+    studio: StudioWorkspace,
     view_name: str | None = None,
     stop_requested: Callable[[], bool] | None = None,
 ) -> AsyncIterator[bytes]:

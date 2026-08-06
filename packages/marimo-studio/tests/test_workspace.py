@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import shutil
 from collections.abc import MutableMapping
 from pathlib import Path
 
@@ -17,10 +18,14 @@ from marimo_studio._workspace.metadata import (
     read_notebook_metadata,
     update_notebook_config,
 )
-from marimo_studio._workspace.models import StudioConfig
+from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
 from marimo_studio._workspace.views import delete_view
 from marimo_studio.checks import check_runtime_studio, check_studio
-from marimo_studio.errors import ConfigurationError, NotebookSourceError
+from marimo_studio.errors import (
+    ConfigurationError,
+    NotebookSourceError,
+    WorkspaceInitializationError,
+)
 from marimo_studio.types import (
     RuntimeCell,
     RuntimeProbe,
@@ -32,7 +37,7 @@ from marimo_studio.workspace import bind_cell, ensure_view, resolve_studio
 from .helpers import empty_notebook_source, replace_app_shell
 
 
-def _shell(studio: StudioConfig, view_name: str, content: str) -> None:
+def _shell(studio: StudioWorkspace, view_name: str, content: str) -> None:
     template = studio.views[view_name].template
     template.write_text(
         replace_app_shell(template.read_text(encoding="utf-8"), content),
@@ -50,7 +55,7 @@ def test_view_setup_configures_the_notebook_and_scaffolds_each_view(
     document = read_notebook_metadata(notebook_path)
     template = result.root.joinpath("index.html").read_text(encoding="utf-8")
 
-    assert result.studio == studio
+    assert result.workspace == studio
     assert studio.uses_notebook_config
     assert studio.config_path == notebook_path
     assert studio.view_root == (
@@ -77,6 +82,28 @@ def test_view_setup_configures_the_notebook_and_scaffolds_each_view(
     assert {path.name for path in report.iterdir()} == {"index.html", "app.css"}
     report_css = report.joinpath("app.css").read_text(encoding="utf-8")
     assert report_css.index("/* THEME */") < report_css.index("/* APP */")
+
+
+def test_definition_materializes_only_after_a_view_exists(
+    notebook_path: Path,
+) -> None:
+    setup = ensure_view(notebook_path)
+    shutil.rmtree(
+        setup.workspace.view_root if setup.workspace is not None else setup.root
+    )
+
+    definition = load_studio_definition(notebook_path)
+
+    assert isinstance(definition, StudioDefinition)
+    assert not isinstance(definition, StudioWorkspace)
+    assert definition.default_view == "dashboard"
+    with pytest.raises(WorkspaceInitializationError, match="first view"):
+        load_studio(notebook_path)
+
+    initialized = ensure_view(notebook_path).workspace
+
+    assert isinstance(initialized, StudioWorkspace)
+    assert list(initialized.views) == ["dashboard"]
 
 
 def test_view_discovery_rejects_a_symlinked_view_directory(
