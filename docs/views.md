@@ -65,8 +65,9 @@ at `/<view-name>/`.
 ## Remove a view
 
 Open the view menu, choose **Remove view**, and confirm the named view. Studio
-deletes that view directory and its files. If it was the default, Studio makes
-the first remaining view the new default.
+first saves the active source and prepares a successor view. It retargets the
+preview and source stream before deleting the old directory. If the removed
+view was the default, Studio makes the first remaining view the new default.
 
 A configured notebook retains at least one view.
 

@@ -149,15 +149,16 @@ then run `make package` when distribution contents are part of the change.
 Package tests protect local contracts. `apps/e2e` protects flows that require a
 live Marimo kernel and several documents.
 
-| Acceptance area      | Current contract                                                           |
-| -------------------- | -------------------------------------------------------------------------- |
-| Runtime lifecycle    | Editor, Server, and WebAssembly frames remain mounted across mode changes  |
-| Control sync         | JSON-compatible native controls synchronize between editor and runtimes    |
-| Runtime isolation    | Anywidget state remains with the runtime that owns its model               |
-| Source authoring     | Studio and external edits update files and the live preview safely         |
-| View management      | Creating and removing a view updates source files and the selected preview |
-| Projection recovery  | A missing value host recovers after its notebook definition returns        |
-| Responsive workspace | The compact layout remains operable without page-level overflow            |
+| Acceptance area      | Current contract                                                               |
+| -------------------- | ------------------------------------------------------------------------------ |
+| Runtime lifecycle    | Editor, Server, and WebAssembly frames remain mounted across mode changes      |
+| Control sync         | JSON-compatible native controls synchronize between editor and runtimes        |
+| Runtime isolation    | Anywidget state remains with the runtime that owns its model                   |
+| Source authoring     | Studio and external edits update files and the live preview safely             |
+| View management      | Creating and removing a view updates source files and the selected preview     |
+| Hosted lifecycle     | A token-protected nested mount creates its first view and runs reactive values |
+| Projection recovery  | A missing value host recovers after its notebook definition returns            |
+| Responsive workspace | The compact layout remains operable without page-level overflow                |
 
 Add a focused regression to the owning package first. Add browser acceptance
 when the failure crosses the editor, kernel, filesystem, runtime, or document

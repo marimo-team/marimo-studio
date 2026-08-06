@@ -32,6 +32,10 @@ __marimo__/
 The starter document places every notebook cell in source order. This gives
 you a working preview before you choose the final content.
 
+If the notebook already contains `[tool.marimo-studio]` and its view directory
+is empty, open the notebook with `marimo edit`. Studio presents **Create the
+first view** and uses the configured `default` name.
+
 ## Open the workspace
 
 ```console

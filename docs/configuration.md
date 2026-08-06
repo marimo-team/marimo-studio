@@ -9,6 +9,11 @@ Studio reads configuration from the notebook's PEP 723 metadata or from a
 project `pyproject.toml`. Use `marimo-studio view add` to create the initial
 configuration and `marimo-studio bind` to manage cell aliases.
 
+Configuration defines a Studio workspace before view source exists. Opening a
+configured notebook in `marimo edit` presents an authenticated initializer when
+the view directory is empty. The initializer creates the configured `default`
+view and opens its authoring workspace.
+
 ## Configure one notebook
 
 `view add` stores notebook-local settings in the PEP 723 block:
@@ -104,6 +109,10 @@ __marimo__/studio/analysis/<view-name>/
 
 Every immediate child directory with an `index.html` is a view. The directory
 name is also its run-mode route.
+
+Studio reports a configured notebook with zero views as `needs-view`. A
+workspace becomes `ready` when at least one view exists and `default` names one
+of those views.
 
 The default starter files are:
 
