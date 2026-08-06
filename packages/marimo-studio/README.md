@@ -1,6 +1,13 @@
-# Marimo Studio
+<p align="center">
+  <a href="https://marimo-team.github.io/marimo-studio/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://marimo-team.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-dark.svg">
+      <img alt="Marimo Studio" src="https://marimo-team.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-light.svg" width="620">
+    </picture>
+  </a>
+</p>
 
-**Tune your notebook for every audience.**
+<p align="center"><strong>Tune your notebook for every audience.</strong></p>
 
 Keep calculations, reactive controls, plots, tables, downloads, and
 [anywidgets](https://anywidget.dev/) in one [marimo](https://marimo.io/)
