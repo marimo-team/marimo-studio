@@ -127,4 +127,86 @@ describe("controller lifecycle", () => {
 
     expect(select).not.toHaveBeenCalled();
   });
+
+  it("retargets the active view before deleting its files", async () => {
+    const order: string[] = [];
+    let removed = false;
+    const remote: ViewRemote = {
+      list: vi.fn(async () => {
+        order.push("list");
+        return removed
+          ? { schema: 1 as const, default_view: "report", views: ["report"] }
+          : {
+              schema: 1 as const,
+              default_view: "dashboard",
+              views: ["dashboard", "report"],
+            };
+      }),
+      create: vi.fn(),
+      remove: vi.fn(async (name: string) => {
+        order.push(`remove:${name}`);
+        removed = true;
+        return {
+          schema: 1 as const,
+          name,
+          default_view: "report",
+          views: ["report"],
+        };
+      }),
+    };
+    const controller = new ViewController(
+      "dashboard",
+      ["dashboard", "report"],
+      remote,
+      "/events",
+      vi.fn(async (view: string) => {
+        order.push(`select:${view}`);
+        return true;
+      }),
+      vi.fn(async () => {
+        order.push("prepare");
+        return true;
+      }),
+      vi.fn(),
+    );
+
+    controller.beginRemoval("dashboard");
+    expect(await controller.deleteSelected()).toBe(true);
+
+    expect(order.slice(0, 4)).toEqual(["prepare", "list", "select:report", "remove:dashboard"]);
+    expect(controller.getSnapshot().current).toBe("report");
+    expect(controller.getSnapshot().views).toEqual(["report"]);
+    controller.dispose();
+  });
+
+  it("keeps active files when the successor cannot be prepared", async () => {
+    const remote: ViewRemote = {
+      list: vi.fn(async () => ({
+        schema: 1 as const,
+        default_view: "dashboard",
+        views: ["dashboard", "report"],
+      })),
+      create: vi.fn(),
+      remove: vi.fn(),
+    };
+    const controller = new ViewController(
+      "dashboard",
+      ["dashboard", "report"],
+      remote,
+      "/events",
+      vi.fn(async () => false),
+      vi.fn(async () => true),
+      vi.fn(),
+    );
+
+    controller.beginRemoval("dashboard");
+    expect(await controller.deleteSelected()).toBe(false);
+
+    expect(remote.remove).not.toHaveBeenCalled();
+    expect(controller.getSnapshot().current).toBe("dashboard");
+    expect(controller.getSnapshot().removeError).toBe(
+      "Select another view before removing this one.",
+    );
+    controller.dispose();
+  });
 });
