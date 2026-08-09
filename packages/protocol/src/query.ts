@@ -17,6 +17,17 @@ export const publicNotebookQuery = (search: string): string => {
   return query ? `?${query}` : "";
 };
 
+export const notebookRouteQuery = (search: string): string => {
+  const input = new URLSearchParams(search);
+  const output = new URLSearchParams();
+  const file = input.get("file");
+  if (file !== null) {
+    output.set("file", file);
+  }
+  const query = output.toString();
+  return query ? `?${query}` : "";
+};
+
 export const notebookQueryValues = (search: string): Record<string, string | string[]> => {
   const parameters = new URLSearchParams(publicNotebookQuery(search));
   return Object.fromEntries(

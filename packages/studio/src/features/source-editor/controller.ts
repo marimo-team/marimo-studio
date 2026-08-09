@@ -1,5 +1,7 @@
 import type { SourceName } from "@marimo-studio/protocol/source-events";
 
+import { appendUrlPath } from "@marimo-studio/protocol/url";
+
 import { SourceEvents } from "./events.ts";
 import { SOURCE_NAMES, sourceRecord } from "./files.ts";
 import { createSourceRemote, type SourceRemote } from "./remote.ts";
@@ -35,7 +37,7 @@ export class SourceController {
   private snapshot!: SourceSnapshot;
 
   constructor(
-    private readonly supportPrefix: string,
+    private readonly supportUrl: (view: string) => string,
     serverToken: string,
     initialView: string,
     private readonly storagePrefix: string,
@@ -43,7 +45,7 @@ export class SourceController {
   ) {
     this.view = initialView;
     this.active = this.readActiveTab(initialView);
-    this.remote = createSourceRemote(this.supportPrefix, serverToken);
+    this.remote = createSourceRemote(this.supportUrl, serverToken);
     const observer: SourceObserver = {
       document: (name, content) => {
         this.contents.set(name, content);
@@ -231,7 +233,7 @@ export class SourceController {
       return;
     }
     this.events.open(
-      `${this.supportPrefix}/${encodeURIComponent(this.view)}/dev/events`,
+      appendUrlPath(this.supportUrl(this.view), "dev/events", globalThis.location.href),
       () => this.sources.forEach((source) => void source.reconcile()),
       ({ path, revision }) => {
         void this.sources.get(path)?.externalChange(revision);

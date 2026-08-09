@@ -28,6 +28,8 @@ const config = (preserveSession: boolean, mode: RuntimeConfig["mode"] = "run"): 
     },
   },
   rootUrl: "/",
+  publicRootUrl: "/",
+  documentRootUrl: "/",
   supportUrl: "/_marimo-studio/views/dashboard",
   showCellLogs: true,
   cellBindings: {},

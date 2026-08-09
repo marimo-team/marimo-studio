@@ -42,6 +42,8 @@ const config = {
     },
   },
   rootUrl: "/",
+  publicRootUrl: "/",
+  documentRootUrl: "/",
   supportUrl: "/_marimo-studio/views/dashboard",
   cellBindings: {},
   valueBindings: {

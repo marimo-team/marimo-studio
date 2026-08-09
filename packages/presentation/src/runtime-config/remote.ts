@@ -1,6 +1,7 @@
 import { parseErrorResponse } from "@marimo-studio/protocol/errors";
 import { parseRuntimeConfig, type RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 import { DEFAULT_RUNTIME_ID, runtimeIdFromSearch } from "@marimo-studio/protocol/runtime-selection";
+import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 import { retry } from "../retry.ts";
 
@@ -86,7 +87,8 @@ export const fetchRuntimeConfig = async (
     href: browser.location?.href,
   });
   const runtime = requestedRuntimeId(fallbackRuntime);
-  const url = `${supportUrl}/config?${new URLSearchParams({ runtime })}`;
+  const url = new URL(appendUrlPath(supportUrl, "config", globalThis.location.href));
+  url.searchParams.set("runtime", runtime);
   const response = await fetch(url, {
     cache: "no-store",
     headers: sessionId ? { "Marimo-Session-Id": sessionId } : undefined,

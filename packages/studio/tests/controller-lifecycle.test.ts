@@ -52,7 +52,13 @@ describe("controller lifecycle", () => {
         .mockImplementationOnce(() => html.promise)
         .mockImplementationOnce(() => css.promise),
     );
-    const source = new SourceController("/views", "token", "dashboard", "workspace", vi.fn());
+    const source = new SourceController(
+      (view) => `/views/${view}`,
+      "token",
+      "dashboard",
+      "workspace",
+      vi.fn(),
+    );
 
     const starting = source.start();
     source.dispose();

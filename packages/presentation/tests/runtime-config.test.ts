@@ -32,6 +32,8 @@ const baseRuntimeConfig = {
     },
   },
   rootUrl: "/proxy/app/",
+  publicRootUrl: "/proxy/app/",
+  documentRootUrl: "/proxy/app/",
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
   showCellLogs: true,
   cellBindings: {

@@ -1,4 +1,5 @@
 import { parseRuntimeConfig, type RuntimeControls } from "@marimo-studio/protocol/runtime-config";
+import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 export interface RuntimeControlSnapshot {
   revision: string;
@@ -11,7 +12,7 @@ export const fetchRuntimeControls = async (
   runtime: string,
   signal?: AbortSignal,
 ): Promise<RuntimeControlSnapshot> => {
-  const url = new URL(`${supportUrl}/config`, globalThis.location.origin);
+  const url = new URL(appendUrlPath(supportUrl, "config", globalThis.location.href));
   url.searchParams.set("runtime", runtime);
   const response = await fetch(url, { cache: "no-store", signal });
   if (!response.ok) {

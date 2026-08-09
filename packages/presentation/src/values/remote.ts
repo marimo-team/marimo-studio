@@ -1,4 +1,5 @@
 import { parseErrorResponse } from "@marimo-studio/protocol/errors";
+import { appendUrlPath } from "@marimo-studio/protocol/url";
 import {
   parseValueReadResponse,
   type ValueReadRequest,
@@ -34,16 +35,19 @@ export const readServerValues = async (
   if (typeof serverToken !== "string") {
     throw new ValueRequestError("The server token is unavailable.", "invalid-runtime", false);
   }
-  const response = await fetch(`${config.supportUrl}/values`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Marimo-Server-Token": serverToken,
-      "Marimo-Session-Id": sessionId,
+  const response = await fetch(
+    appendUrlPath(config.supportUrl, "values", globalThis.location.href),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Marimo-Server-Token": serverToken,
+        "Marimo-Session-Id": sessionId,
+      },
+      body: JSON.stringify(request),
+      signal,
     },
-    body: JSON.stringify(request),
-    signal,
-  });
+  );
   if (!response.ok) {
     const payload: unknown = await response.json().catch(() => undefined);
     const detail = parseErrorResponse(payload);

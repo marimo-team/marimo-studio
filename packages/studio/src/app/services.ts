@@ -31,7 +31,7 @@ export const createStudioServices = (
   const runtimeIds = bootstrap.runtimes.map((runtime) => runtime.id);
   const layout = new LayoutController(storagePrefix, bootstrap.selectedView);
   const source = new SourceController(
-    bootstrap.urls.viewSupportPrefix,
+    routes.support,
     bootstrap.serverToken,
     bootstrap.selectedView,
     storagePrefix,
@@ -49,7 +49,7 @@ export const createStudioServices = (
     supportUrl: routes.support,
     syncQuery: routes.syncQuery,
     syncEditorQuery: (query, signal) =>
-      syncEditorQuery(bootstrap.urls.query, bootstrap.serverToken, query, signal),
+      syncEditorQuery(routes.endpoint(bootstrap.urls.query), bootstrap.serverToken, query, signal),
     navigate: (view) => void views?.choose(view, "preserve"),
     connectControlFrame,
   });
@@ -70,8 +70,8 @@ export const createStudioServices = (
   views = new ViewController(
     bootstrap.selectedView,
     [...bootstrap.views],
-    createViewRemote(bootstrap.urls.views, bootstrap.serverToken),
-    bootstrap.urls.events,
+    createViewRemote(routes.endpoint(bootstrap.urls.views), bootstrap.serverToken),
+    routes.endpoint(bootstrap.urls.events),
     (view, landing) => transition.select(view, landing),
     () => source.prepareViewChange(),
     (view) => globalThis.location.assign(routes.studio(view)),

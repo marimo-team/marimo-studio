@@ -17,6 +17,7 @@ export interface ServerRuntimeData {
   url: string;
   serverToken: string;
   fileKey: string;
+  file?: string;
   preserveSession: boolean;
 }
 
@@ -38,7 +39,11 @@ export const mountServerRuntime = (
         lazy: false,
         serverToken: data.serverToken,
       });
-      configureServerTransport(getRuntimeManager(), context.presentation.mode === "edit");
+      configureServerTransport(
+        getRuntimeManager(),
+        context.presentation.mode === "edit",
+        data.file,
+      );
       store.set(requestClientAtom, createErrorToastingRequests(createNetworkRequests()));
     },
     updateQuery: async () => {},

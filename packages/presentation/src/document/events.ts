@@ -4,6 +4,7 @@ import {
   type NavigateViewMessage,
   type SwitchViewMessage,
 } from "@marimo-studio/protocol/preview-messages";
+import { publicNotebookQuery } from "@marimo-studio/protocol/query";
 
 import { getRuntimeConfig, hasRuntimeConfig } from "../runtime-config/index.ts";
 import { viewNavigationForUrl } from "./view-navigation.ts";
@@ -79,7 +80,9 @@ export const bindViewNavigation = (
     const navigation = viewNavigationForUrl({
       href: anchor.href,
       origin: globalThis.location.origin,
-      rootUrl: config.rootUrl,
+      publicRootUrl: config.publicRootUrl,
+      documentRootUrl: config.documentRootUrl,
+      publicQuery: publicNotebookQuery(globalThis.location.search),
       views: config.views,
       currentView: config.view,
     });
@@ -87,18 +90,28 @@ export const bindViewNavigation = (
       return;
     }
     event.preventDefault();
-    if (!navigation.current) {
-      if (globalThis.parent === globalThis.window) {
-        navigate({ documentUrl: anchor.href, view: navigation.view });
-        return;
+    const current = new URL(globalThis.location.href);
+    const target = new URL(navigation.documentUrl);
+    if (navigation.current) {
+      if (target.href !== current.href) {
+        globalThis.location.assign(target.href);
       }
-      const message: NavigateViewMessage = {
-        type: "marimo-studio:navigate-view",
-        runtime: config.runtime.id,
-        view: navigation.view,
-      };
-      globalThis.parent.postMessage(message, globalThis.location.origin);
+      return;
     }
+    if (target.search !== current.search || target.hash) {
+      globalThis.location.assign(target.href);
+      return;
+    }
+    if (globalThis.parent === globalThis.window) {
+      navigate({ documentUrl: navigation.documentUrl, view: navigation.view });
+      return;
+    }
+    const message: NavigateViewMessage = {
+      type: "marimo-studio:navigate-view",
+      runtime: config.runtime.id,
+      view: navigation.view,
+    };
+    globalThis.parent.postMessage(message, globalThis.location.origin);
   };
   document.addEventListener("click", listener);
   return () => document.removeEventListener("click", listener);
