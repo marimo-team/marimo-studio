@@ -464,60 +464,41 @@ default = "dashboard"
     assert load_studio_definition(inline).notebook == inline
 
 
-def test_notebook_configuration_controls_session_preservation(
-    notebook_path: Path,
-) -> None:
-    ensure_view(notebook_path)
-
-    def preserve(config: MutableMapping[str, object]) -> None:
-        config["preserve_session"] = True
-
-    update_notebook_config(notebook_path, preserve)
-    assert load_studio(notebook_path).preserve_session is True
-
-    def invalidate(config: MutableMapping[str, object]) -> None:
-        config["preserve_session"] = "yes"
-
-    update_notebook_config(notebook_path, invalidate)
-    with pytest.raises(ConfigurationError, match="preserve_session must be a boolean"):
-        load_studio(notebook_path)
-
-
-def test_notebook_configuration_controls_cell_log_visibility(
-    notebook_path: Path,
-) -> None:
-    ensure_view(notebook_path)
-    assert load_studio(notebook_path).show_cell_logs is True
-
-    def hide_logs(config: MutableMapping[str, object]) -> None:
-        config["show_cell_logs"] = False
-
-    update_notebook_config(notebook_path, hide_logs)
-    assert load_studio(notebook_path).show_cell_logs is False
-
-    def invalidate(config: MutableMapping[str, object]) -> None:
-        config["show_cell_logs"] = "no"
-
-    update_notebook_config(notebook_path, invalidate)
-    with pytest.raises(ConfigurationError, match="show_cell_logs must be a boolean"):
-        load_studio(notebook_path)
-
-
-def test_notebook_configuration_selects_presentation_runtimes(
+def test_notebook_configuration_controls_presentation_options(
     notebook_path: Path,
 ) -> None:
     ensure_view(notebook_path)
 
     def configure(config: MutableMapping[str, object]) -> None:
+        config["preserve_session"] = True
+        config["show_cell_logs"] = False
         config["runtime"] = "wasm"
         config["runtimes"] = ["server", "wasm"]
 
     update_notebook_config(notebook_path, configure)
     studio = load_studio(notebook_path)
+    assert studio.preserve_session is True
+    assert studio.show_cell_logs is False
     assert studio.default_runtime == "wasm"
     assert studio.runtimes == ("server", "wasm")
 
+    def invalidate_session(config: MutableMapping[str, object]) -> None:
+        config["preserve_session"] = "yes"
+
+    update_notebook_config(notebook_path, invalidate_session)
+    with pytest.raises(ConfigurationError, match="preserve_session must be a boolean"):
+        load_studio(notebook_path)
+
+    def invalidate_logs(config: MutableMapping[str, object]) -> None:
+        config["preserve_session"] = True
+        config["show_cell_logs"] = "no"
+
+    update_notebook_config(notebook_path, invalidate_logs)
+    with pytest.raises(ConfigurationError, match="show_cell_logs must be a boolean"):
+        load_studio(notebook_path)
+
     def remove_default(config: MutableMapping[str, object]) -> None:
+        config["show_cell_logs"] = False
         config["runtimes"] = ["server"]
 
     update_notebook_config(notebook_path, remove_default)
