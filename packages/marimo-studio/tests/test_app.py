@@ -25,6 +25,7 @@ from marimo_studio import create_asgi_app
 from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.server.programmatic import programmatic_middleware
 from marimo_studio._server import dev
+from marimo_studio._urls import authored_view_root_url
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
 from marimo_studio._workspace.metadata import update_notebook_config
@@ -144,6 +145,7 @@ def test_run_mode_serves_default_and_named_view_documents(
         default = client.get("/")
         named = client.get("/executive/")
         explicit_index = client.get("/executive/index.html")
+        native_editor = client.get("/_marimo-studio/editor/")
 
     assert default.status_code == 200
     assert default.text.count('id="marimo-runtime-root"') == 1
@@ -153,6 +155,7 @@ def test_run_mode_serves_default_and_named_view_documents(
     assert '"/_marimo-studio/views/executive"' in named.text
     assert explicit_index.url.path == "/executive/"
     assert explicit_index.text.count('id="marimo-runtime-root"') == 1
+    assert native_editor.status_code == 404
 
 
 def test_view_directory_serves_native_module_graphs(notebook_path: Path) -> None:
@@ -302,6 +305,134 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
     }
     assert dashboard["runtime"]["data"]["preserveSession"] is True
     assert dashboard["showCellLogs"] is False
+
+
+def test_directory_support_routes_keep_notebook_identity(tmp_path: Path) -> None:
+    from marimo._server.workspace._directory import DirectoryWorkspace
+
+    first = tmp_path / "first.py"
+    second = tmp_path / "second.py"
+    first.write_text(notebook_source(tmp_path / "first-output"), encoding="utf-8")
+    second.write_text(notebook_source(tmp_path / "second-output"), encoding="utf-8")
+    _configured(first)
+    _configured(second)
+    app = _marimo_app(first)
+    _edit_mode(app)
+    manager = _session_manager(app)
+    manager.workspace = DirectoryWorkspace(str(tmp_path), include_markdown=False)
+    manager.get_session = Mock(
+        return_value=SimpleNamespace(
+            initialization_id="second.py",
+            app_file_manager=SimpleNamespace(path=str(second)),
+        )
+    )
+    authored_root = authored_view_root_url("", "first.py")
+
+    with TestClient(app) as client:
+        config = client.get(
+            "/_marimo-studio/views/dashboard/config?file=first.py"
+        ).json()
+        cross_notebook = client.post(
+            "/_marimo-studio/views/dashboard/values?file=first.py",
+            headers={"Marimo-Session-Id": "second-session"},
+            json={"revision": config["revision"], "selectors": ["doubled"]},
+        )
+        created = client.post(
+            "/_marimo-studio/views?file=first.py",
+            headers={"Marimo-Server-Token": config["runtime"]["data"]["serverToken"]},
+            json={"name": "detail"},
+        )
+        marimo_resource = client.get(f"{authored_root}dashboard/public-files-sw.js")
+        authored_document = client.get(
+            f"{authored_root}dashboard/?region=us",
+            follow_redirects=False,
+        )
+
+    assert cross_notebook.status_code == 409
+    assert cross_notebook.json()["error"] == "unknown-session"
+    assert config["rootUrl"] == "/"
+    assert config["publicRootUrl"] == "/?file=first.py"
+    assert config["documentRootUrl"] == authored_root
+    assert config["runtime"]["data"]["url"] == "/"
+    assert config["runtime"]["data"]["file"] == "first.py"
+    assert created.status_code == 201
+    assert created.json()["studio_url"] == "/studio/detail/?file=first.py"
+    assert created.json()["view_url"] == "/detail/?file=first.py"
+    assert marimo_resource.status_code == 200
+    assert authored_document.status_code == 307
+    assert authored_document.headers["location"] == (
+        "/dashboard/?file=first.py&region=us"
+    )
+
+
+def test_mounted_directory_routes_preserve_notebook_identity(tmp_path: Path) -> None:
+    from marimo._server.workspace._directory import DirectoryWorkspace
+
+    notebook = tmp_path / "nested" / "analysis.py"
+    notebook.parent.mkdir()
+    notebook.write_text(notebook_source(tmp_path / "output"), encoding="utf-8")
+    _configured(notebook)
+    child = _marimo_app(notebook, path="/base", programmatic=True)
+    _edit_mode(child)
+    _session_manager(child).workspace = DirectoryWorkspace(
+        str(tmp_path),
+        include_markdown=False,
+    )
+    parent = Starlette(routes=[Mount("/parent", app=child)])
+    file_key = "nested/analysis.py"
+    authored_root = authored_view_root_url("/parent/base", file_key)
+
+    with TestClient(parent) as client:
+        config = client.get(
+            f"/parent/base/_marimo-studio/views/dashboard/config?file={file_key}"
+        ).json()
+        authored_document = client.get(
+            f"{authored_root}dashboard/?region=us",
+            follow_redirects=False,
+        )
+
+    assert config["rootUrl"] == "/parent/base/"
+    assert config["publicRootUrl"] == ("/parent/base/?file=nested%2Fanalysis.py")
+    assert config["runtime"]["data"]["url"] == "/parent/base/"
+    assert config["runtime"]["data"]["file"] == file_key
+    assert authored_document.headers["location"] == (
+        "/parent/base/dashboard/?file=nested%2Fanalysis.py&region=us"
+    )
+
+
+def test_directory_auth_precedes_notebook_configuration(tmp_path: Path) -> None:
+    from marimo._server.workspace._directory import DirectoryWorkspace
+
+    configured = tmp_path / "configured.py"
+    plain = tmp_path / "plain.py"
+    configured.write_text(
+        notebook_source(tmp_path / "configured-output"),
+        encoding="utf-8",
+    )
+    plain.write_text(notebook_source(tmp_path / "plain-output"), encoding="utf-8")
+    _configured(configured)
+    app = _marimo_app(configured, token="test-token")
+    _edit_mode(app)
+    _session_manager(app).workspace = DirectoryWorkspace(
+        str(tmp_path),
+        include_markdown=False,
+    )
+
+    with TestClient(app) as client:
+        responses = [
+            client.get(
+                f"{route}?file={notebook}",
+                follow_redirects=False,
+            )
+            for notebook in ("configured.py", "plain.py")
+            for route in ("/_marimo-studio/status", "/dashboard/")
+        ]
+
+    assert all(response.status_code == 303 for response in responses)
+    assert all(
+        response.headers["location"].startswith("/auth/login?")
+        for response in responses
+    )
 
 
 def test_run_mode_serves_the_configured_wasm_runtime_and_source(
@@ -871,7 +1002,11 @@ def test_run_runtime_refreshes_bindings_for_each_browser_session(
                 ),
                 *rows,
             )
-        return SimpleNamespace(document=SimpleNamespace(cells=rows))
+        return SimpleNamespace(
+            initialization_id=str(studio.notebook),
+            app_file_manager=SimpleNamespace(path=str(studio.notebook)),
+            document=SimpleNamespace(cells=rows),
+        )
 
     sessions = {
         "s_first1": session("first", inserted=False),
@@ -995,12 +1130,17 @@ def test_document_replay_requires_an_opted_in_manager_and_query() -> None:
     handler = SimpleNamespace(_reconnect_session=Mock())
     reconnect = Mock(return_value=("fallback", "new"))
 
-    replay_compat._DOCUMENT_REPLAY_MANAGERS.add(manager)
+    replay_compat._DOCUMENT_REPLAY_FILES[manager] = {"analysis.py"}
 
-    def connector(active_manager: Manager, requested: bool) -> SimpleNamespace:
+    def connector(
+        active_manager: Manager,
+        requested: bool,
+        file_key: str = "analysis.py",
+    ) -> SimpleNamespace:
         query = {replay_compat.DOCUMENT_REPLAY_QUERY_PARAM: "1"} if requested else {}
         return SimpleNamespace(
             manager=active_manager,
+            params=SimpleNamespace(file_key=file_key),
             connection=SimpleNamespace(query_params=query),
             handler=handler,
         )
@@ -1023,10 +1163,17 @@ def test_document_replay_requires_an_opted_in_manager_and_query() -> None:
         reconnect,
         "reconnect",
     )
+    other_notebook = replay_compat._reconnect_with_document_replay(
+        connector(manager, True, "other.py"),
+        session,
+        reconnect,
+        "reconnect",
+    )
 
     assert replayed == (session, "reconnect")
     assert unmarked == ("fallback", "new")
     assert unregistered == ("fallback", "new")
+    assert other_notebook == ("fallback", "new")
     session.disconnect_main_consumer.assert_called_once_with()
     handler._reconnect_session.assert_called_once_with(session, replay=True)
 
@@ -1045,7 +1192,7 @@ def test_document_replay_follows_the_verified_presentation(
 
     with TestClient(app) as client:
         assert client.get("/").status_code == 200
-        assert manager in replay_compat._DOCUMENT_REPLAY_MANAGERS
+        assert str(studio.notebook) in replay_compat._DOCUMENT_REPLAY_FILES[manager]
 
         def reset(config: MutableMapping[str, object]) -> None:
             config["preserve_session"] = False
@@ -1053,7 +1200,7 @@ def test_document_replay_follows_the_verified_presentation(
         update_notebook_config(studio.notebook, reset)
         assert client.get("/").status_code == 200
 
-    assert manager not in replay_compat._DOCUMENT_REPLAY_MANAGERS
+    assert manager not in replay_compat._DOCUMENT_REPLAY_FILES
 
 
 def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
@@ -1190,7 +1337,9 @@ def test_edit_mode_public_routes_honor_parent_mount(notebook_path: Path) -> None
     assert landing.status_code == 307
     assert landing.headers["location"] == "/parent/base/studio/dashboard/"
     assert workspace.status_code == 200
-    expected_editor = "/parent/base/?" + urlencode({"file": str(studio.notebook)})
+    expected_editor = "/parent/base/_marimo-studio/editor/?" + urlencode(
+        {"file": str(studio.notebook)}
+    )
     bootstrap = _studio_bootstrap(workspace.text)
     assert 'href="/parent/base/favicon.ico"' in workspace.text
     assert bootstrap["urls"]["editor"] == expected_editor
@@ -1207,7 +1356,9 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
     studio = _configured(notebook_path)
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
-    expected_editor = "/?" + urlencode({"file": str(studio.notebook)})
+    expected_editor = "/_marimo-studio/editor/?" + urlencode(
+        {"file": str(studio.notebook)}
+    )
 
     with TestClient(app) as client:
         landing = client.get(
@@ -1239,7 +1390,7 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
     assert landing.headers["location"] == (
         "/studio/dashboard/?region=emea&region=apac&empty="
     )
-    landing_editor = "/?" + urlencode(
+    landing_editor = "/_marimo-studio/editor/?" + urlencode(
         [
             ("region", "emea"),
             ("region", "apac"),

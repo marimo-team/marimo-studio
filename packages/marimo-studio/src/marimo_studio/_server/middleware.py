@@ -8,16 +8,21 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from marimo_studio import _assets
 from marimo_studio._compat.server.context import (
     relative_request_path,
+    server_base_url,
     server_context,
     server_location,
+    server_mode,
+    server_uses_file_routing,
 )
 from marimo_studio._compat.server.peer_controls import enable_peer_control_sync
 from marimo_studio._compat.server.sessions import has_access_token, has_read_access
 from marimo_studio._server.files import file_response
 from marimo_studio._server.pages import (
     authentication_redirect,
+    authored_document_redirect,
     document_response,
     error_response,
     initialization_response,
@@ -27,9 +32,11 @@ from marimo_studio._server.pages import (
 )
 from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._server.routing import (
+    authored_view_route,
     could_handle,
     document_view,
     is_studio_landing,
+    native_editor_target,
     studio_view,
     view_asset,
     view_route_alias,
@@ -59,27 +66,87 @@ class PresentationMiddleware:
         receive: Receive,
         send: Send,
     ) -> None:
+        if scope["type"] not in {"http", "websocket"}:
+            await self.app(scope, receive, send)
+            return
+        base_url = server_base_url(scope)
+        if base_url is None:
+            await self.app(scope, receive, send)
+            return
+        relative = relative_request_path(scope, base_url)
+        if relative is None:
+            await self.app(scope, receive, send)
+            return
+        mode = server_mode(scope)
+        if mode is None:
+            await self.app(scope, receive, send)
+            return
+        editor_target = native_editor_target(relative)
+        if editor_target is not None and mode == "edit":
+            await self.app(
+                _replace_relative_path(scope, relative, editor_target),
+                receive,
+                send,
+            )
+            return
         if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-        location = server_location(scope)
-        if location is None:
-            await self.app(scope, receive, send)
-            return
-        relative = relative_request_path(scope, location.base_url)
-        if relative is None or not could_handle(relative, location.mode):
             await self.app(scope, receive, send)
             return
 
         request = Request(scope, receive)
-        landing = is_studio_landing(relative, location.mode)
-        if landing and (
-            request.method not in {"GET", "HEAD"} or "file" in request.query_params
-        ):
+        if relative.startswith(f"{SUPPORT_PATH}/assets/"):
+            response = (
+                file_response(
+                    _assets.runtime_assets_path(),
+                    relative.removeprefix(f"{SUPPORT_PATH}/assets/"),
+                )
+                if request.method in {"GET", "HEAD"}
+                else Response(status_code=405)
+            )
+            await response(scope, receive, send)
+            return
+        if not has_read_access(scope) and relative in {"", "/"}:
             await self.app(scope, receive, send)
             return
-        if landing and (has_access_token(scope) or not has_read_access(scope)):
+        authored = authored_view_route(relative)
+        if (
+            not has_read_access(scope)
+            and server_uses_file_routing(scope)
+            and ("file" in request.query_params or authored is not None)
+            and relative not in {"", "/"}
+            and could_handle(relative, mode)
+        ):
+            response = authentication_redirect(request, base_url)
+            await response(scope, receive, send)
+            return
+
+        request_relative = relative
+        location = server_location(
+            request,
+            selected_file=authored.file_key if authored is not None else None,
+        )
+        if location is None:
             await self.app(scope, receive, send)
+            return
+        if authored is not None:
+            relative = authored.relative
+        if not could_handle(relative, location.mode):
+            await self.app(scope, receive, send)
+            return
+
+        landing = is_studio_landing(relative, location.mode)
+        if landing and request.method not in {"GET", "HEAD"}:
+            await self.app(scope, receive, send)
+            return
+        if landing and not has_read_access(scope):
+            await self.app(scope, receive, send)
+            return
+        if landing and has_access_token(scope):
+            await authentication_redirect(request, location.base_url)(
+                scope,
+                receive,
+                send,
+            )
             return
 
         presentation = self._presentations.setdefault(
@@ -119,7 +186,7 @@ class PresentationMiddleware:
             alias = view_route_alias(relative, workspace)
             if alias is not None and not alias.startswith(SUPPORT_PATH):
                 await self.app(
-                    _replace_relative_path(scope, relative, alias),
+                    _replace_relative_path(scope, request_relative, alias),
                     receive,
                     send,
                 )
@@ -166,6 +233,7 @@ class PresentationMiddleware:
                     base_url=location.base_url,
                     dev=dev,
                     structured=_accepts_json(request),
+                    routing_query=context.routing_query,
                 )
             )
             await response(scope, receive, send)
@@ -202,6 +270,7 @@ class PresentationMiddleware:
                     base_url=location.base_url,
                     dev=dev,
                     structured=_accepts_json(request),
+                    routing_query=context.routing_query,
                 )
             await response(scope, receive, send)
             return
@@ -214,15 +283,23 @@ class PresentationMiddleware:
                 base_url=location.base_url,
                 dev=dev,
                 structured=_accepts_json(request),
+                routing_query=context.routing_query,
             )
             await response(scope, receive, send)
             return
 
         try:
-            redirect = page_redirect(
-                request,
-                relative,
-                selected_document is not None or selected_studio is not None,
+            redirect = (
+                authored_document_redirect(request, context, selected_document)
+                if authored is not None
+                and selected_document is not None
+                and request.method in {"GET", "HEAD"}
+                and not _accepts_json(request)
+                else page_redirect(
+                    request,
+                    relative,
+                    selected_document is not None or selected_studio is not None,
+                )
             )
             if redirect is not None:
                 response = redirect
@@ -231,6 +308,7 @@ class PresentationMiddleware:
                     request,
                     location.base_url,
                     workspace.default_view,
+                    context.routing_query,
                 )
             else:
                 enable_peer_control_sync(location)
@@ -275,6 +353,7 @@ class PresentationMiddleware:
                 base_url=location.base_url,
                 dev=dev,
                 structured=_accepts_json(request),
+                routing_query=context.routing_query,
             )
         await response(scope, receive, send)
 

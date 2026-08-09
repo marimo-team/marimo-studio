@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from starlette.requests import Request
 from starlette.types import Scope
 
 from marimo_studio._compat.server.models import (
@@ -29,21 +30,73 @@ def effective_base_url(scope: Scope, configured: str) -> str:
     return f"{root_path}/{configured.lstrip('/')}"
 
 
-def server_location(scope: Scope) -> ServerLocation | None:
-    """Locate a single-notebook Marimo application."""
+def server_base_url(scope: Scope) -> str | None:
+    """Return the public base URL of a Marimo server application."""
     app = scope.get("app")
     state = getattr(app, "state", None)
     manager = getattr(state, "session_manager", None)
     if manager is None:
         return None
     assert state is not None
-    file_key = manager.workspace.get_unique_file_key()
+    return effective_base_url(scope, str(getattr(state, "base_url", "")))
+
+
+def server_mode(scope: Scope) -> str | None:
+    """Return the active Marimo server mode."""
+    app = scope.get("app")
+    state = getattr(app, "state", None)
+    manager = getattr(state, "session_manager", None)
+    if manager is None:
+        return None
+
+    from marimo._session.model import SessionMode
+
+    if manager.mode is SessionMode.RUN:
+        return "run"
+    if manager.mode is SessionMode.EDIT:
+        return "edit"
+    return None
+
+
+def server_uses_file_routing(scope: Scope) -> bool:
+    """Return whether requests select notebooks within this server."""
+    app = scope.get("app")
+    state = getattr(app, "state", None)
+    manager = getattr(state, "session_manager", None)
+    return manager is not None and manager.workspace.get_unique_file_key() is None
+
+
+def server_location(
+    request: Request,
+    selected_file: str | None = None,
+) -> ServerLocation | None:
+    """Locate the notebook selected for one Marimo server request."""
+    scope = request.scope
+    app = scope.get("app")
+    state = getattr(app, "state", None)
+    manager = getattr(state, "session_manager", None)
+    if manager is None:
+        return None
+    assert state is not None
+    unique_file = manager.workspace.get_unique_file_key()
+    file_key = (
+        unique_file
+        if unique_file is not None
+        else selected_file or request.query_params.get("file")
+    )
     if not file_key:
         return None
-    resolved = manager.workspace.resolve(file_key)
+
+    from marimo._utils.http import HTTPException
+
+    try:
+        resolved = manager.workspace.resolve(file_key)
+    except HTTPException:
+        return None
     if resolved is None:
         return None
 
+    from marimo._server.api.deps import AppState
     from marimo._session.model import SessionMode
 
     if manager.mode is SessionMode.RUN:
@@ -55,11 +108,10 @@ def server_location(scope: Scope) -> ServerLocation | None:
     return ServerLocation(
         notebook=Path(resolved).resolve(),
         file_key=str(file_key),
-        base_url=effective_base_url(
-            scope,
-            str(getattr(state, "base_url", "")),
-        ),
+        base_url=effective_base_url(scope, str(getattr(state, "base_url", ""))),
         mode=mode,
+        routing_query=((("file", str(file_key)),) if unique_file is None else ()),
+        _config_manager=AppState(request).config_manager_at_file(str(file_key)),
         _state=state,
         _session_manager=manager,
     )
@@ -68,21 +120,7 @@ def server_location(scope: Scope) -> ServerLocation | None:
 def server_context(location: ServerLocation) -> ServerContext:
     """Read the validated Marimo state needed by a presentation."""
     assert_supported_version()
-    configured_notebook = getattr(
-        location._state,
-        "_marimo_studio_configured_notebook",
-        None,
-    )
-    if configured_notebook != location.notebook:
-        config_manager = config_manager_at_notebook(
-            location._state.config_manager,
-            location.notebook,
-        )
-        location._state.config_manager = config_manager
-        location._session_manager._config_manager = config_manager
-        location._state._marimo_studio_configured_notebook = location.notebook
-    else:
-        config_manager = location._state.config_manager
+    config_manager = location._config_manager
     return ServerContext(
         notebook=location.notebook,
         file_key=location.file_key,
@@ -90,6 +128,7 @@ def server_context(location: ServerLocation) -> ServerContext:
         mode=location.mode,
         dev=location.mode == "edit"
         or bool(getattr(location._session_manager, "watch", False)),
+        routing_query=location.routing_query,
         user_config=config_manager.get_user_config(),
         config_overrides=config_manager.get_config_overrides(),
         server_token=str(location._session_manager.skew_protection_token),

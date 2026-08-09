@@ -10,7 +10,13 @@ from threading import RLock
 from marimo_studio._compat.server.models import ServerContext
 from marimo_studio._html import runtime_document
 from marimo_studio._server.runtimes import DEFAULT_RUNTIME_REGISTRY
-from marimo_studio._urls import SUPPORT_PATH, public_url, view_url
+from marimo_studio._urls import (
+    SUPPORT_PATH,
+    authored_view_root_url,
+    public_url,
+    view_url,
+    with_query,
+)
 from marimo_studio._workspace import discover_studio
 from marimo_studio._workspace.config import (
     discover_studio_definition,
@@ -319,10 +325,17 @@ class NotebookPresentation:
         context: ServerContext,
     ) -> str:
         view_name = snapshot.view_name
-        root_url = view_url(context.base_url, view_name)
-        support_url = public_url(
-            context.base_url,
-            f"{SUPPORT_PATH}/views/{view_name}",
+        root_url = (
+            f"{authored_view_root_url(context.base_url, context.file_key)}{view_name}/"
+            if context.routing_query
+            else view_url(context.base_url, view_name)
+        )
+        support_url = with_query(
+            public_url(
+                context.base_url,
+                f"{SUPPORT_PATH}/views/{view_name}",
+            ),
+            context.routing_query,
         )
         return runtime_document(
             snapshot.document,
@@ -354,6 +367,10 @@ class NotebookPresentation:
             runtime_id,
         )
         projection = provider.project(snapshot, context, session_id)
+        public_root_url = with_query(
+            public_url(context.base_url, "/"),
+            context.routing_query,
+        )
         return {
             "schema": 1,
             "revision": snapshot.revision,
@@ -371,9 +388,18 @@ class NotebookPresentation:
                 ),
             },
             "rootUrl": public_url(context.base_url, "/"),
-            "supportUrl": public_url(
-                context.base_url,
-                f"{SUPPORT_PATH}/views/{view_name}",
+            "publicRootUrl": public_root_url,
+            "documentRootUrl": (
+                authored_view_root_url(context.base_url, context.file_key)
+                if context.routing_query
+                else public_root_url
+            ),
+            "supportUrl": with_query(
+                public_url(
+                    context.base_url,
+                    f"{SUPPORT_PATH}/views/{view_name}",
+                ),
+                context.routing_query,
             ),
             "showCellLogs": resolved.workspace.show_cell_logs,
             "cellBindings": projection.cell_bindings,
