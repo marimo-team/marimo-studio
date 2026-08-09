@@ -40,8 +40,9 @@ def controls(mo):
 @app.cell
 def metric(scale):
     metric = scale.value * 21
+    responsive_value = "responsive" * 80
     metric
-    return (metric,)
+    return metric, responsive_value
 
 
 @app.cell

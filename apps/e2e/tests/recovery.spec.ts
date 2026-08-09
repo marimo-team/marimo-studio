@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import {
   editorFrame,
   expect,
+  studioEntryUrl,
   previewFrame,
   readWorkspaceFile,
   test,
@@ -34,7 +35,7 @@ const waitForMetricSource = () =>
     .toBe(true);
 
 test("restores a value host after its notebook value returns", async ({ page }) => {
-  await page.goto("/studio/dashboard/");
+  await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
   const value = preview.locator('[mo-value="metric"]');
   const initial = await value.textContent();

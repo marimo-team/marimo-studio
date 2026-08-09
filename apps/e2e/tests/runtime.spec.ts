@@ -1,7 +1,14 @@
-import { editorSlider, expect, previewFrame, test, waitForPreview } from "./fixture.ts";
+import {
+  editorSlider,
+  expect,
+  previewFrame,
+  studioEntryUrl,
+  test,
+  waitForPreview,
+} from "./fixture.ts";
 
 test("keeps one live frame per runtime while modes and controls change", async ({ page }) => {
-  await page.goto("/studio/dashboard/");
+  await page.goto(studioEntryUrl);
   const server = await waitForPreview(page);
   const wasm = await waitForPreview(page, "wasm");
   const serverWidget = server.getByRole("button", { name: /Widget count:/ });

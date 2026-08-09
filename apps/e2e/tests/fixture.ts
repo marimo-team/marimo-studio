@@ -21,6 +21,7 @@ export const hostedDashboardHtmlPath = resolve(
   "__marimo__/studio/notebook/dashboard/index.html",
 );
 export const hostedViewFixturePath = resolve(hostedFixtureDirectory, "dashboard.html");
+export const studioEntryUrl = "/?file=notebook.py";
 
 const copyFixtureFile = async (relativePath: string) => {
   const source = resolve(fixtureDirectory, relativePath);
@@ -36,8 +37,11 @@ const copyFixtureFile = async (relativePath: string) => {
 
 export const restoreWorkspace = async () => {
   await copyFixtureFile("notebook.py");
+  await copyFixtureFile("plain.py");
   await copyFixtureFile("__marimo__/studio/notebook/dashboard/index.html");
   await copyFixtureFile("__marimo__/studio/notebook/dashboard/app.css");
+  await copyFixtureFile("__marimo__/studio/notebook/dashboard/scripts/app.js");
+  await copyFixtureFile("__marimo__/studio/notebook/dashboard/scripts/message.js");
   await rm(resolve(workspaceDirectory, "__marimo__/studio/notebook/qa-view"), {
     force: true,
     recursive: true,
@@ -111,10 +115,11 @@ const sessionAdmin = async (page: Page): Promise<SessionAdmin | undefined> => {
   if (page.isClosed()) {
     return undefined;
   }
-  const source = await page
-    .locator("#marimo-studio-bootstrap")
-    .textContent()
-    .catch(() => null);
+  const bootstrapElement = page.locator("#marimo-studio-bootstrap");
+  if ((await bootstrapElement.count()) === 0) {
+    return undefined;
+  }
+  const source = await bootstrapElement.textContent().catch(() => null);
   if (!source) {
     return undefined;
   }
