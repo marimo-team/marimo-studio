@@ -67,10 +67,6 @@ marimo-cell {
 .view-header h1 {
   text-wrap: balance;
 }
-
-marimo-cell {
-  min-width: 0;
-}
 """
 
 

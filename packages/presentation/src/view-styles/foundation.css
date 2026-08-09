@@ -1,6 +1,7 @@
 @layer marimo-studio-foundation {
   @scope (#app-shell) to ([data-marimo-cell-output]) {
-    :scope {
+    :scope,
+    * {
       min-inline-size: 0;
     }
 
