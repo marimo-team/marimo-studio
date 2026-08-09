@@ -1,6 +1,7 @@
 import type { SourceName } from "@marimo-studio/protocol/source-events";
 
 import { parseErrorResponse } from "@marimo-studio/protocol/errors";
+import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 export interface RemoteSource {
   content: string;
@@ -23,9 +24,12 @@ export class RevisionConflict extends Error {
   }
 }
 
-export const createSourceRemote = (supportPrefix: string, serverToken: string): SourceRemote => {
+export const createSourceRemote = (
+  supportUrl: (view: string) => string,
+  serverToken: string,
+): SourceRemote => {
   const url = (view: string, name: SourceName) =>
-    `${supportPrefix}/${encodeURIComponent(view)}/source/${name}`;
+    appendUrlPath(supportUrl(view), `source/${name}`, globalThis.location.href);
   return {
     async read(view, name) {
       const response = await fetch(url(view, name), { cache: "no-store" });

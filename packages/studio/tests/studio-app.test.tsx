@@ -107,7 +107,7 @@ const controllers = () => {
     vi.fn(),
   );
   const source = new SourceController(
-    bootstrap.urls.viewSupportPrefix,
+    (view) => `${bootstrap.urls.viewSupportPrefix}/${view}`,
     bootstrap.serverToken,
     bootstrap.selectedView,
     "test-workspace",

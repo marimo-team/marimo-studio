@@ -18,6 +18,7 @@ export const startRuntimeTransport = (configure: () => void | Promise<void>): Pr
 export const configureServerTransport = <SessionId>(
   runtime: RuntimeTransport<SessionId>,
   editMode: boolean,
+  file?: string,
 ) => {
   if (configuredTransports.has(runtime)) {
     return;
@@ -25,6 +26,10 @@ export const configureServerTransport = <SessionId>(
   configuredTransports.add(runtime);
   const configure = (url: URL) => {
     url.searchParams.delete(RUNTIME_QUERY_KEY);
+    url.searchParams.delete("file");
+    if (file) {
+      url.searchParams.set("file", file);
+    }
     if (editMode) {
       url.searchParams.set("kiosk", "true");
     }

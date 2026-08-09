@@ -1,6 +1,8 @@
 import type { ShellChangeKind } from "@marimo-studio/protocol/development-events";
 import type { ReceiverReadyMessage } from "@marimo-studio/protocol/preview-messages";
 
+import { appendUrlPath } from "@marimo-studio/protocol/url";
+
 import type { PresentationDiagnostic } from "./diagnostics.ts";
 
 import { bindViewNavigation, bindViewSwitches, DevelopmentEvents } from "./document/events.ts";
@@ -243,13 +245,17 @@ if (hasRuntimeConfig()) {
 }
 
 const connectEvents = () => {
-  developmentEvents.connect(`${getSupportUrl()}/dev/events`, reconcileBaseline, (kind) => {
-    if (globalThis.__MARIMO_STUDIO_RUNTIME_STATE__ === "failed") {
-      globalThis.location.reload();
-      return;
-    }
-    reload(kind);
-  });
+  developmentEvents.connect(
+    appendUrlPath(getSupportUrl(), "dev/events", globalThis.location.href),
+    reconcileBaseline,
+    (kind) => {
+      if (globalThis.__MARIMO_STUDIO_RUNTIME_STATE__ === "failed") {
+        globalThis.location.reload();
+        return;
+      }
+      reload(kind);
+    },
+  );
 };
 
 export const refreshShell = async (

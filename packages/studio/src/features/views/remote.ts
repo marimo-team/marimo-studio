@@ -1,4 +1,5 @@
 import { parseErrorResponse } from "@marimo-studio/protocol/errors";
+import { appendUrlPath } from "@marimo-studio/protocol/url";
 import {
   parseCreatedView,
   parseDeletedView,
@@ -44,10 +45,13 @@ export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRem
   },
 
   async remove(name) {
-    const response = await fetch(`${viewsUrl}/${encodeURIComponent(name)}`, {
-      method: "DELETE",
-      headers: { "Marimo-Server-Token": serverToken },
-    });
+    const response = await fetch(
+      appendUrlPath(viewsUrl, encodeURIComponent(name), globalThis.location.href),
+      {
+        method: "DELETE",
+        headers: { "Marimo-Server-Token": serverToken },
+      },
+    );
     if (!response.ok) {
       throw new Error(await errorMessage(response, "Could not remove view"));
     }

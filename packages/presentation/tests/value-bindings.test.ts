@@ -32,6 +32,8 @@ const config = {
     },
   },
   rootUrl: "/proxy/app/",
+  publicRootUrl: "/proxy/app/",
+  documentRootUrl: "/proxy/app/",
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
   cellBindings: {},
   valueBindings: {
@@ -89,7 +91,7 @@ test("value reads send exact selectors through the configured base URL", async (
       selectors: ["context.label"],
     });
     assert.deepEqual(result.values, { "context.label": "ready" });
-    assert.deepEqual(url, "/proxy/app/_marimo-studio/views/dashboard/values");
+    assert.deepEqual(url, "http://localhost:3000/proxy/app/_marimo-studio/views/dashboard/values");
     assert.deepEqual(headers.get("Marimo-Session-Id"), "session-id");
     assert.deepEqual(headers.get("Marimo-Server-Token"), "server-token");
     assert.deepEqual(JSON.parse(body), {

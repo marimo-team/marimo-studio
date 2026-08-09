@@ -10,7 +10,7 @@ const payload = {
   runtimes: [{ id: "server", label: "Server" }],
   defaultRuntime: "server",
   urls: {
-    editor: "/?file=analysis.py",
+    editor: "/_marimo-studio/editor/?file=analysis.py",
     events: "/_marimo-studio/dev/events",
     query: "/_marimo-studio/query",
     studioPrefix: "/studio/",

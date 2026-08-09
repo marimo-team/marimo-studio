@@ -5,6 +5,7 @@ const serverDataSchema = z.object({
   url: z.string(),
   serverToken: z.string(),
   fileKey: z.string(),
+  file: z.string().optional(),
   preserveSession: z.boolean(),
 });
 

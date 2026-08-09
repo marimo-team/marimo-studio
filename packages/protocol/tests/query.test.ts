@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
-import { notebookQueryValues, publicNotebookQuery } from "../src/query.ts";
+import { notebookQueryValues, notebookRouteQuery, publicNotebookQuery } from "../src/query.ts";
 
 test("notebook query state preserves public values and removes transport keys", () => {
   const query = publicNotebookQuery(
@@ -14,4 +14,8 @@ test("notebook query state preserves public values and removes transport keys", 
     empty: "",
   });
   assert.deepEqual(publicNotebookQuery("?file=analysis.py&kiosk=true"), "");
+  assert.equal(
+    notebookRouteQuery("?region=emea&file=reports%2Fanalysis.py&session_id=session"),
+    "?file=reports%2Fanalysis.py",
+  );
 });
