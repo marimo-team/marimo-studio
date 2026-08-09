@@ -7,7 +7,6 @@ import {
   hostedFixtureDirectory,
   hostedNotebookPath,
   hostedWorkspaceDirectory,
-  notebookPath,
   repositoryDirectory,
   workspaceDirectory,
 } from "./paths.mjs";
@@ -37,7 +36,7 @@ const startServer = (args) =>
   });
 
 const primary = startServer([
-  notebookPath,
+  workspaceDirectory,
   "--no-sandbox",
   "--headless",
   "--no-token",
@@ -81,7 +80,7 @@ const killChildTree = (child, signal) => {
 };
 
 const requestGracefulShutdown = async () => {
-  const document = await fetch(`${serverUrl}/studio/dashboard/`).then((response) =>
+  const document = await fetch(`${serverUrl}/?file=notebook.py`).then((response) =>
     response.text(),
   );
   const token = document.match(/"serverToken":"([^"]+)"/)?.[1];

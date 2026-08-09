@@ -7,6 +7,7 @@ import {
   expect,
   previewFrame,
   readWorkspaceFile,
+  studioEntryUrl,
   test,
   waitForPreview,
   workspaceNotebookPath,
@@ -17,7 +18,7 @@ const saveShortcut = process.platform === "darwin" ? "Meta+s" : "Control+s";
 const selectAllShortcut = process.platform === "darwin" ? "Meta+a" : "Control+a";
 
 test("keeps browser and disk source edits in sync", async ({ page }) => {
-  await page.goto("/studio/dashboard/");
+  await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
   const widgetButton = preview.getByRole("button", { name: /Widget count:/ });
   await expect(widgetButton).toHaveText(/^Widget count: \d+$/);
@@ -112,16 +113,147 @@ test("keeps browser and disk source edits in sync", async ({ page }) => {
   await expect(widgetButton).toHaveText(`Widget count: ${widgetCount + 1}`);
 });
 
+test("routes directory notebooks by Studio configuration", async ({ page }) => {
+  await page.goto("/");
+  const plainUrl = await page
+    .getByRole("treeitem", { name: /plain\.py/ })
+    .getByRole("link")
+    .getAttribute("href");
+  expect(plainUrl).not.toBeNull();
+  await page.goto(plainUrl!);
+  await expect(page).toHaveURL(/\?file=plain\.py$/);
+  await expect(page.locator("#marimo-studio-bootstrap")).toHaveCount(0);
+
+  await page.goto("/");
+  const configuredUrl = await page
+    .getByRole("treeitem", { name: /notebook\.py/ })
+    .getByRole("link")
+    .getAttribute("href");
+  expect(configuredUrl).not.toBeNull();
+  await page.goto(configuredUrl!);
+  await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=notebook\.py$/);
+  await expect(page.locator("#marimo-studio-bootstrap")).toBeAttached();
+});
+
+test("loads a native module graph from a directory view", async ({ page }) => {
+  const source = await readWorkspaceFile(dashboardHtmlPath);
+  await writeWorkspaceFile(
+    dashboardHtmlPath,
+    source.replace(
+      "</head>",
+      '    <script type="module" src="scripts/app.js"></script>\n  </head>',
+    ),
+  );
+
+  await page.goto(studioEntryUrl);
+  const preview = await waitForPreview(page);
+
+  await expect
+    .poll(() => preview.locator("html").getAttribute("data-module-status"))
+    .toBe("Native module ready");
+});
+
+test("keeps nested authored content inside a narrow viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto(studioEntryUrl);
+  const preview = await waitForPreview(page);
+  const source = await readWorkspaceFile(dashboardHtmlPath);
+  const responsive = source.replace(
+    /<main id="app-shell"[\s\S]*<\/main>/,
+    `<main id="app-shell">
+      <section style="display: grid; grid-template-columns: minmax(0, 1fr)">
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr)">
+          <code
+            data-responsive-scroll
+            style="display: block; overflow: auto; white-space: nowrap"
+          ><span
+            mo-value="responsive_value"
+            style="display: inline-block; min-width: max-content; white-space: nowrap"
+          ></span></code>
+        </div>
+      </section>
+    </main>`,
+  );
+
+  await writeWorkspaceFile(dashboardHtmlPath, responsive);
+  const value = preview.locator('[mo-value="responsive_value"]');
+  await expect(value).toContainText("responsiveresponsive");
+
+  expect(
+    await preview.locator("html").evaluate((element) => element.scrollWidth <= element.clientWidth),
+  ).toBe(true);
+});
+
+test("keeps relative view navigation public and reconnectable", async ({ page }) => {
+  await page.goto(`${studioEntryUrl}&region=eu`);
+  await waitForPreview(page);
+
+  const source = await readWorkspaceFile(dashboardHtmlPath);
+  await writeWorkspaceFile(
+    dashboardHtmlPath,
+    source.replace(
+      /<main id="app-shell"([^>]*)>/,
+      `<main id="app-shell"$1>
+        <nav>
+          <a href="#details">View details</a>
+          <a href="?region=us">Use US region</a>
+          <a href="../qa-view/">Open QA view</a>
+        </nav>
+        <section id="details">Quarterly details</section>`,
+    ),
+  );
+  await page.getByLabel("Select or manage a view").click();
+  await page.getByRole("button", { name: "+ New view" }).click();
+  await page.getByLabel("New view").fill("qa-view");
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  const direct = await page.context().newPage();
+  const directErrors: string[] = [];
+  direct.on("pageerror", (error) => directErrors.push(error.message));
+  direct.on("console", (message) => {
+    if (message.type() === "error" && !message.text().startsWith("Failed to load resource:")) {
+      directErrors.push(message.text());
+    }
+  });
+  const waitForDirectView = async () => {
+    await expect(direct.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
+    await expect(direct.getByRole("button", { name: "Widget count: 7" })).toBeVisible();
+  };
+
+  try {
+    await direct.goto("/dashboard/?file=notebook.py&region=eu");
+    await waitForDirectView();
+    await direct.getByRole("link", { name: "View details" }).click();
+    await expect(direct).toHaveURL(/\/dashboard\/\?file=notebook\.py&region=eu#details$/);
+    await direct.getByRole("link", { name: "Use US region" }).click();
+    await expect(direct).toHaveURL(/\/dashboard\/\?file=notebook\.py&region=us$/);
+    await waitForDirectView();
+    await direct.getByRole("link", { name: "Open QA view" }).click();
+    await expect(direct).toHaveURL(/\/qa-view\/\?file=notebook\.py&region=us$/);
+    await expect(direct.getByRole("heading", { name: "Qa View" })).toBeVisible();
+    await waitForDirectView();
+    await direct.reload();
+    await waitForDirectView();
+    await expect(direct.getByRole("heading", { name: "Qa View" })).toBeVisible();
+    const fileToken = Buffer.from("notebook.py").toString("base64url");
+    await direct.goto(`/_marimo-studio/notebooks/${fileToken}/views/dashboard/?region=apac`);
+    await expect(direct).toHaveURL(/\/dashboard\/\?file=notebook\.py&region=apac$/);
+    await waitForDirectView();
+    expect(directErrors).toEqual([]);
+  } finally {
+    await direct.close();
+  }
+});
+
 test("creates a scaffolded view and removes its files", async ({ page }) => {
   const deletedViewRequests: string[] = [];
   let removalStarted = false;
   page.on("request", (request) => {
     const url = new URL(request.url());
-    if (removalStarted && url.pathname.startsWith("/qa-view/")) {
+    if (removalStarted && url.pathname.includes("/qa-view/")) {
       deletedViewRequests.push(request.url());
     }
   });
-  await page.goto("/studio/dashboard/");
+  await page.goto(studioEntryUrl);
   await waitForPreview(page);
 
   await page.getByLabel("Select or manage a view").click();
