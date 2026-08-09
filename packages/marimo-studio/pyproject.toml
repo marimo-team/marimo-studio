@@ -29,6 +29,9 @@ marimo-studio = "marimo_studio._entrypoints:server_middleware"
 [project.entry-points."marimo.kernel.lifespan"]
 marimo-studio = "marimo_studio._entrypoints:kernel_lifespan"
 
+[project.entry-points."marimo.agent.capability"]
+studio = "marimo_studio.agents"
+
 [tool.ruff]
 src = ["src"]
 target-version = "py311"
