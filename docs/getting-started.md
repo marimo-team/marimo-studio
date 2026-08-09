@@ -49,6 +49,16 @@ source and preview together.
 Change a notebook control and confirm that the starter view updates. The
 Server preview and editor use the same Python session.
 
+To browse a notebook folder first, pass the folder to Marimo:
+
+```console
+uv run --with marimo-studio marimo edit notebooks/ --sandbox
+```
+
+The root page remains the Marimo notebook gallery. Opening a configured
+notebook enters its Studio workspace. Other notebooks open in the native
+Marimo editor.
+
 ## Name the output
 
 Inspect cells that end with a displayed result:

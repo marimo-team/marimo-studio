@@ -291,6 +291,15 @@ Open the configured notebook in Marimo:
 marimo edit analysis.py --sandbox
 ```
 
+Open a notebook directory when one Marimo gallery should cover several files:
+
+```console
+marimo edit notebooks/ --sandbox
+```
+
+The gallery stays at the root. Opening a configured notebook enters Studio,
+while other notebooks open in Marimo's native editor.
+
 The **Build** screen shows the notebook and custom page together. Open
 **HTML & CSS** to edit `index.html` and `app.css` in the browser. Changes saved
 there or in an external editor stay synchronized with the same files on disk.
