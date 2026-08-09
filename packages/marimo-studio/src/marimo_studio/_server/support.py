@@ -91,6 +91,7 @@ async def support_response(
             workspace.views if workspace is not None else (),
             context.base_url,
             context.server_token,
+            context.routing_query,
         )
     if workspace is None:
         return _lifecycle_error_response(

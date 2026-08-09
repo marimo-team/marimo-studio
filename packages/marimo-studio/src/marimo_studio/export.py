@@ -171,6 +171,8 @@ def _runtime_config(
             "controls": {"cells": controls},
         },
         "rootUrl": "./",
+        "publicRootUrl": "./",
+        "documentRootUrl": "./",
         "supportUrl": support_url,
         "cellBindings": cell_bindings,
         "valueBindings": value_bindings,

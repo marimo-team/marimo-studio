@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hmac
+from pathlib import Path
 from urllib.parse import parse_qs
 
+from marimo._session.session import Session
 from starlette.datastructures import Headers
 from starlette.types import Scope
 
@@ -38,10 +40,34 @@ def has_access_token(scope: Scope) -> bool:
     return "access_token" in query
 
 
-def current_session(context: ServerContext, session_id: str):
+def current_session(context: ServerContext, session_id: str) -> Session | None:
     from marimo._types.ids import SessionId
 
-    return context._session_manager.get_session(SessionId(session_id))
+    session = context._session_manager.get_session(SessionId(session_id))
+    return (
+        session
+        if session_matches_notebook(
+            session,
+            file_key=context.file_key,
+            notebook=context.notebook,
+        )
+        else None
+    )
+
+
+def session_matches_notebook(
+    session: Session | None,
+    *,
+    file_key: str,
+    notebook: Path,
+) -> bool:
+    """Return whether a Marimo session belongs to the selected notebook."""
+    if session is None:
+        return False
+    initialization_id = str(session.initialization_id)
+    source = session.app_file_manager.path
+    path = Path(source).resolve() if source is not None else None
+    return initialization_id == file_key or path == notebook
 
 
 def has_notebook_session(context: ServerContext) -> bool:

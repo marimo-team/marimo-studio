@@ -2,13 +2,45 @@
 
 from __future__ import annotations
 
-from marimo_studio._urls import STUDIO_PATH, SUPPORT_PATH
+from dataclasses import dataclass
+
+from marimo_studio._urls import STUDIO_PATH, SUPPORT_PATH, authored_file_key
 from marimo_studio._workspace.models import (
     RESERVED_VIEW_ASSET_NAMES,
     RESERVED_VIEW_NAMES,
     VIEW_PATTERN,
     StudioWorkspace,
 )
+
+
+@dataclass(frozen=True)
+class AuthoredViewRoute:
+    file_key: str
+    relative: str
+
+
+def authored_view_route(relative: str) -> AuthoredViewRoute | None:
+    """Resolve a notebook-scoped route used by browser-relative view files."""
+    prefix = f"{SUPPORT_PATH}/notebooks/"
+    if not relative.startswith(prefix):
+        return None
+    token, separator, route = relative.removeprefix(prefix).partition("/views/")
+    if not separator:
+        return None
+    file_key = authored_file_key(token)
+    if file_key is None:
+        return None
+    return AuthoredViewRoute(file_key=file_key, relative=f"/{route}")
+
+
+def native_editor_target(relative: str) -> str | None:
+    """Map the explicit native-editor mount back to Marimo's root routes."""
+    prefix = f"{SUPPORT_PATH}/editor"
+    if relative.rstrip("/") == prefix:
+        return "/"
+    if relative.startswith(f"{prefix}/"):
+        return f"/{relative.removeprefix(f'{prefix}/')}"
+    return None
 
 
 def could_handle(relative: str, mode: str) -> bool:

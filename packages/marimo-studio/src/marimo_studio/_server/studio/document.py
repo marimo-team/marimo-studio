@@ -16,6 +16,7 @@ from marimo_studio._urls import (
     editor_url,
     public_url,
     studio_url,
+    with_query,
 )
 from marimo_studio._workspace.models import StudioWorkspace
 
@@ -27,12 +28,17 @@ def studio_document(
     server_token: str,
     file_key: str,
     query: Sequence[tuple[str, str]],
+    routing_query: Sequence[tuple[str, str]],
     runtimes: tuple[tuple[str, str], ...],
 ) -> str:
     """Return the Studio mount point and its versioned bootstrap payload."""
     root_url = public_url(base_url, "/")
     support_url = public_url(base_url, SUPPORT_PATH)
     native_editor_url = editor_url(base_url, file_key, query)
+
+    def routed(url: str) -> str:
+        return with_query(url, routing_query)
+
     workspace_id = hashlib.sha256(str(config.notebook).encode()).hexdigest()[:16]
     bootstrap = json.dumps(
         {
@@ -46,12 +52,12 @@ def studio_document(
             "defaultRuntime": config.default_runtime,
             "urls": {
                 "editor": native_editor_url,
-                "events": f"{support_url}/dev/events",
-                "query": f"{support_url}/query",
-                "studioPrefix": studio_url(base_url),
-                "viewPrefix": root_url,
-                "viewSupportPrefix": f"{support_url}/views",
-                "views": f"{support_url}/views",
+                "events": routed(f"{support_url}/dev/events"),
+                "query": routed(f"{support_url}/query"),
+                "studioPrefix": routed(studio_url(base_url)),
+                "viewPrefix": routed(root_url),
+                "viewSupportPrefix": routed(f"{support_url}/views"),
+                "views": routed(f"{support_url}/views"),
             },
             "workspaceId": workspace_id,
             "serverToken": server_token,

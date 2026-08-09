@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -29,7 +30,9 @@ from marimo_studio._urls import (
     SUPPORT_PATH,
     public_url,
     studio_url,
+    view_url,
     with_notebook_query,
+    with_query,
 )
 from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
@@ -69,11 +72,27 @@ def studio_landing_redirect(
     request: Request,
     base_url: str,
     view_name: str,
+    routing_query: Sequence[tuple[str, str]] = (),
 ) -> Response:
     """Redirect the edit root to its configured Studio workspace."""
     target = with_notebook_query(
         studio_url(base_url, view_name),
         request.query_params.multi_items(),
+        routing_query,
+    )
+    return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
+
+
+def authored_document_redirect(
+    request: Request,
+    context: ServerContext,
+    view_name: str,
+) -> Response:
+    """Canonicalize an authored document route to its public view URL."""
+    target = with_notebook_query(
+        view_url(context.base_url, view_name),
+        request.query_params.multi_items(),
+        context.routing_query,
     )
     return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
 
@@ -102,9 +121,12 @@ def document_response(
         headers={
             **DOCUMENT_HEADERS,
             "Marimo-Studio-Revision": snapshot.revision,
-            "Marimo-Studio-Support-Url": public_url(
-                context.base_url,
-                f"{SUPPORT_PATH}/views/{snapshot.view_name}",
+            "Marimo-Studio-Support-Url": with_query(
+                public_url(
+                    context.base_url,
+                    f"{SUPPORT_PATH}/views/{snapshot.view_name}",
+                ),
+                context.routing_query,
             ),
         },
     )
@@ -136,6 +158,7 @@ def studio_response(
             context.server_token,
             context.file_key,
             request.query_params.multi_items(),
+            context.routing_query,
             runtimes,
         ),
         headers=DOCUMENT_HEADERS,
@@ -159,6 +182,7 @@ def initialization_response(
             context.server_token,
             context.file_key,
             request.query_params.multi_items(),
+            context.routing_query,
         ),
         headers=DOCUMENT_HEADERS,
     )
@@ -172,6 +196,7 @@ def error_response(
     base_url: str,
     dev: bool,
     structured: bool,
+    routing_query: Sequence[tuple[str, str]] = (),
 ) -> Response:
     """Translate a domain error for the requested page or support route."""
     code = getattr(error, "code", "configuration-error")
@@ -213,7 +238,10 @@ def error_response(
             repair_document(
                 message,
                 hint,
-                public_url(base_url, f"{SUPPORT_PATH}/dev/events"),
+                with_query(
+                    public_url(base_url, f"{SUPPORT_PATH}/dev/events"),
+                    routing_query,
+                ),
             ),
             status_code=status_code,
             headers=headers,

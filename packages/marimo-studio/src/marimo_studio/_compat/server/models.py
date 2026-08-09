@@ -15,6 +15,8 @@ class ServerLocation:
     file_key: str
     base_url: str
     mode: ServerMode
+    routing_query: tuple[tuple[str, str], ...]
+    _config_manager: Any
     _state: Any
     _session_manager: Any
 
@@ -26,6 +28,7 @@ class ServerContext:
     base_url: str
     mode: ServerMode
     dev: bool
+    routing_query: tuple[tuple[str, str], ...]
     user_config: dict[str, Any]
     config_overrides: dict[str, Any]
     server_token: str

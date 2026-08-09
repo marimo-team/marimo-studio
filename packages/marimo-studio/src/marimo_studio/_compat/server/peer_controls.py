@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from threading import Lock
 from typing import cast
 from weakref import WeakKeyDictionary
@@ -26,6 +27,7 @@ from marimo._session.session import Session, SessionImpl
 from marimo._types.ids import ConsumerId
 
 from marimo_studio._compat.server.models import ServerLocation
+from marimo_studio._compat.server.sessions import session_matches_notebook
 
 _MANAGER_LISTENERS: WeakKeyDictionary[SessionManager, _SessionListener] = (
     WeakKeyDictionary()
@@ -62,8 +64,21 @@ class _PeerControlSync(EventAwareExtension):
 
 
 class _SessionListener(SessionEventListener):
+    def __init__(self) -> None:
+        self._notebooks: set[tuple[str, Path]] = set()
+
+    def add(self, location: ServerLocation) -> None:
+        self._notebooks.add((location.file_key, location.notebook))
+
+    def accepts(self, session: Session) -> bool:
+        return any(
+            session_matches_notebook(session, file_key=file_key, notebook=notebook)
+            for file_key, notebook in self._notebooks
+        )
+
     async def on_session_created(self, session: Session) -> None:
-        _attach_to_session(session)
+        if self.accepts(session):
+            _attach_to_session(session)
 
 
 def enable_peer_control_sync(location: ServerLocation) -> None:
@@ -72,14 +87,16 @@ def enable_peer_control_sync(location: ServerLocation) -> None:
         return
     manager = cast(SessionManager, location._session_manager)
     with _MANAGER_LOCK:
-        if manager in _MANAGER_LISTENERS:
-            return
-        listener = _SessionListener()
-        manager._event_bus.subscribe(listener)
-        _MANAGER_LISTENERS[manager] = listener
+        listener = _MANAGER_LISTENERS.get(manager)
+        if listener is None:
+            listener = _SessionListener()
+            manager._event_bus.subscribe(listener)
+            _MANAGER_LISTENERS[manager] = listener
+        listener.add(location)
         sessions = tuple(manager.sessions.values())
     for session in sessions:
-        _attach_to_session(session)
+        if listener.accepts(session):
+            _attach_to_session(session)
 
 
 def _attach_to_session(session: Session) -> None:

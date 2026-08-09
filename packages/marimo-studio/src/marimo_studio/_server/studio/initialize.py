@@ -28,7 +28,7 @@ from htpy import (
 from markupsafe import Markup
 
 from marimo_studio._html import node_list, render
-from marimo_studio._urls import SUPPORT_PATH, editor_url, public_url
+from marimo_studio._urls import SUPPORT_PATH, editor_url, public_url, with_query
 from marimo_studio._workspace.models import StudioDefinition
 
 _STATUS_ATTRIBUTE = "data-studio-initialization-status"
@@ -40,6 +40,7 @@ def initialization_document(
     server_token: str,
     file_key: str,
     query: Sequence[tuple[str, str]],
+    routing_query: Sequence[tuple[str, str]],
 ) -> str:
     """Return the page that creates a definition's first view."""
     support_url = public_url(base_url, SUPPORT_PATH)
@@ -48,7 +49,7 @@ def initialization_document(
         {
             "schema": 1,
             "defaultView": definition.default_view,
-            "createUrl": f"{support_url}/views",
+            "createUrl": with_query(f"{support_url}/views", routing_query),
             "serverToken": server_token,
         },
         separators=(",", ":"),

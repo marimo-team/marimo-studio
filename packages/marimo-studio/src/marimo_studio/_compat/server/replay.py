@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from threading import Lock
 from typing import Any
-from weakref import WeakSet
+from weakref import WeakKeyDictionary
 
 from marimo_studio._compat.server.models import ServerContext
 
 DOCUMENT_REPLAY_QUERY_PARAM = "marimo_studio_resume"
 
-_DOCUMENT_REPLAY_MANAGERS: WeakSet[Any] = WeakSet()
+_DOCUMENT_REPLAY_FILES: WeakKeyDictionary[Any, set[str]] = WeakKeyDictionary()
 _DOCUMENT_REPLAY_LOCK = Lock()
 _DOCUMENT_REPLAY_PATCHED = False
 
@@ -25,7 +25,10 @@ def _reconnect_with_document_replay(
         connector.connection.query_params.get(DOCUMENT_REPLAY_QUERY_PARAM) == "1"
     )
     with _DOCUMENT_REPLAY_LOCK:
-        enabled = connector.manager in _DOCUMENT_REPLAY_MANAGERS
+        enabled = connector.params.file_key in _DOCUMENT_REPLAY_FILES.get(
+            connector.manager,
+            set(),
+        )
     if not requested or not enabled:
         return reconnect(connector, session)
 
@@ -39,10 +42,13 @@ def configure_document_replay(context: ServerContext, enabled: bool) -> None:
     global _DOCUMENT_REPLAY_PATCHED
 
     with _DOCUMENT_REPLAY_LOCK:
+        files = _DOCUMENT_REPLAY_FILES.setdefault(context._session_manager, set())
         if enabled:
-            _DOCUMENT_REPLAY_MANAGERS.add(context._session_manager)
+            files.add(context.file_key)
         else:
-            _DOCUMENT_REPLAY_MANAGERS.discard(context._session_manager)
+            files.discard(context.file_key)
+            if not files:
+                _DOCUMENT_REPLAY_FILES.pop(context._session_manager, None)
         if not enabled or _DOCUMENT_REPLAY_PATCHED:
             return
 

@@ -44,11 +44,13 @@ class _Room:
 
 
 class _Session:
-    def __init__(self) -> None:
+    def __init__(self, notebook: str = "analysis.py") -> None:
         self.extensions = ExtensionRegistry()
         self._event_bus = SessionEventBus()
         self.room = _Room()
         self.session_view = SessionView()
+        self.initialization_id = notebook
+        self.app_file_manager = type("AppFileManager", (), {"path": notebook})()
 
     def receive(
         self,
@@ -63,9 +65,11 @@ class _Session:
 
 
 class _Manager:
-    def __init__(self, session: _Session) -> None:
+    def __init__(self, session: _Session, *others: _Session) -> None:
         self._event_bus = SessionEventBus()
-        self.sessions = {"session": session}
+        self.sessions = {
+            str(index): item for index, item in enumerate((session, *others))
+        }
 
 
 def _location(manager: _Manager, *, mode: str = "edit") -> ServerLocation:
@@ -74,6 +78,8 @@ def _location(manager: _Manager, *, mode: str = "edit") -> ServerLocation:
         file_key="analysis.py",
         base_url="",
         mode=cast(ServerMode, mode),
+        routing_query=(),
+        _config_manager=object(),
         _state=object(),
         _session_manager=manager,
     )
@@ -128,6 +134,23 @@ def test_ui_control_updates_relay_once_only_from_consumers() -> None:
             message={"type": "marimo-ui-value-update", "value": "Growth"},
         ),
     ]
+
+
+def test_peer_sync_attaches_only_to_the_selected_notebook() -> None:
+    selected = _Session("analysis.py")
+    other = _Session("other.py")
+
+    enable_peer_control_sync(_location(_Manager(selected, other)))
+
+    command = UpdateUIElementCommand(
+        object_ids=[UIElementId("slider")],
+        values=[7],
+    )
+    selected.receive(command)
+    other.receive(command)
+
+    assert len(selected.room.messages) == 1
+    assert other.room.messages == []
 
 
 def test_anywidget_state_relays_only_while_its_model_is_live() -> None:

@@ -79,6 +79,7 @@ def test_export_view_writes_a_complete_static_bundle(
     assert config["runtime"]["id"] == "wasm"
     assert config["runtime"]["available"] == ["wasm"]
     assert config["rootUrl"] == "./"
+    assert config["publicRootUrl"] == "./"
     assert config["supportUrl"] == "./_marimo-studio/views/dashboard"
     assert config["cellBindings"]["cell-2"]["kind"] == "id"
     assert config["valueBindings"]["doubled"]["variable"] == "doubled"

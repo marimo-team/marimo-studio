@@ -79,6 +79,7 @@ class ServerRuntime:
                 "serverToken": context.server_token,
                 "fileKey": context.file_key,
                 "preserveSession": snapshot.resolved.workspace.preserve_session,
+                **({"file": context.file_key} if context.routing_query else {}),
             },
             cell_bindings=snapshot.resolved.runtime_cell_bindings(
                 cells,

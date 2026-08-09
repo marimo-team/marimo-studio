@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 
 from marimo_studio._compat.server.sessions import has_edit_access, server_token_matches
-from marimo_studio._urls import studio_url, view_url
+from marimo_studio._urls import studio_url, view_url, with_query
 from marimo_studio._workspace.config import validate_view_name
 from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
 from marimo_studio._workspace.sources import read_source, write_source
@@ -67,6 +67,7 @@ async def create_view_response(
     existing_views: Collection[str],
     base_url: str,
     server_token: str,
+    routing_query: Sequence[tuple[str, str]] = (),
 ) -> Response:
     """Create a named view from an authenticated Studio definition."""
     if request.method != "POST":
@@ -114,8 +115,8 @@ async def create_view_response(
         {
             "schema": 1,
             "name": name,
-            "studio_url": studio_url(base_url, name),
-            "view_url": view_url(base_url, name),
+            "studio_url": with_query(studio_url(base_url, name), routing_query),
+            "view_url": with_query(view_url(base_url, name), routing_query),
         },
         status_code=201,
         headers=_NO_STORE,
