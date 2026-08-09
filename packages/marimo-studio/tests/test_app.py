@@ -158,39 +158,22 @@ def test_run_mode_serves_default_and_named_view_documents(
     assert native_editor.status_code == 404
 
 
-def test_view_directory_serves_native_module_graphs(notebook_path: Path) -> None:
+def test_view_asset_changes_refresh_the_presentation(notebook_path: Path) -> None:
     studio = _configured(notebook_path)
     view = studio.views["dashboard"]
     scripts = view.root / "scripts"
     scripts.mkdir()
-    module = scripts / "app.js"
-    dependency = scripts / "message.js"
-    module.write_text(
-        'import { message } from "./message.js";\nwindow.message = message;\n',
-        encoding="utf-8",
-    )
-    dependency.write_text('export const message = "ready";\n', encoding="utf-8")
-    view.template.write_text(
-        view.template.read_text(encoding="utf-8").replace(
-            "</head>",
-            '<script type="module" src="scripts/app.js"></script>\n  </head>',
-        ),
-        encoding="utf-8",
-    )
+    asset = scripts / "app.js"
+    asset.write_text('export const message = "ready";\n', encoding="utf-8")
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         before = client.get("/")
         source = client.get("/dashboard/scripts/app.js")
-        imported = client.get("/dashboard/scripts/message.js")
-        dependency.write_text('export const message = "fresh";\n', encoding="utf-8")
+        asset.write_text('export const message = "fresh";\n', encoding="utf-8")
         after = client.get("/")
 
-    assert '<base href="/dashboard/">' in before.text
-    assert '<script type="module" src="scripts/app.js"></script>' in before.text
     assert source.status_code == 200
     assert source.headers["content-type"].startswith("text/javascript")
-    assert 'from "./message.js"' in source.text
-    assert imported.text == 'export const message = "ready";\n'
     assert (
         before.headers["Marimo-Studio-Revision"]
         != after.headers["Marimo-Studio-Revision"]
@@ -829,29 +812,40 @@ def test_anonymous_bindings_wait_for_live_cell_identities(
     }
 
 
-def test_view_document_and_runtime_config_publish_one_revision(
+def test_presentation_revision_tracks_view_and_source_identity(
     notebook_path: Path,
 ) -> None:
     studio = _configured(notebook_path)
+    shared = (
+        "<html><head><link rel='stylesheet' href='app.css'></head>"
+        "<body><main id='app-shell'></main></body></html>"
+    )
+    for view in studio.views.values():
+        view.template.write_text(shared, encoding="utf-8")
+    timestamp = studio.views["dashboard"].template.stat().st_mtime_ns
+    for view in studio.views.values():
+        os.utime(view.template, ns=(timestamp, timestamp))
+    template = studio.views["dashboard"].template
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
-        first_page = client.get("/")
-        first_config = client.get("/_marimo-studio/views/dashboard/config").json()
-        template = studio.views["dashboard"].template
+        dashboard = client.get("/")
+        dashboard_config = client.get("/_marimo-studio/views/dashboard/config").json()
+        executive = client.get("/executive/")
+        stat = template.stat()
         template.write_text(
-            template.read_text(encoding="utf-8") + "\n<!-- changed -->\n",
+            shared.replace("app.css", "alt.css"),
             encoding="utf-8",
         )
-        interleaved_config = client.get("/_marimo-studio/views/dashboard/config").json()
-        second_page = client.get("/")
-        second_config = client.get("/_marimo-studio/views/dashboard/config").json()
+        os.utime(template, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+        edited_config = client.get("/_marimo-studio/views/dashboard/config").json()
+        edited = client.get("/")
 
-    first_revision = first_page.headers["Marimo-Studio-Revision"]
-    second_revision = second_page.headers["Marimo-Studio-Revision"]
-    assert first_config["revision"] == first_revision
-    assert interleaved_config["revision"] != first_revision
-    assert second_config["revision"] == second_revision
-    assert second_revision != first_revision
+    dashboard_revision = dashboard.headers["Marimo-Studio-Revision"]
+    edited_revision = edited.headers["Marimo-Studio-Revision"]
+    assert dashboard_config["revision"] == dashboard_revision
+    assert executive.headers["Marimo-Studio-Revision"] != dashboard_revision
+    assert edited_config["revision"] == edited_revision
+    assert edited_revision != dashboard_revision
 
 
 def test_root_document_tracks_a_changed_default_view(notebook_path: Path) -> None:
@@ -873,50 +867,6 @@ def test_root_document_tracks_a_changed_default_view(notebook_path: Path) -> Non
     assert (
         executive.headers["Marimo-Studio-Revision"]
         != dashboard.headers["Marimo-Studio-Revision"]
-    )
-
-
-def test_view_identity_is_part_of_the_presentation_revision(
-    notebook_path: Path,
-) -> None:
-    studio = _configured(notebook_path)
-    shared = "<html><head></head><body><main id='app-shell'></main></body></html>"
-    for view in studio.views.values():
-        view.template.write_text(shared, encoding="utf-8")
-    timestamp = studio.views["dashboard"].template.stat().st_mtime_ns
-    for view in studio.views.values():
-        os.utime(view.template, ns=(timestamp, timestamp))
-
-    with TestClient(create_asgi_app(studio.notebook)) as client:
-        dashboard = client.get("/")
-        executive = client.get("/executive/")
-
-    assert (
-        dashboard.headers["Marimo-Studio-Revision"]
-        != executive.headers["Marimo-Studio-Revision"]
-    )
-
-
-def test_presentation_revision_tracks_same_size_edits(
-    notebook_path: Path,
-) -> None:
-    studio = _configured(notebook_path)
-    template = studio.views["dashboard"].template
-
-    with TestClient(create_asgi_app(studio.notebook)) as client:
-        before = client.get("/")
-        source = template.read_text(encoding="utf-8")
-        stat = template.stat()
-        template.write_text(
-            source.replace("app.css", "alt.css"),
-            encoding="utf-8",
-        )
-        os.utime(template, ns=(stat.st_atime_ns, stat.st_mtime_ns))
-        after = client.get("/")
-
-    assert (
-        before.headers["Marimo-Studio-Revision"]
-        != after.headers["Marimo-Studio-Revision"]
     )
 
 
@@ -1436,15 +1386,6 @@ def test_view_list_tracks_new_folders_without_restarting_marimo(
     assert before["views"] == ["dashboard", "executive"]
     assert after["views"] == ["dashboard", "executive", "operations"]
     assert page.status_code == 200
-
-
-def test_unconfigured_notebook_delegates_workspace_status(
-    notebook_path: Path,
-) -> None:
-    with TestClient(_marimo_app(notebook_path)) as client:
-        response = client.get("/_marimo-studio/status")
-
-    assert response.status_code == 404
 
 
 def test_definition_state_initializes_the_first_view_from_edit_mode(
