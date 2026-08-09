@@ -917,7 +917,7 @@ recommended = [
 
 [[package]]
 name = "marimo-studio"
-version = "0.0.3"
+version = "0.0.4"
 source = { editable = "packages/marimo-studio" }
 dependencies = [
     { name = "click" },
