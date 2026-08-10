@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Literal, cast
+from typing import Literal, Protocol, cast
 
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.checks import check_runtime_studio, check_studio
@@ -21,12 +21,22 @@ BrowserObserver = Callable[
 ]
 
 
+class RuntimeChecker(Protocol):
+    async def __call__(
+        self,
+        studio: StudioWorkspace,
+        *,
+        view_name: str | None = None,
+    ) -> tuple[CheckResult, ...]: ...
+
+
 async def analyze_studio(
     studio: StudioWorkspace,
     *,
     view_name: str | None = None,
     observe_browser: BrowserObserver | None = None,
     require_browser: bool = False,
+    runtime_checker: RuntimeChecker | None = None,
 ) -> AnalysisReport:
     """Validate selected views and return a repair-oriented report.
 
@@ -41,7 +51,8 @@ async def analyze_studio(
         runtime_checks: tuple[CheckResult, ...] = ()
         runtime_skipped = "Static validation failed. Fix those errors first."
     else:
-        runtime_checks = await check_runtime_studio(studio, view_name=view_name)
+        check_runtime = runtime_checker or check_runtime_studio
+        runtime_checks = await check_runtime(studio, view_name=view_name)
         runtime_skipped = None
 
     if observe_browser is None:
@@ -206,4 +217,4 @@ def _default_browser_advice(state: str) -> str:
     return "Fix the rendered view diagnostic, then rerun the analysis."
 
 
-__all__ = ["BrowserObserver", "analyze_studio"]
+__all__ = ["BrowserObserver", "RuntimeChecker", "analyze_studio"]

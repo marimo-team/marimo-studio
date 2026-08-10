@@ -21,6 +21,7 @@ class StudioAgentState:
         self._lock = RLock()
         self._activation = ViewActivation(0, "")
         self._observations: dict[tuple[str, str], BrowserObservation] = {}
+        self._workspace_clients = 0
 
     def activate(self, view: str) -> ViewActivation:
         with self._lock:
@@ -33,6 +34,18 @@ class StudioAgentState:
     def activation(self) -> ViewActivation:
         with self._lock:
             return self._activation
+
+    def connect_workspace(self) -> None:
+        with self._lock:
+            self._workspace_clients += 1
+
+    def disconnect_workspace(self) -> None:
+        with self._lock:
+            self._workspace_clients = max(0, self._workspace_clients - 1)
+
+    def has_workspace_client(self) -> bool:
+        with self._lock:
+            return self._workspace_clients > 0
 
     def record(self, observation: BrowserObservation) -> None:
         if observation.runtime is None:

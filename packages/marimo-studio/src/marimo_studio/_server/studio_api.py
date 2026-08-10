@@ -2,20 +2,29 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Collection, Sequence
 from typing import Literal, cast
 
+from starlette.background import BackgroundTask
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 
-from marimo_studio._compat.server.sessions import has_edit_access, server_token_matches
+from marimo_studio._compat.server.models import ServerContext
+from marimo_studio._compat.server.sessions import (
+    has_edit_access,
+    reload_page_into_studio,
+    server_token_matches,
+)
+from marimo_studio._runtime_process import check_runtime_studio_isolated
 from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._urls import studio_url, view_url, with_query
 from marimo_studio._workspace.config import validate_view_name
 from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
 from marimo_studio._workspace.sources import read_source, write_source
 from marimo_studio._workspace.views import delete_view
+from marimo_studio.analysis import analyze_studio
 from marimo_studio.errors import MarimoStudioError, SourceConflictError
 from marimo_studio.types import (
     BrowserDiagnostic,
@@ -25,6 +34,7 @@ from marimo_studio.types import (
 from marimo_studio.workspace import ensure_view
 
 _NO_STORE = {"Cache-Control": "no-store"}
+_MAX_BROWSER_TIMEOUT = 300.0
 
 
 def _error(error: MarimoStudioError) -> JSONResponse:
@@ -218,18 +228,24 @@ async def source_response(
 
 async def activate_view_response(
     request: Request,
+    context: ServerContext,
     studio: StudioWorkspace,
     view_name: str,
     presentation: NotebookPresentation,
 ) -> Response:
-    """Request that connected Studio workspaces select one view."""
+    """Request one view as the browser's active Studio view."""
     if request.method != "PATCH":
         return Response(status_code=405)
     if not has_edit_access(request.scope):
         return _forbidden()
+    if token_error := _invalid_server_token(request, context.server_token):
+        return token_error
     if view_name not in studio.views:
         return Response(status_code=404)
     activation = presentation.agent_state.activate(view_name)
+    transition = (
+        "in-place" if presentation.agent_state.has_workspace_client() else "reload"
+    )
     return JSONResponse(
         {
             "schema": 1,
@@ -237,9 +253,15 @@ async def activate_view_response(
             "view": view_name,
             "state": "requested",
             "generation": activation.generation,
+            "transition": transition,
         },
         status_code=202,
         headers=_NO_STORE,
+        background=(
+            None
+            if transition == "in-place"
+            else BackgroundTask(reload_page_into_studio, context, view_name)
+        ),
     )
 
 
@@ -295,6 +317,122 @@ def browser_observations_response(
             headers=_NO_STORE,
         )
     runtime = request.query_params.get("runtime") or studio.default_runtime
+    observations = _current_browser_observations(
+        studio,
+        presentation,
+        views,
+        runtime,
+    )
+    return JSONResponse(
+        {
+            "schema": 1,
+            "notebook": str(studio.notebook),
+            "observations": [item.to_dict() for item in observations],
+        },
+        headers=_NO_STORE,
+    )
+
+
+async def analyze_views_response(
+    request: Request,
+    context: ServerContext,
+    studio: StudioWorkspace,
+    presentation: NotebookPresentation,
+) -> Response:
+    """Analyze view sources, runtime projections, and browser evidence."""
+    if request.method != "POST":
+        return Response(status_code=405)
+    if not has_edit_access(request.scope):
+        return _forbidden()
+    if token_error := _invalid_server_token(request, context.server_token):
+        return token_error
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        body = None
+    if not isinstance(body, dict):
+        return _invalid_analysis_request()
+    view_name = body.get("view")
+    timeout = body.get("timeout", 10.0)
+    require_browser = body.get("require_browser", True)
+    if (
+        (view_name is not None and not isinstance(view_name, str))
+        or isinstance(timeout, bool)
+        or not isinstance(timeout, (int, float))
+        or not 0 <= timeout <= _MAX_BROWSER_TIMEOUT
+        or not isinstance(require_browser, bool)
+    ):
+        return _invalid_analysis_request()
+
+    async def observe(
+        _studio: StudioWorkspace,
+        views: tuple[str, ...],
+    ) -> tuple[BrowserObservation, ...]:
+        return await _wait_for_browser_observations(
+            studio,
+            presentation,
+            views,
+            studio.default_runtime,
+            float(timeout),
+        )
+
+    try:
+        report = await analyze_studio(
+            studio,
+            view_name=view_name,
+            observe_browser=observe if require_browser else None,
+            require_browser=require_browser,
+            runtime_checker=check_runtime_studio_isolated,
+        )
+    except MarimoStudioError as error:
+        return _error(error)
+    return JSONResponse(report.to_dict(), headers=_NO_STORE)
+
+
+def _invalid_analysis_request() -> JSONResponse:
+    return JSONResponse(
+        {
+            "error": "invalid-analysis-request",
+            "message": (
+                "view must be a string or null, timeout must be between 0 and "
+                f"{_MAX_BROWSER_TIMEOUT:g}, and require_browser must be a boolean."
+            ),
+        },
+        status_code=400,
+        headers=_NO_STORE,
+    )
+
+
+async def _wait_for_browser_observations(
+    studio: StudioWorkspace,
+    presentation: NotebookPresentation,
+    views: tuple[str, ...],
+    runtime: str,
+    timeout: float,
+) -> tuple[BrowserObservation, ...]:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while True:
+        observations = _current_browser_observations(
+            studio,
+            presentation,
+            views,
+            runtime,
+        )
+        if all(item.state in {"ready", "error"} for item in observations):
+            return observations
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            return observations
+        await asyncio.sleep(min(0.25, remaining))
+
+
+def _current_browser_observations(
+    studio: StudioWorkspace,
+    presentation: NotebookPresentation,
+    views: tuple[str, ...],
+    runtime: str,
+) -> tuple[BrowserObservation, ...]:
     observations: list[BrowserObservation] = []
     for view in views:
         current_revision = presentation.snapshot(view).revision
@@ -323,14 +461,7 @@ def browser_observations_response(
             )
         else:
             observations.append(observed)
-    return JSONResponse(
-        {
-            "schema": 1,
-            "notebook": str(studio.notebook),
-            "observations": [item.to_dict() for item in observations],
-        },
-        headers=_NO_STORE,
-    )
+    return tuple(observations)
 
 
 def _parse_browser_observation(

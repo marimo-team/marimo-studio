@@ -396,12 +396,13 @@ def _browser_status(
 
 @dataclass(frozen=True)
 class ViewActivationResult:
-    """A validated request to select one view in connected Studio clients."""
+    """A validated request to select one active browser view."""
 
     notebook: Path
     view: str
     state: Literal["requested"]
     generation: int
+    transition: Literal["in-place", "reload"]
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -410,6 +411,7 @@ class ViewActivationResult:
             "view": self.view,
             "state": self.state,
             "generation": self.generation,
+            "transition": self.transition,
         }
 
 

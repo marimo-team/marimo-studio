@@ -155,8 +155,10 @@ await studio.activate_view(ctx, setup.name)
 ```
 
 Use `activate_view` after creating a view and whenever the repair loop changes
-to another view. It selects the view through Studio's normal transition and
-does not rewrite the configured default.
+to another view. If this is the notebook's first Studio view, the call reloads
+the open native editor into Studio after code mode returns. An active Studio
+workspace switches views in place. Both paths keep the configured default
+unchanged.
 
 ## 3. Choose what the page shows
 

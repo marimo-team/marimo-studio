@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractAsyncContextManager, contextmanager
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -33,6 +33,37 @@ from marimo_studio.values import MAX_OUTPUT_SELECTORS
 
 _INSPECTION_SELECTORS: dict[Path, tuple[str, ...]] = {}
 _INSPECTION_OUTPUT_SELECTORS: dict[Path, tuple[str, ...]] = {}
+
+
+class _EnteredKernelLifespan:
+    """Keep an entered Marimo lifespan available for its eventual teardown."""
+
+    def __init__(self, lifespan: AbstractAsyncContextManager[None]) -> None:
+        self._lifespan = lifespan
+
+    async def __aenter__(self) -> None:
+        return None
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> bool | None:
+        return await self._lifespan.__aexit__(exc_type, exc_value, traceback)
+
+
+def _guard_entered_lifespan(context: Any) -> None:
+    kernel = context._kernel
+    lifespan = getattr(kernel, "_lifespan", None)
+    if lifespan is None or isinstance(lifespan, _EnteredKernelLifespan):
+        return
+
+    # Marimo queues an instantiation request before each code-mode scratchpad
+    # run. Its graph guard follows the lifespan entry, so an initialized kernel
+    # otherwise tries to re-enter the same async context manager. Preserve the
+    # entered manager for teardown while treating later entries as idempotent.
+    kernel._lifespan = _EnteredKernelLifespan(lifespan)
 
 
 @contextmanager
@@ -87,13 +118,14 @@ class _KernelBridgeLifespan:
         context = get_context()
         if not isinstance(context, KernelRuntimeContext) or context.filename is None:
             return
+        _guard_entered_lifespan(context)
         filename = Path(context.filename).resolve()
         inspection = _INSPECTION_SELECTORS.get(filename)
         inspection_outputs = _INSPECTION_OUTPUT_SELECTORS.get(filename)
         self._activate(context, filename, inspection)
 
-        # Marimo enters the lifespan once. Keep the functions registered while
-        # the renderer waits for a Studio definition created during the session.
+        # Keep the functions registered while the renderer waits for a Studio
+        # definition created during the session.
         def read(args: ReadValuesArgs) -> dict[str, object]:
             try:
                 allowed = (

@@ -122,42 +122,49 @@ async def change_events(
     """Yield filesystem events until the client disconnects or shutdown begins."""
     should_stop = stop_requested or (lambda: False)
     stamps = _file_stamps(studio)
+    workspace_client = agent_state is not None and view_name is None
+    if workspace_client:
+        agent_state.connect_workspace()
     activation_generation = (
         agent_state.activation().generation if agent_state is not None else 0
     )
-    yield b"event: ready\ndata: {}\n\n"
-    last_heartbeat = time.monotonic()
-    while not should_stop():
-        await asyncio.sleep(0.25)
-        if should_stop():
-            return
-        if agent_state is not None:
-            activation = agent_state.activation()
-            if activation.generation != activation_generation:
-                activation_generation = activation.generation
-                payload = json.dumps(
-                    {"schema": 1, "view": activation.view},
-                    separators=(",", ":"),
-                )
-                yield f"event: activate\ndata: {payload}\n\n".encode()
-        current = _file_stamps(studio)
-        changed = {
-            path for path, stamp in current.items() if stamps.get(path) != stamp
-        } | set(stamps).difference(current)
-        stamps = current
-        if not changed:
-            now = time.monotonic()
-            if now - last_heartbeat >= 15:
-                last_heartbeat = now
-                yield b": keepalive\n\n"
-            continue
+    try:
+        yield b"event: ready\ndata: {}\n\n"
         last_heartbeat = time.monotonic()
-        payload = json.dumps(
-            {
-                "schema": 1,
-                "kind": _event_kind(studio, changed, view_name),
-                "files": _changed_files(studio, changed, view_name),
-            },
-            separators=(",", ":"),
-        )
-        yield f"event: change\ndata: {payload}\n\n".encode()
+        while not should_stop():
+            await asyncio.sleep(0.25)
+            if should_stop():
+                return
+            if agent_state is not None:
+                activation = agent_state.activation()
+                if activation.generation != activation_generation:
+                    activation_generation = activation.generation
+                    payload = json.dumps(
+                        {"schema": 1, "view": activation.view},
+                        separators=(",", ":"),
+                    )
+                    yield f"event: activate\ndata: {payload}\n\n".encode()
+            current = _file_stamps(studio)
+            changed = {
+                path for path, stamp in current.items() if stamps.get(path) != stamp
+            } | set(stamps).difference(current)
+            stamps = current
+            if not changed:
+                now = time.monotonic()
+                if now - last_heartbeat >= 15:
+                    last_heartbeat = now
+                    yield b": keepalive\n\n"
+                continue
+            last_heartbeat = time.monotonic()
+            payload = json.dumps(
+                {
+                    "schema": 1,
+                    "kind": _event_kind(studio, changed, view_name),
+                    "files": _changed_files(studio, changed, view_name),
+                },
+                separators=(",", ":"),
+            )
+            yield f"event: change\ndata: {payload}\n\n".encode()
+    finally:
+        if workspace_client and agent_state is not None:
+            agent_state.disconnect_workspace()

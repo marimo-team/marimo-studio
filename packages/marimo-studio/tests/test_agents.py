@@ -8,7 +8,12 @@ import pytest
 
 import marimo_studio.agents as studio_agents
 from marimo_studio._agent_client import StudioServerConnection
-from marimo_studio.types import BrowserObservation, CheckResult, ViewActivationResult
+from marimo_studio.types import (
+    AnalysisReport,
+    BrowserObservation,
+    CheckResult,
+    ViewActivationResult,
+)
 
 
 def test_agent_capability_discovers_its_instruction_module() -> None:
@@ -46,7 +51,7 @@ def test_agent_operations_require_a_saved_notebook() -> None:
         studio_agents.notebook_path(context)
 
 
-def test_agent_analysis_reads_rendered_browser_evidence(
+def test_agent_analysis_runs_through_the_attached_studio_server(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -58,24 +63,33 @@ def test_agent_analysis_reads_rendered_browser_evidence(
         lambda: connection,
     )
 
-    async def runtime(*_args, **_kwargs):
-        return (CheckResult("runtime", "pass", "Notebook run completed"),)
-
-    async def observe(_connection, _notebook, views, **_kwargs):
-        return tuple(
-            BrowserObservation(
-                view=view,
-                runtime="server",
-                revision="revision-1",
-                state="ready",
-            )
-            for view in views
+    async def analyze(_connection, notebook, **kwargs):
+        assert kwargs == {
+            "view_name": "dashboard",
+            "timeout": 10.0,
+            "require_browser": True,
+        }
+        return AnalysisReport(
+            notebook=notebook,
+            views=("dashboard",),
+            static_checks=(CheckResult("static", "pass", "Sources are valid"),),
+            runtime_checks=(CheckResult("runtime", "pass", "Notebook run completed"),),
+            runtime_skipped=None,
+            browser_observations=(
+                BrowserObservation(
+                    view="dashboard",
+                    runtime="server",
+                    revision="revision-1",
+                    state="ready",
+                ),
+            ),
+            browser_required=True,
+            actions=(),
         )
 
-    monkeypatch.setattr("marimo_studio.analysis.check_runtime_studio", runtime)
     monkeypatch.setattr(
-        "marimo_studio._agent_client.observe_browser_views",
-        observe,
+        "marimo_studio._agent_client.request_analysis",
+        analyze,
     )
 
     report = asyncio.run(studio_agents.analyze(context, view_name="dashboard"))
@@ -121,6 +135,7 @@ def test_agent_can_request_the_active_studio_view(
             view=view,
             state="requested",
             generation=2,
+            transition="in-place",
         )
 
     monkeypatch.setattr(
@@ -132,3 +147,4 @@ def test_agent_can_request_the_active_studio_view(
 
     assert result.view == "dashboard"
     assert result.state == "requested"
+    assert result.transition == "in-place"

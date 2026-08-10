@@ -83,10 +83,11 @@ exists and `default` selects it, Studio materializes a `StudioWorkspace`.
 Configured view files live under `__marimo__/studio/<notebook-stem>/<view>/`.
 Requests for another notebook continue through Marimo.
 
-The kernel extension activates from `StudioDefinition`, so value reads and
-native output formatting are registered before the first view is created. A
-materialized view can use the cell aliases and value references present in its
-resolved document. Requests travel through Marimo's kernel queue.
+The kernel extension registers guarded projection functions in each
+file-backed edit kernel. It initializes value reads and native output
+formatting when a Studio definition first appears. A materialized view can use
+the cell aliases and value references present in its resolved document.
+Requests travel through Marimo's kernel queue.
 
 ## Edit and run sessions
 
@@ -100,6 +101,19 @@ initializer. `POST /_marimo-studio/views` creates the configured default and
 transitions the next request to a materialized workspace. Run mode returns a
 structured `workspace-not-initialized` repair response until that transition
 completes.
+
+Agent view activation follows one desired-state contract. A mounted Studio
+workspace receives an activation event and switches through its view
+controller. A native editor receives Marimo's query update and page reload
+after code-mode execution releases its scratchpad lock. The private view hint
+selects the Studio landing route and is removed from the redirected URL.
+
+Agent analysis returns through an authenticated Studio server route. The
+compatibility layer adds Marimo's server token to private code-mode request
+metadata, and the agent client forwards it with the callback. The server owns
+a dedicated Python process for runtime validation and joins its result with
+revision-aware browser observations. The live server process and active
+notebook kernel remain available to deliver the structured response.
 
 The Server preview joins the editor's Marimo session as a kiosk consumer after
 the editor session exists. It reuses that kernel's outputs, native controls,

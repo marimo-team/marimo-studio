@@ -24,7 +24,8 @@ import marimo_studio._compat.server.replay as replay_compat
 from marimo_studio import create_asgi_app
 from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.server.programmatic import programmatic_middleware
-from marimo_studio._server import dev
+from marimo_studio._compat.server.sessions import reload_page_into_studio
+from marimo_studio._server import dev, studio_api
 from marimo_studio._server import middleware as studio_middleware
 from marimo_studio._server.agent_state import StudioAgentState
 from marimo_studio._server.presentation import NotebookPresentation
@@ -33,6 +34,7 @@ from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
 from marimo_studio._workspace.metadata import update_notebook_config
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio.types import CheckResult
 from marimo_studio.workspace import bind_cell, ensure_view
 
 from .helpers import empty_notebook_source, notebook_source, replace_app_shell
@@ -1146,6 +1148,7 @@ def test_change_stream_delivers_agent_view_activation(
             agent_state=state,
         )
         ready = await anext(stream)
+        assert state.has_workspace_client()
         state.activate("executive")
         activated = await asyncio.wait_for(anext(stream), timeout=1)
         stopping = True
@@ -1157,6 +1160,39 @@ def test_change_stream_delivers_agent_view_activation(
 
     assert ready == b"event: ready\ndata: {}\n\n"
     assert activated == (b'event: activate\ndata: {"schema":1,"view":"executive"}\n\n')
+    assert state.has_workspace_client() is False
+
+
+def test_native_page_reload_waits_for_code_mode_to_finish() -> None:
+    notifications: list[Any] = []
+    scratchpad_lock = asyncio.Lock()
+    session = SimpleNamespace(
+        scratchpad_lock=scratchpad_lock,
+        notify=lambda notification, **_kwargs: notifications.append(notification),
+    )
+    context: Any = SimpleNamespace(
+        file_key="analysis.py",
+        _session_manager=SimpleNamespace(
+            get_session_by_file_key=lambda _file_key: session
+        ),
+    )
+
+    async def exercise() -> None:
+        await scratchpad_lock.acquire()
+        transition = asyncio.create_task(reload_page_into_studio(context, "executive"))
+        await asyncio.sleep(0)
+        assert notifications == []
+        scratchpad_lock.release()
+        await transition
+
+    asyncio.run(exercise())
+
+    assert [notification.name for notification in notifications] == [
+        "query-params-set",
+        "reload",
+    ]
+    assert notifications[0].key == "marimo_studio_view"
+    assert notifications[0].value == "executive"
 
 
 def test_document_replay_requires_an_opted_in_manager_and_query() -> None:
@@ -1732,6 +1768,7 @@ def test_edit_workspace_records_browser_readiness_and_requests_active_view(
         )
         activated = client.patch(
             "/_marimo-studio/views/executive/activate",
+            headers=headers,
         )
 
         template = studio.views["dashboard"].template
@@ -1764,8 +1801,54 @@ def test_edit_workspace_records_browser_readiness_and_requests_active_view(
     assert activated.status_code == 202
     assert activated.json()["view"] == "executive"
     assert activated.json()["state"] == "requested"
+    assert activated.json()["transition"] == "reload"
     assert stale.json()["observations"][0]["state"] == "stale"
     assert stale.json()["observations"][0]["diagnostics"] == []
+
+
+def test_edit_server_runs_the_agent_handoff_analysis(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
+    revision = NotebookPresentation(studio.notebook).snapshot("dashboard").revision
+
+    async def runtime(*_args: object, **_kwargs: object) -> tuple[CheckResult, ...]:
+        return (CheckResult("runtime", "pass", "Notebook run completed"),)
+
+    monkeypatch.setattr(studio_api, "check_runtime_studio_isolated", runtime)
+
+    with TestClient(app) as client:
+        recorded = client.put(
+            "/_marimo-studio/views/dashboard/observation",
+            headers=headers,
+            json={
+                "schema": 1,
+                "view": "dashboard",
+                "runtime": "server",
+                "revision": revision,
+                "state": "ready",
+                "diagnostics": [],
+            },
+        )
+        analyzed = client.post(
+            "/_marimo-studio/analyze",
+            headers=headers,
+            json={
+                "view": "dashboard",
+                "timeout": 0,
+                "require_browser": True,
+            },
+        )
+
+    assert recorded.status_code == 204
+    assert analyzed.status_code == 200
+    assert analyzed.json()["handoff_ready"] is True
+    assert analyzed.json()["stages"]["browser"]["status"] == "ready"
+    assert analyzed.json()["actions"] == []
 
 
 def test_view_deletion_removes_files_promotes_the_default_and_keeps_one_view(

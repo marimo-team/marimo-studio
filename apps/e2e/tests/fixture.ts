@@ -190,6 +190,14 @@ const sessionAdmin = async (page: Page): Promise<SessionAdmin | undefined> => {
   };
 };
 
+export const studioServerToken = async (page: Page): Promise<string> => {
+  const admin = await sessionAdmin(page);
+  if (!admin) {
+    throw new Error("Studio session administration is unavailable");
+  }
+  return admin.serverToken;
+};
+
 const closeNotebookSessions = async (page: Page): Promise<void> => {
   const admin = await sessionAdmin(page);
   const request = page.request;

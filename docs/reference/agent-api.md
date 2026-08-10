@@ -131,12 +131,16 @@ async def activate_view(
 ) -> ViewActivationResult: ...
 ```
 
-Requests that connected Studio workspaces select `name`. Studio uses the same
-view transition as its own selector, which preserves the workspace layout and
-checks current source edits before changing views.
+Selects `name` in the current browser workspace. An active Studio workspace
+uses the same in-place transition as its selector, which preserves the layout
+and checks current source edits. When the notebook gained its first Studio
+view during the native editor session, Marimo reloads that page into the
+selected Studio view after the code-mode call returns.
 
 The returned `ViewActivationResult` contains the notebook path, view name,
-`state="requested"`, and a monotonically increasing request generation. The
+`state="requested"`, a monotonically increasing request generation, and the
+selected `transition`. `transition="in-place"` uses the mounted Studio
+workspace. `transition="reload"` queues Marimo's native page reload. The
 result confirms that the server accepted the request. Call `analyze` for the
 same view to confirm that the browser loaded and read the current source
 revision.
@@ -144,7 +148,7 @@ revision.
 Raises:
 
 - `ConfigurationError` when `name` is not configured for the notebook.
-- `ProtocolError` when code mode has no live Studio connection, the server is
+- `ProtocolError` when code mode has no live Marimo connection, the server is
   unavailable, or the server is attached to another notebook.
 
 ## `analyze(context, *, view_name=None, timeout=10.0, require_browser=True)`
@@ -167,6 +171,10 @@ Runs the complete agent handoff gate:
    each projected cell and Python value.
 3. Browser validation waits for Studio to report `ready` or `error` for the
    current saved view revision.
+
+Code mode delegates this work to the attached Studio server. The server runs
+the isolated validation process and returns one structured report to the
+active notebook kernel.
 
 Static failures skip runtime validation. Browser evidence is revision-aware,
 so a report recorded before the latest HTML or CSS save has state `stale`.

@@ -57,6 +57,10 @@ Select a newly created view in the open Studio workspace:
 
     await studio.activate_view(ctx, "dashboard")
 
+When the notebook gained its first Studio view during the current native
+editor session, ``activate_view`` reloads that page into Studio after the
+agent call finishes. Later activations use Studio's in-place view transition.
+
 Analyze the custom page after editing its HTML or CSS:
 
     report = await studio.analyze(ctx, view_name="dashboard")
@@ -208,9 +212,10 @@ async def analyze(
     The default analyzes every configured view and requires current browser
     evidence before ``handoff_ready`` can be true. Pass ``view_name`` after
     activating one view to get a focused repair queue. ``timeout`` controls how
-    long Studio waits for the browser to report the saved view revision.
+    long Studio waits for the browser to report the saved view revision. Code
+    mode runs the analysis through its attached Studio server.
     """
-    from marimo_studio._agent_client import observe_browser_views
+    from marimo_studio._agent_client import request_analysis
     from marimo_studio._compat.code_mode import code_mode_connection
     from marimo_studio._workspace import load_studio
     from marimo_studio.analysis import analyze_studio
@@ -238,20 +243,13 @@ async def analyze(
 
         observer = observe_unavailable
     else:
-
-        async def observe_live(
-            _workspace: object,
-            views: tuple[str, ...],
-        ) -> tuple[BrowserObservation, ...]:
-            return await observe_browser_views(
-                connection,
-                workspace.notebook,
-                views,
-                runtime=workspace.default_runtime,
-                timeout=timeout,
-            )
-
-        observer = observe_live
+        return await request_analysis(
+            connection,
+            workspace.notebook,
+            view_name=view_name,
+            timeout=timeout,
+            require_browser=require_browser,
+        )
 
     return await analyze_studio(
         workspace,
@@ -265,10 +263,11 @@ async def activate_view(
     context: object,
     name: str,
 ) -> ViewActivationResult:
-    """Select a named view in connected Studio workspaces.
+    """Select a named view in the current browser workspace.
 
-    The request uses Studio's normal view transition, which preserves the
-    current workspace layout and protects unsaved source edits.
+    An active Studio workspace uses its normal in-place transition. A native
+    editor reloads into Studio when this call follows the first view setup.
+    The reload waits for the code-mode result before navigating.
     """
     from marimo_studio._agent_client import request_view_activation
     from marimo_studio._compat.code_mode import code_mode_connection

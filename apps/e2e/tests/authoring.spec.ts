@@ -11,9 +11,9 @@ import {
   editorFrame,
   expect,
   plainDashboardHtmlPath,
-  plainNotebookPath,
   previewFrame,
   readWorkspaceFile,
+  studioServerToken,
   studioEntryUrl,
   test,
   waitForPreview,
@@ -181,11 +181,36 @@ test("activates Studio after the first view is created", async ({ page }) => {
       new URL(response.url()).pathname.endsWith("/api/kernel/instantiate") &&
       response.ok(),
   );
+  const resumedUsage = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname.endsWith("/_marimo-studio/editor/api/usage") &&
+      Boolean(request.headers()["marimo-session-id"]),
+  );
   await page.goto("/?file=plain.py");
-  await instantiated;
+  const instantiateResponse = await instantiated;
   await expect(page.locator("#marimo-studio-bootstrap")).toHaveCount(0);
+  await expect(page.getByText("Native Marimo notebook").first()).toBeVisible();
 
-  await addWorkspaceView(plainNotebookPath, "dashboard");
+  const sessionId = instantiateResponse.request().headers()["marimo-session-id"];
+  expect(sessionId).toBeTruthy();
+  const execution = await page.request.post("/api/kernel/execute?file=plain.py", {
+    headers: { "Marimo-Session-Id": sessionId },
+    data: {
+      code: `
+import marimo._code_mode as cm
+import marimo_studio.agents as studio
+
+ctx = cm.get_context()
+setup = studio.ensure_view(ctx, "dashboard")
+activation = await studio.activate_view(ctx, setup.name)
+activation.to_dict()
+`,
+    },
+  });
+  expect(execution.ok()).toBe(true);
+  expect(await execution.text()).toContain('"success": true');
+  await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=plain\.py$/);
+
   const source = await readWorkspaceFile(plainDashboardHtmlPath);
   await writeWorkspaceFile(
     plainDashboardHtmlPath,
@@ -195,10 +220,28 @@ test("activates Studio after the first view is created", async ({ page }) => {
     ),
   );
 
-  await page.goto("/?file=plain.py");
-  await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=plain\.py$/);
   const preview = await waitForPreview(page);
   await expect(preview.locator("#papers")).toHaveText("3877 papers");
+
+  const resumedSessionId = (await resumedUsage).headers()["marimo-session-id"];
+  const analysis = await page.request.post(
+    "/_marimo-studio/editor/api/kernel/execute?file=plain.py",
+    {
+      headers: { "Marimo-Session-Id": resumedSessionId },
+      data: {
+        code: `
+import marimo._code_mode as cm
+import marimo_studio.agents as studio
+
+ctx = cm.get_context()
+report = await studio.analyze(ctx, view_name="dashboard")
+{"handoff_ready": report.handoff_ready, "actions": [item.to_dict() for item in report.actions]}
+`,
+      },
+    },
+  );
+  expect(analysis.ok()).toBe(true);
+  expect(await analysis.text()).toContain('\\"handoff_ready\\": true');
 });
 
 test("loads a native module graph from a directory view", async ({ page }) => {
@@ -363,8 +406,10 @@ test("activates an agent-requested view and records its rendered revision", asyn
 
   const activated = await page.request.patch(
     "/_marimo-studio/views/qa-view/activate?file=notebook.py",
+    { headers: { "Marimo-Server-Token": await studioServerToken(page) } },
   );
   expect(activated.status()).toBe(202);
+  expect(await activated.json()).toMatchObject({ transition: "in-place" });
   await expect(page.getByLabel("Select or manage a view")).toContainText("qa-view");
   await expect(previewFrame(page).getByRole("heading", { name: "Qa View" })).toBeVisible();
 

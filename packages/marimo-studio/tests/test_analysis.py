@@ -5,11 +5,22 @@ import asyncio
 import pytest
 
 import marimo_studio.analysis as analysis_module
+from marimo_studio._runtime_process import check_runtime_studio_isolated
 from marimo_studio._workspace import load_studio
 from marimo_studio.analysis import analyze_studio
 from marimo_studio.errors import ProtocolError
 from marimo_studio.types import BrowserObservation, CheckResult
 from marimo_studio.workspace import ensure_view
+
+
+def test_runtime_analysis_runs_in_a_dedicated_process(notebook_path) -> None:
+    ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+
+    checks = asyncio.run(check_runtime_studio_isolated(studio, view_name="dashboard"))
+
+    assert not [check for check in checks if check.status == "fail"]
+    assert (notebook_path.parent / "cell-executed").read_text() == "executed"
 
 
 def test_analysis_skips_runtime_and_builds_repair_actions(

@@ -38,6 +38,7 @@ from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._server.studio_api import (
     activate_view_response,
+    analyze_views_response,
     browser_observation_response,
     browser_observations_response,
     create_view_response,
@@ -104,6 +105,8 @@ async def support_response(
         )
     if support_path == "/dev/events" and request.method == "GET" and context.dev:
         return events_response(workspace, context=context, presentation=presentation)
+    if support_path == "/analyze":
+        return await analyze_views_response(request, context, workspace, presentation)
     if support_path == "/observations":
         return browser_observations_response(request, workspace, presentation)
     if support_path == "/query" and request.method == "POST":
@@ -202,6 +205,7 @@ async def _view_response(
     if route == "activate":
         return await activate_view_response(
             request,
+            context,
             studio,
             view_name,
             presentation,

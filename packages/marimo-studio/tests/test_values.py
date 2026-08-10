@@ -262,6 +262,39 @@ def test_kernel_projection_bounds_the_aggregate_response() -> None:
     assert result.errors["context.second"].code == "response-too-large"
 
 
+def test_kernel_lifespan_tolerates_code_mode_reinstantiation() -> None:
+    class Lifespan:
+        def __init__(self) -> None:
+            self.entries = 0
+            self.exits = 0
+
+        async def __aenter__(self) -> None:
+            self.entries += 1
+
+        async def __aexit__(self, *_args: object) -> None:
+            self.exits += 1
+
+    lifecycle = Lifespan()
+
+    class Kernel:
+        _lifespan: Any = lifecycle
+
+    class Context:
+        _kernel = Kernel()
+
+    async def exercise() -> None:
+        await lifecycle.__aenter__()
+        kernel_values_module._guard_entered_lifespan(Context())
+        guarded = Context._kernel._lifespan
+        await guarded.__aenter__()
+        await guarded.__aexit__(None, None, None)
+
+    asyncio.run(exercise())
+
+    assert lifecycle.entries == 1
+    assert lifecycle.exits == 1
+
+
 def test_kernel_lifespan_registers_before_the_first_view_exists(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

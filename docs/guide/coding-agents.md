@@ -43,8 +43,9 @@ relationships. It leaves notebook cells unevaluated.
 paths. A new view starts with every notebook cell in source order.
 
 `studio.activate_view` asks each connected Studio workspace to use the normal
-view transition. This updates the active view without rewriting notebook
-configuration or reaching into browser state.
+view transition. When `ensure_view` added the notebook's first Studio view,
+the same call reloads the native editor into that Studio view after code mode
+returns. Later calls switch views in place and preserve the workspace layout.
 
 ## Inspect before editing
 

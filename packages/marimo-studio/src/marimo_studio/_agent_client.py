@@ -14,9 +14,12 @@ from urllib.request import Request, urlopen
 from marimo_studio._urls import SUPPORT_PATH
 from marimo_studio.errors import ProtocolError
 from marimo_studio.types import (
+    AnalysisAction,
+    AnalysisReport,
     BrowserDiagnostic,
     BrowserObservation,
     BrowserObservationState,
+    CheckResult,
     ViewActivationResult,
 )
 
@@ -26,6 +29,7 @@ class StudioServerConnection:
     server_url: str
     auth_token: str = ""
     routing_query: tuple[tuple[str, str], ...] = ()
+    server_token: str = ""
 
 
 def studio_server_connection(
@@ -56,7 +60,7 @@ async def request_view_activation(
     notebook: Path,
     view: str,
 ) -> ViewActivationResult:
-    """Ask connected Studio workspaces to select one validated view."""
+    """Request one validated view as the browser's active Studio view."""
     payload = await _request_json(
         connection,
         f"{SUPPORT_PATH}/views/{quote(view, safe='')}/activate",
@@ -67,6 +71,7 @@ async def request_view_activation(
         payload.get("view") != view
         or payload.get("state") != "requested"
         or not isinstance(payload.get("generation"), int)
+        or payload.get("transition") not in {"in-place", "reload"}
     ):
         raise ProtocolError("The Studio activation response is invalid.")
     return ViewActivationResult(
@@ -74,7 +79,35 @@ async def request_view_activation(
         view=view,
         state="requested",
         generation=payload["generation"],
+        transition=cast(Literal["in-place", "reload"], payload["transition"]),
     )
+
+
+async def request_analysis(
+    connection: StudioServerConnection,
+    notebook: Path,
+    *,
+    view_name: str | None = None,
+    timeout: float = 10.0,
+    require_browser: bool = True,
+) -> AnalysisReport:
+    """Run Studio analysis in the server attached to the active notebook."""
+    payload = await _request_json(
+        connection,
+        f"{SUPPORT_PATH}/analyze",
+        method="POST",
+        body={
+            "view": view_name,
+            "timeout": timeout,
+            "require_browser": require_browser,
+        },
+        timeout=max(90.0, timeout + 90.0),
+    )
+    _require_notebook(payload, notebook)
+    report = _parse_analysis_report(payload)
+    if view_name is not None and report.views != (view_name,):
+        raise ProtocolError("The Studio analysis response is invalid.")
+    return report
 
 
 async def observe_browser_views(
@@ -114,18 +147,26 @@ async def _request_json(
     *,
     method: str = "GET",
     query: tuple[tuple[str, str], ...] = (),
+    body: dict[str, object] | None = None,
+    timeout: float = 15.0,
 ) -> dict[str, Any]:
     parameters = (*connection.routing_query, *query)
     suffix = f"?{urlencode(parameters)}" if parameters else ""
     url = f"{connection.server_url.rstrip('/')}{path}{suffix}"
     headers = {"Accept": "application/json"}
+    data = None
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+        data = json.dumps(body, separators=(",", ":")).encode()
     if connection.auth_token:
         headers["Authorization"] = f"Bearer {connection.auth_token}"
-    request = Request(url, headers=headers, method=method)
+    if connection.server_token:
+        headers["Marimo-Server-Token"] = connection.server_token
+    request = Request(url, data=data, headers=headers, method=method)
 
     def send() -> bytes:
         try:
-            with urlopen(request, timeout=15) as response:
+            with urlopen(request, timeout=timeout) as response:
                 return response.read()
         except HTTPError as error:
             try:
@@ -196,6 +237,120 @@ def _parse_observation(value: object) -> BrowserObservation:
     )
 
 
+def _parse_analysis_report(payload: dict[str, Any]) -> AnalysisReport:
+    notebook = payload.get("notebook")
+    views = payload.get("views")
+    stages = payload.get("stages")
+    actions = payload.get("actions")
+    if (
+        payload.get("schema") != 1
+        or not isinstance(notebook, str)
+        or not isinstance(views, list)
+        or not all(isinstance(view, str) for view in views)
+        or not isinstance(stages, dict)
+        or not isinstance(actions, list)
+    ):
+        raise ProtocolError("The Studio analysis response is invalid.")
+    static = stages.get("static")
+    runtime = stages.get("runtime")
+    browser = stages.get("browser")
+    if (
+        not isinstance(static, dict)
+        or not isinstance(runtime, dict)
+        or not isinstance(browser, dict)
+        or not isinstance(static.get("checks"), list)
+        or not isinstance(runtime.get("checks"), list)
+        or not isinstance(browser.get("observations"), list)
+        or not isinstance(browser.get("required"), bool)
+        or (
+            runtime.get("reason") is not None
+            and not isinstance(runtime.get("reason"), str)
+        )
+    ):
+        raise ProtocolError("The Studio analysis response is invalid.")
+    report = AnalysisReport(
+        notebook=Path(notebook).resolve(),
+        views=tuple(cast(list[str], views)),
+        static_checks=tuple(_parse_check(item) for item in static["checks"]),
+        runtime_checks=tuple(_parse_check(item) for item in runtime["checks"]),
+        runtime_skipped=cast(str | None, runtime.get("reason")),
+        browser_observations=tuple(
+            _parse_observation(item) for item in browser["observations"]
+        ),
+        browser_required=browser["required"],
+        actions=tuple(_parse_action(item) for item in actions),
+    )
+    if (
+        payload.get("ok") is not report.ok
+        or payload.get("handoff_ready") is not report.handoff_ready
+    ):
+        raise ProtocolError("The Studio analysis response is invalid.")
+    return report
+
+
+def _parse_check(value: object) -> CheckResult:
+    if not isinstance(value, dict):
+        raise ProtocolError("A Studio analysis check is invalid.")
+    name = value.get("name")
+    status = value.get("status")
+    message = value.get("message")
+    code = value.get("code")
+    details = value.get("details")
+    if (
+        not isinstance(name, str)
+        or status not in {"pass", "warn", "fail"}
+        or not isinstance(message, str)
+        or (code is not None and not isinstance(code, str))
+        or (details is not None and not _string_keyed_mapping(details))
+    ):
+        raise ProtocolError("A Studio analysis check is invalid.")
+    return CheckResult(
+        name=name,
+        status=cast(Literal["pass", "warn", "fail"], status),
+        message=message,
+        code=code,
+        details=cast(dict[str, Any] | None, details),
+    )
+
+
+def _parse_action(value: object) -> AnalysisAction:
+    if not isinstance(value, dict):
+        raise ProtocolError("A Studio analysis action is invalid.")
+    stage = value.get("stage")
+    severity = value.get("severity")
+    code = value.get("code")
+    message = value.get("message")
+    advice = value.get("advice")
+    view = value.get("view")
+    target = value.get("target")
+    source = value.get("source")
+    if (
+        stage not in {"static", "runtime", "browser"}
+        or severity not in {"warning", "error"}
+        or not isinstance(code, str)
+        or not isinstance(message, str)
+        or not isinstance(advice, str)
+        or (view is not None and not isinstance(view, str))
+        or (target is not None and not isinstance(target, str))
+        or (source is not None and not _string_keyed_mapping(source))
+    ):
+        raise ProtocolError("A Studio analysis action is invalid.")
+    return AnalysisAction(
+        stage=cast(Literal["static", "runtime", "browser"], stage),
+        severity=cast(Literal["warning", "error"], severity),
+        code=code,
+        message=message,
+        advice=advice,
+        view=view,
+        target=target,
+        source=cast(dict[str, object] | None, source),
+    )
+
+
+def _string_keyed_mapping(value: object) -> bool:
+    return isinstance(value, dict) and all(isinstance(key, str) for key in value)
+
+
 def _parse_diagnostic(value: object) -> BrowserDiagnostic:
     if not isinstance(value, dict):
         raise ProtocolError("A Studio browser diagnostic is invalid.")
@@ -238,6 +393,7 @@ def _parse_diagnostic(value: object) -> BrowserDiagnostic:
 __all__ = [
     "StudioServerConnection",
     "observe_browser_views",
+    "request_analysis",
     "request_view_activation",
     "studio_server_connection",
 ]

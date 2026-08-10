@@ -9,6 +9,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from marimo_studio import _assets
+from marimo_studio._compat.code_mode import attach_code_mode_server_token
 from marimo_studio._compat.server.cell_aliases import enable_cell_alias_sync
 from marimo_studio._compat.server.context import (
     relative_request_path,
@@ -47,7 +48,7 @@ from marimo_studio._server.support import (
     lifecycle_status_response,
     support_response,
 )
-from marimo_studio._urls import SUPPORT_PATH
+from marimo_studio._urls import ACTIVE_VIEW_QUERY_PARAM, SUPPORT_PATH
 from marimo_studio._workspace import discover_studio
 from marimo_studio.errors import MarimoStudioError, WorkspaceInitializationError
 
@@ -85,6 +86,7 @@ class PresentationMiddleware:
             return
         editor_target = native_editor_target(relative)
         if editor_target is not None and mode == "edit":
+            delegated_scope = _replace_relative_path(scope, relative, editor_target)
             if scope["type"] == "http":
                 location = server_location(Request(scope, receive))
                 if location is not None:
@@ -94,11 +96,32 @@ class PresentationMiddleware:
                         workspace = None
                     if workspace is not None and workspace.cells:
                         enable_cell_alias_sync(location)
+                    if editor_target.rstrip("/") == "/api/kernel/execute":
+                        delegated_scope = attach_code_mode_server_token(
+                            delegated_scope,
+                            server_context(location).server_token,
+                        )
             await self.app(
-                _replace_relative_path(scope, relative, editor_target),
+                delegated_scope,
                 receive,
                 send,
             )
+            return
+        if (
+            scope["type"] == "http"
+            and mode == "edit"
+            and relative.rstrip("/") == "/api/kernel/execute"
+        ):
+            location = server_location(Request(scope, receive))
+            delegated_scope = (
+                attach_code_mode_server_token(
+                    scope,
+                    server_context(location).server_token,
+                )
+                if location is not None
+                else scope
+            )
+            await self.app(delegated_scope, receive, send)
             return
         if scope["type"] != "http":
             await self.app(scope, receive, send)
@@ -315,10 +338,15 @@ class PresentationMiddleware:
             if redirect is not None:
                 response = redirect
             elif landing:
+                requested_view = request.query_params.get(ACTIVE_VIEW_QUERY_PARAM)
                 response = studio_landing_redirect(
                     request,
                     location.base_url,
-                    workspace.default_view,
+                    (
+                        requested_view
+                        if requested_view in workspace.views
+                        else workspace.default_view
+                    ),
                     context.routing_query,
                 )
             else:

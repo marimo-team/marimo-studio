@@ -12,6 +12,7 @@ from starlette.types import Scope
 
 from marimo_studio._cell_refs import cell_refs
 from marimo_studio._compat.server.models import ServerContext
+from marimo_studio._urls import ACTIVE_VIEW_QUERY_PARAM
 from marimo_studio.errors import RuntimeSyncError
 from marimo_studio.types import LiveCellIdentity, LiveCellSnapshot
 
@@ -75,6 +76,30 @@ def has_notebook_session(context: ServerContext) -> bool:
     return (
         context._session_manager.get_session_by_file_key(context.file_key) is not None
     )
+
+
+async def reload_page_into_studio(
+    context: ServerContext,
+    view_name: str,
+) -> None:
+    """Reload the native editor into a selected Studio view after code mode."""
+    from marimo._messaging.notification import (
+        QueryParamsSetNotification,
+        ReloadNotification,
+    )
+
+    session = context._session_manager.get_session_by_file_key(context.file_key)
+    if session is None:
+        return
+
+    # Code mode holds this lock until its result has been delivered. Waiting
+    # here keeps the navigation from aborting the agent call that requested it.
+    async with session.scratchpad_lock:
+        session.notify(
+            QueryParamsSetNotification(ACTIVE_VIEW_QUERY_PARAM, view_name),
+            from_consumer_id=None,
+        )
+        session.notify(ReloadNotification(), from_consumer_id=None)
 
 
 def live_cells(

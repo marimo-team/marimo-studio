@@ -6,11 +6,13 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 STUDIO_PATH = "/studio"
 SUPPORT_PATH = "/_marimo-studio"
+ACTIVE_VIEW_QUERY_PARAM = "marimo_studio_view"
 PRIVATE_QUERY_KEYS = frozenset(
     {
         "access_token",
         "file",
         "kiosk",
+        ACTIVE_VIEW_QUERY_PARAM,
         "marimo_studio_resume",
         "refresh_token",
         "session_id",
