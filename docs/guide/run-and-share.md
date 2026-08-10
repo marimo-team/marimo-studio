@@ -1,12 +1,12 @@
 ---
-title: Run and share views
+title: Run, export, and share
 description: Serve Studio views through Marimo or export a compatible notebook as a static WebAssembly site.
 ---
 
-# Run and share views
+# Run, export, and share
 
-Choose the runtime from the notebook's dependencies, data access, and hosting
-environment.
+Studio uses Marimo's application server for finished views. Choose the runtime
+from the notebook's dependencies, data access, and hosting environment.
 
 | Destination    | Runtime            | Result                                                                     |
 | -------------- | ------------------ | -------------------------------------------------------------------------- |
@@ -25,7 +25,7 @@ uvx marimo-studio check analysis.py --runtime
 The check executes projected cells and reads referenced Python values. It can
 perform their file, network, database, and data access.
 
-## Serve through Marimo
+## Serve through Marimo <Badge type="info" text="Server" />
 
 Start the configured notebook with Marimo:
 
@@ -57,8 +57,10 @@ Check the authenticated workspace lifecycle at `/_marimo-studio/status`:
 when configuration cannot materialize a workspace. Run-mode document requests
 return a structured repair response in both cases.
 
+::: warning Keep each browser on its kernel process
 Use one worker for a standalone deployment. A multi-worker platform needs
 sticky routing so each browser returns to the process that owns its kernel.
+:::
 
 ### Protect the endpoint
 
@@ -109,12 +111,12 @@ Forward the complete path through the reverse proxy. Keep view assets relative
 to `index.html` so styles, modules, images, and imports resolve beneath that
 base URL.
 
-### Preserve a server session across refreshes
+::: details Preserve a server session across refreshes
 
 Enable session preservation when a manual server-runtime refresh should return
 the browser to its current run-mode kernel:
 
-```toml
+```toml [pyproject.toml]
 [tool.marimo-studio]
 default = "dashboard"
 preserve_session = true
@@ -122,13 +124,14 @@ preserve_session = true
 
 The session remains available while the serving Marimo process retains it.
 Route reconnecting requests to that process.
+:::
 
-## Run the notebook in the browser
+## Run the notebook in the browser <Badge type="tip" text="WebAssembly" />
 
 Select the WebAssembly runtime for a notebook whose dependencies and data
 sources work in Pyodide:
 
-```toml
+```toml [pyproject.toml]
 [tool.marimo-studio]
 default = "dashboard"
 runtime = "wasm"
@@ -140,11 +143,14 @@ select the server runtime for one browser. With `runtime = "server"`, use
 `?runtime=wasm` for the browser runtime.
 
 WebAssembly clients receive the notebook source and install compatible PEP 723
-dependencies in Pyodide. Keep credentials and server-side secrets out of a
-WebAssembly view. Browser clients also need network access to every external
-dataset the notebook reads.
+dependencies in Pyodide.
 
-## Export a static site
+::: warning Browser clients receive notebook source
+Keep credentials and server-side secrets out of a WebAssembly view. The
+browser also needs network access to every external dataset the notebook reads.
+:::
+
+## Export a static site <Badge type="warning" text="Public source" />
 
 Export one view, then serve the generated directory over HTTP:
 
@@ -162,10 +168,14 @@ the notebook's `public/` directory, and static HTMX cell fragments.
 Upload the complete directory to the static host. Use `--force` after reviewing
 an existing output directory that should be replaced.
 
+::: warning Review the public export boundary
 The exported notebook source is public to site visitors. Its dependencies must
 install in Pyodide, and external data must be reachable from the browser.
 Named Iconify icons also load from the Iconify API unless the view uses inline
 SVG.
+:::
 
-[Notebook configuration](configuration.md) defines runtime defaults.
-[CLI reference](cli.md#export) defines export options and exit behavior.
+[Notebook configuration](../reference/configuration.md) defines runtime
+defaults. [CLI reference](../reference/cli.md#export) defines export options
+and exit behavior. [Runtime behavior](../reference/runtimes.md) compares the
+execution and session contracts.

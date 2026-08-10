@@ -30,6 +30,11 @@ Every data command accepts:
 | `--format text\|json`       | `text`  | Write human text or stable JSON to standard output                |
 | `--diagnostics text\|jsonl` | `text`  | Write human diagnostics or one JSON event per standard-error line |
 
+::: warning Runtime mode executes notebook code
+`inspect --runtime` and `check --runtime` can perform the notebook's file,
+network, database, and data access. Run them in the notebook environment.
+:::
+
 ## `inspect`
 
 ```console
@@ -45,8 +50,7 @@ Compiles the notebook graph and prints one record per selected cell.
 | `--runtime`      | Execute the notebook and include MIME outputs and JSON-compatible values |
 | `--limit N`      | Return at most `N` cell records, where `N` is at least 1                 |
 
-Static inspection leaves cell bodies unevaluated. Runtime inspection can
-perform the notebook's file, network, database, and data access.
+Static inspection leaves cell bodies unevaluated.
 
 ## `bind`
 
@@ -148,8 +152,9 @@ the export. JSON output includes the selected view, runtime, output directory,
 entry point, and file count.
 
 Serve the directory over HTTP so the browser can load worker modules and
-runtime assets. [Run and share views](share-views.md#export-a-static-site)
-covers the notebook-source and browser-network boundaries.
+runtime assets. [Run, export, and
+share](../guide/run-and-share.md#export-a-static-site) covers the notebook-source
+and browser-network boundaries.
 
 ## Machine diagnostics
 

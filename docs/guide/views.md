@@ -7,7 +7,8 @@ description: Give several audiences their own pages while reusing one Marimo not
 
 Create one view for each audience or task that needs a distinct page. Views
 reuse the notebook's cells and aliases while owning separate HTML, CSS,
-modules, assets, and routes.
+modules, assets, and routes. The notebook remains the shared owner of data,
+calculations, controls, and domain decisions.
 
 ## Plan each view around one job
 
@@ -20,8 +21,8 @@ answer it.
 | `operations` | Find conditions that require action  | Exceptions, thresholds, owners, and next steps        |
 | `executive`  | Review the outcome and decision      | Headline measures, material risks, and recommendation |
 
-The [collection research example](examples.md#collection-research-packet) uses
-one notebook for corpus discovery, visual study, and packet preparation.
+The [collection research example](../examples/collection-research.md) uses one
+notebook for corpus discovery, visual study, and packet preparation.
 
 ## Add a view
 
@@ -59,8 +60,10 @@ In the Studio workspace, the link opens the target view while preserving the
 current workspace mode. In run mode, the same link opens the target view in
 the current browser session.
 
+::: info View routes
 The configured `default` view opens at `/`. Every named view is also available
 at `/<view-name>/`.
+:::
 
 ## Remove a view
 
@@ -90,6 +93,8 @@ __marimo__/studio/analysis/<view-name>/
 Commit this directory with the notebook. If the repository broadly ignores
 `__marimo__`, keep the Studio source with targeted rules:
 
+::: details Keep Studio source in a broadly ignored `__marimo__` directory
+
 ```text
 !**/__marimo__/
 **/__marimo__/*
@@ -97,6 +102,9 @@ Commit this directory with the notebook. If the repository broadly ignores
 !**/__marimo__/studio/**
 ```
 
-[Notebook configuration](configuration.md) defines the default view and
-runtime. [Design a view](design-views.md) covers projections, styling, assets,
-and loading states.
+:::
+
+[Notebook configuration](../reference/configuration.md) defines the default
+view and runtime. [Use notebook results](notebook-results.md) covers the three
+projection forms. [Use HTML, CSS, and JavaScript](web-platform.md) covers
+styling, modules, assets, and loading states.
