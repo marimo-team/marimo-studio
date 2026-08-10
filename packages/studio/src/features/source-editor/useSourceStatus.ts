@@ -23,22 +23,18 @@ export interface DisplaySourceStatus {
 }
 
 export const useSourceStatus = (state: SourceState): DisplaySourceStatus => {
-  const [status, setStatus] = useState<DisplaySourceStatus>(() => ({
-    message: sourceStatus(state),
-    phase: state.phase,
-  }));
+  const [settledExternalState, setSettledExternalState] = useState<SourceState>();
 
   useEffect(() => {
-    setStatus({ message: sourceStatus(state), phase: state.phase });
     if (state.phase !== "external") {
       return;
     }
-    const timer = globalThis.setTimeout(
-      () => setStatus({ message: SOURCE_STATUS.saved, phase: "saved" }),
-      1_800,
-    );
+    const timer = globalThis.setTimeout(() => setSettledExternalState(state), 1_800);
     return () => globalThis.clearTimeout(timer);
   }, [state]);
 
-  return status;
+  if (state.phase === "external" && state === settledExternalState) {
+    return { message: SOURCE_STATUS.saved, phase: "saved" };
+  }
+  return { message: sourceStatus(state), phase: state.phase };
 };

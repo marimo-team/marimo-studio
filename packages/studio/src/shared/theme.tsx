@@ -1,4 +1,11 @@
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 export type StudioTheme = "light" | "dark";
 
@@ -16,28 +23,50 @@ const StudioThemeContext = createContext<StudioTheme>("light");
 const systemTheme = (): StudioTheme =>
   globalThis.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 
+const subscribeSystemTheme = (listener: () => void): (() => void) => {
+  const media = globalThis.matchMedia("(prefers-color-scheme: dark)");
+  media.addEventListener("change", listener);
+  return () => media.removeEventListener("change", listener);
+};
+
+interface NativeThemeState {
+  connect: ThemeFrameConnector;
+  frame: HTMLIFrameElement;
+  theme: StudioTheme | undefined;
+}
+
 export const useResolvedStudioTheme = (
   frame: HTMLIFrameElement | null,
   connectThemeFrame?: ThemeFrameConnector,
 ): StudioTheme => {
-  const [system, setSystem] = useState(systemTheme);
-  const [native, setNative] = useState<StudioTheme | undefined>();
-
-  useEffect(() => {
-    const media = globalThis.matchMedia("(prefers-color-scheme: dark)");
-    const update = () => setSystem(media.matches ? "dark" : "light");
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
+  const system = useSyncExternalStore<StudioTheme>(
+    subscribeSystemTheme,
+    systemTheme,
+    () => "light",
+  );
+  const [native, setNative] = useState<NativeThemeState>();
 
   useEffect(() => {
     if (!frame || !connectThemeFrame) {
       return;
     }
-    return connectThemeFrame(frame, setNative);
+    let active = true;
+    const disconnect = connectThemeFrame(frame, (theme) => {
+      if (active) {
+        setNative({ connect: connectThemeFrame, frame, theme });
+      }
+    });
+    return () => {
+      active = false;
+      disconnect();
+    };
   }, [connectThemeFrame, frame]);
 
-  return native ?? system;
+  const nativeTheme =
+    native && native.connect === connectThemeFrame && native.frame === frame
+      ? native.theme
+      : undefined;
+  return nativeTheme ?? system;
 };
 
 export const StudioThemeProvider = ({
