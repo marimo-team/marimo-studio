@@ -1,4 +1,4 @@
-"""Register Studio's projection bridge inside a Marimo kernel."""
+"""Register Studio's projection bridge inside file-backed Marimo kernels."""
 
 from __future__ import annotations
 
@@ -58,6 +58,26 @@ class _KernelBridgeLifespan:
         self._output_renderer: KernelOutputRenderer | None = None
         self._release_cached_ui: Callable[[], None] | None = None
 
+    def _activate(
+        self,
+        context: Any,
+        filename: Path,
+        inspection: tuple[str, ...] | None,
+    ) -> bool:
+        if self._output_renderer is not None:
+            return True
+        if inspection is None:
+            try:
+                if discover_studio_definition(filename) is None:
+                    return False
+            except (OSError, UnicodeError, ConfigurationError):
+                return False
+        output_renderer = KernelOutputRenderer(context)
+        release_cached_ui = keep_cached_cells_compatible()
+        self._output_renderer = output_renderer
+        self._release_cached_ui = release_cached_ui
+        return True
+
     async def __aenter__(self) -> None:
         from marimo._runtime.context import get_context
         from marimo._runtime.context.kernel_context import KernelRuntimeContext
@@ -70,13 +90,10 @@ class _KernelBridgeLifespan:
         filename = Path(context.filename).resolve()
         inspection = _INSPECTION_SELECTORS.get(filename)
         inspection_outputs = _INSPECTION_OUTPUT_SELECTORS.get(filename)
-        if inspection is None:
-            try:
-                if discover_studio_definition(filename) is None:
-                    return
-            except (OSError, UnicodeError, ConfigurationError):
-                return
+        self._activate(context, filename, inspection)
 
+        # Marimo enters the lifespan once. Keep the functions registered while
+        # the renderer waits for a Studio definition created during the session.
         def read(args: ReadValuesArgs) -> dict[str, object]:
             try:
                 allowed = (
@@ -95,6 +112,18 @@ class _KernelBridgeLifespan:
                         for selector in args.selectors
                     },
                 ).to_dict()
+            if not self._activate(context, filename, inspection):
+                return ValueReadResult(
+                    values={},
+                    errors={
+                        selector: ValueReadError(
+                            "unknown-selector",
+                            f"Selector {selector!r} is not present in a "
+                            "configured view.",
+                        )
+                        for selector in dict.fromkeys(args.selectors)
+                    },
+                ).to_dict()
             limit = max(1, min(args.max_value_bytes, DEFAULT_MAX_VALUE_BYTES))
             kernel = context._kernel
             with kernel.lock_globals():
@@ -108,8 +137,6 @@ class _KernelBridgeLifespan:
         function = Function(FUNCTION_NAME, ReadValuesArgs, read)
         function.cell_id = CellId_t("__marimo_studio_values__")
         context.function_registry.register(NAMESPACE, function)
-
-        output_renderer = KernelOutputRenderer(context)
 
         def render_outputs(args: RenderValuesArgs) -> dict[str, object]:
             try:
@@ -132,6 +159,18 @@ class _KernelBridgeLifespan:
                         for selector in requested
                     },
                 ).to_dict()
+            if not self._activate(context, filename, inspection):
+                return OutputRenderResult(
+                    outputs={},
+                    errors={
+                        selector: ValueReadError(
+                            "unknown-selector",
+                            f"Selector {selector!r} is not present in a "
+                            "configured view.",
+                        )
+                        for selector in dict.fromkeys(args.selectors)
+                    },
+                ).to_dict()
             selectors = tuple(dict.fromkeys(args.selectors))
             active_selectors = tuple(dict.fromkeys(args.active_selectors))
             if (
@@ -150,6 +189,8 @@ class _KernelBridgeLifespan:
                 ).to_dict()
             limit = max(1, min(args.max_output_bytes, DEFAULT_MAX_VALUE_BYTES))
             kernel = context._kernel
+            output_renderer = self._output_renderer
+            assert output_renderer is not None
             with kernel.lock_globals():
                 return output_renderer.render(
                     kernel.globals,
@@ -169,6 +210,8 @@ class _KernelBridgeLifespan:
         context.function_registry.register(NAMESPACE, output_function)
 
         def sync_query(args: SyncQueryArgs) -> None:
+            if not self._activate(context, filename, inspection):
+                return
             params = context.query_params
             current = dict(params.to_dict())
             for key in current.keys() - args.query.keys() - PRIVATE_QUERY_KEYS:
@@ -185,8 +228,6 @@ class _KernelBridgeLifespan:
         query_function.cell_id = CellId_t("__marimo_studio_query__")
         context.function_registry.register(NAMESPACE, query_function)
         self._registry = context.function_registry
-        self._output_renderer = output_renderer
-        self._release_cached_ui = keep_cached_cells_compatible()
 
     async def __aexit__(
         self,
@@ -208,5 +249,5 @@ class _KernelBridgeLifespan:
 
 
 def kernel_lifespan(_: None) -> _KernelBridgeLifespan:
-    """Register projection functions in configured Studio kernels."""
+    """Register projection functions and activate configured Studio kernels."""
     return _KernelBridgeLifespan()

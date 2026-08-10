@@ -319,6 +319,113 @@ default = "dashboard"
     assert context.function_registry.deleted == ["_marimo_studio"]
 
 
+def test_kernel_lifespan_activates_after_the_first_view_is_created(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._runtime import context as runtime_context
+    from marimo._runtime.context import kernel_context as kernel_context_module
+
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+
+    class Kernel:
+        def __init__(self) -> None:
+            self.globals = {"summary": {"papers": 3_877}}
+            self.lock_count = 0
+
+        @contextmanager
+        def lock_globals(self):
+            self.lock_count += 1
+            yield
+
+    cache_activations: list[bool] = []
+    cache_releases: list[bool] = []
+
+    def keep_cached_cells_compatible() -> Any:
+        cache_activations.append(True)
+        return lambda: cache_releases.append(True)
+
+    current = _native_output_context()
+    current.filename = str(notebook)
+    current._kernel = Kernel()
+    monkeypatch.setattr(runtime_context, "get_context", lambda: current)
+    monkeypatch.setattr(
+        kernel_context_module,
+        "KernelRuntimeContext",
+        type(current),
+    )
+    monkeypatch.setattr(
+        kernel_values_module,
+        "keep_cached_cells_compatible",
+        keep_cached_cells_compatible,
+    )
+
+    async def exercise() -> None:
+        async with _KernelBridgeLifespan():
+            functions = current.function_registry.namespaces["_marimo_studio"].functions
+            assert set(functions) == {
+                "read_values",
+                "render_values",
+                "sync_query",
+            }
+            read = functions["read_values"]
+
+            before = cast(
+                dict[str, Any],
+                read(
+                    {
+                        "selectors": ["summary.papers"],
+                        "max_value_bytes": 1_000,
+                    }
+                ),
+            )
+            assert before["values"] == {}
+            assert (
+                cast(dict[str, Any], before["errors"])["summary.papers"]["code"]
+                == "unknown-selector"
+            )
+            assert not cache_activations
+            assert current._kernel.lock_count == 0
+
+            view = tmp_path / "__marimo__" / "studio" / "notebook" / "dashboard"
+            view.mkdir(parents=True)
+            view.joinpath("index.html").write_text(
+                '<span mo-value="summary.papers"></span>',
+                encoding="utf-8",
+            )
+            tmp_path.joinpath("pyproject.toml").write_text(
+                """\
+[tool.marimo-studio]
+notebook = "notebook.py"
+default = "dashboard"
+""",
+                encoding="utf-8",
+            )
+
+            after = cast(
+                dict[str, Any],
+                read(
+                    {
+                        "selectors": ["summary.papers"],
+                        "max_value_bytes": 1_000,
+                    }
+                ),
+            )
+            assert after["values"] == {"summary.papers": 3_877}
+            assert cache_activations == [True]
+            assert current._kernel.lock_count == 1
+
+    try:
+        with current.install():
+            asyncio.run(exercise())
+    finally:
+        current.virtual_file_registry.shutdown()
+
+    assert current.function_registry.namespaces == {}
+    assert cache_releases == [True]
+
+
 def test_kernel_value_read_rejects_a_viewer_before_dispatch() -> None:
     from marimo._messaging.notification import ConsumerCapabilities
     from marimo._types.ids import ConsumerId

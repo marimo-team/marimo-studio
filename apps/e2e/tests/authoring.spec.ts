@@ -2,12 +2,15 @@ import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import {
+  addWorkspaceView,
   bindWorkspaceCell,
   checkWorkspace,
   dashboardCssPath,
   dashboardHtmlPath,
   editorFrame,
   expect,
+  plainDashboardHtmlPath,
+  plainNotebookPath,
   previewFrame,
   readWorkspaceFile,
   studioEntryUrl,
@@ -168,6 +171,33 @@ test("routes directory notebooks by Studio configuration", async ({ page }) => {
   await page.goto(configuredUrl!);
   await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=notebook\.py$/);
   await expect(page.locator("#marimo-studio-bootstrap")).toBeAttached();
+});
+
+test("activates Studio after the first view is created", async ({ page }) => {
+  const instantiated = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.endsWith("/api/kernel/instantiate") &&
+      response.ok(),
+  );
+  await page.goto("/?file=plain.py");
+  await instantiated;
+  await expect(page.locator("#marimo-studio-bootstrap")).toHaveCount(0);
+
+  await addWorkspaceView(plainNotebookPath, "dashboard");
+  const source = await readWorkspaceFile(plainDashboardHtmlPath);
+  await writeWorkspaceFile(
+    plainDashboardHtmlPath,
+    source.replace(
+      "</header>",
+      '  <p id="papers"><span mo-value="summary.papers"></span> papers</p>\n      </header>',
+    ),
+  );
+
+  await page.goto("/?file=plain.py");
+  await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=plain\.py$/);
+  const preview = await waitForPreview(page);
+  await expect(preview.locator("#papers")).toHaveText("3877 papers");
 });
 
 test("loads a native module graph from a directory view", async ({ page }) => {

@@ -16,9 +16,12 @@ import {
 
 const execFile = promisify(execFileCallback);
 const dashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/notebook/dashboard");
+const plainDashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/plain/dashboard");
 
 export const dashboardHtmlPath = resolve(dashboardDirectory, "index.html");
 export const dashboardCssPath = resolve(dashboardDirectory, "app.css");
+export const plainDashboardHtmlPath = resolve(plainDashboardDirectory, "index.html");
+export const plainNotebookPath = resolve(workspaceDirectory, "plain.py");
 export const workspaceNotebookPath = notebookPath;
 export const hostedDashboardHtmlPath = resolve(
   hostedWorkspaceDirectory,
@@ -50,6 +53,10 @@ export const restoreWorkspace = async () => {
     force: true,
     recursive: true,
   });
+  await rm(resolve(workspaceDirectory, "__marimo__/studio/plain"), {
+    force: true,
+    recursive: true,
+  });
 };
 
 export const restoreHostedWorkspace = async () => {
@@ -77,6 +84,9 @@ const runStudioCli = (args: string[]) =>
 
 export const bindWorkspaceCell = (alias: string, cell: number) =>
   runStudioCli(["bind", workspaceNotebookPath, "--cell", String(cell), "--as", alias]);
+
+export const addWorkspaceView = (target: string, name: string) =>
+  runStudioCli(["view", "add", target, "--name", name]);
 
 export const checkWorkspace = async (): Promise<boolean> => {
   const { stdout } = await runStudioCli(["check", workspaceNotebookPath, "--format", "json"]);
