@@ -49,11 +49,19 @@ def test_view_add_bootstraps_lists_and_checks_named_views(
 
     created = runner.invoke(
         cli,
-        ["view", "add", "dashboard", str(notebook_path), "--format", "json"],
+        ["view", "add", str(notebook_path), "--format", "json"],
     )
     added = runner.invoke(
         cli,
-        ["view", "add", "executive", str(notebook_path), "--format", "json"],
+        [
+            "view",
+            "add",
+            str(notebook_path),
+            "--name",
+            "executive",
+            "--format",
+            "json",
+        ],
     )
     listed = runner.invoke(
         cli,
@@ -91,7 +99,6 @@ def test_view_add_dry_run_reports_changes_without_writing(
         [
             "view",
             "add",
-            "dashboard",
             str(notebook_path),
             "--dry-run",
             "--format",
@@ -117,7 +124,6 @@ def test_human_output_uses_color_and_json_remains_machine_readable(
         [
             "view",
             "add",
-            "dashboard",
             str(notebook_path),
             "--dry-run",
         ],
@@ -128,7 +134,6 @@ def test_human_output_uses_color_and_json_remains_machine_readable(
         [
             "view",
             "add",
-            "dashboard",
             str(notebook_path),
             "--dry-run",
             "--format",
@@ -144,6 +149,51 @@ def test_human_output_uses_color_and_json_remains_machine_readable(
     assert json.loads(machine.output)["view"] == "dashboard"
 
 
+def test_view_add_reports_the_editor_command(notebook_path: Path) -> None:
+    result = CliRunner().invoke(cli, ["view", "add", str(notebook_path)])
+
+    assert result.exit_code == 0, result.output
+    assert f"marimo edit {notebook_path} --sandbox" in unstyle(result.stderr)
+
+
+def test_view_add_resolves_an_uninitialized_project_from_the_current_directory(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pyproject = notebook_path.parent / "pyproject.toml"
+    pyproject.write_text(
+        f"""\
+[tool.marimo-studio]
+notebook = "{notebook_path.name}"
+default = "dashboard"
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(notebook_path.parent)
+
+    result = CliRunner().invoke(cli, ["view", "add", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["config"] == str(pyproject)
+    assert load_studio(pyproject).default_view == "dashboard"
+
+
+def test_help_teaches_target_first_workflows() -> None:
+    runner = CliRunner()
+
+    root = runner.invoke(cli, ["--help"])
+    add = runner.invoke(cli, ["view", "add", "--help"])
+    bind_help = runner.invoke(cli, ["bind", "--help"])
+
+    assert root.exit_code == 0
+    assert "marimo-studio view add analysis.py" in root.output
+    assert "marimo edit analysis.py --sandbox" in root.output
+    assert "Usage: cli view add [OPTIONS] [TARGET]" in add.output
+    assert "--name NAME" in add.output
+    assert "Usage: cli bind [OPTIONS] [TARGET]" in bind_help.output
+    assert "--as ALIAS" in bind_help.output
+
+
 def test_cli_bind_updates_the_shared_cell_registry(
     notebook_path: Path,
 ) -> None:
@@ -154,10 +204,11 @@ def test_cli_bind_updates_the_shared_cell_registry(
         cli,
         [
             "bind",
-            "summary",
             str(notebook_path),
             "--cell",
             "1",
+            "--as",
+            "summary",
             "--format",
             "json",
         ],
@@ -174,6 +225,84 @@ def test_cli_bind_updates_the_shared_cell_registry(
         "source",
     }
     assert str(load_studio(notebook_path).cells["summary"]) == payload["cell"]["ref"]
+
+
+def test_view_remove_preserves_source_when_confirmation_is_declined(
+    notebook_path: Path,
+) -> None:
+    ensure_view(notebook_path)
+    added = ensure_view(notebook_path, "executive")
+
+    result = CliRunner().invoke(
+        cli,
+        ["view", "remove", str(notebook_path), "--name", "executive"],
+        input="n\n",
+    )
+
+    assert result.exit_code == 1
+    assert added.root.is_dir()
+    assert set(load_studio(notebook_path).views) == {"dashboard", "executive"}
+
+
+def test_view_remove_reports_the_updated_view_inventory(notebook_path: Path) -> None:
+    dashboard = ensure_view(notebook_path).root
+    ensure_view(notebook_path, "executive")
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "remove",
+            str(notebook_path),
+            "--name",
+            "dashboard",
+            "--yes",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == {
+        "default_view": "executive",
+        "notebook": str(notebook_path),
+        "schema": 1,
+        "view": "dashboard",
+        "views": ["executive"],
+    }
+    assert not dashboard.exists()
+
+
+def test_view_remove_requires_noninteractive_confirmation_for_jsonl(
+    notebook_path: Path,
+    runtime_assets: Path,
+) -> None:
+    ensure_view(notebook_path)
+    added = ensure_view(notebook_path, "executive")
+
+    result = _run_cli(
+        runtime_assets,
+        "view",
+        "remove",
+        str(notebook_path),
+        "--name",
+        "executive",
+        "--diagnostics",
+        "jsonl",
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == {
+        "schema": 1,
+        "event": "diagnostic",
+        "command": "view remove",
+        "severity": "error",
+        "code": "usage-error",
+        "message": "Pass --yes when using JSON Lines diagnostics.",
+        "exit_code": 2,
+    }
+    assert added.root.is_dir()
 
 
 def test_cli_inspect_runtime_reports_mime_and_json_values(

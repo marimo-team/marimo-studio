@@ -35,6 +35,9 @@ def render_view_setup(result: ViewSetupResult) -> None:
         echo(f"  {light_blue('create')} {path}")
     for path in result.updated:
         echo(f"  {light_blue('update')} {path}")
+    if not result.dry_run:
+        notebook = shlex.quote(str(result.notebook))
+        echo(f"  {light_blue('edit')} marimo edit {notebook} --sandbox", err=True)
 
 
 def view_list_payload(studio: StudioWorkspace) -> dict[str, object]:
@@ -59,6 +62,23 @@ def render_view_list(studio: StudioWorkspace) -> None:
     for name, view in studio.views.items():
         suffix = " (default)" if name == studio.default_view else ""
         echo(f"{light_blue(name)}{suffix}\n  {view.root}")
+
+
+def view_removal_payload(studio: StudioWorkspace, name: str) -> dict[str, object]:
+    """Serialize a completed view removal."""
+    return {
+        "schema": 1,
+        "notebook": str(studio.notebook),
+        "view": name,
+        "default_view": studio.default_view,
+        "views": list(studio.views),
+    }
+
+
+def render_view_removal(studio: StudioWorkspace, name: str) -> None:
+    """Write a completed view removal in human text."""
+    echo(f"{green('Removed')} view {name} from {studio.notebook}")
+    echo(f"  {light_blue('default')} {studio.default_view}")
 
 
 def render_static_export(result: StaticExportResult) -> None:

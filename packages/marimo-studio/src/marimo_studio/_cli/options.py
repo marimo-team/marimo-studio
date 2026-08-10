@@ -1,4 +1,4 @@
-"""Shared Click parameters for notebook commands."""
+"""Shared Click parameters for Studio commands."""
 
 from pathlib import Path
 
@@ -12,8 +12,8 @@ output_format_option = click.option(
     show_default=True,
     help="Set the result format.",
 )
-notebook_argument = click.argument(
-    "notebook",
+target_argument = click.argument(
+    "target",
     required=False,
     type=click.Path(path_type=Path),
 )

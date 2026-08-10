@@ -15,7 +15,7 @@ notebook. Create focused views with plain HTML and CSS that you and your coding
 agent already write. Marimo keeps notebook logic, controls, and outputs live.
 
 ```console
-uvx marimo-studio view add dashboard analysis.py
+uvx marimo-studio view add analysis.py
 uv run --with marimo-studio marimo edit analysis.py --sandbox
 ```
 

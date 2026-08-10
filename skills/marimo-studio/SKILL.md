@@ -100,10 +100,10 @@ writes machine-readable progress and errors to standard error.
 
 ## 2. Create a custom view
 
-Create one named page for one audience or task:
+Create the default `dashboard` page for one audience or task:
 
 ```console
-marimo-studio view add dashboard analysis.py --format json
+marimo-studio view add analysis.py --format json
 ```
 
 View names start with a lowercase letter and contain lowercase letters,
@@ -126,8 +126,8 @@ Create more pages from the same notebook when audiences need different
 wording, content, or tasks:
 
 ```console
-marimo-studio view add report analysis.py --format json
-marimo-studio view add operations analysis.py --format json
+marimo-studio view add analysis.py --name report --format json
+marimo-studio view add analysis.py --name operations --format json
 ```
 
 ## 3. Choose what the page shows
@@ -156,8 +156,9 @@ If the cell is unnamed, give it a stable name using the zero-based position
 reported by `inspect`:
 
 ```console
-marimo-studio bind revenue-chart analysis.py \
+marimo-studio bind analysis.py \
   --cell 4 \
+  --as revenue-chart \
   --format json
 ```
 

@@ -14,7 +14,7 @@ newer and [uv](https://docs.astral.sh/uv/).
 ## Add the dashboard
 
 ```console
-uvx marimo-studio view add dashboard analysis.py
+uvx marimo-studio view add analysis.py
 ```
 
 Studio adds its notebook configuration and creates:
@@ -71,7 +71,7 @@ Use a native Marimo cell name when the intended cell already has one. Bind an
 anonymous cell to a stable alias when it does not:
 
 ```console
-uvx marimo-studio bind summary analysis.py --cell 3
+uvx marimo-studio bind analysis.py --cell 3 --as summary
 ```
 
 Replace `3` with the zero-based index reported by `inspect`.

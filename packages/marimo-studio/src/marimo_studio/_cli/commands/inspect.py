@@ -14,7 +14,7 @@ from marimo_studio._cli.diagnostics import (
     run_in_environment,
 )
 from marimo_studio._cli.help import ColoredCommand
-from marimo_studio._cli.options import notebook_argument, output_format_option
+from marimo_studio._cli.options import output_format_option, target_argument
 from marimo_studio._cli.output import (
     echo_json,
     inspection_payload,
@@ -35,7 +35,7 @@ from marimo_studio.inspect import (
 
 
 @click.command("inspect", cls=ColoredCommand)
-@notebook_argument
+@target_argument
 @click.option("--include-code", is_flag=True, help="Include complete cell source.")
 @click.option(
     "--display",
@@ -52,21 +52,25 @@ from marimo_studio.inspect import (
 @output_format_option
 @diagnostic_format_option
 def inspect(
-    notebook: Path | None,
+    target: Path | None,
     include_code: bool,
     output_expressions: bool,
     runtime: bool,
     limit: int | None,
     output_format: str,
 ) -> None:
-    """Inspect cells in NOTEBOOK."""
-    notebook_path = resolve_notebook(notebook)
+    """Inspect cells in TARGET.
+
+    TARGET may be a notebook, project directory, or pyproject.toml. The current
+    directory is used when TARGET is omitted.
+    """
+    notebook_path = resolve_notebook(target)
     if not notebook_path.is_file():
         raise ConfigurationError(f"Notebook does not exist: {notebook_path}")
 
     runtime_inspection: RuntimeInspection | None = None
     if runtime:
-        environment = resolve_environment_target(notebook, notebook_path)
+        environment = resolve_environment_target(target, notebook_path)
         if should_reenter(environment, None):
             raise click.exceptions.Exit(run_in_environment(environment, sys.argv[1:]))
         with capture_runtime_stderr():

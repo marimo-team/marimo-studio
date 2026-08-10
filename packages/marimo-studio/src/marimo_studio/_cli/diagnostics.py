@@ -154,7 +154,7 @@ def _command_from_argv(args: list[str]) -> str:
     if not args:
         return "marimo-studio"
     first = args[0]
-    if first == "view" and len(args) > 1 and args[1] in {"add", "list"}:
+    if first == "view" and len(args) > 1 and args[1] in {"add", "list", "remove"}:
         return f"view {args[1]}"
     return first if first in _COMMAND_NAMES else "marimo-studio"
 

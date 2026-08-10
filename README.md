@@ -58,7 +58,7 @@ session, so the filters and ordered selection carry through the workflow.
 Add a dashboard to an existing notebook, then open it through Marimo:
 
 ```console
-uvx marimo-studio view add dashboard analysis.py
+uvx marimo-studio view add analysis.py
 uv run --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
