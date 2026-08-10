@@ -8,9 +8,6 @@
 #   "pyobservablejs",
 # ]
 #
-# [tool.marimo.runtime]
-# cache_cells = true
-#
 # [tool.marimo-studio]
 # default = "corpus"
 # preserve_session = false

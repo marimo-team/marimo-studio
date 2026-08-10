@@ -9,8 +9,6 @@
 # default = "dashboard"
 # preserve_session = false
 #
-# [tool.marimo-studio.cells]
-# cell-3 = {ref = "cell:v1:4cb720fc5b853f4a4e9c1c993bb5634eb4e3f1ced59a1dcccdd0946c387d0251:4cb720fc5b853f4a4e9c1c993bb5634eb4e3f1ced59a1dcccdd0946c387d0251:0"}
 # ///
 
 import marimo
@@ -48,13 +46,6 @@ def controls(mo):
 
 
 @app.cell
-def _():
-    a = 42*42
-    a
-    return
-
-
-@app.cell
 def forecast(date, quarter, scenario):
     multipliers = {"Base": 1.0, "Growth": 1.15, "Stretch": 1.3}
     baseline = [240, 270, 310, 350]
@@ -88,18 +79,19 @@ def forecast(date, quarter, scenario):
 
 @app.cell
 def summary(mo, report):
-    mo.md(f"""
+    summary = mo.md(f"""
     ### {report["scenario"]} outlook
 
     Projected revenue through **{report["through"]}** is
     **{report["total"]}**, a **{report["change"]}** change from baseline.
     """)
-    return
+    summary
+    return (summary,)
 
 
 @app.cell
 def revenue_table(mo, rows):
-    mo.ui.table(
+    revenue_table = mo.ui.table(
         rows,
         pagination=False,
         selection=None,
@@ -113,7 +105,8 @@ def revenue_table(mo, rows):
             "Projection": "right",
         },
     )
-    return
+    revenue_table
+    return (revenue_table,)
 
 
 if __name__ == "__main__":

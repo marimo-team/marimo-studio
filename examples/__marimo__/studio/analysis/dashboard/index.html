@@ -13,7 +13,7 @@
         <div class="lg:col-span-2">
           <p class="studio-eyebrow mb-3">Quarterly review</p>
           <h1 class="m-0 max-w-[12ch] font-heading text-[clamp(2.8rem,8vw,5.8rem)] leading-[0.96] font-semibold tracking-tight text-balance">
-            Revenue at a glance <span mo-value="a"></span>
+            Revenue at a glance
           </h1>
           <p class="mt-5 max-w-2xl text-base leading-7 text-muted-foreground">
             Explore the forecast while the notebook remains live behind the page.
@@ -98,10 +98,10 @@
             <iconify-icon icon="lucide:scan-search" aria-hidden="true"></iconify-icon>
             What the model says
           </h2>
-          <marimo-cell
+          <marimo-output
             class="min-w-0 [--marimo-cell-padding:0] [--marimo-cell-skeleton-height:8rem]"
-            name="summary"
-          ></marimo-cell>
+            value="summary"
+          ></marimo-output>
         </article>
 
         <article class="studio-card min-w-0 p-6 lg:col-span-3" aria-labelledby="table-title">
@@ -110,10 +110,10 @@
             <iconify-icon icon="lucide:table-2" aria-hidden="true"></iconify-icon>
             Projection by quarter
           </h2>
-          <marimo-cell
+          <marimo-output
             class="min-w-0 overflow-x-auto [--marimo-cell-padding:0] [--marimo-cell-skeleton-height:18rem]"
-            name="revenue_table"
-          ></marimo-cell>
+            value="revenue_table"
+          ></marimo-output>
         </article>
       </section>
     </main>
