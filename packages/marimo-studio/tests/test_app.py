@@ -26,6 +26,8 @@ from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.server.programmatic import programmatic_middleware
 from marimo_studio._server import dev
 from marimo_studio._server import middleware as studio_middleware
+from marimo_studio._server.agent_state import StudioAgentState
+from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._urls import authored_view_root_url
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
@@ -874,6 +876,7 @@ def test_presentation_revision_tracks_view_and_source_identity(
     for view in studio.views.values():
         os.utime(view.template, ns=(timestamp, timestamp))
     template = studio.views["dashboard"].template
+    stylesheet = studio.views["dashboard"].root / "app.css"
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         dashboard = client.get("/")
@@ -887,6 +890,8 @@ def test_presentation_revision_tracks_view_and_source_identity(
         os.utime(template, ns=(stat.st_atime_ns, stat.st_mtime_ns))
         edited_config = client.get("/_marimo-studio/views/dashboard/config").json()
         edited = client.get("/")
+        stylesheet.write_text("body { color: red; }", encoding="utf-8")
+        styled_config = client.get("/_marimo-studio/views/dashboard/config").json()
 
     dashboard_revision = dashboard.headers["Marimo-Studio-Revision"]
     edited_revision = edited.headers["Marimo-Studio-Revision"]
@@ -894,6 +899,7 @@ def test_presentation_revision_tracks_view_and_source_identity(
     assert executive.headers["Marimo-Studio-Revision"] != dashboard_revision
     assert edited_config["revision"] == edited_revision
     assert edited_revision != dashboard_revision
+    assert styled_config["revision"] != edited_revision
 
 
 def test_root_document_tracks_a_changed_default_view(notebook_path: Path) -> None:
@@ -1116,6 +1122,41 @@ def test_change_stream_classifies_live_source_edits(
     assert payloads[1]["files"][0]["revision"].startswith("sha256:")
     assert payloads[2]["files"] == []
     assert payloads[3]["files"] == []
+
+
+def test_change_stream_delivers_agent_view_activation(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    state = StudioAgentState()
+    native_sleep = asyncio.sleep
+
+    async def poll_immediately(_delay: float) -> None:
+        await native_sleep(0)
+
+    monkeypatch.setattr(dev.asyncio, "sleep", poll_immediately)
+    stopping = False
+
+    async def collect() -> tuple[bytes, bytes]:
+        nonlocal stopping
+        stream = dev.change_events(
+            studio,
+            stop_requested=lambda: stopping,
+            agent_state=state,
+        )
+        ready = await anext(stream)
+        state.activate("executive")
+        activated = await asyncio.wait_for(anext(stream), timeout=1)
+        stopping = True
+        with pytest.raises(StopAsyncIteration):
+            await asyncio.wait_for(anext(stream), timeout=1)
+        return ready, activated
+
+    ready, activated = asyncio.run(collect())
+
+    assert ready == b"event: ready\ndata: {}\n\n"
+    assert activated == (b'event: activate\ndata: {"schema":1,"view":"executive"}\n\n')
 
 
 def test_document_replay_requires_an_opted_in_manager_and_query() -> None:
@@ -1652,6 +1693,79 @@ def test_edit_workspace_creates_views_and_conditionally_updates_source(
     assert duplicate.json()["error"] == "view-exists"
     assert invalid.status_code == 400
     assert invalid.json()["error"] == "invalid-view-name"
+
+
+def test_edit_workspace_records_browser_readiness_and_requests_active_view(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
+    revision = NotebookPresentation(studio.notebook).snapshot("dashboard").revision
+
+    with TestClient(app) as client:
+        recorded = client.put(
+            "/_marimo-studio/views/dashboard/observation",
+            headers=headers,
+            json={
+                "schema": 1,
+                "view": "dashboard",
+                "runtime": "server",
+                "revision": revision,
+                "state": "error",
+                "diagnostics": [
+                    {
+                        "code": "missing-variable",
+                        "severity": "error",
+                        "message": "summary is unavailable.",
+                        "hint": "Restore summary in the notebook.",
+                        "view": "dashboard",
+                        "scope": "host",
+                        "target": "summary.total",
+                    }
+                ],
+            },
+        )
+        observed = client.get(
+            "/_marimo-studio/observations?view=dashboard&runtime=server"
+        )
+        activated = client.patch(
+            "/_marimo-studio/views/executive/activate",
+        )
+
+        template = studio.views["dashboard"].template
+        template.write_text(
+            template.read_text(encoding="utf-8") + "\n<!-- refreshed -->\n",
+            encoding="utf-8",
+        )
+        stale = client.get("/_marimo-studio/observations?view=dashboard&runtime=server")
+
+    assert recorded.status_code == 204
+    assert observed.json()["observations"] == [
+        {
+            "view": "dashboard",
+            "state": "error",
+            "runtime": "server",
+            "revision": revision,
+            "diagnostics": [
+                {
+                    "code": "missing-variable",
+                    "severity": "error",
+                    "message": "summary is unavailable.",
+                    "hint": "Restore summary in the notebook.",
+                    "view": "dashboard",
+                    "scope": "host",
+                    "target": "summary.total",
+                }
+            ],
+        }
+    ]
+    assert activated.status_code == 202
+    assert activated.json()["view"] == "executive"
+    assert activated.json()["state"] == "requested"
+    assert stale.json()["observations"][0]["state"] == "stale"
+    assert stale.json()["observations"][0]["diagnostics"] == []
 
 
 def test_view_deletion_removes_files_promotes_the_default_and_keeps_one_view(

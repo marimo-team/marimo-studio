@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 
 import {
   addWorkspaceView,
+  analyzeWorkspace,
   bindWorkspaceCell,
   checkWorkspace,
   dashboardCssPath,
@@ -350,4 +351,57 @@ test("creates a scaffolded view and removes its files", async ({ page }) => {
     previewFrame(page).getByRole("heading", { name: "Studio browser fixture" }),
   ).toBeVisible();
   expect(deletedViewRequests).toEqual([]);
+});
+
+test("activates an agent-requested view and records its rendered revision", async ({ page }) => {
+  await addWorkspaceView(workspaceNotebookPath, "qa-view");
+  await page.goto(studioEntryUrl);
+  await waitForPreview(page);
+  await expect(
+    previewFrame(page).getByRole("heading", { name: "Studio browser fixture" }),
+  ).toBeVisible();
+
+  const activated = await page.request.patch(
+    "/_marimo-studio/views/qa-view/activate?file=notebook.py",
+  );
+  expect(activated.status()).toBe(202);
+  await expect(page.getByLabel("Select or manage a view")).toContainText("qa-view");
+  await expect(previewFrame(page).getByRole("heading", { name: "Qa View" })).toBeVisible();
+
+  const observationUrl =
+    "/_marimo-studio/observations?file=notebook.py&view=qa-view&runtime=server";
+  const readObservation = async () => {
+    const response = await page.request.get(observationUrl);
+    expect(response.ok()).toBe(true);
+    const payload = (await response.json()) as {
+      observations: Array<{
+        diagnostics: unknown[];
+        revision?: string;
+        state: string;
+        view: string;
+      }>;
+    };
+    return payload.observations[0];
+  };
+  await expect.poll(async () => (await readObservation()).state).toBe("ready");
+  const first = await readObservation();
+  expect(first.view).toBe("qa-view");
+  expect(first.diagnostics).toEqual([]);
+
+  const stylesheet = resolve(
+    workspaceNotebookPath,
+    "../__marimo__/studio/notebook/qa-view/app.css",
+  );
+  const css = await readWorkspaceFile(stylesheet);
+  await writeWorkspaceFile(stylesheet, `${css}\nbody { --agent-revision: current; }\n`);
+  await expect
+    .poll(async () => {
+      const current = await readObservation();
+      return current.state === "ready" && current.revision !== first.revision;
+    })
+    .toBe(true);
+
+  const report = await analyzeWorkspace("qa-view");
+  expect(report.handoff_ready).toBe(true);
+  expect(report.actions).toEqual([]);
 });

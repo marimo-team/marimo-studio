@@ -130,13 +130,13 @@ view document so the browser evaluates its module graph again.
 ## Work with coding agents
 
 The `marimo_studio.agents` module exposes a bounded view-authoring workflow. An
-agent can inspect the saved notebook graph, create a named view, bind a stable
-cell reference, edit ordinary web files, and validate the resulting
-projections. Transformations, metric definitions, and domain rules remain in
-notebook cells where a person can inspect and run them.
+agent can inspect the saved notebook graph, create and activate a named view,
+bind a stable cell reference, edit ordinary web files, and repair source,
+runtime, and rendered browser errors. Transformations, metric definitions, and
+domain rules remain in notebook cells where a person can inspect and run them.
 
 [Work with coding agents](guide/coding-agents.md) develops the complete
-inspect, create, edit, and check loop.
+inspect, create, activate, edit, analyze, and repair loop.
 
 ## Choose where the notebook runs
 

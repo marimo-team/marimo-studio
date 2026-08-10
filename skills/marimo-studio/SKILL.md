@@ -4,17 +4,22 @@ description: >-
   Turn Marimo notebooks into custom web pages for dashboards, reports, and
   focused tools. Use when an agent needs to inspect a notebook, create or edit
   named HTML and CSS pages, show live cell outputs or Python values, add
-  browser behavior, maintain several pages backed by one notebook, validate
-  them, serve them through Marimo, or export a page that runs in WebAssembly.
+  browser behavior, activate a view in the open workspace, analyze rendered
+  errors, maintain several pages backed by one notebook, serve them through
+  Marimo, or export a page that runs in WebAssembly.
 ---
 
 # Build custom pages from Marimo notebooks
 
 Marimo Studio lets one notebook power dashboards, reports, and focused tools.
-Keep calculations, data access, controls, plots, tables, downloads, and
-anywidgets in notebook cells. Choose what an audience sees and arrange it with
-HTML, CSS, and optional JavaScript. Marimo keeps the page connected to the
-running notebook, so controls and dependent outputs continue to update.
+Keep computation, analytical context, data access, domain rules, reactive
+controls, and reusable rich outputs in notebook cells. Put page structure,
+display copy, responsive layout, and presentation styling in the Studio view.
+Use Wind4 utilities in `index.html` for regular presentation. They follow the
+UnoCSS Wind4 vocabulary and Tailwind 4 syntax. Put theme tokens, custom
+keyframes, and CSS rules that utilities cannot express in `app.css`. Marimo
+keeps the page connected to the running notebook, so controls and dependent
+outputs continue to update.
 
 A **custom view** is one named web page backed by a notebook. Studio uses the
 word `view` in its commands. Each custom view has its own `index.html` and
@@ -23,30 +28,38 @@ state.
 
 ## Terms
 
-| Term               | Meaning                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------- |
-| Notebook           | The Marimo `.py` file that owns Python code, data, controls, and displayed outputs    |
-| Custom view        | A named HTML and CSS page that shows selected notebook content                        |
-| Cell name          | A native Marimo cell name or a saved Studio name for an unnamed cell                  |
-| Value reference    | A Python variable selector used by `mo-value` or `<marimo-output>`                    |
-| Server preview     | A custom view connected to the active Python kernel while developing or serving       |
-| WebAssembly export | A static directory where the notebook runs in the browser                             |
-| Static check       | Validation that reads and compiles saved files without executing notebook code        |
-| Runtime check      | Validation that executes the notebook and checks the actual outputs and Python values |
+| Term                | Meaning                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| Notebook            | The Marimo `.py` file that owns Python code, data, controls, and displayed outputs    |
+| Custom view         | A named HTML and CSS page that shows selected notebook content                        |
+| Cell name           | A native Marimo cell name or a saved Studio name for an unnamed cell                  |
+| Value reference     | A Python variable selector used by `mo-value` or `<marimo-output>`                    |
+| Server preview      | A custom view connected to the active Python kernel while developing or serving       |
+| WebAssembly export  | A static directory where the notebook runs in the browser                             |
+| Static check        | Validation that reads and compiles saved files without executing notebook code        |
+| Runtime check       | Validation that executes the notebook and checks the actual outputs and Python values |
+| Browser observation | Revision-aware readiness and diagnostics reported by the rendered Studio view         |
+| Analysis report     | Static, runtime, and browser evidence with an ordered repair queue                    |
 
 ## Workflow
 
 1. Inspect the notebook and existing custom views.
 2. Create or select one named view.
-3. Decide which complete cells, rich objects, and Python values the audience needs.
-4. Edit the view's `index.html`, `app.css`, and optional relative files.
-5. Develop beside the running notebook in `marimo edit`.
-6. Run the static check, then the runtime check.
-7. Serve the notebook through `marimo run` or export one view for WebAssembly.
+3. Activate that view in the open Studio workspace.
+4. Decide which complete cells, rich objects, and Python values the audience needs.
+5. Edit the view's `index.html`, `app.css`, and optional relative files.
+6. Analyze the view and treat its actions as the repair queue.
+7. Repeat until static, runtime, and current rendered browser evidence pass.
+8. Hand off, serve, or export the view only when the analysis is handoff-ready.
 
-## Keep Python work in the notebook
+## Keep analytical work in the notebook
 
-- Keep notebook cell bodies unchanged unless the user requests notebook work.
+- Keep notebook cells focused on computation, analytical context, data access,
+  domain rules, reactive controls, and reusable rich outputs.
+- Keep page structure, display wording, responsive layout, and styling in the
+  Studio view files.
+- Do not inject page HTML, layout wrappers, CSS strings, or presentation-only
+  formatting into notebook cells when `index.html` or `app.css` can own it.
 - Read existing view files completely before editing them. The browser,
   another agent, or an external editor may have changed them.
 - Use an existing Marimo cell name when it clearly identifies the output.
@@ -129,6 +142,21 @@ wording, content, or tasks:
 marimo-studio view add analysis.py --name report --format json
 marimo-studio view add analysis.py --name operations --format json
 ```
+
+From Marimo code mode, create and activate a view through the Python API:
+
+```python
+import marimo._code_mode as cm
+import marimo_studio.agents as studio
+
+ctx = cm.get_context()
+setup = studio.ensure_view(ctx, "report")
+await studio.activate_view(ctx, setup.name)
+```
+
+Use `activate_view` after creating a view and whenever the repair loop changes
+to another view. It selects the view through Studio's normal transition and
+does not rewrite the configured default.
 
 ## 3. Choose what the page shows
 
@@ -230,9 +258,12 @@ element:
 </html>
 ```
 
-Studio provides classes for responsive grids, spacing, typography, colors, and
-borders. The stable shortcuts `studio-view`, `studio-card`, `studio-button`,
-and `studio-eyebrow` use the colors and dimensions defined in `app.css`.
+Studio provides Wind4 classes for responsive grids, spacing, typography,
+colors, borders, and state variants. Write them with Tailwind 4 syntax in
+`index.html`. The stable shortcuts `studio-view`, `studio-card`,
+`studio-button`, and `studio-eyebrow` use the colors and dimensions defined in
+`app.css`. Keep custom keyframes and rules that need the CSS cascade in
+`app.css`.
 
 Keep headings in order, label controls, preserve visible keyboard focus, and
 let wide tables and plots shrink or scroll inside their section.
@@ -334,9 +365,36 @@ new module.
 After each change, confirm that controls, tables, plots, downloads, and
 anywidgets still respond and that notebook edits update dependent content.
 
-## 8. Validate and repair
+## 8. Analyze and repair
 
-Run the static check after editing the notebook or view files:
+From Marimo code mode, run the complete analysis after editing the notebook or
+view files:
+
+```python
+report = await studio.analyze(ctx, view_name=setup.name)
+for action in report.actions:
+    print(action.stage, action.code, action.advice)
+```
+
+The analysis runs static validation, isolated runtime validation, and a
+revision-aware browser check against the running Studio view. The report
+contains every stage and an `actions` repair queue. Save the relevant source,
+rerun the analysis, and continue until `report.handoff_ready` is true.
+
+Run the same gate from the command line:
+
+```console
+MARIMO_STUDIO_SERVER_URL=http://localhost:2718 \
+MARIMO_STUDIO_ACCESS_TOKEN="$STUDIO_TOKEN" \
+marimo-studio analyze analysis.py \
+  --view dashboard \
+  --format json \
+  --diagnostics jsonl
+```
+
+Without a server URL, `analyze` still returns static and runtime results. It
+reports `browser-not-observed`, sets `handoff_ready` to false, and exits with
+code 1. Use `check` when a static-only diagnostic is explicitly requested:
 
 ```console
 marimo-studio check analysis.py \
@@ -345,23 +403,10 @@ marimo-studio check analysis.py \
   --diagnostics jsonl
 ```
 
-The static check reads and compiles the saved notebook and view files. It
-checks cell names, value references, HTML structure, view configuration, and
-packaged browser files. It does not execute notebook code.
-
-Run the runtime check before sharing or exporting:
-
-```console
-marimo-studio check analysis.py \
-  --view dashboard \
-  --runtime \
-  --format json \
-  --diagnostics jsonl
-```
-
-The runtime check executes the notebook and verifies the actual cell outputs
-and Python values used by the selected view. Each diagnostic includes the view,
-the failing reference, its source location, and a repair hint.
+Analysis executes the notebook and can perform its configured file, network,
+database, and data access. Run it in the notebook environment. Each diagnostic
+includes the stage and available view, target, source location, and repair
+advice.
 
 | Problem                               | Repair                                                    |
 | ------------------------------------- | --------------------------------------------------------- |
@@ -371,8 +416,9 @@ the failing reference, its source location, and a repair hint.
 | Python value fails during execution   | Inspect the cell that defines it and its current output   |
 | The notebook has no custom view files | Create the configured default view                        |
 
-Use the diagnostics as a repair queue. Fix one cause, rerun the same command,
-and continue until no result has `status: "fail"`.
+Use `actions` as the repair queue. Fix one cause, rerun the same analysis, and
+continue until `handoff_ready` is true. A successful static or runtime stage
+does not prove that the current browser read the saved view revision.
 
 Inspect the running page after both commands pass:
 
@@ -421,8 +467,8 @@ Report:
 - the HTML, CSS, JavaScript, and relative asset files changed
 - the cell names and Python value references used by each view
 - any inline notebook configuration or saved cell names added
-- the static and runtime check results
+- the static, runtime, and browser analysis results
 - the interactions, loading states, widths, and color modes inspected
 
-Leave the notebook and every changed custom view runnable with no failing
-checks.
+Hand off only when every changed view has `handoff_ready: true`. Leave the
+notebook and each changed custom view runnable with no errors.

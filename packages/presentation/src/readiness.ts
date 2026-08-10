@@ -1,5 +1,6 @@
 import type {
   ViewErrorMessage,
+  ViewObservationMessage,
   ViewReadyMessage,
   ViewSyncPendingMessage,
 } from "@marimo-studio/protocol/preview-messages";
@@ -53,6 +54,7 @@ let settled = false;
 let pageState: PageReadinessState = "connecting";
 let observer: MutationObserver | undefined;
 let readinessGeneration = 0;
+let observationSignature = "";
 
 const runtimeView = (): string => {
   if (hasRuntimeConfig()) {
@@ -174,6 +176,24 @@ const evaluate = () => {
     };
     globalThis.parent.postMessage(message, globalThis.location.origin);
   }
+  if (nextSettled && (next === "ready" || next === "error")) {
+    const observedDiagnostics = diagnostics();
+    const message: ViewObservationMessage = {
+      type: "marimo-studio:view-observation",
+      runtime: hasRuntimeConfig()
+        ? getRuntimeConfig().runtime.id
+        : requestedRuntimeId(getMountConfig().runtime),
+      view: runtimeView(),
+      revision: hasRuntimeConfig() ? getRuntimeConfig().revision : getMountConfig().revision,
+      state: next,
+      diagnostics: [...observedDiagnostics],
+    };
+    const signature = JSON.stringify(message);
+    if (signature !== observationSignature) {
+      observationSignature = signature;
+      globalThis.parent.postMessage(message, globalThis.location.origin);
+    }
+  }
   pageState = next;
   settled = nextSettled;
 };
@@ -237,7 +257,7 @@ const diagnostics = (): readonly StudioDiagnostic[] => {
   const configuredKeys = new Set(
     configured.map((diagnostic) => `${diagnostic.code}\u0000${diagnostic.target}`),
   );
-  const view = hasRuntimeConfig() ? getRuntimeConfig().view : "";
+  const view = runtimeView();
   const hostDiagnostics = Array.from(
     document.querySelectorAll<HTMLElement>("[data-marimo-diagnostic-code]"),
   ).flatMap((host): HostDiagnostic[] => {
@@ -273,6 +293,7 @@ const diagnostics = (): readonly StudioDiagnostic[] => {
 };
 
 export const startReadiness = (updateQuery: (query: string) => Promise<void>) => {
+  observationSignature = "";
   document.documentElement.dataset.marimoStudioState = "connecting";
   globalThis.marimoStudio = {
     ready: () => {
@@ -297,6 +318,7 @@ export const stopReadiness = () => {
   readinessGeneration += 1;
   observer?.disconnect();
   observer = undefined;
+  observationSignature = "";
 };
 
 declare global {

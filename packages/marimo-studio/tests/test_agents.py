@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 from importlib.metadata import distribution
 from types import SimpleNamespace
 
 import pytest
 
 import marimo_studio.agents as studio_agents
+from marimo_studio._agent_client import StudioServerConnection
+from marimo_studio.types import BrowserObservation, CheckResult, ViewActivationResult
 
 
 def test_agent_capability_discovers_its_instruction_module() -> None:
@@ -41,3 +44,91 @@ def test_agent_operations_require_a_saved_notebook() -> None:
 
     with pytest.raises(RuntimeError, match="Save the active notebook"):
         studio_agents.notebook_path(context)
+
+
+def test_agent_analysis_reads_rendered_browser_evidence(
+    notebook_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = SimpleNamespace(globals={"__file__": str(notebook_path)})
+    studio_agents.ensure_view(context, "dashboard")
+    connection = StudioServerConnection("http://localhost:2718")
+    monkeypatch.setattr(
+        "marimo_studio._compat.code_mode.code_mode_connection",
+        lambda: connection,
+    )
+
+    async def runtime(*_args, **_kwargs):
+        return (CheckResult("runtime", "pass", "Notebook run completed"),)
+
+    async def observe(_connection, _notebook, views, **_kwargs):
+        return tuple(
+            BrowserObservation(
+                view=view,
+                runtime="server",
+                revision="revision-1",
+                state="ready",
+            )
+            for view in views
+        )
+
+    monkeypatch.setattr("marimo_studio.analysis.check_runtime_studio", runtime)
+    monkeypatch.setattr(
+        "marimo_studio._agent_client.observe_browser_views",
+        observe,
+    )
+
+    report = asyncio.run(studio_agents.analyze(context, view_name="dashboard"))
+
+    assert report.handoff_ready is True
+    assert report.browser_observations[0].state == "ready"
+
+
+def test_agent_analysis_reports_a_missing_live_browser(
+    notebook_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = SimpleNamespace(globals={"__file__": str(notebook_path)})
+    studio_agents.ensure_view(context, "dashboard")
+
+    async def runtime(*_args, **_kwargs):
+        return (CheckResult("runtime", "pass", "Notebook run completed"),)
+
+    monkeypatch.setattr("marimo_studio.analysis.check_runtime_studio", runtime)
+
+    report = asyncio.run(studio_agents.analyze(context, view_name="dashboard"))
+
+    assert report.handoff_ready is False
+    assert report.browser_observations[0].state == "not-observed"
+    assert report.actions[-1].code == "browser-not-observed"
+
+
+def test_agent_can_request_the_active_studio_view(
+    notebook_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = SimpleNamespace(globals={"__file__": str(notebook_path)})
+    studio_agents.ensure_view(context, "dashboard")
+    connection = StudioServerConnection("http://localhost:2718")
+    monkeypatch.setattr(
+        "marimo_studio._compat.code_mode.code_mode_connection",
+        lambda: connection,
+    )
+
+    async def activate(_connection, notebook, view):
+        return ViewActivationResult(
+            notebook=notebook,
+            view=view,
+            state="requested",
+            generation=2,
+        )
+
+    monkeypatch.setattr(
+        "marimo_studio._agent_client.request_view_activation",
+        activate,
+    )
+
+    result = asyncio.run(studio_agents.activate_view(context, "dashboard"))
+
+    assert result.view == "dashboard"
+    assert result.state == "requested"

@@ -28,8 +28,10 @@ class EventSourceStub {
     this.listeners.set(type, listener);
   }
 
-  emit(type: string): void {
-    this.listeners.get(type)?.(new Event(type));
+  emit(type: string, data?: string): void {
+    this.listeners.get(type)?.(
+      data === undefined ? new Event(type) : new MessageEvent(type, { data }),
+    );
   }
 
   close(): void {}
@@ -132,6 +134,36 @@ describe("controller lifecycle", () => {
     await Promise.resolve();
 
     expect(select).not.toHaveBeenCalled();
+  });
+
+  it("selects an agent-requested view through the normal transition", async () => {
+    const select = vi.fn(async () => true);
+    const remote: ViewRemote = {
+      list: vi.fn(async () => ({
+        schema: 1 as const,
+        default_view: "dashboard",
+        views: ["dashboard", "report"],
+      })),
+      create: vi.fn(),
+      remove: vi.fn(),
+    };
+    const controller = new ViewController(
+      "dashboard",
+      ["dashboard"],
+      remote,
+      "/events",
+      select,
+      vi.fn(async () => true),
+      vi.fn(),
+    );
+    controller.start();
+
+    EventSourceStub.latest?.emit("activate", JSON.stringify({ schema: 1, view: "report" }));
+    await vi.waitFor(() => expect(controller.getSnapshot().current).toBe("report"));
+
+    expect(remote.list).toHaveBeenCalledOnce();
+    expect(select).toHaveBeenCalledWith("report", "preserve");
+    controller.dispose();
   });
 
   it("retargets the active view before deleting its files", async () => {

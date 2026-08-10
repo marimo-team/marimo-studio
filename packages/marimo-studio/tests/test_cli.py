@@ -355,6 +355,57 @@ def test_check_emits_structured_diagnostics(
     )
 
 
+def test_analyze_returns_the_agent_handoff_contract(
+    notebook_path: Path,
+    runtime_assets: Path,
+) -> None:
+    ensure_view(notebook_path)
+
+    result = _run_cli(
+        runtime_assets,
+        "analyze",
+        str(notebook_path),
+        "--view",
+        "dashboard",
+        "--format",
+        "json",
+    )
+
+    assert result.returncode == 1, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["schema"] == 1
+    assert payload["views"] == ["dashboard"]
+    assert payload["ok"] is True
+    assert payload["handoff_ready"] is False
+    assert payload["stages"]["static"]["status"] == "pass"
+    assert payload["stages"]["runtime"]["status"] == "pass"
+    assert payload["stages"]["browser"] == {
+        "required": True,
+        "status": "not-observed",
+        "observations": [
+            {
+                "view": "dashboard",
+                "state": "not-observed",
+                "diagnostics": [],
+                "message": "No rendered browser observation was requested.",
+            }
+        ],
+    }
+    assert payload["actions"] == [
+        {
+            "stage": "browser",
+            "severity": "error",
+            "code": "browser-not-observed",
+            "message": "No rendered browser observation was requested.",
+            "advice": (
+                "Open and authenticate Studio for this notebook, select the view, "
+                "wait for it to settle, then rerun the analysis."
+            ),
+            "view": "dashboard",
+        }
+    ]
+
+
 def test_structured_diagnostics_group_multiline_process_output(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

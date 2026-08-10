@@ -109,12 +109,13 @@ classes.
 ## Work with people and coding agents
 
 View source stays in ordinary web files beside the notebook. A coding agent can
-inspect the saved notebook graph, create a view, bind a stable cell name, edit
-the view files, and validate every projection. Metric definitions,
-transformations, and domain rules remain visible in notebook cells for review.
+inspect the saved notebook graph, create and activate a view, bind a stable
+cell name, edit the view files, and analyze source, runtime, and rendered
+browser errors. Metric definitions, transformations, and domain rules remain
+visible in notebook cells for review.
 
 [Work with coding agents](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
-documents the inspect, create, edit, and check loop.
+documents the inspect, create, activate, edit, and repair loop.
 
 ## Choose a runtime
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, test } from "vite-plus/test";
+import { afterEach, test, vi } from "vite-plus/test";
 
 import {
   pageReadinessState,
@@ -68,6 +68,51 @@ test("a stale value opens a new idle batch while its snapshot remains visible", 
   source.dataset.state = "ready";
   await ready;
   assert.equal(idleEvents, initialEvents + 1);
+});
+
+test("a settled page publishes actionable browser evidence", async () => {
+  document.body.innerHTML = `
+    <span
+      mo-value="summary.total"
+      data-state="error"
+      data-marimo-diagnostic-code="missing-variable"
+      data-marimo-diagnostic-message="summary is unavailable."
+      data-marimo-diagnostic-hint="Restore summary in the notebook."
+    ></span>
+  `;
+  const postMessage = vi.spyOn(globalThis.parent, "postMessage");
+  startReadiness(async () => {});
+  setRuntimeConnectionState("ready");
+  await settleMutations();
+
+  const observation = postMessage.mock.calls
+    .map(([message]) => message)
+    .find(
+      (message) =>
+        typeof message === "object" &&
+        message !== null &&
+        "type" in message &&
+        message.type === "marimo-studio:view-observation",
+    );
+
+  assert.deepEqual(observation, {
+    type: "marimo-studio:view-observation",
+    runtime: "server",
+    view: "dashboard",
+    revision: "presentation-revision",
+    state: "error",
+    diagnostics: [
+      {
+        scope: "host",
+        code: "missing-variable",
+        severity: "error",
+        message: "summary is unavailable.",
+        hint: "Restore summary in the notebook.",
+        view: "dashboard",
+        target: "summary.total",
+      },
+    ],
+  });
 });
 
 test("value cell phases follow the defining Marimo cell", () => {

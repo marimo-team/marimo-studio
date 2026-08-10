@@ -1,6 +1,6 @@
 ---
 title: Agent API reference
-description: Inspect the active notebook, create views, bind cell aliases, and validate projections from Marimo code mode.
+description: Inspect the active notebook, create and activate views, and analyze source, runtime, and rendered browser state from Marimo code mode.
 ---
 
 # Agent API reference
@@ -15,11 +15,20 @@ import marimo_studio.agents as studio
 ctx = cm.get_context()
 notebook = studio.inspect(ctx, include_code=True)
 view = studio.ensure_view(ctx, "dashboard")
+await studio.activate_view(ctx, view.name)
+report = await studio.analyze(ctx, view_name=view.name)
 ```
 
 ::: info Saved notebook required
 The active notebook must be saved before these functions resolve its path.
 :::
+
+Keep computation, analytical context, data access, domain rules, reactive
+controls, and reusable rich outputs in notebook cells. Keep page structure,
+display copy, responsive layout, and presentation styling in the view files.
+Use Wind4 utility classes in `index.html`. They follow the UnoCSS Wind4
+vocabulary and Tailwind 4 syntax. Put custom keyframes and CSS rules in
+`app.css`.
 
 ## `notebook_path(context)`
 
@@ -112,6 +121,86 @@ view. Each `CheckResult.status` is `pass`, `warn`, or `fail`.
 results = studio.check(ctx, view_name="dashboard")
 failures = [result for result in results if result.status == "fail"]
 ```
+
+## `activate_view(context, name)`
+
+```python
+async def activate_view(
+    context: object,
+    name: str,
+) -> ViewActivationResult: ...
+```
+
+Requests that connected Studio workspaces select `name`. Studio uses the same
+view transition as its own selector, which preserves the workspace layout and
+checks current source edits before changing views.
+
+The returned `ViewActivationResult` contains the notebook path, view name,
+`state="requested"`, and a monotonically increasing request generation. The
+result confirms that the server accepted the request. Call `analyze` for the
+same view to confirm that the browser loaded and read the current source
+revision.
+
+Raises:
+
+- `ConfigurationError` when `name` is not configured for the notebook.
+- `ProtocolError` when code mode has no live Studio connection, the server is
+  unavailable, or the server is attached to another notebook.
+
+## `analyze(context, *, view_name=None, timeout=10.0, require_browser=True)`
+
+```python
+async def analyze(
+    context: object,
+    *,
+    view_name: str | None = None,
+    timeout: float = 10.0,
+    require_browser: bool = True,
+) -> AnalysisReport: ...
+```
+
+Runs the complete agent handoff gate:
+
+1. Static validation checks the notebook graph, view documents, projection
+   references, and packaged browser assets.
+2. Runtime validation executes the notebook in an isolated process and reads
+   each projected cell and Python value.
+3. Browser validation waits for Studio to report `ready` or `error` for the
+   current saved view revision.
+
+Static failures skip runtime validation. Browser evidence is revision-aware,
+so a report recorded before the latest HTML or CSS save has state `stale`.
+Pass one `view_name` after activating it for a focused repair loop. When the
+name is absent, every configured view is included and each one needs current
+browser evidence.
+
+`AnalysisReport.to_dict()` returns the stable schema used by the CLI. It
+contains `stages.static`, `stages.runtime`, `stages.browser`, and an `actions`
+repair queue. Each action identifies its stage, severity, code, message,
+advice, and available view, target, or source location.
+
+- `report.ok` is true when no validation stage reports an error.
+- `report.handoff_ready` is true when runtime validation completed, no stage
+  reports an error, and every required rendered view is `ready` at the current
+  revision.
+
+Keep `require_browser=True` for agent handoff. Setting it to false limits the
+gate to deterministic source and runtime evidence.
+
+```python
+while True:
+    report = await studio.analyze(ctx, view_name="dashboard")
+    if report.handoff_ready:
+        break
+    for action in report.actions:
+        print(action.stage, action.advice)
+    # Apply the repairs, save the affected files, and run the loop again.
+```
+
+::: warning Analysis executes notebook code
+Runtime analysis can perform the notebook's configured file, network,
+database, and data access. Run it in the notebook environment.
+:::
 
 Use the [coding-agent guide](../guide/coding-agents.md) for the complete
 authoring workflow. Use the [CLI reference](cli.md) when the agent works

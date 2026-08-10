@@ -11,8 +11,8 @@ events, errors, side effects, and lifecycle behavior.
 | Need                                                                 | Reference                                  |
 | -------------------------------------------------------------------- | ------------------------------------------ |
 | Author HTML projections, browser modules, loading states, and styles | [View document API](view-document.md)      |
-| Inspect, create, bind, and validate through Marimo code mode         | [Agent API](agent-api.md)                  |
-| Inspect, create, bind, validate, or export from the terminal         | [CLI](cli.md)                              |
+| Inspect, activate, and analyze views through Marimo code mode        | [Agent API](agent-api.md)                  |
+| Inspect, create, analyze, or export from the terminal                | [CLI](cli.md)                              |
 | Configure views, runtimes, sessions, logs, and aliases               | [Notebook configuration](configuration.md) |
 | Compare server, browser, and static execution                        | [Runtime behavior](runtimes.md)            |
 | Inspect notebook structure or compose a run-mode ASGI application    | [Python API](python-api.md)                |

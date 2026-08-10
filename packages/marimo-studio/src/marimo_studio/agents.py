@@ -1,10 +1,11 @@
 """Turn the active Marimo notebook into a custom web page.
 
 Marimo Studio lets one notebook power dashboards, reports, and focused tools.
-Calculations, data, controls, plots, tables, downloads, and anywidgets remain in
-notebook cells. A custom view chooses what to show and arranges it with HTML and
-CSS. Marimo keeps the page connected to the running notebook, so controls and
-dependent outputs continue to update.
+Keep notebook cells focused on computation, analytical context, data access,
+domain rules, controls, and reusable rich outputs. Put page structure, display
+copy, responsive layout, and visual styling in the Studio view. Use Wind4
+utility classes in ``index.html`` for ordinary presentation. Put custom
+keyframes and CSS rules that utilities cannot express in ``app.css``.
 
 One notebook can have several named views for different audiences. Each view
 has its own ``index.html`` and ``app.css`` while sharing the notebook's Python
@@ -31,9 +32,8 @@ The two editable files are stored in ``setup.root``:
     css_path = setup.root / "app.css"
 
 Read the current files before changing them so edits from the browser or
-another editor are preserved. Keep Python calculations in notebook cells and
-page structure, wording, and styling in these files. ``index.html`` is a
-complete HTML document with one ``#app-shell`` element.
+another editor are preserved. ``index.html`` is a complete HTML document with
+one ``#app-shell`` element.
 
 Place a notebook cell's complete output in the page with ``<marimo-cell>``.
 Render one Python object's native Marimo representation with
@@ -53,7 +53,23 @@ reference by binding a name to its zero-based notebook position:
 
     studio.bind(ctx, "revenue-chart", 4)
 
-Check the custom page after editing its HTML or CSS:
+Select a newly created view in the open Studio workspace:
+
+    await studio.activate_view(ctx, "dashboard")
+
+Analyze the custom page after editing its HTML or CSS:
+
+    report = await studio.analyze(ctx, view_name="dashboard")
+    if not report.handoff_ready:
+        for action in report.actions:
+            print(action.advice)
+
+``studio.analyze`` runs static and isolated runtime validation, then reads the
+current rendered-view observation from the Studio browser. Fix every error and
+rerun it. Hand off the view only when ``report.handoff_ready`` is true.
+
+Use the lower-level static check when notebook execution is intentionally out
+of scope:
 
     results = studio.check(ctx, view_name="dashboard")
     failures = [result for result in results if result.status == "fail"]
@@ -71,7 +87,12 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from marimo_studio._workspace.models import BindingResult, ViewSetupResult
-    from marimo_studio.types import CheckResult, NotebookSpec
+    from marimo_studio.types import (
+        AnalysisReport,
+        CheckResult,
+        NotebookSpec,
+        ViewActivationResult,
+    )
 
 
 def notebook_path(context: object) -> Path:
@@ -175,4 +196,104 @@ def check(
     )
 
 
-__all__ = ["bind", "check", "ensure_view", "inspect", "notebook_path"]
+async def analyze(
+    context: object,
+    *,
+    view_name: str | None = None,
+    timeout: float = 10.0,
+    require_browser: bool = True,
+) -> AnalysisReport:
+    """Validate view sources, notebook projections, and rendered readiness.
+
+    The default analyzes every configured view and requires current browser
+    evidence before ``handoff_ready`` can be true. Pass ``view_name`` after
+    activating one view to get a focused repair queue. ``timeout`` controls how
+    long Studio waits for the browser to report the saved view revision.
+    """
+    from marimo_studio._agent_client import observe_browser_views
+    from marimo_studio._compat.code_mode import code_mode_connection
+    from marimo_studio._workspace import load_studio
+    from marimo_studio.analysis import analyze_studio
+    from marimo_studio.errors import ProtocolError
+    from marimo_studio.types import BrowserObservation
+
+    workspace = load_studio(notebook_path(context))
+    try:
+        connection = code_mode_connection()
+    except ProtocolError as error:
+        unavailable = str(error)
+
+        async def observe_unavailable(
+            _workspace: object,
+            views: tuple[str, ...],
+        ) -> tuple[BrowserObservation, ...]:
+            return tuple(
+                BrowserObservation(
+                    view=view,
+                    state="not-observed",
+                    message=unavailable,
+                )
+                for view in views
+            )
+
+        observer = observe_unavailable
+    else:
+
+        async def observe_live(
+            _workspace: object,
+            views: tuple[str, ...],
+        ) -> tuple[BrowserObservation, ...]:
+            return await observe_browser_views(
+                connection,
+                workspace.notebook,
+                views,
+                runtime=workspace.default_runtime,
+                timeout=timeout,
+            )
+
+        observer = observe_live
+
+    return await analyze_studio(
+        workspace,
+        view_name=view_name,
+        observe_browser=observer,
+        require_browser=require_browser,
+    )
+
+
+async def activate_view(
+    context: object,
+    name: str,
+) -> ViewActivationResult:
+    """Select a named view in connected Studio workspaces.
+
+    The request uses Studio's normal view transition, which preserves the
+    current workspace layout and protects unsaved source edits.
+    """
+    from marimo_studio._agent_client import request_view_activation
+    from marimo_studio._compat.code_mode import code_mode_connection
+    from marimo_studio._workspace import load_studio
+    from marimo_studio.errors import ConfigurationError
+
+    workspace = load_studio(notebook_path(context))
+    if name not in workspace.views:
+        available = ", ".join(workspace.views)
+        raise ConfigurationError(
+            f"Unknown view {name!r}. Available views: {available}."
+        )
+    return await request_view_activation(
+        code_mode_connection(),
+        workspace.notebook,
+        name,
+    )
+
+
+__all__ = [
+    "activate_view",
+    "analyze",
+    "bind",
+    "check",
+    "ensure_view",
+    "inspect",
+    "notebook_path",
+]

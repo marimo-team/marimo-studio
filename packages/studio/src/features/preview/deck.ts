@@ -1,4 +1,5 @@
 import type { ControlFrameConnector } from "./control-sync.ts";
+import type { RecordBrowserObservation } from "./observation-remote.ts";
 
 import { PreviewController, type PreviewFrameState } from "./controller.ts";
 import { installEditorOutlineGuard } from "./editor-outline.ts";
@@ -14,6 +15,7 @@ interface PreviewDeckOptions {
   syncQuery: (query: string) => void;
   syncEditorQuery: (query: string, signal: AbortSignal) => Promise<void>;
   navigate: (view: string) => void;
+  recordObservation?: RecordBrowserObservation;
   connectControlFrame?: ControlFrameConnector;
 }
 
@@ -152,6 +154,7 @@ export class PreviewDeck {
       this.options.syncEditorQuery,
       this.options.navigate,
       (state) => this.receive(runtime, state),
+      this.options.recordObservation,
       this.options.connectControlFrame,
     );
     this.previews.set(runtime, controller);

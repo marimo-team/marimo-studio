@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./browser-observations": "./src/browser-observations.ts",
     "./development-events": "./src/development-events.ts",
     "./errors": "./src/errors.ts",
     "./output-read": "./src/output-read.ts",

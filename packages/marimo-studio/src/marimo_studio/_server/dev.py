@@ -9,6 +9,7 @@ import time
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
+from marimo_studio._server.agent_state import StudioAgentState
 from marimo_studio._workspace.metadata import notebook_config
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.sources import read_source
@@ -116,16 +117,29 @@ async def change_events(
     studio: StudioWorkspace,
     view_name: str | None = None,
     stop_requested: Callable[[], bool] | None = None,
+    agent_state: StudioAgentState | None = None,
 ) -> AsyncIterator[bytes]:
     """Yield filesystem events until the client disconnects or shutdown begins."""
     should_stop = stop_requested or (lambda: False)
     stamps = _file_stamps(studio)
+    activation_generation = (
+        agent_state.activation().generation if agent_state is not None else 0
+    )
     yield b"event: ready\ndata: {}\n\n"
     last_heartbeat = time.monotonic()
     while not should_stop():
         await asyncio.sleep(0.25)
         if should_stop():
             return
+        if agent_state is not None:
+            activation = agent_state.activation()
+            if activation.generation != activation_generation:
+                activation_generation = activation.generation
+                payload = json.dumps(
+                    {"schema": 1, "view": activation.view},
+                    separators=(",", ":"),
+                )
+                yield f"event: activate\ndata: {payload}\n\n".encode()
         current = _file_stamps(studio)
         changed = {
             path for path, stamp in current.items() if stamps.get(path) != stamp

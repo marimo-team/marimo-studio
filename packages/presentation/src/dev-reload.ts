@@ -195,6 +195,7 @@ const reload = (kind: ShellChangeKind, resetBackoff = true) => {
     activeConfigRefresh?.abort();
     const generation = beginRefresh();
     void refreshStylesheets()
+      .then(refreshRuntimeConfig)
       .then(() => completeRefresh(generation))
       .catch((error: unknown) => {
         handleRefreshError(error, kind, generation);

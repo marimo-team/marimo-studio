@@ -20,6 +20,44 @@ test("preview messages decode navigation and view state", () => {
   );
   assert.deepEqual(
     parsePreviewMessage({
+      type: "marimo-studio:view-observation",
+      runtime: "server",
+      view: "dashboard",
+      revision: "presentation-v2",
+      state: "error",
+      diagnostics: [
+        {
+          code: "missing-variable",
+          severity: "error",
+          message: "summary is unavailable.",
+          hint: "Restore summary in the notebook.",
+          view: "dashboard",
+          scope: "host",
+          target: "summary",
+        },
+      ],
+    }),
+    {
+      type: "marimo-studio:view-observation",
+      runtime: "server",
+      view: "dashboard",
+      revision: "presentation-v2",
+      state: "error",
+      diagnostics: [
+        {
+          code: "missing-variable",
+          severity: "error",
+          message: "summary is unavailable.",
+          hint: "Restore summary in the notebook.",
+          view: "dashboard",
+          scope: "host",
+          target: "summary",
+        },
+      ],
+    },
+  );
+  assert.deepEqual(
+    parsePreviewMessage({
       type: "marimo-studio:navigate-view",
       runtime: "wasm",
       view: "report",

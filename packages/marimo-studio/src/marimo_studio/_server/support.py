@@ -37,6 +37,9 @@ from marimo_studio._server.files import file_response
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._server.studio_api import (
+    activate_view_response,
+    browser_observation_response,
+    browser_observations_response,
     create_view_response,
     delete_view_response,
     source_response,
@@ -100,7 +103,9 @@ async def support_response(
             lifecycle_error or WorkspaceInitializationError(definition.default_view)
         )
     if support_path == "/dev/events" and request.method == "GET" and context.dev:
-        return events_response(workspace, context=context)
+        return events_response(workspace, context=context, presentation=presentation)
+    if support_path == "/observations":
+        return browser_observations_response(request, workspace, presentation)
     if support_path == "/query" and request.method == "POST":
         return await _query_response(request, context)
     if support_path.startswith("/views/"):
@@ -188,7 +193,27 @@ async def _view_response(
     if view_name not in studio.views:
         return Response(status_code=404)
     if route == "dev/events" and request.method == "GET" and context.dev:
-        return events_response(studio, context=context, view_name=view_name)
+        return events_response(
+            studio,
+            context=context,
+            presentation=presentation,
+            view_name=view_name,
+        )
+    if route == "activate":
+        return await activate_view_response(
+            request,
+            studio,
+            view_name,
+            presentation,
+        )
+    if route == "observation":
+        return await browser_observation_response(
+            request,
+            studio,
+            view_name,
+            presentation,
+            context.server_token,
+        )
     if route.startswith("source/"):
         return await source_response(
             request,
@@ -232,6 +257,7 @@ async def _view_response(
 def events_response(
     studio: StudioWorkspace,
     context: ServerContext,
+    presentation: NotebookPresentation,
     view_name: str | None = None,
 ) -> Response:
     """Stream source and notebook changes until the server shuts down."""
@@ -240,6 +266,7 @@ def events_response(
             studio,
             view_name,
             stop_requested=lambda: server_shutdown_requested(context),
+            agent_state=presentation.agent_state,
         ),
         media_type="text/event-stream",
         headers={**NO_STORE, "X-Accel-Buffering": "no"},

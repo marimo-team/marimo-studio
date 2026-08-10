@@ -1,3 +1,5 @@
+import type { BrowserObservation } from "@marimo-studio/protocol/browser-observations";
+
 import {
   parsePreviewMessage,
   type PresentationToStudioMessage,
@@ -7,6 +9,8 @@ import {
 } from "@marimo-studio/protocol/preview-messages";
 import { publicNotebookQuery } from "@marimo-studio/protocol/query";
 import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
+
+import type { RecordBrowserObservation } from "./observation-remote.ts";
 
 import { assertNever } from "../../shared/assertNever.ts";
 import { fetchRuntimeControls } from "./control-remote.ts";
@@ -53,6 +57,7 @@ export class PreviewController {
     private readonly syncEditorQuery: (query: string, signal: AbortSignal) => Promise<void>,
     private readonly navigate: (view: string) => void,
     private readonly report: (state: PreviewFrameState) => void,
+    private readonly recordObservation?: RecordBrowserObservation,
     private readonly connectControlFrame?: ControlFrameConnector,
   ) {
     this.view = initialView;
@@ -165,6 +170,7 @@ export class PreviewController {
       case "marimo-studio:view-sync-pending":
       case "marimo-studio:view-diagnostics":
       case "marimo-studio:view-error":
+      case "marimo-studio:view-observation":
         if (message.view === this.view) {
           this.receiveView(message);
         }
@@ -199,6 +205,28 @@ export class PreviewController {
       case "marimo-studio:view-error":
         this.viewReady = false;
         this.setStatus("Needs repair", "error", message.hint);
+        return;
+      case "marimo-studio:view-observation":
+        this.readyRevision = message.revision;
+        this.viewReady = message.state === "ready";
+        this.diagnostics = message.diagnostics;
+        if (message.state === "ready") {
+          this.showDiagnostics();
+        } else {
+          this.setStatus(
+            "Needs repair",
+            "error",
+            message.diagnostics.map((diagnostic) => diagnostic.message).join("\n"),
+          );
+        }
+        this.publishObservation({
+          schema: 1,
+          view: message.view,
+          runtime: message.runtime,
+          revision: message.revision,
+          state: message.state,
+          diagnostics: message.diagnostics,
+        });
         return;
       default:
         assertNever(message);
@@ -482,6 +510,12 @@ export class PreviewController {
       "warning",
       this.diagnostics.map((diagnostic) => diagnostic.message).join("\n"),
     );
+  }
+
+  private publishObservation(observation: BrowserObservation): void {
+    void this.recordObservation?.(observation).catch((error: unknown) => {
+      console.warn("Studio browser observation could not be recorded", error);
+    });
   }
 
   private setStatus(

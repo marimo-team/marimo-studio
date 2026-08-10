@@ -9,6 +9,7 @@ from threading import RLock
 
 from marimo_studio._compat.server.models import ServerContext
 from marimo_studio._html import runtime_document
+from marimo_studio._server.agent_state import StudioAgentState
 from marimo_studio._server.runtimes import DEFAULT_RUNTIME_REGISTRY
 from marimo_studio._urls import (
     SUPPORT_PATH,
@@ -127,17 +128,22 @@ def _view_asset_identity(view: View) -> tuple[tuple[object, ...], ...]:
     """Return stamps for assets whose browser lifecycle follows the document."""
     identity: list[tuple[object, ...]] = []
     for path in sorted(view.root.rglob("*")):
-        if (
-            path == view.template
-            or path.suffix == ".css"
-            or path.is_symlink()
-            or not path.is_file()
-        ):
+        if path == view.template or path.is_symlink() or not path.is_file():
+            continue
+        relative = path.relative_to(view.root).as_posix()
+        if path.suffix == ".css":
+            identity.append(
+                (
+                    relative,
+                    "sha256",
+                    hashlib.sha256(path.read_bytes()).hexdigest(),
+                )
+            )
             continue
         stat = path.stat()
         identity.append(
             (
-                path.relative_to(view.root).as_posix(),
+                relative,
                 stat.st_mtime_ns,
                 stat.st_ctime_ns,
                 stat.st_size,
@@ -215,6 +221,7 @@ class NotebookPresentation:
         notebook: Path,
     ) -> None:
         self.notebook = notebook
+        self.agent_state = StudioAgentState()
         self._lock = RLock()
         self._snapshots: dict[str, PresentationSnapshot] = {}
         self._snapshot_history: dict[str, dict[str, PresentationSnapshot]] = {}

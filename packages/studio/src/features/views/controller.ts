@@ -1,3 +1,5 @@
+import { parseActiveViewRequest } from "@marimo-studio/protocol/development-events";
+
 import type { ViewRemote } from "./remote.ts";
 import type { ViewLanding } from "./transition.ts";
 
@@ -61,6 +63,7 @@ export class ViewController {
     this.events = new EventSource(this.eventsUrl);
     this.events.addEventListener("ready", this.refreshFromEvent);
     this.events.addEventListener("change", this.refreshFromEvent);
+    this.events.addEventListener("activate", this.activateFromEvent);
   }
 
   async choose(view: string, landing: ViewLanding = "split"): Promise<boolean> {
@@ -253,4 +256,23 @@ export class ViewController {
       }
     });
   };
+
+  private readonly activateFromEvent = (event: Event): void => {
+    const payload = parseActiveViewRequest(event instanceof MessageEvent ? String(event.data) : "");
+    if (!payload) {
+      return;
+    }
+    void this.activate(payload.view).catch((error: unknown) => {
+      if (!this.disposed) {
+        console.warn("Studio view could not be activated", error);
+      }
+    });
+  };
+
+  private async activate(view: string): Promise<void> {
+    if (!this.snapshot.views.includes(view)) {
+      await this.refresh();
+    }
+    await this.choose(view, "preserve");
+  }
 }

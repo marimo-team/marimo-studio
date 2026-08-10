@@ -94,6 +94,20 @@ export const checkWorkspace = async (): Promise<boolean> => {
   return result.ok === true;
 };
 
+export const analyzeWorkspace = async (view: string): Promise<Record<string, unknown>> => {
+  const { stdout } = await runStudioCli([
+    "analyze",
+    workspaceNotebookPath,
+    "--view",
+    view,
+    "--server",
+    "http://127.0.0.1:4321?file=notebook.py",
+    "--format",
+    "json",
+  ]);
+  return JSON.parse(stdout) as Record<string, unknown>;
+};
+
 export const editorFrame = (page: Page): FrameLocator =>
   page.frameLocator('iframe[title="Marimo editor"]');
 
