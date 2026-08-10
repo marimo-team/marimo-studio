@@ -2,8 +2,11 @@ import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import {
+  bindWorkspaceCell,
+  checkWorkspace,
   dashboardCssPath,
   dashboardHtmlPath,
+  editorFrame,
   expect,
   previewFrame,
   readWorkspaceFile,
@@ -111,6 +114,38 @@ test("keeps browser and disk source edits in sync", async ({ page }) => {
     ),
   ).toBe(true);
   await expect(widgetButton).toHaveText(`Widget count: ${widgetCount + 1}`);
+});
+
+test("keeps configured aliases attached to edited notebook cells", async ({ page }) => {
+  await bindWorkspaceCell("range-control", 1);
+  const source = await readWorkspaceFile(dashboardHtmlPath);
+  await writeWorkspaceFile(
+    dashboardHtmlPath,
+    source.replace('name="controls"', 'name="range-control"'),
+  );
+
+  await page.goto(studioEntryUrl);
+  const preview = await waitForPreview(page);
+  await expect(preview.getByText("Scale", { exact: true })).toBeVisible();
+
+  const editor = editorFrame(page);
+  const controlCell = editor.getByRole("textbox").filter({ hasText: 'label="Scale"' });
+  await expect(controlCell).toHaveCount(1);
+  await controlCell.click();
+  await controlCell.press(selectAllShortcut);
+  await page.keyboard.insertText(`scale = mo.ui.slider(
+    start=1,
+    stop=3,
+    value=2,
+    show_value=True,
+    label="Adjusted",
+)
+scale`);
+  await page.keyboard.press("Shift+Enter");
+
+  await expect(preview.getByText("Adjusted", { exact: true })).toBeVisible();
+  await expect.poll(() => readWorkspaceFile(workspaceNotebookPath)).toContain('label="Adjusted"');
+  expect(await checkWorkspace()).toBe(true);
 });
 
 test("routes directory notebooks by Studio configuration", async ({ page }) => {

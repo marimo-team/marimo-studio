@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Mapping, MutableMapping
+from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from importlib.metadata import metadata
 from pathlib import Path
 from typing import Any
@@ -182,11 +182,15 @@ def _package_python_requirement() -> str:
 def set_cell_bindings(
     config: MutableMapping[str, Any],
     bindings: Mapping[str, CellRef],
+    *,
+    remove: Iterable[str] = (),
 ) -> None:
     """Set cell aliases in a mutable Studio configuration."""
     cells = config.setdefault("cells", tomlkit.table())
     if not isinstance(cells, MutableMapping):
         raise ConfigurationError("cells must be a TOML table")
+    for alias in remove:
+        cells.pop(alias, None)
     for alias, ref in bindings.items():
         value = tomlkit.inline_table()
         value["ref"] = str(ref)
@@ -241,6 +245,16 @@ def update_notebook_config(
 ) -> None:
     """Mutate the notebook-local marimo-studio table atomically."""
     source = read_text(path)
+    updated = updated_notebook_config_source(path, source, update)
+    atomic_write_text(path, updated)
+
+
+def updated_notebook_config_source(
+    path: Path,
+    source: str,
+    update: Callable[[MutableMapping[str, Any]], None],
+) -> str:
+    """Return notebook source with an updated marimo-studio table."""
     document = _document(source, path)
     if document is None:
         raise ConfigurationError(f"Notebook has no PEP 723 metadata: {path}")
@@ -251,4 +265,4 @@ def update_notebook_config(
             f"Notebook has no [tool.marimo-studio] configuration: {path}"
         )
     update(config)
-    atomic_write_text(path, _replace_metadata(source, path, document))
+    return _replace_metadata(source, path, document)

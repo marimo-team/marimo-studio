@@ -133,9 +133,12 @@ these entries through the CLI:
 uvx marimo-studio bind summary analysis.py --cell 12
 ```
 
-Native Marimo cell names require no alias. A configured alias follows its cell
-across formatting and comment changes. Reinspect and bind with `--overwrite`
-after the cell's Python meaning changes or the match becomes ambiguous.
+Native Marimo cell names require no alias. During an active `marimo edit`
+session, a configured alias follows its cell as the cell moves or its Python
+meaning changes. Edits made while the notebook is closed resolve across
+formatting and comment changes. Reinspect and bind with `--overwrite` when an
+offline edit changes the cell's meaning or makes the match ambiguous. Deleting
+a cell removes its configured aliases when the notebook is saved.
 
 [CLI reference](cli.md) defines command output and exit codes. [Run and share
 views](share-views.md) explains how runtime settings affect deployment.

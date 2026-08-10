@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Iterable, Mapping, MutableMapping
 from dataclasses import dataclass
 from typing import Any
 
 import tomlkit
 
-from marimo_studio._cell_refs import cell_ref_candidates
+from marimo_studio._cell_refs import cell_ref_candidates, safe_cell_ref_matches
 from marimo_studio._workspace.config import editable_studio_config
 from marimo_studio._workspace.files import atomic_write_text, reject_mutable_symlinks
 from marimo_studio._workspace.metadata import (
@@ -31,7 +31,7 @@ from marimo_studio._workspace.templates import (
     validate_template_structure,
 )
 from marimo_studio.errors import BindingError, ConfigurationError, TemplateError
-from marimo_studio.types import CellSpec, ValueBinding
+from marimo_studio.types import CellRef, CellSpec, ValueBinding
 
 
 @dataclass(frozen=True)
@@ -210,23 +210,34 @@ def _resolve_aliases(
 ) -> tuple[dict[str, CellSpec], dict[str, _AliasFailure]]:
     aliases = dict(native_aliases)
     failures: dict[str, _AliasFailure] = {}
+    cells_by_id = {cell.runtime_id: cell for cell in notebook_cells}
+    resolved_ids = safe_cell_ref_matches(
+        studio.cells,
+        ((cell.ref, cell.runtime_id) for cell in notebook_cells),
+    )
     for alias, ref in studio.cells.items():
         native = aliases.get(alias)
         matches = cell_ref_candidates(
             ref,
             ((cell.ref, cell) for cell in notebook_cells),
         )
-        if len(matches) > 1:
+        cell = cells_by_id.get(resolved_ids.get(alias, ""))
+        if cell is None and matches:
             if native is not None:
                 continue
+            message = (
+                f"Cell alias {alias!r} matches more than one notebook cell."
+                if len(matches) > 1
+                else f"Cell alias {alias!r} conflicts with another cell binding."
+            )
             failures[alias] = _AliasFailure(
                 "cell-binding-ambiguous",
-                f"Cell alias {alias!r} matches more than one notebook cell.",
+                message,
                 "Inspect the notebook, then bind this alias again with --overwrite.",
             )
             aliases.pop(alias, None)
             continue
-        if not matches:
+        if cell is None:
             if native is not None:
                 continue
             failures[alias] = _AliasFailure(
@@ -236,7 +247,6 @@ def _resolve_aliases(
             )
             aliases.pop(alias, None)
             continue
-        cell = matches[0]
         if native is not None and native.runtime_id != cell.runtime_id:
             failures[alias] = _AliasFailure(
                 "cell-binding-conflict",
@@ -323,17 +333,28 @@ def bind_cell(
     result = BindingResult(alias, cell, studio.config_path, previous_ref)
     if dry_run:
         return result
+    _write_cell_bindings(studio, {alias: cell.ref})
+    return result
+
+
+def _write_cell_bindings(
+    studio: StudioWorkspace,
+    bindings: Mapping[str, CellRef],
+    *,
+    remove: Iterable[str] = (),
+) -> None:
+    """Persist cell bindings through the workspace configuration owner."""
+    removed = tuple(remove)
     if studio.uses_notebook_config:
         reject_mutable_symlinks(studio.notebook.parent, {studio.notebook})
 
         def update(config: MutableMapping[str, Any]) -> None:
-            set_cell_bindings(config, {alias: cell.ref})
+            set_cell_bindings(config, bindings, remove=removed)
 
         update_notebook_config(studio.notebook, update)
     else:
         reject_mutable_symlinks(studio.root, {studio.config_path})
         document = tomlkit.parse(studio.config_path.read_text(encoding="utf-8"))
         config = editable_studio_config(document)
-        set_cell_bindings(config, {alias: cell.ref})
+        set_cell_bindings(config, bindings, remove=removed)
         atomic_write_text(studio.config_path, tomlkit.dumps(document))
-    return result
