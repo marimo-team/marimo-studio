@@ -56,6 +56,7 @@ const config = {
       cell: { kind: "id", value: "report-cell" },
     },
   },
+  outputBindings: {},
   diagnostics: [],
   appConfig: {},
   userConfig: {},

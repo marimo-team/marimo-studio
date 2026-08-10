@@ -70,7 +70,7 @@
   content: "—";
 }
 
-:where(marimo-cell) {
+:where(marimo-cell, marimo-output) {
   color: inherit;
   display: block;
   font: inherit;
@@ -79,7 +79,7 @@
   min-width: 0;
 }
 
-:where(marimo-cell):is(
+:where(marimo-cell, marimo-output):is(
   :not(:defined),
   [data-state="connecting"],
   [data-state="loading"]
@@ -105,15 +105,15 @@
   width: 100%;
 }
 
-:where(marimo-cell)[data-skeleton="none"]:empty::before {
+:where(marimo-cell, marimo-output)[data-skeleton="none"]:empty::before {
   display: none;
 }
 
-:where(marimo-cell)[data-skeleton="none"] {
+:where(marimo-cell, marimo-output)[data-skeleton="none"] {
   min-block-size: 0;
 }
 
-:where(marimo-cell) > [data-marimo-cell-output] {
+:where(marimo-cell, marimo-output) > [data-marimo-cell-output] {
   --text-font: var(--marimo-cell-font, inherit);
   --heading-font: var(--marimo-cell-heading-font, var(--text-font));
   --monospace-font: var(
@@ -167,42 +167,42 @@
   width: 100%;
 }
 
-:where(marimo-cell) :where(.output) {
+:where(marimo-cell, marimo-output) :where(.output) {
   margin: 0;
   max-width: 100%;
 }
 
-:where(marimo-cell) :where(.markdown.prose) {
+:where(marimo-cell, marimo-output) :where(.markdown.prose) {
   color: inherit;
   max-width: var(--marimo-cell-content-width, none);
 }
 
-:where(marimo-cell)
+:where(marimo-cell, marimo-output)
   [data-marimo-cell-output]
   .markdown.prose
   :where(h1, h2, h3, h4, h5, h6, p, li, strong, em, blockquote) {
   color: var(--marimo-cell-foreground, inherit);
 }
 
-:where(marimo-cell) [data-marimo-cell-output] .markdown.prose blockquote {
+:where(marimo-cell, marimo-output) [data-marimo-cell-output] .markdown.prose blockquote {
   border-color: var(--marimo-cell-border-color, currentColor);
 }
 
-:where(marimo-cell) :where(marimo-ui-element) {
+:where(marimo-cell, marimo-output) :where(marimo-ui-element) {
   max-width: 100%;
 }
 
-:where(marimo-cell) :where(img, video) {
+:where(marimo-cell, marimo-output) :where(img, video) {
   height: auto;
   max-width: 100%;
 }
 
-:where(marimo-cell) :where(.vega-embed, .js-plotly-plot, .plot-container) {
+:where(marimo-cell, marimo-output) :where(.vega-embed, .js-plotly-plot, .plot-container) {
   max-width: 100%;
   width: 100%;
 }
 
-:where(marimo-cell) :where(.console-output-area) {
+:where(marimo-cell, marimo-output) :where(.console-output-area) {
   border-radius: 0;
   gap: 0;
   max-height: none;
@@ -210,7 +210,7 @@
   padding: 0;
 }
 
-:where(marimo-cell) :where(marimo-tex) {
+:where(marimo-cell, marimo-output) :where(marimo-tex) {
   display: inline-block;
   max-inline-size: 100%;
   overflow-x: auto;
@@ -218,19 +218,19 @@
   vertical-align: middle;
 }
 
-:where(marimo-cell)[data-state="loading"] > [data-marimo-cell-output],
-:where(marimo-cell)[data-state="stale"] > [data-marimo-cell-output] {
+:where(marimo-cell, marimo-output)[data-state="loading"] > [data-marimo-cell-output],
+:where(marimo-cell, marimo-output)[data-state="stale"] > [data-marimo-cell-output] {
   opacity: 0.68;
 }
 
-:where(marimo-cell) :where(.marimo-cell-error) {
+:where(marimo-cell, marimo-output) :where(.marimo-cell-error) {
   background: var(--marimo-cell-muted, color-mix(in srgb, #b5472b 8%, Canvas));
   border-inline-start: 3px solid var(--marimo-cell-error, #a33f25);
   color: var(--marimo-cell-error, #712e1c);
   padding: 0.75rem;
 }
 
-:where(marimo-cell) :where(.marimo-cell-diagnostic) {
+:where(marimo-cell, marimo-output) :where(.marimo-cell-diagnostic) {
   background: var(--marimo-cell-diagnostic-background, color-mix(in srgb, #b7791f 7%, Canvas));
   border-inline-start: 2px solid
     var(--marimo-cell-diagnostic, color-mix(in srgb, #d69e2e 68%, currentColor));
@@ -242,10 +242,10 @@
   padding: 0.7rem 0.8rem;
 }
 
-:where(marimo-cell) :where(.marimo-cell-diagnostic strong) {
+:where(marimo-cell, marimo-output) :where(.marimo-cell-diagnostic strong) {
   font-weight: 600;
 }
 
-:where(marimo-cell) :where(.marimo-cell-diagnostic span) {
+:where(marimo-cell, marimo-output) :where(.marimo-cell-diagnostic span) {
   color: color-mix(in srgb, currentColor 72%, transparent);
 }

@@ -28,7 +28,7 @@ state.
 | Notebook           | The Marimo `.py` file that owns Python code, data, controls, and displayed outputs    |
 | Custom view        | A named HTML and CSS page that shows selected notebook content                        |
 | Cell name          | A native Marimo cell name or a saved Studio name for an unnamed cell                  |
-| Value reference    | Text in `mo-value` that starts with a Python variable and may select nested data      |
+| Value reference    | A Python variable selector used by `mo-value` or `<marimo-output>`                    |
 | Server preview     | A custom view connected to the active Python kernel while developing or serving       |
 | WebAssembly export | A static directory where the notebook runs in the browser                             |
 | Static check       | Validation that reads and compiles saved files without executing notebook code        |
@@ -38,7 +38,7 @@ state.
 
 1. Inspect the notebook and existing custom views.
 2. Create or select one named view.
-3. Decide which cell outputs and Python values the audience needs.
+3. Decide which complete cells, rich objects, and Python values the audience needs.
 4. Edit the view's `index.html`, `app.css`, and optional relative files.
 5. Develop beside the running notebook in `marimo edit`.
 6. Run the static check, then the runtime check.
@@ -82,8 +82,8 @@ Add `--include-code` when the short preview and variable names do not explain a
 cell. Add `--limit` for the first pass through a large notebook.
 
 Static inspection reads and compiles the saved notebook. It does not execute
-cells. Inspect actual outputs and JSON-compatible Python values when the saved
-source leaves a content decision unresolved:
+cells. Inspect actual cell outputs, rich outputs, and JSON-compatible Python
+values when the saved source leaves a content decision unresolved:
 
 ```console
 marimo-studio inspect analysis.py \
@@ -141,10 +141,11 @@ Decide before editing:
 
 Use the element that matches the content:
 
-| Notebook content                                       | HTML                                        |
-| ------------------------------------------------------ | ------------------------------------------- |
-| Control, plot, table, download, Markdown, or anywidget | `<marimo-cell name="...">`                  |
-| String, number, list, dictionary, or nested field      | Any element with `mo-value="variable.path"` |
+| Notebook content                                            | HTML                                        |
+| ----------------------------------------------------------- | ------------------------------------------- |
+| Complete cell output, including logs and errors             | `<marimo-cell name="...">`                  |
+| One rich object as a native table, plot, control, or widget | `<marimo-output value="variable.path">`     |
+| String, number, list, dictionary, or nested field           | Any element with `mo-value="variable.path"` |
 
 Show the complete output from a named cell:
 
@@ -166,6 +167,18 @@ Studio calls this saved name an alias. Reinspect the notebook before using
 `--overwrite` when an existing alias points to a cell that has changed or can
 no longer be identified uniquely. A cell output may appear once in each view.
 
+Show one Python object through Marimo's native output formatter:
+
+```html
+<marimo-output value="df"></marimo-output>
+<marimo-output value="report.figure"></marimo-output>
+<marimo-output value="results[0]"></marimo-output>
+```
+
+Use this form for a DataFrame, plot, Markdown object, control, or widget whose
+native output belongs at that point in the page. Keep one host for each
+rich-output selector.
+
 Show a JSON-compatible Python value as text:
 
 ```html
@@ -175,15 +188,17 @@ Show a JSON-compatible Python value as text:
 <span mo-value='metadata["key.with.dots"]'></span>
 ```
 
-The text inside `mo-value` is the value reference. It starts with a notebook
-variable and can select attributes, dictionary keys, and list items. Put
-formatting, arithmetic, slicing, function calls, and comprehensions in a
-notebook cell when notebook changes are part of the task.
+The `value` on `<marimo-output>` and the text inside `mo-value` use the same
+value-reference grammar. A reference starts with a notebook variable and can
+select attributes, dictionary keys, and list items. Put formatting, arithmetic,
+slicing, function calls, and comprehensions in a notebook cell when notebook
+changes are part of the task.
 
 ## 4. Write the page
 
 Write one complete HTML document with one `<main id="app-shell">`. Put every
-`<marimo-cell>` and `mo-value` element inside that main element:
+`<marimo-cell>`, `<marimo-output>`, and `mo-value` host inside that main
+element:
 
 ```html
 <!doctype html>
@@ -258,8 +273,8 @@ JSON `null` remains a valid value. The last received value remains available
 while an updated value is loading.
 
 Listen for `marimo-value-error` when the page needs a local error message. Use
-`window.marimoStudio.ready()` when browser code must wait for the current cells
-and values to finish loading or report an error.
+`window.marimoStudio.ready()` when browser code must wait for the current
+projections to finish loading or report an error.
 
 ## 6. Style loading and notebook output
 
@@ -268,11 +283,16 @@ of `app.css`. Put page-specific rules under `/* APP */`. Preserve the starter
 `--marimo-cell-*` mappings so notebook output inherits the page's fonts,
 surfaces, and accent color.
 
-Reserve realistic space for large cells and values while they load:
+Reserve realistic space for large cells, rich outputs, and values while they
+load:
 
 ```css
 marimo-cell.trend {
   --marimo-cell-skeleton-height: 28rem;
+}
+
+marimo-output[value="df"] {
+  --marimo-cell-skeleton-height: 24rem;
 }
 
 time[mo-value] {

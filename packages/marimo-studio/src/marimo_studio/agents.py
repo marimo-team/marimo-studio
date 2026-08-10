@@ -36,15 +36,17 @@ page structure, wording, and styling in these files. ``index.html`` is a
 complete HTML document with one ``#app-shell`` element.
 
 Place a notebook cell's complete output in the page with ``<marimo-cell>``.
-Show a JSON-compatible Python value, such as a string, number, list, or
-dictionary, as text with ``mo-value``:
+Render one Python object's native Marimo representation with
+``<marimo-output>``. Show a JSON-compatible value, such as a string, number,
+list, or dictionary, as text with ``mo-value``:
 
-    <marimo-cell name="revenue-chart"></marimo-cell>
+    <marimo-cell name="analysis"></marimo-cell>
+    <marimo-output value="revenue_chart"></marimo-output>
     <strong mo-value="summary.total"></strong>
 
-Cell output keeps its Marimo behavior, including controls, tables, plots,
-downloads, and anywidgets. A value reference starts with a Python variable and
-can select nested attributes, mapping keys, or list items.
+Cell and rich-object output keep their Marimo behavior, including controls,
+tables, plots, downloads, and anywidgets. A value reference starts with a
+Python variable and can select nested attributes, mapping keys, or list items.
 
 Use a cell's existing name when it is clear. Give an unnamed cell a memorable
 reference by binding a name to its zero-based notebook position:
@@ -57,8 +59,8 @@ Check the custom page after editing its HTML or CSS:
     failures = [result for result in results if result.status == "fail"]
 
 Each result has a ``pass``, ``warn``, or ``fail`` status and points to the
-affected cell, Python value, or view file. Saved HTML and CSS changes refresh
-the custom page. Notebook edits update the outputs that depend on them.
+affected projection or view file. Saved HTML and CSS changes refresh the custom
+page. Notebook edits update the outputs that depend on them.
 """
 
 from __future__ import annotations
@@ -158,7 +160,7 @@ def check(
     *,
     view_name: str | None = None,
 ) -> tuple[CheckResult, ...]:
-    """Check that custom pages reference cells and values in the notebook.
+    """Check that custom pages reference notebook cells and values.
 
     Pass ``view_name`` to check one named view. The default checks every view.
     Each result has a ``pass``, ``warn``, or ``fail`` status. This check reads

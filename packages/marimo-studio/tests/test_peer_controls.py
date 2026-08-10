@@ -26,6 +26,7 @@ from marimo._session.session import Session
 from marimo._session.state.session_view import SessionView
 from marimo._types.ids import ConsumerId, UIElementId, WidgetModelId
 
+from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
 from marimo_studio._compat.server.models import ServerLocation, ServerMode
 from marimo_studio._compat.server.peer_controls import enable_peer_control_sync
 
@@ -134,6 +135,30 @@ def test_ui_control_updates_relay_once_only_from_consumers() -> None:
             message={"type": "marimo-ui-value-update", "value": "Growth"},
         ),
     ]
+
+
+def test_projected_control_updates_stay_with_the_owning_consumer() -> None:
+    session = _Session()
+    enable_peer_control_sync(_location(_Manager(session)))
+
+    session.receive(
+        UpdateUIElementCommand(
+            object_ids=[
+                UIElementId(f"{OUTPUT_OWNER_PREFIX}preview-0"),
+                UIElementId("notebook-control"),
+            ],
+            values=[4, 7],
+        ),
+        origin="preview-a",
+    )
+
+    assert len(session.room.messages) == 1
+    message, origin = session.room.messages[0]
+    assert origin == ConsumerId("preview-a")
+    assert deserialize_kernel_message(message) == UIElementMessageNotification(
+        ui_element=UIElementId("notebook-control"),
+        message={"type": "marimo-ui-value-update", "value": 7},
+    )
 
 
 def test_peer_sync_attaches_only_to_the_selected_notebook() -> None:

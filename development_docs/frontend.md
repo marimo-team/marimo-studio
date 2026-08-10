@@ -57,6 +57,7 @@ Presentation groups code by document responsibility:
 | `runtime-config/` | Fetch, validate, stage, and commit runtime configuration           |
 | `runtime/`        | Mount runtimes, output plugins, cells, controls, and anywidgets    |
 | `cells/`          | Discover and preserve `<marimo-cell>` hosts                        |
+| `outputs/`        | Read and preserve native `<marimo-output>` projections             |
 | `values/`         | Read values and publish the `mo-value` DOM contract                |
 | `view-styles/`    | Generate scoped Wind4 utilities from authored classes              |
 
@@ -154,6 +155,7 @@ live Marimo kernel and several documents.
 | Runtime lifecycle    | Editor, Server, and WebAssembly frames remain mounted across mode changes      |
 | Control sync         | JSON-compatible native controls synchronize between editor and runtimes        |
 | Runtime isolation    | Anywidget state remains with the runtime that owns its model                   |
+| Rich output          | Server and WebAssembly render reactive native output from a value reference    |
 | Source authoring     | Studio and external edits update files and the live preview safely             |
 | View management      | Creating and removing a view updates source files and the selected preview     |
 | Hosted lifecycle     | A token-protected nested mount creates its first view and runs reactive values |

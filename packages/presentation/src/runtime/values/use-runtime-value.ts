@@ -1,7 +1,7 @@
 import type { ValueReadError } from "@marimo-studio/protocol/value-read";
 
 import { WebSocketState } from "@marimo-studio/marimo-frontend/runtime";
-import { useEffect, useLayoutEffect, useMemo } from "react";
+import { useEffect, useLayoutEffect } from "react";
 
 import type { ValueReader } from "../../values/reader";
 import type { RuntimeCell } from "../runtime-cell";
@@ -34,10 +34,7 @@ export const useRuntimeValue = ({
   readValues: ValueReader;
 }): void => {
   const deliveryTimedOut = useDeliveryTimeout(runtimeReady && cell === undefined, cell?.id);
-  const model = useMemo(
-    () => valueCellModel(cell, runtimeReady, deliveryTimedOut),
-    [cell, deliveryTimedOut, runtimeReady],
-  );
+  const model = valueCellModel(cell, runtimeReady, deliveryTimedOut);
 
   useLayoutEffect(() => {
     if (model.phase === "loading" || model.phase === "stale") {
@@ -50,7 +47,7 @@ export const useRuntimeValue = ({
         markValueError(selector, valueCellFailure(failure, selector)),
       );
     }
-  }, [model, selectors]);
+  }, [model.failure, model.phase, selectors]);
 
   useEffect(() => {
     if (connectionState !== WebSocketState.OPEN || model.phase !== "ready") {

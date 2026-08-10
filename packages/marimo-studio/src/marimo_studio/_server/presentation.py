@@ -156,11 +156,15 @@ class PresentationSnapshot:
     document: str
     notebook_source: str
     value_references: dict[str, ValueReference]
+    output_references: dict[str, ValueReference]
     revision: str
 
 
-def _value_references(documents: dict[str, str]) -> dict[str, ValueReference]:
-    references: dict[str, ValueReference] = {}
+def _projection_references(
+    documents: dict[str, str],
+) -> tuple[dict[str, ValueReference], dict[str, ValueReference]]:
+    values: dict[str, ValueReference] = {}
+    outputs: dict[str, ValueReference] = {}
     for document in documents.values():
         parser = TemplateParser()
         try:
@@ -168,10 +172,13 @@ def _value_references(documents: dict[str, str]) -> dict[str, ValueReference]:
             validate_template_structure(parser, "Template")
         except (TemplateError, ValueError):
             continue
-        references.update(
+        values.update(
             (reference.source, reference) for reference in parser.value_references
         )
-    return references
+        outputs.update(
+            (reference.source, reference) for reference in parser.output_references
+        )
+    return values, outputs
 
 
 def _browser_diagnostic(
@@ -277,12 +284,16 @@ class NotebookPresentation:
                     continue
                 if before.identity != after.identity:
                     continue
+                value_references, output_references = _projection_references(
+                    before.documents
+                )
                 snapshot = PresentationSnapshot(
                     resolved=resolved,
                     view_name=selected,
                     document=before.documents[selected],
                     notebook_source=before.notebook_source,
-                    value_references=_value_references(before.documents),
+                    value_references=value_references,
+                    output_references=output_references,
                     revision=revision,
                 )
                 self._remember(snapshot)
@@ -404,6 +415,7 @@ class NotebookPresentation:
             "showCellLogs": resolved.workspace.show_cell_logs,
             "cellBindings": projection.cell_bindings,
             "valueBindings": projection.value_bindings,
+            "outputBindings": projection.output_bindings,
             "diagnostics": [
                 _browser_diagnostic(
                     diagnostic,

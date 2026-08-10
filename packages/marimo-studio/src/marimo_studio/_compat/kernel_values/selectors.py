@@ -29,6 +29,21 @@ def _template_selectors(notebook: Path) -> tuple[str, ...] | None:
     return tuple(dict.fromkeys(selectors))
 
 
+def _template_output_selectors(notebook: Path) -> tuple[str, ...] | None:
+    studio = discover_studio(notebook)
+    if studio is None:
+        return None
+    selectors: list[str] = []
+    for view in studio.views.values():
+        parser = TemplateParser()
+        try:
+            parser.feed(view.template.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ConfigurationError):
+            continue
+        selectors.extend(ref.source for ref in parser.output_references)
+    return tuple(dict.fromkeys(selectors))
+
+
 def _encode_value(
     selector: str,
     value: object,

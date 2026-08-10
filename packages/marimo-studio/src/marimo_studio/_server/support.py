@@ -18,6 +18,7 @@ from marimo_studio import _assets
 from marimo_studio._compat.kernel_values import (
     ValueReadUnavailable,
     read_session_values,
+    render_session_outputs,
 )
 from marimo_studio._compat.kernel_values.query import (
     QuerySyncUnavailable,
@@ -42,6 +43,7 @@ from marimo_studio._server.studio_api import (
 )
 from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
 from marimo_studio.errors import MarimoStudioError, WorkspaceInitializationError
+from marimo_studio.values import MAX_OUTPUT_SELECTORS
 
 
 async def support_response(
@@ -208,6 +210,8 @@ async def _view_response(
         )
     if route == "values" and request.method == "POST":
         return await _values_response(request, context, presentation, view_name)
+    if route == "outputs" and request.method == "POST":
+        return await _outputs_response(request, context, presentation, view_name)
     snapshot = presentation.latest_snapshot(view_name)
     resolved = snapshot.resolved
     view = resolved.views[view_name]
@@ -323,6 +327,118 @@ async def _values_response(
         result = await read_session_values(
             session,
             requested,
+            consumer_id=session_id,
+        )
+    except ValueReadUnavailable as error:
+        return JSONResponse(
+            {
+                "error": error.code,
+                "message": str(error),
+                "transient": error.transient,
+            },
+            status_code=error.status_code,
+            headers=NO_STORE,
+        )
+    return JSONResponse(result.to_dict(), headers=NO_STORE)
+
+
+async def _outputs_response(
+    request: Request,
+    context: ServerContext,
+    presentation: NotebookPresentation,
+    view_name: str,
+) -> Response:
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        body = None
+    revision = body.get("revision") if isinstance(body, dict) else None
+    selectors = body.get("selectors") if isinstance(body, dict) else None
+    active_selectors = body.get("activeSelectors") if isinstance(body, dict) else None
+    if (
+        not isinstance(revision, str)
+        or not revision
+        or not isinstance(selectors, list)
+        or len(selectors) > MAX_OUTPUT_SELECTORS
+        or not all(isinstance(selector, str) for selector in selectors)
+        or not isinstance(active_selectors, list)
+        or len(active_selectors) > MAX_OUTPUT_SELECTORS
+        or not all(isinstance(selector, str) for selector in active_selectors)
+    ):
+        return JSONResponse(
+            {
+                "error": "invalid-output-request",
+                "message": (
+                    "revision must be a non-empty string, and selectors and "
+                    "activeSelectors must be arrays of at most "
+                    f"{MAX_OUTPUT_SELECTORS} strings."
+                ),
+            },
+            status_code=400,
+            headers=NO_STORE,
+        )
+    snapshot = presentation.snapshot_for_revision(view_name, revision)
+    if snapshot is None:
+        return JSONResponse(
+            {
+                "error": "presentation-revision-unavailable",
+                "message": (
+                    "The requested presentation revision is no longer available."
+                ),
+                "transient": True,
+            },
+            status_code=409,
+            headers=NO_STORE,
+        )
+    view = snapshot.resolved.views[view_name]
+    requested = tuple(dict.fromkeys(cast(list[str], selectors)))
+    active = tuple(dict.fromkeys(cast(list[str], active_selectors)))
+    unknown = sorted(set((*requested, *active)).difference(view.output_bindings))
+    if unknown:
+        return JSONResponse(
+            {
+                "error": "unknown-selector",
+                "message": f"Unknown output selectors: {', '.join(unknown)}.",
+            },
+            status_code=400,
+            headers=NO_STORE,
+        )
+    if not set(requested).issubset(active):
+        return JSONResponse(
+            {
+                "error": "invalid-output-request",
+                "message": "Every requested selector must also be active.",
+            },
+            status_code=400,
+            headers=NO_STORE,
+        )
+    session_id = request.headers.get("Marimo-Session-Id")
+    if not session_id:
+        return JSONResponse(
+            {
+                "error": "missing-session",
+                "message": "Marimo-Session-Id is required.",
+                "transient": True,
+            },
+            status_code=409,
+            headers=NO_STORE,
+        )
+    session = current_session(context, session_id)
+    if session is None:
+        return JSONResponse(
+            {
+                "error": "unknown-session",
+                "message": "The Marimo session is still connecting.",
+                "transient": True,
+            },
+            status_code=409,
+            headers=NO_STORE,
+        )
+    try:
+        result = await render_session_outputs(
+            session,
+            requested,
+            active,
             consumer_id=session_id,
         )
     except ValueReadUnavailable as error:

@@ -87,11 +87,17 @@ export const commitRuntimeConfig = (config: RuntimeConfig): RuntimeConfig => {
     current && sameValueBindings(current.valueBindings, config.valueBindings)
       ? current.valueBindings
       : config.valueBindings;
+  const outputBindings =
+    current && sameValueBindings(current.outputBindings, config.outputBindings)
+      ? current.outputBindings
+      : config.outputBindings;
   const cellsChanged = current?.cellBindings !== cellBindings;
   current =
-    cellBindings === config.cellBindings && valueBindings === config.valueBindings
+    cellBindings === config.cellBindings &&
+    valueBindings === config.valueBindings &&
+    outputBindings === config.outputBindings
       ? config
-      : { ...config, cellBindings, valueBindings };
+      : { ...config, cellBindings, valueBindings, outputBindings };
   listeners.forEach((listener) => listener());
   if (cellsChanged) {
     cellListeners.forEach((listener) => listener());

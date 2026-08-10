@@ -9,6 +9,7 @@ import {
   store,
 } from "@marimo-studio/marimo-frontend/runtime";
 
+import { createServerOutputReader } from "../outputs/remote";
 import { readServerValuesWithRetry } from "../values/remote";
 import { mountSharedRuntime } from "./runtime";
 import { configureServerTransport } from "./transport";
@@ -49,5 +50,6 @@ export const mountServerRuntime = (
     updateQuery: async () => {},
     valueReader: (sessionId) => (request, signal) =>
       readServerValuesWithRetry(sessionId, request, signal),
+    outputReader: (sessionId) => createServerOutputReader(sessionId),
   });
 };

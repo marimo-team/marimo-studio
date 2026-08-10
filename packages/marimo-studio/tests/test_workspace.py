@@ -5,13 +5,17 @@ import re
 import shutil
 from collections.abc import MutableMapping
 from pathlib import Path
+from typing import cast
 
 import marimo
 import pytest
 
 import marimo_studio._compat.runtime_probe as runtime_probe_compat
 import marimo_studio._workspace.transactions as workspace_transactions
-from marimo_studio._compat.kernel_values.selectors import _template_selectors
+from marimo_studio._compat.kernel_values.selectors import (
+    _template_output_selectors,
+    _template_selectors,
+)
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
 from marimo_studio._workspace.metadata import (
@@ -27,6 +31,8 @@ from marimo_studio.errors import (
     WorkspaceInitializationError,
 )
 from marimo_studio.types import (
+    OutputRenderResult,
+    RenderedOutput,
     RuntimeCell,
     RuntimeProbe,
     ValueReadError,
@@ -506,7 +512,7 @@ def test_notebook_configuration_controls_presentation_options(
         load_studio(notebook_path)
 
 
-def test_kernel_selectors_include_each_valid_view(notebook_path: Path) -> None:
+def test_kernel_projections_include_each_valid_view(notebook_path: Path) -> None:
     ensure_view(notebook_path)
     studio = load_studio(notebook_path)
     ensure_view(notebook_path, "executive")
@@ -514,15 +520,32 @@ def test_kernel_selectors_include_each_valid_view(notebook_path: Path) -> None:
     _shell(
         studio,
         "dashboard",
-        '<span mo-value="doubled"></span>',
+        '<span mo-value="doubled"></span>'
+        '<marimo-output value="doubled"></marimo-output>',
     )
     _shell(
         studio,
         "executive",
-        '<span mo-value="x"></span>',
+        '<span mo-value="x"></span><marimo-output value="x"></marimo-output>',
     )
 
     assert set(_template_selectors(notebook_path) or ()) == {"doubled", "x"}
+    assert set(_template_output_selectors(notebook_path) or ()) == {"doubled", "x"}
+
+
+def test_output_projection_binds_to_the_defining_cell(notebook_path: Path) -> None:
+    ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+    _shell(
+        studio,
+        "dashboard",
+        '<marimo-output value="doubled"></marimo-output>',
+    )
+
+    view = resolve_studio(load_studio(notebook_path)).view("dashboard")
+
+    assert view.output_bindings["doubled"].cell.definitions == ("doubled",)
+    assert view.output_bindings["doubled"].line > 0
 
 
 def test_kernel_selectors_ignore_an_invalid_unselected_view(
@@ -555,8 +578,22 @@ def test_kernel_selectors_ignore_an_invalid_unselected_view(
             "inside #app-shell",
         ),
         (
+            '<main id="app-shell"></main>'
+            '<marimo-output value="doubled"></marimo-output>',
+            "inside #app-shell",
+        ),
+        (
             '<main id="app-shell"><span mo-value="doubled + 1"></span></main>',
             "Invalid mo-value reference",
+        ),
+        (
+            '<main id="app-shell"><marimo-output></marimo-output></main>',
+            "requires a value reference",
+        ),
+        (
+            '<main id="app-shell">'
+            '<marimo-output value="doubled + 1"></marimo-output></main>',
+            "Invalid marimo-output value",
         ),
         (
             "<main id='app-shell' data-marimo-studio-runtime></main>",
@@ -592,6 +629,7 @@ def test_view_reports_each_unresolved_projection_with_its_source(
 <main id="app-shell">
   <marimo-cell name="missing"></marimo-cell>
   <span mo-value="absent.label"></span>
+  <marimo-output value="missing_output"></marimo-output>
 </main>
 </body>
 </html>
@@ -639,7 +677,62 @@ def test_view_reports_each_unresolved_projection_with_its_source(
                 "column": 3,
             },
         },
+        {
+            "code": "output-variable-not-found",
+            "severity": "error",
+            "message": (
+                "Output 'missing_output' depends on notebook variable "
+                "'missing_output', which has no defining cell."
+            ),
+            "hint": (
+                "Define the variable, change the selector, or remove the output "
+                "projection from the view."
+            ),
+            "view": "dashboard",
+            "projection": "output",
+            "target": "missing_output",
+            "source": {
+                "path": str(studio.views["dashboard"].template),
+                "line": 7,
+                "column": 3,
+            },
+        },
     ]
+
+
+def test_output_selector_may_appear_once_per_view(notebook_path: Path) -> None:
+    ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+    _shell(
+        studio,
+        "dashboard",
+        '<marimo-output value="doubled"></marimo-output>'
+        '<marimo-output value="doubled"></marimo-output>',
+    )
+
+    with pytest.raises(ConfigurationError, match="output selector may appear once"):
+        resolve_studio(load_studio(notebook_path))
+
+
+def test_view_accepts_at_most_one_hundred_output_selectors(
+    notebook_path: Path,
+) -> None:
+    ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+
+    def outputs(count: int) -> str:
+        return "".join(
+            f'<marimo-output value="output_{index}"></marimo-output>'
+            for index in range(count)
+        )
+
+    _shell(studio, "dashboard", outputs(100))
+
+    resolve_studio(load_studio(notebook_path))
+
+    _shell(studio, "dashboard", outputs(101))
+    with pytest.raises(ConfigurationError, match="at most 100 output selectors"):
+        resolve_studio(load_studio(notebook_path))
 
 
 @pytest.mark.parametrize("name", ["health", "studio"])
@@ -804,6 +897,7 @@ def test_runtime_check_scopes_values_to_the_selected_view(
                     )
                 },
             ),
+            outputs=OutputRenderResult(outputs={}, errors={}),
         )
 
     monkeypatch.setattr(runtime_probe_compat, "probe_runtime", probe)
@@ -864,6 +958,154 @@ def test_runtime_check_scopes_values_to_the_selected_view(
         "Fix the mo-value selector in the view template or the value shape "
         "in Marimo, then rerun the check."
     )
+
+
+def test_runtime_check_reports_rich_output_format_failures(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+    _shell(studio, "dashboard", '<marimo-output value="doubled"></marimo-output>')
+    captured: dict[str, object] = {}
+
+    async def probe(*_: object, **kwargs: object) -> RuntimeProbe:
+        captured.update(kwargs)
+        return RuntimeProbe(
+            cells={},
+            values=ValueReadResult(values={}, errors={}),
+            outputs=OutputRenderResult(
+                outputs={},
+                errors={
+                    "doubled": ValueReadError(
+                        "output-format-error",
+                        "The rich representation failed",
+                    )
+                },
+            ),
+        )
+
+    monkeypatch.setattr(runtime_probe_compat, "probe_runtime", probe)
+    results = asyncio.run(
+        check_runtime_studio(load_studio(notebook_path), view_name="dashboard")
+    )
+    failure = next(result for result in results if result.status == "fail")
+
+    assert captured["variables"] == ()
+    assert captured["output_selector_groups"] == (("doubled",),)
+    assert failure.name == "runtime-output:doubled"
+    assert failure.code == "output-format-error"
+    assert failure.message == "The rich representation failed"
+    assert failure.details is not None
+    assert failure.details["projection"] == "output"
+    assert failure.details["target"] == "doubled"
+    assert failure.details["view"] == "dashboard"
+
+
+def test_runtime_check_propagates_output_response_errors(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_view(notebook_path)
+    studio = load_studio(notebook_path)
+    _shell(studio, "dashboard", '<marimo-output value="doubled"></marimo-output>')
+
+    async def probe(*_: object, **__: object) -> RuntimeProbe:
+        return RuntimeProbe(
+            cells={},
+            values=ValueReadResult(values={}, errors={}),
+            outputs=OutputRenderResult(
+                outputs={},
+                errors={
+                    "*": ValueReadError(
+                        "response-too-large",
+                        "The output response exceeds the aggregate byte limit.",
+                    )
+                },
+            ),
+        )
+
+    monkeypatch.setattr(runtime_probe_compat, "probe_runtime", probe)
+    results = asyncio.run(
+        check_runtime_studio(load_studio(notebook_path), view_name="dashboard")
+    )
+    failure = next(result for result in results if result.status == "fail")
+
+    assert failure.name == "runtime-output:doubled"
+    assert failure.code == "response-too-large"
+    assert failure.message == "The output response exceeds the aggregate byte limit."
+
+
+def test_runtime_check_keeps_output_request_groups_within_each_view(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "many_outputs.py"
+    names = [f"output_{index}" for index in range(102)]
+    assignments = "\n".join(f"    {name} = {index}" for index, name in enumerate(names))
+    returned = ", ".join(names)
+    notebook.write_text(
+        f'''import marimo
+
+__generated_with = "{marimo.__version__}"
+app = marimo.App()
+
+
+@app.cell
+def _():
+{assignments}
+    return {returned}
+
+
+if __name__ == "__main__":
+    app.run()
+''',
+        encoding="utf-8",
+    )
+    ensure_view(notebook)
+    ensure_view(notebook, "executive")
+    studio = load_studio(notebook)
+    _shell(
+        studio,
+        "dashboard",
+        "".join(
+            f'<marimo-output value="{name}"></marimo-output>' for name in names[:51]
+        ),
+    )
+    _shell(
+        studio,
+        "executive",
+        "".join(
+            f'<marimo-output value="{name}"></marimo-output>' for name in names[51:]
+        ),
+    )
+    captured: dict[str, object] = {}
+
+    async def probe(*_: object, **kwargs: object) -> RuntimeProbe:
+        captured.update(kwargs)
+        return RuntimeProbe(
+            cells={},
+            values=ValueReadResult(values={}, errors={}),
+            outputs=OutputRenderResult(
+                outputs={
+                    name: RenderedOutput(
+                        owner_cell_id=f"owner-{name}",
+                        mimetype="text/plain",
+                        data=str(index),
+                        timestamp=1,
+                    )
+                    for index, name in enumerate(names)
+                },
+                errors={},
+            ),
+        )
+
+    monkeypatch.setattr(runtime_probe_compat, "probe_runtime", probe)
+    results = asyncio.run(check_runtime_studio(load_studio(notebook)))
+
+    groups = cast(tuple[tuple[str, ...], ...], captured["output_selector_groups"])
+    assert tuple(len(group) for group in groups) == (51, 51)
+    assert all(result.status == "pass" for result in results)
 
 
 def test_runtime_check_reports_disabled_projection_causes(tmp_path: Path) -> None:
@@ -989,6 +1231,7 @@ def test_runtime_check_includes_cells_loaded_through_htmx(
                 )
             },
             values=ValueReadResult(values={}, errors={}),
+            outputs=OutputRenderResult(outputs={}, errors={}),
         )
 
     monkeypatch.setattr(runtime_probe_compat, "probe_runtime", probe)

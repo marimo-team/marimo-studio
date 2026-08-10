@@ -26,6 +26,7 @@ from marimo._session.extensions.types import EventAwareExtension
 from marimo._session.session import Session, SessionImpl
 from marimo._types.ids import ConsumerId
 
+from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
 from marimo_studio._compat.server.models import ServerLocation
 from marimo_studio._compat.server.sessions import session_matches_notebook
 
@@ -119,6 +120,7 @@ def _peer_notifications(request: CommandMessage) -> tuple[NotificationMessage, .
                 },
             )
             for object_id, value in request.ids_and_values
+            if not str(object_id).startswith(OUTPUT_OWNER_PREFIX)
         )
     if not isinstance(request, ModelCommand) or not isinstance(
         request.message, ModelUpdateMessage

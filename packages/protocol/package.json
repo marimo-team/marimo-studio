@@ -6,6 +6,7 @@
   "exports": {
     "./development-events": "./src/development-events.ts",
     "./errors": "./src/errors.ts",
+    "./output-read": "./src/output-read.ts",
     "./preview-messages": "./src/preview-messages.ts",
     "./query": "./src/query.ts",
     "./runtime-config": "./src/runtime-config.ts",

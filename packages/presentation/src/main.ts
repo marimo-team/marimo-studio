@@ -14,6 +14,7 @@ import {
   rememberSession,
 } from "./document/session-preservation";
 import { errorMessage } from "./errors";
+import { registerMarimoOutputElement } from "./outputs/host";
 import { setRuntimeConnectionState, startReadiness, stopReadiness } from "./readiness";
 import {
   commitRuntimeConfig,
@@ -34,7 +35,7 @@ import {
   updateConfiguredRuntimeQuery,
 } from "./runtime/coordinator";
 import { restorePendingRuntimeSelection } from "./runtime/selection";
-import { startValueBindings, stopValueBindings } from "./values/index";
+import { startValueBindings, stopValueBindings } from "./values/hosts";
 import { initializeViewStyles } from "./view-styles/runtime";
 
 declare global {
@@ -127,6 +128,7 @@ const bootstrap = async (registry: RuntimeRegistry) => {
   startReadiness(updateConfiguredRuntimeQuery);
   globalThis.addEventListener("pagehide", stopReadiness, { once: true });
   registerMarimoCellElement();
+  registerMarimoOutputElement();
 
   let config = await loadRuntimeConfig();
   const stopRuntimeNavigation = bindRuntimeNavigation();

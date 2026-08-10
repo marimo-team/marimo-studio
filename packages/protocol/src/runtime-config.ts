@@ -15,7 +15,7 @@ export const projectionDiagnosticSchema = z.object({
   message: z.string(),
   hint: z.string(),
   view: z.string(),
-  projection: z.enum(["cell", "value"]),
+  projection: z.enum(["cell", "value", "output"]),
   target: z.string(),
   source: z.object({
     path: z.string(),
@@ -62,6 +62,7 @@ const runtimeConfigFields = {
   showCellLogs: z.boolean().default(true),
   cellBindings: z.record(z.string(), cellBindingConfigSchema),
   valueBindings: z.record(z.string(), valueBindingConfigSchema),
+  outputBindings: z.record(z.string(), valueBindingConfigSchema),
   diagnostics: z.array(projectionDiagnosticSchema),
   appConfig: z.record(z.string(), z.unknown()),
   userConfig: z.record(z.string(), z.unknown()),

@@ -13,7 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from marimo_studio import _assets
-from marimo_studio._compat.browser_notebook import browser_notebook_source
+from marimo_studio._compat.browser_notebook import (
+    browser_notebook_source,
+    selector_specs,
+)
 from marimo_studio._compat.static_export import static_runtime_config
 from marimo_studio._html import cell_host, render, runtime_document
 from marimo_studio._workspace.config import load_studio
@@ -106,10 +109,15 @@ def _digest(*values: str) -> str:
     return digest.hexdigest()
 
 
-def _value_references(document: str) -> dict[str, ValueReference]:
+def _projection_references(
+    document: str,
+) -> tuple[dict[str, ValueReference], dict[str, ValueReference]]:
     parser = TemplateParser()
     parser.feed(document)
-    return {reference.source: reference for reference in parser.value_references}
+    return (
+        {reference.source: reference for reference in parser.value_references},
+        {reference.source: reference for reference in parser.output_references},
+    )
 
 
 def _projection_error(resolved: ResolvedStudio, view_name: str) -> None:
@@ -135,8 +143,13 @@ def _runtime_config(
     document: str,
     notebook_source: str,
 ) -> tuple[str, dict[str, object]]:
-    references = _value_references(document)
-    code = browser_notebook_source(studio.notebook, notebook_source, references)
+    value_references, output_references = _projection_references(document)
+    code = browser_notebook_source(
+        studio.notebook,
+        notebook_source,
+        value_references,
+        output_references,
+    )
     version = _assets.runtime_marimo_version()
     view = resolved.views[view_name]
     cell_bindings = resolved.runtime_cell_bindings(
@@ -144,6 +157,7 @@ def _runtime_config(
         required_aliases=view.cell_aliases,
     )
     value_bindings = view.runtime_value_bindings(None)
+    output_bindings = view.runtime_output_bindings(None)
     controls = resolved.runtime_control_cells(None)
     revision = _digest(
         view_name,
@@ -151,6 +165,7 @@ def _runtime_config(
         code,
         json.dumps(cell_bindings, sort_keys=True),
         json.dumps(value_bindings, sort_keys=True),
+        json.dumps(output_bindings, sort_keys=True),
     )
     support_url = f"./{SUPPORT_ROOT.as_posix()}/views/{view_name}"
     marimo_config = static_runtime_config(studio.notebook)
@@ -167,6 +182,8 @@ def _runtime_config(
                 "code": code,
                 "filename": "notebook.py",
                 "version": version,
+                "valueSpecs": selector_specs(value_references),
+                "outputSpecs": selector_specs(output_references),
             },
             "controls": {"cells": controls},
         },
@@ -176,6 +193,7 @@ def _runtime_config(
         "supportUrl": support_url,
         "cellBindings": cell_bindings,
         "valueBindings": value_bindings,
+        "outputBindings": output_bindings,
         "diagnostics": [],
         "appConfig": resolved.notebook.app_config,
         "userConfig": marimo_config.user,

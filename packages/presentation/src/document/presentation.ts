@@ -1,6 +1,7 @@
 import htmx from "htmx.org";
 
 import { prepareCellHosts, syncPreservedCellHosts } from "../cells/host.ts";
+import { prepareOutputHosts, syncPreservedOutputHosts } from "../outputs/host.ts";
 import {
   commitRuntimeConfig,
   fetchRuntimeConfig,
@@ -117,6 +118,7 @@ export class PresentationDocument {
         throw new Error("Shell refresh requires #app-shell");
       }
       prepareCellHosts(nextDocument);
+      prepareOutputHosts(nextDocument);
       stagedViewStyles = await stageViewStyles(next);
       stagedStyles = await this.styles.stage(nextDocument, nextDocumentUrl, signal);
       if (signal.aborted) {
@@ -137,6 +139,7 @@ export class PresentationDocument {
         documentBase.set(nextBase);
         this.swap(current, next);
         syncPreservedCellHosts(next, document);
+        syncPreservedOutputHosts(next, document);
         stagedStyles.commit();
         stagedViewStyles.commit();
       } catch (error) {

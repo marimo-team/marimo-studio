@@ -25,6 +25,7 @@ def _configured_view(notebook: Path) -> Path:
             """
             <marimo-cell name="cell-2"></marimo-cell>
             <output mo-value="doubled"></output>
+            <marimo-output value="doubled"></marimo-output>
             <button
               hx-get="./_marimo-studio/views/dashboard/cells/cell-2"
               hx-target="#lazy-cell"
@@ -83,9 +84,14 @@ def test_export_view_writes_a_complete_static_bundle(
     assert config["supportUrl"] == "./_marimo-studio/views/dashboard"
     assert config["cellBindings"]["cell-2"]["kind"] == "id"
     assert config["valueBindings"]["doubled"]["variable"] == "doubled"
-    code = config["runtime"]["data"]["code"]
+    assert config["outputBindings"]["doubled"]["variable"] == "doubled"
+    runtime_data = config["runtime"]["data"]
+    assert runtime_data["valueSpecs"] == {"doubled": ["doubled", []]}
+    assert runtime_data["outputSpecs"] == {"doubled": ["doubled", []]}
+    code = runtime_data["code"]
     compile(code, "notebook.py", "exec")
     assert "[tool.marimo-studio]" not in code
+    assert '"render_values"' in code
     assert 'src="./_marimo-studio/assets/runtime.js"' in document
     assert 'href="./_marimo-studio/assets/runtime.css"' in document
     assert '<base href="./">' in document

@@ -1,18 +1,14 @@
 import { definePresentationRuntime, type PresentationRuntime } from "@marimo-studio/runtime";
 import { z } from "zod";
 
+import { wasmRuntimeDataSchema } from "./wasm-config";
+
 const serverDataSchema = z.object({
   url: z.string(),
   serverToken: z.string(),
   fileKey: z.string(),
   file: z.string().optional(),
   preserveSession: z.boolean(),
-});
-
-const wasmDataSchema = z.object({
-  code: z.string(),
-  filename: z.string(),
-  version: z.string(),
 });
 
 export const serverRuntime: PresentationRuntime = definePresentationRuntime({
@@ -27,7 +23,7 @@ export const serverRuntime: PresentationRuntime = definePresentationRuntime({
 export const wasmRuntime: PresentationRuntime = definePresentationRuntime({
   id: "wasm",
   async mount(context, data) {
-    const config = wasmDataSchema.parse(data);
+    const config = wasmRuntimeDataSchema.parse(data);
     const marker = document.createElement("marimo-wasm");
     marker.hidden = true;
     marker.setAttribute("aria-hidden", "true");

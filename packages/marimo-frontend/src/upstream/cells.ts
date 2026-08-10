@@ -11,3 +11,5 @@ export {
   useNotebook,
 } from "@marimo-team/frontend/unstable_internal/core/cells/cells";
 export { RuntimeState } from "@marimo-team/frontend/unstable_internal/core/kernel/RuntimeState";
+export type { CellId } from "@marimo-team/frontend/unstable_internal/core/cells/ids";
+export type { CellOutput } from "@marimo-team/frontend/unstable_internal/core/kernel/messages";

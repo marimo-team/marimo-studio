@@ -114,6 +114,7 @@ class ResolvedView:
     view: View
     cell_aliases: tuple[str, ...]
     value_bindings: dict[str, ValueBinding]
+    output_bindings: dict[str, ValueBinding]
     diagnostics: tuple[ProjectionDiagnostic, ...]
 
     def runtime_value_bindings(
@@ -130,6 +131,22 @@ class ResolvedView:
                 ),
             }
             for source, binding in sorted(self.value_bindings.items())
+        }
+
+    def runtime_output_bindings(
+        self,
+        live_cells: LiveCellSnapshot | None,
+    ) -> dict[str, dict[str, object]]:
+        return {
+            source: {
+                "variable": binding.reference.variable,
+                "cell": _runtime_cell_target(
+                    binding.cell,
+                    live_cells,
+                    f"output selector {source!r}",
+                ),
+            }
+            for source, binding in sorted(self.output_bindings.items())
         }
 
 
@@ -227,7 +244,7 @@ def _runtime_cell_target(
     return {"kind": "id", "value": matches[0]}
 
 
-ProjectionKind = Literal["cell", "value"]
+ProjectionKind = Literal["cell", "value", "output"]
 ProjectionSeverity = Literal["warning", "error"]
 
 

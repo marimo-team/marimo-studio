@@ -36,9 +36,11 @@ class TemplateParser(HTMLParser):
         self.aliases: list[str] = []
         self.fragment_aliases: list[str] = []
         self.value_references: list[ValueReference] = []
+        self.output_references: list[ValueReference] = []
         self.alias_positions: dict[str, tuple[int, int]] = {}
         self.fragment_alias_positions: dict[str, tuple[int, int]] = {}
         self.value_positions: dict[str, tuple[int, int]] = {}
+        self.output_positions: dict[str, tuple[int, int]] = {}
         self.app_shells = 0
         self.heads = 0
         self.bodies = 0
@@ -102,7 +104,7 @@ class TemplateParser(HTMLParser):
         if is_shell:
             self.app_shells += 1
             self._shell_depth += 1
-        if (tag == "marimo-cell" or "mo-value" in attributes) and (
+        if (tag in ("marimo-cell", "marimo-output") or "mo-value" in attributes) and (
             self._shell_depth == 0
         ):
             self.projection_outside_shell = True
@@ -139,6 +141,24 @@ class TemplateParser(HTMLParser):
                 ) from error
             self.value_references.append(reference)
             self.value_positions.setdefault(reference.source, position)
+        if tag == "marimo-output":
+            source = attributes.get("value")
+            if source is None:
+                raise TemplateError(
+                    "Every <marimo-output> requires a value reference",
+                    line=line,
+                    column=column + 1,
+                )
+            try:
+                reference = parse_value_reference(source)
+            except ValueError as error:
+                raise TemplateError(
+                    f"Invalid marimo-output value {source!r} at line {line}: {error}",
+                    line=line,
+                    column=column + 1,
+                ) from error
+            self.output_references.append(reference)
+            self.output_positions.setdefault(reference.source, position)
         if self_closing:
             if is_shell:
                 self._shell_depth -= 1

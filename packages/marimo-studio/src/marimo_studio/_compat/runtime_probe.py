@@ -16,14 +16,18 @@ from marimo_studio._compat.kernel_values import (
     DEFAULT_MAX_VALUE_BYTES,
     inspection_selectors,
     read_session_values,
+    render_session_outputs,
 )
 from marimo_studio._compat.runtime_requests import instantiate_notebook_request
 from marimo_studio._compat.version import assert_supported_version
 from marimo_studio.errors import ProtocolError
 from marimo_studio.types import (
+    OutputRenderResult,
+    RenderedOutput,
     RuntimeCell,
     RuntimeOutput,
     RuntimeProbe,
+    ValueReadError,
     ValueReadResult,
 )
 
@@ -80,6 +84,8 @@ async def probe_runtime(
     *,
     cell_ids: tuple[str, ...],
     variables: tuple[str, ...],
+    output_selectors: tuple[str, ...] = (),
+    output_selector_groups: tuple[tuple[str, ...], ...] = (),
     timeout: float = 60.0,
     show_tracebacks: bool = False,
     value_max_bytes: int | None = None,
@@ -118,6 +124,10 @@ async def probe_runtime(
         def on_detach(self) -> None:
             return
 
+    groups = output_selector_groups or ((output_selectors,) if output_selectors else ())
+    allowed_outputs = tuple(
+        dict.fromkeys(selector for group in groups for selector in group)
+    )
     manager = _build_manager(
         path,
         timeout=timeout,
@@ -127,7 +137,7 @@ async def probe_runtime(
     consumer = ProbeConsumer()
     session: Any | None = None
     try:
-        with inspection_selectors(path, variables):
+        with inspection_selectors(path, variables, allowed_outputs):
             session = manager.create_session(
                 session_id,
                 consumer,
@@ -180,7 +190,30 @@ async def probe_runtime(
                 if variables
                 else ValueReadResult(values={}, errors={})
             )
-            return RuntimeProbe(cells=cells, values=values)
+            outputs: dict[str, RenderedOutput] = {}
+            output_errors: dict[str, ValueReadError] = {}
+            for group in groups:
+                active = tuple(dict.fromkeys(group))
+                for selector in active:
+                    rendered = await render_session_outputs(
+                        session,
+                        (selector,),
+                        active,
+                        consumer_id=str(consumer.consumer_id),
+                    )
+                    error = rendered.errors.get(selector) or rendered.errors.get("*")
+                    output = rendered.outputs.get(selector)
+                    if error is not None:
+                        outputs.pop(selector, None)
+                        output_errors[selector] = error
+                    elif output is not None:
+                        output_errors.pop(selector, None)
+                        outputs[selector] = output
+            output_result = OutputRenderResult(
+                outputs=outputs,
+                errors=output_errors,
+            )
+            return RuntimeProbe(cells=cells, values=values, outputs=output_result)
     finally:
         try:
             if session is not None:

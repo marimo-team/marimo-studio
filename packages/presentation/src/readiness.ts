@@ -139,7 +139,8 @@ export const pageReadinessState = (
 const evaluate = () => {
   const cells = Array.from(document.querySelectorAll("marimo-cell"));
   const values = Array.from(document.querySelectorAll("[mo-value]"));
-  const hosts = [...cells, ...values];
+  const outputs = Array.from(document.querySelectorAll("marimo-output"));
+  const hosts = [...cells, ...outputs, ...values];
   const hostStates = hosts.map(hostState);
   const next = pageReadinessState(connectionState, hostStates, presentationState);
 
@@ -242,7 +243,12 @@ const diagnostics = (): readonly StudioDiagnostic[] => {
   ).flatMap((host): HostDiagnostic[] => {
     const code = host.dataset.marimoDiagnosticCode;
     const message = host.dataset.marimoDiagnosticMessage;
-    const target = host.getAttribute("name") ?? host.getAttribute("mo-value") ?? "";
+    let target = host.getAttribute("mo-value") ?? "";
+    if (host.matches("marimo-cell")) {
+      target = host.getAttribute("name") ?? "";
+    } else if (host.matches("marimo-output")) {
+      target = host.getAttribute("value") ?? "";
+    }
     if (!code || !message || configuredKeys.has(`${code}\u0000${target}`)) {
       return [];
     }
@@ -280,7 +286,7 @@ export const startReadiness = (updateQuery: (query: string) => Promise<void>) =>
   observer = new MutationObserver(notifyReadinessChanged);
   observer.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: ["data-state", "mo-value", "name"],
+    attributeFilter: ["data-state", "mo-value", "name", "value"],
     childList: true,
     subtree: true,
   });

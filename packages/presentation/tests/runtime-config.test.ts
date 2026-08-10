@@ -45,6 +45,7 @@ const baseRuntimeConfig = {
       cell: { kind: "id", value: "context-cell-id" },
     },
   },
+  outputBindings: {},
   diagnostics: [],
   appConfig: {},
   userConfig: {},

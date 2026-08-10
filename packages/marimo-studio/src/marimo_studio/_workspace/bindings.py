@@ -32,6 +32,7 @@ from marimo_studio._workspace.templates import (
 )
 from marimo_studio.errors import BindingError, ConfigurationError, TemplateError
 from marimo_studio.types import CellRef, CellSpec, ValueBinding
+from marimo_studio.values import MAX_OUTPUT_SELECTORS
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,8 @@ def _projection_position(
 ) -> tuple[int, int]:
     if projection == "value":
         return parser.value_positions.get(target, (1, 1))
+    if projection == "output":
+        return parser.output_positions.get(target, (1, 1))
     return parser.alias_positions.get(
         target,
         parser.fragment_alias_positions.get(target, (1, 1)),
@@ -103,7 +106,7 @@ def _resolve_view(
     validate_template_structure(parser, view.template)
     if parser.projection_outside_shell:
         raise TemplateError(
-            f"{view.template}: cell and value hosts must be inside #app-shell",
+            f"{view.template}: projection hosts must be inside #app-shell",
             source=view.template,
         )
     if parser.has_reserved_runtime_markup:
@@ -118,6 +121,30 @@ def _resolve_view(
         line, column = parser.alias_positions[duplicates[0]]
         raise TemplateError(
             f"{view.template}: a cell alias may appear once: " + ", ".join(duplicates),
+            source=view.template,
+            line=line,
+            column=column,
+        )
+    duplicate_outputs = sorted(
+        source
+        for source in set(reference.source for reference in parser.output_references)
+        if sum(reference.source == source for reference in parser.output_references) > 1
+    )
+    if duplicate_outputs:
+        line, column = parser.output_positions[duplicate_outputs[0]]
+        raise TemplateError(
+            f"{view.template}: an output selector may appear once: "
+            + ", ".join(duplicate_outputs),
+            source=view.template,
+            line=line,
+            column=column,
+        )
+    if len(parser.output_references) > MAX_OUTPUT_SELECTORS:
+        first_excess = parser.output_references[MAX_OUTPUT_SELECTORS]
+        line, column = parser.output_positions[first_excess.source]
+        raise TemplateError(
+            f"{view.template}: a view may contain at most "
+            f"{MAX_OUTPUT_SELECTORS} output selectors",
             source=view.template,
             line=line,
             column=column,
@@ -195,10 +222,58 @@ def _resolve_view(
             line=line,
             column=column,
         )
+    output_bindings: dict[str, ValueBinding] = {}
+    output_references = {
+        reference.source: reference for reference in parser.output_references
+    }
+    for source, reference in output_references.items():
+        defining = defining_cells.get(reference.variable, [])
+        if not defining:
+            diagnostics.append(
+                _diagnostic(
+                    view,
+                    parser,
+                    code="output-variable-not-found",
+                    message=(
+                        f"Output {source!r} depends on notebook variable "
+                        f"{reference.variable!r}, which has no defining cell."
+                    ),
+                    hint="Define the variable, change the selector, or remove "
+                    "the output projection from the view.",
+                    projection="output",
+                    target=source,
+                )
+            )
+            continue
+        if len(defining) > 1:
+            diagnostics.append(
+                _diagnostic(
+                    view,
+                    parser,
+                    code="output-variable-ambiguous",
+                    message=(
+                        f"Output {source!r} depends on notebook variable "
+                        f"{reference.variable!r}, which has multiple defining cells."
+                    ),
+                    hint="Give the variable one defining cell before projecting it.",
+                    projection="output",
+                    target=source,
+                )
+            )
+            continue
+        line, column = parser.output_positions[source]
+        output_bindings[source] = ValueBinding(
+            reference=reference,
+            cell=defining[0],
+            source=view.template,
+            line=line,
+            column=column,
+        )
     return ResolvedView(
         view=view,
         cell_aliases=projected_aliases,
         value_bindings=value_bindings,
+        output_bindings=output_bindings,
         diagnostics=tuple(diagnostics),
     )
 
