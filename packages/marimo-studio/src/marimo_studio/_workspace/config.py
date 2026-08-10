@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-import tomllib
+import sys
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 from marimo_studio._workspace.files import reject_mutable_symlinks
 from marimo_studio._workspace.metadata import notebook_config

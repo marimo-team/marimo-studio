@@ -154,7 +154,7 @@ async def probe_runtime(
                     consumer.complete.wait(),
                     timeout=max(0, deadline - loop.time()),
                 )
-            except TimeoutError as error:
+            except asyncio.TimeoutError as error:
                 raise ProtocolError(
                     f"Notebook runtime did not finish within {timeout:g} seconds"
                 ) from error

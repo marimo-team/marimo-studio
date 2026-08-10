@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import os
 import sys
-import tomllib
 from importlib.metadata import metadata
 from pathlib import Path
 from typing import Protocol
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import Version

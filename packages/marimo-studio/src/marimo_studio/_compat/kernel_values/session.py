@@ -309,7 +309,7 @@ async def _invoke_session_function(
                 from_consumer_id=native_consumer_id,
             )
             return await asyncio.wait_for(waiter.future, timeout=timeout)
-    except TimeoutError as error:
+    except asyncio.TimeoutError as error:
         output_read = operation == "output"
         raise ValueReadUnavailable(
             "output-read-timeout" if output_read else "read-timeout",

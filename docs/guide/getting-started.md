@@ -8,7 +8,7 @@ description: Add a view to a saved Marimo notebook and render one live notebook 
 Add a view to a saved [marimo](https://marimo.io/) notebook, open it beside the
 native editor, and replace the starter page with one focused output.
 
-The commands use `analysis.py` as the notebook path. You need Python 3.11 or
+The commands use `analysis.py` as the notebook path. You need Python 3.10 or
 newer and [uv](https://docs.astral.sh/uv/).
 
 ## Add the view

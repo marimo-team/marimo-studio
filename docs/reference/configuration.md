@@ -22,7 +22,7 @@ view and opens its authoring workspace.
 
 ```python [analysis.py]
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.10"
 # dependencies = [
 #   "marimo-studio",
 # ]

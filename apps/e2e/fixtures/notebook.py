@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.10"
 # dependencies = [
 #   "anywidget==0.9.21",
 #   "marimo>=0.23.16",

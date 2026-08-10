@@ -254,7 +254,7 @@ def test_setup_converges_package_requirements_and_sources(
     notebook_path.write_text(
         """\
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.10"
 # dependencies = [
 #   "Marimo_Studio @ https://packages.example/widget.whl",
 #   "humanize>=4",
@@ -298,7 +298,7 @@ def test_setup_tightens_the_notebook_python_requirement(
     notebook_path.write_text(
         """\
 # /// script
-# requires-python = ">=3.10,<3.13"
+# requires-python = ">=3.9,<3.13"
 # dependencies = []
 # ///
 
@@ -311,7 +311,7 @@ def test_setup_tightens_the_notebook_python_requirement(
     document = read_notebook_metadata(notebook_path)
 
     assert document is not None
-    assert document["requires-python"] == ">=3.11,<3.13"
+    assert document["requires-python"] == ">=3.10,<3.13"
 
 
 def test_setup_rejects_disjoint_python_requirements_before_mutation(
@@ -320,7 +320,7 @@ def test_setup_rejects_disjoint_python_requirements_before_mutation(
     notebook_path.write_text(
         notebook_path.read_text(encoding="utf-8").replace(
             "import marimo",
-            '# /// script\n# requires-python = "<3.11"\n'
+            '# /// script\n# requires-python = "<3.10"\n'
             "# dependencies = []\n# ///\n\nimport marimo",
         ),
         encoding="utf-8",
