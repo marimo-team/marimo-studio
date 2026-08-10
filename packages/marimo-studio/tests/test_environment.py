@@ -65,7 +65,7 @@ default = "dashboard"
     ) -> list[str]:
         captured["package_requirement"] = package_requirement
         captured["compose_project"] = compose_project
-        return ["--python", ">=3.11"]
+        return ["--python", ">=3.10"]
 
     monkeypatch.setattr(environment_module, "inline_environment_flags", inline_flags)
     monkeypatch.setattr(subprocess, "run", run)
@@ -95,7 +95,7 @@ def test_source_checkout_reentry_uses_local_package_for_unversioned_requirement(
     notebook.write_text(
         """\
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.10"
 # dependencies = ["marimo-studio"]
 # ///
 """,
@@ -218,7 +218,7 @@ def test_inline_environment_uses_the_unversioned_package_requirement(
     notebook.write_text(
         """\
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.10"
 # dependencies = ["humanize>=4", "marimo-studio==1.2.3"]
 #
 # [tool.uv.sources]

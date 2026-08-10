@@ -4,13 +4,14 @@ version = "0.0.4"
 description = "Custom views for Marimo notebooks"
 readme = "README.md"
 authors = [{ name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }]
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
   "click>=8.2",
   "htpy>=26.5.1,<27",
   "marimo>=0.23.16",
   "markupsafe>=3",
   "packaging>=25",
+  "tomli>=2; python_version < '3.11'",
   "tomlkit>=0.14",
 ]
 
@@ -34,7 +35,7 @@ studio = "marimo_studio.agents"
 
 [tool.ruff]
 src = ["src"]
-target-version = "py311"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID251"]

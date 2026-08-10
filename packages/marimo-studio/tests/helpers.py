@@ -43,7 +43,7 @@ def notebook_source(marker: Path, *, dependencies: tuple[str, ...] = ()) -> str:
         values = ", ".join(f'"{dependency}"' for dependency in dependencies)
         metadata = (
             "# /// script\n"
-            '# requires-python = ">=3.11"\n'
+            '# requires-python = ">=3.10"\n'
             f"# dependencies = [{values}]\n"
             "# ///\n"
         )
