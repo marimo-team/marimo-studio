@@ -1,0 +1,29 @@
+packages/studio/src/features/workspace/TrustedFrame.tsx
+  s_77c7fa5e40f24c::t_3d2ee071ae7f24 3,6,9-14,21
+packages/studio/tests/theme.test.tsx
+  s_77c7fa5e40f24c::t_f8f4561d011053 60
+  s_77c7fa5e40f24c::t_3d2ee071ae7f24 9-39,48-52,58-59,62
+packages/studio/src/shared/theme.tsx
+  s_77c7fa5e40f24c::t_3d2ee071ae7f24 1-8,26-37,42-47,53-62,65-69
+packages/studio/src/features/source-editor/useSourceStatus.ts
+  s_77c7fa5e40f24c::t_3d2ee071ae7f24 26,32,36-39
+packages/studio/tests/source-status.test.tsx
+  s_77c7fa5e40f24c::t_8a22d69d2dca8f 11,14,17,21
+  s_77c7fa5e40f24c::t_f8f4561d011053 1-10,12-13,15-16,18-20,22-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ffeac8874194809db9f0a60dca0b9033a7b559aa",
+  "prompts": {},
+  "sessions": {
+    "s_77c7fa5e40f24c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe720-c827-7eb0-9849-933c9305ded5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
