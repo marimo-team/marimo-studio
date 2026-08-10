@@ -19,7 +19,6 @@
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-top-level-await": "catalog:",
     "vite-plus": "catalog:"
   }
 }

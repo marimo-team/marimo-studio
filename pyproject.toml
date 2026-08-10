@@ -23,5 +23,5 @@ project-includes = ["packages/marimo-studio/src/**/*.py", "packages/marimo-studi
 search-path = ["packages/marimo-studio/src", "packages/marimo-studio/tests"]
 
 [tool.uv]
-exclude-newer = "5 days"
+exclude-newer = "3 days"
 exclude-newer-package = { marimo = false }
