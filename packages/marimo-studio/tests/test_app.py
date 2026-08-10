@@ -83,9 +83,15 @@ def _configured(notebook: Path) -> StudioWorkspace:
     _set_shell(
         studio,
         "dashboard",
-        '<span mo-value="doubled"></span><marimo-cell name="result"></marimo-cell>',
+        '<span mo-value="doubled"></span>'
+        '<marimo-output value="doubled"></marimo-output>'
+        '<marimo-cell name="result"></marimo-cell>',
     )
-    _set_shell(studio, "executive", '<span mo-value="x"></span>')
+    _set_shell(
+        studio,
+        "executive",
+        '<span mo-value="x"></span><marimo-output value="x"></marimo-output>',
+    )
     return load_studio(notebook)
 
 
@@ -277,8 +283,10 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
     assert dashboard["views"] == ["dashboard", "executive"]
     assert dashboard["supportUrl"] == "/_marimo-studio/views/dashboard"
     assert set(dashboard["valueBindings"]) == {"doubled"}
+    assert set(dashboard["outputBindings"]) == {"doubled"}
     assert executive["supportUrl"] == "/_marimo-studio/views/executive"
     assert set(executive["valueBindings"]) == {"x"}
+    assert set(executive["outputBindings"]) == {"x"}
     assert dashboard["cellBindings"]["result"] == executive["cellBindings"]["result"]
     assert cell.text == '<marimo-cell name="result"></marimo-cell>'
     assert stylesheet.status_code == 200
@@ -484,6 +492,45 @@ def test_edit_mode_offers_both_preview_runtimes(notebook_path: Path) -> None:
         {"id": "wasm", "label": "WebAssembly"},
     ]
     assert bootstrap["urls"]["query"] == "/_marimo-studio/query"
+
+
+def test_wasm_runtime_updates_projection_specs_without_restarting_notebook(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+
+    def enable_wasm(config: MutableMapping[str, object]) -> None:
+        config["runtime"] = "wasm"
+        config["runtimes"] = ["server", "wasm"]
+
+    update_notebook_config(studio.notebook, enable_wasm)
+    template = studio.views["dashboard"].template
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        first = client.get("/_marimo-studio/views/dashboard/config").json()
+        template.write_text(
+            template.read_text(encoding="utf-8").replace(
+                '<marimo-output value="doubled"',
+                '<marimo-output value="doubled.real"',
+                1,
+            ),
+            encoding="utf-8",
+        )
+        second = client.get("/_marimo-studio/views/dashboard/config").json()
+        studio.notebook.write_text(
+            studio.notebook.read_text(encoding="utf-8").replace(
+                "doubled = x * 2",
+                "doubled = x * 3",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        third = client.get("/_marimo-studio/views/dashboard/config").json()
+
+    assert first["runtime"]["instance"] == second["runtime"]["instance"]
+    assert first["runtime"]["data"]["code"] != second["runtime"]["data"]["code"]
+    assert "doubled" in first["runtime"]["data"]["outputSpecs"]
+    assert "doubled.real" in second["runtime"]["data"]["outputSpecs"]
+    assert second["runtime"]["instance"] != third["runtime"]["instance"]
 
 
 def test_edit_workspace_queues_public_query_state(
@@ -1178,6 +1225,51 @@ def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
     assert allowed.json()["error"] == "unknown-session"
     assert cross_view.status_code == 400
     assert cross_view.json()["error"] == "unknown-selector"
+
+
+def test_output_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
+    studio = _configured(notebook_path)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        headers = {
+            "Marimo-Server-Token": config["runtime"]["data"]["serverToken"],
+            "Marimo-Session-Id": "s_unknown",
+        }
+        allowed = client.post(
+            "/_marimo-studio/views/dashboard/outputs",
+            headers=headers,
+            json={
+                "revision": config["revision"],
+                "selectors": ["doubled"],
+                "activeSelectors": ["doubled"],
+            },
+        )
+        cross_view = client.post(
+            "/_marimo-studio/views/dashboard/outputs",
+            headers=headers,
+            json={
+                "revision": config["revision"],
+                "selectors": ["x"],
+                "activeSelectors": ["doubled"],
+            },
+        )
+        inactive = client.post(
+            "/_marimo-studio/views/dashboard/outputs",
+            headers=headers,
+            json={
+                "revision": config["revision"],
+                "selectors": ["doubled"],
+                "activeSelectors": [],
+            },
+        )
+
+    assert allowed.status_code == 409
+    assert allowed.json()["error"] == "unknown-session"
+    assert cross_view.status_code == 400
+    assert cross_view.json()["error"] == "unknown-selector"
+    assert inactive.status_code == 400
+    assert inactive.json()["error"] == "invalid-output-request"
 
 
 def test_value_permissions_follow_the_browser_presentation_revision(

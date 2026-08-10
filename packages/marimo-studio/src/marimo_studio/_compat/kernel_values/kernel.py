@@ -1,4 +1,4 @@
-"""Register Studio's value reader inside a Marimo kernel."""
+"""Register Studio's projection bridge inside a Marimo kernel."""
 
 from __future__ import annotations
 
@@ -13,39 +13,49 @@ from marimo_studio._compat.kernel_values.models import (
     DEFAULT_MAX_VALUE_BYTES,
     FUNCTION_NAME,
     NAMESPACE,
+    OUTPUT_FUNCTION_NAME,
     QUERY_FUNCTION_NAME,
     ReadValuesArgs,
+    RenderValuesArgs,
     SyncQueryArgs,
 )
+from marimo_studio._compat.kernel_values.outputs import KernelOutputRenderer
 from marimo_studio._compat.kernel_values.selectors import (
     _read_values,
+    _template_output_selectors,
     _template_selectors,
 )
 from marimo_studio._urls import PRIVATE_QUERY_KEYS
 from marimo_studio._workspace.config import discover_studio_definition
 from marimo_studio.errors import ConfigurationError
-from marimo_studio.types import ValueReadError, ValueReadResult
+from marimo_studio.types import OutputRenderResult, ValueReadError, ValueReadResult
+from marimo_studio.values import MAX_OUTPUT_SELECTORS
 
 _INSPECTION_SELECTORS: dict[Path, tuple[str, ...]] = {}
+_INSPECTION_OUTPUT_SELECTORS: dict[Path, tuple[str, ...]] = {}
 
 
 @contextmanager
 def inspection_selectors(
     notebook: Path,
     selectors: tuple[str, ...],
+    output_selectors: tuple[str, ...] = (),
 ) -> Iterator[None]:
     """Permit runtime inspection selectors for an in-process probe kernel."""
     path = notebook.resolve()
     _INSPECTION_SELECTORS[path] = selectors
+    _INSPECTION_OUTPUT_SELECTORS[path] = output_selectors
     try:
         yield
     finally:
         _INSPECTION_SELECTORS.pop(path, None)
+        _INSPECTION_OUTPUT_SELECTORS.pop(path, None)
 
 
-class _KernelValueLifespan:
+class _KernelBridgeLifespan:
     def __init__(self) -> None:
         self._registry: Any | None = None
+        self._output_renderer: KernelOutputRenderer | None = None
         self._release_cached_ui: Callable[[], None] | None = None
 
     async def __aenter__(self) -> None:
@@ -59,6 +69,7 @@ class _KernelValueLifespan:
             return
         filename = Path(context.filename).resolve()
         inspection = _INSPECTION_SELECTORS.get(filename)
+        inspection_outputs = _INSPECTION_OUTPUT_SELECTORS.get(filename)
         if inspection is None:
             try:
                 if discover_studio_definition(filename) is None:
@@ -98,6 +109,65 @@ class _KernelValueLifespan:
         function.cell_id = CellId_t("__marimo_studio_values__")
         context.function_registry.register(NAMESPACE, function)
 
+        output_renderer = KernelOutputRenderer(context)
+
+        def render_outputs(args: RenderValuesArgs) -> dict[str, object]:
+            try:
+                allowed = (
+                    set(_template_output_selectors(filename) or ())
+                    if inspection_outputs is None
+                    else set(inspection_outputs)
+                )
+            except (OSError, UnicodeError, ConfigurationError) as error:
+                requested = tuple(
+                    dict.fromkeys((*args.selectors, *args.active_selectors))
+                )
+                return OutputRenderResult(
+                    outputs={},
+                    errors={
+                        selector: ValueReadError(
+                            "studio-unavailable",
+                            f"Studio output selectors are unavailable: {error}",
+                        )
+                        for selector in requested
+                    },
+                ).to_dict()
+            selectors = tuple(dict.fromkeys(args.selectors))
+            active_selectors = tuple(dict.fromkeys(args.active_selectors))
+            if (
+                len(selectors) > MAX_OUTPUT_SELECTORS
+                or len(active_selectors) > MAX_OUTPUT_SELECTORS
+            ):
+                return OutputRenderResult(
+                    outputs={},
+                    errors={
+                        "*": ValueReadError(
+                            "too-many-selectors",
+                            "An output request may contain at most "
+                            f"{MAX_OUTPUT_SELECTORS} selectors.",
+                        )
+                    },
+                ).to_dict()
+            limit = max(1, min(args.max_output_bytes, DEFAULT_MAX_VALUE_BYTES))
+            kernel = context._kernel
+            with kernel.lock_globals():
+                return output_renderer.render(
+                    kernel.globals,
+                    selectors,
+                    active_selectors,
+                    allowed,
+                    consumer_id=args.consumer_id,
+                    max_output_bytes=limit,
+                ).to_dict()
+
+        output_function = Function(
+            OUTPUT_FUNCTION_NAME,
+            RenderValuesArgs,
+            render_outputs,
+        )
+        output_function.cell_id = CellId_t("__marimo_studio_outputs__")
+        context.function_registry.register(NAMESPACE, output_function)
+
         def sync_query(args: SyncQueryArgs) -> None:
             params = context.query_params
             current = dict(params.to_dict())
@@ -115,6 +185,7 @@ class _KernelValueLifespan:
         query_function.cell_id = CellId_t("__marimo_studio_query__")
         context.function_registry.register(NAMESPACE, query_function)
         self._registry = context.function_registry
+        self._output_renderer = output_renderer
         self._release_cached_ui = keep_cached_cells_compatible()
 
     async def __aexit__(
@@ -124,6 +195,9 @@ class _KernelValueLifespan:
         traceback: TracebackType | None,
     ) -> bool:
         del exc_type, exc_value, traceback
+        if self._output_renderer is not None:
+            self._output_renderer.close()
+            self._output_renderer = None
         if self._registry is not None:
             self._registry.delete(NAMESPACE)
             self._registry = None
@@ -133,6 +207,6 @@ class _KernelValueLifespan:
         return False
 
 
-def kernel_lifespan(_: None) -> _KernelValueLifespan:
-    """Register the value function in kernels backed by Studio configuration."""
-    return _KernelValueLifespan()
+def kernel_lifespan(_: None) -> _KernelBridgeLifespan:
+    """Register projection functions in configured Studio kernels."""
+    return _KernelBridgeLifespan()

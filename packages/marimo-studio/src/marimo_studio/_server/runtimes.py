@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 from marimo_studio import _assets
-from marimo_studio._compat.browser_notebook import browser_notebook_source
+from marimo_studio._compat.browser_notebook import (
+    browser_notebook_source,
+    selector_specs,
+)
 from marimo_studio._compat.server.models import ServerContext
 from marimo_studio._compat.server.sessions import live_cells
 from marimo_studio._urls import public_url
@@ -28,6 +31,7 @@ class RuntimeProjection:
     data: dict[str, object]
     cell_bindings: dict[str, dict[str, str]]
     value_bindings: dict[str, dict[str, object]]
+    output_bindings: dict[str, dict[str, object]]
     control_cells: dict[str, str] | None = None
 
 
@@ -86,6 +90,7 @@ class ServerRuntime:
                 required_aliases=view.cell_aliases,
             ),
             value_bindings=view.runtime_value_bindings(cells),
+            output_bindings=view.runtime_output_bindings(cells),
             control_cells=snapshot.resolved.runtime_control_cells(cells),
         )
 
@@ -107,19 +112,29 @@ class WasmRuntime:
             snapshot.resolved.workspace.notebook,
             snapshot.notebook_source,
             snapshot.value_references,
+            snapshot.output_references,
+        )
+        identity_code = browser_notebook_source(
+            snapshot.resolved.workspace.notebook,
+            snapshot.notebook_source,
+            {},
+            {},
         )
         return RuntimeProjection(
-            instance=_digest(version, code),
+            instance=_digest(version, identity_code),
             data={
                 "code": code,
                 "filename": "notebook.py",
                 "version": version,
+                "valueSpecs": selector_specs(snapshot.value_references),
+                "outputSpecs": selector_specs(snapshot.output_references),
             },
             cell_bindings=snapshot.resolved.runtime_cell_bindings(
                 None,
                 required_aliases=view.cell_aliases,
             ),
             value_bindings=view.runtime_value_bindings(None),
+            output_bindings=view.runtime_output_bindings(None),
             control_cells=snapshot.resolved.runtime_control_cells(None),
         )
 

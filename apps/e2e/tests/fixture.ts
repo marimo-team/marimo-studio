@@ -76,7 +76,7 @@ const runStudioCli = (args: string[]) =>
   });
 
 export const bindWorkspaceCell = (alias: string, cell: number) =>
-  runStudioCli(["bind", alias, workspaceNotebookPath, "--cell", String(cell)]);
+  runStudioCli(["bind", workspaceNotebookPath, "--cell", String(cell), "--as", alias]);
 
 export const checkWorkspace = async (): Promise<boolean> => {
   const { stdout } = await runStudioCli(["check", workspaceNotebookPath, "--format", "json"]);
@@ -212,8 +212,13 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
       const messages: string[] = [];
       page.on("pageerror", (error) => messages.push(`pageerror: ${error.message}`));
       page.on("console", (message) => {
-        if (message.type() === "error" && !message.text().startsWith("Failed to load resource:")) {
-          messages.push(`console: ${message.text()}`);
+        const missingProjectedControl = message.text().includes("UIElementRegistry missing entry");
+        if (
+          missingProjectedControl ||
+          (message.type() === "error" && !message.text().startsWith("Failed to load resource:"))
+        ) {
+          const source = message.location().url;
+          messages.push(`console${source ? ` (${source})` : ""}: ${message.text()}`);
         }
       });
       page.on("requestfailed", (request) => {

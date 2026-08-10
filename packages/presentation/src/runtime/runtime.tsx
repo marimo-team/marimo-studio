@@ -11,6 +11,7 @@ import {
 } from "@marimo-studio/marimo-frontend/runtime";
 import { createRoot } from "react-dom/client";
 
+import type { OutputReader } from "../outputs/reader";
 import type { ValueReader } from "../values/reader";
 
 import {
@@ -34,6 +35,7 @@ export interface RuntimeMountOptions {
   configureTransport: () => void | Promise<void>;
   updateQuery: (query: string) => Promise<void>;
   valueReader: (sessionId: string, initialized: Promise<void>) => ValueReader;
+  outputReader: (sessionId: string, initialized: Promise<void>) => OutputReader;
 }
 
 export const mountSharedRuntime = (
@@ -48,6 +50,7 @@ export const mountSharedRuntime = (
   const initialized = startRuntimeTransport(options.configureTransport);
   store.set(connectionAtom, { state: WebSocketState.CONNECTING });
   const readValues = options.valueReader(sessionId, initialized);
+  const readOutputs = options.outputReader(sessionId, initialized);
 
   let stopTheme = () => {};
   let stopExposingSession = () => {};
@@ -58,7 +61,12 @@ export const mountSharedRuntime = (
     stopExposingSession = exposeRuntimeSession(sessionId, options.exposeSession);
     root.render(
       <RuntimeProviders>
-        <RuntimeCellViews initialized={initialized} readValues={readValues} sessionId={sessionId} />
+        <RuntimeCellViews
+          initialized={initialized}
+          readOutputs={readOutputs}
+          readValues={readValues}
+          sessionId={sessionId}
+        />
       </RuntimeProviders>,
     );
   } catch (error) {

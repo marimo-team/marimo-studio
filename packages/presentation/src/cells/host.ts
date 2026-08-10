@@ -13,6 +13,8 @@ const RUNTIME_ATTRIBUTES = new Set([
   "data-marimo-diagnostic-code",
   "data-marimo-diagnostic-hint",
   "data-marimo-diagnostic-message",
+  "data-marimo-selector",
+  "data-marimo-variable",
   "data-output-mime",
   "data-output-mimes",
   "data-runtime-cell-id",
@@ -173,7 +175,7 @@ export const prepareCellHosts = (root: ParentNode) => {
   root.querySelectorAll("marimo-cell").forEach(prepareCellHost);
 };
 
-const syncHostAttributes = (live: HTMLElement, source: Element): void => {
+export const syncProjectionHostAttributes = (live: HTMLElement, source: Element): void => {
   const measuredHeight = live.style.getPropertyValue(MEASURED_HEIGHT_PROPERTY);
   for (const attribute of Array.from(live.attributes)) {
     if (!RUNTIME_ATTRIBUTES.has(attribute.name) && !source.hasAttribute(attribute.name)) {
@@ -195,7 +197,7 @@ export const syncPreservedCellHosts = (source: ParentNode, live: Document): void
   source.querySelectorAll<HTMLElement>("marimo-cell[data-hx-preserve][id]").forEach((host) => {
     const preserved = live.getElementById(host.id);
     if (preserved?.localName === "marimo-cell" && preserved !== host) {
-      syncHostAttributes(preserved, host);
+      syncProjectionHostAttributes(preserved, host);
     }
   });
 };

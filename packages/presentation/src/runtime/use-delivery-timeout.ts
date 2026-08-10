@@ -9,7 +9,6 @@ export const useDeliveryTimeout = (
   const [timeout, setTimeoutState] = useState<DeliveryTimeout | null>(null);
 
   useEffect(() => {
-    setTimeoutState(null);
     if (!waiting) {
       return;
     }

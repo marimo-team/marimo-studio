@@ -35,7 +35,7 @@ export interface ReadyEvents {
   objectId(event: Event): string | undefined;
 }
 
-const widgetModelReferenceSchema = z.object({ model_id: z.string().min(1) }).strict();
+const widgetModelReferenceSchema = z.strictObject({ model_id: z.string().min(1) });
 
 const isNativeControlValue = (value: unknown): boolean =>
   !widgetModelReferenceSchema.safeParse(value).success;

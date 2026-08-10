@@ -53,6 +53,12 @@ const baseRuntimeConfig = {
       cell: { kind: "id", value: "context-cell-id" },
     },
   },
+  outputBindings: {
+    "context.table": {
+      variable: "context",
+      cell: { kind: "id", value: "context-cell-id" },
+    },
+  },
   diagnostics: [diagnostic],
   appConfig: {},
   userConfig: {},

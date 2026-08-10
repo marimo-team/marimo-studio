@@ -6,6 +6,7 @@
   "exports": {
     "./build-metadata": "./scripts/metadata.mjs",
     "./cells": "./src/upstream/cells.ts",
+    "./projected-output": "./src/projected-output.tsx",
     "./control-frame": "./src/control-frame.ts",
     "./controls": "./src/upstream/controls.ts",
     "./runtime": "./src/upstream/runtime.ts",
@@ -15,7 +16,7 @@
   },
   "scripts": {
     "prepare:upstream": "node scripts/prepare.mjs",
-    "test": "vp test tests/source.test.mjs tests/control-frame.test.ts tests/runtime-logger.test.ts tests/theme-frame.test.ts"
+    "test": "vp test tests/source.test.mjs tests/control-frame.test.ts tests/projected-output-state.test.ts tests/runtime-logger.test.ts tests/theme-frame.test.ts"
   },
   "dependencies": {
     "@codemirror/state": "catalog:",

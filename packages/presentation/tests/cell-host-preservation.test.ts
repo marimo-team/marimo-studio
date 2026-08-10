@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "vite-plus/test";
 
 import { prepareCellHosts, syncPreservedCellHosts } from "../src/cells/host.ts";
+import { prepareOutputHosts, syncPreservedOutputHosts } from "../src/outputs/host.ts";
 import { ViewStyleController } from "../src/view-styles/runtime.ts";
 
 afterEach(() => {
@@ -76,4 +77,37 @@ test("a shell swap updates authored cell attributes without replacing its output
   assert.equal(updatedHost.dataset.runtimeCellId, "runtime-cell-1");
   assert.equal(updatedHost.dataset.marimoDiagnosticCode, "stale-runtime-diagnostic");
   assert.equal(document.querySelector("style")?.textContent, "/* new p-6 */");
+});
+
+test("a shell refresh updates a rich output host around its mounted renderer", () => {
+  document.body.innerHTML = `
+    <main id="app-shell">
+      <marimo-output value="report.table" class="old">
+        <div data-marimo-cell-output><button>Native table action</button></div>
+      </marimo-output>
+    </main>
+  `;
+  prepareOutputHosts(document);
+  const liveHost = document.querySelector<HTMLElement>("marimo-output")!;
+  const liveOutput = liveHost.querySelector("[data-marimo-cell-output]");
+  liveHost.dataset.state = "ready";
+  liveHost.dataset.runtimeCellId = "runtime-cell-id";
+
+  const nextDocument = new DOMParser().parseFromString(
+    `
+      <main id="app-shell">
+        <marimo-output value="report.table" class="new p-4"></marimo-output>
+      </main>
+    `,
+    "text/html",
+  );
+  prepareOutputHosts(nextDocument);
+  const nextShell = nextDocument.querySelector("#app-shell")!;
+
+  syncPreservedOutputHosts(nextShell, document);
+
+  assert.equal(liveHost.querySelector("[data-marimo-cell-output]"), liveOutput);
+  assert.equal(liveHost.className, "new p-4");
+  assert.equal(liveHost.dataset.state, "ready");
+  assert.equal(liveHost.dataset.runtimeCellId, "runtime-cell-id");
 });

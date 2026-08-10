@@ -5,7 +5,7 @@ import type { ValueReader } from "./reader";
 
 import { ValueRequestError } from "./remote";
 
-const resultSchema = z.object({
+export const functionResultSchema = z.object({
   found: z.boolean(),
   status: z.object({ code: z.string(), message: z.string().nullish() }),
   return_value: z.unknown(),
@@ -16,9 +16,9 @@ const BRIDGE_RETRY_DELAY_MS = 250;
 export type FunctionRequest = (selectors: string[], signal?: AbortSignal) => Promise<unknown>;
 
 const abortError = (): DOMException =>
-  new DOMException("The value request was cancelled.", "AbortError");
+  new DOMException("The runtime request was cancelled.", "AbortError");
 
-const throwIfAborted = (signal?: AbortSignal): void => {
+export const throwIfWasmAborted = (signal?: AbortSignal): void => {
   if (signal?.aborted) {
     throw abortError();
   }
@@ -41,7 +41,7 @@ const wait = (delay: number, signal?: AbortSignal): Promise<void> =>
     signal?.addEventListener("abort", abort, { once: true });
   });
 
-const waitForCaller = <T>(request: Promise<T>, signal?: AbortSignal): Promise<T> => {
+export const waitForWasmCaller = <T>(request: Promise<T>, signal?: AbortSignal): Promise<T> => {
   if (!signal) {
     return request;
   }
@@ -59,7 +59,7 @@ const readWasmValues = async (
   selectors: string[],
   request: FunctionRequest,
 ): Promise<ValueReadResponse> => {
-  const result = resultSchema.parse(await request(selectors));
+  const result = functionResultSchema.parse(await request(selectors));
   if (!result.found) {
     throw new ValueRequestError(
       "The notebook value bridge is unavailable.",
@@ -85,7 +85,7 @@ export const waitForWasmValueBridge = async (
   // instantiation. A successful call therefore proves that dependencies
   // loaded, the initial graph settled, and its Python controls exist.
   while (!signal.aborted) {
-    const result = resultSchema.parse(await waitForCaller(request([], signal), signal));
+    const result = functionResultSchema.parse(await waitForWasmCaller(request([], signal), signal));
     if (result.found) {
       if (result.status.code !== "ok") {
         throw new ValueRequestError(
@@ -103,21 +103,21 @@ export const waitForWasmValueBridge = async (
 
 /** Serialize bridge calls so cancellation never multiplies work in Pyodide. */
 export const createWasmValueReader = (
-  initialized: Promise<void>,
+  ready: Promise<void> | (() => Promise<void>),
   request: FunctionRequest,
 ): ValueReader => {
   let queue: Promise<void> = Promise.resolve();
   return ({ selectors }, signal) => {
     const operation = queue.then(async () => {
-      throwIfAborted(signal);
-      await initialized;
-      throwIfAborted(signal);
+      throwIfWasmAborted(signal);
+      await (typeof ready === "function" ? ready() : ready);
+      throwIfWasmAborted(signal);
       return readWasmValues(selectors, (requested) => request(requested, signal));
     });
     queue = operation.then(
       () => undefined,
       () => undefined,
     );
-    return waitForCaller(operation, signal);
+    return waitForWasmCaller(operation, signal);
   };
 };

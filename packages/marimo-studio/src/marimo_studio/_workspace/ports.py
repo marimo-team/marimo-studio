@@ -28,6 +28,7 @@ class RuntimeProber(Protocol):
         *,
         cell_ids: tuple[str, ...],
         variables: tuple[str, ...],
+        output_selector_groups: tuple[tuple[str, ...], ...],
         show_tracebacks: bool,
     ) -> RuntimeProbe: ...
 

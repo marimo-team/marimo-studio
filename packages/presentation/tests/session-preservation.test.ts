@@ -34,6 +34,7 @@ const config = (preserveSession: boolean, mode: RuntimeConfig["mode"] = "run"): 
   showCellLogs: true,
   cellBindings: {},
   valueBindings: {},
+  outputBindings: {},
   diagnostics: [],
   appConfig: {},
   userConfig: {},

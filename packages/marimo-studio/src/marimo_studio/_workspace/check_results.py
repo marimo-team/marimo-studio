@@ -98,11 +98,12 @@ def runtime_value_details(
     bindings: tuple[ValueBinding, ...],
     hint: str,
     *,
+    projection: str = "value",
     views: tuple[str, ...],
 ) -> dict[str, object]:
     binding = bindings[0]
     details: dict[str, object] = {
-        "projection": "value",
+        "projection": projection,
         "target": target,
         "source": {
             "path": str(binding.source),
@@ -147,5 +148,24 @@ def runtime_value_hint(code: str) -> str:
         return "Project a smaller JSON value or render the defining cell."
     return (
         "Fix the mo-value selector in the view template or its defining "
+        "notebook cell, then rerun the check."
+    )
+
+
+def runtime_output_hint(code: str) -> str:
+    if code == "value-path-unavailable":
+        return (
+            "Fix the marimo-output selector in the view template or the value "
+            "shape in Marimo, then rerun the check."
+        )
+    if code == "missing-variable":
+        return (
+            "Restore the defining notebook variable or update the marimo-output "
+            "selector, then rerun the check."
+        )
+    if code in {"output-too-large", "response-too-large"}:
+        return "Project a smaller rich output, then rerun the check."
+    return (
+        "Fix the marimo-output selector in the view template or its defining "
         "notebook cell, then rerun the check."
     )

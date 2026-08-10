@@ -1,0 +1,179 @@
+import type { CellId } from "@marimo-studio/marimo-frontend/cells";
+import type { WebSocketState } from "@marimo-studio/marimo-frontend/runtime";
+import type { RenderedOutput } from "@marimo-studio/protocol/output-read";
+import type { ValueReadError } from "@marimo-studio/protocol/value-read";
+
+import { ensureProjectedOutputOwner } from "@marimo-studio/marimo-frontend/projected-output";
+import { WebSocketState as ConnectionState } from "@marimo-studio/marimo-frontend/runtime";
+import { useEffect, useState } from "react";
+
+import type { OutputReader } from "../../outputs/reader";
+import type { ValueCellModel } from "../values/value-cell-model";
+
+import { errorMessage } from "../../errors";
+import { OutputRequestError } from "../../outputs/remote";
+import { useLatest } from "../use-latest";
+
+export interface OutputDiagnostic {
+  code: string;
+  message: string;
+  hint?: string;
+}
+
+export interface OutputProjection {
+  cellId: CellId;
+  output: RenderedOutput;
+  sourceVersion: number | null;
+}
+
+interface OutputRequestState {
+  failure?: OutputDiagnostic;
+  identity: string;
+  pending: boolean;
+  projection?: OutputProjection;
+}
+
+export interface OutputProjectionState {
+  failure?: OutputDiagnostic;
+  pending: boolean;
+  projection?: OutputProjection;
+  projectionCurrent: boolean;
+}
+
+const requestFailure = (error: unknown): ValueReadError => ({
+  code: error instanceof OutputRequestError ? error.code : "output-request-failed",
+  message: errorMessage(error),
+});
+
+export const useOutputProjection = ({
+  activeSelectors,
+  bindingIdentity,
+  blocked,
+  connectionState,
+  model,
+  readOutputs,
+  revision,
+  selector,
+  sourceCellId,
+}: {
+  activeSelectors: string[];
+  bindingIdentity: string | undefined;
+  blocked: boolean;
+  connectionState: WebSocketState;
+  model: ValueCellModel;
+  readOutputs: OutputReader;
+  revision: string;
+  selector: string;
+  sourceCellId: CellId | undefined;
+}): OutputProjectionState => {
+  const [state, setState] = useState<OutputRequestState>();
+  const revisionRef = useLatest(revision);
+  const activeSelectorsRef = useLatest(activeSelectors);
+  const requestIdentity =
+    bindingIdentity && sourceCellId
+      ? `${selector}\u0000${bindingIdentity}\u0000${sourceCellId}`
+      : undefined;
+
+  useEffect(() => {
+    if (
+      !requestIdentity ||
+      !sourceCellId ||
+      blocked ||
+      connectionState !== ConnectionState.OPEN ||
+      model.phase !== "ready"
+    ) {
+      return;
+    }
+    const controller = new AbortController();
+    let current = true;
+    const sourceVersion = model.version;
+    setState((previous) => ({
+      identity: requestIdentity,
+      pending: true,
+      projection: previous?.identity === requestIdentity ? previous.projection : undefined,
+    }));
+
+    const release = () => {
+      void readOutputs({
+        revision: revisionRef.current,
+        selectors: [],
+        activeSelectors: activeSelectorsRef.current.filter((active) => active !== selector),
+      }).catch(() => {});
+    };
+
+    void readOutputs(
+      {
+        revision: revisionRef.current,
+        selectors: [selector],
+        activeSelectors: activeSelectorsRef.current,
+      },
+      controller.signal,
+    )
+      .then((response) => {
+        if (!current) {
+          return;
+        }
+        const failure = response.errors[selector] ?? response.errors["*"];
+        const rendered = response.outputs[selector];
+        if (failure) {
+          setState({ failure, identity: requestIdentity, pending: false });
+          release();
+          return;
+        }
+        if (!rendered) {
+          setState({
+            failure: {
+              code: "invalid-output-response",
+              message: `The kernel returned no output for ${JSON.stringify(selector)}.`,
+            },
+            identity: requestIdentity,
+            pending: false,
+          });
+          release();
+          return;
+        }
+        const ownerCellId = rendered.ownerCellId as CellId;
+        ensureProjectedOutputOwner(ownerCellId, rendered.timestamp);
+        setState({
+          identity: requestIdentity,
+          pending: false,
+          projection: { cellId: sourceCellId, output: rendered, sourceVersion },
+        });
+      })
+      .catch((error: unknown) => {
+        if (!current || (error instanceof DOMException && error.name === "AbortError")) {
+          return;
+        }
+        setState({
+          failure: requestFailure(error),
+          identity: requestIdentity,
+          pending: false,
+        });
+        release();
+      });
+    return () => {
+      current = false;
+      controller.abort();
+    };
+  }, [
+    activeSelectorsRef,
+    blocked,
+    connectionState,
+    model.phase,
+    model.version,
+    readOutputs,
+    requestIdentity,
+    revisionRef,
+    selector,
+    sourceCellId,
+  ]);
+
+  const currentState = !blocked && state?.identity === requestIdentity ? state : undefined;
+  const projectionCurrent = currentState?.projection?.sourceVersion === model.version;
+  return {
+    failure: currentState?.failure,
+    pending: currentState?.pending ?? false,
+    projection: currentState?.projection,
+    projectionCurrent,
+  };
+};

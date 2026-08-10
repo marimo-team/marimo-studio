@@ -13,6 +13,8 @@ _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _INDEX = re.compile(r"(?:0|[1-9][0-9]*)")
 _JSON_DECODER = json.JSONDecoder()
 
+MAX_OUTPUT_SELECTORS = 100
+
 
 def _parse_attribute(value: str, position: int) -> tuple[ValuePathStep, int]:
     selected = _IDENTIFIER.match(value, position + 1)

@@ -83,10 +83,10 @@ exists and `default` selects it, Studio materializes a `StudioWorkspace`.
 Configured view files live under `__marimo__/studio/<notebook-stem>/<view>/`.
 Requests for another notebook continue through Marimo.
 
-The kernel extension activates from `StudioDefinition`, so value reads are
-registered before the first view is created. A materialized view can read the
-cell aliases and value selectors present in its resolved document. Requests
-travel through Marimo's kernel queue.
+The kernel extension activates from `StudioDefinition`, so value reads and
+native output formatting are registered before the first view is created. A
+materialized view can use the cell aliases and value references present in its
+resolved document. Requests travel through Marimo's kernel queue.
 
 ## Edit and run sessions
 
@@ -133,10 +133,13 @@ derived notebook in Marimo's Pyodide worker. Both runtimes use the presentation
 renderer for output plugins, native controls, React portals, value reads, and
 anywidget models.
 
-React portals place cell output in `<marimo-cell>` hosts. `mo-value` hosts read
-permitted JSON values through the active runtime. A missing cell or value
-produces a structured diagnostic on the affected host while healthy regions
-continue to render.
+React portals place complete cell output in `<marimo-cell>` hosts and formatted
+Python objects in `<marimo-output>` hosts. The output bridge resolves an
+allow-listed value reference, formats it through Marimo's native registry, and
+owns formatter-created resources under a stable presentation cell ID.
+`mo-value` hosts read permitted JSON values through the active runtime. A
+missing projection produces a structured diagnostic on the affected host while
+healthy regions continue to render.
 
 ## View source lifecycle
 
@@ -162,7 +165,8 @@ deletes the old directory, then commits the returned inventory.
 ## Static export
 
 `marimo_studio.export` resolves one view, validates its projections and output
-paths, derives the WebAssembly notebook, and writes a static site. The bundle
+paths, derives the WebAssembly notebook with value and rich-output bridges, and
+writes a static site. The bundle
 contains the authored view, notebook source, notebook `public/` files, static
 cell fragments, runtime configuration, and packaged browser assets.
 
@@ -174,16 +178,16 @@ Replacing an existing destination requires `--force`.
 
 ## Change ownership
 
-| Change                                  | Primary owners and checks                                                 |
-| --------------------------------------- | ------------------------------------------------------------------------- |
-| Configuration, aliases, or source files | `_workspace` and focused Python tests                                     |
-| Routes, sessions, or authentication     | `_server`, `_compat/server`, Python tests, and browser acceptance         |
-| Browser record or response shape        | Protocol schema, Python producer, browser consumers, and schema tests     |
-| Runtime contract                        | `packages/runtime`, Python provider, presentation adapter, and tests      |
-| Cell, value, or document lifecycle      | `packages/presentation`, package tests, and browser acceptance            |
-| Workspace mode, view, source, or layout | `packages/studio`, package tests, and browser acceptance                  |
-| Marimo frontend integration             | `packages/marimo-frontend`, `make build`, and adapter tests               |
-| Static export                           | `export.py`, `_compat/static_export.py`, export tests, and `make package` |
+| Change                                     | Primary owners and checks                                                 |
+| ------------------------------------------ | ------------------------------------------------------------------------- |
+| Configuration, aliases, or source files    | `_workspace` and focused Python tests                                     |
+| Routes, sessions, or authentication        | `_server`, `_compat/server`, Python tests, and browser acceptance         |
+| Browser record or response shape           | Protocol schema, Python producer, browser consumers, and schema tests     |
+| Runtime contract                           | `packages/runtime`, Python provider, presentation adapter, and tests      |
+| Cell, output, value, or document lifecycle | `packages/presentation`, package tests, and browser acceptance            |
+| Workspace mode, view, source, or layout    | `packages/studio`, package tests, and browser acceptance                  |
+| Marimo frontend integration                | `packages/marimo-frontend`, `make build`, and adapter tests               |
+| Static export                              | `export.py`, `_compat/static_export.py`, export tests, and `make package` |
 
 Keep a cross-boundary change aligned across Python response models, protocol
 schemas, runtime IDs, browser consumers, diagnostics, storage keys, query
