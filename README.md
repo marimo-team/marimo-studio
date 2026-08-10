@@ -15,95 +15,164 @@
 
 <p align="center"><strong>Tune your notebook for every audience.</strong></p>
 
-Keep calculations, reactive controls, plots, tables, downloads, and
-[anywidgets](https://anywidget.dev/) in one [marimo](https://marimo.io/)
-notebook. Create focused views with plain HTML and CSS that you and your coding
-agent already write. Marimo keeps notebook logic, controls, and outputs live.
+Marimo Studio turns one reactive, reproducible
+[marimo](https://marimo.io/) notebook into custom web views for different
+audiences. The notebook owns data access, transformations, metrics, controls,
+and domain decisions. Each view owns page structure, styles, and browser logic
+in ordinary HTML, CSS, and JavaScript files. People and coding agents can shape
+the interface while the analytical logic continues to evolve in one place.
 
-## Try the example
+Studio runs inside Marimo. `marimo edit` opens the notebook and view together.
+`marimo run` serves finished views with Marimo's kernels, sessions,
+authentication, routing, controls, and output renderers.
 
-Clone the repository, then open the included notebook:
+<p align="center">
+  <a href="https://marimo-team.github.io/marimo-studio/">
+    <img alt="A Marimo notebook and a custom operations view in Marimo Studio" src="https://marimo-team.github.io/marimo-studio/og.png" width="1100">
+  </a>
+</p>
 
-```console
-make install build
-uv run marimo edit examples/analysis.py --no-sandbox
-```
+## Try Studio
 
-The browser opens the notebook beside its dashboard. Choose **Server** to run
-both panes through the editor's Python session. Switch the preview to
-**WebAssembly** to reveal the copy that Studio prepared in a background
-Pyodide worker. Studio keeps native Marimo controls such as the scenario and
-quarter synchronized while each runtime updates its own reactive graph.
-
-Open **HTML & CSS** and inspect `index.html` and `app.css`. Layout and
-responsive behavior live in utility classes, while the top of `app.css` holds
-the semantic theme. The adjacent `app.js` module reads the projected `report`
-mapping and copies it as a briefing. Change the scenario, edit a utility class
-or `--primary`, then save. The refreshed view keeps the current control values
-and rendered cell state.
-
-For a multi-view workflow, open the collection research example:
+From a repository checkout, open the revenue forecast in the Studio editor:
 
 ```console
-uv run --with pyobservablejs --with polars \
-  marimo edit examples/nga_collection.py --no-sandbox
+uvx --with marimo-studio marimo edit examples/analysis.py --sandbox
 ```
 
-Narrow the corpus, select works in **Study**, and open **Packet**. The three
-pages apply separate semantic themes and responsive layouts to one notebook
-session, so the filters and ordered selection carry through the workflow.
+Choose **Build** to work on the notebook and view together. Run the same
+notebook as an application at its default Studio view:
 
-## Create a view
+```console
+uvx --with marimo-studio marimo run examples/analysis.py --sandbox
+```
 
-Add a dashboard to an existing notebook, then open it through Marimo:
+The collection research example provides Corpus, Study, and Packet views over
+one notebook session:
+
+```console
+uvx --with marimo-studio marimo edit examples/nga_collection.py --sandbox
+uvx --with marimo-studio marimo run examples/nga_collection.py --sandbox
+```
+
+## Create your first view
+
+Add a view to an existing notebook, then open it through Marimo:
 
 ```console
 uvx marimo-studio view add analysis.py
-uv run --with marimo-studio marimo edit analysis.py --sandbox
+uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-The new view starts with every notebook cell in source order. Studio gives you
-the Marimo editor, view source editors, and a live preview in one workspace.
-Write [utility classes](https://unocss.dev/presets/wind4/) directly in
-`index.html`. Tune semantic light and dark tokens under `/* THEME */` in
-`app.css`, then write page rules under `/* APP */`. Saved source changes
-refresh around the running notebook.
+The new `dashboard` view begins with the notebook's cells in source order.
+The default view opens at `/`. A named view such as `executive` opens at
+`/executive/` in the same Marimo application.
 
-Place a named cell or a JSON-compatible Python value in the view:
+## One notebook, several views
+
+Create one view for each audience or task while keeping the analytical graph
+in the notebook:
+
+| View         | Reader job                           | Content                                      |
+| ------------ | ------------------------------------ | -------------------------------------------- |
+| `dashboard`  | Explore and adjust the current model | Controls, detailed measures, plots, tables   |
+| `operations` | Find conditions that require action  | Exceptions, thresholds, owners, next steps   |
+| `executive`  | Review the outcome and decision      | Headline measures, risks, and recommendation |
+
+The notebook owns data access, transformations, calculations, reactive
+dependencies, controls, and native Marimo components. Each view owns its page
+structure, wording, styles, modules, assets, and route. Stylesheets and browser
+modules stay in view files, keeping notebook cells focused on analysis.
+Updating a notebook definition updates every view that projects the affected
+result.
+
+## Project notebook results
+
+Studio connects a notebook to an authored web document through three
+primitives:
+
+| Need                                               | Projection                    |
+| -------------------------------------------------- | ----------------------------- |
+| Include everything a cell produced                 | `<marimo-cell name="...">`    |
+| Render one Python object through Marimo            | `<marimo-output value="...">` |
+| Read a JSON-compatible value in HTML or JavaScript | `mo-value="..."`              |
 
 ```html
-<marimo-cell name="revenue_chart"></marimo-cell> <time mo-value="report.updated_at"></time>
+<marimo-cell name="controls"></marimo-cell>
+<marimo-output value="revenue_table"></marimo-output>
+<time mo-value="report.updated_at"></time>
 ```
 
-Add more views when the same notebook needs a different page for another
-audience.
+`<marimo-cell>` includes complete cell output, including output appended with
+`mo.output.append(...)`. `<marimo-output>` formats a selected Python object as
+native Marimo output. `mo-value` renders a JSON-compatible value in an HTML
+element and exposes its typed snapshot to browser code.
 
-## Share a view
+[Use notebook results](https://marimo-team.github.io/marimo-studio/guide/notebook-results)
+develops each primitive with working examples.
 
-Serve the notebook with Marimo:
+## Use the web platform
+
+A view is a complete HTML document. Add stylesheets, JavaScript modules,
+browser APIs, SVG, Canvas, Web Components, images, fonts, and existing browser
+libraries through ordinary relative files. Studio keeps native Marimo
+controls, plots, tables, downloads, and anywidgets connected to the selected
+runtime.
+
+[Use HTML, CSS, and JavaScript](https://marimo-team.github.io/marimo-studio/guide/web-platform)
+covers browser behavior, assets, loading states, and the built-in utility
+classes.
+
+## Work with people and coding agents
+
+View source stays in ordinary web files beside the notebook. A coding agent can
+inspect the saved notebook graph, create a view, bind a stable cell name, edit
+the view files, and validate every projection. Metric definitions,
+transformations, and domain rules remain visible in notebook cells for review.
+
+```python
+import marimo._code_mode as cm
+import marimo_studio.agents as studio
+
+ctx = cm.get_context()
+notebook = studio.inspect(ctx, include_code=True)
+view = studio.ensure_view(ctx, "dashboard")
+checks = studio.check(ctx, view_name="dashboard")
+```
+
+[Work with coding agents](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
+documents the inspect, create, edit, and check loop.
+
+## Choose a runtime
+
+Use the Server runtime when the notebook needs a full Python environment,
+local resources, databases, or credentials. Use the WebAssembly runtime when
+the notebook and its dependencies run in Pyodide.
+
+Export one WebAssembly view for a static host:
 
 ```console
-uv run --with marimo-studio marimo run analysis.py --sandbox --headless
+uvx marimo-studio export analysis.py --view executive --output dist/executive
+python -m http.server --directory dist/executive
 ```
 
-The default view opens at `/`. A view named `report` opens at `/report/`. Each
-browser receives its own Marimo run session.
-
-Export a view when the notebook can run in WebAssembly and the destination is
-a static host:
-
-```console
-uvx marimo-studio export analysis.py --view report --output dist/report
-python -m http.server --directory dist/report
-```
+The static export contains the notebook source. Review the notebook and its
+data access before publishing the generated directory.
 
 Marimo Studio supports Python 3.11 or newer and Marimo 0.23.16 or newer.
 
-## Learn more
+## Examples
 
-- [Create your first view](https://marimo-team.github.io/marimo-studio/getting-started)
-- [Overview](https://marimo-team.github.io/marimo-studio/how-it-works)
-- [Examples](https://marimo-team.github.io/marimo-studio/examples)
-- [Design a view](https://marimo-team.github.io/marimo-studio/design-views)
-- [Run and share views](https://marimo-team.github.io/marimo-studio/share-views)
-- [Reference](https://marimo-team.github.io/marimo-studio/reference)
+The [revenue forecast](https://marimo-team.github.io/marimo-studio/examples/revenue-forecast)
+shows one reactive dashboard. The
+[collection research workflow](https://marimo-team.github.io/marimo-studio/examples/collection-research)
+uses three views for corpus discovery, visual study, and a provenance-rich
+handoff.
+
+## Documentation
+
+- [Overview](https://marimo-team.github.io/marimo-studio/overview)
+- [Get started](https://marimo-team.github.io/marimo-studio/guide/getting-started)
+- [Guide](https://marimo-team.github.io/marimo-studio/guide/)
+- [Examples](https://marimo-team.github.io/marimo-studio/examples/)
+- [Reference](https://marimo-team.github.io/marimo-studio/reference/)

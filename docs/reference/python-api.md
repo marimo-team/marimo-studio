@@ -88,7 +88,7 @@ Each cell record contains:
 `CellRef.parse(value)` accepts a `cell:v1:...` string or an existing `CellRef`.
 `str(ref)` returns the serialized reference.
 
-## `create_asgi_app`
+## `create_asgi_app` <Badge type="info" text="Marimo 0.23.16+" />
 
 ```python
 create_asgi_app(

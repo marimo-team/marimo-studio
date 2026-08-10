@@ -60,13 +60,13 @@ jobs:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
         run: |
           index="apps/docs/.vitepress/dist/index.html"
-          test -f apps/docs/.vitepress/dist/getting-started.html
-          test -f apps/docs/.vitepress/dist/reference.html
+          test -f apps/docs/.vitepress/dist/guide/getting-started.html
+          test -f apps/docs/.vitepress/dist/reference/index.html
           grep -q "href=\"${BASE_PATH}/assets/" "$index"
           grep -q "src=\"${BASE_PATH}/assets/" "$index"
           grep -q "href=\"${BASE_PATH}/brand/marimo-studio-mark-light.svg\"" "$index"
           grep -q "href=\"${BASE_PATH}/brand/marimo-studio-mark-dark.svg\"" "$index"
-          grep -q "href=\"${BASE_PATH}/getting-started\"" "$index"
+          grep -q "href=\"${BASE_PATH}/guide/getting-started\"" "$index"
 
       - name: Upload GitHub Pages artifact
         if: github.event_name != 'pull_request'

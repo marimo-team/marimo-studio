@@ -9,22 +9,44 @@
 
 <p align="center"><strong>Tune your notebook for every audience.</strong></p>
 
-Keep calculations, reactive controls, plots, tables, downloads, and
-[anywidgets](https://anywidget.dev/) in one [marimo](https://marimo.io/)
-notebook. Create focused views with plain HTML and CSS that you and your coding
-agent already write. Marimo keeps notebook logic, controls, and outputs live.
+Marimo Studio turns one reactive, reproducible
+[marimo](https://marimo.io/) notebook into custom web views for different
+audiences. The notebook owns data access, transformations, metrics, controls,
+and domain decisions. Each view owns page structure, styles, and browser logic
+in ordinary HTML, CSS, and JavaScript files. People and coding agents can shape
+the interface while the analytical logic continues to evolve in one place.
+
+From a repository checkout, open the revenue forecast in Studio:
 
 ```console
-uvx marimo-studio view add analysis.py
-uv run --with marimo-studio marimo edit analysis.py --sandbox
+uvx --with marimo-studio marimo edit examples/analysis.py --sandbox
 ```
 
-The new view starts with every notebook cell in source order. Use native cell
-names and JSON-compatible Python values in the page:
+Choose **Build** to work on the notebook and view together. Serve the finished
+view with the same Marimo application:
+
+```console
+uvx --with marimo-studio marimo run examples/analysis.py --sandbox
+```
+
+The collection research example provides Corpus, Study, and Packet views over
+one notebook session:
+
+```console
+uvx --with marimo-studio marimo edit examples/nga_collection.py --sandbox
+uvx --with marimo-studio marimo run examples/nga_collection.py --sandbox
+```
+
+Studio runs inside Marimo and uses its kernels, sessions, authentication,
+routing, controls, and output renderers. Select complete cell output, one
+Python object rendered by Marimo, or a JSON-compatible browser value:
 
 ```html
-<marimo-cell name="revenue_chart"></marimo-cell> <time mo-value="report.updated_at"></time>
+<marimo-cell name="controls"></marimo-cell>
+<marimo-output value="revenue_table"></marimo-output>
+<time mo-value="report.updated_at"></time>
 ```
 
 Read the [Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/)
-for view design, sharing, configuration, and the Python API.
+for multi-view authoring, browser integration, coding-agent workflows,
+runtimes, and API contracts.

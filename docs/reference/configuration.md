@@ -9,16 +9,18 @@ Studio reads configuration from the notebook's PEP 723 metadata or from a
 project `pyproject.toml`. Use `marimo-studio view add` to create the initial
 configuration and `marimo-studio bind` to manage cell aliases.
 
+::: info Configuration can precede view source
 Configuration defines a Studio workspace before view source exists. Opening a
 configured notebook in `marimo edit` presents an authenticated initializer when
 the view directory is empty. The initializer creates the configured `default`
 view and opens its authoring workspace.
+:::
 
 ## Configure one notebook
 
 `view add` stores notebook-local settings in the PEP 723 block:
 
-```python
+```python [analysis.py]
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
@@ -62,7 +64,7 @@ the same process.
 
 A managed project can place the same settings in `pyproject.toml`:
 
-```toml
+```toml [pyproject.toml]
 [project]
 name = "analysis"
 version = "0.1.0"
@@ -140,5 +142,6 @@ formatting and comment changes. Reinspect and bind with `--overwrite` when an
 offline edit changes the cell's meaning or makes the match ambiguous. Deleting
 a cell removes its configured aliases when the notebook is saved.
 
-[CLI reference](cli.md) defines command output and exit codes. [Run and share
-views](share-views.md) explains how runtime settings affect deployment.
+[CLI reference](cli.md) defines command output and exit codes. [Run, export,
+and share](../guide/run-and-share.md) explains how runtime settings affect
+deployment.

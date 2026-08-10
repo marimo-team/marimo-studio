@@ -1,17 +1,17 @@
 ---
 title: Create your first view
-description: Add a dashboard to a saved Marimo notebook and render one live notebook output.
+description: Add a view to a saved Marimo notebook and render one live notebook output.
 ---
 
 # Create your first view
 
-Add a dashboard to a saved [marimo](https://marimo.io/) notebook, open it
-beside the native editor, and replace the starter page with one focused output.
+Add a view to a saved [marimo](https://marimo.io/) notebook, open it beside the
+native editor, and replace the starter page with one focused output.
 
 The commands use `analysis.py` as the notebook path. You need Python 3.11 or
 newer and [uv](https://docs.astral.sh/uv/).
 
-## Add the dashboard
+## Add the view
 
 ```console
 uvx marimo-studio view add analysis.py
@@ -49,7 +49,15 @@ source and preview together.
 Change a notebook control and confirm that the starter view updates. The
 Server preview and editor use the same Python session.
 
-To browse a notebook folder first, pass the folder to Marimo:
+::: info The same notebook runs as the finished view
+Studio uses Marimo's existing application command. After authoring, run
+`uv run --with marimo-studio marimo run analysis.py --sandbox`. The configured
+default view opens at `/`, and each named view has its own route.
+:::
+
+::: details Browse a notebook folder first
+
+Pass the folder to Marimo:
 
 ```console
 uv run --with marimo-studio marimo edit notebooks/ --sandbox
@@ -58,6 +66,7 @@ uv run --with marimo-studio marimo edit notebooks/ --sandbox
 The root page remains the Marimo notebook gallery. Opening a configured
 notebook enters its Studio workspace. Other notebooks open in the native
 Marimo editor.
+:::
 
 ## Name the output
 
@@ -80,7 +89,7 @@ Replace `3` with the zero-based index reported by `inspect`.
 
 Open `index.html` and replace the contents of `#app-shell`:
 
-```html
+```html{9} [index.html]
 <main id="app-shell" class="studio-view grid gap-6">
   <header>
     <p class="studio-eyebrow">Quarterly review</p>
@@ -112,9 +121,12 @@ Run projected cells and resolve projected values before sharing:
 uvx marimo-studio check analysis.py --runtime
 ```
 
+::: warning Runtime checks execute notebook code
 The runtime check executes notebook code. It can perform the same file,
 network, database, and data access as the projected cells.
+:::
 
 Continue with [Create and manage views](views.md) when another audience needs
-its own page, or [Design a view](design-views.md) to add values, styling, and
-browser behavior.
+its own page. [Use notebook results](notebook-results.md) adds rich objects and
+JSON-compatible values. [Use HTML, CSS, and JavaScript](web-platform.md) adds
+styling, assets, and browser behavior.

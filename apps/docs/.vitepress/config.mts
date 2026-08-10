@@ -4,7 +4,7 @@ import { defineConfig, type HeadConfig } from "vitepress";
 const repository = "https://github.com/marimo-team/marimo-studio";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-studio/");
 const socialDescription =
-  "Create focused views with plain HTML and CSS that you and your coding agent already write. Marimo keeps notebook logic, controls, and outputs live.";
+  "Keep analytical context in one reactive, reproducible Marimo notebook, then shape a custom web view for each audience.";
 const socialImageAlt = "Marimo Studio: Tune your notebook for every audience.";
 const socialImageUrl = new URL("og.png", siteUrl).href;
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
@@ -83,56 +83,112 @@ export default defineConfig({
       light: "/brand/marimo-studio-lockup-horizontal-light.svg",
     },
     nav: [
-      { text: "Overview", link: "/how-it-works" },
+      { text: "Overview", link: "/overview" },
       {
         text: "Guide",
         items: [
-          { text: "Create your first view", link: "/getting-started" },
-          { text: "Create and manage views", link: "/views" },
-          { text: "Design a view", link: "/design-views" },
-          { text: "Run and share views", link: "/share-views" },
+          { text: "Guide overview", link: "/guide/" },
+          { text: "Create your first view", link: "/guide/getting-started" },
+          { text: "Create and manage views", link: "/guide/views" },
+          { text: "Use notebook results", link: "/guide/notebook-results" },
+          { text: "Use HTML, CSS, and JavaScript", link: "/guide/web-platform" },
+          { text: "Work with coding agents", link: "/guide/coding-agents" },
+          { text: "Run, export, and share", link: "/guide/run-and-share" },
         ],
       },
-      { text: "Examples", link: "/examples" },
-      { text: "Reference", link: "/reference" },
+      { text: "Examples", link: "/examples/" },
+      { text: "Reference", link: "/reference/" },
     ],
     outline: [2, 3],
     search: { provider: "local" },
-    sidebar: [
-      {
-        text: "Introduction",
-        collapsed: false,
-        items: [
-          { text: "Marimo Studio", link: "/" },
-          { text: "Overview", link: "/how-it-works" },
-          { text: "Create your first view", link: "/getting-started" },
-        ],
-      },
-      {
-        text: "Guide",
-        collapsed: false,
-        items: [
-          { text: "Create and manage views", link: "/views" },
-          { text: "Design a view", link: "/design-views" },
-          { text: "Run and share views", link: "/share-views" },
-        ],
-      },
-      {
-        text: "Examples",
-        link: "/examples",
-      },
-      {
-        text: "Reference",
-        collapsed: false,
-        items: [
-          { text: "Reference overview", link: "/reference" },
-          { text: "CLI", link: "/cli" },
-          { text: "Notebook configuration", link: "/configuration" },
-          { text: "View document API", link: "/view-api" },
-          { text: "Python API", link: "/python-api" },
-        ],
-      },
-    ],
+    sidebar: {
+      "/guide/": [
+        {
+          text: "Guide",
+          collapsed: false,
+          items: [
+            { text: "Guide overview", link: "/guide/" },
+            { text: "Create your first view", link: "/guide/getting-started" },
+            { text: "Create and manage views", link: "/guide/views" },
+            { text: "Use notebook results", link: "/guide/notebook-results" },
+            { text: "Use HTML, CSS, and JavaScript", link: "/guide/web-platform" },
+            { text: "Work with coding agents", link: "/guide/coding-agents" },
+            { text: "Run, export, and share", link: "/guide/run-and-share" },
+          ],
+        },
+      ],
+      "/examples/": [
+        {
+          text: "Examples",
+          collapsed: false,
+          items: [
+            { text: "Examples overview", link: "/examples/" },
+            { text: "Revenue forecast", link: "/examples/revenue-forecast" },
+            { text: "Collection research", link: "/examples/collection-research" },
+          ],
+        },
+      ],
+      "/reference/": [
+        {
+          text: "Reference",
+          collapsed: false,
+          items: [
+            { text: "Reference overview", link: "/reference/" },
+            { text: "View document API", link: "/reference/view-document" },
+            { text: "Agent API", link: "/reference/agent-api" },
+            { text: "CLI", link: "/reference/cli" },
+            { text: "Notebook configuration", link: "/reference/configuration" },
+            { text: "Runtime behavior", link: "/reference/runtimes" },
+            { text: "Python API", link: "/reference/python-api" },
+          ],
+        },
+      ],
+      "/": [
+        {
+          text: "Introduction",
+          collapsed: false,
+          items: [
+            { text: "Marimo Studio", link: "/" },
+            { text: "Overview", link: "/overview" },
+            { text: "Create your first view", link: "/guide/getting-started" },
+          ],
+        },
+        {
+          text: "Guide",
+          collapsed: true,
+          items: [
+            { text: "Guide overview", link: "/guide/" },
+            { text: "Create and manage views", link: "/guide/views" },
+            { text: "Use notebook results", link: "/guide/notebook-results" },
+            { text: "Use HTML, CSS, and JavaScript", link: "/guide/web-platform" },
+            { text: "Work with coding agents", link: "/guide/coding-agents" },
+            { text: "Run, export, and share", link: "/guide/run-and-share" },
+          ],
+        },
+        {
+          text: "Examples",
+          collapsed: true,
+          items: [
+            { text: "Examples overview", link: "/examples/" },
+            { text: "Revenue forecast", link: "/examples/revenue-forecast" },
+            { text: "Collection research", link: "/examples/collection-research" },
+          ],
+        },
+        {
+          text: "Reference",
+          collapsed: true,
+          items: [
+            { text: "Reference overview", link: "/reference/" },
+            { text: "View document API", link: "/reference/view-document" },
+            { text: "Agent API", link: "/reference/agent-api" },
+            { text: "CLI", link: "/reference/cli" },
+            { text: "Notebook configuration", link: "/reference/configuration" },
+            { text: "Runtime behavior", link: "/reference/runtimes" },
+            { text: "Python API", link: "/reference/python-api" },
+          ],
+        },
+      ],
+    },
     siteTitle: false,
     socialLinks: [{ icon: "github", link: repository }],
   },

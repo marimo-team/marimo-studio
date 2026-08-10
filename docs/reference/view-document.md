@@ -1,6 +1,6 @@
 ---
 title: View document API
-description: HTML projections, browser value events, readiness, built-in styles, loading states, and relative assets.
+description: Cell, rich-output, and value projections with browser events, readiness, styles, loading states, and relative assets.
 ---
 
 # View document API
@@ -11,7 +11,7 @@ runtime.
 
 ## Document contract
 
-```html
+```html [index.html]
 <!doctype html>
 <html lang="en">
   <head>
@@ -23,6 +23,7 @@ runtime.
   <body>
     <main id="app-shell" class="studio-view">
       <marimo-cell name="summary"></marimo-cell>
+      <marimo-output value="report.table"></marimo-output>
       <strong mo-value="report.total"></strong>
     </main>
   </body>
@@ -30,9 +31,10 @@ runtime.
 ```
 
 The document must contain one `<head>`, one `<body>`, and one `#app-shell`.
-Place every `<marimo-cell>` and `mo-value` host inside the shell.
+Place every `<marimo-cell>`, `<marimo-output>`, and `mo-value` host inside the
+shell.
 
-## `<marimo-cell>`
+## `<marimo-cell>` <Badge type="info" text="Complete cell" />
 
 ```html
 <marimo-cell name="summary"></marimo-cell>
@@ -63,16 +65,10 @@ Cell events:
 - `marimo-cell-updated`
 - `marimo-cell-error`
 
-## `mo-value`
+## Value references
 
-```html
-<span mo-value="report"></span>
-<time mo-value="report.updated_at"></time>
-<span mo-value="series[0].label"></span>
-<span mo-value='metadata["key.with.dots"]'></span>
-```
-
-Selector grammar:
+`<marimo-output value="...">` and `mo-value="..."` accept the same value
+reference grammar:
 
 ```text
 selector  := identifier (dot-key | item)*
@@ -84,6 +80,63 @@ item      := "[" non-negative-integer "]"
 Dot selection checks a mapping key, then Python attribute access. Bracket
 selection uses item lookup. The root variable must have one defining notebook
 cell.
+
+## `<marimo-output>` <Badge type="tip" text="Python object" />
+
+```html
+<marimo-output value="df"></marimo-output>
+<marimo-output value="report.figure"></marimo-output>
+<marimo-output value="results[0]"></marimo-output>
+```
+
+The element formats the selected Python object through Marimo's output
+registry, then renders its MIME output with Marimo's native output area. Use it
+for a table, plot, Markdown object, control, or widget that should look and
+behave like notebook output. Each output selector can appear once per view.
+
+The defining notebook cell remains the reactive owner. During a rerun, the
+current output stays mounted with `data-state="stale"` until the replacement is
+ready. Studio releases formatter-created controls, functions, files, and other
+native resources when the selector is replaced or removed.
+
+The host uses these `data-state` values:
+
+```text
+connecting | loading | stale | ready | error
+```
+
+`data-runtime-cell-id` identifies the defining cell. `data-output-mime`
+records the rendered MIME type. Diagnostic failures use the same
+`data-marimo-diagnostic-*` attributes as cell projections. Each encoded output
+and the aggregate response are bounded to 1,000,000 bytes.
+
+Output events:
+
+- `marimo-output-ready` fires after the first output is mounted.
+- `marimo-output-updated` fires after a later reactive replacement is mounted.
+- `marimo-output-error` fires when the host enters an error state.
+
+Each event bubbles, crosses shadow boundaries, and carries this detail shape:
+
+```ts
+interface MarimoOutputEventDetail {
+  selector: string;
+  cellId?: string;
+  mimetype?: string;
+  code?: string;
+  message?: string;
+  hint?: string;
+}
+```
+
+## `mo-value` <Badge type="info" text="JSON value" />
+
+```html
+<span mo-value="report"></span>
+<time mo-value="report.updated_at"></time>
+<span mo-value="series[0].label"></span>
+<span mo-value='metadata["key.with.dots"]'></span>
+```
 
 Strings, numbers, and booleans render as text. Objects and arrays render as
 compact JSON. JSON `null` renders as empty text while remaining available to
@@ -165,9 +218,9 @@ await window.marimoStudio.ready();
 const diagnostics = window.marimoStudio.diagnostics();
 ```
 
-`ready()` resolves after every current cell and value reaches `ready` or a
-terminal diagnostic. It waits through reactive updates and view-source
-refreshes while retained content remains visible.
+`ready()` resolves after every current cell, rich output, and value reaches
+`ready` or a terminal diagnostic. It waits through reactive updates and
+view-source refreshes while retained content remains visible.
 
 `diagnostics()` returns the current projection, presentation, host, and runtime
 failures.
@@ -179,8 +232,8 @@ The root `<html>` element publishes combined state in
 connecting | loading | ready | error
 ```
 
-`marimo-studio:idle` fires on `document` when current cells and values settle.
-Its detail is `{ state: "ready" | "error" }`.
+`marimo-studio:idle` fires on `document` when current projections settle. Its
+detail is `{ state: "ready" | "error" }`.
 
 ## Built-in styles
 
@@ -222,15 +275,15 @@ continue to run.
 
 | Scope           | Properties                                                                                                                               |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Cell skeleton   | `--marimo-cell-skeleton-height`, `--marimo-cell-skeleton-color`, `--marimo-cell-skeleton-radius`                                         |
+| Output skeleton | `--marimo-cell-skeleton-height`, `--marimo-cell-skeleton-color`, `--marimo-cell-skeleton-radius`                                         |
 | Value skeleton  | `--marimo-value-skeleton-width`, `--marimo-value-skeleton-height`, `--marimo-value-skeleton-color`, `--marimo-value-skeleton-radius`     |
 | Cell typography | `--marimo-cell-font`, `--marimo-cell-heading-font`, `--marimo-cell-monospace-font`                                                       |
 | Cell surface    | `--marimo-cell-background`, `--marimo-cell-surface`, `--marimo-cell-foreground`, `--marimo-cell-muted`, `--marimo-cell-muted-foreground` |
 | Cell frame      | `--marimo-cell-border`, `--marimo-cell-border-color`, `--marimo-cell-radius`, `--marimo-cell-padding`, `--marimo-cell-content-width`     |
 | Cell accent     | `--marimo-cell-accent`, `--marimo-cell-accent-foreground`, `--marimo-cell-error`                                                         |
 
-Set `data-skeleton="none"` on a cell when an empty first-load region is
-intentional.
+Set `data-skeleton="none"` on a cell or rich output when an empty first-load
+region is intentional.
 
 ## Relative assets and reserved paths
 
@@ -273,4 +326,7 @@ Replace `dashboard` and `detail_table` with the current view and cell name.
 Studio processes utility classes in the inserted fragment and connects the new
 host to the current Marimo runtime.
 
-[Design a view](design-views.md) applies these contracts in reader order.
+[Use notebook results](../guide/notebook-results.md) applies the projection
+contracts in an authoring workflow. [Use HTML, CSS, and
+JavaScript](../guide/web-platform.md) covers modules, browser behavior, assets,
+and styling.
