@@ -15,7 +15,7 @@ from marimo_studio._cli.diagnostics import (
     run_in_environment,
 )
 from marimo_studio._cli.help import ColoredCommand
-from marimo_studio._cli.options import notebook_argument, output_format_option
+from marimo_studio._cli.options import output_format_option, target_argument
 from marimo_studio._cli.output import (
     checks_payload,
     echo_json,
@@ -29,7 +29,7 @@ _CHECK_SEVERITY = {"pass": "info", "warn": "warning", "fail": "error"}
 
 
 @click.command("check", cls=ColoredCommand)
-@notebook_argument
+@target_argument
 @click.option("--view", "view_name", help="Validate one named view.")
 @click.option(
     "--runtime",
@@ -40,13 +40,17 @@ _CHECK_SEVERITY = {"pass": "info", "warn": "warning", "fail": "error"}
 @output_format_option
 @diagnostic_format_option
 def check(
-    notebook: Path | None,
+    target: Path | None,
     view_name: str | None,
     runtime_check: bool,
     output_format: str,
 ) -> None:
-    """Validate the views configured for NOTEBOOK."""
-    studio = load_studio_target(notebook)
+    """Validate the views configured for TARGET.
+
+    TARGET may be a notebook, project directory, or pyproject.toml. The current
+    directory is used when TARGET is omitted.
+    """
+    studio = load_studio_target(target)
     if runtime_check and should_reenter(studio, None):
         raise click.exceptions.Exit(run_in_environment(studio, sys.argv[1:]))
     results = check_studio(studio, view_name=view_name)

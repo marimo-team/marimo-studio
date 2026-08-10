@@ -31,7 +31,7 @@ In Studio, open the view menu and choose **New view**. Enter a name such as
 The equivalent terminal command is:
 
 ```console
-uvx marimo-studio view add executive analysis.py
+uvx marimo-studio view add analysis.py --name executive
 ```
 
 A view name starts with a lowercase letter and contains lowercase letters,
@@ -68,6 +68,14 @@ Open the view menu, choose **Remove view**, and confirm the named view. Studio
 first saves the active source and prepares a successor view. It retargets the
 preview and source stream before deleting the old directory. If the removed
 view was the default, Studio makes the first remaining view the new default.
+
+The equivalent terminal command prompts before deleting the view directory:
+
+```console
+uvx marimo-studio view remove analysis.py --name executive
+```
+
+Pass `--yes` after reviewing the target when a script performs the removal.
 
 A configured notebook retains at least one view.
 

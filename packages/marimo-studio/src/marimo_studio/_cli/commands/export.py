@@ -8,13 +8,17 @@ import click
 
 from marimo_studio._cli.diagnostics import diagnostic_format_option
 from marimo_studio._cli.help import ColoredCommand
-from marimo_studio._cli.options import notebook_argument, output_format_option
+from marimo_studio._cli.options import output_format_option, target_argument
 from marimo_studio._cli.output import echo_json, render_static_export
 from marimo_studio.export import export_view
 
 
-@click.command("export", cls=ColoredCommand)
-@notebook_argument
+@click.command(
+    "export",
+    cls=ColoredCommand,
+    short_help="Export a view as a static WebAssembly site.",
+)
+@target_argument
 @click.option(
     "-o",
     "--output",
@@ -31,14 +35,18 @@ from marimo_studio.export import export_view
 @output_format_option
 @diagnostic_format_option
 def export(
-    notebook: Path | None,
+    target: Path | None,
     output: Path,
     view: str | None,
     force: bool,
     output_format: str,
 ) -> None:
-    """Export a view from NOTEBOOK as a static WebAssembly site."""
-    result = export_view(notebook or Path.cwd(), output, view=view, force=force)
+    """Export a view from TARGET as a static WebAssembly site.
+
+    TARGET may be a notebook, project directory, or pyproject.toml. The current
+    directory is used when TARGET is omitted.
+    """
+    result = export_view(target or Path.cwd(), output, view=view, force=force)
     if output_format == "json":
         echo_json(result.to_dict())
     else:

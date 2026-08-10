@@ -130,7 +130,7 @@ The `cells` table maps an alias to a stable cell reference. Create and update
 these entries through the CLI:
 
 ```console
-uvx marimo-studio bind summary analysis.py --cell 12
+uvx marimo-studio bind analysis.py --cell 12 --as summary
 ```
 
 Native Marimo cell names require no alias. During an active `marimo edit`

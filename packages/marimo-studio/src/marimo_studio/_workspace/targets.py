@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from marimo_studio._workspace.config import load_studio
+from marimo_studio._workspace.config import load_studio, load_studio_definition
 from marimo_studio._workspace.models import StudioWorkspace
 
 
@@ -23,12 +23,12 @@ def load_studio_target(target: str | Path | None) -> StudioWorkspace:
 
 
 def resolve_notebook(target: str | Path | None) -> Path:
-    """Resolve a notebook path, project path, or implicit current workspace."""
+    """Resolve a notebook path, project path, or implicit current configuration."""
     if target is None:
-        return load_studio_target(None).notebook
+        return load_studio_definition(".").notebook
     path = Path(target).expanduser()
     if path.is_dir() or path.suffix == ".toml":
-        return load_studio_target(path).notebook
+        return load_studio_definition(path).notebook
     return path.resolve()
 
 

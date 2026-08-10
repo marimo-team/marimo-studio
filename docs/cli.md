@@ -10,16 +10,18 @@ aliases, validates projections, and exports static sites. Marimo's `edit` and
 `run` commands own notebook servers.
 
 ```text
-marimo-studio inspect [OPTIONS] [NOTEBOOK]
-marimo-studio bind [OPTIONS] ALIAS [NOTEBOOK]
-marimo-studio view add [OPTIONS] NAME [NOTEBOOK]
-marimo-studio view list [OPTIONS] [NOTEBOOK]
-marimo-studio check [OPTIONS] [NOTEBOOK]
-marimo-studio export [OPTIONS] [NOTEBOOK]
+marimo-studio inspect [OPTIONS] [TARGET]
+marimo-studio bind [OPTIONS] [TARGET]
+marimo-studio view add [OPTIONS] [TARGET]
+marimo-studio view list [OPTIONS] [TARGET]
+marimo-studio view remove [OPTIONS] [TARGET]
+marimo-studio check [OPTIONS] [TARGET]
+marimo-studio export [OPTIONS] [TARGET]
 ```
 
-Pass a notebook path when creating the first view. Later commands can discover
-one configured notebook from the current directory or its project.
+`TARGET` accepts a notebook path, project directory, or `pyproject.toml`. Pass
+a notebook path when creating the first view. Commands discover one configured
+notebook from the current directory when `TARGET` is omitted.
 
 Every data command accepts:
 
@@ -49,7 +51,7 @@ perform the notebook's file, network, database, and data access.
 ## `bind`
 
 ```console
-uvx marimo-studio bind summary analysis.py --cell 12
+uvx marimo-studio bind analysis.py --cell 12 --as summary
 ```
 
 Records `summary` as a stable alias for zero-based cell index `12`.
@@ -57,6 +59,7 @@ Records `summary` as a stable alias for zero-based cell index `12`.
 | Option         | Behavior                                             |
 | -------------- | ---------------------------------------------------- |
 | `--cell INDEX` | Select the zero-based cell. Required                 |
+| `--as ALIAS`   | Name the selected cell. Required                     |
 | `--dry-run`    | Report the binding and leave configuration unchanged |
 | `--overwrite`  | Replace an existing alias                            |
 
@@ -70,12 +73,18 @@ its match becomes ambiguous.
 ## `view add`
 
 ```console
-uvx marimo-studio view add executive analysis.py
+uvx marimo-studio view add analysis.py
 ```
 
-Creates the view directory and configures the notebook when needed. A new view
-contains `index.html` and `app.css` and starts with every notebook cell in
-source order.
+Creates the `dashboard` view directory and configures the notebook when needed.
+A new view contains `index.html` and `app.css` and starts with every notebook
+cell in source order.
+
+Name another view with `--name`:
+
+```console
+uvx marimo-studio view add analysis.py --name executive
+```
 
 `--dry-run` reports the files and configuration changes without writing them.
 
@@ -90,6 +99,19 @@ uvx marimo-studio view list analysis.py
 
 Lists every configured view, its source directory, and the current default.
 JSON output includes `schema`, `notebook`, `default_view`, and a `views` array.
+
+## `view remove`
+
+```console
+uvx marimo-studio view remove analysis.py --name executive
+```
+
+Removes the named view directory after confirmation. If the selected view is
+the default, the first remaining view becomes the default. A configured
+notebook retains at least one view.
+
+Use `--yes` for a reviewed non-interactive removal. JSON output includes
+`schema`, `notebook`, `view`, `default_view`, and the remaining `views`.
 
 ## `check`
 

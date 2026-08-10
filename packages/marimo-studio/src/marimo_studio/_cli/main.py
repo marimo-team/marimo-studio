@@ -20,6 +20,12 @@ from marimo_studio.errors import MarimoStudioError
 @click.group(
     cls=ColoredGroup,
     context_settings={"help_option_names": ["-h", "--help"]},
+    epilog="""\b
+Examples:
+  marimo-studio view add analysis.py
+  marimo edit analysis.py --sandbox
+  marimo-studio view add analysis.py --name executive
+""",
     no_args_is_help=True,
 )
 @click.version_option(prog_name="marimo-studio", package_name="marimo-studio")
