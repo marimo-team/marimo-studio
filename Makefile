@@ -10,7 +10,7 @@ PY_PACKAGE := packages/marimo-studio
 FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples packages skills package.json pnpm-workspace.yaml tsconfig.json vite.config.ts
 TYPECHECK_PATHS := apps/browser apps/docs/.vitepress apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/src vite.config.ts
 
-.PHONY: help install format lint typecheck test e2e e2e-ui check build docs-build docs-serve package prepare-frontend
+.PHONY: help install format lint typecheck test examples-check e2e e2e-ui check build docs-build docs-serve package prepare-frontend
 
 help: ## List development targets.
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -40,13 +40,18 @@ test: ## Run Python and browser-runtime tests.
 	$(UV) run pytest
 	$(VP) run -r test
 
+examples-check: ## Validate every example notebook and Studio view.
+	$(UV) run marimo check examples/analysis.py examples/nga_collection.py
+	$(UV) run marimo-studio check examples/analysis.py --runtime
+	$(UV) run marimo-studio check examples/nga_collection.py
+
 e2e: build ## Test Studio in Chromium with a live Marimo kernel.
 	$(PNPM) --filter @marimo-studio/e2e e2e
 
 e2e-ui: build ## Open the browser test runner.
 	$(PNPM) --filter @marimo-studio/e2e e2e:ui
 
-check: lint typecheck test ## Run the local quality gates.
+check: lint typecheck test examples-check ## Run the local quality gates.
 
 build: ## Build browser assets into the Python package.
 	$(VP) run --filter @marimo-studio/browser build
