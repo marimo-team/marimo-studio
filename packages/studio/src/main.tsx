@@ -40,7 +40,7 @@ const showStartupError = (root: HTMLElement, cause: unknown): void => {
   console.error("Studio could not start", error);
 };
 
-export const startStudio = async (options: StudioOptions): Promise<void> => {
+export const startStudio = (options: StudioOptions): void => {
   const root = required<HTMLElement>("#marimo-studio-root");
   try {
     const bootstrap = readBootstrap();

@@ -1,7 +1,6 @@
 import { createMarimoViteIntegration } from "@marimo-studio/marimo-frontend/vite";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import topLevelAwait from "vite-plugin-top-level-await";
 import { defineConfig } from "vite-plus";
 
 import { buildMetadata } from "./build-metadata.ts";
@@ -16,7 +15,7 @@ export default defineConfig({
   css: {
     postcss: marimo.postcss,
   },
-  plugins: [topLevelAwait(), buildMetadata()],
+  plugins: [buildMetadata()],
   resolve: {
     alias: marimo.aliases,
   },
