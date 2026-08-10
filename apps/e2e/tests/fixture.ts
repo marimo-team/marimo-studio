@@ -1,6 +1,8 @@
 import { expect, test as base, type FrameLocator, type Page } from "@playwright/test";
+import { execFile as execFileCallback } from "node:child_process";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { promisify } from "node:util";
 
 import {
   fixtureDirectory,
@@ -8,9 +10,11 @@ import {
   hostedNotebookPath,
   hostedWorkspaceDirectory,
   notebookPath,
+  repositoryDirectory,
   workspaceDirectory,
 } from "../scripts/paths.mjs";
 
+const execFile = promisify(execFileCallback);
 const dashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/notebook/dashboard");
 
 export const dashboardHtmlPath = resolve(dashboardDirectory, "index.html");
@@ -65,6 +69,20 @@ export const hostedWorkspaceNotebookPath = hostedNotebookPath;
 
 export const readWorkspaceFile = (path: string) => readFile(path, "utf8");
 export const writeWorkspaceFile = (path: string, content: string) => writeFile(path, content);
+
+const runStudioCli = (args: string[]) =>
+  execFile("uv", ["run", "--frozen", "--project", repositoryDirectory, "marimo-studio", ...args], {
+    cwd: repositoryDirectory,
+  });
+
+export const bindWorkspaceCell = (alias: string, cell: number) =>
+  runStudioCli(["bind", alias, workspaceNotebookPath, "--cell", String(cell)]);
+
+export const checkWorkspace = async (): Promise<boolean> => {
+  const { stdout } = await runStudioCli(["check", workspaceNotebookPath, "--format", "json"]);
+  const result = JSON.parse(stdout) as { ok?: unknown };
+  return result.ok === true;
+};
 
 export const editorFrame = (page: Page): FrameLocator =>
   page.frameLocator('iframe[title="Marimo editor"]');

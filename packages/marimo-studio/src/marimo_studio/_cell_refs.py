@@ -6,7 +6,7 @@ import ast
 import hashlib
 import textwrap
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import TypeVar
 
 from marimo_studio.types import CellRef
@@ -161,3 +161,52 @@ def cell_ref_candidates(
         for candidate, value in available
         if candidate.layout_fingerprint == ref.layout_fingerprint
     )
+
+
+def safe_cell_ref_matches(
+    bindings: Mapping[str, CellRef],
+    candidates: Iterable[tuple[CellRef, str]],
+) -> dict[str, str]:
+    """Return unique matches that preserve distinct configured bindings."""
+    available = tuple(candidates)
+    resolved = {
+        alias: matches[0]
+        for alias, ref in bindings.items()
+        if len(matches := cell_ref_candidates(ref, available)) == 1
+    }
+    aliases_by_id: dict[str, list[str]] = {}
+    for alias, runtime_id in resolved.items():
+        aliases_by_id.setdefault(runtime_id, []).append(alias)
+    for aliases in aliases_by_id.values():
+        if len({bindings[alias] for alias in aliases}) > 1:
+            for alias in aliases:
+                resolved.pop(alias)
+    return resolved
+
+
+def safe_cell_ref_updates(
+    bindings: Mapping[str, CellRef],
+    updates: Mapping[str, CellRef],
+) -> dict[str, CellRef]:
+    """Return automatic updates that keep distinct bindings distinct."""
+    accepted = dict(updates)
+    while True:
+        effective = dict(bindings)
+        effective.update(accepted)
+        aliases_by_ref: dict[CellRef, list[str]] = {}
+        for alias, ref in effective.items():
+            aliases_by_ref.setdefault(ref, []).append(alias)
+
+        blocked: set[str] = set()
+        for aliases in aliases_by_ref.values():
+            original_refs = {bindings[alias] for alias in aliases if alias in bindings}
+            if len(original_refs) > 1:
+                blocked.update(
+                    alias
+                    for alias in aliases
+                    if alias in accepted and accepted[alias] != bindings.get(alias)
+                )
+        if not blocked:
+            return accepted
+        for alias in blocked:
+            accepted.pop(alias)

@@ -9,6 +9,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from marimo_studio import _assets
+from marimo_studio._compat.server.cell_aliases import enable_cell_alias_sync
 from marimo_studio._compat.server.context import (
     relative_request_path,
     server_base_url,
@@ -47,6 +48,7 @@ from marimo_studio._server.support import (
     support_response,
 )
 from marimo_studio._urls import SUPPORT_PATH
+from marimo_studio._workspace import discover_studio
 from marimo_studio.errors import MarimoStudioError, WorkspaceInitializationError
 
 
@@ -83,6 +85,15 @@ class PresentationMiddleware:
             return
         editor_target = native_editor_target(relative)
         if editor_target is not None and mode == "edit":
+            if scope["type"] == "http":
+                location = server_location(Request(scope, receive))
+                if location is not None:
+                    try:
+                        workspace = discover_studio(location.notebook)
+                    except MarimoStudioError:
+                        workspace = None
+                    if workspace is not None and workspace.cells:
+                        enable_cell_alias_sync(location)
             await self.app(
                 _replace_relative_path(scope, relative, editor_target),
                 receive,
@@ -321,6 +332,8 @@ class PresentationMiddleware:
                         selected_document,
                     )
                 elif selected_studio is not None:
+                    if workspace.cells:
+                        enable_cell_alias_sync(location)
                     response = studio_response(
                         request,
                         context,

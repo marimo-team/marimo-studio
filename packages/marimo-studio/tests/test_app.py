@@ -25,6 +25,7 @@ from marimo_studio import create_asgi_app
 from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.server.programmatic import programmatic_middleware
 from marimo_studio._server import dev
+from marimo_studio._server import middleware as studio_middleware
 from marimo_studio._urls import authored_view_root_url
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
@@ -1369,6 +1370,28 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
     assert "Starting notebook" in waiting.text
     assert missing_view.status_code == 404
     assert view.status_code == 200
+
+
+def test_direct_native_editor_enables_cell_alias_sync(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    locations: list[Any] = []
+    monkeypatch.setattr(
+        studio_middleware,
+        "enable_cell_alias_sync",
+        locations.append,
+    )
+    editor = "/_marimo-studio/editor/?" + urlencode({"file": str(studio.notebook)})
+
+    with TestClient(app) as client:
+        response = client.get(editor)
+
+    assert response.status_code == 200
+    assert {location.notebook for location in locations} == {studio.notebook}
 
 
 def test_view_list_tracks_new_folders_without_restarting_marimo(
