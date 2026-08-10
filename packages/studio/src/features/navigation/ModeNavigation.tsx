@@ -44,7 +44,7 @@ export const ModeNavigation = ({
 }) => {
   const config = NAVIGATION_VARIANTS[variant];
   const selected = selectedMode(active, config.grouped);
-  const showIcons = variant === "overflow";
+  const iconClassName = variant === "primary" ? "studio-mode-icon" : "studio-menu-item-icon";
   return (
     <nav className={config.className} aria-label="Studio mode">
       {config.items.map((item) => {
@@ -61,7 +61,7 @@ export const ModeNavigation = ({
               closeParentMenu(event.currentTarget);
             }}
           >
-            {showIcons ? <Icon className="studio-menu-item-icon" aria-hidden /> : null}
+            <Icon className={iconClassName} strokeWidth={1.5} aria-hidden />
             <span>{item.label}</span>
           </button>
         );
