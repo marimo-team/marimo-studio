@@ -1,9 +1,6 @@
 <p align="center">
   <a href="https://marimo-team.github.io/marimo-studio/">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://marimo-team.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-dark.svg">
-      <img alt="Marimo Studio" src="https://marimo-team.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-light.svg" width="620">
-    </picture>
+    <img alt="A Marimo notebook and a custom operations view in Marimo Studio" src="https://marimo-team.github.io/marimo-studio/og.png" width="1100">
   </a>
 </p>
 
@@ -26,12 +23,6 @@ Studio runs inside Marimo. `marimo edit` opens the notebook and view together.
 `marimo run` serves finished views with Marimo's kernels, sessions,
 authentication, routing, controls, and output renderers.
 
-<p align="center">
-  <a href="https://marimo-team.github.io/marimo-studio/">
-    <img alt="A Marimo notebook and a custom operations view in Marimo Studio" src="https://marimo-team.github.io/marimo-studio/og.png" width="1100">
-  </a>
-</p>
-
 ## Try Studio
 
 From a repository checkout, open the revenue forecast in the Studio editor:
@@ -45,14 +36,6 @@ notebook as an application at its default Studio view:
 
 ```console
 uvx --with marimo-studio marimo run examples/analysis.py --sandbox
-```
-
-The collection research example provides Corpus, Study, and Packet views over
-one notebook session:
-
-```console
-uvx --with marimo-studio marimo edit examples/nga_collection.py --sandbox
-uvx --with marimo-studio marimo run examples/nga_collection.py --sandbox
 ```
 
 ## Create your first view
@@ -130,16 +113,6 @@ inspect the saved notebook graph, create a view, bind a stable cell name, edit
 the view files, and validate every projection. Metric definitions,
 transformations, and domain rules remain visible in notebook cells for review.
 
-```python
-import marimo._code_mode as cm
-import marimo_studio.agents as studio
-
-ctx = cm.get_context()
-notebook = studio.inspect(ctx, include_code=True)
-view = studio.ensure_view(ctx, "dashboard")
-checks = studio.check(ctx, view_name="dashboard")
-```
-
 [Work with coding agents](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
 documents the inspect, create, edit, and check loop.
 
@@ -161,18 +134,12 @@ data access before publishing the generated directory.
 
 Marimo Studio supports Python 3.10 or newer and Marimo 0.23.16 or newer.
 
-## Examples
-
-The [revenue forecast](https://marimo-team.github.io/marimo-studio/examples/revenue-forecast)
-shows one reactive dashboard. The
-[collection research workflow](https://marimo-team.github.io/marimo-studio/examples/collection-research)
-uses three views for corpus discovery, visual study, and a provenance-rich
-handoff.
-
 ## Documentation
 
-- [Overview](https://marimo-team.github.io/marimo-studio/overview)
-- [Get started](https://marimo-team.github.io/marimo-studio/guide/getting-started)
-- [Guide](https://marimo-team.github.io/marimo-studio/guide/)
-- [Examples](https://marimo-team.github.io/marimo-studio/examples/)
-- [Reference](https://marimo-team.github.io/marimo-studio/reference/)
+Read the [Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/)
+to create views, project notebook results, work with coding agents, and choose
+a runtime.
+
+## License
+
+Marimo Studio is licensed under the [Apache License 2.0](LICENSE).

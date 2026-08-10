@@ -3,6 +3,8 @@ name = "marimo-studio"
 version = "0.0.4"
 description = "Custom views for Marimo notebooks"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }]
 requires-python = ">=3.10"
 dependencies = [

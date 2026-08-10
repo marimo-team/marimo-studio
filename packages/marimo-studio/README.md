@@ -1,9 +1,6 @@
 <p align="center">
   <a href="https://marimo-team.github.io/marimo-studio/">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://marimo-team.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-dark.svg">
-      <img alt="Marimo Studio" src="https://marimo-team.github.io/marimo-studio/brand/marimo-studio-lockup-horizontal-light.svg" width="620">
-    </picture>
+    <img alt="A Marimo notebook and a custom operations view in Marimo Studio" src="https://marimo-team.github.io/marimo-studio/og.png" width="1100">
   </a>
 </p>
 
@@ -29,14 +26,6 @@ view with the same Marimo application:
 uvx --with marimo-studio marimo run examples/analysis.py --sandbox
 ```
 
-The collection research example provides Corpus, Study, and Packet views over
-one notebook session:
-
-```console
-uvx --with marimo-studio marimo edit examples/nga_collection.py --sandbox
-uvx --with marimo-studio marimo run examples/nga_collection.py --sandbox
-```
-
 Studio runs inside Marimo and uses its kernels, sessions, authentication,
 routing, controls, and output renderers. Select complete cell output, one
 Python object rendered by Marimo, or a JSON-compatible browser value:
@@ -48,5 +37,10 @@ Python object rendered by Marimo, or a JSON-compatible browser value:
 ```
 
 Read the [Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/)
-for multi-view authoring, browser integration, coding-agent workflows,
-runtimes, and API contracts.
+to create views, project notebook results, work with coding agents, and choose
+a runtime.
+
+## License
+
+Marimo Studio is licensed under the
+[Apache License 2.0](https://github.com/marimo-team/marimo-studio/blob/main/LICENSE).
