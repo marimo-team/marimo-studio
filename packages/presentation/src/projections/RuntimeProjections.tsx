@@ -1,8 +1,7 @@
-import type { SessionId } from "@marimo-studio/marimo-frontend/runtime";
-
 import { Fragment, type ReactNode } from "react";
 
 import type { OutputReader } from "../outputs/reader";
+import type { RuntimeCellSource } from "../runtime/session/use-runtime-cells";
 import type { ValueReader } from "../values/reader";
 
 import { RuntimeCellPortals } from "../runtime/cells/RuntimeCellPortals";
@@ -11,19 +10,17 @@ import { useRuntimeCells } from "../runtime/session/use-runtime-cells";
 import { RuntimeValues } from "../runtime/values/RuntimeValues";
 
 interface RuntimeProjectionProps {
-  initialized: Promise<void>;
   readValues: ValueReader;
   readOutputs: OutputReader;
-  sessionId: SessionId;
+  runtime: RuntimeCellSource;
 }
 
 export const RuntimeProjections = ({
-  initialized,
   readValues,
   readOutputs,
-  sessionId,
+  runtime: source,
 }: RuntimeProjectionProps) => {
-  const runtime = useRuntimeCells({ initialized, sessionId });
+  const runtime = useRuntimeCells(source);
   const projections: readonly { kind: string; view: ReactNode }[] = [
     {
       kind: "output",

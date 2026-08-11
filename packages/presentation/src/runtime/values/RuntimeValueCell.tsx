@@ -1,6 +1,5 @@
-import type { WebSocketState } from "@marimo-studio/marimo-frontend/runtime";
-
 import type { ValueReader } from "../../values/reader";
+import type { RuntimeConnectionState } from "../cell-state";
 import type { RuntimeCell } from "../runtime-cell";
 
 import { useRuntimeValue } from "./use-runtime-value";
@@ -16,7 +15,7 @@ export const RuntimeValueCell = ({
   revision: string;
   selectors: string[];
   cell: RuntimeCell | undefined;
-  connectionState: WebSocketState;
+  connectionState: RuntimeConnectionState;
   runtimeReady: boolean;
   readValues: ValueReader;
 }) => {

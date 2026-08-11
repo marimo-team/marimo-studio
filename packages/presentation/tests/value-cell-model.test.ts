@@ -8,7 +8,10 @@ import { valueCellModel } from "../src/runtime/values/value-cell-model.ts";
 test("an idle kernel value remains readable when a secondary client has stale source metadata", () => {
   const cell = {
     id: "cell-id",
+    name: "_",
     config: { disabled: false },
+    consoleOutputs: [],
+    debuggerActive: false,
     status: "idle",
     lastRunStartTimestamp: 2,
     errored: false,
@@ -32,7 +35,10 @@ test("an idle kernel value remains readable when a secondary client has stale so
 test("an idle value waits while its kernel inputs are stale", () => {
   const cell = {
     id: "cell-id",
+    name: "_",
     config: { disabled: false },
+    consoleOutputs: [],
+    debuggerActive: false,
     status: "idle",
     lastRunStartTimestamp: 2,
     errored: false,

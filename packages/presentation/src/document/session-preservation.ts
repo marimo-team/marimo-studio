@@ -1,4 +1,4 @@
-import { isSessionId } from "@marimo-studio/marimo-frontend/session";
+import { isSessionId } from "@marimo-studio/marimo-frontend/session-bootstrap";
 
 import type { RuntimeConfig } from "../runtime-config/index.ts";
 
@@ -47,7 +47,7 @@ const storageKey = (config: RuntimeConfig, url: URL): string => {
   return `marimo-studio:session:v1:server:${runtime?.fileKey ?? "unknown"}:${url.pathname}`;
 };
 
-const prepareReplay = (config: RuntimeConfig, environment?: SessionEnvironment): boolean => {
+const preflightReplay = (config: RuntimeConfig, environment?: SessionEnvironment): boolean => {
   try {
     const browser = environment ?? browserEnvironment();
     const url = new URL(browser.href);
@@ -126,6 +126,15 @@ const finishReplay = (environment?: Pick<SessionEnvironment, "href" | "replaceUr
   }
 };
 
+const replayPending = (environment?: Pick<SessionEnvironment, "href">): boolean => {
+  try {
+    const browser = environment ?? browserEnvironment();
+    return new URL(browser.href).searchParams.get(DOCUMENT_REPLAY_PARAM) === "1";
+  } catch {
+    return false;
+  }
+};
+
 const rememberReplay = (
   config: RuntimeConfig,
   sessionId: string,
@@ -151,8 +160,12 @@ export class BrowserSessionReplay {
       globalThis.__MARIMO_STUDIO_SESSION_ID__,
   ) {}
 
-  prepare(config: RuntimeConfig): boolean {
-    return prepareReplay(config, this.environment);
+  preflight(config: RuntimeConfig): boolean {
+    return preflightReplay(config, this.environment);
+  }
+
+  pending(): boolean {
+    return replayPending(this.environment);
   }
 
   preservedUrl(config: RuntimeConfig, target: string): string {

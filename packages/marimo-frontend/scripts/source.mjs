@@ -1,4 +1,5 @@
 import { execFile, spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,8 +16,14 @@ const metadataPath = join(cacheRoot, "source.json");
 
 export const repository = "https://github.com/marimo-team/marimo.git";
 
-// Keep this revision aligned with the Marimo release resolved by uv.lock.
-export const expectedCommit = "d9d6ca0d262845abafd52966790e1ffd4668da76";
+const release = JSON.parse(
+  readFileSync(
+    resolve(packageRoot, "../marimo-studio/src/marimo_studio/_compat/release.json"),
+    "utf8",
+  ),
+);
+export const expectedVersion = release.version;
+export const expectedCommit = release.commit;
 
 const capture = async (command, args, cwd) => {
   const result = await exec(command, args, { cwd, encoding: "utf8" });
@@ -74,6 +81,15 @@ const assertVersion = async (path, expected) => {
   if (actual !== expected) {
     throw new Error(
       `The Marimo checkout is ${actual}, but the Python environment resolves ${expected}`,
+    );
+  }
+};
+
+export const assertMarimoCommit = async (path) => {
+  const actual = await capture("git", ["rev-parse", "HEAD"], path);
+  if (actual !== expectedCommit) {
+    throw new Error(
+      `The Marimo checkout is ${actual}, but Studio requires release commit ${expectedCommit}`,
     );
   }
 };
@@ -153,12 +169,18 @@ const reusableOwnedSource = async (version) => {
 
 export const prepareMarimoSource = async () => {
   const version = await resolvedVersion();
+  if (version !== expectedVersion) {
+    throw new Error(
+      `The Python environment resolves Marimo ${version}, but Studio requires ${expectedVersion}`,
+    );
+  }
   const configured = process.env.MARIMO_REPO?.trim();
   let path;
 
   if (configured) {
     path = resolve(configured);
     await assertVersion(path, version);
+    await assertMarimoCommit(path);
   } else {
     const reusable = await reusableOwnedSource(version);
     if (reusable) {

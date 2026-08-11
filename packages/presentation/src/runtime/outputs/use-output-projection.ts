@@ -1,13 +1,10 @@
-import type { CellId } from "@marimo-studio/marimo-frontend/cells";
-import type { WebSocketState } from "@marimo-studio/marimo-frontend/runtime";
 import type { RenderedOutput } from "@marimo-studio/protocol/output-read";
 import type { ValueReadError } from "@marimo-studio/protocol/value-read";
 
-import { ensureProjectedOutputOwner } from "@marimo-studio/marimo-frontend/projected-output";
-import { WebSocketState as ConnectionState } from "@marimo-studio/marimo-frontend/runtime";
 import { useEffect, useState } from "react";
 
 import type { OutputReader } from "../../outputs/reader";
+import type { RuntimeConnectionState } from "../cell-state";
 import type { ValueCellModel } from "../values/value-cell-model";
 
 import { errorMessage } from "../../errors";
@@ -21,7 +18,7 @@ export interface OutputDiagnostic {
 }
 
 export interface OutputProjection {
-  cellId: CellId;
+  cellId: string;
   output: RenderedOutput;
   sourceVersion: number | null;
 }
@@ -59,12 +56,12 @@ export const useOutputProjection = ({
   activeSelectors: string[];
   bindingIdentity: string | undefined;
   blocked: boolean;
-  connectionState: WebSocketState;
+  connectionState: RuntimeConnectionState;
   model: ValueCellModel;
   readOutputs: OutputReader;
   revision: string;
   selector: string;
-  sourceCellId: CellId | undefined;
+  sourceCellId: string | undefined;
 }): OutputProjectionState => {
   const [state, setState] = useState<OutputRequestState>();
   const revisionRef = useLatest(revision);
@@ -79,7 +76,7 @@ export const useOutputProjection = ({
       !requestIdentity ||
       !sourceCellId ||
       blocked ||
-      connectionState !== ConnectionState.OPEN ||
+      connectionState !== "OPEN" ||
       model.phase !== "ready"
     ) {
       return;
@@ -132,8 +129,6 @@ export const useOutputProjection = ({
           release();
           return;
         }
-        const ownerCellId = rendered.ownerCellId as CellId;
-        ensureProjectedOutputOwner(ownerCellId, rendered.timestamp);
         setState({
           identity: requestIdentity,
           pending: false,

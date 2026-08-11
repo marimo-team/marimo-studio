@@ -21,6 +21,9 @@
       "@marimo-studio/marimo-frontend/*": ["./packages/marimo-frontend/src/*"],
       "@marimo-team/frontend/unstable_internal/*": [
         "./packages/marimo-frontend/.cache/marimo/frontend/src/*"
+      ],
+      "@marimo-team/react-slotz": [
+        "./packages/marimo-frontend/.cache/marimo/frontend/node_modules/@marimo-team/react-slotz"
       ]
     },
     "resolveJsonModule": true,

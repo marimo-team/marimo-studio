@@ -1,4 +1,4 @@
-import { cellDomProps, ConsoleOutput, OutputArea } from "@marimo-studio/marimo-frontend/cells";
+import { CellPresentation } from "@marimo-studio/marimo-frontend/cell-presentation";
 
 import type { RuntimeCell, SubmitStdin } from "../runtime-cell";
 import type { CellProjection } from "./cell-projection";
@@ -12,22 +12,11 @@ export const CellOutput = ({
   projection: CellProjection;
   onSubmitStdin: SubmitStdin;
 }) => (
-  <div className="marimo" data-marimo-cell-output="" {...cellDomProps(cell.id, cell.name)}>
-    <ConsoleOutput
-      cellId={cell.id}
-      cellName="_"
-      consoleOutputs={projection.consoleOutputs}
-      stale={(cell.status === "queued" || cell.edited || cell.staleInputs) && !cell.interrupted}
-      interrupted={cell.interrupted}
-      debuggerActive={cell.debuggerActive}
-      onSubmitDebugger={(text, outputIndex) => onSubmitStdin(cell, text, outputIndex)}
-    />
-    <OutputArea
-      allowExpand={false}
-      output={cell.output}
-      cellId={cell.id}
-      stale={projection.stale}
-      loading={projection.loading}
-    />
-  </div>
+  <CellPresentation
+    cell={cell}
+    consoleOutputs={projection.consoleOutputs}
+    loading={projection.loading}
+    stale={projection.stale}
+    onSubmitStdin={(text, outputIndex) => onSubmitStdin(cell, text, outputIndex)}
+  />
 );

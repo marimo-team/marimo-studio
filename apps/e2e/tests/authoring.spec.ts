@@ -562,47 +562,43 @@ test("activates an agent-requested view and records its rendered revision", asyn
 });
 
 test("rebinds agent analysis after the native editor reconnects", async ({ page }) => {
-  const initialSessionRequest = page.waitForRequest(
-    (request) =>
-      new URL(request.url()).pathname.endsWith("/_marimo-studio/editor/api/usage") &&
-      Boolean(request.headers()["marimo-session-id"]),
-  );
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
-  const initialSession = (await initialSessionRequest).headers()["marimo-session-id"];
+  const serverPreview = page.locator('iframe[data-preview-runtime-frame="server"]');
+  const readySession = async () => {
+    const sessionId = await serverPreview.getAttribute("data-session-id");
+    return sessionId && /^s_[\da-z]{6}$/.test(sessionId) ? sessionId : undefined;
+  };
+  let initialSession: string | undefined;
+  await expect
+    .poll(async () => {
+      initialSession = await readySession();
+      return initialSession;
+    })
+    .toBeTruthy();
   if (!initialSession) {
-    throw new Error("The editor did not expose its Marimo session");
+    throw new Error("The preview did not expose its Marimo session");
   }
 
   await editorSlider(page).press("End");
   await expect(preview.locator('[mo-value="metric"]')).toHaveText("63");
-  const reboundSessionRequest = page.waitForRequest(
-    (request) =>
-      new URL(request.url()).pathname.endsWith("/_marimo-studio/editor/api/usage") &&
-      Boolean(request.headers()["marimo-session-id"]) &&
-      request.headers()["marimo-session-id"] !== initialSession,
-  );
-  const reboundConfig = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      response.ok() &&
-      url.pathname.endsWith("/_marimo-studio/views/dashboard/config") &&
-      url.searchParams.get("runtime") === "server"
-    );
-  });
   await page
     .locator('iframe[title="Marimo editor"]')
     .evaluate((editor: HTMLIFrameElement) => editor.contentWindow?.location.reload());
-  const reboundSession = (await reboundSessionRequest).headers()["marimo-session-id"];
+  let reboundSession: string | undefined;
+  await expect
+    .poll(async () => {
+      const sessionId = await readySession();
+      reboundSession = sessionId === initialSession ? undefined : sessionId;
+      return reboundSession;
+    })
+    .toBeTruthy();
   if (!reboundSession) {
-    throw new Error("The reloaded editor did not expose its Marimo session");
+    throw new Error("The reloaded preview did not expose its Marimo session");
   }
-  await reboundConfig;
+  expect(reboundSession).not.toBe(initialSession);
   await waitForPreview(page);
-  await expect(page.locator('iframe[data-preview-runtime-frame="server"]')).toHaveAttribute(
-    "data-session-id",
-    reboundSession,
-  );
+  await expect(serverPreview).toHaveAttribute("data-session-id", reboundSession);
   await editorSlider(page).press("End");
   await expect(preview.locator('[mo-value="metric"]')).toHaveText("63");
 

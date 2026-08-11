@@ -18,7 +18,7 @@ import { useLayoutEffect } from "react";
 
 import { reconcileProjectedOutputState } from "./projected-output-state";
 
-interface ProjectedOutputUpdate {
+export interface ProjectedOutputUpdate {
   ownerCellId: string;
   mimetype: string;
   data: string;
@@ -26,7 +26,7 @@ interface ProjectedOutputUpdate {
   resetUiObjectIds: readonly string[];
 }
 
-export const ensureProjectedOutputOwner = (ownerCellId: CellId, executionTime: number): void => {
+const ensureProjectedOutputOwner = (ownerCellId: CellId, executionTime: number): void => {
   store.set(notebookAtom, (state) => {
     if (state.cellData[ownerCellId] && state.cellRuntime[ownerCellId]) {
       return state;
@@ -61,11 +61,25 @@ export const reconcileProjectedOutput = (output: ProjectedOutputUpdate): void =>
   );
 };
 
+const ownerReferences = new Map<CellId, number>();
+
+const retainProjectedOutputOwner = (ownerCellId: CellId): void => {
+  ownerReferences.set(ownerCellId, (ownerReferences.get(ownerCellId) ?? 0) + 1);
+};
+
 const releaseProjectedOutputOwner = (ownerCellId: CellId): void => {
+  const references = ownerReferences.get(ownerCellId) ?? 0;
+  if (references > 1) {
+    ownerReferences.set(ownerCellId, references - 1);
+    return;
+  }
+  ownerReferences.delete(ownerCellId);
+  const state = store.get(notebookAtom);
+  if (state.cellIds.inOrderIds.includes(ownerCellId)) {
+    return;
+  }
+  VirtualFileTracker.INSTANCE.removeForCellId(ownerCellId);
   store.set(notebookAtom, (state) => {
-    if (state.cellIds.inOrderIds.includes(ownerCellId)) {
-      return state;
-    }
     const cellData = { ...state.cellData };
     const cellRuntime = { ...state.cellRuntime };
     delete cellData[ownerCellId];
@@ -75,26 +89,26 @@ const releaseProjectedOutputOwner = (ownerCellId: CellId): void => {
 };
 
 export const ProjectedOutputArea = ({
-  executionTime,
-  ownerCellId,
   output,
   stale,
 }: {
-  executionTime: number;
-  ownerCellId: CellId;
-  output: CellOutput;
+  output: ProjectedOutputUpdate;
   stale: boolean;
 }) => {
+  const ownerCellId = output.ownerCellId as CellId;
   const notebook = useNotebook();
   const registered = Boolean(notebook.cellData[ownerCellId] && notebook.cellRuntime[ownerCellId]);
 
   useLayoutEffect(() => {
-    if (!registered) {
-      ensureProjectedOutputOwner(ownerCellId, executionTime);
-    }
-  }, [executionTime, ownerCellId, registered]);
+    retainProjectedOutputOwner(ownerCellId);
+    return () => releaseProjectedOutputOwner(ownerCellId);
+  }, [ownerCellId]);
 
-  useLayoutEffect(() => () => releaseProjectedOutputOwner(ownerCellId), [ownerCellId]);
+  useLayoutEffect(() => {
+    if (!registered) {
+      ensureProjectedOutputOwner(ownerCellId, output.timestamp);
+    }
+  }, [output.timestamp, ownerCellId, registered]);
 
   if (!registered) {
     return null;
@@ -106,7 +120,14 @@ export const ProjectedOutputArea = ({
         allowExpand={false}
         cellId={ownerCellId}
         loading={false}
-        output={output}
+        output={
+          {
+            channel: "output",
+            mimetype: output.mimetype,
+            data: output.data,
+            timestamp: output.timestamp,
+          } as CellOutput
+        }
         stale={stale}
       />
     </div>

@@ -16,7 +16,7 @@ export {
   subscribeRuntimeConfig,
 } from "./store.ts";
 
-export const loadRuntimeConfig = async (previewSessionId?: string) => {
+export const loadRuntimeConfig = async (sessionId?: string) => {
   const mount = getMountConfig();
   return commitRuntimeConfig(
     await fetchRuntimeConfigForRevision(
@@ -24,7 +24,8 @@ export const loadRuntimeConfig = async (previewSessionId?: string) => {
       mount.revision,
       undefined,
       mount.runtime,
-      previewSessionId,
+      sessionId,
+      sessionId,
     ),
   );
 };

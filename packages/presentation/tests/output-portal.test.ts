@@ -1,6 +1,5 @@
 import type { OutputReadResponse, RenderedOutput } from "@marimo-studio/protocol/output-read";
 
-import { WebSocketState } from "@marimo-studio/marimo-frontend/runtime";
 import { act, createElement, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, expect, test, vi } from "vite-plus/test";
@@ -18,19 +17,8 @@ import {
 import { OutputPortal } from "../src/runtime/outputs/OutputPortal";
 
 vi.mock("@marimo-studio/marimo-frontend/projected-output", () => ({
-  ensureProjectedOutputOwner: vi.fn(),
   ProjectedOutputArea: ({ output }: { output: { data: string } }) =>
     createElement("div", { "data-marimo-cell-output": "" }, output.data),
-}));
-
-vi.mock("@marimo-studio/marimo-frontend/runtime", () => ({
-  WebSocketState: {
-    NOT_STARTED: "NOT_STARTED",
-    CONNECTING: "CONNECTING",
-    OPEN: "OPEN",
-    CLOSING: "CLOSING",
-    CLOSED: "CLOSED",
-  },
 }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -94,7 +82,7 @@ test("keeps readiness stale until the requested source version mounts", async ()
   const props: Omit<ComponentProps<typeof OutputPortal>, "cell"> = {
     activeSelectors: ["report"],
     binding: { variable: "report", cell: { kind: "id" as const, value: "source-cell" } },
-    connectionState: WebSocketState.OPEN,
+    connectionState: "OPEN",
     developer: true,
     host,
     readOutputs,
@@ -172,7 +160,7 @@ test("clears a prior projection when its binding changes", async () => {
     .mockImplementationOnce(() => second);
   const props: Omit<ComponentProps<typeof OutputPortal>, "binding" | "cell"> = {
     activeSelectors: ["report"],
-    connectionState: WebSocketState.OPEN,
+    connectionState: "OPEN",
     developer: true,
     host,
     readOutputs,

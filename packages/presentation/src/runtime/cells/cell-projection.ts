@@ -1,4 +1,7 @@
-import { outputIsLoading, outputIsStale } from "@marimo-studio/marimo-frontend/cells";
+import {
+  cellOutputIsLoading,
+  cellOutputIsStale,
+} from "@marimo-studio/marimo-frontend/cell-presentation";
 
 import type { ProjectionDiagnostic } from "../../runtime-config/index";
 import type { RuntimeCell } from "../runtime-cell";
@@ -112,7 +115,7 @@ export const projectCell = ({
   runtimeReady,
   showCellLogs,
 }: CellProjectionInput): CellProjection => {
-  const stale = cell ? outputIsStale(cell, cell.edited) : false;
+  const stale = cell ? cellOutputIsStale(cell, cell.edited) : false;
   const disabled = cell
     ? cell.config.disabled === true || cell.status === "disabled-transitively"
     : false;
@@ -123,7 +126,9 @@ export const projectCell = ({
     cell.output === null &&
     consoleOutputs.length === 0 &&
     cell.status === "idle";
-  const loading = cell ? !disabled && (outputIsLoading(cell.status) || awaitingFirstRun) : false;
+  const loading = cell
+    ? !disabled && (cellOutputIsLoading(cell.status) || awaitingFirstRun)
+    : false;
   const outputMessages = outputMessagesFor(cell, consoleOutputs);
   const visibleOutputs = outputMessages.filter(
     (output) => output.data !== "" && output.data !== null,

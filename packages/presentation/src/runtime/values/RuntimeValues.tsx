@@ -1,9 +1,8 @@
-import type { WebSocketState } from "@marimo-studio/marimo-frontend/runtime";
-
 import { useMemo } from "react";
 
 import type { CellIndex } from "../../cells/bindings";
 import type { ValueReader } from "../../values/reader";
+import type { RuntimeConnectionState } from "../cell-state";
 import type { RuntimeCell } from "../runtime-cell";
 
 import { resolveCellBinding } from "../../cells/bindings";
@@ -18,7 +17,7 @@ export const RuntimeValues = ({
   readValues,
 }: {
   cells: CellIndex<RuntimeCell>;
-  connectionState: WebSocketState;
+  connectionState: RuntimeConnectionState;
   runtimeReady: boolean;
   readValues: ValueReader;
 }) => {

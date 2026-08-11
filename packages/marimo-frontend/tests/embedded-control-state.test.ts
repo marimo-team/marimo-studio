@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
-import { retainUnmountedUIValues, type UIValueRegistry } from "../src/runtime/peer-controls.ts";
+import {
+  type EmbeddedControlRegistry,
+  retainUnmountedControlValues,
+} from "../src/embedded-control-state.ts";
 
-class Registry implements UIValueRegistry<string> {
+class Registry implements EmbeddedControlRegistry<string> {
   readonly values = new Map<string, unknown>();
   readonly delivered: string[] = [];
 
@@ -24,7 +27,7 @@ class Registry implements UIValueRegistry<string> {
 
 test("peer values survive until their control mounts", () => {
   const registry = new Registry();
-  retainUnmountedUIValues(registry);
+  retainUnmountedControlValues(registry);
 
   registry.broadcastMessage("slider", { type: "marimo-ui-value-update", value: 8 }, []);
 
@@ -34,7 +37,7 @@ test("peer values survive until their control mounts", () => {
 
 test("ephemeral messages remain scoped to mounted controls", () => {
   const registry = new Registry();
-  retainUnmountedUIValues(registry);
+  retainUnmountedControlValues(registry);
 
   registry.broadcastMessage("button", { type: "custom" }, []);
   registry.broadcastMessage("slider", { type: "marimo-ui-value-update" }, []);

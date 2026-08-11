@@ -1,9 +1,9 @@
 import type { ValueReadError } from "@marimo-studio/protocol/value-read";
 
-import { WebSocketState } from "@marimo-studio/marimo-frontend/runtime";
 import { useEffect, useLayoutEffect } from "react";
 
 import type { ValueReader } from "../../values/reader";
+import type { RuntimeConnectionState } from "../cell-state";
 import type { RuntimeCell } from "../runtime-cell";
 
 import { errorMessage } from "../../errors";
@@ -29,7 +29,7 @@ export const useRuntimeValue = ({
   revision: string;
   selectors: string[];
   cell: RuntimeCell | undefined;
-  connectionState: WebSocketState;
+  connectionState: RuntimeConnectionState;
   runtimeReady: boolean;
   readValues: ValueReader;
 }): void => {
@@ -50,7 +50,7 @@ export const useRuntimeValue = ({
   }, [model.failure, model.phase, selectors]);
 
   useEffect(() => {
-    if (connectionState !== WebSocketState.OPEN || model.phase !== "ready") {
+    if (connectionState !== "OPEN" || model.phase !== "ready") {
       return;
     }
 

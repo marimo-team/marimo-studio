@@ -27,9 +27,6 @@ const documentPort = (replace: RevisionDocumentPort["replace"]): RevisionDocumen
 
 const options = () => ({
   applyRuntime: vi.fn(() => "applied" as const),
-  loadRevision: vi.fn(
-    async (config: RuntimeConfig, _previewSessionId: string, _signal: AbortSignal) => config,
-  ),
   reloadDocument: vi.fn(),
   reloadRuntime: vi.fn(),
   classifyFailure: vi.fn((error: unknown) => ({
@@ -49,42 +46,8 @@ const options = () => ({
 });
 
 const sessionReplay = (): SessionReplayPort => ({
-  prepare: vi.fn(() => false),
   preservedUrl: vi.fn((target: string) => target),
-  finish: vi.fn(),
   remember: vi.fn(),
-});
-
-const runtimeConfig = (revision: string): RuntimeConfig => ({
-  schema: 1,
-  revision,
-  view: "dashboard",
-  views: ["dashboard"],
-  runtime: {
-    id: "server",
-    instance: "server-instance",
-    available: ["server"],
-    data: {
-      fileKey: "/workspace/analysis.py",
-      serverToken: "token",
-      preserveSession: true,
-      url: "/",
-    },
-  },
-  rootUrl: "/",
-  publicRootUrl: "/",
-  documentRootUrl: "/",
-  supportUrl: "/_marimo-studio/views/dashboard",
-  showCellLogs: true,
-  cellBindings: {},
-  valueBindings: {},
-  outputBindings: {},
-  diagnostics: [],
-  appConfig: {},
-  userConfig: {},
-  configOverrides: {},
-  dev: false,
-  mode: "run",
 });
 
 test("a newer revision cancels and supersedes an in-flight transition", async () => {
@@ -183,7 +146,6 @@ test("a committed support target reconnects its event source", async () => {
   assert.equal(hooks.onSupportChanged.mock.calls.length, 1);
   assert.equal(hooks.onReady.mock.calls.length, 1);
 });
-
 test("a runtime refresh can arrive before the initial config commits", async () => {
   readiness.start();
   globalThis.__MARIMO_MOUNT_CONFIG__ = {
@@ -192,17 +154,29 @@ test("a runtime refresh can arrive before the initial config commits", async () 
     revision: "presentation-revision",
     runtime: "wasm",
   };
-  const initialConfig = runtimeConfig("presentation-revision");
   const config = {
-    ...initialConfig,
+    schema: 1,
+    revision: "presentation-revision",
+    view: "dashboard",
+    views: ["dashboard"],
     runtime: {
-      ...initialConfig.runtime,
       id: "wasm",
       instance: "wasm-instance",
       available: ["server", "wasm"],
       data: {},
     },
+    rootUrl: "/",
+    publicRootUrl: "/",
     documentRootUrl: "/dashboard/",
+    supportUrl: "/_marimo-studio/views/dashboard",
+    showCellLogs: true,
+    cellBindings: {},
+    valueBindings: {},
+    outputBindings: {},
+    diagnostics: [],
+    appConfig: {},
+    userConfig: {},
+    configOverrides: {},
     dev: true,
     mode: "edit",
   } satisfies RuntimeConfig;
@@ -230,22 +204,4 @@ test("a runtime refresh can arrive before the initial config commits", async () 
   assert.equal(requestedRuntime, "wasm");
   assert.equal(hooks.applyRuntime.mock.calls.length, 1);
   assert.equal(hooks.onReady.mock.calls.length, 1);
-});
-
-test("the revision transaction owns session replay completion", async () => {
-  readiness.start();
-  const adapter = documentPort(async () => commit());
-  const hooks = options();
-  const replay = sessionReplay();
-  vi.mocked(replay.prepare).mockReturnValue(true);
-  vi.mocked(hooks.loadRevision).mockResolvedValue(runtimeConfig("revision-2"));
-  const controller = new PresentationRevisionController(adapter, "s_view01", hooks, replay);
-
-  const resumed = await controller.resume(runtimeConfig("revision-1"));
-  document.dispatchEvent(new CustomEvent("marimo-studio:runtime-ready"));
-
-  assert.equal(resumed.revision, "revision-2");
-  assert.equal(hooks.loadRevision.mock.calls[0]?.[1], "s_view01");
-  assert.equal(vi.mocked(replay.finish).mock.calls.length, 1);
-  assert.equal(readiness.snapshot().presentation, "ready");
 });

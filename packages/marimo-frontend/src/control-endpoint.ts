@@ -1,124 +1,42 @@
-import { z } from "zod";
+import {
+  connectControlEndpoint as createControlEndpoint,
+  type ControlEndpoint,
+  type SendControlValues,
+  type UIElementRegistry,
+} from "./control-endpoint-core.ts";
+import { MarimoValueReadyEvent } from "./upstream/controls.ts";
 
-interface UIElementEntry {
-  value: unknown;
-}
-
-export interface UIElementRegistry {
-  readonly entries: ReadonlyMap<string, UIElementEntry>;
-  has(objectId: string): boolean;
-  lookupValue(objectId: string): unknown;
-  set(objectId: string, value: unknown): void;
-  registerInstance(objectId: string, instance: HTMLElement): void;
-  broadcastMessage(objectId: string, message: unknown, buffers: readonly DataView[]): void;
-}
-
-export interface ControlUpdate {
-  objectId: string;
-  value: unknown;
-}
-
-export interface ControlEndpoint {
-  snapshot(): readonly ControlUpdate[];
-  subscribe(listener: (update: ControlUpdate) => void): () => void;
-  apply(updates: readonly ControlUpdate[]): Promise<void>;
-  dispose(): void;
-}
-
-export type SendControlValues = (request: {
-  objectIds: string[];
-  values: unknown[];
-}) => Promise<unknown>;
-
-export interface ReadyEvents {
-  type: string;
-  objectId(event: Event): string | undefined;
-}
-
-const widgetModelReferenceSchema = z.strictObject({ model_id: z.string().min(1) });
-
-const isNativeControlValue = (value: unknown): boolean =>
-  !widgetModelReferenceSchema.safeParse(value).success;
-
-export const connectControlEndpoint = (
-  document: EventTarget,
-  registry: UIElementRegistry,
-  readyEvents: ReadyEvents,
-  sendControlValues: SendControlValues,
-): ControlEndpoint => {
-  let applying = false;
-  const disposers = new Set<() => void>();
-  const listeners = new Set<(update: ControlUpdate) => void>();
-  const notify = (objectId: string) => {
-    if (applying || !registry.has(objectId)) {
-      return;
-    }
-    const value = registry.lookupValue(objectId);
-    if (isNativeControlValue(value)) {
-      listeners.forEach((listener) => listener({ objectId, value }));
-    }
+type MarimoWindow = Window & {
+  _marimo_private_UIElementRegistry?: UIElementRegistry;
+  _marimo_private_RuntimeState?: {
+    _sendComponentValues?: SendControlValues;
   };
-  const registerInstance = registry.registerInstance.bind(registry);
-  const observeRegistration: UIElementRegistry["registerInstance"] = (objectId, instance) => {
-    registerInstance(objectId, instance);
-    const value = registry.lookupValue(objectId);
-    if (isNativeControlValue(value)) {
-      registry.broadcastMessage(objectId, { type: "marimo-ui-value-update", value }, []);
-      notify(objectId);
-    }
-  };
-  registry.registerInstance = observeRegistration;
-  return {
-    snapshot: () =>
-      Array.from(registry.entries, ([objectId, entry]) => ({ objectId, entry }))
-        .filter(({ entry }) => isNativeControlValue(entry.value))
-        .map(({ objectId, entry }) => ({ objectId, value: entry.value })),
-    subscribe(listener) {
-      const receive = (event: Event) => {
-        const objectId = readyEvents.objectId(event);
-        if (objectId) {
-          notify(objectId);
-        }
-      };
-      listeners.add(listener);
-      document.addEventListener(readyEvents.type, receive);
-      const dispose = () => {
-        listeners.delete(listener);
-        document.removeEventListener(readyEvents.type, receive);
-        disposers.delete(dispose);
-      };
-      disposers.add(dispose);
-      return dispose;
+};
+
+const eventObjectId = (event: Event): string | undefined => {
+  if (!MarimoValueReadyEvent.is(event)) {
+    return undefined;
+  }
+  return typeof event.detail.objectId === "string" ? event.detail.objectId : undefined;
+};
+
+export type { ControlEndpoint, ControlUpdate } from "./control-endpoint-core.ts";
+
+export const connectControlEndpoint = (frame: HTMLIFrameElement): ControlEndpoint | undefined => {
+  const browser = frame.contentWindow as MarimoWindow | null;
+  const registry = browser?._marimo_private_UIElementRegistry;
+  const sendControlValues = browser?._marimo_private_RuntimeState?._sendComponentValues;
+  if (!browser || !registry || !sendControlValues) {
+    return undefined;
+  }
+
+  return createControlEndpoint(
+    browser.document,
+    registry,
+    {
+      type: MarimoValueReadyEvent.TYPE,
+      objectId: eventObjectId,
     },
-    async apply(updates) {
-      if (updates.length === 0) {
-        return;
-      }
-      applying = true;
-      try {
-        for (const update of updates) {
-          if (!registry.has(update.objectId)) {
-            registry.set(update.objectId, update.value);
-          }
-          registry.broadcastMessage(
-            update.objectId,
-            { type: "marimo-ui-value-update", value: update.value },
-            [],
-          );
-        }
-      } finally {
-        applying = false;
-      }
-      await sendControlValues({
-        objectIds: updates.map(({ objectId }) => objectId),
-        values: updates.map(({ value }) => value),
-      });
-    },
-    dispose() {
-      Array.from(disposers).forEach((dispose) => dispose());
-      if (registry.registerInstance === observeRegistration) {
-        registry.registerInstance = registerInstance;
-      }
-    },
-  };
+    sendControlValues,
+  );
 };

@@ -1,7 +1,6 @@
 import type { ShellChangeKind } from "@marimo-studio/protocol/development-events";
 
 import type { PresentationDiagnostic } from "../diagnostics.ts";
-import type { RuntimeConfig } from "../runtime-config/index.ts";
 import type { ShellTarget } from "./refresh-state.ts";
 import type { DocumentRevisionCommit } from "./revision-document.ts";
 
@@ -35,19 +34,12 @@ export interface PresentationRevisionPolicy {
 
 export interface PresentationRevisionOptions extends PresentationRevisionPolicy {
   applyRuntime(): "applied" | "pending" | "reload";
-  loadRevision(
-    config: RuntimeConfig,
-    previewSessionId: string,
-    signal: AbortSignal,
-  ): Promise<RuntimeConfig>;
   reloadDocument(url: string): void;
   reloadRuntime(): void;
 }
 
 export interface SessionReplayPort {
-  prepare(config: RuntimeConfig): boolean;
   preservedUrl(target: string): string;
-  finish(): void;
   remember(sessionId: string): void;
 }
 
@@ -132,31 +124,6 @@ export class PresentationRevisionController {
       },
       policy,
     );
-  }
-
-  async resume(config: RuntimeConfig): Promise<RuntimeConfig> {
-    if (!this.sessionReplay.prepare(config)) {
-      return config;
-    }
-    const resumed = await this.run(
-      {
-        kind: "runtime",
-        target: {
-          documentUrl: this.document.url,
-          supportUrl: config.supportUrl,
-        },
-      },
-      async (signal) =>
-        commitRuntimeConfig(await this.options.loadRevision(config, this.previewSessionId, signal)),
-      this.options,
-    );
-    if (resumed === undefined) {
-      return config;
-    }
-    document.addEventListener("marimo-studio:runtime-ready", () => this.sessionReplay.finish(), {
-      once: true,
-    });
-    return resumed;
   }
 
   rememberSession(sessionId: string): void {
