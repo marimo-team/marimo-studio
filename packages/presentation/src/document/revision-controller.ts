@@ -9,8 +9,10 @@ import { beginPresentationRefresh, setPresentationRefreshState } from "../readin
 import {
   commitRuntimeConfig,
   fetchRuntimeConfig,
+  getMountConfig,
   getRuntimeConfig,
   getSupportUrl,
+  hasRuntimeConfig,
 } from "../runtime-config/index.ts";
 import { isAbortError } from "./styles.ts";
 
@@ -177,13 +179,11 @@ export class PresentationRevisionController {
   }
 
   private async refreshRuntimeConfig(signal: AbortSignal): Promise<void> {
+    const fallbackRuntime = hasRuntimeConfig()
+      ? getRuntimeConfig().runtime.id
+      : getMountConfig().runtime;
     commitRuntimeConfig(
-      await fetchRuntimeConfig(
-        getSupportUrl(),
-        signal,
-        getRuntimeConfig().runtime.id,
-        this.previewSessionId,
-      ),
+      await fetchRuntimeConfig(getSupportUrl(), signal, fallbackRuntime, this.previewSessionId),
     );
     if (this.options.applyRuntime() === "reload") {
       this.options.reloadRuntime();

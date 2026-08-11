@@ -184,6 +184,54 @@ test("a committed support target reconnects its event source", async () => {
   assert.equal(hooks.onReady.mock.calls.length, 1);
 });
 
+test("a runtime refresh can arrive before the initial config commits", async () => {
+  readiness.start();
+  globalThis.__MARIMO_MOUNT_CONFIG__ = {
+    supportUrl: "/_marimo-studio/views/dashboard",
+    version: "test-version",
+    revision: "presentation-revision",
+    runtime: "wasm",
+  };
+  const initialConfig = runtimeConfig("presentation-revision");
+  const config = {
+    ...initialConfig,
+    runtime: {
+      ...initialConfig.runtime,
+      id: "wasm",
+      instance: "wasm-instance",
+      available: ["server", "wasm"],
+      data: {},
+    },
+    documentRootUrl: "/dashboard/",
+    dev: true,
+    mode: "edit",
+  } satisfies RuntimeConfig;
+  const originalFetch = globalThis.fetch;
+  let requestedRuntime: string | null = null;
+  globalThis.fetch = (input) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    requestedRuntime = url.searchParams.get("runtime");
+    return Promise.resolve(Response.json(config));
+  };
+  const hooks = options();
+  const controller = new PresentationRevisionController(
+    documentPort(async () => commit()),
+    "s_view01",
+    hooks,
+    sessionReplay(),
+  );
+
+  try {
+    await controller.refreshRuntime();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(requestedRuntime, "wasm");
+  assert.equal(hooks.applyRuntime.mock.calls.length, 1);
+  assert.equal(hooks.onReady.mock.calls.length, 1);
+});
+
 test("the revision transaction owns session replay completion", async () => {
   readiness.start();
   const adapter = documentPort(async () => commit());
