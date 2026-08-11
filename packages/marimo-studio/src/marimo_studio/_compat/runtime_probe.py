@@ -12,15 +12,14 @@ from uuid import uuid4
 
 import marimo
 
+from marimo_studio._capabilities import ProjectionUnavailable
 from marimo_studio._compat.kernel_values import (
     DEFAULT_MAX_VALUE_BYTES,
-    ValueReadUnavailable,
-    inspection_selectors,
+    probe_selector_lease,
     read_session_values,
     render_session_outputs,
 )
 from marimo_studio._compat.runtime_requests import instantiate_notebook_request
-from marimo_studio._compat.version import assert_supported_version
 from marimo_studio._runtime_limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio.errors import ProtocolError, RuntimeTimeoutError
 from marimo_studio.types import (
@@ -60,7 +59,6 @@ def _notebook_config_context(path: Path) -> Generator[None, None, None]:
 
 
 def _build_manager(path: Path, *, timeout: float, show_tracebacks: bool) -> Any:
-    assert_supported_version()
     with _notebook_config_context(path):
         app: Any = (
             marimo.create_asgi_app(
@@ -140,11 +138,11 @@ async def probe_runtime(
     consumer = ProbeConsumer()
     session: Any | None = None
     try:
-        with inspection_selectors(path, variables, allowed_outputs):
+        with probe_selector_lease(path, variables, allowed_outputs) as query_params:
             session = manager.create_session(
                 session_id,
                 consumer,
-                query_params={},
+                query_params=query_params,
                 file_key=str(path),
                 auto_instantiate=True,
             )
@@ -258,7 +256,7 @@ async def _read_values_within_deadline(
             timeout=_remaining_runtime_time(loop, deadline, timeout),
             max_value_bytes=max_value_bytes,
         )
-    except ValueReadUnavailable as error:
+    except ProjectionUnavailable as error:
         if error.code == "read-timeout":
             raise _projection_timeout(timeout) from error
         raise
@@ -282,7 +280,7 @@ async def _render_output_within_deadline(
             consumer_id=consumer_id,
             timeout=_remaining_runtime_time(loop, deadline, timeout),
         )
-    except ValueReadUnavailable as error:
+    except ProjectionUnavailable as error:
         if error.code == "output-read-timeout":
             raise _projection_timeout(timeout) from error
         raise

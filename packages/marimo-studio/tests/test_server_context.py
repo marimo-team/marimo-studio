@@ -9,7 +9,7 @@ from marimo._server.workspace._directory import DirectoryWorkspace
 from marimo._session.model import SessionMode
 from starlette.requests import Request
 
-from marimo_studio._compat.server.context import server_location
+from marimo_studio._compat.server.gateway import PrivateServerGateway
 
 from .helpers import notebook_source
 
@@ -57,8 +57,9 @@ def test_directory_request_resolves_notebook_without_mutating_server_config(
     first_request = _request(state, "first.py")
     second_request = _request(state, "nested/second.py")
 
-    first_location = server_location(first_request)
-    second_location = server_location(second_request)
+    gateway = PrivateServerGateway()
+    first_location = gateway.location(first_request)
+    second_location = gateway.location(second_request)
 
     assert first_location is not None
     assert first_location.notebook == first.resolve()
@@ -78,7 +79,7 @@ def test_single_notebook_ignores_directory_file_selectors(tmp_path: Path) -> Non
         resolve=lambda key: str(notebook) if key == "only.py" else None,
     )
 
-    location = server_location(_request(state, "other.py"))
+    location = PrivateServerGateway().location(_request(state, "other.py"))
 
     assert location is not None
     assert location.file_key == "only.py"

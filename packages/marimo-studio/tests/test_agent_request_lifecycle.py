@@ -11,8 +11,10 @@ from starlette.authentication import AuthCredentials
 from starlette.requests import Request
 from starlette.types import Message, Scope
 
+from marimo_studio._capabilities import SessionState
 from marimo_studio._server import agent_api, browser_agent
 from marimo_studio._server.notebook_scope import NotebookScope
+from marimo_studio._server.runtimes import RuntimeRegistry
 from marimo_studio._workspace.models import StudioWorkspace
 
 from .app_helpers import configured
@@ -45,10 +47,10 @@ def test_observation_disconnect_clears_the_browser_operation(
         )
         return provider, ("server",)
 
-    monkeypatch.setattr(
-        browser_agent.DEFAULT_RUNTIME_REGISTRY,
-        "select",
-        select_runtime,
+    sessions = cast(SessionState, SimpleNamespace(exists=lambda *_args: True))
+    runtimes = cast(
+        RuntimeRegistry,
+        SimpleNamespace(ids=("server",), select=select_runtime),
     )
 
     async def exercise() -> tuple[int, tuple[object, ...]]:
@@ -76,6 +78,8 @@ def test_observation_disconnect_clears_the_browser_operation(
                 context,
                 studio,
                 notebook_scope,
+                sessions,
+                runtimes,
             )
         )
         for _attempt in range(100):
@@ -146,6 +150,8 @@ def test_analysis_disconnect_cancels_runtime_validation(
                 context,
                 studio,
                 notebook_scope,
+                cast(SessionState, SimpleNamespace(exists=lambda *_args: True)),
+                cast(RuntimeRegistry, SimpleNamespace()),
             )
         )
         await asyncio.wait_for(started.wait(), timeout=1)
@@ -209,6 +215,8 @@ def test_already_disconnected_observation_skips_source_capture(
             context,
             studio,
             notebook_scope,
+            cast(SessionState, SimpleNamespace(exists=lambda *_args: True)),
+            cast(RuntimeRegistry, SimpleNamespace(ids=("server",))),
         )
         return response.status_code
 
@@ -247,6 +255,8 @@ def test_observation_view_limit_applies_after_default_expansion(
             context,
             studio,
             notebook_scope,
+            cast(SessionState, SimpleNamespace(exists=lambda *_args: True)),
+            cast(RuntimeRegistry, SimpleNamespace(ids=("server",))),
         )
     )
 
@@ -292,6 +302,7 @@ def test_activation_disconnect_clears_the_browser_operation(
                 studio,
                 "dashboard",
                 notebook_scope,
+                cast(SessionState, SimpleNamespace(exists=lambda *_args: True)),
             )
         )
         for _attempt in range(100):

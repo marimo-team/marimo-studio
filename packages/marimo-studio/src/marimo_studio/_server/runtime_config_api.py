@@ -7,18 +7,17 @@ import re
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from marimo_studio._compat.server.kiosk import route_kiosk_consumer
-from marimo_studio._compat.server.models import ServerContext
-from marimo_studio._compat.server.sessions import (
-    current_session,
-    has_edit_access,
-    is_session_id,
+from marimo_studio._capabilities import (
+    ExistingSessionAttachment,
+    ServerContext,
+    SessionState,
 )
-from marimo_studio._server.auth import forbidden_response
+from marimo_studio._server.auth import forbidden_response, has_edit_access
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.live_clients import StudioClientRegistry
 from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._server.presentation_payload import build_runtime_config
+from marimo_studio._server.runtimes import RuntimeRegistry
 from marimo_studio._urls import STUDIO_CLIENT_QUERY_PARAM
 
 _CLIENT_PATTERN = re.compile(r"[A-Za-z0-9_-]{16,128}")
@@ -31,6 +30,10 @@ async def runtime_config_response(
     presentation: NotebookPresentation,
     clients: StudioClientRegistry,
     view_name: str,
+    *,
+    sessions: SessionState,
+    attachment: ExistingSessionAttachment,
+    runtimes: RuntimeRegistry,
 ) -> Response:
     """Return configuration bound to the requesting Studio editor session."""
     client_id = request.query_params.get(STUDIO_CLIENT_QUERY_PARAM)
@@ -42,7 +45,7 @@ async def runtime_config_response(
         if (
             _CLIENT_PATTERN.fullmatch(client_id) is None
             or preview_session_id is None
-            or not is_session_id(preview_session_id)
+            or not sessions.is_session_id(preview_session_id)
         ):
             return _invalid_studio_session()
 
@@ -53,17 +56,16 @@ async def runtime_config_response(
         snapshot = presentation.snapshot_for_revision(view_name, requested_revision)
         if snapshot is None:
             return _revision_unavailable()
-    editor_session = None
     if client_id is not None:
         session_id = await clients.session_for_client(client_id)
         if session_id is None:
             return _session_pending()
-        editor_session = current_session(context, session_id)
-        if editor_session is None:
+        if not sessions.exists(context, session_id):
             return _session_pending()
     payload = build_runtime_config(
         snapshot,
         context,
+        runtimes,
         request.query_params.get("runtime"),
         session_id,
         session_id if client_id is not None else None,
@@ -75,11 +77,11 @@ async def runtime_config_response(
         if (
             isinstance(runtime, dict)
             and runtime.get("id") == "server"
-            and editor_session is not None
-            and not route_kiosk_consumer(
-                context._session_manager,
+            and session_id is not None
+            and not attachment.attach(
+                context,
                 preview_session_id,
-                editor_session,
+                session_id,
             )
         ):
             return _session_pending(

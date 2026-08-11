@@ -5,7 +5,7 @@ from typing import Any
 
 import marimo
 
-from marimo_studio._compat.server.programmatic import programmatic_middleware
+from marimo_studio._composition import programmatic_middleware
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.workspace import bind_cell, ensure_view

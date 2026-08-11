@@ -67,7 +67,11 @@ default = "dashboard"
         captured["compose_project"] = compose_project
         return ["--python", ">=3.10"]
 
-    monkeypatch.setattr(environment_module, "inline_environment_flags", inline_flags)
+    monkeypatch.setattr(
+        environment_module,
+        "create_tooling_adapters",
+        lambda: SimpleNamespace(environment=inline_flags),
+    )
     monkeypatch.setattr(subprocess, "run", run)
 
     result = run_in_notebook_environment(

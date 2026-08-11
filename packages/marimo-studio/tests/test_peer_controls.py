@@ -26,9 +26,10 @@ from marimo._session.session import Session
 from marimo._session.state.session_view import SessionView
 from marimo._types.ids import ConsumerId, UIElementId, WidgetModelId
 
+from marimo_studio._capabilities import ServerHandle, ServerLocation, ServerMode
 from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
-from marimo_studio._compat.server.models import ServerLocation, ServerMode
-from marimo_studio._compat.server.peer_controls import enable_peer_control_sync
+from marimo_studio._compat.server.gateway import _LocationHandle
+from marimo_studio._compat.server.peer_state import PrivatePeerStateRelay
 
 
 class _Room:
@@ -80,10 +81,20 @@ def _location(manager: _Manager, *, mode: str = "edit") -> ServerLocation:
         base_url="",
         mode=cast(ServerMode, mode),
         routing_query=(),
-        _config_manager=object(),
-        _state=object(),
-        _session_manager=manager,
+        handle=ServerHandle(
+            _LocationHandle(
+                config_manager=object(),
+                state=object(),
+                session_manager=manager,
+            )
+        ),
     )
+
+
+def _enable(location: ServerLocation) -> PrivatePeerStateRelay:
+    relay = PrivatePeerStateRelay()
+    relay.enable(location)
+    return relay
 
 
 def _open_model(session: _Session, model_id: WidgetModelId) -> None:
@@ -102,8 +113,8 @@ def _open_model(session: _Session, model_id: WidgetModelId) -> None:
 def test_ui_control_updates_relay_once_only_from_consumers() -> None:
     session = _Session()
     location = _location(_Manager(session))
-    enable_peer_control_sync(location)
-    enable_peer_control_sync(location)
+    relay = _enable(location)
+    relay.enable(location)
 
     session.receive(
         UpdateUIElementCommand(
@@ -139,7 +150,7 @@ def test_ui_control_updates_relay_once_only_from_consumers() -> None:
 
 def test_projected_control_updates_stay_with_the_owning_consumer() -> None:
     session = _Session()
-    enable_peer_control_sync(_location(_Manager(session)))
+    _enable(_location(_Manager(session)))
 
     session.receive(
         UpdateUIElementCommand(
@@ -165,7 +176,7 @@ def test_peer_sync_attaches_only_to_the_selected_notebook() -> None:
     selected = _Session("analysis.py")
     other = _Session("other.py")
 
-    enable_peer_control_sync(_location(_Manager(selected, other)))
+    _enable(_location(_Manager(selected, other)))
 
     command = UpdateUIElementCommand(
         object_ids=[UIElementId("slider")],
@@ -180,7 +191,7 @@ def test_peer_sync_attaches_only_to_the_selected_notebook() -> None:
 
 def test_anywidget_state_relays_only_while_its_model_is_live() -> None:
     session = _Session()
-    enable_peer_control_sync(_location(_Manager(session)))
+    _enable(_location(_Manager(session)))
     model_id = WidgetModelId("widget")
     _open_model(session, model_id)
 
@@ -241,7 +252,7 @@ def test_anywidget_state_relays_only_while_its_model_is_live() -> None:
 
 def test_partial_anywidget_buffers_preserve_valid_state() -> None:
     session = _Session()
-    enable_peer_control_sync(_location(_Manager(session)))
+    _enable(_location(_Manager(session)))
     model_id = WidgetModelId("widget")
     _open_model(session, model_id)
 
@@ -270,7 +281,7 @@ def test_partial_anywidget_buffers_preserve_valid_state() -> None:
 def test_new_edit_sessions_join_sync_while_run_sessions_stay_isolated() -> None:
     initial = _Session()
     manager = _Manager(initial)
-    enable_peer_control_sync(_location(manager))
+    _enable(_location(manager))
     late = _Session()
 
     asyncio.run(manager._event_bus.emit_session_created(cast(Session, late)))
@@ -282,7 +293,7 @@ def test_new_edit_sessions_join_sync_while_run_sessions_stay_isolated() -> None:
     )
 
     isolated = _Session()
-    enable_peer_control_sync(_location(_Manager(isolated), mode="run"))
+    _enable(_location(_Manager(isolated), mode="run"))
     isolated.receive(
         UpdateUIElementCommand(
             object_ids=[UIElementId("slider")],

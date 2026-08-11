@@ -1,7 +1,6 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "marimo[recommended]>=0.23.16",
 #   "marimo-studio",
 #   "numpy",
 #   "polars",

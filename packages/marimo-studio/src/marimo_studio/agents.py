@@ -224,7 +224,7 @@ async def analyze(
             analysis has no named view.
     """
     from marimo_studio._agent_client import request_analysis
-    from marimo_studio._compat.code_mode import code_mode_connection
+    from marimo_studio._composition import create_tooling_adapters
     from marimo_studio._workspace import load_studio
 
     if not math.isfinite(timeout) or not 0 <= timeout <= 20:
@@ -244,7 +244,7 @@ async def analyze(
         )
     workspace = load_studio(notebook_path(context))
     return await request_analysis(
-        code_mode_connection(),
+        create_tooling_adapters().code_mode.connection(),
         workspace.notebook,
         view_name=view_name,
         timeout=timeout,
@@ -264,7 +264,7 @@ async def activate_view(
     The reload waits for the code-mode result before navigating.
     """
     from marimo_studio._agent_client import request_view_activation
-    from marimo_studio._compat.code_mode import code_mode_connection
+    from marimo_studio._composition import create_tooling_adapters
     from marimo_studio._workspace import load_studio
     from marimo_studio.errors import ConfigurationError
 
@@ -275,7 +275,7 @@ async def activate_view(
             f"Unknown view {name!r}. Available views: {available}."
         )
     return await request_view_activation(
-        code_mode_connection(),
+        create_tooling_adapters().code_mode.connection(),
         workspace.notebook,
         name,
     )

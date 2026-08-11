@@ -11,12 +11,12 @@ from weakref import WeakKeyDictionary, WeakSet
 
 from marimo._session.extensions.types import EventAwareExtension
 
+from marimo_studio._capabilities import ProjectionUnavailable
 from marimo_studio._compat.kernel_values.models import (
     DEFAULT_MAX_VALUE_BYTES,
     FUNCTION_NAME,
     NAMESPACE,
     OUTPUT_FUNCTION_NAME,
-    ValueReadUnavailable,
 )
 from marimo_studio.types import (
     OutputRenderResult,
@@ -58,7 +58,7 @@ class _FunctionResultWaiter(EventAwareExtension):
                 return
             if not message.found:
                 self.future.set_exception(
-                    ValueReadUnavailable(
+                    ProjectionUnavailable(
                         f"{self.operation}-function-unavailable",
                         f"The kernel {self.operation} function is still starting.",
                         transient=True,
@@ -67,7 +67,7 @@ class _FunctionResultWaiter(EventAwareExtension):
                 return
             if message.status.code != "ok":
                 self.future.set_exception(
-                    ValueReadUnavailable(
+                    ProjectionUnavailable(
                         f"{self.operation}-function-error",
                         message.status.message
                         or f"The kernel {self.operation} function failed.",
@@ -77,7 +77,7 @@ class _FunctionResultWaiter(EventAwareExtension):
                 return
             try:
                 result = self.parser(message.return_value)
-            except ValueReadUnavailable as error:
+            except ProjectionUnavailable as error:
                 self.future.set_exception(error)
             else:
                 self.future.set_result(result)
@@ -89,7 +89,7 @@ class _FunctionResultWaiter(EventAwareExtension):
             if self.future.done():
                 return
             self.future.set_exception(
-                ValueReadUnavailable(
+                ProjectionUnavailable(
                     "consumer-unavailable",
                     "The Marimo browser connection is no longer active.",
                     transient=True,
@@ -146,7 +146,7 @@ def _attach_output_cleanup(session: Any, consumer: Any, consumer_id: str) -> Non
 
 def _parse_result(value: object) -> ValueReadResult:
     if not isinstance(value, dict):
-        raise ValueReadUnavailable(
+        raise ProjectionUnavailable(
             "invalid-value-response",
             "The kernel returned an invalid value response.",
             transient=False,
@@ -154,7 +154,7 @@ def _parse_result(value: object) -> ValueReadResult:
     raw_values = value.get("values")
     raw_errors = value.get("errors")
     if not isinstance(raw_values, dict) or not isinstance(raw_errors, dict):
-        raise ValueReadUnavailable(
+        raise ProjectionUnavailable(
             "invalid-value-response",
             "The kernel returned an invalid value response.",
             transient=False,
@@ -169,7 +169,7 @@ def _parse_result(value: object) -> ValueReadResult:
             or not isinstance(code, str)
             or not isinstance(message, str)
         ):
-            raise ValueReadUnavailable(
+            raise ProjectionUnavailable(
                 "invalid-value-response",
                 "The kernel returned an invalid value error.",
                 transient=False,
@@ -183,7 +183,7 @@ def _parse_result(value: object) -> ValueReadResult:
 
 def _parse_output_result(value: object) -> OutputRenderResult:
     if not isinstance(value, dict):
-        raise ValueReadUnavailable(
+        raise ProjectionUnavailable(
             "invalid-output-response",
             "The kernel returned an invalid output response.",
             transient=False,
@@ -191,7 +191,7 @@ def _parse_output_result(value: object) -> OutputRenderResult:
     raw_outputs = value.get("outputs")
     raw_errors = value.get("errors")
     if not isinstance(raw_outputs, dict) or not isinstance(raw_errors, dict):
-        raise ValueReadUnavailable(
+        raise ProjectionUnavailable(
             "invalid-output-response",
             "The kernel returned an invalid output response.",
             transient=False,
@@ -215,14 +215,14 @@ def _parse_output_result(value: object) -> OutputRenderResult:
             or not isinstance(reset_ui_object_ids, list)
             or not all(isinstance(item, str) for item in reset_ui_object_ids)
         ):
-            raise ValueReadUnavailable(
+            raise ProjectionUnavailable(
                 "invalid-output-response",
                 "The kernel returned an invalid rendered output.",
                 transient=False,
             )
         reset_ids = cast(list[str], reset_ui_object_ids)
         if any(not item.startswith(f"{owner_cell_id}-") for item in reset_ids):
-            raise ValueReadUnavailable(
+            raise ProjectionUnavailable(
                 "invalid-output-response",
                 "The kernel returned a UI reset owned by another cell.",
                 transient=False,
@@ -243,7 +243,7 @@ def _parse_output_result(value: object) -> OutputRenderResult:
             or not isinstance(code, str)
             or not isinstance(message, str)
         ):
-            raise ValueReadUnavailable(
+            raise ProjectionUnavailable(
                 "invalid-output-response",
                 "The kernel returned an invalid output error.",
                 transient=False,
@@ -269,7 +269,7 @@ async def _invoke_session_function(
     native_consumer_id = ConsumerId(consumer_id)
     consumer = session.room.get_consumer(native_consumer_id)
     if consumer is None:
-        raise ValueReadUnavailable(
+        raise ProjectionUnavailable(
             "consumer-unavailable",
             "The Marimo browser connection is no longer active.",
             transient=True,
@@ -279,7 +279,7 @@ async def _invoke_session_function(
         session.room.get_capabilities(consumer),
         InvokeFunctionCommand,
     ):
-        raise ValueReadUnavailable(
+        raise ProjectionUnavailable(
             "interaction-forbidden",
             f"This Marimo connection cannot read live kernel {operation}s.",
             transient=False,
@@ -311,7 +311,7 @@ async def _invoke_session_function(
             return await asyncio.wait_for(waiter.future, timeout=timeout)
     except asyncio.TimeoutError as error:
         output_read = operation == "output"
-        raise ValueReadUnavailable(
+        raise ProjectionUnavailable(
             "output-read-timeout" if output_read else "read-timeout",
             f"Timed out while reading {operation}s from the Marimo kernel.",
             transient=not output_read,

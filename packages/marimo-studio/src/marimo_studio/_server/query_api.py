@@ -9,14 +9,15 @@ from urllib.parse import parse_qs
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from marimo_studio._compat.kernel_values.query import (
+from marimo_studio._capabilities import (
+    KernelProjectionHost,
     QuerySyncUnavailable,
-    queue_query_sync,
+    ServerContext,
+    SessionState,
 )
-from marimo_studio._compat.server.models import ServerContext
-from marimo_studio._compat.server.sessions import current_session, has_edit_access
 from marimo_studio._server.auth import (
     forbidden_response,
+    has_edit_access,
     invalid_server_token_response,
 )
 from marimo_studio._server.headers import NO_STORE
@@ -30,6 +31,8 @@ async def query_response(
     request: Request,
     context: ServerContext,
     clients: StudioClientRegistry,
+    sessions: SessionState,
+    projections: KernelProjectionHost,
 ) -> Response:
     if context.mode != "edit" or not has_edit_access(request.scope):
         return forbidden_response()
@@ -88,7 +91,7 @@ async def query_response(
             headers=NO_STORE,
         )
     session_id = await clients.session_for_client(client_id)
-    if session_id is None or current_session(context, session_id) is None:
+    if session_id is None or not sessions.exists(context, session_id):
         return _session_unavailable()
     claimed = await clients.claim_query_operation(
         client_id,
@@ -100,7 +103,7 @@ async def query_response(
     if not claimed:
         return Response(status_code=202, headers=NO_STORE)
     try:
-        queue_query_sync(context, session_id, values, operation_id)
+        projections.sync_query(context, session_id, values, operation_id)
     except QuerySyncUnavailable as error:
         await clients.release_query_operation(client_id, operation_id)
         return JSONResponse(

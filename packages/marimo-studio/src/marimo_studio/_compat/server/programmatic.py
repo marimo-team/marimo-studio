@@ -8,7 +8,7 @@ from typing import Any
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from marimo_studio._compat.server.context import (
+from marimo_studio._compat.server.gateway import (
     config_manager_at_notebook,
     effective_base_url,
 )

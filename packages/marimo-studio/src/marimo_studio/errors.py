@@ -114,6 +114,12 @@ class ProtocolError(ConfigurationError):
     exit_code = 6
 
 
+class CompatibilityError(ProtocolError):
+    """The installed Marimo layout cannot provide a required capability."""
+
+    code = "marimo-layout-incompatible"
+
+
 class RuntimeTimeoutError(MarimoStudioError):
     """Notebook execution did not settle within its analysis budget."""
 

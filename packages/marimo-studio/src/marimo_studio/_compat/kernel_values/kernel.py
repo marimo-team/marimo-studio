@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from contextlib import AbstractAsyncContextManager, contextmanager
+from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 from types import TracebackType
 from typing import Any
+from uuid import uuid4
 
 from marimo_studio._compat.cached_cells import keep_cached_cells_compatible
 from marimo_studio._compat.kernel_values.models import (
@@ -31,8 +34,34 @@ from marimo_studio.errors import ConfigurationError
 from marimo_studio.types import OutputRenderResult, ValueReadError, ValueReadResult
 from marimo_studio.values import MAX_OUTPUT_SELECTORS
 
-_INSPECTION_SELECTORS: dict[Path, tuple[str, ...]] = {}
-_INSPECTION_OUTPUT_SELECTORS: dict[Path, tuple[str, ...]] = {}
+_PROBE_LEASE_QUERY_PARAM = "_marimo_studio_probe_lease"
+
+
+@dataclass(frozen=True)
+class _ProbeSelectorLease:
+    token: str
+    notebook: Path
+    selectors: tuple[str, ...]
+    output_selectors: tuple[str, ...]
+
+
+_PROBE_SELECTOR_LEASES: dict[str, _ProbeSelectorLease] = {}
+_PROBE_SELECTOR_LEASE_LOCK = Lock()
+
+
+class _CachedCellCompatibility:
+    def __init__(self) -> None:
+        self._release: Callable[[], None] | None = None
+
+    def activate(self) -> None:
+        if self._release is None:
+            self._release = keep_cached_cells_compatible()
+
+    def close(self) -> None:
+        if self._release is None:
+            return
+        self._release()
+        self._release = None
 
 
 class _EnteredKernelLifespan:
@@ -91,34 +120,54 @@ def _guard_entered_lifespan(context: Any) -> _EnteredKernelLifespan | None:
 
 
 @contextmanager
-def inspection_selectors(
+def probe_selector_lease(
     notebook: Path,
     selectors: tuple[str, ...],
     output_selectors: tuple[str, ...] = (),
-) -> Iterator[None]:
+) -> Iterator[dict[str, str | list[str]]]:
     """Permit runtime inspection selectors for an in-process probe kernel."""
-    path = notebook.resolve()
-    _INSPECTION_SELECTORS[path] = selectors
-    _INSPECTION_OUTPUT_SELECTORS[path] = output_selectors
+    lease = _ProbeSelectorLease(
+        token=uuid4().hex,
+        notebook=notebook.resolve(),
+        selectors=selectors,
+        output_selectors=output_selectors,
+    )
+    with _PROBE_SELECTOR_LEASE_LOCK:
+        _PROBE_SELECTOR_LEASES[lease.token] = lease
     try:
-        yield
+        yield {_PROBE_LEASE_QUERY_PARAM: lease.token}
     finally:
-        _INSPECTION_SELECTORS.pop(path, None)
-        _INSPECTION_OUTPUT_SELECTORS.pop(path, None)
+        with _PROBE_SELECTOR_LEASE_LOCK:
+            _PROBE_SELECTOR_LEASES.pop(lease.token, None)
+
+
+def _claim_probe_selector_lease(
+    context: Any,
+    notebook: Path,
+) -> _ProbeSelectorLease | None:
+    token = context.query_params.get(_PROBE_LEASE_QUERY_PARAM)
+    if not isinstance(token, str):
+        return None
+    context.query_params.remove(_PROBE_LEASE_QUERY_PARAM)
+    with _PROBE_SELECTOR_LEASE_LOCK:
+        lease = _PROBE_SELECTOR_LEASES.get(token)
+        if lease is None or lease.notebook != notebook:
+            return None
+        return _PROBE_SELECTOR_LEASES.pop(token)
 
 
 class _KernelBridgeLifespan:
     def __init__(self) -> None:
         self._registry: Any | None = None
         self._output_renderer: KernelOutputRenderer | None = None
-        self._release_cached_ui: Callable[[], None] | None = None
+        self._cached_cells = _CachedCellCompatibility()
         self._entered_lifespan: _EnteredKernelLifespan | None = None
 
     def _activate(
         self,
         context: Any,
         filename: Path,
-        inspection: tuple[str, ...] | None,
+        inspection: _ProbeSelectorLease | None,
     ) -> bool:
         if self._output_renderer is not None:
             return True
@@ -130,12 +179,11 @@ class _KernelBridgeLifespan:
                 return False
         output_renderer = KernelOutputRenderer(context)
         try:
-            release_cached_ui = keep_cached_cells_compatible()
+            self._cached_cells.activate()
         except BaseException:
             output_renderer.close()
             raise
         self._output_renderer = output_renderer
-        self._release_cached_ui = release_cached_ui
         return True
 
     async def __aenter__(self) -> None:
@@ -174,8 +222,7 @@ class _KernelBridgeLifespan:
         from marimo._messaging.notification_utils import broadcast_notification
 
         filename = Path(context.filename).resolve()
-        inspection = _INSPECTION_SELECTORS.get(filename)
-        inspection_outputs = _INSPECTION_OUTPUT_SELECTORS.get(filename)
+        inspection = _claim_probe_selector_lease(context, filename)
         self._activate(context, filename, inspection)
 
         # Keep the functions registered while the renderer waits for a Studio
@@ -185,7 +232,7 @@ class _KernelBridgeLifespan:
                 allowed = (
                     set(_template_selectors(filename) or ())
                     if inspection is None
-                    else set(inspection)
+                    else set(inspection.selectors)
                 )
             except (OSError, UnicodeError, ConfigurationError) as error:
                 return ValueReadResult(
@@ -229,8 +276,8 @@ class _KernelBridgeLifespan:
             try:
                 allowed = (
                     set(_template_output_selectors(filename) or ())
-                    if inspection_outputs is None
-                    else set(inspection_outputs)
+                    if inspection is None
+                    else set(inspection.output_selectors)
                 )
             except (OSError, UnicodeError, ConfigurationError) as error:
                 requested = tuple(
@@ -358,15 +405,29 @@ class _KernelBridgeLifespan:
         return False
 
     def _close(self) -> None:
+        failure: BaseException | None = None
         if self._output_renderer is not None:
-            self._output_renderer.close()
-            self._output_renderer = None
+            try:
+                self._output_renderer.close()
+            except BaseException as error:
+                failure = error
+            else:
+                self._output_renderer = None
         if self._registry is not None:
-            self._registry.delete(NAMESPACE)
-            self._registry = None
-        if self._release_cached_ui is not None:
-            self._release_cached_ui()
-            self._release_cached_ui = None
+            try:
+                self._registry.delete(NAMESPACE)
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+            else:
+                self._registry = None
+        try:
+            self._cached_cells.close()
+        except BaseException as error:
+            if failure is None:
+                failure = error
+        if failure is not None:
+            raise failure
 
 
 def kernel_lifespan(_: None) -> _KernelBridgeLifespan:

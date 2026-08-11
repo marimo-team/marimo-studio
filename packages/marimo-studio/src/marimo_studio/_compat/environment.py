@@ -13,7 +13,6 @@ from pathlib import Path
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
 
-from marimo_studio._compat.version import assert_supported_version
 from marimo_studio._workspace.metadata import set_package_requirement
 
 _PACKAGE_NAME = canonicalize_name("marimo-studio")
@@ -52,7 +51,6 @@ def inline_environment_flags(
     compose_project: bool,
 ) -> list[str]:
     """Resolve complete PEP 723 sources and indexes through Marimo."""
-    assert_supported_version()
     from marimo._cli.sandbox import construct_uv_flags
     from marimo._utils.inline_script_metadata import PyProjectReader
 

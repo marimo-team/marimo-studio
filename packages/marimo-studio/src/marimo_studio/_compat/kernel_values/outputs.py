@@ -46,10 +46,13 @@ class KernelOutputRenderer:
     def __init__(self, context: Any) -> None:
         self._context = context
         self._active: dict[str, set[str]] = {}
+        self._releasing: set[tuple[str, str]] = set()
+        self._release_references: dict[tuple[str, str], dict[str, Any]] = {}
         self._retained: set[tuple[str, str]] = set()
         self._retained_ui: dict[tuple[str, str], set[str]] = {}
         self._ui_owners: dict[tuple[str, str], set[str]] = {}
         self._pending_notifications: dict[tuple[str, str], dict[str, Any]] = {}
+        self._closed = False
 
     def render(
         self,
@@ -61,6 +64,8 @@ class KernelOutputRenderer:
         consumer_id: str,
         max_output_bytes: int,
     ) -> OutputRenderResult:
+        if self._closed:
+            raise RuntimeError("The output renderer has already closed.")
         selectors = tuple(dict.fromkeys(selectors))
         active = set(active_selectors).intersection(allowed)
         current = self._active.get(consumer_id, set())
@@ -112,7 +117,15 @@ class KernelOutputRenderer:
                 errors[selector] = error
                 continue
             assert output is not None
-            size = _encoded_size(output.to_dict())
+            try:
+                size = _encoded_size(output.to_dict())
+            except BaseException as error:
+                failed.add((consumer_id, selector))
+                errors[selector] = ValueReadError(
+                    "output-format-error",
+                    f"Selector {selector!r} could not be encoded: {_message(error)}",
+                )
+                continue
             if size > max_output_bytes:
                 failed.add((consumer_id, selector))
                 errors[selector] = ValueReadError(
@@ -141,6 +154,8 @@ class KernelOutputRenderer:
         )
 
     def close(self) -> None:
+        if self._closed:
+            return
         active = (
             (consumer_id, selector)
             for consumer_id, selectors in tuple(self._active.items())
@@ -148,6 +163,7 @@ class KernelOutputRenderer:
         )
         self._release_many(active, retry_retained=True)
         self._flush_notifications()
+        self._closed = True
 
     def _format(
         self,
@@ -201,30 +217,39 @@ class KernelOutputRenderer:
         from marimo._types.ids import CellId_t
 
         released = set(requested)
-        cleanup = released.union(self._retained if retry_retained else ())
-        if not cleanup:
+        if (
+            not released
+            and not self._releasing
+            and (not retry_retained or not self._retained)
+        ):
             return
-        candidates = {
-            identity: set(self._retained_ui.get(identity, ())) for identity in cleanup
-        }
         registry = self._context.ui_element_registry
-        released_references: dict[tuple[str, str], dict[str, Any]] = {}
         for identity in released:
             consumer_id, selector = identity
-            referenced = self._ui_owners.pop(identity, set())
-            owner = CellId_t(_owner_id(*identity))
-            released_references[identity] = {
-                object_id: registry._objects.get(object_id)
-                for object_id in referenced
-                if registry._constructing_cells.get(object_id) == owner
-                or object_id.startswith(f"{owner}-")
-            }
-            candidates.setdefault(identity, set()).update(referenced)
+            if identity not in self._releasing:
+                referenced = set(self._ui_owners.get(identity, ()))
+                owner = CellId_t(_owner_id(*identity))
+                self._release_references[identity] = {
+                    object_id: registry._objects.get(object_id)
+                    for object_id in referenced
+                    if registry._constructing_cells.get(object_id) == owner
+                    or object_id.startswith(f"{owner}-")
+                }
+                self._releasing.add(identity)
             active = self._active.get(consumer_id)
             if active is not None:
                 active.discard(selector)
                 if not active:
                     self._active.pop(consumer_id, None)
+
+        cleanup = self._releasing.union(self._retained if retry_retained else ())
+        if not cleanup:
+            return
+        candidates = {
+            identity: set(self._retained_ui.get(identity, ())) for identity in cleanup
+        }
+        for identity in cleanup:
+            candidates[identity].update(self._ui_owners.get(identity, ()))
 
         if candidates:
             owners = {
@@ -232,19 +257,30 @@ class KernelOutputRenderer:
             }
             retained = self._release_ui_elements(owners, candidates)
             lifecycle_registry = self._context.cell_lifecycle_registry
+            failure: BaseException | None = None
             for identity, owner in owners.items():
+                try:
+                    lifecycle_registry.dispose(owner, deletion=False)
+                except BaseException as error:
+                    if failure is None:
+                        failure = error
+                    continue
                 retained_ui = retained.get(identity, set())
                 if retained_ui:
                     self._retained_ui[identity] = retained_ui
                 else:
                     self._retained_ui.pop(identity, None)
-                lifecycle_registry.dispose(owner, deletion=False)
                 if owner in lifecycle_registry.registry or retained_ui:
                     self._retained.add(identity)
                 else:
                     self._retained.discard(identity)
-
-        self._pending_notifications.update(released_references)
+                if identity in self._releasing:
+                    pending = self._pending_notifications.setdefault(identity, {})
+                    pending.update(self._release_references.pop(identity, {}))
+                    self._ui_owners.pop(identity, None)
+                    self._releasing.discard(identity)
+            if failure is not None:
+                raise failure
 
     def _replacement_resets(
         self,
@@ -298,7 +334,12 @@ class KernelOutputRenderer:
             identity = owner_identities.get(cell_id)
             if identity is not None:
                 candidates[identity].add(object_id)
-        shared = set().union(*self._ui_owners.values()) if self._ui_owners else set()
+        shared_owners = (
+            referenced
+            for identity, referenced in self._ui_owners.items()
+            if identity not in self._releasing
+        )
+        shared = set().union(*shared_owners)
         object_ids = set().union(*candidates.values()).difference(shared)
         references: list[tuple[str, Any, set[str] | None, object | None]] = []
         for object_id in object_ids:

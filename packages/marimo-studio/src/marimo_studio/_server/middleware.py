@@ -2,23 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from marimo_studio import _assets
-from marimo_studio._compat.server.cell_aliases import enable_cell_alias_sync
-from marimo_studio._compat.server.context import (
-    relative_request_path,
-    server_base_url,
-    server_context,
-    server_location,
-    server_mode,
-    server_uses_file_routing,
+from marimo_studio._capabilities import ServerAdapters
+from marimo_studio._server.auth import (
+    authentication_required_response,
+    has_access_token,
+    has_read_access,
 )
-from marimo_studio._compat.server.peer_controls import enable_peer_control_sync
-from marimo_studio._compat.server.sessions import has_access_token, has_read_access
-from marimo_studio._server.auth import authentication_required_response
 from marimo_studio._server.editor_bridge import delegate_editor_request
 from marimo_studio._server.files import file_response
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
@@ -42,7 +38,7 @@ from marimo_studio._server.routing import (
     view_asset,
     view_route_alias,
 )
-from marimo_studio._server.runtimes import DEFAULT_RUNTIME_REGISTRY
+from marimo_studio._server.runtimes import create_runtime_registry
 from marimo_studio._server.support import (
     support_response,
 )
@@ -63,9 +59,15 @@ class PresentationMiddleware:
     def __init__(
         self,
         app: ASGIApp,
+        adapter_factory: Callable[[], ServerAdapters],
     ) -> None:
         self.app = app
+        self._adapters = adapter_factory()
         self._notebooks = NotebookScopeRegistry()
+        self._runtimes = create_runtime_registry(
+            self._adapters.session_state,
+            self._adapters.browser,
+        )
 
     async def __call__(
         self,
@@ -74,26 +76,54 @@ class PresentationMiddleware:
         send: Send,
     ) -> None:
         if scope["type"] == "lifespan":
+            adapters = self._adapters.lifecycle.open()
+            closed = False
+
+            async def close() -> None:
+                nonlocal closed
+                if closed:
+                    return
+                failure: BaseException | None = None
+                try:
+                    await self._notebooks.close()
+                except BaseException as error:
+                    failure = error
+                try:
+                    adapters.close()
+                except BaseException as error:
+                    if failure is None:
+                        failure = error
+                else:
+                    closed = True
+                if failure is not None:
+                    raise failure
 
             async def close_scopes(message: Message) -> None:
-                if message["type"] == "lifespan.shutdown.complete":
-                    await self._notebooks.close()
+                if message["type"] in {
+                    "lifespan.startup.failed",
+                    "lifespan.shutdown.complete",
+                    "lifespan.shutdown.failed",
+                }:
+                    await close()
                 await send(message)
 
-            await self.app(scope, receive, close_scopes)
+            try:
+                await self.app(scope, receive, close_scopes)
+            finally:
+                await close()
             return
         if scope["type"] not in {"http", "websocket"}:
             await self.app(scope, receive, send)
             return
-        base_url = server_base_url(scope)
+        base_url = self._adapters.server.base_url(scope)
         if base_url is None:
             await self.app(scope, receive, send)
             return
-        relative = relative_request_path(scope, base_url)
+        relative = self._adapters.server.relative_path(scope, base_url)
         if relative is None:
             await self.app(scope, receive, send)
             return
-        mode = server_mode(scope)
+        mode = self._adapters.server.mode(scope)
         if mode is None:
             await self.app(scope, receive, send)
             return
@@ -103,6 +133,10 @@ class PresentationMiddleware:
             scope,
             receive,
             send,
+            server=self._adapters.server,
+            sessions=self._adapters.session_state,
+            persistence=self._adapters.persistence,
+            code_mode=self._adapters.code_mode,
             relative=relative,
             mode=mode,
         ):
@@ -136,7 +170,7 @@ class PresentationMiddleware:
         authored = authored_view_route(relative)
         if (
             not has_read_access(scope)
-            and server_uses_file_routing(scope)
+            and self._adapters.server.uses_file_routing(scope)
             and ("file" in request.query_params or authored is not None)
             and relative not in {"", "/"}
             and could_handle(relative, mode)
@@ -146,7 +180,7 @@ class PresentationMiddleware:
             return
 
         request_relative = relative
-        location = server_location(
+        location = self._adapters.server.location(
             request,
             selected_file=authored.file_key if authored is not None else None,
         )
@@ -224,10 +258,8 @@ class PresentationMiddleware:
                 )
             return
 
-        dev = location.mode == "edit" or bool(
-            getattr(location._session_manager, "watch", False)
-        )
-        context = server_context(location)
+        context = self._adapters.server.context(location)
+        dev = context.dev
         if isinstance(lifecycle, Invalid):
             response = (
                 await support_response(
@@ -236,6 +268,11 @@ class PresentationMiddleware:
                     lifecycle,
                     notebook_scope,
                     relative.removeprefix(SUPPORT_PATH),
+                    server=self._adapters.server,
+                    session_state=self._adapters.session_state,
+                    sessions=self._adapters.sessions,
+                    projections=self._adapters.projections,
+                    runtimes=self._runtimes,
                 )
                 if relative.startswith(SUPPORT_PATH)
                 else error_response(
@@ -259,6 +296,11 @@ class PresentationMiddleware:
                     lifecycle,
                     notebook_scope,
                     relative.removeprefix(SUPPORT_PATH),
+                    server=self._adapters.server,
+                    session_state=self._adapters.session_state,
+                    sessions=self._adapters.sessions,
+                    projections=self._adapters.projections,
+                    runtimes=self._runtimes,
                 )
             elif location.mode == "edit" and (
                 landing or relative.strip("/").split("/")[0] == "studio"
@@ -313,7 +355,7 @@ class PresentationMiddleware:
                     context.routing_query,
                 )
             else:
-                enable_peer_control_sync(location)
+                self._adapters.peers.enable(location)
                 if selected_document is not None:
                     response = await document_response(
                         request,
@@ -321,16 +363,19 @@ class PresentationMiddleware:
                         presentation,
                         relative,
                         selected_document,
+                        sessions=self._adapters.session_state,
+                        replay=self._adapters.replay,
+                        marimo_version=self._adapters.browser.version,
                     )
                 elif selected_studio is not None:
                     if workspace.cells:
-                        enable_cell_alias_sync(location)
+                        self._adapters.persistence.enable(location)
                     response = studio_response(
                         request,
                         context,
                         workspace,
                         selected_studio,
-                        DEFAULT_RUNTIME_REGISTRY.options,
+                        self._runtimes.options,
                     )
                 elif selected_asset is not None:
                     view_name, asset = selected_asset
@@ -346,6 +391,11 @@ class PresentationMiddleware:
                         lifecycle,
                         notebook_scope,
                         relative.removeprefix(SUPPORT_PATH),
+                        server=self._adapters.server,
+                        session_state=self._adapters.session_state,
+                        sessions=self._adapters.sessions,
+                        projections=self._adapters.projections,
+                        runtimes=self._runtimes,
                     )
         except MarimoStudioError as error:
             response = error_response(

@@ -9,10 +9,13 @@ from starlette.requests import HTTPConnection, Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocket
 
-from marimo_studio._compat.code_mode import attach_code_mode_session
-from marimo_studio._compat.server.cell_aliases import enable_cell_alias_sync
-from marimo_studio._compat.server.context import server_location
-from marimo_studio._compat.server.sessions import has_edit_access, is_session_id
+from marimo_studio._capabilities import (
+    CodeModeBridge,
+    NotebookSaveTransform,
+    ServerGateway,
+    SessionState,
+)
+from marimo_studio._server.auth import has_edit_access
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
 from marimo_studio._server.routing import native_editor_target
 from marimo_studio._urls import STUDIO_CLIENT_QUERY_PARAM
@@ -29,6 +32,10 @@ async def delegate_editor_request(
     receive: Receive,
     send: Send,
     *,
+    server: ServerGateway,
+    sessions: SessionState,
+    persistence: NotebookSaveTransform,
+    code_mode: CodeModeBridge,
     relative: str,
     mode: str,
 ) -> bool:
@@ -41,18 +48,23 @@ async def delegate_editor_request(
             if scope["type"] == "http"
             else WebSocket(scope, receive, send)
         )
-        location = server_location(connection)
+        location = server.location(connection)
         if location is not None:
-            await _bind_editor_session(notebooks, connection, location.notebook)
+            await _bind_editor_session(
+                notebooks,
+                connection,
+                location.notebook,
+                sessions,
+            )
         if scope["type"] == "http" and location is not None:
             try:
                 workspace = discover_studio(location.notebook)
             except MarimoStudioError:
                 workspace = None
             if workspace is not None and workspace.cells:
-                enable_cell_alias_sync(location)
+                persistence.enable(location)
             if editor_target.rstrip("/") in _CODE_MODE_ROUTES:
-                delegated_scope = attach_code_mode_session(delegated_scope)
+                delegated_scope = code_mode.attach_session(delegated_scope)
         await app(delegated_scope, receive, send)
         return True
 
@@ -61,7 +73,7 @@ async def delegate_editor_request(
         and mode == "edit"
         and relative.rstrip("/") in _CODE_MODE_ROUTES
     ):
-        delegated_scope = attach_code_mode_session(scope)
+        delegated_scope = code_mode.attach_session(scope)
         await app(delegated_scope, receive, send)
         return True
     return False
@@ -71,6 +83,7 @@ async def _bind_editor_session(
     notebooks: NotebookScopeRegistry,
     connection: HTTPConnection,
     notebook: Path,
+    sessions: SessionState,
 ) -> None:
     if not has_edit_access(connection.scope):
         return
@@ -80,7 +93,7 @@ async def _bind_editor_session(
         client_id is None
         or session_id is None
         or re.fullmatch(r"[A-Za-z0-9_-]{16,128}", client_id) is None
-        or not is_session_id(session_id)
+        or not sessions.is_session_id(session_id)
     ):
         return
     notebook_scope = notebooks.get(notebook)

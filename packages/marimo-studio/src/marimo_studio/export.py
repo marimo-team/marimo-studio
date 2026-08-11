@@ -13,11 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from marimo_studio import _assets
-from marimo_studio._compat.browser_notebook import (
-    browser_notebook_source,
-    selector_specs,
-)
-from marimo_studio._compat.static_export import static_runtime_config
+from marimo_studio._capabilities import ExportAdapters
+from marimo_studio._composition import create_export_adapters
 from marimo_studio._html import cell_host, render, runtime_document
 from marimo_studio._workspace.config import load_studio
 from marimo_studio._workspace.models import (
@@ -137,6 +134,7 @@ def _projection_error(resolved: ResolvedStudio, view_name: str) -> None:
 
 
 def _runtime_config(
+    adapters: ExportAdapters,
     studio: StudioWorkspace,
     resolved: ResolvedStudio,
     view_name: str,
@@ -144,13 +142,12 @@ def _runtime_config(
     notebook_source: str,
 ) -> tuple[str, dict[str, object]]:
     value_references, output_references = _projection_references(document)
-    code = browser_notebook_source(
+    projection = adapters.browser.project(
         studio.notebook,
         notebook_source,
-        value_references,
-        output_references,
+        values=value_references,
+        outputs=output_references,
     )
-    version = _assets.runtime_marimo_version()
     view = resolved.views[view_name]
     cell_bindings = resolved.runtime_cell_bindings(
         None,
@@ -162,13 +159,13 @@ def _runtime_config(
     revision = _digest(
         view_name,
         document,
-        code,
+        projection.code,
         json.dumps(cell_bindings, sort_keys=True),
         json.dumps(value_bindings, sort_keys=True),
         json.dumps(output_bindings, sort_keys=True),
     )
     support_url = f"./{SUPPORT_ROOT.as_posix()}/views/{view_name}"
-    marimo_config = static_runtime_config(studio.notebook)
+    marimo_config = adapters.runtime_config(studio.notebook)
     config: dict[str, object] = {
         "schema": 1,
         "revision": revision,
@@ -176,15 +173,9 @@ def _runtime_config(
         "views": [view_name],
         "runtime": {
             "id": RUNTIME_ID,
-            "instance": _digest(version, code),
+            "instance": projection.instance,
             "available": [RUNTIME_ID],
-            "data": {
-                "code": code,
-                "filename": "notebook.py",
-                "version": version,
-                "valueSpecs": selector_specs(value_references),
-                "outputSpecs": selector_specs(output_references),
-            },
+            "data": projection.runtime_data(),
             "controls": {"cells": controls},
         },
         "rootUrl": "./",
@@ -210,6 +201,7 @@ def _runtime_config(
         revision=revision,
         runtime=RUNTIME_ID,
         filename="notebook.py",
+        marimo_version=projection.version,
     )
     return rendered, config
 
@@ -336,6 +328,7 @@ def _asset_plan(
 
 
 def _write_bundle(
+    adapters: ExportAdapters,
     output: Path,
     studio: StudioWorkspace,
     resolved: ResolvedStudio,
@@ -344,6 +337,7 @@ def _write_bundle(
     notebook_source: str,
 ) -> int:
     rendered, config = _runtime_config(
+        adapters,
         studio,
         resolved,
         view_name,
@@ -512,6 +506,7 @@ def export_view(
     force: bool = False,
 ) -> StaticExportResult:
     """Export one configured view as an HTTP-hosted WebAssembly site."""
+    adapters = create_export_adapters()
     studio = load_studio(target)
     selected = view or studio.default_view
     if selected not in studio.views:
@@ -547,6 +542,7 @@ def export_view(
     staged.mkdir()
     try:
         files = _write_bundle(
+            adapters,
             staged,
             studio,
             resolved,

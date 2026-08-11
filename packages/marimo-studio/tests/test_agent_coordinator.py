@@ -57,6 +57,16 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
         await waiting
         settled = await agents.pending_operations(target, None, None)
         assert settled.activation is None
+        assert await agents.acknowledge_activation(
+            target.client_id,
+            activation.generation,
+            "executive",
+        )
+        assert not await agents.acknowledge_activation(
+            target.client_id,
+            activation.generation,
+            "dashboard",
+        )
 
     asyncio.run(exercise())
 

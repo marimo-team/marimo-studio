@@ -8,10 +8,10 @@ from collections.abc import Collection, Sequence
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 
-from marimo_studio._compat.server.sessions import has_edit_access
 from marimo_studio._server.auth import (
     error_response,
     forbidden_response,
+    has_edit_access,
     invalid_server_token_response,
 )
 from marimo_studio._server.headers import NO_STORE

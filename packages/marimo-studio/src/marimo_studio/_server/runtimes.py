@@ -6,13 +6,11 @@ import hashlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
-from marimo_studio import _assets
-from marimo_studio._compat.browser_notebook import (
-    browser_notebook_source,
-    selector_specs,
+from marimo_studio._capabilities import (
+    BrowserRuntimeProjector,
+    ServerContext,
+    SessionState,
 )
-from marimo_studio._compat.server.models import ServerContext
-from marimo_studio._compat.server.sessions import live_cells
 from marimo_studio._urls import public_url
 from marimo_studio._workspace.models import (
     RUNTIME_PATTERN,
@@ -64,6 +62,9 @@ class ServerRuntime:
     id = "server"
     label = "Server"
 
+    def __init__(self, sessions: SessionState) -> None:
+        self._sessions = sessions
+
     def project(
         self,
         snapshot: PresentationSnapshot,
@@ -71,7 +72,7 @@ class ServerRuntime:
         session_id: str | None,
         binding_id: str | None = None,
     ) -> RuntimeProjection:
-        cells = live_cells(context, session_id)
+        cells = self._sessions.live_cells(context, session_id)
         view = _view(snapshot)
         return RuntimeProjection(
             instance=_digest(
@@ -102,6 +103,9 @@ class WasmRuntime:
     id = "wasm"
     label = "WebAssembly"
 
+    def __init__(self, browser: BrowserRuntimeProjector) -> None:
+        self._browser = browser
+
     def project(
         self,
         snapshot: PresentationSnapshot,
@@ -111,28 +115,15 @@ class WasmRuntime:
     ) -> RuntimeProjection:
         del context, session_id, binding_id
         view = _view(snapshot)
-        version = _assets.runtime_marimo_version()
-        code = browser_notebook_source(
+        projection = self._browser.project(
             snapshot.resolved.workspace.notebook,
             snapshot.notebook_source,
-            snapshot.value_references,
-            snapshot.output_references,
-        )
-        identity_code = browser_notebook_source(
-            snapshot.resolved.workspace.notebook,
-            snapshot.notebook_source,
-            {},
-            {},
+            values=snapshot.value_references,
+            outputs=snapshot.output_references,
         )
         return RuntimeProjection(
-            instance=_digest(version, identity_code),
-            data={
-                "code": code,
-                "filename": "notebook.py",
-                "version": version,
-                "valueSpecs": selector_specs(snapshot.value_references),
-                "outputSpecs": selector_specs(snapshot.output_references),
-            },
+            instance=projection.instance,
+            data=projection.runtime_data(),
             cell_bindings=snapshot.resolved.runtime_cell_bindings(
                 None,
                 required_aliases=view.cell_aliases,
@@ -194,12 +185,17 @@ class RuntimeRegistry:
         return self._by_id[selected], available
 
 
-DEFAULT_RUNTIME_REGISTRY = RuntimeRegistry((ServerRuntime(), WasmRuntime()))
+def create_runtime_registry(
+    sessions: SessionState,
+    browser: BrowserRuntimeProjector,
+) -> RuntimeRegistry:
+    """Construct Studio runtime policy from the Marimo adapter bundle."""
+    return RuntimeRegistry((ServerRuntime(sessions), WasmRuntime(browser)))
 
 
 __all__ = [
-    "DEFAULT_RUNTIME_REGISTRY",
     "RuntimeProjection",
     "RuntimeProvider",
     "RuntimeRegistry",
+    "create_runtime_registry",
 ]
