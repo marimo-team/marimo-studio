@@ -48,3 +48,4 @@ class RenderValuesArgs:
 @dataclass
 class SyncQueryArgs:
     query: dict[str, str | list[str]]
+    operation_id: str = ""

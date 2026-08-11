@@ -15,8 +15,18 @@ import marimo_studio.agents as studio
 ctx = cm.get_context()
 notebook = studio.inspect(ctx, include_code=True)
 view = studio.ensure_view(ctx, "dashboard")
-await studio.activate_view(ctx, view.name)
-report = await studio.analyze(ctx, view_name=view.name)
+activation = await studio.activate_view(ctx, view.name)
+```
+
+Let that code-mode call return so a first view can reload the native editor
+into Studio. Run the analysis in the next code-mode call after the page loads:
+
+```python
+import marimo._code_mode as cm
+import marimo_studio.agents as studio
+
+ctx = cm.get_context()
+report = await studio.analyze(ctx, view_name="dashboard")
 ```
 
 ::: info Saved notebook required
@@ -133,25 +143,28 @@ async def activate_view(
 
 Selects `name` in the current browser workspace. An active Studio workspace
 uses the same in-place transition as its selector, which preserves the layout
-and checks current source edits. When the notebook gained its first Studio
-view during the native editor session, Marimo reloads that page into the
-selected Studio view after the code-mode call returns.
+and checks current source edits. The request targets the Studio tab attached
+to the current Marimo session. When the notebook gained its first Studio view
+during that native editor session, Marimo reloads the page into the selected
+Studio view after the code-mode call returns.
 
 The returned `ViewActivationResult` contains the notebook path, view name,
-`state="requested"`, a monotonically increasing request generation, and the
-selected `transition`. `transition="in-place"` uses the mounted Studio
-workspace. `transition="reload"` queues Marimo's native page reload. The
-result confirms that the server accepted the request. Call `analyze` for the
-same view to confirm that the browser loaded and read the current source
-revision.
+a monotonically increasing generation, and the selected transition.
+`state="active"` with `transition="in-place"` means the targeted workspace
+acknowledged the completed transition. `state="reload-requested"` with
+`transition="reload"` means the exact native editor session will reload after
+the code-mode call releases its execution lock. Call `analyze` for the same
+view to confirm that the rendered page read the current source revision.
 
 Raises:
 
 - `ConfigurationError` when `name` is not configured for the notebook.
-- `ProtocolError` when code mode has no live Marimo connection, the server is
-  unavailable, or the server is attached to another notebook.
+- `ProtocolError` when code mode has no live Marimo callback credentials.
+- `AgentRequestError` when the server, session, or targeted browser cannot
+  complete the transition, or when the server is attached to another
+  notebook. The exception's `code` identifies the failure.
 
-## `analyze(context, *, view_name=None, timeout=10.0, require_browser=True)`
+## `analyze(context, *, view_name=None, timeout=10.0, runtime_timeout=60.0, require_browser=True)`
 
 ```python
 async def analyze(
@@ -159,6 +172,7 @@ async def analyze(
     *,
     view_name: str | None = None,
     timeout: float = 10.0,
+    runtime_timeout: float = 60.0,
     require_browser: bool = True,
 ) -> AnalysisReport: ...
 ```
@@ -169,18 +183,24 @@ Runs the complete agent handoff gate:
    references, and packaged browser assets.
 2. Runtime validation executes the notebook in an isolated process and reads
    each projected cell and Python value.
-3. Browser validation waits for Studio to report `ready` or `error` for the
-   current saved view revision.
+3. Browser validation issues a fresh request to the session-bound Studio tab
+   and waits for `ready` or `error` for the selected runtime instance and
+   saved source revision.
 
 Code mode delegates this work to the attached Studio server. The server runs
 the isolated validation process and returns one structured report to the
 active notebook kernel.
 
-Static failures skip runtime validation. Browser evidence is revision-aware,
-so a report recorded before the latest HTML or CSS save has state `stale`.
-Pass one `view_name` after activating it for a focused repair loop. When the
-name is absent, every configured view is included and each one needs current
-browser evidence.
+Static failures skip runtime validation. Runtime and browser checks use one
+captured revision map. An edit during analysis adds an
+`analysis-source-changed` action, so evidence from different saves cannot
+produce a handoff-ready report. Code mode requires one named, active view for
+browser validation. Activate the view in one code-mode call, let that call
+finish, then analyze it in the next call. Setting `require_browser=False`
+allows a code-mode call with no `view_name` to validate every configured view
+through the static and isolated runtime stages. The external
+`marimo-studio analyze` command can visit every configured view because it does
+not occupy the notebook kernel while Studio switches views.
 
 `AnalysisReport.to_dict()` returns the stable schema used by the CLI. It
 contains `stages.static`, `stages.runtime`, `stages.browser`, and an `actions`
@@ -189,11 +209,20 @@ advice, and available view, target, or source location.
 
 - `report.ok` is true when no validation stage reports an error.
 - `report.handoff_ready` is true when runtime validation completed, no stage
-  reports an error, and every required rendered view is `ready` at the current
-  revision.
+  reports an error, and every required rendered view is `ready` for the report
+  runtime, revision, runtime instance, Marimo session, browser client, and
+  request ID.
 
 Keep `require_browser=True` for agent handoff. Setting it to false limits the
 gate to deterministic source and runtime evidence.
+
+`timeout` must be finite and between 0 and 20 seconds. It bounds the rendered
+browser observation. `runtime_timeout` must be finite and between 0 and 300
+seconds. It bounds isolated notebook execution and defaults to 60 seconds. A
+runtime deadline produces a `runtime-timeout` action with repair advice.
+Transport, protocol, authentication, session, revision, and rendered-view
+failures appear as stable error codes in `actions` or raise
+`AgentRequestError` before a report can be created.
 
 ```python
 while True:

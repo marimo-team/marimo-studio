@@ -1,4 +1,4 @@
-import type { BrowserObservation } from "@marimo-studio/protocol/browser-observations";
+import type { ObserveViewRequest } from "@marimo-studio/protocol/development-events";
 
 import {
   parsePreviewMessage,
@@ -7,22 +7,17 @@ import {
   type ViewDiagnostic,
   type ViewPreviewMessage,
 } from "@marimo-studio/protocol/preview-messages";
-import { publicNotebookQuery } from "@marimo-studio/protocol/query";
-import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
 
+import type { ControlFrameConnector } from "./control-sync.ts";
 import type { RecordBrowserObservation } from "./observation-remote.ts";
+import type { EditorQuerySyncResult } from "./query-remote.ts";
 
 import { assertNever } from "../../shared/assertNever.ts";
-import { fetchRuntimeControls } from "./control-remote.ts";
-import {
-  type ControlFrameConnector,
-  type ControlSync,
-  synchronizeControlEndpoints,
-} from "./control-sync.ts";
+import { PreviewControlController } from "./control-controller.ts";
+import { PreviewObservationController } from "./observation-controller.ts";
+import { PreviewQueryController } from "./query-controller.ts";
 import { previewLoadState, RetrySchedule } from "./state.ts";
 import { previewStartingMessage, type PreviewStatus } from "./status.ts";
-
-const CONTROL_SYNC_RETRY_DELAYS = [100, 250, 500, 1_000, 2_000, 5_000] as const;
 
 export interface PreviewFrameState {
   url: string;
@@ -37,14 +32,11 @@ export class PreviewController {
   private diagnostics: ViewDiagnostic[] = [];
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly retrySchedule = new RetrySchedule();
-  private controlSync: ControlSync | undefined;
-  private controlSyncRevision: string | undefined;
-  private controlSyncRequest: { controller: AbortController; revision: string } | undefined;
-  private controlSyncRetryTimer: ReturnType<typeof setTimeout> | undefined;
-  private controlSyncRetryAttempt = 0;
   private readyRevision: string | undefined;
-  private notebookQuery = publicNotebookQuery(globalThis.location.search);
-  private querySyncController: AbortController | undefined;
+  private readySessionId: string | undefined;
+  private readonly controls: PreviewControlController;
+  private readonly observations: PreviewObservationController;
+  private readonly queries: PreviewQueryController;
 
   constructor(
     initialView: string,
@@ -53,12 +45,16 @@ export class PreviewController {
     private readonly preview: HTMLIFrameElement,
     private readonly viewUrl: (view: string, runtime: string) => string,
     private readonly supportUrl: (view: string) => string,
-    private readonly syncQuery: (query: string) => void,
-    private readonly syncEditorQuery: (query: string, signal: AbortSignal) => Promise<void>,
+    syncQuery: (query: string) => void,
+    syncEditorQuery: (
+      query: string,
+      operationId: string,
+      signal: AbortSignal,
+    ) => Promise<EditorQuerySyncResult>,
     private readonly navigate: (view: string) => void,
     private readonly report: (state: PreviewFrameState) => void,
-    private readonly recordObservation?: RecordBrowserObservation,
-    private readonly connectControlFrame?: ControlFrameConnector,
+    recordObservation?: RecordBrowserObservation,
+    connectControlFrame?: ControlFrameConnector,
   ) {
     this.view = initialView;
     this.state = {
@@ -69,12 +65,25 @@ export class PreviewController {
         title: "",
       },
     };
+    this.controls = new PreviewControlController({
+      runtime,
+      editor,
+      preview,
+      supportUrl: () => this.supportUrl(this.view),
+      connect: connectControlFrame,
+    });
+    this.observations = new PreviewObservationController(runtime, preview, recordObservation);
+    this.queries = new PreviewQueryController(runtime, preview, syncQuery, syncEditorQuery, () =>
+      this.setPopoutUrl(this.viewUrl(this.view, this.runtime)),
+    );
     this.bind();
   }
 
   switchView(view: string): void {
-    this.stopControlSync();
+    this.controls.stop();
     this.readyRevision = undefined;
+    this.readySessionId = undefined;
+    delete this.preview.dataset.sessionId;
     this.viewReady = false;
     this.view = view;
     const nextPreview = this.viewUrl(view, this.runtime);
@@ -94,17 +103,23 @@ export class PreviewController {
     this.preview.contentWindow?.dispatchEvent(new Event("resize"));
   }
 
-  editorQueryChanged(query: string): void {
-    if (this.queryChanged(query)) {
-      void this.updatePreviewQuery(this.notebookQuery);
-    }
+  requestObservation(request: ObserveViewRequest): void {
+    this.observations.request(request);
+  }
+
+  editorSessionChanged(): void {
+    this.reload();
+  }
+
+  editorQueryChanged(query: string, operationId?: string, completed = false): void {
+    this.queries.editorChanged(query, this.viewReady, operationId, completed);
   }
 
   dispose(): void {
     this.cancelRetry();
-    this.stopControlSync();
-    this.querySyncController?.abort();
-    this.editor.removeEventListener("load", this.editorLoaded);
+    this.controls.stop();
+    this.queries.cancel();
+    this.observations.clear();
     this.editor.removeEventListener("load", this.startFromEditor);
     this.preview.removeEventListener("load", this.previewLoaded);
     globalThis.removeEventListener("message", this.message);
@@ -113,7 +128,6 @@ export class PreviewController {
   private bind(): void {
     globalThis.addEventListener("message", this.message);
     this.preview.addEventListener("load", this.previewLoaded);
-    this.editor.addEventListener("load", this.editorLoaded);
     this.editor.addEventListener("load", this.startFromEditor, { once: true });
     if (this.editor.contentDocument?.readyState === "complete") {
       this.startFromEditor();
@@ -138,6 +152,7 @@ export class PreviewController {
     if (
       !message ||
       message.type === "marimo-studio:switch-view" ||
+      message.type === "marimo-studio:observe-view" ||
       message.runtime !== this.runtime
     ) {
       return;
@@ -154,8 +169,10 @@ export class PreviewController {
         this.previewQueryChanged(message.query);
         return;
       case "marimo-studio:receiver-ready":
-        this.stopControlSync();
+        this.controls.stop();
         this.readyRevision = undefined;
+        this.readySessionId = undefined;
+        delete this.preview.dataset.sessionId;
         this.receiverReady = true;
         this.viewReady = false;
         this.cancelRetry();
@@ -165,6 +182,7 @@ export class PreviewController {
         } else {
           this.postSwitch();
         }
+        this.observations.post();
         return;
       case "marimo-studio:view-ready":
       case "marimo-studio:view-sync-pending":
@@ -183,14 +201,18 @@ export class PreviewController {
   private receiveView(message: ViewPreviewMessage): void {
     switch (message.type) {
       case "marimo-studio:view-ready":
-        if (message.sessionId !== undefined) {
+        this.readySessionId = message.sessionId;
+        if (message.sessionId === undefined) {
+          delete this.preview.dataset.sessionId;
+        } else {
           this.preview.dataset.sessionId = message.sessionId;
         }
         this.readyRevision = message.revision;
         this.viewReady = true;
         this.showDiagnostics();
-        this.beginControlSync(message.revision);
-        void this.updatePreviewQuery(this.notebookQuery);
+        this.controls.begin(message.revision, message.sessionId);
+        void this.queries.applyToPreview(this.viewReady);
+        this.observations.post();
         return;
       case "marimo-studio:view-sync-pending":
         this.viewReady = false;
@@ -207,11 +229,14 @@ export class PreviewController {
         this.setStatus("Needs repair", "error", message.hint);
         return;
       case "marimo-studio:view-observation":
+        this.observations.receive(message);
         this.readyRevision = message.revision;
         this.viewReady = message.state === "ready";
         this.diagnostics = message.diagnostics;
         if (message.state === "ready") {
           this.showDiagnostics();
+        } else if (message.state === "loading") {
+          this.setStatus("Waiting for rendered view", "loading");
         } else {
           this.setStatus(
             "Needs repair",
@@ -219,68 +244,14 @@ export class PreviewController {
             message.diagnostics.map((diagnostic) => diagnostic.message).join("\n"),
           );
         }
-        this.publishObservation({
-          schema: 1,
-          view: message.view,
-          runtime: message.runtime,
-          revision: message.revision,
-          state: message.state,
-          diagnostics: message.diagnostics,
-        });
         return;
       default:
         assertNever(message);
     }
   }
 
-  private queryChanged(query: string): boolean {
-    const next = publicNotebookQuery(query);
-    if (next === this.notebookQuery) {
-      return false;
-    }
-    this.notebookQuery = next;
-    this.syncQuery(query);
-    this.setPopoutUrl(this.viewUrl(this.view, this.runtime));
-    return true;
-  }
-
   private previewQueryChanged(query: string): void {
-    if (!this.queryChanged(query) || this.runtime === DEFAULT_RUNTIME_ID) {
-      return;
-    }
-    this.querySyncController?.abort();
-    const controller = new AbortController();
-    this.querySyncController = controller;
-    void this.syncEditorQuery(this.notebookQuery, controller.signal)
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) {
-          console.warn("Marimo editor query state could not be synchronized", error);
-        }
-      })
-      .finally(() => {
-        if (this.querySyncController === controller) {
-          this.querySyncController = undefined;
-        }
-      });
-  }
-
-  private async updatePreviewQuery(query: string): Promise<void> {
-    if (this.runtime === DEFAULT_RUNTIME_ID || !this.viewReady) {
-      return;
-    }
-    const studio = (
-      this.preview.contentWindow as
-        | (Window & { marimoStudio?: { updateQuery(query: string): Promise<void> } })
-        | null
-    )?.marimoStudio;
-    if (!studio) {
-      return;
-    }
-    try {
-      await studio.updateQuery(query);
-    } catch (error) {
-      console.warn("Marimo preview query state could not be synchronized", error);
-    }
+    this.queries.previewChanged(query);
   }
 
   private postSwitch(): void {
@@ -296,9 +267,11 @@ export class PreviewController {
 
   private reload(): void {
     this.cancelRetry();
-    this.stopControlSync();
-    this.querySyncController?.abort();
+    this.controls.stop();
+    this.queries.cancel();
     this.readyRevision = undefined;
+    this.readySessionId = undefined;
+    delete this.preview.dataset.sessionId;
     this.receiverReady = false;
     this.viewReady = false;
     this.setStatus(previewStartingMessage(this.runtime));
@@ -360,144 +333,9 @@ export class PreviewController {
   private readonly previewLoaded = (): void => {
     this.loaded();
     if (this.receiverReady && this.readyRevision) {
-      this.beginControlSync(this.readyRevision);
+      this.controls.begin(this.readyRevision, this.readySessionId);
     }
   };
-
-  private readonly editorLoaded = (): void => {
-    this.stopControlSync();
-    if (this.receiverReady && this.readyRevision) {
-      this.beginControlSync(this.readyRevision);
-    }
-  };
-
-  private beginControlSync(revision: string): void {
-    if (!this.connectControlFrame || this.runtime === DEFAULT_RUNTIME_ID) {
-      return;
-    }
-    if (
-      (this.controlSync && this.controlSyncRevision === revision) ||
-      this.controlSyncRequest?.revision === revision
-    ) {
-      return;
-    }
-    this.stopControlSync();
-    this.controlSyncRetryAttempt = 0;
-    void this.startControlSync(revision);
-  }
-
-  private async startControlSync(revision: string): Promise<void> {
-    if (
-      !this.connectControlFrame ||
-      this.runtime === DEFAULT_RUNTIME_ID ||
-      this.readyRevision !== revision
-    ) {
-      return;
-    }
-    if (this.controlSync || this.controlSyncRequest) {
-      return;
-    }
-    const controller = new AbortController();
-    const request = { controller, revision };
-    this.controlSyncRequest = request;
-    let retry = false;
-    let failure: unknown;
-    try {
-      await previewReady(this.preview, controller.signal);
-      if (controller.signal.aborted || this.controlSyncRequest !== request) {
-        return;
-      }
-      const supportUrl = this.supportUrl(this.view);
-      const [editorConfig, previewConfig] = await Promise.all([
-        fetchRuntimeControls(supportUrl, DEFAULT_RUNTIME_ID, controller.signal),
-        fetchRuntimeControls(supportUrl, this.runtime, controller.signal),
-      ]);
-      if (controller.signal.aborted || this.controlSyncRequest !== request) {
-        return;
-      }
-      if (editorConfig.revision !== revision || editorConfig.revision !== previewConfig.revision) {
-        retry = true;
-        failure = new Error("Control configuration revisions have not converged");
-        return;
-      }
-      if (!editorConfig.controls || !previewConfig.controls) {
-        return;
-      }
-      const editor = this.connectControlFrame(this.editor);
-      const preview = this.connectControlFrame(this.preview);
-      if (!editor || !preview) {
-        editor?.dispose();
-        preview?.dispose();
-        retry = true;
-        failure = new Error("Marimo control endpoints are still starting");
-        return;
-      }
-      const sync = await synchronizeControlEndpoints({
-        editor,
-        preview,
-        editorControls: editorConfig.controls,
-        previewControls: previewConfig.controls,
-        signal: controller.signal,
-      });
-      if (
-        controller.signal.aborted ||
-        this.controlSyncRequest !== request ||
-        this.readyRevision !== revision
-      ) {
-        sync.dispose();
-        return;
-      }
-      this.controlSync = sync;
-      this.controlSyncRevision = revision;
-    } catch (error) {
-      if (!controller.signal.aborted) {
-        retry = true;
-        failure = error;
-      }
-    } finally {
-      if (this.controlSyncRequest === request) {
-        this.controlSyncRequest = undefined;
-      }
-      if (retry && !controller.signal.aborted) {
-        this.scheduleControlSync(revision, failure);
-      }
-    }
-  }
-
-  private scheduleControlSync(revision: string, failure?: unknown): void {
-    if (
-      this.readyRevision !== revision ||
-      this.controlSyncRetryTimer !== undefined ||
-      this.controlSyncRetryAttempt >= CONTROL_SYNC_RETRY_DELAYS.length
-    ) {
-      if (
-        failure !== undefined &&
-        this.controlSyncRetryAttempt >= CONTROL_SYNC_RETRY_DELAYS.length
-      ) {
-        console.warn("Marimo control state could not be synchronized", failure);
-      }
-      return;
-    }
-    const delay = CONTROL_SYNC_RETRY_DELAYS[this.controlSyncRetryAttempt];
-    this.controlSyncRetryAttempt += 1;
-    this.controlSyncRetryTimer = setTimeout(() => {
-      this.controlSyncRetryTimer = undefined;
-      void this.startControlSync(revision);
-    }, delay);
-  }
-
-  private stopControlSync(): void {
-    this.controlSyncRequest?.controller.abort();
-    this.controlSyncRequest = undefined;
-    this.controlSync?.dispose();
-    this.controlSync = undefined;
-    this.controlSyncRevision = undefined;
-    if (this.controlSyncRetryTimer !== undefined) {
-      clearTimeout(this.controlSyncRetryTimer);
-      this.controlSyncRetryTimer = undefined;
-    }
-    this.controlSyncRetryAttempt = 0;
-  }
 
   private showDiagnostics(): void {
     if (!this.diagnostics.length) {
@@ -510,12 +348,6 @@ export class PreviewController {
       "warning",
       this.diagnostics.map((diagnostic) => diagnostic.message).join("\n"),
     );
-  }
-
-  private publishObservation(observation: BrowserObservation): void {
-    void this.recordObservation?.(observation).catch((error: unknown) => {
-      console.warn("Studio browser observation could not be recorded", error);
-    });
   }
 
   private setStatus(
@@ -544,18 +376,3 @@ export class PreviewController {
     }
   }
 }
-
-const previewReady = async (frame: HTMLIFrameElement, signal: AbortSignal): Promise<void> => {
-  const ready = (
-    frame.contentWindow as (Window & { marimoStudio?: { ready(): Promise<void> } }) | null
-  )?.marimoStudio?.ready;
-  if (!ready) {
-    return;
-  }
-  await Promise.race([
-    ready(),
-    new Promise<void>((resolve) =>
-      signal.addEventListener("abort", () => resolve(), { once: true }),
-    ),
-  ]);
-};

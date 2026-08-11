@@ -93,6 +93,7 @@ def __marimo_studio_values():
     @_studio_dataclasses.dataclass
     class _StudioSyncQueryArgs:
         query: dict[str, str | list[str]]
+        operation_id: str = ""
 
     _studio_specs = {specs}
     _studio_output_specs = {output_specs}
@@ -563,9 +564,14 @@ def __marimo_studio_values():
     def _studio_sync_query(args):
         params = _studio_context.query_params
         current = dict(params.to_dict())
-        for key in current.keys() - args.query.keys() - _studio_private_query_keys:
+        query = {{
+            key: value
+            for key, value in args.query.items()
+            if key not in _studio_private_query_keys
+        }}
+        for key in current.keys() - query.keys() - _studio_private_query_keys:
             params.remove(key)
-        for key, value in args.query.items():
+        for key, value in query.items():
             if current.get(key) != value:
                 params.set(key, value)
 

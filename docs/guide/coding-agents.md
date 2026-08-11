@@ -42,10 +42,11 @@ relationships. It leaves notebook cells unevaluated.
 `studio.ensure_view` creates the named view when needed and returns the current
 paths. A new view starts with every notebook cell in source order.
 
-`studio.activate_view` asks each connected Studio workspace to use the normal
-view transition. When `ensure_view` added the notebook's first Studio view,
-the same call reloads the native editor into that Studio view after code mode
-returns. Later calls switch views in place and preserve the workspace layout.
+`studio.activate_view` targets the Studio tab attached to the current Marimo
+code-mode session. When `ensure_view` added the notebook's first Studio view,
+the call reloads that native editor into Studio after code mode returns. Later
+calls wait for the targeted workspace to complete its normal in-place view
+transition.
 
 ## Inspect before editing
 
@@ -126,18 +127,39 @@ source, and call `studio.analyze` again. Hand off the view when
 `report.handoff_ready` is true. A static or runtime pass cannot substitute for
 current rendered browser evidence.
 
+Runtime execution waits 60 seconds by default. Give expected remote data or
+model setup a larger explicit budget:
+
+```python
+report = await studio.analyze(
+    ctx,
+    view_name=view.name,
+    runtime_timeout=120,
+)
+```
+
+Before handoff, review the notebook diff. Keep changes that define data,
+analysis, controls, or reusable outputs. Move page markup, display wording,
+layout helpers, CSS strings, and presentation-only formatting into the view
+files.
+
 If the view changes during the loop, activate the target explicitly before
-analyzing it:
+analyzing it. Let the activation call return and wait for the page to render:
 
 ```python
 await studio.activate_view(ctx, "executive")
+```
+
+Run the focused analysis in the next code-mode call:
+
+```python
 report = await studio.analyze(ctx, view_name="executive")
 ```
 
 `studio.check` remains available for a static check that leaves notebook cells
 unevaluated. It is not the handoff gate.
 
-Inspect the live view after the static check passes. Confirm the reading order,
+Inspect the live view during the repair loop. Confirm the reading order,
 reactive updates, browser behavior, loading states, controls, plots, tables,
 downloads, widgets, and narrow and wide layouts.
 
@@ -153,6 +175,7 @@ MARIMO_STUDIO_SERVER_URL=http://localhost:2718 \
 MARIMO_STUDIO_ACCESS_TOKEN="$STUDIO_TOKEN" \
   uvx marimo-studio analyze analysis.py \
     --view dashboard \
+    --runtime-timeout 120 \
     --format json \
     --diagnostics jsonl
 ```

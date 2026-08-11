@@ -9,8 +9,10 @@ import {
   dashboardCssPath,
   dashboardHtmlPath,
   editorFrame,
+  editorSlider,
   expect,
   plainDashboardHtmlPath,
+  plainReportHtmlPath,
   previewFrame,
   readWorkspaceFile,
   studioServerToken,
@@ -242,6 +244,71 @@ report = await studio.analyze(ctx, view_name="dashboard")
   );
   expect(analysis.ok()).toBe(true);
   expect(await analysis.text()).toContain('\\"handoff_ready\\": true');
+
+  const created = await page.request.post(
+    "/_marimo-studio/editor/api/kernel/execute?file=plain.py",
+    {
+      headers: { "Marimo-Session-Id": resumedSessionId },
+      data: {
+        code: `
+import marimo._code_mode as cm
+import marimo_studio.agents as studio
+
+ctx = cm.get_context()
+studio.ensure_view(ctx, "report").to_dict()
+`,
+      },
+    },
+  );
+  expect(created.ok()).toBe(true);
+  expect(await created.text()).toContain('"success": true');
+  const reportSource = await readWorkspaceFile(plainReportHtmlPath);
+  await writeWorkspaceFile(
+    plainReportHtmlPath,
+    reportSource.replace(
+      "</main>",
+      '<p id="report-papers"><span mo-value="summary.papers"></span> papers</p>\n  </main>',
+    ),
+  );
+
+  const activated = await page.request.post(
+    "/_marimo-studio/editor/api/kernel/execute?file=plain.py",
+    {
+      headers: { "Marimo-Session-Id": resumedSessionId },
+      data: {
+        code: `
+import marimo._code_mode as cm
+import marimo_studio.agents as studio
+
+ctx = cm.get_context()
+(await studio.activate_view(ctx, "report")).to_dict()
+`,
+      },
+    },
+  );
+  expect(activated.ok()).toBe(true);
+  expect(await activated.text()).toContain('"success": true');
+  await expect(page.getByLabel("Select or manage a view")).toContainText("report");
+  await expect(preview.locator("#report-papers")).toHaveText("3877 papers");
+
+  const focused = await page.request.post(
+    "/_marimo-studio/editor/api/kernel/execute?file=plain.py",
+    {
+      headers: { "Marimo-Session-Id": resumedSessionId },
+      data: {
+        code: `
+import marimo._code_mode as cm
+import marimo_studio.agents as studio
+
+ctx = cm.get_context()
+report = await studio.analyze(ctx, view_name="report")
+{"handoff_ready": report.handoff_ready, "actions": [item.to_dict() for item in report.actions]}
+`,
+      },
+    },
+  );
+  expect(focused.ok()).toBe(true);
+  expect(await focused.text()).toContain('\\"handoff_ready\\": true');
 });
 
 test("loads a native module graph from a directory view", async ({ page }) => {
@@ -298,19 +365,17 @@ test("keeps relative view navigation public and reconnectable", async ({ page })
   await waitForPreview(page);
 
   const source = await readWorkspaceFile(dashboardHtmlPath);
-  await writeWorkspaceFile(
-    dashboardHtmlPath,
-    source.replace(
-      /<main id="app-shell"([^>]*)>/,
-      `<main id="app-shell"$1>
+  const navigationSource = source.replace(
+    /<main id="app-shell"([^>]*)>/,
+    `<main id="app-shell"$1>
         <nav>
           <a href="#details">View details</a>
           <a href="?region=us">Use US region</a>
           <a href="../qa-view/">Open QA view</a>
         </nav>
         <section id="details">Quarterly details</section>`,
-    ),
   );
+  await writeWorkspaceFile(dashboardHtmlPath, navigationSource);
   await page.getByLabel("Select or manage a view").click();
   await page.getByRole("button", { name: "+ New view" }).click();
   await page.getByLabel("New view").fill("qa-view");
@@ -331,6 +396,26 @@ test("keeps relative view navigation public and reconnectable", async ({ page })
   try {
     await direct.goto("/dashboard/?file=notebook.py&region=eu");
     await waitForDirectView();
+    await direct.locator("html").evaluate(() => {
+      (globalThis as typeof globalThis & { __e2eRuntimeMarker?: string }).__e2eRuntimeMarker =
+        "mounted";
+    });
+    await writeWorkspaceFile(
+      dashboardHtmlPath,
+      navigationSource.replaceAll("Studio browser fixture", "Standalone refresh"),
+    );
+    await expect(direct.getByRole("heading", { name: "Standalone refresh" })).toBeVisible();
+    await expect
+      .poll(() =>
+        direct
+          .locator("html")
+          .evaluate(
+            () =>
+              (globalThis as typeof globalThis & { __e2eRuntimeMarker?: string })
+                .__e2eRuntimeMarker,
+          ),
+      )
+      .toBe("mounted");
     await direct.getByRole("link", { name: "View details" }).click();
     await expect(direct).toHaveURL(/\/dashboard\/\?file=notebook\.py&region=eu#details$/);
     await direct.getByRole("link", { name: "Use US region" }).click();
@@ -398,25 +483,50 @@ test("creates a scaffolded view and removes its files", async ({ page }) => {
 
 test("activates an agent-requested view and records its rendered revision", async ({ page }) => {
   await addWorkspaceView(workspaceNotebookPath, "qa-view");
+  const sessionRequest = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname.endsWith("/_marimo-studio/editor/api/usage") &&
+      Boolean(request.headers()["marimo-session-id"]),
+  );
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   await expect(
     previewFrame(page).getByRole("heading", { name: "Studio browser fixture" }),
   ).toBeVisible();
 
+  const sessionId = (await sessionRequest).headers()["marimo-session-id"];
+  const serverToken = await studioServerToken(page);
   const activated = await page.request.patch(
     "/_marimo-studio/views/qa-view/activate?file=notebook.py",
-    { headers: { "Marimo-Server-Token": await studioServerToken(page) } },
+    {
+      headers: {
+        "Marimo-Server-Token": serverToken,
+        "Marimo-Session-Id": sessionId,
+      },
+    },
   );
-  expect(activated.status()).toBe(202);
+  expect(activated.status()).toBe(200);
   expect(await activated.json()).toMatchObject({ transition: "in-place" });
   await expect(page.getByLabel("Select or manage a view")).toContainText("qa-view");
   await expect(previewFrame(page).getByRole("heading", { name: "Qa View" })).toBeVisible();
 
-  const observationUrl =
-    "/_marimo-studio/observations?file=notebook.py&view=qa-view&runtime=server";
   const readObservation = async () => {
-    const response = await page.request.get(observationUrl);
+    const configured = await page.request.get(
+      "/_marimo-studio/views/qa-view/config?file=notebook.py&runtime=server",
+    );
+    expect(configured.ok()).toBe(true);
+    const { revision } = (await configured.json()) as { revision: string };
+    const response = await page.request.post("/_marimo-studio/observations?file=notebook.py", {
+      headers: { "Marimo-Server-Token": serverToken },
+      data: {
+        schema: 1,
+        views: ["qa-view"],
+        revisions: { "qa-view": revision },
+        runtime: "server",
+        timeout: 10,
+        browserClient: null,
+      },
+    });
     expect(response.ok()).toBe(true);
     const payload = (await response.json()) as {
       observations: Array<{
@@ -449,4 +559,92 @@ test("activates an agent-requested view and records its rendered revision", asyn
   const report = await analyzeWorkspace("qa-view");
   expect(report.handoff_ready).toBe(true);
   expect(report.actions).toEqual([]);
+});
+
+test("rebinds agent analysis after the native editor reconnects", async ({ page }) => {
+  const initialSessionRequest = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname.endsWith("/_marimo-studio/editor/api/usage") &&
+      Boolean(request.headers()["marimo-session-id"]),
+  );
+  await page.goto(studioEntryUrl);
+  const preview = await waitForPreview(page);
+  const initialSession = (await initialSessionRequest).headers()["marimo-session-id"];
+  if (!initialSession) {
+    throw new Error("The editor did not expose its Marimo session");
+  }
+
+  await editorSlider(page).press("End");
+  await expect(preview.locator('[mo-value="metric"]')).toHaveText("63");
+  const reboundSessionRequest = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname.endsWith("/_marimo-studio/editor/api/usage") &&
+      Boolean(request.headers()["marimo-session-id"]) &&
+      request.headers()["marimo-session-id"] !== initialSession,
+  );
+  const reboundConfig = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.ok() &&
+      url.pathname.endsWith("/_marimo-studio/views/dashboard/config") &&
+      url.searchParams.get("runtime") === "server"
+    );
+  });
+  await page
+    .locator('iframe[title="Marimo editor"]')
+    .evaluate((editor: HTMLIFrameElement) => editor.contentWindow?.location.reload());
+  const reboundSession = (await reboundSessionRequest).headers()["marimo-session-id"];
+  if (!reboundSession) {
+    throw new Error("The reloaded editor did not expose its Marimo session");
+  }
+  await reboundConfig;
+  await waitForPreview(page);
+  await expect(page.locator('iframe[data-preview-runtime-frame="server"]')).toHaveAttribute(
+    "data-session-id",
+    reboundSession,
+  );
+  await editorSlider(page).press("End");
+  await expect(preview.locator('[mo-value="metric"]')).toHaveText("63");
+
+  const source = await page.locator("#marimo-studio-bootstrap").textContent();
+  const bootstrap: unknown = JSON.parse(source ?? "null");
+  if (
+    typeof bootstrap !== "object" ||
+    bootstrap === null ||
+    !("clientId" in bootstrap) ||
+    typeof bootstrap.clientId !== "string"
+  ) {
+    throw new TypeError("Studio bootstrap is missing its browser client ID");
+  }
+  const response = await page.request.post("/_marimo-studio/analyze?file=notebook.py", {
+    headers: { "Marimo-Server-Token": await studioServerToken(page) },
+    data: {
+      view: "dashboard",
+      timeout: 10,
+      require_browser: true,
+      browser_client: bootstrap.clientId,
+    },
+  });
+  expect(response.ok()).toBe(true);
+  const report = (await response.json()) as {
+    handoff_ready: boolean;
+    stages: {
+      browser: {
+        observations: Array<{
+          client_id?: string;
+          runtime_instance?: string;
+          session_id?: string;
+          state: string;
+        }>;
+      };
+    };
+  };
+  const observation = report.stages.browser.observations[0];
+  expect(report.handoff_ready).toBe(true);
+  expect(observation).toMatchObject({
+    client_id: bootstrap.clientId,
+    session_id: reboundSession,
+    state: "ready",
+  });
+  expect(observation.runtime_instance).toBeTruthy();
 });

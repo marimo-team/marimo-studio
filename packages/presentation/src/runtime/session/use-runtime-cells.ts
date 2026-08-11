@@ -16,7 +16,7 @@ import type { SubmitStdin } from "../runtime-cell";
 
 import { indexCells } from "../../cells/bindings";
 import { errorMessage } from "../../errors";
-import { setRuntimeConnectionState } from "../../readiness";
+import { setRuntimeConnectionState } from "../../rendered-view-observer";
 import { runtimeConnectionDiagnostic } from "../cell-state";
 import { useCellHosts } from "../cells/use-cell-hosts";
 

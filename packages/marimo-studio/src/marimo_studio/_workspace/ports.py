@@ -30,6 +30,7 @@ class RuntimeProber(Protocol):
         variables: tuple[str, ...],
         output_selector_groups: tuple[tuple[str, ...], ...],
         show_tracebacks: bool,
+        timeout: float,
     ) -> RuntimeProbe: ...
 
 

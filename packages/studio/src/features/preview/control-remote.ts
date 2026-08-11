@@ -10,11 +10,16 @@ export interface RuntimeControlSnapshot {
 export const fetchRuntimeControls = async (
   supportUrl: string,
   runtime: string,
+  sessionId: string,
   signal?: AbortSignal,
 ): Promise<RuntimeControlSnapshot> => {
   const url = new URL(appendUrlPath(supportUrl, "config", globalThis.location.href));
   url.searchParams.set("runtime", runtime);
-  const response = await fetch(url, { cache: "no-store", signal });
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: { "Marimo-Session-Id": sessionId },
+    signal,
+  });
   if (!response.ok) {
     throw new Error(`Control configuration failed with ${response.status}`);
   }

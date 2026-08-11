@@ -1,34 +1,16 @@
-import type {
-  ViewErrorMessage,
-  ViewObservationMessage,
-  ViewReadyMessage,
-  ViewSyncPendingMessage,
-} from "@marimo-studio/protocol/preview-messages";
+import type { PresentationDiagnostic, RuntimeDiagnostic } from "./diagnostics.ts";
 
-import type {
-  HostDiagnostic,
-  PresentationDiagnostic,
-  RuntimeDiagnostic,
-  StudioDiagnostic,
-} from "./diagnostics.ts";
-
-import {
-  getRuntimeConfig,
-  getRuntimeDiagnostics,
-  getMountConfig,
-  getSupportUrl,
-  hasRuntimeConfig,
-  requestedRuntimeId,
-} from "./runtime-config/index.ts";
-
-type RuntimeConnectionState = "connecting" | "ready" | "error";
-type PresentationRefreshState = "ready" | "loading" | "error";
+export type RuntimeConnectionState = "connecting" | "ready" | "error";
+export type PresentationRefreshState = "ready" | "loading" | "error";
 export type PageReadinessState = "connecting" | "loading" | "ready" | "error";
 
-interface MarimoStudioApi {
-  ready: () => Promise<void>;
-  diagnostics: () => readonly StudioDiagnostic[];
-  updateQuery: (query: string) => Promise<void>;
+export interface ReadinessSnapshot {
+  readonly connection: RuntimeConnectionState;
+  readonly presentation: PresentationRefreshState;
+  readonly page: PageReadinessState;
+  readonly settled: boolean;
+  readonly runtimeDiagnostic?: RuntimeDiagnostic;
+  readonly presentationDiagnostic?: PresentationDiagnostic;
 }
 
 interface Deferred {
@@ -44,80 +26,9 @@ const deferred = (): Deferred => {
   return { promise, resolve };
 };
 
-let connectionState: RuntimeConnectionState = "connecting";
-let runtimeDiagnostic: RuntimeDiagnostic | undefined;
-let presentationState: PresentationRefreshState = "ready";
-let presentationDiagnostic: PresentationDiagnostic | undefined;
-let presentationGeneration = 0;
-let waiter = deferred();
-let settled = false;
-let pageState: PageReadinessState = "connecting";
-let observer: MutationObserver | undefined;
-let readinessGeneration = 0;
-let observationSignature = "";
-
-const runtimeView = (): string => {
-  if (hasRuntimeConfig()) {
-    return getRuntimeConfig().view;
-  }
-  try {
-    return decodeURIComponent(
-      new URL(getSupportUrl(), globalThis.location.origin).pathname
-        .split("/")
-        .filter(Boolean)
-        .at(-1) ?? "",
-    );
-  } catch {
-    return "";
-  }
-};
-
-const runtimeDiagnosticHost = (): HTMLElement => {
-  const existing = document.querySelector<HTMLElement>("[data-marimo-studio-runtime-diagnostic]");
-  if (existing) {
-    return existing;
-  }
-  const host = document.createElement("div");
-  host.dataset.marimoStudioRuntimeDiagnostic = "";
-  host.setAttribute("role", "alert");
-  host.hidden = true;
-  document.body.append(host);
-  return host;
-};
-
-const publishRuntimeDiagnostic = () => {
-  const host = runtimeDiagnosticHost();
-  if (!runtimeDiagnostic) {
-    host.hidden = true;
-    return;
-  }
-  host.textContent = runtimeDiagnostic.message;
-  host.dataset.state = runtimeDiagnostic.severity === "warning" ? "waiting" : "error";
-  host.setAttribute("role", runtimeDiagnostic.severity === "warning" ? "status" : "alert");
-  host.title = runtimeDiagnostic.hint;
-  host.hidden = runtimeDiagnostic.severity === "warning" && globalThis.parent !== globalThis.window;
-  const message: ViewSyncPendingMessage | ViewErrorMessage = {
-    type:
-      runtimeDiagnostic.severity === "warning"
-        ? "marimo-studio:view-sync-pending"
-        : "marimo-studio:view-error",
-    runtime: hasRuntimeConfig()
-      ? getRuntimeConfig().runtime.id
-      : requestedRuntimeId(getMountConfig().runtime),
-    message: runtimeDiagnostic.message,
-    hint: runtimeDiagnostic.hint,
-    view: runtimeDiagnostic.view,
-  };
-  globalThis.parent.postMessage(message, globalThis.location.origin);
-};
-
-const hostState = (host: Element): string => {
-  return (host as HTMLElement).dataset.state ?? "connecting";
-};
-
 export const pageReadinessState = (
   connection: RuntimeConnectionState,
-  hostStates: string[],
+  hostStates: readonly string[],
   presentation: PresentationRefreshState = "ready",
 ): PageReadinessState => {
   if (connection === "error" || presentation === "error") {
@@ -129,7 +40,7 @@ export const pageReadinessState = (
   if (presentation === "loading") {
     return "loading";
   }
-  if (hostStates.some((state) => ["connecting", "loading"].includes(state))) {
+  if (hostStates.some((state) => ["connecting", "loading", "stale"].includes(state))) {
     return "loading";
   }
   if (hostStates.some((state) => ["error", "missing"].includes(state))) {
@@ -138,193 +49,123 @@ export const pageReadinessState = (
   return "ready";
 };
 
-const evaluate = () => {
-  const cells = Array.from(document.querySelectorAll("marimo-cell"));
-  const values = Array.from(document.querySelectorAll("[mo-value]"));
-  const outputs = Array.from(document.querySelectorAll("marimo-output"));
-  const hosts = [...cells, ...outputs, ...values];
-  const hostStates = hosts.map(hostState);
-  const next = pageReadinessState(connectionState, hostStates, presentationState);
+type Listener = (snapshot: ReadinessSnapshot, previous: ReadinessSnapshot) => void;
 
-  document.documentElement.dataset.marimoStudioState = next;
-  const nextSettled =
-    connectionState === "error" ||
-    presentationState === "error" ||
-    (connectionState === "ready" &&
-      presentationState === "ready" &&
-      !hostStates.some((state) => ["connecting", "loading", "stale"].includes(state)));
-  if (!nextSettled && settled) {
-    waiter = deferred();
+export class ReadinessController {
+  private connection: RuntimeConnectionState = "connecting";
+  private presentation: PresentationRefreshState = "ready";
+  private runtimeDiagnostic: RuntimeDiagnostic | undefined;
+  private presentationDiagnostic: PresentationDiagnostic | undefined;
+  private hostStates: readonly string[] = [];
+  private presentationGeneration = 0;
+  private waiter = deferred();
+  private snapshotValue: ReadinessSnapshot = {
+    connection: "connecting",
+    presentation: "ready",
+    page: "connecting",
+    settled: false,
+  };
+  private readonly listeners = new Set<Listener>();
+
+  start(): void {
+    this.connection = "connecting";
+    this.presentation = "ready";
+    this.runtimeDiagnostic = undefined;
+    this.presentationDiagnostic = undefined;
+    this.hostStates = [];
+    this.presentationGeneration = 0;
+    this.waiter = deferred();
+    this.commit();
   }
-  if (nextSettled && !settled) {
-    waiter.resolve();
-    document.dispatchEvent(
-      new CustomEvent("marimo-studio:idle", {
-        detail: { state: next },
-      }),
-    );
+
+  subscribe(listener: Listener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
-  if (next === "ready" && pageState !== "ready") {
-    const message: ViewReadyMessage = {
-      type: "marimo-studio:view-ready",
-      runtime: hasRuntimeConfig()
-        ? getRuntimeConfig().runtime.id
-        : requestedRuntimeId(getMountConfig().runtime),
-      view: runtimeView(),
-      revision: hasRuntimeConfig() ? getRuntimeConfig().revision : getMountConfig().revision,
-      sessionId: globalThis.__MARIMO_STUDIO_SESSION_ID__,
-    };
-    globalThis.parent.postMessage(message, globalThis.location.origin);
+
+  snapshot(): ReadinessSnapshot {
+    return this.snapshotValue;
   }
-  if (nextSettled && (next === "ready" || next === "error")) {
-    const observedDiagnostics = diagnostics();
-    const message: ViewObservationMessage = {
-      type: "marimo-studio:view-observation",
-      runtime: hasRuntimeConfig()
-        ? getRuntimeConfig().runtime.id
-        : requestedRuntimeId(getMountConfig().runtime),
-      view: runtimeView(),
-      revision: hasRuntimeConfig() ? getRuntimeConfig().revision : getMountConfig().revision,
-      state: next,
-      diagnostics: [...observedDiagnostics],
-    };
-    const signature = JSON.stringify(message);
-    if (signature !== observationSignature) {
-      observationSignature = signature;
-      globalThis.parent.postMessage(message, globalThis.location.origin);
+
+  ready(): Promise<void> {
+    return this.snapshotValue.settled ? Promise.resolve() : this.waiter.promise;
+  }
+
+  setHosts(states: readonly string[]): void {
+    if (
+      states.length === this.hostStates.length &&
+      states.every((state, index) => state === this.hostStates[index])
+    ) {
+      return;
     }
+    this.hostStates = [...states];
+    this.commit();
   }
-  pageState = next;
-  settled = nextSettled;
-};
 
-export const notifyReadinessChanged = () => {
-  const generation = readinessGeneration;
-  queueMicrotask(() => {
-    if (generation === readinessGeneration) {
-      evaluate();
+  setRuntime(state: RuntimeConnectionState, diagnostic?: RuntimeDiagnostic): void {
+    this.connection = state;
+    if (diagnostic !== undefined) {
+      this.runtimeDiagnostic = diagnostic;
+    } else if (state === "ready") {
+      this.runtimeDiagnostic = undefined;
     }
-  });
-};
+    this.commit();
+  }
 
-export const setRuntimeConnectionState = (
-  state: RuntimeConnectionState,
-  diagnostic?: Pick<RuntimeDiagnostic, "code" | "hint" | "message">,
-) => {
-  const previous = connectionState;
-  connectionState = state;
-  if (diagnostic) {
-    runtimeDiagnostic = {
-      ...diagnostic,
-      scope: "runtime",
-      severity: state === "error" ? "error" : "warning",
-      view: runtimeView(),
+  beginPresentation(): number {
+    this.presentationGeneration += 1;
+    this.presentation = "loading";
+    this.presentationDiagnostic = undefined;
+    this.commit();
+    return this.presentationGeneration;
+  }
+
+  setPresentation(
+    generation: number,
+    state: PresentationRefreshState,
+    diagnostic?: PresentationDiagnostic,
+  ): void {
+    if (generation !== this.presentationGeneration) {
+      return;
+    }
+    this.presentation = state;
+    this.presentationDiagnostic = diagnostic;
+    this.commit();
+  }
+
+  private commit(): void {
+    const previous = this.snapshotValue;
+    const page = pageReadinessState(this.connection, this.hostStates, this.presentation);
+    const settled =
+      this.connection === "error" ||
+      this.presentation === "error" ||
+      (this.connection === "ready" &&
+        this.presentation === "ready" &&
+        !this.hostStates.some((state) => ["connecting", "loading", "stale"].includes(state)));
+    if (!settled && previous.settled) {
+      this.waiter = deferred();
+    }
+    this.snapshotValue = {
+      connection: this.connection,
+      presentation: this.presentation,
+      page,
+      settled,
+      runtimeDiagnostic: this.runtimeDiagnostic,
+      presentationDiagnostic: this.presentationDiagnostic,
     };
-    publishRuntimeDiagnostic();
-  } else if (state === "ready") {
-    runtimeDiagnostic = undefined;
-    publishRuntimeDiagnostic();
+    if (settled && !previous.settled) {
+      this.waiter.resolve();
+    }
+    this.listeners.forEach((listener) => listener(this.snapshotValue, previous));
   }
-  if (state === "ready" && previous !== "ready") {
-    document.dispatchEvent(new CustomEvent("marimo-studio:runtime-ready"));
-  }
-  notifyReadinessChanged();
-};
+}
 
-export const beginPresentationRefresh = (): number => {
-  presentationGeneration += 1;
-  presentationState = "loading";
-  presentationDiagnostic = undefined;
-  notifyReadinessChanged();
-  return presentationGeneration;
-};
+export const readiness = new ReadinessController();
+
+export const beginPresentationRefresh = (): number => readiness.beginPresentation();
 
 export const setPresentationRefreshState = (
   generation: number,
   state: PresentationRefreshState,
   diagnostic?: PresentationDiagnostic,
-) => {
-  if (generation !== presentationGeneration) {
-    return;
-  }
-  presentationState = state;
-  presentationDiagnostic = diagnostic;
-  notifyReadinessChanged();
-};
-
-const diagnostics = (): readonly StudioDiagnostic[] => {
-  const configured = hasRuntimeConfig() ? getRuntimeDiagnostics() : [];
-  const configuredKeys = new Set(
-    configured.map((diagnostic) => `${diagnostic.code}\u0000${diagnostic.target}`),
-  );
-  const view = runtimeView();
-  const hostDiagnostics = Array.from(
-    document.querySelectorAll<HTMLElement>("[data-marimo-diagnostic-code]"),
-  ).flatMap((host): HostDiagnostic[] => {
-    const code = host.dataset.marimoDiagnosticCode;
-    const message = host.dataset.marimoDiagnosticMessage;
-    let target = host.getAttribute("mo-value") ?? "";
-    if (host.matches("marimo-cell")) {
-      target = host.getAttribute("name") ?? "";
-    } else if (host.matches("marimo-output")) {
-      target = host.getAttribute("value") ?? "";
-    }
-    if (!code || !message || configuredKeys.has(`${code}\u0000${target}`)) {
-      return [];
-    }
-    return [
-      {
-        scope: "host",
-        code,
-        severity: "error",
-        message,
-        hint: host.dataset.marimoDiagnosticHint ?? "",
-        view,
-        target,
-      },
-    ];
-  });
-  return [
-    ...configured,
-    ...hostDiagnostics,
-    ...(runtimeDiagnostic ? [{ ...runtimeDiagnostic }] : []),
-    ...(presentationDiagnostic ? [{ ...presentationDiagnostic }] : []),
-  ];
-};
-
-export const startReadiness = (updateQuery: (query: string) => Promise<void>) => {
-  observationSignature = "";
-  document.documentElement.dataset.marimoStudioState = "connecting";
-  globalThis.marimoStudio = {
-    ready: () => {
-      evaluate();
-      return settled ? Promise.resolve() : waiter.promise;
-    },
-    diagnostics,
-    updateQuery,
-  };
-  observer?.disconnect();
-  observer = new MutationObserver(notifyReadinessChanged);
-  observer.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ["data-state", "mo-value", "name", "value"],
-    childList: true,
-    subtree: true,
-  });
-  notifyReadinessChanged();
-};
-
-export const stopReadiness = () => {
-  readinessGeneration += 1;
-  observer?.disconnect();
-  observer = undefined;
-  observationSignature = "";
-};
-
-declare global {
-  var marimoStudio: MarimoStudioApi;
-
-  interface Window {
-    marimoStudio: MarimoStudioApi;
-  }
-}
+): void => readiness.setPresentation(generation, state, diagnostic);

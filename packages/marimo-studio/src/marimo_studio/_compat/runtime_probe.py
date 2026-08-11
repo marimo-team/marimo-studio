@@ -14,13 +14,15 @@ import marimo
 
 from marimo_studio._compat.kernel_values import (
     DEFAULT_MAX_VALUE_BYTES,
+    ValueReadUnavailable,
     inspection_selectors,
     read_session_values,
     render_session_outputs,
 )
 from marimo_studio._compat.runtime_requests import instantiate_notebook_request
 from marimo_studio._compat.version import assert_supported_version
-from marimo_studio.errors import ProtocolError
+from marimo_studio._runtime_limits import DEFAULT_RUNTIME_TIMEOUT
+from marimo_studio.errors import ProtocolError, RuntimeTimeoutError
 from marimo_studio.types import (
     OutputRenderResult,
     RenderedOutput,
@@ -32,6 +34,7 @@ from marimo_studio.types import (
 )
 
 _NOTEBOOK_CONFIG_LOCK = threading.RLock()
+_POST_DEADLINE_SHUTDOWN_GRACE = 2.0
 
 
 @contextmanager
@@ -86,7 +89,7 @@ async def probe_runtime(
     variables: tuple[str, ...],
     output_selectors: tuple[str, ...] = (),
     output_selector_groups: tuple[tuple[str, ...], ...] = (),
-    timeout: float = 60.0,
+    timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     show_tracebacks: bool = False,
     value_max_bytes: int | None = None,
 ) -> RuntimeProbe:
@@ -155,7 +158,7 @@ async def probe_runtime(
                     timeout=max(0, deadline - loop.time()),
                 )
             except asyncio.TimeoutError as error:
-                raise ProtocolError(
+                raise RuntimeTimeoutError(
                     f"Notebook runtime did not finish within {timeout:g} seconds"
                 ) from error
 
@@ -168,7 +171,7 @@ async def probe_runtime(
             ):
                 remaining = deadline - loop.time()
                 if remaining <= 0:
-                    raise ProtocolError(
+                    raise RuntimeTimeoutError(
                         "Notebook runtime finished before its cell state settled"
                     )
                 await asyncio.sleep(min(0.01, remaining))
@@ -181,11 +184,14 @@ async def probe_runtime(
                 for cell_id in cell_ids
             }
             values = (
-                await read_session_values(
+                await _read_values_within_deadline(
                     session,
                     variables,
                     consumer_id=str(consumer.consumer_id),
                     max_value_bytes=value_max_bytes or DEFAULT_MAX_VALUE_BYTES,
+                    loop=loop,
+                    deadline=deadline,
+                    timeout=timeout,
                 )
                 if variables
                 else ValueReadResult(values={}, errors={})
@@ -195,11 +201,14 @@ async def probe_runtime(
             for group in groups:
                 active = tuple(dict.fromkeys(group))
                 for selector in active:
-                    rendered = await render_session_outputs(
+                    rendered = await _render_output_within_deadline(
                         session,
-                        (selector,),
+                        selector,
                         active,
                         consumer_id=str(consumer.consumer_id),
+                        loop=loop,
+                        deadline=deadline,
+                        timeout=timeout,
                     )
                     error = rendered.errors.get(selector) or rendered.errors.get("*")
                     output = rendered.outputs.get(selector)
@@ -218,7 +227,10 @@ async def probe_runtime(
         try:
             if session is not None:
                 manager.close_session(session_id)
-                shutdown_deadline = loop.time() + 5
+                shutdown_deadline = min(
+                    loop.time() + 5,
+                    deadline + _POST_DEADLINE_SHUTDOWN_GRACE,
+                )
                 while (
                     session.kernel_state() is not KernelState.STOPPED
                     and loop.time() < shutdown_deadline
@@ -226,6 +238,72 @@ async def probe_runtime(
                     await asyncio.sleep(0.01)
         finally:
             manager.shutdown()
+
+
+async def _read_values_within_deadline(
+    session: Any,
+    selectors: tuple[str, ...],
+    *,
+    consumer_id: str,
+    max_value_bytes: int,
+    loop: asyncio.AbstractEventLoop,
+    deadline: float,
+    timeout: float,
+) -> ValueReadResult:
+    try:
+        return await read_session_values(
+            session,
+            selectors,
+            consumer_id=consumer_id,
+            timeout=_remaining_runtime_time(loop, deadline, timeout),
+            max_value_bytes=max_value_bytes,
+        )
+    except ValueReadUnavailable as error:
+        if error.code == "read-timeout":
+            raise _projection_timeout(timeout) from error
+        raise
+
+
+async def _render_output_within_deadline(
+    session: Any,
+    selector: str,
+    active: tuple[str, ...],
+    *,
+    consumer_id: str,
+    loop: asyncio.AbstractEventLoop,
+    deadline: float,
+    timeout: float,
+) -> OutputRenderResult:
+    try:
+        return await render_session_outputs(
+            session,
+            (selector,),
+            active,
+            consumer_id=consumer_id,
+            timeout=_remaining_runtime_time(loop, deadline, timeout),
+        )
+    except ValueReadUnavailable as error:
+        if error.code == "output-read-timeout":
+            raise _projection_timeout(timeout) from error
+        raise
+
+
+def _remaining_runtime_time(
+    loop: asyncio.AbstractEventLoop,
+    deadline: float,
+    timeout: float,
+) -> float:
+    remaining = deadline - loop.time()
+    if remaining <= 0:
+        raise _projection_timeout(timeout)
+    return remaining
+
+
+def _projection_timeout(timeout: float) -> RuntimeTimeoutError:
+    return RuntimeTimeoutError(
+        f"Notebook runtime inspection exceeded {timeout:g} seconds while "
+        "reading projected values and outputs"
+    )
 
 
 def _runtime_cell(notification: Any, cell_channel: Any) -> RuntimeCell:

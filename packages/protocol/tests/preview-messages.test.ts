@@ -36,6 +36,10 @@ test("preview messages decode navigation and view state", () => {
           target: "summary",
         },
       ],
+      runtimeInstance: "runtime-instance",
+      sessionId: "s_123456",
+      requestId: "request-dashboard",
+      query: "region=emea",
     }),
     {
       type: "marimo-studio:view-observation",
@@ -54,6 +58,28 @@ test("preview messages decode navigation and view state", () => {
           target: "summary",
         },
       ],
+      runtimeInstance: "runtime-instance",
+      sessionId: "s_123456",
+      requestId: "request-dashboard",
+      query: "region=emea",
+    },
+  );
+  assert.deepEqual(
+    parsePreviewMessage({
+      type: "marimo-studio:observe-view",
+      runtime: "server",
+      view: "dashboard",
+      revision: "presentation-v2",
+      runtimeInstance: "runtime-instance",
+      requestId: "request-dashboard",
+    }),
+    {
+      type: "marimo-studio:observe-view",
+      runtime: "server",
+      view: "dashboard",
+      revision: "presentation-v2",
+      runtimeInstance: "runtime-instance",
+      requestId: "request-dashboard",
     },
   );
   assert.deepEqual(

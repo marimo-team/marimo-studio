@@ -35,31 +35,45 @@ Root `vite.config.ts` enforces package imports:
 
 Studio follows `app -> features -> shared`.
 
-| Slice                     | Responsibility                                                      |
-| ------------------------- | ------------------------------------------------------------------- |
-| `app/`                    | Construct services, routes, theme integration, and the React root   |
-| `features/navigation/`    | Mode, runtime, view, and workspace controls                         |
-| `features/preview/`       | Stable runtime frames, query sync, and native control sync          |
-| `features/source-editor/` | Source reads, edits, saves, external updates, and conflicts         |
-| `features/views/`         | View creation, selection, removal, and transition coordination      |
-| `features/workspace/`     | Pane tree, modes, geometry, resizing, and persisted layout          |
-| `shared/`                 | Theme state, external-store binding, errors, icons, and UI controls |
+| Slice                     | Responsibility                                                        |
+| ------------------------- | --------------------------------------------------------------------- |
+| `app/`                    | Compose services, workspace events, routes, theme, and the React root |
+| `features/navigation/`    | Mode, runtime, view, and workspace controls                           |
+| `features/preview/`       | Stable runtime frames, observations, query sync, and control sync     |
+| `features/source-editor/` | Source reads, edits, saves, external updates, and conflicts           |
+| `features/views/`         | View inventory, creation, selection, removal, and transitions         |
+| `features/workspace/`     | Pane tree, modes, geometry, resizing, and persisted layout            |
+| `shared/`                 | Theme state, external-store binding, errors, icons, and UI controls   |
 
-`app/` may compose feature controllers. Feature slices stay independent of
-`app/` and communicate through typed controllers. `shared/` imports no app or
-feature module. Keep the graph acyclic.
+`app/` composes feature controllers and owns coordination that crosses those
+features. `WorkspaceEventCoordinator` is the event-stream boundary for source,
+activation, observation, and editor-session events. Feature slices stay
+independent of `app/` and communicate through typed ports. `shared/` imports no
+app or feature module. Keep the graph acyclic.
 
 Presentation groups code by document responsibility:
 
-| Slice             | Responsibility                                                     |
-| ----------------- | ------------------------------------------------------------------ |
-| `document/`       | Authored shell, view navigation, query sync, styles, and refreshes |
-| `runtime-config/` | Fetch, validate, stage, and commit runtime configuration           |
-| `runtime/`        | Mount runtimes, output plugins, cells, controls, and anywidgets    |
-| `cells/`          | Discover and preserve `<marimo-cell>` hosts                        |
-| `outputs/`        | Read and preserve native `<marimo-output>` projections             |
-| `values/`         | Read values and publish the `mo-value` DOM contract                |
-| `view-styles/`    | Generate scoped Wind4 utilities from authored classes              |
+| Slice             | Responsibility                                                         |
+| ----------------- | ---------------------------------------------------------------------- |
+| `document/`       | Revision transactions, authored shell adapters, navigation, and replay |
+| `projections/`    | Host adapters, discovery, preservation, lifecycle, and host state      |
+| `runtime-config/` | Fetch, validate, stage, and commit runtime configuration               |
+| `runtime/`        | Mount runtimes, output plugins, cells, controls, and anywidgets        |
+| `cells/`          | Discover and preserve `<marimo-cell>` hosts                            |
+| `outputs/`        | Read and preserve native `<marimo-output>` projections                 |
+| `values/`         | Read values and publish the `mo-value` DOM contract                    |
+| `view-styles/`    | Generate scoped Wind4 utilities from authored classes                  |
+
+`PresentationRevisionController` is the transaction owner for navigation and
+development refresh. It stages, commits, rolls back, cancels, transfers runtime
+configuration, coordinates session replay, and drives presentation readiness.
+`DocumentRevisionAdapter` performs browser mutations. `main.ts` and
+`dev-reload.ts` share one composed controller.
+
+`ReadinessController` reduces explicit state and performs no DOM observation.
+`rendered-view-observer.ts` probes the rendered page and publishes the public
+browser API. `agent-observer.ts` owns the current agent observation request.
+`ProjectionHostRuntime` provides their shared host lifecycle boundary.
 
 ## Work on one package
 

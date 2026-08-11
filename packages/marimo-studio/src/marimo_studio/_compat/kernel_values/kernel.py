@@ -25,7 +25,7 @@ from marimo_studio._compat.kernel_values.selectors import (
     _template_output_selectors,
     _template_selectors,
 )
-from marimo_studio._urls import PRIVATE_QUERY_KEYS
+from marimo_studio._urls import PRIVATE_QUERY_KEYS, QUERY_OPERATION_QUERY_PARAM
 from marimo_studio._workspace.config import discover_studio_definition
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.types import OutputRenderResult, ValueReadError, ValueReadResult
@@ -40,8 +40,21 @@ class _EnteredKernelLifespan:
 
     def __init__(self, lifespan: AbstractAsyncContextManager[None]) -> None:
         self._lifespan = lifespan
+        self._failure: BaseException | None = None
+        self._closed = False
+
+    def fail(self, error: BaseException) -> None:
+        if self._failure is None:
+            self._failure = error
 
     async def __aenter__(self) -> None:
+        if self._failure is not None:
+            raise RuntimeError(
+                "The Marimo kernel lifespan setup failed. Restart the kernel "
+                "before running notebook code."
+            ) from self._failure
+        if self._closed:
+            raise RuntimeError("The Marimo kernel lifespan has already exited.")
         return None
 
     async def __aexit__(
@@ -50,20 +63,31 @@ class _EnteredKernelLifespan:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> bool | None:
-        return await self._lifespan.__aexit__(exc_type, exc_value, traceback)
+        if self._failure is not None or self._closed:
+            return False
+        self._closed = True
+        try:
+            return await self._lifespan.__aexit__(exc_type, exc_value, traceback)
+        except BaseException as error:
+            self.fail(error)
+            raise
 
 
-def _guard_entered_lifespan(context: Any) -> None:
+def _guard_entered_lifespan(context: Any) -> _EnteredKernelLifespan | None:
     kernel = context._kernel
     lifespan = getattr(kernel, "_lifespan", None)
-    if lifespan is None or isinstance(lifespan, _EnteredKernelLifespan):
-        return
+    if lifespan is None:
+        return None
+    if isinstance(lifespan, _EnteredKernelLifespan):
+        return lifespan
 
     # Marimo queues an instantiation request before each code-mode scratchpad
     # run. Its graph guard follows the lifespan entry, so an initialized kernel
     # otherwise tries to re-enter the same async context manager. Preserve the
     # entered manager for teardown while treating later entries as idempotent.
-    kernel._lifespan = _EnteredKernelLifespan(lifespan)
+    guarded = _EnteredKernelLifespan(lifespan)
+    kernel._lifespan = guarded
+    return guarded
 
 
 @contextmanager
@@ -88,6 +112,7 @@ class _KernelBridgeLifespan:
         self._registry: Any | None = None
         self._output_renderer: KernelOutputRenderer | None = None
         self._release_cached_ui: Callable[[], None] | None = None
+        self._entered_lifespan: _EnteredKernelLifespan | None = None
 
     def _activate(
         self,
@@ -104,7 +129,11 @@ class _KernelBridgeLifespan:
             except (OSError, UnicodeError, ConfigurationError):
                 return False
         output_renderer = KernelOutputRenderer(context)
-        release_cached_ui = keep_cached_cells_compatible()
+        try:
+            release_cached_ui = keep_cached_cells_compatible()
+        except BaseException:
+            output_renderer.close()
+            raise
         self._output_renderer = output_renderer
         self._release_cached_ui = release_cached_ui
         return True
@@ -118,7 +147,30 @@ class _KernelBridgeLifespan:
         context = get_context()
         if not isinstance(context, KernelRuntimeContext) or context.filename is None:
             return
-        _guard_entered_lifespan(context)
+        self._entered_lifespan = _guard_entered_lifespan(context)
+        try:
+            self._enter(context, Function, CellId_t)
+        except BaseException as error:
+            if self._entered_lifespan is not None:
+                self._entered_lifespan.fail(error)
+            try:
+                self._close()
+            except BaseException as cleanup_error:
+                raise error from cleanup_error
+            raise
+
+    def _enter(
+        self,
+        context: Any,
+        function_type: Any,
+        cell_id_type: Any,
+    ) -> None:
+        from marimo._messaging.notification import (
+            QueryParamsDeleteNotification,
+            QueryParamsSetNotification,
+        )
+        from marimo._messaging.notification_utils import broadcast_notification
+
         filename = Path(context.filename).resolve()
         inspection = _INSPECTION_SELECTORS.get(filename)
         inspection_outputs = _INSPECTION_OUTPUT_SELECTORS.get(filename)
@@ -166,9 +218,10 @@ class _KernelBridgeLifespan:
                     max_value_bytes=limit,
                 ).to_dict()
 
-        function = Function(FUNCTION_NAME, ReadValuesArgs, read)
-        function.cell_id = CellId_t("__marimo_studio_values__")
+        function = function_type(FUNCTION_NAME, ReadValuesArgs, read)
+        function.cell_id = cell_id_type("__marimo_studio_values__")
         context.function_registry.register(NAMESPACE, function)
+        self._registry = context.function_registry
 
         def render_outputs(args: RenderValuesArgs) -> dict[str, object]:
             try:
@@ -192,6 +245,9 @@ class _KernelBridgeLifespan:
                     },
                 ).to_dict()
             if not self._activate(context, filename, inspection):
+                requested = tuple(
+                    dict.fromkeys((*args.selectors, *args.active_selectors))
+                )
                 return OutputRenderResult(
                     outputs={},
                     errors={
@@ -200,7 +256,7 @@ class _KernelBridgeLifespan:
                             f"Selector {selector!r} is not present in a "
                             "configured view.",
                         )
-                        for selector in dict.fromkeys(args.selectors)
+                        for selector in requested
                     },
                 ).to_dict()
             selectors = tuple(dict.fromkeys(args.selectors))
@@ -233,12 +289,12 @@ class _KernelBridgeLifespan:
                     max_output_bytes=limit,
                 ).to_dict()
 
-        output_function = Function(
+        output_function = function_type(
             OUTPUT_FUNCTION_NAME,
             RenderValuesArgs,
             render_outputs,
         )
-        output_function.cell_id = CellId_t("__marimo_studio_outputs__")
+        output_function.cell_id = cell_id_type("__marimo_studio_outputs__")
         context.function_registry.register(NAMESPACE, output_function)
 
         def sync_query(args: SyncQueryArgs) -> None:
@@ -246,20 +302,42 @@ class _KernelBridgeLifespan:
                 return
             params = context.query_params
             current = dict(params.to_dict())
-            for key in current.keys() - args.query.keys() - PRIVATE_QUERY_KEYS:
-                params.remove(key)
-            for key, value in args.query.items():
-                if current.get(key) != value:
-                    params.set(key, value)
+            query = {
+                key: value
+                for key, value in args.query.items()
+                if key not in PRIVATE_QUERY_KEYS
+            }
+            if args.operation_id:
+                broadcast_notification(
+                    QueryParamsSetNotification(
+                        QUERY_OPERATION_QUERY_PARAM,
+                        args.operation_id,
+                    ),
+                    context.stream,
+                )
+            try:
+                for key in current.keys() - query.keys() - PRIVATE_QUERY_KEYS:
+                    params.remove(key)
+                for key, value in query.items():
+                    if current.get(key) != value:
+                        params.set(key, value)
+            finally:
+                if args.operation_id:
+                    broadcast_notification(
+                        QueryParamsDeleteNotification(
+                            QUERY_OPERATION_QUERY_PARAM,
+                            None,
+                        ),
+                        context.stream,
+                    )
 
-        query_function = Function(
+        query_function = function_type(
             QUERY_FUNCTION_NAME,
             SyncQueryArgs,
             sync_query,
         )
-        query_function.cell_id = CellId_t("__marimo_studio_query__")
+        query_function.cell_id = cell_id_type("__marimo_studio_query__")
         context.function_registry.register(NAMESPACE, query_function)
-        self._registry = context.function_registry
 
     async def __aexit__(
         self,
@@ -267,7 +345,17 @@ class _KernelBridgeLifespan:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> bool:
-        del exc_type, exc_value, traceback
+        del traceback
+        if exc_type is not None and self._entered_lifespan is not None:
+            self._entered_lifespan.fail(
+                exc_value
+                if exc_value is not None
+                else RuntimeError("The Marimo kernel lifespan setup failed.")
+            )
+        self._close()
+        return False
+
+    def _close(self) -> None:
         if self._output_renderer is not None:
             self._output_renderer.close()
             self._output_renderer = None
@@ -277,7 +365,6 @@ class _KernelBridgeLifespan:
         if self._release_cached_ui is not None:
             self._release_cached_ui()
             self._release_cached_ui = None
-        return False
 
 
 def kernel_lifespan(_: None) -> _KernelBridgeLifespan:

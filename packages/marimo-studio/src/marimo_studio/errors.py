@@ -114,6 +114,26 @@ class ProtocolError(ConfigurationError):
     exit_code = 6
 
 
+class RuntimeTimeoutError(MarimoStudioError):
+    """Notebook execution did not settle within its analysis budget."""
+
+    code = "runtime-timeout"
+    status_code = 504
+    public_hint = (
+        "Increase runtime_timeout for expected setup work, or fix the notebook "
+        "operation that did not finish. The CLI option is --runtime-timeout."
+    )
+
+
+class AgentRequestError(ProtocolError):
+    """An agent-facing server request failed with a structured error code."""
+
+    def __init__(self, code: str, message: str, *, status_code: int = 500) -> None:
+        super().__init__(message)
+        self.code = code
+        self.status_code = status_code
+
+
 class DependencyError(ConfigurationError):
     """The notebook environment could not be prepared."""
 

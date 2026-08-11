@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
   type ControlEndpoint,
@@ -40,20 +40,22 @@ class MemoryEndpoint implements ControlEndpoint {
 }
 
 class DeferredApplyEndpoint extends MemoryEndpoint {
-  private resolveApply: (() => void) | undefined;
+  private readonly pending: Array<{
+    resolve: () => void;
+    updates: readonly ControlUpdate[];
+  }> = [];
 
   override apply(updates: readonly ControlUpdate[]): Promise<void> {
     this.applied.push(updates);
     return new Promise((resolve) => {
-      this.resolveApply = () => {
-        updates.forEach((update) => this.values.set(update.objectId, update.value));
-        resolve();
-      };
+      this.pending.push({ resolve, updates });
     });
   }
 
-  resolve(): void {
-    this.resolveApply?.();
+  resolveNext(): void {
+    const pending = this.pending.shift();
+    pending?.updates.forEach((update) => this.values.set(update.objectId, update.value));
+    pending?.resolve();
   }
 }
 
@@ -101,6 +103,50 @@ describe("control state synchronization", () => {
     sync.dispose();
   });
 
+  it("serializes initial and live editor writes and keeps the latest value", async () => {
+    const editor = new MemoryEndpoint({ "live-control-0": "Initial" });
+    const preview = new DeferredApplyEndpoint({ "wasm-control-0": "Preview" });
+    const synchronizing = synchronizeControlEndpoints({
+      editor,
+      preview,
+      editorControls: { cells: { controls: "live-control" } },
+      previewControls: { cells: { controls: "wasm-control" } },
+    });
+    await Promise.resolve();
+
+    editor.emit({ objectId: "live-control-0", value: "Intermediate" });
+    editor.emit({ objectId: "live-control-0", value: "Latest" });
+    expect(preview.applied).toEqual([[{ objectId: "wasm-control-0", value: "Initial" }]]);
+
+    preview.resolveNext();
+    await vi.waitFor(() => expect(preview.applied).toHaveLength(2));
+    expect(preview.applied[1]).toEqual([{ objectId: "wasm-control-0", value: "Latest" }]);
+    preview.resolveNext();
+    const sync = await synchronizing;
+    sync.dispose();
+  });
+
+  it("serializes preview writes before applying them to the editor", async () => {
+    const editor = new DeferredApplyEndpoint({ "live-control-0": "Initial" });
+    const preview = new MemoryEndpoint({ "wasm-control-0": "Preview" });
+    const sync = await synchronizeControlEndpoints({
+      editor,
+      preview,
+      editorControls: { cells: { controls: "live-control" } },
+      previewControls: { cells: { controls: "wasm-control" } },
+    });
+
+    preview.emit({ objectId: "wasm-control-0", value: "Intermediate" });
+    preview.emit({ objectId: "wasm-control-0", value: "Latest" });
+    expect(editor.applied).toEqual([[{ objectId: "live-control-0", value: "Intermediate" }]]);
+
+    editor.resolveNext();
+    await vi.waitFor(() => expect(editor.applied).toHaveLength(2));
+    expect(editor.applied[1]).toEqual([{ objectId: "live-control-0", value: "Latest" }]);
+    editor.resolveNext();
+    sync.dispose();
+  });
+
   it("disconnects endpoints while the initial synchronization is pending", async () => {
     const editor = new MemoryEndpoint({ "live-control-0": "Initial" });
     const preview = new DeferredApplyEndpoint({ "wasm-control-0": "Preview" });
@@ -114,14 +160,11 @@ describe("control state synchronization", () => {
     });
     await Promise.resolve();
 
+    const cancelled = expect(synchronizing).rejects.toMatchObject({ name: "AbortError" });
     controller.abort();
     editor.emit({ objectId: "live-control-0", value: "After abort" });
     expect(preview.applied).toHaveLength(1);
 
-    preview.resolve();
-    const sync = await synchronizing;
-    editor.emit({ objectId: "live-control-0", value: "Still disconnected" });
-    expect(preview.applied).toHaveLength(1);
-    sync.dispose();
+    await cancelled;
   });
 });

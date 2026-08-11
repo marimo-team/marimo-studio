@@ -41,8 +41,10 @@ const bootstrap: StudioBootstrap = {
     { id: "wasm", label: "WebAssembly" },
   ],
   defaultRuntime: "server",
+  clientId: "browser-client-1234",
   urls: {
     editor: "/?file=analysis.py",
+    agent: "/_marimo-studio",
     events: "/_marimo-studio/dev/events",
     query: "/_marimo-studio/query",
     studioPrefix: "/studio/",
@@ -94,14 +96,13 @@ const controllers = () => {
     viewUrl: (view, runtime) => `/${view}/?runtime=${runtime}`,
     supportUrl: (view) => `/_marimo-studio/views/${view}`,
     syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => undefined),
+    syncEditorQuery: vi.fn(async () => "accepted" as const),
     navigate: vi.fn(),
   });
   const views = new ViewController(
     bootstrap.selectedView,
     [...bootstrap.views],
     remote(),
-    bootstrap.urls.events,
     vi.fn(async () => true),
     vi.fn(async () => true),
     vi.fn(),
@@ -130,13 +131,20 @@ const WorkspaceHarness = ({
       return;
     }
     frames.forEach((frame, runtime) => {
-      frame.src = `/${bootstrap.selectedView}/?runtime=${runtime}`;
+      Object.defineProperty(frame, "src", {
+        configurable: true,
+        value: `/${bootstrap.selectedView}/?runtime=${runtime}`,
+        writable: true,
+      });
     });
     preview.attach(editor.current, frames);
   }, [frames, preview]);
   return (
     <Workspace
-      bootstrap={bootstrap}
+      bootstrap={{
+        ...bootstrap,
+        urls: { ...bootstrap.urls, editor: "about:blank" },
+      }}
       editorRef={(element) => {
         editor.current = element;
       }}
@@ -177,10 +185,12 @@ describe("Studio shell", () => {
     globalThis.localStorage.setItem(`${storagePrefix}:source:${bootstrap.selectedView}`, "app.css");
 
     const services = createStudioServices(bootstrap);
+    const serverPreviewUrl = new URL(services.preview.getSnapshot().states.server.url);
 
     expect(services.layout.getSnapshot().code).toEqual(persisted.code);
     expect(services.layout.getSnapshot().workspace).toEqual(persisted.workspace);
     expect(services.source.getSnapshot().active).toBe("app.css");
+    expect(serverPreviewUrl.searchParams.get("marimo_studio_client")).toBe(bootstrap.clientId);
     services.dispose();
   });
 

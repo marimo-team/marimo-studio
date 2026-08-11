@@ -7,12 +7,16 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 STUDIO_PATH = "/studio"
 SUPPORT_PATH = "/_marimo-studio"
 ACTIVE_VIEW_QUERY_PARAM = "marimo_studio_view"
+STUDIO_CLIENT_QUERY_PARAM = "marimo_studio_client"
+QUERY_OPERATION_QUERY_PARAM = "marimo_studio_query_operation"
 PRIVATE_QUERY_KEYS = frozenset(
     {
         "access_token",
         "file",
         "kiosk",
         ACTIVE_VIEW_QUERY_PARAM,
+        QUERY_OPERATION_QUERY_PARAM,
+        STUDIO_CLIENT_QUERY_PARAM,
         "marimo_studio_resume",
         "refresh_token",
         "session_id",
@@ -38,10 +42,13 @@ def editor_url(
     base_url: str,
     file_key: str,
     query: Sequence[tuple[str, str]] = (),
+    client_id: str | None = None,
 ) -> str:
     """Return Marimo's native editor URL for one notebook."""
     parameters = _notebook_query(query)
     parameters.append(("file", file_key))
+    if client_id is not None:
+        parameters.append((STUDIO_CLIENT_QUERY_PARAM, client_id))
     return with_query(
         public_url(base_url, f"{SUPPORT_PATH}/editor/"),
         parameters,

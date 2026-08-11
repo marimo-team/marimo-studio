@@ -1,4 +1,4 @@
-import { notifyReadinessChanged } from "../readiness.ts";
+import { notifyProjectionChanged } from "../projections/changes.ts";
 
 export type CellHostState = "connecting" | "loading" | "stale" | "ready" | "missing" | "error";
 
@@ -261,5 +261,5 @@ export const setCellHostState = (
       }),
     );
   }
-  notifyReadinessChanged();
+  notifyProjectionChanged();
 };

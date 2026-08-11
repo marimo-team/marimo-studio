@@ -9,6 +9,7 @@ from marimo_studio._compat.kernel_values.models import (
     QUERY_FUNCTION_NAME,
 )
 from marimo_studio._compat.server.models import ServerContext
+from marimo_studio._compat.server.sessions import current_session
 from marimo_studio.errors import ProtocolError
 
 
@@ -18,14 +19,16 @@ class QuerySyncUnavailable(ProtocolError):
 
 def queue_query_sync(
     context: ServerContext,
+    session_id: str,
     query: dict[str, str | list[str]],
+    operation_id: str,
 ) -> None:
-    """Queue one query-state update on the active editor kernel."""
+    """Queue one query-state update on the selected editor kernel."""
     from marimo._runtime.commands import InvokeFunctionCommand
     from marimo._session.capabilities import consumer_can
     from marimo._types.ids import RequestId
 
-    session = context._session_manager.get_session_by_file_key(context.file_key)
+    session = current_session(context, session_id)
     consumer = session.room.main_consumer if session is not None else None
     if session is None or consumer is None:
         raise QuerySyncUnavailable("The Marimo editor session is still connecting.")
@@ -41,7 +44,7 @@ def queue_query_sync(
             function_call_id=RequestId(uuid4().hex),
             namespace=NAMESPACE,
             function_name=QUERY_FUNCTION_NAME,
-            args={"query": query},
+            args={"query": query, "operation_id": operation_id},
         ),
         from_consumer_id=consumer.consumer_id,
     )

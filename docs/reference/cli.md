@@ -127,7 +127,9 @@ uvx marimo-studio check analysis.py --view dashboard --runtime
 
 Static checks validate view documents, aliases, and value selectors. Add
 `--runtime` to execute projected cells and resolve projected values. Omit
-`--view` to check every configured view.
+`--view` to check every configured view. Runtime execution waits 60 seconds by
+default. Set `--runtime-timeout SECONDS` for notebooks with expected setup work
+such as remote data loading.
 
 Text output reports one `PASS`, `WARN`, or `FAIL` record per check. JSON output
 contains `schema`, `ok`, `notebook`, `view`, and a `checks` array.
@@ -145,16 +147,28 @@ MARIMO_STUDIO_ACCESS_TOKEN="$STUDIO_TOKEN" \
 
 Runs the complete agent handoff gate. Static validation reads the notebook and
 view sources. Runtime validation executes the notebook and resolves every
-projected output and value. Browser validation reads the latest readiness and
-diagnostics published by a rendered Studio view for the current source
-revision.
+projected output and value. Browser validation asks a connected Studio tab to
+visit each selected view and return fresh readiness and diagnostics for the
+captured source revision, runtime instance, and Marimo session.
 
-| Option                      | Behavior                                                                                                   |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `--view NAME`               | Analyze one named view. The default analyzes every configured view                                         |
-| `--server URL`              | Read rendered evidence from this running Studio server. `MARIMO_STUDIO_SERVER_URL` provides the same value |
-| `--access-token TOKEN`      | Authenticate to the running server. Prefer `MARIMO_STUDIO_ACCESS_TOKEN`                                    |
-| `--browser-timeout SECONDS` | Wait this long for current browser evidence. The default is 10 seconds                                     |
+| Option                      | Behavior                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `--view NAME`               | Analyze one named view. The default analyzes every configured view                                            |
+| `--server URL`              | Request rendered evidence from this running Studio server. `MARIMO_STUDIO_SERVER_URL` provides the same value |
+| `--browser-client ID`       | Target one Studio tab when several tabs are connected. `MARIMO_STUDIO_BROWSER_CLIENT` provides the same value |
+| `--browser-timeout SECONDS` | Wait 0 to 300 finite seconds for fresh rendered evidence. The default is 10 seconds                           |
+| `--runtime-timeout SECONDS` | Wait 0 to 300 finite seconds for isolated notebook execution. The default is 60 seconds                       |
+
+Set `MARIMO_STUDIO_ACCESS_TOKEN` to authenticate. The command rejects access
+tokens embedded in `--server` URLs so credentials stay out of shell history
+and process arguments.
+
+The Studio bootstrap record contains its browser client ID. With several tabs
+open for one notebook, read `clientId` from the target tab's
+`#marimo-studio-bootstrap` JSON and pass it through `--browser-client` or the
+environment variable. Browser selection requires `--server` or
+`MARIMO_STUDIO_SERVER_URL`. Supplying a client ID without a server is a usage
+error with exit code 2.
 
 The JSON response contains:
 
@@ -162,8 +176,13 @@ The JSON response contains:
 - `handoff_ready`, which also requires completed runtime validation and a
   `ready` browser observation for every selected view
 - `stages.static`, `stages.runtime`, and `stages.browser`
+- `runtime` and `revisions`, which identify the evidence set
 - `actions`, an ordered repair queue with stage, severity, code, message,
   advice, and available view, target, or source location
+
+A runtime deadline produces a `runtime-timeout` action. Increase
+`--runtime-timeout` when the notebook is expected to spend longer on setup.
+Otherwise, fix the notebook operation named by the runtime output.
 
 Without a server URL, the command still returns static and runtime results.
 The browser stage is `not-observed`, `handoff_ready` is false, and the command
@@ -226,6 +245,9 @@ Each diagnostic event contains:
 Projection diagnostics can also include the view, target, source location, and
 repair hint. Command failures include `exit_code`. Native process output is
 bounded and emitted as a warning event when JSON Lines diagnostics are active.
+Transport failures use stable codes such as `authentication-required`,
+`request-timeout`, and `request-capacity-exhausted` so an agent can retry the
+right boundary or reduce concurrent requests.
 
 ## Exit codes
 

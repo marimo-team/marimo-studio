@@ -10,6 +10,7 @@
     "./control-frame": "./src/control-frame.ts",
     "./controls": "./src/upstream/controls.ts",
     "./runtime": "./src/upstream/runtime.ts",
+    "./session": "./src/upstream/session.ts",
     "./style": "./src/upstream/style.ts",
     "./theme-frame": "./src/theme-frame.ts",
     "./vite": "./src/vite.ts"

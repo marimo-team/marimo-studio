@@ -4,29 +4,27 @@ import type { ReceiverReadyMessage } from "@marimo-studio/protocol/preview-messa
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 import type { PresentationDiagnostic } from "./diagnostics.ts";
+import type {
+  PresentationRevisionPolicy,
+  RevisionOperation,
+} from "./document/revision-controller.ts";
 
 import { bindViewNavigation, bindViewSwitches, DevelopmentEvents } from "./document/events.ts";
-import { PresentationDocument } from "./document/presentation.ts";
 import {
   BaselineReconciler,
   RefreshRetrySchedule,
-  ShellChangeQueue,
   ShellRefreshState,
-  type ShellTarget,
 } from "./document/refresh-state.ts";
-import { preservedDocumentUrl } from "./document/session-preservation.ts";
+import { presentationRevisions } from "./document/revision-runtime.ts";
 import {
   clearDiagnostic,
   notifyDiagnostics,
   showDiagnostic,
   supportView,
 } from "./document/status.ts";
-import { isAbortError, StylesheetRefreshError } from "./document/styles.ts";
+import { StylesheetRefreshError } from "./document/styles.ts";
 import { errorMessage } from "./errors.ts";
-import { beginPresentationRefresh, setPresentationRefreshState } from "./readiness.ts";
 import {
-  commitRuntimeConfig,
-  fetchRuntimeConfig,
   getMountConfig,
   getRuntimeConfig,
   getSupportUrl,
@@ -35,27 +33,16 @@ import {
   RuntimeConfigRequestError,
   subscribeRuntimeConfig,
 } from "./runtime-config/index.ts";
-import { updateConfiguredRuntime } from "./runtime/coordinator.ts";
 
 declare global {
-  var __MARIMO_STUDIO_SESSION_ID__: string | undefined;
   var __MARIMO_STUDIO_RUNTIME_STATE__: "booting" | "failed" | "mounted" | undefined;
 }
 
-const presentationDocument = new PresentationDocument();
-
-export const refreshStylesheets = async (): Promise<void> => {
-  await presentationDocument.refreshStylesheets();
-};
 const developmentEvents = new DevelopmentEvents();
-let activeTransition: AbortController | undefined;
-let activeConfigRefresh: AbortController | undefined;
-let retryTimer: ReturnType<typeof setTimeout> | undefined;
 const retrySchedule = new RefreshRetrySchedule();
-let latestRefreshGeneration = 0;
 const shellRefreshState = new ShellRefreshState();
-const shellChangeQueue = new ShellChangeQueue();
 const baselineReconciler = new BaselineReconciler(hasRuntimeConfig());
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
 const REFRESH_FAILURE_CODES: Record<ShellChangeKind, string> = {
   css: "stylesheet-refresh-failed",
@@ -64,23 +51,19 @@ const REFRESH_FAILURE_CODES: Record<ShellChangeKind, string> = {
   views: "shell-refresh-failed",
 };
 
-const queueChange = (kind: ShellChangeKind) => {
-  shellChangeQueue.push(kind);
-};
-
-const cancelRetry = () => {
+const cancelRetry = (): void => {
   if (retryTimer !== undefined) {
     clearTimeout(retryTimer);
     retryTimer = undefined;
   }
 };
 
-const resetRetry = () => {
+const resetRetry = (): void => {
   cancelRetry();
   retrySchedule.reset();
 };
 
-const scheduleRetry = (kind: ShellChangeKind) => {
+const scheduleRetry = (kind: ShellChangeKind): void => {
   cancelRetry();
   retryTimer = setTimeout(() => {
     retryTimer = undefined;
@@ -106,146 +89,20 @@ const refreshFailureHint = (error: unknown, transient: boolean): string => {
 
 const refreshDiagnostic = (
   error: unknown,
-  kind: ShellChangeKind,
-  view = supportView(),
+  operation: RevisionOperation,
 ): PresentationDiagnostic => {
   const transient = error instanceof RuntimeConfigRequestError && error.transient;
   return {
     scope: "presentation",
-    code: refreshFailureCode(error, kind),
+    code: refreshFailureCode(error, operation.kind),
     severity: transient ? "warning" : "error",
     message: errorMessage(error),
     hint: refreshFailureHint(error, transient),
-    view: view ?? "",
+    view: supportView(operation.target.supportUrl) ?? "",
   };
 };
 
-const handleRefreshError = (
-  error: unknown,
-  kind: ShellChangeKind,
-  generation: number,
-  view = supportView(),
-) => {
-  if (isAbortError(error) || generation !== latestRefreshGeneration) {
-    return;
-  }
-  const diagnostic = refreshDiagnostic(error, kind, view);
-  if (error instanceof RuntimeConfigRequestError && error.transient) {
-    showDiagnostic(diagnostic, "waiting");
-    setPresentationRefreshState(generation, "loading", diagnostic);
-    scheduleRetry(kind);
-    return;
-  }
-  resetRetry();
-  showDiagnostic(diagnostic);
-  setPresentationRefreshState(generation, "error", diagnostic);
-};
-
-const refreshRuntimeConfig = async (): Promise<void> => {
-  activeConfigRefresh?.abort();
-  const controller = new AbortController();
-  activeConfigRefresh = controller;
-  try {
-    const config = commitRuntimeConfig(
-      await fetchRuntimeConfig(
-        getSupportUrl(),
-        controller.signal,
-        hasRuntimeConfig() ? getRuntimeConfig().runtime.id : requestedRuntimeId(),
-      ),
-    );
-    if (updateConfiguredRuntime(config) === "reload") {
-      globalThis.location.reload();
-    }
-    clearDiagnostic();
-  } finally {
-    if (activeConfigRefresh === controller) {
-      activeConfigRefresh = undefined;
-    }
-  }
-};
-
-const beginRefresh = (): number => {
-  latestRefreshGeneration = beginPresentationRefresh();
-  return latestRefreshGeneration;
-};
-
-const completeRefresh = (generation: number) => {
-  if (generation !== latestRefreshGeneration) {
-    return;
-  }
-  resetRetry();
-  clearDiagnostic();
-  setPresentationRefreshState(generation, "ready");
-};
-
-const reload = (kind: ShellChangeKind, resetBackoff = true) => {
-  if (kind === "views" && !shellRefreshState.pending) {
-    return;
-  }
-  if (resetBackoff) {
-    resetRetry();
-  } else {
-    cancelRetry();
-  }
-  if (activeTransition) {
-    queueChange(kind);
-    return;
-  }
-  if (kind === "css" && !shellRefreshState.pending) {
-    activeConfigRefresh?.abort();
-    const generation = beginRefresh();
-    void refreshStylesheets()
-      .then(refreshRuntimeConfig)
-      .then(() => completeRefresh(generation))
-      .catch((error: unknown) => {
-        handleRefreshError(error, kind, generation);
-      });
-    return;
-  }
-  if (kind === "runtime" && !shellRefreshState.pending) {
-    presentationDocument.abortStyles();
-    const generation = beginRefresh();
-    void refreshRuntimeConfig()
-      .then(() => completeRefresh(generation))
-      .catch((error: unknown) => {
-        handleRefreshError(error, kind, generation);
-      });
-    return;
-  }
-  const target = shellRefreshState.targetForChange(kind, {
-    documentUrl: presentationDocument.url,
-    supportUrl: getSupportUrl(),
-  });
-  if (!target) {
-    return;
-  }
-  const generation = beginRefresh();
-  void refreshShell(target.documentUrl, target.supportUrl)
-    .then(() => completeRefresh(generation))
-    .catch((error: unknown) => {
-      const failed = shellRefreshState.failedTarget ?? target;
-      handleRefreshError(error, kind, generation, supportView(failed.supportUrl));
-    });
-};
-
-const reconcileBaseline = () => {
-  if (baselineReconciler.ready()) {
-    reload("html");
-  }
-};
-
-subscribeRuntimeConfig(() => {
-  notifyDiagnostics(getRuntimeConfig().diagnostics, getRuntimeConfig().view);
-  if (baselineReconciler.configure()) {
-    reload("html");
-  }
-});
-
-if (hasRuntimeConfig()) {
-  notifyDiagnostics(getRuntimeConfig().diagnostics, getRuntimeConfig().view);
-}
-
-const connectEvents = () => {
+const connectEvents = (): void => {
   developmentEvents.connect(
     appendUrlPath(getSupportUrl(), "dev/events", globalThis.location.href),
     reconcileBaseline,
@@ -259,79 +116,93 @@ const connectEvents = () => {
   );
 };
 
-export const refreshShell = async (
-  nextDocumentUrl = presentationDocument.url,
-  nextSupportUrl = getSupportUrl(),
-) => {
-  let target: ShellTarget = {
-    documentUrl: nextDocumentUrl,
-    supportUrl: nextSupportUrl,
-  };
-  presentationDocument.abortStyles();
-  activeConfigRefresh?.abort();
-  activeTransition?.abort();
-  const controller = new AbortController();
-  activeTransition = controller;
-  try {
-    const commit = await presentationDocument.replace(
-      nextDocumentUrl,
-      nextSupportUrl,
-      controller.signal,
-      (resolvedTarget) => {
-        target = resolvedTarget;
-      },
-    );
-    if (commit.reloadDocument) {
-      globalThis.location.assign(
-        preservedDocumentUrl(
-          getRuntimeConfig(),
-          commit.target.documentUrl,
-          globalThis.__MARIMO_STUDIO_SESSION_ID__,
-        ),
-      );
+const revisionPolicy: PresentationRevisionPolicy = {
+  classifyFailure: (error, operation) => {
+    const diagnostic = refreshDiagnostic(error, operation);
+    return {
+      state: diagnostic.severity === "warning" ? "loading" : "error",
+      diagnostic,
+    };
+  },
+  onFailure: (error, operation, failure) => {
+    if (operation.kind === "html" || operation.kind === "views") {
+      shellRefreshState.rememberFailure(operation.target);
+    }
+    if (failure.state === "loading") {
+      showDiagnostic(failure.diagnostic, "waiting");
+      scheduleRetry(operation.kind);
       return;
     }
-    if (updateConfiguredRuntime(getRuntimeConfig()) === "reload") {
-      globalThis.location.reload();
-      return;
-    }
+    resetRetry();
+    showDiagnostic(failure.diagnostic);
+    console.error("marimo-studio presentation refresh error", error);
+  },
+  onReady: (operation) => {
+    resetRetry();
     clearDiagnostic();
-    if (commit.supportChanged) {
-      connectEvents();
-    }
-    shellRefreshState.complete(commit.target);
-  } catch (error) {
-    if (!isAbortError(error)) {
-      shellRefreshState.rememberFailure(target);
-    }
-    throw error;
-  } finally {
-    if (activeTransition === controller) {
-      activeTransition = undefined;
-      const queued = shellChangeQueue.take();
-      if (queued) {
-        queueMicrotask(() => reload(queued));
-      }
-    }
+    shellRefreshState.complete(operation.target);
+  },
+  onSupportChanged: connectEvents,
+};
+
+const reload = (kind: ShellChangeKind, resetBackoff = true): void => {
+  if (kind === "views" && !shellRefreshState.pending) {
+    return;
+  }
+  if (resetBackoff) {
+    resetRetry();
+  } else {
+    cancelRetry();
+  }
+  if (kind === "css" && !shellRefreshState.pending) {
+    void presentationRevisions.refreshStyles(revisionPolicy).catch(() => {});
+    return;
+  }
+  if (kind === "runtime" && !shellRefreshState.pending) {
+    void presentationRevisions.refreshRuntime(revisionPolicy).catch(() => {});
+    return;
+  }
+  const target = shellRefreshState.targetForChange(kind, {
+    documentUrl: presentationRevisions.url,
+    supportUrl: getSupportUrl(),
+  });
+  if (target) {
+    void presentationRevisions
+      .transition(target.documentUrl, target.supportUrl, kind, revisionPolicy)
+      .catch(() => {});
   }
 };
 
-const transitionToView = (documentUrl: string, supportUrl: string, view: string) => {
+function reconcileBaseline(): void {
+  if (baselineReconciler.ready()) {
+    reload("html");
+  }
+}
+
+subscribeRuntimeConfig(() => {
+  notifyDiagnostics(getRuntimeConfig().diagnostics, getRuntimeConfig().view);
+  if (baselineReconciler.configure()) {
+    reload("html");
+  }
+});
+
+if (hasRuntimeConfig()) {
+  notifyDiagnostics(getRuntimeConfig().diagnostics, getRuntimeConfig().view);
+}
+
+const transitionToView = (documentUrl: string, supportUrl: string): void => {
   resetRetry();
   shellRefreshState.supersede();
-  const generation = beginRefresh();
-  void refreshShell(documentUrl, supportUrl)
-    .then(() => completeRefresh(generation))
-    .catch((error: unknown) => {
-      handleRefreshError(error, "html", generation, view);
-    });
+  void presentationRevisions
+    .transition(documentUrl, supportUrl, "html", revisionPolicy)
+    .catch(() => {});
 };
 
 const unbindViewSwitches = bindViewSwitches((request) => {
-  transitionToView(request.documentUrl, request.supportUrl, request.view);
+  transitionToView(request.documentUrl, request.supportUrl);
 });
 const unbindViewNavigation = bindViewNavigation((request) => {
-  transitionToView(request.documentUrl, getSupportUrl(), request.view);
+  transitionToView(request.documentUrl, getSupportUrl());
 });
 
 connectEvents();
@@ -347,9 +218,7 @@ globalThis.addEventListener(
   "pagehide",
   () => {
     resetRetry();
-    presentationDocument.abortStyles();
-    activeConfigRefresh?.abort();
-    activeTransition?.abort();
+    presentationRevisions.dispose();
     developmentEvents.close();
     unbindViewSwitches();
     unbindViewNavigation();

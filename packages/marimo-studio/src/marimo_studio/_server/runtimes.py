@@ -44,6 +44,7 @@ class RuntimeProvider(Protocol):
         snapshot: PresentationSnapshot,
         context: ServerContext,
         session_id: str | None,
+        binding_id: str | None = None,
     ) -> RuntimeProjection: ...
 
 
@@ -68,6 +69,7 @@ class ServerRuntime:
         snapshot: PresentationSnapshot,
         context: ServerContext,
         session_id: str | None,
+        binding_id: str | None = None,
     ) -> RuntimeProjection:
         cells = live_cells(context, session_id)
         view = _view(snapshot)
@@ -77,6 +79,7 @@ class ServerRuntime:
                 context.base_url,
                 context.mode,
                 context.server_token,
+                binding_id or "",
             ),
             data={
                 "url": public_url(context.base_url, "/"),
@@ -104,8 +107,9 @@ class WasmRuntime:
         snapshot: PresentationSnapshot,
         context: ServerContext,
         session_id: str | None,
+        binding_id: str | None = None,
     ) -> RuntimeProjection:
-        del context, session_id
+        del context, session_id, binding_id
         view = _view(snapshot)
         version = _assets.runtime_marimo_version()
         code = browser_notebook_source(

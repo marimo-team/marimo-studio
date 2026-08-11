@@ -91,8 +91,8 @@ def notebook_config(path: Path) -> Mapping[str, Any] | None:
 
 
 def _render(document: TOMLDocument, newline: str) -> str:
-    content = tomlkit.dumps(document).rstrip("\n")
-    lines = content.split("\n") if content else []
+    content = tomlkit.dumps(document).rstrip("\r\n")
+    lines = content.splitlines() if content else []
     comments = ("#" if not line else f"# {line}" for line in lines)
     return newline.join((SCRIPT_START, *comments, SCRIPT_END))
 

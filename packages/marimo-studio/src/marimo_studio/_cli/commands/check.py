@@ -15,15 +15,20 @@ from marimo_studio._cli.diagnostics import (
     run_in_environment,
 )
 from marimo_studio._cli.help import ColoredCommand
-from marimo_studio._cli.options import output_format_option, target_argument
+from marimo_studio._cli.options import (
+    output_format_option,
+    runtime_timeout_option,
+    target_argument,
+)
 from marimo_studio._cli.output import (
     checks_payload,
     echo_json,
     render_checks,
 )
+from marimo_studio._runtime_process import check_runtime_studio_isolated
 from marimo_studio._workspace.environment import should_reenter
 from marimo_studio._workspace.targets import load_studio_target
-from marimo_studio.checks import check_runtime_studio, check_studio
+from marimo_studio.checks import check_studio
 
 _CHECK_SEVERITY = {"pass": "info", "warn": "warning", "fail": "error"}
 
@@ -37,12 +42,14 @@ _CHECK_SEVERITY = {"pass": "info", "warn": "warning", "fail": "error"}
     is_flag=True,
     help="Execute projected cells and resolve projected values.",
 )
+@runtime_timeout_option
 @output_format_option
 @diagnostic_format_option
 def check(
     target: Path | None,
     view_name: str | None,
     runtime_check: bool,
+    runtime_timeout: float,
     output_format: str,
 ) -> None:
     """Validate the views configured for TARGET.
@@ -56,7 +63,13 @@ def check(
     results = check_studio(studio, view_name=view_name)
     if runtime_check and not any(result.status == "fail" for result in results):
         with capture_runtime_stderr():
-            results += asyncio.run(check_runtime_studio(studio, view_name=view_name))
+            results += asyncio.run(
+                check_runtime_studio_isolated(
+                    studio,
+                    view_name=view_name,
+                    timeout=runtime_timeout,
+                )
+            )
 
     stream = diagnostics()
     for result in results:

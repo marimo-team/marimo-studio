@@ -1,5 +1,11 @@
+import type {
+  EditorSessionBinding,
+  ObserveViewRequest,
+} from "@marimo-studio/protocol/development-events";
+
 import type { ControlFrameConnector } from "./control-sync.ts";
 import type { RecordBrowserObservation } from "./observation-remote.ts";
+import type { EditorQuerySyncResult } from "./query-remote.ts";
 
 import { PreviewController, type PreviewFrameState } from "./controller.ts";
 import { installEditorOutlineGuard } from "./editor-outline.ts";
@@ -13,7 +19,11 @@ interface PreviewDeckOptions {
   viewUrl: (view: string, runtime: string) => string;
   supportUrl: (view: string) => string;
   syncQuery: (query: string) => void;
-  syncEditorQuery: (query: string, signal: AbortSignal) => Promise<void>;
+  syncEditorQuery: (
+    query: string,
+    operationId: string,
+    signal: AbortSignal,
+  ) => Promise<EditorQuerySyncResult>;
   navigate: (view: string) => void;
   recordObservation?: RecordBrowserObservation;
   connectControlFrame?: ControlFrameConnector;
@@ -37,6 +47,8 @@ export class PreviewDeck {
   private snapshot!: PreviewDeckSnapshot;
   private stopEditorQuerySync: (() => void) | undefined;
   private stopEditorOutlineGuard: (() => void) | undefined;
+  private editorBindingGeneration = 0;
+  private editorSessionId: string | undefined;
 
   constructor(private readonly options: PreviewDeckOptions) {
     this.runtime = options.initialRuntime;
@@ -64,9 +76,6 @@ export class PreviewDeck {
     this.editor = editor;
     this.frames = frames;
     this.ensure(this.runtime);
-    if (this.options.runtimes.includes("wasm") && this.runtime !== "wasm") {
-      this.ensure("wasm");
-    }
     this.bindEditor();
   }
 
@@ -99,6 +108,23 @@ export class PreviewDeck {
     this.previews.forEach((controller) => controller.requestResize());
   }
 
+  requestObservation(request: ObserveViewRequest): void {
+    this.ensure(request.runtime)?.requestObservation(request);
+  }
+
+  editorSessionChanged(binding: EditorSessionBinding): void {
+    if (binding.generation <= this.editorBindingGeneration) {
+      return;
+    }
+    const previousSessionId = this.editorSessionId;
+    const hadEarlierBinding = this.editorBindingGeneration > 0 || binding.replaced;
+    this.editorBindingGeneration = binding.generation;
+    this.editorSessionId = binding.sessionId;
+    if (hadEarlierBinding && previousSessionId !== binding.sessionId) {
+      this.previews.forEach((controller) => controller.editorSessionChanged());
+    }
+  }
+
   dispose(): void {
     this.stopEditorQuerySync?.();
     this.stopEditorOutlineGuard?.();
@@ -115,8 +141,10 @@ export class PreviewDeck {
     }
     this.guardEditorOutline();
     editor.addEventListener("load", this.editorLoaded);
-    this.stopEditorQuerySync = observeFrameQuery(editor, (query) => {
-      this.previews.forEach((controller) => controller.editorQueryChanged(query));
+    this.stopEditorQuerySync = observeFrameQuery(editor, (query, operationId, completed) => {
+      this.previews.forEach((controller) =>
+        controller.editorQueryChanged(query, operationId, completed),
+      );
     });
   }
 
@@ -166,6 +194,14 @@ export class PreviewDeck {
       return;
     }
     this.states.set(runtime, state);
+    if (
+      runtime === this.runtime &&
+      runtime !== "wasm" &&
+      state.status.state !== "loading" &&
+      this.options.runtimes.includes("wasm")
+    ) {
+      this.ensure("wasm");
+    }
     this.publish();
   }
 

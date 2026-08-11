@@ -17,10 +17,12 @@ import {
 const execFile = promisify(execFileCallback);
 const dashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/notebook/dashboard");
 const plainDashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/plain/dashboard");
+const plainReportDirectory = resolve(workspaceDirectory, "__marimo__/studio/plain/report");
 
 export const dashboardHtmlPath = resolve(dashboardDirectory, "index.html");
 export const dashboardCssPath = resolve(dashboardDirectory, "app.css");
 export const plainDashboardHtmlPath = resolve(plainDashboardDirectory, "index.html");
+export const plainReportHtmlPath = resolve(plainReportDirectory, "index.html");
 export const plainNotebookPath = resolve(workspaceDirectory, "plain.py");
 export const workspaceNotebookPath = notebookPath;
 export const hostedDashboardHtmlPath = resolve(

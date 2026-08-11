@@ -17,7 +17,7 @@ import click
 from marimo_studio._workspace.environment import EnvironmentTarget
 from marimo_studio.environment import run_in_notebook_environment
 
-_COMMAND_NAMES = frozenset({"bind", "check", "export", "inspect", "view"})
+_COMMAND_NAMES = frozenset({"analyze", "bind", "check", "export", "inspect", "view"})
 _MAX_PROCESS_OUTPUT_CHARS = 16 * 1024
 
 

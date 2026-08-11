@@ -3,9 +3,10 @@
 Marimo Studio lets one notebook power dashboards, reports, and focused tools.
 Keep notebook cells focused on computation, analytical context, data access,
 domain rules, controls, and reusable rich outputs. Put page structure, display
-copy, responsive layout, and visual styling in the Studio view. Use Wind4
-utility classes in ``index.html`` for ordinary presentation. Put custom
-keyframes and CSS rules that utilities cannot express in ``app.css``.
+copy, responsive layout, and visual styling in the Studio view. Use the UnoCSS
+Wind4 vocabulary with Tailwind 4 syntax in ``index.html`` for ordinary
+presentation. Put custom keyframes and CSS rules that utilities cannot express
+in ``app.css``.
 
 One notebook can have several named views for different audiences. Each view
 has its own ``index.html`` and ``app.css`` while sharing the notebook's Python
@@ -68,9 +69,10 @@ Analyze the custom page after editing its HTML or CSS:
         for action in report.actions:
             print(action.advice)
 
-``studio.analyze`` runs static and isolated runtime validation, then reads the
-current rendered-view observation from the Studio browser. Fix every error and
-rerun it. Hand off the view only when ``report.handoff_ready`` is true.
+``studio.analyze`` runs static and isolated runtime validation, then asks the
+session-bound Studio browser for fresh evidence from the captured source
+revision. Fix every error and rerun it. Hand off the view only when
+``report.handoff_ready`` is true.
 
 Use the lower-level static check when notebook execution is intentionally out
 of scope:
@@ -85,18 +87,17 @@ page. Notebook edits update the outputs that depend on them.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from marimo_studio._workspace.models import BindingResult, ViewSetupResult
-    from marimo_studio.types import (
-        AnalysisReport,
-        CheckResult,
-        NotebookSpec,
-        ViewActivationResult,
-    )
+from marimo_studio._runtime_limits import (
+    DEFAULT_RUNTIME_TIMEOUT,
+    MAX_RUNTIME_TIMEOUT,
+)
+from marimo_studio._workspace.models import BindingResult, ViewSetupResult
+from marimo_studio.agent_models import AnalysisReport, ViewActivationResult
+from marimo_studio.types import CheckResult, NotebookSpec
 
 
 def notebook_path(context: object) -> Path:
@@ -205,56 +206,49 @@ async def analyze(
     *,
     view_name: str | None = None,
     timeout: float = 10.0,
+    runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     require_browser: bool = True,
 ) -> AnalysisReport:
     """Validate view sources, notebook projections, and rendered readiness.
 
-    The default analyzes every configured view and requires current browser
-    evidence before ``handoff_ready`` can be true. Pass ``view_name`` after
-    activating one view to get a focused repair queue. ``timeout`` controls how
-    long Studio waits for the browser to report the saved view revision. Code
-    mode runs the analysis through its attached Studio server.
+    Browser analysis requires ``view_name`` for the active Studio view. Activate
+    that view in a separate code-mode call before analyzing it. Set
+    ``require_browser=False`` to run static and runtime validation across every
+    configured view when ``view_name`` is absent. ``timeout`` controls how long
+    Studio waits for the browser to report the saved view revision. Code mode
+    runs the analysis through its attached Studio server. ``runtime_timeout``
+    bounds isolated notebook execution.
+
+    Raises:
+        ValueError: A timeout is outside its supported range, or browser
+            analysis has no named view.
     """
     from marimo_studio._agent_client import request_analysis
     from marimo_studio._compat.code_mode import code_mode_connection
     from marimo_studio._workspace import load_studio
-    from marimo_studio.analysis import analyze_studio
-    from marimo_studio.errors import ProtocolError
-    from marimo_studio.types import BrowserObservation
 
-    workspace = load_studio(notebook_path(context))
-    try:
-        connection = code_mode_connection()
-    except ProtocolError as error:
-        unavailable = str(error)
-
-        async def observe_unavailable(
-            _workspace: object,
-            views: tuple[str, ...],
-        ) -> tuple[BrowserObservation, ...]:
-            return tuple(
-                BrowserObservation(
-                    view=view,
-                    state="not-observed",
-                    message=unavailable,
-                )
-                for view in views
-            )
-
-        observer = observe_unavailable
-    else:
-        return await request_analysis(
-            connection,
-            workspace.notebook,
-            view_name=view_name,
-            timeout=timeout,
-            require_browser=require_browser,
+    if not math.isfinite(timeout) or not 0 <= timeout <= 20:
+        raise ValueError("timeout must be a finite number between 0 and 20 seconds")
+    if (
+        not math.isfinite(runtime_timeout)
+        or not 0 <= runtime_timeout <= MAX_RUNTIME_TIMEOUT
+    ):
+        raise ValueError(
+            "runtime_timeout must be a finite number between 0 and "
+            f"{MAX_RUNTIME_TIMEOUT:g} seconds"
         )
-
-    return await analyze_studio(
-        workspace,
+    if require_browser and view_name is None:
+        raise ValueError(
+            "Code-mode browser analysis requires view_name. Activate that view "
+            "in one code-mode call, then analyze it in the next call."
+        )
+    workspace = load_studio(notebook_path(context))
+    return await request_analysis(
+        code_mode_connection(),
+        workspace.notebook,
         view_name=view_name,
-        observe_browser=observer,
+        timeout=timeout,
+        runtime_timeout=runtime_timeout,
         require_browser=require_browser,
     )
 

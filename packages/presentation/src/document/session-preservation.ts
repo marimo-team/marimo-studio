@@ -1,3 +1,5 @@
+import { isSessionId } from "@marimo-studio/marimo-frontend/session";
+
 import type { RuntimeConfig } from "../runtime-config/index.ts";
 
 type NavigationType = PerformanceNavigationTiming["type"];
@@ -9,7 +11,6 @@ export interface SessionEnvironment {
   storage: Pick<Storage, "getItem" | "removeItem" | "setItem">;
 }
 
-const SESSION_ID_PATTERN = /^s_[\da-z]{6}$/;
 const DOCUMENT_REPLAY_PARAM = "marimo_studio_resume";
 
 interface ServerSessionConfig {
@@ -46,10 +47,7 @@ const storageKey = (config: RuntimeConfig, url: URL): string => {
   return `marimo-studio:session:v1:server:${runtime?.fileKey ?? "unknown"}:${url.pathname}`;
 };
 
-export const prepareSessionRefresh = (
-  config: RuntimeConfig,
-  environment?: SessionEnvironment,
-): boolean => {
+const prepareReplay = (config: RuntimeConfig, environment?: SessionEnvironment): boolean => {
   try {
     const browser = environment ?? browserEnvironment();
     const url = new URL(browser.href);
@@ -66,23 +64,19 @@ export const prepareSessionRefresh = (
       return false;
     }
     const explicit = url.searchParams.get("session_id");
-    if (
-      url.searchParams.get(DOCUMENT_REPLAY_PARAM) === "1" &&
-      explicit &&
-      SESSION_ID_PATTERN.test(explicit)
-    ) {
+    if (url.searchParams.get(DOCUMENT_REPLAY_PARAM) === "1" && explicit && isSessionId(explicit)) {
       return true;
     }
     if (browser.navigationType !== "reload") {
       return false;
     }
-    if (explicit && SESSION_ID_PATTERN.test(explicit)) {
+    if (isSessionId(explicit)) {
       url.searchParams.set(DOCUMENT_REPLAY_PARAM, "1");
       browser.replaceUrl(url.toString());
       return true;
     }
     const remembered = browser.storage.getItem(storageKey(config, url));
-    if (remembered && SESSION_ID_PATTERN.test(remembered)) {
+    if (isSessionId(remembered)) {
       url.searchParams.set("session_id", remembered);
       url.searchParams.set(DOCUMENT_REPLAY_PARAM, "1");
       browser.replaceUrl(url.toString());
@@ -97,7 +91,7 @@ export const prepareSessionRefresh = (
   return false;
 };
 
-export const preservedDocumentUrl = (
+const replayDocumentUrl = (
   config: RuntimeConfig,
   target: string,
   sessionId: string | undefined,
@@ -110,21 +104,14 @@ export const preservedDocumentUrl = (
     url.searchParams.set("runtime", runtimeSelection);
   }
   const runtime = serverSessionConfig(config);
-  if (
-    runtime?.preserve &&
-    config.mode === "run" &&
-    sessionId &&
-    SESSION_ID_PATTERN.test(sessionId)
-  ) {
+  if (runtime?.preserve && config.mode === "run" && sessionId && isSessionId(sessionId)) {
     url.searchParams.set("session_id", sessionId);
     url.searchParams.set(DOCUMENT_REPLAY_PARAM, "1");
   }
   return url.toString();
 };
 
-export const finishSessionRefresh = (
-  environment?: Pick<SessionEnvironment, "href" | "replaceUrl">,
-): void => {
+const finishReplay = (environment?: Pick<SessionEnvironment, "href" | "replaceUrl">): void => {
   try {
     const browser = environment ?? browserEnvironment();
     const url = new URL(browser.href);
@@ -139,13 +126,13 @@ export const finishSessionRefresh = (
   }
 };
 
-export const rememberSession = (
+const rememberReplay = (
   config: RuntimeConfig,
   sessionId: string,
   environment?: SessionEnvironment,
 ): void => {
   const runtime = serverSessionConfig(config);
-  if (!runtime?.preserve || config.mode !== "run" || !SESSION_ID_PATTERN.test(sessionId)) {
+  if (!runtime?.preserve || config.mode !== "run" || !isSessionId(sessionId)) {
     return;
   }
   try {
@@ -156,3 +143,31 @@ export const rememberSession = (
     return;
   }
 };
+
+export class BrowserSessionReplay {
+  constructor(
+    private readonly environment?: SessionEnvironment,
+    private readonly currentSessionId: () => string | undefined = () =>
+      globalThis.__MARIMO_STUDIO_SESSION_ID__,
+  ) {}
+
+  prepare(config: RuntimeConfig): boolean {
+    return prepareReplay(config, this.environment);
+  }
+
+  preservedUrl(config: RuntimeConfig, target: string): string {
+    return replayDocumentUrl(config, target, this.currentSessionId(), this.environment?.href);
+  }
+
+  finish(): void {
+    finishReplay(this.environment);
+  }
+
+  remember(config: RuntimeConfig, sessionId: string): void {
+    rememberReplay(config, sessionId, this.environment);
+  }
+}
+
+declare global {
+  var __MARIMO_STUDIO_SESSION_ID__: string | undefined;
+}

@@ -14,36 +14,22 @@ const deferred = <T>() => {
 };
 
 class EventSourceStub {
-  static latest: EventSourceStub | undefined;
   static opened = 0;
 
-  private readonly listeners = new Map<string, EventListener>();
-
-  constructor(readonly url: string) {
-    EventSourceStub.latest = this;
+  constructor() {
     EventSourceStub.opened += 1;
   }
 
-  addEventListener(type: string, listener: EventListener): void {
-    this.listeners.set(type, listener);
-  }
-
-  emit(type: string, data?: string): void {
-    this.listeners.get(type)?.(
-      data === undefined ? new Event(type) : new MessageEvent(type, { data }),
-    );
-  }
-
+  addEventListener(): void {}
   close(): void {}
 }
 
 beforeEach(() => {
-  EventSourceStub.latest = undefined;
   EventSourceStub.opened = 0;
   vi.stubGlobal("EventSource", EventSourceStub);
 });
 
-describe("controller lifecycle", () => {
+describe("feature controller lifecycle", () => {
   it("does not open source events after disposal during initial reads", async () => {
     const html = deferred<Response>();
     const css = deferred<Response>();
@@ -71,7 +57,7 @@ describe("controller lifecycle", () => {
     expect(EventSourceStub.opened).toBe(0);
   });
 
-  it("ignores a view list loaded before a successful create", async () => {
+  it("ignores an inventory read started before a successful create", async () => {
     const listing = deferred<Awaited<ReturnType<ViewRemote["list"]>>>();
     const canonical = {
       schema: 1 as const,
@@ -90,25 +76,23 @@ describe("controller lifecycle", () => {
       "dashboard",
       ["dashboard"],
       remote,
-      "/events",
       vi.fn(async () => true),
       vi.fn(async () => true),
       vi.fn(),
     );
-    controller.start();
-    EventSourceStub.latest?.emit("ready");
+    const refreshing = controller.refreshInventory();
     await Promise.resolve();
 
     expect(await controller.create("report")).toBe(true);
     listing.resolve({ schema: 1, default_view: "dashboard", views: ["dashboard"] });
-    await Promise.resolve();
+    await refreshing;
 
     expect(controller.getSnapshot().views).toEqual(["dashboard", "report"]);
     expect(controller.getSnapshot().current).toBe("report");
     controller.dispose();
   });
 
-  it("does not select a view after a pending refresh is disposed", async () => {
+  it("does not select a view after a pending inventory read is disposed", async () => {
     const listing = deferred<Awaited<ReturnType<ViewRemote["list"]>>>();
     const select = vi.fn(async () => true);
     const remote: ViewRemote = {
@@ -120,50 +104,18 @@ describe("controller lifecycle", () => {
       "dashboard",
       ["dashboard"],
       remote,
-      "/events",
       select,
       vi.fn(async () => true),
       vi.fn(),
     );
-    controller.start();
-    EventSourceStub.latest?.emit("ready");
+    const refreshing = controller.refreshInventory();
     await Promise.resolve();
 
     controller.dispose();
     listing.resolve({ schema: 1, default_view: "report", views: ["report"] });
-    await Promise.resolve();
+    await refreshing;
 
     expect(select).not.toHaveBeenCalled();
-  });
-
-  it("selects an agent-requested view through the normal transition", async () => {
-    const select = vi.fn(async () => true);
-    const remote: ViewRemote = {
-      list: vi.fn(async () => ({
-        schema: 1 as const,
-        default_view: "dashboard",
-        views: ["dashboard", "report"],
-      })),
-      create: vi.fn(),
-      remove: vi.fn(),
-    };
-    const controller = new ViewController(
-      "dashboard",
-      ["dashboard"],
-      remote,
-      "/events",
-      select,
-      vi.fn(async () => true),
-      vi.fn(),
-    );
-    controller.start();
-
-    EventSourceStub.latest?.emit("activate", JSON.stringify({ schema: 1, view: "report" }));
-    await vi.waitFor(() => expect(controller.getSnapshot().current).toBe("report"));
-
-    expect(remote.list).toHaveBeenCalledOnce();
-    expect(select).toHaveBeenCalledWith("report", "preserve");
-    controller.dispose();
   });
 
   it("retargets the active view before deleting its files", async () => {
@@ -196,7 +148,6 @@ describe("controller lifecycle", () => {
       "dashboard",
       ["dashboard", "report"],
       remote,
-      "/events",
       vi.fn(async (view: string) => {
         order.push(`select:${view}`);
         return true;
@@ -231,7 +182,6 @@ describe("controller lifecycle", () => {
       "dashboard",
       ["dashboard", "report"],
       remote,
-      "/events",
       vi.fn(async () => false),
       vi.fn(async () => true),
       vi.fn(),

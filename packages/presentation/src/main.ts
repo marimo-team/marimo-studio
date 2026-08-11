@@ -2,23 +2,15 @@ import type { RuntimeRegistry } from "@marimo-studio/runtime";
 
 import htmx from "htmx.org";
 
-import { registerMarimoCellElement } from "./cells/host";
 import { documentBase } from "./document/base";
 import { bindViewNavigation } from "./document/events";
-import { PresentationDocument } from "./document/presentation";
 import { startQuerySync } from "./document/query-sync";
-import {
-  finishSessionRefresh,
-  preservedDocumentUrl,
-  prepareSessionRefresh,
-  rememberSession,
-} from "./document/session-preservation";
+import { presentationRevisions, presentationSessionId } from "./document/revision-runtime";
 import { errorMessage } from "./errors";
-import { registerMarimoOutputElement } from "./outputs/host";
-import { setRuntimeConnectionState, startReadiness, stopReadiness } from "./readiness";
+import { startPresentationObservers, stopPresentationObservers } from "./observers";
+import { projectionHosts } from "./projections/host-runtime";
+import { setRuntimeConnectionState } from "./rendered-view-observer";
 import {
-  commitRuntimeConfig,
-  fetchRuntimeConfigForRevision,
   getRuntimeConfig,
   getMountConfig,
   getSupportUrl,
@@ -31,11 +23,9 @@ import {
   disposeConfiguredRuntime,
   mountConfiguredRuntime,
   RuntimeMountCancelledError,
-  updateConfiguredRuntime,
   updateConfiguredRuntimeQuery,
 } from "./runtime/coordinator";
 import { restorePendingRuntimeSelection } from "./runtime/selection";
-import { startValueBindings, stopValueBindings } from "./values/hosts";
 import { initializeViewStyles } from "./view-styles/runtime";
 
 declare global {
@@ -47,13 +37,12 @@ declare global {
 }
 
 const browser = globalThis as typeof globalThis & Window;
+const runtimeSessionId = presentationSessionId;
 browser.htmx = htmx;
 const viewBaseUrl = document.baseURI;
 // Marimo's server client points <base> at the API root during health checks.
 // Keep relative authored assets anchored to the active view directory.
 documentBase.start(viewBaseUrl);
-const presentationDocument = new PresentationDocument();
-let activeViewTransition: AbortController | undefined;
 browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "booting";
 restorePendingRuntimeSelection();
 startQuerySync();
@@ -90,68 +79,32 @@ const bindRuntimeNavigation = (): (() => void) => {
 
 const bindStandaloneViewNavigation = (): (() => void) =>
   bindViewNavigation((request) => {
-    activeViewTransition?.abort();
-    const controller = new AbortController();
-    activeViewTransition = controller;
-    void presentationDocument
-      .replace(request.documentUrl, getSupportUrl(), controller.signal, () => {})
-      .then((commit) => {
-        if (commit.reloadDocument) {
-          globalThis.location.assign(
-            preservedDocumentUrl(
-              getRuntimeConfig(),
-              commit.target.documentUrl,
-              browser.__MARIMO_STUDIO_SESSION_ID__,
-            ),
-          );
-          return;
-        }
-        if (updateConfiguredRuntime(getRuntimeConfig()) === "reload") {
-          globalThis.location.reload();
-        }
-      })
+    void presentationRevisions
+      .transition(request.documentUrl, getSupportUrl())
       .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return;
-        }
         console.error("marimo-studio view navigation error", error);
-      })
-      .finally(() => {
-        if (activeViewTransition === controller) {
-          activeViewTransition = undefined;
-        }
       });
   });
 
 const bootstrap = async (registry: RuntimeRegistry) => {
+  startPresentationObservers(updateConfiguredRuntimeQuery);
+  globalThis.addEventListener("pagehide", stopPresentationObservers, { once: true });
   await initializeViewStyles();
-  startReadiness(updateConfiguredRuntimeQuery);
-  globalThis.addEventListener("pagehide", stopReadiness, { once: true });
-  registerMarimoCellElement();
-  registerMarimoOutputElement();
+  projectionHosts.register();
 
-  let config = await loadRuntimeConfig();
+  let config = await loadRuntimeConfig(runtimeSessionId);
+  config = await presentationRevisions.resume(config);
   const stopRuntimeNavigation = bindRuntimeNavigation();
   const stopViewNavigation = config.dev ? () => {} : bindStandaloneViewNavigation();
   globalThis.addEventListener("pagehide", stopRuntimeNavigation, { once: true });
   globalThis.addEventListener("pagehide", stopViewNavigation, { once: true });
-  globalThis.addEventListener("pagehide", () => activeViewTransition?.abort(), { once: true });
-  const resumingDocument = prepareSessionRefresh(config);
-  if (resumingDocument) {
-    config = commitRuntimeConfig(
-      await fetchRuntimeConfigForRevision(
-        getSupportUrl(),
-        config.revision,
-        undefined,
-        config.runtime.id,
-      ),
-    );
-    document.addEventListener("marimo-studio:runtime-ready", () => finishSessionRefresh(), {
-      once: true,
-    });
-  }
-  startValueBindings();
-  globalThis.addEventListener("pagehide", stopValueBindings, { once: true });
+  globalThis.addEventListener("pagehide", () => presentationRevisions.dispose(), {
+    once: true,
+  });
+  projectionHosts.connect();
+  globalThis.addEventListener("pagehide", () => projectionHosts.disconnect(), {
+    once: true,
+  });
   const runtimeRoot = document.querySelector<HTMLElement>("#marimo-runtime-root");
   if (!runtimeRoot) {
     throw new Error("Missing #marimo-runtime-root");
@@ -164,10 +117,10 @@ const bootstrap = async (registry: RuntimeRegistry) => {
   }
   browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "mounted";
   if (session.sessionId) {
-    rememberSession(config, session.sessionId);
+    presentationRevisions.rememberSession(session.sessionId);
     globalThis.addEventListener(
       "pagehide",
-      () => rememberSession(getRuntimeConfig(), session.sessionId ?? ""),
+      () => presentationRevisions.rememberSession(session.sessionId ?? ""),
       { once: true },
     );
   }

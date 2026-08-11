@@ -10,7 +10,11 @@ import type { OutputReader } from "../src/outputs/reader";
 import type { RuntimeCell } from "../src/runtime/runtime-cell";
 
 import { registerMarimoOutputElement } from "../src/outputs/host";
-import { setRuntimeConnectionState, startReadiness, stopReadiness } from "../src/readiness";
+import {
+  setRuntimeConnectionState,
+  startRenderedViewObserver,
+  stopRenderedViewObserver,
+} from "../src/rendered-view-observer";
 import { OutputPortal } from "../src/runtime/outputs/OutputPortal";
 
 vi.mock("@marimo-studio/marimo-frontend/projected-output", () => ({
@@ -42,7 +46,7 @@ beforeAll(() => registerMarimoOutputElement());
 
 afterEach(() => {
   vi.clearAllMocks();
-  stopReadiness();
+  stopRenderedViewObserver();
   document.body.replaceChildren();
 });
 
@@ -72,7 +76,7 @@ test("keeps readiness stale until the requested source version mounts", async ()
   const events: string[] = [];
   host.addEventListener("marimo-output-ready", () => events.push("ready"));
   host.addEventListener("marimo-output-updated", () => events.push("updated"));
-  startReadiness(async () => {});
+  startRenderedViewObserver(async () => {});
   setRuntimeConnectionState("ready");
 
   let resolveFirst = (_value: OutputReadResponse) => {};

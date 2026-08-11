@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from marimo_studio import _assets
-from marimo_studio._compat.code_mode import attach_code_mode_server_token
 from marimo_studio._compat.server.cell_aliases import enable_cell_alias_sync
 from marimo_studio._compat.server.context import (
     relative_request_path,
@@ -21,7 +18,10 @@ from marimo_studio._compat.server.context import (
 )
 from marimo_studio._compat.server.peer_controls import enable_peer_control_sync
 from marimo_studio._compat.server.sessions import has_access_token, has_read_access
+from marimo_studio._server.auth import authentication_required_response
+from marimo_studio._server.editor_bridge import delegate_editor_request
 from marimo_studio._server.files import file_response
+from marimo_studio._server.notebook_scope import NotebookScopeRegistry
 from marimo_studio._server.pages import (
     authentication_redirect,
     authored_document_redirect,
@@ -32,25 +32,29 @@ from marimo_studio._server.pages import (
     studio_landing_redirect,
     studio_response,
 )
-from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._server.routing import (
     authored_view_route,
     could_handle,
     document_view,
     is_studio_landing,
-    native_editor_target,
+    is_support_route,
     studio_view,
     view_asset,
     view_route_alias,
 )
 from marimo_studio._server.runtimes import DEFAULT_RUNTIME_REGISTRY
 from marimo_studio._server.support import (
-    lifecycle_status_response,
     support_response,
 )
+from marimo_studio._server.workspace_lifecycle import (
+    Invalid,
+    NeedsView,
+    Ready,
+    Unconfigured,
+    resolve_workspace_lifecycle,
+)
 from marimo_studio._urls import ACTIVE_VIEW_QUERY_PARAM, SUPPORT_PATH
-from marimo_studio._workspace import discover_studio
-from marimo_studio.errors import MarimoStudioError, WorkspaceInitializationError
+from marimo_studio.errors import MarimoStudioError
 
 
 class PresentationMiddleware:
@@ -61,7 +65,7 @@ class PresentationMiddleware:
         app: ASGIApp,
     ) -> None:
         self.app = app
-        self._presentations: dict[Path, NotebookPresentation] = {}
+        self._notebooks = NotebookScopeRegistry()
 
     async def __call__(
         self,
@@ -69,6 +73,15 @@ class PresentationMiddleware:
         receive: Receive,
         send: Send,
     ) -> None:
+        if scope["type"] == "lifespan":
+
+            async def close_scopes(message: Message) -> None:
+                if message["type"] == "lifespan.shutdown.complete":
+                    await self._notebooks.close()
+                await send(message)
+
+            await self.app(scope, receive, close_scopes)
+            return
         if scope["type"] not in {"http", "websocket"}:
             await self.app(scope, receive, send)
             return
@@ -84,44 +97,15 @@ class PresentationMiddleware:
         if mode is None:
             await self.app(scope, receive, send)
             return
-        editor_target = native_editor_target(relative)
-        if editor_target is not None and mode == "edit":
-            delegated_scope = _replace_relative_path(scope, relative, editor_target)
-            if scope["type"] == "http":
-                location = server_location(Request(scope, receive))
-                if location is not None:
-                    try:
-                        workspace = discover_studio(location.notebook)
-                    except MarimoStudioError:
-                        workspace = None
-                    if workspace is not None and workspace.cells:
-                        enable_cell_alias_sync(location)
-                    if editor_target.rstrip("/") == "/api/kernel/execute":
-                        delegated_scope = attach_code_mode_server_token(
-                            delegated_scope,
-                            server_context(location).server_token,
-                        )
-            await self.app(
-                delegated_scope,
-                receive,
-                send,
-            )
-            return
-        if (
-            scope["type"] == "http"
-            and mode == "edit"
-            and relative.rstrip("/") == "/api/kernel/execute"
+        if await delegate_editor_request(
+            self.app,
+            self._notebooks,
+            scope,
+            receive,
+            send,
+            relative=relative,
+            mode=mode,
         ):
-            location = server_location(Request(scope, receive))
-            delegated_scope = (
-                attach_code_mode_server_token(
-                    scope,
-                    server_context(location).server_token,
-                )
-                if location is not None
-                else scope
-            )
-            await self.app(delegated_scope, receive, send)
             return
         if scope["type"] != "http":
             await self.app(scope, receive, send)
@@ -138,6 +122,13 @@ class PresentationMiddleware:
                 else Response(status_code=405)
             )
             await response(scope, receive, send)
+            return
+        if (
+            not has_read_access(scope)
+            and is_support_route(relative)
+            and _accepts_json(request)
+        ):
+            await authentication_required_response()(scope, receive, send)
             return
         if not has_read_access(scope) and relative in {"", "/"}:
             await self.app(scope, receive, send)
@@ -183,34 +174,16 @@ class PresentationMiddleware:
             )
             return
 
-        presentation = self._presentations.setdefault(
-            location.notebook,
-            NotebookPresentation(location.notebook),
-        )
-        try:
-            definition = presentation.discover_definition()
-            lifecycle_error = None
-        except MarimoStudioError as error:
-            definition = None
-            lifecycle_error = error
-
-        if definition is None and lifecycle_error is None:
+        notebook_scope = self._notebooks.get(location.notebook)
+        presentation = notebook_scope.presentation
+        lifecycle = resolve_workspace_lifecycle(presentation)
+        if isinstance(lifecycle, Unconfigured):
             await self.app(scope, receive, send)
             return
-
-        if definition is not None:
-            try:
-                workspace = presentation.materialize(definition)
-            except MarimoStudioError as error:
-                workspace = None
-                lifecycle_error = error
-        else:
-            workspace = None
-
-        needs_view = isinstance(lifecycle_error, WorkspaceInitializationError)
-        if lifecycle_error is not None and landing and not needs_view:
+        if isinstance(lifecycle, Invalid) and landing:
             await self.app(scope, receive, send)
             return
+        workspace = lifecycle.workspace if isinstance(lifecycle, Ready) else None
 
         if workspace is None:
             selected_document = None
@@ -255,14 +228,19 @@ class PresentationMiddleware:
             getattr(location._session_manager, "watch", False)
         )
         context = server_context(location)
-        if definition is None:
-            assert lifecycle_error is not None
+        if isinstance(lifecycle, Invalid):
             response = (
-                lifecycle_status_response(lifecycle_error)
-                if relative == f"{SUPPORT_PATH}/status" and request.method == "GET"
+                await support_response(
+                    request,
+                    context,
+                    lifecycle,
+                    notebook_scope,
+                    relative.removeprefix(SUPPORT_PATH),
+                )
+                if relative.startswith(SUPPORT_PATH)
                 else error_response(
                     relative,
-                    lifecycle_error,
+                    lifecycle.error,
                     presentation.notebook,
                     base_url=location.base_url,
                     dev=dev,
@@ -273,33 +251,28 @@ class PresentationMiddleware:
             await response(scope, receive, send)
             return
 
-        if workspace is None:
-            assert lifecycle_error is not None
+        if isinstance(lifecycle, NeedsView):
             if relative.startswith(SUPPORT_PATH):
                 response = await support_response(
                     request,
                     context,
-                    definition,
-                    None,
-                    lifecycle_error,
-                    presentation,
+                    lifecycle,
+                    notebook_scope,
                     relative.removeprefix(SUPPORT_PATH),
                 )
-            elif (
-                needs_view
-                and location.mode == "edit"
-                and (landing or relative.strip("/").split("/")[0] == "studio")
+            elif location.mode == "edit" and (
+                landing or relative.strip("/").split("/")[0] == "studio"
             ):
                 redirect = page_redirect(request, relative, not landing)
                 response = redirect or initialization_response(
                     request,
                     context,
-                    definition,
+                    lifecycle.definition,
                 )
             else:
                 response = error_response(
                     relative,
-                    lifecycle_error,
+                    lifecycle.error,
                     presentation.notebook,
                     base_url=location.base_url,
                     dev=dev,
@@ -309,18 +282,8 @@ class PresentationMiddleware:
             await response(scope, receive, send)
             return
 
-        if lifecycle_error is not None:
-            response = error_response(
-                relative,
-                lifecycle_error,
-                presentation.notebook,
-                base_url=location.base_url,
-                dev=dev,
-                structured=_accepts_json(request),
-                routing_query=context.routing_query,
-            )
-            await response(scope, receive, send)
-            return
+        assert isinstance(lifecycle, Ready)
+        workspace = lifecycle.workspace
 
         try:
             redirect = (
@@ -352,7 +315,7 @@ class PresentationMiddleware:
             else:
                 enable_peer_control_sync(location)
                 if selected_document is not None:
-                    response = document_response(
+                    response = await document_response(
                         request,
                         context,
                         presentation,
@@ -380,10 +343,8 @@ class PresentationMiddleware:
                     response = await support_response(
                         request,
                         context,
-                        definition,
-                        workspace,
-                        None,
-                        presentation,
+                        lifecycle,
+                        notebook_scope,
                         relative.removeprefix(SUPPORT_PATH),
                     )
         except MarimoStudioError as error:

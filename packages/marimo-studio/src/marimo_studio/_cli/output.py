@@ -12,9 +12,10 @@ from marimo_studio._workspace.models import (
     StudioWorkspace,
     ViewSetupResult,
 )
+from marimo_studio.agent_models import AnalysisReport
 from marimo_studio.export import StaticExportResult
 from marimo_studio.inspect import RuntimeInspection
-from marimo_studio.types import AnalysisReport, CellSpec, CheckResult, NotebookSpec
+from marimo_studio.types import CellSpec, CheckResult, NotebookSpec
 
 
 def echo_error(message: str) -> None:

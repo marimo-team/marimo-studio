@@ -19,6 +19,7 @@ export const studioBootstrapSchema = z
     defaultRuntime: z.string().trim().min(1),
     urls: z.object({
       editor: z.string().min(1),
+      agent: z.string().min(1),
       events: z.string().min(1),
       query: z.string().min(1),
       studioPrefix: z.string().min(1),
@@ -27,6 +28,7 @@ export const studioBootstrapSchema = z
       views: z.string().min(1),
     }),
     workspaceId: z.string().min(1),
+    clientId: z.string().min(1),
     serverToken: z.string().min(1),
   })
   .superRefine((value, context) => {

@@ -2,21 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Literal, Protocol, cast
 
+from marimo_studio._runtime_limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.checks import check_runtime_studio, check_studio
-from marimo_studio.errors import ConfigurationError, MarimoStudioError
-from marimo_studio.types import (
+from marimo_studio._workspace.revisions import capture_studio_sources
+from marimo_studio.agent_models import (
     AnalysisAction,
     AnalysisReport,
     BrowserObservation,
-    CheckResult,
 )
+from marimo_studio.checks import check_runtime_studio, check_studio
+from marimo_studio.errors import ConfigurationError, MarimoStudioError
+from marimo_studio.types import CheckResult
 
 BrowserObserver = Callable[
-    [StudioWorkspace, tuple[str, ...]],
+    [StudioWorkspace, tuple[str, ...], dict[str, str]],
     Awaitable[tuple[BrowserObservation, ...]],
 ]
 
@@ -27,6 +30,8 @@ class RuntimeChecker(Protocol):
         studio: StudioWorkspace,
         *,
         view_name: str | None = None,
+        expected_revisions: dict[str, str] | None = None,
+        timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     ) -> tuple[CheckResult, ...]: ...
 
 
@@ -37,6 +42,7 @@ async def analyze_studio(
     observe_browser: BrowserObserver | None = None,
     require_browser: bool = False,
     runtime_checker: RuntimeChecker | None = None,
+    runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
 ) -> AnalysisReport:
     """Validate selected views and return a repair-oriented report.
 
@@ -45,52 +51,222 @@ async def analyze_studio(
     rendered Studio pages.
     """
     views = _selected_views(studio, view_name)
-    static_checks = check_studio(studio, view_name=view_name)
+    before, before_error, static_checks, after, after_error = await asyncio.to_thread(
+        _static_stage,
+        studio,
+        views,
+        view_name,
+    )
+    source_stable = before is not None and before == after
+    revisions = after or before or {view: "unavailable" for view in views}
+    source_error = before_error or after_error
+    if source_error is not None:
+        static_checks = (
+            *static_checks,
+            CheckResult(
+                "analysis-source-revision",
+                "fail",
+                f"Studio sources could not be captured: {source_error}",
+                code="analysis-source-unavailable",
+                details={
+                    "source": {"path": str(studio.notebook)},
+                    "hint": (
+                        "Restore the missing source, save it, then rerun the analysis."
+                    ),
+                },
+            ),
+        )
+    elif not source_stable:
+        static_checks = (
+            *static_checks,
+            CheckResult(
+                "analysis-source-revision",
+                "fail",
+                "Studio sources changed during static validation.",
+                code="analysis-source-changed",
+                details={
+                    "source": {"path": str(studio.notebook)},
+                    "hint": (
+                        "Wait for the current edits to save, then rerun the analysis."
+                    ),
+                },
+            ),
+        )
     static_failed = any(result.status == "fail" for result in static_checks)
     if static_failed:
         runtime_checks: tuple[CheckResult, ...] = ()
         runtime_skipped = "Static validation failed. Fix those errors first."
-    else:
-        check_runtime = runtime_checker or check_runtime_studio
-        runtime_checks = await check_runtime(studio, view_name=view_name)
-        runtime_skipped = None
-
-    if observe_browser is None:
-        observations = tuple(
-            BrowserObservation(
-                view=view,
-                state="not-observed",
-                message="No rendered browser observation was requested.",
-            )
-            for view in views
+        observations = _unobserved(
+            views,
+            "Browser validation waits for static validation to pass.",
+            code="browser-skipped",
         )
     else:
-        try:
-            observations = await observe_browser(studio, views)
-        except MarimoStudioError as error:
-            observations = tuple(
-                BrowserObservation(
-                    view=view,
-                    state="not-observed",
-                    message=str(error),
-                )
-                for view in views
-            )
+        runtime_result, observations = await _runtime_and_browser(
+            studio,
+            views,
+            revisions,
+            view_name=view_name,
+            observe_browser=observe_browser,
+            runtime_checker=runtime_checker,
+            runtime_timeout=runtime_timeout,
+        )
+        runtime_checks = runtime_result
+        runtime_skipped = None
     actions = _actions(
         static_checks,
         runtime_checks,
         observations,
         browser_required=require_browser,
     )
+    current_revisions, current_error = await asyncio.to_thread(
+        _try_selected_revisions,
+        studio,
+        views,
+    )
+    if source_stable:
+        if current_error is not None:
+            actions = (
+                *actions,
+                AnalysisAction(
+                    stage="analysis",
+                    severity="error",
+                    code="analysis-source-unavailable",
+                    message=(
+                        "Studio sources could not be captured after validation: "
+                        f"{current_error}"
+                    ),
+                    advice=(
+                        "Restore the missing source, save it, then rerun the analysis."
+                    ),
+                    source={"path": str(studio.notebook)},
+                ),
+            )
+        elif current_revisions != revisions:
+            actions = (
+                *actions,
+                AnalysisAction(
+                    stage="analysis",
+                    severity="error",
+                    code="analysis-source-changed",
+                    message="Studio sources changed while the analysis was running.",
+                    advice=(
+                        "Wait for the current edits to save, then rerun the analysis."
+                    ),
+                ),
+            )
     return AnalysisReport(
         notebook=studio.notebook,
         views=views,
+        runtime=studio.default_runtime,
+        revisions=revisions,
         static_checks=static_checks,
         runtime_checks=runtime_checks,
         runtime_skipped=runtime_skipped,
         browser_observations=observations,
         browser_required=require_browser,
         actions=actions,
+    )
+
+
+def _static_stage(
+    studio: StudioWorkspace,
+    views: tuple[str, ...],
+    view_name: str | None,
+) -> tuple[
+    dict[str, str] | None,
+    Exception | None,
+    tuple[CheckResult, ...],
+    dict[str, str] | None,
+    Exception | None,
+]:
+    before, before_error = _try_selected_revisions(studio, views)
+    static_checks = check_studio(studio, view_name=view_name)
+    after, after_error = _try_selected_revisions(studio, views)
+    return before, before_error, static_checks, after, after_error
+
+
+def _selected_revisions(
+    studio: StudioWorkspace,
+    views: tuple[str, ...],
+) -> dict[str, str]:
+    revisions = capture_studio_sources(studio, views).revisions
+    return {view: revisions[view] for view in views}
+
+
+def _try_selected_revisions(
+    studio: StudioWorkspace,
+    views: tuple[str, ...],
+) -> tuple[dict[str, str] | None, Exception | None]:
+    try:
+        return _selected_revisions(studio, views), None
+    except (KeyError, OSError, MarimoStudioError) as error:
+        return None, error
+
+
+async def _runtime_and_browser(
+    studio: StudioWorkspace,
+    views: tuple[str, ...],
+    revisions: dict[str, str],
+    *,
+    view_name: str | None,
+    observe_browser: BrowserObserver | None,
+    runtime_checker: RuntimeChecker | None,
+    runtime_timeout: float,
+) -> tuple[tuple[CheckResult, ...], tuple[BrowserObservation, ...]]:
+    async def check_runtime() -> tuple[CheckResult, ...]:
+        if runtime_checker is None:
+            return await check_runtime_studio(
+                studio,
+                view_name=view_name,
+                timeout=runtime_timeout,
+            )
+        return await runtime_checker(
+            studio,
+            view_name=view_name,
+            expected_revisions=revisions,
+            timeout=runtime_timeout,
+        )
+
+    async def observe() -> tuple[BrowserObservation, ...]:
+        if observe_browser is None:
+            return _unobserved(
+                views,
+                "No rendered browser observation was requested.",
+                code="browser-not-requested",
+            )
+        try:
+            return await observe_browser(studio, views, revisions)
+        except MarimoStudioError as error:
+            return _unobserved(views, str(error), code=error.code)
+
+    runtime_task = asyncio.create_task(check_runtime())
+    browser_task = asyncio.create_task(observe())
+    tasks = (runtime_task, browser_task)
+    try:
+        runtime_checks, observations = await asyncio.gather(*tasks)
+        return runtime_checks, observations
+    except BaseException:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
+
+
+def _unobserved(
+    views: tuple[str, ...],
+    message: str,
+    *,
+    code: str,
+) -> tuple[BrowserObservation, ...]:
+    return tuple(
+        BrowserObservation(
+            view=view,
+            state="not-observed",
+            message=message,
+            code=code,
+        )
+        for view in views
     )
 
 
@@ -141,6 +317,7 @@ def _actions(
         if (
             browser_required
             and observation.state != "ready"
+            and observation.code != "browser-skipped"
             and not any(
                 diagnostic.severity == "error" for diagnostic in observation.diagnostics
             )
@@ -149,10 +326,13 @@ def _actions(
                 AnalysisAction(
                     stage="browser",
                     severity="error",
-                    code=f"browser-{observation.state}",
+                    code=observation.code or f"browser-{observation.state}",
                     message=observation.message
                     or f"Rendered view {observation.view!r} is {observation.state}.",
-                    advice=_default_browser_advice(observation.state),
+                    advice=_default_browser_advice(
+                        observation.state,
+                        observation.code,
+                    ),
                     view=observation.view,
                 )
             )
@@ -201,11 +381,41 @@ def _default_check_advice(stage: str, result: CheckResult) -> str:
     return "Fix the projected notebook output, then rerun the analysis."
 
 
-def _default_browser_advice(state: str) -> str:
+def _default_browser_advice(state: str, code: str | None = None) -> str:
+    if code == "authentication-required":
+        return "Authenticate to the notebook server, then rerun the analysis."
+    if code == "notebook-mismatch":
+        return "Use the server URL for this notebook, then rerun the analysis."
+    if code == "browser-client-ambiguous":
+        return (
+            "Close the extra Studio tab or select its browser client, then rerun "
+            "the analysis."
+        )
+    if code == "browser-client-unavailable":
+        return "Open Studio for this notebook, then rerun the analysis."
+    if code == "server-unavailable":
+        return (
+            "Start or reconnect the requested Studio server, then rerun the analysis."
+        )
+    if code == "browser-observation-timeout":
+        return (
+            "Check the Studio browser connection and rendered-view errors, then "
+            "rerun the analysis."
+        )
+    if code == "browser-session-changed":
+        return "Rerun the analysis from the Studio tab for the current Marimo session."
+    if code == "browser-session-unavailable":
+        return "Wait for the Studio editor session to connect, then rerun the analysis."
+    if code == "browser-view-not-active":
+        return (
+            "Activate the view in one code-mode call, wait for it to render, "
+            "then analyze it in the next call."
+        )
+    if code == "browser-operation-in-progress":
+        return "Wait for the current Studio browser operation, then rerun the analysis."
     if state == "not-observed":
         return (
-            "Open and authenticate Studio for this notebook, select the view, "
-            "wait for it to settle, then rerun the analysis."
+            "Open Studio for this notebook, select the view, then rerun the analysis."
         )
     if state == "stale":
         return (

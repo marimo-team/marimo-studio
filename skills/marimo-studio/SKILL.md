@@ -68,6 +68,9 @@ state.
   active Python kernel.
 - Test the WebAssembly option when the user requests a static export. It runs
   the notebook in the browser.
+- Before handoff, inspect the notebook diff. Keep analytical and computational
+  changes. Move page markup, display copy, layout helpers, CSS strings, and
+  presentation-only formatting into the view files.
 
 `marimo-studio view add` may add the `marimo-studio` dependency and
 `[tool.marimo-studio]` settings to the notebook's inline dependency header.
@@ -156,9 +159,11 @@ await studio.activate_view(ctx, setup.name)
 
 Use `activate_view` after creating a view and whenever the repair loop changes
 to another view. If this is the notebook's first Studio view, the call reloads
-the open native editor into Studio after code mode returns. An active Studio
-workspace switches views in place. Both paths keep the configured default
-unchanged.
+the exact native editor session into Studio after code mode returns. An active
+Studio workspace switches the session-bound tab in place and acknowledges the
+completed transition. Both paths keep the configured default unchanged. Let
+the activation call return before running browser analysis so the selected
+page can finish its notebook projections.
 
 ## 3. Choose what the page shows
 
@@ -370,7 +375,8 @@ anywidgets still respond and that notebook edits update dependent content.
 ## 8. Analyze and repair
 
 From Marimo code mode, run the complete analysis after editing the notebook or
-view files:
+view files. The named view must already be active from an earlier code-mode
+call:
 
 ```python
 report = await studio.analyze(ctx, view_name=setup.name)
@@ -378,10 +384,33 @@ for action in report.actions:
     print(action.stage, action.code, action.advice)
 ```
 
-The analysis runs static validation, isolated runtime validation, and a
-revision-aware browser check against the running Studio view. The report
-contains every stage and an `actions` repair queue. Save the relevant source,
-rerun the analysis, and continue until `report.handoff_ready` is true.
+The analysis runs static validation, isolated runtime validation, and a fresh
+browser check against the running Studio view. Each browser request binds the
+view, source revision, runtime instance, Marimo session, client, and request
+ID. The report contains every stage and an `actions` repair queue. Save the
+relevant source, rerun the analysis, and continue until
+`report.handoff_ready` is true.
+
+Code mode analyzes one active view at a time. Complete the activation call,
+wait for the selected view to load, then run focused analysis in the next
+code-mode call. Repeat this pair for every changed view. The external CLI may
+omit `--view` and visit every configured view because it does not hold the
+notebook kernel while the workspace switches views.
+
+Isolated runtime validation waits 60 seconds by default. When the notebook has
+expected remote data or model setup, pass an explicit budget:
+
+```python
+report = await studio.analyze(
+    ctx,
+    view_name=setup.name,
+    runtime_timeout=120,
+)
+```
+
+The CLI equivalent is `--runtime-timeout 120`. A `runtime-timeout` action means
+the notebook did not settle within the selected budget. Increase the budget
+for expected setup work, or repair the notebook operation that did not finish.
 
 Run the same gate from the command line:
 
@@ -395,7 +424,7 @@ marimo-studio analyze analysis.py \
 ```
 
 Without a server URL, `analyze` still returns static and runtime results. It
-reports `browser-not-observed`, sets `handoff_ready` to false, and exits with
+reports `browser-not-requested`, sets `handoff_ready` to false, and exits with
 code 1. Use `check` when a static-only diagnostic is explicitly requested:
 
 ```console
@@ -472,5 +501,6 @@ Report:
 - the static, runtime, and browser analysis results
 - the interactions, loading states, widths, and color modes inspected
 
-Hand off only when every changed view has `handoff_ready: true`. Leave the
-notebook and each changed custom view runnable with no errors.
+Hand off only after focused analysis for every changed view returns
+`report.handoff_ready is True`. Leave the notebook and each changed custom view
+runnable with no errors.
