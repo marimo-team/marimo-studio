@@ -264,40 +264,37 @@ def test_kernel_projection_bounds_the_aggregate_response() -> None:
     assert result.errors["context.second"].code == "response-too-large"
 
 
-def test_kernel_lifespan_tolerates_code_mode_reinstantiation() -> None:
-    class Lifespan:
-        def __init__(self) -> None:
-            self.entries = 0
-            self.exits = 0
-
-        async def __aenter__(self) -> None:
-            self.entries += 1
-
-        async def __aexit__(self, *_args: object) -> None:
-            self.exits += 1
-
-    lifecycle = Lifespan()
+def test_untitled_notebook_allows_repeated_kernel_instantiation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._runtime import context as runtime_context
+    from marimo._runtime.context import kernel_context as kernel_context_module
+    from marimo._utils.lifespans import Lifespans
 
     class Kernel:
-        _lifespan: Any = lifecycle
+        _lifespan: Any = None
 
     class Context:
+        filename = None
         _kernel = Kernel()
 
+    context = Context()
+    monkeypatch.setattr(runtime_context, "get_context", lambda: context)
+    monkeypatch.setattr(kernel_context_module, "KernelRuntimeContext", Context)
+
     async def exercise() -> None:
-        await lifecycle.__aenter__()
-        kernel_values_module._guard_entered_lifespan(Context())
-        guarded = Context._kernel._lifespan
-        await guarded.__aenter__()
-        await guarded.__aexit__(None, None, None)
+        aggregate = Lifespans([kernel_values_module.kernel_lifespan])(None)
+        context._kernel._lifespan = aggregate
+        await aggregate.__aenter__()
+        try:
+            await context._kernel._lifespan.__aenter__()
+        finally:
+            await context._kernel._lifespan.__aexit__(None, None, None)
 
     asyncio.run(exercise())
 
-    assert lifecycle.entries == 1
-    assert lifecycle.exits == 1
 
-
-def test_kernel_lifespan_guard_preserves_marimos_full_lifespan_chain() -> None:
+def test_kernel_reinstantiation_preserves_marimos_full_lifespan_chain() -> None:
     from contextlib import asynccontextmanager
 
     from marimo._utils.lifespans import Lifespans
@@ -354,7 +351,7 @@ def test_kernel_lifespan_guard_preserves_marimos_full_lifespan_chain() -> None:
     ]
 
 
-def test_kernel_lifespan_guard_rejects_retry_after_setup_failure(
+def test_kernel_lifespan_rejects_retry_after_setup_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
