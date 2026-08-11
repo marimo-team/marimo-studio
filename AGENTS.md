@@ -31,8 +31,9 @@ TypeScript checks, tests, builds, and task execution.
   virtual files, and native routes.
 - `_workspace` owns configuration and files, `_compat` owns private Marimo
   integration, `_server` owns Studio HTTP routes, and `_cli` adapts commands.
-  `_workspace` and `_cli` import no compatibility adapter. Private `marimo._*`
-  imports stay in `_compat`. Ruff enforces these boundaries.
+  `_composition.py` builds the adapter bundle behind `_capabilities.py` ports.
+  `_workspace`, `_server`, and `_cli` import no concrete compatibility adapter.
+  Private `marimo._*` imports stay in `_compat`. Ruff enforces these boundaries.
 - `packages/protocol` owns browser records and performs no I/O.
   `packages/runtime` imports protocol and performs no Marimo, React, or browser
   I/O.
@@ -43,6 +44,26 @@ TypeScript checks, tests, builds, and task execution.
   module, and shared primitives import no app or feature module.
 - `apps/browser` composes package entry points. `apps/e2e` owns live browser
   acceptance. `apps/docs` owns VitePress while `docs/` owns authored pages.
+
+## Sources of truth
+
+Read contracts in this order:
+
+1. `_compat/release.json` for the supported Marimo version and tag commit.
+2. `_capabilities.py` for Studio-owned Python ports.
+3. `packages/protocol` for browser records.
+4. Runtime diagnostics and contract tests for observed behavior.
+5. Contributor and user guides for workflows.
+
+## Mutable owners
+
+| State                      | Owner                                    | Release boundary                          |
+| -------------------------- | ---------------------------------------- | ----------------------------------------- |
+| Notebook services          | `NotebookScopeRegistry`                  | Marimo application lifespan               |
+| Session replay             | `PrivateSessionReplay`                   | Final adapter handle                      |
+| Document revision          | Presentation revision runtime            | Presentation handle disposal              |
+| Projected output resources | Marimo frontend projected-output adapter | Final rendered owner                      |
+| Save transformation        | Notebook source-transform extension      | Session detach or server adapter shutdown |
 
 ## Validation
 
@@ -57,9 +78,12 @@ TypeScript checks, tests, builds, and task execution.
   failed requests, projections, controls, anywidgets, view switches, source
   saves, and external edits as the change requires.
 
-## Contributor guides
+## Task routing
 
-- [Contributor guide](development_docs/README.md)
-- [Architecture](development_docs/architecture.md)
-- [Frontend workspace](development_docs/frontend.md)
-- [Releasing](development_docs/releasing.md)
+| Task                                  | Guide                                              |
+| ------------------------------------- | -------------------------------------------------- |
+| General contribution                  | [Contributor guide](development_docs/README.md)    |
+| Python architecture or Marimo upgrade | [Architecture](development_docs/architecture.md)   |
+| Frontend facade or browser runtime    | [Frontend workspace](development_docs/frontend.md) |
+| Live cross-boundary behavior          | `apps/e2e` and the browser acceptance commands     |
+| Studio distribution or release        | [Releasing](development_docs/releasing.md)         |

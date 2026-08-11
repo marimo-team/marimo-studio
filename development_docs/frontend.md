@@ -130,20 +130,38 @@ installs its frontend workspace, and records the source metadata:
 pnpm --filter @marimo-studio/marimo-frontend prepare:upstream
 ```
 
-A Marimo upgrade changes both the Python lockfile and `expectedCommit` in
-`packages/marimo-frontend/scripts/source.mjs`. Run adapter tests and rebuild
-the browser bundle after updating them.
+A Marimo upgrade changes `_compat/release.json`, the exact Python pins, and any
+affected symbol contracts in `_compat/layout.py`. Run the adapter tests and
+rebuild the browser bundle after updating them.
 
-Set `MARIMO_REPO` to exercise a local checkout whose project version matches
-the Python environment:
+Set `MARIMO_REPO` to exercise a local checkout at the configured release
+commit. The preparation step rejects another commit even when its project
+version has the same value:
 
 ```console
 MARIMO_REPO=/path/to/marimo make build
 ```
 
-Keep upstream source paths, registry access, Marimo frame behavior, and build
-aliases inside this package. Other packages consume named adapters such as the
-control endpoint and theme frame.
+The package exposes five capability adapters to browser applications:
+
+- `embedded-runtime` exposes `mountEmbeddedRuntime(options)`. Its closeable
+  handle owns Marimo providers, server or WebAssembly transport, notebook
+  connection, theme updates, session exposure, registered function calls, and
+  disposal.
+- `cell-presentation` renders a runtime cell through Marimo's native console
+  and output components.
+- `projected-output` retains its synthetic cell and virtual files through the
+  final rendered owner. Marimo kernel notifications release shared UI element
+  registry entries.
+- `session-bootstrap` preflights a remembered session before Marimo creates its
+  browser session singleton.
+- `control-endpoint` adapts an embedded Marimo frame to Studio's control
+  connector contract through one multi-owner registry broker.
+
+Presentation supplies document policy and protocol records to these adapters.
+Upstream source paths, atoms, providers, registries, transport managers, and
+frame globals remain package implementation details. `theme-frame` and `vite`
+provide the shared frame-theme and build integrations.
 
 ## Browser build
 
@@ -155,9 +173,10 @@ packages/marimo-studio/src/marimo_studio/_static/browser/
 ```
 
 The build emits `runtime.js`, `dev-reload.js`, `studio.js`, their CSS files,
-shared chunks, worker assets, and `build-meta.json`. The generated directory
-and prepared Marimo checkout stay untracked. Change workspace source, rebuild,
-then run `make package` when distribution contents are part of the change.
+shared chunks, worker assets, and `build-meta.json`. Build metadata records the
+Marimo version and release commit. The generated directory and prepared Marimo
+checkout stay untracked. Change workspace source, rebuild, then run
+`make package` when distribution contents are part of the change.
 
 ## Browser acceptance ownership
 

@@ -19,6 +19,7 @@ Marimo process
 | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Marimo                                                                | ASGI lifecycle, auth, sessions, kernels, native APIs, and virtual files            |
 | `_entrypoints`                                                        | Register Studio middleware and the kernel lifespan extension                       |
+| `_composition.py`, `_capabilities.py`                                 | Construct Marimo adapters and define the stable ports consumed by Studio policy    |
 | `_workspace`                                                          | Resolve definitions, workspaces, targets, aliases, views, checks, and source files |
 | `app.py`, `checks.py`, `environment.py`, `inspect.py`, `workspace.py` | Compose workspace rules with Marimo adapters at public boundaries                  |
 | `_compat`                                                             | Translate private Marimo APIs into Studio-owned records                            |
@@ -27,14 +28,47 @@ Marimo process
 | `_cli`                                                                | Adapt Click commands and output formats to application services                    |
 
 `_workspace` accepts `NotebookInspector` and `RuntimeProber` ports when a
-rule needs notebook data. It imports no compatibility adapter. `_cli` also
-stays independent of `_compat`. Public services, `_server`, and extension
-entry points are composition boundaries that connect those slices.
+rule needs notebook data. It imports no compatibility adapter. `_cli` and
+`_server` also stay independent of concrete `_compat` modules. The composition
+module exposes fixed roots for server, kernel, tooling, programmatic app, and
+static-export processes. Each root validates the pinned release before it
+constructs a private adapter and injects the narrow port into Studio policy.
 
 Private imports beginning with `marimo._` stay in `_compat`. Ruff enforces the
 boundary. Compatibility code converts Marimo sessions, graph state, requests,
 and kernel messages into records owned by `marimo_studio.types` or
 `_workspace`.
+
+### Marimo release
+
+Studio supports the tagged Marimo `0.23.16` release. Python dependencies use
+an exact version pin. The frontend source uses the commit behind that tag, and
+the browser build records the same version and commit in `build-meta.json`.
+
+`_compat/release.json` is the shared version and commit source for the Python
+and frontend adapters. `_compat/layout.py` contains the private symbols whose
+behavior Studio depends on. Adapter construction checks the installed version,
+signatures, and source fingerprints before Marimo starts serving Studio routes.
+Packaged browser assets must report the configured version and commit.
+
+To update Marimo:
+
+1. Change the version and tag commit in `_compat/release.json`.
+2. Change the exact dependency pins in both Python project files and refresh
+   `uv.lock`.
+3. Capture the new signatures and fingerprints:
+
+   ```console
+   uv run --frozen python -m marimo_studio._compat.layout > /tmp/marimo-symbols.json
+   ```
+
+4. Update the affected contracts in `_compat/layout.py`, then run the
+   compatibility tests.
+5. Rebuild the browser assets and run the full browser acceptance suite.
+
+`marimo-studio check --format json` includes a `compatibility` record with the
+Studio version, Marimo version and commit, browser version and commit, adapter
+family, and validation state.
 
 ### Notebook-scoped services
 
@@ -59,7 +93,10 @@ registry and owns one activation or observation operation for each targeted
 browser. Agent state does not sit on the presentation cache.
 
 `NotebookScopeRegistry` creates these services on demand and closes them with
-the Marimo server lifespan. HTTP adapters receive the specific peer they need.
+the Marimo server lifespan. Cache hits reuse the existing scope. Shutdown
+attempts every scope, client registry, agent coordinator, and server adapter,
+then reports the first failure. HTTP adapters receive the specific peer they
+need.
 
 ### Workspace lifecycle
 
@@ -207,6 +244,11 @@ derived notebook in Marimo's Pyodide worker. Both runtimes use the presentation
 renderer for output plugins, native controls, React portals, value reads, and
 anywidget models.
 
+`mountEmbeddedRuntime(options)` is the Marimo frontend composition seam. Its
+handle owns the provider tree, transport configuration, notebook connection,
+theme subscription, session exposure, updates, and disposal. Presentation
+supplies document policy and projection readers through the facade contract.
+
 `PresentationRevisionController` owns each document transition. It cancels a
 superseded generation, marks presentation readiness as loading, stages the
 document and runtime configuration, commits or rolls back the authored shell,
@@ -261,8 +303,10 @@ deletes the old directory, then commits the returned inventory.
 ## Static export
 
 `marimo_studio.export` resolves one view, validates its projections and output
-paths, derives the WebAssembly notebook with value and rich-output bridges, and
-writes a static site. The bundle
+paths, asks the shared `BrowserRuntimeProjector` for the WebAssembly record,
+and writes a static site. Server previews use the same projector, so version,
+commit, notebook identity, code, and selector specifications have one producer.
+The bundle
 contains the authored view, notebook source, notebook `public/` files, static
 cell fragments, runtime configuration, and packaged browser assets.
 

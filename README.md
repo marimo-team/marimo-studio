@@ -133,7 +133,8 @@ python -m http.server --directory dist/executive
 The static export contains the notebook source. Review the notebook and its
 data access before publishing the generated directory.
 
-Marimo Studio supports Python 3.10 or newer and Marimo 0.23.16 or newer.
+Marimo Studio supports Python 3.10 or newer and the tagged Marimo 0.23.16
+release.
 
 ## Documentation
 

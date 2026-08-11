@@ -132,7 +132,9 @@ default. Set `--runtime-timeout SECONDS` for notebooks with expected setup work
 such as remote data loading.
 
 Text output reports one `PASS`, `WARN`, or `FAIL` record per check. JSON output
-contains `schema`, `ok`, `notebook`, `view`, and a `checks` array.
+contains `schema`, `ok`, `notebook`, `view`, and a `checks` array. Its
+`compatibility` check records the Studio version, validated Marimo version and
+tag commit, packaged browser identity, adapter family, and validation state.
 
 ## `analyze`
 
