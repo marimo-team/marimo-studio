@@ -1,0 +1,27 @@
+packages/studio/tests/agent-remotes.test.ts
+  s_9189dcd8cc1eb7::t_fdba0f210fd8e9 277-300
+packages/presentation/tests/runtime-config.test.ts
+  s_9189dcd8cc1eb7::t_fdba0f210fd8e9 226-236
+packages/studio/src/app/activation-remote.ts
+  s_9189dcd8cc1eb7::t_fdba0f210fd8e9 30
+packages/presentation/src/runtime-config/remote.ts
+  s_9189dcd8cc1eb7::t_fdba0f210fd8e9 118-135
+apps/e2e/tests/fixture.ts
+  s_9189dcd8cc1eb7::t_fdba0f210fd8e9 276-279
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7fe4c7567402032ba85c1bc336730eaaab9e5292",
+  "prompts": {},
+  "sessions": {
+    "s_9189dcd8cc1eb7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fefb7-2c6b-7ee3-abc7-f46a25a4a7c3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
