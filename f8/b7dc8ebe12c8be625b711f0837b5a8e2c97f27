@@ -1,0 +1,104 @@
+packages/marimo-studio/tests/test_peer_controls.py
+  s_9189dcd8cc1eb7::t_ac68010b3aab61 32,94-95,113
+development_docs/architecture.md
+  s_9189dcd8cc1eb7::t_6fb85bd404bdfd 59-61,67,69
+  s_9189dcd8cc1eb7::t_ac68010b3aab61 220-221
+  s_9189dcd8cc1eb7::t_8512a216b99eac 72-74
+packages/marimo-studio/src/marimo_studio/_compat/server/existing_session.py
+  s_9189dcd8cc1eb7::t_59bf794b494227 185,188-197,200,215-222,226
+packages/marimo-studio/tests/test_kiosk_sessions.py
+  s_9189dcd8cc1eb7::t_ff0ee775587710 3,5,18,51-65,239-286
+packages/marimo-studio/tests/test_notebook_scope.py
+  s_9189dcd8cc1eb7::t_a6f6aededf2da1 85,88-93,99-100,102-104,149
+packages/marimo-studio/tests/test_compatibility.py
+  s_9189dcd8cc1eb7::t_2d51e734371433 17,178-205,214-215,219-221
+  s_9189dcd8cc1eb7::t_615e700b927316 168-175,206-213
+  s_9189dcd8cc1eb7::t_9d229ad8dadbf9 247-273
+packages/marimo-studio/src/marimo_studio/_capabilities.py
+  s_9189dcd8cc1eb7::t_ac68010b3aab61 177-178,372,414
+packages/marimo-frontend/tests/control-endpoint.test.ts
+  s_9189dcd8cc1eb7::t_2ca9f7dbb13961 149-171
+docs/reference/cli.md
+  s_9189dcd8cc1eb7::t_2d51e734371433 136-138
+packages/marimo-studio/src/marimo_studio/_server/notebook_scope.py
+  s_9189dcd8cc1eb7::t_a6f6aededf2da1 60,62
+  s_9189dcd8cc1eb7::t_652fbd72d93fd8 68-70
+packages/marimo-studio/tests/test_session_replay.py
+  s_9189dcd8cc1eb7::t_9d229ad8dadbf9 33-37,108-160
+packages/marimo-studio/src/marimo_studio/_compat/server/peer_state.py
+  s_9189dcd8cc1eb7::t_ac68010b3aab61 1,36-37,62,64,75,138,213
+Makefile
+  s_9189dcd8cc1eb7::t_6fb85bd404bdfd 43
+packages/presentation/src/outputs/remote.ts
+  s_9189dcd8cc1eb7::t_7865089f85ddc3 115-117
+  s_9189dcd8cc1eb7::t_0f42e5a35a9ab3 122
+packages/marimo-frontend/scripts/source.mjs
+  s_9189dcd8cc1eb7::t_cb2ec2913d610c 147
+  s_9189dcd8cc1eb7::t_6fb85bd404bdfd 97,99-105,193
+  s_9189dcd8cc1eb7::t_7865089f85ddc3 98
+packages/marimo-frontend/src/upstream/runtime.ts
+  s_9189dcd8cc1eb7::t_62cd49a98fc10d 2-3,5
+development_docs/frontend.md
+  s_9189dcd8cc1eb7::t_6fb85bd404bdfd 137
+  s_9189dcd8cc1eb7::t_8512a216b99eac 138-139
+  s_9189dcd8cc1eb7::t_2d51e734371433 151
+  s_9189dcd8cc1eb7::t_2e23cfaf8db5a7 150
+packages/marimo-studio/tests/test_live_cell_aliases.py
+  s_9189dcd8cc1eb7::t_9d229ad8dadbf9 31,467-479,485,488-499
+packages/marimo-frontend/tests/embedded-runtime.test.ts
+  s_9189dcd8cc1eb7::t_2e23cfaf8db5a7 401
+  s_9189dcd8cc1eb7::t_62cd49a98fc10d 99,114,116,230-234,400,402-468
+  s_9189dcd8cc1eb7::t_808cf3be0c26ed 470-524
+packages/protocol/tests/runtime-config.test.ts
+  s_9189dcd8cc1eb7::t_e6e7ed3c80bfbe 99
+.github/workflows/ci.yml
+  s_9189dcd8cc1eb7::t_6fb85bd404bdfd 112-113
+packages/marimo-frontend/tests/source.test.mjs
+  s_9189dcd8cc1eb7::t_cb2ec2913d610c 42,137-139
+  s_9189dcd8cc1eb7::t_8e11605913de24 40
+  s_9189dcd8cc1eb7::t_6fb85bd404bdfd 10,149-159
+packages/marimo-studio/src/marimo_studio/_server/middleware.py
+  s_9189dcd8cc1eb7::t_a6f6aededf2da1 96
+  s_9189dcd8cc1eb7::t_ac68010b3aab61 358
+packages/marimo-studio/src/marimo_studio/_compat/server/notebook_save.py
+  s_9189dcd8cc1eb7::t_59bf794b494227 111-119
+packages/presentation/src/outputs/wasm.ts
+  s_9189dcd8cc1eb7::t_0f42e5a35a9ab3 78,84
+packages/presentation/tests/wasm-outputs.test.ts
+  s_9189dcd8cc1eb7::t_0f42e5a35a9ab3 122,141-142,144
+packages/marimo-studio/src/marimo_studio/checks.py
+  s_9189dcd8cc1eb7::t_2d51e734371433 10,21-32,42,48
+packages/marimo-frontend/src/embedded-runtime.tsx
+  s_9189dcd8cc1eb7::t_cb2ec2913d610c 432-434,442,445-454,467-469,525
+  s_9189dcd8cc1eb7::t_2e23cfaf8db5a7 516
+  s_9189dcd8cc1eb7::t_62cd49a98fc10d 32,47,49,144-149,427,429,501-505,509-515,517-523
+packages/marimo-studio/src/marimo_studio/_compat/server/session_replay.py
+  s_9189dcd8cc1eb7::t_59bf794b494227 5,20,25,37,39,41-49,130,132,135,148
+packages/marimo-studio/src/marimo_studio/_composition.py
+  s_9189dcd8cc1eb7::t_59bf794b494227 37-41
+  s_9189dcd8cc1eb7::t_ac68010b3aab61 81,88,96,99-101
+  s_9189dcd8cc1eb7::t_2d51e734371433 61-68,165
+packages/marimo-frontend/src/control-endpoint-core.ts
+  s_9189dcd8cc1eb7::t_2ca9f7dbb13961 84-86,89-90,92-93,95
+packages/presentation/tests/server-outputs.test.ts
+  s_9189dcd8cc1eb7::t_0f42e5a35a9ab3 63,147,150-151
+apps/e2e/tests/recovery.spec.ts
+  s_9189dcd8cc1eb7::t_147876192af1a0 22,37-38,200
+  s_9189dcd8cc1eb7::t_7865089f85ddc3 72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f8b7dc8ebe12c8be625b711f0837b5a8e2c97f27",
+  "prompts": {},
+  "sessions": {
+    "s_9189dcd8cc1eb7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fefb7-2c6b-7ee3-abc7-f46a25a4a7c3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
