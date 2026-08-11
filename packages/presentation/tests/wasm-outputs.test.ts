@@ -119,7 +119,7 @@ describe("WebAssembly output reads", () => {
     expect(request).toHaveBeenNthCalledWith(2, secondProjection);
   });
 
-  test("reconciles a native render after its caller stops waiting", async () => {
+  test("discards a native render after its caller stops waiting", async () => {
     let complete = (_value: unknown) => {};
     const response = new Promise<unknown>((resolve) => {
       complete = resolve;
@@ -138,9 +138,9 @@ describe("WebAssembly output reads", () => {
     controller.abort();
     await expect(reading).rejects.toMatchObject({ name: "AbortError" });
     complete(rendered);
+    await Promise.resolve();
+    await Promise.resolve();
 
-    await vi.waitFor(() =>
-      expect(reconcileProjectedOutput).toHaveBeenCalledWith(rendered.return_value.outputs.df),
-    );
+    expect(reconcileProjectedOutput).not.toHaveBeenCalled();
   });
 });

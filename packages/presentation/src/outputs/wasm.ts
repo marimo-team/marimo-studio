@@ -75,12 +75,12 @@ export const createWasmOutputReader = (
       throwIfWasmAborted(signal);
       await (typeof ready === "function" ? ready() : ready);
       throwIfWasmAborted(signal);
-      return readWasmOutputs(projection, request).then(reconcileOutputReadResponse);
+      return readWasmOutputs(projection, request);
     });
     queue = operation.then(
       () => undefined,
       () => undefined,
     );
-    return waitForWasmCaller(operation, signal);
+    return waitForWasmCaller(operation, signal).then(reconcileOutputReadResponse);
   };
 };

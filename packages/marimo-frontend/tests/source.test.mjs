@@ -7,6 +7,7 @@ import { afterEach, expect, test } from "vite-plus/test";
 
 import { decodeMarimoSource } from "../scripts/metadata.mjs";
 import {
+  assertCleanCheckout,
   assertMarimoCommit,
   expectedCommit,
   isPreparedOwnedCheckout,
@@ -36,8 +37,9 @@ const createRepository = async (content) => {
   await git(path, "init");
   await git(path, "config", "user.email", "studio@example.com");
   await git(path, "config", "user.name", "Marimo Studio");
+  await writeFile(join(path, ".gitignore"), "node_modules/\npackages/llm-info/data/generated/\n");
   await writeFile(join(path, "tracked.txt"), content);
-  await git(path, "add", "tracked.txt");
+  await git(path, "add", ".gitignore", "tracked.txt");
   await git(path, "commit", "-m", "fixture");
   return { commit: await git(path, "rev-parse", "HEAD"), path };
 };
@@ -132,6 +134,10 @@ test("checkout preparation repairs ownership, dirt, and readiness", async () => 
 
   expect(await isPreparedOwnedCheckout(preparation)).toBe(true);
 
+  await writeFile(join(checkout, "untracked.ts"), "export {};\n");
+  expect(await isPreparedOwnedCheckout(preparation)).toBe(false);
+  await rm(join(checkout, "untracked.ts"));
+
   await writeFile(join(checkout, "tracked.txt"), "changed\n");
   expect(await isPreparedOwnedCheckout(preparation)).toBe(false);
 });
@@ -139,4 +145,16 @@ test("checkout preparation repairs ownership, dirt, and readiness", async () => 
 test("a local source must match the tagged release commit", async () => {
   const source = await createRepository("release\n");
   await expect(assertMarimoCommit(source.path)).rejects.toThrow(expectedCommit);
+});
+
+test("a local source must have a clean worktree", async () => {
+  const source = await createRepository("release\n");
+
+  await assertCleanCheckout(source.path);
+  await writeFile(join(source.path, "tracked.txt"), "changed\n");
+  await expect(assertCleanCheckout(source.path)).rejects.toThrow("local source changes");
+
+  await git(source.path, "checkout", "--", "tracked.txt");
+  await writeFile(join(source.path, "untracked.ts"), "export {};\n");
+  await expect(assertCleanCheckout(source.path)).rejects.toThrow("local source changes");
 });

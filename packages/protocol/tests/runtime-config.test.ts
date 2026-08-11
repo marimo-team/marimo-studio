@@ -96,7 +96,7 @@ test("runtime configuration rejects malformed contracts", () => {
 test("mount configuration validates injected document data", () => {
   const mount = {
     supportUrl: "/_marimo-studio/views/dashboard",
-    version: "0.23.16",
+    version: "test-version",
     revision: "presentation-revision",
     runtime: "server",
   };

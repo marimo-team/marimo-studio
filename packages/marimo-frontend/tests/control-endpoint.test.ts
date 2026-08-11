@@ -146,4 +146,27 @@ describe("Control endpoint", () => {
     second.dispose();
     expect(registry.registerInstance).toBe(original);
   });
+
+  test("retries broker disposal after another registry owner unwinds", () => {
+    const registry = new FakeRegistry();
+    const original = registry.registerInstance;
+    const controls = endpoint(registry, async () => null);
+    const broker = registry.registerInstance;
+    const foreign = function (this: FakeRegistry, objectId: string, instance: HTMLElement) {
+      return broker.call(this, objectId, instance);
+    };
+    registry.registerInstance = foreign;
+
+    expect(() => controls.dispose()).toThrow("changed before endpoint disposal");
+    expect(registry.registerInstance).toBe(foreign);
+
+    registry.registerInstance = broker;
+    controls.dispose();
+    expect(registry.registerInstance).toBe(original);
+
+    const replacement = endpoint(registry, async () => null);
+    registry.registerInstance("slider-0", { value: 7 } as HTMLElement & { value: number });
+    expect(registry.messages).toHaveLength(1);
+    replacement.dispose();
+  });
 });

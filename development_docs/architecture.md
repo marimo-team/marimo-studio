@@ -56,19 +56,22 @@ To update Marimo:
 1. Change the version and tag commit in `_compat/release.json`.
 2. Change the exact dependency pins in both Python project files and refresh
    `uv.lock`.
-3. Capture the new signatures and fingerprints:
+3. Update the support labels in `README.md`, this guide, and
+   `docs/reference/python-api.md`.
+4. Capture the new signatures and fingerprints:
 
    ```console
    uv run --frozen python -m marimo_studio._compat.layout > /tmp/marimo-symbols.json
    ```
 
-4. Update the affected contracts in `_compat/layout.py`, then run the
+5. Update the affected contracts in `_compat/layout.py`, then run the
    compatibility tests.
-5. Rebuild the browser assets and run the full browser acceptance suite.
+6. Rebuild the browser assets and run the full browser acceptance suite.
 
 `marimo-studio check --format json` includes a `compatibility` record with the
-Studio version, Marimo version and commit, browser version and commit, adapter
-family, and validation state.
+Studio version, required release, observed Marimo and browser identities,
+adapter family, and validation state. Observed identities are `null` when
+release validation fails.
 
 ### Notebook-scoped services
 
@@ -214,8 +217,8 @@ descendants.
 
 The Server preview joins the editor's Marimo session as a kiosk consumer after
 the editor session exists. It reuses that kernel's outputs, native controls,
-and anywidget models. Marimo relays accepted native control writes to peer
-consumers in the session.
+and anywidget models. Studio relays authorized native control commands to peer
+consumers before kernel application.
 
 The WebAssembly preview owns a separate Pyodide kernel. Studio maps semantic
 cell references to each runtime's cell IDs and synchronizes JSON-compatible

@@ -96,6 +96,7 @@ vi.mock("../src/upstream/runtime.ts", async () => {
     getRuntimeManager: () => mocks.runtimeManager,
     initialModeAtom: mocks.atoms.initialMode,
     initializePlugins: mocks.initializePlugins,
+    KernelStartupErrorModal: () => createElement("div", { "data-feedback": "startup" }),
     LocaleProvider: provider("locale"),
     marimoVersionAtom: mocks.atoms.marimoVersion,
     ModalProvider: provider("modal"),
@@ -110,7 +111,9 @@ vi.mock("../src/upstream/runtime.ts", async () => {
     SlotzProvider: provider("slotz"),
     store: { set: mocks.storeSet },
     ThemeProvider: provider("theme"),
+    Toaster: () => createElement("div", { "data-feedback": "toast" }),
     TooltipProvider: provider("tooltip"),
+    TracebackModalContainer: () => createElement("div", { "data-feedback": "traceback" }),
     useMarimoKernelConnection: () => ({ connection: { state: "OPEN" } }),
     useRequestClient: () => ({
       sendComponentValues: mocks.sendComponentValues,
@@ -224,6 +227,11 @@ test("mounts, updates, and disposes the server runtime through one handle", asyn
     ),
   ).toEqual(["jotai", "theme", "error", "tooltip", "slotz", "locale", "modal"]);
   expect(target.textContent).toContain("s_abc123");
+  expect(
+    Array.from(target.querySelectorAll<HTMLElement>("[data-feedback]"), (element) =>
+      element.getAttribute("data-feedback"),
+    ),
+  ).toEqual(["toast", "startup", "traceback"]);
   expect(mocks.retainControlValues).toHaveBeenCalledOnce();
   expect(mocks.storeSet).toHaveBeenCalledWith(mocks.atoms.connection, { state: "CONNECTING" });
   expect(mocks.storeSet).toHaveBeenCalledWith(mocks.atoms.runtimeConfig, {
@@ -388,4 +396,129 @@ test("reports synchronous transport failures through the handle", async () => {
   });
 
   await act(async () => handle.dispose());
+});
+
+test("allows one embedded runtime owner per page", async () => {
+  const theme = createThemeSource();
+  let first!: EmbeddedRuntimeHandle;
+  await act(async () => {
+    first = mountEmbeddedRuntime({
+      exposeSession: false,
+      initialMode: "read",
+      presentation: presentation(),
+      render: () => null,
+      root: root(),
+      theme: theme.source,
+      transport: {
+        kind: "wasm",
+        code: "",
+        filename: "notebook.py",
+        url: "https://example.test/",
+        version: "1.2.3",
+        waitForReady: () => undefined,
+      },
+      viewMode: "read",
+    });
+    await first.initialized;
+  });
+
+  expect(() =>
+    mountEmbeddedRuntime({
+      exposeSession: false,
+      initialMode: "read",
+      presentation: presentation(),
+      render: () => null,
+      root: root(),
+      theme: theme.source,
+      transport: {
+        kind: "wasm",
+        code: "",
+        filename: "notebook.py",
+        url: "https://example.test/",
+        version: "1.2.3",
+        waitForReady: () => undefined,
+      },
+      viewMode: "read",
+    }),
+  ).toThrow("already mounted");
+
+  await act(async () => first.dispose());
+
+  let replacement!: EmbeddedRuntimeHandle;
+  await act(async () => {
+    replacement = mountEmbeddedRuntime({
+      exposeSession: false,
+      initialMode: "read",
+      presentation: presentation(),
+      render: () => null,
+      root: root(),
+      theme: theme.source,
+      transport: {
+        kind: "wasm",
+        code: "",
+        filename: "notebook.py",
+        url: "https://example.test/",
+        version: "1.2.3",
+        waitForReady: () => undefined,
+      },
+      viewMode: "read",
+    });
+    await replacement.initialized;
+    replacement.dispose();
+  });
+});
+
+test("retains runtime ownership when mount rollback cannot release a resource", () => {
+  const cleanupError = new Error("theme rollback failed");
+  const theme = {
+    current: () => "light" as const,
+    subscribe: () => () => {
+      throw cleanupError;
+    },
+  };
+  let failure: unknown;
+
+  try {
+    mountEmbeddedRuntime({
+      exposeSession: false,
+      initialMode: "read",
+      presentation: presentation(),
+      render: () => null,
+      root: null as unknown as HTMLElement,
+      theme,
+      transport: {
+        kind: "wasm",
+        code: "",
+        filename: "notebook.py",
+        url: "https://example.test/",
+        version: "1.2.3",
+        waitForReady: () => undefined,
+      },
+      viewMode: "read",
+    });
+  } catch (error) {
+    failure = error;
+  }
+
+  expect(failure).toBeInstanceOf(AggregateError);
+  expect((failure as AggregateError).errors).toContain(cleanupError);
+  expect(() =>
+    mountEmbeddedRuntime({
+      exposeSession: false,
+      initialMode: "read",
+      presentation: presentation(),
+      render: () => null,
+      root: root(),
+      theme,
+      transport: {
+        kind: "wasm",
+        code: "",
+        filename: "notebook.py",
+        url: "https://example.test/",
+        version: "1.2.3",
+        waitForReady: () => undefined,
+      },
+      viewMode: "read",
+    }),
+  ).toThrow("already mounted");
 });

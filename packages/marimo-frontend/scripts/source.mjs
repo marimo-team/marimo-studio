@@ -94,6 +94,15 @@ export const assertMarimoCommit = async (path) => {
   }
 };
 
+export const assertCleanCheckout = async (path) => {
+  const status = await capture("git", ["status", "--porcelain=v1", "--untracked-files=all"], path);
+  if (status) {
+    throw new Error(
+      "The Marimo checkout has local source changes. Studio requires the configured release commit.",
+    );
+  }
+};
+
 const installWorkspace = async (path) => {
   await run("corepack", ["pnpm", "install", "--frozen-lockfile"], path);
   await run("corepack", ["pnpm", "--dir", "packages/llm-info", "codegen"], path);
@@ -135,7 +144,7 @@ export const isPreparedOwnedCheckout = async ({ path, repository, commit }) => {
     const [origin, head, status] = await Promise.all([
       remoteUrl(path),
       capture("git", ["rev-parse", "HEAD"], path),
-      capture("git", ["status", "--porcelain=v1", "--untracked-files=no"], path),
+      capture("git", ["status", "--porcelain=v1", "--untracked-files=all"], path),
     ]);
     if (origin !== repository || head !== commit || status) {
       return false;
@@ -181,6 +190,7 @@ export const prepareMarimoSource = async () => {
     path = resolve(configured);
     await assertVersion(path, version);
     await assertMarimoCommit(path);
+    await assertCleanCheckout(path);
   } else {
     const reusable = await reusableOwnedSource(version);
     if (reusable) {

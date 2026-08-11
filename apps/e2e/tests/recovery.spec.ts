@@ -19,6 +19,7 @@ const runShortcut = process.platform === "darwin" ? "Meta+Enter" : "Control+Ente
 const selectAllShortcut = process.platform === "darwin" ? "Meta+a" : "Control+a";
 const originalMetricSource = "metric = scale.value * 21\nmetric";
 const runServerUrl = "http://127.0.0.1:4323";
+const runServerToken = "recovery-e2e-token";
 
 const startRunServer = (): { output: () => string; process: ChildProcess } => {
   const child = spawn(
@@ -33,7 +34,8 @@ const startRunServer = (): { output: () => string; process: ChildProcess } => {
       workspaceNotebookPath,
       "--no-sandbox",
       "--headless",
-      "--no-token",
+      "--token-password",
+      runServerToken,
       "--host",
       "127.0.0.1",
       "--port",
@@ -67,7 +69,7 @@ const waitForRunServer = async (server: ReturnType<typeof startRunServer>): Prom
       throw new Error(`Run server exited during startup\n${server.output()}`);
     }
     try {
-      const response = await fetch(`${runServerUrl}/dashboard/`);
+      const response = await fetch(`${runServerUrl}/dashboard/?access_token=${runServerToken}`);
       await response.body?.cancel();
       if (response.ok) {
         return;
@@ -195,7 +197,7 @@ test("preserves run-mode kernel state across a page reload", async ({ page }) =>
 
   try {
     await waitForRunServer(server);
-    await page.goto(`${runServerUrl}/dashboard/`);
+    await page.goto(`${runServerUrl}/dashboard/?access_token=${runServerToken}`);
     await waitForRunMode();
     const scale = page.locator('marimo-cell[name="controls"]').getByRole("slider");
     await scale.press("End");

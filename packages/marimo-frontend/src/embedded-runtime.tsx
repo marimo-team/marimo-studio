@@ -29,6 +29,7 @@ import {
   getRuntimeManager,
   initialModeAtom,
   initializePlugins,
+  KernelStartupErrorModal,
   LocaleProvider,
   marimoVersionAtom,
   ModalProvider,
@@ -43,7 +44,9 @@ import {
   SlotzProvider,
   store,
   ThemeProvider,
+  Toaster,
   TooltipProvider,
+  TracebackModalContainer,
   useMarimoKernelConnection,
   useRequestClient,
   userConfigAtom,
@@ -138,7 +141,12 @@ const EmbeddedRuntimeProviders = ({ children }: { children: ReactNode }) => (
           <TooltipProvider>
             <SlotzProvider controller={slotsController}>
               <LocaleProvider>
-                <ModalProvider>{children}</ModalProvider>
+                <ModalProvider>
+                  {children}
+                  <Toaster />
+                  <KernelStartupErrorModal />
+                  <TracebackModalContainer />
+                </ModalProvider>
               </LocaleProvider>
             </SlotzProvider>
           </TooltipProvider>
@@ -416,21 +424,14 @@ const throwDisposalErrors = (errors: unknown[]): void => {
   }
 };
 
-export const mountEmbeddedRuntime = (
+const mountOwnedEmbeddedRuntime = (
   options: MountEmbeddedRuntimeOptions,
+  releaseOwner: () => void,
 ): EmbeddedRuntimeHandle => {
   let presentation = options.presentation;
-  initializeEmbeddedRuntime();
-  configurePresentation(
-    presentation,
-    options.initialMode,
-    options.viewMode,
-    options.theme.current(),
-  );
-  const sessionId = currentSessionId();
-  const transport = initializeTransport(options.transport);
-  const initialized = transport.initialized;
-
+  let initialized!: Promise<void>;
+  let sessionId!: SessionId;
+  let transport: ReturnType<typeof initializeTransport> | undefined;
   let stopTheme = () => {};
   let stopExposingSession = () => {};
   let root: ReturnType<typeof createRoot> | undefined;
@@ -438,9 +439,19 @@ export const mountEmbeddedRuntime = (
     () => root?.unmount(),
     () => stopExposingSession(),
     () => stopTheme(),
-    () => transport.release(),
+    () => transport?.release(),
   ]);
   try {
+    initializeEmbeddedRuntime();
+    configurePresentation(
+      presentation,
+      options.initialMode,
+      options.viewMode,
+      options.theme.current(),
+    );
+    sessionId = currentSessionId();
+    transport = initializeTransport(options.transport);
+    initialized = transport.initialized;
     store.set(connectionAtom, { state: WebSocketState.CONNECTING });
     const syncTheme = () => configureTheme(presentation.userConfig, options.theme.current());
     stopTheme = options.theme.subscribe(syncTheme);
@@ -453,6 +464,9 @@ export const mountEmbeddedRuntime = (
     );
   } catch (error) {
     const cleanupErrors = runDisposers(disposers);
+    if (disposers.size === 0) {
+      releaseOwner();
+    }
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
         [error, ...cleanupErrors],
@@ -484,7 +498,29 @@ export const mountEmbeddedRuntime = (
         return;
       }
       disposing = true;
-      throwDisposalErrors(runDisposers(disposers));
+      const errors = runDisposers(disposers);
+      if (disposers.size === 0) {
+        releaseOwner();
+      }
+      throwDisposalErrors(errors);
     },
   };
+};
+
+let activeEmbeddedRuntime: object | undefined;
+
+export const mountEmbeddedRuntime = (
+  options: MountEmbeddedRuntimeOptions,
+): EmbeddedRuntimeHandle => {
+  if (activeEmbeddedRuntime) {
+    throw new Error("An embedded runtime is already mounted in this page");
+  }
+  const owner = {};
+  activeEmbeddedRuntime = owner;
+  const releaseOwner = () => {
+    if (activeEmbeddedRuntime === owner) {
+      activeEmbeddedRuntime = undefined;
+    }
+  };
+  return mountOwnedEmbeddedRuntime(options, releaseOwner);
 };

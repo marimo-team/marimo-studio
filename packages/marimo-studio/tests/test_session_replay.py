@@ -30,7 +30,11 @@ def test_document_replay_requires_an_opted_in_manager_and_query(
 
     manager = Manager()
     other_manager = Manager()
-    session = SimpleNamespace(disconnect_main_consumer=Mock())
+    session = SimpleNamespace(
+        initialization_id="analysis.py",
+        app_file_manager=SimpleNamespace(path=Path("analysis.py")),
+        disconnect_main_consumer=Mock(),
+    )
     handler = SimpleNamespace(_reconnect_session=Mock())
     reconnect = Mock(return_value=("fallback", "new"))
     monkeypatch.setattr(SessionConnector, "_reconnect_session", reconnect)
@@ -97,6 +101,63 @@ def test_document_replay_requires_an_opted_in_manager_and_query(
 
         session.disconnect_main_consumer.assert_called_once_with()
         handler._reconnect_session.assert_called_once_with(session, replay=True)
+    finally:
+        handle.close()
+
+
+def test_document_replay_requires_the_session_to_match_the_registered_notebook(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Manager:
+        pass
+
+    manager = Manager()
+    session = SimpleNamespace(
+        initialization_id="first.py",
+        app_file_manager=SimpleNamespace(path=Path("first.py")),
+        disconnect_main_consumer=Mock(),
+    )
+    handler = SimpleNamespace(_reconnect_session=Mock())
+    reconnect = Mock(return_value=("fallback", "native"))
+    monkeypatch.setattr(SessionConnector, "_reconnect_session", reconnect)
+    replay = PrivateSessionReplay()
+    handle = replay.open()
+    context = ServerContext(
+        notebook=Path("second.py").resolve(),
+        file_key="second.py",
+        base_url="",
+        mode="run",
+        dev=False,
+        routing_query=(),
+        user_config={},
+        config_overrides={},
+        server_token="",
+        handle=ServerHandle(_ContextHandle(server=None, session_manager=manager)),
+    )
+    replay.configure(context, True)
+    connector = SessionConnector(
+        manager=cast(Any, manager),
+        params=cast(
+            Any,
+            SimpleNamespace(file_key="second.py"),
+        ),
+        connection=cast(
+            Any,
+            SimpleNamespace(
+                query_params=QueryParams({DOCUMENT_REPLAY_QUERY_PARAM: "1"}),
+            ),
+        ),
+        handler=cast(Any, handler),
+    )
+
+    try:
+        assert connector._reconnect_session(cast(Any, session)) == (
+            "fallback",
+            "native",
+        )
+        reconnect.assert_called_once_with(connector, session)
+        session.disconnect_main_consumer.assert_not_called()
+        handler._reconnect_session.assert_not_called()
     finally:
         handle.close()
 

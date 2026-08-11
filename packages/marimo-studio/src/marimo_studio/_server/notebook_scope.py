@@ -57,15 +57,17 @@ class NotebookScopeRegistry:
         return notebook.resolve() in self._scopes
 
     async def close(self) -> None:
-        scopes = tuple(self._scopes.values())
-        self._scopes.clear()
+        scopes = tuple(self._scopes.items())
         failure: BaseException | None = None
-        for notebook_scope in scopes:
+        for notebook, notebook_scope in scopes:
             try:
                 await notebook_scope.close()
             except BaseException as error:
                 if failure is None:
                     failure = error
+            else:
+                if self._scopes.get(notebook) is notebook_scope:
+                    self._scopes.pop(notebook)
         if failure is not None:
             raise failure
 

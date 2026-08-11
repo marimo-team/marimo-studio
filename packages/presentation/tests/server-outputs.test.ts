@@ -60,7 +60,7 @@ const config = {
   showCellLogs: true,
 } satisfies RuntimeConfig;
 
-test("serializes server output work with caller cancellation and captured targets", async () => {
+test("serializes server output work without retaining a canceled response", async () => {
   globalThis.fetch = vi.fn(async () => Response.json(config));
   await loadRuntimeConfig();
 
@@ -144,8 +144,11 @@ test("serializes server output work with caller cancellation and captured target
   );
   await vi.waitFor(() =>
     expect(reconcileProjectedOutput).toHaveBeenCalledWith(
-      expect.objectContaining({ data: "second" }),
+      expect.objectContaining({ data: "first" }),
     ),
+  );
+  expect(reconcileProjectedOutput).not.toHaveBeenCalledWith(
+    expect.objectContaining({ data: "second" }),
   );
   expect(requests[1]).toMatchObject({
     revision: "revision-a",

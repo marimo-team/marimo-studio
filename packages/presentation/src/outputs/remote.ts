@@ -112,13 +112,13 @@ export const createServerOutputReader = (sessionId: string): OutputReader => {
     } catch (error) {
       return waitForCaller(Promise.reject(error), signal);
     }
-    const operation = queue
-      .then(() => readServerOutputsAtTargetWithRetry(target, sessionId, request))
-      .then(reconcileOutputReadResponse);
+    const operation = queue.then(() =>
+      readServerOutputsAtTargetWithRetry(target, sessionId, request),
+    );
     queue = operation.then(
       () => undefined,
       () => undefined,
     );
-    return waitForCaller(operation, signal);
+    return waitForCaller(operation, signal).then(reconcileOutputReadResponse);
   };
 };

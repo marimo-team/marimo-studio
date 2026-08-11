@@ -174,8 +174,8 @@ class NotebookSaveTransform(Protocol):
     def enable(self, location: ServerLocation) -> None: ...
 
 
-class PeerStateRelay(Protocol):
-    """Relay accepted control values between consumers of one session."""
+class PeerCommandRelay(Protocol):
+    """Relay authorized control commands between consumers of one session."""
 
     def enable(self, location: ServerLocation) -> None: ...
 
@@ -369,7 +369,7 @@ class ServerAdapters:
     replay: SessionReplay
     persistence: NotebookSaveTransform
     projections: KernelProjectionHost
-    peers: PeerStateRelay
+    peer_commands: PeerCommandRelay
     browser: BrowserRuntimeProjector
     code_mode: CodeModeBridge
     lifecycle: AdapterLifecycle
@@ -411,7 +411,7 @@ __all__ = [
     "LiveNotebookRunner",
     "NotebookSaveTransform",
     "NotebookSourcePolicy",
-    "PeerStateRelay",
+    "PeerCommandRelay",
     "ProjectionUnavailable",
     "QuerySyncUnavailable",
     "SaveCell",

@@ -134,9 +134,9 @@ A Marimo upgrade changes `_compat/release.json`, the exact Python pins, and any
 affected symbol contracts in `_compat/layout.py`. Run the adapter tests and
 rebuild the browser bundle after updating them.
 
-Set `MARIMO_REPO` to exercise a local checkout at the configured release
-commit. The preparation step rejects another commit even when its project
-version has the same value:
+Set `MARIMO_REPO` to exercise a clean local checkout at the configured release
+commit. The preparation step requires an unchanged worktree at that exact
+commit:
 
 ```console
 MARIMO_REPO=/path/to/marimo make build
@@ -147,7 +147,8 @@ The package exposes five capability adapters to browser applications:
 - `embedded-runtime` exposes `mountEmbeddedRuntime(options)`. Its closeable
   handle owns Marimo providers, server or WebAssembly transport, notebook
   connection, theme updates, session exposure, registered function calls, and
-  disposal.
+  disposal. A page mounts one embedded runtime at a time. Dispose its
+  handle before mounting another runtime.
 - `cell-presentation` renders a runtime cell through Marimo's native console
   and output components.
 - `projected-output` retains its synthetic cell and virtual files through the

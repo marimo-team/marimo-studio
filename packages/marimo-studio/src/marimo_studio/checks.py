@@ -7,6 +7,7 @@ from importlib.metadata import version
 from marimo_studio._composition import (
     create_browser_runtime_projector,
     create_tooling_adapters,
+    marimo_release_identity,
 )
 from marimo_studio._runtime_limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._workspace.checks import check_studio as _check_studio
@@ -15,6 +16,18 @@ from marimo_studio._workspace.runtime_checks import run_runtime_checks
 from marimo_studio.errors import MarimoStudioError
 from marimo_studio.inspect import inspect_notebook
 from marimo_studio.types import CheckResult
+
+
+def _compatibility_details(*, passed: bool) -> dict[str, object]:
+    required = marimo_release_identity()
+    return {
+        "validation": "pass" if passed else "fail",
+        "studio": {"version": version("marimo-studio")},
+        "requiredRelease": required,
+        "marimo": required.copy() if passed else None,
+        "browser": required.copy() if passed else None,
+        "adapterFamily": "private",
+    }
 
 
 def _compatibility_check() -> CheckResult:
@@ -26,25 +39,13 @@ def _compatibility_check() -> CheckResult:
             "fail",
             str(error),
             code=error.code,
-            details={"validation": "fail"},
+            details=_compatibility_details(passed=False),
         )
     return CheckResult(
         "compatibility",
         "pass",
         f"Validated Marimo {browser.version} and its packaged browser runtime",
-        details={
-            "validation": "pass",
-            "studio": {"version": version("marimo-studio")},
-            "marimo": {
-                "version": browser.version,
-                "commit": browser.commit,
-            },
-            "browser": {
-                "version": browser.version,
-                "commit": browser.commit,
-            },
-            "adapterFamily": "private",
-        },
+        details=_compatibility_details(passed=True),
     )
 
 

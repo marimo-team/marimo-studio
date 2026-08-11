@@ -93,7 +93,7 @@ class PresentationMiddleware:
                 except BaseException as error:
                     if failure is None:
                         failure = error
-                else:
+                if failure is None:
                     closed = True
                 if failure is not None:
                     raise failure
@@ -355,7 +355,7 @@ class PresentationMiddleware:
                     context.routing_query,
                 )
             else:
-                self._adapters.peers.enable(location)
+                self._adapters.peer_commands.enable(location)
                 if selected_document is not None:
                     response = await document_response(
                         request,

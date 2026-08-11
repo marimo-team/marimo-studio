@@ -81,15 +81,18 @@ const subscribeRegistrations = (
     if (!subscribed) {
       return;
     }
-    subscribed = false;
-    broker.subscribers.delete(subscriber);
-    if (broker.subscribers.size > 0) {
+    if (broker.subscribers.size > 1) {
+      broker.subscribers.delete(subscriber);
+      subscribed = false;
       return;
     }
-    if (registry.registerInstance === broker.observeRegistration) {
-      registry.registerInstance = broker.original;
+    if (registry.registerInstance !== broker.observeRegistration) {
+      throw new Error("The Marimo control registry changed before endpoint disposal");
     }
+    registry.registerInstance = broker.original;
+    broker.subscribers.delete(subscriber);
     registrationBrokers.delete(registry);
+    subscribed = false;
   };
 };
 

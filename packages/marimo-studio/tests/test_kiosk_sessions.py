@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event, RLock
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -13,6 +15,7 @@ from marimo._session.model import SessionMode
 from starlette.datastructures import QueryParams
 from starlette.websockets import WebSocketDisconnect
 
+import marimo_studio._compat.server.existing_session as existing_session_module
 from marimo_studio._capabilities import CloseHandle, ServerContext, ServerHandle
 from marimo_studio._compat.server.existing_session import (
     _PREVIEW_CONNECT_GRACE,
@@ -43,6 +46,21 @@ class _Manager:
     def get_session_by_file_key(self, _file_key: str) -> object | None:
         self.fallback_calls += 1
         return self.fallback
+
+
+class _ObservedRLock:
+    def __init__(self) -> None:
+        self._lock = RLock()
+        self.contended = Event()
+
+    def __enter__(self) -> _ObservedRLock:
+        if not self._lock.acquire(blocking=False):
+            self.contended.set()
+            self._lock.acquire()
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self._lock.release()
 
 
 def _context(manager: _Manager) -> ServerContext:
@@ -211,6 +229,61 @@ def test_lifecycle_close_removes_owned_routes() -> None:
     assert adapter.attach(_context(manager), "s_view01", "s_target")
 
     handle.close()
+    verifier = PrivateExistingSessionAttachment()
+    verifier_handle = verifier.open()
+    try:
+        with pytest.raises(WebSocketDisconnect):
+            _connect(manager, "s_view01")
+    finally:
+        verifier_handle.close()
+
+
+def test_lifecycle_close_serializes_with_route_registration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager = _Manager()
+    target = _Session()
+    manager.sessions["s_target"] = target
+    observed_lock = _ObservedRLock()
+    monkeypatch.setattr(existing_session_module, "_ROUTERS_LOCK", observed_lock)
+    entered_registration = Event()
+    continue_registration = Event()
+    native_register = existing_session_module._SessionRouter.register
+
+    def blocking_register(
+        router: Any,
+        owner: object,
+        consumer_id: str,
+        session: object,
+    ) -> bool:
+        entered_registration.set()
+        assert continue_registration.wait(timeout=2)
+        return native_register(router, owner, consumer_id, session)
+
+    monkeypatch.setattr(
+        existing_session_module._SessionRouter,
+        "register",
+        blocking_register,
+    )
+    adapter, handle = _open(manager)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        attaching = executor.submit(
+            adapter.attach,
+            _context(manager),
+            "s_view01",
+            "s_target",
+        )
+        assert entered_registration.wait(timeout=2)
+        closing = executor.submit(handle.close)
+        try:
+            assert observed_lock.contended.wait(timeout=2)
+        finally:
+            continue_registration.set()
+        assert attaching.result(timeout=2)
+        closing.result(timeout=2)
+
+    assert not adapter.attach(_context(manager), "s_view02", "s_target")
     verifier = PrivateExistingSessionAttachment()
     verifier_handle = verifier.open()
     try:

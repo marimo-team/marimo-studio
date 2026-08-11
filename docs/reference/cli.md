@@ -133,8 +133,9 @@ such as remote data loading.
 
 Text output reports one `PASS`, `WARN`, or `FAIL` record per check. JSON output
 contains `schema`, `ok`, `notebook`, `view`, and a `checks` array. Its
-`compatibility` check records the Studio version, validated Marimo version and
-tag commit, packaged browser identity, adapter family, and validation state.
+`compatibility` records the Studio version, required Marimo release, observed
+Marimo and browser identities, adapter family, and validation state. Observed
+identities are `null` when release validation fails.
 
 ## `analyze`
 

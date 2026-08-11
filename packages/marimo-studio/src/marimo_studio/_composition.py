@@ -34,8 +34,11 @@ class _PrivateAdapterLifecycle:
         try:
             for installer in self._installers:
                 handles.append(installer.open())
-        except BaseException:
-            CompositeCloseHandle(handles).close()
+        except BaseException as setup_error:
+            try:
+                CompositeCloseHandle(handles).close()
+            except BaseException as cleanup_error:
+                raise setup_error from cleanup_error
             raise
         return CompositeCloseHandle(handles)
 
@@ -55,6 +58,14 @@ def create_browser_runtime_projector() -> BrowserRuntimeProjector:
     )
 
 
+def marimo_release_identity() -> dict[str, str]:
+    """Return the Marimo release required by every Studio adapter."""
+    return {
+        "version": MARIMO_VERSION,
+        "commit": MARIMO_RELEASE_COMMIT,
+    }
+
+
 def create_server_adapters() -> ServerAdapters:
     """Construct Marimo adapters for one Studio server application."""
     validate_marimo_release()
@@ -67,14 +78,14 @@ def create_server_adapters() -> ServerAdapters:
     from marimo_studio._compat.server.notebook_save import (
         PrivateNotebookSaveTransform,
     )
-    from marimo_studio._compat.server.peer_state import PrivatePeerStateRelay
+    from marimo_studio._compat.server.peer_state import PrivatePeerCommandRelay
     from marimo_studio._compat.server.session_replay import PrivateSessionReplay
     from marimo_studio._compat.server.session_state import PrivateSessionState
 
     sessions = PrivateExistingSessionAttachment()
     replay = PrivateSessionReplay()
     persistence = PrivateNotebookSaveTransform(CellAliasSourcePolicy())
-    peers = PrivatePeerStateRelay()
+    peer_commands = PrivatePeerCommandRelay()
     return ServerAdapters(
         server=PrivateServerGateway(),
         session_state=PrivateSessionState(),
@@ -82,10 +93,12 @@ def create_server_adapters() -> ServerAdapters:
         replay=replay,
         persistence=persistence,
         projections=PrivateKernelProjectionHost(),
-        peers=peers,
+        peer_commands=peer_commands,
         browser=create_browser_runtime_projector(),
         code_mode=PrivateCodeModeBridge(),
-        lifecycle=_PrivateAdapterLifecycle((sessions, replay, persistence, peers)),
+        lifecycle=_PrivateAdapterLifecycle(
+            (sessions, replay, persistence, peer_commands)
+        ),
     )
 
 
@@ -149,6 +162,7 @@ __all__ = [
     "create_server_adapters",
     "create_tooling_adapters",
     "kernel_lifespan",
+    "marimo_release_identity",
     "programmatic_middleware",
     "validate_marimo_release",
 ]
