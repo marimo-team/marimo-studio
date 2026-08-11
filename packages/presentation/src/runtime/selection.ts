@@ -1,10 +1,33 @@
 import { runtimeIdSchema } from "@marimo-studio/protocol/runtime-config";
 import { RUNTIME_QUERY_KEY } from "@marimo-studio/protocol/runtime-selection";
 
-const storageKey = (): string => `marimo-studio:pending-runtime:v1:${globalThis.location.pathname}`;
+const PENDING_RUNTIME_STATE_KEY = "marimo-studio:pending-runtime:v1";
 
-const replaceLocation = (url: URL): void => {
-  globalThis.history.replaceState(globalThis.history.state, "", url);
+interface PendingRuntimeState {
+  runtime: string;
+  previous: unknown;
+}
+
+const pendingRuntimeState = (state: unknown): PendingRuntimeState | undefined => {
+  if (typeof state !== "object" || state === null) {
+    return undefined;
+  }
+  const pending = (state as Record<string, unknown>)[PENDING_RUNTIME_STATE_KEY];
+  if (typeof pending !== "object" || pending === null || !("previous" in pending)) {
+    return undefined;
+  }
+  const parsed = runtimeIdSchema.safeParse((pending as Record<string, unknown>).runtime);
+  if (!parsed.success) {
+    return undefined;
+  }
+  return {
+    runtime: parsed.data,
+    previous: (pending as Record<string, unknown>).previous,
+  };
+};
+
+const replaceLocation = (url: URL, state: unknown = globalThis.history.state): void => {
+  globalThis.history.replaceState(state, "", url);
 };
 
 export const restorePendingRuntimeSelection = (): void => {
@@ -12,12 +35,12 @@ export const restorePendingRuntimeSelection = (): void => {
   if (url.searchParams.has(RUNTIME_QUERY_KEY)) {
     return;
   }
-  const parsed = runtimeIdSchema.safeParse(globalThis.sessionStorage.getItem(storageKey()));
-  if (!parsed.success) {
+  const pending = pendingRuntimeState(globalThis.history.state);
+  if (!pending) {
     return;
   }
-  url.searchParams.set(RUNTIME_QUERY_KEY, parsed.data);
-  replaceLocation(url);
+  url.searchParams.set(RUNTIME_QUERY_KEY, pending.runtime);
+  replaceLocation(url, pending.previous);
 };
 
 export const hideRuntimeSelectionDuringStartup = (): (() => void) => {
@@ -26,15 +49,21 @@ export const hideRuntimeSelectionDuringStartup = (): (() => void) => {
   if (!parsed.success) {
     return () => {};
   }
-  const key = storageKey();
-  globalThis.sessionStorage.setItem(key, parsed.data);
   const clean = new URL(globalThis.location.href);
   clean.searchParams.delete(RUNTIME_QUERY_KEY);
-  replaceLocation(clean);
+  replaceLocation(clean, {
+    [PENDING_RUNTIME_STATE_KEY]: {
+      runtime: parsed.data,
+      previous: globalThis.history.state,
+    },
+  });
   return () => {
     const current = new URL(globalThis.location.href);
     current.searchParams.set(RUNTIME_QUERY_KEY, parsed.data);
-    replaceLocation(current);
-    globalThis.sessionStorage.removeItem(key);
+    const pending = pendingRuntimeState(globalThis.history.state);
+    replaceLocation(
+      current,
+      pending?.runtime === parsed.data ? pending.previous : globalThis.history.state,
+    );
   };
 };
