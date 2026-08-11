@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
+import subprocess
 from typing import Any
 
 from marimo_studio._cli.print import echo, green, light_blue, red, yellow
@@ -16,6 +18,12 @@ from marimo_studio.agent_models import AnalysisReport
 from marimo_studio.export import StaticExportResult
 from marimo_studio.inspect import RuntimeInspection
 from marimo_studio.types import CellSpec, CheckResult, NotebookSpec
+
+
+def _shell_command(arguments: list[str]) -> str:
+    if os.name == "nt":
+        return subprocess.list2cmdline(arguments)
+    return shlex.join(arguments)
 
 
 def echo_error(message: str) -> None:
@@ -37,8 +45,8 @@ def render_view_setup(result: ViewSetupResult) -> None:
     for path in result.updated:
         echo(f"  {light_blue('update')} {path}")
     if not result.dry_run:
-        notebook = shlex.quote(str(result.notebook))
-        echo(f"  {light_blue('edit')} marimo edit {notebook} --sandbox", err=True)
+        command = _shell_command(["marimo", "edit", str(result.notebook), "--sandbox"])
+        echo(f"  {light_blue('edit')} {command}", err=True)
 
 
 def view_list_payload(studio: StudioWorkspace) -> dict[str, object]:
@@ -86,8 +94,10 @@ def render_static_export(result: StaticExportResult) -> None:
     """Write a static export result in human text."""
     echo(f"{green('Exported')} {result.view} to {result.output}")
     echo(f"  {light_blue('open')} {result.entrypoint}")
-    destination = shlex.quote(str(result.output))
-    echo(f"  {light_blue('serve')} python -m http.server --directory {destination}")
+    command = _shell_command(
+        ["python", "-m", "http.server", "--directory", str(result.output)]
+    )
+    echo(f"  {light_blue('serve')} {command}")
 
 
 def render_binding(result: BindingResult, *, dry_run: bool) -> None:

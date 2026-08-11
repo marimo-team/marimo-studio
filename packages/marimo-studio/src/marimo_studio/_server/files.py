@@ -21,4 +21,9 @@ def file_response(root: Path, relative: str) -> Response:
         return Response(status_code=404)
     if not candidate.is_file():
         return Response(status_code=404)
-    return FileResponse(candidate, headers={"Cache-Control": "no-cache"})
+    media_type = "text/javascript" if candidate.suffix.lower() == ".js" else None
+    return FileResponse(
+        candidate,
+        headers={"Cache-Control": "no-cache"},
+        media_type=media_type,
+    )

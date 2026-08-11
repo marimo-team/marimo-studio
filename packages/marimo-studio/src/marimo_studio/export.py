@@ -441,11 +441,14 @@ def _publish_absent(staged: Path, output: Path) -> None:
             f"Output changed while the static export was prepared: {output}. "
             "Run the export again."
         ) from error
+    if os.name == "nt":
+        output.rmdir()
     try:
         os.replace(staged, output)
     except OSError:
-        with suppress(OSError):
-            output.rmdir()
+        if os.name != "nt":
+            with suppress(OSError):
+                output.rmdir()
         raise
 
 
