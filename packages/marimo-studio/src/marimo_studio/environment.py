@@ -9,7 +9,7 @@ import tempfile
 from collections.abc import Callable
 from typing import TextIO
 
-from marimo_studio._compat.environment import inline_environment_flags
+from marimo_studio._composition import create_tooling_adapters
 from marimo_studio._workspace.environment import (
     SANDBOX_ENV,
     EnvironmentTarget,
@@ -66,7 +66,7 @@ def environment_command(
     source_root = package_source_root()
     package_requirement = None if source_root is not None else "marimo-studio"
     command.extend(
-        inline_environment_flags(
+        create_tooling_adapters().environment(
             target.notebook,
             package_requirement,
             compose_project=compose_project,

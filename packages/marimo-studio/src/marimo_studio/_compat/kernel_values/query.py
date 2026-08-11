@@ -4,17 +4,12 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from marimo_studio._capabilities import QuerySyncUnavailable, ServerContext
 from marimo_studio._compat.kernel_values.models import (
     NAMESPACE,
     QUERY_FUNCTION_NAME,
 )
-from marimo_studio._compat.server.models import ServerContext
-from marimo_studio._compat.server.sessions import current_session
-from marimo_studio.errors import ProtocolError
-
-
-class QuerySyncUnavailable(ProtocolError):
-    """The edit kernel cannot accept query state yet."""
+from marimo_studio._compat.server.session_state import current_session
 
 
 def queue_query_sync(

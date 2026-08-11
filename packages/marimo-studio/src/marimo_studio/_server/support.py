@@ -13,9 +13,13 @@ from starlette.responses import (
 )
 
 from marimo_studio import _assets
-from marimo_studio._compat.server.context import server_shutdown_requested
-from marimo_studio._compat.server.models import ServerContext
-from marimo_studio._compat.server.sessions import has_read_access
+from marimo_studio._capabilities import (
+    ExistingSessionAttachment,
+    KernelProjectionHost,
+    ServerContext,
+    ServerGateway,
+    SessionState,
+)
 from marimo_studio._html import cell_host, render
 from marimo_studio._server.agent_api import (
     activate_view_response,
@@ -23,7 +27,10 @@ from marimo_studio._server.agent_api import (
     agent_connection_response,
     analyze_views_response,
 )
-from marimo_studio._server.auth import authentication_required_response
+from marimo_studio._server.auth import (
+    authentication_required_response,
+    has_read_access,
+)
 from marimo_studio._server.browser_agent import (
     browser_observation_response,
     browser_observations_response,
@@ -38,6 +45,7 @@ from marimo_studio._server.projection_api import (
 )
 from marimo_studio._server.query_api import query_response
 from marimo_studio._server.runtime_config_api import runtime_config_response
+from marimo_studio._server.runtimes import RuntimeRegistry
 from marimo_studio._server.studio_api import (
     create_view_response,
     delete_view_response,
@@ -60,6 +68,12 @@ async def support_response(
     lifecycle: WorkspaceLifecycle,
     notebook_scope: NotebookScope,
     support_path: str,
+    *,
+    server: ServerGateway,
+    session_state: SessionState,
+    sessions: ExistingSessionAttachment,
+    projections: KernelProjectionHost,
+    runtimes: RuntimeRegistry,
 ) -> Response:
     """Dispatch one namespaced Studio support request."""
     if support_path.startswith("/assets/"):
@@ -106,15 +120,25 @@ async def support_response(
             workspace,
             context=context,
             notebook_scope=notebook_scope,
+            server=server,
         )
     if support_path == "/analyze":
-        return await analyze_views_response(request, context, workspace, notebook_scope)
+        return await analyze_views_response(
+            request,
+            context,
+            workspace,
+            notebook_scope,
+            session_state,
+            runtimes,
+        )
     if support_path == "/observations":
         return await browser_observations_response(
             request,
             context,
             workspace,
             notebook_scope,
+            session_state,
+            runtimes,
         )
     if support_path.startswith("/activations/") and support_path.endswith("/ack"):
         raw_generation = support_path.removeprefix("/activations/").removesuffix("/ack")
@@ -127,7 +151,13 @@ async def support_response(
             int(raw_generation),
         )
     if support_path == "/query" and request.method == "POST":
-        return await query_response(request, context, notebook_scope.clients)
+        return await query_response(
+            request,
+            context,
+            notebook_scope.clients,
+            session_state,
+            projections,
+        )
     if support_path.startswith("/views/"):
         return await _view_response(
             request,
@@ -135,6 +165,11 @@ async def support_response(
             workspace,
             notebook_scope,
             support_path.removeprefix("/views/"),
+            server=server,
+            session_state=session_state,
+            sessions=sessions,
+            projections=projections,
+            runtimes=runtimes,
         )
     return Response(status_code=404)
 
@@ -187,6 +222,12 @@ async def _view_response(
     studio: StudioWorkspace,
     notebook_scope: NotebookScope,
     relative: str,
+    *,
+    server: ServerGateway,
+    session_state: SessionState,
+    sessions: ExistingSessionAttachment,
+    projections: KernelProjectionHost,
+    runtimes: RuntimeRegistry,
 ) -> Response:
     presentation = notebook_scope.presentation
     view_name, separator, route = relative.partition("/")
@@ -206,6 +247,7 @@ async def _view_response(
             context=context,
             notebook_scope=notebook_scope,
             view_name=view_name,
+            server=server,
         )
     if route == "activate":
         return await activate_view_response(
@@ -214,6 +256,7 @@ async def _view_response(
             studio,
             view_name,
             notebook_scope,
+            session_state,
         )
     if route == "observation":
         return await browser_observation_response(
@@ -237,11 +280,26 @@ async def _view_response(
             presentation,
             notebook_scope.clients,
             view_name,
+            sessions=session_state,
+            attachment=sessions,
+            runtimes=runtimes,
         )
     if route == "values" and request.method == "POST":
-        return await values_response(request, context, presentation, view_name)
+        return await values_response(
+            request,
+            context,
+            presentation,
+            view_name,
+            projections,
+        )
     if route == "outputs" and request.method == "POST":
-        return await outputs_response(request, context, presentation, view_name)
+        return await outputs_response(
+            request,
+            context,
+            presentation,
+            view_name,
+            projections,
+        )
     snapshot = await presentation.latest_snapshot_async(view_name)
     resolved = snapshot.resolved
     view = resolved.views[view_name]
@@ -265,6 +323,8 @@ def events_response(
     context: ServerContext,
     notebook_scope: NotebookScope,
     view_name: str | None = None,
+    *,
+    server: ServerGateway,
 ) -> Response:
     """Stream source and notebook changes until the server shuts down."""
     client_id = (
@@ -302,7 +362,7 @@ def events_response(
         change_events(
             studio,
             view_name,
-            stop_requested=lambda: server_shutdown_requested(context),
+            stop_requested=lambda: server.shutdown_requested(context),
             clients=notebook_scope.clients,
             agents=notebook_scope.agents,
             client_id=client_id,

@@ -11,11 +11,11 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from marimo_studio._agent_protocol import decode_browser_observation
-from marimo_studio._compat.server.models import ServerContext
-from marimo_studio._compat.server.sessions import current_session, has_edit_access
+from marimo_studio._capabilities import ServerContext, SessionState
 from marimo_studio._server.auth import (
     error_response,
     forbidden_response,
+    has_edit_access,
     invalid_server_token_response,
 )
 from marimo_studio._server.headers import NO_STORE
@@ -24,7 +24,7 @@ from marimo_studio._server.request_lifecycle import (
     RequestDisconnected,
     run_while_connected,
 )
-from marimo_studio._server.runtimes import DEFAULT_RUNTIME_REGISTRY
+from marimo_studio._server.runtimes import RuntimeRegistry
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.agent_models import BrowserObservation
 from marimo_studio.errors import AgentRequestError, MarimoStudioError, ProtocolError
@@ -67,6 +67,8 @@ async def browser_observations_response(
     context: ServerContext,
     studio: StudioWorkspace,
     notebook_scope: NotebookScope,
+    sessions: SessionState,
+    runtimes: RuntimeRegistry,
 ) -> Response:
     """Request and return fresh browser evidence for selected views."""
     if request.method != "POST":
@@ -127,7 +129,7 @@ async def browser_observations_response(
             headers=NO_STORE,
         )
     runtime = runtime_value or studio.default_runtime
-    if runtime not in DEFAULT_RUNTIME_REGISTRY.ids:
+    if runtime not in runtimes.ids:
         return _invalid_payload("invalid-runtime")
     timeout = _finite_timeout(body.get("timeout"), default=10.0)
     if timeout is None:
@@ -152,6 +154,8 @@ async def browser_observations_response(
                     session_id=session_id,
                     client_id=client_id,
                     allow_view_activation=session_id is None,
+                    sessions=sessions,
+                    runtimes=runtimes,
                 ),
                 timeout=remaining,
             )
@@ -192,6 +196,8 @@ async def observe_views(
     session_id: str | None,
     client_id: str | None,
     allow_view_activation: bool = True,
+    sessions: SessionState,
+    runtimes: RuntimeRegistry,
 ) -> tuple[BrowserObservation, ...]:
     if set(revisions) != set(views):
         raise AgentRequestError(
@@ -218,7 +224,7 @@ async def observe_views(
             "The Studio browser is attached to a different Marimo session.",
             status_code=409,
         )
-    if bound_session_id is None or current_session(context, bound_session_id) is None:
+    if bound_session_id is None or not sessions.exists(context, bound_session_id):
         raise AgentRequestError(
             "browser-session-unavailable",
             "The Studio editor session is still connecting.",
@@ -256,7 +262,7 @@ async def observe_views(
                 "Studio sources changed before browser validation began.",
                 status_code=409,
             )
-        provider, _available = DEFAULT_RUNTIME_REGISTRY.select(
+        provider, _available = runtimes.select(
             snapshot.resolved.workspace,
             context,
             runtime,

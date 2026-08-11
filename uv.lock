@@ -21,7 +21,7 @@ members = [
 [manifest.dependency-groups]
 dev = [
     { name = "httpx2", specifier = ">=2.9" },
-    { name = "marimo", extras = ["recommended"], specifier = ">=0.23.16" },
+    { name = "marimo", extras = ["recommended"], specifier = "==0.23.16" },
     { name = "polars", specifier = ">=1.42" },
     { name = "pyrefly", specifier = ">=1.1" },
     { name = "pytest", specifier = ">=9.1" },
@@ -1057,7 +1057,7 @@ dependencies = [
 requires-dist = [
     { name = "click", specifier = ">=8.2" },
     { name = "htpy", specifier = ">=26.5.1,<27" },
-    { name = "marimo", specifier = ">=0.23.16" },
+    { name = "marimo", specifier = "==0.23.16" },
     { name = "markupsafe", specifier = ">=3" },
     { name = "packaging", specifier = ">=25" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2" },

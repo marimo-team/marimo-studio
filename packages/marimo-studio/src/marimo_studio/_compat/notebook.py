@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-from marimo_studio._compat.version import assert_supported_version
+from marimo_studio._capabilities import StaticCell, StaticNotebook
 from marimo_studio.errors import (
     ConfigurationError,
     NotebookSourceError,
@@ -16,30 +14,8 @@ from marimo_studio.errors import (
 from marimo_studio.types import SourceSpan
 
 
-@dataclass(frozen=True)
-class StaticCell:
-    runtime_id: str
-    code: str
-    name: str
-    definitions: tuple[str, ...]
-    references: tuple[str, ...]
-    parents: tuple[str, ...]
-    children: tuple[str, ...]
-    column: int | None
-    disabled: bool
-    hide_code: bool
-    source: SourceSpan
-
-
-@dataclass(frozen=True)
-class StaticNotebook:
-    cells: tuple[StaticCell, ...]
-    app_config: dict[str, Any]
-
-
 def run_guard_line(source: str) -> int | None:
     """Return the standard Marimo run guard line for notebook source."""
-    assert_supported_version()
     from marimo._ast.scanner import scan_notebook
 
     return scan_notebook(source).run_guard_line
@@ -105,7 +81,6 @@ def _is_canonical_empty_notebook(source: str) -> bool:
 
 def load_static_notebook(path: Path) -> StaticNotebook:
     """Compile notebook metadata without running cell bodies."""
-    assert_supported_version()
     try:
         from marimo._ast.load import get_notebook_status, load_app
         from marimo._ast.scanner import scan_notebook

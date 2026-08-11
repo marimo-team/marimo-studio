@@ -67,6 +67,10 @@ class ActivationCoordinator:
     ) -> bool:
         async with self._store.condition:
             activation = self._store.activations.get(client_id)
+            acknowledged = self._store.acknowledged_generations.get(client_id)
+        if activation is None and acknowledged == generation:
+            target = await self._store.clients.target_for_client(client_id)
+            return target is not None and target.active_view == view
         if (
             activation is None
             or activation.generation != generation

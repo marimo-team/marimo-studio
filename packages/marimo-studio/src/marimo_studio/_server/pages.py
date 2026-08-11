@@ -15,9 +15,7 @@ from starlette.responses import (
     Response,
 )
 
-from marimo_studio._compat.server.models import ServerContext
-from marimo_studio._compat.server.replay import configure_document_replay
-from marimo_studio._compat.server.sessions import has_notebook_session
+from marimo_studio._capabilities import ServerContext, SessionReplay, SessionState
 from marimo_studio._server.headers import DOCUMENT_HEADERS
 from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._server.presentation_payload import render_presentation_document
@@ -104,21 +102,26 @@ async def document_response(
     presentation: NotebookPresentation,
     relative: str,
     view_name: str,
+    *,
+    sessions: SessionState,
+    replay: SessionReplay,
+    marimo_version: str,
 ) -> Response:
     """Render one custom view document against the active Marimo server."""
     if request.method not in {"GET", "HEAD"}:
         return Response(status_code=405)
-    if context.mode == "edit" and not has_notebook_session(context):
+    if context.mode == "edit" and not sessions.has_notebook_session(context):
         return _waiting_response()
     selected = None if context.mode == "run" and relative in {"", "/"} else view_name
     snapshot = await presentation.snapshot_async(selected)
     if context.mode == "run":
-        configure_document_replay(
-            context,
-            snapshot.resolved.workspace.preserve_session,
-        )
+        replay.configure(context, snapshot.resolved.workspace.preserve_session)
     return HTMLResponse(
-        render_presentation_document(snapshot, context),
+        render_presentation_document(
+            snapshot,
+            context,
+            marimo_version=marimo_version,
+        ),
         headers={
             **DOCUMENT_HEADERS,
             "Marimo-Studio-Revision": snapshot.revision,

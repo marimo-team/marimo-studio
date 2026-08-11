@@ -6,10 +6,17 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
+import marimo_studio._assets as assets_module
 import marimo_studio.export as export_module
+from marimo_studio._capabilities import (
+    BrowserRuntimeProjection,
+    ExportAdapters,
+    StaticRuntimeConfig,
+)
 from marimo_studio._cli import cli
+from marimo_studio._composition import create_browser_runtime_projector
 from marimo_studio._workspace import load_studio
-from marimo_studio.errors import StaticExportError
+from marimo_studio.errors import CompatibilityError, StaticExportError
 from marimo_studio.export import export_view
 from marimo_studio.workspace import bind_cell, ensure_view
 
@@ -115,6 +122,83 @@ def test_export_view_writes_a_complete_static_bundle(
     )
     assert output.joinpath("_marimo-studio/assets/runtime.js").is_file()
     assert output.joinpath(".nojekyll").is_file()
+
+
+def test_export_rejects_browser_release_drift_before_creating_output(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configured_view(notebook_path)
+    output = tmp_path / "site"
+    release = create_browser_runtime_projector()
+    monkeypatch.setattr(
+        assets_module,
+        "_runtime_marimo_metadata",
+        lambda: {
+            "version": release.version,
+            "commit": "different",
+        },
+    )
+
+    with pytest.raises(CompatibilityError, match="browser runtime"):
+        export_view(notebook_path, output)
+
+    assert not output.exists()
+
+
+def test_export_uses_the_composed_browser_projection(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configured_view(notebook_path)
+    output = tmp_path / "site"
+    release = create_browser_runtime_projector()
+
+    class Projector:
+        version = release.version
+        commit = release.commit
+
+        def project(
+            self, *_args: object, **_kwargs: object
+        ) -> BrowserRuntimeProjection:
+            return BrowserRuntimeProjection(
+                instance="composed-instance",
+                version=self.version,
+                commit=self.commit,
+                code="# composed browser projection\n",
+                value_specs={"composed": ("composed", ())},
+                output_specs={},
+            )
+
+    monkeypatch.setattr(
+        export_module,
+        "create_export_adapters",
+        lambda: ExportAdapters(
+            browser=Projector(),
+            runtime_config=lambda notebook: StaticRuntimeConfig(
+                user={},
+                overrides={},
+            ),
+        ),
+    )
+
+    export_view(notebook_path, output)
+
+    config = json.loads(
+        output.joinpath("_marimo-studio/views/dashboard/config").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert config["runtime"]["instance"] == "composed-instance"
+    assert config["runtime"]["data"] == {
+        "code": "# composed browser projection\n",
+        "filename": "notebook.py",
+        "version": release.version,
+        "valueSpecs": {"composed": ["composed", []]},
+        "outputSpecs": {},
+    }
 
 
 @pytest.mark.parametrize(

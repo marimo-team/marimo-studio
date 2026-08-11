@@ -10,12 +10,7 @@ from starlette.background import BackgroundTask
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from marimo_studio._compat.server.models import ServerContext
-from marimo_studio._compat.server.sessions import (
-    current_session,
-    has_edit_access,
-    reload_page_into_studio,
-)
+from marimo_studio._capabilities import ServerContext, SessionState
 from marimo_studio._runtime_limits import (
     DEFAULT_RUNTIME_TIMEOUT,
     MAX_RUNTIME_TIMEOUT,
@@ -24,6 +19,7 @@ from marimo_studio._runtime_process import check_runtime_studio_isolated
 from marimo_studio._server.auth import (
     error_response,
     forbidden_response,
+    has_edit_access,
     invalid_server_token_response,
 )
 from marimo_studio._server.browser_agent import observe_views
@@ -33,6 +29,7 @@ from marimo_studio._server.request_lifecycle import (
     RequestDisconnected,
     run_while_connected,
 )
+from marimo_studio._server.runtimes import RuntimeRegistry
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.agent_models import BrowserObservation
 from marimo_studio.analysis import analyze_studio
@@ -69,6 +66,7 @@ async def activate_view_response(
     studio: StudioWorkspace,
     view_name: str,
     notebook_scope: NotebookScope,
+    sessions: SessionState,
 ) -> Response:
     """Select one view in the Studio tab that owns the calling code session."""
     if request.method != "PATCH":
@@ -80,7 +78,7 @@ async def activate_view_response(
     if view_name not in studio.views:
         return Response(status_code=404)
     session_id = request.headers.get("Marimo-Session-Id")
-    if not session_id or current_session(context, session_id) is None:
+    if not session_id or not sessions.exists(context, session_id):
         return JSONResponse(
             {
                 "error": "unknown-session",
@@ -139,7 +137,7 @@ async def activate_view_response(
             status_code=202,
             headers=NO_STORE,
             background=BackgroundTask(
-                reload_page_into_studio,
+                sessions.reload_page,
                 context,
                 view_name,
                 session_id,
@@ -198,6 +196,8 @@ async def analyze_views_response(
     context: ServerContext,
     studio: StudioWorkspace,
     notebook_scope: NotebookScope,
+    sessions: SessionState,
+    runtimes: RuntimeRegistry,
 ) -> Response:
     """Analyze source, runtime, and fresh rendered browser evidence."""
     if request.method != "POST":
@@ -207,7 +207,7 @@ async def analyze_views_response(
     if token_error := invalid_server_token_response(request, context.server_token):
         return token_error
     session_id = request.headers.get("Marimo-Session-Id")
-    if session_id is not None and current_session(context, session_id) is None:
+    if session_id is not None and not sessions.exists(context, session_id):
         return JSONResponse(
             {
                 "error": "unknown-session",
@@ -268,6 +268,8 @@ async def analyze_views_response(
             session_id=session_id,
             client_id=client_id,
             allow_view_activation=session_id is None,
+            sessions=sessions,
+            runtimes=runtimes,
         )
 
     try:

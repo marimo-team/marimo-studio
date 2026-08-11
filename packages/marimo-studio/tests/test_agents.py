@@ -66,8 +66,10 @@ def test_agent_analysis_runs_through_the_attached_studio_server(
     studio_agents.ensure_view(context, "dashboard")
     connection = StudioServerConnection("http://localhost:2718")
     monkeypatch.setattr(
-        "marimo_studio._compat.code_mode.code_mode_connection",
-        lambda: connection,
+        "marimo_studio._composition.create_tooling_adapters",
+        lambda: SimpleNamespace(
+            code_mode=SimpleNamespace(connection=lambda: connection)
+        ),
     )
 
     async def analyze(_connection, notebook, **kwargs):
@@ -120,9 +122,12 @@ def test_agent_analysis_requires_the_attached_studio_server(
     context = SimpleNamespace(globals={"__file__": str(notebook_path)})
     studio_agents.ensure_view(context, "dashboard")
 
+    def unavailable() -> StudioServerConnection:
+        raise ProtocolError("Studio metadata is unavailable.")
+
     monkeypatch.setattr(
-        "marimo_studio._compat.code_mode.code_mode_connection",
-        lambda: (_ for _ in ()).throw(ProtocolError("Studio metadata is unavailable.")),
+        "marimo_studio._composition.create_tooling_adapters",
+        lambda: SimpleNamespace(code_mode=SimpleNamespace(connection=unavailable)),
     )
 
     with pytest.raises(ProtocolError, match="Studio metadata is unavailable"):
@@ -159,8 +164,10 @@ def test_agent_can_request_the_active_studio_view(
     studio_agents.ensure_view(context, "dashboard")
     connection = StudioServerConnection("http://localhost:2718")
     monkeypatch.setattr(
-        "marimo_studio._compat.code_mode.code_mode_connection",
-        lambda: connection,
+        "marimo_studio._composition.create_tooling_adapters",
+        lambda: SimpleNamespace(
+            code_mode=SimpleNamespace(connection=lambda: connection)
+        ),
     )
 
     async def activate(_connection, notebook, view):

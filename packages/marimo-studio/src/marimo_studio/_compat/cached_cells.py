@@ -7,6 +7,8 @@ from io import BytesIO
 from threading import Lock
 from typing import Any, cast
 
+from marimo_studio.errors import CompatibilityError
+
 _UI_ELEMENT_STUB = "marimo._save.stubs.ui_element_stub.UIElementStub"
 _POLARS_TYPES = (
     "polars.dataframe.frame.DataFrame",
@@ -66,6 +68,18 @@ def keep_cached_cells_compatible() -> Callable[[], None]:
     global _ORIGINAL_TENSOR_BUFFER, _PATCHED_TENSOR_BUFFER
     global _ORIGINAL_UI_CHECK, _PATCHED_UI_CHECK, _PATCH_USERS
     with _PATCH_LOCK:
+        if _PATCH_USERS and (
+            CachedLifecycle._restored_ui_defs is not _PATCHED_UI_CHECK
+            or encode._contiguous_tensor_bytes is not _PATCHED_TENSOR_BUFFER
+            or any(
+                LAZY_STUB_LOOKUP.get(type_name) != "pickle"
+                for type_name in _POLARS_TYPES
+            )
+        ):
+            raise CompatibilityError(
+                "Another owner replaced the cached-cell repair while Studio "
+                "was using it."
+            )
         if _PATCH_USERS == 0:
             original = CachedLifecycle._restored_ui_defs
 
@@ -107,10 +121,24 @@ def keep_cached_cells_compatible() -> Callable[[], None]:
         with _PATCH_LOCK:
             if released:
                 return
-            released = True
-            _PATCH_USERS -= 1
-            if _PATCH_USERS != 0:
+            if _PATCH_USERS > 1:
+                _PATCH_USERS -= 1
+                released = True
                 return
+            if (
+                CachedLifecycle._restored_ui_defs is not _PATCHED_UI_CHECK
+                or encode._contiguous_tensor_bytes is not _PATCHED_TENSOR_BUFFER
+                or any(
+                    LAZY_STUB_LOOKUP.get(type_name) != "pickle"
+                    for type_name in _POLARS_TYPES
+                )
+            ):
+                raise CompatibilityError(
+                    "Another owner replaced the cached-cell repair before "
+                    "Studio could restore it."
+                )
+            _PATCH_USERS = 0
+            released = True
             if (
                 _ORIGINAL_UI_CHECK is not None
                 and CachedLifecycle._restored_ui_defs is _PATCHED_UI_CHECK

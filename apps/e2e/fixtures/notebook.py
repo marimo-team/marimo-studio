@@ -2,7 +2,6 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #   "anywidget==0.9.21",
-#   "marimo>=0.23.16",
 #   "marimo-studio",
 # ]
 #

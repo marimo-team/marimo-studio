@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from marimo_studio._compat.server.models import ServerContext
+from marimo_studio._capabilities import ServerContext
 from marimo_studio._html import runtime_document
 from marimo_studio._server.presentation import PresentationSnapshot
-from marimo_studio._server.runtimes import DEFAULT_RUNTIME_REGISTRY
+from marimo_studio._server.runtimes import RuntimeRegistry
 from marimo_studio._urls import (
     SUPPORT_PATH,
     authored_view_root_url,
@@ -21,6 +21,8 @@ from marimo_studio._workspace.models import ProjectionDiagnostic
 def render_presentation_document(
     snapshot: PresentationSnapshot,
     context: ServerContext,
+    *,
+    marimo_version: str,
 ) -> str:
     view_name = snapshot.view_name
     root_url = (
@@ -47,12 +49,14 @@ def render_presentation_document(
         revision=snapshot.revision,
         runtime=snapshot.resolved.workspace.default_runtime,
         filename=context.file_key,
+        marimo_version=marimo_version,
     )
 
 
 def build_runtime_config(
     snapshot: PresentationSnapshot,
     context: ServerContext,
+    runtimes: RuntimeRegistry,
     runtime_id: str | None = None,
     session_id: str | None = None,
     binding_id: str | None = None,
@@ -60,7 +64,7 @@ def build_runtime_config(
     resolved = snapshot.resolved
     view_name = snapshot.view_name
     view = resolved.views[view_name]
-    provider, available = DEFAULT_RUNTIME_REGISTRY.select(
+    provider, available = runtimes.select(
         resolved.workspace,
         context,
         runtime_id,

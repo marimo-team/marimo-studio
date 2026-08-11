@@ -19,13 +19,14 @@ from marimo._session.notebook.file_manager import AppFileManager
 from marimo._session.session import Session
 from marimo._types.ids import CellId_t
 
-import marimo_studio._compat.server.cell_aliases as cell_aliases
-from marimo_studio._compat.server.cell_aliases import (
-    _CellAliasSync,
-    attach_cell_alias_sync,
-    enable_cell_alias_sync,
+import marimo_studio._server.cell_alias_policy as cell_alias_policy
+from marimo_studio._capabilities import ServerHandle, ServerLocation
+from marimo_studio._compat.server.gateway import _LocationHandle
+from marimo_studio._compat.server.notebook_save import (
+    PrivateNotebookSaveTransform,
+    _SourceTransformExtension,
 )
-from marimo_studio._compat.server.models import ServerLocation
+from marimo_studio._server.cell_alias_policy import CellAliasSourcePolicy
 from marimo_studio._workspace import load_studio
 from marimo_studio.workspace import bind_cell, ensure_view, resolve_studio
 
@@ -85,14 +86,23 @@ def _location(notebook: Path, manager: _Manager) -> ServerLocation:
         base_url="",
         mode="edit",
         routing_query=(),
-        _config_manager=object(),
-        _state=object(),
-        _session_manager=manager,
+        handle=ServerHandle(
+            _LocationHandle(
+                config_manager=object(),
+                state=object(),
+                session_manager=manager,
+            )
+        ),
     )
 
 
-def _enable_sync(notebook: Path, session: _Session) -> None:
-    enable_cell_alias_sync(_location(notebook, _Manager(session)))
+def _enable_sync(
+    notebook: Path,
+    session: _Session,
+) -> PrivateNotebookSaveTransform:
+    adapter = PrivateNotebookSaveTransform(CellAliasSourcePolicy())
+    adapter.enable(_location(notebook, _Manager(session)))
+    return adapter
 
 
 def _append_cells(notebook: Path, cells: str) -> None:
@@ -196,7 +206,7 @@ def test_live_save_tracks_alias_rebound_by_another_process(
     ensure_view(notebook_path)
     manager = AppFileManager(notebook_path)
     session = _Session(manager)
-    attach_cell_alias_sync(cast(Session, session))
+    _enable_sync(notebook_path, session)
     first, second = tuple(session.document.cells)
     inserted = NotebookCell(
         id=CellId_t("inserted"),
@@ -231,7 +241,7 @@ def test_code_mode_save_updates_aliases(
     ensure_view(notebook_path)
     manager = AppFileManager(notebook_path)
     session = _Session(manager)
-    attach_cell_alias_sync(cast(Session, session))
+    _enable_sync(notebook_path, session)
     cells = tuple(session.document.cells)
     updated = [
         _cell_with_code(cell, cell.code.replace("x * 2", "x * 5")) for cell in cells
@@ -251,7 +261,7 @@ def test_non_persistent_save_returns_refreshed_source_without_writing(
     ensure_view(notebook_path)
     before = notebook_path.read_text(encoding="utf-8")
     manager = AppFileManager(notebook_path)
-    attach_cell_alias_sync(cast(Session, _Session(manager)))
+    _enable_sync(notebook_path, _Session(manager))
     cells = tuple(manager.app.cell_manager.document.cells)
     updated = tuple(
         _cell_with_code(cell, cell.code.replace("x * 2", "x * 5")) for cell in cells
@@ -266,7 +276,7 @@ def test_non_persistent_save_returns_refreshed_source_without_writing(
 def test_notebook_rename_keeps_native_save_available(notebook_path: Path) -> None:
     ensure_view(notebook_path)
     manager = AppFileManager(notebook_path)
-    attach_cell_alias_sync(cast(Session, _Session(manager)))
+    _enable_sync(notebook_path, _Session(manager))
     renamed = notebook_path.with_name("renamed.py")
 
     manager.rename(renamed)
@@ -323,13 +333,13 @@ def test_project_alias_write_failure_is_visible(
     _configure_project(notebook_path)
     ensure_view(notebook_path)
     manager = AppFileManager(notebook_path)
-    attach_cell_alias_sync(cast(Session, _Session(manager)))
+    _enable_sync(notebook_path, _Session(manager))
     cells = tuple(manager.app.cell_manager.document.cells)
 
     def fail_write(*_: object, **__: object) -> None:
         raise OSError("configuration is read-only")
 
-    monkeypatch.setattr(cell_aliases, "_write_cell_bindings", fail_write)
+    monkeypatch.setattr(cell_alias_policy, "_write_cell_bindings", fail_write)
 
     with pytest.raises(OSError, match="configuration is read-only"):
         _save_cells(
@@ -349,7 +359,7 @@ def test_live_edit_of_duplicate_cells_keeps_distinct_aliases(
     _duplicate_notebook(notebook_path, 2)
     ensure_view(notebook_path)
     manager = AppFileManager(notebook_path)
-    attach_cell_alias_sync(cast(Session, _Session(manager)))
+    _enable_sync(notebook_path, _Session(manager))
     first, second = tuple(manager.app.cell_manager.document.cells)
 
     _save_cells(
@@ -369,7 +379,7 @@ def test_live_deletion_renumbers_every_surviving_duplicate_alias(
     _duplicate_notebook(notebook_path, 3)
     ensure_view(notebook_path)
     manager = AppFileManager(notebook_path)
-    attach_cell_alias_sync(cast(Session, _Session(manager)))
+    _enable_sync(notebook_path, _Session(manager))
     _first, second, third = tuple(manager.app.cell_manager.document.cells)
 
     _save_cells(manager, (second, third))
@@ -420,7 +430,7 @@ def test_live_save_does_not_guess_after_offline_reorder(
     )
     restarted = AppFileManager(notebook_path)
 
-    attach_cell_alias_sync(cast(Session, _Session(restarted)))
+    _enable_sync(notebook_path, _Session(restarted))
     _save_cells(restarted, tuple(restarted.app.cell_manager.document.cells))
 
     unresolved = resolve_studio(load_studio(notebook_path))
@@ -437,8 +447,8 @@ def test_session_close_restores_save_method_and_releases_state(
     manager = AppFileManager(notebook_path)
     original_save_file = manager._save_file
     session = _Session(manager)
-    attach_cell_alias_sync(cast(Session, session))
-    extension = session.extensions.get(_CellAliasSync)
+    _enable_sync(notebook_path, session)
+    extension = session.extensions.get(_SourceTransformExtension)
     assert extension is not None
     assert manager._save_file is not original_save_file
     manager_ref = weakref.ref(manager)
@@ -457,8 +467,8 @@ def test_session_detach_waits_for_in_flight_save(notebook_path: Path) -> None:
     ensure_view(notebook_path)
     manager = AppFileManager(notebook_path)
     session = _Session(manager)
-    attach_cell_alias_sync(cast(Session, session))
-    extension = session.extensions.get(_CellAliasSync)
+    _enable_sync(notebook_path, session)
+    extension = session.extensions.get(_SourceTransformExtension)
     assert extension is not None
     observed_lock = _ObservedRLock()
     cast(Any, manager)._save_lock = observed_lock
@@ -496,9 +506,10 @@ def test_session_detach_waits_for_in_flight_save(notebook_path: Path) -> None:
 def test_listener_attaches_sessions_created_after_enable(notebook_path: Path) -> None:
     ensure_view(notebook_path)
     manager = _Manager()
-    enable_cell_alias_sync(_location(notebook_path, manager))
+    adapter = PrivateNotebookSaveTransform(CellAliasSourcePolicy())
+    adapter.enable(_location(notebook_path, manager))
     session = _Session(AppFileManager(notebook_path))
 
     asyncio.run(manager._event_bus.emit_session_created(cast(Session, session)))
 
-    assert session.extensions.get(_CellAliasSync) is not None
+    assert session.extensions.get(_SourceTransformExtension) is not None

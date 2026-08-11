@@ -100,11 +100,14 @@ def __marimo_studio_values():
     _studio_private_query_keys = {private_query_keys}
     _studio_context = _studio_get_context()
 
-    def _studio_error(code, message):
+    def _studio_message(message):
         try:
-            text = str(message)
+            return str(message)
         except Exception:
-            text = "The operation failed without a printable message."
+            return "The operation failed without a printable message."
+
+    def _studio_error(code, message):
+        text = _studio_message(message)
         if len(text) > {MAX_ERROR_MESSAGE_LENGTH}:
             text = text[:{MAX_ERROR_MESSAGE_LENGTH}] + "…"
         return {{"code": code, "message": text}}
@@ -210,6 +213,8 @@ def __marimo_studio_values():
         return _studio_payload(values, errors)
 
     _studio_active_outputs = {{}}
+    _studio_releasing_outputs = set()
+    _studio_release_references = {{}}
     _studio_retained_outputs = set()
     _studio_retained_ui = {{}}
     _studio_ui_owners = {{}}
@@ -258,11 +263,12 @@ def __marimo_studio_values():
             identity = owner_identities.get(cell_id)
             if identity is not None:
                 candidates[identity].add(object_id)
-        shared = (
-            set().union(*_studio_ui_owners.values())
-            if _studio_ui_owners
-            else set()
+        shared_owners = (
+            referenced
+            for identity, referenced in _studio_ui_owners.items()
+            if identity not in _studio_releasing_outputs
         )
+        shared = set().union(*shared_owners)
         object_ids = set().union(*candidates.values()).difference(shared)
         references = []
         for object_id in object_ids:
@@ -302,7 +308,32 @@ def __marimo_studio_values():
 
     def _studio_release_many(requested, retry_retained=False):
         released = set(requested)
-        cleanup = released.union(
+        if (
+            not released
+            and not _studio_releasing_outputs
+            and (not retry_retained or not _studio_retained_outputs)
+        ):
+            return
+        registry = _studio_context.ui_element_registry
+        for identity in released:
+            consumer_id, selector = identity
+            if identity not in _studio_releasing_outputs:
+                referenced = set(_studio_ui_owners.get(identity, ()))
+                owner = _studio_owner(*identity)
+                _studio_release_references[identity] = {{
+                    object_id: registry._objects.get(object_id)
+                    for object_id in referenced
+                    if registry._constructing_cells.get(object_id) == owner
+                    or object_id.startswith(f"{{owner}}-")
+                }}
+                _studio_releasing_outputs.add(identity)
+            active = _studio_active_outputs.get(consumer_id)
+            if active is not None:
+                active.discard(selector)
+                if not active:
+                    _studio_active_outputs.pop(consumer_id, None)
+
+        cleanup = _studio_releasing_outputs.union(
             _studio_retained_outputs if retry_retained else ()
         )
         if not cleanup:
@@ -311,24 +342,8 @@ def __marimo_studio_values():
             identity: set(_studio_retained_ui.get(identity, ()))
             for identity in cleanup
         }}
-        registry = _studio_context.ui_element_registry
-        released_references = {{}}
-        for identity in released:
-            consumer_id, selector = identity
-            referenced = _studio_ui_owners.pop(identity, set())
-            owner = _studio_owner(*identity)
-            released_references[identity] = {{
-                object_id: registry._objects.get(object_id)
-                for object_id in referenced
-                if registry._constructing_cells.get(object_id) == owner
-                or object_id.startswith(f"{{owner}}-")
-            }}
-            candidates.setdefault(identity, set()).update(referenced)
-            active = _studio_active_outputs.get(consumer_id)
-            if active is not None:
-                active.discard(selector)
-                if not active:
-                    _studio_active_outputs.pop(consumer_id, None)
+        for identity in cleanup:
+            candidates[identity].update(_studio_ui_owners.get(identity, ()))
 
         if candidates:
             owners = {{
@@ -336,19 +351,30 @@ def __marimo_studio_values():
             }}
             retained = _studio_release_ui_elements(owners, candidates)
             lifecycle_registry = _studio_context.cell_lifecycle_registry
+            failure = None
             for identity, owner in owners.items():
+                try:
+                    lifecycle_registry.dispose(owner, deletion=False)
+                except BaseException as error:
+                    if failure is None:
+                        failure = error
+                    continue
                 retained_ui = retained.get(identity, set())
                 if retained_ui:
                     _studio_retained_ui[identity] = retained_ui
                 else:
                     _studio_retained_ui.pop(identity, None)
-                lifecycle_registry.dispose(owner, deletion=False)
                 if owner in lifecycle_registry.registry or retained_ui:
                     _studio_retained_outputs.add(identity)
                 else:
                     _studio_retained_outputs.discard(identity)
-
-        _studio_pending_notifications.update(released_references)
+                if identity in _studio_releasing_outputs:
+                    pending = _studio_pending_notifications.setdefault(identity, {{}})
+                    pending.update(_studio_release_references.pop(identity, {{}}))
+                    _studio_ui_owners.pop(identity, None)
+                    _studio_releasing_outputs.discard(identity)
+            if failure is not None:
+                raise failure
 
     def _studio_replacement_resets(consumer_id, selector):
         identity = (consumer_id, selector)
@@ -456,15 +482,16 @@ def __marimo_studio_values():
                                 )
                 except BaseException as error:
                     failed.add((consumer_id, selector))
+                    detail = _studio_message(error)
                     errors[selector] = _studio_error(
                         "output-format-error",
-                        f"Selector {{selector!r}} could not be formatted: {{error}}",
+                        f"Selector {{selector!r}} could not be formatted: {{detail}}",
                     )
                     continue
                 if formatted.traceback is not None:
                     failed.add((consumer_id, selector))
                     detail = (
-                        str(formatted.exception)
+                        _studio_message(formatted.exception)
                         if formatted.exception is not None
                         else "The value representation failed."
                     )
@@ -473,23 +500,32 @@ def __marimo_studio_values():
                         f"Selector {{selector!r}} could not be formatted: {{detail}}",
                     )
                     continue
-                rendered = {{
-                    "ownerCellId": str(owner),
-                    "mimetype": str(formatted.mimetype),
-                    "data": formatted.data,
-                    "timestamp": _studio_time.time(),
-                    "resetUiObjectIds": _studio_replacement_resets(
-                        consumer_id, selector
-                    ),
-                }}
-                size = len(
-                    _studio_json.dumps(
-                        rendered,
-                        allow_nan=False,
-                        ensure_ascii=False,
-                        separators=(",", ":"),
-                    ).encode("utf-8")
-                )
+                try:
+                    rendered = {{
+                        "ownerCellId": str(owner),
+                        "mimetype": str(formatted.mimetype),
+                        "data": formatted.data,
+                        "timestamp": _studio_time.time(),
+                        "resetUiObjectIds": _studio_replacement_resets(
+                            consumer_id, selector
+                        ),
+                    }}
+                    size = len(
+                        _studio_json.dumps(
+                            rendered,
+                            allow_nan=False,
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                        ).encode("utf-8")
+                    )
+                except BaseException as error:
+                    failed.add((consumer_id, selector))
+                    detail = _studio_message(error)
+                    errors[selector] = _studio_error(
+                        "output-format-error",
+                        f"Selector {{selector!r}} could not be encoded: {{detail}}",
+                    )
+                    continue
                 if size > limit:
                     failed.add((consumer_id, selector))
                     errors[selector] = _studio_error(
@@ -497,9 +533,18 @@ def __marimo_studio_values():
                         f"Selector {{selector!r}} exceeds the {{limit}}-byte limit.",
                     )
                     continue
-                _studio_track_ui_elements(
-                    consumer_id, selector, rendered["data"]
-                )
+                try:
+                    _studio_track_ui_elements(
+                        consumer_id, selector, rendered["data"]
+                    )
+                except BaseException as error:
+                    failed.add((consumer_id, selector))
+                    detail = _studio_message(error)
+                    errors[selector] = _studio_error(
+                        "output-format-error",
+                        f"Selector {{selector!r}} could not be tracked: {{detail}}",
+                    )
+                    continue
                 _studio_active_outputs.setdefault(consumer_id, set()).add(selector)
                 outputs[selector] = rendered
         if failed:
@@ -542,12 +587,28 @@ def __marimo_studio_values():
         _studio_output_specs.clear()
         _studio_output_specs.update(next_output_specs)
 
+    _studio_bridge_functions = {{}}
+    _studio_host_state = {{"closed": False}}
+
+    def _studio_unregister_bridge():
+        if not _studio_bridge_functions:
+            return
+        registry = _studio_context.function_registry
+        if all(
+            registry.get_function("_marimo_studio", name) is function
+            for name, function in _studio_bridge_functions.items()
+        ):
+            registry.delete("_marimo_studio")
+        _studio_bridge_functions.clear()
+
     class _StudioOutputLifecycle:
         def create(self, context):
             del context
 
         def dispose(self, context, deletion):
             del context, deletion
+            if _studio_host_state["closed"]:
+                return True
             active = (
                 (consumer_id, selector)
                 for consumer_id, selectors in tuple(
@@ -555,11 +616,19 @@ def __marimo_studio_values():
                 )
                 for selector in tuple(selectors)
             )
-            _studio_release_many(active, retry_retained=True)
-            _studio_flush_notifications()
+            try:
+                _studio_release_many(active, retry_retained=True)
+                _studio_flush_notifications()
+            except BaseException:
+                return False
+            if _studio_releasing_outputs or _studio_retained_outputs:
+                return False
+            try:
+                _studio_unregister_bridge()
+            except BaseException:
+                return False
+            _studio_host_state["closed"] = True
             return True
-
-    _studio_context.cell_lifecycle_registry.add(_StudioOutputLifecycle())
 
     def _studio_sync_query(args):
         params = _studio_context.query_params
@@ -575,26 +644,30 @@ def __marimo_studio_values():
             if current.get(key) != value:
                 params.set(key, value)
 
-    _studio_context.function_registry.register(
-        "_marimo_studio",
+    _studio_functions = (
         _StudioFunction("read_values", _StudioReadValuesArgs, _studio_read),
-    )
-    _studio_context.function_registry.register(
-        "_marimo_studio",
         _StudioFunction("render_values", _StudioRenderValuesArgs, _studio_render),
-    )
-    _studio_context.function_registry.register(
-        "_marimo_studio",
         _StudioFunction(
             "sync_projection_specs",
             _StudioSyncProjectionSpecsArgs,
             _studio_sync_projection_specs,
         ),
-    )
-    _studio_context.function_registry.register(
-        "_marimo_studio",
         _StudioFunction("sync_query", _StudioSyncQueryArgs, _studio_sync_query),
     )
+    try:
+        for function in _studio_functions:
+            _studio_context.function_registry.register(
+                "_marimo_studio", function
+            )
+            _studio_bridge_functions[function.name] = function
+        _studio_context.cell_lifecycle_registry.add(_StudioOutputLifecycle())
+    except BaseException as setup_error:
+        try:
+            _studio_context.function_registry.delete("_marimo_studio")
+        except BaseException as cleanup_error:
+            raise setup_error from cleanup_error
+        _studio_bridge_functions.clear()
+        raise
     return
 
 '''

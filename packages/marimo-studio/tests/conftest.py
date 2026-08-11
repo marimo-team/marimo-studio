@@ -8,6 +8,7 @@ import marimo
 import pytest
 
 import marimo_studio._assets as assets_module
+from marimo_studio._compat.layout import MARIMO_RELEASE_COMMIT
 
 from .helpers import notebook_source
 
@@ -26,7 +27,15 @@ def runtime_assets(
     ):
         (assets / name).write_text("", encoding="utf-8")
     (assets / "build-meta.json").write_text(
-        json.dumps({"marimo": {"version": marimo.__version__}}) + "\n",
+        json.dumps(
+            {
+                "marimo": {
+                    "version": marimo.__version__,
+                    "commit": MARIMO_RELEASE_COMMIT,
+                }
+            }
+        )
+        + "\n",
         encoding="utf-8",
     )
     monkeypatch = pytest.MonkeyPatch()

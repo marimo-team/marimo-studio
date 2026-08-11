@@ -8,7 +8,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from marimo_studio._cell_refs import cell_refs
-from marimo_studio._compat.notebook import load_static_notebook
+from marimo_studio._composition import create_tooling_adapters
+from marimo_studio._runtime_limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.types import (
     CellConfigSpec,
@@ -74,7 +75,7 @@ def inspect_notebook(
     if not notebook_path.is_file():
         raise ConfigurationError(f"Notebook does not exist: {notebook_path}")
 
-    static = load_static_notebook(notebook_path)
+    static = create_tooling_adapters().notebook(notebook_path)
     source_digests = [
         hashlib.sha256(cell.code.encode("utf-8")).hexdigest() for cell in static.cells
     ]
@@ -136,19 +137,19 @@ async def inspect_runtime(
     include_code: bool = False,
 ) -> RuntimeInspection:
     """Run a notebook and return its static graph, outputs, and JSON values."""
-    from marimo_studio._compat.runtime_probe import probe_runtime
-
     notebook = inspect_notebook(path, include_code=include_code)
     variables = tuple(
         dict.fromkeys(
             definition for cell in notebook.cells for definition in cell.definitions
         )
     )
-    runtime = await probe_runtime(
+    runtime = await create_tooling_adapters().runner(
         notebook.path,
         cell_ids=tuple(cell.runtime_id for cell in notebook.cells),
         variables=variables,
+        output_selector_groups=(),
         show_tracebacks=True,
+        timeout=DEFAULT_RUNTIME_TIMEOUT,
         value_max_bytes=_RUNTIME_VALUE_BYTES,
     )
     return RuntimeInspection(notebook=notebook, runtime=runtime)

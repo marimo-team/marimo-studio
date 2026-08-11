@@ -9,7 +9,6 @@ from typing import cast
 from htpy import Element, Node, Renderable, base, div, fragment, link, script
 from markupsafe import Markup
 
-from marimo_studio._assets import runtime_marimo_version
 from marimo_studio._workspace.templates import (
     TemplateParser,
     validate_template_structure,
@@ -62,11 +61,12 @@ def runtime_head(
     dev: bool,
     revision: str,
     runtime: str,
+    marimo_version: str,
 ) -> Renderable:
     mount_config = json.dumps(
         {
             "supportUrl": support_url,
-            "version": runtime_marimo_version(),
+            "version": marimo_version,
             "revision": revision,
             "runtime": runtime,
         },
@@ -160,6 +160,7 @@ def runtime_document(
     revision: str,
     runtime: str,
     filename: str,
+    marimo_version: str,
 ) -> str:
     """Inject one presentation runtime into an authored view document."""
     parser = TemplateParser()
@@ -184,6 +185,7 @@ def runtime_document(
                 dev=dev,
                 revision=revision,
                 runtime=runtime,
+                marimo_version=marimo_version,
             )
         )
         + "\n"

@@ -2,12 +2,38 @@
 
 from __future__ import annotations
 
+import hmac
+from urllib.parse import parse_qs
+
+from starlette.datastructures import Headers
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.types import Scope
 
-from marimo_studio._compat.server.sessions import server_token_matches
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio.errors import MarimoStudioError
+
+
+def server_token_matches(scope: Scope, expected: str) -> bool:
+    """Validate Marimo's server token for a Studio mutation route."""
+    supplied = Headers(scope=scope).get("Marimo-Server-Token")
+    return supplied is not None and hmac.compare_digest(supplied, expected)
+
+
+def has_read_access(scope: Scope) -> bool:
+    auth = scope.get("auth")
+    return "read" in getattr(auth, "scopes", ())
+
+
+def has_edit_access(scope: Scope) -> bool:
+    auth = scope.get("auth")
+    return "edit" in getattr(auth, "scopes", ())
+
+
+def has_access_token(scope: Scope) -> bool:
+    raw = scope.get("query_string", b"")
+    query = parse_qs(bytes(raw).decode("latin-1"), keep_blank_values=True)
+    return "access_token" in query
 
 
 def error_response(error: MarimoStudioError) -> JSONResponse:
@@ -69,5 +95,9 @@ __all__ = [
     "authentication_required_response",
     "error_response",
     "forbidden_response",
+    "has_access_token",
+    "has_edit_access",
+    "has_read_access",
     "invalid_server_token_response",
+    "server_token_matches",
 ]

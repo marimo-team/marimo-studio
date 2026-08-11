@@ -4,17 +4,20 @@ import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from starlette.testclient import TestClient
 
-from marimo_studio._compat.server.sessions import reload_page_into_studio
+from marimo_studio._capabilities import ServerContext, ServerHandle, SessionState
+from marimo_studio._compat.server.gateway import _ContextHandle
+from marimo_studio._compat.server.session_state import PrivateSessionState
 from marimo_studio._server import agent_api, browser_agent, dev
 from marimo_studio._server.agent_coordinator import AgentCoordinator
 from marimo_studio._server.live_clients import StudioClientRegistry
 from marimo_studio._server.notebook_scope import NotebookScope
 from marimo_studio._server.presentation import NotebookPresentation
+from marimo_studio._server.runtimes import RuntimeRegistry
 from marimo_studio.agent_models import BrowserObservation
 from marimo_studio.errors import AgentRequestError
 from marimo_studio.types import CheckResult
@@ -174,16 +177,27 @@ def test_native_page_reload_waits_for_code_mode_to_finish() -> None:
         scratchpad_lock=scratchpad_lock,
         notify=lambda notification, **_kwargs: notifications.append(notification),
     )
-    context: Any = SimpleNamespace(
+    manager = SimpleNamespace(
+        get_session_by_file_key=lambda _file_key: session,
+    )
+    context = ServerContext(
+        notebook=Path("analysis.py"),
         file_key="analysis.py",
-        _session_manager=SimpleNamespace(
-            get_session_by_file_key=lambda _file_key: session
-        ),
+        base_url="",
+        mode="edit",
+        dev=True,
+        routing_query=(),
+        user_config={},
+        config_overrides={},
+        server_token="",
+        handle=ServerHandle(_ContextHandle(server=None, session_manager=manager)),
     )
 
     async def exercise() -> None:
         await scratchpad_lock.acquire()
-        transition = asyncio.create_task(reload_page_into_studio(context, "executive"))
+        transition = asyncio.create_task(
+            PrivateSessionState().reload_page(context, "executive")
+        )
         await asyncio.sleep(0)
         assert notifications == []
         scratchpad_lock.release()
@@ -244,8 +258,8 @@ def test_edit_workspace_records_browser_readiness_and_requests_active_view(
         no_session_client,
     )
     monkeypatch.setattr(browser_agent, "observe_views", observe)
-    monkeypatch.setattr(agent_api, "current_session", lambda *_args: object())
-    monkeypatch.setattr(agent_api, "reload_page_into_studio", ignore_reload)
+    monkeypatch.setattr(PrivateSessionState, "exists", lambda *_args: True)
+    monkeypatch.setattr(PrivateSessionState, "reload_page", ignore_reload)
 
     with TestClient(app) as client:
         recorded = client.put(
@@ -366,12 +380,11 @@ def test_external_observation_uses_the_selected_browser_session(
             projected_sessions.append((session_id, binding_id))
             return SimpleNamespace(instance=f"runtime-{session_id}")
 
-    monkeypatch.setattr(
-        browser_agent.DEFAULT_RUNTIME_REGISTRY,
-        "select",
-        lambda *_args: (Provider(), ("server",)),
+    runtimes = cast(
+        RuntimeRegistry,
+        SimpleNamespace(select=lambda *_args: (Provider(), ("server",))),
     )
-    monkeypatch.setattr(browser_agent, "current_session", lambda *_args: object())
+    sessions = cast(SessionState, SimpleNamespace(exists=lambda *_args: True))
 
     async def exercise() -> tuple[BrowserObservation, ...]:
         client_id = "browser-client-1234"
@@ -388,6 +401,8 @@ def test_external_observation_uses_the_selected_browser_session(
                 timeout=1,
                 session_id=None,
                 client_id=client_id,
+                sessions=sessions,
+                runtimes=runtimes,
             )
         )
         while True:
@@ -431,7 +446,8 @@ def test_code_mode_observation_rejects_an_inactive_view(
         agents=agents,
     )
     context: Any = SimpleNamespace()
-    monkeypatch.setattr(browser_agent, "current_session", lambda *_args: object())
+    sessions = cast(SessionState, SimpleNamespace(exists=lambda *_args: True))
+    runtimes = cast(RuntimeRegistry, SimpleNamespace())
 
     async def exercise() -> None:
         client_id = "browser-client-1234"
@@ -450,6 +466,8 @@ def test_code_mode_observation_rejects_an_inactive_view(
                 session_id="s_123456",
                 client_id=client_id,
                 allow_view_activation=False,
+                sessions=sessions,
+                runtimes=runtimes,
             )
 
         assert raised.value.code == "browser-view-not-active"
@@ -484,12 +502,11 @@ def test_code_mode_observation_rejects_an_active_view_changed_during_snapshot(
     provider = SimpleNamespace(
         project=lambda *_args: SimpleNamespace(instance="runtime-instance")
     )
-    monkeypatch.setattr(
-        browser_agent.DEFAULT_RUNTIME_REGISTRY,
-        "select",
-        lambda *_args: (provider, ("server",)),
+    runtimes = cast(
+        RuntimeRegistry,
+        SimpleNamespace(select=lambda *_args: (provider, ("server",))),
     )
-    monkeypatch.setattr(browser_agent, "current_session", lambda *_args: object())
+    sessions = cast(SessionState, SimpleNamespace(exists=lambda *_args: True))
 
     async def exercise() -> None:
         client_id = "browser-client-1234"
@@ -508,6 +525,8 @@ def test_code_mode_observation_rejects_an_active_view_changed_during_snapshot(
                 session_id="s_123456",
                 client_id=client_id,
                 allow_view_activation=False,
+                sessions=sessions,
+                runtimes=runtimes,
             )
 
         assert raised.value.code == "browser-view-not-active"
@@ -603,7 +622,13 @@ def test_code_mode_analysis_requires_one_named_view(
         revisions: dict[str, str],
         **kwargs: object,
     ) -> tuple[BrowserObservation, ...]:
-        observed.append(kwargs)
+        observed.append(
+            {
+                key: value
+                for key, value in kwargs.items()
+                if key not in {"sessions", "runtimes"}
+            }
+        )
         return (
             BrowserObservation(
                 view=views[0],
@@ -619,7 +644,7 @@ def test_code_mode_analysis_requires_one_named_view(
             ),
         )
 
-    monkeypatch.setattr(agent_api, "current_session", lambda *_args: object())
+    monkeypatch.setattr(PrivateSessionState, "exists", lambda *_args: True)
     monkeypatch.setattr(agent_api, "check_runtime_studio_isolated", runtime)
     monkeypatch.setattr(agent_api, "observe_views", observe)
 

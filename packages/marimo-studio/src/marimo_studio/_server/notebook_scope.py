@@ -28,8 +28,15 @@ class NotebookScope:
         )
 
     async def close(self) -> None:
-        await self.agents.close()
-        await self.clients.close()
+        failure: BaseException | None = None
+        for resource in (self.agents, self.clients):
+            try:
+                await resource.close()
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+        if failure is not None:
+            raise failure
 
 
 class NotebookScopeRegistry:
@@ -40,7 +47,11 @@ class NotebookScopeRegistry:
 
     def get(self, notebook: Path) -> NotebookScope:
         canonical = notebook.resolve()
-        return self._scopes.setdefault(canonical, NotebookScope.create(canonical))
+        notebook_scope = self._scopes.get(canonical)
+        if notebook_scope is None:
+            notebook_scope = NotebookScope.create(canonical)
+            self._scopes[canonical] = notebook_scope
+        return notebook_scope
 
     def contains(self, notebook: Path) -> bool:
         return notebook.resolve() in self._scopes
@@ -48,8 +59,15 @@ class NotebookScopeRegistry:
     async def close(self) -> None:
         scopes = tuple(self._scopes.values())
         self._scopes.clear()
+        failure: BaseException | None = None
         for notebook_scope in scopes:
-            await notebook_scope.close()
+            try:
+                await notebook_scope.close()
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+        if failure is not None:
+            raise failure
 
 
 __all__ = ["NotebookScope", "NotebookScopeRegistry"]

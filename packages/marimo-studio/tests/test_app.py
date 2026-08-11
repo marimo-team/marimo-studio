@@ -21,12 +21,11 @@ from starlette.middleware import Middleware
 from starlette.routing import Mount
 from starlette.testclient import TestClient
 
-import marimo_studio._compat.server.replay as replay_compat
 from marimo_studio import create_asgi_app
 from marimo_studio._compat.notebook import load_static_notebook
-from marimo_studio._compat.server.kiosk import route_kiosk_consumer
-from marimo_studio._compat.server.sessions import is_session_id
-from marimo_studio._server import dev, editor_bridge, projection_api
+from marimo_studio._compat.server.session_replay import PrivateSessionReplay
+from marimo_studio._compat.server.session_state import PrivateSessionState
+from marimo_studio._server import dev
 from marimo_studio._server.live_clients import StudioClientRegistry
 from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._urls import authored_view_root_url
@@ -88,10 +87,11 @@ def test_package_registers_marimo_extension_points() -> None:
 
 
 def test_session_id_validation_tracks_marimos_server_boundary() -> None:
-    assert is_session_id("s_abc123")
-    assert not is_session_id("s_ABC123")
-    assert not is_session_id("s_short")
-    assert not is_session_id(None)
+    sessions = PrivateSessionState()
+    assert sessions.is_session_id("s_abc123")
+    assert not sessions.is_session_id("s_ABC123")
+    assert not sessions.is_session_id("s_short")
+    assert not sessions.is_session_id(None)
 
 
 def test_run_mode_serves_default_and_named_view_documents(
@@ -475,7 +475,6 @@ def test_studio_runtime_config_targets_its_editor_session(
     studio = _configured(notebook_path)
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
-    editor_session = object()
     captured: dict[str, object] = {}
 
     async def session_for_client(
@@ -488,6 +487,7 @@ def test_studio_runtime_config_targets_its_editor_session(
     def runtime_config(
         _snapshot: object,
         _context: object,
+        _runtimes: object,
         runtime_id: str | None,
         session_id: str | None,
         binding_id: str | None,
@@ -497,14 +497,14 @@ def test_studio_runtime_config_targets_its_editor_session(
         captured["binding_id"] = binding_id
         return {"runtime": {"id": "server"}}
 
-    def route_kiosk(
-        manager: object,
+    def attach_session(
+        _attachment: object,
+        _context: object,
         consumer_id: str,
-        session: object,
+        session_id: str,
     ) -> bool:
-        captured["manager"] = manager
         captured["consumer_id"] = consumer_id
-        captured["editor_session"] = session
+        captured["editor_session_id"] = session_id
         return True
 
     monkeypatch.setattr(
@@ -517,12 +517,12 @@ def test_studio_runtime_config_targets_its_editor_session(
         runtime_config,
     )
     monkeypatch.setattr(
-        "marimo_studio._server.runtime_config_api.current_session",
-        lambda _context, _session_id: editor_session,
+        "marimo_studio._compat.server.session_state.PrivateSessionState.exists",
+        lambda _sessions, _context, _session_id: True,
     )
     monkeypatch.setattr(
-        "marimo_studio._server.runtime_config_api.route_kiosk_consumer",
-        route_kiosk,
+        "marimo_studio._compat.server.existing_session.PrivateExistingSessionAttachment.attach",
+        attach_session,
     )
 
     with TestClient(app) as client:
@@ -546,9 +546,8 @@ def test_studio_runtime_config_targets_its_editor_session(
         "runtime_id": "server",
         "session_id": "s_123456",
         "binding_id": "s_123456",
-        "manager": _session_manager(app),
         "consumer_id": "s_view01",
-        "editor_session": editor_session,
+        "editor_session_id": "s_123456",
     }
     assert invalid.status_code == 400
     assert invalid.json()["error"] == "invalid-studio-session"
@@ -581,6 +580,7 @@ def test_studio_runtime_config_resolves_session_after_snapshot(
     def runtime_config(
         _snapshot: object,
         _context: object,
+        _runtimes: object,
         _runtime_id: str | None,
         session_id: str | None,
         binding_id: str | None,
@@ -589,12 +589,13 @@ def test_studio_runtime_config_resolves_session_after_snapshot(
         captured["binding_id"] = binding_id
         return {"runtime": {"id": "server"}}
 
-    def route_kiosk(
-        _manager: object,
+    def attach_session(
+        _attachment: object,
+        _context: object,
         _consumer_id: str,
-        session: object,
+        session_id: str,
     ) -> bool:
-        captured["editor_session"] = session
+        captured["editor_session"] = sessions[session_id]
         return True
 
     monkeypatch.setattr(NotebookPresentation, "snapshot_async", snapshot_async)
@@ -608,12 +609,12 @@ def test_studio_runtime_config_resolves_session_after_snapshot(
         runtime_config,
     )
     monkeypatch.setattr(
-        "marimo_studio._server.runtime_config_api.current_session",
-        lambda _context, session_id: sessions.get(session_id),
+        "marimo_studio._compat.server.session_state.PrivateSessionState.exists",
+        lambda _sessions, _context, session_id: session_id in sessions,
     )
     monkeypatch.setattr(
-        "marimo_studio._server.runtime_config_api.route_kiosk_consumer",
-        route_kiosk,
+        "marimo_studio._compat.server.existing_session.PrivateExistingSessionAttachment.attach",
+        attach_session,
     )
 
     with TestClient(app) as client:
@@ -642,16 +643,6 @@ def test_runtime_config_keeps_parallel_preview_bootstraps(
     studio = _configured(notebook_path)
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
-    editor_session = object()
-
-    class Manager:
-        def __init__(self) -> None:
-            self.sessions = {"s_editor": editor_session}
-
-        def get_session(self, session_id: object) -> object | None:
-            return self.sessions.get(str(session_id))
-
-    manager = Manager()
 
     async def session_for_client(
         _clients: StudioClientRegistry,
@@ -669,16 +660,12 @@ def test_runtime_config_keeps_parallel_preview_bootstraps(
         lambda *_args, **_kwargs: {"runtime": {"id": "server"}},
     )
     monkeypatch.setattr(
-        "marimo_studio._server.runtime_config_api.current_session",
-        lambda _context, _session_id: editor_session,
+        "marimo_studio._compat.server.session_state.PrivateSessionState.exists",
+        lambda _sessions, _context, _session_id: True,
     )
     monkeypatch.setattr(
-        "marimo_studio._server.runtime_config_api.route_kiosk_consumer",
-        lambda _manager, consumer_id, session: route_kiosk_consumer(
-            manager,
-            consumer_id,
-            session,
-        ),
+        "marimo_studio._compat.server.existing_session.PrivateExistingSessionAttachment.attach",
+        lambda _attachment, _context, _consumer_id, _session_id: True,
     )
 
     with TestClient(app) as client:
@@ -697,8 +684,6 @@ def test_runtime_config_keeps_parallel_preview_bootstraps(
         ]
 
     assert statuses == [200, 200]
-    assert manager.get_session("s_v00000") is editor_session
-    assert manager.get_session("s_v00001") is editor_session
 
 
 def test_wasm_runtime_updates_projection_specs_without_restarting_notebook(
@@ -779,14 +764,12 @@ def test_edit_workspace_queues_public_query_state(
         claim_query_operation,
     )
     monkeypatch.setattr(
-        "marimo_studio._server.query_api.current_session",
-        lambda _context, session_id: (
-            object() if session_id in sessions.values() else None
-        ),
+        "marimo_studio._compat.server.session_state.PrivateSessionState.exists",
+        lambda _sessions, _context, session_id: session_id in sessions.values(),
     )
     monkeypatch.setattr(
-        "marimo_studio._server.query_api.queue_query_sync",
-        lambda _context, session_id, query, operation_id: received.append(
+        "marimo_studio._compat.kernel_values.host.PrivateKernelProjectionHost.sync_query",
+        lambda _host, _context, session_id, query, operation_id: received.append(
             {"session": session_id, "operation": operation_id, **query}
         ),
     )
@@ -894,11 +877,11 @@ def test_edit_workspace_retries_query_after_an_editor_session_rebind(
         reject_stale_claim,
     )
     monkeypatch.setattr(
-        "marimo_studio._server.query_api.current_session",
-        lambda _context, session_id: object() if session_id == "s_123456" else None,
+        "marimo_studio._compat.server.session_state.PrivateSessionState.exists",
+        lambda _sessions, _context, session_id: session_id == "s_123456",
     )
     monkeypatch.setattr(
-        "marimo_studio._server.query_api.queue_query_sync",
+        "marimo_studio._compat.kernel_values.host.PrivateKernelProjectionHost.sync_query",
         lambda *_args: queued.append(object()),
     )
     headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
@@ -949,8 +932,8 @@ def test_server_runtime_instance_stays_stable_when_lookup_session_connects(
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
     monkeypatch.setattr(
-        "marimo_studio._server.runtimes.live_cells",
-        lambda _context, _session_id: None,
+        "marimo_studio._compat.server.session_state.PrivateSessionState.live_cells",
+        lambda _sessions, _context, _session_id: None,
     )
 
     with TestClient(app) as client:
@@ -1506,66 +1489,9 @@ def test_change_stream_classifies_live_source_edits(
     assert payloads[3]["files"] == []
 
 
-def test_document_replay_requires_an_opted_in_manager_and_query() -> None:
-    class Manager:
-        pass
-
-    manager = Manager()
-    other_manager = Manager()
-    session = SimpleNamespace(disconnect_main_consumer=Mock())
-    handler = SimpleNamespace(_reconnect_session=Mock())
-    reconnect = Mock(return_value=("fallback", "new"))
-
-    replay_compat._DOCUMENT_REPLAY_FILES[manager] = {"analysis.py"}
-
-    def connector(
-        active_manager: Manager,
-        requested: bool,
-        file_key: str = "analysis.py",
-    ) -> SimpleNamespace:
-        query = {replay_compat.DOCUMENT_REPLAY_QUERY_PARAM: "1"} if requested else {}
-        return SimpleNamespace(
-            manager=active_manager,
-            params=SimpleNamespace(file_key=file_key),
-            connection=SimpleNamespace(query_params=query),
-            handler=handler,
-        )
-
-    replayed = replay_compat._reconnect_with_document_replay(
-        connector(manager, True),
-        session,
-        reconnect,
-        "reconnect",
-    )
-    unmarked = replay_compat._reconnect_with_document_replay(
-        connector(manager, False),
-        session,
-        reconnect,
-        "reconnect",
-    )
-    unregistered = replay_compat._reconnect_with_document_replay(
-        connector(other_manager, True),
-        session,
-        reconnect,
-        "reconnect",
-    )
-    other_notebook = replay_compat._reconnect_with_document_replay(
-        connector(manager, True, "other.py"),
-        session,
-        reconnect,
-        "reconnect",
-    )
-
-    assert replayed == (session, "reconnect")
-    assert unmarked == ("fallback", "new")
-    assert unregistered == ("fallback", "new")
-    assert other_notebook == ("fallback", "new")
-    session.disconnect_main_consumer.assert_called_once_with()
-    handler._reconnect_session.assert_called_once_with(session, replay=True)
-
-
 def test_document_replay_follows_the_verified_presentation(
     notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = _configured(notebook_path)
 
@@ -1574,11 +1500,15 @@ def test_document_replay_follows_the_verified_presentation(
 
     update_notebook_config(studio.notebook, preserve)
     app = create_asgi_app(studio.notebook)
-    manager = _session_manager(app)
+    configured: list[bool] = []
+    monkeypatch.setattr(
+        PrivateSessionReplay,
+        "configure",
+        lambda _replay, _context, enabled: configured.append(enabled),
+    )
 
     with TestClient(app) as client:
         assert client.get("/").status_code == 200
-        assert str(studio.notebook) in replay_compat._DOCUMENT_REPLAY_FILES[manager]
 
         def reset(config: MutableMapping[str, object]) -> None:
             config["preserve_session"] = False
@@ -1586,7 +1516,7 @@ def test_document_replay_follows_the_verified_presentation(
         update_notebook_config(studio.notebook, reset)
         assert client.get("/").status_code == 200
 
-    assert manager not in replay_compat._DOCUMENT_REPLAY_FILES
+    assert configured == [True, False]
 
 
 def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
@@ -1666,7 +1596,7 @@ def test_output_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
         (
             "values",
             {"selectors": ["doubled"]},
-            "read_session_values",
+            "read_values",
         ),
         (
             "outputs",
@@ -1674,7 +1604,7 @@ def test_output_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
                 "selectors": ["doubled"],
                 "activeSelectors": ["doubled"],
             },
-            "render_session_outputs",
+            "render_outputs",
         ),
     ],
 )
@@ -1687,23 +1617,22 @@ def test_projection_resolves_session_once(
 ) -> None:
     studio = _configured(notebook_path)
     app = create_asgi_app(studio.notebook)
-    session = object()
     resolved: list[str] = []
 
-    def resolve_session(_context: object, session_id: str) -> object | None:
-        resolved.append(session_id)
-        return session if len(resolved) == 1 else None
-
     async def read_projection(
-        actual_session: object,
+        _host: object,
+        _context: object,
+        session_id: str,
         *_args: object,
         **_kwargs: object,
     ) -> SimpleNamespace:
-        assert actual_session is session
+        resolved.append(session_id)
         return SimpleNamespace(to_dict=lambda: {"errors": {}})
 
-    monkeypatch.setattr(projection_api, "current_session", resolve_session)
-    monkeypatch.setattr(projection_api, reader_name, read_projection)
+    monkeypatch.setattr(
+        f"marimo_studio._compat.kernel_values.host.PrivateKernelProjectionHost.{reader_name}",
+        read_projection,
+    )
 
     with TestClient(app) as client:
         config = client.get("/_marimo-studio/views/dashboard/config").json()
@@ -1930,9 +1859,8 @@ def test_direct_native_editor_enables_cell_alias_sync(
     _edit_mode(app)
     locations: list[Any] = []
     monkeypatch.setattr(
-        editor_bridge,
-        "enable_cell_alias_sync",
-        locations.append,
+        "marimo_studio._compat.server.notebook_save.PrivateNotebookSaveTransform.enable",
+        lambda _persistence, location: locations.append(location),
     )
     editor = "/_marimo-studio/editor/?" + urlencode({"file": str(studio.notebook)})
 

@@ -1,7 +1,8 @@
-"""Locate and configure the Marimo server behind Studio middleware."""
+"""Translate private Marimo server state into Studio-owned records."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -9,12 +10,25 @@ from starlette.requests import Request
 from starlette.types import Scope
 from starlette.websockets import WebSocket
 
-from marimo_studio._compat.server.models import (
+from marimo_studio._capabilities import (
     ServerContext,
+    ServerHandle,
     ServerLocation,
     ServerMode,
 )
-from marimo_studio._compat.version import assert_supported_version
+
+
+@dataclass(frozen=True)
+class _LocationHandle:
+    config_manager: Any
+    state: Any
+    session_manager: Any
+
+
+@dataclass(frozen=True)
+class _ContextHandle:
+    server: Any
+    session_manager: Any
 
 
 def effective_base_url(scope: Scope, configured: str) -> str:
@@ -31,8 +45,7 @@ def effective_base_url(scope: Scope, configured: str) -> str:
     return f"{root_path}/{configured.lstrip('/')}"
 
 
-def server_base_url(scope: Scope) -> str | None:
-    """Return the public base URL of a Marimo server application."""
+def _server_base_url(scope: Scope) -> str | None:
     app = scope.get("app")
     state = getattr(app, "state", None)
     manager = getattr(state, "session_manager", None)
@@ -42,8 +55,7 @@ def server_base_url(scope: Scope) -> str | None:
     return effective_base_url(scope, str(getattr(state, "base_url", "")))
 
 
-def server_mode(scope: Scope) -> str | None:
-    """Return the active Marimo server mode."""
+def _server_mode(scope: Scope) -> ServerMode | None:
     app = scope.get("app")
     state = getattr(app, "state", None)
     manager = getattr(state, "session_manager", None)
@@ -59,19 +71,17 @@ def server_mode(scope: Scope) -> str | None:
     return None
 
 
-def server_uses_file_routing(scope: Scope) -> bool:
-    """Return whether requests select notebooks within this server."""
+def _server_uses_file_routing(scope: Scope) -> bool:
     app = scope.get("app")
     state = getattr(app, "state", None)
     manager = getattr(state, "session_manager", None)
     return manager is not None and manager.workspace.get_unique_file_key() is None
 
 
-def server_location(
+def _server_location(
     request: Request | WebSocket,
     selected_file: str | None = None,
 ) -> ServerLocation | None:
-    """Locate the notebook selected for one Marimo server request."""
     scope = request.scope
     app = scope.get("app")
     state = getattr(app, "state", None)
@@ -112,39 +122,55 @@ def server_location(
         base_url=effective_base_url(scope, str(getattr(state, "base_url", ""))),
         mode=mode,
         routing_query=((("file", str(file_key)),) if unique_file is None else ()),
-        _config_manager=AppState(request).config_manager_at_file(str(file_key)),
-        _state=state,
-        _session_manager=manager,
+        handle=ServerHandle(
+            _LocationHandle(
+                config_manager=AppState(request).config_manager_at_file(str(file_key)),
+                state=state,
+                session_manager=manager,
+            )
+        ),
     )
 
 
-def server_context(location: ServerLocation) -> ServerContext:
-    """Read the validated Marimo state needed by a presentation."""
-    assert_supported_version()
-    config_manager = location._config_manager
+def location_handle(location: ServerLocation) -> _LocationHandle:
+    handle = location.handle
+    if not isinstance(handle, _LocationHandle):
+        raise TypeError("Server location belongs to another Marimo adapter")
+    return handle
+
+
+def _server_context(location: ServerLocation) -> ServerContext:
+    handle = location_handle(location)
+    config_manager = handle.config_manager
     return ServerContext(
         notebook=location.notebook,
         file_key=location.file_key,
         base_url=location.base_url,
         mode=location.mode,
         dev=location.mode == "edit"
-        or bool(getattr(location._session_manager, "watch", False)),
+        or bool(getattr(handle.session_manager, "watch", False)),
         routing_query=location.routing_query,
         user_config=config_manager.get_user_config(),
         config_overrides=config_manager.get_config_overrides(),
-        server_token=str(location._session_manager.skew_protection_token),
-        _server=getattr(location._state, "server", None),
-        _session_manager=location._session_manager,
+        server_token=str(handle.session_manager.skew_protection_token),
+        handle=ServerHandle(
+            _ContextHandle(
+                server=getattr(handle.state, "server", None),
+                session_manager=handle.session_manager,
+            )
+        ),
     )
 
 
-def server_shutdown_requested(context: ServerContext) -> bool:
-    """Return whether Marimo has begun shutting down its HTTP server."""
-    return bool(getattr(context._server, "should_exit", False))
+def context_handle(context: ServerContext) -> _ContextHandle:
+    """Return the private state carried by one adapter-owned context."""
+    handle = context.handle
+    if not isinstance(handle, _ContextHandle):
+        raise TypeError("Server context belongs to another Marimo adapter")
+    return handle
 
 
-def relative_request_path(scope: Scope, base_url: str) -> str | None:
-    """Resolve a request path relative to Marimo's configured base URL."""
+def _relative_request_path(scope: Scope, base_url: str) -> str | None:
     path = str(scope.get("path", "/"))
     base = base_url.rstrip("/")
     if not base:
@@ -204,3 +230,41 @@ def config_manager_at_notebook(config_manager: Any, notebook: Path) -> Any:
         *partials,
         *config_manager.security_partials,
     )
+
+
+class PrivateServerGateway:
+    """Read Marimo server state through the pinned release adapter."""
+
+    def base_url(self, scope: Scope) -> str | None:
+        return _server_base_url(scope)
+
+    def mode(self, scope: Scope) -> ServerMode | None:
+        return _server_mode(scope)
+
+    def uses_file_routing(self, scope: Scope) -> bool:
+        return _server_uses_file_routing(scope)
+
+    def location(
+        self,
+        request: Request | WebSocket,
+        selected_file: str | None = None,
+    ) -> ServerLocation | None:
+        return _server_location(request, selected_file)
+
+    def context(self, location: ServerLocation) -> ServerContext:
+        return _server_context(location)
+
+    def relative_path(self, scope: Scope, base_url: str) -> str | None:
+        return _relative_request_path(scope, base_url)
+
+    def shutdown_requested(self, context: ServerContext) -> bool:
+        return bool(getattr(context_handle(context).server, "should_exit", False))
+
+
+__all__ = [
+    "PrivateServerGateway",
+    "config_manager_at_notebook",
+    "context_handle",
+    "effective_base_url",
+    "location_handle",
+]

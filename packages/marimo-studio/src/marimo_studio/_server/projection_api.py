@@ -8,13 +8,11 @@ from typing import cast
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from marimo_studio._compat.kernel_values import (
-    ValueReadUnavailable,
-    read_session_values,
-    render_session_outputs,
+from marimo_studio._capabilities import (
+    KernelProjectionHost,
+    ProjectionUnavailable,
+    ServerContext,
 )
-from marimo_studio._compat.server.models import ServerContext
-from marimo_studio._compat.server.sessions import current_session
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio.values import MAX_OUTPUT_SELECTORS
@@ -25,6 +23,7 @@ async def values_response(
     context: ServerContext,
     presentation: NotebookPresentation,
     view_name: str,
+    projections: KernelProjectionHost,
 ) -> Response:
     body = await _json_body(request)
     revision = body.get("revision") if isinstance(body, dict) else None
@@ -65,16 +64,14 @@ async def values_response(
     session_id = request.headers.get("Marimo-Session-Id")
     if not session_id:
         return _session_unavailable(session_id)
-    session = current_session(context, session_id)
-    if session is None:
-        return _session_unavailable(session_id)
     try:
-        result = await read_session_values(
-            session,
+        result = await projections.read_values(
+            context,
+            session_id,
             requested,
             consumer_id=session_id,
         )
-    except ValueReadUnavailable as error:
+    except ProjectionUnavailable as error:
         return _value_error(error)
     return JSONResponse(result.to_dict(), headers=NO_STORE)
 
@@ -84,6 +81,7 @@ async def outputs_response(
     context: ServerContext,
     presentation: NotebookPresentation,
     view_name: str,
+    projections: KernelProjectionHost,
 ) -> Response:
     body = await _json_body(request)
     revision = body.get("revision") if isinstance(body, dict) else None
@@ -139,17 +137,15 @@ async def outputs_response(
     session_id = request.headers.get("Marimo-Session-Id")
     if not session_id:
         return _session_unavailable(session_id)
-    session = current_session(context, session_id)
-    if session is None:
-        return _session_unavailable(session_id)
     try:
-        result = await render_session_outputs(
-            session,
+        result = await projections.render_outputs(
+            context,
+            session_id,
             requested,
             active,
             consumer_id=session_id,
         )
-    except ValueReadUnavailable as error:
+    except ProjectionUnavailable as error:
         return _value_error(error)
     return JSONResponse(result.to_dict(), headers=NO_STORE)
 
@@ -195,7 +191,7 @@ def _session_unavailable(session_id: str | None) -> JSONResponse:
     )
 
 
-def _value_error(error: ValueReadUnavailable) -> JSONResponse:
+def _value_error(error: ProjectionUnavailable) -> JSONResponse:
     return JSONResponse(
         {
             "error": error.code,

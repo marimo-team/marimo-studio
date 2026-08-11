@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,8 +15,8 @@ import pytest
 
 import marimo_studio._compat.kernel_values.kernel as kernel_values_module
 import marimo_studio._compat.runtime_probe as runtime_probe_module
+from marimo_studio._capabilities import ProjectionUnavailable
 from marimo_studio._compat.kernel_values import (
-    ValueReadUnavailable,
     read_session_values,
     render_session_outputs,
 )
@@ -24,9 +26,7 @@ from marimo_studio._compat.kernel_values.selectors import _read_values
 from marimo_studio._compat.kernel_values.session import _FunctionResultWaiter
 from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.runtime_probe import probe_runtime
-from marimo_studio._compat.version import assert_supported_version
 from marimo_studio._urls import QUERY_OPERATION_QUERY_PARAM
-from marimo_studio.errors import ProtocolError
 from marimo_studio.types import ValuePathStep
 from marimo_studio.values import (
     parse_value_reference,
@@ -381,10 +381,11 @@ def test_kernel_lifespan_rejects_retry_after_setup_failure(
     class Context:
         filename = str(notebook)
         function_registry = Registry()
-        query_params = object()
+        query_params: dict[str, str]
         _kernel = Kernel()
 
     context = Context()
+    context.query_params = {}
     monkeypatch.setattr(runtime_context, "get_context", lambda: context)
     monkeypatch.setattr(kernel_context_module, "KernelRuntimeContext", Context)
 
@@ -441,10 +442,11 @@ def test_kernel_lifespan_cleans_a_partially_registered_bridge(
     class Context:
         filename = str(notebook)
         function_registry = Registry()
-        query_params = object()
+        query_params: dict[str, str]
         _kernel = Kernel()
 
     context = Context()
+    context.query_params = {}
     monkeypatch.setattr(runtime_context, "get_context", lambda: context)
     monkeypatch.setattr(kernel_context_module, "KernelRuntimeContext", Context)
 
@@ -494,10 +496,11 @@ default = "dashboard"
     class Context:
         filename = str(notebook)
         function_registry = Registry()
-        query_params = object()
+        query_params: dict[str, str]
         _kernel = object()
 
     context = Context()
+    context.query_params = {}
     monkeypatch.setattr(runtime_context, "get_context", lambda: context)
     monkeypatch.setattr(kernel_context_module, "KernelRuntimeContext", Context)
     monkeypatch.setattr(
@@ -660,6 +663,9 @@ default = "dashboard"
         def to_dict(self) -> dict[str, str | list[str]]:
             return dict(self.values)
 
+        def get(self, key: str) -> str | list[str] | None:
+            return self.values.get(key)
+
         def remove(self, key: str) -> None:
             events.append(("remove", key))
             self.values.pop(key, None)
@@ -766,7 +772,7 @@ def test_kernel_value_read_rejects_a_viewer_before_dispatch() -> None:
         def put_control_request(*_: object, **__: object) -> None:
             raise AssertionError("viewer request reached the kernel queue")
 
-    with pytest.raises(ValueReadUnavailable) as raised:
+    with pytest.raises(ProjectionUnavailable) as raised:
         asyncio.run(
             read_session_values(
                 ViewerSession(),
@@ -808,7 +814,7 @@ def test_output_timeout_is_terminal_after_one_kernel_dispatch() -> None:
             self.dispatched += 1
 
     session = Session()
-    with pytest.raises(ValueReadUnavailable) as raised:
+    with pytest.raises(ProjectionUnavailable) as raised:
         asyncio.run(
             render_session_outputs(
                 session,
@@ -872,7 +878,7 @@ def test_output_consumer_detach_finishes_read_and_releases_owners() -> None:
 
     session = Session()
 
-    async def disconnect() -> ValueReadUnavailable:
+    async def disconnect() -> ProjectionUnavailable:
         session.dispatched = asyncio.Event()
         read = asyncio.create_task(
             render_session_outputs(
@@ -886,7 +892,7 @@ def test_output_consumer_detach_finishes_read_and_releases_owners() -> None:
         await session.dispatched.wait()
         session.room.connected = False
         consumer.on_detach()
-        with pytest.raises(ValueReadUnavailable) as raised:
+        with pytest.raises(ProjectionUnavailable) as raised:
             await asyncio.wait_for(read, timeout=1)
         return raised.value
 
@@ -943,6 +949,124 @@ if __name__ == "__main__":
     assert result.cells[cell.runtime_id].status == "idle"
     assert result.cells[cell.runtime_id].outputs
     assert result.values.values == {"context.count": 3}
+
+
+def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._messaging.types import NoopStream
+    from marimo._runtime.functions import Function
+    from marimo._runtime.params import QueryParams
+    from marimo._types.ids import CellId_t
+
+    notebook = tmp_path / "runtime.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+    monkeypatch.setattr(
+        kernel_values_module,
+        "keep_cached_cells_compatible",
+        lambda: lambda: None,
+    )
+    both_leased = threading.Barrier(2)
+    first_released = threading.Event()
+
+    class Kernel:
+        def __init__(self) -> None:
+            self.globals = {"first": 1, "second": 2}
+
+        @contextmanager
+        def lock_globals(self):
+            yield
+
+    def inspect(
+        owned: str,
+        foreign: str,
+        query_params: dict[str, str | list[str]],
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, str | list[str]]]:
+        context = _native_output_context()
+        context.filename = str(notebook)
+        context._kernel = Kernel()
+        context._query_params = QueryParams(query_params, NoopStream())
+        lifespan = _KernelBridgeLifespan()
+        try:
+            with context.install():
+                try:
+                    lifespan._enter(context, Function, CellId_t)
+                    functions = context.function_registry.namespaces[
+                        "_marimo_studio"
+                    ].functions
+                    values = cast(
+                        dict[str, Any],
+                        functions["read_values"](
+                            {
+                                "selectors": [owned, foreign],
+                                "max_value_bytes": 1_000,
+                            }
+                        ),
+                    )
+                    outputs = cast(
+                        dict[str, Any],
+                        functions["render_values"](
+                            {
+                                "selectors": [owned, foreign],
+                                "active_selectors": [owned, foreign],
+                                "consumer_id": f"probe-{owned}",
+                                "max_output_bytes": 10_000,
+                            }
+                        ),
+                    )
+                    return values, outputs, dict(context.query_params.to_dict())
+                finally:
+                    lifespan._close()
+        finally:
+            context.virtual_file_registry.shutdown()
+
+    def first_probe() -> tuple[
+        dict[str, Any], dict[str, Any], dict[str, str | list[str]]
+    ]:
+        try:
+            with kernel_values_module.probe_selector_lease(
+                notebook,
+                ("first",),
+                ("first",),
+            ) as query_params:
+                both_leased.wait(timeout=10)
+                return inspect("first", "second", query_params)
+        finally:
+            first_released.set()
+
+    def second_probe() -> tuple[
+        dict[str, Any], dict[str, Any], dict[str, str | list[str]]
+    ]:
+        with kernel_values_module.probe_selector_lease(
+            notebook,
+            ("second",),
+            ("second",),
+        ) as query_params:
+            both_leased.wait(timeout=10)
+            assert first_released.wait(timeout=10)
+            return inspect("second", "first", query_params)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first_future = executor.submit(first_probe)
+        second_future = executor.submit(second_probe)
+        first = first_future.result(timeout=15)
+        second = second_future.result(timeout=15)
+
+    for owned, foreign, (values, outputs, query_params) in (
+        ("first", "second", first),
+        ("second", "first", second),
+    ):
+        assert values["values"] == {owned: 1 if owned == "first" else 2}
+        assert cast(dict[str, Any], values["errors"])[foreign]["code"] == (
+            "unknown-selector"
+        )
+        assert set(cast(dict[str, Any], outputs["outputs"])) == {owned}
+        assert cast(dict[str, Any], outputs["errors"])[foreign]["code"] == (
+            "unknown-selector"
+        )
+        assert query_params == {}
+    assert not kernel_values_module._PROBE_SELECTOR_LEASES
 
 
 def test_runtime_probe_formats_rich_values_with_marimo(
@@ -1885,15 +2009,6 @@ def test_runtime_probe_preserves_session_creation_failures(
     assert manager.shutdown_called
 
 
-def test_runtime_rejects_marimo_below_the_supported_lower_bound(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(marimo, "__version__", "0.23.15")
-
-    with pytest.raises(ProtocolError, match=r"Install marimo>=0\.23\.16"):
-        assert_supported_version()
-
-
 def test_value_waiter_surfaces_an_invalid_kernel_response() -> None:
     from marimo._messaging.notification import (
         FunctionCallResultNotification,
@@ -1916,7 +2031,7 @@ def test_value_waiter_surfaces_an_invalid_kernel_response() -> None:
                 )
             ),
         )
-        with pytest.raises(ValueReadUnavailable) as raised:
+        with pytest.raises(ProjectionUnavailable) as raised:
             await waiter.future
         assert raised.value.code == "invalid-value-response"
 

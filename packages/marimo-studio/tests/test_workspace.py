@@ -5,13 +5,14 @@ import re
 import shutil
 from collections.abc import MutableMapping
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import marimo
 import pytest
 
-import marimo_studio._compat.runtime_probe as runtime_probe_compat
 import marimo_studio._workspace.transactions as workspace_transactions
+import marimo_studio.checks as checks_module
 from marimo_studio._compat.kernel_values.selectors import (
     _template_output_selectors,
     _template_selectors,
@@ -925,7 +926,11 @@ def test_runtime_check_scopes_values_to_the_selected_view(
             outputs=OutputRenderResult(outputs={}, errors={}),
         )
 
-    monkeypatch.setattr(runtime_probe_compat, "probe_runtime", probe)
+    monkeypatch.setattr(
+        checks_module,
+        "create_tooling_adapters",
+        lambda: SimpleNamespace(runner=probe),
+    )
     results = asyncio.run(
         check_runtime_studio(load_studio(notebook_path), view_name="dashboard")
     )
@@ -1010,7 +1015,11 @@ def test_runtime_check_reports_rich_output_format_failures(
             ),
         )
 
-    monkeypatch.setattr(runtime_probe_compat, "probe_runtime", probe)
+    monkeypatch.setattr(
+        checks_module,
+        "create_tooling_adapters",
+        lambda: SimpleNamespace(runner=probe),
+    )
     results = asyncio.run(
         check_runtime_studio(load_studio(notebook_path), view_name="dashboard")
     )
@@ -1050,7 +1059,11 @@ def test_runtime_check_propagates_output_response_errors(
             ),
         )
 
-    monkeypatch.setattr(runtime_probe_compat, "probe_runtime", probe)
+    monkeypatch.setattr(
+        checks_module,
+        "create_tooling_adapters",
+        lambda: SimpleNamespace(runner=probe),
+    )
     results = asyncio.run(
         check_runtime_studio(load_studio(notebook_path), view_name="dashboard")
     )
@@ -1125,7 +1138,11 @@ if __name__ == "__main__":
             ),
         )
 
-    monkeypatch.setattr(runtime_probe_compat, "probe_runtime", probe)
+    monkeypatch.setattr(
+        checks_module,
+        "create_tooling_adapters",
+        lambda: SimpleNamespace(runner=probe),
+    )
     results = asyncio.run(check_runtime_studio(load_studio(notebook)))
 
     groups = cast(tuple[tuple[str, ...], ...], captured["output_selector_groups"])
@@ -1259,7 +1276,11 @@ def test_runtime_check_includes_cells_loaded_through_htmx(
             outputs=OutputRenderResult(outputs={}, errors={}),
         )
 
-    monkeypatch.setattr(runtime_probe_compat, "probe_runtime", probe)
+    monkeypatch.setattr(
+        checks_module,
+        "create_tooling_adapters",
+        lambda: SimpleNamespace(runner=probe),
+    )
     results = asyncio.run(
         check_runtime_studio(load_studio(notebook_path), view_name="dashboard")
     )
