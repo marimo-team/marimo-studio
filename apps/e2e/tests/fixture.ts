@@ -247,9 +247,15 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
       page.on("pageerror", (error) => messages.push(`pageerror: ${error.message}`));
       page.on("console", (message) => {
         const missingProjectedControl = message.text().includes("UIElementRegistry missing entry");
+        const nativeLanguageServerTimeout =
+          message.location().url.includes("/_marimo-studio/editor/assets/") &&
+          message.text().startsWith("Language server initialization failed") &&
+          message.text().includes('Request "initialize" timed out');
         if (
           missingProjectedControl ||
-          (message.type() === "error" && !message.text().startsWith("Failed to load resource:"))
+          (message.type() === "error" &&
+            !nativeLanguageServerTimeout &&
+            !message.text().startsWith("Failed to load resource:"))
         ) {
           const source = message.location().url;
           messages.push(`console${source ? ` (${source})` : ""}: ${message.text()}`);
