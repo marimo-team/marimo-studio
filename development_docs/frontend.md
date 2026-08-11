@@ -1,83 +1,30 @@
 # Frontend workspace
 
-The pnpm workspace contains the custom view document, the editor workspace,
-their shared contracts, the browser build, the documentation site, and live
-browser acceptance tests.
+The pnpm workspace builds two browser documents: the authored presentation and
+the Studio authoring workspace. Work in the package that owns the behavior,
+then cross package boundaries through protocol records, the runtime interface,
+or an injected feature port.
 
-## Package responsibilities
+Read [Browser runtime and
+authoring](architecture/browser-runtime-and-authoring.md) for the semantic and
+lifecycle map behind these packages.
 
-| Path                       | Responsibility                                                          |
-| -------------------------- | ----------------------------------------------------------------------- |
-| `packages/protocol`        | Zod schemas and inferred types for browser and server records           |
-| `packages/runtime`         | Runtime registry and document-scoped session interface                  |
-| `packages/presentation`    | Custom view document, projections, runtime adapters, and generated CSS  |
-| `packages/studio`          | Workspace UI, source editing, view management, and preview coordination |
-| `packages/marimo-frontend` | Adapters around Marimo's unstable frontend modules and build setup      |
-| `apps/browser`             | Vite entry points, shared chunks, browser assets, and build metadata    |
-| `apps/e2e`                 | Playwright fixture and live `marimo edit` acceptance tests              |
-| `apps/docs`                | VitePress application and site configuration                            |
+## Choose the owning package
 
-`apps/browser` is the composition root. Its runtime entry registers the
-Server and WebAssembly presentation runtimes. Its Studio entry injects the
-Marimo control and theme frame adapters into the workspace.
+| Package                    | Owns                                                                            | Typical change                                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `packages/protocol`        | Zod schemas and inferred browser and server records                             | Add a field to runtime configuration or a development event                                              |
+| `packages/runtime`         | Runtime registration, mount, update, query, and disposal interface              | Add a runtime lifecycle capability shared by Server and WebAssembly                                      |
+| `packages/presentation`    | One authored document, revision transaction, projections, styles, and readiness | Change HTML refresh, a projection host, or browser readiness                                             |
+| `packages/studio`          | Notebook, source, preview workspace and feature controllers                     | Change navigation, layout, source editing, view management, or frame coordination                        |
+| `packages/marimo-frontend` | Named adapters around Marimo's unstable frontend modules                        | Change native rendering, embedded runtime composition, controls, session bootstrap, or theme integration |
+| `apps/browser`             | Final runtime and Studio entry-point composition                                | Register a runtime or inject a frame adapter                                                             |
+| `apps/e2e`                 | Live Marimo and Chromium acceptance                                             | Prove behavior across editor, kernel, filesystem, session, worker, and preview                           |
+| `apps/docs`                | VitePress delivery                                                              | Change site navigation, theme, metadata, search, or docs build behavior                                  |
 
-Root `vite.config.ts` enforces package imports:
+## Install and run focused checks
 
-- Protocol imports no Studio package and performs no network, filesystem, DOM,
-  or window I/O.
-- Runtime imports protocol and performs no Marimo, React, or browser I/O.
-- Presentation imports protocol, runtime, and named Marimo frontend adapters.
-- Studio imports protocol and stays independent of presentation and Marimo
-  frontend code.
-- Marimo frontend imports no Studio package.
-
-## Studio feature ownership
-
-Studio follows `app -> features -> shared`.
-
-| Slice                     | Responsibility                                                        |
-| ------------------------- | --------------------------------------------------------------------- |
-| `app/`                    | Compose services, workspace events, routes, theme, and the React root |
-| `features/navigation/`    | Mode, runtime, view, and workspace controls                           |
-| `features/preview/`       | Stable runtime frames, observations, query sync, and control sync     |
-| `features/source-editor/` | Source reads, edits, saves, external updates, and conflicts           |
-| `features/views/`         | View inventory, creation, selection, removal, and transitions         |
-| `features/workspace/`     | Pane tree, modes, geometry, resizing, and persisted layout            |
-| `shared/`                 | Theme state, external-store binding, errors, icons, and UI controls   |
-
-`app/` composes feature controllers and owns coordination that crosses those
-features. `WorkspaceEventCoordinator` is the event-stream boundary for source,
-activation, observation, and editor-session events. Feature slices stay
-independent of `app/` and communicate through typed ports. `shared/` imports no
-app or feature module. Keep the graph acyclic.
-
-Presentation groups code by document responsibility:
-
-| Slice             | Responsibility                                                         |
-| ----------------- | ---------------------------------------------------------------------- |
-| `document/`       | Revision transactions, authored shell adapters, navigation, and replay |
-| `projections/`    | Host adapters, discovery, preservation, lifecycle, and host state      |
-| `runtime-config/` | Fetch, validate, stage, and commit runtime configuration               |
-| `runtime/`        | Mount runtimes, output plugins, cells, controls, and anywidgets        |
-| `cells/`          | Discover and preserve `<marimo-cell>` hosts                            |
-| `outputs/`        | Read and preserve native `<marimo-output>` projections                 |
-| `values/`         | Read values and publish the `mo-value` DOM contract                    |
-| `view-styles/`    | Generate scoped Wind4 utilities from authored classes                  |
-
-`PresentationRevisionController` is the transaction owner for navigation and
-development refresh. It stages, commits, rolls back, cancels, transfers runtime
-configuration, coordinates session replay, and drives presentation readiness.
-`DocumentRevisionAdapter` performs browser mutations. `main.ts` and
-`dev-reload.ts` share one composed controller.
-
-`ReadinessController` reduces explicit state and performs no DOM observation.
-`rendered-view-observer.ts` probes the rendered page and publishes the public
-browser API. `agent-observer.ts` owns the current agent observation request.
-`ProjectionHostRuntime` provides their shared host lifecycle boundary.
-
-## Work on one package
-
-Install the locked workspace once:
+Install the locked workspace:
 
 ```console
 make install
@@ -100,15 +47,16 @@ make typecheck
 make lint
 ```
 
-Build the document entry points after changing presentation, Studio, runtime,
-protocol, or Marimo adapter code:
+Build browser entry points after changing protocol, runtime, presentation,
+Studio, browser composition, or Marimo frontend code:
 
 ```console
 make build
 ```
 
-Run the live acceptance suite when a change affects sessions, frames, source
-files, projections, native controls, runtime switching, or responsive layout:
+Run live acceptance after changing sessions, frames, source files,
+projections, controls, query state, runtime switching, view transitions, or
+responsive layout:
 
 ```console
 make e2e
@@ -116,86 +64,168 @@ make e2e
 
 Use `make e2e-ui` to inspect the Playwright flow interactively.
 
-## Marimo frontend adapter
+## Preserve package direction
 
-`packages/marimo-frontend` contains every import from Marimo's unstable
-frontend surface, Marimo's `@/` alias, and the source preparation required by
-Vite.
+Root `vite.config.ts` enforces these imports:
 
-The preparation command reads the Marimo version resolved by `uv.lock`, checks
-out the pinned matching commit under `packages/marimo-frontend/.cache/`,
-installs its frontend workspace, and records the source metadata:
+- Protocol imports no Studio package and performs no network, filesystem,
+  document object model, or window I/O.
+- Runtime imports protocol and performs no Marimo, React, or browser I/O.
+- Presentation imports protocol, runtime, and named Marimo frontend adapters.
+- Studio imports protocol and stays independent of presentation and Marimo
+  frontend code.
+- Marimo frontend imports no Studio package.
+- `apps/browser` composes package entry points.
+
+Within `packages/studio`, source follows `app -> features -> shared`.
+Feature slices import no app module. Shared primitives import no app or feature
+module.
+
+Use `app/` for coordination that crosses features. Keep view inventory in the
+views feature, source persistence state in the source-editor feature, runtime
+frames in the preview feature, and pane geometry in the workspace feature.
+
+## Change a protocol record
+
+A protocol change is complete when the same semantic field reaches every
+owner that reads or writes it.
+
+1. Change the Zod schema and inferred type in `packages/protocol`.
+2. Update the Python producer or parser.
+3. Update every browser consumer.
+4. Add a concrete fixture that represents the supported behavior.
+5. Test malformed or stale input when it can affect mutation, navigation,
+   session identity, or agent evidence.
+6. Run protocol tests, the owning producer and consumer tests, type checks, and
+   browser acceptance for a cross-document behavior.
+
+Avoid duplicating validation constants in producers and consumers. Let the
+schema own the browser record and let the Python model own its server shape.
+
+## Change the presentation document
+
+Presentation code is grouped by document responsibility:
+
+| Slice             | Owns                                                                                                                         |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `document/`       | Revision transactions, authored shell mutation, navigation, base URL, styles, scripts, query observation, and session replay |
+| `projections/`    | Shared host registration, preservation, connection, disposal, and readiness contribution                                     |
+| `cells/`          | `<marimo-cell>` host discovery and preservation                                                                              |
+| `outputs/`        | `<marimo-output>` host discovery, requests, and preservation                                                                 |
+| `values/`         | `mo-value` hosts, browser properties, and events                                                                             |
+| `runtime-config/` | Fetch, validate, stage, and commit runtime configuration                                                                     |
+| `runtime/`        | Runtime mount, cell portals, output portals, values, controls, and transport                                                 |
+| `view-styles/`    | Scoped Wind4 utility generation and foundation styles                                                                        |
+
+`PresentationRevisionController` owns every HTML, CSS, runtime, and view
+transition. Add a new transition through that controller so cancellation,
+staging, rollback, runtime updates, session replay, and readiness remain one
+transaction.
+
+`ProjectionHostRuntime` owns the adapter list for projection hosts. A new host
+type joins document preparation, preservation, connection, disposal, change
+notification, and readiness through that boundary.
+
+Test a presentation change at three levels when applicable:
+
+1. The local reducer, parser, or adapter contract.
+2. The composed document transition or runtime integration.
+3. A live Server and WebAssembly path when runtime ownership differs.
+
+## Change the Studio workspace
+
+Studio features expose controller snapshots through React external stores.
+Keep mutations in the controller that owns the state:
+
+| Feature       | Controller responsibility                                                                         |
+| ------------- | ------------------------------------------------------------------------------------------------- |
+| Navigation    | Map user actions to layout, runtime, and view controller calls                                    |
+| Workspace     | Pane tree, modes, placement, geometry, resizing, compact state, and per-view storage              |
+| Source editor | File buffers, autosave, revisions, external changes, conflicts, and active source tab             |
+| Views         | Inventory, selection, creation, removal, and transition cancellation                              |
+| Preview       | Stable frames, runtime status, query sync, control sync, observations, and editor session changes |
+
+`WorkspaceEventCoordinator` is the server-event boundary. Add an event there
+when the event coordinates several features. Keep feature-local browser events
+inside the feature.
+
+Visible changes require browser inspection at desktop and narrow widths. Check
+keyboard operation, focus, overflow, pane resizing, hidden frames, runtime
+status, source conflicts, and error recovery as the feature requires.
+
+## Change the Marimo frontend facade
+
+`packages/marimo-frontend` contains imports from Marimo's unstable frontend
+surface, Marimo's `@/` alias, and the source preparation needed by Vite.
+Presentation and Studio import named facade capabilities:
+
+- `embedded-runtime`
+- `cell-presentation`
+- `projected-output`
+- `session-bootstrap`
+- `control-endpoint`
+- `theme-frame`
+- `vite`
+
+Keep upstream atoms, providers, registries, transport managers, source paths,
+and frame globals inside the facade. Expose the smallest behavior and lifecycle
+that the caller needs. A stateful facade returns a handle or endpoint with an
+explicit `dispose` or `close` boundary.
+
+Prepare the exact Marimo frontend source with:
 
 ```console
 pnpm --filter @marimo-studio/marimo-frontend prepare:upstream
 ```
 
-A Marimo upgrade changes `_compat/release.json`, the exact Python pins, and any
-affected symbol contracts in `_compat/layout.py`. Run the adapter tests and
-rebuild the browser bundle after updating them.
+The command reads the version resolved by `uv.lock`, checks out the commit from
+`_compat/release.json` under `packages/marimo-frontend/.cache/`, installs its
+frontend workspace, and records source metadata.
 
-Set `MARIMO_REPO` to exercise a clean local checkout at the configured release
-commit. The preparation step requires an unchanged worktree at that exact
+Set `MARIMO_REPO` to use a clean local checkout at the configured release
 commit:
 
 ```console
 MARIMO_REPO=/path/to/marimo make build
 ```
 
-The package exposes five capability adapters to browser applications:
+A Marimo upgrade changes the release manifest, exact Python pins, private
+symbol contracts, frontend source preparation, affected facade adapters, and
+their tests together. Follow [Marimo integration](architecture/marimo-integration.md)
+and [Releasing](releasing.md).
 
-- `embedded-runtime` exposes `mountEmbeddedRuntime(options)`. Its closeable
-  handle owns Marimo providers, server or WebAssembly transport, notebook
-  connection, theme updates, session exposure, registered function calls, and
-  disposal. A page mounts one embedded runtime at a time. Dispose its
-  handle before mounting another runtime.
-- `cell-presentation` renders a runtime cell through Marimo's native console
-  and output components.
-- `projected-output` retains its synthetic cell and virtual files through the
-  final rendered owner. Marimo kernel notifications release shared UI element
-  registry entries.
-- `session-bootstrap` preflights a remembered session before Marimo creates its
-  browser session singleton.
-- `control-endpoint` adapts an embedded Marimo frame to Studio's control
-  connector contract through one multi-owner registry broker.
+## Inspect the browser build
 
-Presentation supplies document policy and protocol records to these adapters.
-Upstream source paths, atoms, providers, registries, transport managers, and
-frame globals remain package implementation details. `theme-frame` and `vite`
-provide the shared frame-theme and build integrations.
-
-## Browser build
-
-`make build` prepares Marimo source and builds the entry points from
-`apps/browser` into:
+`make build` emits:
 
 ```text
 packages/marimo-studio/src/marimo_studio/_static/browser/
 ```
 
-The build emits `runtime.js`, `dev-reload.js`, `studio.js`, their CSS files,
+The output contains `runtime.js`, `dev-reload.js`, `studio.js`, their CSS,
 shared chunks, worker assets, and `build-meta.json`. Build metadata records the
-Marimo version and release commit. The generated directory and prepared Marimo
-checkout stay untracked. Change workspace source, rebuild, then run
-`make package` when distribution contents are part of the change.
+Marimo version and release commit.
 
-## Browser acceptance ownership
+The generated browser directory and prepared Marimo checkout remain
+untracked. Change workspace source, rebuild, then use `make package` when the
+distribution contents are part of the contract.
 
-Package tests protect local contracts. `apps/e2e` protects flows that require a
-live Marimo kernel and several documents.
+## Add browser acceptance at the product seam
 
-| Acceptance area      | Current contract                                                               |
-| -------------------- | ------------------------------------------------------------------------------ |
-| Runtime lifecycle    | Editor, Server, and WebAssembly frames remain mounted across mode changes      |
-| Control sync         | JSON-compatible native controls synchronize between editor and runtimes        |
-| Runtime isolation    | Anywidget state remains with the runtime that owns its model                   |
-| Rich output          | Server and WebAssembly render reactive native output from a value reference    |
-| Source authoring     | Studio and external edits update files and the live preview safely             |
-| View management      | Creating and removing a view updates source files and the selected preview     |
-| Hosted lifecycle     | A token-protected nested mount creates its first view and runs reactive values |
-| Projection recovery  | A missing value host recovers after its notebook definition returns            |
-| Responsive workspace | The compact layout remains operable without page-level overflow                |
+Package tests protect local behavior. Add `apps/e2e` coverage when a failure
+requires several owners to reproduce.
 
-Add a focused regression to the owning package first. Add browser acceptance
-when the failure crosses the editor, kernel, filesystem, runtime, or document
-boundary.
+| Seam                  | Representative evidence                                                        |
+| --------------------- | ------------------------------------------------------------------------------ |
+| Document and runtime  | Native output persists across valid HTML refresh and updates after rerun       |
+| Runtime frames        | Server and WebAssembly remain mounted across workspace modes                   |
+| Resource ownership    | A projected control remains until the final owner disappears                   |
+| Runtime isolation     | Anywidget state stays with its owning runtime                                  |
+| Source and filesystem | Browser edits, external edits, conflicts, and deletion converge                |
+| View transition       | Source saves, successor preparation, route, and preview update in order        |
+| Session identity      | Preview reattaches after editor reconnect and run mode replays when configured |
+| Agent evidence        | Activation and observation match view, revision, runtime, session, and request |
+| Responsive workspace  | Studio and authored content remain operable at narrow width                    |
+
+Start with one focused package regression, then add the live case that proves
+the cross-boundary failure mode.
