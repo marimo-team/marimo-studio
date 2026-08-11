@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -41,6 +42,7 @@ main()
         [sys.executable, "-c", script, str(runtime_assets), *args],
         check=False,
         capture_output=True,
+        env={**os.environ, SANDBOX_ENV: "1"},
         text=True,
     )
 
