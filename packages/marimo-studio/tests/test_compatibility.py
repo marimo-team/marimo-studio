@@ -14,6 +14,7 @@ else:
 import marimo_studio._assets as assets_module
 import marimo_studio._compat.layout as layout_module
 import marimo_studio._composition as composition_module
+import marimo_studio.checks as checks_module
 from marimo_studio._compat.patch import ReversiblePatch
 from marimo_studio._composition import create_browser_runtime_projector
 from marimo_studio._workspace import load_studio
@@ -164,13 +165,60 @@ def test_check_reports_the_validated_release_identity(notebook_path: Path) -> No
 
     assert result.status == "pass"
     assert result.details is not None
+    assert set(result.details) == {
+        "validation",
+        "studio",
+        "requiredRelease",
+        "marimo",
+        "browser",
+        "adapterFamily",
+    }
     assert result.details["validation"] == "pass"
     assert result.details["adapterFamily"] == "private"
-    assert result.details["marimo"] == {
+    expected = {
         "version": layout_module.MARIMO_VERSION,
         "commit": layout_module.MARIMO_RELEASE_COMMIT,
     }
-    assert result.details["browser"] == result.details["marimo"]
+    assert result.details["requiredRelease"] == expected
+    assert result.details["marimo"] == expected
+    assert result.details["browser"] == expected
+
+
+def test_check_reports_the_required_release_when_validation_fails(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_view(notebook_path)
+
+    def fail_validation() -> object:
+        raise CompatibilityError("release mismatch")
+
+    monkeypatch.setattr(
+        checks_module,
+        "create_browser_runtime_projector",
+        fail_validation,
+    )
+
+    result = check_studio(load_studio(notebook_path))[0]
+
+    assert result.status == "fail"
+    assert result.details is not None
+    assert set(result.details) == {
+        "validation",
+        "studio",
+        "requiredRelease",
+        "marimo",
+        "browser",
+        "adapterFamily",
+    }
+    assert result.details["validation"] == "fail"
+    assert result.details["requiredRelease"] == {
+        "version": layout_module.MARIMO_VERSION,
+        "commit": layout_module.MARIMO_RELEASE_COMMIT,
+    }
+    assert result.details["marimo"] is None
+    assert result.details["browser"] is None
+    assert result.details["adapterFamily"] == "private"
 
 
 def test_reversible_patch_rejects_a_conflict_and_retries_close() -> None:
@@ -196,3 +244,30 @@ def test_reversible_patch_rejects_a_conflict_and_retries_close() -> None:
     Target.method = replacement
     handle.close()
     assert Target.method is original
+
+
+def test_adapter_setup_preserves_rollback_failure_as_its_cause() -> None:
+    setup_error = RuntimeError("adapter setup failed")
+    cleanup_error = RuntimeError("adapter cleanup failed")
+
+    class Handle:
+        def close(self) -> None:
+            raise cleanup_error
+
+    class FirstInstaller:
+        def open(self) -> Handle:
+            return Handle()
+
+    class FailingInstaller:
+        def open(self) -> Handle:
+            raise setup_error
+
+    lifecycle = composition_module._PrivateAdapterLifecycle(
+        (FirstInstaller(), FailingInstaller())
+    )
+
+    with pytest.raises(RuntimeError, match="adapter setup failed") as raised:
+        lifecycle.open()
+
+    assert raised.value is setup_error
+    assert raised.value.__cause__ is cleanup_error

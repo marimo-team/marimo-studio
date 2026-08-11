@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig, type HeadConfig } from "vitepress";
+import { defineConfig, type HeadConfig, type Plugin } from "vitepress";
+import llmstxt from "vitepress-plugin-llms";
 
 const repository = "https://github.com/marimo-team/marimo-studio";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-studio/");
@@ -192,5 +193,13 @@ export default defineConfig({
     siteTitle: false,
     socialLinks: [{ icon: "github", link: repository }],
   },
-  vite: { publicDir },
+  vite: {
+    plugins: [
+      llmstxt({
+        domain: siteUrl.href.replace(/\/$/, ""),
+        excludeIndexPage: false,
+      }) as unknown as Plugin,
+    ],
+    publicDir,
+  },
 });

@@ -30,6 +30,10 @@ export const createMarimoViteIntegration = () => {
         find: /^@\/(.*)$/,
         replacement: `${join(frontend, "src")}/$1`,
       },
+      {
+        find: "@marimo-team/react-slotz",
+        replacement: join(modules, "@marimo-team", "react-slotz"),
+      },
       // Marimo's exported store, hooks, and providers must share these module
       // instances with the presentation runtime that consumes them.
       {

@@ -1,9 +1,7 @@
-import type { WebSocketState } from "@marimo-studio/marimo-frontend/runtime";
-
-import { WebSocketState as ConnectionState } from "@marimo-studio/marimo-frontend/runtime";
 import { useEffect } from "react";
 
 import type { OutputReader } from "../../outputs/reader";
+import type { RuntimeConnectionState } from "../cell-state";
 
 import { useLatest } from "../use-latest";
 
@@ -15,7 +13,7 @@ export const useOutputLifecycle = ({
   runtimeReady,
 }: {
   activeSelectors: string[];
-  connectionState: WebSocketState;
+  connectionState: RuntimeConnectionState;
   readOutputs: OutputReader;
   revision: string;
   runtimeReady: boolean;
@@ -23,7 +21,7 @@ export const useOutputLifecycle = ({
   const revisionRef = useLatest(revision);
 
   useEffect(() => {
-    if (!runtimeReady || connectionState !== ConnectionState.OPEN) {
+    if (!runtimeReady || connectionState !== "OPEN") {
       return;
     }
     const controller = new AbortController();

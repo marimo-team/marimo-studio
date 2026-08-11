@@ -46,7 +46,7 @@ make e2e
 | Runtime interface       | Runtime tests plus the presentation adapter checks                |
 | View document           | Presentation tests plus browser acceptance when lifecycle changes |
 | Studio workflow         | Studio package tests plus browser acceptance                      |
-| Marimo frontend adapter | Adapter tests, `make build`, and CI's Marimo lower-bound job      |
+| Marimo frontend adapter | Adapter tests, `make build`, and CI's exact-release job           |
 | Static distribution     | Export tests and `make package`                                   |
 | Documentation           | `make docs-build` and rendered browser inspection                 |
 

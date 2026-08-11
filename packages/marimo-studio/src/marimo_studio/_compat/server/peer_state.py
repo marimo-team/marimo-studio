@@ -1,4 +1,4 @@
-"""Relay accepted control state between consumers in one Marimo session."""
+"""Relay authorized control commands between consumers in one Marimo session."""
 
 from __future__ import annotations
 
@@ -33,8 +33,8 @@ from marimo_studio._compat.server.gateway import location_handle
 from marimo_studio._compat.server.session_state import session_matches_notebook
 
 
-class _PeerStateRelayExtension(EventAwareExtension):
-    """Relay received control writes to the other consumers in a room."""
+class _PeerCommandRelayExtension(EventAwareExtension):
+    """Relay authorized control commands before kernel application."""
 
     def on_received_command(
         self,
@@ -59,9 +59,9 @@ class _PeerStateRelayExtension(EventAwareExtension):
 
 def _attach(session: Session) -> None:
     implementation = cast(SessionImpl, session)
-    if implementation.extensions.get(_PeerStateRelayExtension) is not None:
+    if implementation.extensions.get(_PeerCommandRelayExtension) is not None:
         return
-    extension = _PeerStateRelayExtension()
+    extension = _PeerCommandRelayExtension()
     implementation.extensions.add(extension)
     try:
         extension.on_attach(implementation, implementation._event_bus)
@@ -72,7 +72,7 @@ def _attach(session: Session) -> None:
 
 def _detach(session: Session) -> None:
     implementation = cast(SessionImpl, session)
-    extension = implementation.extensions.get(_PeerStateRelayExtension)
+    extension = implementation.extensions.get(_PeerCommandRelayExtension)
     if extension is None:
         return
     extension.on_detach()
@@ -135,7 +135,7 @@ _MANAGERS: WeakKeyDictionary[SessionManager, _ManagerRelay] = WeakKeyDictionary(
 _MANAGERS_LOCK = RLock()
 
 
-class PrivatePeerStateRelay:
+class PrivatePeerCommandRelay:
     """Own manager subscriptions and peer relays for one application."""
 
     def __init__(self) -> None:
@@ -210,4 +210,4 @@ def _peer_notifications(request: CommandMessage) -> tuple[NotificationMessage, .
     )
 
 
-__all__ = ["PrivatePeerStateRelay"]
+__all__ = ["PrivatePeerCommandRelay"]

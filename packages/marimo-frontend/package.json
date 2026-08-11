@@ -5,19 +5,17 @@
   "type": "module",
   "exports": {
     "./build-metadata": "./scripts/metadata.mjs",
-    "./cells": "./src/upstream/cells.ts",
+    "./cell-presentation": "./src/cell-presentation.tsx",
+    "./control-endpoint": "./src/control-endpoint.ts",
+    "./embedded-runtime": "./src/embedded-runtime.tsx",
     "./projected-output": "./src/projected-output.tsx",
-    "./control-frame": "./src/control-frame.ts",
-    "./controls": "./src/upstream/controls.ts",
-    "./runtime": "./src/upstream/runtime.ts",
-    "./session": "./src/upstream/session.ts",
-    "./style": "./src/upstream/style.ts",
+    "./session-bootstrap": "./src/session-bootstrap.ts",
     "./theme-frame": "./src/theme-frame.ts",
     "./vite": "./src/vite.ts"
   },
   "scripts": {
     "prepare:upstream": "node scripts/prepare.mjs",
-    "test": "vp test tests/source.test.mjs tests/control-frame.test.ts tests/projected-output-state.test.ts tests/runtime-logger.test.ts tests/theme-frame.test.ts"
+    "test": "vp test tests/source.test.mjs tests/control-endpoint.test.ts tests/embedded-control-state.test.ts tests/embedded-runtime.test.ts tests/projected-output-state.test.ts tests/runtime-logger.test.ts tests/session-bootstrap.test.ts tests/theme-frame.test.ts"
   },
   "dependencies": {
     "@codemirror/state": "catalog:",

@@ -1,18 +1,9 @@
 import type { RuntimeContext, RuntimeSession } from "@marimo-studio/runtime";
 
-import {
-  createErrorToastingRequests,
-  createNetworkRequests,
-  getRuntimeManager,
-  requestClientAtom,
-  runtimeConfigAtom,
-  store,
-} from "@marimo-studio/marimo-frontend/runtime";
-
 import { createServerOutputReader } from "../outputs/remote";
 import { readServerValuesWithRetry } from "../values/remote";
 import { mountSharedRuntime } from "./runtime";
-import { configureServerTransport } from "./transport";
+import { createServerTransportURL } from "./transport";
 
 export interface ServerRuntimeData {
   url: string;
@@ -34,22 +25,20 @@ export const mountServerRuntime = (
     initialMode,
     viewMode,
     exposeSession: true,
-    configureTransport() {
-      store.set(runtimeConfigAtom, {
-        url: new URL(data.url, globalThis.location.origin).toString(),
-        lazy: false,
-        serverToken: data.serverToken,
-      });
-      configureServerTransport(
-        getRuntimeManager(),
+    transport: {
+      kind: "server",
+      url: new URL(data.url, globalThis.location.origin).toString(),
+      serverToken: data.serverToken,
+      transformTransportURL: createServerTransportURL(
         context.presentation.mode === "edit",
         data.file,
-      );
-      store.set(requestClientAtom, createErrorToastingRequests(createNetworkRequests()));
+      ),
     },
     updateQuery: async () => {},
-    valueReader: (sessionId) => (request, signal) =>
-      readServerValuesWithRetry(sessionId, request, signal),
-    outputReader: (sessionId) => createServerOutputReader(sessionId),
+    valueReader:
+      ({ sessionId }) =>
+      (request, signal) =>
+        readServerValuesWithRetry(sessionId, request, signal),
+    outputReader: ({ sessionId }) => createServerOutputReader(sessionId),
   });
 };

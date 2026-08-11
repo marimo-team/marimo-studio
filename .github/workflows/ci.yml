@@ -109,5 +109,5 @@ jobs:
       - name: Build documentation
         run: make docs-build
 
-      - name: Build package
-        run: make package
+      - name: Build package and validate examples
+        run: make package examples-check

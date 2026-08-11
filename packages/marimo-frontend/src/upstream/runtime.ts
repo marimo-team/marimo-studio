@@ -1,6 +1,12 @@
 export { ErrorBoundary } from "@marimo-team/frontend/unstable_internal/components/editor/boundary/ErrorBoundary";
+export { KernelStartupErrorModal } from "@marimo-team/frontend/unstable_internal/components/editor/KernelStartupErrorModal";
+export { TracebackModalContainer } from "@marimo-team/frontend/unstable_internal/components/editor/TracebackModalContainer";
 export { ModalProvider } from "@marimo-team/frontend/unstable_internal/components/modal/ImperativeModal";
+export { Toaster } from "@marimo-team/frontend/unstable_internal/components/ui/toaster";
 export { TooltipProvider } from "@marimo-team/frontend/unstable_internal/components/ui/tooltip";
+export { LocaleProvider } from "@marimo-team/frontend/unstable_internal/core/i18n/locale-provider";
+export { slotsController } from "@marimo-team/frontend/unstable_internal/core/slots/slots";
+export { Provider as SlotzProvider } from "@marimo-team/react-slotz";
 export {
   appConfigAtom,
   configOverridesAtom,
@@ -12,7 +18,6 @@ export {
   parseUserConfig,
 } from "@marimo-team/frontend/unstable_internal/core/config/config-schema";
 export { initialModeAtom, viewStateAtom } from "@marimo-team/frontend/unstable_internal/core/mode";
-export { getSessionId, isSessionId, type SessionId } from "./session.ts";
 export { connectionAtom } from "@marimo-team/frontend/unstable_internal/core/network/connection";
 export { FUNCTIONS_REGISTRY } from "@marimo-team/frontend/unstable_internal/core/functions/FunctionRegistry";
 export {

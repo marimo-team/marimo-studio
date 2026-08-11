@@ -1,11 +1,14 @@
 import type { RuntimeRegistry } from "@marimo-studio/runtime";
 
+import { bootstrapSession } from "@marimo-studio/marimo-frontend/session-bootstrap";
 import htmx from "htmx.org";
 
 import { documentBase } from "./document/base";
 import { bindViewNavigation } from "./document/events";
 import { startQuerySync } from "./document/query-sync";
-import { presentationRevisions, presentationSessionId } from "./document/revision-runtime";
+import { createPresentationRevisions } from "./document/revision-runtime";
+import { BrowserSessionReplay } from "./document/session-preservation";
+import { bootstrapPresentationSession } from "./document/session-startup";
 import { errorMessage } from "./errors";
 import { startPresentationObservers, stopPresentationObservers } from "./observers";
 import { projectionHosts } from "./projections/host-runtime";
@@ -37,7 +40,6 @@ declare global {
 }
 
 const browser = globalThis as typeof globalThis & Window;
-const runtimeSessionId = presentationSessionId;
 browser.htmx = htmx;
 const viewBaseUrl = document.baseURI;
 // Marimo's server client points <base> at the API root during health checks.
@@ -77,7 +79,9 @@ const bindRuntimeNavigation = (): (() => void) => {
   };
 };
 
-const bindStandaloneViewNavigation = (): (() => void) =>
+const bindStandaloneViewNavigation = (
+  presentationRevisions: ReturnType<typeof createPresentationRevisions>,
+): (() => void) =>
   bindViewNavigation((request) => {
     void presentationRevisions
       .transition(request.documentUrl, getSupportUrl())
@@ -87,15 +91,34 @@ const bindStandaloneViewNavigation = (): (() => void) =>
   });
 
 const bootstrap = async (registry: RuntimeRegistry) => {
+  const browserSessionReplay = new BrowserSessionReplay();
+  const startup = await bootstrapPresentationSession({
+    bootstrap: bootstrapSession,
+    loadConfig: loadRuntimeConfig,
+    replay: browserSessionReplay,
+    requiresSessionForConfig: new URL(globalThis.location.href).searchParams.has(
+      "marimo_studio_client",
+    ),
+  });
+  const presentationRevisions = createPresentationRevisions(
+    startup.sessionId,
+    browserSessionReplay,
+  );
+  if (startup.replaying) {
+    document.addEventListener("marimo-studio:runtime-ready", () => browserSessionReplay.finish(), {
+      once: true,
+    });
+  }
   startPresentationObservers(updateConfiguredRuntimeQuery);
   globalThis.addEventListener("pagehide", stopPresentationObservers, { once: true });
   await initializeViewStyles();
   projectionHosts.register();
 
-  let config = await loadRuntimeConfig(runtimeSessionId);
-  config = await presentationRevisions.resume(config);
+  const config = startup.config;
   const stopRuntimeNavigation = bindRuntimeNavigation();
-  const stopViewNavigation = config.dev ? () => {} : bindStandaloneViewNavigation();
+  const stopViewNavigation = config.dev
+    ? () => {}
+    : bindStandaloneViewNavigation(presentationRevisions);
   globalThis.addEventListener("pagehide", stopRuntimeNavigation, { once: true });
   globalThis.addEventListener("pagehide", stopViewNavigation, { once: true });
   globalThis.addEventListener("pagehide", () => presentationRevisions.dispose(), {

@@ -12,6 +12,7 @@
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitepress": "catalog:",
+    "vitepress-plugin-llms": "1.13.2",
     "vue": "catalog:"
   }
 }

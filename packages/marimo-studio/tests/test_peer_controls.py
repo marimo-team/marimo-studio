@@ -29,7 +29,7 @@ from marimo._types.ids import ConsumerId, UIElementId, WidgetModelId
 from marimo_studio._capabilities import ServerHandle, ServerLocation, ServerMode
 from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
 from marimo_studio._compat.server.gateway import _LocationHandle
-from marimo_studio._compat.server.peer_state import PrivatePeerStateRelay
+from marimo_studio._compat.server.peer_state import PrivatePeerCommandRelay
 
 
 class _Room:
@@ -91,8 +91,8 @@ def _location(manager: _Manager, *, mode: str = "edit") -> ServerLocation:
     )
 
 
-def _enable(location: ServerLocation) -> PrivatePeerStateRelay:
-    relay = PrivatePeerStateRelay()
+def _enable(location: ServerLocation) -> PrivatePeerCommandRelay:
+    relay = PrivatePeerCommandRelay()
     relay.enable(location)
     return relay
 
@@ -110,7 +110,7 @@ def _open_model(session: _Session, model_id: WidgetModelId) -> None:
     )
 
 
-def test_ui_control_updates_relay_once_only_from_consumers() -> None:
+def test_authorized_ui_control_commands_relay_once_from_consumers() -> None:
     session = _Session()
     location = _location(_Manager(session))
     relay = _enable(location)

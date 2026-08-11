@@ -1,5 +1,15 @@
 export type CellPhase = "connecting" | "missing" | "loading" | "error" | "stale" | "ready";
 
+export type RuntimeConnectionState = "NOT_STARTED" | "CONNECTING" | "OPEN" | "CLOSING" | "CLOSED";
+
+export type RuntimeConnection =
+  | { state: Exclude<RuntimeConnectionState, "CLOSED"> }
+  | { state: "CLOSED"; code: string; reason: string };
+
+export type RuntimeInitialization =
+  | { state: "connecting" | "ready" }
+  | { state: "error"; error: unknown };
+
 export type CellDeliveryPhase = "received" | "waiting" | "timed-out" | "missing";
 
 export const CELL_DELIVERY_TIMEOUT_MS = 10_000;

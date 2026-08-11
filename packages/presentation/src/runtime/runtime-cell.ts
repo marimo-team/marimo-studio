@@ -1,5 +1,5 @@
-import type { flattenTopLevelNotebookCells } from "@marimo-studio/marimo-frontend/cells";
+import type { RuntimeCell as EmbeddedRuntimeCell } from "@marimo-studio/marimo-frontend/cell-presentation";
 
-export type RuntimeCell = ReturnType<typeof flattenTopLevelNotebookCells>[number];
+export type RuntimeCell = EmbeddedRuntimeCell;
 
 export type SubmitStdin = (cell: RuntimeCell, text: string, outputIndex: number) => void;

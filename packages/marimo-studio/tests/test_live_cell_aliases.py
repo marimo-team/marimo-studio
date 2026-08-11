@@ -28,6 +28,7 @@ from marimo_studio._compat.server.notebook_save import (
 )
 from marimo_studio._server.cell_alias_policy import CellAliasSourcePolicy
 from marimo_studio._workspace import load_studio
+from marimo_studio.errors import CompatibilityError
 from marimo_studio.workspace import bind_cell, ensure_view, resolve_studio
 
 from .helpers import empty_notebook_source
@@ -461,6 +462,41 @@ def test_session_close_restores_save_method_and_releases_state(
     gc.collect()
     assert session_ref() is None
     assert manager_ref() is None
+
+
+def test_session_detach_retries_after_save_method_owner_unwinds(
+    notebook_path: Path,
+) -> None:
+    ensure_view(notebook_path)
+    manager = AppFileManager(notebook_path)
+    original_save_file = manager._save_file
+    session = _Session(manager)
+    _enable_sync(notebook_path, session)
+    extension = session.extensions.get(_SourceTransformExtension)
+    assert extension is not None
+    studio_save_file = manager._save_file
+
+    def foreign_save_file(
+        path: Path,
+        *,
+        notebook: object,
+        persist: bool,
+        previous_path: Path | None = None,
+    ) -> str:
+        del path, notebook, persist, previous_path
+        return "foreign"
+
+    cast(Any, manager)._save_file = foreign_save_file
+    with pytest.raises(CompatibilityError, match="before Studio could restore"):
+        extension.on_detach()
+
+    assert extension.session is session
+    cast(Any, manager)._save_file = studio_save_file
+    extension.on_detach()
+
+    assert manager._save_file == original_save_file
+    with pytest.raises(RuntimeError, match="not attached"):
+        _ = extension.session
 
 
 def test_session_detach_waits_for_in_flight_save(notebook_path: Path) -> None:

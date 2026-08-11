@@ -1,17 +1,8 @@
 import type { RuntimeContext, RuntimeSession } from "@marimo-studio/runtime";
 
-import {
-  codeAtom,
-  filenameAtom,
-  FUNCTIONS_REGISTRY,
-  marimoVersionAtom,
-  PyodideBridge,
-  requestClientAtom,
-  resolveRequestClient,
-  runtimeConfigAtom,
-  store,
-} from "@marimo-studio/marimo-frontend/runtime";
 import { notebookQueryValues } from "@marimo-studio/protocol/query";
+
+import type { RuntimeInvoke } from "./runtime";
 
 import { createWasmOutputReader, createWasmOutputRequest } from "../outputs/wasm";
 import {
@@ -25,14 +16,15 @@ import { mountSharedRuntime } from "./runtime";
 import { hideRuntimeSelectionDuringStartup } from "./selection";
 import {
   createProjectionSpecSynchronizer,
+  type WasmProjectionSpecs,
   type WasmRuntimeData,
   wasmRuntimeDataSchema,
 } from "./wasm-config";
 
-const requestValues = (selectors: string[], signal?: AbortSignal) =>
+const requestValues = (invoke: RuntimeInvoke, selectors: string[], signal?: AbortSignal) =>
   retryWasmRpc(
     () =>
-      FUNCTIONS_REGISTRY.request({
+      invoke({
         namespace: "_marimo_studio",
         functionName: "read_values",
         args: { selectors, max_value_bytes: 1_000_000 },
@@ -40,9 +32,9 @@ const requestValues = (selectors: string[], signal?: AbortSignal) =>
     signal,
   );
 
-const updateQuery = async (query: string): Promise<void> => {
+const updateQuery = async (invoke: RuntimeInvoke, query: string): Promise<void> => {
   await retryWasmRpc(() =>
-    FUNCTIONS_REGISTRY.request({
+    invoke({
       namespace: "_marimo_studio",
       functionName: "sync_query",
       args: { query: notebookQueryValues(query) },
@@ -55,66 +47,74 @@ export const mountWasmRuntime = (
   initialData: WasmRuntimeData,
 ): RuntimeSession => {
   let data = initialData;
-  const ensureProjectionSpecs = createProjectionSpecSynchronizer(
-    initialData,
-    async ({ outputSpecs, valueSpecs }) => {
-      const result = functionResultSchema.parse(
-        await retryWasmRpc(() =>
-          FUNCTIONS_REGISTRY.request({
-            namespace: "_marimo_studio",
-            functionName: "sync_projection_specs",
-            args: {
-              value_specs: valueSpecs,
-              output_specs: outputSpecs,
-            },
-          }),
-        ),
-      );
-      if (!result.found) {
-        throw new Error("The notebook projection bridge is unavailable.");
-      }
-      if (result.status.code !== "ok") {
-        throw new Error(result.status.message ?? "The notebook projection bridge failed.");
-      }
-    },
-  );
+  let ensureProjectionSpecs: ((specs: WasmProjectionSpecs) => Promise<void>) | undefined;
+  const projectionSpecs = (invoke: RuntimeInvoke) => {
+    ensureProjectionSpecs ??= createProjectionSpecSynchronizer(
+      initialData,
+      async ({ outputSpecs, valueSpecs }) => {
+        const result = functionResultSchema.parse(
+          await retryWasmRpc(() =>
+            invoke({
+              namespace: "_marimo_studio",
+              functionName: "sync_projection_specs",
+              args: {
+                value_specs: valueSpecs,
+                output_specs: outputSpecs,
+              },
+            }),
+          ),
+        );
+        if (!result.found) {
+          throw new Error("The notebook projection bridge is unavailable.");
+        }
+        if (result.status.code !== "ok") {
+          throw new Error(result.status.message ?? "The notebook projection bridge failed.");
+        }
+      },
+    );
+    return ensureProjectionSpecs;
+  };
+
   const runtime = mountSharedRuntime(context.presentation, context.root, {
     id: "wasm",
     instance: context.presentation.runtime.instance,
     initialMode: "read",
     viewMode: "read",
     exposeSession: false,
-    configureTransport() {
-      store.set(codeAtom, data.code);
-      store.set(filenameAtom, data.filename);
-      store.set(marimoVersionAtom, data.version);
-      store.set(runtimeConfigAtom, {
-        url: new URL(context.presentation.rootUrl, globalThis.location.origin).toString(),
-        lazy: false,
-        serverToken: "",
-      });
-      const restoreRuntimeSelection = hideRuntimeSelectionDuringStartup();
-      const bridge = PyodideBridge.INSTANCE;
-      store.set(requestClientAtom, resolveRequestClient());
-      return awaitWasmStartup(
-        waitForWasmInitialization(bridge.initialized.promise, (signal) =>
-          waitForWasmValueBridge(requestValues, signal),
-        ),
-      ).finally(restoreRuntimeSelection);
+    transport: {
+      kind: "wasm",
+      code: data.code,
+      filename: data.filename,
+      version: data.version,
+      url: new URL(context.presentation.rootUrl, globalThis.location.origin).toString(),
+      waitForReady(workerInitialized, invoke) {
+        const restoreRuntimeSelection = hideRuntimeSelectionDuringStartup();
+        return awaitWasmStartup(
+          waitForWasmInitialization(workerInitialized, (signal) =>
+            waitForWasmValueBridge(
+              (selectors, requestSignal) => requestValues(invoke, selectors, requestSignal),
+              signal,
+            ),
+          ),
+        ).finally(restoreRuntimeSelection);
+      },
     },
     updateQuery,
-    valueReader: (_sessionId, initialized) =>
-      createWasmValueReader(async () => {
-        await initialized;
-        await ensureProjectionSpecs(data);
-      }, requestValues),
-    outputReader: (sessionId, initialized) =>
+    valueReader: ({ initialized, invoke }) =>
+      createWasmValueReader(
+        async () => {
+          await initialized;
+          await projectionSpecs(invoke)(data);
+        },
+        (selectors, signal) => requestValues(invoke, selectors, signal),
+      ),
+    outputReader: ({ initialized, invoke, sessionId }) =>
       createWasmOutputReader(
         async () => {
           await initialized;
-          await ensureProjectionSpecs(data);
+          await projectionSpecs(invoke)(data);
         },
-        createWasmOutputRequest(sessionId, (request) => FUNCTIONS_REGISTRY.request(request)),
+        createWasmOutputRequest(sessionId, invoke),
       ),
   });
   return {

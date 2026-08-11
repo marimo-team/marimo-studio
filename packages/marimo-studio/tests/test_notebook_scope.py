@@ -82,15 +82,26 @@ def test_registry_closes_every_scope_after_one_fails(tmp_path: Path) -> None:
         asyncio.run(registry.close())
 
     assert calls == ["first", "second"]
-    assert not registry.contains(tmp_path / "first.py")
+    assert registry.contains(tmp_path / "first.py")
     assert not registry.contains(tmp_path / "second.py")
+
+    first.failure = None
+    asyncio.run(registry.close())
+
+    assert calls == ["first", "second", "first"]
+    assert not registry.contains(tmp_path / "first.py")
 
 
 def test_middleware_restores_adapters_after_scope_shutdown_fails() -> None:
     calls: list[str] = []
 
     class AdapterHandle:
+        closed = False
+
         def close(self) -> None:
+            if self.closed:
+                return
+            self.closed = True
             calls.append("adapters")
 
     class AdapterLifecycle:
@@ -135,4 +146,4 @@ def test_middleware_restores_adapters_after_scope_shutdown_fails() -> None:
     with pytest.raises(RuntimeError, match="scope shutdown failed"):
         asyncio.run(middleware(scope, receive, send))
 
-    assert calls == ["open", "scopes", "adapters"]
+    assert calls == ["open", "scopes", "adapters", "scopes"]

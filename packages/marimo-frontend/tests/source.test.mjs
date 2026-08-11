@@ -6,7 +6,13 @@ import { promisify } from "node:util";
 import { afterEach, expect, test } from "vite-plus/test";
 
 import { decodeMarimoSource } from "../scripts/metadata.mjs";
-import { isPreparedOwnedCheckout, prepareOwnedCheckout } from "../scripts/source.mjs";
+import {
+  assertCleanCheckout,
+  assertMarimoCommit,
+  expectedCommit,
+  isPreparedOwnedCheckout,
+  prepareOwnedCheckout,
+} from "../scripts/source.mjs";
 
 const exec = promisify(execFile);
 const temporaryPaths = [];
@@ -31,8 +37,9 @@ const createRepository = async (content) => {
   await git(path, "init");
   await git(path, "config", "user.email", "studio@example.com");
   await git(path, "config", "user.name", "Marimo Studio");
+  await writeFile(join(path, ".gitignore"), "node_modules/\npackages/llm-info/data/generated/\n");
   await writeFile(join(path, "tracked.txt"), content);
-  await git(path, "add", "tracked.txt");
+  await git(path, "add", ".gitignore", "tracked.txt");
   await git(path, "commit", "-m", "fixture");
   return { commit: await git(path, "rev-parse", "HEAD"), path };
 };
@@ -53,7 +60,7 @@ test("source metadata validates the prepared checkout contract", () => {
         commit: "abc123",
         path: "/tmp/marimo",
         repository: "https://github.com/marimo-team/marimo.git",
-        version: "0.23.16",
+        version: "1.2.3",
         ignored: true,
       }),
     ),
@@ -61,10 +68,27 @@ test("source metadata validates the prepared checkout contract", () => {
     commit: "abc123",
     path: "/tmp/marimo",
     repository: "https://github.com/marimo-team/marimo.git",
-    version: "0.23.16",
+    version: "1.2.3",
   });
   expect(() => decodeMarimoSource('{"commit":42}')).toThrow();
   expect(() => decodeMarimoSource("invalid")).toThrow();
+});
+
+test("the package exposes capability facades", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+
+  expect(new Set(Object.keys(manifest.exports))).toEqual(
+    new Set([
+      "./build-metadata",
+      "./cell-presentation",
+      "./control-endpoint",
+      "./embedded-runtime",
+      "./projected-output",
+      "./session-bootstrap",
+      "./theme-frame",
+      "./vite",
+    ]),
+  );
 });
 
 test("checkout preparation repairs ownership, dirt, and readiness", async () => {
@@ -110,6 +134,27 @@ test("checkout preparation repairs ownership, dirt, and readiness", async () => 
 
   expect(await isPreparedOwnedCheckout(preparation)).toBe(true);
 
+  await writeFile(join(checkout, "untracked.ts"), "export {};\n");
+  expect(await isPreparedOwnedCheckout(preparation)).toBe(false);
+  await rm(join(checkout, "untracked.ts"));
+
   await writeFile(join(checkout, "tracked.txt"), "changed\n");
   expect(await isPreparedOwnedCheckout(preparation)).toBe(false);
+});
+
+test("a local source must match the tagged release commit", async () => {
+  const source = await createRepository("release\n");
+  await expect(assertMarimoCommit(source.path)).rejects.toThrow(expectedCommit);
+});
+
+test("a local source must have a clean worktree", async () => {
+  const source = await createRepository("release\n");
+
+  await assertCleanCheckout(source.path);
+  await writeFile(join(source.path, "tracked.txt"), "changed\n");
+  await expect(assertCleanCheckout(source.path)).rejects.toThrow("local source changes");
+
+  await git(source.path, "checkout", "--", "tracked.txt");
+  await writeFile(join(source.path, "untracked.ts"), "export {};\n");
+  await expect(assertCleanCheckout(source.path)).rejects.toThrow("local source changes");
 });

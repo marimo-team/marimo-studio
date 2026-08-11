@@ -1,12 +1,10 @@
-import { getSessionId } from "@marimo-studio/marimo-frontend/runtime";
+import type { SessionId } from "@marimo-studio/marimo-frontend/session-bootstrap";
+
+import type { BrowserSessionReplay } from "./session-preservation.ts";
 
 import { errorMessage } from "../errors.ts";
 import { renderedViewIdentity } from "../rendered-view-state.ts";
-import {
-  fetchRuntimeConfigForRevision,
-  getRuntimeConfig,
-  RuntimeConfigRequestError,
-} from "../runtime-config/index.ts";
+import { getRuntimeConfig, RuntimeConfigRequestError } from "../runtime-config/index.ts";
 import { updateConfiguredRuntime } from "../runtime/coordinator.ts";
 import {
   PresentationRevisionController,
@@ -14,17 +12,6 @@ import {
   type SessionReplayPort,
 } from "./revision-controller.ts";
 import { DocumentRevisionAdapter } from "./revision-document.ts";
-import { BrowserSessionReplay } from "./session-preservation.ts";
-
-export const presentationSessionId = getSessionId();
-
-const browserSessionReplay = new BrowserSessionReplay();
-const sessionReplay: SessionReplayPort = {
-  prepare: (config) => browserSessionReplay.prepare(config),
-  preservedUrl: (target) => browserSessionReplay.preservedUrl(getRuntimeConfig(), target),
-  finish: () => browserSessionReplay.finish(),
-  remember: (sessionId) => browserSessionReplay.remember(getRuntimeConfig(), sessionId),
-};
 
 const classifyFailure = (error: unknown, _operation: RevisionOperation) => ({
   state: "error" as const,
@@ -42,22 +29,43 @@ const classifyFailure = (error: unknown, _operation: RevisionOperation) => ({
   },
 });
 
-export const presentationRevisions = new PresentationRevisionController(
-  new DocumentRevisionAdapter(presentationSessionId),
-  presentationSessionId,
-  {
-    applyRuntime: () => updateConfiguredRuntime(getRuntimeConfig()),
-    loadRevision: (config, previewSessionId, signal) =>
-      fetchRuntimeConfigForRevision(
-        config.supportUrl,
-        config.revision,
-        signal,
-        config.runtime.id,
-        previewSessionId,
-      ),
-    reloadDocument: (url) => globalThis.location.assign(url),
-    reloadRuntime: () => globalThis.location.reload(),
-    classifyFailure,
-  },
-  sessionReplay,
-);
+let activeSessionId: SessionId | undefined;
+let activeController: PresentationRevisionController | undefined;
+let resolveController: (controller: PresentationRevisionController) => void;
+const controllerReady = new Promise<PresentationRevisionController>((resolve) => {
+  resolveController = resolve;
+});
+
+export const createPresentationRevisions = (
+  sessionId: SessionId,
+  browserSessionReplay: BrowserSessionReplay,
+): PresentationRevisionController => {
+  if (activeController) {
+    if (activeSessionId !== sessionId) {
+      throw new Error("Presentation revisions are already bound to another session");
+    }
+    return activeController;
+  }
+  const sessionReplay: SessionReplayPort = {
+    preservedUrl: (target) => browserSessionReplay.preservedUrl(getRuntimeConfig(), target),
+    remember: (currentSessionId) =>
+      browserSessionReplay.remember(getRuntimeConfig(), currentSessionId),
+  };
+  activeSessionId = sessionId;
+  activeController = new PresentationRevisionController(
+    new DocumentRevisionAdapter(sessionId),
+    sessionId,
+    {
+      applyRuntime: () => updateConfiguredRuntime(getRuntimeConfig()),
+      reloadDocument: (url) => globalThis.location.assign(url),
+      reloadRuntime: () => globalThis.location.reload(),
+      classifyFailure,
+    },
+    sessionReplay,
+  );
+  resolveController(activeController);
+  return activeController;
+};
+
+export const waitForPresentationRevisions = async (): Promise<PresentationRevisionController> =>
+  activeController ?? controllerReady;

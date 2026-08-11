@@ -1,5 +1,3 @@
-import type { CellId } from "@marimo-studio/marimo-frontend/cells";
-import type { WebSocketState } from "@marimo-studio/marimo-frontend/runtime";
 import type {
   ProjectionDiagnostic,
   ValueBindingConfig,
@@ -9,6 +7,7 @@ import { createPortal } from "react-dom";
 
 import type { MarimoOutputElement } from "../../outputs/host";
 import type { OutputReader } from "../../outputs/reader";
+import type { RuntimeConnectionState } from "../cell-state";
 import type { RuntimeCell } from "../runtime-cell";
 
 import { cellBindingKey } from "../../cells/bindings";
@@ -52,7 +51,7 @@ export const OutputPortal = ({
   activeSelectors: string[];
   binding: ValueBindingConfig | undefined;
   cell: RuntimeCell | undefined;
-  connectionState: WebSocketState;
+  connectionState: RuntimeConnectionState;
   developer: boolean;
   diagnostic?: ProjectionDiagnostic;
   host: MarimoOutputElement;
@@ -66,7 +65,7 @@ export const OutputPortal = ({
     binding ? cellBindingKey(binding.cell) : undefined,
   );
   const model = valueCellModel(cell, runtimeReady, deliveryTimedOut);
-  const sourceCellId = cell?.id as CellId | undefined;
+  const sourceCellId = cell?.id;
   const bindingIdentity = binding
     ? `${binding.variable}\u0000${cellBindingKey(binding.cell)}`
     : undefined;

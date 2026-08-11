@@ -107,21 +107,21 @@ class _SourceTransformExtension(EventAwareExtension):
             super().on_detach()
             return
         manager = session.app_file_manager
-        conflict = False
         with manager._save_lock:
-            if manager._save_file is self._wrapped_save_file:
+            if (
+                self._wrapped_save_file is not None
+                and manager._save_file is not self._wrapped_save_file
+            ):
+                raise CompatibilityError(
+                    "Another owner replaced Marimo's notebook persistence method "
+                    "before Studio could restore it."
+                )
+            if self._wrapped_save_file is not None:
                 cast(Any, manager)._save_file = self._original_save_file
-            elif self._wrapped_save_file is not None:
-                conflict = True
             self._original_save_file = None
             self._wrapped_save_file = None
             self._transform.close()
             super().on_detach()
-        if conflict:
-            raise CompatibilityError(
-                "Another owner replaced Marimo's notebook persistence method "
-                "before Studio could restore it."
-            )
 
 
 def _attach(session: Session, policy: NotebookSourcePolicy) -> None:

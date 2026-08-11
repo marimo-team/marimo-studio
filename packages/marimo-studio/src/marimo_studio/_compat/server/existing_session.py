@@ -182,11 +182,22 @@ class PrivateExistingSessionAttachment:
         self._clock = clock
         self._owner = object()
         self._managers: WeakKeyDictionary[Any, None] = WeakKeyDictionary()
+        self._active = False
 
     def open(self) -> CompositeCloseHandle:
+        with _ROUTERS_LOCK:
+            if self._active:
+                raise RuntimeError("The existing-session adapter is already open")
+            self._active = True
+        try:
+            patch = _CONNECT_PATCH.open()
+        except BaseException:
+            with _ROUTERS_LOCK:
+                self._active = False
+            raise
         return CompositeCloseHandle(
             (
-                _CONNECT_PATCH.open(),
+                patch,
                 CallbackCloseHandle(self.close),
             )
         )
@@ -201,14 +212,18 @@ class PrivateExistingSessionAttachment:
         if session is None:
             return False
         manager = context_handle(context).session_manager
-        router = _router(manager, self._clock)
-        registered = router.register(self._owner, consumer_id, session)
-        if registered:
-            self._managers[manager] = None
-        return registered
+        with _ROUTERS_LOCK:
+            if not self._active:
+                return False
+            router = _router(manager, self._clock)
+            registered = router.register(self._owner, consumer_id, session)
+            if registered:
+                self._managers[manager] = None
+            return registered
 
     def close(self) -> None:
         with _ROUTERS_LOCK:
+            self._active = False
             for manager in tuple(self._managers):
                 router = _ROUTERS.get(manager)
                 if router is not None:

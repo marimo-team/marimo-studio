@@ -40,7 +40,7 @@ test: ## Run Python and browser-runtime tests.
 	$(UV) run pytest
 	$(VP) run -r test
 
-examples-check: ## Validate every example notebook and Studio view.
+examples-check: build ## Validate every example notebook and Studio view.
 	$(UV) run marimo check examples/analysis.py examples/nga_collection.py
 	$(UV) run marimo-studio check examples/analysis.py --runtime
 	$(UV) run marimo-studio check examples/nga_collection.py

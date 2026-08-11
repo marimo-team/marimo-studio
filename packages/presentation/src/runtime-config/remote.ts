@@ -84,12 +84,15 @@ export const fetchRuntimeConfig = async (
   fallbackRuntime = DEFAULT_RUNTIME_ID,
   previewSessionId?: string,
   revision?: string,
+  runtimeSessionId?: string,
 ): Promise<RuntimeConfig> => {
   const browser = globalThis as typeof globalThis & Window;
-  const sessionId = runtimeConfigSessionId({
-    connected: browser.__MARIMO_STUDIO_SESSION_ID__,
-    href: browser.location?.href,
-  });
+  const sessionId =
+    runtimeSessionId ??
+    runtimeConfigSessionId({
+      connected: browser.__MARIMO_STUDIO_SESSION_ID__,
+      href: browser.location?.href,
+    });
   const runtime = requestedRuntimeId(fallbackRuntime);
   const url = new URL(appendUrlPath(supportUrl, "config", globalThis.location.href));
   url.searchParams.set("runtime", runtime);
@@ -159,10 +162,18 @@ export const fetchRuntimeConfigWithRetry = async (
   fallbackRuntime = DEFAULT_RUNTIME_ID,
   previewSessionId?: string,
   revision?: string,
+  runtimeSessionId?: string,
 ): Promise<RuntimeConfig> =>
   retry({
     operation: () =>
-      fetchRuntimeConfig(supportUrl, signal, fallbackRuntime, previewSessionId, revision),
+      fetchRuntimeConfig(
+        supportUrl,
+        signal,
+        fallbackRuntime,
+        previewSessionId,
+        revision,
+        runtimeSessionId,
+      ),
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof RuntimeConfigRequestError && error.transient,
     signal,
@@ -190,6 +201,7 @@ export const fetchRuntimeConfigForRevision = async (
   signal?: AbortSignal,
   fallbackRuntime = DEFAULT_RUNTIME_ID,
   previewSessionId?: string,
+  runtimeSessionId?: string,
 ): Promise<RuntimeConfig> => {
   const config = await fetchRuntimeConfigWithRetry(
     supportUrl,
@@ -197,6 +209,7 @@ export const fetchRuntimeConfigForRevision = async (
     fallbackRuntime,
     previewSessionId,
     documentRevision,
+    runtimeSessionId,
   );
   requireMatchingPresentationRevision(documentRevision, config);
   return config;

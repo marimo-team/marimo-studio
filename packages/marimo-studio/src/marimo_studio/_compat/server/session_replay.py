@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from threading import RLock
 from typing import Any
 from weakref import WeakKeyDictionary
@@ -16,11 +17,12 @@ from marimo_studio._compat.patch import (
     ReversiblePatch,
 )
 from marimo_studio._compat.server.gateway import context_handle
+from marimo_studio._compat.server.session_state import session_matches_notebook
 from marimo_studio.errors import CompatibilityError
 
 DOCUMENT_REPLAY_QUERY_PARAM = "marimo_studio_resume"
 
-_FILES: WeakKeyDictionary[Any, dict[str, set[object]]] = WeakKeyDictionary()
+_FILES: WeakKeyDictionary[Any, dict[str, dict[object, Path]]] = WeakKeyDictionary()
 _LOCK = RLock()
 
 
@@ -32,11 +34,19 @@ def _reconnect_replacement(native_reconnect: Any) -> Any:
             connector.connection.query_params.get(DOCUMENT_REPLAY_QUERY_PARAM) == "1"
         )
         with _LOCK:
-            owners = _FILES.get(connector.manager, {}).get(
+            registrations = _FILES.get(connector.manager, {}).get(
                 connector.params.file_key,
-                set(),
+                {},
             )
-        if not requested or not owners:
+            replay = any(
+                session_matches_notebook(
+                    session,
+                    file_key=connector.params.file_key,
+                    notebook=notebook,
+                )
+                for notebook in registrations.values()
+            )
+        if not requested or not replay:
             return native_reconnect(connector, session)
         session.disconnect_main_consumer()
         connector.handler._reconnect_session(session, replay=True)
@@ -117,12 +127,12 @@ class PrivateSessionReplay:
         manager = context_handle(context).session_manager
         with _LOCK:
             files = _FILES.setdefault(manager, {})
-            owners = files.setdefault(context.file_key, set())
+            owners = files.setdefault(context.file_key, {})
             if enabled:
-                owners.add(self._owner)
+                owners[self._owner] = context.notebook.resolve()
                 self._managers[manager] = None
                 return
-            owners.discard(self._owner)
+            owners.pop(self._owner, None)
             if not owners:
                 files.pop(context.file_key, None)
             if not files:
@@ -135,7 +145,7 @@ class PrivateSessionReplay:
                 if files is None:
                     continue
                 for file_key, owners in tuple(files.items()):
-                    owners.discard(self._owner)
+                    owners.pop(self._owner, None)
                     if not owners:
                         files.pop(file_key, None)
                 if not files:
