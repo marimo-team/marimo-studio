@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -66,6 +67,8 @@ def _file_stamps(studio: StudioWorkspace) -> dict[_WatchKey, _FileStamp]:
                 result[(kind, path)] = hashlib.sha256(
                     repr(config).encode("utf-8")
                 ).hexdigest()
+            elif os.name == "nt":
+                result[(kind, path)] = hashlib.sha256(path.read_bytes()).hexdigest()
             else:
                 stat = path.stat()
                 result[(kind, path)] = (

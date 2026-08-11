@@ -15,7 +15,7 @@ first projection through deployment.
 | Add, switch, link, and remove views              | [Create and manage views](views.md)              |
 | Choose among the three projections               | [Use notebook results](notebook-results.md)      |
 | Add CSS, JavaScript, browser APIs, and assets    | [Use HTML, CSS, and JavaScript](web-platform.md) |
-| Inspect, edit, and validate through an agent     | [Work with coding agents](coding-agents.md)      |
+| Author and validate views with a coding agent    | [Agent-native authoring](coding-agents.md)       |
 | Serve through Marimo or export for a static host | [Run, export, and share](run-and-share.md)       |
 
 ::: tip Start with an existing notebook

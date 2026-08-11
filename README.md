@@ -16,8 +16,8 @@ Marimo Studio turns one reactive, reproducible
 [marimo](https://marimo.io/) notebook into custom web views for different
 audiences. The notebook owns data access, transformations, metrics, controls,
 and domain decisions. Each view owns page structure, styles, and browser logic
-in ordinary HTML, CSS, and JavaScript files. People and coding agents can shape
-the interface while the analytical logic continues to evolve in one place.
+in ordinary HTML, CSS, and JavaScript files. Coding agents can inspect and edit
+those files while the analytical logic continues to evolve in one place.
 
 Studio runs inside Marimo. `marimo edit` opens the notebook and view together.
 `marimo run` serves finished views with Marimo's kernels, sessions,
@@ -106,7 +106,7 @@ runtime.
 covers browser behavior, assets, loading states, and the built-in utility
 classes.
 
-## Work with people and coding agents
+## Agent-native authoring
 
 View source stays in ordinary web files beside the notebook. A coding agent can
 inspect the saved notebook graph, create and activate a view, bind a stable
@@ -114,7 +114,7 @@ cell name, edit the view files, and analyze source, runtime, and rendered
 browser errors. Metric definitions, transformations, and domain rules remain
 visible in notebook cells for review.
 
-[Work with coding agents](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
+[Agent-native authoring](https://marimo-team.github.io/marimo-studio/guide/coding-agents)
 documents the inspect, create, activate, edit, and repair loop.
 
 ## Choose a runtime
@@ -138,8 +138,8 @@ Marimo Studio supports Python 3.10 or newer and Marimo 0.23.16 or newer.
 ## Documentation
 
 Read the [Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/)
-to create views, project notebook results, work with coding agents, and choose
-a runtime.
+to create views, project notebook results, automate view authoring, and choose a
+runtime.
 
 ## License
 

@@ -10,8 +10,8 @@ Marimo Studio turns one reactive, reproducible
 [marimo](https://marimo.io/) notebook into custom web views for different
 audiences. The notebook owns data access, transformations, metrics, controls,
 and domain decisions. Each view owns page structure, styles, and browser logic
-in ordinary HTML, CSS, and JavaScript files. People and coding agents can shape
-the interface while the analytical logic continues to evolve in one place.
+in ordinary HTML, CSS, and JavaScript files. Coding agents can inspect and edit
+those files while the analytical logic continues to evolve in one place.
 
 From a repository checkout, open the revenue forecast in Studio:
 
@@ -37,8 +37,8 @@ Python object rendered by Marimo, or a JSON-compatible browser value:
 ```
 
 Read the [Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/)
-to create views, project notebook results, work with coding agents, and choose
-a runtime.
+to create views, project notebook results, automate view authoring, and choose a
+runtime.
 
 ## License
 

@@ -283,15 +283,15 @@ def _asset_plan(
     view_name: str,
 ) -> tuple[_AssetCopy, ...]:
     support = SUPPORT_ROOT / "views" / view_name
-    generated = {
-        Path("index.html"): "the generated view document",
-        Path(".nojekyll"): "the generated site marker",
-        support / "config": "the generated runtime configuration",
-        **{
-            support / "cells" / alias: "a generated cell fragment"
+    generated = [
+        (Path("index.html"), "the generated view document"),
+        (Path(".nojekyll"), "the generated site marker"),
+        (support / "config", "the generated runtime configuration"),
+        *(
+            (support / "cells" / alias, "a generated cell fragment")
             for alias in resolved.views[view_name].cell_aliases
-        },
-    }
+        ),
+    ]
     copies = _asset_files(
         _assets.runtime_assets_path(),
         SUPPORT_ROOT / "assets",
@@ -328,7 +328,7 @@ def _asset_plan(
 
     files: dict[tuple[str, ...], tuple[str, Path]] = {}
     directories: dict[tuple[str, ...], tuple[str, Path]] = {}
-    for destination, owner in generated.items():
+    for destination, owner in generated:
         _claim_asset(files, directories, destination, owner)
     for asset in copies:
         _claim_asset(files, directories, asset.destination, asset.owner)
@@ -441,11 +441,14 @@ def _publish_absent(staged: Path, output: Path) -> None:
             f"Output changed while the static export was prepared: {output}. "
             "Run the export again."
         ) from error
+    if os.name == "nt":
+        output.rmdir()
     try:
         os.replace(staged, output)
     except OSError:
-        with suppress(OSError):
-            output.rmdir()
+        if os.name != "nt":
+            with suppress(OSError):
+                output.rmdir()
         raise
 
 

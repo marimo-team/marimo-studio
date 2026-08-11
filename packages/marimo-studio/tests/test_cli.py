@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -82,7 +83,9 @@ def test_view_add_bootstraps_lists_and_checks_named_views(
     assert listed.exit_code == 0, listed.output
     assert checked.exit_code == 0, checked.output
     assert json.loads(created.output)["view"] == "dashboard"
-    assert "/__marimo__/studio/analysis/dashboard" in json.loads(created.output)["root"]
+    assert Path(json.loads(created.output)["root"]) == (
+        notebook_path.parent / "__marimo__" / "studio" / "analysis" / "dashboard"
+    )
     assert json.loads(added.output)["view"] == "executive"
     assert [item["name"] for item in json.loads(listed.output)["views"]] == [
         "dashboard",
@@ -158,7 +161,11 @@ def test_view_add_reports_the_editor_command(notebook_path: Path) -> None:
     result = CliRunner().invoke(cli, ["view", "add", str(notebook_path)])
 
     assert result.exit_code == 0, result.output
-    assert f"marimo edit {notebook_path} --sandbox" in unstyle(result.stderr)
+    arguments = ["marimo", "edit", str(notebook_path), "--sandbox"]
+    expected = (
+        subprocess.list2cmdline(arguments) if os.name == "nt" else shlex.join(arguments)
+    )
+    assert expected in unstyle(result.stderr)
 
 
 def test_view_add_resolves_an_uninitialized_project_from_the_current_directory(

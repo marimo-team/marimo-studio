@@ -239,6 +239,6 @@ Runtime analysis can perform the notebook's configured file, network,
 database, and data access. Run it in the notebook environment.
 :::
 
-Use the [coding-agent guide](../guide/coding-agents.md) for the complete
+Use the [agent-native authoring guide](../guide/coding-agents.md) for the complete
 authoring workflow. Use the [CLI reference](cli.md) when the agent works
 outside Marimo code mode.

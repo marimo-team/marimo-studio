@@ -205,7 +205,8 @@ def _start_exchange(
     body: bytes | None,
     timeout: float,
 ) -> asyncio.Future[bytes]:
-    if not _HTTP_WORKER_SLOTS.acquire(blocking=False):
+    worker_slots = _HTTP_WORKER_SLOTS
+    if not worker_slots.acquire(blocking=False):
         raise AgentRequestError(
             "request-capacity-exhausted",
             (
@@ -225,7 +226,7 @@ def _start_exchange(
         except BaseException as caught:
             error = caught
         finally:
-            _HTTP_WORKER_SLOTS.release()
+            worker_slots.release()
         with suppress(RuntimeError):
             loop.call_soon_threadsafe(_finish_exchange, future, result, error)
 
@@ -237,7 +238,7 @@ def _start_exchange(
     try:
         worker.start()
     except Exception:
-        _HTTP_WORKER_SLOTS.release()
+        worker_slots.release()
         future.cancel()
         raise
     return future

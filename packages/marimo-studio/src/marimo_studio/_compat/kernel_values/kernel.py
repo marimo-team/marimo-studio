@@ -145,9 +145,11 @@ class _KernelBridgeLifespan:
         from marimo._types.ids import CellId_t
 
         context = get_context()
-        if not isinstance(context, KernelRuntimeContext) or context.filename is None:
+        if not isinstance(context, KernelRuntimeContext):
             return
         self._entered_lifespan = _guard_entered_lifespan(context)
+        if context.filename is None:
+            return
         try:
             self._enter(context, Function, CellId_t)
         except BaseException as error:

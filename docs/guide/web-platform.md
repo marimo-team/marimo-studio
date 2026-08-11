@@ -205,5 +205,6 @@ Use the Server preview while developing against the editor's Python kernel.
 After each change, inspect controls, tables, plots, downloads, widgets,
 loading states, keyboard focus, and narrow and wide layouts.
 
-Continue with [Work with coding agents](coding-agents.md) for the bounded agent
-workflow or [Run, export, and share](run-and-share.md) for delivery options.
+Continue with [Agent-native authoring](coding-agents.md) to inspect, edit, and
+validate views with a coding agent, or [Run, export, and
+share](run-and-share.md) for delivery options.
