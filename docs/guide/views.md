@@ -60,6 +60,10 @@ In the Studio workspace, the link opens the target view while preserving the
 current workspace mode. In run mode, the same link opens the target view in
 the current browser session.
 
+Public query parameters travel with the link and remain aligned between the
+notebook editor and selected preview. This lets one view link to a filtered or
+otherwise parameterized state in another view.
+
 ::: info View routes
 The configured `default` view opens at `/`. Every named view is also available
 at `/<view-name>/`.
@@ -106,5 +110,7 @@ Commit this directory with the notebook. If the repository broadly ignores
 
 [Notebook configuration](../reference/configuration.md) defines the default
 view and runtime. [Use notebook results](notebook-results.md) covers the three
-projection forms. [Use HTML, CSS, and JavaScript](web-platform.md) covers
-styling, modules, assets, and loading states.
+projection forms. [Author with the live workspace](live-authoring.md) covers
+view switching, source synchronization, and saved layouts. [Use HTML, CSS, and
+JavaScript](web-platform.md) covers styling, modules, assets, and loading
+states.

@@ -24,16 +24,7 @@ hero:
 
 features:
   - icon:
-      src: /icons/blocks.svg
-      alt: Durable analytical context
-      width: "24"
-      height: "24"
-    title: Keep notebook cells focused
-    details: Use notebook cells for data access, transformations, metrics, controls, and domain decisions. Keep structure, styling, and browser behavior in ordinary web files.
-    link: ./overview#keep-analysis-in-notebook-cells-and-frontend-code-in-view-files
-    linkText: Understand the model
-  - icon:
-      src: /icons/panels-top-left.svg
+      src: /icons/gallery-vertical-end.svg
       alt: Several authored views
       width: "24"
       height: "24"
@@ -41,6 +32,24 @@ features:
     details: Reuse one reactive graph across pages that each have their own audience, structure, language, styling, and route.
     link: ./guide/views
     linkText: Create and manage views
+  - icon:
+      src: /icons/mouse-pointer-click.svg
+      alt: Interactive notebook results
+      width: "24"
+      height: "24"
+    title: Keep results interactive
+    details: Place complete cells, individual Python objects, or JSON-compatible values. Marimo tables, plots, controls, downloads, and anywidgets retain their native behavior.
+    link: ./guide/notebook-results
+    linkText: Choose a projection
+  - icon:
+      src: /icons/panels-top-left.svg
+      alt: Live authoring workspace
+      width: "24"
+      height: "24"
+    title: Build beside the notebook
+    details: Move among the notebook, source, and preview while preserving the live kernel and each preview runtime. Edit in Studio or your regular editor.
+    link: ./guide/live-authoring
+    linkText: Use the live workspace
   - icon:
       src: /icons/code-xml.svg
       alt: HTML, CSS, and JavaScript
@@ -51,8 +60,17 @@ features:
     link: ./guide/web-platform
     linkText: Use browser APIs
   - icon:
-      src: /icons/sparkles.svg
-      alt: Coding agents
+      src: /icons/cpu.svg
+      alt: Server and browser computation
+      width: "24"
+      height: "24"
+    title: Choose where computation runs
+    details: Serve a Python-backed application, run the notebook in a browser worker, or export a self-contained static site from the same authored view.
+    link: ./guide/run-and-share
+    linkText: Compare delivery options
+  - icon:
+      src: /icons/bot.svg
+      alt: Coding agent
       width: "24"
       height: "24"
     title: Agent-native authoring
@@ -94,3 +112,34 @@ Studio connects the notebook to each view through three primitives:
 
 [Create your first view](guide/getting-started.md) or
 [compare the included examples](examples/).
+
+## Author against the live result
+
+Use **Notebook** for analytical work, **Build** to compare the notebook and
+page, **Preview** for audience review, and **HTML & CSS** for source feedback.
+Studio keeps the underlying notebook and prepared preview runtimes available
+while the workspace arrangement changes.
+
+Browser saves and external editor saves converge on the same view files. If
+both changed from the same earlier revision, Studio preserves each version so
+you can compare them and choose the intended source. CSS and script-free HTML
+refresh around mounted Marimo results, which keeps interactive state in place
+during frequent layout work.
+
+[Author with the live workspace](guide/live-authoring.md) covers layouts,
+source conflicts, refresh behavior, runtime comparison, and query-driven
+views.
+
+## Deliver for the environment your audience has
+
+Use the Server runtime when the view needs Python packages, local files,
+databases, credentials, or server-side network access. Use WebAssembly when
+the notebook and its dependencies can run in Pyodide. Export the WebAssembly
+form when the audience needs a static site.
+
+The authored view stays the same across these delivery choices. You can test
+Server and WebAssembly previews during authoring, then serve through
+`marimo run`, mount Studio in an ASGI application, or publish a static export.
+
+[Run, export, and share](guide/run-and-share.md) develops each path and its
+data boundary.

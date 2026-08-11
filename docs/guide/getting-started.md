@@ -49,6 +49,11 @@ source and preview together.
 Change a notebook control and confirm that the starter view updates. The
 Server preview and editor use the same Python session.
 
+The **Notebook**, **Build**, **Preview**, and **HTML & CSS** modes change what
+fills the workspace while keeping the notebook and prepared previews
+available. Arrange and resize the three surfaces from the workspace menu.
+[Author with the live workspace](live-authoring.md) develops this workflow.
+
 ::: info The same notebook runs as the finished view
 Studio uses Marimo's existing application command. After authoring, run
 `uv run --with marimo-studio marimo run analysis.py --sandbox`. The configured
@@ -128,5 +133,6 @@ network, database, and data access as the projected cells.
 
 Continue with [Create and manage views](views.md) when another audience needs
 its own page. [Use notebook results](notebook-results.md) adds rich objects and
-JSON-compatible values. [Use HTML, CSS, and JavaScript](web-platform.md) adds
-styling, assets, and browser behavior.
+JSON-compatible values. [Author with the live workspace](live-authoring.md)
+covers source feedback and runtime comparison. [Use HTML, CSS, and
+JavaScript](web-platform.md) adds styling, assets, and browser behavior.
