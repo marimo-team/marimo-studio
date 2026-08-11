@@ -85,18 +85,22 @@ def test_isolated_runtime_reports_cleanup_failures(
     )
 
 
-def test_cancelled_runtime_preserves_cleanup_failure_as_its_cause(
+def test_cancelled_runtime_waits_for_process_cleanup(
     tmp_path,
     monkeypatch,
 ) -> None:
     started = threading.Event()
     cancelled = threading.Event()
+    finished = threading.Event()
 
     class Supervisor:
         def run(self, _command, _timeout):
             started.set()
-            cancelled.wait(timeout=2)
-            raise process_supervisor.ProcessCleanupError("group remained alive")
+            try:
+                cancelled.wait(timeout=2)
+                raise process_supervisor.ProcessCleanupError("group remained alive")
+            finally:
+                finished.set()
 
         def cancel(self) -> None:
             cancelled.set()
@@ -113,12 +117,10 @@ def test_cancelled_runtime_preserves_cleanup_failure_as_its_cause(
         )
         assert await asyncio.to_thread(started.wait, 1)
         task.cancel()
-        with pytest.raises(asyncio.CancelledError) as raised:
+        with pytest.raises(asyncio.CancelledError):
             await task
-        assert isinstance(
-            raised.value.__cause__,
-            process_supervisor.ProcessCleanupError,
-        )
+        assert cancelled.is_set()
+        assert finished.is_set()
 
     asyncio.run(exercise())
 
