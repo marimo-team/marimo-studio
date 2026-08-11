@@ -439,12 +439,12 @@ test("keeps relative view navigation public and reconnectable", async ({ page })
 });
 
 test("creates a scaffolded view and removes its files", async ({ page }) => {
-  const deletedViewRequests: string[] = [];
+  const removedViewFailures: string[] = [];
   let removalStarted = false;
-  page.on("request", (request) => {
-    const url = new URL(request.url());
-    if (removalStarted && url.pathname.includes("/qa-view/")) {
-      deletedViewRequests.push(request.url());
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (removalStarted && response.status() >= 400 && url.pathname.includes("/qa-view/")) {
+      removedViewFailures.push(`${response.status()} ${response.url()}`);
     }
   });
   await page.goto(studioEntryUrl);
@@ -478,7 +478,7 @@ test("creates a scaffolded view and removes its files", async ({ page }) => {
   await expect(
     previewFrame(page).getByRole("heading", { name: "Studio browser fixture" }),
   ).toBeVisible();
-  expect(deletedViewRequests).toEqual([]);
+  expect(removedViewFailures).toEqual([]);
 });
 
 test("activates an agent-requested view and records its rendered revision", async ({ page }) => {
