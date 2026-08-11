@@ -382,8 +382,8 @@ def test_analyze_returns_the_agent_handoff_contract(
     assert payload["handoff_ready"] is False
     assert payload["runtime"] == "server"
     assert set(payload["revisions"]) == {"dashboard"}
-    assert payload["stages"]["static"]["status"] == "pass"
-    assert payload["stages"]["runtime"]["status"] == "pass"
+    assert payload["stages"]["static"]["status"] == "pass", payload
+    assert payload["stages"]["runtime"]["status"] == "pass", payload
     assert payload["stages"]["browser"] == {
         "required": True,
         "status": "not-observed",

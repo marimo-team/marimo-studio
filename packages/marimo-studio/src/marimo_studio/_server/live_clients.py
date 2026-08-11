@@ -7,7 +7,7 @@ import time
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
-from enum import StrEnum
+from enum import Enum
 
 from marimo_studio.errors import AgentRequestError
 
@@ -34,7 +34,7 @@ class PeerSnapshot:
     binding_replaced: bool
 
 
-class PeerStatus(StrEnum):
+class PeerStatus(str, Enum):
     CURRENT = "current"
     UNAVAILABLE = "unavailable"
     REBOUND = "rebound"
