@@ -274,3 +274,27 @@ it("retries a stalled activation acknowledgement with the same generation", asyn
     "report",
   ]);
 });
+
+it("retries an activation acknowledgement while the browser binding settles", async () => {
+  vi.useFakeTimers();
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(null, { status: 409 }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }));
+  vi.stubGlobal("fetch", fetch);
+  const acknowledge = createViewActivationRemote(
+    "/_marimo-studio",
+    "server-token",
+    "browser-client-1234",
+  );
+
+  const acknowledged = acknowledge(12, "report", new AbortController().signal);
+  await vi.advanceTimersByTimeAsync(100);
+  await acknowledged;
+
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(fetch.mock.calls.map(([, init]) => jsonRequestBody(init).view)).toEqual([
+    "report",
+    "report",
+  ]);
+});

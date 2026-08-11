@@ -273,7 +273,10 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
           response.status() === 409 &&
           url.pathname.includes("/_marimo-studio/views/") &&
           url.pathname.endsWith("/config");
-        if (response.status() >= 400 && !transientConfig) {
+        const transientActivation =
+          response.status() === 409 &&
+          /^\/_marimo-studio\/activations\/\d+\/ack$/.test(url.pathname);
+        if (response.status() >= 400 && !transientConfig && !transientActivation) {
           messages.push(`http ${response.status()}: ${response.url()}`);
         }
       });

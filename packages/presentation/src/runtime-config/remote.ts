@@ -115,11 +115,24 @@ export const fetchRuntimeConfig = async (
   if (sessionId) {
     headers.set("Marimo-Session-Id", sessionId);
   }
-  const response = await fetch(url, {
-    cache: "no-store",
-    headers,
-    signal,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      cache: "no-store",
+      headers,
+      signal,
+    });
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+    throw new RuntimeConfigRequestError(
+      error instanceof Error ? error.message : "Runtime config request failed.",
+      "runtime-config-unavailable",
+      true,
+      "Wait for the Studio server to become available.",
+    );
+  }
   if (!response.ok) {
     const detail = await readResponseError(
       response,

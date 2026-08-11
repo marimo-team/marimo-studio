@@ -223,6 +223,25 @@ test("runtime config retries a transient session mismatch", async () => {
   assert.deepEqual(attempts, 2);
 });
 
+test("runtime config retries a failed network request", async () => {
+  const originalFetch = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = () => {
+    attempts += 1;
+    return attempts === 1
+      ? Promise.reject(new TypeError("Failed to fetch"))
+      : Promise.resolve(Response.json(baseRuntimeConfig));
+  };
+
+  try {
+    await fetchRuntimeConfigWithRetry("/_marimo-studio/views/dashboard");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(attempts, 2);
+});
+
 test("cell subscribers observe alias mapping changes", () => {
   commitRuntimeConfig(baseRuntimeConfig);
   const initial = getRuntimeCellBindings();
