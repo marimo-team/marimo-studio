@@ -9,6 +9,16 @@ Marimo Studio adds authored web documents inside a Marimo process. The notebook
 owns data, transformations, calculations, reactive state, and domain logic.
 Each view selects notebook results and arranges them for one audience or task.
 
+| Capability                      | What it gives you                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Named views                     | Several audience-specific pages backed by one notebook                                           |
+| Native projections              | Complete cells, rich Python objects, and JSON-compatible values in the page structure you choose |
+| Live authoring workspace        | Notebook, source, and preview surfaces that preserve their runtime state while you work          |
+| Full web documents              | Responsive CSS, modules, assets, browser APIs, components, and direct links                      |
+| Server and WebAssembly runtimes | Python-backed delivery and browser-executed delivery from the same view                          |
+| Static export                   | A directory ready for an HTTP static host when the notebook works in Pyodide                     |
+| Agent and command interfaces    | Structured inspection, creation, validation, analysis, and repair workflows                      |
+
 ## Keep analysis in notebook cells and frontend code in view files
 
 Marimo's reactive notebook editor is the home for data access,
@@ -127,6 +137,30 @@ CSS saves update the current stylesheet. HTML saves replace the authored
 `#app-shell` around the mounted Marimo runtime. A module change reloads the
 view document so the browser evaluates its module graph again.
 
+## Work against the live notebook and page
+
+The Studio workspace provides four focused arrangements:
+
+| Mode           | Focus                                          |
+| -------------- | ---------------------------------------------- |
+| **Notebook**   | Native Marimo authoring and reactive debugging |
+| **Build**      | Notebook and audience-facing result together   |
+| **Preview**    | Reading and interacting with the selected view |
+| **HTML & CSS** | View source and immediate page feedback        |
+
+Arrange and resize the notebook, source, and preview panes for the current
+task. Studio remembers that workspace per view. Moving among modes keeps the
+notebook and prepared preview runtimes available, so control state and live
+outputs survive layout changes.
+
+Edit `index.html` and `app.css` inside Studio or use your regular editor. File
+updates travel to the same preview. If browser and disk edits conflict, Studio
+preserves both versions for comparison before you choose which source to save.
+
+[Author with the live workspace](guide/live-authoring.md) covers workspace
+layouts, source conflicts, refresh behavior, runtime comparison, and
+query-driven views.
+
 ## Agent-native authoring
 
 The `marimo_studio.agents` module exposes a bounded view-authoring workflow. A
@@ -137,6 +171,22 @@ domain rules remain executable and inspectable in notebook cells.
 
 [Agent-native authoring](guide/coding-agents.md) develops the complete
 inspect, create, activate, edit, analyze, and repair loop.
+
+## Automate and embed the same application
+
+The `marimo-studio` command exposes notebook inspection, stable cell binding,
+view creation, runtime validation, rendered analysis, and static export in
+human-readable or structured formats. Teams can put the same checks in a
+local workflow, a coding-agent loop, or continuous integration.
+
+Python applications can inspect the saved notebook graph through
+`inspect_notebook`. A service can create one configured run-mode ASGI
+application through `create_asgi_app` and mount it with its existing server
+stack.
+
+Use the [CLI reference](reference/cli.md) for commands, machine output, and
+exit codes. Use the [Python API reference](reference/python-api.md) for the
+inspection and ASGI contracts.
 
 ## Choose where the notebook runs
 

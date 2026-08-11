@@ -1,338 +1,182 @@
 # Architecture
 
-Marimo Studio runs inside Marimo. Marimo owns the process, authentication,
-notebook execution, sessions, WebSockets, virtual files, and native routes.
-Studio adds authored view documents, projection routes, runtime adapters, and
-an editor workspace around those services.
+Marimo Studio turns one reactive Marimo notebook into several authored web
+views. Marimo remains the computation platform. Studio supplies the product
+model, view source, presentation lifecycle, authoring workspace, and delivery
+workflows around that platform.
+
+The boundary starts from a user outcome:
 
 ```text
-Marimo process
-  -> Studio middleware and kernel extension
-     -> Python workspace and server services
-        -> validated browser records
-           -> Studio workspace or custom view document
+one executable notebook
+  -> several audience-specific views
+     -> native reactive results inside standard web documents
 ```
 
-## Python responsibilities
+## Product boundary from first principles
 
-| Owner                                                                 | Responsibility                                                                     |
-| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Marimo                                                                | ASGI lifecycle, auth, sessions, kernels, native APIs, and virtual files            |
-| `_entrypoints`                                                        | Register Studio middleware and the kernel lifespan extension                       |
-| `_composition.py`, `_capabilities.py`                                 | Construct Marimo adapters and define the stable ports consumed by Studio policy    |
-| `_workspace`                                                          | Resolve definitions, workspaces, targets, aliases, views, checks, and source files |
-| `app.py`, `checks.py`, `environment.py`, `inspect.py`, `workspace.py` | Compose workspace rules with Marimo adapters at public boundaries                  |
-| `_compat`                                                             | Translate private Marimo APIs into Studio-owned records                            |
-| `_server`                                                             | Translate authenticated HTTP requests into Studio services                         |
-| `export.py`                                                           | Package one resolved view as a static WebAssembly site                             |
-| `_cli`                                                                | Adapt Click commands and output formats to application services                    |
+| Product decision                            | User capability                                                                                            | Complexity Studio accepts                                                                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Keep computation in Marimo                  | Data access, transformations, controls, outputs, and reactive dependencies stay executable in one notebook | Studio must address Marimo cells and values without owning notebook execution                                                    |
+| Make each view a complete web document      | Authors use HTML, CSS, JavaScript modules, browser APIs, and relative assets                               | Studio must preserve browser document semantics while mounting a long-lived Marimo runtime beside the authored shell             |
+| Let one notebook own several named views    | A dashboard, operations page, and executive brief can reuse one analytical graph                           | View selection, routes, source files, revisions, and layouts need one coherent identity                                          |
+| Offer Server and WebAssembly runtimes       | A view can use a full Python environment or run on a static browser host                                   | Equivalent projections must map to different cell IDs, sessions, workers, and resource lifetimes                                 |
+| Keep notebook, source, and preview together | Authors can change analysis and presentation in one workspace                                              | Frames, source conflicts, query state, controls, and layout must remain coordinated across several documents                     |
+| Expose evidence to coding agents            | An agent can inspect, create, activate, repair, and verify a rendered view                                 | Every report must bind static, runtime, and browser evidence to the same notebook, view, revision, runtime, session, and request |
 
-`_workspace` accepts `NotebookInspector` and `RuntimeProber` ports when a
-rule needs notebook data. It imports no compatibility adapter. `_cli` and
-`_server` also stay independent of concrete `_compat` modules. The composition
-module exposes fixed roots for server, kernel, tooling, programmatic app, and
-static-export processes. Each root validates the pinned release before it
-constructs a private adapter and injects the narrow port into Studio policy.
+```mermaid
+flowchart LR
+    person[Analyst or coding agent]
 
-Private imports beginning with `marimo._` stay in `_compat`. Ruff enforces the
-boundary. Compatibility code converts Marimo sessions, graph state, requests,
-and kernel messages into records owned by `marimo_studio.types` or
-`_workspace`.
+    subgraph studio[Marimo Studio]
+        workspace[Authoring workspace]
+        source[Named view files<br/>HTML, CSS, JavaScript]
+        presentation[Presentation lifecycle<br/>revisions and projections]
+        delivered[Audience-specific view]
+    end
 
-### Marimo release
+    subgraph marimo[Marimo]
+        editor[Native notebook editor]
+        kernel[Reactive kernel and session]
+        native[Native outputs, controls,<br/>widgets, files, and functions]
+    end
 
-Studio supports the tagged Marimo `0.23.16` release. Python dependencies use
-an exact version pin. The frontend source uses the commit behind that tag, and
-the browser build records the same version and commit in `build-meta.json`.
-
-`_compat/release.json` is the shared version and commit source for the Python
-and frontend adapters. `_compat/layout.py` contains the private symbols whose
-behavior Studio depends on. Adapter construction checks the installed version,
-signatures, and source fingerprints before Marimo starts serving Studio routes.
-Packaged browser assets must report the configured version and commit.
-
-To update Marimo:
-
-1. Change the version and tag commit in `_compat/release.json`.
-2. Change the exact dependency pins in both Python project files and refresh
-   `uv.lock`.
-3. Update the support labels in `README.md`, this guide, and
-   `docs/reference/python-api.md`.
-4. Capture the new signatures and fingerprints:
-
-   ```console
-   uv run --frozen python -m marimo_studio._compat.layout > /tmp/marimo-symbols.json
-   ```
-
-5. Update the affected contracts in `_compat/layout.py`, then run the
-   compatibility tests.
-6. Rebuild the browser assets and run the full browser acceptance suite.
-
-`marimo-studio check --format json` includes a `compatibility` record with the
-Studio version, required release, observed Marimo and browser identities,
-adapter family, and validation state. Observed identities are `null` when
-release validation fails.
-
-### Notebook-scoped services
-
-Each canonical notebook path has one `NotebookScope`. The scope composes three
-peer services with distinct state:
-
-```text
-NotebookScope
-  |-> NotebookPresentation
-  |     `-> source discovery, immutable snapshots, and revision history
-  |-> StudioClientRegistry
-  |     `-> connected browsers, Marimo sessions, active views, and query claims
-  `-> AgentCoordinator
-        `-> acknowledged activations and ordered browser observations
+    person --> workspace
+    workspace --> editor
+    workspace --> source
+    editor --> kernel
+    kernel --> native
+    source --> presentation
+    native --> presentation
+    presentation --> delivered
+    delivered --> person
 ```
 
-`NotebookPresentation` reads authored source and caches immutable presentation
-snapshots. `StudioClientRegistry` owns browser presence and session binding.
-Runtime configuration and query synchronization consume that registry
-directly. `AgentCoordinator` captures immutable browser targets from the
-registry and owns one activation or observation operation for each targeted
-browser. Agent state does not sit on the presentation cache.
+Marimo owns the process, authentication, native routes, notebook execution,
+reactive graph, sessions, WebSockets, virtual files, output renderers,
+controls, and widgets. Studio owns authored documents, semantic projections,
+named views, source editing, runtime selection, cross-frame coordination,
+agent evidence, and static packaging.
 
-`NotebookScopeRegistry` creates these services on demand and closes them with
-the Marimo server lifespan. Cache hits reuse the existing scope. Shutdown
-attempts every scope, client registry, agent coordinator, and server adapter,
-then reports the first failure. HTTP adapters receive the specific peer they
-need.
+## Where the complexity comes from
 
-### Workspace lifecycle
+The system is complex where a user-visible promise crosses an ownership or
+lifecycle boundary. The complexity is concentrated in six contracts.
 
-`resolve_workspace_lifecycle` resolves one request into one tagged state:
+| Contract                       | User benefit                                                                                                    | Failure the design prevents                                                         | Primary owner                                                                  |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Semantic cell identity         | A view keeps pointing at the intended cell after reordering, formatting, or live edits                          | A projection silently moves to another cell or breaks after a routine notebook save | `_cell_refs.py`, `_workspace.bindings`, save transformation adapter            |
+| Coherent source revision       | A preview, runtime configuration, and agent report describe the same saved view                                 | HTML from one save renders with selectors or runtime data from another              | `NotebookPresentation`, `PresentationRevisionController`, source revision APIs |
+| Exact runtime ownership        | Switching modes or views preserves the kernel, worker, controls, and widget state owned by each runtime         | Hidden frames reconnect, duplicate a session, or discard browser state              | `PreviewDeck`, runtime SPI, embedded runtime adapter                           |
+| Native resource ownership      | Projected controls, virtual files, functions, tables, plots, and widgets clean up with the final rendered owner | A projection leaks Marimo resources or frees resources still used by another host   | kernel projection host and projected-output adapter                            |
+| Cross-document synchronization | Notebook query parameters and compatible controls stay aligned across editor and preview documents              | Two visible surfaces show different selections or feed updates back indefinitely    | query and control coordinators plus Studio client registry                     |
+| Evidence identity              | An agent hands off the view that was actually rendered and checked                                              | A stale tab or earlier revision satisfies a current validation request              | agent coordinator, analysis report, browser observer                           |
 
-| State          | Data carried                                                |
-| -------------- | ----------------------------------------------------------- |
-| `Unconfigured` | Canonical notebook path                                     |
-| `NeedsView`    | Valid definition and first-view initialization error        |
-| `Ready`        | Valid definition and materialized workspace                 |
-| `Invalid`      | Configuration or source error and any discovered definition |
+These are product constraints, not incidental framework work. Removing one of
+the contracts removes the user capability in the second column or weakens its
+failure guarantee.
 
-Middleware authenticates and resolves the notebook before creating this
-state. Route handlers then match the state to delegation, initialization,
-view serving, or a structured error. The state is request-scoped, so source
-changes take effect on the next request and each response uses one coherent
-definition and workspace.
+## Ports and adapters bound the Marimo integration
 
-## Browser responsibilities
+Studio depends on behavior from Marimo, including behavior that currently
+lives behind private APIs. The port and adapter model keeps that dependency at
+one boundary.
 
-| Owner                      | Responsibility                                                         |
-| -------------------------- | ---------------------------------------------------------------------- |
-| `packages/protocol`        | Zod schemas and inferred types for browser and server records          |
-| `packages/runtime`         | Runtime registry, mount contract, session update, and disposal         |
-| `packages/presentation`    | Custom document lifecycle, projections, runtime mount, and view styles |
-| `packages/studio`          | Editor workspace, source editors, views, layouts, and preview control  |
-| `packages/marimo-frontend` | Named adapters around Marimo's unstable frontend surface               |
-| `apps/browser`             | Compose runtime and Studio entry points into packaged browser assets   |
-| `apps/e2e`                 | Exercise live behavior across the editor, kernel, files, and previews  |
+```mermaid
+flowchart LR
+    policy[Studio policy<br/>workspace, server, agents, export]
+    ports[Studio-owned ports<br/>_capabilities.py]
+    roots[Process composition<br/>_composition.py]
+    adapters[Release adapters<br/>_compat]
+    marimo[Marimo public and private APIs]
 
-Browser dependencies point toward contracts:
-
-```text
-apps/browser
-  |-> presentation -> runtime -> protocol
-  |       |-> protocol
-  |       `-> marimo-frontend
-  `-> studio -> protocol
+    policy --> ports
+    roots --> ports
+    roots --> adapters
+    adapters --> marimo
 ```
 
-`packages/protocol` performs no network, filesystem, DOM, or window I/O.
-`packages/runtime` performs no Marimo, React, or browser I/O.
-`packages/studio` stays independent of presentation and Marimo frontend code.
-Root `vite.config.ts` enforces these package boundaries and the internal
-`app -> features -> shared` direction in Studio.
+The direction is deliberate:
 
-Studio app composition owns cross-feature workspace events.
-`WorkspaceEventCoordinator` owns the event stream, decodes activation,
-observation, source, and editor-session events, calls `ViewController` for
-view selection, calls `PreviewDeck` for preview work, and sends activation
-acknowledgements through its remote. `ViewController` owns view inventory and
-mutations. Preview features own runtime frames, observations, controls, and
-query synchronization.
+1. `_capabilities.py` names the behavior Studio needs with Studio-owned records.
+2. `_composition.py` builds the adapter set for a server, tooling command,
+   export, programmatic application, or kernel lifespan.
+3. `_compat` translates the pinned Marimo release into those ports. Private
+   `marimo._*` imports stay in this package.
+4. Each process root validates the release before the private capability is
+   used. Browser assets carry the same release identity.
+5. Stateful adapters return close handles or install through an owned
+   lifecycle. Shutdown unwinds registrations and patches in reverse order.
+6. `_workspace`, `_server`, `_cli`, public services, and browser policy depend
+   on the port or protocol. They do not depend on a concrete private adapter.
 
-## Activation
+When Marimo gains a suitable public extension point, the corresponding
+`_compat` adapter can shrink or disappear while the Studio policy and its
+consumers retain the same port. When a product requirement changes, change the
+port deliberately and update every provider, consumer, diagnostic, and
+contract test together.
 
-The Python distribution registers two Marimo entry points:
+Read [Marimo integration](architecture/marimo-integration.md) for the complete
+port inventory, private seams, lifecycle rules, and upstreaming path.
 
-```toml
-[project.entry-points."marimo.server.asgi.middleware"]
-marimo-studio = "marimo_studio._entrypoints:server_middleware"
+## Semantic architecture map
 
-[project.entry-points."marimo.kernel.lifespan"]
-marimo-studio = "marimo_studio._entrypoints:kernel_lifespan"
-```
+The detailed architecture is split by durable product boundary.
 
-The middleware resolves a `StudioDefinition` from PEP 723 metadata or the
-nearest matching `pyproject.toml`. A definition contains notebook and runtime
-configuration and can exist before authored view files. Once at least one view
-exists and `default` selects it, Studio materializes a `StudioWorkspace`.
-Configured view files live under `__marimo__/studio/<notebook-stem>/<view>/`.
-Requests for another notebook continue through Marimo.
+| Area                                | Detailed map                                                                   | Questions it answers                                                                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product and workspace state         | [Product model and workspace](architecture/product-and-workspace.md)           | What is a definition, workspace, view, projection, cell reference, source revision, and view transaction?                                          |
+| Marimo platform integration         | [Marimo integration](architecture/marimo-integration.md)                       | Which behavior comes from Marimo, which private seams exist, and how do ports, adapters, validation, and cleanup contain them?                     |
+| Browser documents and authoring     | [Browser runtime and authoring](architecture/browser-runtime-and-authoring.md) | How do protocol records, presentation transactions, stable frames, source editing, projections, controls, and query state compose?                 |
+| Agents, deployment, and maintenance | [Agents and delivery](architecture/agents-and-delivery.md)                     | How do inspection, activation, analysis, process supervision, CLI output, ASGI hosting, export, packaging, and end-to-end tests prove the product? |
 
-The kernel extension registers guarded projection functions in each
-file-backed edit kernel. It initializes value reads and native output
-formatting when a Studio definition first appears. A materialized view can use
-the cell aliases and value references present in its resolved document.
-Requests travel through Marimo's kernel queue.
+[Frontend workspace](frontend.md) contains the package-level development loop.
+[Releasing](releasing.md) contains the publication workflow.
 
-## Edit and run sessions
+## Ownership zones
 
-Edit mode serves the workspace at `/studio/<view>/`. The workspace keeps the
-native editor and one frame per available preview runtime mounted while the
-layout, selected view, or visible runtime changes. It prepares the selected
-runtime and the WebAssembly preview in the background.
+| Zone                       | Owns                                                                             | Imports toward                                                 |
+| -------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `_workspace`               | Configuration, targets, view files, aliases, revisions, transactions, and checks | Stable Python records and injected inspection or runtime ports |
+| `_capabilities.py`         | Python integration contracts and opaque Marimo handles                           | Studio records and public framework types                      |
+| `_composition.py`          | Process-specific adapter selection and release validation                        | Ports and concrete `_compat` providers                         |
+| `_compat`                  | Private Marimo translation and reversible integration                            | The pinned Marimo release and Studio ports                     |
+| `_server`                  | Authenticated Studio routes and notebook-scoped coordination                     | Workspace policy and injected capabilities                     |
+| `_cli`                     | Human text, JSON, JSON Lines diagnostics, and exit status                        | Public application services                                    |
+| `packages/protocol`        | Validated browser and server records                                             | No browser, Marimo, React, or network I/O                      |
+| `packages/runtime`         | Runtime registration, mount, update, and disposal contract                       | Protocol only                                                  |
+| `packages/presentation`    | One authored view document and its projection lifecycle                          | Protocol, runtime, and named Marimo frontend adapters          |
+| `packages/studio`          | The outer notebook, source, and preview workspace                                | Protocol and feature-local ports                               |
+| `packages/marimo-frontend` | Unstable Marimo frontend imports and embedded-runtime integration                | Pinned Marimo frontend source                                  |
+| `apps/browser`             | Browser entry-point composition and packaged assets                              | Package entry points                                           |
+| `apps/e2e`                 | Live acceptance across editor, kernel, filesystem, and preview documents         | The served product boundary                                    |
 
-When a definition has zero views, authenticated edit mode serves the first-view
-initializer. `POST /_marimo-studio/views` creates the configured default and
-transitions the next request to a materialized workspace. Run mode returns a
-structured `workspace-not-initialized` repair response until that transition
-completes.
+## Mutable state and release boundaries
 
-Agent view activation follows one desired-state contract. The editor transport
-binds each Marimo session ID to the client ID of its containing Studio tab. A
-mounted workspace receives a targeted activation event, switches through its
-view controller, and acknowledges the completed transition. A native editor
-receives Marimo's query update and page reload after code-mode execution
-releases its scratchpad lock. The private view hint selects the Studio landing
-route and is removed from the redirected URL.
+| State                                                  | Owner                                           | Released when                                                        |
+| ------------------------------------------------------ | ----------------------------------------------- | -------------------------------------------------------------------- |
+| Notebook services                                      | `NotebookScopeRegistry`                         | Marimo application lifespan closes                                   |
+| Connected browsers and editor sessions                 | `StudioClientRegistry`                          | Client disconnects or notebook scope closes                          |
+| Agent activation or observation                        | `AgentCoordinator`                              | Targeted operation completes, cancels, or scope closes               |
+| Session attachment, replay, save hooks, and peer relay | Server adapter lifecycle                        | Final server adapter handle closes                                   |
+| Document revision                                      | `PresentationRevisionController`                | A newer generation supersedes it or the presentation handle disposes |
+| Runtime session                                        | `RuntimeSession` returned by the runtime SPI    | Presentation runtime changes or the document disposes                |
+| Projected native resources                             | Kernel and frontend output owners               | Final projection owner releases the selector                         |
+| View layout and selected source tab                    | Studio controllers and per-view browser storage | The user resets storage or changes the saved layout                  |
 
-Agent analysis returns through an authenticated Studio server route. The
-compatibility layer exposes Marimo's callback credentials and session ID to
-code mode. The agent client authenticates the connection handshake, receives a
-Studio mutation token, and uses it for the request. Runtime validation runs in
-a supervised child process with bounded output, timeout, cancellation, and
-owned-process termination. Browser validation sends a fresh request ID, source
-revision, runtime, and runtime instance to the bound client. The server accepts
-ordered observations that match that request and joins them with the runtime
-result from the same source revision.
+## Reason about a change
 
-On POSIX, the owned boundary is the worker's new process group. Notebook code
-that starts another process session leaves that boundary and may outlive
-validation. On Windows, a kill-on-close Job Object retains the worker and its
-descendants.
+1. State the user-visible behavior and the identity that must remain stable.
+2. Find the semantic owner in the detailed maps. Add behavior to that owner
+   before adding coordination elsewhere.
+3. Cross a package or process boundary through a port, protocol record, or
+   closeable handle.
+4. Keep Marimo-specific mechanics in `_compat` or `packages/marimo-frontend`.
+5. Test the nearest public boundary. Add `apps/e2e` coverage when the contract
+   crosses editor, kernel, filesystem, session, worker, or preview documents.
+6. Run `make build` after browser integration changes and `make e2e` after
+   lifecycle or cross-document changes. Finish with `make check`.
 
-The Server preview joins the editor's Marimo session as a kiosk consumer after
-the editor session exists. It reuses that kernel's outputs, native controls,
-and anywidget models. Studio relays authorized native control commands to peer
-consumers before kernel application.
-
-The WebAssembly preview owns a separate Pyodide kernel. Studio maps semantic
-cell references to each runtime's cell IDs and synchronizes JSON-compatible
-native `mo.ui` values between the editor and preview. Each cell must construct
-the same native controls in the same order in both runtimes. Anywidget comm
-state remains with the runtime that created the model.
-
-Run mode serves the configured default at `/` and each named view at
-`/<view>/`. Each browser receives an isolated Marimo run session or Pyodide
-worker. Studio support routes remain beneath `/_marimo-studio/` and include
-the parent ASGI mount and Marimo `base_url`. Native authentication and unrelated
-Marimo routes continue through the host.
-
-Notebook query parameters synchronize through each runtime's kernel queue.
-Runtime choice, authentication, file selection, transport, and session
-parameters remain with the document that owns them.
-
-## Presentation runtime
-
-Python `RuntimeProvider` implementations project runtime-specific data behind
-one record. Browser `PresentationRuntime` implementations use the same runtime
-ID, validate that data, and return one document-scoped `RuntimeSession`.
-
-The Server runtime connects to a Marimo session. The WebAssembly runtime runs a
-derived notebook in Marimo's Pyodide worker. Both runtimes use the presentation
-renderer for output plugins, native controls, React portals, value reads, and
-anywidget models.
-
-`mountEmbeddedRuntime(options)` is the Marimo frontend composition seam. Its
-handle owns the provider tree, transport configuration, notebook connection,
-theme subscription, session exposure, updates, and disposal. Presentation
-supplies document policy and projection readers through the facade contract.
-
-`PresentationRevisionController` owns each document transition. It cancels a
-superseded generation, marks presentation readiness as loading, stages the
-document and runtime configuration, commits or rolls back the authored shell,
-hands the revision to the mounted runtime, preserves a run session across a
-required page reload, and publishes the terminal readiness state. The
-`DocumentRevisionAdapter` owns DOM, stylesheet, history, base URL, and runtime
-configuration mutations for that transaction. Standalone navigation and the
-development event loop use the same controller instance.
-
-Rendered observation is split from readiness state. `ReadinessController`
-reduces runtime, presentation, and projection host states. The rendered-view
-observer owns DOM probing, diagnostics, the public `window.marimoStudio` API,
-and parent-frame readiness messages. The agent observer owns the current
-observation request and emits loading or terminal evidence for its exact view,
-revision, runtime instance, and session.
-
-React portals place complete cell output in `<marimo-cell>` hosts and formatted
-Python objects in `<marimo-output>` hosts. The output bridge resolves an
-allow-listed value reference, formats it through Marimo's native registry, and
-owns formatter-created resources under a stable presentation cell ID.
-`mo-value` hosts read permitted JSON values through the active runtime. A
-missing projection produces a structured diagnostic on the affected host while
-healthy regions continue to render.
-
-`ProjectionHostRuntime` composes cell, output, and value adapters. It owns host
-registration, connection and disposal, staged-document preparation, live-host
-preservation, change notification, and the projection readiness contribution.
-Each adapter keeps its selector and rendering semantics. A new projection host
-joins the document lifecycle through this adapter list.
-
-## View source lifecycle
-
-Studio serves every view as a native web directory. Relative stylesheets,
-modules, images, fonts, JavaScript imports, and CSS `url(...)` references stay
-relative to their authored files.
-
-A source refresh runs one revision transaction for the document, runtime
-configuration, view styles, and selected view. A valid scriptless HTML change
-replaces `#app-shell` while the runtime root remains mounted. CSS refreshes in
-place. An HTML or module change in a scripted view reloads its document so the
-browser evaluates the module graph through its regular lifecycle. A failed
-refresh keeps the last valid shell and publishes its diagnostic.
-
-Source reads and writes use content revisions. Writes use atomic replacement
-and reject mutable symlink traversal. An external edit refreshes a clean
-editor and produces a conflict beside a dirty editor.
-
-Removing the selected view is an ordered transition. Studio saves its source,
-selects and prepares the successor, retargets preview and source streams,
-deletes the old directory, then commits the returned inventory.
-
-## Static export
-
-`marimo_studio.export` resolves one view, validates its projections and output
-paths, asks the shared `BrowserRuntimeProjector` for the WebAssembly record,
-and writes a static site. Server previews use the same projector, so version,
-commit, notebook identity, code, and selector specifications have one producer.
-The bundle
-contains the authored view, notebook source, notebook `public/` files, static
-cell fragments, runtime configuration, and packaged browser assets.
-
-Export uses relative URLs so the directory can be hosted beneath another base
-path. It rejects reserved paths, duplicate destinations, file-directory
-collisions, and symlink sources before copying. Files are staged beside the
-destination and moved into place after the complete bundle has been written.
-Replacing an existing destination requires `--force`.
-
-## Change ownership
-
-| Change                                     | Primary owners and checks                                                 |
-| ------------------------------------------ | ------------------------------------------------------------------------- |
-| Configuration, aliases, or source files    | `_workspace` and focused Python tests                                     |
-| Routes, sessions, or authentication        | `_server`, `_compat/server`, Python tests, and browser acceptance         |
-| Browser record or response shape           | Protocol schema, Python producer, browser consumers, and schema tests     |
-| Runtime contract                           | `packages/runtime`, Python provider, presentation adapter, and tests      |
-| Cell, output, value, or document lifecycle | `packages/presentation`, package tests, and browser acceptance            |
-| Workspace mode, view, source, or layout    | `packages/studio`, package tests, and browser acceptance                  |
-| Marimo frontend integration                | `packages/marimo-frontend`, `make build`, and adapter tests               |
-| Static export                              | `export.py`, `_compat/static_export.py`, export tests, and `make package` |
-
-Keep a cross-boundary change aligned across Python response models, protocol
-schemas, runtime IDs, browser consumers, diagnostics, storage keys, query
-parameters, and tests. [Frontend workspace](frontend.md) gives the browser
-development loop and package-specific validation commands.
+This method keeps product complexity visible while preventing Marimo release
+details, browser framework details, and cross-feature coordination from
+spreading through the repository.

@@ -121,6 +121,12 @@ Network-loaded modules and assets require the deployed page's content security
 policy and network access to permit their origin.
 :::
 
+::: warning Treat view scripts as application code
+Authored JavaScript runs on the same origin as the Marimo session. Give
+source-editing access to people and agents trusted with the notebook, its data,
+and its credentials. Review third-party modules before deployment.
+:::
+
 ## Read notebook data in JavaScript
 
 Use a hidden `mo-value` host as the typed data source for browser behavior:
@@ -205,6 +211,8 @@ Use the Server preview while developing against the editor's Python kernel.
 After each change, inspect controls, tables, plots, downloads, widgets,
 loading states, keyboard focus, and narrow and wide layouts.
 
+[Author with the live workspace](live-authoring.md) explains saved layouts,
+source conflicts, refresh behavior, runtime comparison, and query state.
 Continue with [Agent-native authoring](coding-agents.md) to inspect, edit, and
-validate views with a coding agent, or [Run, export, and
-share](run-and-share.md) for delivery options.
+validate views with a coding agent, or [Run, export, and share](run-and-share.md)
+for delivery options.

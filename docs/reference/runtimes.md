@@ -16,6 +16,21 @@ WebAssembly worker.
 | WebAssembly run mode | Pyodide worker                      | Isolated per browser                      |
 | Static export        | Pyodide worker                      | Created when the exported page opens      |
 
+## Authoring runtime continuity
+
+The Studio workspace keeps the native editor and each prepared preview
+runtime mounted while you switch among **Notebook**, **Build**, **Preview**,
+and **HTML & CSS**. Changing the workspace arrangement preserves the kernel,
+control state, widgets, and browser state owned by those runtimes.
+
+CSS and script-free HTML saves update the authored page around the mounted
+runtime. An authored executable script or module change reloads the view
+document so its browser lifecycle starts from the new source.
+
+Public query parameters remain aligned among the Studio route, native editor,
+and active preview. The notebook therefore observes the same query-driven
+state while you compare authoring surfaces and runtimes.
+
 ## Server <Badge type="info" text="Python" />
 
 The server runtime uses the active Marimo process. Use it for Python packages,

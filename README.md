@@ -23,6 +23,27 @@ Studio runs inside Marimo. `marimo edit` opens the notebook and view together.
 `marimo run` serves finished views with Marimo's kernels, sessions,
 authentication, routing, controls, and output renderers.
 
+## What you can do
+
+- 🗂️ **[One notebook, several views](https://marimo-team.github.io/marimo-studio/guide/views).**
+  Give each audience its own route, structure, wording, and interaction while
+  reusing the same reactive graph.
+- 🖱️ **[Keep results interactive](https://marimo-team.github.io/marimo-studio/guide/notebook-results).**
+  Place complete cells, selected Python objects, or JSON-compatible values
+  while retaining Marimo tables, plots, controls, downloads, and anywidgets.
+- 🛠️ **[Build beside the notebook](https://marimo-team.github.io/marimo-studio/guide/live-authoring).**
+  Move among the notebook, view source, and preview while preserving the live
+  kernel and prepared preview runtimes.
+- 🌐 **[Use the web platform](https://marimo-team.github.io/marimo-studio/guide/web-platform).**
+  Author complete HTML documents with responsive CSS, JavaScript modules,
+  browser APIs, components, and relative assets.
+- 🖥️ **[Choose where computation runs](https://marimo-team.github.io/marimo-studio/guide/run-and-share).**
+  Use a Python server or a browser worker, then export compatible WebAssembly
+  views for static hosting.
+- 🤖 **[Agent-native authoring](https://marimo-team.github.io/marimo-studio/guide/coding-agents).**
+  Inspect the notebook graph, edit ordinary web files, and validate source,
+  runtime, and rendered browser behavior.
+
 ## Try Studio
 
 From a repository checkout, open the revenue forecast in the Studio editor:
