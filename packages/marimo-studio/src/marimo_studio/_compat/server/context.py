@@ -7,6 +7,7 @@ from typing import Any
 
 from starlette.requests import Request
 from starlette.types import Scope
+from starlette.websockets import WebSocket
 
 from marimo_studio._compat.server.models import (
     ServerContext,
@@ -67,7 +68,7 @@ def server_uses_file_routing(scope: Scope) -> bool:
 
 
 def server_location(
-    request: Request,
+    request: Request | WebSocket,
     selected_file: str | None = None,
 ) -> ServerLocation | None:
     """Locate the notebook selected for one Marimo server request."""

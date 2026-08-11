@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "vite-plus/test";
 
-import { prepareCellHosts, syncPreservedCellHosts } from "../src/cells/host.ts";
-import { prepareOutputHosts, syncPreservedOutputHosts } from "../src/outputs/host.ts";
+import { projectionHosts } from "../src/projections/host-runtime.ts";
 import { ViewStyleController } from "../src/view-styles/runtime.ts";
 
 afterEach(() => {
@@ -28,7 +27,7 @@ test("a shell swap updates authored cell attributes without replacing its output
       </marimo-cell>
     </main>
   `;
-  prepareCellHosts(document);
+  projectionHosts.prepare(document);
   const liveHost = document.querySelector<HTMLElement>("marimo-cell")!;
   const liveOutput = liveHost.querySelector("[data-marimo-cell-output]");
   liveHost.dataset.state = "ready";
@@ -50,7 +49,7 @@ test("a shell swap updates authored cell attributes without replacing its output
     `,
     "text/html",
   );
-  prepareCellHosts(nextDocument);
+  projectionHosts.prepare(nextDocument);
   const nextShell = nextDocument.querySelector("#app-shell")!;
   const styles = new ViewStyleController(async (tokens) => `/* ${[...tokens].sort().join(" ")} */`);
   const staged = await styles.stage(nextShell);
@@ -61,7 +60,7 @@ test("a shell swap updates authored cell attributes without replacing its output
     }
   ).swap;
   swap(document.querySelector("#app-shell")!, nextShell.outerHTML, { swapStyle: "outerHTML" });
-  syncPreservedCellHosts(nextShell, document);
+  projectionHosts.preserve(nextShell, document);
   staged.commit();
 
   const updatedHost = document.querySelector<HTMLElement>("marimo-cell")!;
@@ -87,7 +86,7 @@ test("a shell refresh updates a rich output host around its mounted renderer", (
       </marimo-output>
     </main>
   `;
-  prepareOutputHosts(document);
+  projectionHosts.prepare(document);
   const liveHost = document.querySelector<HTMLElement>("marimo-output")!;
   const liveOutput = liveHost.querySelector("[data-marimo-cell-output]");
   liveHost.dataset.state = "ready";
@@ -101,10 +100,10 @@ test("a shell refresh updates a rich output host around its mounted renderer", (
     `,
     "text/html",
   );
-  prepareOutputHosts(nextDocument);
+  projectionHosts.prepare(nextDocument);
   const nextShell = nextDocument.querySelector("#app-shell")!;
 
-  syncPreservedOutputHosts(nextShell, document);
+  projectionHosts.preserve(nextShell, document);
 
   assert.equal(liveHost.querySelector("[data-marimo-cell-output]"), liveOutput);
   assert.equal(liveHost.className, "new p-4");

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shutil
 from collections.abc import MutableMapping
 from html.parser import HTMLParser
@@ -23,17 +24,23 @@ from starlette.testclient import TestClient
 import marimo_studio._compat.server.replay as replay_compat
 from marimo_studio import create_asgi_app
 from marimo_studio._compat.notebook import load_static_notebook
-from marimo_studio._compat.server.programmatic import programmatic_middleware
-from marimo_studio._server import dev
-from marimo_studio._server import middleware as studio_middleware
+from marimo_studio._compat.server.kiosk import route_kiosk_consumer
+from marimo_studio._compat.server.sessions import is_session_id
+from marimo_studio._server import dev, editor_bridge, projection_api
+from marimo_studio._server.live_clients import StudioClientRegistry
+from marimo_studio._server.presentation import NotebookPresentation
 from marimo_studio._urls import authored_view_root_url
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
 from marimo_studio._workspace.metadata import update_notebook_config
-from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.workspace import bind_cell, ensure_view
 
-from .helpers import empty_notebook_source, notebook_source, replace_app_shell
+from .app_helpers import configured as _configured
+from .app_helpers import edit_mode as _edit_mode
+from .app_helpers import marimo_app as _marimo_app
+from .app_helpers import session_manager as _session_manager
+from .app_helpers import set_shell as _set_shell
+from .helpers import empty_notebook_source, notebook_source
 
 
 class _BootstrapParser(HTMLParser):
@@ -66,69 +73,6 @@ def _studio_bootstrap(document: str) -> dict[str, Any]:
     return json.loads("".join(parser.parts))
 
 
-def _set_shell(studio: StudioWorkspace, view_name: str, content: str) -> None:
-    template = studio.views[view_name].template
-    template.write_text(
-        replace_app_shell(template.read_text(encoding="utf-8"), content),
-        encoding="utf-8",
-    )
-
-
-def _configured(notebook: Path) -> StudioWorkspace:
-    ensure_view(notebook)
-    studio = load_studio(notebook)
-    bind_cell(studio, "result", 1)
-    ensure_view(notebook, "executive")
-    studio = load_studio(notebook)
-    _set_shell(
-        studio,
-        "dashboard",
-        '<span mo-value="doubled"></span>'
-        '<marimo-output value="doubled"></marimo-output>'
-        '<marimo-cell name="result"></marimo-cell>',
-    )
-    _set_shell(
-        studio,
-        "executive",
-        '<span mo-value="x"></span><marimo-output value="x"></marimo-output>',
-    )
-    return load_studio(notebook)
-
-
-def _marimo_app(
-    notebook: Path,
-    *,
-    path: str = "/",
-    token: str = "",
-    programmatic: bool = False,
-    skew_protection: bool = False,
-) -> Any:
-    return (
-        marimo.create_asgi_app(
-            quiet=True,
-            token=token,
-            skew_protection=skew_protection,
-        )
-        .with_app(
-            path=path,
-            root=str(notebook),
-            middleware=([programmatic_middleware(notebook)] if programmatic else None),
-        )
-        .build()
-    )
-
-
-def _session_manager(app: Any) -> Any:
-    mounted: Any = next(route.app for route in app.routes if isinstance(route, Mount))
-    return mounted.state.session_manager
-
-
-def _edit_mode(app: Any) -> None:
-    from marimo._session.model import SessionMode
-
-    _session_manager(app).mode = SessionMode.EDIT
-
-
 def test_package_registers_marimo_extension_points() -> None:
     server = {
         point.name: point.load()
@@ -141,6 +85,13 @@ def test_package_registers_marimo_extension_points() -> None:
 
     assert isinstance(server["marimo-studio"], Middleware)
     assert callable(kernel["marimo-studio"])
+
+
+def test_session_id_validation_tracks_marimos_server_boundary() -> None:
+    assert is_session_id("s_abc123")
+    assert not is_session_id("s_ABC123")
+    assert not is_session_id("s_short")
+    assert not is_session_id(None)
 
 
 def test_run_mode_serves_default_and_named_view_documents(
@@ -419,12 +370,35 @@ def test_directory_auth_precedes_notebook_configuration(tmp_path: Path) -> None:
             for notebook in ("configured.py", "plain.py")
             for route in ("/_marimo-studio/status", "/dashboard/")
         ]
+        json_responses = [
+            client.get(
+                f"/_marimo-studio/status?file={notebook}",
+                headers={
+                    "Accept": "application/json",
+                    **({"Authorization": "Bearer invalid-token"} if invalid else {}),
+                },
+                follow_redirects=False,
+            )
+            for notebook in ("configured.py", "plain.py")
+            for invalid in (False, True)
+        ]
+        lookalike = client.get(
+            "/_marimo-studio-tools?file=configured.py",
+            headers={"Accept": "application/json"},
+            follow_redirects=False,
+        )
 
     assert all(response.status_code == 303 for response in responses)
     assert all(
         response.headers["location"].startswith("/auth/login?")
         for response in responses
     )
+    assert all(response.status_code == 401 for response in json_responses)
+    assert all(
+        response.json()["error"] == "authentication-required"
+        for response in json_responses
+    )
+    assert lookalike.status_code == 404
 
 
 def test_run_mode_serves_the_configured_wasm_runtime_and_source(
@@ -494,6 +468,239 @@ def test_edit_mode_offers_both_preview_runtimes(notebook_path: Path) -> None:
     assert bootstrap["urls"]["query"] == "/_marimo-studio/query"
 
 
+def test_studio_runtime_config_targets_its_editor_session(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    editor_session = object()
+    captured: dict[str, object] = {}
+
+    async def session_for_client(
+        _clients: StudioClientRegistry,
+        client_id: str,
+    ) -> str | None:
+        captured["client_id"] = client_id
+        return "s_123456"
+
+    def runtime_config(
+        _snapshot: object,
+        _context: object,
+        runtime_id: str | None,
+        session_id: str | None,
+        binding_id: str | None,
+    ) -> dict[str, object]:
+        captured["runtime_id"] = runtime_id
+        captured["session_id"] = session_id
+        captured["binding_id"] = binding_id
+        return {"runtime": {"id": "server"}}
+
+    def route_kiosk(
+        manager: object,
+        consumer_id: str,
+        session: object,
+    ) -> bool:
+        captured["manager"] = manager
+        captured["consumer_id"] = consumer_id
+        captured["editor_session"] = session
+        return True
+
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_for_client",
+        session_for_client,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._server.runtime_config_api.build_runtime_config",
+        runtime_config,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._server.runtime_config_api.current_session",
+        lambda _context, _session_id: editor_session,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._server.runtime_config_api.route_kiosk_consumer",
+        route_kiosk,
+    )
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/_marimo-studio/views/dashboard/config",
+            params={
+                "runtime": "server",
+                "marimo_studio_client": "browser-client-1234",
+            },
+            headers={"Marimo-Studio-Preview-Session-Id": "s_view01"},
+        )
+        invalid = client.get(
+            "/_marimo-studio/views/dashboard/config",
+            params={"marimo_studio_client": "browser-client-1234"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["editorSessionId"] == "s_123456"
+    assert captured == {
+        "client_id": "browser-client-1234",
+        "runtime_id": "server",
+        "session_id": "s_123456",
+        "binding_id": "s_123456",
+        "manager": _session_manager(app),
+        "consumer_id": "s_view01",
+        "editor_session": editor_session,
+    }
+    assert invalid.status_code == 400
+    assert invalid.json()["error"] == "invalid-studio-session"
+
+
+def test_studio_runtime_config_resolves_session_after_snapshot(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    active = {"session_id": "s_123456"}
+    sessions = {"s_123456": object(), "s_654321": object()}
+    captured: dict[str, object] = {}
+
+    async def snapshot_async(
+        _presentation: NotebookPresentation,
+        _view_name: str,
+    ) -> object:
+        active["session_id"] = "s_654321"
+        return object()
+
+    async def session_for_client(
+        _clients: StudioClientRegistry,
+        _client_id: str,
+    ) -> str:
+        return active["session_id"]
+
+    def runtime_config(
+        _snapshot: object,
+        _context: object,
+        _runtime_id: str | None,
+        session_id: str | None,
+        binding_id: str | None,
+    ) -> dict[str, object]:
+        captured["session_id"] = session_id
+        captured["binding_id"] = binding_id
+        return {"runtime": {"id": "server"}}
+
+    def route_kiosk(
+        _manager: object,
+        _consumer_id: str,
+        session: object,
+    ) -> bool:
+        captured["editor_session"] = session
+        return True
+
+    monkeypatch.setattr(NotebookPresentation, "snapshot_async", snapshot_async)
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_for_client",
+        session_for_client,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._server.runtime_config_api.build_runtime_config",
+        runtime_config,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._server.runtime_config_api.current_session",
+        lambda _context, session_id: sessions.get(session_id),
+    )
+    monkeypatch.setattr(
+        "marimo_studio._server.runtime_config_api.route_kiosk_consumer",
+        route_kiosk,
+    )
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/_marimo-studio/views/dashboard/config",
+            params={
+                "runtime": "server",
+                "marimo_studio_client": "browser-client-1234",
+            },
+            headers={"Marimo-Studio-Preview-Session-Id": "s_view01"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["editorSessionId"] == "s_654321"
+    assert captured == {
+        "session_id": "s_654321",
+        "binding_id": "s_654321",
+        "editor_session": sessions["s_654321"],
+    }
+
+
+def test_runtime_config_keeps_parallel_preview_bootstraps(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    editor_session = object()
+
+    class Manager:
+        def __init__(self) -> None:
+            self.sessions = {"s_editor": editor_session}
+
+        def get_session(self, session_id: object) -> object | None:
+            return self.sessions.get(str(session_id))
+
+    manager = Manager()
+
+    async def session_for_client(
+        _clients: StudioClientRegistry,
+        _client_id: str,
+    ) -> str:
+        return "s_123456"
+
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_for_client",
+        session_for_client,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._server.runtime_config_api.build_runtime_config",
+        lambda *_args, **_kwargs: {"runtime": {"id": "server"}},
+    )
+    monkeypatch.setattr(
+        "marimo_studio._server.runtime_config_api.current_session",
+        lambda _context, _session_id: editor_session,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._server.runtime_config_api.route_kiosk_consumer",
+        lambda _manager, consumer_id, session: route_kiosk_consumer(
+            manager,
+            consumer_id,
+            session,
+        ),
+    )
+
+    with TestClient(app) as client:
+        statuses = [
+            client.get(
+                "/_marimo-studio/views/dashboard/config",
+                params={
+                    "runtime": "server",
+                    "marimo_studio_client": "browser-client-1234",
+                },
+                headers={
+                    "Marimo-Studio-Preview-Session-Id": f"s_v{index:05d}",
+                },
+            ).status_code
+            for index in range(2)
+        ]
+
+    assert statuses == [200, 200]
+    assert manager.get_session("s_v00000") is editor_session
+    assert manager.get_session("s_v00001") is editor_session
+
+
 def test_wasm_runtime_updates_projection_specs_without_restarting_notebook(
     notebook_path: Path,
 ) -> None:
@@ -541,9 +748,47 @@ def test_edit_workspace_queues_public_query_state(
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
     received: list[dict[str, str | list[str]]] = []
+    sessions = {
+        "browser-client-1234": "s_123456",
+        "browser-client-5678": "s_654321",
+    }
+    claimed_operations: set[tuple[str, str]] = set()
+
+    async def claim_query_operation(
+        _self: StudioClientRegistry,
+        client_id: str,
+        operation_id: str,
+        expected_session_id: str,
+    ) -> bool:
+        if sessions.get(client_id) != expected_session_id:
+            return False
+        operation = (client_id, operation_id)
+        if operation in claimed_operations:
+            return False
+        claimed_operations.add(operation)
+        return True
+
     monkeypatch.setattr(
-        "marimo_studio._server.support.queue_query_sync",
-        lambda _context, query: received.append(query),
+        StudioClientRegistry,
+        "session_for_client",
+        lambda _self, client_id: asyncio.sleep(0, result=sessions.get(client_id)),
+    )
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "claim_query_operation",
+        claim_query_operation,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._server.query_api.current_session",
+        lambda _context, session_id: (
+            object() if session_id in sessions.values() else None
+        ),
+    )
+    monkeypatch.setattr(
+        "marimo_studio._server.query_api.queue_query_sync",
+        lambda _context, session_id, query, operation_id: received.append(
+            {"session": session_id, "operation": operation_id, **query}
+        ),
     )
     headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
 
@@ -551,11 +796,128 @@ def test_edit_workspace_queues_public_query_state(
         response = client.post(
             "/_marimo-studio/query",
             headers=headers,
-            json={"query": "?region=emea&region=apac&empty="},
+            json={
+                "clientId": "browser-client-1234",
+                "operationId": "query-1",
+                "query": "?region=emea&region=apac&empty=",
+            },
+        )
+        duplicate = client.post(
+            "/_marimo-studio/query",
+            headers=headers,
+            json={
+                "clientId": "browser-client-1234",
+                "operationId": "query-1",
+                "query": "?region=emea&region=apac&empty=",
+            },
+        )
+        second = client.post(
+            "/_marimo-studio/query",
+            headers=headers,
+            json={
+                "clientId": "browser-client-5678",
+                "operationId": "query-2",
+                "query": "?region=apac",
+            },
+        )
+        private = client.post(
+            "/_marimo-studio/query",
+            headers=headers,
+            json={
+                "clientId": "browser-client-1234",
+                "operationId": "query-3",
+                "query": (
+                    "?region=public&session_id=s_private&runtime=wasm"
+                    "&marimo_studio_query_operation=query_injected"
+                ),
+            },
+        )
+        monkeypatch.setattr(
+            "marimo_studio._server.query_api.has_edit_access",
+            lambda _scope: False,
+        )
+        denied = client.post(
+            "/_marimo-studio/query",
+            headers=headers,
+            json={
+                "clientId": "browser-client-1234",
+                "operationId": "query-4",
+                "query": "?region=private",
+            },
         )
 
     assert response.status_code == 202
-    assert received == [{"region": ["emea", "apac"], "empty": ""}]
+    assert duplicate.status_code == 202
+    assert second.status_code == 202
+    assert private.status_code == 400
+    assert private.json()["error"] == "invalid-query"
+    assert denied.status_code == 403
+    assert denied.json()["error"] == "edit-access-required"
+    assert received == [
+        {
+            "session": "s_123456",
+            "operation": "query-1",
+            "region": ["emea", "apac"],
+            "empty": "",
+        },
+        {"session": "s_654321", "operation": "query-2", "region": "apac"},
+    ]
+
+
+def test_edit_workspace_retries_query_after_an_editor_session_rebind(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    queued: list[object] = []
+
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "session_for_client",
+        lambda _self, _client_id: asyncio.sleep(0, result="s_123456"),
+    )
+
+    async def reject_stale_claim(
+        _self: StudioClientRegistry,
+        _client_id: str,
+        _operation_id: str,
+        expected_session_id: str,
+    ) -> None:
+        assert expected_session_id == "s_123456"
+        return None
+
+    monkeypatch.setattr(
+        StudioClientRegistry,
+        "claim_query_operation",
+        reject_stale_claim,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._server.query_api.current_session",
+        lambda _context, session_id: object() if session_id == "s_123456" else None,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._server.query_api.queue_query_sync",
+        lambda *_args: queued.append(object()),
+    )
+    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/_marimo-studio/query",
+            headers=headers,
+            json={
+                "clientId": "browser-client-1234",
+                "operationId": "query-1",
+                "query": "?region=emea",
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "query-session-unavailable"
+    assert response.json()["transient"] is True
+    assert queued == []
 
 
 def test_server_runtime_instance_changes_with_transport_token(
@@ -577,6 +939,28 @@ def test_server_runtime_instance_changes_with_transport_token(
         != second["runtime"]["data"]["serverToken"]
     )
     assert first["runtime"]["instance"] != second["runtime"]["instance"]
+
+
+def test_server_runtime_instance_stays_stable_when_lookup_session_connects(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    monkeypatch.setattr(
+        "marimo_studio._server.runtimes.live_cells",
+        lambda _context, _session_id: None,
+    )
+
+    with TestClient(app) as client:
+        initial = client.get("/_marimo-studio/views/dashboard/config").json()
+        connected = client.get(
+            "/_marimo-studio/views/dashboard/config",
+            headers={"Marimo-Session-Id": "s_123456"},
+        ).json()
+
+    assert initial["runtime"]["instance"] == connected["runtime"]["instance"]
 
 
 def test_deleted_named_cell_keeps_the_view_live_until_repaired(
@@ -874,6 +1258,7 @@ def test_presentation_revision_tracks_view_and_source_identity(
     for view in studio.views.values():
         os.utime(view.template, ns=(timestamp, timestamp))
     template = studio.views["dashboard"].template
+    stylesheet = studio.views["dashboard"].root / "app.css"
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         dashboard = client.get("/")
@@ -887,6 +1272,8 @@ def test_presentation_revision_tracks_view_and_source_identity(
         os.utime(template, ns=(stat.st_atime_ns, stat.st_mtime_ns))
         edited_config = client.get("/_marimo-studio/views/dashboard/config").json()
         edited = client.get("/")
+        stylesheet.write_text("body { color: red; }", encoding="utf-8")
+        styled_config = client.get("/_marimo-studio/views/dashboard/config").json()
 
     dashboard_revision = dashboard.headers["Marimo-Studio-Revision"]
     edited_revision = edited.headers["Marimo-Studio-Revision"]
@@ -894,6 +1281,7 @@ def test_presentation_revision_tracks_view_and_source_identity(
     assert executive.headers["Marimo-Studio-Revision"] != dashboard_revision
     assert edited_config["revision"] == edited_revision
     assert edited_revision != dashboard_revision
+    assert styled_config["revision"] != edited_revision
 
 
 def test_root_document_tracks_a_changed_default_view(notebook_path: Path) -> None:
@@ -1272,6 +1660,66 @@ def test_output_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
     assert inactive.json()["error"] == "invalid-output-request"
 
 
+@pytest.mark.parametrize(
+    ("endpoint", "body", "reader_name"),
+    [
+        (
+            "values",
+            {"selectors": ["doubled"]},
+            "read_session_values",
+        ),
+        (
+            "outputs",
+            {
+                "selectors": ["doubled"],
+                "activeSelectors": ["doubled"],
+            },
+            "render_session_outputs",
+        ),
+    ],
+)
+def test_projection_resolves_session_once(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
+    body: dict[str, list[str]],
+    reader_name: str,
+) -> None:
+    studio = _configured(notebook_path)
+    app = create_asgi_app(studio.notebook)
+    session = object()
+    resolved: list[str] = []
+
+    def resolve_session(_context: object, session_id: str) -> object | None:
+        resolved.append(session_id)
+        return session if len(resolved) == 1 else None
+
+    async def read_projection(
+        actual_session: object,
+        *_args: object,
+        **_kwargs: object,
+    ) -> SimpleNamespace:
+        assert actual_session is session
+        return SimpleNamespace(to_dict=lambda: {"errors": {}})
+
+    monkeypatch.setattr(projection_api, "current_session", resolve_session)
+    monkeypatch.setattr(projection_api, reader_name, read_projection)
+
+    with TestClient(app) as client:
+        config = client.get("/_marimo-studio/views/dashboard/config").json()
+        response = client.post(
+            f"/_marimo-studio/views/dashboard/{endpoint}",
+            headers={
+                "Marimo-Server-Token": config["runtime"]["data"]["serverToken"],
+                "Marimo-Session-Id": "s_123456",
+            },
+            json={"revision": config["revision"], **body},
+        )
+
+    assert response.status_code == 200
+    assert resolved == ["s_123456"]
+
+
 def test_value_permissions_follow_the_browser_presentation_revision(
     notebook_path: Path,
 ) -> None:
@@ -1380,12 +1828,14 @@ def test_edit_mode_public_routes_honor_parent_mount(notebook_path: Path) -> None
     assert landing.status_code == 307
     assert landing.headers["location"] == "/parent/base/studio/dashboard/"
     assert workspace.status_code == 200
-    expected_editor = "/parent/base/_marimo-studio/editor/?" + urlencode(
-        {"file": str(studio.notebook)}
-    )
     bootstrap = _studio_bootstrap(workspace.text)
+    editor_url = urlsplit(bootstrap["urls"]["editor"])
+    editor_query = parse_qs(editor_url.query)
     assert 'href="/parent/base/favicon.ico"' in workspace.text
-    assert bootstrap["urls"]["editor"] == expected_editor
+    assert editor_url.path == "/parent/base/_marimo-studio/editor/"
+    assert editor_query["file"] == [str(studio.notebook)]
+    assert editor_query["marimo_studio_client"] == [bootstrap["clientId"]]
+    assert re.fullmatch(r"[A-Za-z0-9_-]{16,128}", bootstrap["clientId"])
     assert bootstrap["urls"]["viewPrefix"] == "/parent/base/"
     assert bootstrap["urls"]["studioPrefix"] == "/parent/base/studio/"
     assert config["rootUrl"] == "/parent/base/"
@@ -1441,9 +1891,16 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
             ("file", str(studio.notebook)),
         ]
     )
-    assert _studio_bootstrap(landing_workspace.text)["urls"]["editor"] == (
-        landing_editor
-    )
+    landing_bootstrap = _studio_bootstrap(landing_workspace.text)
+    actual_editor = urlsplit(landing_bootstrap["urls"]["editor"])
+    expected_parts = urlsplit(landing_editor)
+    actual_query = parse_qs(actual_editor.query, keep_blank_values=True)
+    expected_query = parse_qs(expected_parts.query, keep_blank_values=True)
+    assert actual_editor.path == expected_parts.path
+    assert actual_query["region"] == expected_query["region"]
+    assert actual_query["empty"] == [""]
+    assert actual_query["file"] == [str(studio.notebook)]
+    assert actual_query["marimo_studio_client"] == [landing_bootstrap["clientId"]]
     assert head.status_code == 307
     assert head.headers["location"] == "/studio/dashboard/"
     assert post.status_code == 405
@@ -1473,7 +1930,7 @@ def test_direct_native_editor_enables_cell_alias_sync(
     _edit_mode(app)
     locations: list[Any] = []
     monkeypatch.setattr(
-        studio_middleware,
+        editor_bridge,
         "enable_cell_alias_sync",
         locations.append,
     )
@@ -1741,6 +2198,18 @@ def test_edit_workspace_mutations_require_the_current_server_token(
             "/_marimo-studio/views/executive",
             headers={"Marimo-Server-Token": "stale-token"},
         )
+        missing_analysis = client.post(
+            "/_marimo-studio/analyze",
+            json={"view": "dashboard"},
+        )
+        invalid_activation = client.patch(
+            "/_marimo-studio/views/dashboard/activate",
+            headers={"Marimo-Server-Token": "stale-token"},
+        )
+        missing_observation = client.put(
+            "/_marimo-studio/views/dashboard/observation",
+            json={},
+        )
 
     assert missing.status_code == 401
     assert missing.json()["error"] == "missing-server-token"
@@ -1751,6 +2220,9 @@ def test_edit_workspace_mutations_require_the_current_server_token(
     assert missing_delete.json()["error"] == "missing-server-token"
     assert invalid_delete.status_code == 401
     assert invalid_delete.json()["error"] == "invalid-server-token"
+    assert missing_analysis.status_code == 401
+    assert invalid_activation.status_code == 401
+    assert missing_observation.status_code == 401
 
 
 def test_run_mode_keeps_studio_source_mutations_read_only(
@@ -1776,6 +2248,32 @@ def test_run_mode_keeps_studio_source_mutations_read_only(
             "/_marimo-studio/views/executive",
             headers=headers,
         )
+        analysis = client.post(
+            "/_marimo-studio/analyze",
+            json={"view": "dashboard"},
+            headers=headers,
+        )
+        observations = client.post(
+            "/_marimo-studio/observations",
+            headers=headers,
+            json={
+                "schema": 1,
+                "views": ["dashboard"],
+                "revisions": {"dashboard": config["revision"]},
+                "runtime": None,
+                "timeout": 10,
+                "browserClient": None,
+            },
+        )
+        activation = client.patch(
+            "/_marimo-studio/views/dashboard/activate",
+            headers=headers,
+        )
+        observation = client.put(
+            "/_marimo-studio/views/dashboard/observation",
+            json={},
+            headers=headers,
+        )
 
     assert loaded.status_code == 200
     assert write.status_code == 403
@@ -1784,6 +2282,14 @@ def test_run_mode_keeps_studio_source_mutations_read_only(
     assert create.json()["error"] == "edit-access-required"
     assert delete.status_code == 403
     assert delete.json()["error"] == "edit-access-required"
+    assert analysis.status_code == 403
+    assert analysis.json()["error"] == "edit-access-required"
+    assert observations.status_code == 403
+    assert observations.json()["error"] == "edit-access-required"
+    assert activation.status_code == 403
+    assert activation.json()["error"] == "edit-access-required"
+    assert observation.status_code == 403
+    assert observation.json()["error"] == "edit-access-required"
 
 
 def test_template_errors_stay_scoped_to_the_selected_view(

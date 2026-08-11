@@ -9,8 +9,10 @@ const payload = {
   views: ["dashboard"],
   runtimes: [{ id: "server", label: "Server" }],
   defaultRuntime: "server",
+  clientId: "browser-client-1234",
   urls: {
     editor: "/_marimo-studio/editor/?file=analysis.py",
+    agent: "/_marimo-studio",
     events: "/_marimo-studio/dev/events",
     query: "/_marimo-studio/query",
     studioPrefix: "/studio/",

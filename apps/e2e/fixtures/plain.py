@@ -5,8 +5,9 @@ app = marimo.App()
 
 @app.cell
 def _():
+    summary = {"papers": 3877}
     "Native Marimo notebook"
-    return
+    return (summary,)
 
 
 if __name__ == "__main__":

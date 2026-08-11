@@ -67,6 +67,7 @@ const runtimeConfigFields = {
   appConfig: z.record(z.string(), z.unknown()),
   userConfig: z.record(z.string(), z.unknown()),
   configOverrides: z.record(z.string(), z.unknown()),
+  editorSessionId: z.string().min(1).optional(),
   dev: z.boolean(),
   mode: z.enum(["edit", "run"]),
 };

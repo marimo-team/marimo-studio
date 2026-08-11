@@ -10,8 +10,8 @@ export class StudioRoutes {
 
   constructor(private readonly bootstrap: StudioBootstrap) {}
 
-  view = (view: string, runtime: string): string =>
-    selectRuntimeInUrl(
+  view = (view: string, runtime: string): string => {
+    const selected = selectRuntimeInUrl(
       this.withNotebookQuery(
         appendUrlPath(
           this.bootstrap.urls.viewPrefix,
@@ -22,6 +22,10 @@ export class StudioRoutes {
       runtime,
       this.bootstrap.defaultRuntime,
     );
+    const url = new URL(selected, globalThis.location.href);
+    url.searchParams.set("marimo_studio_client", this.bootstrap.clientId);
+    return url.toString();
+  };
 
   studio = (view: string): string =>
     this.withNotebookQuery(

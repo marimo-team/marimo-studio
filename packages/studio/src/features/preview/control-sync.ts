@@ -23,6 +23,88 @@ interface CellIdentity {
   runtime: string;
 }
 
+interface WriteWaiter {
+  version: number;
+  resolve: () => void;
+  reject: (error: unknown) => void;
+}
+
+class ControlWriter {
+  private readonly pending = new Map<string, ControlUpdate>();
+  private readonly waiters: WriteWaiter[] = [];
+  private version = 0;
+  private pendingVersion = 0;
+  private running = false;
+  private disposed = false;
+
+  constructor(private readonly endpoint: ControlEndpoint) {}
+
+  write(updates: readonly ControlUpdate[]): Promise<void> {
+    if (this.disposed || updates.length === 0) {
+      return Promise.resolve();
+    }
+    const version = ++this.version;
+    this.pendingVersion = version;
+    updates.forEach((update) => this.pending.set(update.objectId, update));
+    const applied = new Promise<void>((resolve, reject) => {
+      this.waiters.push({ version, resolve, reject });
+    });
+    this.start();
+    return applied;
+  }
+
+  dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.pending.clear();
+    this.waiters.splice(0).forEach(({ resolve }) => resolve());
+  }
+
+  private start(): void {
+    if (this.running || this.disposed) {
+      return;
+    }
+    this.running = true;
+    void this.drain();
+  }
+
+  private async drain(): Promise<void> {
+    try {
+      while (!this.disposed && this.pending.size > 0) {
+        const updates = Array.from(this.pending.values());
+        const version = this.pendingVersion;
+        this.pending.clear();
+        try {
+          await this.endpoint.apply(updates);
+        } catch (error) {
+          this.settle(version, error);
+          continue;
+        }
+        this.settle(version);
+      }
+    } finally {
+      this.running = false;
+      if (!this.disposed && this.pending.size > 0) {
+        this.start();
+      }
+    }
+  }
+
+  private settle(version: number, error?: unknown): void {
+    const settled = this.waiters.filter((waiter) => waiter.version <= version);
+    this.waiters.splice(0, settled.length);
+    settled.forEach((waiter) => {
+      if (error === undefined) {
+        waiter.resolve();
+      } else {
+        waiter.reject(error);
+      }
+    });
+  }
+}
+
 const cellsByRuntimeId = (controls: RuntimeControls): readonly CellIdentity[] =>
   Object.entries(controls.cells)
     .map(([semantic, runtime]) => ({ semantic, runtime }))
@@ -66,10 +148,12 @@ export const synchronizeControlEndpoints = async ({
 }): Promise<ControlSync> => {
   const editorCells = cellsByRuntimeId(editorControls);
   const previewCells = cellsByRuntimeId(previewControls);
+  const editorWriter = new ControlWriter(editor);
+  const previewWriter = new ControlWriter(preview);
   const editorToPreview = (update: ControlUpdate) => {
     const translated = translate(update, editorCells, previewControls.cells);
     if (translated) {
-      void preview.apply([translated]).catch((error: unknown) => {
+      void previewWriter.write([translated]).catch((error: unknown) => {
         console.warn("Marimo preview control update failed", error);
       });
     }
@@ -77,7 +161,7 @@ export const synchronizeControlEndpoints = async ({
   const previewToEditor = (update: ControlUpdate) => {
     const translated = translate(update, previewCells, editorControls.cells);
     if (translated) {
-      void editor.apply([translated]).catch((error: unknown) => {
+      void editorWriter.write([translated]).catch((error: unknown) => {
         console.warn("Marimo editor control update failed", error);
       });
     }
@@ -94,6 +178,8 @@ export const synchronizeControlEndpoints = async ({
     signal?.removeEventListener("abort", dispose);
     stopEditor();
     stopPreview();
+    editorWriter.dispose();
+    previewWriter.dispose();
     editor.dispose();
     preview.dispose();
   };
@@ -102,16 +188,34 @@ export const synchronizeControlEndpoints = async ({
     dispose();
     return sync;
   }
-  signal?.addEventListener("abort", dispose, { once: true });
   const initial = editor
     .snapshot()
     .map((update) => translate(update, editorCells, previewControls.cells))
     .filter((update): update is ControlUpdate => update !== undefined);
+  const initialApply = abortable(previewWriter.write(initial), signal);
+  signal?.addEventListener("abort", dispose, { once: true });
   try {
-    await preview.apply(initial);
+    await initialApply;
   } catch (error) {
     dispose();
     throw error;
   }
   return sync;
+};
+
+const abortable = async <T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> => {
+  if (!signal) {
+    return await operation;
+  }
+  signal.throwIfAborted();
+  let cancel = () => {};
+  const aborted = new Promise<never>((_resolve, reject) => {
+    cancel = () => reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+    signal.addEventListener("abort", cancel, { once: true });
+  });
+  try {
+    return await Promise.race([operation, aborted]);
+  } finally {
+    signal.removeEventListener("abort", cancel);
+  }
 };

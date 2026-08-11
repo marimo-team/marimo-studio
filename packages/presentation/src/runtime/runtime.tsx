@@ -14,6 +14,7 @@ import { createRoot } from "react-dom/client";
 import type { OutputReader } from "../outputs/reader";
 import type { ValueReader } from "../values/reader";
 
+import { RuntimeProjections } from "../projections/RuntimeProjections";
 import {
   configurePresentation,
   type InitialMode,
@@ -21,7 +22,6 @@ import {
   type ViewMode,
   watchPageTheme,
 } from "./runtime-configuration";
-import { RuntimeCellViews } from "./RuntimeCellViews";
 import { RuntimeProviders } from "./RuntimeProviders";
 import { exposeRuntimeSession } from "./session/expose-session";
 import { startRuntimeTransport } from "./transport";
@@ -61,7 +61,7 @@ export const mountSharedRuntime = (
     stopExposingSession = exposeRuntimeSession(sessionId, options.exposeSession);
     root.render(
       <RuntimeProviders>
-        <RuntimeCellViews
+        <RuntimeProjections
           initialized={initialized}
           readOutputs={readOutputs}
           readValues={readValues}

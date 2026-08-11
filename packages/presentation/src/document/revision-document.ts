@@ -1,14 +1,12 @@
 import htmx from "htmx.org";
 
-import { prepareCellHosts, syncPreservedCellHosts } from "../cells/host.ts";
-import { prepareOutputHosts, syncPreservedOutputHosts } from "../outputs/host.ts";
+import { projectionHosts } from "../projections/host-runtime.ts";
 import {
   commitRuntimeConfig,
-  fetchRuntimeConfig,
+  fetchRuntimeConfigForRevision,
   getRuntimeConfig,
   getSupportUrl,
   readResponseError,
-  requireMatchingPresentationRevision,
   RuntimeConfigRequestError,
   setSupportUrl,
 } from "../runtime-config/index.ts";
@@ -18,17 +16,17 @@ import { sameShellPresentation, type ShellTarget } from "./refresh-state.ts";
 import { requiresDocumentReload } from "./scripts.ts";
 import { abortError, PageStyles, type StagedStyles } from "./styles.ts";
 
-export interface DocumentCommit {
+export interface DocumentRevisionCommit {
   target: ShellTarget;
   supportChanged: boolean;
   reloadDocument: boolean;
 }
 
-export class PresentationDocument {
+export class DocumentRevisionAdapter {
   private readonly styles = new PageStyles();
   private documentUrl = globalThis.location.href;
 
-  constructor() {
+  constructor(private readonly previewSessionId: string) {
     this.styles.mark(document);
   }
 
@@ -36,7 +34,7 @@ export class PresentationDocument {
     return this.documentUrl;
   }
 
-  abortStyles(): void {
+  abort(): void {
     this.styles.abort();
   }
 
@@ -49,7 +47,7 @@ export class PresentationDocument {
     nextSupportUrl: string,
     signal: AbortSignal,
     onTarget: (target: ShellTarget) => void,
-  ): Promise<DocumentCommit> {
+  ): Promise<DocumentRevisionCommit> {
     let target = {
       documentUrl: nextDocumentUrl,
       supportUrl: nextSupportUrl,
@@ -83,14 +81,21 @@ export class PresentationDocument {
           detail.hint,
         );
       }
-      const nextConfig = await fetchRuntimeConfig(
+      const revision = response.headers.get("Marimo-Studio-Revision");
+      if (!revision) {
+        throw new RuntimeConfigRequestError(
+          "The view document did not identify its presentation revision.",
+          "presentation-revision-missing",
+          true,
+          "Wait for the current view sources to settle.",
+        );
+      }
+      const nextConfig = await fetchRuntimeConfigForRevision(
         target.supportUrl,
+        revision,
         signal,
         getRuntimeConfig().runtime.id,
-      );
-      requireMatchingPresentationRevision(
-        response.headers.get("Marimo-Studio-Revision"),
-        nextConfig,
+        this.previewSessionId,
       );
       if (
         sameShellPresentation(
@@ -117,8 +122,7 @@ export class PresentationDocument {
       if (!current || !next) {
         throw new Error("Shell refresh requires #app-shell");
       }
-      prepareCellHosts(nextDocument);
-      prepareOutputHosts(nextDocument);
+      projectionHosts.prepare(nextDocument);
       stagedViewStyles = await stageViewStyles(next);
       stagedStyles = await this.styles.stage(nextDocument, nextDocumentUrl, signal);
       if (signal.aborted) {
@@ -138,8 +142,7 @@ export class PresentationDocument {
         globalThis.history.replaceState(globalThis.history.state, "", nextDocumentUrl);
         documentBase.set(nextBase);
         this.swap(current, next);
-        syncPreservedCellHosts(next, document);
-        syncPreservedOutputHosts(next, document);
+        projectionHosts.preserve(next, document);
         stagedStyles.commit();
         stagedViewStyles.commit();
       } catch (error) {

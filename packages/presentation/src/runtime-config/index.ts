@@ -16,9 +16,15 @@ export {
   subscribeRuntimeConfig,
 } from "./store.ts";
 
-export const loadRuntimeConfig = async () => {
+export const loadRuntimeConfig = async (previewSessionId?: string) => {
   const mount = getMountConfig();
   return commitRuntimeConfig(
-    await fetchRuntimeConfigForRevision(mount.supportUrl, mount.revision, undefined, mount.runtime),
+    await fetchRuntimeConfigForRevision(
+      mount.supportUrl,
+      mount.revision,
+      undefined,
+      mount.runtime,
+      previewSessionId,
+    ),
   );
 };

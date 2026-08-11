@@ -21,19 +21,28 @@ class MemoryStorage {
   }
 }
 
-const installBrowser = (href: string) => {
+const installBrowser = (
+  href: string,
+  {
+    state: initialState = null,
+    storage = new MemoryStorage(),
+  }: { state?: unknown; storage?: MemoryStorage } = {},
+) => {
   let location = new URL(href);
-  const storage = new MemoryStorage();
+  let state = initialState;
   vi.stubGlobal("location", location);
   vi.stubGlobal("sessionStorage", storage);
   vi.stubGlobal("history", {
-    state: null,
-    replaceState: (_state: unknown, _title: string, next: string | URL) => {
+    get state() {
+      return state;
+    },
+    replaceState: (nextState: unknown, _title: string, next: string | URL) => {
+      state = nextState;
       location = new URL(next, location);
       vi.stubGlobal("location", location);
     },
   });
-  return { location: () => location, storage };
+  return { location: () => location, state: () => state };
 };
 
 afterEach(() => {
@@ -47,13 +56,25 @@ describe("pending runtime selection", () => {
     hideRuntimeSelectionDuringStartup();
     expect(browser.location().search).toBe("");
 
+    const reloaded = installBrowser(browser.location().href, { state: browser.state() });
     restorePendingRuntimeSelection();
-    expect(browser.location().search).toBe("?runtime=wasm");
+    expect(reloaded.location().search).toBe("?runtime=wasm");
 
     const restore = hideRuntimeSelectionDuringStartup();
     restore();
 
-    expect(browser.location().search).toBe("?runtime=wasm");
-    expect(browser.storage.values.size).toBe(0);
+    expect(reloaded.location().search).toBe("?runtime=wasm");
+    expect(reloaded.state()).toBeNull();
+  });
+
+  test("keeps concurrent preview runtime selections isolated", () => {
+    const storage = new MemoryStorage();
+    installBrowser("https://example.test/dashboard/?runtime=wasm", { storage });
+    hideRuntimeSelectionDuringStartup();
+
+    const server = installBrowser("https://example.test/dashboard/", { storage });
+    restorePendingRuntimeSelection();
+
+    expect(server.location().search).toBe("");
   });
 });

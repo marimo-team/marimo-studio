@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
+import marimo
 import pytest
 from click import unstyle
 from click.testing import CliRunner
@@ -12,6 +15,7 @@ from click.testing import CliRunner
 from marimo_studio._cli import cli, main
 from marimo_studio._cli.diagnostics import DiagnosticStream
 from marimo_studio._workspace import load_studio
+from marimo_studio._workspace.environment import SANDBOX_ENV
 from marimo_studio.workspace import ensure_view
 
 from .helpers import replace_app_shell
@@ -38,6 +42,7 @@ main()
         [sys.executable, "-c", script, str(runtime_assets), *args],
         check=False,
         capture_output=True,
+        env={**os.environ, SANDBOX_ENV: "1"},
         text=True,
     )
 
@@ -353,6 +358,211 @@ def test_check_emits_structured_diagnostics(
         and event["severity"] == "info"
         for event in events
     )
+
+
+def test_analyze_returns_the_agent_handoff_contract(
+    notebook_path: Path,
+    runtime_assets: Path,
+) -> None:
+    ensure_view(notebook_path)
+
+    result = _run_cli(
+        runtime_assets,
+        "analyze",
+        str(notebook_path),
+        "--view",
+        "dashboard",
+        "--format",
+        "json",
+    )
+
+    assert result.returncode == 1, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["schema"] == 1
+    assert payload["views"] == ["dashboard"]
+    assert payload["ok"] is False
+    assert payload["handoff_ready"] is False
+    assert payload["runtime"] == "server"
+    assert set(payload["revisions"]) == {"dashboard"}
+    static_stage = payload["stages"]["static"]
+    runtime_stage = payload["stages"]["runtime"]
+    assert static_stage["status"] == "pass", static_stage
+    assert runtime_stage["status"] == "pass", runtime_stage
+    assert payload["stages"]["browser"] == {
+        "required": True,
+        "status": "not-observed",
+        "observations": [
+            {
+                "view": "dashboard",
+                "state": "not-observed",
+                "diagnostics": [],
+                "message": "No rendered browser observation was requested.",
+                "code": "browser-not-requested",
+            }
+        ],
+    }
+    assert payload["actions"] == [
+        {
+            "stage": "browser",
+            "severity": "error",
+            "code": "browser-not-requested",
+            "message": "No rendered browser observation was requested.",
+            "advice": (
+                "Open Studio for this notebook, select the view, then rerun "
+                "the analysis."
+            ),
+            "view": "dashboard",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "server_url",
+    [
+        "ftp://localhost:2718",
+        "http://localhost:abc",
+        "http://localhost:99999",
+        "http://localhost:2718?access_token=secret",
+        "http://localhost:2718/#access_token=secret",
+        "http://user@localhost:2718",
+        "http://user:secret@localhost:2718",
+    ],
+)
+def test_analyze_rejects_malformed_server_urls_as_usage_errors(
+    notebook_path: Path,
+    runtime_assets: Path,
+    server_url: str,
+) -> None:
+    ensure_view(notebook_path)
+
+    result = _run_cli(
+        runtime_assets,
+        "analyze",
+        str(notebook_path),
+        "--server",
+        server_url,
+        "--format",
+        "json",
+        "--diagnostics",
+        "jsonl",
+    )
+
+    events = [json.loads(line) for line in result.stderr.splitlines()]
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert len(events) == 1
+    assert events[0]["schema"] == 1
+    assert events[0]["event"] == "diagnostic"
+    assert events[0]["command"] == "analyze"
+    assert events[0]["severity"] == "error"
+    assert events[0]["code"] == "usage-error"
+    assert events[0]["exit_code"] == 2
+    assert "--server" in events[0]["message"]
+
+
+def test_analyze_rejects_browser_selection_without_a_server() -> None:
+    result = CliRunner().invoke(
+        cli,
+        ["analyze", "--browser-client", "browser-client-1234"],
+    )
+
+    assert result.exit_code == 2
+    assert "--browser-client" in result.output
+    assert "--server" in result.output
+
+
+def test_analyze_keeps_access_tokens_out_of_command_arguments() -> None:
+    result = CliRunner().invoke(cli, ["analyze", "--help"])
+
+    assert result.exit_code == 0
+    assert "--access-token" not in result.output
+    assert "MARIMO_STUDIO_ACCESS_TOKEN" in result.output
+    assert "--runtime-timeout" in result.output
+
+
+@pytest.mark.parametrize("command", ["analyze", "check"])
+def test_runtime_timeout_must_be_finite(command: str) -> None:
+    result = CliRunner().invoke(
+        cli,
+        [command, "--runtime-timeout", "nan"],
+    )
+
+    assert result.exit_code == 2
+    assert "finite number" in result.output
+
+
+def test_runtime_timeout_bounds_projected_output_rendering(
+    tmp_path: Path,
+    runtime_assets: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "slow_outputs.py"
+    marker = tmp_path / "formatted.txt"
+    names = tuple(f"output_{index}" for index in range(8))
+    assignments = "\n".join(f"    {name} = SlowOutput()" for name in names)
+    returned = ", ".join(names)
+    notebook.write_text(
+        f'''\
+import marimo
+
+__generated_with = "{marimo.__version__}"
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import time
+    from pathlib import Path
+
+    marker = Path(r"{marker}")
+
+    class SlowOutput:
+        def _mime_(self):
+            current = marker.read_text(encoding="utf-8") if marker.exists() else ""
+            marker.write_text(current + "x", encoding="utf-8")
+            time.sleep(0.8)
+            return "text/html", "<strong>ready</strong>"
+
+{assignments}
+    return {returned}
+
+
+if __name__ == "__main__":
+    app.run()
+''',
+        encoding="utf-8",
+    )
+    setup = ensure_view(notebook)
+    template = setup.root / "index.html"
+    template.write_text(
+        replace_app_shell(
+            template.read_text(encoding="utf-8"),
+            "".join(
+                f'<marimo-output value="{name}"></marimo-output>' for name in names
+            ),
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(SANDBOX_ENV, "1")
+
+    started = time.monotonic()
+    result = _run_cli(
+        runtime_assets,
+        "check",
+        str(notebook),
+        "--runtime",
+        "--runtime-timeout",
+        "3",
+        "--diagnostics",
+        "jsonl",
+    )
+    elapsed = time.monotonic() - started
+
+    assert result.returncode == 1, result.stderr
+    assert marker.exists()
+    assert elapsed < 6
+    events = [json.loads(line) for line in result.stderr.splitlines()]
+    assert events[-1]["code"] == "runtime-timeout"
 
 
 def test_structured_diagnostics_group_multiline_process_output(

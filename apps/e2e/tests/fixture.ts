@@ -16,9 +16,14 @@ import {
 
 const execFile = promisify(execFileCallback);
 const dashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/notebook/dashboard");
+const plainDashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/plain/dashboard");
+const plainReportDirectory = resolve(workspaceDirectory, "__marimo__/studio/plain/report");
 
 export const dashboardHtmlPath = resolve(dashboardDirectory, "index.html");
 export const dashboardCssPath = resolve(dashboardDirectory, "app.css");
+export const plainDashboardHtmlPath = resolve(plainDashboardDirectory, "index.html");
+export const plainReportHtmlPath = resolve(plainReportDirectory, "index.html");
+export const plainNotebookPath = resolve(workspaceDirectory, "plain.py");
 export const workspaceNotebookPath = notebookPath;
 export const hostedDashboardHtmlPath = resolve(
   hostedWorkspaceDirectory,
@@ -50,6 +55,10 @@ export const restoreWorkspace = async () => {
     force: true,
     recursive: true,
   });
+  await rm(resolve(workspaceDirectory, "__marimo__/studio/plain"), {
+    force: true,
+    recursive: true,
+  });
 };
 
 export const restoreHostedWorkspace = async () => {
@@ -78,10 +87,27 @@ const runStudioCli = (args: string[]) =>
 export const bindWorkspaceCell = (alias: string, cell: number) =>
   runStudioCli(["bind", workspaceNotebookPath, "--cell", String(cell), "--as", alias]);
 
+export const addWorkspaceView = (target: string, name: string) =>
+  runStudioCli(["view", "add", target, "--name", name]);
+
 export const checkWorkspace = async (): Promise<boolean> => {
   const { stdout } = await runStudioCli(["check", workspaceNotebookPath, "--format", "json"]);
   const result = JSON.parse(stdout) as { ok?: unknown };
   return result.ok === true;
+};
+
+export const analyzeWorkspace = async (view: string): Promise<Record<string, unknown>> => {
+  const { stdout } = await runStudioCli([
+    "analyze",
+    workspaceNotebookPath,
+    "--view",
+    view,
+    "--server",
+    "http://127.0.0.1:4321?file=notebook.py",
+    "--format",
+    "json",
+  ]);
+  return JSON.parse(stdout) as Record<string, unknown>;
 };
 
 export const editorFrame = (page: Page): FrameLocator =>
@@ -166,6 +192,14 @@ const sessionAdmin = async (page: Page): Promise<SessionAdmin | undefined> => {
   };
 };
 
+export const studioServerToken = async (page: Page): Promise<string> => {
+  const admin = await sessionAdmin(page);
+  if (!admin) {
+    throw new Error("Studio session administration is unavailable");
+  }
+  return admin.serverToken;
+};
+
 const closeNotebookSessions = async (page: Page): Promise<void> => {
   const admin = await sessionAdmin(page);
   const request = page.request;
@@ -213,9 +247,15 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
       page.on("pageerror", (error) => messages.push(`pageerror: ${error.message}`));
       page.on("console", (message) => {
         const missingProjectedControl = message.text().includes("UIElementRegistry missing entry");
+        const nativeLanguageServerTimeout =
+          message.location().url.includes("/_marimo-studio/editor/assets/") &&
+          message.text().startsWith("Language server initialization failed") &&
+          message.text().includes('Request "initialize" timed out');
         if (
           missingProjectedControl ||
-          (message.type() === "error" && !message.text().startsWith("Failed to load resource:"))
+          (message.type() === "error" &&
+            !nativeLanguageServerTimeout &&
+            !message.text().startsWith("Failed to load resource:"))
         ) {
           const source = message.location().url;
           messages.push(`console${source ? ` (${source})` : ""}: ${message.text()}`);
@@ -233,7 +273,10 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
           response.status() === 409 &&
           url.pathname.includes("/_marimo-studio/views/") &&
           url.pathname.endsWith("/config");
-        if (response.status() >= 400 && !transientConfig) {
+        const transientActivation =
+          response.status() === 409 &&
+          /^\/_marimo-studio\/activations\/\d+\/ack$/.test(url.pathname);
+        if (response.status() >= 400 && !transientConfig && !transientActivation) {
           messages.push(`http ${response.status()}: ${response.url()}`);
         }
       });

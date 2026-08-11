@@ -5,6 +5,7 @@ import json
 import math
 from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import marimo
@@ -24,6 +25,7 @@ from marimo_studio._compat.kernel_values.session import _FunctionResultWaiter
 from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.runtime_probe import probe_runtime
 from marimo_studio._compat.version import assert_supported_version
+from marimo_studio._urls import QUERY_OPERATION_QUERY_PARAM
 from marimo_studio.errors import ProtocolError
 from marimo_studio.types import ValuePathStep
 from marimo_studio.values import (
@@ -262,6 +264,207 @@ def test_kernel_projection_bounds_the_aggregate_response() -> None:
     assert result.errors["context.second"].code == "response-too-large"
 
 
+def test_kernel_lifespan_tolerates_code_mode_reinstantiation() -> None:
+    class Lifespan:
+        def __init__(self) -> None:
+            self.entries = 0
+            self.exits = 0
+
+        async def __aenter__(self) -> None:
+            self.entries += 1
+
+        async def __aexit__(self, *_args: object) -> None:
+            self.exits += 1
+
+    lifecycle = Lifespan()
+
+    class Kernel:
+        _lifespan: Any = lifecycle
+
+    class Context:
+        _kernel = Kernel()
+
+    async def exercise() -> None:
+        await lifecycle.__aenter__()
+        kernel_values_module._guard_entered_lifespan(Context())
+        guarded = Context._kernel._lifespan
+        await guarded.__aenter__()
+        await guarded.__aexit__(None, None, None)
+
+    asyncio.run(exercise())
+
+    assert lifecycle.entries == 1
+    assert lifecycle.exits == 1
+
+
+def test_kernel_lifespan_guard_preserves_marimos_full_lifespan_chain() -> None:
+    from contextlib import asynccontextmanager
+
+    from marimo._utils.lifespans import Lifespans
+
+    events: list[str] = []
+
+    class Kernel:
+        _lifespan: Any = None
+
+    class Context:
+        _kernel = Kernel()
+
+    @asynccontextmanager
+    async def first(_app: None):
+        events.append("first-enter")
+        try:
+            yield
+        finally:
+            events.append("first-exit")
+
+    @asynccontextmanager
+    async def studio(_app: None):
+        events.append("studio-enter")
+        kernel_values_module._guard_entered_lifespan(Context())
+        try:
+            yield
+        finally:
+            events.append("studio-exit")
+
+    @asynccontextmanager
+    async def last(_app: None):
+        events.append("last-enter")
+        try:
+            yield
+        finally:
+            events.append("last-exit")
+
+    async def exercise() -> None:
+        aggregate = Lifespans([first, studio, last])(None)
+        Context._kernel._lifespan = aggregate
+        await aggregate.__aenter__()
+        await Context._kernel._lifespan.__aenter__()
+        await Context._kernel._lifespan.__aexit__(None, None, None)
+
+    asyncio.run(exercise())
+
+    assert events == [
+        "first-enter",
+        "studio-enter",
+        "last-enter",
+        "last-exit",
+        "studio-exit",
+        "first-exit",
+    ]
+
+
+def test_kernel_lifespan_guard_rejects_retry_after_setup_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from contextlib import asynccontextmanager
+
+    from marimo._runtime import context as runtime_context
+    from marimo._runtime.context import kernel_context as kernel_context_module
+    from marimo._utils.lifespans import Lifespans
+
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+
+    class Registry:
+        def __init__(self) -> None:
+            self.registered: list[str] = []
+            self.deleted: list[str] = []
+
+        def register(self, namespace: str, _: object) -> None:
+            self.registered.append(namespace)
+
+        def delete(self, namespace: str) -> None:
+            self.deleted.append(namespace)
+
+    class Kernel:
+        _lifespan: Any = None
+
+    class Context:
+        filename = str(notebook)
+        function_registry = Registry()
+        query_params = object()
+        _kernel = Kernel()
+
+    context = Context()
+    monkeypatch.setattr(runtime_context, "get_context", lambda: context)
+    monkeypatch.setattr(kernel_context_module, "KernelRuntimeContext", Context)
+
+    @asynccontextmanager
+    async def failing(_app: None):
+        raise RuntimeError("later lifespan failed")
+        yield
+
+    async def exercise() -> None:
+        aggregate = Lifespans([kernel_values_module.kernel_lifespan, failing])(None)
+        context._kernel._lifespan = aggregate
+        with pytest.raises(RuntimeError, match="later lifespan failed"):
+            await aggregate.__aenter__()
+        with pytest.raises(RuntimeError, match="kernel lifespan setup failed"):
+            await context._kernel._lifespan.__aenter__()
+
+    asyncio.run(exercise())
+
+    assert context.function_registry.registered == [
+        "_marimo_studio",
+        "_marimo_studio",
+        "_marimo_studio",
+    ]
+    assert context.function_registry.deleted == ["_marimo_studio"]
+
+
+def test_kernel_lifespan_cleans_a_partially_registered_bridge(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._runtime import context as runtime_context
+    from marimo._runtime.context import kernel_context as kernel_context_module
+    from marimo._utils.lifespans import Lifespans
+
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+
+    class Registry:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.deleted: list[str] = []
+
+        def register(self, _namespace: str, _function: object) -> None:
+            self.calls += 1
+            if self.calls == 2:
+                raise RuntimeError("registration failed")
+
+        def delete(self, namespace: str) -> None:
+            self.deleted.append(namespace)
+
+    class Kernel:
+        _lifespan: Any = None
+
+    class Context:
+        filename = str(notebook)
+        function_registry = Registry()
+        query_params = object()
+        _kernel = Kernel()
+
+    context = Context()
+    monkeypatch.setattr(runtime_context, "get_context", lambda: context)
+    monkeypatch.setattr(kernel_context_module, "KernelRuntimeContext", Context)
+
+    async def exercise() -> None:
+        aggregate = Lifespans([kernel_values_module.kernel_lifespan])(None)
+        context._kernel._lifespan = aggregate
+        with pytest.raises(RuntimeError, match="registration failed"):
+            await aggregate.__aenter__()
+        with pytest.raises(RuntimeError, match="kernel lifespan setup failed"):
+            await context._kernel._lifespan.__aenter__()
+
+    asyncio.run(exercise())
+
+    assert context.function_registry.calls == 2
+    assert context.function_registry.deleted == ["_marimo_studio"]
+
+
 def test_kernel_lifespan_registers_before_the_first_view_exists(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -317,6 +520,230 @@ default = "dashboard"
     asyncio.run(exercise())
 
     assert context.function_registry.deleted == ["_marimo_studio"]
+
+
+def test_kernel_lifespan_activates_after_the_first_view_is_created(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._runtime import context as runtime_context
+    from marimo._runtime.context import kernel_context as kernel_context_module
+
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+
+    class Kernel:
+        def __init__(self) -> None:
+            self.globals = {"summary": {"papers": 3_877}}
+            self.lock_count = 0
+
+        @contextmanager
+        def lock_globals(self):
+            self.lock_count += 1
+            yield
+
+    cache_activations: list[bool] = []
+    cache_releases: list[bool] = []
+
+    def keep_cached_cells_compatible() -> Any:
+        cache_activations.append(True)
+        return lambda: cache_releases.append(True)
+
+    current = _native_output_context()
+    current.filename = str(notebook)
+    current._kernel = Kernel()
+    monkeypatch.setattr(runtime_context, "get_context", lambda: current)
+    monkeypatch.setattr(
+        kernel_context_module,
+        "KernelRuntimeContext",
+        type(current),
+    )
+    monkeypatch.setattr(
+        kernel_values_module,
+        "keep_cached_cells_compatible",
+        keep_cached_cells_compatible,
+    )
+
+    async def exercise() -> None:
+        async with _KernelBridgeLifespan():
+            functions = current.function_registry.namespaces["_marimo_studio"].functions
+            assert set(functions) == {
+                "read_values",
+                "render_values",
+                "sync_query",
+            }
+            read = functions["read_values"]
+
+            before = cast(
+                dict[str, Any],
+                read(
+                    {
+                        "selectors": ["summary.papers"],
+                        "max_value_bytes": 1_000,
+                    }
+                ),
+            )
+            assert before["values"] == {}
+            assert (
+                cast(dict[str, Any], before["errors"])["summary.papers"]["code"]
+                == "unknown-selector"
+            )
+            assert not cache_activations
+            assert current._kernel.lock_count == 0
+
+            view = tmp_path / "__marimo__" / "studio" / "notebook" / "dashboard"
+            view.mkdir(parents=True)
+            view.joinpath("index.html").write_text(
+                '<span mo-value="summary.papers"></span>',
+                encoding="utf-8",
+            )
+            tmp_path.joinpath("pyproject.toml").write_text(
+                """\
+[tool.marimo-studio]
+notebook = "notebook.py"
+default = "dashboard"
+""",
+                encoding="utf-8",
+            )
+
+            after = cast(
+                dict[str, Any],
+                read(
+                    {
+                        "selectors": ["summary.papers"],
+                        "max_value_bytes": 1_000,
+                    }
+                ),
+            )
+            assert after["values"] == {"summary.papers": 3_877}
+            assert cache_activations == [True]
+            assert current._kernel.lock_count == 1
+
+    try:
+        with current.install():
+            asyncio.run(exercise())
+    finally:
+        current.virtual_file_registry.shutdown()
+
+    assert current.function_registry.namespaces == {}
+    assert cache_releases == [True]
+
+
+def test_kernel_query_sync_labels_its_echo_and_preserves_private_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._messaging import notification_utils
+    from marimo._runtime import context as runtime_context
+    from marimo._runtime.context import kernel_context as kernel_context_module
+
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+    view = tmp_path / "__marimo__" / "studio" / "notebook" / "dashboard"
+    view.mkdir(parents=True)
+    view.joinpath("index.html").write_text("<main></main>", encoding="utf-8")
+    tmp_path.joinpath("pyproject.toml").write_text(
+        """\
+[tool.marimo-studio]
+notebook = "notebook.py"
+default = "dashboard"
+""",
+        encoding="utf-8",
+    )
+    events: list[tuple[object, ...]] = []
+
+    class QueryParams:
+        def __init__(self) -> None:
+            self.values: dict[str, str | list[str]] = {
+                "session_id": "s_private",
+                "runtime": "server",
+                "old": "value",
+            }
+
+        def to_dict(self) -> dict[str, str | list[str]]:
+            return dict(self.values)
+
+        def remove(self, key: str) -> None:
+            events.append(("remove", key))
+            self.values.pop(key, None)
+
+        def set(self, key: str, value: str | list[str]) -> None:
+            events.append(("set", key, value))
+            self.values[key] = value
+
+    def record_notification(notification: object, _stream: object) -> None:
+        events.append(
+            (
+                type(notification).__name__,
+                getattr(notification, "key", None),
+                getattr(notification, "value", None),
+            )
+        )
+
+    current = _native_output_context()
+    current.filename = str(notebook)
+    current._kernel = SimpleNamespace()
+    current._query_params = QueryParams()
+    current.stream = object()
+    monkeypatch.setattr(runtime_context, "get_context", lambda: current)
+    monkeypatch.setattr(
+        kernel_context_module,
+        "KernelRuntimeContext",
+        type(current),
+    )
+    monkeypatch.setattr(
+        notification_utils,
+        "broadcast_notification",
+        record_notification,
+    )
+    monkeypatch.setattr(
+        kernel_values_module,
+        "keep_cached_cells_compatible",
+        lambda: lambda: None,
+    )
+
+    async def exercise() -> None:
+        async with _KernelBridgeLifespan():
+            function = current.function_registry.namespaces["_marimo_studio"].functions[
+                "sync_query"
+            ]
+            function(
+                {
+                    "query": {
+                        "region": "emea",
+                        "session_id": "s_injected",
+                        "runtime": "wasm",
+                        QUERY_OPERATION_QUERY_PARAM: "query_injected",
+                    },
+                    "operation_id": "query_1",
+                }
+            )
+
+    try:
+        with current.install():
+            asyncio.run(exercise())
+    finally:
+        current.virtual_file_registry.shutdown()
+
+    assert current.query_params.values == {
+        "session_id": "s_private",
+        "runtime": "server",
+        "region": "emea",
+    }
+    assert events == [
+        (
+            "QueryParamsSetNotification",
+            QUERY_OPERATION_QUERY_PARAM,
+            "query_1",
+        ),
+        ("remove", "old"),
+        ("set", "region", "emea"),
+        (
+            "QueryParamsDeleteNotification",
+            QUERY_OPERATION_QUERY_PARAM,
+            None,
+        ),
+    ]
 
 
 def test_kernel_value_read_rejects_a_viewer_before_dispatch() -> None:

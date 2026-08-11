@@ -12,10 +12,7 @@ export {
   parseUserConfig,
 } from "@marimo-team/frontend/unstable_internal/core/config/config-schema";
 export { initialModeAtom, viewStateAtom } from "@marimo-team/frontend/unstable_internal/core/mode";
-export {
-  getSessionId,
-  type SessionId,
-} from "@marimo-team/frontend/unstable_internal/core/kernel/session";
+export { getSessionId, isSessionId, type SessionId } from "./session.ts";
 export { connectionAtom } from "@marimo-team/frontend/unstable_internal/core/network/connection";
 export { FUNCTIONS_REGISTRY } from "@marimo-team/frontend/unstable_internal/core/functions/FunctionRegistry";
 export {

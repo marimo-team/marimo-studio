@@ -219,6 +219,31 @@ def test_setup_preserves_crlf_preamble_and_notebook_body(tmp_path: Path) -> None
     assert b"\n" not in updated.replace(b"\r\n", b"")
 
 
+def test_repeated_setup_preserves_crlf_metadata(tmp_path: Path) -> None:
+    notebook = tmp_path / "analysis.py"
+    source = (
+        "# /// script\r\n"
+        '# requires-python = ">=3.10"\r\n'
+        '# dependencies = ["marimo-studio"]\r\n'
+        "# ///\r\n"
+        "\r\n"
+        f'import marimo\r\n__generated_with = "{marimo.__version__}"\r\n'
+        "app = marimo.App()\r\n"
+        "@app.cell\r\n"
+        "def _():\r\n"
+        "    return\r\n"
+    )
+    notebook.write_bytes(source.encode())
+
+    ensure_view(notebook, "dashboard")
+    ensure_view(notebook, "report")
+
+    updated = notebook.read_bytes()
+    assert b"\r\r\n" not in updated
+    assert b"\n" not in updated.replace(b"\r\n", b"")
+    assert read_notebook_metadata(notebook) is not None
+
+
 def test_setup_rolls_back_notebook_and_view_files_after_write_failure(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,

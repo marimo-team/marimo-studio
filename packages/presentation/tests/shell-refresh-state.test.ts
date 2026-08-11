@@ -5,7 +5,6 @@ import {
   BaselineReconciler,
   RefreshRetrySchedule,
   sameShellPresentation,
-  ShellChangeQueue,
   ShellRefreshState,
 } from "../src/document/refresh-state.ts";
 
@@ -56,22 +55,6 @@ test("shell changes recover the exact failed view", () => {
   state.rememberFailure(executive);
   state.supersede();
   assert.deepEqual(state.targetForChange("runtime", dashboard), dashboard);
-});
-
-test("queued changes keep the highest-priority refresh", () => {
-  const queue = new ShellChangeQueue();
-  queue.push("css");
-  queue.push("views");
-  queue.push("runtime");
-
-  assert.deepEqual(queue.take(), "runtime");
-
-  queue.push("runtime");
-  queue.push("html");
-  queue.push("views");
-
-  assert.deepEqual(queue.take(), "html");
-  assert.deepEqual(queue.take(), undefined);
 });
 
 test("stream baselines reconcile after runtime configuration", () => {

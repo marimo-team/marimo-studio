@@ -22,7 +22,6 @@ type Listener = () => void;
 
 export class ViewController {
   private readonly listeners = new Set<Listener>();
-  private events: EventSource | undefined;
   private snapshot: ViewSnapshot;
   private refreshGeneration = 0;
   private disposed = false;
@@ -31,7 +30,6 @@ export class ViewController {
     initialView: string,
     initialViews: string[],
     private readonly remote: ViewRemote,
-    eventsUrl: string,
     private readonly selectView: (view: string, landing: ViewLanding) => Promise<boolean>,
     private readonly prepareCurrentView: () => Promise<boolean>,
     private readonly recoverView: (view: string) => void,
@@ -42,7 +40,6 @@ export class ViewController {
       creating: false,
       deleting: false,
     };
-    this.eventsUrl = eventsUrl;
   }
 
   readonly subscribe = (listener: Listener): (() => void) => {
@@ -51,17 +48,6 @@ export class ViewController {
   };
 
   readonly getSnapshot = (): ViewSnapshot => this.snapshot;
-
-  private readonly eventsUrl: string;
-
-  start(): void {
-    if (this.events || this.disposed) {
-      return;
-    }
-    this.events = new EventSource(this.eventsUrl);
-    this.events.addEventListener("ready", this.refreshFromEvent);
-    this.events.addEventListener("change", this.refreshFromEvent);
-  }
 
   async choose(view: string, landing: ViewLanding = "split"): Promise<boolean> {
     if (this.disposed || !this.snapshot.views.includes(view)) {
@@ -202,12 +188,10 @@ export class ViewController {
     }
     this.disposed = true;
     this.refreshGeneration += 1;
-    this.events?.close();
-    this.events = undefined;
     this.listeners.clear();
   }
 
-  private async refresh(): Promise<void> {
+  async refreshInventory(): Promise<void> {
     if (this.disposed) {
       return;
     }
@@ -223,6 +207,19 @@ export class ViewController {
     if (!payload.views.includes(this.snapshot.current)) {
       await this.choose(payload.default_view);
     }
+  }
+
+  async ensureAvailable(view: string): Promise<boolean> {
+    if (this.snapshot.views.includes(view)) {
+      return true;
+    }
+    const payload = await this.remote.list();
+    if (this.disposed || !payload.views.includes(view)) {
+      return false;
+    }
+    this.refreshGeneration += 1;
+    this.update({ views: payload.views });
+    return true;
   }
 
   private update(next: Partial<ViewSnapshot>): void {
@@ -243,14 +240,10 @@ export class ViewController {
       return;
     }
     this.update(next);
-    this.refreshFromEvent();
-  }
-
-  private readonly refreshFromEvent = (): void => {
-    void this.refresh().catch((error: unknown) => {
+    void this.refreshInventory().catch((error: unknown) => {
       if (!this.disposed) {
         console.warn("Studio views could not be refreshed", error);
       }
     });
-  };
+  }
 }

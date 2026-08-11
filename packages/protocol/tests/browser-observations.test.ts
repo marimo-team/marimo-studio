@@ -1,0 +1,27 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { test } from "vite-plus/test";
+
+import { browserObservationSchema } from "../src/browser-observations.ts";
+
+const fixture = JSON.parse(
+  readFileSync(new URL("../fixtures/browser-observation.json", import.meta.url), "utf8"),
+);
+const invalidCases = JSON.parse(
+  readFileSync(new URL("../fixtures/browser-observation-invalid.json", import.meta.url), "utf8"),
+) as Array<{ name: string; patch: Record<string, unknown> }>;
+
+test("browser observation fixtures satisfy the strict protocol", () => {
+  assert.deepEqual(browserObservationSchema.parse(fixture), fixture);
+  assert.equal(browserObservationSchema.safeParse({ ...fixture, extra: true }).success, false);
+});
+
+test("browser observation fixtures reject invalid protocol values", () => {
+  for (const invalid of invalidCases) {
+    assert.equal(
+      browserObservationSchema.safeParse({ ...fixture, ...invalid.patch }).success,
+      false,
+      invalid.name,
+    );
+  }
+});

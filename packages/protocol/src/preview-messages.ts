@@ -1,8 +1,24 @@
 import { z } from "zod";
 
+import { browserDiagnosticSchema } from "./browser-observations";
 import { runtimeIdSchema } from "./runtime-config";
 
-export const viewDiagnosticSchema = z.object({ message: z.string() });
+export const viewDiagnosticSchema = z.object({
+  code: z.string().optional(),
+  severity: z.enum(["warning", "error"]).optional(),
+  message: z.string(),
+  hint: z.string().optional(),
+  view: z.string().optional(),
+  scope: z.string().optional(),
+  target: z.string().optional(),
+  source: z
+    .object({
+      path: z.string(),
+      line: z.int(),
+      column: z.int(),
+    })
+    .optional(),
+});
 
 const runtimeField = { runtime: runtimeIdSchema };
 
@@ -56,6 +72,30 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     message: z.string(),
     hint: z.string().optional(),
   }),
+  z
+    .object({
+      type: z.literal("marimo-studio:view-observation"),
+      ...runtimeField,
+      view: z.string(),
+      revision: z.string().min(1),
+      state: z.enum(["ready", "loading", "error"]),
+      diagnostics: z.array(browserDiagnosticSchema),
+      runtimeInstance: z.string().min(1),
+      sessionId: z.string().min(1).nullable(),
+      requestId: z.string().min(1),
+      query: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("marimo-studio:observe-view"),
+      ...runtimeField,
+      view: z.string().min(1),
+      revision: z.string().min(1),
+      runtimeInstance: z.string().min(1),
+      requestId: z.string().min(1),
+    })
+    .strict(),
 ]);
 
 export const previewMessageSchema = previewMessageInputSchema.transform((message) => {
@@ -87,17 +127,23 @@ export type ViewDiagnosticsMessage = Extract<
   { type: "marimo-studio:view-diagnostics" }
 >;
 export type ViewErrorMessage = Extract<PreviewMessage, { type: "marimo-studio:view-error" }>;
+export type ViewObservationMessage = Extract<
+  PreviewMessage,
+  { type: "marimo-studio:view-observation" }
+>;
+export type ObserveViewMessage = Extract<PreviewMessage, { type: "marimo-studio:observe-view" }>;
 export type ViewPreviewMessage =
   | ViewReadyMessage
   | ViewSyncPendingMessage
   | ViewDiagnosticsMessage
-  | ViewErrorMessage;
+  | ViewErrorMessage
+  | ViewObservationMessage;
 export type PresentationToStudioMessage =
   | NavigateViewMessage
   | QueryChangeMessage
   | ReceiverReadyMessage
   | ViewPreviewMessage;
-export type StudioToPresentationMessage = SwitchViewMessage;
+export type StudioToPresentationMessage = SwitchViewMessage | ObserveViewMessage;
 
 export const parsePreviewMessage = (value: unknown): PreviewMessage | undefined => {
   const result = previewMessageSchema.safeParse(value);

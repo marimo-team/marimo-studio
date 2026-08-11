@@ -5,6 +5,8 @@ import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 import { retry } from "../retry.ts";
 
+const PREVIEW_SESSION_HEADER = "Marimo-Studio-Preview-Session-Id";
+
 const responseText = async (response: Response, fallback: string) => {
   if (response.headers.get("content-type")?.includes("text/html")) {
     return fallback;
@@ -80,6 +82,8 @@ export const fetchRuntimeConfig = async (
   supportUrl: string,
   signal?: AbortSignal,
   fallbackRuntime = DEFAULT_RUNTIME_ID,
+  previewSessionId?: string,
+  revision?: string,
 ): Promise<RuntimeConfig> => {
   const browser = globalThis as typeof globalThis & Window;
   const sessionId = runtimeConfigSessionId({
@@ -89,11 +93,46 @@ export const fetchRuntimeConfig = async (
   const runtime = requestedRuntimeId(fallbackRuntime);
   const url = new URL(appendUrlPath(supportUrl, "config", globalThis.location.href));
   url.searchParams.set("runtime", runtime);
-  const response = await fetch(url, {
-    cache: "no-store",
-    headers: sessionId ? { "Marimo-Session-Id": sessionId } : undefined,
-    signal,
-  });
+  if (revision) {
+    url.searchParams.set("revision", revision);
+  }
+  const page = new URL(globalThis.location.href);
+  const clientId = page.searchParams.get("marimo_studio_client");
+  if (clientId) {
+    url.searchParams.set("marimo_studio_client", clientId);
+    if (!previewSessionId) {
+      throw new RuntimeConfigRequestError(
+        "The Studio preview session is not initialized.",
+        "preview-session-unavailable",
+        false,
+      );
+    }
+  }
+  const headers = new Headers();
+  if (previewSessionId) {
+    headers.set(PREVIEW_SESSION_HEADER, previewSessionId);
+  }
+  if (sessionId) {
+    headers.set("Marimo-Session-Id", sessionId);
+  }
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      cache: "no-store",
+      headers,
+      signal,
+    });
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+    throw new RuntimeConfigRequestError(
+      error instanceof Error ? error.message : "Runtime config request failed.",
+      "runtime-config-unavailable",
+      true,
+      "Wait for the Studio server to become available.",
+    );
+  }
   if (!response.ok) {
     const detail = await readResponseError(
       response,
@@ -118,9 +157,12 @@ export const fetchRuntimeConfigWithRetry = async (
   supportUrl: string,
   signal?: AbortSignal,
   fallbackRuntime = DEFAULT_RUNTIME_ID,
+  previewSessionId?: string,
+  revision?: string,
 ): Promise<RuntimeConfig> =>
   retry({
-    operation: () => fetchRuntimeConfig(supportUrl, signal, fallbackRuntime),
+    operation: () =>
+      fetchRuntimeConfig(supportUrl, signal, fallbackRuntime, previewSessionId, revision),
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof RuntimeConfigRequestError && error.transient,
     signal,
@@ -147,8 +189,15 @@ export const fetchRuntimeConfigForRevision = async (
   documentRevision: string,
   signal?: AbortSignal,
   fallbackRuntime = DEFAULT_RUNTIME_ID,
+  previewSessionId?: string,
 ): Promise<RuntimeConfig> => {
-  const config = await fetchRuntimeConfigWithRetry(supportUrl, signal, fallbackRuntime);
+  const config = await fetchRuntimeConfigWithRetry(
+    supportUrl,
+    signal,
+    fallbackRuntime,
+    previewSessionId,
+    documentRevision,
+  );
   requireMatchingPresentationRevision(documentRevision, config);
   return config;
 };

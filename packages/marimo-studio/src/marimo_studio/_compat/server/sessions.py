@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import re
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -12,8 +13,11 @@ from starlette.types import Scope
 
 from marimo_studio._cell_refs import cell_refs
 from marimo_studio._compat.server.models import ServerContext
+from marimo_studio._urls import ACTIVE_VIEW_QUERY_PARAM
 from marimo_studio.errors import RuntimeSyncError
 from marimo_studio.types import LiveCellIdentity, LiveCellSnapshot
+
+_SESSION_PATTERN = re.compile(r"s_[a-z0-9]{6}")
 
 
 def server_token_matches(scope: Scope, expected: str) -> bool:
@@ -38,6 +42,11 @@ def has_access_token(scope: Scope) -> bool:
     raw = scope.get("query_string", b"")
     query = parse_qs(bytes(raw).decode("latin-1"), keep_blank_values=True)
     return "access_token" in query
+
+
+def is_session_id(value: object) -> bool:
+    """Return whether a value follows Marimo's current session ID grammar."""
+    return isinstance(value, str) and _SESSION_PATTERN.fullmatch(value) is not None
 
 
 def current_session(context: ServerContext, session_id: str) -> Session | None:
@@ -75,6 +84,35 @@ def has_notebook_session(context: ServerContext) -> bool:
     return (
         context._session_manager.get_session_by_file_key(context.file_key) is not None
     )
+
+
+async def reload_page_into_studio(
+    context: ServerContext,
+    view_name: str,
+    session_id: str | None = None,
+) -> None:
+    """Reload the native editor into a selected Studio view after code mode."""
+    from marimo._messaging.notification import (
+        QueryParamsSetNotification,
+        ReloadNotification,
+    )
+
+    session = (
+        current_session(context, session_id)
+        if session_id is not None
+        else context._session_manager.get_session_by_file_key(context.file_key)
+    )
+    if session is None:
+        return
+
+    # Code mode holds this lock until its result has been delivered. Waiting
+    # here keeps the navigation from aborting the agent call that requested it.
+    async with session.scratchpad_lock:
+        session.notify(
+            QueryParamsSetNotification(ACTIVE_VIEW_QUERY_PARAM, view_name),
+            from_consumer_id=None,
+        )
+        session.notify(ReloadNotification(), from_consumer_id=None)
 
 
 def live_cells(

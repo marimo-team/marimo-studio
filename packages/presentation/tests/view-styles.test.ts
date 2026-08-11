@@ -156,6 +156,29 @@ test("initial generation includes classes added while the generator loads", asyn
   controller.disconnect();
 });
 
+test("a live utility regeneration failure becomes a presentation diagnostic", async () => {
+  document.body.innerHTML = '<main id="app-shell" class="grid"></main>';
+  let calls = 0;
+  const controller = new ViewStyleController(async () => {
+    calls += 1;
+    if (calls > 1) {
+      throw new Error("generator failed");
+    }
+    return "/* grid */";
+  });
+  await controller.refresh();
+  controller.observe();
+
+  document.querySelector("#app-shell")!.classList.add("p-4");
+  await settleMutations();
+
+  const diagnostic = document.querySelector<HTMLElement>("[data-marimo-studio-style-error]");
+  assert.equal(document.documentElement.dataset.marimoStudioStyles, "error");
+  assert.equal(diagnostic?.dataset.marimoDiagnosticCode, "view-styles-failed");
+  assert.equal(diagnostic?.dataset.marimoDiagnosticScope, "presentation");
+  controller.disconnect();
+});
+
 test("late style initialization clears the watchdog diagnostic", async () => {
   document.body.innerHTML = `
     <main id="app-shell" class="p-4"></main>

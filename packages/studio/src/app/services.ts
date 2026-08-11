@@ -3,6 +3,7 @@ import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 import type { ControlFrameConnector } from "../features/preview/control-sync.ts";
 
 import { PreviewDeck } from "../features/preview/deck.ts";
+import { createBrowserObservationRemote } from "../features/preview/observation-remote.ts";
 import { syncEditorQuery } from "../features/preview/query-remote.ts";
 import { initialPreviewRuntime } from "../features/preview/runtime.ts";
 import { SourceController } from "../features/source-editor/controller.ts";
@@ -10,7 +11,9 @@ import { ViewController } from "../features/views/controller.ts";
 import { createViewRemote } from "../features/views/remote.ts";
 import { ViewTransition } from "../features/views/transition.ts";
 import { LayoutController } from "../features/workspace/controller.ts";
+import { createViewActivationRemote } from "./activation-remote.ts";
 import { StudioRoutes } from "./routes.ts";
+import { WorkspaceEventCoordinator } from "./workspace-event-coordinator.ts";
 
 export interface StudioServices {
   layout: LayoutController;
@@ -48,9 +51,21 @@ export const createStudioServices = (
     viewUrl: routes.view,
     supportUrl: routes.support,
     syncQuery: routes.syncQuery,
-    syncEditorQuery: (query, signal) =>
-      syncEditorQuery(routes.endpoint(bootstrap.urls.query), bootstrap.serverToken, query, signal),
+    syncEditorQuery: (query, operationId, signal) =>
+      syncEditorQuery(
+        routes.endpoint(bootstrap.urls.query),
+        bootstrap.serverToken,
+        bootstrap.clientId,
+        query,
+        operationId,
+        signal,
+      ),
     navigate: (view) => void views?.choose(view, "preserve"),
+    recordObservation: createBrowserObservationRemote(
+      routes.support,
+      bootstrap.serverToken,
+      bootstrap.clientId,
+    ),
     connectControlFrame,
   });
   const transition = new ViewTransition(bootstrap.selectedView, {
@@ -71,11 +86,20 @@ export const createStudioServices = (
     bootstrap.selectedView,
     [...bootstrap.views],
     createViewRemote(routes.endpoint(bootstrap.urls.views), bootstrap.serverToken),
-    routes.endpoint(bootstrap.urls.events),
     (view, landing) => transition.select(view, landing),
     () => source.prepareViewChange(),
     (view) => globalThis.location.assign(routes.studio(view)),
   );
+  const workspaceEvents = new WorkspaceEventCoordinator({
+    eventsUrl: routes.endpoint(bootstrap.urls.events),
+    views,
+    preview,
+    acknowledge: createViewActivationRemote(
+      routes.endpoint(bootstrap.urls.agent),
+      bootstrap.serverToken,
+      bootstrap.clientId,
+    ),
+  });
   let disposed = false;
 
   return {
@@ -86,7 +110,7 @@ export const createStudioServices = (
     views,
     async start(editor, frames) {
       preview.attach(editor, frames);
-      views.start();
+      workspaceEvents.start();
       await source.start();
     },
     dispose() {
@@ -94,6 +118,7 @@ export const createStudioServices = (
         return;
       }
       disposed = true;
+      workspaceEvents.dispose();
       views.dispose();
       source.dispose();
       preview.dispose();

@@ -1,10 +1,12 @@
 """Turn the active Marimo notebook into a custom web page.
 
 Marimo Studio lets one notebook power dashboards, reports, and focused tools.
-Calculations, data, controls, plots, tables, downloads, and anywidgets remain in
-notebook cells. A custom view chooses what to show and arranges it with HTML and
-CSS. Marimo keeps the page connected to the running notebook, so controls and
-dependent outputs continue to update.
+Keep notebook cells focused on computation, analytical context, data access,
+domain rules, controls, and reusable rich outputs. Put page structure, display
+copy, responsive layout, and visual styling in the Studio view. Use the UnoCSS
+Wind4 vocabulary with Tailwind 4 syntax in ``index.html`` for ordinary
+presentation. Put custom keyframes and CSS rules that utilities cannot express
+in ``app.css``.
 
 One notebook can have several named views for different audiences. Each view
 has its own ``index.html`` and ``app.css`` while sharing the notebook's Python
@@ -31,9 +33,8 @@ The two editable files are stored in ``setup.root``:
     css_path = setup.root / "app.css"
 
 Read the current files before changing them so edits from the browser or
-another editor are preserved. Keep Python calculations in notebook cells and
-page structure, wording, and styling in these files. ``index.html`` is a
-complete HTML document with one ``#app-shell`` element.
+another editor are preserved. ``index.html`` is a complete HTML document with
+one ``#app-shell`` element.
 
 Place a notebook cell's complete output in the page with ``<marimo-cell>``.
 Render one Python object's native Marimo representation with
@@ -53,7 +54,28 @@ reference by binding a name to its zero-based notebook position:
 
     studio.bind(ctx, "revenue-chart", 4)
 
-Check the custom page after editing its HTML or CSS:
+Select a newly created view in the open Studio workspace:
+
+    await studio.activate_view(ctx, "dashboard")
+
+When the notebook gained its first Studio view during the current native
+editor session, ``activate_view`` reloads that page into Studio after the
+agent call finishes. Later activations use Studio's in-place view transition.
+
+Analyze the custom page after editing its HTML or CSS:
+
+    report = await studio.analyze(ctx, view_name="dashboard")
+    if not report.handoff_ready:
+        for action in report.actions:
+            print(action.advice)
+
+``studio.analyze`` runs static and isolated runtime validation, then asks the
+session-bound Studio browser for fresh evidence from the captured source
+revision. Fix every error and rerun it. Hand off the view only when
+``report.handoff_ready`` is true.
+
+Use the lower-level static check when notebook execution is intentionally out
+of scope:
 
     results = studio.check(ctx, view_name="dashboard")
     failures = [result for result in results if result.status == "fail"]
@@ -65,13 +87,17 @@ page. Notebook edits update the outputs that depend on them.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from marimo_studio._workspace.models import BindingResult, ViewSetupResult
-    from marimo_studio.types import CheckResult, NotebookSpec
+from marimo_studio._runtime_limits import (
+    DEFAULT_RUNTIME_TIMEOUT,
+    MAX_RUNTIME_TIMEOUT,
+)
+from marimo_studio._workspace.models import BindingResult, ViewSetupResult
+from marimo_studio.agent_models import AnalysisReport, ViewActivationResult
+from marimo_studio.types import CheckResult, NotebookSpec
 
 
 def notebook_path(context: object) -> Path:
@@ -175,4 +201,92 @@ def check(
     )
 
 
-__all__ = ["bind", "check", "ensure_view", "inspect", "notebook_path"]
+async def analyze(
+    context: object,
+    *,
+    view_name: str | None = None,
+    timeout: float = 10.0,
+    runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
+    require_browser: bool = True,
+) -> AnalysisReport:
+    """Validate view sources, notebook projections, and rendered readiness.
+
+    Browser analysis requires ``view_name`` for the active Studio view. Activate
+    that view in a separate code-mode call before analyzing it. Set
+    ``require_browser=False`` to run static and runtime validation across every
+    configured view when ``view_name`` is absent. ``timeout`` controls how long
+    Studio waits for the browser to report the saved view revision. Code mode
+    runs the analysis through its attached Studio server. ``runtime_timeout``
+    bounds isolated notebook execution.
+
+    Raises:
+        ValueError: A timeout is outside its supported range, or browser
+            analysis has no named view.
+    """
+    from marimo_studio._agent_client import request_analysis
+    from marimo_studio._compat.code_mode import code_mode_connection
+    from marimo_studio._workspace import load_studio
+
+    if not math.isfinite(timeout) or not 0 <= timeout <= 20:
+        raise ValueError("timeout must be a finite number between 0 and 20 seconds")
+    if (
+        not math.isfinite(runtime_timeout)
+        or not 0 <= runtime_timeout <= MAX_RUNTIME_TIMEOUT
+    ):
+        raise ValueError(
+            "runtime_timeout must be a finite number between 0 and "
+            f"{MAX_RUNTIME_TIMEOUT:g} seconds"
+        )
+    if require_browser and view_name is None:
+        raise ValueError(
+            "Code-mode browser analysis requires view_name. Activate that view "
+            "in one code-mode call, then analyze it in the next call."
+        )
+    workspace = load_studio(notebook_path(context))
+    return await request_analysis(
+        code_mode_connection(),
+        workspace.notebook,
+        view_name=view_name,
+        timeout=timeout,
+        runtime_timeout=runtime_timeout,
+        require_browser=require_browser,
+    )
+
+
+async def activate_view(
+    context: object,
+    name: str,
+) -> ViewActivationResult:
+    """Select a named view in the current browser workspace.
+
+    An active Studio workspace uses its normal in-place transition. A native
+    editor reloads into Studio when this call follows the first view setup.
+    The reload waits for the code-mode result before navigating.
+    """
+    from marimo_studio._agent_client import request_view_activation
+    from marimo_studio._compat.code_mode import code_mode_connection
+    from marimo_studio._workspace import load_studio
+    from marimo_studio.errors import ConfigurationError
+
+    workspace = load_studio(notebook_path(context))
+    if name not in workspace.views:
+        available = ", ".join(workspace.views)
+        raise ConfigurationError(
+            f"Unknown view {name!r}. Available views: {available}."
+        )
+    return await request_view_activation(
+        code_mode_connection(),
+        workspace.notebook,
+        name,
+    )
+
+
+__all__ = [
+    "activate_view",
+    "analyze",
+    "bind",
+    "check",
+    "ensure_view",
+    "inspect",
+    "notebook_path",
+]

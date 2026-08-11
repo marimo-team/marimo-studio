@@ -12,6 +12,7 @@ from marimo_studio._workspace.models import (
     StudioWorkspace,
     ViewSetupResult,
 )
+from marimo_studio.agent_models import AnalysisReport
 from marimo_studio.export import StaticExportResult
 from marimo_studio.inspect import RuntimeInspection
 from marimo_studio.types import CellSpec, CheckResult, NotebookSpec
@@ -216,3 +217,25 @@ def render_checks(results: tuple[CheckResult, ...]) -> None:
         hint = result.details.get("hint")
         if isinstance(hint, str):
             echo(f"     {hint}")
+
+
+def render_analysis(report: AnalysisReport) -> None:
+    """Write an agent analysis report in human text."""
+    state = green("HANDOFF READY") if report.handoff_ready else red("NEEDS REPAIR")
+    echo(f"{state} {report.notebook}")
+    echo(f"  {light_blue('views')} {', '.join(report.views)}")
+    render_checks(report.static_checks)
+    if report.runtime_skipped is not None:
+        echo(f"{yellow('SKIP')} runtime: {report.runtime_skipped}")
+    else:
+        render_checks(report.runtime_checks)
+    for observation in report.browser_observations:
+        style = green if observation.state == "ready" else red
+        echo(f"{style(observation.state.upper()):<4} browser:{observation.view}")
+        if observation.message:
+            echo(f"     {observation.message}")
+    if report.actions:
+        echo(f"\n{light_blue('Repair queue')}")
+        for action in report.actions:
+            target = f" [{action.view}]" if action.view else ""
+            echo(f"  {action.severity.upper()} {action.code}{target}: {action.advice}")

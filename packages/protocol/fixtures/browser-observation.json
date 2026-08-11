@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "view": "dashboard",
+  "runtime": "server",
+  "revision": "revision-1",
+  "state": "error",
+  "diagnostics": [
+    {
+      "code": "missing-variable",
+      "severity": "error",
+      "message": "summary is unavailable.",
+      "hint": "Restore summary in the notebook.",
+      "view": "dashboard",
+      "scope": "projection",
+      "projection": "value",
+      "target": "summary.total",
+      "source": {
+        "path": "views/dashboard/index.html",
+        "line": 12,
+        "column": 9
+      }
+    }
+  ],
+  "clientId": "browser-client-1234",
+  "runtimeInstance": "runtime-instance",
+  "sessionId": "s_123456",
+  "requestId": "request-dashboard",
+  "sequence": 3,
+  "query": "region=emea"
+}

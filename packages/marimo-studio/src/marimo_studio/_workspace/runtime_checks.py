@@ -25,6 +25,7 @@ async def run_runtime_checks(
     inspect_notebook: NotebookInspector,
     view_name: str | None,
     probe_runtime: RuntimeProber,
+    timeout: float,
 ) -> tuple[CheckResult, ...]:
     try:
         resolved = resolve_studio(
@@ -80,6 +81,7 @@ async def run_runtime_checks(
             variables=tuple(sorted(selectors)),
             output_selector_groups=output_selector_groups,
             show_tracebacks=True,
+            timeout=timeout,
         )
     except MarimoStudioError as error:
         return (error_result("runtime", error, studio),)

@@ -36,6 +36,48 @@ boundary. Compatibility code converts Marimo sessions, graph state, requests,
 and kernel messages into records owned by `marimo_studio.types` or
 `_workspace`.
 
+### Notebook-scoped services
+
+Each canonical notebook path has one `NotebookScope`. The scope composes three
+peer services with distinct state:
+
+```text
+NotebookScope
+  |-> NotebookPresentation
+  |     `-> source discovery, immutable snapshots, and revision history
+  |-> StudioClientRegistry
+  |     `-> connected browsers, Marimo sessions, active views, and query claims
+  `-> AgentCoordinator
+        `-> acknowledged activations and ordered browser observations
+```
+
+`NotebookPresentation` reads authored source and caches immutable presentation
+snapshots. `StudioClientRegistry` owns browser presence and session binding.
+Runtime configuration and query synchronization consume that registry
+directly. `AgentCoordinator` captures immutable browser targets from the
+registry and owns one activation or observation operation for each targeted
+browser. Agent state does not sit on the presentation cache.
+
+`NotebookScopeRegistry` creates these services on demand and closes them with
+the Marimo server lifespan. HTTP adapters receive the specific peer they need.
+
+### Workspace lifecycle
+
+`resolve_workspace_lifecycle` resolves one request into one tagged state:
+
+| State          | Data carried                                                |
+| -------------- | ----------------------------------------------------------- |
+| `Unconfigured` | Canonical notebook path                                     |
+| `NeedsView`    | Valid definition and first-view initialization error        |
+| `Ready`        | Valid definition and materialized workspace                 |
+| `Invalid`      | Configuration or source error and any discovered definition |
+
+Middleware authenticates and resolves the notebook before creating this
+state. Route handlers then match the state to delegation, initialization,
+view serving, or a structured error. The state is request-scoped, so source
+changes take effect on the next request and each response uses one coherent
+definition and workspace.
+
 ## Browser responsibilities
 
 | Owner                      | Responsibility                                                         |
@@ -64,6 +106,14 @@ apps/browser
 Root `vite.config.ts` enforces these package boundaries and the internal
 `app -> features -> shared` direction in Studio.
 
+Studio app composition owns cross-feature workspace events.
+`WorkspaceEventCoordinator` owns the event stream, decodes activation,
+observation, source, and editor-session events, calls `ViewController` for
+view selection, calls `PreviewDeck` for preview work, and sends activation
+acknowledgements through its remote. `ViewController` owns view inventory and
+mutations. Preview features own runtime frames, observations, controls, and
+query synchronization.
+
 ## Activation
 
 The Python distribution registers two Marimo entry points:
@@ -83,10 +133,11 @@ exists and `default` selects it, Studio materializes a `StudioWorkspace`.
 Configured view files live under `__marimo__/studio/<notebook-stem>/<view>/`.
 Requests for another notebook continue through Marimo.
 
-The kernel extension activates from `StudioDefinition`, so value reads and
-native output formatting are registered before the first view is created. A
-materialized view can use the cell aliases and value references present in its
-resolved document. Requests travel through Marimo's kernel queue.
+The kernel extension registers guarded projection functions in each
+file-backed edit kernel. It initializes value reads and native output
+formatting when a Studio definition first appears. A materialized view can use
+the cell aliases and value references present in its resolved document.
+Requests travel through Marimo's kernel queue.
 
 ## Edit and run sessions
 
@@ -100,6 +151,29 @@ initializer. `POST /_marimo-studio/views` creates the configured default and
 transitions the next request to a materialized workspace. Run mode returns a
 structured `workspace-not-initialized` repair response until that transition
 completes.
+
+Agent view activation follows one desired-state contract. The editor transport
+binds each Marimo session ID to the client ID of its containing Studio tab. A
+mounted workspace receives a targeted activation event, switches through its
+view controller, and acknowledges the completed transition. A native editor
+receives Marimo's query update and page reload after code-mode execution
+releases its scratchpad lock. The private view hint selects the Studio landing
+route and is removed from the redirected URL.
+
+Agent analysis returns through an authenticated Studio server route. The
+compatibility layer exposes Marimo's callback credentials and session ID to
+code mode. The agent client authenticates the connection handshake, receives a
+Studio mutation token, and uses it for the request. Runtime validation runs in
+a supervised child process with bounded output, timeout, cancellation, and
+owned-process termination. Browser validation sends a fresh request ID, source
+revision, runtime, and runtime instance to the bound client. The server accepts
+ordered observations that match that request and joins them with the runtime
+result from the same source revision.
+
+On POSIX, the owned boundary is the worker's new process group. Notebook code
+that starts another process session leaves that boundary and may outlive
+validation. On Windows, a kill-on-close Job Object retains the worker and its
+descendants.
 
 The Server preview joins the editor's Marimo session as a kiosk consumer after
 the editor session exists. It reuses that kernel's outputs, native controls,
@@ -133,6 +207,22 @@ derived notebook in Marimo's Pyodide worker. Both runtimes use the presentation
 renderer for output plugins, native controls, React portals, value reads, and
 anywidget models.
 
+`PresentationRevisionController` owns each document transition. It cancels a
+superseded generation, marks presentation readiness as loading, stages the
+document and runtime configuration, commits or rolls back the authored shell,
+hands the revision to the mounted runtime, preserves a run session across a
+required page reload, and publishes the terminal readiness state. The
+`DocumentRevisionAdapter` owns DOM, stylesheet, history, base URL, and runtime
+configuration mutations for that transaction. Standalone navigation and the
+development event loop use the same controller instance.
+
+Rendered observation is split from readiness state. `ReadinessController`
+reduces runtime, presentation, and projection host states. The rendered-view
+observer owns DOM probing, diagnostics, the public `window.marimoStudio` API,
+and parent-frame readiness messages. The agent observer owns the current
+observation request and emits loading or terminal evidence for its exact view,
+revision, runtime instance, and session.
+
 React portals place complete cell output in `<marimo-cell>` hosts and formatted
 Python objects in `<marimo-output>` hosts. The output bridge resolves an
 allow-listed value reference, formats it through Marimo's native registry, and
@@ -141,18 +231,24 @@ owns formatter-created resources under a stable presentation cell ID.
 missing projection produces a structured diagnostic on the affected host while
 healthy regions continue to render.
 
+`ProjectionHostRuntime` composes cell, output, and value adapters. It owns host
+registration, connection and disposal, staged-document preparation, live-host
+preservation, change notification, and the projection readiness contribution.
+Each adapter keeps its selector and rendering semantics. A new projection host
+joins the document lifecycle through this adapter list.
+
 ## View source lifecycle
 
 Studio serves every view as a native web directory. Relative stylesheets,
 modules, images, fonts, JavaScript imports, and CSS `url(...)` references stay
 relative to their authored files.
 
-A source refresh stages the document, runtime configuration, view styles, and
-selected view at one presentation revision. A valid scriptless HTML change
+A source refresh runs one revision transaction for the document, runtime
+configuration, view styles, and selected view. A valid scriptless HTML change
 replaces `#app-shell` while the runtime root remains mounted. CSS refreshes in
 place. An HTML or module change in a scripted view reloads its document so the
 browser evaluates the module graph through its regular lifecycle. A failed
-refresh keeps the last valid shell.
+refresh keeps the last valid shell and publishes its diagnostic.
 
 Source reads and writes use content revisions. Writes use atomic replacement
 and reject mutable symlink traversal. An external edit refreshes a clean

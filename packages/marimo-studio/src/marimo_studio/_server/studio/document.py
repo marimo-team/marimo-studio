@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
 from collections.abc import Sequence
 from typing import cast
 
@@ -12,6 +13,8 @@ from markupsafe import Markup
 
 from marimo_studio._html import node_list, render
 from marimo_studio._urls import (
+    ACTIVE_VIEW_QUERY_PARAM,
+    STUDIO_CLIENT_QUERY_PARAM,
     SUPPORT_PATH,
     editor_url,
     public_url,
@@ -34,7 +37,8 @@ def studio_document(
     """Return the Studio mount point and its versioned bootstrap payload."""
     root_url = public_url(base_url, "/")
     support_url = public_url(base_url, SUPPORT_PATH)
-    native_editor_url = editor_url(base_url, file_key, query)
+    client_id = secrets.token_urlsafe(18)
+    native_editor_url = editor_url(base_url, file_key, query, client_id)
 
     def routed(url: str) -> str:
         return with_query(url, routing_query)
@@ -52,7 +56,14 @@ def studio_document(
             "defaultRuntime": config.default_runtime,
             "urls": {
                 "editor": native_editor_url,
-                "events": routed(f"{support_url}/dev/events"),
+                "agent": routed(support_url),
+                "events": with_query(
+                    routed(f"{support_url}/dev/events"),
+                    (
+                        (STUDIO_CLIENT_QUERY_PARAM, client_id),
+                        (ACTIVE_VIEW_QUERY_PARAM, selected),
+                    ),
+                ),
                 "query": routed(f"{support_url}/query"),
                 "studioPrefix": routed(studio_url(base_url)),
                 "viewPrefix": routed(root_url),
@@ -60,6 +71,7 @@ def studio_document(
                 "views": routed(f"{support_url}/views"),
             },
             "workspaceId": workspace_id,
+            "clientId": client_id,
             "serverToken": server_token,
         },
         separators=(",", ":"),

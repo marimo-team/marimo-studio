@@ -1,0 +1,14 @@
+[
+  {
+    "name": "runtime identifiers use the wire format",
+    "patch": {
+      "runtime": "SERVER_BAD"
+    }
+  },
+  {
+    "name": "sequences are nonnegative integers",
+    "patch": {
+      "sequence": -1
+    }
+  }
+]

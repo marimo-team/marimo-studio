@@ -20,37 +20,6 @@ export const sameShellPresentation = (
   );
 };
 
-const changePriority: Record<ShellChangeKind, number> = {
-  css: 0,
-  views: 1,
-  runtime: 2,
-  html: 3,
-};
-
-const queuedShellChange = (
-  current: ShellChangeKind | undefined,
-  incoming: ShellChangeKind,
-): ShellChangeKind => {
-  if (current === undefined || changePriority[incoming] > changePriority[current]) {
-    return incoming;
-  }
-  return current;
-};
-
-export class ShellChangeQueue {
-  #change: ShellChangeKind | undefined;
-
-  push(kind: ShellChangeKind): void {
-    this.#change = queuedShellChange(this.#change, kind);
-  }
-
-  take(): ShellChangeKind | undefined {
-    const change = this.#change;
-    this.#change = undefined;
-    return change;
-  }
-}
-
 export class RefreshRetrySchedule {
   #attempt = 0;
 

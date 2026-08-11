@@ -1,0 +1,236 @@
+import type { ObserveViewRequest } from "@marimo-studio/protocol/development-events";
+
+import { beforeEach, expect, it, vi } from "vite-plus/test";
+
+import type { ViewLanding } from "../src/features/views/transition.ts";
+
+import { WorkspaceEventCoordinator } from "../src/app/workspace-event-coordinator.ts";
+
+class EventSourceStub {
+  static instances: EventSourceStub[] = [];
+  readonly listeners = new Map<string, EventListener>();
+  closed = false;
+
+  constructor(readonly url: string) {
+    EventSourceStub.instances.push(this);
+  }
+
+  addEventListener(type: string, listener: EventListener): void {
+    this.listeners.set(type, listener);
+  }
+
+  emit(type: string, data?: string): void {
+    this.listeners.get(type)?.(
+      data === undefined ? new Event(type) : new MessageEvent(type, { data }),
+    );
+  }
+
+  close(): void {
+    this.closed = true;
+  }
+}
+
+const workspace = (initialViews = ["dashboard", "report"]) => {
+  let current = "dashboard";
+  let views = [...initialViews];
+  const listeners = new Set<() => void>();
+  const choose = vi.fn(async (view: string, _landing: ViewLanding) => {
+    if (!views.includes(view)) {
+      return false;
+    }
+    current = view;
+    listeners.forEach((listener) => listener());
+    return true;
+  });
+  const ensureAvailable = vi.fn(async (view: string) => views.includes(view));
+  const refreshInventory = vi.fn(async () => undefined);
+  return {
+    views: {
+      subscribe(listener: () => void) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      getSnapshot: () => ({ current }),
+      refreshInventory,
+      ensureAvailable,
+      choose,
+    },
+    choose,
+    ensureAvailable,
+    refreshInventory,
+    replaceViews(next: string[]) {
+      views = next;
+    },
+  };
+};
+
+const setup = (initialViews?: string[]) => {
+  const model = workspace(initialViews);
+  const preview = {
+    requestObservation: vi.fn(),
+    editorSessionChanged: vi.fn(),
+  };
+  const acknowledge = vi.fn(
+    async (_generation: number, _view: string, _signal: AbortSignal) => undefined,
+  );
+  const coordinator = new WorkspaceEventCoordinator({
+    eventsUrl: "/events?file=notebook.py",
+    views: model.views,
+    preview,
+    acknowledge,
+  });
+  coordinator.start();
+  return { acknowledge, coordinator, model, preview };
+};
+
+beforeEach(() => {
+  EventSourceStub.instances = [];
+  vi.stubGlobal("EventSource", EventSourceStub);
+});
+
+it("reconnects the workspace stream after a committed view selection", async () => {
+  const { coordinator, model } = setup();
+  expect(EventSourceStub.instances).toHaveLength(1);
+  expect(EventSourceStub.instances[0]?.url).toContain("marimo_studio_view=dashboard");
+
+  await model.views.choose("report", "preserve");
+
+  expect(EventSourceStub.instances).toHaveLength(2);
+  expect(EventSourceStub.instances[0]?.closed).toBe(true);
+  expect(EventSourceStub.instances[1]?.url).toContain("marimo_studio_view=report");
+  coordinator.dispose();
+});
+
+it("routes source events to inventory reconciliation", async () => {
+  const { coordinator, model } = setup();
+  EventSourceStub.instances[0]?.emit("ready");
+  EventSourceStub.instances[0]?.emit("change");
+
+  await vi.waitFor(() => expect(model.refreshInventory).toHaveBeenCalledTimes(2));
+  coordinator.dispose();
+});
+
+it("ignores callbacks from a replaced stream", async () => {
+  const { coordinator, model } = setup();
+  const stale = EventSourceStub.instances[0];
+  await model.views.choose("report", "preserve");
+
+  stale?.emit("change");
+  await Promise.resolve();
+
+  expect(model.refreshInventory).not.toHaveBeenCalled();
+  coordinator.dispose();
+});
+
+it("selects and then acknowledges an agent activation", async () => {
+  const { acknowledge, coordinator, model } = setup(["dashboard"]);
+  model.replaceViews(["dashboard", "report"]);
+  model.ensureAvailable.mockResolvedValue(true);
+
+  EventSourceStub.instances[0]?.emit(
+    "activate",
+    JSON.stringify({ schema: 1, generation: 7, view: "report" }),
+  );
+
+  await vi.waitFor(() =>
+    expect(acknowledge).toHaveBeenCalledWith(7, "report", expect.any(AbortSignal)),
+  );
+  expect(model.ensureAvailable).toHaveBeenCalledWith("report");
+  expect(model.choose).toHaveBeenCalledWith("report", "preserve");
+  coordinator.dispose();
+});
+
+it("does not acknowledge a failed or malformed activation", async () => {
+  const { acknowledge, coordinator, model } = setup();
+  model.choose.mockResolvedValue(false);
+  const events = EventSourceStub.instances[0];
+  events?.emit("activate", JSON.stringify({ schema: 1, generation: 2, view: "report" }));
+  events?.emit("activate", '{"schema":1,"view":""}');
+  await Promise.resolve();
+
+  expect(acknowledge).not.toHaveBeenCalled();
+  coordinator.dispose();
+});
+
+it("selects an unfocused observation before forwarding it", async () => {
+  const { coordinator, model, preview } = setup();
+  const request: ObserveViewRequest = {
+    schema: 1,
+    requestId: "request-report",
+    view: "report",
+    runtime: "server",
+    runtimeInstance: "runtime-instance",
+    revision: "revision-report",
+  };
+
+  EventSourceStub.instances[0]?.emit("observe", JSON.stringify(request));
+
+  await vi.waitFor(() => expect(preview.requestObservation).toHaveBeenCalledWith(request));
+  expect(model.choose).toHaveBeenCalledWith("report", "preserve");
+  coordinator.dispose();
+});
+
+it("forwards focused observations only while their view is active", async () => {
+  const { coordinator, model, preview } = setup();
+  const request: ObserveViewRequest = {
+    schema: 1,
+    requestId: "request-dashboard",
+    view: "dashboard",
+    runtime: "server",
+    runtimeInstance: "runtime-instance",
+    revision: "revision-dashboard",
+    activeViewGeneration: 4,
+  };
+  const events = EventSourceStub.instances[0];
+
+  events?.emit("observe", JSON.stringify(request));
+  await vi.waitFor(() => expect(preview.requestObservation).toHaveBeenCalledWith(request));
+  events?.emit(
+    "observe",
+    JSON.stringify({ ...request, requestId: "request-report", view: "report" }),
+  );
+  await Promise.resolve();
+
+  expect(preview.requestObservation).toHaveBeenCalledOnce();
+  expect(model.choose).not.toHaveBeenCalled();
+  coordinator.dispose();
+});
+
+it("forwards validated session replacement evidence", () => {
+  const { coordinator, preview } = setup();
+  const binding = {
+    schema: 1,
+    generation: 2,
+    sessionId: "s_reconnected",
+    replaced: true,
+  } as const;
+  const events = EventSourceStub.instances[0];
+  events?.emit("session", JSON.stringify(binding));
+  events?.emit("session", JSON.stringify({ ...binding, generation: 0 }));
+
+  expect(preview.editorSessionChanged).toHaveBeenCalledOnce();
+  expect(preview.editorSessionChanged).toHaveBeenCalledWith(binding);
+  coordinator.dispose();
+});
+
+it("aborts pending acknowledgement and blocks events after disposal", async () => {
+  let signal: AbortSignal | undefined;
+  const { acknowledge, coordinator, model } = setup();
+  acknowledge.mockImplementation(async (_generation, _view, activeSignal) => {
+    signal = activeSignal;
+    await new Promise<void>(() => {});
+  });
+  EventSourceStub.instances[0]?.emit(
+    "activate",
+    JSON.stringify({ schema: 1, generation: 9, view: "report" }),
+  );
+  await vi.waitFor(() => expect(acknowledge).toHaveBeenCalledOnce());
+
+  const events = EventSourceStub.instances.at(-1);
+  coordinator.dispose();
+  events?.emit("change");
+
+  expect(signal?.aborted).toBe(true);
+  expect(events?.closed).toBe(true);
+  expect(model.refreshInventory).not.toHaveBeenCalled();
+});

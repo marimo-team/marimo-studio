@@ -20,6 +20,7 @@ from marimo_studio._compat.server.replay import configure_document_replay
 from marimo_studio._compat.server.sessions import has_notebook_session
 from marimo_studio._server.headers import DOCUMENT_HEADERS
 from marimo_studio._server.presentation import NotebookPresentation
+from marimo_studio._server.presentation_payload import render_presentation_document
 from marimo_studio._server.studio import (
     initialization_document,
     repair_document,
@@ -97,7 +98,7 @@ def authored_document_redirect(
     return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
 
 
-def document_response(
+async def document_response(
     request: Request,
     context: ServerContext,
     presentation: NotebookPresentation,
@@ -110,14 +111,14 @@ def document_response(
     if context.mode == "edit" and not has_notebook_session(context):
         return _waiting_response()
     selected = None if context.mode == "run" and relative in {"", "/"} else view_name
-    snapshot = presentation.snapshot(selected)
+    snapshot = await presentation.snapshot_async(selected)
     if context.mode == "run":
         configure_document_replay(
             context,
             snapshot.resolved.workspace.preserve_session,
         )
     return HTMLResponse(
-        presentation.render_document(snapshot, context),
+        render_presentation_document(snapshot, context),
         headers={
             **DOCUMENT_HEADERS,
             "Marimo-Studio-Revision": snapshot.revision,

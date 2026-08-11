@@ -1,6 +1,6 @@
 import type { ValueReadError } from "@marimo-studio/protocol/value-read";
 
-import { notifyReadinessChanged } from "../readiness.ts";
+import { notifyProjectionChanged } from "../projections/changes.ts";
 import {
   getRuntimeConfig,
   type JsonValue,
@@ -123,7 +123,7 @@ const setState = (host: HTMLElement, state: ValuePhase): boolean => {
   } else {
     host.removeAttribute("aria-busy");
   }
-  notifyReadinessChanged();
+  notifyProjectionChanged();
   return previous !== state;
 };
 
@@ -293,7 +293,7 @@ const releaseHost = (host: HTMLElement) => {
   delete host.dataset.marimoVariable;
   delete host.dataset.state;
   host.removeAttribute("aria-busy");
-  notifyReadinessChanged();
+  notifyProjectionChanged();
 };
 
 const reconcileHosts = () => {

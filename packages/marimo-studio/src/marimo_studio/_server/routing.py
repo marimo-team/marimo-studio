@@ -43,9 +43,13 @@ def native_editor_target(relative: str) -> str | None:
     return None
 
 
+def is_support_route(relative: str) -> bool:
+    return relative == SUPPORT_PATH or relative.startswith(f"{SUPPORT_PATH}/")
+
+
 def could_handle(relative: str, mode: str) -> bool:
     """Return whether a path can belong to Studio in the active mode."""
-    if relative == SUPPORT_PATH or relative.startswith(f"{SUPPORT_PATH}/"):
+    if is_support_route(relative):
         return True
     if relative in {"", "/"} and mode in {"edit", "run"}:
         return True

@@ -6,6 +6,7 @@ import sys
 
 import click
 
+from marimo_studio._cli.commands.analyze import analyze
 from marimo_studio._cli.commands.bind import bind
 from marimo_studio._cli.commands.check import check
 from marimo_studio._cli.commands.export import export as export_command
@@ -34,6 +35,7 @@ def cli() -> None:
 
 
 cli.add_command(bind)
+cli.add_command(analyze)
 cli.add_command(check)
 cli.add_command(export_command)
 cli.add_command(inspect)

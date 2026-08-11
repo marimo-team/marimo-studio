@@ -4,10 +4,7 @@ import { test } from "vite-plus/test";
 import type { RuntimeConfig } from "../src/runtime-config/index.ts";
 
 import {
-  finishSessionRefresh,
-  preservedDocumentUrl,
-  prepareSessionRefresh,
-  rememberSession,
+  BrowserSessionReplay,
   type SessionEnvironment,
 } from "../src/document/session-preservation.ts";
 
@@ -70,10 +67,10 @@ const environment = (
 test("a reload restores the session remembered for its view path", () => {
   const storage = new Map<string, string>();
   const first = environment(storage);
-  rememberSession(config(true), "s_abc123", first.value);
+  new BrowserSessionReplay(first.value).remember(config(true), "s_abc123");
   const reload = environment(storage, { navigationType: "reload" });
 
-  const prepared = prepareSessionRefresh(config(true), reload.value);
+  const prepared = new BrowserSessionReplay(reload.value).prepare(config(true));
 
   assert.deepEqual(prepared, true);
   assert.deepEqual(reload.replaced, [
@@ -83,30 +80,30 @@ test("a reload restores the session remembered for its view path", () => {
 
 test("session preservation stays scoped to a run-mode page reload", () => {
   const storage = new Map<string, string>();
-  rememberSession(config(true), "s_abc123", environment(storage).value);
+  new BrowserSessionReplay(environment(storage).value).remember(config(true), "s_abc123");
   const navigation = environment(storage);
   const otherUI = environment(storage, {
     href: "https://example.test/executive/",
     navigationType: "reload",
   });
 
-  assert.deepEqual(prepareSessionRefresh(config(true), navigation.value), false);
-  assert.deepEqual(prepareSessionRefresh(config(true), otherUI.value), false);
+  assert.deepEqual(new BrowserSessionReplay(navigation.value).prepare(config(true)), false);
+  assert.deepEqual(new BrowserSessionReplay(otherUI.value).prepare(config(true)), false);
 
   assert.deepEqual(navigation.replaced, []);
   assert.deepEqual(otherUI.replaced, []);
 
   const disabledStorage = new Map<string, string>();
   const disabled = environment(disabledStorage, { navigationType: "reload" });
-  rememberSession(config(false), "s_abc123", disabled.value);
-  assert.deepEqual(prepareSessionRefresh(config(false), disabled.value), false);
+  new BrowserSessionReplay(disabled.value).remember(config(false), "s_abc123");
+  assert.deepEqual(new BrowserSessionReplay(disabled.value).prepare(config(false)), false);
   assert.deepEqual(disabledStorage.size, 0);
   assert.deepEqual(disabled.replaced, []);
 
   const editStorage = new Map<string, string>();
   const edit = environment(editStorage, { navigationType: "reload" });
-  rememberSession(config(true, "edit"), "s_abc123", edit.value);
-  assert.deepEqual(prepareSessionRefresh(config(true, "edit"), edit.value), false);
+  new BrowserSessionReplay(edit.value).remember(config(true, "edit"), "s_abc123");
+  assert.deepEqual(new BrowserSessionReplay(edit.value).prepare(config(true, "edit")), false);
   assert.deepEqual(editStorage.size, 0);
   assert.deepEqual(edit.replaced, []);
 });
@@ -116,17 +113,18 @@ test("the replay marker is removed after the runtime opens", () => {
     href: "https://example.test/dashboard/?session_id=s_abc123&marimo_studio_resume=1&view=summary",
   });
 
-  finishSessionRefresh(browser.value);
+  new BrowserSessionReplay(browser.value).finish();
 
   assert.deepEqual(browser.replaced, ["https://example.test/dashboard/?view=summary"]);
 });
 
 test("an intentional document navigation carries runtime and server session", () => {
-  const target = preservedDocumentUrl(
+  const source = environment(new Map(), {
+    href: "https://example.test/dashboard/?runtime=server",
+  });
+  const target = new BrowserSessionReplay(source.value, () => "s_abc123").preservedUrl(
     config(true),
     "https://example.test/report/?region=emea",
-    "s_abc123",
-    "https://example.test/dashboard/?runtime=server",
   );
   const browser = environment(new Map(), {
     href: target,
@@ -137,7 +135,7 @@ test("an intentional document navigation carries runtime and server session", ()
     target,
     "https://example.test/report/?region=emea&runtime=server&session_id=s_abc123&marimo_studio_resume=1",
   );
-  assert.equal(prepareSessionRefresh(config(true), browser.value), true);
+  assert.equal(new BrowserSessionReplay(browser.value).prepare(config(true)), true);
 });
 
 test("disabling preservation cancels a pending replay", () => {
@@ -149,7 +147,7 @@ test("disabling preservation cancels a pending replay", () => {
     navigationType: "reload",
   });
 
-  assert.deepEqual(prepareSessionRefresh(config(false), browser.value), false);
+  assert.deepEqual(new BrowserSessionReplay(browser.value).prepare(config(false)), false);
   assert.deepEqual(browser.replaced, ["https://example.test/dashboard/?view=summary"]);
   assert.deepEqual(storage.size, 0);
 });

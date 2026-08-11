@@ -1,5 +1,5 @@
 import { syncProjectionHostAttributes } from "../cells/host.ts";
-import { notifyReadinessChanged } from "../readiness.ts";
+import { notifyProjectionChanged } from "../projections/changes.ts";
 
 export type OutputHostState = "connecting" | "loading" | "stale" | "ready" | "error";
 
@@ -133,5 +133,5 @@ export const setOutputHostState = (
       }),
     );
   }
-  notifyReadinessChanged();
+  notifyProjectionChanged();
 };
