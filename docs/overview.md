@@ -17,10 +17,10 @@ Notebook cells keep this context executable, inspectable, and connected through
 reactive dependencies.
 
 A Studio view is the home for page structure, CSS, JavaScript, assets, and
-browser interactions. People and coding agents edit these ordinary web files
-while every projection remains connected to notebook state. An analyst can
-improve a definition once, inspect the supporting cells, then review its effect
-in every view that uses the result.
+browser interactions. A coding agent can inspect and edit these ordinary web
+files while every projection remains connected to notebook state. An analyst
+can improve a definition once, inspect the supporting cells, then review its
+effect in every view that uses the result.
 
 ## Studio runs inside Marimo
 
@@ -127,15 +127,15 @@ CSS saves update the current stylesheet. HTML saves replace the authored
 `#app-shell` around the mounted Marimo runtime. A module change reloads the
 view document so the browser evaluates its module graph again.
 
-## Work with coding agents
+## Agent-native authoring
 
-The `marimo_studio.agents` module exposes a bounded view-authoring workflow. An
-agent can inspect the saved notebook graph, create and activate a named view,
-bind a stable cell reference, edit ordinary web files, and repair source,
+The `marimo_studio.agents` module exposes a bounded view-authoring workflow. A
+coding agent can inspect the saved notebook graph, create and activate a named
+view, bind a stable cell reference, edit ordinary web files, and repair source,
 runtime, and rendered browser errors. Transformations, metric definitions, and
-domain rules remain in notebook cells where a person can inspect and run them.
+domain rules remain executable and inspectable in notebook cells.
 
-[Work with coding agents](guide/coding-agents.md) develops the complete
+[Agent-native authoring](guide/coding-agents.md) develops the complete
 inspect, create, activate, edit, analyze, and repair loop.
 
 ## Choose where the notebook runs

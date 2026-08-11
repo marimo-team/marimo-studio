@@ -1,14 +1,15 @@
 ---
-title: Work with coding agents
+title: Agent-native authoring
 description: Create and activate a Studio view, then repair source, runtime, and rendered browser errors until it is ready to hand off.
 ---
 
-# Work with coding agents
+# Agent-native authoring
 
-Marimo Studio gives a coding agent one repair loop for a saved notebook and
-its audience-specific views. The agent inspects the notebook graph, creates or
-locates a view, selects it in the open workspace, edits ordinary web files,
-and analyzes the source, executed notebook, and rendered page.
+Marimo Studio exposes a bounded authoring and repair workflow for a saved
+notebook and its audience-specific views. A coding agent inspects the notebook
+graph, creates or locates a view, selects it in the open workspace, edits
+ordinary web files, and analyzes the source, executed notebook, and rendered
+page.
 
 ## Keep notebook and view ownership clear
 
@@ -19,9 +20,9 @@ and analyzes the source, executed notebook, and rendered page.
 | `app.css`           | Theme tokens, custom keyframes, and CSS rules that Wind4 utilities cannot express                               |
 | Relative view files | Browser modules, images, fonts, and other presentation assets                                                   |
 
-Do not build page wrappers, layout markup, or style strings in notebook cells
-when a Studio view file can own them. This keeps the notebook readable as an
-analysis and lets several views reuse the same Python results.
+Notebook cells hold the analysis and reusable outputs. View files hold page
+wrappers, layout markup, styles, and presentation wording. The notebook remains
+focused on analysis while several views reuse the same Python results.
 
 Use `marimo_studio.agents` from Marimo code mode:
 

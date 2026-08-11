@@ -6,7 +6,7 @@ description: Keep analytical context in one reactive, reproducible Marimo notebo
 
 hero:
   text: Tune your notebook for every audience.
-  tagline: Keep data access, transformations, metrics, controls, and domain decisions in one reactive notebook. Let people and coding agents shape a custom web view for each audience.
+  tagline: Keep data access, transformations, metrics, controls, and domain decisions in one reactive notebook. Create custom web views in standard web files that coding agents can inspect and edit.
   image:
     light: /brand/marimo-studio-lockup-stacked-light.svg
     dark: /brand/marimo-studio-lockup-stacked-dark.svg
@@ -55,10 +55,10 @@ features:
       alt: Coding agents
       width: "24"
       height: "24"
-    title: Work with people and agents
-    details: Let agents revise ordinary web files while metric definitions, transformations, and domain rules remain visible in the notebook.
+    title: Agent-native authoring
+    details: Coding agents inspect and edit ordinary web files while metric definitions, transformations, and domain rules remain visible in the notebook.
     link: ./guide/coding-agents
-    linkText: Author with agents
+    linkText: Use the authoring workflow
 ---
 
 ## Keep analysis in notebook cells and frontend code in view files
@@ -67,9 +67,10 @@ Marimo provides a reactive notebook editor for data access, transformations,
 metrics, controls, and domain decisions. Studio views put page structure, CSS,
 JavaScript, assets, and browser behavior in ordinary web files.
 
-People and coding agents can reshape the interface while notebook cells remain
-focused on the analytical model. Each view projects live notebook results, so
-the executable, reviewable context continues to evolve in one place.
+Coding agents can reshape the interface through these web files while notebook
+cells remain focused on the analytical model. Each view projects live notebook
+results, so the executable, reviewable context continues to evolve in one
+place.
 
 ::: info Studio runs inside Marimo
 `marimo edit` opens the notebook and view together. `marimo run` serves the

@@ -7,8 +7,7 @@ description: Run a reactive revenue forecast and a three-view collection researc
 
 The included examples keep source data, transformations, calculations,
 controls, and domain decisions in Marimo notebooks. Their Studio views provide
-separate page structure, browser behavior, and routes for the people using
-those results.
+separate page structure, browser behavior, and routes for each audience.
 
 ## Revenue forecast <Badge type="info" text="One view" />
 
