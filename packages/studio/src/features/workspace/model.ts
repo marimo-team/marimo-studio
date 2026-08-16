@@ -32,17 +32,24 @@ export interface ComputedLayout {
 }
 
 const DIVIDER_SIZE = 5;
-const MINIMUM: Record<Surface, { width: number; height: number }> = {
+
+interface MinimumSize {
+  width: number;
+  height: number;
+}
+
+const MINIMUM = {
   notebook: { width: 320, height: 220 },
   source: { width: 280, height: 220 },
   preview: { width: 280, height: 220 },
-};
-const PLACEMENT_LAYOUT: Record<Placement, { axis: Axis; addedFirst: boolean }> = {
+} satisfies Record<Surface, MinimumSize>;
+
+const PLACEMENT_LAYOUT = {
   left: { axis: "x", addedFirst: true },
   right: { axis: "x", addedFirst: false },
   above: { axis: "y", addedFirst: true },
   below: { axis: "y", addedFirst: false },
-};
+} satisfies Record<Placement, { axis: Axis; addedFirst: boolean }>;
 
 const pane = (surface: Surface): PaneNode => ({
   type: "pane",
@@ -102,7 +109,7 @@ export const visibleSurfaces = (node: LayoutNode): Surface[] => {
   return [...visibleSurfaces(node.first), ...visibleSurfaces(node.second)];
 };
 
-const minimumSize = (node: LayoutNode): { width: number; height: number } => {
+const minimumSize = (node: LayoutNode): MinimumSize => {
   if (node.type === "pane") {
     return MINIMUM[node.surface];
   }

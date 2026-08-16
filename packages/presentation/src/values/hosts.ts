@@ -1,5 +1,7 @@
 import type { ValueReadError } from "@marimo-studio/protocol/value-read";
 
+import { z } from "zod";
+
 import { notifyProjectionChanged } from "../projections/changes.ts";
 import {
   getRuntimeConfig,
@@ -12,6 +14,7 @@ import { type ValuePhase, ValueStates } from "./state.ts";
 
 const ATTRIBUTE = "mo-value";
 const ATTRIBUTE_SELECTOR = `[${ATTRIBUTE}]`;
+const textValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 const hosts = new Set<HTMLElement>();
 const renderedValues = new WeakMap<
   HTMLElement,
@@ -50,6 +53,21 @@ export interface MarimoValueErrorDetail {
   readonly hint?: string;
 }
 
+declare global {
+  interface DocumentEventMap {
+    "marimo-value-error": CustomEvent<MarimoValueErrorDetail>;
+    "marimo-value-updated": CustomEvent<MarimoValueUpdatedDetail>;
+  }
+
+  interface HTMLElementEventMap {
+    "marimo-value-error": CustomEvent<MarimoValueErrorDetail>;
+    "marimo-value-updated": CustomEvent<MarimoValueUpdatedDetail>;
+  }
+}
+
+export const isMarimoValueHost = (host: HTMLElement): host is MarimoValueHost =>
+  Object.getOwnPropertyDescriptor(host, "marimoValue")?.get instanceof Function;
+
 const prepareHost = (host: HTMLElement): MarimoValueHost => {
   if (!preparedHosts.has(host)) {
     Object.defineProperty(host, "marimoValue", {
@@ -59,7 +77,10 @@ const prepareHost = (host: HTMLElement): MarimoValueHost => {
     });
     preparedHosts.add(host);
   }
-  return host as MarimoValueHost;
+  if (!isMarimoValueHost(host)) {
+    throw new Error("Unable to expose the projected value on its host element");
+  }
+  return host;
 };
 
 const clearHostValue = (host: HTMLElement): void => {
@@ -156,12 +177,9 @@ const failHost = (host: HTMLElement, error: ValueReadError, diagnostic?: Project
     host.setAttribute("role", "status");
     host.dataset.marimoStudioRole = "";
   }
-  const detail: MarimoValueErrorDetail = {
-    selector: selectorFor(host),
-    code: error.code,
-    message: error.message,
-    ...(hint ? { hint } : {}),
-  };
+  const detail: MarimoValueErrorDetail = hint
+    ? { selector: selectorFor(host), code: error.code, message: error.message, hint }
+    : { selector: selectorFor(host), code: error.code, message: error.message };
   if (setState(host, "error")) {
     host.dispatchEvent(
       new CustomEvent<MarimoValueErrorDetail>("marimo-value-error", {
@@ -198,11 +216,9 @@ const projectValue = (value: JsonValue): ProjectedValue => {
   if (value === null) {
     return { fingerprint, text: "", value };
   }
-  if (typeof value === "string") {
-    return { fingerprint, text: value, value };
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return { fingerprint, text: String(value), value };
+  const textValue = textValueSchema.safeParse(value);
+  if (textValue.success) {
+    return { fingerprint, text: String(textValue.data), value };
   }
   return { fingerprint, text: fingerprint, value };
 };
@@ -262,12 +278,12 @@ const connectHost = (host: HTMLElement) => {
   clearHostDiagnostic(host);
   host.dataset.marimoSelector = selector;
   host.dataset.marimoVariable = binding.variable;
-  const cached = cachedValues.has(selector);
-  const state = states.connected(selector, cached);
+  const cached = cachedValues.get(selector);
+  const state = states.connected(selector, cached !== undefined);
   if (state.phase === "error" && state.error) {
     failHost(host, state.error);
   } else if (cached) {
-    renderHost(host, selector, cachedValues.get(selector) as ProjectedValue, state.phase);
+    renderHost(host, selector, cached, state.phase);
   } else {
     clearHostValue(host);
     setState(host, state.phase);

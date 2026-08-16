@@ -1,6 +1,7 @@
 import type { SourceName } from "@marimo-studio/protocol/source-events";
 
 import { parseErrorResponse } from "@marimo-studio/protocol/errors";
+import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 export interface RemoteSource {
@@ -23,6 +24,16 @@ export class RevisionConflict extends Error {
     super("Source revision changed");
   }
 }
+
+const responseJson = async (response: Response) => jsonValueSchema.parse(await response.json());
+
+const responseErrorMessage = async (response: Response, fallback: string): Promise<string> => {
+  try {
+    return parseErrorResponse(await responseJson(response)).message ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
 
 export const createSourceRemote = (
   supportUrl: (view: string) => string,
@@ -53,13 +64,13 @@ export const createSourceRemote = (
         body: content,
       });
       if (response.status === 412) {
-        const body: unknown = await response.json();
+        const body = await responseJson(response);
         throw new RevisionConflict(parseErrorResponse(body).revision ?? "");
       }
       if (!response.ok) {
-        const body: unknown = await response.json().catch(() => undefined);
-        const detail = parseErrorResponse(body);
-        throw new Error(detail.message ?? `Could not save ${name} (${response.status})`);
+        throw new Error(
+          await responseErrorMessage(response, `Could not save ${name} (${response.status})`),
+        );
       }
       const next = response.headers.get("ETag")?.replace(/^W\//, "").replace(/^"|"$/g, "");
       if (!next) {

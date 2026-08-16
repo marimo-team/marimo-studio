@@ -240,9 +240,9 @@ export class ViewController {
       return;
     }
     this.update(next);
-    void this.refreshInventory().catch((error: unknown) => {
+    void this.refreshInventory().catch((cause: unknown) => {
       if (!this.disposed) {
-        console.warn("Studio views could not be refreshed", error);
+        console.warn("Studio views could not be refreshed", cause);
       }
     });
   }

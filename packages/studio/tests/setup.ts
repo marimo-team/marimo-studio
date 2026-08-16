@@ -11,7 +11,10 @@ class ResizeObserverStub implements ResizeObserver {
         {
           target,
           contentRect: target.getBoundingClientRect(),
-        } as ResizeObserverEntry,
+          borderBoxSize: [],
+          contentBoxSize: [],
+          devicePixelContentBoxSize: [],
+        },
       ],
       this,
     );

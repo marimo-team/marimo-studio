@@ -1,17 +1,14 @@
 import type { RuntimeContext, RuntimeSession } from "@marimo-studio/runtime";
 
+import type { ServerRuntimeData } from "./server-config";
+
+import { reconcileOutputReadResponse } from "../outputs/reconcile";
 import { createServerOutputReader } from "../outputs/remote";
 import { readServerValuesWithRetry } from "../values/remote";
 import { mountSharedRuntime } from "./runtime";
 import { createServerTransportURL } from "./transport";
 
-export interface ServerRuntimeData {
-  url: string;
-  serverToken: string;
-  fileKey: string;
-  file?: string;
-  preserveSession: boolean;
-}
+export type { ServerRuntimeData } from "./server-config";
 
 export const mountServerRuntime = (
   context: RuntimeContext,
@@ -39,6 +36,7 @@ export const mountServerRuntime = (
       ({ sessionId }) =>
       (request, signal) =>
         readServerValuesWithRetry(sessionId, request, signal),
-    outputReader: ({ sessionId }) => createServerOutputReader(sessionId),
+    outputReader: ({ sessionId }) =>
+      createServerOutputReader(sessionId, reconcileOutputReadResponse),
   });
 };

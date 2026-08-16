@@ -18,6 +18,30 @@ const deferred = () => {
 
 const frame = () => document.createElement("iframe");
 
+it("applies an editor query through the rendered preview API", async () => {
+  const preview = frame();
+  document.body.append(preview);
+  const child = preview.contentWindow;
+  if (!child) {
+    throw new Error("The preview iframe did not create a window");
+  }
+  const updateQuery = vi.fn(async (_query: string) => {});
+  Object.defineProperty(child, "marimoStudio", {
+    configurable: true,
+    value: {
+      ready: async () => {},
+      updateQuery,
+    },
+  });
+  const controller = new PreviewQueryController("wasm", preview, vi.fn(), vi.fn(), vi.fn());
+
+  controller.editorChanged("region=emea", true);
+
+  await vi.waitFor(() => expect(updateQuery).toHaveBeenCalledWith("?region=emea"));
+  controller.cancel();
+  preview.remove();
+});
+
 it("serializes writes and coalesces them to the latest query", async () => {
   const first = deferred();
   const second = deferred();

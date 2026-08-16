@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
+import { z } from "zod";
 
 import { loadRuntimeConfig } from "../src/runtime-config/index.ts";
 import {
@@ -51,15 +52,8 @@ const config = {
   mode: "run",
 };
 
-const requestUrl = (input: RequestInfo | URL): string => {
-  if (typeof input === "string") {
-    return input;
-  }
-  if (input instanceof URL) {
-    return input.href;
-  }
-  return input.url;
-};
+const requestUrl = (input: RequestInfo | URL): string =>
+  input instanceof URL ? input.href : new Request(input).url;
 
 const installConfig = async () => {
   const originalFetch = globalThis.fetch;
@@ -80,10 +74,11 @@ test("value reads send exact selectors through the configured base URL", async (
   globalThis.fetch = (input, init) => {
     url = requestUrl(input);
     headers = new Headers(init?.headers);
-    if (typeof init?.body !== "string") {
+    const parsedBody = z.string().safeParse(init?.body);
+    if (!parsedBody.success) {
       throw new TypeError("Expected a JSON request body");
     }
-    body = init.body;
+    body = parsedBody.data;
     return Promise.resolve(Response.json({ values: { "context.label": "ready" }, errors: {} }));
   };
   try {
@@ -128,9 +123,9 @@ test("terminal value failures do not retry", async () => {
           revision: "presentation-revision",
           selectors: ["context.label"],
         }),
-      (error: unknown) => {
-        assert.ok(error instanceof ValueRequestError);
-        assert.match(error.message, /Unknown selector/);
+      (cause: unknown) => {
+        assert.ok(cause instanceof ValueRequestError);
+        assert.match(cause.message, /Unknown selector/);
         return true;
       },
     );

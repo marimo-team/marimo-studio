@@ -3,26 +3,73 @@ import { expect, it, vi } from "vite-plus/test";
 
 import { observeFrameQuery } from "../src/features/preview/query-sync.ts";
 
-const queryFrame = () => {
-  const child = new EventTarget() as EventTarget & {
-    history: History;
-    location: { href: string; search: string };
-  };
-  child.location = { href: "http://localhost/notebook", search: "" };
-  const navigate = (_data: unknown, _unused: string, url?: string | URL | null) => {
+interface HistoryState {
+  readonly operation?: string;
+}
+
+type QueryLocation = {
+  href: string;
+  search: string;
+};
+
+class QueryHistory {
+  constructor(private readonly location: QueryLocation) {}
+
+  pushState(data: HistoryState, unused: string, url?: string | URL | null): void {
+    this.navigate(data, unused, url);
+  }
+
+  replaceState(data: HistoryState, unused: string, url?: string | URL | null): void {
+    this.navigate(data, unused, url);
+  }
+
+  private navigate(_data: HistoryState, _unused: string, url?: string | URL | null): void {
     if (url !== undefined && url !== null) {
-      const next = new URL(String(url), child.location.href);
-      child.location.href = next.href;
-      child.location.search = next.search;
+      const next = new URL(String(url), this.location.href);
+      this.location.href = next.href;
+      this.location.search = next.search;
     }
+  }
+}
+
+class QueryWindow extends EventTarget {
+  location: QueryLocation;
+  history: QueryHistory;
+
+  constructor(href = "http://localhost/notebook") {
+    super();
+    this.location = this.queryLocation(href);
+    this.history = new QueryHistory(this.location);
+  }
+
+  navigate(href: string): void {
+    this.location = this.queryLocation(href);
+    this.history = new QueryHistory(this.location);
+  }
+
+  private queryLocation(href: string): QueryLocation {
+    const location = new URL(href);
+    return { href: location.href, search: location.search };
+  }
+}
+
+const queryFrame = () => {
+  const child = new QueryWindow();
+  let childDocument = document.implementation.createHTMLDocument();
+  const frame = document.createElement("iframe");
+  Object.defineProperties(frame, {
+    contentDocument: { get: () => childDocument },
+    contentWindow: { value: child },
+  });
+  return {
+    child,
+    frame,
+    navigate(href: string) {
+      child.navigate(href);
+      childDocument = document.implementation.createHTMLDocument();
+      frame.dispatchEvent(new Event("load"));
+    },
   };
-  child.history = {
-    pushState: navigate,
-    replaceState: navigate,
-  } as History;
-  const frame = new EventTarget() as HTMLIFrameElement;
-  Object.defineProperty(frame, "contentWindow", { value: child });
-  return { child, frame };
 };
 
 it("labels a kernel query echo with its causal operation", () => {
@@ -62,4 +109,23 @@ it("moves query observations to a replacement subscriber", () => {
     ["?region=editor", undefined, false],
   ]);
   stopSecond();
+});
+
+it("reinstalls query observation after iframe navigation keeps its window proxy", () => {
+  const { child, frame, navigate } = queryFrame();
+  const receive = vi.fn();
+  const stop = observeFrameQuery(frame, receive);
+  frame.dispatchEvent(new Event("load"));
+  child.history.replaceState({}, "", "?region=before");
+
+  navigate("http://localhost/notebook?region=loaded");
+  child.history.replaceState({}, "", "?region=after");
+
+  expect(receive.mock.calls).toEqual([
+    ["", undefined, false],
+    ["?region=before", undefined, false],
+    ["?region=loaded", undefined, false],
+    ["?region=after", undefined, false],
+  ]);
+  stop();
 });

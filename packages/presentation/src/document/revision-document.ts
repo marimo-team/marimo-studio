@@ -1,4 +1,4 @@
-import htmx from "htmx.org";
+import htmx, { type HtmxSwapSpecification } from "htmx.org";
 
 import { projectionHosts } from "../projections/host-runtime.ts";
 import {
@@ -186,11 +186,11 @@ export class DocumentRevisionAdapter {
   }
 
   private swap(current: HTMLElement, next: HTMLElement): void {
-    const swap = (
-      htmx as unknown as {
-        swap: (target: Element, content: string, options: { swapStyle: string }) => void;
-      }
-    ).swap;
-    swap(current, next.outerHTML, { swapStyle: "outerHTML" });
+    const swap: HtmxSwapSpecification = {
+      swapStyle: "outerHTML",
+      swapDelay: 0,
+      settleDelay: 0,
+    };
+    htmx.swap(current, next.outerHTML, swap);
   }
 }

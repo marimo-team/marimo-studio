@@ -1,5 +1,7 @@
+import { parsePreviewMessage } from "@marimo-studio/protocol/preview-messages";
+import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 import assert from "node:assert/strict";
-import { afterEach, test } from "vite-plus/test";
+import { afterEach, test, vi } from "vite-plus/test";
 
 import { startPresentationObservers, stopPresentationObservers } from "../src/observers.ts";
 import { toBrowserDiagnostics } from "../src/readiness-diagnostics.ts";
@@ -8,18 +10,25 @@ import { setRuntimeConnectionState } from "../src/rendered-view-observer.ts";
 import { valueCellPhase } from "../src/runtime/value-cell-state.ts";
 import { initializeViewStyles } from "../src/view-styles/runtime.ts";
 
-globalThis.__MARIMO_MOUNT_CONFIG__ = {
+const mountConfig = {
   supportUrl: "/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "presentation-revision",
   runtime: "server",
-};
+} as const;
+
+globalThis.__MARIMO_MOUNT_CONFIG__ = mountConfig;
 
 const settleMutations = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
-afterEach(stopPresentationObservers);
+afterEach(() => {
+  stopPresentationObservers();
+  globalThis.__MARIMO_MOUNT_CONFIG__ = mountConfig;
+  globalThis.__MARIMO_STUDIO_SESSION_ID__ = undefined;
+  vi.restoreAllMocks();
+});
 
 const valueCell = (
   overrides: Partial<Parameters<typeof valueCellPhase>[0]> = {},
@@ -65,6 +74,32 @@ test("browser evidence reports deterministic diagnostic truncation", () => {
     view: "dashboard",
     scope: "presentation",
   });
+});
+
+test("WASM readiness omits an unavailable session from its preview message", async () => {
+  globalThis.__MARIMO_MOUNT_CONFIG__ = { ...mountConfig, runtime: "wasm" };
+  const postMessage = vi.spyOn(globalThis.parent, "postMessage");
+
+  startPresentationObservers(async () => {});
+  setRuntimeConnectionState("ready");
+  await settleMutations();
+
+  const ready = postMessage.mock.calls.flatMap(([message]) => {
+    const payload = jsonValueSchema.safeParse(message);
+    if (!payload.success) {
+      return [];
+    }
+    const parsed = parsePreviewMessage(payload.data);
+    return parsed?.type === "marimo-studio:view-ready" ? [parsed] : [];
+  });
+  assert.deepEqual(ready, [
+    {
+      type: "marimo-studio:view-ready",
+      runtime: "wasm",
+      view: "dashboard",
+      revision: "presentation-revision",
+    },
+  ]);
 });
 
 test("runtime readiness preserves a visible style failure", async () => {

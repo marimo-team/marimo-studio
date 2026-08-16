@@ -1,17 +1,12 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
+import type { fetchRuntimeControls } from "../src/features/preview/control-remote.ts";
 import type { ControlEndpoint } from "../src/features/preview/control-sync.ts";
 
 import { PreviewControlController } from "../src/features/preview/control-controller.ts";
-import { fetchRuntimeControls } from "../src/features/preview/control-remote.ts";
-
-vi.mock("../src/features/preview/control-remote.ts", () => ({
-  fetchRuntimeControls: vi.fn(),
-}));
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.mocked(fetchRuntimeControls).mockReset();
 });
 
 const endpoint = (): ControlEndpoint => ({
@@ -31,7 +26,8 @@ it("retries a bounded control setup against the active editor session", async ()
         { once: true },
       );
     });
-  vi.mocked(fetchRuntimeControls)
+  const fetchControls = vi
+    .fn<typeof fetchRuntimeControls>()
     .mockImplementationOnce(stalled)
     .mockImplementationOnce(stalled)
     .mockResolvedValueOnce({
@@ -51,14 +47,15 @@ it("retries a bounded control setup against the active editor session", async ()
     preview: document.createElement("iframe"),
     supportUrl: () => "/_marimo-studio/views/dashboard",
     connect,
+    fetchControls,
   });
 
   controller.begin("revision-1", "s_123456");
   await vi.advanceTimersByTimeAsync(3_100);
   await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(2));
 
-  expect(fetchRuntimeControls).toHaveBeenCalledTimes(4);
-  expect(vi.mocked(fetchRuntimeControls).mock.calls.map((call) => call[2])).toEqual([
+  expect(fetchControls).toHaveBeenCalledTimes(4);
+  expect(fetchControls.mock.calls.map((call) => call[2])).toEqual([
     "s_123456",
     "s_123456",
     "s_123456",

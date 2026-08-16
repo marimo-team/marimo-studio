@@ -1,20 +1,12 @@
 import { definePresentationRuntime, type PresentationRuntime } from "@marimo-studio/runtime";
-import { z } from "zod";
 
+import { serverRuntimeDataSchema } from "./server-config";
 import { wasmRuntimeDataSchema } from "./wasm-config";
-
-const serverDataSchema = z.object({
-  url: z.string(),
-  serverToken: z.string(),
-  fileKey: z.string(),
-  file: z.string().optional(),
-  preserveSession: z.boolean(),
-});
 
 export const serverRuntime: PresentationRuntime = definePresentationRuntime({
   id: "server",
   async mount(context, data) {
-    const config = serverDataSchema.parse(data);
+    const config = serverRuntimeDataSchema.parse(data);
     const { mountServerRuntime } = await import("./server");
     return mountServerRuntime(context, config);
   },

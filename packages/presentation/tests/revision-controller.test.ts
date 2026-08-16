@@ -29,13 +29,13 @@ const options = () => ({
   applyRuntime: vi.fn(() => "applied" as const),
   reloadDocument: vi.fn(),
   reloadRuntime: vi.fn(),
-  classifyFailure: vi.fn((error: unknown) => ({
+  classifyFailure: vi.fn((cause: unknown) => ({
     state: "error" as const,
     diagnostic: {
       scope: "presentation" as const,
       code: "revision-failed",
       severity: "error" as const,
-      message: String(error),
+      message: String(cause),
       hint: "Fix the source.",
       view: "dashboard",
     },

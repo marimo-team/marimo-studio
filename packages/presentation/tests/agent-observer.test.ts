@@ -1,3 +1,5 @@
+import { parsePreviewMessage } from "@marimo-studio/protocol/preview-messages";
+import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 import assert from "node:assert/strict";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
@@ -44,17 +46,17 @@ test("browser evidence stays loading until stale projections settle", async () =
   source.dataset.state = "ready";
   await settleMutations();
 
-  const states = postMessage.mock.calls.flatMap(([message]) =>
-    typeof message === "object" &&
-    message !== null &&
-    "type" in message &&
-    message.type === "marimo-studio:view-observation" &&
-    "requestId" in message &&
-    message.requestId === "request-stale" &&
-    "state" in message
-      ? [message.state]
-      : [],
-  );
+  const states = postMessage.mock.calls.flatMap(([message]) => {
+    const payload = jsonValueSchema.safeParse(message);
+    if (!payload.success) {
+      return [];
+    }
+    const observation = parsePreviewMessage(payload.data);
+    return observation?.type === "marimo-studio:view-observation" &&
+      observation.requestId === "request-stale"
+      ? [observation.state]
+      : [];
+  });
   expect(states).toEqual(["loading", "ready"]);
   postMessage.mockRestore();
 });
@@ -75,13 +77,13 @@ test("a settled page publishes actionable browser evidence", async () => {
   await settleMutations();
 
   assert.equal(
-    postMessage.mock.calls.some(
-      ([message]) =>
-        typeof message === "object" &&
-        message !== null &&
-        "type" in message &&
-        message.type === "marimo-studio:view-observation",
-    ),
+    postMessage.mock.calls.some(([message]) => {
+      const payload = jsonValueSchema.safeParse(message);
+      return (
+        payload.success &&
+        parsePreviewMessage(payload.data)?.type === "marimo-studio:view-observation"
+      );
+    }),
     false,
   );
   globalThis.dispatchEvent(
@@ -100,15 +102,14 @@ test("a settled page publishes actionable browser evidence", async () => {
   );
   await settleMutations();
 
-  const observation = postMessage.mock.calls
-    .map(([message]) => message)
-    .find(
-      (message) =>
-        typeof message === "object" &&
-        message !== null &&
-        "type" in message &&
-        message.type === "marimo-studio:view-observation",
-    );
+  const observation = postMessage.mock.calls.flatMap(([message]) => {
+    const payload = jsonValueSchema.safeParse(message);
+    if (!payload.success) {
+      return [];
+    }
+    const parsed = parsePreviewMessage(payload.data);
+    return parsed?.type === "marimo-studio:view-observation" ? [parsed] : [];
+  })[0];
 
   assert.deepEqual(observation, {
     type: "marimo-studio:view-observation",
@@ -156,17 +157,17 @@ test("a view-style startup failure is reported as presentation evidence", async 
   );
   await settleMutations();
 
-  const observation = postMessage.mock.calls
-    .map(([message]) => message)
-    .find(
-      (message) =>
-        typeof message === "object" &&
-        message !== null &&
-        "type" in message &&
-        message.type === "marimo-studio:view-observation" &&
-        "requestId" in message &&
-        message.requestId === "request-styles",
-    );
+  const observation = postMessage.mock.calls.flatMap(([message]) => {
+    const payload = jsonValueSchema.safeParse(message);
+    if (!payload.success) {
+      return [];
+    }
+    const parsed = parsePreviewMessage(payload.data);
+    return parsed?.type === "marimo-studio:view-observation" &&
+      parsed.requestId === "request-styles"
+      ? [parsed]
+      : [];
+  })[0];
   expect(observation).toMatchObject({
     state: "error",
     diagnostics: [
@@ -218,17 +219,17 @@ test("browser evidence waits for live utility regeneration", async () => {
   rejectGeneration(new Error("generator failed"));
   await settleMutations();
 
-  const states = postMessage.mock.calls.flatMap(([message]) =>
-    typeof message === "object" &&
-    message !== null &&
-    "type" in message &&
-    message.type === "marimo-studio:view-observation" &&
-    "requestId" in message &&
-    message.requestId === "request-live-styles" &&
-    "state" in message
-      ? [message.state]
-      : [],
-  );
+  const states = postMessage.mock.calls.flatMap(([message]) => {
+    const payload = jsonValueSchema.safeParse(message);
+    if (!payload.success) {
+      return [];
+    }
+    const observation = parsePreviewMessage(payload.data);
+    return observation?.type === "marimo-studio:view-observation" &&
+      observation.requestId === "request-live-styles"
+      ? [observation.state]
+      : [];
+  });
   expect(states).toEqual(["loading", "error"]);
   styles.disconnect();
 });

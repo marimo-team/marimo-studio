@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { JsonValue } from "./runtime-config.ts";
+
 import { valueReadErrorSchema } from "./value-read.ts";
 
 export const MAX_OUTPUT_SELECTORS = 100;
@@ -42,6 +44,6 @@ export type OutputReadRequest = z.infer<typeof outputReadRequestSchema>;
 export type OutputReadResponse = z.infer<typeof outputReadResponseSchema>;
 export type RenderedOutput = z.infer<typeof renderedOutputSchema>;
 
-export const parseOutputReadResponse = (value: unknown): OutputReadResponse => {
+export const parseOutputReadResponse = (value: JsonValue): OutputReadResponse => {
   return outputReadResponseSchema.parse(value);
 };

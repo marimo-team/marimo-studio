@@ -1,7 +1,13 @@
-import { expect, it, vi } from "vite-plus/test";
+import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
+
+import { afterEach, expect, it, vi } from "vite-plus/test";
+
+import type { ControlEndpoint } from "../src/features/preview/control-sync.ts";
 
 import { PreviewController } from "../src/features/preview/controller.ts";
 import { PreviewDeck } from "../src/features/preview/deck.ts";
+
+afterEach(() => vi.unstubAllGlobals());
 
 const frame = (readyState: DocumentReadyState): HTMLIFrameElement => {
   const element = document.createElement("iframe");
@@ -22,6 +28,7 @@ const controller = (
   editor: HTMLIFrameElement,
   preview: HTMLIFrameElement,
   viewUrl: (view: string, runtime: string) => string,
+  report = vi.fn(),
 ) =>
   new PreviewController(
     "dashboard",
@@ -33,8 +40,122 @@ const controller = (
     vi.fn(),
     vi.fn(async () => "accepted" as const),
     vi.fn(),
-    vi.fn(),
+    report,
   );
+
+const runtimeConfig = (runtime: string) =>
+  ({
+    schema: 1,
+    revision: "revision-1",
+    view: "dashboard",
+    views: ["dashboard"],
+    runtime: {
+      id: runtime,
+      instance: `${runtime}-instance`,
+      available: ["server", "wasm"],
+      data: {},
+      controls: { cells: {} },
+    },
+    rootUrl: "/",
+    publicRootUrl: "/",
+    documentRootUrl: "/",
+    supportUrl: "/support/dashboard",
+    showCellLogs: true,
+    cellBindings: {},
+    valueBindings: {},
+    outputBindings: {},
+    diagnostics: [],
+    appConfig: {},
+    userConfig: {},
+    configOverrides: {},
+    editorSessionId: "s_123456",
+    dev: true,
+    mode: "edit",
+  }) satisfies RuntimeConfig;
+
+const controlEndpoint = (): ControlEndpoint => ({
+  snapshot: () => [],
+  subscribe: () => () => {},
+  apply: vi.fn(async () => {}),
+  dispose: vi.fn(),
+});
+
+it("accepts sessionless WASM readiness from the rendered view", () => {
+  const editor = frame("loading");
+  const preview = frame("complete");
+  const report = vi.fn();
+  const wasm = controller(
+    "wasm",
+    editor,
+    preview,
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+    report,
+  );
+
+  globalThis.dispatchEvent(
+    new MessageEvent("message", {
+      origin: globalThis.location.origin,
+      data: {
+        type: "marimo-studio:view-ready",
+        runtime: "wasm",
+        view: "dashboard",
+        revision: "revision-1",
+      },
+    }),
+  );
+
+  expect(report).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      status: { message: "Live", state: "ready", title: "" },
+    }),
+  );
+  wasm.dispose();
+});
+
+it("starts WASM control synchronization from an active rendered-view session", async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>();
+  fetch.mockResolvedValueOnce(Response.json(runtimeConfig("server")));
+  fetch.mockResolvedValueOnce(Response.json(runtimeConfig("wasm")));
+  vi.stubGlobal("fetch", fetch);
+  const editor = frame("loading");
+  const preview = frame("complete");
+  const connect = vi.fn(() => controlEndpoint());
+  const wasm = new PreviewController(
+    "dashboard",
+    "wasm",
+    editor,
+    preview,
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+    (view) => `/support/${view}`,
+    vi.fn(),
+    vi.fn(async () => "accepted" as const),
+    vi.fn(),
+    vi.fn(),
+    undefined,
+    connect,
+  );
+
+  globalThis.dispatchEvent(
+    new MessageEvent("message", {
+      origin: globalThis.location.origin,
+      data: {
+        type: "marimo-studio:view-ready",
+        runtime: "wasm",
+        view: "dashboard",
+        revision: "revision-1",
+        sessionId: "s_123456",
+      },
+    }),
+  );
+
+  await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(2));
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(fetch.mock.calls.map(([, init]) => init?.headers)).toEqual([
+    { "Marimo-Session-Id": "s_123456" },
+    { "Marimo-Session-Id": "s_123456" },
+  ]);
+  wasm.dispose();
+});
 
 it("reloads every preview after its editor session binding changes", () => {
   const editor = frame("loading");

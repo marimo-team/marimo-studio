@@ -1,5 +1,6 @@
 import type { BrowserObservation } from "@marimo-studio/protocol/browser-observations";
 
+import { parseErrorResponse } from "@marimo-studio/protocol/errors";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 export type RenderedBrowserObservation = Omit<
@@ -44,14 +45,9 @@ const delay = async (duration: number, signal: AbortSignal): Promise<boolean> =>
 const responseError = async (response: Response): Promise<BrowserObservationUploadError> => {
   let code = "browser-observation-upload-failed";
   try {
-    const payload: unknown = await response.json();
-    if (
-      typeof payload === "object" &&
-      payload !== null &&
-      "error" in payload &&
-      typeof payload.error === "string"
-    ) {
-      code = payload.error;
+    const detail = parseErrorResponse(await response.json());
+    if (detail.error !== undefined) {
+      code = detail.error;
     }
   } catch {
     // The status still provides a stable retry classification.

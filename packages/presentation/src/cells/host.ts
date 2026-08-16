@@ -4,6 +4,15 @@ export type CellHostState = "connecting" | "loading" | "stale" | "ready" | "miss
 
 type HostListener = () => void;
 
+export interface CellHostEventDetail {
+  readonly alias?: string;
+  readonly runtimeId?: string;
+  readonly outputMime?: string;
+  readonly code?: string;
+  readonly message?: string;
+  readonly hint?: string;
+}
+
 const OUTPUT_SELECTOR = "[data-marimo-cell-output]";
 const MEASURED_HEIGHT_PROPERTY = "--_marimo-cell-measured-height";
 const PRESERVED_ID_PREFIX = "marimo-studio-cell-";
@@ -37,8 +46,8 @@ const viewportClass = (): string => {
   return "wide";
 };
 
-const heightKey = (host: MarimoCellElement, view = viewportClass()): string => {
-  return `${location.pathname}:${host.cellName}:${view}`;
+const heightKey = (host: HTMLElement, view = viewportClass()): string => {
+  return `${location.pathname}:${host.getAttribute("name")?.trim() ?? ""}:${view}`;
 };
 
 const readMeasuredHeight = (key: string): number | undefined => {
@@ -77,7 +86,7 @@ const publish = () => {
   listeners.forEach((listener) => listener());
 };
 
-const applyMeasuredHeight = (host: MarimoCellElement) => {
+const applyMeasuredHeight = (host: HTMLElement) => {
   const height = readMeasuredHeight(heightKey(host));
   if (height === undefined) {
     host.style.removeProperty(MEASURED_HEIGHT_PROPERTY);
@@ -86,8 +95,8 @@ const applyMeasuredHeight = (host: MarimoCellElement) => {
   host.style.setProperty(MEASURED_HEIGHT_PROPERTY, `${height}px`);
 };
 
-const rememberMeasuredHeight = (host: MarimoCellElement) => {
-  if (host.dataset.state !== "ready" || !host.cellName) {
+const rememberMeasuredHeight = (host: HTMLElement) => {
+  if (host.dataset.state !== "ready" || !host.getAttribute("name")?.trim()) {
     return;
   }
   const height = Math.ceil(host.getBoundingClientRect().height);
@@ -99,13 +108,15 @@ const rememberMeasuredHeight = (host: MarimoCellElement) => {
 };
 
 const sizeObserver =
-  typeof ResizeObserver === "undefined"
-    ? null
-    : new ResizeObserver((entries) => {
+  "ResizeObserver" in globalThis
+    ? new ResizeObserver((entries) => {
         entries.forEach((entry) => {
-          rememberMeasuredHeight(entry.target as MarimoCellElement);
+          if (entry.target instanceof HTMLElement) {
+            rememberMeasuredHeight(entry.target);
+          }
         });
-      });
+      })
+    : null;
 
 export class MarimoCellElement extends HTMLElement {
   static observedAttributes = ["name"];
@@ -237,7 +248,7 @@ export const subscribeCellHosts = (listener: HostListener) => {
 export const setCellHostState = (
   host: MarimoCellElement,
   state: CellHostState,
-  detail: Record<string, unknown> = {},
+  detail: CellHostEventDetail = {},
 ) => {
   const previous = host.dataset.state;
   host.dataset.state = state;

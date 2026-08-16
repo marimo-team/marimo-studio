@@ -1,3 +1,5 @@
+import type { HtmxSwapSpecification } from "htmx.org";
+
 import assert from "node:assert/strict";
 import { afterEach, test } from "vite-plus/test";
 
@@ -54,12 +56,12 @@ test("a shell swap updates authored cell attributes without replacing its output
   const styles = new ViewStyleController(async (tokens) => `/* ${[...tokens].sort().join(" ")} */`);
   const staged = await styles.stage(nextShell);
 
-  const swap = (
-    htmx as unknown as {
-      swap: (target: Element, content: string, options: { swapStyle: string }) => void;
-    }
-  ).swap;
-  swap(document.querySelector("#app-shell")!, nextShell.outerHTML, { swapStyle: "outerHTML" });
+  const swap: HtmxSwapSpecification = {
+    swapStyle: "outerHTML",
+    swapDelay: 0,
+    settleDelay: 0,
+  };
+  htmx.swap(document.querySelector("#app-shell")!, nextShell.outerHTML, swap);
   projectionHosts.preserve(nextShell, document);
   staged.commit();
 

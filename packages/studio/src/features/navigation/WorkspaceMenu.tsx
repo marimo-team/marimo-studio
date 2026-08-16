@@ -17,12 +17,12 @@ import { type WorkspaceAction, WORKSPACE_ACTION_GROUPS } from "./model.ts";
 import { ModeNavigation } from "./ModeNavigation.tsx";
 import { RuntimeOptions } from "./RuntimeOptions.tsx";
 
-const WORKSPACE_ACTION_ICONS: Readonly<Record<WorkspaceAction, LucideIcon>> = {
+const WORKSPACE_ACTION_ICONS = {
   arrange: MoveIcon,
   equalize: Columns3Icon,
   reset: RotateCcwIcon,
   workspace: LayoutTemplateIcon,
-};
+} as const satisfies Readonly<Record<WorkspaceAction, LucideIcon>>;
 
 export const WorkspaceMenu = ({
   arranging,

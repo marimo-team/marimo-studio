@@ -1,4 +1,9 @@
+import {
+  browserObservationSchema,
+  type BrowserObservation,
+} from "@marimo-studio/protocol/browser-observations";
 import { afterEach, expect, it, vi } from "vite-plus/test";
+import { z } from "zod";
 
 import { createViewActivationRemote } from "../src/app/activation-remote.ts";
 import { createBrowserObservationRemote } from "../src/features/preview/observation-remote.ts";
@@ -11,11 +16,23 @@ const deferred = <T>() => {
   return { promise, resolve };
 };
 
-const jsonRequestBody = (init?: RequestInit): Record<string, unknown> => {
-  const body = init?.body;
-  expect(typeof body).toBe("string");
-  return JSON.parse(body as string) as Record<string, unknown>;
-};
+interface JsonRequestInit extends RequestInit {
+  readonly body: string;
+}
+
+type JsonFetch = (url: string, init: JsonRequestInit) => Promise<Response>;
+
+const activationAcknowledgementSchema = z.object({
+  schema: z.literal(1),
+  clientId: z.string(),
+  view: z.string(),
+});
+
+const observationRequestBody = (init: JsonRequestInit): BrowserObservation =>
+  browserObservationSchema.parse(JSON.parse(init.body));
+
+const activationRequestBody = (init: JsonRequestInit) =>
+  activationAcknowledgementSchema.parse(JSON.parse(init.body));
 
 afterEach(() => {
   vi.useRealTimers();
@@ -24,10 +41,9 @@ afterEach(() => {
 
 it("uploads browser observations in monotonic order within one request", async () => {
   const first = deferred<Response>();
-  const fetch = vi
-    .fn()
-    .mockImplementationOnce(() => first.promise)
-    .mockResolvedValue(new Response(null, { status: 204 }));
+  const fetch = vi.fn<JsonFetch>();
+  fetch.mockImplementationOnce(() => first.promise);
+  fetch.mockResolvedValue(new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", fetch);
   const record = createBrowserObservationRemote(
     (view) => `/_marimo-studio/views/${view}`,
@@ -53,11 +69,7 @@ it("uploads browser observations in monotonic order within one request", async (
   first.resolve(new Response(null, { status: 204 }));
   await Promise.all([firstUpload, secondUpload]);
 
-  const payloads = fetch.mock.calls.map(([, init]) => {
-    const body = (init as RequestInit).body;
-    expect(typeof body).toBe("string");
-    return JSON.parse(body as string);
-  });
+  const payloads = fetch.mock.calls.map(([, init]) => observationRequestBody(init));
   expect(payloads.map((payload) => payload.sequence)).toEqual([0, 1]);
   expect(payloads.map((payload) => payload.requestId)).toEqual([
     "request-dashboard",
@@ -67,10 +79,9 @@ it("uploads browser observations in monotonic order within one request", async (
 });
 
 it("retries a transient observation upload with the same sequence", async () => {
-  const fetch = vi
-    .fn()
-    .mockRejectedValueOnce(new TypeError("network unavailable"))
-    .mockResolvedValue(new Response(null, { status: 204 }));
+  const fetch = vi.fn<JsonFetch>();
+  fetch.mockRejectedValueOnce(new TypeError("network unavailable"));
+  fetch.mockResolvedValue(new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", fetch);
   const record = createBrowserObservationRemote(
     (view) => `/_marimo-studio/views/${view}`,
@@ -92,9 +103,7 @@ it("retries a transient observation upload with the same sequence", async () => 
   await record(observation);
 
   expect(fetch).toHaveBeenCalledTimes(2);
-  const sequences = fetch.mock.calls.map(
-    ([, init]) => jsonRequestBody(init as RequestInit).sequence,
-  );
+  const sequences = fetch.mock.calls.map(([, init]) => observationRequestBody(init).sequence);
   expect(sequences).toEqual([0, 0]);
 });
 
@@ -135,13 +144,13 @@ it("does not retry a rejected observation request", async () => {
 
 it("a new request supersedes a stalled upload before its retry budget", async () => {
   vi.useFakeTimers();
-  const fetch = vi.fn((_url: string, init?: RequestInit) => {
-    const body = jsonRequestBody(init);
+  const fetch = vi.fn((_url: string, init: JsonRequestInit) => {
+    const body = observationRequestBody(init);
     if (body.requestId !== "expired-request") {
       return Promise.resolve(new Response(null, { status: 204 }));
     }
     return new Promise<Response>((_resolve, reject) => {
-      init?.signal?.addEventListener("abort", () =>
+      init.signal?.addEventListener("abort", () =>
         reject(new DOMException("Aborted", "AbortError")),
       );
     });
@@ -168,7 +177,7 @@ it("a new request supersedes a stalled upload before its retry budget", async ()
 
   await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   await Promise.all([expired, fresh]);
-  expect(fetch.mock.calls.map(([, init]) => jsonRequestBody(init).requestId)).toEqual([
+  expect(fetch.mock.calls.map(([, init]) => observationRequestBody(init).requestId)).toEqual([
     "expired-request",
     "fresh-request",
   ]);
@@ -176,13 +185,13 @@ it("a new request supersedes a stalled upload before its retry budget", async ()
 
 it("a stalled loading upload yields promptly to terminal evidence", async () => {
   vi.useFakeTimers();
-  const fetch = vi.fn((_url: string, init?: RequestInit) => {
-    const body = jsonRequestBody(init);
+  const fetch = vi.fn((_url: string, init: JsonRequestInit) => {
+    const body = observationRequestBody(init);
     if (body.state === "ready") {
       return Promise.resolve(new Response(null, { status: 204 }));
     }
     return new Promise<Response>((_resolve, reject) => {
-      init?.signal?.addEventListener("abort", () =>
+      init.signal?.addEventListener("abort", () =>
         reject(new DOMException("Aborted", "AbortError")),
       );
     });
@@ -214,11 +223,14 @@ it("a stalled loading upload yields promptly to terminal evidence", async () => 
   await ready;
 
   expect(fetch).toHaveBeenCalledTimes(2);
-  expect(jsonRequestBody(fetch.mock.calls[1]?.[1]).state).toBe("ready");
+  expect(fetch.mock.calls.map(([, init]) => observationRequestBody(init).state)).toEqual([
+    "loading",
+    "ready",
+  ]);
 });
 
 it("acknowledges an activation with its browser identity", async () => {
-  const fetch = vi.fn(async () => new Response(null, { status: 204 }));
+  const fetch = vi.fn<JsonFetch>(async () => new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", fetch);
   const acknowledge = createViewActivationRemote(
     "/_marimo-studio",
@@ -243,16 +255,17 @@ it("acknowledges an activation with its browser identity", async () => {
 
 it("retries a stalled activation acknowledgement with the same generation", async () => {
   vi.useFakeTimers();
-  const fetch = vi
-    .fn()
-    .mockImplementationOnce((_url: string, init?: RequestInit) => {
-      return new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener("abort", () => {
-          reject(new DOMException("Aborted", "AbortError"));
-        });
+  const fetch = vi.fn(
+    (_url: string, _init: JsonRequestInit): Promise<Response> =>
+      Promise.resolve(new Response(null, { status: 204 })),
+  );
+  fetch.mockImplementationOnce((_url: string, init: JsonRequestInit) => {
+    return new Promise<Response>((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () => {
+        reject(new DOMException("Aborted", "AbortError"));
       });
-    })
-    .mockResolvedValue(new Response(null, { status: 204 }));
+    });
+  });
   vi.stubGlobal("fetch", fetch);
   const acknowledge = createViewActivationRemote(
     "/_marimo-studio",
@@ -268,8 +281,8 @@ it("retries a stalled activation acknowledgement with the same generation", asyn
   expect(
     fetch.mock.calls.every(([url]) => url.includes("/_marimo-studio/activations/11/ack")),
   ).toBe(true);
-  expect(fetch.mock.calls.map(([, init]) => jsonRequestBody(init).schema)).toEqual([1, 1]);
-  expect(fetch.mock.calls.map(([, init]) => jsonRequestBody(init).view)).toEqual([
+  expect(fetch.mock.calls.map(([, init]) => activationRequestBody(init).schema)).toEqual([1, 1]);
+  expect(fetch.mock.calls.map(([, init]) => activationRequestBody(init).view)).toEqual([
     "report",
     "report",
   ]);
@@ -277,10 +290,9 @@ it("retries a stalled activation acknowledgement with the same generation", asyn
 
 it("retries an activation acknowledgement while the browser binding settles", async () => {
   vi.useFakeTimers();
-  const fetch = vi
-    .fn()
-    .mockResolvedValueOnce(new Response(null, { status: 409 }))
-    .mockResolvedValueOnce(new Response(null, { status: 204 }));
+  const fetch = vi.fn<JsonFetch>();
+  fetch.mockResolvedValueOnce(new Response(null, { status: 409 }));
+  fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", fetch);
   const acknowledge = createViewActivationRemote(
     "/_marimo-studio",
@@ -293,7 +305,7 @@ it("retries an activation acknowledgement while the browser binding settles", as
   await acknowledged;
 
   expect(fetch).toHaveBeenCalledTimes(2);
-  expect(fetch.mock.calls.map(([, init]) => jsonRequestBody(init).view)).toEqual([
+  expect(fetch.mock.calls.map(([, init]) => activationRequestBody(init).view)).toEqual([
     "report",
     "report",
   ]);

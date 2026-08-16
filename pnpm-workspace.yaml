@@ -39,9 +39,12 @@ catalog:
   zod: 4.3.6
   css-tree: 3.2.1
   "@types/css-tree": 2.3.11
+  oxlint: 1.78.0
+  "@oxlint/plugins": 1.78.0
+  oxlint-tsgolint: 7.0.2001
 
 overrides:
-  nanoid: 3.3.17
+  nanoid: 3.3.18
   postcss: 8.5.26
   undici: 7.29.0
   vite: "catalog:"

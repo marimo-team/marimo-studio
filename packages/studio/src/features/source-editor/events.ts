@@ -8,7 +8,8 @@ export class SourceEvents {
     this.events = new EventSource(url);
     this.events.addEventListener("ready", onReady);
     this.events.addEventListener("change", (event) => {
-      for (const change of parseSourceChanges((event as MessageEvent<string>).data)) {
+      const data = event instanceof MessageEvent ? String(event.data) : "";
+      for (const change of parseSourceChanges(data)) {
         onChange(change);
       }
     });

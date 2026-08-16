@@ -96,15 +96,20 @@ const deliveryDiagnostic = (
   };
 };
 
-const DELIVERY_PHASES: Partial<Record<CellDeliveryPhase, CellPhase>> = {
+const DELIVERY_PHASES = {
   waiting: "loading",
   "timed-out": "error",
-};
+} satisfies Partial<Record<CellDeliveryPhase, CellPhase>>;
 
 const resolvedCellPhase = (
   delivery: CellDeliveryPhase,
   input: Parameters<typeof cellPhase>[0],
-): CellPhase => DELIVERY_PHASES[delivery] ?? cellPhase(input);
+): CellPhase => {
+  if (delivery === "waiting" || delivery === "timed-out") {
+    return DELIVERY_PHASES[delivery];
+  }
+  return cellPhase(input);
+};
 
 export const projectCell = ({
   alias,

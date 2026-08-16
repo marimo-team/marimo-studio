@@ -5,15 +5,19 @@ import type { SourceState } from "../src/features/source-editor/sync.ts";
 
 import { useSourceStatus } from "../src/features/source-editor/useSourceStatus.ts";
 
+interface SourceStatusProps {
+  state: SourceState;
+}
+
 describe("source status", () => {
   afterEach(() => vi.useRealTimers());
 
   test("derives current source state while settling each external update", async () => {
     vi.useFakeTimers();
     const first = { name: "index.html", phase: "external" } satisfies SourceState;
-    const initialProps: { state: SourceState } = { state: first };
+    const initialProps: SourceStatusProps = { state: first };
     const { result, rerender } = renderHook(
-      ({ state }: { state: SourceState }) => useSourceStatus(state),
+      ({ state }: SourceStatusProps) => useSourceStatus(state),
       { initialProps },
     );
 

@@ -43,7 +43,7 @@ export interface SplitNode {
 
 export type LayoutNode = PaneNode | SplitNode;
 
-const layoutNodeShapeSchema: z.ZodType<LayoutNode> = z.lazy(() =>
+const recursiveLayoutNodeSchema: z.ZodType<LayoutNode> = z.lazy(() =>
   z.discriminatedUnion("type", [
     z.object({
       type: z.literal("pane"),
@@ -55,8 +55,8 @@ const layoutNodeShapeSchema: z.ZodType<LayoutNode> = z.lazy(() =>
       id: z.string().min(1),
       axis: axisSchema,
       ratio: z.number().min(0.1).max(0.9),
-      first: layoutNodeShapeSchema,
-      second: layoutNodeShapeSchema,
+      first: recursiveLayoutNodeSchema,
+      second: recursiveLayoutNodeSchema,
     }),
   ]),
 );
@@ -81,7 +81,7 @@ const hasUniqueNodes = (root: LayoutNode): boolean => {
   return visit(root);
 };
 
-export const layoutNodeSchema = layoutNodeShapeSchema.refine(hasUniqueNodes, {
+export const layoutNodeSchema = recursiveLayoutNodeSchema.refine(hasUniqueNodes, {
   message: "Layout panes and node identifiers must be unique.",
 });
 

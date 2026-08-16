@@ -1,21 +1,26 @@
 import { z } from "zod";
 
+import type { UIElementRegistry as MarimoUIElementRegistry } from "./upstream/controls.ts";
+
+type ControlValue = Parameters<MarimoUIElementRegistry["set"]>[1];
+type ControlMessage = Parameters<MarimoUIElementRegistry["broadcastMessage"]>[1];
+
 interface UIElementEntry {
-  value: unknown;
+  value: ControlValue;
 }
 
-export interface UIElementRegistry {
+export interface ControlRegistry {
   readonly entries: ReadonlyMap<string, UIElementEntry>;
   has(objectId: string): boolean;
-  lookupValue(objectId: string): unknown;
-  set(objectId: string, value: unknown): void;
-  registerInstance(objectId: string, instance: HTMLElement): void;
-  broadcastMessage(objectId: string, message: unknown, buffers: readonly DataView[]): void;
+  lookupValue(objectId: string): ControlValue;
+  set(objectId: string, value: ControlValue): void;
+  registerInstance: (objectId: string, instance: HTMLElement) => void;
+  broadcastMessage(objectId: string, message: ControlMessage, buffers: readonly DataView[]): void;
 }
 
 export interface ControlUpdate {
   objectId: string;
-  value: unknown;
+  value: ControlValue;
 }
 
 export interface ControlEndpoint {
@@ -27,8 +32,8 @@ export interface ControlEndpoint {
 
 export type SendControlValues = (request: {
   objectIds: string[];
-  values: unknown[];
-}) => Promise<unknown>;
+  values: ControlValue[];
+}) => Promise<null>;
 
 export interface ReadyEvents {
   type: string;
@@ -37,32 +42,29 @@ export interface ReadyEvents {
 
 const widgetModelReferenceSchema = z.strictObject({ model_id: z.string().min(1) });
 
-const isNativeControlValue = (value: unknown): boolean =>
+const isNativeControlValue = (value: ControlValue): boolean =>
   !widgetModelReferenceSchema.safeParse(value).success;
 
 type RegistrationSubscriber = (objectId: string) => void;
 
 interface RegistrationBroker {
-  readonly original: UIElementRegistry["registerInstance"];
-  readonly observeRegistration: UIElementRegistry["registerInstance"];
+  readonly original: ControlRegistry["registerInstance"];
+  readonly observeRegistration: ControlRegistry["registerInstance"];
   readonly subscribers: Set<RegistrationSubscriber>;
 }
 
-const registrationBrokers = new WeakMap<UIElementRegistry, RegistrationBroker>();
+const registrationBrokers = new WeakMap<ControlRegistry, RegistrationBroker>();
 
 const subscribeRegistrations = (
-  registry: UIElementRegistry,
+  registry: ControlRegistry,
   subscriber: RegistrationSubscriber,
 ): (() => void) => {
   let broker = registrationBrokers.get(registry);
   if (!broker) {
-    const original = Reflect.get(
-      registry,
-      "registerInstance",
-    ) as UIElementRegistry["registerInstance"];
+    const original = registry.registerInstance;
     const registerInstance = original.bind(registry);
     const subscribers = new Set<RegistrationSubscriber>();
-    const observeRegistration: UIElementRegistry["registerInstance"] = (objectId, instance) => {
+    const observeRegistration: ControlRegistry["registerInstance"] = (objectId, instance) => {
       registerInstance(objectId, instance);
       const value = registry.lookupValue(objectId);
       if (!isNativeControlValue(value)) {
@@ -98,7 +100,7 @@ const subscribeRegistrations = (
 
 export const connectControlEndpoint = (
   document: EventTarget,
-  registry: UIElementRegistry,
+  registry: ControlRegistry,
   readyEvents: ReadyEvents,
   sendControlValues: SendControlValues,
 ): ControlEndpoint => {

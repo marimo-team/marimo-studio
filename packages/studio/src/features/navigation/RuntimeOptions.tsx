@@ -5,9 +5,15 @@ import { AppWindowIcon, CircleHelpIcon, ServerIcon, type LucideIcon } from "luci
 import { closeParentMenu } from "./menu.ts";
 import { runtimeDescription } from "./model.ts";
 
-const RUNTIME_ICONS: Readonly<Record<string, LucideIcon>> = {
-  server: ServerIcon,
-  wasm: AppWindowIcon,
+const runtimeIcon = (runtime: string): LucideIcon => {
+  switch (runtime) {
+    case "server":
+      return ServerIcon;
+    case "wasm":
+      return AppWindowIcon;
+    default:
+      return CircleHelpIcon;
+  }
 };
 
 export const RuntimeOptions = ({
@@ -21,7 +27,7 @@ export const RuntimeOptions = ({
 }) => (
   <>
     {runtimes.map((runtime) => {
-      const Icon = RUNTIME_ICONS[runtime.id] ?? CircleHelpIcon;
+      const Icon = runtimeIcon(runtime.id);
       return (
         <button
           key={runtime.id}

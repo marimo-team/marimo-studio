@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig, type HeadConfig, type Plugin } from "vitepress";
+import { defineConfig, type HeadConfig, type Plugin, type UserConfig } from "vitepress";
 import llmstxt from "vitepress-plugin-llms";
 
 const repository = "https://github.com/marimo-team/marimo-studio";
@@ -18,6 +18,16 @@ const canonicalUrl = (page: string): string => {
     .replace(/(^|\/)index\.md$/, "$1")
     .replace(/\.md$/, "");
   return new URL(route, siteUrl).href;
+};
+// SAFETY: vitepress-plugin-llms returns two Vite plugins whose standard hooks
+// are loaded and executed by this VitePress version during every docs build.
+const llmsPlugins = llmstxt({
+  domain: siteUrl.href.replace(/\/$/, ""),
+  excludeIndexPage: false,
+}) as [Plugin, Plugin];
+const viteConfig: UserConfig["vite"] = {
+  plugins: llmsPlugins,
+  publicDir,
 };
 
 export default defineConfig({
@@ -196,13 +206,5 @@ export default defineConfig({
     siteTitle: false,
     socialLinks: [{ icon: "github", link: repository }],
   },
-  vite: {
-    plugins: [
-      llmstxt({
-        domain: siteUrl.href.replace(/\/$/, ""),
-        excludeIndexPage: false,
-      }) as unknown as Plugin,
-    ],
-    publicDir,
-  },
+  vite: viteConfig,
 });

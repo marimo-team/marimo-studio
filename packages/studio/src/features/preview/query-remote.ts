@@ -1,3 +1,5 @@
+import { parseErrorResponse } from "@marimo-studio/protocol/errors";
+
 export type EditorQuerySyncResult = "accepted" | "retry";
 
 const ATTEMPT_TIMEOUT_MS = 3_000;
@@ -59,13 +61,7 @@ export const syncEditorQuery = async (
 
 const isTransient = async (response: Response): Promise<boolean> => {
   try {
-    const payload: unknown = await response.json();
-    return (
-      typeof payload === "object" &&
-      payload !== null &&
-      "transient" in payload &&
-      payload.transient === true
-    );
+    return parseErrorResponse(await response.json()).transient === true;
   } catch {
     return false;
   }

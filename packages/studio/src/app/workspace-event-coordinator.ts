@@ -115,9 +115,9 @@ export class WorkspaceEventCoordinator {
   }
 
   private readonly refreshInventory = (): void => {
-    void this.options.views.refreshInventory().catch((error: unknown) => {
+    void this.options.views.refreshInventory().catch((cause: unknown) => {
       if (!this.disposed) {
-        console.warn("Studio views could not be refreshed", error);
+        console.warn("Studio views could not be refreshed", cause);
       }
     });
   };

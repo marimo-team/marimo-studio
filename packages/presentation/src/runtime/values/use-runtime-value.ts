@@ -13,9 +13,9 @@ import { applyValueReadResponse } from "../../values/response";
 import { useDeliveryTimeout } from "../use-delivery-timeout";
 import { valueCellFailure, valueCellModel } from "./value-cell-model";
 
-const requestFailure = (error: unknown): ValueReadError => ({
-  code: error instanceof ValueRequestError ? error.code : "value-request-failed",
-  message: errorMessage(error),
+const requestFailure = (cause: unknown): ValueReadError => ({
+  code: cause instanceof ValueRequestError ? cause.code : "value-request-failed",
+  message: errorMessage(cause),
 });
 
 export const useRuntimeValue = ({
@@ -64,11 +64,11 @@ export const useRuntimeValue = ({
         }
         applyValueReadResponse(selectors, response);
       })
-      .catch((error: unknown) => {
-        if (!current || (error instanceof DOMException && error.name === "AbortError")) {
+      .catch((cause: unknown) => {
+        if (!current || (cause instanceof DOMException && cause.name === "AbortError")) {
           return;
         }
-        const failure = requestFailure(error);
+        const failure = requestFailure(cause);
         selectors.forEach((selector) => markValueError(selector, failure));
       });
     return () => {

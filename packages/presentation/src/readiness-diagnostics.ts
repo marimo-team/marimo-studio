@@ -75,25 +75,30 @@ export const toBrowserDiagnostics = (
 ): BrowserDiagnostic[] => {
   const maximum = 200;
   const included = diagnostics.length > maximum ? diagnostics.slice(0, maximum - 1) : diagnostics;
-  const result = included.map((diagnostic) => ({
-    code: diagnostic.code,
-    severity: diagnostic.severity,
-    message: diagnostic.message,
-    hint: diagnostic.hint,
-    view: diagnostic.view,
-    scope: "scope" in diagnostic ? diagnostic.scope : "projection",
-    ...("projection" in diagnostic ? { projection: diagnostic.projection } : {}),
-    ...("target" in diagnostic ? { target: diagnostic.target } : {}),
-    ...("source" in diagnostic
-      ? {
-          source: {
-            ...diagnostic.source,
-            line: Math.max(0, diagnostic.source.line),
-            column: Math.max(0, diagnostic.source.column),
-          },
-        }
-      : {}),
-  }));
+  const result = included.map((diagnostic): BrowserDiagnostic => {
+    const browserDiagnostic: BrowserDiagnostic = {
+      code: diagnostic.code,
+      severity: diagnostic.severity,
+      message: diagnostic.message,
+      hint: diagnostic.hint,
+      view: diagnostic.view,
+      scope: "scope" in diagnostic ? diagnostic.scope : "projection",
+    };
+    if ("projection" in diagnostic) {
+      browserDiagnostic.projection = diagnostic.projection;
+    }
+    if ("target" in diagnostic) {
+      browserDiagnostic.target = diagnostic.target;
+    }
+    if ("source" in diagnostic) {
+      browserDiagnostic.source = {
+        ...diagnostic.source,
+        line: Math.max(0, diagnostic.source.line),
+        column: Math.max(0, diagnostic.source.column),
+      };
+    }
+    return browserDiagnostic;
+  });
   if (diagnostics.length > maximum) {
     const omitted = diagnostics.length - included.length;
     result.push({

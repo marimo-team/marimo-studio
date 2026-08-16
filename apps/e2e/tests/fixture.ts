@@ -3,6 +3,7 @@ import { execFile as execFileCallback } from "node:child_process";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
+import { z } from "zod";
 
 import {
   fixtureDirectory,
@@ -31,6 +32,19 @@ export const hostedDashboardHtmlPath = resolve(
 );
 export const hostedViewFixturePath = resolve(hostedFixtureDirectory, "dashboard.html");
 export const studioEntryUrl = "/?file=notebook.py";
+
+const workspaceCheckSchema = z.object({ ok: z.boolean() });
+const workspaceAnalysisSchema = z.object({
+  actions: z.array(z.record(z.string(), z.json())),
+  handoff_ready: z.boolean(),
+});
+const sessionAdminBootstrapSchema = z.object({
+  serverToken: z.string(),
+  urls: z.object({ query: z.string() }),
+});
+const sessionInventorySchema = z.object({
+  files: z.array(z.object({ sessionId: z.string() })),
+});
 
 const copyFixtureFile = async (relativePath: string) => {
   const source = resolve(fixtureDirectory, relativePath);
@@ -92,11 +106,14 @@ export const addWorkspaceView = (target: string, name: string) =>
 
 export const checkWorkspace = async (): Promise<boolean> => {
   const { stdout } = await runStudioCli(["check", workspaceNotebookPath, "--format", "json"]);
-  const result = JSON.parse(stdout) as { ok?: unknown };
-  return result.ok === true;
+  return workspaceCheckSchema.parse(JSON.parse(stdout)).ok;
 };
 
-export const analyzeWorkspace = async (view: string): Promise<Record<string, unknown>> => {
+declare global {
+  var __e2eRuntimeMarker: string | undefined;
+}
+
+export const analyzeWorkspace = async (view: string) => {
   const { stdout } = await runStudioCli([
     "analyze",
     workspaceNotebookPath,
@@ -107,7 +124,7 @@ export const analyzeWorkspace = async (view: string): Promise<Record<string, unk
     "--format",
     "json",
   ]);
-  return JSON.parse(stdout) as Record<string, unknown>;
+  return workspaceAnalysisSchema.parse(JSON.parse(stdout));
 };
 
 export const editorFrame = (page: Page): FrameLocator =>
@@ -128,14 +145,11 @@ export const waitForPreview = async (page: Page, runtime = "server") => {
         preview
           .locator("html")
           .evaluate(async () => {
-            const studio = globalThis as typeof globalThis & {
-              marimoStudio?: { ready: () => Promise<void> };
-            };
-            if (!studio.marimoStudio) {
+            if (!globalThis.marimoStudio) {
               return false;
             }
             return Promise.race([
-              studio.marimoStudio.ready().then(() => true),
+              globalThis.marimoStudio.ready().then(() => true),
               new Promise<false>((resolve) => setTimeout(() => resolve(false), 500)),
             ]);
           })
@@ -167,20 +181,7 @@ const sessionAdmin = async (page: Page): Promise<SessionAdmin | undefined> => {
   if (!source) {
     return undefined;
   }
-  const bootstrap: unknown = JSON.parse(source);
-  if (
-    typeof bootstrap !== "object" ||
-    bootstrap === null ||
-    !("serverToken" in bootstrap) ||
-    typeof bootstrap.serverToken !== "string" ||
-    !("urls" in bootstrap) ||
-    typeof bootstrap.urls !== "object" ||
-    bootstrap.urls === null ||
-    !("query" in bootstrap.urls) ||
-    typeof bootstrap.urls.query !== "string"
-  ) {
-    throw new TypeError("Studio bootstrap is missing session administration fields");
-  }
+  const bootstrap = sessionAdminBootstrapSchema.parse(JSON.parse(source));
   const query = new URL(bootstrap.urls.query, page.url());
   const queryPath = "/_marimo-studio/query";
   if (!query.pathname.endsWith(queryPath)) {
@@ -212,24 +213,8 @@ const closeNotebookSessions = async (page: Page): Promise<void> => {
   if (!running.ok()) {
     throw new Error(`Could not list Marimo sessions: ${running.status()}`);
   }
-  const payload: unknown = await running.json();
-  if (
-    typeof payload !== "object" ||
-    payload === null ||
-    !("files" in payload) ||
-    !Array.isArray(payload.files)
-  ) {
-    throw new TypeError("Marimo returned an invalid session inventory");
-  }
-  for (const file of payload.files) {
-    if (
-      typeof file !== "object" ||
-      file === null ||
-      !("sessionId" in file) ||
-      typeof file.sessionId !== "string"
-    ) {
-      throw new TypeError("Marimo returned an invalid session record");
-    }
+  const inventory = sessionInventorySchema.parse(await running.json());
+  for (const file of inventory.files) {
     const closed = await request.post(`${admin.apiRoot}/shutdown_session`, {
       data: { sessionId: file.sessionId },
       headers,

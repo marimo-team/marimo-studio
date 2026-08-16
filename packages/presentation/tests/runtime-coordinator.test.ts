@@ -1,6 +1,7 @@
 import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
-import type { RuntimeRegistry, RuntimeSession } from "@marimo-studio/runtime";
+import type { RuntimeSession } from "@marimo-studio/runtime";
 
+import { createRuntimeRegistry } from "@marimo-studio/runtime";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -11,8 +12,27 @@ import {
   updateConfiguredRuntimeQuery,
 } from "../src/runtime/coordinator";
 
-const config = (instance: string): RuntimeConfig =>
-  ({ runtime: { id: "test", instance, available: ["test"], data: {} } }) as RuntimeConfig;
+const config = (instance: string): RuntimeConfig => ({
+  schema: 1,
+  revision: "revision-a",
+  view: "dashboard",
+  views: ["dashboard"],
+  runtime: { id: "test", instance, available: ["test"], data: {} },
+  rootUrl: "/",
+  publicRootUrl: "/",
+  documentRootUrl: "/",
+  supportUrl: "/_marimo-studio/views/dashboard",
+  showCellLogs: true,
+  cellBindings: {},
+  valueBindings: {},
+  outputBindings: {},
+  diagnostics: [],
+  appConfig: {},
+  userConfig: {},
+  configOverrides: {},
+  dev: false,
+  mode: "run",
+});
 
 describe("runtime coordinator", () => {
   afterEach(disposeConfiguredRuntime);
@@ -29,11 +49,13 @@ describe("runtime coordinator", () => {
       updateQuery: async () => {},
       dispose: vi.fn(),
     };
-    const registry = {
-      get: () => ({ mount: () => mounted }),
-    } as unknown as RuntimeRegistry;
+    const registry = createRuntimeRegistry([{ id: "test", mount: () => mounted }]);
 
-    const mounting = mountConfiguredRuntime(registry, config("first"), {} as HTMLElement);
+    const mounting = mountConfiguredRuntime(
+      registry,
+      config("first"),
+      document.createElement("div"),
+    );
 
     expect(updateConfiguredRuntime(config("latest"))).toBe("pending");
     finishMount(session);
@@ -53,10 +75,12 @@ describe("runtime coordinator", () => {
       updateQuery: async () => {},
       dispose: vi.fn(),
     };
-    const registry = {
-      get: () => ({ mount: () => mounted }),
-    } as unknown as RuntimeRegistry;
-    const mounting = mountConfiguredRuntime(registry, config("first"), {} as HTMLElement);
+    const registry = createRuntimeRegistry([{ id: "test", mount: () => mounted }]);
+    const mounting = mountConfiguredRuntime(
+      registry,
+      config("first"),
+      document.createElement("div"),
+    );
 
     disposeConfiguredRuntime();
     finishMount(session);
@@ -74,11 +98,9 @@ describe("runtime coordinator", () => {
       updateQuery,
       dispose: vi.fn(),
     };
-    const registry = {
-      get: () => ({ mount: async () => session }),
-    } as unknown as RuntimeRegistry;
+    const registry = createRuntimeRegistry([{ id: "test", mount: async () => session }]);
 
-    await mountConfiguredRuntime(registry, config("first"), {} as HTMLElement);
+    await mountConfiguredRuntime(registry, config("first"), document.createElement("div"));
     await updateConfiguredRuntimeQuery("?region=emea");
 
     expect(updateQuery).toHaveBeenCalledWith("?region=emea");

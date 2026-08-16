@@ -8,8 +8,10 @@ describe("editor outline compatibility", () => {
     const path = `//H3[contains(., "${title}")]`;
     const repaired = `//H3[contains(., concat("The painter's ", '"', "Study", '"', ""))]`;
     const unrelated = "//*[broken";
-    const match = { singleNodeValue: { title } } as unknown as XPathResult;
-    const contextNode = {} as Node;
+    const heading = document.createElement("h3");
+    heading.title = title;
+    const match = document.evaluate(".", heading, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+    const contextNode = document.createElement("main");
     const expressions: string[] = [];
     const nativeEvaluate: Document["evaluate"] = (expression) => {
       expressions.push(expression);

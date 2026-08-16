@@ -1,28 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
-import type { RuntimeCell } from "../src/runtime/runtime-cell.ts";
-
 import { valueCellModel } from "../src/runtime/values/value-cell-model.ts";
+import { runtimeCellFixture } from "./runtime-cell-fixture.ts";
 
 test("an idle kernel value remains readable when a secondary client has stale source metadata", () => {
-  const cell = {
-    id: "cell-id",
-    name: "_",
-    config: { disabled: false },
-    consoleOutputs: [],
-    debuggerActive: false,
-    status: "idle",
+  const cell = runtimeCellFixture({
     lastRunStartTimestamp: 2,
-    errored: false,
     edited: true,
-    staleInputs: false,
-    interrupted: false,
-    output: null,
-    runStartTimestamp: null,
     lastCodeRun: "old_name = 1",
     code: "current_name = 1",
-  } as RuntimeCell;
+  });
 
   assert.deepEqual(valueCellModel(cell, true, false), {
     cellId: "cell-id",
@@ -33,21 +21,10 @@ test("an idle kernel value remains readable when a secondary client has stale so
 });
 
 test("an idle value waits while its kernel inputs are stale", () => {
-  const cell = {
-    id: "cell-id",
-    name: "_",
-    config: { disabled: false },
-    consoleOutputs: [],
-    debuggerActive: false,
-    status: "idle",
+  const cell = runtimeCellFixture({
     lastRunStartTimestamp: 2,
-    errored: false,
-    edited: false,
     staleInputs: true,
-    interrupted: false,
-    output: null,
-    runStartTimestamp: null,
-  } as RuntimeCell;
+  });
 
   assert.deepEqual(valueCellModel(cell, true, false), {
     cellId: "cell-id",

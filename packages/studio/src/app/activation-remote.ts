@@ -29,7 +29,7 @@ const wait = async (duration: number, signal: AbortSignal): Promise<void> => {
 const retryableStatus = (status: number): boolean =>
   status === 408 || status === 409 || status === 429 || status >= 500;
 
-const attemptSignal = (lifecycle: AbortSignal): { signal: AbortSignal; dispose(): void } => {
+const attemptSignal = (lifecycle: AbortSignal) => {
   const controller = new AbortController();
   const cancel = () => controller.abort(lifecycle.reason);
   if (lifecycle.aborted) {

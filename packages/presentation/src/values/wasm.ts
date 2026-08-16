@@ -1,3 +1,4 @@
+import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 import { parseValueReadResponse, type ValueReadResponse } from "@marimo-studio/protocol/value-read";
 import { z } from "zod";
 
@@ -8,12 +9,17 @@ import { ValueRequestError } from "./remote";
 export const functionResultSchema = z.object({
   found: z.boolean(),
   status: z.object({ code: z.string(), message: z.string().nullish() }),
-  return_value: z.unknown(),
+  return_value: jsonValueSchema,
 });
+
+export type FunctionResult = z.infer<typeof functionResultSchema>;
 
 const BRIDGE_RETRY_DELAY_MS = 250;
 
-export type FunctionRequest = (selectors: string[], signal?: AbortSignal) => Promise<unknown>;
+export type FunctionRequest = (
+  selectors: string[],
+  signal?: AbortSignal,
+) => Promise<FunctionResult>;
 
 const abortError = (): DOMException =>
   new DOMException("The runtime request was cancelled.", "AbortError");
@@ -59,7 +65,7 @@ const readWasmValues = async (
   selectors: string[],
   request: FunctionRequest,
 ): Promise<ValueReadResponse> => {
-  const result = functionResultSchema.parse(await request(selectors));
+  const result = await request(selectors);
   if (!result.found) {
     throw new ValueRequestError(
       "The notebook value bridge is unavailable.",
@@ -85,7 +91,7 @@ export const waitForWasmValueBridge = async (
   // instantiation. A successful call therefore proves that dependencies
   // loaded, the initial graph settled, and its Python controls exist.
   while (!signal.aborted) {
-    const result = functionResultSchema.parse(await waitForWasmCaller(request([], signal), signal));
+    const result = await waitForWasmCaller(request([], signal), signal);
     if (result.found) {
       if (result.status.code !== "ok") {
         throw new ValueRequestError(
@@ -103,14 +109,14 @@ export const waitForWasmValueBridge = async (
 
 /** Serialize bridge calls so cancellation never multiplies work in Pyodide. */
 export const createWasmValueReader = (
-  ready: Promise<void> | (() => Promise<void>),
+  ready: () => Promise<void>,
   request: FunctionRequest,
 ): ValueReader => {
   let queue: Promise<void> = Promise.resolve();
   return ({ selectors }, signal) => {
     const operation = queue.then(async () => {
       throwIfWasmAborted(signal);
-      await (typeof ready === "function" ? ready() : ready);
+      await ready();
       throwIfWasmAborted(signal);
       return readWasmValues(selectors, (requested) => request(requested, signal));
     });

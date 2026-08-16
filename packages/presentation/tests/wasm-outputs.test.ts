@@ -1,14 +1,13 @@
-import { reconcileProjectedOutput } from "@marimo-studio/marimo-frontend/projected-output";
-import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
+
+import type { OutputResponseReconciler } from "../src/outputs/reader";
+import type { FunctionResult } from "../src/values/wasm";
 
 import { createWasmOutputReader, createWasmOutputRequest } from "../src/outputs/wasm";
-import { createProjectionSpecSynchronizer } from "../src/runtime/wasm-config";
-
-vi.mock("@marimo-studio/marimo-frontend/projected-output", () => ({
-  reconcileProjectedOutput: vi.fn(),
-}));
-
-beforeEach(() => vi.clearAllMocks());
+import {
+  createProjectionSpecSynchronizer,
+  type WasmProjectionSpecs,
+} from "../src/runtime/wasm-config";
 
 const rendered = {
   found: true,
@@ -25,15 +24,15 @@ const rendered = {
     },
     errors: {},
   },
-};
+} satisfies FunctionResult;
 
 describe("WebAssembly output reads", () => {
   test("retries an unchanged projection update after synchronization fails", async () => {
     const initial = { valueSpecs: {}, outputSpecs: {} };
     const projected = {
       valueSpecs: {},
-      outputSpecs: { df: ["df", []] as [string, []] },
-    };
+      outputSpecs: { df: ["df", []] },
+    } satisfies WasmProjectionSpecs;
     const failure = new Error("RPC request timed out.");
     const apply = vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce(undefined);
     const synchronize = createProjectionSpecSynchronizer(initial, apply);
@@ -75,15 +74,16 @@ describe("WebAssembly output reads", () => {
     const initialized = new Promise<void>((resolve) => {
       initialize = resolve;
     });
-    let completeFirst = (_value: unknown) => {};
-    const firstResponse = new Promise<unknown>((resolve) => {
+    let completeFirst: (value: FunctionResult) => void = () => {};
+    const firstResponse = new Promise<FunctionResult>((resolve) => {
       completeFirst = resolve;
     });
     const request = vi
       .fn()
       .mockImplementationOnce(() => firstResponse)
       .mockResolvedValueOnce(rendered);
-    const reader = createWasmOutputReader(initialized, request);
+    const reconcile = vi.fn<OutputResponseReconciler>((response) => response);
+    const reader = createWasmOutputReader(() => initialized, request, reconcile);
     const firstProjection = {
       revision: "presentation-revision",
       selectors: ["df"],
@@ -117,15 +117,17 @@ describe("WebAssembly output reads", () => {
     await expect(second).resolves.toEqual(rendered.return_value);
     expect(request).toHaveBeenCalledTimes(2);
     expect(request).toHaveBeenNthCalledWith(2, secondProjection);
+    expect(reconcile).toHaveBeenCalledTimes(2);
   });
 
   test("discards a native render after its caller stops waiting", async () => {
-    let complete = (_value: unknown) => {};
-    const response = new Promise<unknown>((resolve) => {
+    let complete: (value: FunctionResult) => void = () => {};
+    const response = new Promise<FunctionResult>((resolve) => {
       complete = resolve;
     });
     const request = vi.fn(async () => response);
-    const reader = createWasmOutputReader(Promise.resolve(), request);
+    const reconcile = vi.fn<OutputResponseReconciler>((result) => result);
+    const reader = createWasmOutputReader(async () => {}, request, reconcile);
     const controller = new AbortController();
     const projection = {
       revision: "presentation-revision",
@@ -141,6 +143,6 @@ describe("WebAssembly output reads", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(reconcileProjectedOutput).not.toHaveBeenCalled();
+    expect(reconcile).not.toHaveBeenCalled();
   });
 });

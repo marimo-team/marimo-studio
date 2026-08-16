@@ -26,8 +26,11 @@ interface CellIdentity {
 interface WriteWaiter {
   version: number;
   resolve: () => void;
-  reject: (error: unknown) => void;
+  reject: (error: Error) => void;
 }
+
+const controlWriteError = (cause: unknown): Error =>
+  cause instanceof Error ? cause : new Error(String(cause));
 
 class ControlWriter {
   private readonly pending = new Map<string, ControlUpdate>();
@@ -78,8 +81,8 @@ class ControlWriter {
         this.pending.clear();
         try {
           await this.endpoint.apply(updates);
-        } catch (error) {
-          this.settle(version, error);
+        } catch (cause) {
+          this.settle(version, controlWriteError(cause));
           continue;
         }
         this.settle(version);
@@ -92,7 +95,7 @@ class ControlWriter {
     }
   }
 
-  private settle(version: number, error?: unknown): void {
+  private settle(version: number, error?: Error): void {
     const settled = this.waiters.filter((waiter) => waiter.version <= version);
     this.waiters.splice(0, settled.length);
     settled.forEach((waiter) => {
@@ -153,7 +156,7 @@ export const synchronizeControlEndpoints = async ({
   const editorToPreview = (update: ControlUpdate) => {
     const translated = translate(update, editorCells, previewControls.cells);
     if (translated) {
-      void previewWriter.write([translated]).catch((error: unknown) => {
+      void previewWriter.write([translated]).catch((error) => {
         console.warn("Marimo preview control update failed", error);
       });
     }
@@ -161,7 +164,7 @@ export const synchronizeControlEndpoints = async ({
   const previewToEditor = (update: ControlUpdate) => {
     const translated = translate(update, previewCells, editorControls.cells);
     if (translated) {
-      void editorWriter.write([translated]).catch((error: unknown) => {
+      void editorWriter.write([translated]).catch((error) => {
         console.warn("Marimo editor control update failed", error);
       });
     }

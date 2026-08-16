@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
-import { parseMountConfig, parseRuntimeConfig, type RuntimeConfig } from "../src/runtime-config.ts";
+import {
+  parseMountConfig,
+  parseRuntimeConfig,
+  type JsonValue,
+  type RuntimeConfig,
+} from "../src/runtime-config.ts";
 
 const diagnostic = {
   code: "cell-not-found",
@@ -67,7 +72,9 @@ const baseRuntimeConfig = {
   mode: "edit",
 } satisfies RuntimeConfig;
 
-const runtimeConfig = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+type RuntimeConfigOverrides = Readonly<Record<string, JsonValue>>;
+
+const runtimeConfig = (overrides: RuntimeConfigOverrides = {}) => ({
   ...baseRuntimeConfig,
   ...overrides,
 });

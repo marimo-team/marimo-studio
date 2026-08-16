@@ -88,7 +88,7 @@ export class PreviewObservationController {
           this.requests.delete(message.requestId);
         }
       })
-      .catch((error: unknown) => {
+      .catch((error) => {
         if (request.terminalUpload && this.requests.get(message.requestId) === request) {
           this.requests.delete(message.requestId);
         }

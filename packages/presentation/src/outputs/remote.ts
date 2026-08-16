@@ -6,11 +6,12 @@ import {
 } from "@marimo-studio/protocol/output-read";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
-import type { OutputReader } from "./reader";
+import type { OutputReader, OutputResponseReconciler } from "./reader";
 
+import { responseJson, responseJsonOrNull } from "../json.ts";
 import { retry } from "../retry.ts";
 import { getRuntimeConfig } from "../runtime-config/index.ts";
-import { reconcileOutputReadResponse } from "./reconcile";
+import { serverRuntimeDataSchema } from "../runtime/server-config.ts";
 
 export class OutputRequestError extends Error {
   constructor(
@@ -33,10 +34,11 @@ const serverOutputTarget = (): ServerOutputTarget => {
   if (config.runtime.id !== "server") {
     throw new OutputRequestError("The server output reader is inactive.", "wrong-runtime", false);
   }
-  const serverToken = config.runtime.data.serverToken;
-  if (typeof serverToken !== "string") {
+  const serverData = serverRuntimeDataSchema.safeParse(config.runtime.data);
+  if (!serverData.success) {
     throw new OutputRequestError("The server token is unavailable.", "invalid-runtime", false);
   }
+  const { serverToken } = serverData.data;
   return {
     serverToken,
     url: appendUrlPath(config.supportUrl, "outputs", globalThis.location.href),
@@ -60,15 +62,14 @@ const readServerOutputsAtTarget = async (
     signal,
   });
   if (!response.ok) {
-    const payload: unknown = await response.json().catch(() => undefined);
-    const detail = parseErrorResponse(payload);
+    const detail = parseErrorResponse(await responseJsonOrNull(response));
     throw new OutputRequestError(
       detail.message ?? `Output request failed with ${response.status}`,
       detail.error ?? "output-request-failed",
       detail.transient ?? false,
     );
   }
-  return parseOutputReadResponse(await response.json());
+  return parseOutputReadResponse(await responseJson(response));
 };
 
 const RETRY_DELAYS = [250, 500, 1_000, 2_000] as const;
@@ -103,7 +104,10 @@ const waitForCaller = <T>(operation: Promise<T>, signal?: AbortSignal): Promise<
   });
 };
 
-export const createServerOutputReader = (sessionId: string): OutputReader => {
+export const createServerOutputReader = (
+  sessionId: string,
+  reconcile: OutputResponseReconciler,
+): OutputReader => {
   let queue: Promise<void> = Promise.resolve();
   return (request, signal) => {
     let target: ServerOutputTarget;
@@ -119,6 +123,6 @@ export const createServerOutputReader = (sessionId: string): OutputReader => {
       () => undefined,
       () => undefined,
     );
-    return waitForCaller(operation, signal).then(reconcileOutputReadResponse);
+    return waitForCaller(operation, signal).then(reconcile);
   };
 };

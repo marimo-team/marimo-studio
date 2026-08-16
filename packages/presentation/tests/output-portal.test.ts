@@ -6,7 +6,6 @@ import { afterEach, beforeAll, expect, test, vi } from "vite-plus/test";
 
 import type { MarimoOutputElement } from "../src/outputs/host";
 import type { OutputReader } from "../src/outputs/reader";
-import type { RuntimeCell } from "../src/runtime/runtime-cell";
 
 import { registerMarimoOutputElement } from "../src/outputs/host";
 import {
@@ -15,14 +14,13 @@ import {
   stopRenderedViewObserver,
 } from "../src/rendered-view-observer";
 import { OutputPortal } from "../src/runtime/outputs/OutputPortal";
+import { runtimeCellFixture } from "./runtime-cell-fixture";
 
-vi.mock("@marimo-studio/marimo-frontend/projected-output", () => ({
-  ProjectedOutputArea: ({ output }: { output: { data: string } }) =>
-    createElement("div", { "data-marimo-cell-output": "" }, output.data),
-}));
+declare global {
+  var IS_REACT_ACT_ENVIRONMENT: boolean;
+}
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
   supportUrl: "/_marimo-studio/views/dashboard",
   version: "test-version",
@@ -38,16 +36,11 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-const runtimeCell = (version: number, id = "source-cell"): RuntimeCell =>
-  ({
+const runtimeCell = (version: number, id = "source-cell") =>
+  runtimeCellFixture({
     id,
     lastRunStartTimestamp: version,
-    config: { disabled: false },
-    status: "idle",
-    errored: false,
-    staleInputs: false,
-    interrupted: false,
-  }) as RuntimeCell;
+  });
 
 const output = (data: string, timestamp: number): RenderedOutput => ({
   ownerCellId: "projected-owner",
@@ -121,7 +114,8 @@ test("keeps readiness stale until the requested source version mounts", async ()
   await ready;
 
   expect(host.dataset.state).toBe("ready");
-  expect(host.textContent).toContain("second");
+  expect(host.dataset.runtimeCellId).toBe("source-cell");
+  expect(host.dataset.outputMime).toBe("text/plain");
   expect(events).toEqual(["ready", "updated"]);
   expect(readOutputs).toHaveBeenCalledTimes(2);
 
@@ -137,12 +131,13 @@ test("keeps readiness stale until the requested source version mounts", async ()
   });
   expect(readOutputs).toHaveBeenCalledTimes(2);
   expect(host.dataset.state).toBe("ready");
-  expect(host.textContent).toContain("second");
+  expect(host.dataset.runtimeCellId).toBe("source-cell");
+  expect(host.dataset.outputMime).toBe("text/plain");
 
   await act(async () => root.unmount());
 });
 
-test("clears a prior projection when its binding changes", async () => {
+test("clears prior projection metadata when its binding changes", async () => {
   document.body.innerHTML = '<marimo-output value="report"></marimo-output><div id="root"></div>';
   const host = document.querySelector<MarimoOutputElement>("marimo-output")!;
   const root = createRoot(document.querySelector("#root")!);
@@ -181,7 +176,10 @@ test("clears a prior projection when its binding changes", async () => {
     resolveFirst({ outputs: { report: output("first", 1) }, errors: {} });
     await first;
   });
-  expect(host.textContent).toContain("first");
+  expect(host.dataset.state).toBe("ready");
+  expect(host.dataset.marimoVariable).toBe("first");
+  expect(host.dataset.runtimeCellId).toBe("source-cell");
+  expect(host.dataset.outputMime).toBe("text/plain");
 
   await act(async () => {
     root.render(
@@ -193,7 +191,9 @@ test("clears a prior projection when its binding changes", async () => {
     );
   });
   expect(host.dataset.state).toBe("loading");
-  expect(host.textContent).not.toContain("first");
+  expect(host.dataset.marimoVariable).toBe("second");
+  expect(host.dataset.runtimeCellId).toBeUndefined();
+  expect(host.dataset.outputMime).toBeUndefined();
 
   await act(async () => {
     resolveSecond({ outputs: { report: output("second", 2) }, errors: {} });
@@ -201,7 +201,8 @@ test("clears a prior projection when its binding changes", async () => {
   });
   expect(host.dataset.state).toBe("ready");
   expect(host.dataset.marimoVariable).toBe("second");
-  expect(host.textContent).toContain("second");
+  expect(host.dataset.runtimeCellId).toBe("next-cell");
+  expect(host.dataset.outputMime).toBe("text/plain");
 
   await act(async () => root.unmount());
 });

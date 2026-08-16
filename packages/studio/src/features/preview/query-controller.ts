@@ -3,11 +3,8 @@ import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
 
 import type { EditorQuerySyncResult } from "./query-remote.ts";
 
+import { previewFrameApi } from "./frame-api.ts";
 import { RetrySchedule } from "./state.ts";
-
-interface PreviewQueryApi {
-  updateQuery(query: string): Promise<void>;
-}
 
 interface PendingQuery {
   query: string;
@@ -82,13 +79,7 @@ export class PreviewQueryController {
     if (this.runtime === DEFAULT_RUNTIME_ID || !viewReady) {
       return;
     }
-    const studio = (
-      this.preview.contentWindow as
-        | (Window & {
-            marimoStudio?: PreviewQueryApi;
-          })
-        | null
-    )?.marimoStudio;
+    const studio = previewFrameApi(this.preview);
     if (!studio) {
       return;
     }

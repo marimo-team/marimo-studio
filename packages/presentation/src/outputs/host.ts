@@ -5,6 +5,15 @@ export type OutputHostState = "connecting" | "loading" | "stale" | "ready" | "er
 
 type HostListener = () => void;
 
+export interface OutputHostEventDetail {
+  readonly selector?: string;
+  readonly cellId?: string;
+  readonly mimetype?: string;
+  readonly code?: string;
+  readonly message?: string;
+  readonly hint?: string;
+}
+
 const OUTPUT_SELECTOR = "[data-marimo-cell-output]";
 const PRESERVED_ID_PREFIX = "marimo-studio-output-";
 const hosts = new Set<MarimoOutputElement>();
@@ -111,7 +120,7 @@ export const subscribeOutputHosts = (listener: HostListener) => {
 export const setOutputHostState = (
   host: MarimoOutputElement,
   state: OutputHostState,
-  detail: Record<string, unknown> = {},
+  detail: OutputHostEventDetail = {},
 ) => {
   const previous = host.dataset.state;
   host.dataset.state = state;

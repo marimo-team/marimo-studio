@@ -1,4 +1,5 @@
 import { parseErrorResponse } from "@marimo-studio/protocol/errors";
+import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 import {
   parseCreatedView,
@@ -15,9 +16,15 @@ export interface ViewRemote {
   remove(name: string): Promise<DeletedView>;
 }
 
+const responseJson = async (response: Response) => jsonValueSchema.parse(await response.json());
+
 const errorMessage = async (response: Response, fallback: string): Promise<string> => {
-  const payload: unknown = await response.json().catch(() => undefined);
-  return parseErrorResponse(payload).message ?? `${fallback} (${response.status})`;
+  const message = `${fallback} (${response.status})`;
+  try {
+    return parseErrorResponse(await responseJson(response)).message ?? message;
+  } catch {
+    return message;
+  }
 };
 
 export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRemote => ({
@@ -26,7 +33,7 @@ export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRem
     if (!response.ok) {
       throw new Error(await errorMessage(response, "Could not load views"));
     }
-    return parseViewList(await response.json());
+    return parseViewList(await responseJson(response));
   },
 
   async create(name) {
@@ -41,7 +48,7 @@ export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRem
     if (!response.ok) {
       throw new Error(await errorMessage(response, "Could not create view"));
     }
-    return parseCreatedView(await response.json());
+    return parseCreatedView(await responseJson(response));
   },
 
   async remove(name) {
@@ -55,6 +62,6 @@ export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRem
     if (!response.ok) {
       throw new Error(await errorMessage(response, "Could not remove view"));
     }
-    return parseDeletedView(await response.json());
+    return parseDeletedView(await responseJson(response));
   },
 });
