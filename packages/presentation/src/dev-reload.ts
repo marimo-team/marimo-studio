@@ -46,12 +46,12 @@ const baselineReconciler = new BaselineReconciler(hasRuntimeConfig());
 let presentationRevisions: PresentationRevisionController;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-const REFRESH_FAILURE_CODES: Record<ShellChangeKind, string> = {
+const REFRESH_FAILURE_CODES = {
   css: "stylesheet-refresh-failed",
   html: "shell-refresh-failed",
   runtime: "runtime-config-refresh-failed",
   views: "shell-refresh-failed",
-};
+} satisfies Record<ShellChangeKind, string>;
 
 const cancelRetry = (): void => {
   if (retryTimer !== undefined) {
@@ -73,16 +73,16 @@ const scheduleRetry = (kind: ShellChangeKind): void => {
   }, retrySchedule.next());
 };
 
-const refreshFailureCode = (error: unknown, kind: ShellChangeKind): string => {
-  if (error instanceof RuntimeConfigRequestError || error instanceof StylesheetRefreshError) {
-    return error.code;
+const refreshFailureCode = (cause: unknown, kind: ShellChangeKind): string => {
+  if (cause instanceof RuntimeConfigRequestError || cause instanceof StylesheetRefreshError) {
+    return cause.code;
   }
   return REFRESH_FAILURE_CODES[kind];
 };
 
-const refreshFailureHint = (error: unknown, transient: boolean): string => {
-  if (error instanceof RuntimeConfigRequestError && error.hint) {
-    return error.hint;
+const refreshFailureHint = (cause: unknown, transient: boolean): string => {
+  if (cause instanceof RuntimeConfigRequestError && cause.hint) {
+    return cause.hint;
   }
   return transient
     ? "Wait for Marimo to accept the notebook change."
@@ -90,16 +90,16 @@ const refreshFailureHint = (error: unknown, transient: boolean): string => {
 };
 
 const refreshDiagnostic = (
-  error: unknown,
+  cause: unknown,
   operation: RevisionOperation,
 ): PresentationDiagnostic => {
-  const transient = error instanceof RuntimeConfigRequestError && error.transient;
+  const transient = cause instanceof RuntimeConfigRequestError && cause.transient;
   return {
     scope: "presentation",
-    code: refreshFailureCode(error, operation.kind),
+    code: refreshFailureCode(cause, operation.kind),
     severity: transient ? "warning" : "error",
-    message: errorMessage(error),
-    hint: refreshFailureHint(error, transient),
+    message: errorMessage(cause),
+    hint: refreshFailureHint(cause, transient),
     view: supportView(operation.target.supportUrl) ?? "",
   };
 };

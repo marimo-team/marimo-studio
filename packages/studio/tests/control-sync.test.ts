@@ -11,8 +11,8 @@ class MemoryEndpoint implements ControlEndpoint {
   readonly applied: (readonly ControlUpdate[])[] = [];
   private readonly listeners = new Set<(update: ControlUpdate) => void>();
 
-  constructor(values: Record<string, unknown>) {
-    Object.entries(values).forEach(([key, value]) => this.values.set(key, value));
+  constructor(...updates: readonly ControlUpdate[]) {
+    updates.forEach((update) => this.values.set(update.objectId, update.value));
   }
 
   snapshot(): readonly ControlUpdate[] {
@@ -61,8 +61,11 @@ class DeferredApplyEndpoint extends MemoryEndpoint {
 
 describe("control state synchronization", () => {
   it("translates stable cell identities between independent runtimes", async () => {
-    const editor = new MemoryEndpoint({ "live-control-0": ["Growth"] });
-    const preview = new MemoryEndpoint({ "wasm-shifted-control-0": ["Base"] });
+    const editor = new MemoryEndpoint({ objectId: "live-control-0", value: ["Growth"] });
+    const preview = new MemoryEndpoint({
+      objectId: "wasm-shifted-control-0",
+      value: ["Base"],
+    });
     const sync = await synchronizeControlEndpoints({
       editor,
       preview,
@@ -83,11 +86,11 @@ describe("control state synchronization", () => {
   });
 
   it("leaves unmatched and non-JSON control values local", async () => {
-    const editor = new MemoryEndpoint({
-      "live-known-0": 2,
-      "live-private-0": 3,
-    });
-    const preview = new MemoryEndpoint({ "wasm-known-0": 1 });
+    const editor = new MemoryEndpoint(
+      { objectId: "live-known-0", value: 2 },
+      { objectId: "live-private-0", value: 3 },
+    );
+    const preview = new MemoryEndpoint({ objectId: "wasm-known-0", value: 1 });
     const sync = await synchronizeControlEndpoints({
       editor,
       preview,
@@ -104,8 +107,11 @@ describe("control state synchronization", () => {
   });
 
   it("serializes initial and live editor writes and keeps the latest value", async () => {
-    const editor = new MemoryEndpoint({ "live-control-0": "Initial" });
-    const preview = new DeferredApplyEndpoint({ "wasm-control-0": "Preview" });
+    const editor = new MemoryEndpoint({ objectId: "live-control-0", value: "Initial" });
+    const preview = new DeferredApplyEndpoint({
+      objectId: "wasm-control-0",
+      value: "Preview",
+    });
     const synchronizing = synchronizeControlEndpoints({
       editor,
       preview,
@@ -127,8 +133,11 @@ describe("control state synchronization", () => {
   });
 
   it("serializes preview writes before applying them to the editor", async () => {
-    const editor = new DeferredApplyEndpoint({ "live-control-0": "Initial" });
-    const preview = new MemoryEndpoint({ "wasm-control-0": "Preview" });
+    const editor = new DeferredApplyEndpoint({
+      objectId: "live-control-0",
+      value: "Initial",
+    });
+    const preview = new MemoryEndpoint({ objectId: "wasm-control-0", value: "Preview" });
     const sync = await synchronizeControlEndpoints({
       editor,
       preview,
@@ -148,8 +157,11 @@ describe("control state synchronization", () => {
   });
 
   it("disconnects endpoints while the initial synchronization is pending", async () => {
-    const editor = new MemoryEndpoint({ "live-control-0": "Initial" });
-    const preview = new DeferredApplyEndpoint({ "wasm-control-0": "Preview" });
+    const editor = new MemoryEndpoint({ objectId: "live-control-0", value: "Initial" });
+    const preview = new DeferredApplyEndpoint({
+      objectId: "wasm-control-0",
+      value: "Preview",
+    });
     const controller = new AbortController();
     const synchronizing = synchronizeControlEndpoints({
       editor,

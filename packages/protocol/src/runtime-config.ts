@@ -88,10 +88,10 @@ export const mountConfigSchema = z.object({
 export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;
 export type MountConfig = z.infer<typeof mountConfigSchema>;
 
-export const parseRuntimeConfig = (value: unknown): RuntimeConfig => {
+export const parseRuntimeConfig = (value: JsonValue): RuntimeConfig => {
   return runtimeConfigSchema.parse(value);
 };
 
-export const parseMountConfig = (value: unknown): MountConfig => {
+export const parseMountConfig = (value: JsonValue): MountConfig => {
   return mountConfigSchema.parse(value);
 };

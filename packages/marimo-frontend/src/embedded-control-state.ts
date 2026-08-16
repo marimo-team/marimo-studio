@@ -1,9 +1,14 @@
 import { z } from "zod";
 
+import type { UIElementRegistry as MarimoUIElementRegistry } from "./upstream/controls.ts";
+
+type ControlValue = Parameters<MarimoUIElementRegistry["set"]>[1];
+type ControlMessage = Parameters<MarimoUIElementRegistry["broadcastMessage"]>[1];
+
 export interface EmbeddedControlRegistry<TId> {
   has(objectId: TId): boolean;
-  set(objectId: TId, value: unknown): void;
-  broadcastMessage(objectId: TId, message: unknown, buffers: readonly DataView[]): void;
+  set(objectId: TId, value: ControlValue): void;
+  broadcastMessage(objectId: TId, message: ControlMessage, buffers: readonly DataView[]): void;
 }
 
 const configuredRegistries = new WeakSet<object>();

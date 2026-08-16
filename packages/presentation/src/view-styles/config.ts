@@ -5,9 +5,15 @@ import { clone, generate, parse, type SelectorList } from "css-tree";
 
 // A selector inside @scope starts below the scope root. Include :scope so
 // utilities on #app-shell follow the same rules as utilities on its children.
-const scopeSubjectSelector = parse(":where(:scope, *)", {
-  context: "selectorList",
-}) as SelectorList;
+const parseSelectorList = (selector: string): SelectorList => {
+  const parsed = parse(selector, { context: "selectorList" });
+  if (parsed.type !== "SelectorList") {
+    throw new Error(`Unable to parse selector list ${selector}`);
+  }
+  return parsed;
+};
+
+const scopeSubjectSelector = parseSelectorList(":where(:scope, *)");
 const scopeSubject = scopeSubjectSelector.children.first;
 const SCOPE_SUBJECT = scopeSubject?.type === "Selector" ? scopeSubject.children.first : null;
 if (!SCOPE_SUBJECT) {
@@ -20,7 +26,7 @@ const targetScopedElement: Postprocessor = (utility) => {
   }
   let selectors: SelectorList;
   try {
-    selectors = parse(utility.selector, { context: "selectorList" }) as SelectorList;
+    selectors = parseSelectorList(utility.selector);
   } catch (error) {
     throw new Error(`Unable to scope view utility selector ${utility.selector}`, {
       cause: error,

@@ -1,7 +1,7 @@
 interface RetryOptions<T> {
   operation: () => Promise<T>;
   delays: readonly number[];
-  retryWhen: (error: unknown) => boolean;
+  retryWhen: (cause: unknown) => boolean;
   signal?: AbortSignal;
 }
 

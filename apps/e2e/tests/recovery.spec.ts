@@ -21,7 +21,7 @@ const originalMetricSource = "metric = scale.value * 21\nmetric";
 const runServerUrl = "http://127.0.0.1:4323";
 const runServerToken = "recovery-e2e-token";
 
-const startRunServer = (): { output: () => string; process: ChildProcess } => {
+const startRunServer = () => {
   const child = spawn(
     "uv",
     [
@@ -205,23 +205,13 @@ test("preserves run-mode kernel state across a page reload", async ({ page }) =>
     const widget = page.getByRole("button", { name: "Widget count: 7" });
     await widget.click();
     await expect(page.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
-    const sessionId = await page.evaluate(
-      () =>
-        (globalThis as typeof globalThis & { __MARIMO_STUDIO_SESSION_ID__?: string })
-          .__MARIMO_STUDIO_SESSION_ID__,
-    );
+    const sessionId = await page.evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__);
     expect(sessionId).toMatch(/^s_[\da-z]{6}$/);
 
     await page.reload();
     await waitForRunMode();
 
-    expect(
-      await page.evaluate(
-        () =>
-          (globalThis as typeof globalThis & { __MARIMO_STUDIO_SESSION_ID__?: string })
-            .__MARIMO_STUDIO_SESSION_ID__,
-      ),
-    ).toBe(sessionId);
+    expect(await page.evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__)).toBe(sessionId);
     await expect(page.locator('[mo-value="metric"]')).toHaveText("63");
     await expect(page.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
   } finally {

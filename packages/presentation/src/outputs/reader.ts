@@ -4,3 +4,5 @@ export type OutputReader = (
   request: OutputReadRequest,
   signal?: AbortSignal,
 ) => Promise<OutputReadResponse>;
+
+export type OutputResponseReconciler = (response: OutputReadResponse) => OutputReadResponse;

@@ -37,9 +37,9 @@ export interface OutputProjectionState {
   projectionCurrent: boolean;
 }
 
-const requestFailure = (error: unknown): ValueReadError => ({
-  code: error instanceof OutputRequestError ? error.code : "output-request-failed",
-  message: errorMessage(error),
+const requestFailure = (cause: unknown): ValueReadError => ({
+  code: cause instanceof OutputRequestError ? cause.code : "output-request-failed",
+  message: errorMessage(cause),
 });
 
 export const useOutputProjection = ({
@@ -135,12 +135,12 @@ export const useOutputProjection = ({
           projection: { cellId: sourceCellId, output: rendered, sourceVersion },
         });
       })
-      .catch((error: unknown) => {
-        if (!current || (error instanceof DOMException && error.name === "AbortError")) {
+      .catch((cause: unknown) => {
+        if (!current || (cause instanceof DOMException && cause.name === "AbortError")) {
           return;
         }
         setState({
-          failure: requestFailure(error),
+          failure: requestFailure(cause),
           identity: requestIdentity,
           pending: false,
         });

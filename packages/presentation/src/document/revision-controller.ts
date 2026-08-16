@@ -26,8 +26,8 @@ export interface RevisionFailure {
 }
 
 export interface PresentationRevisionPolicy {
-  classifyFailure(error: unknown, operation: RevisionOperation): RevisionFailure;
-  onFailure?(error: unknown, operation: RevisionOperation, failure: RevisionFailure): void;
+  classifyFailure(cause: unknown, operation: RevisionOperation): RevisionFailure;
+  onFailure?(cause: unknown, operation: RevisionOperation, failure: RevisionFailure): void;
   onReady?(operation: RevisionOperation): void;
   onSupportChanged?(): void;
 }

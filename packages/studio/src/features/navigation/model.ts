@@ -34,29 +34,32 @@ export const WORKSPACE_ACTION_GROUPS: readonly (readonly {
   ],
 ];
 
-const GROUPED_MODES: Readonly<Record<StudioMode, ModeItem["mode"] | undefined>> = {
+const GROUPED_MODES = {
   code: "split",
   notebook: "notebook",
   preview: "preview",
   split: "split",
   workspace: "split",
-};
+} as const satisfies Readonly<Record<StudioMode, ModeItem["mode"] | undefined>>;
 
-const EXACT_MODES: Readonly<Record<StudioMode, ModeItem["mode"] | undefined>> = {
+const EXACT_MODES = {
   code: "code",
   notebook: "notebook",
   preview: "preview",
   split: "split",
   workspace: undefined,
-};
+} as const satisfies Readonly<Record<StudioMode, ModeItem["mode"] | undefined>>;
 
-const RUNTIME_DESCRIPTIONS: Readonly<Record<string, string>> = {
-  server: "Uses the notebook kernel",
-  wasm: "Runs locally in your browser",
+export const runtimeDescription = (runtime: string): string => {
+  switch (runtime) {
+    case "server":
+      return "Uses the notebook kernel";
+    case "wasm":
+      return "Runs locally in your browser";
+    default:
+      return "Custom preview runtime";
+  }
 };
-
-export const runtimeDescription = (runtime: string): string =>
-  RUNTIME_DESCRIPTIONS[runtime] ?? "Custom preview runtime";
 
 export const runtimeStatusTitle = (status: PreviewStatus): string => {
   if (!status.title) {

@@ -13,17 +13,17 @@ import {
 } from "./revision-controller.ts";
 import { DocumentRevisionAdapter } from "./revision-document.ts";
 
-const classifyFailure = (error: unknown, _operation: RevisionOperation) => ({
+const classifyFailure = (cause: unknown, _operation: RevisionOperation) => ({
   state: "error" as const,
   diagnostic: {
     scope: "presentation" as const,
     code:
-      error instanceof RuntimeConfigRequestError ? error.code : "presentation-transition-failed",
+      cause instanceof RuntimeConfigRequestError ? cause.code : "presentation-transition-failed",
     severity: "error" as const,
-    message: errorMessage(error),
+    message: errorMessage(cause),
     hint:
-      error instanceof RuntimeConfigRequestError && error.hint
-        ? error.hint
+      cause instanceof RuntimeConfigRequestError && cause.hint
+        ? cause.hint
         : "Fix the view source, then try the navigation again.",
     view: renderedViewIdentity().view,
   },

@@ -1,12 +1,13 @@
-import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 import type { RuntimeSession } from "@marimo-studio/runtime";
 
 import {
   type EmbeddedFunction,
+  type EmbeddedPresentationConfig,
   type EmbeddedRuntimeView,
   type EmbeddedTransport,
   mountEmbeddedRuntime,
 } from "@marimo-studio/marimo-frontend/embedded-runtime";
+import { jsonValueSchema, type RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 
 import "./style.css";
 
@@ -32,6 +33,12 @@ export interface RuntimeMountOptions {
   outputReader: (runtime: RuntimeReaderContext) => OutputReader;
 }
 
+const embeddedPresentation = (config: RuntimeConfig): EmbeddedPresentationConfig => ({
+  appConfig: jsonValueSchema.parse(config.appConfig),
+  configOverrides: jsonValueSchema.parse(config.configOverrides),
+  userConfig: jsonValueSchema.parse(config.userConfig),
+});
+
 export const mountSharedRuntime = (
   config: RuntimeConfig,
   runtimeRoot: HTMLElement,
@@ -42,7 +49,7 @@ export const mountSharedRuntime = (
   const runtime = mountEmbeddedRuntime({
     exposeSession: options.exposeSession,
     initialMode: options.initialMode,
-    presentation: config,
+    presentation: embeddedPresentation(config),
     root: runtimeRoot,
     theme: pageThemeSource,
     transport: options.transport,
@@ -63,7 +70,7 @@ export const mountSharedRuntime = (
       if (next.runtime.id !== options.id || next.runtime.instance !== options.instance) {
         return "reload";
       }
-      runtime.update(next);
+      runtime.update(embeddedPresentation(next));
       return "applied";
     },
     updateQuery: (query) => options.updateQuery(runtime.invoke, query),

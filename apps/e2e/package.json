@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "@playwright/test": "catalog:",
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "zod": "catalog:"
   }
 }

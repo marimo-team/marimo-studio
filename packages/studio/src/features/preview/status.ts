@@ -4,13 +4,13 @@ export interface PreviewStatus {
   title: string;
 }
 
-const STARTING_MESSAGES: Readonly<Record<string, string>> = {
-  server: "Connecting to server",
-  wasm: "Starting WebAssembly",
-};
+const STARTING_MESSAGES = new Map([
+  ["server", "Connecting to server"],
+  ["wasm", "Starting WebAssembly"],
+]);
 
 export const previewStartingMessage = (runtime: string): string =>
-  STARTING_MESSAGES[runtime] ?? `Connecting to ${runtime}`;
+  STARTING_MESSAGES.get(runtime) ?? `Connecting to ${runtime}`;
 
 export const previewStartingStatus = (runtime: string): PreviewStatus => ({
   message: previewStartingMessage(runtime),

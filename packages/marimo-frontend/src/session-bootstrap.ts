@@ -1,35 +1,16 @@
-declare const sessionIdBrand: unique symbol;
+import type { SessionId } from "./upstream/session.ts";
 
-export type SessionId = string & { readonly [sessionIdBrand]: true };
+import { createSessionBootstrap } from "./session-bootstrap-core.ts";
 
-let sessionId: SessionId | undefined;
-let sessionBootstrap: Promise<SessionId> | undefined;
+export type { SessionId };
 
 export const isSessionId = (value: string | null | undefined): value is SessionId =>
-  typeof value === "string" && /^s_[\da-z]{6}$/.test(value);
+  value != null && /^s_[\da-z]{6}$/.test(value);
 
-export const bootstrapSession = (preflight: () => void | Promise<void>): Promise<SessionId> => {
-  if (sessionBootstrap) {
-    return sessionBootstrap;
-  }
-  const pending = (async () => {
-    await preflight();
-    const { getSessionId } = await import("./upstream/session.ts");
-    sessionId = getSessionId() as unknown as SessionId;
-    return sessionId;
-  })();
-  sessionBootstrap = pending;
-  void pending.catch(() => {
-    if (sessionBootstrap === pending) {
-      sessionBootstrap = undefined;
-    }
-  });
-  return pending;
-};
+const session = createSessionBootstrap(async () => {
+  const source = await import("./upstream/session.ts");
+  return source.getSessionId();
+});
 
-export const currentSessionId = (): SessionId => {
-  if (!sessionId) {
-    throw new Error("The Marimo session has not been bootstrapped");
-  }
-  return sessionId;
-};
+export const bootstrapSession = session.bootstrap;
+export const currentSessionId = session.current;

@@ -4,6 +4,7 @@ import { notebookQueryValues } from "@marimo-studio/protocol/query";
 
 import type { RuntimeInvoke } from "./runtime";
 
+import { reconcileOutputReadResponse } from "../outputs/reconcile";
 import { createWasmOutputReader, createWasmOutputRequest } from "../outputs/wasm";
 import {
   createWasmValueReader,
@@ -21,15 +22,17 @@ import {
   wasmRuntimeDataSchema,
 } from "./wasm-config";
 
-const requestValues = (invoke: RuntimeInvoke, selectors: string[], signal?: AbortSignal) =>
-  retryWasmRpc(
-    () =>
-      invoke({
-        namespace: "_marimo_studio",
-        functionName: "read_values",
-        args: { selectors, max_value_bytes: 1_000_000 },
-      }),
-    signal,
+const requestValues = async (invoke: RuntimeInvoke, selectors: string[], signal?: AbortSignal) =>
+  functionResultSchema.parse(
+    await retryWasmRpc(
+      () =>
+        invoke({
+          namespace: "_marimo_studio",
+          functionName: "read_values",
+          args: { selectors, max_value_bytes: 1_000_000 },
+        }),
+      signal,
+    ),
   );
 
 const updateQuery = async (invoke: RuntimeInvoke, query: string): Promise<void> => {
@@ -115,6 +118,7 @@ export const mountWasmRuntime = (
           await projectionSpecs(invoke)(data);
         },
         createWasmOutputRequest(sessionId, invoke),
+        reconcileOutputReadResponse,
       ),
   });
   return {

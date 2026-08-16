@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { JsonValue } from "./runtime-config.ts";
+
 const viewListFields = {
   schema: z.literal(1),
   default_view: z.string(),
@@ -28,14 +30,14 @@ export type ViewList = z.infer<typeof viewListSchema>;
 export type CreatedView = z.infer<typeof createdViewSchema>;
 export type DeletedView = z.infer<typeof deletedViewSchema>;
 
-export const parseViewList = (payload: unknown): ViewList => {
+export const parseViewList = (payload: JsonValue): ViewList => {
   return viewListSchema.parse(payload);
 };
 
-export const parseCreatedView = (payload: unknown): CreatedView => {
+export const parseCreatedView = (payload: JsonValue): CreatedView => {
   return createdViewSchema.parse(payload);
 };
 
-export const parseDeletedView = (payload: unknown): DeletedView => {
+export const parseDeletedView = (payload: JsonValue): DeletedView => {
   return deletedViewSchema.parse(payload);
 };

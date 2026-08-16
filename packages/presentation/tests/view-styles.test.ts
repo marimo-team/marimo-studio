@@ -184,10 +184,7 @@ test("late style initialization clears the watchdog diagnostic", async () => {
     <main id="app-shell" class="p-4"></main>
     <div data-marimo-studio-style-error role="alert">Style startup failed</div>
   `;
-  const browser = globalThis as typeof globalThis & {
-    __MARIMO_STUDIO_STYLE_TIMEOUT__?: ReturnType<typeof setTimeout>;
-  };
-  browser.__MARIMO_STUDIO_STYLE_TIMEOUT__ = setTimeout(() => {}, 60_000);
+  globalThis.__MARIMO_STUDIO_STYLE_TIMEOUT__ = setTimeout(() => {}, 60_000);
 
   await initializeViewStyles(true);
 

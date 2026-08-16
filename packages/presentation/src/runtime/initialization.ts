@@ -18,9 +18,9 @@ export const waitForWasmInitialization = (
           clearTimeout(timer);
           resolve();
         },
-        (error: unknown) => {
+        (cause: unknown) => {
           clearTimeout(timer);
-          reject(error);
+          reject(cause);
         },
       );
   });

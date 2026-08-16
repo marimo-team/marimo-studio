@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { createWasmValueReader, waitForWasmValueBridge } from "../src/values/wasm";
+import {
+  createWasmValueReader,
+  type FunctionRequest,
+  type FunctionResult,
+  waitForWasmValueBridge,
+} from "../src/values/wasm";
 
-const response = (value: number) => ({
+const response = (value: number): FunctionResult => ({
   found: true,
   status: { code: "ok", message: null },
   return_value: { values: { total: value }, errors: {} },
@@ -14,7 +19,7 @@ describe("WebAssembly value reads", () => {
   test("waits for the notebook value bridge", async () => {
     vi.useFakeTimers();
     const request = vi
-      .fn<(_: string[]) => Promise<unknown>>()
+      .fn<FunctionRequest>()
       .mockResolvedValueOnce({
         found: false,
         status: { code: "ok", message: null },
@@ -37,7 +42,7 @@ describe("WebAssembly value reads", () => {
     });
     const request = vi.fn(async () => response(3));
     const reading = createWasmValueReader(
-      initialized,
+      () => initialized,
       request,
     )({
       revision: "presentation-revision",
@@ -52,15 +57,15 @@ describe("WebAssembly value reads", () => {
   });
 
   test("serializes calls while one native request is pending", async () => {
-    let complete = (_value: unknown) => {};
-    const firstResponse = new Promise<unknown>((resolve) => {
+    let complete: (value: FunctionResult) => void = () => {};
+    const firstResponse = new Promise<FunctionResult>((resolve) => {
       complete = resolve;
     });
     const request = vi
-      .fn<(_: string[]) => Promise<unknown>>()
+      .fn<FunctionRequest>()
       .mockImplementationOnce(() => firstResponse)
       .mockResolvedValueOnce(response(2));
-    const reader = createWasmValueReader(Promise.resolve(), request);
+    const reader = createWasmValueReader(async () => {}, request);
 
     const valueRequest = { revision: "presentation-revision", selectors: ["total"] };
     const first = reader(valueRequest);
@@ -74,12 +79,12 @@ describe("WebAssembly value reads", () => {
   });
 
   test("drops an aborted read before it reaches the native queue", async () => {
-    let complete = (_value: unknown) => {};
-    const firstResponse = new Promise<unknown>((resolve) => {
+    let complete: (value: FunctionResult) => void = () => {};
+    const firstResponse = new Promise<FunctionResult>((resolve) => {
       complete = resolve;
     });
-    const request = vi.fn<(_: string[]) => Promise<unknown>>(() => firstResponse);
-    const reader = createWasmValueReader(Promise.resolve(), request);
+    const request = vi.fn<FunctionRequest>(() => firstResponse);
+    const reader = createWasmValueReader(async () => {}, request);
     const controller = new AbortController();
 
     const first = reader({ revision: "presentation-revision", selectors: ["first"] });

@@ -1,5 +1,8 @@
+import type { JsonValue } from "@marimo-studio/protocol/runtime-config";
+
 import assert from "node:assert/strict";
 import { afterEach, test } from "vite-plus/test";
+import { z } from "zod";
 
 import {
   commitRuntimeConfig,
@@ -8,6 +11,7 @@ import {
 } from "../src/runtime-config/index.ts";
 import {
   applyValues,
+  isMarimoValueHost,
   type MarimoValueErrorDetail,
   type MarimoValueHost,
   type MarimoValueUpdatedDetail,
@@ -114,26 +118,27 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
   const updates: Array<{
     detail: MarimoValueUpdatedDetail;
     state: string | undefined;
-    value: unknown;
+    value: JsonValue | undefined;
   }> = [];
   const errors: Array<{
     detail: MarimoValueErrorDetail;
     state: string | undefined;
-    value: unknown;
+    value: JsonValue | undefined;
   }> = [];
   let bubbled: CustomEvent<MarimoValueUpdatedDetail> | undefined;
   let errorEvent: CustomEvent<MarimoValueErrorDetail> | undefined;
   first.addEventListener("marimo-value-updated", (event) => {
-    const update = event as CustomEvent<MarimoValueUpdatedDetail>;
     updates.push({
-      detail: structuredClone(update.detail),
+      detail: structuredClone(event.detail),
       state: first.dataset.state,
       value: structuredClone(first.marimoValue),
     });
-    (update.detail.value as { labels: string[] }).labels.push("East");
+    z.object({ labels: z.array(z.string()) })
+      .parse(event.detail.value)
+      .labels.push("East");
   });
   first.addEventListener("marimo-value-error", (event) => {
-    errorEvent = event as CustomEvent<MarimoValueErrorDetail>;
+    errorEvent = event;
     errors.push({
       detail: errorEvent.detail,
       state: first.dataset.state,
@@ -143,14 +148,14 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
   document.addEventListener(
     "marimo-value-updated",
     (event) => {
-      bubbled = event as CustomEvent<MarimoValueUpdatedDetail>;
+      bubbled = event;
     },
     { once: true },
   );
 
   assert.equal(first.marimoValue, undefined);
   const property = Object.getOwnPropertyDescriptor(first, "marimoValue");
-  assert.equal(typeof property?.get, "function");
+  assert.equal(property?.get instanceof Function, true);
   assert.equal(property?.set, undefined);
   const report = { labels: ["North", "South"], total: 42 };
   applyValues({ report });
@@ -170,7 +175,7 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
 
   let nullUpdate: MarimoValueUpdatedDetail | undefined;
   nullable.addEventListener("marimo-value-updated", (event) => {
-    nullUpdate = (event as CustomEvent<MarimoValueUpdatedDetail>).detail;
+    nullUpdate = event.detail;
   });
   applyValues({ nullable: null });
   assert.equal(nullable.marimoValue, null);
@@ -230,15 +235,16 @@ test("dynamic value hosts follow their active selector", async () => {
   const updates: MarimoValueUpdatedDetail[] = [];
   let errors = 0;
   source.addEventListener("marimo-value-updated", (event) => {
-    updates.push(structuredClone((event as CustomEvent<MarimoValueUpdatedDetail>).detail));
+    updates.push(structuredClone(event.detail));
   });
   source.addEventListener("marimo-value-error", () => errors++);
   applyValues({ dynamic: report });
 
-  const late = document.createElement("span") as MarimoValueHost;
+  const late = document.createElement("span");
   late.setAttribute("mo-value", "dynamic");
   document.body.append(late);
   await settleMutations();
+  assert.ok(isMarimoValueHost(late));
   assert.deepEqual(late.marimoValue, report);
 
   source.setAttribute("mo-value", "copy");
@@ -293,7 +299,7 @@ test("a shell replacement reconciles hosts against the incoming bindings", async
   const incoming = document.querySelector<MarimoValueHost>("#incoming")!;
   let update: MarimoValueUpdatedDetail | undefined;
   incoming.addEventListener("marimo-value-updated", (event) => {
-    update = (event as CustomEvent<MarimoValueUpdatedDetail>).detail;
+    update = event.detail;
   });
   applyValues({ incoming: "ready" });
   assert.equal(outgoingErrors, 0);
@@ -308,7 +314,7 @@ test("response-wide read failures retain their structured error", async () => {
   const wide = document.querySelector<MarimoValueHost>("#wide")!;
   let failure: MarimoValueErrorDetail | undefined;
   wide.addEventListener("marimo-value-error", (event) => {
-    failure = (event as CustomEvent<MarimoValueErrorDetail>).detail;
+    failure = event.detail;
   });
   applyValueReadResponse(["wide"], {
     values: {},

@@ -26,6 +26,57 @@ export interface ProjectedOutputUpdate {
   resetUiObjectIds: readonly string[];
 }
 
+const outputMimetypes = {
+  "application/json": true,
+  "application/vnd.jupyter.widget-view+json": true,
+  "application/vnd.marimo+error": true,
+  "application/vnd.marimo+mimebundle": true,
+  "application/vnd.marimo+traceback": true,
+  "application/vnd.vega.v5+json": true,
+  "application/vnd.vega.v6+json": true,
+  "application/vnd.vegalite.v5+json": true,
+  "application/vnd.vegalite.v6+json": true,
+  "image/avif": true,
+  "image/bmp": true,
+  "image/gif": true,
+  "image/jpeg": true,
+  "image/png": true,
+  "image/svg+xml": true,
+  "image/tiff": true,
+  "text/csv": true,
+  "text/html": true,
+  "text/latex": true,
+  "text/markdown": true,
+  "text/password": true,
+  "text/plain": true,
+  "video/mp4": true,
+  "video/mpeg": true,
+} as const satisfies Record<CellOutput["mimetype"], true>;
+
+const isCellId = (value: string): value is CellId => value.length > 0;
+
+const parseCellId = (value: string): CellId => {
+  if (!isCellId(value)) {
+    throw new Error("A projected output owner must have a cell identifier");
+  }
+  return value;
+};
+
+const isOutputMimetype = (value: string): value is CellOutput["mimetype"] =>
+  Object.hasOwn(outputMimetypes, value);
+
+const toCellOutput = (output: ProjectedOutputUpdate): CellOutput => {
+  if (!isOutputMimetype(output.mimetype)) {
+    throw new Error(`Marimo cannot render projected output type ${output.mimetype}`);
+  }
+  return {
+    channel: "output",
+    mimetype: output.mimetype,
+    data: output.data,
+    timestamp: output.timestamp,
+  };
+};
+
 const ensureProjectedOutputOwner = (ownerCellId: CellId, executionTime: number): void => {
   store.set(notebookAtom, (state) => {
     if (state.cellData[ownerCellId] && state.cellRuntime[ownerCellId]) {
@@ -49,14 +100,16 @@ const ensureProjectedOutputOwner = (ownerCellId: CellId, executionTime: number):
 };
 
 export const reconcileProjectedOutput = (output: ProjectedOutputUpdate): void => {
+  const ownerCellId = parseCellId(output.ownerCellId);
+  const cellOutput = toCellOutput(output);
   reconcileProjectedOutputState(
     output,
     UI_ELEMENT_REGISTRY.entries,
-    (ownerCellId) => VirtualFileTracker.INSTANCE.removeForCellId(ownerCellId as CellId),
-    (message) =>
+    () => VirtualFileTracker.INSTANCE.removeForCellId(ownerCellId),
+    () =>
       VirtualFileTracker.INSTANCE.track({
-        cell_id: message.cell_id as CellId,
-        output: message.output as CellOutput,
+        cell_id: ownerCellId,
+        output: cellOutput,
       }),
   );
 };
@@ -95,7 +148,8 @@ export const ProjectedOutputArea = ({
   output: ProjectedOutputUpdate;
   stale: boolean;
 }) => {
-  const ownerCellId = output.ownerCellId as CellId;
+  const ownerCellId = parseCellId(output.ownerCellId);
+  const projectedOutput = toCellOutput(output);
   const notebook = useNotebook();
   const registered = Boolean(notebook.cellData[ownerCellId] && notebook.cellRuntime[ownerCellId]);
 
@@ -120,14 +174,7 @@ export const ProjectedOutputArea = ({
         allowExpand={false}
         cellId={ownerCellId}
         loading={false}
-        output={
-          {
-            channel: "output",
-            mimetype: output.mimetype,
-            data: output.data,
-            timestamp: output.timestamp,
-          } as CellOutput
-        }
+        output={projectedOutput}
         stale={stale}
       />
     </div>

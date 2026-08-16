@@ -3,8 +3,8 @@ import { retry } from "./retry.ts";
 const RPC_TIMEOUT = "RPC request timed out.";
 const RPC_RETRY_DELAYS = [250, 750] as const;
 
-export const isWasmRpcTimeout = (error: unknown): boolean =>
-  error instanceof Error && error.message === RPC_TIMEOUT;
+export const isWasmRpcTimeout = (cause: unknown): boolean =>
+  cause instanceof Error && cause.message === RPC_TIMEOUT;
 
 export const retryWasmRpc = <T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> =>
   retry({

@@ -69,13 +69,13 @@ const publish = (snapshot: ReadinessSnapshot, previous: ReadinessSnapshot): void
   }
   if (snapshot.page === "ready" && previous.page !== "ready") {
     const view = renderedViewIdentity();
-    const message: ViewReadyMessage = {
+    const ready = {
       type: "marimo-studio:view-ready",
       runtime: view.runtime,
       view: view.view,
       revision: view.revision,
-      sessionId: view.sessionId,
-    };
+    } satisfies ViewReadyMessage;
+    const message = view.sessionId === undefined ? ready : { ...ready, sessionId: view.sessionId };
     globalThis.parent.postMessage(message, globalThis.location.origin);
   }
 };

@@ -4,11 +4,11 @@ import { surfaceSchema } from "./schema.ts";
 
 export const SURFACES: readonly Surface[] = surfaceSchema.options;
 
-export const SURFACE_LABELS: Record<Surface, string> = {
+export const SURFACE_LABELS = {
   notebook: "Notebook",
   source: "HTML & CSS",
   preview: "Preview",
-};
+} satisfies Record<Surface, string>;
 
 export const PLACEMENTS: readonly {
   value: Placement;

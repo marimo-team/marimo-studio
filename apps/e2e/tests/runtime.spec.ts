@@ -19,19 +19,11 @@ test("preserves native output state across HTML edits and replaces terminal fail
   const wasm = await waitForPreview(page, "wasm");
   const runtimeMarker = "projected-output-runtime";
   await wasm.locator("html").evaluate((_html, marker) => {
-    (globalThis as typeof globalThis & { __e2eRuntimeMarker?: string }).__e2eRuntimeMarker = marker;
+    globalThis.__e2eRuntimeMarker = marker;
   }, runtimeMarker);
   const expectWasmRuntimePreserved = async () => {
     await expect
-      .poll(() =>
-        wasm
-          .locator("html")
-          .evaluate(
-            () =>
-              (globalThis as typeof globalThis & { __e2eRuntimeMarker?: string })
-                .__e2eRuntimeMarker,
-          ),
-      )
+      .poll(() => wasm.locator("html").evaluate(() => globalThis.__e2eRuntimeMarker))
       .toBe(runtimeMarker);
   };
   const serverSummary = server.locator("#rich-summary-output");

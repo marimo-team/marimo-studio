@@ -3,6 +3,7 @@ import { parseRuntimeConfig, type RuntimeConfig } from "@marimo-studio/protocol/
 import { DEFAULT_RUNTIME_ID, runtimeIdFromSearch } from "@marimo-studio/protocol/runtime-selection";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
+import { responseJson, responseJsonOrNull } from "../json.ts";
 import { retry } from "../retry.ts";
 
 const PREVIEW_SESSION_HEADER = "Marimo-Studio-Preview-Session-Id";
@@ -23,11 +24,7 @@ export const readResponseError = async (
   hint: string;
   transient: boolean;
 }> => {
-  const payload: unknown = await response
-    .clone()
-    .json()
-    .catch(() => undefined);
-  const detail = parseErrorResponse(payload);
+  const detail = parseErrorResponse(await responseJsonOrNull(response.clone()));
   return {
     code: detail.error ?? "runtime-config-failed",
     message: detail.message ?? (await responseText(response, fallback)),
@@ -86,12 +83,11 @@ export const fetchRuntimeConfig = async (
   revision?: string,
   runtimeSessionId?: string,
 ): Promise<RuntimeConfig> => {
-  const browser = globalThis as typeof globalThis & Window;
   const sessionId =
     runtimeSessionId ??
     runtimeConfigSessionId({
-      connected: browser.__MARIMO_STUDIO_SESSION_ID__,
-      href: browser.location?.href,
+      connected: globalThis.__MARIMO_STUDIO_SESSION_ID__,
+      href: globalThis.location?.href,
     });
   const runtime = requestedRuntimeId(fallbackRuntime);
   const url = new URL(appendUrlPath(supportUrl, "config", globalThis.location.href));
@@ -143,7 +139,7 @@ export const fetchRuntimeConfig = async (
     );
     throw new RuntimeConfigRequestError(detail.message, detail.code, detail.transient, detail.hint);
   }
-  const config = parseRuntimeConfig(await response.json());
+  const config = parseRuntimeConfig(await responseJson(response));
   if (config.runtime.id !== runtime) {
     throw new RuntimeConfigRequestError(
       `The server selected ${JSON.stringify(config.runtime.id)} instead of ${JSON.stringify(runtime)}.`,

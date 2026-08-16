@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { browserDiagnosticSchema } from "./browser-observations";
-import { runtimeIdSchema } from "./runtime-config";
+import { runtimeIdSchema, type JsonValue } from "./runtime-config";
 
 export const viewDiagnosticSchema = z.object({
   code: z.string().optional(),
@@ -145,7 +145,7 @@ export type PresentationToStudioMessage =
   | ViewPreviewMessage;
 export type StudioToPresentationMessage = SwitchViewMessage | ObserveViewMessage;
 
-export const parsePreviewMessage = (value: unknown): PreviewMessage | undefined => {
+export const parsePreviewMessage = (value: JsonValue): PreviewMessage | undefined => {
   const result = previewMessageSchema.safeParse(value);
   return result.success ? result.data : undefined;
 };

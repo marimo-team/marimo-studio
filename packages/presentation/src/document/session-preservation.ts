@@ -1,6 +1,9 @@
 import { isSessionId } from "@marimo-studio/marimo-frontend/session-bootstrap";
+import { z } from "zod";
 
 import type { RuntimeConfig } from "../runtime-config/index.ts";
+
+import { serverRuntimeDataSchema } from "../runtime/server-config.ts";
 
 type NavigationType = PerformanceNavigationTiming["type"];
 
@@ -12,6 +15,7 @@ export interface SessionEnvironment {
 }
 
 const DOCUMENT_REPLAY_PARAM = "marimo_studio_resume";
+const navigationTypeSchema = z.enum(["navigate", "reload", "back_forward"]);
 
 interface ServerSessionConfig {
   fileKey: string;
@@ -22,21 +26,21 @@ const serverSessionConfig = (config: RuntimeConfig): ServerSessionConfig | undef
   if (config.runtime.id !== "server") {
     return undefined;
   }
-  const fileKey = config.runtime.data.fileKey;
-  const preserve = config.runtime.data.preserveSession;
-  if (typeof fileKey !== "string" || typeof preserve !== "boolean") {
+  const parsed = serverRuntimeDataSchema.safeParse(config.runtime.data);
+  if (!parsed.success) {
     return undefined;
   }
-  return { fileKey, preserve };
+  return { fileKey: parsed.data.fileKey, preserve: parsed.data.preserveSession };
 };
 
 const browserEnvironment = (): SessionEnvironment => {
-  const navigation = performance.getEntriesByType("navigation")[0] as
-    | PerformanceNavigationTiming
-    | undefined;
+  const navigation = performance.getEntriesByType("navigation")[0];
+  const parsedNavigation = navigationTypeSchema.safeParse(
+    navigation && "type" in navigation ? navigation.type : undefined,
+  );
   return {
     href: globalThis.location.href,
-    navigationType: navigation?.type,
+    navigationType: parsedNavigation.success ? parsedNavigation.data : undefined,
     replaceUrl: (url) => globalThis.history.replaceState(history.state, "", url),
     storage: globalThis.sessionStorage,
   };

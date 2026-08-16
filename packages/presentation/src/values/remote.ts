@@ -6,8 +6,10 @@ import {
   type ValueReadResponse,
 } from "@marimo-studio/protocol/value-read";
 
+import { responseJson, responseJsonOrNull } from "../json.ts";
 import { retry } from "../retry.ts";
 import { getRuntimeConfig } from "../runtime-config/index.ts";
+import { serverRuntimeDataSchema } from "../runtime/server-config.ts";
 
 export type { ValueReadResponse } from "@marimo-studio/protocol/value-read";
 
@@ -31,10 +33,11 @@ export const readServerValues = async (
   if (config.runtime.id !== "server") {
     throw new ValueRequestError("The server value reader is inactive.", "wrong-runtime", false);
   }
-  const serverToken = config.runtime.data.serverToken;
-  if (typeof serverToken !== "string") {
+  const serverData = serverRuntimeDataSchema.safeParse(config.runtime.data);
+  if (!serverData.success) {
     throw new ValueRequestError("The server token is unavailable.", "invalid-runtime", false);
   }
+  const { serverToken } = serverData.data;
   const response = await fetch(
     appendUrlPath(config.supportUrl, "values", globalThis.location.href),
     {
@@ -49,14 +52,13 @@ export const readServerValues = async (
     },
   );
   if (!response.ok) {
-    const payload: unknown = await response.json().catch(() => undefined);
-    const detail = parseErrorResponse(payload);
+    const detail = parseErrorResponse(await responseJsonOrNull(response));
     const message = detail.message ?? `Value request failed with ${response.status}`;
     const code = detail.error ?? "value-request-failed";
     const transient = detail.transient ?? false;
     throw new ValueRequestError(message, code, transient);
   }
-  return parseValueReadResponse(await response.json());
+  return parseValueReadResponse(await responseJson(response));
 };
 
 const RETRY_DELAYS = [250, 500, 1_000, 2_000] as const;

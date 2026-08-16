@@ -1,2 +1,2 @@
-export const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
+export const errorMessage = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);

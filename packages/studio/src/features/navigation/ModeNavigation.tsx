@@ -11,12 +11,12 @@ import type { StudioMode } from "../workspace/schema.ts";
 import { closeParentMenu } from "./menu.ts";
 import { OVERFLOW_MODES, PRIMARY_MODES, selectedMode } from "./model.ts";
 
-const MODE_ICONS: Readonly<Record<Exclude<StudioMode, "workspace">, LucideIcon>> = {
+const MODE_ICONS = {
   code: Code2Icon,
   notebook: NotebookTabsIcon,
   preview: EyeIcon,
   split: PanelsTopLeftIcon,
-};
+} as const satisfies Readonly<Record<Exclude<StudioMode, "workspace">, LucideIcon>>;
 
 const NAVIGATION_VARIANTS = {
   overflow: {

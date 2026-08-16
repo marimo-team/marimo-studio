@@ -1,19 +1,21 @@
+import type { EmbeddedFunction } from "@marimo-studio/marimo-frontend/embedded-runtime";
+
 import {
   parseOutputReadResponse,
   type OutputReadRequest,
   type OutputReadResponse,
 } from "@marimo-studio/protocol/output-read";
 
-import type { OutputReader } from "./reader";
+import type { FunctionResult } from "../values/wasm";
+import type { OutputReader, OutputResponseReconciler } from "./reader";
 
 import { functionResultSchema, throwIfWasmAborted, waitForWasmCaller } from "../values/wasm";
-import { reconcileOutputReadResponse } from "./reconcile";
 import { OutputRequestError } from "./remote";
 
 export type OutputFunctionRequest = (
   request: OutputReadRequest,
   signal?: AbortSignal,
-) => Promise<unknown>;
+) => Promise<FunctionResult>;
 
 interface OutputFunctionInvocation {
   namespace: "_marimo_studio";
@@ -27,12 +29,9 @@ interface OutputFunctionInvocation {
 }
 
 export const createWasmOutputRequest =
-  (
-    consumerId: string,
-    invoke: (request: OutputFunctionInvocation) => Promise<unknown>,
-  ): OutputFunctionRequest =>
-  (request) =>
-    invoke({
+  (consumerId: string, invoke: EmbeddedFunction): OutputFunctionRequest =>
+  async (request) => {
+    const invocation: OutputFunctionInvocation = {
       namespace: "_marimo_studio",
       functionName: "render_values",
       args: {
@@ -41,13 +40,15 @@ export const createWasmOutputRequest =
         consumer_id: consumerId,
         max_output_bytes: 1_000_000,
       },
-    });
+    };
+    return functionResultSchema.parse(await invoke(invocation));
+  };
 
 const readWasmOutputs = async (
   request: OutputReadRequest,
   invoke: OutputFunctionRequest,
 ): Promise<OutputReadResponse> => {
-  const result = functionResultSchema.parse(await invoke(request));
+  const result = await invoke(request);
   if (!result.found) {
     throw new OutputRequestError(
       "The notebook output bridge is unavailable.",
@@ -66,14 +67,15 @@ const readWasmOutputs = async (
 };
 
 export const createWasmOutputReader = (
-  ready: Promise<void> | (() => Promise<void>),
+  ready: () => Promise<void>,
   request: OutputFunctionRequest,
+  reconcile: OutputResponseReconciler,
 ): OutputReader => {
   let queue: Promise<void> = Promise.resolve();
   return (projection, signal) => {
     const operation = queue.then(async () => {
       throwIfWasmAborted(signal);
-      await (typeof ready === "function" ? ready() : ready);
+      await ready();
       throwIfWasmAborted(signal);
       return readWasmOutputs(projection, request);
     });
@@ -81,6 +83,6 @@ export const createWasmOutputReader = (
       () => undefined,
       () => undefined,
     );
-    return waitForWasmCaller(operation, signal).then(reconcileOutputReadResponse);
+    return waitForWasmCaller(operation, signal).then(reconcile);
   };
 };

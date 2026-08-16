@@ -1,143 +1,239 @@
 // @vitest-environment jsdom
 
+import { CellId } from "@marimo-team/frontend/unstable_internal/core/cells/ids";
+import {
+  createCell,
+  createCellRuntimeState,
+} from "@marimo-team/frontend/unstable_internal/core/cells/types";
 import { act, createElement, type ReactNode } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, expect, test, vi } from "vite-plus/test";
 
-const mocks = vi.hoisted(() => {
-  const runtimeManager = {
-    getWsURL: vi.fn((_sessionId: string) => new URL("ws://example.test/ws?session_id=s_abc123")),
-    getSseURL: vi.fn(
-      (_sessionId: string) => new URL("https://example.test/sse?session_id=s_abc123"),
-    ),
-  };
-  return {
-    atoms: {
-      appConfig: "app-config",
-      code: "code",
-      configOverrides: "config-overrides",
-      connection: "connection",
-      filename: "filename",
-      initialMode: "initial-mode",
-      marimoVersion: "marimo-version",
-      requestClient: "request-client",
-      runtimeConfig: "runtime-config",
-      userConfig: "user-config",
-      viewState: "view-state",
-    },
-    cells: [{ id: "cell-1" }],
-    functionRequest: vi.fn(async () => ({ found: true })),
-    initializePlugins: vi.fn(),
-    retainControlValues: vi.fn(),
-    runtimeManager,
-    runtimeStart: vi.fn(),
-    runtimeStop: vi.fn(),
-    sendComponentValues: vi.fn(async () => undefined),
-    sendStdin: vi.fn(async () => undefined),
-    setCells: vi.fn(),
-    setStdinResponse: vi.fn(),
-    storeSet: vi.fn(),
-    workerInitialized: Promise.resolve(),
-  };
-});
-
-vi.mock("jotai", async () => {
-  const { createElement } = await import("react");
-  return {
-    Provider: ({ children }: { children: ReactNode }) =>
-      createElement("div", { "data-provider": "jotai" }, children),
-  };
-});
-
-vi.mock("../src/embedded-control-state.ts", () => ({
-  retainUnmountedControlValues: mocks.retainControlValues,
-}));
-
-vi.mock("../src/session-bootstrap.ts", () => ({
-  currentSessionId: () => "s_abc123",
-}));
-
-vi.mock("../src/upstream/style.ts", () => ({}));
-
-vi.mock("../src/upstream/controls.ts", () => ({
-  UI_ELEMENT_REGISTRY: {},
-}));
-
-vi.mock("../src/upstream/cells.ts", () => ({
-  flattenTopLevelNotebookCells: () => mocks.cells,
-  RuntimeState: {
-    INSTANCE: {
-      start: mocks.runtimeStart,
-      stop: mocks.runtimeStop,
-    },
-  },
-  useCellActions: () => ({
-    setCells: mocks.setCells,
-    setStdinResponse: mocks.setStdinResponse,
-  }),
-  useNotebook: () => ({}),
-}));
-
-vi.mock("../src/upstream/runtime.ts", async () => {
-  const { createElement } = await import("react");
-  const provider =
-    (name: string) =>
-    ({ children }: { children: ReactNode }) =>
-      createElement("div", { "data-provider": name }, children);
-  return {
-    appConfigAtom: mocks.atoms.appConfig,
-    codeAtom: mocks.atoms.code,
-    configOverridesAtom: mocks.atoms.configOverrides,
-    connectionAtom: mocks.atoms.connection,
-    createErrorToastingRequests: () => "server-requests",
-    createNetworkRequests: () => "network-requests",
-    ErrorBoundary: provider("error"),
-    filenameAtom: mocks.atoms.filename,
-    FUNCTIONS_REGISTRY: { request: mocks.functionRequest },
-    getRuntimeManager: () => mocks.runtimeManager,
-    initialModeAtom: mocks.atoms.initialMode,
-    initializePlugins: mocks.initializePlugins,
-    KernelStartupErrorModal: () => createElement("div", { "data-feedback": "startup" }),
-    LocaleProvider: provider("locale"),
-    marimoVersionAtom: mocks.atoms.marimoVersion,
-    ModalProvider: provider("modal"),
-    parseAppConfig: (value: unknown) => ({ parsedAppConfig: value }),
-    parseConfigOverrides: (value: unknown) => ({ parsedConfigOverrides: value }),
-    parseUserConfig: (value: unknown) => value,
-    PyodideBridge: { INSTANCE: { initialized: { promise: mocks.workerInitialized } } },
-    requestClientAtom: mocks.atoms.requestClient,
-    resolveRequestClient: () => "wasm-requests",
-    runtimeConfigAtom: mocks.atoms.runtimeConfig,
-    slotsController: {},
-    SlotzProvider: provider("slotz"),
-    store: { set: mocks.storeSet },
-    ThemeProvider: provider("theme"),
-    Toaster: () => createElement("div", { "data-feedback": "toast" }),
-    TooltipProvider: provider("tooltip"),
-    TracebackModalContainer: () => createElement("div", { "data-feedback": "traceback" }),
-    useMarimoKernelConnection: () => ({ connection: { state: "OPEN" } }),
-    useRequestClient: () => ({
-      sendComponentValues: mocks.sendComponentValues,
-      sendStdin: mocks.sendStdin,
-    }),
-    userConfigAtom: mocks.atoms.userConfig,
-    viewStateAtom: mocks.atoms.viewState,
-    WebSocketState: {
-      NOT_STARTED: "NOT_STARTED",
-      CONNECTING: "CONNECTING",
-      OPEN: "OPEN",
-      CLOSING: "CLOSING",
-      CLOSED: "CLOSED",
-    },
-  };
-});
-
-import {
-  type EmbeddedRuntimeHandle,
-  type EmbeddedRuntimeView,
-  mountEmbeddedRuntime,
+import type {
+  EmbeddedRuntimeHost,
+  EmbeddedRuntimeRenderer,
+  EmbeddedTransportHost,
+} from "../src/embedded-runtime-core.ts";
+import type {
+  EmbeddedCellActions,
+  EmbeddedRequestClient,
+  EmbeddedRuntimeKernel,
+} from "../src/embedded-runtime-view.tsx";
+import type {
+  EmbeddedConnection,
+  EmbeddedFunction,
+  EmbeddedFunctionResult,
+  EmbeddedPresentationConfig,
+  EmbeddedRuntimeHandle,
+  EmbeddedRuntimeCell,
+  EmbeddedRuntimeView,
+  EmbeddedServerTransport,
+  EmbeddedThemeSource,
+  EmbeddedWasmTransport,
 } from "../src/embedded-runtime.tsx";
+import type { SessionId } from "../src/session-bootstrap.ts";
 
-const presentation = (theme = "system") => ({
+import { parseEmbeddedJsonValue } from "../src/embedded-json.ts";
+import {
+  createEmbeddedRuntimeMount,
+  createTransportInitializer,
+  resolveEmbeddedCellId,
+} from "../src/embedded-runtime-core.ts";
+import { EmbeddedRuntimeViewComponent } from "../src/embedded-runtime-view.tsx";
+import { mountEmbeddedRuntime as mountMarimoRuntime } from "../src/embedded-runtime.tsx";
+import { bootstrapSession, isSessionId } from "../src/session-bootstrap.ts";
+
+const testSessionId = (): SessionId => {
+  const sessionId = "s_abc123";
+  if (!isSessionId(sessionId)) {
+    throw new Error("The test session identifier must follow Marimo's session format");
+  }
+  return sessionId;
+};
+
+const functionResult: EmbeddedFunctionResult = {
+  found: true,
+  return_value: { found: true },
+  status: { code: "ok", message: null, title: "Success" },
+};
+
+class RuntimeManagerDouble {
+  getWsURL = (_sessionId: SessionId): URL => new URL("ws://example.test/ws?session_id=s_abc123");
+
+  getSseURL = (_sessionId: SessionId): URL =>
+    new URL("https://example.test/sse?session_id=s_abc123");
+}
+
+class TransportHostDouble implements EmbeddedTransportHost {
+  readonly runtime = new RuntimeManagerDouble();
+  readonly serverTransports = new Array<EmbeddedServerTransport>();
+  readonly wasmTransports = new Array<EmbeddedWasmTransport>();
+  readonly workerInitialized = Promise.resolve();
+  serverRequestActivations = 0;
+
+  activateServerRequests(): void {
+    this.serverRequestActivations += 1;
+  }
+
+  prepareServer(transport: EmbeddedServerTransport): RuntimeManagerDouble {
+    this.serverTransports.push(transport);
+    return this.runtime;
+  }
+
+  prepareWasm(transport: EmbeddedWasmTransport): Promise<void> {
+    this.wasmTransports.push(transport);
+    return this.workerInitialized;
+  }
+}
+
+type MountRender = (runtime: EmbeddedRuntimeView) => ReactNode;
+
+class RuntimeRendererDouble implements EmbeddedRuntimeRenderer {
+  readonly root: Root;
+  disposeCalls = 0;
+
+  constructor(
+    element: HTMLElement,
+    private readonly host: RuntimeHostDouble,
+  ) {
+    this.root = createRoot(element);
+  }
+
+  render(initialized: Promise<void>, renderView: MountRender, sessionId: SessionId): void {
+    if (this.host.renderError) {
+      throw this.host.renderError;
+    }
+    const connection: EmbeddedConnection = { state: "OPEN" };
+    const view: EmbeddedRuntimeView = {
+      cells: [],
+      connection,
+      initialization: { state: "ready" },
+      initialized,
+      invoke: this.host.invoke,
+      sessionId,
+      submitStdin: () => {},
+    };
+    this.host.view = view;
+    this.root.render(renderView(view));
+  }
+
+  dispose(): void {
+    this.disposeCalls += 1;
+    this.root.unmount();
+  }
+}
+
+interface PresentationCall {
+  readonly config: EmbeddedPresentationConfig;
+  readonly initialMode: "edit" | "read";
+  readonly theme: "light" | "dark" | undefined;
+  readonly viewMode: "present" | "read";
+}
+
+interface ThemeCall {
+  readonly config: EmbeddedPresentationConfig;
+  readonly theme: "light" | "dark" | undefined;
+}
+
+class RuntimeHostDouble implements EmbeddedRuntimeHost {
+  readonly transport = new TransportHostDouble();
+  readonly presentationCalls = new Array<PresentationCall>();
+  readonly themeCalls = new Array<ThemeCall>();
+  readonly invoke: EmbeddedFunction = vi.fn(async () => functionResult);
+  readonly initializeTransport = createTransportInitializer(this.transport, this.invoke);
+  connectingCalls = 0;
+  initializeCalls = 0;
+  renderError: Error | undefined;
+  renderer: RuntimeRendererDouble | undefined;
+  view: EmbeddedRuntimeView | undefined;
+
+  configurePresentation(
+    config: EmbeddedPresentationConfig,
+    initialMode: "edit" | "read",
+    viewMode: "present" | "read",
+    theme: "light" | "dark" | undefined,
+  ): void {
+    this.presentationCalls.push({ config, initialMode, theme, viewMode });
+  }
+
+  configureTheme(config: EmbeddedPresentationConfig, theme: "light" | "dark" | undefined): void {
+    this.themeCalls.push({ config, theme });
+  }
+
+  createRenderer(element: HTMLElement): RuntimeRendererDouble {
+    const renderer = new RuntimeRendererDouble(element, this);
+    this.renderer = renderer;
+    return renderer;
+  }
+
+  currentSessionId(): SessionId {
+    return testSessionId();
+  }
+
+  initialize(): void {
+    this.initializeCalls += 1;
+  }
+
+  setConnecting(): void {
+    this.connectingCalls += 1;
+  }
+}
+
+type KernelNotebook = readonly EmbeddedRuntimeCell[];
+
+class KernelDouble implements EmbeddedRuntimeKernel<KernelNotebook> {
+  readonly invoke: EmbeddedFunction = vi.fn(async () => functionResult);
+  readonly setCells: EmbeddedCellActions["setCells"] = vi.fn();
+  readonly setStdinResponse: EmbeddedCellActions["setStdinResponse"] = vi.fn();
+  readonly sendComponentValues: EmbeddedRequestClient["sendComponentValues"] = vi.fn(
+    async () => null,
+  );
+  readonly sendStdin: EmbeddedRequestClient["sendStdin"] = vi.fn(async () => null);
+  readonly connectionSessions = new Array<SessionId>();
+  startCalls = 0;
+  stopCalls = 0;
+
+  constructor(private readonly notebook: KernelNotebook) {}
+
+  flattenCells(notebook: KernelNotebook): EmbeddedRuntimeCell[] {
+    return [...notebook];
+  }
+
+  startRuntime(_sendComponentValues: EmbeddedRequestClient["sendComponentValues"]): void {
+    this.startCalls += 1;
+  }
+
+  stopRuntime(): void {
+    this.stopCalls += 1;
+  }
+
+  useCellActions(): EmbeddedCellActions {
+    return {
+      setCells: this.setCells,
+      setStdinResponse: this.setStdinResponse,
+    };
+  }
+
+  useConnection(
+    input: Parameters<EmbeddedRuntimeKernel<KernelNotebook>["useConnection"]>[0],
+  ): EmbeddedConnection {
+    this.connectionSessions.push(input.sessionId);
+    return { state: "OPEN" };
+  }
+
+  useNotebook(): KernelNotebook {
+    return this.notebook;
+  }
+
+  useRequestClient(): EmbeddedRequestClient {
+    return {
+      sendComponentValues: this.sendComponentValues,
+      sendStdin: this.sendStdin,
+    };
+  }
+}
+
+const presentation = (theme = "system"): EmbeddedPresentationConfig => ({
   appConfig: { width: "full" },
   configOverrides: { runtime: "embedded" },
   userConfig: { display: { theme } },
@@ -146,14 +242,15 @@ const presentation = (theme = "system") => ({
 const createThemeSource = () => {
   let current: "light" | "dark" | undefined = "light";
   const listeners = new Set<() => void>();
-  return {
-    source: {
-      current: () => current,
-      subscribe(listener: () => void) {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      },
+  const source: EmbeddedThemeSource = {
+    current: () => current,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
+  };
+  return {
+    source,
     emit() {
       for (const listener of listeners) {
         listener();
@@ -172,23 +269,39 @@ const root = (): HTMLElement => {
   return element;
 };
 
+const serverTransport = (
+  transformTransportURL: EmbeddedServerTransport["transformTransportURL"] = (url) => url,
+): EmbeddedServerTransport => ({
+  kind: "server",
+  serverToken: "token",
+  transformTransportURL,
+  url: "https://example.test/base/",
+});
+
+const wasmTransport = (
+  waitForReady: EmbeddedWasmTransport["waitForReady"] = () => undefined,
+): EmbeddedWasmTransport => ({
+  kind: "wasm",
+  code: "print('ready')",
+  filename: "notebook.py",
+  url: "https://example.test/",
+  version: "1.2.3",
+  waitForReady,
+});
+
 beforeEach(() => {
-  vi.clearAllMocks();
   document.body.replaceChildren();
-  delete (globalThis as typeof globalThis & { __MARIMO_STUDIO_SESSION_ID__?: string })
-    .__MARIMO_STUDIO_SESSION_ID__;
+  delete globalThis.__MARIMO_STUDIO_SESSION_ID__;
 });
 
 test("mounts, updates, and disposes the server runtime through one handle", async () => {
   const target = root();
   const theme = createThemeSource();
-  const originalGetWsURL = mocks.runtimeManager.getWsURL;
-  const originalGetSseURL = mocks.runtimeManager.getSseURL;
-  const browser = globalThis as typeof globalThis & {
-    __MARIMO_STUDIO_SESSION_ID__?: string;
-  };
-  browser.__MARIMO_STUDIO_SESSION_ID__ = "s_before";
-  let view: EmbeddedRuntimeView | undefined;
+  const host = new RuntimeHostDouble();
+  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
+  const originalGetWsURL = host.transport.runtime.getWsURL;
+  const originalGetSseURL = host.transport.runtime.getSseURL;
+  globalThis.__MARIMO_STUDIO_SESSION_ID__ = "s_before";
   let handle!: EmbeddedRuntimeHandle;
 
   await act(async () => {
@@ -197,84 +310,81 @@ test("mounts, updates, and disposes the server runtime through one handle", asyn
       initialMode: "read",
       presentation: presentation(),
       render(runtime) {
-        view = runtime;
         return createElement("div", { "data-runtime-view": "" }, runtime.sessionId);
       },
       root: target,
       theme: theme.source,
-      transport: {
-        kind: "server",
-        serverToken: "token",
-        transformTransportURL(url) {
-          url.searchParams.set("embedded", "true");
-          return url;
-        },
-        url: "https://example.test/base/",
-      },
+      transport: serverTransport((url) => {
+        url.searchParams.set("embedded", "true");
+        return url;
+      }),
       viewMode: "read",
     });
     await handle.initialized;
   });
 
   expect(handle.sessionId).toBe("s_abc123");
-  expect(browser.__MARIMO_STUDIO_SESSION_ID__).toBe("s_abc123");
-  expect(view?.cells).toEqual(mocks.cells);
-  expect(view?.connection.state).toBe("OPEN");
-  expect(view?.initialization).toEqual({ state: "ready" });
-  expect(
-    Array.from(target.querySelectorAll<HTMLElement>("[data-provider]"), (element) =>
-      element.getAttribute("data-provider"),
-    ),
-  ).toEqual(["jotai", "theme", "error", "tooltip", "slotz", "locale", "modal"]);
-  expect(target.textContent).toContain("s_abc123");
-  expect(
-    Array.from(target.querySelectorAll<HTMLElement>("[data-feedback]"), (element) =>
-      element.getAttribute("data-feedback"),
-    ),
-  ).toEqual(["toast", "startup", "traceback"]);
-  expect(mocks.retainControlValues).toHaveBeenCalledOnce();
-  expect(mocks.storeSet).toHaveBeenCalledWith(mocks.atoms.connection, { state: "CONNECTING" });
-  expect(mocks.storeSet).toHaveBeenCalledWith(mocks.atoms.runtimeConfig, {
-    lazy: false,
-    serverToken: "token",
-    url: "https://example.test/base/",
-  });
-  expect(mocks.runtimeManager.getWsURL("s_abc123").searchParams.get("embedded")).toBe("true");
-  expect(mocks.runtimeManager.getSseURL("s_abc123").searchParams.get("embedded")).toBe("true");
+  expect(globalThis.__MARIMO_STUDIO_SESSION_ID__).toBe("s_abc123");
+  expect(host.view?.cells).toEqual([]);
+  expect(host.view?.connection.state).toBe("OPEN");
+  expect(host.view?.initialization).toEqual({ state: "ready" });
+  expect(target.textContent).toBe("s_abc123");
+  expect(host.initializeCalls).toBe(1);
+  expect(host.connectingCalls).toBe(1);
+  expect(host.presentationCalls).toEqual([
+    {
+      config: presentation(),
+      initialMode: "read",
+      theme: "light",
+      viewMode: "read",
+    },
+  ]);
+  expect(host.transport.serverTransports).toHaveLength(1);
+  expect(host.transport.serverRequestActivations).toBe(1);
+  expect(host.transport.runtime.getWsURL(testSessionId()).searchParams.get("embedded")).toBe(
+    "true",
+  );
+  expect(host.transport.runtime.getSseURL(testSessionId()).searchParams.get("embedded")).toBe(
+    "true",
+  );
   await expect(
     handle.invoke({ namespace: "studio", functionName: "ping", args: {} }),
-  ).resolves.toEqual({ found: true });
+  ).resolves.toEqual(functionResult);
 
   theme.set("dark");
   handle.update(presentation("light"));
-  expect(mocks.storeSet).toHaveBeenLastCalledWith(mocks.atoms.userConfig, {
-    display: { theme: "dark" },
+  expect(host.presentationCalls.at(-1)).toEqual({
+    config: presentation("light"),
+    initialMode: "read",
+    theme: "dark",
+    viewMode: "read",
   });
   theme.set("light");
   theme.emit();
-  expect(mocks.storeSet).toHaveBeenLastCalledWith(mocks.atoms.userConfig, {
-    display: { theme: "light" },
-  });
+  expect(host.presentationCalls).toHaveLength(2);
+  expect(host.themeCalls).toEqual([{ config: presentation("light"), theme: "light" }]);
 
   await act(async () => handle.dispose());
   handle.dispose();
   expect(target.childElementCount).toBe(0);
   expect(theme.listeners.size).toBe(0);
-  expect(mocks.runtimeStop).toHaveBeenCalledOnce();
-  expect(browser.__MARIMO_STUDIO_SESSION_ID__).toBe("s_before");
-  expect(mocks.runtimeManager.getWsURL).toBe(originalGetWsURL);
-  expect(mocks.runtimeManager.getSseURL).toBe(originalGetSseURL);
+  expect(host.renderer?.disposeCalls).toBe(1);
+  expect(globalThis.__MARIMO_STUDIO_SESSION_ID__).toBe("s_before");
+  expect(host.transport.runtime.getWsURL).toBe(originalGetWsURL);
+  expect(host.transport.runtime.getSseURL).toBe(originalGetSseURL);
 });
 
 test("retries only failed disposal work", async () => {
   const target = root();
   const theme = createThemeSource();
-  const originalGetWsURL = mocks.runtimeManager.getWsURL;
-  const originalGetSseURL = mocks.runtimeManager.getSseURL;
+  const host = new RuntimeHostDouble();
+  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
+  const originalGetWsURL = host.transport.runtime.getWsURL;
+  const originalGetSseURL = host.transport.runtime.getSseURL;
   let releaseAttempts = 0;
-  const source = {
+  const source: EmbeddedThemeSource = {
     ...theme.source,
-    subscribe(listener: () => void) {
+    subscribe(listener) {
       const release = theme.source.subscribe(listener);
       return () => {
         releaseAttempts += 1;
@@ -295,12 +405,7 @@ test("retries only failed disposal work", async () => {
       render: () => null,
       root: target,
       theme: source,
-      transport: {
-        kind: "server",
-        serverToken: "token",
-        transformTransportURL: (url) => url,
-        url: "https://example.test/base/",
-      },
+      transport: serverTransport(),
       viewMode: "read",
     });
     await handle.initialized;
@@ -315,23 +420,23 @@ test("retries only failed disposal work", async () => {
     }
   });
   expect(disposalError).toEqual(new Error("theme release failed"));
-  expect(mocks.runtimeManager.getWsURL).toBe(originalGetWsURL);
-  expect(mocks.runtimeManager.getSseURL).toBe(originalGetSseURL);
-  expect(mocks.runtimeStop).toHaveBeenCalledOnce();
-  expect(
-    (globalThis as typeof globalThis & { __MARIMO_STUDIO_SESSION_ID__?: string })
-      .__MARIMO_STUDIO_SESSION_ID__,
-  ).toBeUndefined();
+  expect(host.transport.runtime.getWsURL).toBe(originalGetWsURL);
+  expect(host.transport.runtime.getSseURL).toBe(originalGetSseURL);
+  expect(host.renderer?.disposeCalls).toBe(1);
+  expect(globalThis.__MARIMO_STUDIO_SESSION_ID__).toBeUndefined();
 
   handle.dispose();
   handle.dispose();
   expect(releaseAttempts).toBe(2);
   expect(theme.listeners.size).toBe(0);
+  expect(host.renderer?.disposeCalls).toBe(1);
 });
 
 test("waits for WebAssembly readiness before reporting initialization", async () => {
   const target = root();
   const theme = createThemeSource();
+  const host = new RuntimeHostDouble();
+  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
   const waitForReady = vi.fn(
     async (workerInitialized: Promise<void>, invoke: EmbeddedRuntimeView["invoke"]) => {
       await workerInitialized;
@@ -348,28 +453,22 @@ test("waits for WebAssembly readiness before reporting initialization", async ()
       render: () => null,
       root: target,
       theme: theme.source,
-      transport: {
-        kind: "wasm",
-        code: "print('ready')",
-        filename: "notebook.py",
-        url: "https://example.test/",
-        version: "1.2.3",
-        waitForReady,
-      },
+      transport: wasmTransport(waitForReady),
       viewMode: "read",
     });
     await handle.initialized;
   });
 
-  expect(waitForReady).toHaveBeenCalledWith(mocks.workerInitialized, handle.invoke);
-  expect(mocks.storeSet).toHaveBeenCalledWith(mocks.atoms.requestClient, "wasm-requests");
-  expect(mocks.storeSet).toHaveBeenCalledWith(mocks.atoms.code, "print('ready')");
+  expect(waitForReady).toHaveBeenCalledWith(host.transport.workerInitialized, handle.invoke);
+  expect(host.transport.wasmTransports).toHaveLength(1);
   await act(async () => handle.dispose());
 });
 
 test("reports synchronous transport failures through the handle", async () => {
   const target = root();
   const theme = createThemeSource();
+  const host = new RuntimeHostDouble();
+  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
   let handle!: EmbeddedRuntimeHandle;
 
   await act(async () => {
@@ -380,16 +479,9 @@ test("reports synchronous transport failures through the handle", async () => {
       render: () => null,
       root: target,
       theme: theme.source,
-      transport: {
-        kind: "wasm",
-        code: "",
-        filename: "notebook.py",
-        url: "https://example.test/",
-        version: "1.2.3",
-        waitForReady() {
-          throw new Error("transport unavailable");
-        },
-      },
+      transport: wasmTransport(() => {
+        throw new Error("transport unavailable");
+      }),
       viewMode: "read",
     });
     await expect(handle.initialized).rejects.toThrow("transport unavailable");
@@ -398,8 +490,10 @@ test("reports synchronous transport failures through the handle", async () => {
   await act(async () => handle.dispose());
 });
 
-test("allows one embedded runtime owner per page", async () => {
+test("allows one embedded runtime owner per mount boundary", async () => {
   const theme = createThemeSource();
+  const host = new RuntimeHostDouble();
+  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
   let first!: EmbeddedRuntimeHandle;
   await act(async () => {
     first = mountEmbeddedRuntime({
@@ -409,14 +503,7 @@ test("allows one embedded runtime owner per page", async () => {
       render: () => null,
       root: root(),
       theme: theme.source,
-      transport: {
-        kind: "wasm",
-        code: "",
-        filename: "notebook.py",
-        url: "https://example.test/",
-        version: "1.2.3",
-        waitForReady: () => undefined,
-      },
+      transport: wasmTransport(),
       viewMode: "read",
     });
     await first.initialized;
@@ -430,14 +517,7 @@ test("allows one embedded runtime owner per page", async () => {
       render: () => null,
       root: root(),
       theme: theme.source,
-      transport: {
-        kind: "wasm",
-        code: "",
-        filename: "notebook.py",
-        url: "https://example.test/",
-        version: "1.2.3",
-        waitForReady: () => undefined,
-      },
+      transport: wasmTransport(),
       viewMode: "read",
     }),
   ).toThrow("already mounted");
@@ -453,14 +533,7 @@ test("allows one embedded runtime owner per page", async () => {
       render: () => null,
       root: root(),
       theme: theme.source,
-      transport: {
-        kind: "wasm",
-        code: "",
-        filename: "notebook.py",
-        url: "https://example.test/",
-        version: "1.2.3",
-        waitForReady: () => undefined,
-      },
+      transport: wasmTransport(),
       viewMode: "read",
     });
     await replacement.initialized;
@@ -470,12 +543,15 @@ test("allows one embedded runtime owner per page", async () => {
 
 test("retains runtime ownership when mount rollback cannot release a resource", () => {
   const cleanupError = new Error("theme rollback failed");
-  const theme = {
-    current: () => "light" as const,
+  const theme: EmbeddedThemeSource = {
+    current: () => "light",
     subscribe: () => () => {
       throw cleanupError;
     },
   };
+  const host = new RuntimeHostDouble();
+  host.renderError = new Error("runtime render failed");
+  const mountEmbeddedRuntime = createEmbeddedRuntimeMount(host);
   let failure: unknown;
 
   try {
@@ -484,16 +560,9 @@ test("retains runtime ownership when mount rollback cannot release a resource", 
       initialMode: "read",
       presentation: presentation(),
       render: () => null,
-      root: null as unknown as HTMLElement,
+      root: root(),
       theme,
-      transport: {
-        kind: "wasm",
-        code: "",
-        filename: "notebook.py",
-        url: "https://example.test/",
-        version: "1.2.3",
-        waitForReady: () => undefined,
-      },
+      transport: wasmTransport(),
       viewMode: "read",
     });
   } catch (error) {
@@ -501,7 +570,10 @@ test("retains runtime ownership when mount rollback cannot release a resource", 
   }
 
   expect(failure).toBeInstanceOf(AggregateError);
-  expect((failure as AggregateError).errors).toContain(cleanupError);
+  if (!(failure instanceof AggregateError)) {
+    throw new Error("Expected mount rollback to report an aggregate failure");
+  }
+  expect(failure.errors).toContain(cleanupError);
   expect(() =>
     mountEmbeddedRuntime({
       exposeSession: false,
@@ -510,15 +582,124 @@ test("retains runtime ownership when mount rollback cannot release a resource", 
       render: () => null,
       root: root(),
       theme,
-      transport: {
-        kind: "wasm",
-        code: "",
-        filename: "notebook.py",
-        url: "https://example.test/",
-        version: "1.2.3",
-        waitForReady: () => undefined,
-      },
+      transport: wasmTransport(),
       viewMode: "read",
     }),
   ).toThrow("already mounted");
+});
+
+test("resolves stdin against the live runtime cells", () => {
+  const cells = [{ id: "cell-1" }];
+
+  expect(resolveEmbeddedCellId(cells, "cell-1")).toBe("cell-1");
+  expect(() => resolveEmbeddedCellId(cells, "missing-cell")).toThrow("unknown cell");
+});
+
+test("accepts JSON function results and rejects runtime-only values", () => {
+  expect(parseEmbeddedJsonValue({ found: true, values: [1, "ready", null] })).toEqual({
+    found: true,
+    values: [1, "ready", null],
+  });
+  expect(() => parseEmbeddedJsonValue({ value: undefined })).toThrow();
+});
+
+test("composes the live kernel view and submits stdin through both Marimo paths", async () => {
+  const cellId = CellId.create();
+  const cell = {
+    ...createCell({ id: cellId, name: "prompt" }),
+    ...createCellRuntimeState(),
+  };
+  const kernel = new KernelDouble([cell]);
+  const target = root();
+  const renderRoot = createRoot(target);
+  const initialized = Promise.resolve();
+  const sessionId = testSessionId();
+  let view: EmbeddedRuntimeView | undefined;
+
+  await act(async () => {
+    renderRoot.render(
+      createElement(EmbeddedRuntimeViewComponent<KernelNotebook>, {
+        initialized,
+        kernel,
+        render(runtime) {
+          view = runtime;
+          return createElement("div", {}, runtime.cells[0]?.name);
+        },
+        sessionId,
+      }),
+    );
+    await initialized;
+  });
+
+  if (!view) {
+    throw new Error("Expected the embedded kernel view to render");
+  }
+  const renderedView = view;
+  expect(renderedView.initialization).toEqual({ state: "ready" });
+  expect(renderedView.cells).toEqual([cell]);
+  expect(renderedView.connection).toEqual({ state: "OPEN" });
+  expect(kernel.connectionSessions.length).toBeGreaterThan(0);
+  expect(new Set(kernel.connectionSessions)).toEqual(new Set([sessionId]));
+  expect(kernel.startCalls).toBe(1);
+
+  renderedView.submitStdin(cellId, "answer", 2);
+  expect(kernel.setStdinResponse).toHaveBeenCalledWith({
+    cellId,
+    outputIndex: 2,
+    response: "answer",
+  });
+  expect(kernel.sendStdin).toHaveBeenCalledWith({ text: "answer" });
+  expect(() => renderedView.submitStdin("missing-cell", "answer", 2)).toThrow("unknown cell");
+
+  await act(async () => renderRoot.unmount());
+  expect(kernel.stopCalls).toBe(1);
+});
+
+test("mounts the exported Marimo runtime facade", async () => {
+  window.__MARIMO_STATIC__ = { files: {} };
+  const sessionId = await bootstrapSession(() => undefined);
+  const target = root();
+  const theme = createThemeSource();
+  let view: EmbeddedRuntimeView | undefined;
+  let handle: EmbeddedRuntimeHandle | undefined;
+
+  try {
+    await act(async () => {
+      handle = mountMarimoRuntime({
+        exposeSession: true,
+        initialMode: "read",
+        presentation: {
+          appConfig: {},
+          configOverrides: {},
+          userConfig: {},
+        },
+        render(runtime) {
+          view = runtime;
+          return createElement("div", { "data-marimo-runtime": "" }, runtime.sessionId);
+        },
+        root: target,
+        theme: theme.source,
+        transport: serverTransport(),
+        viewMode: "read",
+      });
+      await handle.initialized;
+    });
+
+    if (!view || !handle) {
+      throw new Error("Expected the exported Marimo runtime facade to render");
+    }
+    expect(handle.sessionId).toBe(sessionId);
+    expect(view.sessionId).toBe(sessionId);
+    expect(view.initialization).toEqual({ state: "ready" });
+    expect(view.connection).toEqual({ state: "OPEN" });
+    expect(view.cells).toEqual([]);
+    expect(target.textContent).toBe(sessionId);
+    expect(globalThis.__MARIMO_STUDIO_SESSION_ID__).toBe(sessionId);
+  } finally {
+    const mounted = handle;
+    if (mounted) {
+      await act(async () => mounted.dispose());
+    }
+    delete window.__MARIMO_STATIC__;
+  }
 });

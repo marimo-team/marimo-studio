@@ -6,6 +6,7 @@ import {
 } from "@marimo-studio/protocol/preview-messages";
 import { publicNotebookQuery } from "@marimo-studio/protocol/query";
 
+import { messageJson } from "../json.ts";
 import { getRuntimeConfig, hasRuntimeConfig } from "../runtime-config/index.ts";
 import { viewNavigationForUrl } from "./view-navigation.ts";
 
@@ -22,7 +23,10 @@ export class DevelopmentEvents {
     this.source = new EventSource(url);
     this.source.addEventListener("ready", onReady);
     this.source.addEventListener("change", (event) => {
-      const payload = parseShellChange((event as MessageEvent<string>).data);
+      if (!(event instanceof MessageEvent)) {
+        return;
+      }
+      const payload = parseShellChange(event.data);
       if (payload) {
         onChange(payload);
       }
@@ -40,7 +44,11 @@ export const bindViewSwitches = (callback: (request: SwitchViewMessage) => void)
     if (event.origin !== globalThis.location.origin || event.source !== globalThis.parent) {
       return;
     }
-    const request = parsePreviewMessage(event.data);
+    const payload = messageJson(event);
+    if (payload === undefined) {
+      return;
+    }
+    const request = parsePreviewMessage(payload);
     if (
       request?.type === "marimo-studio:switch-view" &&
       (!hasRuntimeConfig() || request.runtime === getRuntimeConfig().runtime.id)

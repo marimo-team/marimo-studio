@@ -2,10 +2,9 @@ import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { forwardRef, useImperativeHandle, useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import type { SourceEditorHandle } from "../src/features/source-editor/SourceEditor.tsx";
 import type { ViewRemote } from "../src/features/views/remote.ts";
 
 import { createStudioServices } from "../src/app/services.ts";
@@ -19,17 +18,6 @@ import { Divider } from "../src/features/workspace/Divider.tsx";
 import { computeLayout, defaultWorkspaceLayout } from "../src/features/workspace/model.ts";
 import { useWorkspace } from "../src/features/workspace/useWorkspace.ts";
 import { Workspace } from "../src/features/workspace/Workspace.tsx";
-
-vi.mock("../src/features/source-editor/SourceEditor.tsx", () => ({
-  SourceEditor: forwardRef<SourceEditorHandle>(function Editor(_props, ref) {
-    const element = useRef<HTMLTextAreaElement>(null);
-    useImperativeHandle(ref, () => ({
-      focus: () => element.current?.focus(),
-      requestMeasure: vi.fn(),
-    }));
-    return <textarea ref={element} aria-label="Source editor" />;
-  }),
-}));
 
 const bootstrap: StudioBootstrap = {
   schema: 1,
@@ -61,6 +49,14 @@ const brand = {
     dark: "dark-mark.svg",
     light: "light-mark.svg",
   },
+};
+
+const frameByTitle = (title: string): HTMLIFrameElement => {
+  const element = screen.getByTitle(title);
+  if (!(element instanceof HTMLIFrameElement)) {
+    throw new TypeError(`${title} is not an iframe`);
+  }
+  return element;
 };
 
 const remote = (): ViewRemote => {
@@ -359,11 +355,11 @@ describe("Studio shell", () => {
       />,
     );
 
-    const notebook = screen.getByTitle("Marimo editor");
-    const server = screen.getByTitle("dashboard custom view using server");
-    const notebookWindow = (notebook as HTMLIFrameElement).contentWindow;
-    const serverWindow = (server as HTMLIFrameElement).contentWindow;
-    const wasm = screen.getByTitle("dashboard custom view using wasm");
+    const notebook = frameByTitle("Marimo editor");
+    const server = frameByTitle("dashboard custom view using server");
+    const notebookWindow = notebook.contentWindow;
+    const serverWindow = server.contentWindow;
+    const wasm = frameByTitle("dashboard custom view using wasm");
     for (const [runtime, frame] of [
       ["server", server],
       ["wasm", wasm],
@@ -371,7 +367,7 @@ describe("Studio shell", () => {
       globalThis.dispatchEvent(
         new MessageEvent("message", {
           origin: globalThis.location.origin,
-          source: (frame as HTMLIFrameElement).contentWindow,
+          source: frame.contentWindow,
           data: {
             type: "marimo-studio:receiver-ready",
             runtime,
@@ -388,8 +384,8 @@ describe("Studio shell", () => {
 
     expect(screen.getByTitle("Marimo editor")).toBe(notebook);
     expect(frames.get("server")).toBe(server);
-    expect((notebook as HTMLIFrameElement).contentWindow).toBe(notebookWindow);
-    expect((server as HTMLIFrameElement).contentWindow).toBe(serverWindow);
+    expect(notebook.contentWindow).toBe(notebookWindow);
+    expect(server.contentWindow).toBe(serverWindow);
     expect(server).toHaveAttribute("data-preview-frame");
     expect(server).toHaveAttribute("data-preview-runtime-frame", "server");
 

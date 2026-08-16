@@ -15,8 +15,8 @@ export interface StagedStyles {
 
 export const abortError = () => new DOMException("Refresh superseded", "AbortError");
 
-export const isAbortError = (error: unknown): boolean =>
-  error instanceof DOMException && error.name === "AbortError";
+export const isAbortError = (cause: unknown): boolean =>
+  cause instanceof DOMException && cause.name === "AbortError";
 
 export class StylesheetRefreshError extends Error {
   constructor(
@@ -73,7 +73,10 @@ export class PageStyles {
     const staged = Array.from(
       nextDocument.querySelectorAll<HTMLElement>(PAGE_STYLE_SELECTOR),
       (element) => {
-        const clone = element.cloneNode(true) as HTMLElement;
+        const clone = element.cloneNode(true);
+        if (!(clone instanceof HTMLElement)) {
+          throw new Error("Unable to stage a page style element");
+        }
         const media = clone.getAttribute("media");
         clone.setAttribute("media", "not all");
         clone.setAttribute(STAGED_STYLE_ATTRIBUTE, "");

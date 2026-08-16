@@ -1,29 +1,31 @@
 import {
   connectControlEndpoint as createControlEndpoint,
   type ControlEndpoint,
+  type ControlRegistry,
   type SendControlValues,
-  type UIElementRegistry,
 } from "./control-endpoint-core.ts";
 import { MarimoValueReadyEvent } from "./upstream/controls.ts";
 
-type MarimoWindow = Window & {
-  _marimo_private_UIElementRegistry?: UIElementRegistry;
-  _marimo_private_RuntimeState?: {
-    _sendComponentValues?: SendControlValues;
-  };
-};
+declare global {
+  interface Window {
+    _marimo_private_UIElementRegistry?: ControlRegistry;
+    _marimo_private_RuntimeState?: {
+      _sendComponentValues?: SendControlValues;
+    };
+  }
+}
 
 const eventObjectId = (event: Event): string | undefined => {
   if (!MarimoValueReadyEvent.is(event)) {
     return undefined;
   }
-  return typeof event.detail.objectId === "string" ? event.detail.objectId : undefined;
+  return event.detail.objectId;
 };
 
 export type { ControlEndpoint, ControlUpdate } from "./control-endpoint-core.ts";
 
 export const connectControlEndpoint = (frame: HTMLIFrameElement): ControlEndpoint | undefined => {
-  const browser = frame.contentWindow as MarimoWindow | null;
+  const browser = frame.contentWindow;
   const registry = browser?._marimo_private_UIElementRegistry;
   const sendControlValues = browser?._marimo_private_RuntimeState?._sendComponentValues;
   if (!browser || !registry || !sendControlValues) {

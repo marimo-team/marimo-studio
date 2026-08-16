@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 
 import type { SourcePhase, SourceState } from "./sync.ts";
 
-const SOURCE_STATUS: Readonly<Record<Exclude<SourcePhase, "error">, string>> = {
+const SOURCE_STATUS = {
   conflict: "Conflict",
   external: "Updated from disk",
   loading: "Loading",
   saved: "Saved ✓",
   saving: "Saving…",
-};
+} satisfies Record<Exclude<SourcePhase, "error">, string>;
 
 const sourceStatus = (state: SourceState): string => {
   if (state.phase === "error") {

@@ -1,5 +1,6 @@
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
+import { z } from "zod";
 
 import {
   addWorkspaceView,
@@ -25,6 +26,55 @@ import {
 
 const saveShortcut = process.platform === "darwin" ? "Meta+s" : "Control+s";
 const selectAllShortcut = process.platform === "darwin" ? "Meta+a" : "Control+a";
+
+const observationStateSchema = z.enum(["error", "loading", "ready"]);
+const viewRevisionSchema = z.object({ revision: z.string() });
+const requestedObservationsSchema = z.object({
+  observations: z
+    .array(
+      z.object({
+        diagnostics: z.array(z.record(z.string(), z.json())),
+        revision: z.string().optional(),
+        state: observationStateSchema,
+        view: z.string(),
+      }),
+    )
+    .min(1),
+});
+const studioClientSchema = z.object({ clientId: z.string() });
+const browserAnalysisSchema = z.object({
+  handoff_ready: z.boolean(),
+  stages: z.object({
+    browser: z.object({
+      observations: z
+        .array(
+          z.object({
+            client_id: z.string().optional(),
+            runtime_instance: z.string().optional(),
+            session_id: z.string().optional(),
+            state: observationStateSchema,
+          }),
+        )
+        .min(1),
+    }),
+  }),
+});
+
+const readViewRevision = (source: string): string => {
+  return viewRevisionSchema.parse(JSON.parse(source)).revision;
+};
+
+const readRequestedObservation = (source: string) => {
+  return requestedObservationsSchema.parse(JSON.parse(source)).observations[0];
+};
+
+const readStudioClientId = (source: string): string => {
+  return studioClientSchema.parse(JSON.parse(source)).clientId;
+};
+
+const readBrowserAnalysis = (source: string) => {
+  return browserAnalysisSchema.parse(JSON.parse(source));
+};
 
 test("keeps browser and disk source edits in sync", async ({ page }) => {
   await page.goto(studioEntryUrl);
@@ -397,8 +447,7 @@ test("keeps relative view navigation public and reconnectable", async ({ page })
     await direct.goto("/dashboard/?file=notebook.py&region=eu");
     await waitForDirectView();
     await direct.locator("html").evaluate(() => {
-      (globalThis as typeof globalThis & { __e2eRuntimeMarker?: string }).__e2eRuntimeMarker =
-        "mounted";
+      globalThis.__e2eRuntimeMarker = "mounted";
     });
     await writeWorkspaceFile(
       dashboardHtmlPath,
@@ -406,15 +455,7 @@ test("keeps relative view navigation public and reconnectable", async ({ page })
     );
     await expect(direct.getByRole("heading", { name: "Standalone refresh" })).toBeVisible();
     await expect
-      .poll(() =>
-        direct
-          .locator("html")
-          .evaluate(
-            () =>
-              (globalThis as typeof globalThis & { __e2eRuntimeMarker?: string })
-                .__e2eRuntimeMarker,
-          ),
-      )
+      .poll(() => direct.locator("html").evaluate(() => globalThis.__e2eRuntimeMarker))
       .toBe("mounted");
     await direct.getByRole("link", { name: "View details" }).click();
     await expect(direct).toHaveURL(/\/dashboard\/\?file=notebook\.py&region=eu#details$/);
@@ -515,7 +556,7 @@ test("activates an agent-requested view and records its rendered revision", asyn
       "/_marimo-studio/views/qa-view/config?file=notebook.py&runtime=server",
     );
     expect(configured.ok()).toBe(true);
-    const { revision } = (await configured.json()) as { revision: string };
+    const revision = readViewRevision(await configured.text());
     const response = await page.request.post("/_marimo-studio/observations?file=notebook.py", {
       headers: { "Marimo-Server-Token": serverToken },
       data: {
@@ -528,15 +569,7 @@ test("activates an agent-requested view and records its rendered revision", asyn
       },
     });
     expect(response.ok()).toBe(true);
-    const payload = (await response.json()) as {
-      observations: Array<{
-        diagnostics: unknown[];
-        revision?: string;
-        state: string;
-        view: string;
-      }>;
-    };
-    return payload.observations[0];
+    return readRequestedObservation(await response.text());
   };
   await expect.poll(async () => (await readObservation()).state).toBe("ready");
   const first = await readObservation();
@@ -603,42 +636,22 @@ test("rebinds agent analysis after the native editor reconnects", async ({ page 
   await expect(preview.locator('[mo-value="metric"]')).toHaveText("63");
 
   const source = await page.locator("#marimo-studio-bootstrap").textContent();
-  const bootstrap: unknown = JSON.parse(source ?? "null");
-  if (
-    typeof bootstrap !== "object" ||
-    bootstrap === null ||
-    !("clientId" in bootstrap) ||
-    typeof bootstrap.clientId !== "string"
-  ) {
-    throw new TypeError("Studio bootstrap is missing its browser client ID");
-  }
+  const clientId = readStudioClientId(source ?? "null");
   const response = await page.request.post("/_marimo-studio/analyze?file=notebook.py", {
     headers: { "Marimo-Server-Token": await studioServerToken(page) },
     data: {
       view: "dashboard",
       timeout: 10,
       require_browser: true,
-      browser_client: bootstrap.clientId,
+      browser_client: clientId,
     },
   });
   expect(response.ok()).toBe(true);
-  const report = (await response.json()) as {
-    handoff_ready: boolean;
-    stages: {
-      browser: {
-        observations: Array<{
-          client_id?: string;
-          runtime_instance?: string;
-          session_id?: string;
-          state: string;
-        }>;
-      };
-    };
-  };
+  const report = readBrowserAnalysis(await response.text());
   const observation = report.stages.browser.observations[0];
   expect(report.handoff_ready).toBe(true);
   expect(observation).toMatchObject({
-    client_id: bootstrap.clientId,
+    client_id: clientId,
     session_id: reboundSession,
     state: "ready",
   });

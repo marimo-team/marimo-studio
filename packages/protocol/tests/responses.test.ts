@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
 import { parseErrorResponse } from "../src/errors.ts";
-import { parseValueReadResponse, valueReadRequestSchema } from "../src/value-read.ts";
+import {
+  parseValueReadResponse,
+  valueReadRequestSchema,
+  valueReadResponseSchema,
+} from "../src/value-read.ts";
 import { parseCreatedView, parseDeletedView, parseViewList } from "../src/views.ts";
 
 test("view responses validate list, create, and delete envelopes", () => {
@@ -36,7 +40,9 @@ test("value responses validate errors before presentation consumes them", () => 
   assert.throws(() =>
     parseValueReadResponse({ values: {}, errors: { broken: { code: 42, message: "bad" } } }),
   );
-  assert.throws(() => parseValueReadResponse({ values: { missing: undefined }, errors: {} }));
+  assert.throws(() =>
+    valueReadResponseSchema.parse({ values: { missing: undefined }, errors: {} }),
+  );
 });
 
 test("value requests identify their presentation revision", () => {

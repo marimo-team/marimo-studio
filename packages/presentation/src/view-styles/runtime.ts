@@ -5,6 +5,10 @@ const OUTPUT_BOUNDARY = "[data-marimo-cell-output]";
 const RUNTIME_STYLE = "data-marimo-studio-runtime";
 const VIEW_STYLE = "data-marimo-studio-view-utilities";
 
+declare global {
+  var __MARIMO_STUDIO_STYLE_TIMEOUT__: ReturnType<typeof setTimeout> | undefined;
+}
+
 export interface StagedViewStyles {
   commit(): void;
   discard(): void;
@@ -100,14 +104,14 @@ export class ViewStyleController {
             markStylesReady();
             setPresentationRefreshState(generation, "ready");
           })
-          .catch((error: unknown) => {
+          .catch((cause: unknown) => {
             styleFailure(
               "view-styles-failed",
               "View styling could not update. The authored page remains available.",
               "Check the browser console and the view utility classes.",
             );
             setPresentationRefreshState(generation, "error");
-            console.error("marimo-studio view styling error", error);
+            console.error("marimo-studio view styling error", cause);
           });
       }
       for (const mutation of mutations) {
@@ -205,10 +209,7 @@ export interface ViewStyleDiagnostic {
 }
 
 const styleFailure = (code: string, message: string, hint: string): ViewStyleDiagnostic => {
-  const browser = globalThis as typeof globalThis & {
-    __MARIMO_STUDIO_STYLE_TIMEOUT__?: ReturnType<typeof setTimeout>;
-  };
-  clearTimeout(browser.__MARIMO_STUDIO_STYLE_TIMEOUT__);
+  clearTimeout(globalThis.__MARIMO_STUDIO_STYLE_TIMEOUT__);
   document.documentElement.dataset.marimoStudioStyles = "error";
   const existing = document.querySelector<HTMLElement>("[data-marimo-studio-style-error]");
   if (existing) {
@@ -234,15 +235,16 @@ const styleFailure = (code: string, message: string, hint: string): ViewStyleDia
 };
 
 const markStylesReady = (): void => {
-  const browser = globalThis as typeof globalThis & {
-    __MARIMO_STUDIO_STYLE_TIMEOUT__?: ReturnType<typeof setTimeout>;
-  };
-  clearTimeout(browser.__MARIMO_STUDIO_STYLE_TIMEOUT__);
+  clearTimeout(globalThis.__MARIMO_STUDIO_STYLE_TIMEOUT__);
   document.querySelector("[data-marimo-studio-style-error]")?.remove();
   document.documentElement.dataset.marimoStudioStyles = "ready";
 };
 
-export const supportsViewStyleScope = (target: object = globalThis): boolean =>
+export interface ViewStyleScopeTarget {
+  readonly CSSScopeRule?: abstract new (...arguments_: never[]) => CSSRule;
+}
+
+export const supportsViewStyleScope = (target: ViewStyleScopeTarget = globalThis): boolean =>
   "CSSScopeRule" in target;
 
 export const initializeViewStyles = async (

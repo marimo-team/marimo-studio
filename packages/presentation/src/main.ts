@@ -39,7 +39,7 @@ declare global {
   }
 }
 
-const browser = globalThis as typeof globalThis & Window;
+const browser = window;
 browser.htmx = htmx;
 const viewBaseUrl = document.baseURI;
 // Marimo's server client points <base> at the API root during health checks.
@@ -51,17 +51,17 @@ startQuerySync();
 globalThis.addEventListener("pagehide", () => documentBase.stop());
 globalThis.addEventListener("pageshow", () => documentBase.start());
 
-const showRuntimeError = (error: unknown) => {
+const showRuntimeError = (cause: unknown) => {
   browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "failed";
   setRuntimeConnectionState("error", {
-    code: error instanceof RuntimeConfigRequestError ? error.code : "runtime-bootstrap-failed",
-    message: errorMessage(error),
+    code: cause instanceof RuntimeConfigRequestError ? cause.code : "runtime-bootstrap-failed",
+    message: errorMessage(cause),
     hint:
-      error instanceof RuntimeConfigRequestError
-        ? error.hint
+      cause instanceof RuntimeConfigRequestError
+        ? cause.hint
         : "Reload the view after the runtime is available.",
   });
-  console.error("marimo-studio runtime error", error);
+  console.error("marimo-studio runtime error", cause);
 };
 
 const bindRuntimeNavigation = (): (() => void) => {
@@ -85,8 +85,8 @@ const bindStandaloneViewNavigation = (
   bindViewNavigation((request) => {
     void presentationRevisions
       .transition(request.documentUrl, getSupportUrl())
-      .catch((error: unknown) => {
-        console.error("marimo-studio view navigation error", error);
+      .catch((cause: unknown) => {
+        console.error("marimo-studio view navigation error", cause);
       });
   });
 
@@ -139,35 +139,36 @@ const bootstrap = async (registry: RuntimeRegistry) => {
     return;
   }
   browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "mounted";
-  if (session.sessionId) {
-    presentationRevisions.rememberSession(session.sessionId);
+  const sessionId = session.sessionId;
+  if (sessionId) {
+    presentationRevisions.rememberSession(sessionId);
     globalThis.addEventListener(
       "pagehide",
-      () => presentationRevisions.rememberSession(session.sessionId ?? ""),
+      () => presentationRevisions.rememberSession(sessionId),
       { once: true },
     );
   }
 };
 
 const start = (registry: RuntimeRegistry) => {
-  void bootstrap(registry).catch((error: unknown) => {
-    if (error instanceof RuntimeMountCancelledError) {
+  void bootstrap(registry).catch((cause: unknown) => {
+    if (cause instanceof RuntimeMountCancelledError) {
       return;
     }
-    if (error instanceof RuntimeConfigRequestError && error.transient) {
+    if (cause instanceof RuntimeConfigRequestError && cause.transient) {
       setRuntimeConnectionState("connecting", {
-        code: error.code,
-        message: error.message,
-        hint: error.hint || "Wait for the notebook session to settle.",
+        code: cause.code,
+        message: cause.message,
+        hint: cause.hint || "Wait for the notebook session to settle.",
       });
-      if (error.code === "presentation-revision-mismatch") {
+      if (cause.code === "presentation-revision-mismatch") {
         setTimeout(() => globalThis.location.reload(), 250);
       } else {
         setTimeout(() => start(registry), 1_000);
       }
       return;
     }
-    showRuntimeError(error);
+    showRuntimeError(cause);
   });
 };
 

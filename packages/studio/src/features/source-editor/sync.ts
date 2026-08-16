@@ -82,8 +82,8 @@ export class SyncedSource {
     this.emit("saved");
   }
 
-  loadError(error: unknown): void {
-    this.emit("error", errorMessage(error));
+  loadError(cause: unknown): void {
+    this.emit("error", errorMessage(cause));
   }
 
   async load(view: string): Promise<boolean> {

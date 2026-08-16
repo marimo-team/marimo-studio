@@ -8,6 +8,7 @@ import { publicNotebookQuery } from "@marimo-studio/protocol/query";
 
 import type { ReadinessSnapshot } from "./readiness.ts";
 
+import { messageJson } from "./json.ts";
 import { toBrowserDiagnostics } from "./readiness-diagnostics.ts";
 import { readiness } from "./readiness.ts";
 import { refreshRenderedView } from "./rendered-view-observer.ts";
@@ -65,7 +66,11 @@ const observationRequested = (event: MessageEvent<unknown>): void => {
   if (event.origin !== globalThis.location.origin || event.source !== globalThis.parent) {
     return;
   }
-  const request = parsePreviewMessage(event.data);
+  const payload = messageJson(event);
+  if (payload === undefined) {
+    return;
+  }
+  const request = parsePreviewMessage(payload);
   if (request?.type !== "marimo-studio:observe-view") {
     return;
   }

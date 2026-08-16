@@ -90,9 +90,12 @@ test("nested ratios update and equalize independently", () => {
   const changed = updateRatio(updateRatio(tree, "notebook-preview", 0.6), "custom-1", 0.3);
   const equalized = equalizeLayout(changed);
 
-  assert.deepEqual((changed as { ratio: number }).ratio, 0.6);
-  assert.deepEqual((equalized as { ratio: number }).ratio, 0.5);
-  assert.deepEqual((equalized as { second: { ratio: number } }).second.ratio, 0.5);
+  assert.equal(changed.type, "split");
+  assert.equal(equalized.type, "split");
+  assert.equal(equalized.second.type, "split");
+  assert.deepEqual(changed.ratio, 0.6);
+  assert.deepEqual(equalized.ratio, 0.5);
+  assert.deepEqual(equalized.second.ratio, 0.5);
 });
 
 test("swapping panes exchanges their surfaces", () => {

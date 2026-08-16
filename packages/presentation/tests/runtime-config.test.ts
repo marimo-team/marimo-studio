@@ -54,32 +54,27 @@ const baseRuntimeConfig = {
   mode: "edit",
 } satisfies RuntimeConfig;
 
-const runtimeConfig = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+const runtimeConfig = (revision: string): RuntimeConfig => ({
   ...baseRuntimeConfig,
-  ...overrides,
+  revision,
 });
+
+const requestUrl = (input: RequestInfo | URL): string =>
+  input instanceof URL ? input.href : new Request(input).url;
 
 test("session restoration keeps the document revision", async () => {
   const originalFetch = globalThis.fetch;
   let requestedRevision: string | null = null;
   globalThis.fetch = (input) => {
-    let url: string;
-    if (typeof input === "string") {
-      url = input;
-    } else if (input instanceof URL) {
-      url = input.href;
-    } else {
-      url = input.url;
-    }
-    requestedRevision = new URL(url).searchParams.get("revision");
-    return Promise.resolve(Response.json(runtimeConfig({ revision: "newer-revision" })));
+    requestedRevision = new URL(requestUrl(input)).searchParams.get("revision");
+    return Promise.resolve(Response.json(runtimeConfig("newer-revision")));
   };
 
   try {
     const error = await fetchRuntimeConfigForRevision(
       "/_marimo-studio/views/dashboard",
       "presentation-revision",
-    ).catch((caught: unknown) => caught);
+    ).catch((cause: unknown) => cause);
     assert.ok(error instanceof RuntimeConfigRequestError);
     assert.match(error.message, /one source revision/);
     assert.deepEqual(error.code, "presentation-revision-mismatch");
@@ -109,7 +104,7 @@ test("fetchRuntimeConfig reports the configuration diagnostic", async () => {
 
   try {
     const error = await fetchRuntimeConfig("/_marimo-studio/views/dashboard").catch(
-      (caught: unknown) => caught,
+      (cause: unknown) => cause,
     );
     assert.ok(error instanceof RuntimeConfigRequestError);
     assert.match(
@@ -137,23 +132,18 @@ test("HTML error documents do not leak into diagnostics", async () => {
 
 test("runtime refresh targets the connected Marimo session", async () => {
   const originalFetch = globalThis.fetch;
-  const browser = globalThis as typeof globalThis & Window;
-  const previousSession = browser.__MARIMO_STUDIO_SESSION_ID__;
+  const previousSession = globalThis.__MARIMO_STUDIO_SESSION_ID__;
   const previousUrl = globalThis.location.href;
   let sessionHeader: string | null = null;
   let previewSessionHeader: string | null = null;
   let requestUrl = "";
-  browser.__MARIMO_STUDIO_SESSION_ID__ = "s_abc123";
+  globalThis.__MARIMO_STUDIO_SESSION_ID__ = "s_abc123";
   globalThis.history.replaceState({}, "", "/dashboard/?marimo_studio_client=browser-client-1234");
   globalThis.fetch = (input, init) => {
     const headers = new Headers(init?.headers);
     sessionHeader = headers.get("Marimo-Session-Id");
     previewSessionHeader = headers.get("Marimo-Studio-Preview-Session-Id");
-    if (typeof input === "string") {
-      requestUrl = input;
-    } else {
-      requestUrl = input instanceof URL ? input.href : input.url;
-    }
+    requestUrl = input instanceof URL ? input.href : new Request(input).url;
     return Promise.resolve(Response.json(baseRuntimeConfig));
   };
 
@@ -161,7 +151,7 @@ test("runtime refresh targets the connected Marimo session", async () => {
     await fetchRuntimeConfig("/_marimo-studio/views/dashboard", undefined, undefined, "s_view01");
   } finally {
     globalThis.fetch = originalFetch;
-    browser.__MARIMO_STUDIO_SESSION_ID__ = previousSession;
+    globalThis.__MARIMO_STUDIO_SESSION_ID__ = previousSession;
     globalThis.history.replaceState({}, "", previousUrl);
   }
 

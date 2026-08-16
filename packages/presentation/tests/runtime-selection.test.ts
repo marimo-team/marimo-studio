@@ -26,7 +26,7 @@ const installBrowser = (
   {
     state: initialState = null,
     storage = new MemoryStorage(),
-  }: { state?: unknown; storage?: MemoryStorage } = {},
+  }: { state?: History["state"]; storage?: MemoryStorage } = {},
 ) => {
   let location = new URL(href);
   let state = initialState;
@@ -36,7 +36,7 @@ const installBrowser = (
     get state() {
       return state;
     },
-    replaceState: (nextState: unknown, _title: string, next: string | URL) => {
+    replaceState: (nextState: History["state"], _title: string, next: string | URL) => {
       state = nextState;
       location = new URL(next, location);
       vi.stubGlobal("location", location);

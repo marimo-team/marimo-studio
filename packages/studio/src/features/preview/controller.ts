@@ -7,6 +7,7 @@ import {
   type ViewDiagnostic,
   type ViewPreviewMessage,
 } from "@marimo-studio/protocol/preview-messages";
+import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 
 import type { ControlFrameConnector } from "./control-sync.ts";
 import type { RecordBrowserObservation } from "./observation-remote.ts";
@@ -14,6 +15,7 @@ import type { EditorQuerySyncResult } from "./query-remote.ts";
 
 import { assertNever } from "../../shared/assertNever.ts";
 import { PreviewControlController } from "./control-controller.ts";
+import { fetchRuntimeControls } from "./control-remote.ts";
 import { PreviewObservationController } from "./observation-controller.ts";
 import { PreviewQueryController } from "./query-controller.ts";
 import { previewLoadState, RetrySchedule } from "./state.ts";
@@ -71,6 +73,7 @@ export class PreviewController {
       preview,
       supportUrl: () => this.supportUrl(this.view),
       connect: connectControlFrame,
+      fetchControls: fetchRuntimeControls,
     });
     this.observations = new PreviewObservationController(runtime, preview, recordObservation);
     this.queries = new PreviewQueryController(runtime, preview, syncQuery, syncEditorQuery, () =>
@@ -148,7 +151,11 @@ export class PreviewController {
     ) {
       return;
     }
-    const message = parsePreviewMessage(event.data);
+    const payload = jsonValueSchema.safeParse(event.data);
+    if (!payload.success) {
+      return;
+    }
+    const message = parsePreviewMessage(payload.data);
     if (
       !message ||
       message.type === "marimo-studio:switch-view" ||

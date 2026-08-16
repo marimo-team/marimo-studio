@@ -14,7 +14,7 @@ export interface ValueCellModel {
 
 type ValueCellFailure = NonNullable<ValueCellModel["failure"]>;
 
-const FAILURE_DETAILS: Readonly<Record<ValueCellFailure, (selector: string) => ValueReadError>> = {
+const FAILURE_DETAILS = {
   "defining-cell-error": (selector) => ({
     code: "defining-cell-error",
     message: `The cell backing ${JSON.stringify(selector)} is unavailable.`,
@@ -24,7 +24,7 @@ const FAILURE_DETAILS: Readonly<Record<ValueCellFailure, (selector: string) => V
     message: `The cell backing ${JSON.stringify(selector)} did not reach the browser.`,
     hint: "Wait for the notebook to settle, then reload the view.",
   }),
-};
+} satisfies Readonly<Record<ValueCellFailure, (selector: string) => ValueReadError>>;
 
 export const valueCellFailure = (failure: ValueCellFailure, selector: string): ValueReadError =>
   FAILURE_DETAILS[failure](selector);

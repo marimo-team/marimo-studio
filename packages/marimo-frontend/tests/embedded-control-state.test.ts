@@ -6,19 +6,22 @@ import {
   retainUnmountedControlValues,
 } from "../src/embedded-control-state.ts";
 
+type ControlValue = Parameters<EmbeddedControlRegistry<string>["set"]>[1];
+type ControlMessage = Parameters<EmbeddedControlRegistry<string>["broadcastMessage"]>[1];
+
 class Registry implements EmbeddedControlRegistry<string> {
-  readonly values = new Map<string, unknown>();
+  readonly values = new Map<string, ControlValue>();
   readonly delivered: string[] = [];
 
   has(objectId: string) {
     return this.values.has(objectId);
   }
 
-  set(objectId: string, value: unknown) {
+  set(objectId: string, value: ControlValue) {
     this.values.set(objectId, value);
   }
 
-  broadcastMessage(objectId: string, _message: unknown, _buffers: readonly DataView[]) {
+  broadcastMessage(objectId: string, _message: ControlMessage, _buffers: readonly DataView[]) {
     if (this.has(objectId)) {
       this.delivered.push(objectId);
     }

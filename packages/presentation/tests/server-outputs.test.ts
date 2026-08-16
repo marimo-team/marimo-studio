@@ -1,5 +1,7 @@
-import { reconcileProjectedOutput } from "@marimo-studio/marimo-frontend/projected-output";
+import { outputReadRequestSchema } from "@marimo-studio/protocol/output-read";
 import { afterEach, expect, test, vi } from "vite-plus/test";
+
+import type { OutputResponseReconciler } from "../src/outputs/reader";
 
 import { createServerOutputReader } from "../src/outputs/remote";
 import {
@@ -7,10 +9,6 @@ import {
   loadRuntimeConfig,
   type RuntimeConfig,
 } from "../src/runtime-config/index";
-
-vi.mock("@marimo-studio/marimo-frontend/projected-output", () => ({
-  reconcileProjectedOutput: vi.fn(),
-}));
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
   supportUrl: "/_marimo-studio/views/dashboard",
@@ -71,10 +69,7 @@ test("serializes server output work without retaining a canceled response", asyn
   const requests: Array<{ revision: string; selector: string; token: string | null; url: string }> =
     [];
   globalThis.fetch = vi.fn(async (input, init) => {
-    const body = JSON.parse(String(init?.body)) as {
-      revision: string;
-      selectors: string[];
-    };
+    const body = outputReadRequestSchema.parse(JSON.parse(String(init?.body)));
     const selector = body.selectors[0] ?? "cleanup";
     requests.push({
       revision: body.revision,
@@ -98,7 +93,8 @@ test("serializes server output work without retaining a canceled response", asyn
       errors: {},
     });
   });
-  const reader = createServerOutputReader("preview-a");
+  const reconcile = vi.fn<OutputResponseReconciler>((response) => response);
+  const reader = createServerOutputReader("preview-a", reconcile);
   const controller = new AbortController();
   const first = reader({
     revision: "revision-a",
@@ -143,13 +139,11 @@ test("serializes server output work without retaining a canceled response", asyn
     expect(requests.map(({ selector }) => selector)).toEqual(["first", "second"]),
   );
   await vi.waitFor(() =>
-    expect(reconcileProjectedOutput).toHaveBeenCalledWith(
-      expect.objectContaining({ data: "first" }),
+    expect(reconcile).toHaveBeenCalledWith(
+      expect.objectContaining({ outputs: { first: expect.objectContaining({ data: "first" }) } }),
     ),
   );
-  expect(reconcileProjectedOutput).not.toHaveBeenCalledWith(
-    expect.objectContaining({ data: "second" }),
-  );
+  expect(reconcile).toHaveBeenCalledTimes(1);
   expect(requests[1]).toMatchObject({
     revision: "revision-a",
     token: "server-token",

@@ -1,5 +1,4 @@
-import type { SessionId } from "@marimo-studio/marimo-frontend/session-bootstrap";
-
+import { isSessionId } from "@marimo-studio/marimo-frontend/session-bootstrap";
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
@@ -41,7 +40,8 @@ const runtimeConfig = (revision: string): RuntimeConfig => ({
 
 test("a preserved session preflights and reloads configuration before runtime composition", async () => {
   const order: string[] = [];
-  const sessionId = "s_abc123" as SessionId;
+  const sessionId = "s_abc123";
+  assert.ok(isSessionId(sessionId));
 
   const startup = await bootstrapPresentationSession({
     bootstrap: async (preflight) => {

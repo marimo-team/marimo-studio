@@ -7,17 +7,15 @@ interface PointerCoordinates {
 
 interface DividerAxisModel {
   coordinate(event: PointerCoordinates): number;
-  keys: Readonly<Record<string, number>>;
   label: string;
   orientation: "horizontal" | "vertical";
   origin(workspace: DOMRect, divider: DividerRectangle): number;
   size(divider: DividerRectangle): number;
 }
 
-export const DIVIDER_AXES: Readonly<Record<Axis, DividerAxisModel>> = {
+export const DIVIDER_AXES = {
   x: {
     coordinate: (event) => event.clientX,
-    keys: { ArrowLeft: -1, ArrowRight: 1 },
     label: "Resize columns",
     orientation: "vertical",
     origin: (workspace, divider) => workspace.left + divider.bounds.left,
@@ -25,13 +23,12 @@ export const DIVIDER_AXES: Readonly<Record<Axis, DividerAxisModel>> = {
   },
   y: {
     coordinate: (event) => event.clientY,
-    keys: { ArrowDown: 1, ArrowUp: -1 },
     label: "Resize rows",
     orientation: "horizontal",
     origin: (workspace, divider) => workspace.top + divider.bounds.top,
     size: (divider) => divider.bounds.height - divider.height,
   },
-};
+} as const satisfies Readonly<Record<Axis, DividerAxisModel>>;
 
 export const dividerStyle = (divider: DividerRectangle) => ({
   height: divider.height,
@@ -40,12 +37,27 @@ export const dividerStyle = (divider: DividerRectangle) => ({
   width: divider.width,
 });
 
+const keyboardDirection = (axis: Axis, key: string): -1 | 1 | undefined => {
+  switch (key) {
+    case "ArrowDown":
+      return axis === "y" ? 1 : undefined;
+    case "ArrowLeft":
+      return axis === "x" ? -1 : undefined;
+    case "ArrowRight":
+      return axis === "x" ? 1 : undefined;
+    case "ArrowUp":
+      return axis === "y" ? -1 : undefined;
+    default:
+      return undefined;
+  }
+};
+
 export const keyboardRatio = (
   divider: DividerRectangle,
   key: string,
   step: number,
 ): number | undefined => {
-  const direction = DIVIDER_AXES[divider.axis].keys[key];
+  const direction = keyboardDirection(divider.axis, key);
   if (direction === undefined) {
     return undefined;
   }

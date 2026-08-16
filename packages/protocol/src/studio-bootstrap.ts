@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { runtimeIdSchema } from "./runtime-config";
+import { runtimeIdSchema, type JsonValue } from "./runtime-config";
 
 export const studioRuntimeSchema = z.object({
   id: runtimeIdSchema,
@@ -66,5 +66,5 @@ export const studioBootstrapSchema = z
 export type StudioRuntime = z.infer<typeof studioRuntimeSchema>;
 export type StudioBootstrap = z.infer<typeof studioBootstrapSchema>;
 
-export const parseStudioBootstrap = (value: unknown): StudioBootstrap =>
+export const parseStudioBootstrap = (value: JsonValue): StudioBootstrap =>
   studioBootstrapSchema.parse(value);

@@ -1,11 +1,13 @@
 import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
 
-import { fetchRuntimeControls } from "./control-remote.ts";
+import type { fetchRuntimeControls } from "./control-remote.ts";
+
 import {
   type ControlFrameConnector,
   type ControlSync,
   synchronizeControlEndpoints,
 } from "./control-sync.ts";
+import { previewFrameApi } from "./frame-api.ts";
 
 const RETRY_DELAYS = [100, 250, 500, 1_000, 2_000, 5_000] as const;
 const ATTEMPT_TIMEOUT_MS = 3_000;
@@ -16,7 +18,16 @@ interface ControlControllerOptions {
   preview: HTMLIFrameElement;
   supportUrl: () => string;
   connect?: ControlFrameConnector;
+  fetchControls: typeof fetchRuntimeControls;
 }
+
+interface AttemptSignal {
+  signal: AbortSignal;
+  dispose(): void;
+}
+
+const controlSetupError = (cause: unknown): Error =>
+  cause instanceof Error ? cause : new Error(String(cause));
 
 export class PreviewControlController {
   private sync: ControlSync | undefined;
@@ -75,7 +86,7 @@ export class PreviewControlController {
     const attempt = attemptSignal(controller.signal);
     this.request = request;
     let retry = false;
-    let failure: unknown;
+    let failure: Error | undefined;
     try {
       await previewReady(this.options.preview, attempt.signal);
       if (attempt.signal.aborted || this.request !== request) {
@@ -83,8 +94,8 @@ export class PreviewControlController {
       }
       const supportUrl = this.options.supportUrl();
       const [editorConfig, previewConfig] = await Promise.all([
-        fetchRuntimeControls(supportUrl, DEFAULT_RUNTIME_ID, sessionId, attempt.signal),
-        fetchRuntimeControls(supportUrl, this.options.runtime, sessionId, attempt.signal),
+        this.options.fetchControls(supportUrl, DEFAULT_RUNTIME_ID, sessionId, attempt.signal),
+        this.options.fetchControls(supportUrl, this.options.runtime, sessionId, attempt.signal),
       ]);
       if (attempt.signal.aborted || this.request !== request) {
         return;
@@ -120,10 +131,10 @@ export class PreviewControlController {
       this.sync = sync;
       this.revision = revision;
       this.sessionId = sessionId;
-    } catch (error) {
+    } catch (cause) {
       if (!controller.signal.aborted) {
         retry = true;
-        failure = error;
+        failure = controlSetupError(cause);
       }
     } finally {
       attempt.dispose();
@@ -136,7 +147,7 @@ export class PreviewControlController {
     }
   }
 
-  private schedule(revision: string, sessionId: string | undefined, failure?: unknown): void {
+  private schedule(revision: string, sessionId: string | undefined, failure?: Error): void {
     if (this.retryTimer !== undefined || this.retryAttempt >= RETRY_DELAYS.length) {
       if (failure !== undefined && this.retryAttempt >= RETRY_DELAYS.length) {
         console.warn("Marimo control state could not be synchronized", failure);
@@ -153,16 +164,14 @@ export class PreviewControlController {
 }
 
 const previewReady = async (frame: HTMLIFrameElement, signal: AbortSignal): Promise<void> => {
-  const ready = (
-    frame.contentWindow as (Window & { marimoStudio?: { ready(): Promise<void> } }) | null
-  )?.marimoStudio?.ready;
-  if (!ready) {
+  const studio = previewFrameApi(frame);
+  if (!studio) {
     return;
   }
-  await abortable(ready(), signal);
+  await abortable(studio.ready(), signal);
 };
 
-const attemptSignal = (lifecycle: AbortSignal): { signal: AbortSignal; dispose: () => void } => {
+const attemptSignal = (lifecycle: AbortSignal): AttemptSignal => {
   const controller = new AbortController();
   const cancel = () => controller.abort(lifecycle.reason);
   if (lifecycle.aborted) {
