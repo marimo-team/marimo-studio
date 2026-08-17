@@ -39,13 +39,13 @@ catalog:
   zod: 4.3.6
   css-tree: 3.2.1
   "@types/css-tree": 2.3.11
-  oxlint: 1.78.0
-  "@oxlint/plugins": 1.78.0
+  oxlint: 1.76.0
+  "@oxlint/plugins": 1.76.0
   oxlint-tsgolint: 7.0.2001
 
 overrides:
   nanoid: 3.3.18
-  postcss: 8.5.26
+  postcss: 8.5.25
   undici: 7.29.0
   vite: "catalog:"
   vitepress>vite: 8.2.0
@@ -60,7 +60,7 @@ allowBuilds:
   "@swc/core": true
   esbuild: true
 
-minimumReleaseAge: 4320
+minimumReleaseAge: 20160
 verifyDepsBeforeRun: install
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
@@ -68,4 +68,5 @@ trustPolicyExclude:
   - undici-types@6.21.0
 onlyBuiltDependencies: []
 minimumReleaseAgeExclude:
+  - nanoid@3.3.18
   - "@marimo-team/*"

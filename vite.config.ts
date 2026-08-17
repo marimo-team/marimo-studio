@@ -1,5 +1,7 @@
 import { defineConfig } from "vite-plus";
 
+import { antiSlopIgnorePatterns, antiSlopRules } from "./tools/oxlint/anti-slop/preset.ts";
+
 const generated = [
   "**/__marimo__/**",
   "apps/docs/.vitepress/cache/**",
@@ -9,22 +11,7 @@ const generated = [
   "packages/marimo-studio/src/marimo_studio/_static/**",
 ];
 
-const agentTooling = [
-  ".agent/**",
-  ".agents/**",
-  ".claude/**",
-  ".codex/**",
-  ".continue/**",
-  ".cursor/**",
-  ".gemini/**",
-  ".opencode/**",
-  ".pi/**",
-  ".roo/**",
-  ".windsurf/**",
-  "tools/oxlint/anti-slop/**",
-];
-
-const ignored = [...generated, ...agentTooling];
+const ignored = [...generated, ...antiSlopIgnorePatterns];
 
 const studioPackageRestrictedImports = [
   "@marimo-studio/marimo-frontend",
@@ -78,21 +65,7 @@ export default defineConfig({
     },
     plugins: ["import", "react", "typescript", "unicorn"],
     rules: {
-      "anti-slop/no-chained-type-assertions": "error",
-      "anti-slop/no-conditional-empty-object-spread": "error",
-      "anti-slop/no-known-value-widening": "error",
-      "anti-slop/no-module-mocking": "error",
-      "anti-slop/no-object-parameters": "error",
-      "anti-slop/no-reflect-apply": "error",
-      "anti-slop/no-reflect-get": "error",
-      "anti-slop/no-runtime-typeof": "error",
-      "anti-slop/no-shape-in-symbol-names": "error",
-      "anti-slop/no-unknown-parameters": "error",
-      "anti-slop/no-unknown-returns": "error",
-      "anti-slop/no-unknown-type-aliases": "error",
-      "anti-slop/no-unsafe-dictionary-type": "error",
-      "anti-slop/no-widen-then-assert": "error",
-      "anti-slop/require-safety-comment-for-type-assertion": "error",
+      ...antiSlopRules,
       "eslint/no-nested-ternary": "error",
       "import/no-cycle": "error",
       "import/no-duplicates": "error",

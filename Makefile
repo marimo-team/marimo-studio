@@ -10,7 +10,7 @@ PY_PACKAGE := packages/marimo-studio
 FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples packages skills package.json pnpm-workspace.yaml tsconfig.json vite.config.ts
 TYPECHECK_PATHS := apps/browser apps/docs/.vitepress apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/src vite.config.ts
 
-.PHONY: help install format lint typecheck test examples-check e2e e2e-ui check build docs-build docs-serve package prepare-frontend
+.PHONY: help install anti-slop-check format lint typecheck test examples-check e2e e2e-ui check build docs-build docs-serve package prepare-frontend
 
 help: ## List development targets.
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -19,11 +19,15 @@ install: ## Install locked Python and JavaScript dependencies.
 	$(UV) sync --locked
 	$(PNPM) install --frozen-lockfile
 
+anti-slop-check: ## Verify the managed Oxlint policy.
+	node --test --test-concurrency=1 tools/oxlint/anti-slop/test/*.test.ts tools/oxlint/anti-slop/test/compatibility/*.test.ts
+	$(PNPM) exec tsc -p tools/oxlint/anti-slop/tsconfig.json --noEmit
+
 format: ## Format Python and JavaScript sources.
 	cd $(PY_PACKAGE) && $(UV) run --project ../.. ruff format .
 	$(VP) fmt $(FORMAT_PATHS)
 
-lint: prepare-frontend ## Check formatting, source, workflows, and shell scripts.
+lint: prepare-frontend anti-slop-check ## Check formatting, source, workflows, and shell scripts.
 	cd $(PY_PACKAGE) && $(UV) run --project ../.. ruff format --check .
 	cd $(PY_PACKAGE) && $(UV) run --project ../.. ruff check .
 	$(VP) fmt --check $(FORMAT_PATHS)

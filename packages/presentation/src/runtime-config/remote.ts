@@ -8,6 +8,13 @@ import { retry } from "../retry.ts";
 
 const PREVIEW_SESSION_HEADER = "Marimo-Studio-Preview-Session-Id";
 
+export interface ResponseError {
+  code: string;
+  message: string;
+  hint: string;
+  transient: boolean;
+}
+
 const responseText = async (response: Response, fallback: string) => {
   if (response.headers.get("content-type")?.includes("text/html")) {
     return fallback;
@@ -18,12 +25,7 @@ const responseText = async (response: Response, fallback: string) => {
 export const readResponseError = async (
   response: Response,
   fallback: string,
-): Promise<{
-  code: string;
-  message: string;
-  hint: string;
-  transient: boolean;
-}> => {
+): Promise<ResponseError> => {
   const detail = parseErrorResponse(await responseJsonOrNull(response.clone()));
   return {
     code: detail.error ?? "runtime-config-failed",
