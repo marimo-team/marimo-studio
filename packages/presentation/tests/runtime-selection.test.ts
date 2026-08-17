@@ -21,12 +21,14 @@ class MemoryStorage {
   }
 }
 
+interface BrowserInstallOptions {
+  state?: History["state"];
+  storage?: MemoryStorage;
+}
+
 const installBrowser = (
   href: string,
-  {
-    state: initialState = null,
-    storage = new MemoryStorage(),
-  }: { state?: History["state"]; storage?: MemoryStorage } = {},
+  { state: initialState = null, storage = new MemoryStorage() }: BrowserInstallOptions = {},
 ) => {
   let location = new URL(href);
   let state = initialState;

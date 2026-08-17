@@ -7,6 +7,12 @@ interface SessionReplayPreflight {
   preflight(config: RuntimeConfig): boolean;
 }
 
+export interface PresentationSessionBootstrapResult {
+  config: RuntimeConfig;
+  replaying: boolean;
+  sessionId: SessionId;
+}
+
 export const bootstrapPresentationSession = async ({
   bootstrap,
   loadConfig,
@@ -17,7 +23,7 @@ export const bootstrapPresentationSession = async ({
   loadConfig: (sessionId?: SessionId) => Promise<RuntimeConfig>;
   replay: SessionReplayPreflight;
   requiresSessionForConfig: boolean;
-}): Promise<{ config: RuntimeConfig; replaying: boolean; sessionId: SessionId }> => {
+}): Promise<PresentationSessionBootstrapResult> => {
   let config: RuntimeConfig | undefined;
   let replaying = false;
   const sessionId = await bootstrap(async () => {

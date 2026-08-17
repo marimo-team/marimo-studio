@@ -40,15 +40,17 @@ const config = (preserveSession: boolean, mode: RuntimeConfig["mode"] = "run"): 
   mode,
 });
 
+interface SessionEnvironmentOptions {
+  href?: string;
+  navigationType?: SessionEnvironment["navigationType"];
+}
+
 const environment = (
   storage: Map<string, string>,
   {
     href = "https://example.test/dashboard/",
     navigationType = "navigate",
-  }: {
-    href?: string;
-    navigationType?: SessionEnvironment["navigationType"];
-  } = {},
+  }: SessionEnvironmentOptions = {},
 ) => {
   const replaced: string[] = [];
   const value: SessionEnvironment = {
