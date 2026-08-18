@@ -24,4 +24,4 @@ search-path = ["packages/marimo-studio/src", "packages/marimo-studio/tests"]
 
 [tool.uv]
 exclude-newer = "3 days"
-exclude-newer-package = { marimo = false }
+exclude-newer-package = { agent-plugins = false, marimo = false }

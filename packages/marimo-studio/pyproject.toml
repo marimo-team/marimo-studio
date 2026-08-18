@@ -8,6 +8,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }]
 requires-python = ">=3.10"
 dependencies = [
+  "agent-plugins==0.1.0",
   "click>=8.2",
   "htpy>=26.5.1,<27",
   "marimo==0.24.0",
@@ -82,5 +83,8 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID251"]
 "tests/test_workspace.py" = ["TID251"]
 
 [build-system]
-requires = ["uv_build>=0.11.32,<0.13.0"]
-build-backend = "uv_build"
+requires = ["agent-plugins==0.1.0", "uv_build==0.12.2"]
+build-backend = "agent_plugins.build.uv_build"
+
+[tool.agent-plugins]
+root = "../.."
