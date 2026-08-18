@@ -46,7 +46,7 @@ assert plugin.path.name == f"marimo_studio-{dist.version}.agent-plugin"
 assert skill in plugin.skills
 assert (skill / "SKILL.md").is_file()
 assert (skill / "agents" / "openai.yaml").is_file()
-assert skill.frontmatter.startswith("name: marimo-studio\n")
+assert skill.frontmatter.splitlines()[0] == "name: marimo-studio"
 help_text = pydoc.render_doc(studio_agents)
 assert str(plugin.path) in help_text
 assert str(skill / "SKILL.md") in help_text

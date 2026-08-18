@@ -46,7 +46,7 @@ def test_agent_plugin_exposes_the_packaged_studio_skill() -> None:
     assert skill.path.name == "marimo-studio"
     assert (skill / "SKILL.md").is_file()
     assert (skill / "agents" / "openai.yaml").is_file()
-    assert skill.frontmatter.startswith("name: marimo-studio\n")
+    assert skill.frontmatter.splitlines()[0] == "name: marimo-studio"
 
 
 def test_agent_module_help_points_to_installed_resources() -> None:
