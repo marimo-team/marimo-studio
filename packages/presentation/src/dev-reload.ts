@@ -13,6 +13,7 @@ import type {
   RevisionOperation,
 } from "./document/revision-controller.ts";
 
+import { DevelopmentViewTransition } from "./document/development-view-transition.ts";
 import {
   bindSourceChanges,
   bindViewNavigation,
@@ -50,11 +51,11 @@ declare global {
 const developmentEvents = new DevelopmentEvents();
 const retrySchedule = new RefreshRetrySchedule();
 const shellRefreshState = new ShellRefreshState();
-const baselineReconciler = new BaselineReconciler(hasRuntimeConfig());
 const embedded = globalThis.parent !== globalThis.window;
+let baselineReconciler: BaselineReconciler;
 let presentationRevisions: PresentationRevisionController;
+let viewTransitions: DevelopmentViewTransition;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
-let viewTransitionGeneration = 0;
 
 const REFRESH_FAILURE_CODES = {
   css: "stylesheet-refresh-failed",
@@ -196,32 +197,21 @@ function reconcileBaseline(): void {
 }
 
 const transitionToView = (documentUrl: string, supportUrl: string): void => {
-  const generation = ++viewTransitionGeneration;
   resetRetry();
   shellRefreshState.supersede();
-  if (!embedded) {
-    developmentEvents.close();
-  }
-  void presentationRevisions
-    .transition(documentUrl, supportUrl, "html", revisionPolicy)
-    .then((commit) => {
-      if (generation === viewTransitionGeneration && commit === undefined) {
-        globalThis.location.assign(documentUrl);
-        return;
-      }
-      if (!embedded && generation === viewTransitionGeneration && !commit?.supportChanged) {
-        connectEvents();
-      }
-    })
-    .catch(() => {
-      if (!embedded && generation === viewTransitionGeneration) {
-        connectEvents();
-      }
-    });
+  void viewTransitions.run(documentUrl, supportUrl);
 };
 
 const startDevelopmentReload = async (): Promise<void> => {
   presentationRevisions = await waitForPresentationRevisions();
+  baselineReconciler = new BaselineReconciler(hasRuntimeConfig());
+  viewTransitions = new DevelopmentViewTransition({
+    embedded,
+    closeEvents: () => developmentEvents.close(),
+    connectEvents,
+    replaceView: (documentUrl, supportUrl) =>
+      presentationRevisions.transition(documentUrl, supportUrl, "html", revisionPolicy),
+  });
   subscribeRuntimeConfig(() => {
     notifyDiagnostics(getRuntimeConfig().diagnostics, getRuntimeConfig().view);
     if (baselineReconciler.configure()) {
@@ -257,7 +247,7 @@ const startDevelopmentReload = async (): Promise<void> => {
         type: "marimo-studio:receiver-unready",
       };
       globalThis.parent.postMessage(receiverUnready, globalThis.location.origin);
-      viewTransitionGeneration += 1;
+      viewTransitions.cancel();
       resetRetry();
       presentationRevisions.dispose();
       developmentEvents.close();

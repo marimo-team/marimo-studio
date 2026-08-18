@@ -1377,6 +1377,7 @@ def test_root_document_tracks_a_changed_default_view(notebook_path: Path) -> Non
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         dashboard = client.get("/")
+        dashboard_config = client.get("/_marimo-studio/views/dashboard/config").json()
 
         def select_executive(config: MutableMapping[str, object]) -> None:
             config["default"] = "executive"
@@ -1385,8 +1386,16 @@ def test_root_document_tracks_a_changed_default_view(notebook_path: Path) -> Non
         executive = client.get("/")
         config = client.get("/_marimo-studio/views/executive/config").json()
 
-    assert dashboard.headers["Marimo-Studio-Support-Url"].endswith("/views/dashboard")
-    assert executive.headers["Marimo-Studio-Support-Url"].endswith("/views/executive")
+    dashboard_support = urlsplit(dashboard.headers["Marimo-Studio-Support-Url"])
+    executive_support = urlsplit(executive.headers["Marimo-Studio-Support-Url"])
+    assert dashboard_support.path.endswith("/views/dashboard")
+    assert executive_support.path.endswith("/views/executive")
+    assert parse_qs(dashboard_support.query)[SERVER_INSTANCE_QUERY_PARAM] == [
+        dashboard_config["runtime"]["data"]["serverInstance"]
+    ]
+    assert parse_qs(executive_support.query)[SERVER_INSTANCE_QUERY_PARAM] == [
+        config["runtime"]["data"]["serverInstance"]
+    ]
     assert executive.headers["Marimo-Studio-Revision"] == config["revision"]
     assert (
         executive.headers["Marimo-Studio-Revision"]

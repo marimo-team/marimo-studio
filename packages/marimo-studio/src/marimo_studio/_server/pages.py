@@ -18,7 +18,10 @@ from starlette.responses import (
 from marimo_studio._capabilities import ServerContext, SessionReplay, SessionState
 from marimo_studio._server.headers import DOCUMENT_HEADERS
 from marimo_studio._server.presentation import NotebookPresentation
-from marimo_studio._server.presentation_payload import render_presentation_document
+from marimo_studio._server.presentation_payload import (
+    presentation_support_url,
+    render_presentation_document,
+)
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.studio import (
     initialization_document,
@@ -127,12 +130,9 @@ async def document_response(
         headers={
             **DOCUMENT_HEADERS,
             "Marimo-Studio-Revision": snapshot.revision,
-            "Marimo-Studio-Support-Url": with_query(
-                public_url(
-                    context.base_url,
-                    f"{SUPPORT_PATH}/views/{snapshot.view_name}",
-                ),
-                context.routing_query,
+            "Marimo-Studio-Support-Url": presentation_support_url(
+                context,
+                snapshot.view_name,
             ),
         },
     )
