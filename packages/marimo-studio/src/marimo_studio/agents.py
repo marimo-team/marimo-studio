@@ -1,95 +1,15 @@
-"""Turn the active Marimo notebook into a custom web page.
-
-Marimo Studio lets one notebook power dashboards, reports, and focused tools.
-Keep notebook cells focused on computation, analytical context, data access,
-domain rules, controls, and reusable rich outputs. Put page structure, display
-copy, responsive layout, and visual styling in the Studio view. Use the UnoCSS
-Wind4 vocabulary with Tailwind 4 syntax in ``index.html`` for ordinary
-presentation. Put custom keyframes and CSS rules that utilities cannot express
-in ``app.css``.
-
-One notebook can have several named views for different audiences. Each view
-has its own ``index.html`` and ``app.css`` while sharing the notebook's Python
-calculations and interactive controls.
-
-Use this module from Marimo code mode. The context tells Studio which open
-notebook to work with:
-
-    import marimo._code_mode as cm
-    import marimo_studio.agents as studio
-
-    ctx = cm.get_context()
-    notebook = studio.inspect(ctx, include_code=True)
-    setup = studio.ensure_view(ctx, "dashboard")
-
-``studio.inspect`` returns the saved cells in notebook order, including their
-positions, names, code, and variable relationships. ``studio.ensure_view``
-creates the named view when needed. A new view starts with every notebook cell
-in order, so the page has working content before it is customized.
-
-The two editable files are stored in ``setup.root``:
-
-    index_path = setup.root / "index.html"
-    css_path = setup.root / "app.css"
-
-Read the current files before changing them so edits from the browser or
-another editor are preserved. ``index.html`` is a complete HTML document with
-one ``#app-shell`` element.
-
-Place a notebook cell's complete output in the page with ``<marimo-cell>``.
-Render one Python object's native Marimo representation with
-``<marimo-output>``. Show a JSON-compatible value, such as a string, number,
-list, or dictionary, as text with ``mo-value``:
-
-    <marimo-cell name="analysis"></marimo-cell>
-    <marimo-output value="revenue_chart"></marimo-output>
-    <strong mo-value="summary.total"></strong>
-
-Cell and rich-object output keep their Marimo behavior, including controls,
-tables, plots, downloads, and anywidgets. A value reference starts with a
-Python variable and can select nested attributes, mapping keys, or list items.
-
-Use a cell's existing name when it is clear. Give an unnamed cell a memorable
-reference by binding a name to its zero-based notebook position:
-
-    studio.bind(ctx, "revenue-chart", 4)
-
-Select a newly created view in the open Studio workspace:
-
-    await studio.activate_view(ctx, "dashboard")
-
-When the notebook gained its first Studio view during the current native
-editor session, ``activate_view`` reloads that page into Studio after the
-agent call finishes. Later activations use Studio's in-place view transition.
-
-Analyze the custom page after editing its HTML or CSS:
-
-    report = await studio.analyze(ctx, view_name="dashboard")
-    if not report.handoff_ready:
-        for action in report.actions:
-            print(action.advice)
-
-``studio.analyze`` runs static and isolated runtime validation, then asks the
-session-bound Studio browser for fresh evidence from the captured source
-revision. Fix every error and rerun it. Hand off the view only when
-``report.handoff_ready`` is true.
-
-Use the lower-level static check when notebook execution is intentionally out
-of scope:
-
-    results = studio.check(ctx, view_name="dashboard")
-    failures = [result for result in results if result.status == "fail"]
-
-Each result has a ``pass``, ``warn``, or ``fail`` status and points to the
-affected projection or view file. Saved HTML and CSS changes refresh the custom
-page. Notebook edits update the outputs that depend on them.
-"""
+"""Use Marimo Studio from code mode."""
 
 from __future__ import annotations
 
 import math
+import sys
 from collections.abc import Mapping
 from pathlib import Path
+from textwrap import indent
+from types import ModuleType
+
+import agent_plugins
 
 from marimo_studio._runtime_limits import (
     DEFAULT_RUNTIME_TIMEOUT,
@@ -98,6 +18,62 @@ from marimo_studio._runtime_limits import (
 from marimo_studio._workspace.models import BindingResult, ViewSetupResult
 from marimo_studio.agent_models import AnalysisReport, ViewActivationResult
 from marimo_studio.types import CheckResult, NotebookSpec
+
+_DISTRIBUTION_NAME = "marimo-studio"
+_SKILL_NAME = "marimo-studio"
+
+
+def agent_plugin() -> agent_plugins.Plugin:
+    """Return the Agent Plugin installed with this Studio version."""
+    return agent_plugins.locate(_DISTRIBUTION_NAME)
+
+
+def _agent_skill(plugin: agent_plugins.Plugin) -> agent_plugins.Skill:
+    for skill in plugin.skills:
+        if skill.path.name == _SKILL_NAME:
+            return skill
+    raise agent_plugins.AgentPluginError(
+        "The marimo-studio Agent Plugin has no marimo-studio skill. "
+        "Reinstall marimo-studio."
+    )
+
+
+def agent_skill() -> agent_plugins.Skill:
+    """Return Studio's packaged Agent Skill."""
+    return _agent_skill(agent_plugin())
+
+
+def _module_help(summary: str) -> str:
+    plugin = agent_plugin()
+    skill = _agent_skill(plugin)
+    tree = indent(plugin.tree(max_depth=3, max_files=50), "    ")
+    return f"""{summary}
+
+Start with the active notebook context:
+
+    import marimo._code_mode as cm
+    import marimo_studio.agents as studio
+
+    ctx = cm.get_context()
+    notebook = studio.inspect(ctx, include_code=True)
+    view = studio.ensure_view(ctx, "dashboard")
+
+The installed Agent Plugin carries the complete authoring workflow and the
+resources that match this Studio version:
+
+{tree}
+
+Read the Studio skill instructions at:
+
+    {skill / "SKILL.md"}
+
+Traverse the same resources programmatically:
+
+    resources = studio.agent_plugin()
+    skill = studio.agent_skill()
+    print(resources)
+    print(skill.body)
+"""
 
 
 def notebook_path(context: object) -> Path:
@@ -283,6 +259,8 @@ async def activate_view(
 
 __all__ = [
     "activate_view",
+    "agent_plugin",
+    "agent_skill",
     "analyze",
     "bind",
     "check",
@@ -290,3 +268,17 @@ __all__ = [
     "inspect",
     "notebook_path",
 ]
+
+
+class _AgentModule(ModuleType):
+    @property
+    def __doc__(self) -> str | None:  # pyrefly: ignore [bad-override]
+        summary = self.__dict__.get("__doc__")
+        return _module_help(summary) if isinstance(summary, str) else None
+
+    @__doc__.setter
+    def __doc__(self, value: str | None) -> None:
+        self.__dict__["__doc__"] = value
+
+
+sys.modules[__name__].__class__ = _AgentModule
