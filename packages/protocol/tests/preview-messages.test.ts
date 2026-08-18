@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
+import type { JsonValue } from "../src/runtime-config.ts";
+
 import { parsePreviewMessage } from "../src/preview-messages.ts";
 
 test("preview messages decode navigation and view state", () => {
@@ -96,6 +98,18 @@ test("preview messages decode navigation and view state", () => {
   );
   assert.deepEqual(
     parsePreviewMessage({
+      type: "marimo-studio:receiver-unready",
+      runtime: "server",
+      view: "dashboard",
+    }),
+    {
+      type: "marimo-studio:receiver-unready",
+      runtime: "server",
+      view: "dashboard",
+    },
+  );
+  assert.deepEqual(
+    parsePreviewMessage({
       type: "marimo-studio:view-sync-pending",
       runtime: "server",
       view: "dashboard",
@@ -107,6 +121,20 @@ test("preview messages decode navigation and view state", () => {
       view: "dashboard",
       message: "The notebook is updating.",
       hint: "The notebook is updating.",
+    },
+  );
+  assert.deepEqual(
+    parsePreviewMessage({
+      type: "marimo-studio:source-change",
+      runtime: "server",
+      view: "dashboard",
+      kind: "runtime",
+    }),
+    {
+      type: "marimo-studio:source-change",
+      runtime: "server",
+      view: "dashboard",
+      kind: "runtime",
     },
   );
   assert.deepEqual(
@@ -142,9 +170,10 @@ test("preview messages decode navigation and view state", () => {
 });
 
 test("preview messages reject malformed protocol payloads", () => {
-  const malformed = [
+  const malformed: JsonValue[] = [
     null,
     { type: "marimo-studio:navigate-view", view: 42 },
+    { type: "marimo-studio:source-change", runtime: "server", view: "dashboard", kind: "js" },
     { type: "unknown", view: "dashboard" },
   ];
 

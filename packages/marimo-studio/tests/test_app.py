@@ -5,12 +5,13 @@ import json
 import os
 import re
 import shutil
-from collections.abc import MutableMapping
+import threading
+from collections.abc import AsyncGenerator, MutableMapping
 from html.parser import HTMLParser
 from importlib.metadata import entry_points
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import Mock
 from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
@@ -23,12 +24,16 @@ from starlette.testclient import TestClient
 
 from marimo_studio import create_asgi_app
 from marimo_studio._compat.notebook import load_static_notebook
+from marimo_studio._compat.server.existing_session import (
+    PrivateExistingSessionAttachment,
+)
 from marimo_studio._compat.server.session_replay import PrivateSessionReplay
 from marimo_studio._compat.server.session_state import PrivateSessionState
 from marimo_studio._server import dev
 from marimo_studio._server.live_clients import StudioClientRegistry
 from marimo_studio._server.presentation import NotebookPresentation
-from marimo_studio._urls import authored_view_root_url
+from marimo_studio._server.server_instance import server_instance_id
+from marimo_studio._urls import SERVER_INSTANCE_QUERY_PARAM, authored_view_root_url
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
 from marimo_studio._workspace.metadata import update_notebook_config
@@ -72,6 +77,11 @@ def _studio_bootstrap(document: str) -> dict[str, Any]:
     return json.loads("".join(parser.parts))
 
 
+def _assert_server_runtime(data: dict[str, Any], url: str) -> None:
+    assert data["url"] == url
+    assert data["serverInstance"] == server_instance_id(data["serverToken"])
+
+
 def test_package_registers_marimo_extension_points() -> None:
     server = {
         point.name: point.load()
@@ -94,6 +104,92 @@ def test_session_id_validation_tracks_marimos_server_boundary() -> None:
     assert not sessions.is_session_id(None)
 
 
+def test_stale_studio_preview_receives_terminal_session_close(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    manager = _session_manager(app)
+    query = urlencode(
+        {
+            "session_id": "s_stale1",
+            "kiosk": "true",
+            "marimo_studio_client": "browser-client-1234",
+            SERVER_INSTANCE_QUERY_PARAM: server_instance_id(
+                str(manager.skew_protection_token)
+            ),
+        }
+    )
+
+    attachment = PrivateExistingSessionAttachment()
+    handle = attachment.open()
+    try:
+        with (
+            TestClient(app) as client,
+            client.websocket_connect(f"/ws?{query}") as websocket,
+        ):
+            close = websocket.receive()
+    finally:
+        handle.close()
+
+    assert close == {
+        "type": "websocket.close",
+        "code": 1000,
+        "reason": "MARIMO_NO_SESSION",
+    }
+
+
+def test_stale_studio_editor_does_not_create_a_session(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    manager = _session_manager(app)
+    query = urlencode(
+        {
+            "session_id": "s_stale1",
+            "marimo_studio_client": "browser-client-1234",
+            SERVER_INSTANCE_QUERY_PARAM: "stale-server",
+        }
+    )
+
+    attachment = PrivateExistingSessionAttachment()
+    handle = attachment.open()
+    try:
+        with (
+            TestClient(app) as client,
+            client.websocket_connect(f"/ws?{query}") as websocket,
+        ):
+            close = websocket.receive()
+    finally:
+        handle.close()
+
+    assert close == {
+        "type": "websocket.close",
+        "code": 1000,
+        "reason": "MARIMO_NO_SESSION",
+    }
+    assert manager.get_session("s_stale1") is None
+
+
+def test_stale_development_stream_stops_reconnecting(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/_marimo-studio/views/dashboard/dev/events",
+            params={SERVER_INSTANCE_QUERY_PARAM: "stale-server"},
+        )
+
+    assert response.status_code == 204
+
+
 def test_run_mode_serves_default_and_named_view_documents(
     notebook_path: Path,
 ) -> None:
@@ -107,10 +203,10 @@ def test_run_mode_serves_default_and_named_view_documents(
 
     assert default.status_code == 200
     assert default.text.count('id="marimo-runtime-root"') == 1
-    assert '"/_marimo-studio/views/dashboard"' in default.text
+    assert '"/_marimo-studio/views/dashboard?marimo_studio_server=' in default.text
     assert default.text.index("runtime.css") < default.text.index("app.css")
     assert named.status_code == 200
-    assert '"/_marimo-studio/views/executive"' in named.text
+    assert '"/_marimo-studio/views/executive?marimo_studio_server=' in named.text
     assert explicit_index.url.path == "/executive/"
     assert explicit_index.text.count('id="marimo-runtime-root"') == 1
     assert native_editor.status_code == 404
@@ -232,10 +328,12 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
 
     assert dashboard["view"] == "dashboard"
     assert dashboard["views"] == ["dashboard", "executive"]
-    assert dashboard["supportUrl"] == "/_marimo-studio/views/dashboard"
+    dashboard_support = urlsplit(dashboard["supportUrl"])
+    executive_support = urlsplit(executive["supportUrl"])
+    assert dashboard_support.path == "/_marimo-studio/views/dashboard"
     assert set(dashboard["valueBindings"]) == {"doubled"}
     assert set(dashboard["outputBindings"]) == {"doubled"}
-    assert executive["supportUrl"] == "/_marimo-studio/views/executive"
+    assert executive_support.path == "/_marimo-studio/views/executive"
     assert set(executive["valueBindings"]) == {"x"}
     assert set(executive["outputBindings"]) == {"x"}
     assert dashboard["cellBindings"]["result"] == executive["cellBindings"]["result"]
@@ -248,6 +346,13 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
     }
     assert dashboard["runtime"]["data"]["preserveSession"] is True
     assert dashboard["showCellLogs"] is False
+    expected_instance = server_instance_id(dashboard["runtime"]["data"]["serverToken"])
+    assert parse_qs(dashboard_support.query)[SERVER_INSTANCE_QUERY_PARAM] == [
+        expected_instance
+    ]
+    assert parse_qs(executive_support.query)[SERVER_INSTANCE_QUERY_PARAM] == [
+        expected_instance
+    ]
 
 
 def test_directory_support_routes_keep_notebook_identity(tmp_path: Path) -> None:
@@ -296,7 +401,7 @@ def test_directory_support_routes_keep_notebook_identity(tmp_path: Path) -> None
     assert config["rootUrl"] == "/"
     assert config["publicRootUrl"] == "/?file=first.py"
     assert config["documentRootUrl"] == authored_root
-    assert config["runtime"]["data"]["url"] == "/"
+    _assert_server_runtime(config["runtime"]["data"], "/")
     assert config["runtime"]["data"]["file"] == "first.py"
     assert created.status_code == 201
     assert created.json()["studio_url"] == "/studio/detail/?file=first.py"
@@ -336,7 +441,7 @@ def test_mounted_directory_routes_preserve_notebook_identity(tmp_path: Path) -> 
 
     assert config["rootUrl"] == "/parent/base/"
     assert config["publicRootUrl"] == ("/parent/base/?file=nested%2Fanalysis.py")
-    assert config["runtime"]["data"]["url"] == "/parent/base/"
+    _assert_server_runtime(config["runtime"]["data"], "/parent/base/")
     assert config["runtime"]["data"]["file"] == file_key
     assert authored_document.headers["location"] == (
         "/parent/base/dashboard/?file=nested%2Fanalysis.py&region=us"
@@ -1272,6 +1377,7 @@ def test_root_document_tracks_a_changed_default_view(notebook_path: Path) -> Non
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         dashboard = client.get("/")
+        dashboard_config = client.get("/_marimo-studio/views/dashboard/config").json()
 
         def select_executive(config: MutableMapping[str, object]) -> None:
             config["default"] = "executive"
@@ -1280,8 +1386,16 @@ def test_root_document_tracks_a_changed_default_view(notebook_path: Path) -> Non
         executive = client.get("/")
         config = client.get("/_marimo-studio/views/executive/config").json()
 
-    assert dashboard.headers["Marimo-Studio-Support-Url"].endswith("/views/dashboard")
-    assert executive.headers["Marimo-Studio-Support-Url"].endswith("/views/executive")
+    dashboard_support = urlsplit(dashboard.headers["Marimo-Studio-Support-Url"])
+    executive_support = urlsplit(executive.headers["Marimo-Studio-Support-Url"])
+    assert dashboard_support.path.endswith("/views/dashboard")
+    assert executive_support.path.endswith("/views/executive")
+    assert parse_qs(dashboard_support.query)[SERVER_INSTANCE_QUERY_PARAM] == [
+        dashboard_config["runtime"]["data"]["serverInstance"]
+    ]
+    assert parse_qs(executive_support.query)[SERVER_INSTANCE_QUERY_PARAM] == [
+        config["runtime"]["data"]["serverInstance"]
+    ]
     assert executive.headers["Marimo-Studio-Revision"] == config["revision"]
     assert (
         executive.headers["Marimo-Studio-Revision"]
@@ -1411,6 +1525,55 @@ def test_run_runtime_refreshes_bindings_for_each_browser_session(
         assert second["runtime"]["controls"]["cells"][identity] == f"second-{index}"
 
 
+def test_change_stream_captures_source_baseline_without_blocking_event_loop(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    capture_started = threading.Event()
+    release_capture = threading.Event()
+    fallback_release = threading.Event()
+
+    def capture_sources(
+        _studio: object,
+        _views: object,
+    ) -> SimpleNamespace:
+        capture_started.set()
+        assert release_capture.wait(timeout=1)
+        return SimpleNamespace(revision=lambda _view: "a" * 64)
+
+    monkeypatch.setattr(dev, "capture_studio_sources", capture_sources)
+
+    async def capture_ready() -> bytes:
+        loop = asyncio.get_running_loop()
+
+        def coordinate_release() -> None:
+            assert capture_started.wait(timeout=1)
+            loop.call_soon_threadsafe(release_capture.set)
+            if not release_capture.wait(timeout=0.2):
+                fallback_release.set()
+                release_capture.set()
+
+        coordinator = threading.Thread(target=coordinate_release)
+        coordinator.start()
+        stream = cast(
+            AsyncGenerator[bytes, None],
+            dev.change_events(studio, "dashboard"),
+        )
+        try:
+            ready = await asyncio.wait_for(anext(stream), timeout=1)
+        finally:
+            release_capture.set()
+            await stream.aclose()
+            await asyncio.to_thread(coordinator.join, 1)
+        return ready
+
+    ready = asyncio.run(capture_ready())
+
+    assert not fallback_release.is_set()
+    assert json.loads(ready.split(b"data: ", 1)[1])["revision"] == "a" * 64
+
+
 def test_change_stream_classifies_live_source_edits(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1472,7 +1635,10 @@ def test_change_stream_classifies_live_source_edits(
 
     messages = asyncio.run(collect_events())
 
-    assert messages[0] == b"event: ready\ndata: {}\n\n"
+    ready_payload = json.loads(messages[0].split(b"data: ", 1)[1])
+    assert ready_payload["schema"] == 1
+    assert ready_payload["view"] == "dashboard"
+    assert re.fullmatch(r"[0-9a-f]{64}", ready_payload["revision"])
     payloads = [json.loads(message.split(b"data: ", 1)[1]) for message in messages[1:]]
     assert [payload["kind"] for payload in payloads] == [
         "html",
@@ -1727,8 +1893,12 @@ def test_parent_asgi_mount_preserves_public_routes(notebook_path: Path) -> None:
     assert '<base href="/parent/base/dashboard/">' in page.text
     assert 'src="/parent/base/_marimo-studio/assets/runtime.js"' in page.text
     assert config["rootUrl"] == "/parent/base/"
-    assert config["runtime"]["data"]["url"] == "/parent/base/"
-    assert config["supportUrl"] == "/parent/base/_marimo-studio/views/dashboard"
+    _assert_server_runtime(config["runtime"]["data"], "/parent/base/")
+    support_url = urlsplit(config["supportUrl"])
+    assert support_url.path == "/parent/base/_marimo-studio/views/dashboard"
+    assert parse_qs(support_url.query)[SERVER_INSTANCE_QUERY_PARAM] == [
+        server_instance_id(config["runtime"]["data"]["serverToken"])
+    ]
     assert studio_asset.status_code == 200
     assert relative_cell.text == '<marimo-cell name="result"></marimo-cell>'
     assert relative_public.text == "notebook asset"
@@ -1764,11 +1934,12 @@ def test_edit_mode_public_routes_honor_parent_mount(notebook_path: Path) -> None
     assert editor_url.path == "/parent/base/_marimo-studio/editor/"
     assert editor_query["file"] == [str(studio.notebook)]
     assert editor_query["marimo_studio_client"] == [bootstrap["clientId"]]
+    assert editor_query[SERVER_INSTANCE_QUERY_PARAM] == [bootstrap["serverInstance"]]
     assert re.fullmatch(r"[A-Za-z0-9_-]{16,128}", bootstrap["clientId"])
     assert bootstrap["urls"]["viewPrefix"] == "/parent/base/"
     assert bootstrap["urls"]["studioPrefix"] == "/parent/base/studio/"
     assert config["rootUrl"] == "/parent/base/"
-    assert config["runtime"]["data"]["url"] == "/parent/base/"
+    _assert_server_runtime(config["runtime"]["data"], "/parent/base/")
     assert all(response.status_code == 404 for response in outside)
 
 

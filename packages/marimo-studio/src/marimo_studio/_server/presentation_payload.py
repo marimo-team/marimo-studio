@@ -8,7 +8,9 @@ from marimo_studio._capabilities import ServerContext
 from marimo_studio._html import runtime_document
 from marimo_studio._server.presentation import PresentationSnapshot
 from marimo_studio._server.runtimes import RuntimeRegistry
+from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._urls import (
+    SERVER_INSTANCE_QUERY_PARAM,
     SUPPORT_PATH,
     authored_view_root_url,
     public_url,
@@ -16,6 +18,20 @@ from marimo_studio._urls import (
     with_query,
 )
 from marimo_studio._workspace.models import ProjectionDiagnostic
+
+
+def presentation_support_url(context: ServerContext, view_name: str) -> str:
+    """Return the process-bound support URL for one rendered view."""
+    return with_query(
+        public_url(
+            context.base_url,
+            f"{SUPPORT_PATH}/views/{view_name}",
+        ),
+        (
+            *context.routing_query,
+            (SERVER_INSTANCE_QUERY_PARAM, server_instance_id(context.server_token)),
+        ),
+    )
 
 
 def render_presentation_document(
@@ -30,13 +46,7 @@ def render_presentation_document(
         if context.routing_query
         else view_url(context.base_url, view_name)
     )
-    support_url = with_query(
-        public_url(
-            context.base_url,
-            f"{SUPPORT_PATH}/views/{view_name}",
-        ),
-        context.routing_query,
-    )
+    support_url = presentation_support_url(context, view_name)
     return runtime_document(
         snapshot.document,
         root_url=root_url,
@@ -97,13 +107,7 @@ def build_runtime_config(
             if context.routing_query
             else public_root_url
         ),
-        "supportUrl": with_query(
-            public_url(
-                context.base_url,
-                f"{SUPPORT_PATH}/views/{view_name}",
-            ),
-            context.routing_query,
-        ),
+        "supportUrl": presentation_support_url(context, view_name),
         "showCellLogs": resolved.workspace.show_cell_logs,
         "cellBindings": projection.cell_bindings,
         "valueBindings": projection.value_bindings,
@@ -150,4 +154,8 @@ def _browser_diagnostic(
     }
 
 
-__all__ = ["build_runtime_config", "render_presentation_document"]
+__all__ = [
+    "build_runtime_config",
+    "presentation_support_url",
+    "render_presentation_document",
+]

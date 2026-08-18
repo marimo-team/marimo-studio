@@ -1,5 +1,8 @@
 import type { ShellChangeKind } from "@marimo-studio/protocol/development-events";
-import type { ReceiverReadyMessage } from "@marimo-studio/protocol/preview-messages";
+import type {
+  ReceiverReadyMessage,
+  ReceiverUnreadyMessage,
+} from "@marimo-studio/protocol/preview-messages";
 
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
@@ -10,7 +13,13 @@ import type {
   RevisionOperation,
 } from "./document/revision-controller.ts";
 
-import { bindViewNavigation, bindViewSwitches, DevelopmentEvents } from "./document/events.ts";
+import { DevelopmentViewTransition } from "./document/development-view-transition.ts";
+import {
+  bindSourceChanges,
+  bindViewNavigation,
+  bindViewSwitches,
+  DevelopmentEvents,
+} from "./document/events.ts";
 import {
   BaselineReconciler,
   RefreshRetrySchedule,
@@ -42,8 +51,10 @@ declare global {
 const developmentEvents = new DevelopmentEvents();
 const retrySchedule = new RefreshRetrySchedule();
 const shellRefreshState = new ShellRefreshState();
-const baselineReconciler = new BaselineReconciler(hasRuntimeConfig());
+const embedded = globalThis.parent !== globalThis.window;
+let baselineReconciler: BaselineReconciler;
 let presentationRevisions: PresentationRevisionController;
+let viewTransitions: DevelopmentViewTransition;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
 const REFRESH_FAILURE_CODES = {
@@ -144,7 +155,11 @@ const revisionPolicy: PresentationRevisionPolicy = {
     clearDiagnostic();
     shellRefreshState.complete(operation.target);
   },
-  onSupportChanged: connectEvents,
+  onSupportChanged: () => {
+    if (!embedded) {
+      connectEvents();
+    }
+  },
 };
 
 const reload = (kind: ShellChangeKind, resetBackoff = true): void => {
@@ -184,13 +199,19 @@ function reconcileBaseline(): void {
 const transitionToView = (documentUrl: string, supportUrl: string): void => {
   resetRetry();
   shellRefreshState.supersede();
-  void presentationRevisions
-    .transition(documentUrl, supportUrl, "html", revisionPolicy)
-    .catch(() => {});
+  void viewTransitions.run(documentUrl, supportUrl);
 };
 
 const startDevelopmentReload = async (): Promise<void> => {
   presentationRevisions = await waitForPresentationRevisions();
+  baselineReconciler = new BaselineReconciler(hasRuntimeConfig());
+  viewTransitions = new DevelopmentViewTransition({
+    embedded,
+    closeEvents: () => developmentEvents.close(),
+    connectEvents,
+    replaceView: (documentUrl, supportUrl) =>
+      presentationRevisions.transition(documentUrl, supportUrl, "html", revisionPolicy),
+  });
   subscribeRuntimeConfig(() => {
     notifyDiagnostics(getRuntimeConfig().diagnostics, getRuntimeConfig().view);
     if (baselineReconciler.configure()) {
@@ -206,7 +227,10 @@ const startDevelopmentReload = async (): Promise<void> => {
   const unbindViewNavigation = bindViewNavigation((request) => {
     transitionToView(request.documentUrl, getSupportUrl());
   });
-  connectEvents();
+  const unbindSourceChanges = bindSourceChanges((kind) => reload(kind));
+  if (!embedded) {
+    connectEvents();
+  }
   const receiverReady: ReceiverReadyMessage = {
     type: "marimo-studio:receiver-ready",
     runtime: hasRuntimeConfig()
@@ -218,9 +242,16 @@ const startDevelopmentReload = async (): Promise<void> => {
   globalThis.addEventListener(
     "pagehide",
     () => {
+      const receiverUnready: ReceiverUnreadyMessage = {
+        ...receiverReady,
+        type: "marimo-studio:receiver-unready",
+      };
+      globalThis.parent.postMessage(receiverUnready, globalThis.location.origin);
+      viewTransitions.cancel();
       resetRetry();
       presentationRevisions.dispose();
       developmentEvents.close();
+      unbindSourceChanges();
       unbindViewSwitches();
       unbindViewNavigation();
     },

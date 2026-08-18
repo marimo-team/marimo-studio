@@ -1,5 +1,4 @@
-import type { Page } from "@playwright/test";
-
+import { expect as playwrightExpect, test as playwrightTest, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
 
 import { configDirectory, repositoryDirectory } from "../scripts/paths.mjs";
@@ -9,6 +8,7 @@ import {
   studioEntryUrl,
   previewFrame,
   readWorkspaceFile,
+  restoreWorkspace,
   test,
   waitForPreview,
   workspaceNotebookPath,
@@ -20,8 +20,26 @@ const selectAllShortcut = process.platform === "darwin" ? "Meta+a" : "Control+a"
 const originalMetricSource = "metric = scale.value * 21\nmetric";
 const runServerUrl = "http://127.0.0.1:4323";
 const runServerToken = "recovery-e2e-token";
+const editServerUrl = "http://127.0.0.1:4324";
 
-const startRunServer = () => {
+declare global {
+  var __studioEventSourceCount: number | undefined;
+  var __studioEventSources: EventSource[] | undefined;
+  var __studioWebSocketObservations: WebSocketObservation[] | undefined;
+}
+
+interface WebSocketObservation {
+  documentUrl: string;
+  socketUrl: string;
+  closeCode?: number;
+  closeReason?: string;
+}
+
+const startNotebookServer = (
+  command: "edit" | "run",
+  port: number,
+  authentication: readonly string[],
+) => {
   const child = spawn(
     "uv",
     [
@@ -30,16 +48,15 @@ const startRunServer = () => {
       "--group",
       "e2e",
       "marimo",
-      "run",
+      command,
       workspaceNotebookPath,
       "--no-sandbox",
       "--headless",
-      "--token-password",
-      runServerToken,
+      ...authentication,
       "--host",
       "127.0.0.1",
       "--port",
-      "4323",
+      String(port),
     ],
     {
       cwd: repositoryDirectory,
@@ -62,14 +79,21 @@ const startRunServer = () => {
   return { output: () => output, process: child };
 };
 
-const waitForRunServer = async (server: ReturnType<typeof startRunServer>): Promise<void> => {
+const startRunServer = () => startNotebookServer("run", 4323, ["--token-password", runServerToken]);
+
+const startEditServer = () => startNotebookServer("edit", 4324, ["--no-token"]);
+
+const waitForServer = async (
+  server: ReturnType<typeof startNotebookServer>,
+  url: string,
+): Promise<void> => {
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     if (server.process.exitCode !== null) {
-      throw new Error(`Run server exited during startup\n${server.output()}`);
+      throw new Error(`Notebook server exited during startup\n${server.output()}`);
     }
     try {
-      const response = await fetch(`${runServerUrl}/dashboard/?access_token=${runServerToken}`);
+      const response = await fetch(url);
       await response.body?.cancel();
       if (response.ok) {
         return;
@@ -79,10 +103,10 @@ const waitForRunServer = async (server: ReturnType<typeof startRunServer>): Prom
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`Run server did not start\n${server.output()}`);
+  throw new Error(`Notebook server did not start\n${server.output()}`);
 };
 
-const stopRunServer = async (child: ChildProcess): Promise<void> => {
+const stopServer = async (child: ChildProcess): Promise<void> => {
   const stopped = () => child.exitCode !== null || child.signalCode !== null;
   const pid = child.pid;
   if (stopped() || pid === undefined) {
@@ -136,6 +160,120 @@ const waitForMetricSource = () =>
       return source.includes("metric = scale.value * 21") && !source.includes("replacement =");
     })
     .toBe(true);
+
+const eventSourceCount = async (page: Page): Promise<number> =>
+  (
+    await Promise.all(
+      page
+        .frames()
+        .map((frame) =>
+          frame.evaluate(() => globalThis.__studioEventSourceCount ?? 0).catch(() => 0),
+        ),
+    )
+  ).reduce((total, count) => total + count, 0);
+
+const webSocketObservations = async (page: Page): Promise<WebSocketObservation[]> =>
+  (
+    await Promise.all(
+      page
+        .frames()
+        .map((frame) =>
+          frame
+            .evaluate(() => globalThis.__studioWebSocketObservations ?? [])
+            .catch((): WebSocketObservation[] => []),
+        ),
+    )
+  ).flat();
+
+const isEditorSocket = (observation: WebSocketObservation): boolean =>
+  new URL(observation.documentUrl).pathname.includes("/_marimo-studio/editor/");
+
+playwrightTest(
+  "a fresh Studio tab starts after the server restarts with a stale tab open",
+  async ({ context, page }) => {
+    await restoreWorkspace();
+    await context.addInitScript(() => {
+      const NativeEventSource = globalThis.EventSource;
+      const NativeWebSocket = globalThis.WebSocket;
+      globalThis.__studioEventSourceCount = 0;
+      globalThis.__studioEventSources = [];
+      globalThis.__studioWebSocketObservations = [];
+      globalThis.EventSource = class extends NativeEventSource {
+        constructor(url: string | URL, eventSourceInitDict?: EventSourceInit) {
+          super(url, eventSourceInitDict);
+          globalThis.__studioEventSourceCount = (globalThis.__studioEventSourceCount ?? 0) + 1;
+          globalThis.__studioEventSources?.push(this);
+        }
+      };
+      globalThis.WebSocket = class extends NativeWebSocket {
+        constructor(url: string | URL, protocols: string | string[] = []) {
+          super(url, protocols);
+          const observation: WebSocketObservation = {
+            documentUrl: globalThis.location.href,
+            socketUrl: this.url,
+          };
+          globalThis.__studioWebSocketObservations?.push(observation);
+          this.addEventListener("close", (event) => {
+            observation.closeCode = event.code;
+            observation.closeReason = event.reason;
+          });
+        }
+      };
+    });
+    let server = startEditServer();
+    let fresh: Page | undefined;
+
+    try {
+      await waitForServer(server, editServerUrl);
+      await page.goto(editServerUrl);
+      await waitForPreview(page);
+      await playwrightExpect.poll(() => eventSourceCount(page)).toBe(1);
+      await playwrightExpect
+        .poll(async () => (await webSocketObservations(page)).some(isEditorSocket))
+        .toBe(true);
+      await playwrightExpect
+        .poll(() =>
+          page.evaluate(
+            () => globalThis.__studioEventSources?.[0]?.readyState === EventSource.OPEN,
+          ),
+        )
+        .toBe(true);
+
+      await stopServer(server.process);
+      server = startEditServer();
+      await waitForServer(server, editServerUrl);
+      await playwrightExpect
+        .poll(() =>
+          page.evaluate(
+            () => globalThis.__studioEventSources?.[0]?.readyState === EventSource.CLOSED,
+          ),
+        )
+        .toBe(true);
+      await playwrightExpect
+        .poll(async () =>
+          (await webSocketObservations(page)).some(
+            (observation) =>
+              isEditorSocket(observation) &&
+              observation.closeCode === 1000 &&
+              observation.closeReason === "MARIMO_NO_SESSION",
+          ),
+        )
+        .toBe(true);
+
+      const current = await context.newPage();
+      fresh = current;
+      await current.goto(editServerUrl);
+      const preview = await waitForPreview(current);
+      await playwrightExpect(preview.getByText("Projected total:")).toBeVisible();
+      await playwrightExpect.poll(() => eventSourceCount(current)).toBe(1);
+      playwrightExpect(server.output()).not.toContain("Exception in ASGI application");
+    } finally {
+      await fresh?.close();
+      await stopServer(server.process);
+      await restoreWorkspace();
+    }
+  },
+);
 
 test("restores a value host after its notebook value returns", async ({ page }) => {
   await page.goto(studioEntryUrl);
@@ -196,7 +334,7 @@ test("preserves run-mode kernel state across a page reload", async ({ page }) =>
   };
 
   try {
-    await waitForRunServer(server);
+    await waitForServer(server, `${runServerUrl}/dashboard/?access_token=${runServerToken}`);
     await page.goto(`${runServerUrl}/dashboard/?access_token=${runServerToken}`);
     await waitForRunMode();
     const scale = page.locator('marimo-cell[name="controls"]').getByRole("slider");
@@ -215,6 +353,6 @@ test("preserves run-mode kernel state across a page reload", async ({ page }) =>
     await expect(page.locator('[mo-value="metric"]')).toHaveText("63");
     await expect(page.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
   } finally {
-    await stopRunServer(server.process);
+    await stopServer(server.process);
   }
 });

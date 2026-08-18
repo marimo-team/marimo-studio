@@ -282,6 +282,7 @@ class PresentationMiddleware:
                     base_url=location.base_url,
                     dev=dev,
                     structured=_accepts_json(request),
+                    server_token=context.server_token,
                     routing_query=context.routing_query,
                 )
             )
@@ -319,6 +320,7 @@ class PresentationMiddleware:
                     base_url=location.base_url,
                     dev=dev,
                     structured=_accepts_json(request),
+                    server_token=context.server_token,
                     routing_query=context.routing_query,
                 )
             await response(scope, receive, send)
@@ -405,6 +407,7 @@ class PresentationMiddleware:
                 base_url=location.base_url,
                 dev=dev,
                 structured=_accepts_json(request),
+                server_token=context.server_token,
                 routing_query=context.routing_query,
             )
         await response(scope, receive, send)

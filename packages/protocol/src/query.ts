@@ -1,4 +1,5 @@
 export const QUERY_OPERATION_QUERY_PARAM = "marimo_studio_query_operation";
+export const SERVER_INSTANCE_QUERY_PARAM = "marimo_studio_server";
 
 const PRIVATE_QUERY_KEYS = [
   "access_token",
@@ -6,6 +7,7 @@ const PRIVATE_QUERY_KEYS = [
   "kiosk",
   "marimo_studio_client",
   QUERY_OPERATION_QUERY_PARAM,
+  SERVER_INSTANCE_QUERY_PARAM,
   "marimo_studio_resume",
   "marimo_studio_view",
   "refresh_token",

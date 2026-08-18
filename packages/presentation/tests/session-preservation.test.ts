@@ -20,6 +20,7 @@ const config = (preserveSession: boolean, mode: RuntimeConfig["mode"] = "run"): 
     data: {
       fileKey: "/workspace/analysis.py",
       serverToken: "token",
+      serverInstance: "server-instance",
       preserveSession,
       url: "/",
     },

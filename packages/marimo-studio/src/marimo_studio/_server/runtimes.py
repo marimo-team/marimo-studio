@@ -11,6 +11,7 @@ from marimo_studio._capabilities import (
     ServerContext,
     SessionState,
 )
+from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._urls import public_url
 from marimo_studio._workspace.models import (
     RUNTIME_PATTERN,
@@ -85,6 +86,7 @@ class ServerRuntime:
             data={
                 "url": public_url(context.base_url, "/"),
                 "serverToken": context.server_token,
+                "serverInstance": server_instance_id(context.server_token),
                 "fileKey": context.file_key,
                 "preserveSession": snapshot.resolved.workspace.preserve_session,
                 **({"file": context.file_key} if context.routing_query else {}),

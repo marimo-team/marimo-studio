@@ -10,6 +10,7 @@ const payload = {
   runtimes: [{ id: "server", label: "Server" }],
   defaultRuntime: "server",
   clientId: "browser-client-1234",
+  serverInstance: "server-instance",
   urls: {
     editor: "/_marimo-studio/editor/?file=analysis.py",
     agent: "/_marimo-studio",

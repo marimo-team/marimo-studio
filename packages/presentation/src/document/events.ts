@@ -20,15 +20,21 @@ export class DevelopmentEvents {
 
   connect(url: string, onReady: () => void, onChange: (kind: ShellChangeKind) => void): void {
     this.close();
-    this.source = new EventSource(url);
-    this.source.addEventListener("ready", onReady);
-    this.source.addEventListener("change", (event) => {
+    const source = new EventSource(url);
+    this.source = source;
+    const current = (operation: () => void) => {
+      if (this.source === source) {
+        operation();
+      }
+    };
+    source.addEventListener("ready", () => current(onReady));
+    source.addEventListener("change", (event) => {
       if (!(event instanceof MessageEvent)) {
         return;
       }
       const payload = parseShellChange(event.data);
       if (payload) {
-        onChange(payload);
+        current(() => onChange(payload));
       }
     });
   }
@@ -54,6 +60,28 @@ export const bindViewSwitches = (callback: (request: SwitchViewMessage) => void)
       (!hasRuntimeConfig() || request.runtime === getRuntimeConfig().runtime.id)
     ) {
       callback(request);
+    }
+  };
+  globalThis.addEventListener("message", listener);
+  return () => globalThis.removeEventListener("message", listener);
+};
+
+export const bindSourceChanges = (callback: (kind: ShellChangeKind) => void): (() => void) => {
+  const listener = (event: MessageEvent<unknown>) => {
+    if (event.origin !== globalThis.location.origin || event.source !== globalThis.parent) {
+      return;
+    }
+    const payload = messageJson(event);
+    if (payload === undefined) {
+      return;
+    }
+    const request = parsePreviewMessage(payload);
+    if (request?.type !== "marimo-studio:source-change" || !hasRuntimeConfig()) {
+      return;
+    }
+    const config = getRuntimeConfig();
+    if (request.runtime === config.runtime.id && request.view === config.view) {
+      callback(request.kind);
     }
   };
   globalThis.addEventListener("message", listener);

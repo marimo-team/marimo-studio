@@ -8,6 +8,7 @@ STUDIO_PATH = "/studio"
 SUPPORT_PATH = "/_marimo-studio"
 ACTIVE_VIEW_QUERY_PARAM = "marimo_studio_view"
 STUDIO_CLIENT_QUERY_PARAM = "marimo_studio_client"
+SERVER_INSTANCE_QUERY_PARAM = "marimo_studio_server"
 QUERY_OPERATION_QUERY_PARAM = "marimo_studio_query_operation"
 PRIVATE_QUERY_KEYS = frozenset(
     {
@@ -16,6 +17,7 @@ PRIVATE_QUERY_KEYS = frozenset(
         "kiosk",
         ACTIVE_VIEW_QUERY_PARAM,
         QUERY_OPERATION_QUERY_PARAM,
+        SERVER_INSTANCE_QUERY_PARAM,
         STUDIO_CLIENT_QUERY_PARAM,
         "marimo_studio_resume",
         "refresh_token",
@@ -43,12 +45,15 @@ def editor_url(
     file_key: str,
     query: Sequence[tuple[str, str]] = (),
     client_id: str | None = None,
+    server_instance: str | None = None,
 ) -> str:
     """Return Marimo's native editor URL for one notebook."""
     parameters = _notebook_query(query)
     parameters.append(("file", file_key))
     if client_id is not None:
         parameters.append((STUDIO_CLIENT_QUERY_PARAM, client_id))
+    if server_instance is not None:
+        parameters.append((SERVER_INSTANCE_QUERY_PARAM, server_instance))
     return with_query(
         public_url(base_url, f"{SUPPORT_PATH}/editor/"),
         parameters,

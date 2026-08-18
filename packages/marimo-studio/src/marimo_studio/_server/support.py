@@ -46,6 +46,7 @@ from marimo_studio._server.projection_api import (
 from marimo_studio._server.query_api import query_response
 from marimo_studio._server.runtime_config_api import runtime_config_response
 from marimo_studio._server.runtimes import RuntimeRegistry
+from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.studio_api import (
     create_view_response,
     delete_view_response,
@@ -57,7 +58,11 @@ from marimo_studio._server.workspace_lifecycle import (
     Ready,
     WorkspaceLifecycle,
 )
-from marimo_studio._urls import ACTIVE_VIEW_QUERY_PARAM, STUDIO_CLIENT_QUERY_PARAM
+from marimo_studio._urls import (
+    ACTIVE_VIEW_QUERY_PARAM,
+    SERVER_INSTANCE_QUERY_PARAM,
+    STUDIO_CLIENT_QUERY_PARAM,
+)
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
 
@@ -327,6 +332,10 @@ def events_response(
     server: ServerGateway,
 ) -> Response:
     """Stream source and notebook changes until the server shuts down."""
+    if request.query_params.get(SERVER_INSTANCE_QUERY_PARAM) != server_instance_id(
+        context.server_token
+    ):
+        return Response(status_code=204, headers=NO_STORE)
     client_id = (
         request.query_params.get(STUDIO_CLIENT_QUERY_PARAM)
         if view_name is None

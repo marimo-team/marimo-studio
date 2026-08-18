@@ -2,9 +2,16 @@ import {
   parseActiveViewRequest,
   parseEditorSessionBinding,
   parseObserveViewRequest,
+  parseShellChange,
   type EditorSessionBinding,
   type ObserveViewRequest,
+  type ShellChangeKind,
 } from "@marimo-studio/protocol/development-events";
+import {
+  parseSourceBaseline,
+  parseSourceChanges,
+  type SourceFileChange,
+} from "@marimo-studio/protocol/source-events";
 
 import type { ViewLanding } from "../features/views/transition.ts";
 import type { AcknowledgeViewActivation } from "./activation-remote.ts";
@@ -20,12 +27,20 @@ interface WorkspaceViewPort {
 interface WorkspacePreviewPort {
   requestObservation(request: ObserveViewRequest): void;
   editorSessionChanged(binding: EditorSessionBinding): void;
+  sourceBaseline(revision: string | null): void;
+  sourceChanged(kind: ShellChangeKind): void;
+}
+
+interface WorkspaceSourcePort {
+  reconcile(): void;
+  externalChanges(changes: readonly SourceFileChange[]): void;
 }
 
 interface WorkspaceEventCoordinatorOptions {
   eventsUrl: string;
   views: WorkspaceViewPort;
   preview: WorkspacePreviewPort;
+  source: WorkspaceSourcePort;
   acknowledge: AcknowledgeViewActivation;
 }
 
@@ -86,8 +101,19 @@ export class WorkspaceEventCoordinator {
       }
       operation();
     };
-    events.addEventListener("ready", () => current(this.refreshInventory));
-    events.addEventListener("change", () => current(this.refreshInventory));
+    events.addEventListener("ready", (event) =>
+      current(() => {
+        this.refreshInventory();
+        this.options.source.reconcile();
+        const baseline = parseSourceBaseline(this.data(event));
+        this.options.preview.sourceBaseline(
+          baseline?.view === this.currentView ? baseline.revision : null,
+        );
+      }),
+    );
+    events.addEventListener("change", (event) =>
+      current(() => this.sourceChanged(this.data(event))),
+    );
     events.addEventListener("activate", (event) =>
       current(() => {
         const payload = parseActiveViewRequest(this.data(event));
@@ -121,6 +147,15 @@ export class WorkspaceEventCoordinator {
       }
     });
   };
+
+  private sourceChanged(data: string): void {
+    this.refreshInventory();
+    this.options.source.externalChanges(parseSourceChanges(data));
+    const kind = parseShellChange(data);
+    if (kind) {
+      this.options.preview.sourceChanged(kind);
+    }
+  }
 
   private async activate(view: string, generation: number): Promise<void> {
     try {

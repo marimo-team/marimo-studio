@@ -18,7 +18,11 @@ from marimo_studio._capabilities import (
 from marimo_studio._server.auth import has_edit_access
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
 from marimo_studio._server.routing import native_editor_target
-from marimo_studio._urls import STUDIO_CLIENT_QUERY_PARAM
+from marimo_studio._server.server_instance import server_instance_id
+from marimo_studio._urls import (
+    SERVER_INSTANCE_QUERY_PARAM,
+    STUDIO_CLIENT_QUERY_PARAM,
+)
 from marimo_studio._workspace import discover_studio
 from marimo_studio.errors import MarimoStudioError
 
@@ -50,11 +54,13 @@ async def delegate_editor_request(
         )
         location = server.location(connection)
         if location is not None:
+            context = server.context(location)
             await _bind_editor_session(
                 notebooks,
                 connection,
                 location.notebook,
                 sessions,
+                expected_server_instance=server_instance_id(context.server_token),
             )
         if scope["type"] == "http" and location is not None:
             try:
@@ -84,8 +90,15 @@ async def _bind_editor_session(
     connection: HTTPConnection,
     notebook: Path,
     sessions: SessionState,
+    *,
+    expected_server_instance: str,
 ) -> None:
     if not has_edit_access(connection.scope):
+        return
+    if (
+        connection.query_params.get(SERVER_INSTANCE_QUERY_PARAM)
+        != expected_server_instance
+    ):
         return
     client_id = connection.query_params.get(STUDIO_CLIENT_QUERY_PARAM)
     session_id = connection.query_params.get("session_id")

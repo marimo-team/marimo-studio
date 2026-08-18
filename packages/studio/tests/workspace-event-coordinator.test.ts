@@ -69,7 +69,10 @@ const setup = (initialViews?: string[]) => {
   const preview = {
     requestObservation: vi.fn(),
     editorSessionChanged: vi.fn(),
+    sourceBaseline: vi.fn(),
+    sourceChanged: vi.fn(),
   };
+  const source = { reconcile: vi.fn(), externalChanges: vi.fn() };
   const acknowledge = vi.fn(
     async (_generation: number, _view: string, _signal: AbortSignal) => undefined,
   );
@@ -77,10 +80,11 @@ const setup = (initialViews?: string[]) => {
     eventsUrl: "/events?file=notebook.py",
     views: model.views,
     preview,
+    source,
     acknowledge,
   });
   coordinator.start();
-  return { acknowledge, coordinator, model, preview };
+  return { acknowledge, coordinator, model, preview, source };
 };
 
 beforeEach(() => {
@@ -102,11 +106,26 @@ it("reconnects the workspace stream after a committed view selection", async () 
 });
 
 it("routes source events to inventory reconciliation", async () => {
-  const { coordinator, model } = setup();
-  EventSourceStub.instances[0]?.emit("ready");
-  EventSourceStub.instances[0]?.emit("change");
+  const { coordinator, model, preview, source } = setup();
+  EventSourceStub.instances[0]?.emit(
+    "ready",
+    JSON.stringify({ schema: 1, view: "dashboard", revision: "presentation-v1" }),
+  );
+  EventSourceStub.instances[0]?.emit(
+    "change",
+    JSON.stringify({
+      kind: "css",
+      files: [{ path: "app.css", revision: "sha256:next" }],
+    }),
+  );
 
   await vi.waitFor(() => expect(model.refreshInventory).toHaveBeenCalledTimes(2));
+  expect(source.reconcile).toHaveBeenCalledOnce();
+  expect(preview.sourceBaseline).toHaveBeenCalledWith("presentation-v1");
+  expect(preview.sourceChanged).toHaveBeenCalledWith("css");
+  expect(source.externalChanges).toHaveBeenCalledWith([
+    { path: "app.css", revision: "sha256:next" },
+  ]);
   coordinator.dispose();
 });
 

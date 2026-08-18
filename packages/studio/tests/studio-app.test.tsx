@@ -30,6 +30,7 @@ const bootstrap: StudioBootstrap = {
   ],
   defaultRuntime: "server",
   clientId: "browser-client-1234",
+  serverInstance: "server-instance",
   urls: {
     editor: "/?file=analysis.py",
     agent: "/_marimo-studio",
@@ -187,6 +188,9 @@ describe("Studio shell", () => {
     expect(services.layout.getSnapshot().workspace).toEqual(persisted.workspace);
     expect(services.source.getSnapshot().active).toBe("app.css");
     expect(serverPreviewUrl.searchParams.get("marimo_studio_client")).toBe(bootstrap.clientId);
+    expect(serverPreviewUrl.searchParams.get("marimo_studio_server")).toBe(
+      bootstrap.serverInstance,
+    );
     services.dispose();
   });
 

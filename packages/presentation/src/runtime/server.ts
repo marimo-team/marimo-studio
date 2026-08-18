@@ -29,6 +29,7 @@ export const mountServerRuntime = (
       transformTransportURL: createServerTransportURL(
         context.presentation.mode === "edit",
         data.file,
+        data.serverInstance,
       ),
     },
     updateQuery: async () => {},

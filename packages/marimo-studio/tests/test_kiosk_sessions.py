@@ -11,6 +11,7 @@ from marimo._server.api.endpoints.ws.ws_session_connector import (
     ConnectionType,
     SessionConnector,
 )
+from marimo._server.api.endpoints.ws_endpoint import WebSocketHandler
 from marimo._session.model import SessionMode
 from starlette.datastructures import QueryParams
 from starlette.websockets import WebSocketDisconnect
@@ -206,19 +207,27 @@ def test_expired_unclaimed_routes_release_capacity() -> None:
         handle.close()
 
 
-def test_final_lifecycle_close_restores_the_connector() -> None:
-    original = SessionConnector._connect_kiosk
+def test_final_lifecycle_close_restores_private_patches() -> None:
+    original_session_connect = SessionConnector.connect
+    original_connector = SessionConnector._connect_kiosk
+    original_start = WebSocketHandler.start
     first = PrivateExistingSessionAttachment()
     second = PrivateExistingSessionAttachment()
     first_handle = first.open()
-    replacement = SessionConnector._connect_kiosk
+    replacement_session_connect = SessionConnector.connect
+    replacement_connector = SessionConnector._connect_kiosk
+    replacement_start = WebSocketHandler.start
     second_handle = second.open()
 
     first_handle.close()
-    assert SessionConnector._connect_kiosk is replacement
+    assert SessionConnector.connect is replacement_session_connect
+    assert SessionConnector._connect_kiosk is replacement_connector
+    assert WebSocketHandler.start is replacement_start
 
     second_handle.close()
-    assert SessionConnector._connect_kiosk is original
+    assert SessionConnector.connect is original_session_connect
+    assert SessionConnector._connect_kiosk is original_connector
+    assert WebSocketHandler.start is original_start
 
 
 def test_lifecycle_close_removes_owned_routes() -> None:

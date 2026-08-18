@@ -1,4 +1,4 @@
-import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
+import type { JsonValue, RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
@@ -42,6 +42,15 @@ const controller = (
     vi.fn(),
     report,
   );
+
+const dispatchPreviewMessage = <Source>(source: Source, data: JsonValue): void => {
+  const event = new MessageEvent("message", {
+    origin: globalThis.location.origin,
+    data,
+  });
+  Object.defineProperty(event, "source", { value: source });
+  globalThis.dispatchEvent(event);
+};
 
 const runtimeConfig = (runtime: string) =>
   ({
@@ -179,6 +188,189 @@ it("reloads every preview after its editor session binding changes", () => {
   expect(wasmFrame.src).toContain("runtime=wasm");
   server.dispose();
   wasm.dispose();
+});
+
+it("reconciles source changes across the rendered preview lifecycle", () => {
+  const editor = frame("complete");
+  const preview = frame("complete");
+  const postMessage = vi.fn();
+  const previewWindow = { postMessage };
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: previewWindow,
+  });
+  const server = controller(
+    "server",
+    editor,
+    preview,
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+  );
+
+  server.sourceChanged("runtime");
+
+  expect(postMessage).not.toHaveBeenCalled();
+  const ready = new MessageEvent("message", {
+    origin: globalThis.location.origin,
+    data: {
+      type: "marimo-studio:receiver-ready",
+      runtime: "server",
+      view: "dashboard",
+    },
+  });
+  Object.defineProperty(ready, "source", { value: previewWindow });
+  globalThis.dispatchEvent(ready);
+
+  expect(postMessage).toHaveBeenCalledWith(
+    {
+      type: "marimo-studio:source-change",
+      runtime: "server",
+      view: "dashboard",
+      kind: "html",
+    },
+    globalThis.location.origin,
+  );
+  postMessage.mockClear();
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-ready",
+    runtime: "server",
+    view: "dashboard",
+    revision: "revision-1",
+    sessionId: "s_123456",
+  });
+
+  server.sourceChanged("css");
+
+  expect(postMessage).toHaveBeenCalledWith(
+    {
+      type: "marimo-studio:source-change",
+      runtime: "server",
+      view: "dashboard",
+      kind: "css",
+    },
+    globalThis.location.origin,
+  );
+  postMessage.mockClear();
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:receiver-unready",
+    runtime: "server",
+    view: "dashboard",
+  });
+  postMessage.mockClear();
+  globalThis.dispatchEvent(ready);
+
+  expect(postMessage).toHaveBeenCalledWith(
+    {
+      type: "marimo-studio:source-change",
+      runtime: "server",
+      view: "dashboard",
+      kind: "html",
+    },
+    globalThis.location.origin,
+  );
+  server.dispose();
+});
+
+it("reconciles source after a soft view switch commits", () => {
+  const editor = frame("complete");
+  const preview = frame("complete");
+  const postMessage = vi.fn();
+  const previewWindow = { postMessage };
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: previewWindow,
+  });
+  const server = controller(
+    "server",
+    editor,
+    preview,
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+  );
+  const dispatch = (data: JsonValue) => dispatchPreviewMessage(previewWindow, data);
+  dispatch({
+    type: "marimo-studio:receiver-ready",
+    runtime: "server",
+    view: "dashboard",
+  });
+  dispatch({
+    type: "marimo-studio:view-ready",
+    runtime: "server",
+    view: "dashboard",
+    revision: "revision-1",
+    sessionId: "s_123456",
+  });
+  postMessage.mockClear();
+
+  server.switchView("report");
+  server.sourceChanged("css");
+
+  expect(postMessage).toHaveBeenCalledOnce();
+  expect(postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({ type: "marimo-studio:switch-view", view: "report" }),
+    globalThis.location.origin,
+  );
+  dispatch({
+    type: "marimo-studio:view-ready",
+    runtime: "server",
+    view: "report",
+    revision: "revision-2",
+    sessionId: "s_123456",
+  });
+
+  expect(postMessage).toHaveBeenLastCalledWith(
+    {
+      type: "marimo-studio:source-change",
+      runtime: "server",
+      view: "report",
+      kind: "html",
+    },
+    globalThis.location.origin,
+  );
+  server.dispose();
+});
+
+it("compares the stream baseline with the rendered revision", () => {
+  const editor = frame("complete");
+  const preview = frame("complete");
+  const postMessage = vi.fn();
+  const previewWindow = { postMessage };
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: previewWindow,
+  });
+  const server = controller(
+    "server",
+    editor,
+    preview,
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+  );
+  server.sourceBaseline("revision-1");
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:receiver-ready",
+    runtime: "server",
+    view: "dashboard",
+  });
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-ready",
+    runtime: "server",
+    view: "dashboard",
+    revision: "revision-1",
+    sessionId: "s_123456",
+  });
+
+  expect(postMessage).not.toHaveBeenCalled();
+
+  server.sourceBaseline("revision-2");
+
+  expect(postMessage).toHaveBeenCalledWith(
+    {
+      type: "marimo-studio:source-change",
+      runtime: "server",
+      view: "dashboard",
+      kind: "html",
+    },
+    globalThis.location.origin,
+  );
+  server.dispose();
 });
 
 it("reloads attached previews once for each newer editor binding", () => {
