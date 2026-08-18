@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import pydoc
 from importlib.metadata import distribution
 from types import SimpleNamespace
 from typing import get_type_hints
@@ -34,6 +35,29 @@ def test_agent_capability_entry_point_loads_the_instruction_module() -> None:
         ("studio", "marimo_studio.agents")
     ]
     assert capabilities[0].load() is studio_agents
+
+
+def test_agent_plugin_exposes_the_packaged_studio_skill() -> None:
+    plugin = studio_agents.agent_plugin()
+    skill = studio_agents.agent_skill()
+
+    assert plugin.manifest.name == "marimo-studio"
+    assert skill in plugin.skills
+    assert skill.path.name == "marimo-studio"
+    assert (skill / "SKILL.md").is_file()
+    assert (skill / "agents" / "openai.yaml").is_file()
+    assert skill.frontmatter.splitlines()[0] == "name: marimo-studio"
+
+
+def test_agent_module_help_points_to_installed_resources() -> None:
+    plugin = studio_agents.agent_plugin()
+    skill = studio_agents.agent_skill()
+    rendered = pydoc.render_doc(studio_agents)
+
+    assert str(plugin.path) in rendered
+    assert str(skill / "SKILL.md") in rendered
+    assert "resources = studio.agent_plugin()" in rendered
+    assert "skill = studio.agent_skill()" in rendered
 
 
 def test_public_agent_annotations_resolve_at_runtime() -> None:

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "marimo-studio",
+  "description": "Author and validate custom web views backed by Marimo notebooks.",
+  "author": {
+    "name": "Péter Ferenc Gyarmati",
+    "email": "dev.petergy@gmail.com"
+  },
+  "repository": "https://github.com/marimo-team/marimo-studio",
+  "keywords": ["marimo", "notebooks", "agent-skills", "data-apps"]
+}
