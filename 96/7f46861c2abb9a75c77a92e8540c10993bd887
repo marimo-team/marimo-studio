@@ -1,0 +1,19 @@
+apps/e2e/tests/recovery.spec.ts
+  s_6c4e4d914645f2::t_80db1121c8ba2e 357
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "967f46861c2abb9a75c77a92e8540c10993bd887",
+  "prompts": {},
+  "sessions": {
+    "s_6c4e4d914645f2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01518-a473-7073-8e86-60d1cfa1bdda",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
