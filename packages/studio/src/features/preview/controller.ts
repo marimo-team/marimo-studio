@@ -14,6 +14,7 @@ import {
   type SourceChangeMessage,
   type SwitchViewMessage,
   type ViewDiagnostic,
+  type ViewObservationMessage,
   type ViewPreviewMessage,
 } from "@marimo-studio/protocol/preview-messages";
 import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
@@ -96,7 +97,7 @@ export class PreviewController {
     this.observations = new PreviewObservationController(
       runtime,
       preview,
-      () => this.runtimeDiagnostics.report(),
+      (message) => this.acceptObservation(message),
       recordObservation,
     );
     this.queries = new PreviewQueryController(runtime, preview, syncQuery, syncEditorQuery, () =>
@@ -331,28 +332,6 @@ export class PreviewController {
         this.setRuntimeStatus("failed", [message.diagnostic]);
         return;
       case "marimo-studio:view-observation":
-        this.readyRevision = message.revision;
-        this.readySessionId = message.sessionId ?? undefined;
-        if (this.readySessionId === undefined) {
-          delete this.preview.dataset.sessionId;
-        } else {
-          this.preview.dataset.sessionId = this.readySessionId;
-        }
-        this.viewReady = message.state === "ready";
-        this.diagnostics = message.diagnostics;
-        if (message.state === "ready") {
-          this.showReadyStatus();
-        } else if (message.state === "loading") {
-          this.setRuntimeStatus("synchronizing", message.diagnostics, {
-            revision: message.revision,
-            sessionId: message.sessionId,
-          });
-        } else {
-          this.setRuntimeStatus("failed", message.diagnostics, {
-            revision: message.revision,
-            sessionId: message.sessionId,
-          });
-        }
         this.observations.receive(message);
         return;
       default:
@@ -362,6 +341,32 @@ export class PreviewController {
 
   private previewQueryChanged(query: string): void {
     this.queries.previewChanged(query);
+  }
+
+  private acceptObservation(message: ViewObservationMessage): RuntimeStatusReport {
+    this.readyRevision = message.revision;
+    this.readySessionId = message.sessionId ?? undefined;
+    if (this.readySessionId === undefined) {
+      delete this.preview.dataset.sessionId;
+    } else {
+      this.preview.dataset.sessionId = this.readySessionId;
+    }
+    this.viewReady = message.state === "ready";
+    this.diagnostics = message.diagnostics;
+    if (message.state === "ready") {
+      this.showReadyStatus();
+    } else if (message.state === "loading") {
+      this.setRuntimeStatus("synchronizing", message.diagnostics, {
+        revision: message.revision,
+        sessionId: message.sessionId,
+      });
+    } else {
+      this.setRuntimeStatus("failed", message.diagnostics, {
+        revision: message.revision,
+        sessionId: message.sessionId,
+      });
+    }
+    return this.runtimeDiagnostics.report();
   }
 
   private postSwitch(): void {
