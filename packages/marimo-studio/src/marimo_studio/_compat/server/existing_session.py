@@ -6,13 +6,16 @@ import time
 from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from functools import wraps
 from threading import RLock
 from typing import Any
 from weakref import WeakKeyDictionary, ref
 
 from marimo._server.api.endpoints.ws.ws_session_connector import SessionConnector
+from marimo._server.api.endpoints.ws_endpoint import WebSocketHandler
+from starlette.websockets import WebSocketDisconnect
 
-from marimo_studio._capabilities import ServerContext
+from marimo_studio._capabilities import CloseHandle, ServerContext
 from marimo_studio._compat.patch import (
     CallbackCloseHandle,
     CompositeCloseHandle,
@@ -20,10 +23,18 @@ from marimo_studio._compat.patch import (
 )
 from marimo_studio._compat.server.gateway import context_handle
 from marimo_studio._compat.server.session_state import current_session
-from marimo_studio._urls import STUDIO_CLIENT_QUERY_PARAM
+from marimo_studio._server.server_instance import server_instance_id
+from marimo_studio._urls import (
+    SERVER_INSTANCE_QUERY_PARAM,
+    STUDIO_CLIENT_QUERY_PARAM,
+)
 
 _MAX_ROUTES = 100
 _PREVIEW_CONNECT_GRACE = 30.0
+
+
+class _StudioSessionRejected(WebSocketDisconnect):
+    pass
 
 
 @dataclass
@@ -139,17 +150,38 @@ def _router(manager: Any, clock: Callable[[], float]) -> _SessionRouter:
         return router
 
 
-def _connect_replacement(native_connect: Any) -> Any:
+def _session_connect_replacement(native_connect: Any) -> Any:
+    from marimo._server.codes import WebSocketCloseReason, WebSocketCodes
+
+    @wraps(native_connect)
+    def connect_current_server(connector: SessionConnector) -> Any:
+        query = connector.connection.query_params
+        client_id = query.get(STUDIO_CLIENT_QUERY_PARAM)
+        instance_id = query.get(SERVER_INSTANCE_QUERY_PARAM)
+        if (client_id is not None or instance_id is not None) and (
+            instance_id
+            != server_instance_id(str(connector.manager.skew_protection_token))
+        ):
+            raise _StudioSessionRejected(
+                WebSocketCodes.NORMAL_CLOSE,
+                WebSocketCloseReason.NO_SESSION,
+            )
+        return native_connect(connector)
+
+    return connect_current_server
+
+
+def _connect_kiosk_replacement(native_connect: Any) -> Any:
     from marimo._server.api.endpoints.ws.ws_session_connector import ConnectionType
     from marimo._server.codes import WebSocketCloseReason, WebSocketCodes
     from marimo._session.model import SessionMode
-    from starlette.websockets import WebSocketDisconnect
 
+    @wraps(native_connect)
     def connect_existing(connector: SessionConnector) -> tuple[Any, ConnectionType]:
         if connector.connection.query_params.get(STUDIO_CLIENT_QUERY_PARAM) is None:
             return native_connect(connector)
         if connector.manager.mode is not SessionMode.EDIT:
-            raise WebSocketDisconnect(
+            raise _StudioSessionRejected(
                 WebSocketCodes.FORBIDDEN,
                 WebSocketCloseReason.KIOSK_NOT_ALLOWED,
             )
@@ -157,7 +189,7 @@ def _connect_replacement(native_connect: Any) -> Any:
             router = _ROUTERS.get(connector.manager)
         session = router.resolve(connector.params.session_id) if router else None
         if session is None:
-            raise WebSocketDisconnect(
+            raise _StudioSessionRejected(
                 WebSocketCodes.NORMAL_CLOSE,
                 WebSocketCloseReason.NO_SESSION,
             )
@@ -167,11 +199,34 @@ def _connect_replacement(native_connect: Any) -> Any:
     return connect_existing
 
 
-_CONNECT_PATCH = ReversiblePatch(
+def _start_replacement(native_start: Any) -> Any:
+    @wraps(native_start)
+    async def start(handler: WebSocketHandler) -> None:
+        try:
+            await native_start(handler)
+        except _StudioSessionRejected as error:
+            await handler._safe_close(error.code, error.reason or "")
+
+    return start
+
+
+_SESSION_CONNECT_PATCH = ReversiblePatch(
+    "server-instance-routing",
+    SessionConnector,
+    "connect",
+    _session_connect_replacement,
+)
+_KIOSK_CONNECT_PATCH = ReversiblePatch(
     "existing-session-attachment",
     SessionConnector,
     "_connect_kiosk",
-    _connect_replacement,
+    _connect_kiosk_replacement,
+)
+_START_PATCH = ReversiblePatch(
+    "existing-session-rejection",
+    WebSocketHandler,
+    "start",
+    _start_replacement,
 )
 
 
@@ -189,18 +244,23 @@ class PrivateExistingSessionAttachment:
             if self._active:
                 raise RuntimeError("The existing-session adapter is already open")
             self._active = True
+        patches: list[CloseHandle] = []
         try:
-            patch = _CONNECT_PATCH.open()
-        except BaseException:
+            for patch in (
+                _SESSION_CONNECT_PATCH,
+                _KIOSK_CONNECT_PATCH,
+                _START_PATCH,
+            ):
+                patches.append(patch.open())
+        except BaseException as setup_error:
             with _ROUTERS_LOCK:
                 self._active = False
+            try:
+                CompositeCloseHandle(patches).close()
+            except BaseException as cleanup_error:
+                raise setup_error from cleanup_error
             raise
-        return CompositeCloseHandle(
-            (
-                patch,
-                CallbackCloseHandle(self.close),
-            )
-        )
+        return CompositeCloseHandle((*patches, CallbackCloseHandle(self.close)))
 
     def attach(
         self,

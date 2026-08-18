@@ -109,9 +109,31 @@ _SYMBOLS = {
         ),
         SymbolContract(
             "marimo._server.api.endpoints.ws.ws_session_connector",
+            "SessionConnector.connect",
+            _parameters(("self", "POSITIONAL_OR_KEYWORD", False)),
+            "b6fad2c2767fc3dcb2856d18ea6a434630251c413dd53ec1e0581622da7bf4d4",
+        ),
+        SymbolContract(
+            "marimo._server.api.endpoints.ws.ws_session_connector",
             "SessionConnector._connect_kiosk",
             _parameters(("self", "POSITIONAL_OR_KEYWORD", False)),
             "fb918e0fca6ebdc0d0ef0770a5aa5b4bf0a9f96aeab43713770d042d3f54f962",
+        ),
+        SymbolContract(
+            "marimo._server.api.endpoints.ws_endpoint",
+            "WebSocketHandler.start",
+            _parameters(("self", "POSITIONAL_OR_KEYWORD", False)),
+            "1e5dc8b41351444c8926cd84fcd66b0bd0ecea2e3bb49c18bdda99cfcc61f98a",
+        ),
+        SymbolContract(
+            "marimo._server.api.endpoints.ws_endpoint",
+            "WebSocketHandler._safe_close",
+            _parameters(
+                ("self", "POSITIONAL_OR_KEYWORD", False),
+                ("code", "POSITIONAL_OR_KEYWORD", False),
+                ("reason", "POSITIONAL_OR_KEYWORD", False),
+            ),
+            "30d6ac8d47c223e0c4c22c8b48186fdbf8e043baec34bda52d1107b3c783fe29",
         ),
     ),
     "session-replay": (

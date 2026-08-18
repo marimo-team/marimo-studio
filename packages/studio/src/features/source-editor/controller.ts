@@ -1,8 +1,5 @@
-import type { SourceName } from "@marimo-studio/protocol/source-events";
+import type { SourceFileChange, SourceName } from "@marimo-studio/protocol/source-events";
 
-import { appendUrlPath } from "@marimo-studio/protocol/url";
-
-import { SourceEvents } from "./events.ts";
 import { SOURCE_NAMES, sourceRecord } from "./files.ts";
 import { createSourceRemote, type SourceRemote } from "./remote.ts";
 import { type SourceObserver, type SourceState, SyncedSource } from "./sync.ts";
@@ -25,7 +22,6 @@ export class SourceController {
   private readonly sources = new Map<SourceName, SyncedSource>();
   private readonly contents = new Map<SourceName, string>();
   private readonly states = new Map<SourceName, SourceState>();
-  private readonly events = new SourceEvents();
   private readonly remote: SourceRemote;
   private readonly listeners = new Set<Listener>();
   private view: string;
@@ -79,7 +75,6 @@ export class SourceController {
     if (this.disposed) {
       return;
     }
-    this.openEvents();
     if (!loaded.every(Boolean)) {
       this.revealBlockedSource();
     }
@@ -152,13 +147,22 @@ export class SourceController {
     this.publish();
   }
 
+  reconcile(): void {
+    this.sources.forEach((source) => void source.reconcile());
+  }
+
+  externalChanges(changes: readonly SourceFileChange[]): void {
+    for (const { path, revision } of changes) {
+      void this.sources.get(path)?.externalChange(revision);
+    }
+  }
+
   dispose(): void {
     if (this.disposed) {
       return;
     }
     this.disposed = true;
     this.transition += 1;
-    this.events.close();
     this.sources.forEach((source) => source.dispose());
     this.listeners.clear();
   }
@@ -223,22 +227,8 @@ export class SourceController {
         this.sources.get(name)?.open(view, source);
       }
     }
-    this.openEvents();
     this.publish();
     return true;
-  }
-
-  private openEvents(): void {
-    if (this.disposed) {
-      return;
-    }
-    this.events.open(
-      appendUrlPath(this.supportUrl(this.view), "dev/events", globalThis.location.href),
-      () => this.sources.forEach((source) => void source.reconcile()),
-      ({ path, revision }) => {
-        void this.sources.get(path)?.externalChange(revision);
-      },
-    );
   }
 
   private tabKey(view = this.view): string {

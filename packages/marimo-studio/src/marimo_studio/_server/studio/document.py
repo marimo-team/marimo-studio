@@ -12,8 +12,10 @@ from htpy import Node, a, body, div, head, html, link, meta, noscript, script, t
 from markupsafe import Markup
 
 from marimo_studio._html import node_list, render
+from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._urls import (
     ACTIVE_VIEW_QUERY_PARAM,
+    SERVER_INSTANCE_QUERY_PARAM,
     STUDIO_CLIENT_QUERY_PARAM,
     SUPPORT_PATH,
     editor_url,
@@ -38,7 +40,14 @@ def studio_document(
     root_url = public_url(base_url, "/")
     support_url = public_url(base_url, SUPPORT_PATH)
     client_id = secrets.token_urlsafe(18)
-    native_editor_url = editor_url(base_url, file_key, query, client_id)
+    server_instance = server_instance_id(server_token)
+    native_editor_url = editor_url(
+        base_url,
+        file_key,
+        query,
+        client_id,
+        server_instance,
+    )
 
     def routed(url: str) -> str:
         return with_query(url, routing_query)
@@ -62,6 +71,7 @@ def studio_document(
                     (
                         (STUDIO_CLIENT_QUERY_PARAM, client_id),
                         (ACTIVE_VIEW_QUERY_PARAM, selected),
+                        (SERVER_INSTANCE_QUERY_PARAM, server_instance),
                     ),
                 ),
                 "query": routed(f"{support_url}/query"),
@@ -72,6 +82,7 @@ def studio_document(
             },
             "workspaceId": workspace_id,
             "clientId": client_id,
+            "serverInstance": server_instance,
             "serverToken": server_token,
         },
         separators=(",", ":"),

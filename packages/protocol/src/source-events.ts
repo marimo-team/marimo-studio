@@ -18,6 +18,22 @@ const sourceChangesCodec = jsonCodec(sourceChangesSchema);
 export type SourceName = z.infer<typeof sourceNameSchema>;
 export type SourceFileChange = z.infer<typeof sourceFileChangeSchema>;
 
+const sourceBaselineSchema = z
+  .object({
+    schema: z.literal(1),
+    view: z.string().min(1),
+    revision: z.string().min(1).nullable(),
+  })
+  .strict();
+const sourceBaselineCodec = jsonCodec(sourceBaselineSchema);
+
+export type SourceBaseline = z.infer<typeof sourceBaselineSchema>;
+
+export const parseSourceBaseline = (source: string): SourceBaseline | undefined => {
+  const result = sourceBaselineCodec.safeDecode(source);
+  return result.success ? result.data : undefined;
+};
+
 export const parseSourceChanges = (source: string): SourceFileChange[] => {
   const result = sourceChangesCodec.safeDecode(source);
   return result.success ? result.data.files : [];

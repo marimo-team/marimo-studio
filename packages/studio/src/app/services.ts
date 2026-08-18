@@ -94,6 +94,7 @@ export const createStudioServices = (
     eventsUrl: routes.endpoint(bootstrap.urls.events),
     views,
     preview,
+    source,
     acknowledge: createViewActivationRemote(
       routes.endpoint(bootstrap.urls.agent),
       bootstrap.serverToken,
@@ -110,8 +111,8 @@ export const createStudioServices = (
     views,
     async start(editor, frames) {
       preview.attach(editor, frames);
-      workspaceEvents.start();
       await source.start();
+      workspaceEvents.start();
     },
     dispose() {
       if (disposed) {

@@ -8,7 +8,9 @@ from marimo_studio._capabilities import ServerContext
 from marimo_studio._html import runtime_document
 from marimo_studio._server.presentation import PresentationSnapshot
 from marimo_studio._server.runtimes import RuntimeRegistry
+from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._urls import (
+    SERVER_INSTANCE_QUERY_PARAM,
     SUPPORT_PATH,
     authored_view_root_url,
     public_url,
@@ -16,6 +18,13 @@ from marimo_studio._urls import (
     with_query,
 )
 from marimo_studio._workspace.models import ProjectionDiagnostic
+
+
+def _support_query(context: ServerContext) -> tuple[tuple[str, str], ...]:
+    return (
+        *context.routing_query,
+        (SERVER_INSTANCE_QUERY_PARAM, server_instance_id(context.server_token)),
+    )
 
 
 def render_presentation_document(
@@ -35,7 +44,7 @@ def render_presentation_document(
             context.base_url,
             f"{SUPPORT_PATH}/views/{view_name}",
         ),
-        context.routing_query,
+        _support_query(context),
     )
     return runtime_document(
         snapshot.document,
@@ -102,7 +111,7 @@ def build_runtime_config(
                 context.base_url,
                 f"{SUPPORT_PATH}/views/{view_name}",
             ),
-            context.routing_query,
+            _support_query(context),
         ),
         "showCellLogs": resolved.workspace.show_cell_logs,
         "cellBindings": projection.cell_bindings,

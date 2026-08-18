@@ -1,6 +1,10 @@
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
-import { notebookRouteQuery, publicNotebookQuery } from "@marimo-studio/protocol/query";
+import {
+  notebookRouteQuery,
+  publicNotebookQuery,
+  SERVER_INSTANCE_QUERY_PARAM,
+} from "@marimo-studio/protocol/query";
 import { selectRuntimeInUrl } from "@marimo-studio/protocol/runtime-selection";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
@@ -24,6 +28,7 @@ export class StudioRoutes {
     );
     const url = new URL(selected, globalThis.location.href);
     url.searchParams.set("marimo_studio_client", this.bootstrap.clientId);
+    url.searchParams.set(SERVER_INSTANCE_QUERY_PARAM, this.bootstrap.serverInstance);
     return url.toString();
   };
 
@@ -36,12 +41,17 @@ export class StudioRoutes {
       ),
     );
 
-  support = (view: string): string =>
-    appendUrlPath(
-      this.bootstrap.urls.viewSupportPrefix,
-      encodeURIComponent(view),
-      globalThis.location.href,
+  support = (view: string): string => {
+    const url = new URL(
+      appendUrlPath(
+        this.bootstrap.urls.viewSupportPrefix,
+        encodeURIComponent(view),
+        globalThis.location.href,
+      ),
     );
+    url.searchParams.set(SERVER_INSTANCE_QUERY_PARAM, this.bootstrap.serverInstance);
+    return url.toString();
+  };
 
   endpoint = (url: string): string => new URL(url, globalThis.location.href).toString();
 

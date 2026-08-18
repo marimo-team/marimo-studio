@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { browserDiagnosticSchema } from "./browser-observations";
+import { shellChangeKindSchema } from "./development-events";
 import { runtimeIdSchema, type JsonValue } from "./runtime-config";
 
 export const viewDiagnosticSchema = z.object({
@@ -39,11 +40,22 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     view: z.string().optional(),
   }),
   z.object({
+    type: z.literal("marimo-studio:receiver-unready"),
+    ...runtimeField,
+    view: z.string().optional(),
+  }),
+  z.object({
     type: z.literal("marimo-studio:switch-view"),
     ...runtimeField,
     view: z.string(),
     documentUrl: z.string(),
     supportUrl: z.string(),
+  }),
+  z.object({
+    type: z.literal("marimo-studio:source-change"),
+    ...runtimeField,
+    view: z.string(),
+    kind: shellChangeKindSchema,
   }),
   z.object({
     type: z.literal("marimo-studio:view-ready"),
@@ -116,7 +128,12 @@ export type ReceiverReadyMessage = Extract<
   PreviewMessage,
   { type: "marimo-studio:receiver-ready" }
 >;
+export type ReceiverUnreadyMessage = Extract<
+  PreviewMessage,
+  { type: "marimo-studio:receiver-unready" }
+>;
 export type SwitchViewMessage = Extract<PreviewMessage, { type: "marimo-studio:switch-view" }>;
+export type SourceChangeMessage = Extract<PreviewMessage, { type: "marimo-studio:source-change" }>;
 export type ViewReadyMessage = Extract<PreviewMessage, { type: "marimo-studio:view-ready" }>;
 export type ViewSyncPendingMessage = Extract<
   PreviewMessage,
@@ -142,8 +159,12 @@ export type PresentationToStudioMessage =
   | NavigateViewMessage
   | QueryChangeMessage
   | ReceiverReadyMessage
+  | ReceiverUnreadyMessage
   | ViewPreviewMessage;
-export type StudioToPresentationMessage = SwitchViewMessage | ObserveViewMessage;
+export type StudioToPresentationMessage =
+  | SwitchViewMessage
+  | SourceChangeMessage
+  | ObserveViewMessage;
 
 export const parsePreviewMessage = (value: JsonValue): PreviewMessage | undefined => {
   const result = previewMessageSchema.safeParse(value);

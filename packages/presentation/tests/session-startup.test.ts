@@ -18,6 +18,7 @@ const runtimeConfig = (revision: string): RuntimeConfig => ({
     data: {
       fileKey: "/workspace/analysis.py",
       serverToken: "token",
+      serverInstance: "server-instance",
       preserveSession: true,
       url: "/",
     },

@@ -16,6 +16,10 @@ from marimo_studio._compat.code_mode import (
 )
 from marimo_studio._server import editor_bridge
 from marimo_studio._server import middleware as studio_middleware
+from marimo_studio._server.server_instance import server_instance_id
+from marimo_studio._urls import SERVER_INSTANCE_QUERY_PARAM
+
+_SERVER_TOKEN = "server-token"
 
 
 @pytest.mark.parametrize(
@@ -132,12 +136,39 @@ def test_editor_transport_requires_edit_access_before_binding_a_session(
     assert not middleware._notebooks.contains(notebook_path)
 
 
+def test_stale_editor_transport_does_not_bind_a_studio_client(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def downstream(scope: Scope, receive: Receive, send: Send) -> None:
+        del scope, receive, send
+
+    location = SimpleNamespace(notebook=notebook_path)
+    monkeypatch.setattr(editor_bridge, "native_editor_target", lambda _relative: "/ws")
+    middleware = studio_middleware.PresentationMiddleware(
+        downstream,
+        lambda: _adapters(location),
+    )
+    scope = _websocket_scope(("edit",), server_instance="stale-server")
+
+    async def receive() -> Message:
+        return {"type": "websocket.connect"}
+
+    async def send(_message: Message) -> None:
+        return None
+
+    asyncio.run(middleware(scope, receive, send))
+
+    assert not middleware._notebooks.contains(notebook_path)
+
+
 def _adapters(location: object) -> ServerAdapters:
     server = SimpleNamespace(
         base_url=lambda _scope: "",
         relative_path=lambda scope, _base: scope["path"],
         mode=lambda _scope: "edit",
         location=lambda _connection: location,
+        context=lambda _location: SimpleNamespace(server_token=_SERVER_TOKEN),
     )
     sessions = SimpleNamespace(is_session_id=lambda value: value == "s_123456")
     return cast(
@@ -152,7 +183,11 @@ def _adapters(location: object) -> ServerAdapters:
     )
 
 
-def _websocket_scope(scopes: tuple[str, ...]) -> Scope:
+def _websocket_scope(
+    scopes: tuple[str, ...],
+    *,
+    server_instance: str = server_instance_id(_SERVER_TOKEN),
+) -> Scope:
     return {
         "type": "websocket",
         "scheme": "ws",
@@ -163,6 +198,7 @@ def _websocket_scope(scopes: tuple[str, ...]) -> Scope:
             {
                 "marimo_studio_client": "browser-client-1234",
                 "session_id": "s_123456",
+                SERVER_INSTANCE_QUERY_PARAM: server_instance,
             }
         ).encode(),
         "headers": [],

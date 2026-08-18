@@ -28,6 +28,7 @@ const config = {
     data: {
       fileKey: "/workspace/notebook.py",
       serverToken: "server-token",
+      serverInstance: "server-instance",
       preserveSession: false,
       url: "/proxy/app/",
     },

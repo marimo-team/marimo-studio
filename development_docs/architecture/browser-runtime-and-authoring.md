@@ -304,7 +304,8 @@ retains its controller and frame.
 
 The source controller owns one synchronized document for `index.html` and one
 for `app.css`. Each buffer autosaves after a short pause using its loaded
-revision. Server-sent events announce disk changes.
+revision. The workspace event stream announces disk changes, and the source
+controller reconciles the affected buffers against their loaded revisions.
 
 - **User capability:** authors can edit in the browser or an external editor.
   Clean buffers refresh from disk. Dirty buffers expose Compare, Use disk, and
@@ -331,14 +332,28 @@ preparation.
 
 ### 18. Workspace event coordination
 
-`WorkspaceEventCoordinator` owns the server-sent event stream for inventory,
-agent activation, browser observation, and editor-session binding. It calls the
-view and preview ports, then acknowledges a completed targeted activation.
+`WorkspaceEventCoordinator` owns one server-sent event stream for source
+changes, inventory, agent activation, browser observation, and editor-session
+binding. It routes source changes to the source controller and prepared preview
+frames, then acknowledges a completed targeted activation.
+
+The stream-ready event carries the current presentation revision. Each preview
+compares that baseline with its rendered revision and refreshes when they differ.
+Preview documents report when their receiver enters and leaves the page, so
+changes that cross a document navigation are replayed after the next receiver
+starts.
+
+The Studio document, editor frame, preview frames, and event stream carry a
+hashed server-instance identifier. A restarted process rejects stale session
+connections before session allocation and returns HTTP 204 for stale event
+streams. [`EventSource` treats that response as terminal](https://html.spec.whatwg.org/dev/server-sent-events.html),
+which releases the browser connection for the current Studio document.
 
 - **User capability:** external view creation appears in the workspace, and a
   coding agent can select and inspect the exact tab attached to its session.
-- **Complexity carried:** reconnect generations, stale events, current view,
-  session replacement, and acknowledgement ordering must stay aligned.
+- **Complexity carried:** stream multiplexing, server identity, reconnect
+  generations, current view, session replacement, and acknowledgement ordering
+  must stay aligned.
 - **Maintenance surface:** `app/workspace-event-coordinator.ts`, development
   event protocol, server event routes, unit tests, and agent acceptance.
 

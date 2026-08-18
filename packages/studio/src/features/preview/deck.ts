@@ -1,6 +1,7 @@
 import type {
   EditorSessionBinding,
   ObserveViewRequest,
+  ShellChangeKind,
 } from "@marimo-studio/protocol/development-events";
 
 import type { ControlFrameConnector } from "./control-sync.ts";
@@ -49,6 +50,7 @@ export class PreviewDeck {
   private stopEditorOutlineGuard: (() => void) | undefined;
   private editorBindingGeneration = 0;
   private editorSessionId: string | undefined;
+  private sourceRevision: string | null | undefined;
 
   constructor(private readonly options: PreviewDeckOptions) {
     this.runtime = options.initialRuntime;
@@ -91,6 +93,7 @@ export class PreviewDeck {
 
   switchView(view: string): void {
     this.view = view;
+    this.sourceRevision = undefined;
     for (const runtime of this.options.runtimes) {
       if (!this.previews.has(runtime)) {
         this.states.set(runtime, {
@@ -123,6 +126,16 @@ export class PreviewDeck {
     if (hadEarlierBinding && previousSessionId !== binding.sessionId) {
       this.previews.forEach((controller) => controller.editorSessionChanged());
     }
+  }
+
+  sourceChanged(kind: ShellChangeKind): void {
+    this.sourceRevision = undefined;
+    this.previews.forEach((controller) => controller.sourceChanged(kind));
+  }
+
+  sourceBaseline(revision: string | null): void {
+    this.sourceRevision = revision;
+    this.previews.forEach((controller) => controller.sourceBaseline(revision));
   }
 
   dispose(): void {
@@ -185,6 +198,9 @@ export class PreviewDeck {
       this.options.recordObservation,
       this.options.connectControlFrame,
     );
+    if (this.sourceRevision !== undefined) {
+      controller.sourceBaseline(this.sourceRevision);
+    }
     this.previews.set(runtime, controller);
     return controller;
   }

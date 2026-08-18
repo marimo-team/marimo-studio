@@ -29,6 +29,7 @@ export const studioBootstrapSchema = z
     }),
     workspaceId: z.string().min(1),
     clientId: z.string().min(1),
+    serverInstance: z.string().min(1),
     serverToken: z.string().min(1),
   })
   .superRefine((value, context) => {

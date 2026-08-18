@@ -1,8 +1,12 @@
-import type { ObserveViewRequest } from "@marimo-studio/protocol/development-events";
+import type {
+  ObserveViewRequest,
+  ShellChangeKind,
+} from "@marimo-studio/protocol/development-events";
 
 import {
   parsePreviewMessage,
   type PresentationToStudioMessage,
+  type SourceChangeMessage,
   type SwitchViewMessage,
   type ViewDiagnostic,
   type ViewPreviewMessage,
@@ -36,6 +40,8 @@ export class PreviewController {
   private readonly retrySchedule = new RetrySchedule();
   private readyRevision: string | undefined;
   private readySessionId: string | undefined;
+  private pendingSourceRefresh = false;
+  private sourceBaselineRevision: string | null | undefined;
   private readonly controls: PreviewControlController;
   private readonly observations: PreviewObservationController;
   private readonly queries: PreviewQueryController;
@@ -88,6 +94,8 @@ export class PreviewController {
     this.readySessionId = undefined;
     delete this.preview.dataset.sessionId;
     this.viewReady = false;
+    this.pendingSourceRefresh = true;
+    this.sourceBaselineRevision = undefined;
     this.view = view;
     const nextPreview = this.viewUrl(view, this.runtime);
     this.preview.title = `${view} custom view using ${this.runtime}`;
@@ -112,6 +120,39 @@ export class PreviewController {
 
   editorSessionChanged(): void {
     this.reload();
+  }
+
+  sourceChanged(kind: ShellChangeKind): void {
+    this.sourceBaselineRevision = undefined;
+    if (!this.receiverReady || !this.viewReady) {
+      this.pendingSourceRefresh = true;
+      return;
+    }
+    this.postSourceChange(kind);
+  }
+
+  sourceBaseline(revision: string | null): void {
+    this.sourceBaselineRevision = revision ?? undefined;
+    const needsRefresh =
+      revision === null || (this.readyRevision !== undefined && this.readyRevision !== revision);
+    if (!needsRefresh) {
+      return;
+    }
+    this.pendingSourceRefresh = true;
+    if (this.receiverReady && this.viewReady) {
+      this.pendingSourceRefresh = false;
+      this.postSourceChange("html");
+    }
+  }
+
+  private postSourceChange(kind: ShellChangeKind): void {
+    const message: SourceChangeMessage = {
+      type: "marimo-studio:source-change",
+      runtime: this.runtime,
+      view: this.view,
+      kind,
+    };
+    this.preview.contentWindow?.postMessage(message, globalThis.location.origin);
   }
 
   editorQueryChanged(query: string, operationId?: string, completed = false): void {
@@ -159,6 +200,7 @@ export class PreviewController {
     if (
       !message ||
       message.type === "marimo-studio:switch-view" ||
+      message.type === "marimo-studio:source-change" ||
       message.type === "marimo-studio:observe-view" ||
       message.runtime !== this.runtime
     ) {
@@ -175,6 +217,15 @@ export class PreviewController {
       case "marimo-studio:query-change":
         this.previewQueryChanged(message.query);
         return;
+      case "marimo-studio:receiver-unready":
+        this.controls.stop();
+        this.readyRevision = undefined;
+        this.readySessionId = undefined;
+        delete this.preview.dataset.sessionId;
+        this.receiverReady = false;
+        this.viewReady = false;
+        this.pendingSourceRefresh = true;
+        return;
       case "marimo-studio:receiver-ready":
         this.controls.stop();
         this.readyRevision = undefined;
@@ -186,7 +237,12 @@ export class PreviewController {
         this.retrySchedule.reset();
         if (message.view === this.view) {
           this.setStatus(previewStartingMessage(this.runtime));
+          if (this.pendingSourceRefresh && this.sourceBaselineRevision === undefined) {
+            this.pendingSourceRefresh = false;
+            this.postSourceChange("html");
+          }
         } else {
+          this.pendingSourceRefresh = true;
           this.postSwitch();
         }
         this.observations.post();
@@ -216,10 +272,17 @@ export class PreviewController {
         }
         this.readyRevision = message.revision;
         this.viewReady = true;
+        if (this.sourceBaselineRevision !== undefined) {
+          this.pendingSourceRefresh = this.sourceBaselineRevision !== message.revision;
+        }
         this.showDiagnostics();
         this.controls.begin(message.revision, message.sessionId);
         void this.queries.applyToPreview(this.viewReady);
         this.observations.post();
+        if (this.pendingSourceRefresh) {
+          this.pendingSourceRefresh = false;
+          this.postSourceChange("html");
+        }
         return;
       case "marimo-studio:view-sync-pending":
         this.viewReady = false;

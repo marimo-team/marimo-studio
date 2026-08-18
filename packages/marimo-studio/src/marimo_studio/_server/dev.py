@@ -14,6 +14,8 @@ from marimo_studio._server.workspace_client_events import (
     WorkspaceClientEventProducer,
 )
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio._workspace.revisions import capture_studio_sources
+from marimo_studio.errors import MarimoStudioError
 
 
 def _encode(kind: str, payload: dict[str, object]) -> bytes:
@@ -32,7 +34,8 @@ async def change_events(
 ) -> AsyncIterator[bytes]:
     """Yield source and agent events until the client disconnects."""
     should_stop = stop_requested or (lambda: False)
-    sources = SourceChangeProducer(studio, view_name)
+    selected_view = view_name or active_view
+    sources = SourceChangeProducer(studio, selected_view)
     browser = _browser_events(
         view_name,
         clients,
@@ -43,7 +46,7 @@ async def change_events(
     if browser is not None:
         await browser.connect()
     try:
-        yield b"event: ready\ndata: {}\n\n"
+        yield _encode("ready", _source_baseline(studio, selected_view))
         last_heartbeat = time.monotonic()
         while not should_stop():
             await asyncio.sleep(0.25)
@@ -71,6 +74,23 @@ async def change_events(
     finally:
         if browser is not None:
             await browser.close()
+
+
+def _source_baseline(
+    studio: StudioWorkspace,
+    view_name: str | None,
+) -> dict[str, object]:
+    if view_name is None:
+        return {}
+    try:
+        revision = capture_studio_sources(studio, (view_name,)).revision(view_name)
+    except (MarimoStudioError, OSError):
+        revision = None
+    return {
+        "schema": 1,
+        "view": view_name,
+        "revision": revision,
+    }
 
 
 def _browser_events(
