@@ -46,7 +46,8 @@ async def change_events(
     if browser is not None:
         await browser.connect()
     try:
-        yield _encode("ready", _source_baseline(studio, selected_view))
+        baseline = await asyncio.to_thread(_source_baseline, studio, selected_view)
+        yield _encode("ready", baseline)
         last_heartbeat = time.monotonic()
         while not should_stop():
             await asyncio.sleep(0.25)

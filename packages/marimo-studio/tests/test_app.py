@@ -5,12 +5,13 @@ import json
 import os
 import re
 import shutil
-from collections.abc import MutableMapping
+import threading
+from collections.abc import AsyncGenerator, MutableMapping
 from html.parser import HTMLParser
 from importlib.metadata import entry_points
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import Mock
 from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
@@ -1513,6 +1514,55 @@ def test_run_runtime_refreshes_bindings_for_each_browser_session(
         index = static_indexes[runtime_id]
         assert first["runtime"]["controls"]["cells"][identity] == f"first-{index}"
         assert second["runtime"]["controls"]["cells"][identity] == f"second-{index}"
+
+
+def test_change_stream_captures_source_baseline_without_blocking_event_loop(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    capture_started = threading.Event()
+    release_capture = threading.Event()
+    fallback_release = threading.Event()
+
+    def capture_sources(
+        _studio: object,
+        _views: object,
+    ) -> SimpleNamespace:
+        capture_started.set()
+        assert release_capture.wait(timeout=1)
+        return SimpleNamespace(revision=lambda _view: "a" * 64)
+
+    monkeypatch.setattr(dev, "capture_studio_sources", capture_sources)
+
+    async def capture_ready() -> bytes:
+        loop = asyncio.get_running_loop()
+
+        def coordinate_release() -> None:
+            assert capture_started.wait(timeout=1)
+            loop.call_soon_threadsafe(release_capture.set)
+            if not release_capture.wait(timeout=0.2):
+                fallback_release.set()
+                release_capture.set()
+
+        coordinator = threading.Thread(target=coordinate_release)
+        coordinator.start()
+        stream = cast(
+            AsyncGenerator[bytes, None],
+            dev.change_events(studio, "dashboard"),
+        )
+        try:
+            ready = await asyncio.wait_for(anext(stream), timeout=1)
+        finally:
+            release_capture.set()
+            await stream.aclose()
+            await asyncio.to_thread(coordinator.join, 1)
+        return ready
+
+    ready = asyncio.run(capture_ready())
+
+    assert not fallback_release.is_set()
+    assert json.loads(ready.split(b"data: ", 1)[1])["revision"] == "a" * 64
 
 
 def test_change_stream_classifies_live_source_edits(
