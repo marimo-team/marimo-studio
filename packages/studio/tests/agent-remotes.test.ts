@@ -34,6 +34,25 @@ const observationRequestBody = (init: JsonRequestInit): BrowserObservation =>
 const activationRequestBody = (init: JsonRequestInit) =>
   activationAcknowledgementSchema.parse(JSON.parse(init.body));
 
+const runtimeStatus = (phase: "ready" | "synchronizing" = "ready") => ({
+  runtime: "server",
+  view: "dashboard",
+  revision: "revision-dashboard",
+  sessionId: "s_123456",
+  current: { phase, diagnostics: [] },
+  transitions: [
+    {
+      sequence: 0,
+      observedAt: 1_000,
+      revision: "revision-dashboard",
+      sessionId: "s_123456",
+      phase,
+      diagnostics: [],
+      diagnosticsTruncated: false,
+    },
+  ],
+});
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -60,9 +79,14 @@ it("uploads browser observations in monotonic order within one request", async (
     sessionId: "s_123456",
     requestId: "request-dashboard",
     query: "region=emea",
+    runtimeStatus: runtimeStatus(),
   };
 
-  const firstUpload = record({ ...observation, state: "loading" });
+  const firstUpload = record({
+    ...observation,
+    state: "loading",
+    runtimeStatus: runtimeStatus("synchronizing"),
+  });
   const secondUpload = record(observation);
   await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
 
@@ -98,6 +122,7 @@ it("retries a transient observation upload with the same sequence", async () => 
     sessionId: "s_123456",
     requestId: "request-dashboard",
     query: "",
+    runtimeStatus: runtimeStatus(),
   };
 
   await record(observation);
@@ -132,6 +157,7 @@ it("does not retry a rejected observation request", async () => {
     sessionId: "s_123456",
     requestId: "expired-request",
     query: "",
+    runtimeStatus: runtimeStatus(),
   });
 
   await expect(rejected).rejects.toMatchObject({
@@ -170,6 +196,7 @@ it("a new request supersedes a stalled upload before its retry budget", async ()
     runtimeInstance: "runtime-instance",
     sessionId: "s_123456",
     query: "",
+    runtimeStatus: runtimeStatus(),
   };
   const expired = record({ ...base, requestId: "expired-request" });
   await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
@@ -211,8 +238,13 @@ it("a stalled loading upload yields promptly to terminal evidence", async () => 
     sessionId: "s_123456",
     requestId: "request-dashboard",
     query: "",
+    runtimeStatus: runtimeStatus(),
   };
-  const loading = record({ ...base, state: "loading" });
+  const loading = record({
+    ...base,
+    state: "loading",
+    runtimeStatus: runtimeStatus("synchronizing"),
+  });
   const loadingResult = expect(loading).rejects.toMatchObject({
     code: "browser-observation-upload-timeout",
   });

@@ -1,3 +1,4 @@
+import type { RuntimeStatusReport } from "@marimo-studio/protocol/browser-observations";
 import type { ObserveViewRequest } from "@marimo-studio/protocol/development-events";
 import type {
   ObserveViewMessage,
@@ -17,6 +18,7 @@ export class PreviewObservationController {
   constructor(
     private readonly runtime: string,
     private readonly preview: HTMLIFrameElement,
+    private readonly runtimeStatus: () => RuntimeStatusReport,
     private readonly record?: RecordBrowserObservation,
   ) {}
 
@@ -71,6 +73,7 @@ export class PreviewObservationController {
       sessionId: message.sessionId,
       requestId: message.requestId,
       query: message.query,
+      runtimeStatus: this.runtimeStatus(),
     };
     if (message.state !== "loading") {
       request.terminalUpload = true;

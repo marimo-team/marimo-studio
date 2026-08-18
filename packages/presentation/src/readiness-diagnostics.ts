@@ -75,30 +75,7 @@ export const toBrowserDiagnostics = (
 ): BrowserDiagnostic[] => {
   const maximum = 200;
   const included = diagnostics.length > maximum ? diagnostics.slice(0, maximum - 1) : diagnostics;
-  const result = included.map((diagnostic): BrowserDiagnostic => {
-    const browserDiagnostic: BrowserDiagnostic = {
-      code: diagnostic.code,
-      severity: diagnostic.severity,
-      message: diagnostic.message,
-      hint: diagnostic.hint,
-      view: diagnostic.view,
-      scope: "scope" in diagnostic ? diagnostic.scope : "projection",
-    };
-    if ("projection" in diagnostic) {
-      browserDiagnostic.projection = diagnostic.projection;
-    }
-    if ("target" in diagnostic) {
-      browserDiagnostic.target = diagnostic.target;
-    }
-    if ("source" in diagnostic) {
-      browserDiagnostic.source = {
-        ...diagnostic.source,
-        line: Math.max(0, diagnostic.source.line),
-        column: Math.max(0, diagnostic.source.column),
-      };
-    }
-    return browserDiagnostic;
-  });
+  const result = included.map(toBrowserDiagnostic);
   if (diagnostics.length > maximum) {
     const omitted = diagnostics.length - included.length;
     result.push({
@@ -111,4 +88,29 @@ export const toBrowserDiagnostics = (
     });
   }
   return result;
+};
+
+export const toBrowserDiagnostic = (diagnostic: StudioDiagnostic): BrowserDiagnostic => {
+  const browserDiagnostic: BrowserDiagnostic = {
+    code: diagnostic.code,
+    severity: diagnostic.severity,
+    message: diagnostic.message,
+    hint: diagnostic.hint,
+    view: diagnostic.view,
+    scope: "scope" in diagnostic ? diagnostic.scope : "projection",
+  };
+  if ("projection" in diagnostic) {
+    browserDiagnostic.projection = diagnostic.projection;
+  }
+  if ("target" in diagnostic) {
+    browserDiagnostic.target = diagnostic.target;
+  }
+  if ("source" in diagnostic) {
+    browserDiagnostic.source = {
+      ...diagnostic.source,
+      line: Math.max(0, diagnostic.source.line),
+      column: Math.max(0, diagnostic.source.column),
+    };
+  }
+  return browserDiagnostic;
 };

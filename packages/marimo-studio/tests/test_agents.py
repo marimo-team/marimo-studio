@@ -19,6 +19,8 @@ from marimo_studio.agent_models import (
 from marimo_studio.errors import ProtocolError
 from marimo_studio.types import CheckResult
 
+from .helpers import ready_runtime_status
+
 
 def test_marimo_code_mode_discovers_the_studio_capability() -> None:
     assert code_mode.capabilities()["studio"] == "marimo_studio.agents"
@@ -127,6 +129,10 @@ def test_agent_analysis_runs_through_the_attached_studio_server(
                     session_id="s_123456",
                     request_id="request-1",
                     sequence=1,
+                    runtime_status=ready_runtime_status(
+                        "dashboard",
+                        "revision-1",
+                    ),
                 ),
             ),
             browser_required=True,

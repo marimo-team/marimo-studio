@@ -5,6 +5,40 @@ from pathlib import Path
 
 import marimo
 
+from marimo_studio.agent_models import (
+    RuntimeStatusReport,
+    RuntimeStatusSnapshot,
+    RuntimeStatusTransition,
+)
+
+
+def ready_runtime_status(
+    view: str,
+    revision: str,
+    session_id: str = "s_123456",
+) -> RuntimeStatusReport:
+    return RuntimeStatusReport(
+        runtime="server",
+        view=view,
+        revision=revision,
+        session_id=session_id,
+        current=RuntimeStatusSnapshot(phase="ready"),
+        transitions=(
+            RuntimeStatusTransition(
+                sequence=0,
+                observed_at=1_000,
+                phase="connecting",
+            ),
+            RuntimeStatusTransition(
+                sequence=1,
+                observed_at=1_100,
+                phase="ready",
+                revision=revision,
+                session_id=session_id,
+            ),
+        ),
+    )
+
 
 def replace_app_shell(document: str, content: str) -> str:
     """Replace the authored contents of the single application shell."""

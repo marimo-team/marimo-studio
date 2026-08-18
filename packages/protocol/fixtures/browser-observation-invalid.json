@@ -10,5 +10,27 @@
     "patch": {
       "sequence": -1
     }
+  },
+  {
+    "name": "observation states match runtime phases",
+    "patch": {
+      "state": "loading"
+    }
+  },
+  {
+    "name": "runtime status phases use the wire format",
+    "patch": {
+      "runtimeStatus": {
+        "runtime": "server",
+        "view": "dashboard",
+        "revision": "revision-1",
+        "sessionId": "s_123456",
+        "current": {
+          "phase": "orange",
+          "diagnostics": []
+        },
+        "transitions": []
+      }
+    }
   }
 ]

@@ -6,6 +6,7 @@ import type {
 
 import type { PresentationDiagnostic } from "../diagnostics.ts";
 
+import { toBrowserDiagnostic, toBrowserDiagnostics } from "../readiness-diagnostics.ts";
 import {
   getRuntimeConfig,
   getMountConfig,
@@ -45,8 +46,7 @@ export const showDiagnostic = (
   const message: ViewSyncPendingMessage | ViewErrorMessage = {
     type: state === "waiting" ? "marimo-studio:view-sync-pending" : "marimo-studio:view-error",
     runtime: runtimeId(),
-    message: detail.message,
-    hint: detail.hint,
+    diagnostic: toBrowserDiagnostic(detail),
     view: detail.view,
   };
   globalThis.parent.postMessage(message, globalThis.location.origin);
@@ -67,7 +67,7 @@ export const notifyDiagnostics = (
     type: "marimo-studio:view-diagnostics",
     runtime: runtimeId(),
     view,
-    diagnostics,
+    diagnostics: toBrowserDiagnostics(diagnostics),
   };
   globalThis.parent.postMessage(message, globalThis.location.origin);
 };

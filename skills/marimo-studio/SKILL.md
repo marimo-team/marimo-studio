@@ -391,6 +391,19 @@ ID. The report contains every stage and an `actions` repair queue. Save the
 relevant source, rerun the analysis, and continue until
 `report.handoff_ready` is true.
 
+Each successful browser observation includes a structured `runtime_status`
+report. Query `current` for the active phase and diagnostics. Query
+`transitions` when a brief connection or diagnostic state has already cleared:
+
+```python
+observation = report.browser_observations[0]
+status = observation.runtime_status
+if status is not None:
+    print(status.current.phase)
+    for transition in status.transitions:
+        print(transition.sequence, transition.phase)
+```
+
 Code mode analyzes one active view at a time. Complete the activation call,
 wait for the selected view to load, then run focused analysis in the next
 code-mode call. Repeat this pair for every changed view. The external CLI may

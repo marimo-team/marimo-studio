@@ -3,16 +3,28 @@
 from __future__ import annotations
 
 import re
+from itertools import pairwise
 from typing import Any, Literal, cast
 
 from marimo_studio.agent_models import (
     BrowserDiagnostic,
     BrowserObservation,
     BrowserObservationState,
+    RuntimeStatusPhase,
+    RuntimeStatusReport,
+    RuntimeStatusSnapshot,
+    RuntimeStatusTransition,
 )
 from marimo_studio.errors import ProtocolError
 
 _RUNTIME_ID_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
+_RUNTIME_STATUS_PHASES = {
+    "connecting",
+    "synchronizing",
+    "ready",
+    "degraded",
+    "failed",
+}
 
 
 def parse_observation_response(
@@ -51,6 +63,7 @@ def decode_browser_observation(
         "requestId",
         "sequence",
         "query",
+        "runtimeStatus",
     }:
         raise ProtocolError("The browser observation payload is invalid.")
     view = value.get("view")
@@ -64,6 +77,11 @@ def decode_browser_observation(
     request_id = value.get("requestId")
     sequence = value.get("sequence")
     query = value.get("query")
+    runtime_status = _parse_runtime_status(
+        value.get("runtimeStatus"),
+        expected_view,
+        wire=True,
+    )
     if (
         value.get("schema") != 1
         or view != expected_view
@@ -78,20 +96,21 @@ def decode_browser_observation(
         or not _nonempty(request_id)
         or not _nonnegative_int(sequence)
         or not isinstance(query, str)
+        or runtime_status.runtime != runtime
+        or runtime_status.revision != revision
+        or runtime_status.session_id != session_id
     ):
         raise ProtocolError("The browser observation payload is invalid.")
     parsed = tuple(_parse_diagnostic(item, expected_view) for item in diagnostics)
-    observed_state = (
-        "error"
-        if state == "ready"
-        and any(diagnostic.severity == "error" for diagnostic in parsed)
-        else state
-    )
+    if runtime_status.current.diagnostics != parsed:
+        raise ProtocolError("The browser observation payload is invalid.")
+    if runtime_status.current.phase != _runtime_status_phase(state, parsed):
+        raise ProtocolError("The browser observation payload is invalid.")
     return BrowserObservation(
         view=expected_view,
         runtime=cast(str, runtime),
         revision=cast(str, revision),
-        state=cast(BrowserObservationState, observed_state),
+        state=cast(BrowserObservationState, state),
         diagnostics=parsed,
         client_id=cast(str, client_id),
         runtime_instance=cast(str, runtime_instance),
@@ -99,6 +118,7 @@ def decode_browser_observation(
         request_id=cast(str, request_id),
         sequence=cast(int, sequence),
         query=query,
+        runtime_status=runtime_status,
     )
 
 
@@ -117,6 +137,7 @@ def parse_browser_observation(value: object) -> BrowserObservation:
         "request_id",
         "sequence",
         "query",
+        "runtime_status",
     }
     if not required.issubset(value) or not set(value).issubset(required | optional):
         raise ProtocolError("A Studio browser observation is invalid.")
@@ -133,6 +154,12 @@ def parse_browser_observation(value: object) -> BrowserObservation:
     request_id = value.get("request_id")
     sequence = value.get("sequence")
     query = value.get("query")
+    raw_runtime_status = value.get("runtime_status")
+    runtime_status = (
+        _parse_runtime_status(raw_runtime_status, cast(str, view), wire=False)
+        if raw_runtime_status is not None and isinstance(view, str)
+        else None
+    )
     if (
         not _nonempty(view)
         or state not in {"ready", "loading", "error", "stale", "not-observed"}
@@ -147,6 +174,28 @@ def parse_browser_observation(value: object) -> BrowserObservation:
         or (request_id is not None and not _nonempty(request_id))
         or (sequence is not None and not _nonnegative_int(sequence))
         or (query is not None and not isinstance(query, str))
+        or (
+            runtime_status is not None
+            and (
+                (runtime is not None and runtime_status.runtime != runtime)
+                or (revision is not None and runtime_status.revision != revision)
+                or (session_id is not None and runtime_status.session_id != session_id)
+            )
+        )
+    ):
+        raise ProtocolError("A Studio browser observation is invalid.")
+    parsed_diagnostics = tuple(
+        _parse_diagnostic(item, cast(str, view)) for item in diagnostics
+    )
+    if (
+        runtime_status is not None
+        and runtime_status.current.diagnostics != parsed_diagnostics
+    ):
+        raise ProtocolError("A Studio browser observation is invalid.")
+    if (
+        runtime_status is not None
+        and runtime_status.current.phase
+        != _runtime_status_phase(state, parsed_diagnostics)
     ):
         raise ProtocolError("A Studio browser observation is invalid.")
     return BrowserObservation(
@@ -154,9 +203,7 @@ def parse_browser_observation(value: object) -> BrowserObservation:
         state=cast(BrowserObservationState, state),
         runtime=cast(str | None, runtime),
         revision=cast(str | None, revision),
-        diagnostics=tuple(
-            _parse_diagnostic(item, cast(str, view)) for item in diagnostics
-        ),
+        diagnostics=parsed_diagnostics,
         message=message,
         code=cast(str | None, code),
         client_id=cast(str | None, client_id),
@@ -165,6 +212,164 @@ def parse_browser_observation(value: object) -> BrowserObservation:
         request_id=cast(str | None, request_id),
         sequence=cast(int | None, sequence),
         query=query,
+        runtime_status=runtime_status,
+    )
+
+
+def _parse_runtime_status(
+    value: object,
+    expected_view: str,
+    *,
+    wire: bool,
+) -> RuntimeStatusReport:
+    if not isinstance(value, dict):
+        raise ProtocolError("A Studio runtime status report is invalid.")
+    session_key = "sessionId" if wire else "session_id"
+    if set(value) != {
+        "runtime",
+        "view",
+        "revision",
+        session_key,
+        "current",
+        "transitions",
+    }:
+        raise ProtocolError("A Studio runtime status report is invalid.")
+    runtime = value.get("runtime")
+    view = value.get("view")
+    revision = value.get("revision")
+    session_id = value.get(session_key)
+    transitions = value.get("transitions")
+    if (
+        not _runtime_id(runtime)
+        or view != expected_view
+        or (revision is not None and not _nonempty(revision))
+        or (session_id is not None and not _nonempty(session_id))
+        or not isinstance(transitions, list)
+        or not 1 <= len(transitions) <= 32
+    ):
+        raise ProtocolError("A Studio runtime status report is invalid.")
+    current = _parse_runtime_status_snapshot(value.get("current"), expected_view)
+    parsed_transitions = tuple(
+        _parse_runtime_status_transition(item, expected_view, wire=wire)
+        for item in transitions
+    )
+    if any(
+        current.sequence <= previous.sequence
+        for previous, current in pairwise(parsed_transitions)
+    ):
+        raise ProtocolError("A Studio runtime status report is invalid.")
+    latest = parsed_transitions[-1]
+    retained = current.diagnostics[:20]
+    if (
+        latest.phase != current.phase
+        or latest.revision != revision
+        or latest.session_id != session_id
+        or latest.diagnostics != retained
+        or latest.diagnostics_truncated != (len(retained) < len(current.diagnostics))
+    ):
+        raise ProtocolError("A Studio runtime status report is invalid.")
+    return RuntimeStatusReport(
+        runtime=cast(str, runtime),
+        view=expected_view,
+        revision=cast(str | None, revision),
+        session_id=cast(str | None, session_id),
+        current=current,
+        transitions=parsed_transitions,
+    )
+
+
+def _runtime_status_phase(
+    state: object,
+    diagnostics: tuple[BrowserDiagnostic, ...],
+) -> RuntimeStatusPhase:
+    if state == "loading":
+        return "synchronizing"
+    if state == "error":
+        return "failed"
+    if state == "ready" and diagnostics:
+        if any(diagnostic.severity == "error" for diagnostic in diagnostics):
+            raise ProtocolError("A ready browser observation cannot contain errors.")
+        return "degraded"
+    if state == "ready":
+        return "ready"
+    raise ProtocolError("A Studio browser observation state is invalid.")
+
+
+def _parse_runtime_status_snapshot(
+    value: object,
+    expected_view: str,
+) -> RuntimeStatusSnapshot:
+    if not isinstance(value, dict) or set(value) != {"phase", "diagnostics"}:
+        raise ProtocolError("A Studio runtime status snapshot is invalid.")
+    phase = value.get("phase")
+    diagnostics = value.get("diagnostics")
+    if (
+        phase not in _RUNTIME_STATUS_PHASES
+        or not isinstance(diagnostics, list)
+        or len(diagnostics) > 200
+        or (phase == "ready" and bool(diagnostics))
+        or (phase in {"degraded", "failed"} and not diagnostics)
+    ):
+        raise ProtocolError("A Studio runtime status snapshot is invalid.")
+    return RuntimeStatusSnapshot(
+        phase=cast(RuntimeStatusPhase, phase),
+        diagnostics=tuple(
+            _parse_diagnostic(item, expected_view) for item in diagnostics
+        ),
+    )
+
+
+def _parse_runtime_status_transition(
+    value: object,
+    expected_view: str,
+    *,
+    wire: bool,
+) -> RuntimeStatusTransition:
+    if not isinstance(value, dict):
+        raise ProtocolError("A Studio runtime status transition is invalid.")
+    observed_key = "observedAt" if wire else "observed_at"
+    session_key = "sessionId" if wire else "session_id"
+    truncated_key = "diagnosticsTruncated" if wire else "diagnostics_truncated"
+    if set(value) != {
+        "sequence",
+        observed_key,
+        "revision",
+        session_key,
+        "phase",
+        "diagnostics",
+        truncated_key,
+    }:
+        raise ProtocolError("A Studio runtime status transition is invalid.")
+    sequence = value.get("sequence")
+    observed_at = value.get(observed_key)
+    revision = value.get("revision")
+    session_id = value.get(session_key)
+    phase = value.get("phase")
+    diagnostics = value.get("diagnostics")
+    truncated = value.get(truncated_key)
+    if (
+        not _nonnegative_int(sequence)
+        or not _nonnegative_int(observed_at)
+        or (revision is not None and not _nonempty(revision))
+        or (session_id is not None and not _nonempty(session_id))
+        or phase not in _RUNTIME_STATUS_PHASES
+        or not isinstance(diagnostics, list)
+        or len(diagnostics) > 20
+        or not isinstance(truncated, bool)
+        or (phase == "ready" and bool(diagnostics))
+        or (phase in {"degraded", "failed"} and not diagnostics)
+    ):
+        raise ProtocolError("A Studio runtime status transition is invalid.")
+    return RuntimeStatusTransition(
+        sequence=cast(int, sequence),
+        observed_at=cast(int, observed_at),
+        phase=cast(RuntimeStatusPhase, phase),
+        revision=cast(str | None, revision),
+        session_id=cast(str | None, session_id),
+        diagnostics=tuple(
+            _parse_diagnostic(item, expected_view) for item in diagnostics
+        ),
+        diagnostics_truncated=truncated,
     )
 
 

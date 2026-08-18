@@ -1,25 +1,10 @@
 import { z } from "zod";
 
-import { browserDiagnosticSchema } from "./browser-observations";
+import { browserDiagnosticSchema, type BrowserDiagnostic } from "./browser-observations";
 import { shellChangeKindSchema } from "./development-events";
 import { runtimeIdSchema, type JsonValue } from "./runtime-config";
 
-export const viewDiagnosticSchema = z.object({
-  code: z.string().optional(),
-  severity: z.enum(["warning", "error"]).optional(),
-  message: z.string(),
-  hint: z.string().optional(),
-  view: z.string().optional(),
-  scope: z.string().optional(),
-  target: z.string().optional(),
-  source: z
-    .object({
-      path: z.string(),
-      line: z.int(),
-      column: z.int(),
-    })
-    .optional(),
-});
+export const viewDiagnosticSchema = browserDiagnosticSchema;
 
 const runtimeField = { runtime: runtimeIdSchema };
 
@@ -68,21 +53,19 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     type: z.literal("marimo-studio:view-sync-pending"),
     ...runtimeField,
     view: z.string(),
-    message: z.string(),
-    hint: z.string().optional(),
+    diagnostic: browserDiagnosticSchema,
   }),
   z.object({
     type: z.literal("marimo-studio:view-diagnostics"),
     ...runtimeField,
     view: z.string(),
-    diagnostics: z.array(viewDiagnosticSchema),
+    diagnostics: z.array(viewDiagnosticSchema).max(200),
   }),
   z.object({
     type: z.literal("marimo-studio:view-error"),
     ...runtimeField,
     view: z.string(),
-    message: z.string(),
-    hint: z.string().optional(),
+    diagnostic: browserDiagnosticSchema,
   }),
   z
     .object({
@@ -91,7 +74,7 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
       view: z.string(),
       revision: z.string().min(1),
       state: z.enum(["ready", "loading", "error"]),
-      diagnostics: z.array(browserDiagnosticSchema),
+      diagnostics: z.array(browserDiagnosticSchema).max(200),
       runtimeInstance: z.string().min(1),
       sessionId: z.string().min(1).nullable(),
       requestId: z.string().min(1),
@@ -110,17 +93,29 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     .strict(),
 ]);
 
-export const previewMessageSchema = previewMessageInputSchema.transform((message) => {
+export const previewMessageSchema = previewMessageInputSchema.superRefine((message, context) => {
+  let diagnostics: readonly BrowserDiagnostic[] = [];
   if (
+    message.type === "marimo-studio:view-diagnostics" ||
+    message.type === "marimo-studio:view-observation"
+  ) {
+    diagnostics = message.diagnostics;
+  } else if (
     message.type === "marimo-studio:view-sync-pending" ||
     message.type === "marimo-studio:view-error"
   ) {
-    return { ...message, hint: message.hint ?? message.message };
+    diagnostics = [message.diagnostic];
   }
-  return message;
+  if ("view" in message && diagnostics.some((diagnostic) => diagnostic.view !== message.view)) {
+    context.addIssue({
+      code: "custom",
+      message: "Preview diagnostics must target the message view",
+      path: ["view"],
+    });
+  }
 });
 
-export type ViewDiagnostic = z.infer<typeof viewDiagnosticSchema>;
+export type ViewDiagnostic = BrowserDiagnostic;
 export type PreviewMessage = z.infer<typeof previewMessageSchema>;
 export type NavigateViewMessage = Extract<PreviewMessage, { type: "marimo-studio:navigate-view" }>;
 export type QueryChangeMessage = Extract<PreviewMessage, { type: "marimo-studio:query-change" }>;

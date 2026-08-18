@@ -23,6 +23,7 @@ from marimo_studio.errors import AgentRequestError
 from marimo_studio.types import CheckResult
 
 from .app_helpers import configured, edit_mode, marimo_app, session_manager
+from .helpers import ready_runtime_status
 
 
 def test_authenticated_agent_connection_returns_the_mutation_token(
@@ -222,6 +223,14 @@ def test_edit_workspace_records_browser_readiness_and_requests_active_view(
     edit_mode(app)
     headers = {"Marimo-Server-Token": str(session_manager(app).skew_protection_token)}
     revision = NotebookPresentation(studio.notebook).snapshot("dashboard").revision
+    diagnostic = {
+        "code": "runtime-disconnected",
+        "severity": "error",
+        "message": "The runtime disconnected.",
+        "hint": "Reconnect the notebook runtime.",
+        "view": "dashboard",
+        "scope": "runtime",
+    }
 
     async def record(
         _coordinator: AgentCoordinator,
@@ -271,13 +280,34 @@ def test_edit_workspace_records_browser_readiness_and_requests_active_view(
                 "runtime": "server",
                 "revision": revision,
                 "state": "error",
-                "diagnostics": [],
+                "diagnostics": [diagnostic],
                 "clientId": "browser-client-1234",
                 "runtimeInstance": "runtime-instance",
                 "sessionId": "s_123456",
                 "requestId": "request-dashboard",
                 "sequence": 4,
                 "query": "",
+                "runtimeStatus": {
+                    "runtime": "server",
+                    "view": "dashboard",
+                    "revision": revision,
+                    "sessionId": "s_123456",
+                    "current": {
+                        "phase": "failed",
+                        "diagnostics": [diagnostic],
+                    },
+                    "transitions": [
+                        {
+                            "sequence": 0,
+                            "observedAt": 1_000,
+                            "revision": revision,
+                            "sessionId": "s_123456",
+                            "phase": "failed",
+                            "diagnostics": [diagnostic],
+                            "diagnosticsTruncated": False,
+                        }
+                    ],
+                },
             },
         )
         observed = client.post(
@@ -424,6 +454,10 @@ def test_external_observation_uses_the_selected_browser_session(
                 request_id=request.request_id,
                 sequence=0,
                 query="",
+                runtime_status=ready_runtime_status(
+                    "dashboard",
+                    "revision-1",
+                ),
             )
         )
         return await observing
@@ -573,6 +607,7 @@ def test_edit_server_runs_the_agent_handoff_analysis(
                 request_id=f"request-{view}",
                 sequence=index,
                 query="",
+                runtime_status=ready_runtime_status(view, revisions[view]),
             )
             for index, view in enumerate(views)
         )
@@ -641,6 +676,10 @@ def test_code_mode_analysis_requires_one_named_view(
                 sequence=1,
                 session_id="s_123456",
                 query="",
+                runtime_status=ready_runtime_status(
+                    views[0],
+                    revisions[views[0]],
+                ),
             ),
         )
 

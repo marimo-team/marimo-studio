@@ -353,6 +353,10 @@ test("preserves run-mode kernel state across a page reload", async ({ page }) =>
     await expect(page.locator('[mo-value="metric"]')).toHaveText("63");
     await expect(page.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
   } finally {
-    await stopServer(server.process);
+    try {
+      await page.close();
+    } finally {
+      await stopServer(server.process);
+    }
   }
 });

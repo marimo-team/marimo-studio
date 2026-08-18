@@ -1,4 +1,9 @@
 import type {
+  BrowserDiagnostic,
+  RuntimeStatusPhase,
+  RuntimeStatusReport,
+} from "@marimo-studio/protocol/browser-observations";
+import type {
   ObserveViewRequest,
   ShellChangeKind,
 } from "@marimo-studio/protocol/development-events";
@@ -22,12 +27,19 @@ import { PreviewControlController } from "./control-controller.ts";
 import { fetchRuntimeControls } from "./control-remote.ts";
 import { PreviewObservationController } from "./observation-controller.ts";
 import { PreviewQueryController } from "./query-controller.ts";
+import { RuntimeDiagnostics } from "./runtime-diagnostics.ts";
 import { previewLoadState, RetrySchedule } from "./state.ts";
-import { previewStartingMessage, type PreviewStatus } from "./status.ts";
+import { previewStatus, type PreviewStatus } from "./status.ts";
 
 export interface PreviewFrameState {
   url: string;
   status: PreviewStatus;
+  runtimeStatus: RuntimeStatusReport;
+}
+
+interface RuntimeStatusIdentity {
+  revision?: string | null;
+  sessionId?: string | null;
 }
 
 export class PreviewController {
@@ -42,6 +54,7 @@ export class PreviewController {
   private readySessionId: string | undefined;
   private pendingSourceRefresh = false;
   private sourceBaselineRevision: string | null | undefined;
+  private readonly runtimeDiagnostics: RuntimeDiagnostics;
   private readonly controls: PreviewControlController;
   private readonly observations: PreviewObservationController;
   private readonly queries: PreviewQueryController;
@@ -65,13 +78,12 @@ export class PreviewController {
     connectControlFrame?: ControlFrameConnector,
   ) {
     this.view = initialView;
+    this.runtimeDiagnostics = new RuntimeDiagnostics({ runtime, view: initialView });
+    const runtimeStatus = this.runtimeDiagnostics.report();
     this.state = {
       url: this.viewUrl(initialView, runtime),
-      status: {
-        message: previewStartingMessage(runtime),
-        state: "loading",
-        title: "",
-      },
+      status: previewStatus(runtime, runtimeStatus.current),
+      runtimeStatus,
     };
     this.controls = new PreviewControlController({
       runtime,
@@ -81,7 +93,12 @@ export class PreviewController {
       connect: connectControlFrame,
       fetchControls: fetchRuntimeControls,
     });
-    this.observations = new PreviewObservationController(runtime, preview, recordObservation);
+    this.observations = new PreviewObservationController(
+      runtime,
+      preview,
+      () => this.runtimeDiagnostics.report(),
+      recordObservation,
+    );
     this.queries = new PreviewQueryController(runtime, preview, syncQuery, syncEditorQuery, () =>
       this.setPopoutUrl(this.viewUrl(this.view, this.runtime)),
     );
@@ -99,9 +116,12 @@ export class PreviewController {
     this.view = view;
     const nextPreview = this.viewUrl(view, this.runtime);
     this.preview.title = `${view} custom view using ${this.runtime}`;
-    this.setPopoutUrl(nextPreview);
     this.diagnostics = [];
-    this.setStatus("Updating preview");
+    this.runtimeDiagnostics.reset(view);
+    this.updateRuntimeStatus(
+      this.runtimeDiagnostics.record({ phase: "synchronizing", diagnostics: [] }),
+      nextPreview,
+    );
     if (this.receiverReady) {
       this.postSwitch();
     } else {
@@ -116,6 +136,10 @@ export class PreviewController {
 
   requestObservation(request: ObserveViewRequest): void {
     this.observations.request(request);
+  }
+
+  runtimeStatus(): RuntimeStatusReport {
+    return this.runtimeDiagnostics.report();
   }
 
   editorSessionChanged(): void {
@@ -146,6 +170,7 @@ export class PreviewController {
   }
 
   private postSourceChange(kind: ShellChangeKind): void {
+    this.setRuntimeStatus("synchronizing", []);
     const message: SourceChangeMessage = {
       type: "marimo-studio:source-change",
       runtime: this.runtime,
@@ -225,6 +250,10 @@ export class PreviewController {
         this.receiverReady = false;
         this.viewReady = false;
         this.pendingSourceRefresh = true;
+        this.setRuntimeStatus("connecting", [], {
+          revision: null,
+          sessionId: null,
+        });
         return;
       case "marimo-studio:receiver-ready":
         this.controls.stop();
@@ -236,7 +265,10 @@ export class PreviewController {
         this.cancelRetry();
         this.retrySchedule.reset();
         if (message.view === this.view) {
-          this.setStatus(previewStartingMessage(this.runtime));
+          this.setRuntimeStatus("connecting", [], {
+            revision: null,
+            sessionId: null,
+          });
           if (this.pendingSourceRefresh && this.sourceBaselineRevision === undefined) {
             this.pendingSourceRefresh = false;
             this.postSourceChange("html");
@@ -275,7 +307,7 @@ export class PreviewController {
         if (this.sourceBaselineRevision !== undefined) {
           this.pendingSourceRefresh = this.sourceBaselineRevision !== message.revision;
         }
-        this.showDiagnostics();
+        this.showReadyStatus();
         this.controls.begin(message.revision, message.sessionId);
         void this.queries.applyToPreview(this.viewReady);
         this.observations.post();
@@ -286,34 +318,42 @@ export class PreviewController {
         return;
       case "marimo-studio:view-sync-pending":
         this.viewReady = false;
-        this.setStatus("Waiting for notebook", "loading", message.hint);
+        this.setRuntimeStatus("synchronizing", [message.diagnostic]);
         return;
       case "marimo-studio:view-diagnostics":
         this.diagnostics = message.diagnostics;
         if (this.viewReady) {
-          this.showDiagnostics();
+          this.showReadyStatus();
         }
         return;
       case "marimo-studio:view-error":
         this.viewReady = false;
-        this.setStatus("Needs repair", "error", message.hint);
+        this.setRuntimeStatus("failed", [message.diagnostic]);
         return;
       case "marimo-studio:view-observation":
-        this.observations.receive(message);
         this.readyRevision = message.revision;
+        this.readySessionId = message.sessionId ?? undefined;
+        if (this.readySessionId === undefined) {
+          delete this.preview.dataset.sessionId;
+        } else {
+          this.preview.dataset.sessionId = this.readySessionId;
+        }
         this.viewReady = message.state === "ready";
         this.diagnostics = message.diagnostics;
         if (message.state === "ready") {
-          this.showDiagnostics();
+          this.showReadyStatus();
         } else if (message.state === "loading") {
-          this.setStatus("Waiting for rendered view", "loading");
+          this.setRuntimeStatus("synchronizing", message.diagnostics, {
+            revision: message.revision,
+            sessionId: message.sessionId,
+          });
         } else {
-          this.setStatus(
-            "Needs repair",
-            "error",
-            message.diagnostics.map((diagnostic) => diagnostic.message).join("\n"),
-          );
+          this.setRuntimeStatus("failed", message.diagnostics, {
+            revision: message.revision,
+            sessionId: message.sessionId,
+          });
         }
+        this.observations.receive(message);
         return;
       default:
         assertNever(message);
@@ -344,7 +384,10 @@ export class PreviewController {
     delete this.preview.dataset.sessionId;
     this.receiverReady = false;
     this.viewReady = false;
-    this.setStatus(previewStartingMessage(this.runtime));
+    this.setRuntimeStatus("connecting", [], {
+      revision: null,
+      sessionId: null,
+    });
     const next = this.viewUrl(this.view, this.runtime);
     this.setPopoutUrl(next);
     this.navigatePreview(next);
@@ -393,10 +436,24 @@ export class PreviewController {
           ?.querySelector<HTMLElement>("main, [role='status'], body > p")
           ?.textContent?.trim() ?? "");
     if (state === "waiting") {
-      this.setStatus("Waiting for notebook", "loading", detail);
+      this.setRuntimeStatus("synchronizing", [
+        this.lifecycleDiagnostic(
+          "notebook-session-pending",
+          "warning",
+          "Waiting for notebook",
+          detail,
+        ),
+      ]);
       return;
     }
-    this.setStatus("Needs repair", "error", detail);
+    this.setRuntimeStatus("failed", [
+      this.lifecycleDiagnostic(
+        "preview-document-unavailable",
+        "error",
+        "The preview document needs repair.",
+        detail,
+      ),
+    ]);
     this.scheduleRetry();
   }
 
@@ -407,26 +464,44 @@ export class PreviewController {
     }
   };
 
-  private showDiagnostics(): void {
-    if (!this.diagnostics.length) {
-      this.setStatus("Live", "ready");
-      return;
-    }
-    const count = this.diagnostics.length;
-    this.setStatus(
-      `${count} ${count === 1 ? "issue" : "issues"}`,
-      "warning",
-      this.diagnostics.map((diagnostic) => diagnostic.message).join("\n"),
-    );
+  private showReadyStatus(): void {
+    this.setRuntimeStatus(this.diagnostics.length ? "degraded" : "ready", this.diagnostics, {
+      revision: this.readyRevision ?? null,
+      sessionId: this.readySessionId ?? null,
+    });
   }
 
-  private setStatus(
-    message: string,
-    state: "loading" | "ready" | "warning" | "error" = "loading",
-    title = "",
+  private setRuntimeStatus(
+    phase: RuntimeStatusPhase,
+    diagnostics: readonly BrowserDiagnostic[],
+    identity: RuntimeStatusIdentity = {},
   ): void {
-    this.state = { ...this.state, status: { message, state, title } };
+    this.updateRuntimeStatus(this.runtimeDiagnostics.record({ phase, diagnostics, ...identity }));
+  }
+
+  private updateRuntimeStatus(runtimeStatus: RuntimeStatusReport, url = this.state.url): void {
+    this.state = {
+      url,
+      runtimeStatus,
+      status: previewStatus(this.runtime, runtimeStatus.current),
+    };
     this.report(this.state);
+  }
+
+  private lifecycleDiagnostic(
+    code: string,
+    severity: BrowserDiagnostic["severity"],
+    message: string,
+    hint: string,
+  ): BrowserDiagnostic {
+    return {
+      code,
+      severity,
+      message,
+      hint,
+      view: this.view,
+      scope: "runtime",
+    };
   }
 
   private scheduleRetry(delay = this.retrySchedule.next()): void {

@@ -7,6 +7,7 @@ import type {
 import type { RuntimeDiagnostic, StudioDiagnostic } from "./diagnostics.ts";
 
 import { projectionHosts } from "./projections/host-runtime.ts";
+import { toBrowserDiagnostic } from "./readiness-diagnostics.ts";
 import { type ReadinessSnapshot, readiness, type RuntimeConnectionState } from "./readiness.ts";
 import { renderedViewDiagnostics, renderedViewIdentity } from "./rendered-view-state.ts";
 
@@ -52,8 +53,7 @@ const publishRuntimeDiagnostic = (diagnostic?: RuntimeDiagnostic): void => {
         ? "marimo-studio:view-sync-pending"
         : "marimo-studio:view-error",
     runtime: view.runtime,
-    message: diagnostic.message,
-    hint: diagnostic.hint,
+    diagnostic: toBrowserDiagnostic(diagnostic),
     view: diagnostic.view,
   };
   globalThis.parent.postMessage(message, globalThis.location.origin);

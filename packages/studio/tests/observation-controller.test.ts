@@ -27,16 +27,38 @@ const observation = (state: "loading" | "ready"): ViewObservationMessage => ({
   query: "region=emea",
 });
 
+const runtimeStatus = () => ({
+  runtime: "server",
+  view: "dashboard",
+  revision: "revision-dashboard",
+  sessionId: "s_123456",
+  current: { phase: "ready" as const, diagnostics: [] },
+  transitions: [
+    {
+      sequence: 0,
+      observedAt: 1_000,
+      revision: "revision-dashboard",
+      sessionId: "s_123456",
+      phase: "ready" as const,
+      diagnostics: [],
+      diagnosticsTruncated: false,
+    },
+  ],
+});
+
 it("keeps an observation request until terminal evidence is recorded", async () => {
   document.body.innerHTML = "<iframe></iframe>";
   const preview = document.querySelector("iframe")!;
   const postMessage = vi.spyOn(preview.contentWindow!, "postMessage");
   const record = vi.fn(async () => undefined);
-  const controller = new PreviewObservationController("server", preview, record);
+  const controller = new PreviewObservationController("server", preview, runtimeStatus, record);
 
   controller.request(request);
   controller.receive(observation("loading"));
   await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+  expect(record).toHaveBeenLastCalledWith(
+    expect.objectContaining({ runtimeStatus: runtimeStatus() }),
+  );
   controller.post();
   expect(postMessage).toHaveBeenCalledTimes(2);
 
@@ -53,7 +75,7 @@ it("releases terminal evidence after its bounded upload fails", async () => {
   const record = vi.fn(async () => {
     throw new Error("network unavailable");
   });
-  const controller = new PreviewObservationController("server", preview, record);
+  const controller = new PreviewObservationController("server", preview, runtimeStatus, record);
   const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
   controller.request(request);
@@ -76,7 +98,7 @@ it("does not resend a request while terminal evidence is uploading", async () =>
         finishUpload = resolve;
       }),
   );
-  const controller = new PreviewObservationController("server", preview, record);
+  const controller = new PreviewObservationController("server", preview, runtimeStatus, record);
 
   controller.request(request);
   controller.receive(observation("ready"));
@@ -97,7 +119,7 @@ it("a new observation request supersedes stale browser work", () => {
   document.body.innerHTML = "<iframe></iframe>";
   const preview = document.querySelector("iframe")!;
   const postMessage = vi.spyOn(preview.contentWindow!, "postMessage");
-  const controller = new PreviewObservationController("server", preview);
+  const controller = new PreviewObservationController("server", preview, runtimeStatus);
 
   controller.request({ ...request, requestId: "stale-request", revision: "revision-1" });
   controller.request({ ...request, requestId: "current-request", revision: "revision-2" });

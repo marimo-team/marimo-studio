@@ -232,13 +232,31 @@ The rendered-view observer probes the committed page, publishes
 `window.marimoStudio`, updates root data attributes, and sends parent-frame
 messages. The agent observer owns one exact observation request.
 
+`RuntimeDiagnostics` turns preview lifecycle messages into a structured report
+for each prepared runtime. The report holds the current phase and diagnostics,
+plus the latest 32 distinct transitions. Each transition retains up to 20
+diagnostics and records whether more were present. `PreviewDeck.runtimeDiagnostics()`
+returns the report for internal consumers. Browser observations carry the same
+report through the existing agent analysis path.
+
+| Phase           | Runtime condition                                | Indicator           |
+| --------------- | ------------------------------------------------ | ------------------- |
+| `connecting`    | The preview receiver or runtime transport starts | Pulsing blue        |
+| `synchronizing` | The selected view sources or notebook update     | Pulsing blue        |
+| `ready`         | The rendered view settled with no diagnostics    | Green               |
+| `degraded`      | The rendered view is live with diagnostics       | Orange with summary |
+| `failed`        | The preview requires a repair action             | Red                 |
+
 - **User capability:** browser modules can wait for a settled view, Studio can
-  show live or repair status, and agents can require current rendered evidence.
+  show a specific runtime condition, and agents can inspect current and recent
+  diagnostic evidence.
 - **Complexity carried:** retained stale content can remain visible while a
-  generation is loading. A terminal error in one projection must identify that
-  host while healthy regions remain rendered.
+  generation is loading. The report deduplicates repeated states and bounds
+  diagnostic history. A terminal error in one projection must identify that host
+  while healthy regions remain rendered.
 - **Maintenance surface:** readiness reducer, rendered observer, agent observer,
-  protocol diagnostics, browser API tests, and agent analysis acceptance.
+  preview runtime diagnostics, protocol records, browser API tests, and agent
+  analysis acceptance.
 
 ### 12. Scoped view styles
 

@@ -16,6 +16,7 @@ import { closeParentMenu } from "./menu.ts";
 import { type WorkspaceAction, WORKSPACE_ACTION_GROUPS } from "./model.ts";
 import { ModeNavigation } from "./ModeNavigation.tsx";
 import { RuntimeOptions } from "./RuntimeOptions.tsx";
+import { RuntimeStatus } from "./RuntimeStatus.tsx";
 
 const WORKSPACE_ACTION_ICONS = {
   arrange: MoveIcon,
@@ -61,10 +62,7 @@ export const WorkspaceMenu = ({
     <div className="studio-menu-popover studio-workspace-popover">
       <div className="studio-overflow-preview" hidden={!previewVisible}>
         <strong className="studio-menu-heading">Preview runtime</strong>
-        <div className="studio-overflow-runtime-status" data-state={status.state}>
-          <span className="studio-runtime-dot" aria-hidden="true" />
-          <span>{status.message}</span>
-        </div>
+        <RuntimeStatus status={status} />
         <RuntimeOptions current={runtime.id} runtimes={runtimes} onSelect={onRuntimeSelect} />
         <a
           className="studio-menu-item studio-overflow-popout"

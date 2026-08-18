@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, TypeAlias, cast
 
@@ -16,6 +17,24 @@ BrowserObservationState: TypeAlias = Literal[
     "stale",
     "not-observed",
 ]
+RuntimeStatusPhase: TypeAlias = Literal[
+    "connecting",
+    "synchronizing",
+    "ready",
+    "degraded",
+    "failed",
+]
+
+
+def _phase_matches_diagnostics(
+    phase: RuntimeStatusPhase,
+    diagnostics: tuple[BrowserDiagnostic, ...],
+) -> bool:
+    if phase == "ready":
+        return not diagnostics
+    if phase in {"degraded", "failed"}:
+        return bool(diagnostics)
+    return True
 
 
 @dataclass(frozen=True)
@@ -51,6 +70,112 @@ class BrowserDiagnostic:
 
 
 @dataclass(frozen=True)
+class RuntimeStatusSnapshot:
+    """Current runtime phase and its structured diagnostics."""
+
+    phase: RuntimeStatusPhase
+    diagnostics: tuple[BrowserDiagnostic, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "phase": self.phase,
+            "diagnostics": [item.to_dict() for item in self.diagnostics],
+        }
+
+
+@dataclass(frozen=True)
+class RuntimeStatusTransition:
+    """One retained runtime phase change."""
+
+    sequence: int
+    observed_at: int
+    phase: RuntimeStatusPhase
+    revision: str | None = None
+    session_id: str | None = None
+    diagnostics: tuple[BrowserDiagnostic, ...] = ()
+    diagnostics_truncated: bool = False
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "sequence": self.sequence,
+            "observed_at": self.observed_at,
+            "revision": self.revision,
+            "session_id": self.session_id,
+            "phase": self.phase,
+            "diagnostics": [item.to_dict() for item in self.diagnostics],
+            "diagnostics_truncated": self.diagnostics_truncated,
+        }
+
+
+@dataclass(frozen=True)
+class RuntimeStatusReport:
+    """Queryable current and recent runtime diagnostic state."""
+
+    runtime: str
+    view: str
+    revision: str | None
+    session_id: str | None
+    current: RuntimeStatusSnapshot
+    transitions: tuple[RuntimeStatusTransition, ...]
+
+    @property
+    def coherent(self) -> bool:
+        if not 1 <= len(self.transitions) <= 32:
+            return False
+        if any(
+            current.sequence <= previous.sequence
+            for previous, current in pairwise(self.transitions)
+        ):
+            return False
+        if any(
+            transition.sequence < 0
+            or transition.observed_at < 0
+            or len(transition.diagnostics) > 20
+            or not _phase_matches_diagnostics(
+                transition.phase,
+                transition.diagnostics,
+            )
+            for transition in self.transitions
+        ):
+            return False
+        if len(self.current.diagnostics) > 200 or not _phase_matches_diagnostics(
+            self.current.phase,
+            self.current.diagnostics,
+        ):
+            return False
+        diagnostics = (
+            *self.current.diagnostics,
+            *(
+                diagnostic
+                for transition in self.transitions
+                for diagnostic in transition.diagnostics
+            ),
+        )
+        if any(diagnostic.view != self.view for diagnostic in diagnostics):
+            return False
+        latest = self.transitions[-1]
+        retained = self.current.diagnostics[:20]
+        return (
+            latest.phase == self.current.phase
+            and latest.revision == self.revision
+            and latest.session_id == self.session_id
+            and latest.diagnostics == retained
+            and latest.diagnostics_truncated
+            == (len(retained) < len(self.current.diagnostics))
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "runtime": self.runtime,
+            "view": self.view,
+            "revision": self.revision,
+            "session_id": self.session_id,
+            "current": self.current.to_dict(),
+            "transitions": [item.to_dict() for item in self.transitions],
+        }
+
+
+@dataclass(frozen=True)
 class BrowserObservation:
     """Fresh browser evidence for one rendered view revision."""
 
@@ -67,6 +192,7 @@ class BrowserObservation:
     request_id: str | None = None
     sequence: int | None = None
     query: str | None = None
+    runtime_status: RuntimeStatusReport | None = None
 
     def to_dict(self) -> dict[str, object]:
         value: dict[str, object] = {
@@ -85,6 +211,12 @@ class BrowserObservation:
             ("request_id", self.request_id),
             ("sequence", self.sequence),
             ("query", self.query),
+            (
+                "runtime_status",
+                self.runtime_status.to_dict()
+                if self.runtime_status is not None
+                else None,
+            ),
         )
         value.update((key, item) for key, item in optional if item is not None)
         return value
@@ -168,6 +300,15 @@ class AnalysisReport:
             and bool(observation.request_id)
             and observation.sequence is not None
             and observation.sequence >= 0
+            and observation.runtime_status is not None
+            and observation.runtime_status.current.phase in {"ready", "degraded"}
+            and observation.runtime_status.coherent
+            and observation.runtime_status.runtime == observation.runtime
+            and observation.runtime_status.view == view
+            and observation.runtime_status.revision == observation.revision
+            and observation.runtime_status.session_id == observation.session_id
+            and observation.runtime_status.current.diagnostics
+            == observation.diagnostics
             for view, observation in observations.items()
         )
 
@@ -304,5 +445,9 @@ __all__ = [
     "BrowserDiagnostic",
     "BrowserObservation",
     "BrowserObservationState",
+    "RuntimeStatusPhase",
+    "RuntimeStatusReport",
+    "RuntimeStatusSnapshot",
+    "RuntimeStatusTransition",
     "ViewActivationResult",
 ]

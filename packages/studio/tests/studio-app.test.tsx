@@ -9,8 +9,10 @@ import type { ViewRemote } from "../src/features/views/remote.ts";
 
 import { createStudioServices } from "../src/app/services.ts";
 import { StudioErrorBoundary } from "../src/app/StudioErrorBoundary.tsx";
+import { RuntimeStatus } from "../src/features/navigation/RuntimeStatus.tsx";
 import { Toolbar } from "../src/features/navigation/Toolbar.tsx";
 import { PreviewDeck } from "../src/features/preview/deck.ts";
+import { previewStatus } from "../src/features/preview/status.ts";
 import { SourceController } from "../src/features/source-editor/controller.ts";
 import { ViewController } from "../src/features/views/controller.ts";
 import { LayoutController } from "../src/features/workspace/controller.ts";
@@ -159,6 +161,35 @@ const WorkspaceHarness = ({
 };
 
 describe("Studio shell", () => {
+  it("explains a degraded runtime with its diagnostic", () => {
+    render(
+      <RuntimeStatus
+        status={previewStatus("server", {
+          phase: "degraded",
+          diagnostics: [
+            {
+              code: "value-stale",
+              severity: "warning",
+              message: "The projected value is stale.",
+              hint: "Wait for the notebook to finish running.",
+              view: "dashboard",
+              scope: "projection",
+              projection: "value",
+              target: "summary.total",
+            },
+          ],
+        })}
+      />,
+    );
+
+    const status = screen.getByText("Live with 1 warning").closest(".studio-runtime-status");
+    expect(status).toHaveAttribute("data-state", "warning");
+    expect(status).toHaveAttribute(
+      "title",
+      "The projected value is stale. Wait for the notebook to finish running.",
+    );
+  });
+
   it("restores persisted layout trees and source tab from the application namespace", () => {
     const storagePrefix = `marimo-studio:workspace-layout:v1:${bootstrap.workspaceId}`;
     const persisted = {
@@ -242,6 +273,11 @@ describe("Studio shell", () => {
     );
 
     await user.click(screen.getByLabelText("Server preview runtime"));
+    const runtimeStatus = screen
+      .getByLabelText("Server preview runtime")
+      .closest("details")
+      ?.querySelector(".studio-runtime-status");
+    expect(runtimeStatus).toHaveTextContent("Connecting to server");
     await user.click(screen.getAllByRole("button", { name: /WebAssembly.*Runs locally/ })[0]);
     expect(screen.getByLabelText("WebAssembly preview runtime")).toBeVisible();
 
