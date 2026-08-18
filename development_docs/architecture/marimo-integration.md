@@ -318,6 +318,92 @@ Browser runtime construction also validates the packaged asset version and
 commit. `marimo-studio check --format json` exposes the required and observed
 identities so a person or agent can diagnose a mismatched installation.
 
+### Upgrade the pinned Marimo release
+
+Set `MARIMO_RELEASE` to the target tag and capture the configured version before
+editing the release manifest:
+
+```console
+MARIMO_REPOSITORY=https://github.com/marimo-team/marimo.git
+: "${MARIMO_RELEASE:?Set MARIMO_RELEASE to the target Marimo tag}"
+PREVIOUS_MARIMO_VERSION="$(
+  uv run python -c \
+    'from marimo_studio._compat.layout import MARIMO_VERSION; print(MARIMO_VERSION)'
+)"
+```
+
+Resolve the target tag to its commit in a current Marimo checkout:
+
+```console
+git -C /path/to/marimo fetch \
+  "$MARIMO_REPOSITORY" "refs/tags/$MARIMO_RELEASE"
+MARIMO_COMMIT="$(
+  git -C /path/to/marimo rev-parse 'FETCH_HEAD^{commit}'
+)"
+printf '%s\n' "$MARIMO_COMMIT"
+```
+
+Record that version and commit in `_compat/release.json`. Update the exact
+Marimo pins in the root and package `pyproject.toml` files, then resolve and
+install the Python environment:
+
+```console
+uv lock
+uv sync --locked
+```
+
+Search the maintained source set for stale release references:
+
+```console
+rg -n -F "$PREVIOUS_MARIMO_VERSION" \
+  README.md pyproject.toml uv.lock packages apps docs development_docs examples
+```
+
+The search should return no release references after the manifests, notebooks,
+fixtures, and version-specific prose are current.
+
+Inspect the installed private contracts before changing an adapter:
+
+```console
+uv run python -m marimo_studio._compat.layout
+uv run pytest \
+  packages/marimo-studio/tests/test_compatibility.py \
+  -q
+```
+
+The snapshot reports each capability, symbol, callable shape, and source
+fingerprint. Compare every changed symbol with the tagged Marimo source. Update
+a fingerprint when the adapter's required behavior and callable shape still
+hold. A changed signature, missing symbol, or changed lifecycle requires an
+edit in the owning `_compat` adapter and its contract tests.
+
+Exercise the frontend facade against the same release commit:
+
+```console
+pnpm --filter @marimo-studio/marimo-frontend test
+make build
+```
+
+The frontend preparation step checks out the commit from
+`_compat/release.json`, installs that source workspace, and records its identity
+in generated browser metadata. Finish the upgrade through every shipped
+boundary:
+
+```console
+make check
+make e2e
+make package
+```
+
+An upgrade that preserves the product boundary changes release identity,
+dependency pins, private contract fingerprints, narrow adapters, adapter tests,
+and generated notebook metadata. Documentation names the supported release
+through `_compat/release.json` or package metadata and changes when the upgrade
+workflow or behavior changes. Marimo-specific behavior stays within `_compat`,
+`_composition.py`, or `packages/marimo-frontend`. Changes in workspace policy,
+server policy, presentation, or Studio UI require a boundary review before the
+upgrade is complete.
+
 ## Reversible integration lifecycle
 
 `ReversiblePatch` reference-counts one attribute replacement. It rejects a

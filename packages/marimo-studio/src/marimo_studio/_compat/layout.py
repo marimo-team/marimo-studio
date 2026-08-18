@@ -80,7 +80,7 @@ _SYMBOLS = {
         _source_contract(
             "marimo._server.session_manager",
             "SessionManager.__init__",
-            "74a8c4356a36ef5916f1167be7f556bdd3585934b9c789bf40280ead31870d2b",
+            "6f65ddd08428c50b8fb7a440bca3de708e2d87a20a6eb39f458d694238280179",
         ),
         SymbolContract(
             "marimo._server.session_manager",
@@ -98,7 +98,7 @@ _SYMBOLS = {
                 ("self", "POSITIONAL_OR_KEYWORD", False),
                 ("file_key", "POSITIONAL_OR_KEYWORD", False),
             ),
-            "bb705d24adf284fc0be75a332743a31ba05bd9d1f710341ca5b44270ae80c401",
+            "993c2270c70d67b7527e82e1064793e13e36caa894617ebcc46df7ad1778dd45",
         ),
     ),
     "existing-session-attachment": (

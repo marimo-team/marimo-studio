@@ -88,7 +88,7 @@ Each cell record contains:
 `CellRef.parse(value)` accepts a `cell:v1:...` string or an existing `CellRef`.
 `str(ref)` returns the serialized reference.
 
-## `create_asgi_app` <Badge type="info" text="Marimo 0.23.16" />
+## `create_asgi_app` <Badge type="info" text="Pinned Marimo release" />
 
 ```python
 create_asgi_app(
@@ -107,7 +107,8 @@ from marimo_studio import create_asgi_app
 app = create_asgi_app("analysis.py")
 ```
 
-The factory requires the tagged Marimo 0.23.16 release.
+The factory requires the exact Marimo release declared by the installed
+`marimo-studio` package.
 
 A definition with zero views still produces the ASGI application. Run-mode
 document requests return `409` with `workspace-not-initialized`, the configured

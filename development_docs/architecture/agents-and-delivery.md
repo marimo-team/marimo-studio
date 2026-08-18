@@ -278,11 +278,10 @@ Python API, view grammar, and readiness contract as the public docs.
 - **Maintenance surface:** skill source, public guide and reference, package
   entry-point metadata, capability tests, and representative agent runs.
 
-The distribution also declares the `marimo.agent.capability` entry point. The
-supported Marimo 0.23.16 code-mode workflow imports
-`marimo_studio.agents` explicitly. Treat automatic host discovery as a separate
-compatibility contract and test it against a Marimo release that provides that
-discovery surface.
+The distribution declares the `marimo.agent.capability` entry point. The
+supported Marimo code-mode API exposes it as `studio` through
+`cm.capabilities()` and lists the module in `help(cm)`. An agent imports
+`marimo_studio.agents` explicitly before calling its authoring operations.
 
 ### 16. Browser acceptance
 
