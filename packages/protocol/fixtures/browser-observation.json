@@ -26,5 +26,67 @@
   "sessionId": "s_123456",
   "requestId": "request-dashboard",
   "sequence": 3,
-  "query": "region=emea"
+  "query": "region=emea",
+  "runtimeStatus": {
+    "runtime": "server",
+    "view": "dashboard",
+    "revision": "revision-1",
+    "sessionId": "s_123456",
+    "current": {
+      "phase": "failed",
+      "diagnostics": [
+        {
+          "code": "missing-variable",
+          "severity": "error",
+          "message": "summary is unavailable.",
+          "hint": "Restore summary in the notebook.",
+          "view": "dashboard",
+          "scope": "projection",
+          "projection": "value",
+          "target": "summary.total",
+          "source": {
+            "path": "views/dashboard/index.html",
+            "line": 12,
+            "column": 9
+          }
+        }
+      ]
+    },
+    "transitions": [
+      {
+        "sequence": 0,
+        "observedAt": 1000,
+        "revision": null,
+        "sessionId": null,
+        "phase": "connecting",
+        "diagnostics": [],
+        "diagnosticsTruncated": false
+      },
+      {
+        "sequence": 1,
+        "observedAt": 1100,
+        "revision": "revision-1",
+        "sessionId": "s_123456",
+        "phase": "failed",
+        "diagnostics": [
+          {
+            "code": "missing-variable",
+            "severity": "error",
+            "message": "summary is unavailable.",
+            "hint": "Restore summary in the notebook.",
+            "view": "dashboard",
+            "scope": "projection",
+            "projection": "value",
+            "target": "summary.total",
+            "source": {
+              "path": "views/dashboard/index.html",
+              "line": 12,
+              "column": 9
+            }
+          }
+        ],
+        "diagnosticsTruncated": false
+      }
+    ]
+  }
 }

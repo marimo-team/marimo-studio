@@ -5,6 +5,15 @@ import type { JsonValue } from "../src/runtime-config.ts";
 
 import { parsePreviewMessage } from "../src/preview-messages.ts";
 
+const pendingDiagnostic = {
+  code: "notebook-updating",
+  severity: "warning" as const,
+  message: "The notebook is updating.",
+  hint: "Wait for the current notebook run.",
+  view: "dashboard",
+  scope: "runtime",
+};
+
 test("preview messages decode navigation and view state", () => {
   assert.deepEqual(
     parsePreviewMessage({
@@ -113,14 +122,13 @@ test("preview messages decode navigation and view state", () => {
       type: "marimo-studio:view-sync-pending",
       runtime: "server",
       view: "dashboard",
-      message: "The notebook is updating.",
+      diagnostic: pendingDiagnostic,
     }),
     {
       type: "marimo-studio:view-sync-pending",
       runtime: "server",
       view: "dashboard",
-      message: "The notebook is updating.",
-      hint: "The notebook is updating.",
+      diagnostic: pendingDiagnostic,
     },
   );
   assert.deepEqual(
@@ -158,13 +166,13 @@ test("preview messages decode navigation and view state", () => {
       type: "marimo-studio:view-diagnostics",
       runtime: "server",
       view: "dashboard",
-      diagnostics: [{ message: "Cell summary is unavailable." }],
+      diagnostics: [pendingDiagnostic],
     }),
     {
       type: "marimo-studio:view-diagnostics",
       runtime: "server",
       view: "dashboard",
-      diagnostics: [{ message: "Cell summary is unavailable." }],
+      diagnostics: [pendingDiagnostic],
     },
   );
 });
@@ -173,6 +181,12 @@ test("preview messages reject malformed protocol payloads", () => {
   const malformed: JsonValue[] = [
     null,
     { type: "marimo-studio:navigate-view", view: 42 },
+    {
+      type: "marimo-studio:view-sync-pending",
+      runtime: "server",
+      view: "dashboard",
+      message: "The notebook is updating.",
+    },
     { type: "marimo-studio:source-change", runtime: "server", view: "dashboard", kind: "js" },
     { type: "unknown", view: "dashboard" },
   ];

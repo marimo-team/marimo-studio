@@ -11,6 +11,54 @@ import {
   writeWorkspaceFile,
 } from "./fixture.ts";
 
+test("explains a degraded runtime diagnostic in the runtime menu", async ({ page }) => {
+  await page.goto(studioEntryUrl);
+  await waitForPreview(page);
+  await page.evaluate(() => {
+    const frame = document.querySelector<HTMLIFrameElement>(
+      'iframe[data-preview-runtime-frame="server"]',
+    );
+    if (!frame?.contentWindow) {
+      throw new Error("Server preview frame is unavailable");
+    }
+    globalThis.dispatchEvent(
+      new MessageEvent("message", {
+        origin: globalThis.location.origin,
+        source: frame.contentWindow,
+        data: {
+          type: "marimo-studio:view-diagnostics",
+          runtime: "server",
+          view: "dashboard",
+          diagnostics: [
+            {
+              code: "value-stale",
+              severity: "warning",
+              message: "The projected value is stale.",
+              hint: "Wait for the notebook to finish running.",
+              view: "dashboard",
+              scope: "projection",
+              projection: "value",
+              target: "metric",
+            },
+          ],
+        },
+      }),
+    );
+  });
+
+  const menu = page.locator(".studio-runtime-menu");
+  await expect(menu).toHaveAttribute("data-state", "warning");
+  await page.getByLabel("Server preview runtime").click();
+  const status = menu.locator(".studio-runtime-status");
+  await expect(status).toBeVisible();
+  await expect(status).toHaveText("Live with 1 warning");
+  await expect(status).toHaveAttribute(
+    "title",
+    "The projected value is stale. Wait for the notebook to finish running.",
+  );
+  await expect(status.locator(".studio-runtime-dot")).toBeVisible();
+});
+
 test("preserves native output state across HTML edits and replaces terminal failures", async ({
   page,
 }) => {

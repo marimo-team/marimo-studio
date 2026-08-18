@@ -5,6 +5,7 @@ import type { PreviewStatus } from "../preview/status.ts";
 import { MenuChevron } from "../../shared/ui/icons.tsx";
 import { runtimeStatusTitle } from "./model.ts";
 import { RuntimeOptions } from "./RuntimeOptions.tsx";
+import { RuntimeStatus } from "./RuntimeStatus.tsx";
 
 export const RuntimeMenu = ({
   current,
@@ -32,6 +33,7 @@ export const RuntimeMenu = ({
     </summary>
     <div className="studio-menu-popover studio-runtime-popover">
       <strong className="studio-menu-heading">Preview runtime</strong>
+      <RuntimeStatus status={status} />
       <RuntimeOptions current={current.id} runtimes={runtimes} onSelect={onSelect} />
     </div>
   </details>

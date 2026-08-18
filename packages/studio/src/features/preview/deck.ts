@@ -1,3 +1,4 @@
+import type { RuntimeStatusReport } from "@marimo-studio/protocol/browser-observations";
 import type {
   EditorSessionBinding,
   ObserveViewRequest,
@@ -11,7 +12,8 @@ import type { EditorQuerySyncResult } from "./query-remote.ts";
 import { PreviewController, type PreviewFrameState } from "./controller.ts";
 import { installEditorOutlineGuard } from "./editor-outline.ts";
 import { observeFrameQuery } from "./query-sync.ts";
-import { previewStartingStatus } from "./status.ts";
+import { cloneRuntimeStatusReport, RuntimeDiagnostics } from "./runtime-diagnostics.ts";
+import { previewStatus } from "./status.ts";
 
 interface PreviewDeckOptions {
   initialView: string;
@@ -37,6 +39,15 @@ export interface PreviewDeckSnapshot {
 
 type Listener = () => void;
 
+const startingFrameState = (runtime: string, view: string, url: string): PreviewFrameState => {
+  const runtimeStatus = new RuntimeDiagnostics({ runtime, view }).report();
+  return {
+    url,
+    runtimeStatus,
+    status: previewStatus(runtime, runtimeStatus.current),
+  };
+};
+
 export class PreviewDeck {
   private readonly previews = new Map<string, PreviewController>();
   private readonly listeners = new Set<Listener>();
@@ -56,10 +67,10 @@ export class PreviewDeck {
     this.runtime = options.initialRuntime;
     this.view = options.initialView;
     for (const runtime of options.runtimes) {
-      this.states.set(runtime, {
-        url: options.viewUrl(this.view, runtime),
-        status: previewStartingStatus(runtime),
-      });
+      this.states.set(
+        runtime,
+        startingFrameState(runtime, this.view, options.viewUrl(this.view, runtime)),
+      );
     }
     this.updateSnapshot();
   }
@@ -96,10 +107,10 @@ export class PreviewDeck {
     this.sourceRevision = undefined;
     for (const runtime of this.options.runtimes) {
       if (!this.previews.has(runtime)) {
-        this.states.set(runtime, {
-          url: this.options.viewUrl(view, runtime),
-          status: previewStartingStatus(runtime),
-        });
+        this.states.set(
+          runtime,
+          startingFrameState(runtime, view, this.options.viewUrl(view, runtime)),
+        );
       }
     }
     this.previews.forEach((controller) => controller.switchView(view));
@@ -136,6 +147,15 @@ export class PreviewDeck {
   sourceBaseline(revision: string | null): void {
     this.sourceRevision = revision;
     this.previews.forEach((controller) => controller.sourceBaseline(revision));
+  }
+
+  runtimeDiagnostics(runtime = this.runtime): RuntimeStatusReport | undefined {
+    const controller = this.previews.get(runtime);
+    if (controller !== undefined) {
+      return controller.runtimeStatus();
+    }
+    const report = this.states.get(runtime)?.runtimeStatus;
+    return report === undefined ? undefined : cloneRuntimeStatusReport(report);
   }
 
   dispose(): void {

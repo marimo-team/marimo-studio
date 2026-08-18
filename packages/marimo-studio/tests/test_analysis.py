@@ -15,6 +15,8 @@ from marimo_studio.errors import ProtocolError
 from marimo_studio.types import CheckResult
 from marimo_studio.workspace import ensure_view
 
+from .helpers import ready_runtime_status
+
 
 def test_runtime_analysis_runs_in_a_dedicated_process(notebook_path) -> None:
     ensure_view(notebook_path)
@@ -103,6 +105,7 @@ def test_required_browser_evidence_controls_handoff_readiness(
                 session_id="s_123456",
                 request_id=f"request-{view}",
                 sequence=index,
+                runtime_status=ready_runtime_status(view, revisions[view]),
             )
             for index, view in enumerate(views)
         )
@@ -280,6 +283,7 @@ def test_analysis_rejects_evidence_collected_across_source_revisions(
                 session_id="s_123456",
                 request_id=f"request-{view}",
                 sequence=index,
+                runtime_status=ready_runtime_status(view, revisions[view]),
             )
             for index, view in enumerate(views)
         )
@@ -353,6 +357,10 @@ def test_focused_analysis_ignores_an_unrelated_view_edit(
                 session_id="s_123456",
                 request_id="request-dashboard",
                 sequence=1,
+                runtime_status=ready_runtime_status(
+                    views[0],
+                    revisions[views[0]],
+                ),
             ),
         )
 
@@ -398,6 +406,10 @@ def test_selected_view_deletion_becomes_a_source_unavailable_action(
                 session_id="s_123456",
                 request_id="request-dashboard",
                 sequence=1,
+                runtime_status=ready_runtime_status(
+                    views[0],
+                    revisions[views[0]],
+                ),
             ),
         )
 

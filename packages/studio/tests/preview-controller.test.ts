@@ -229,6 +229,7 @@ it("reconciles source changes across the rendered preview lifecycle", () => {
     },
     globalThis.location.origin,
   );
+  expect(server.runtimeStatus().current.phase).toBe("synchronizing");
   postMessage.mockClear();
   dispatchPreviewMessage(previewWindow, {
     type: "marimo-studio:view-ready",
@@ -254,6 +255,13 @@ it("reconciles source changes across the rendered preview lifecycle", () => {
     type: "marimo-studio:receiver-unready",
     runtime: "server",
     view: "dashboard",
+  });
+  const disconnected = server.runtimeStatus();
+  expect(disconnected.revision).toBeNull();
+  expect(disconnected.sessionId).toBeNull();
+  expect(disconnected.transitions.find(({ phase }) => phase === "ready")).toMatchObject({
+    revision: "revision-1",
+    sessionId: "s_123456",
   });
   postMessage.mockClear();
   globalThis.dispatchEvent(ready);
@@ -370,6 +378,154 @@ it("compares the stream baseline with the rendered revision", () => {
     },
     globalThis.location.origin,
   );
+  server.dispose();
+});
+
+it("retains a cleared preview diagnostic in runtime history", () => {
+  const editor = frame("complete");
+  const preview = frame("complete");
+  const previewWindow = { postMessage: vi.fn() };
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: previewWindow,
+  });
+  const server = controller(
+    "server",
+    editor,
+    preview,
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+  );
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:receiver-ready",
+    runtime: "server",
+    view: "dashboard",
+  });
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-ready",
+    runtime: "server",
+    view: "dashboard",
+    revision: "revision-1",
+    sessionId: "s_123456",
+  });
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-diagnostics",
+    runtime: "server",
+    view: "dashboard",
+    diagnostics: [
+      {
+        code: "value-stale",
+        severity: "warning",
+        message: "The projected value is stale.",
+        hint: "Wait for the notebook to finish running.",
+        view: "dashboard",
+        scope: "projection",
+        projection: "value",
+        target: "summary.total",
+      },
+    ],
+  });
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-diagnostics",
+    runtime: "server",
+    view: "dashboard",
+    diagnostics: [],
+  });
+
+  const report = server.runtimeStatus();
+  expect(report.current.phase).toBe("ready");
+  expect(report.transitions.map(({ phase }) => phase)).toEqual([
+    "connecting",
+    "ready",
+    "degraded",
+    "ready",
+  ]);
+  expect(report.transitions[2]?.diagnostics[0]?.code).toBe("value-stale");
+  server.dispose();
+});
+
+it("ignores superseded observation replies before updating runtime identity", () => {
+  const editor = frame("complete");
+  const preview = frame("complete");
+  const previewWindow = { postMessage: vi.fn() };
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: previewWindow,
+  });
+  const report = vi.fn();
+  const record = vi.fn(async () => undefined);
+  const server = new PreviewController(
+    "dashboard",
+    "server",
+    editor,
+    preview,
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+    (view) => `/support/${view}`,
+    vi.fn(),
+    vi.fn(async () => "accepted" as const),
+    vi.fn(),
+    report,
+    record,
+  );
+  server.requestObservation({
+    schema: 1,
+    requestId: "stale-request",
+    view: "dashboard",
+    runtime: "server",
+    runtimeInstance: "stale-instance",
+    revision: "revision-1",
+  });
+  server.requestObservation({
+    schema: 1,
+    requestId: "current-request",
+    view: "dashboard",
+    runtime: "server",
+    runtimeInstance: "current-instance",
+    revision: "revision-2",
+  });
+  report.mockClear();
+
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-observation",
+    requestId: "stale-request",
+    view: "dashboard",
+    runtime: "server",
+    runtimeInstance: "stale-instance",
+    revision: "revision-1",
+    state: "ready",
+    diagnostics: [],
+    sessionId: "s_stale1",
+    query: "",
+  });
+
+  expect(report).not.toHaveBeenCalled();
+  expect(preview.dataset.sessionId).toBeUndefined();
+  expect(server.runtimeStatus()).toMatchObject({
+    revision: null,
+    sessionId: null,
+    current: { phase: "connecting" },
+  });
+
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-observation",
+    requestId: "current-request",
+    view: "dashboard",
+    runtime: "server",
+    runtimeInstance: "current-instance",
+    revision: "revision-2",
+    state: "ready",
+    diagnostics: [],
+    sessionId: "s_current2",
+    query: "",
+  });
+
+  expect(preview.dataset.sessionId).toBe("s_current2");
+  expect(server.runtimeStatus()).toMatchObject({
+    revision: "revision-2",
+    sessionId: "s_current2",
+    current: { phase: "ready" },
+  });
+  expect(record).toHaveBeenCalledTimes(1);
+  expect(record).toHaveBeenCalledWith(expect.objectContaining({ requestId: "current-request" }));
   server.dispose();
 });
 

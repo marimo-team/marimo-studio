@@ -1,3 +1,4 @@
+import type { RuntimeStatusReport } from "@marimo-studio/protocol/browser-observations";
 import type { ObserveViewRequest } from "@marimo-studio/protocol/development-events";
 import type {
   ObserveViewMessage,
@@ -11,12 +12,15 @@ interface PendingObservation {
   terminalUpload: boolean;
 }
 
+type AcceptObservation = (message: ViewObservationMessage) => RuntimeStatusReport;
+
 export class PreviewObservationController {
   private readonly requests = new Map<string, PendingObservation>();
 
   constructor(
     private readonly runtime: string,
     private readonly preview: HTMLIFrameElement,
+    private readonly accept: AcceptObservation,
     private readonly record?: RecordBrowserObservation,
   ) {}
 
@@ -61,6 +65,7 @@ export class PreviewObservationController {
     ) {
       return;
     }
+    const runtimeStatus = this.accept(message);
     const observation = {
       view: message.view,
       runtime: message.runtime,
@@ -71,6 +76,7 @@ export class PreviewObservationController {
       sessionId: message.sessionId,
       requestId: message.requestId,
       query: message.query,
+      runtimeStatus,
     };
     if (message.state !== "loading") {
       request.terminalUpload = true;
