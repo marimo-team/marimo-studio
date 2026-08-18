@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
   "click>=8.2",
   "htpy>=26.5.1,<27",
-  "marimo==0.23.16",
+  "marimo==0.24.0",
   "markupsafe>=3",
   "packaging>=25",
   "tomli>=2; python_version < '3.11'",
@@ -45,9 +45,14 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID251"]
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "marimo._ast" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
 "marimo._cli" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo._code_mode" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
 "marimo._config" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
 "marimo._messaging" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo._output" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo._plugins" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
 "marimo._runtime" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo._save" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
+"marimo._schemas" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
 "marimo._server" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
 "marimo._session" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
 "marimo._types" = { msg = "Private Marimo imports belong in marimo_studio._compat" }
@@ -61,6 +66,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID251"]
 "tests/conftest.py" = ["TID251"]
 "tests/test_agent_browser_api.py" = ["TID251"]
 "tests/test_agent_client.py" = ["TID251"]
+"tests/test_agents.py" = ["TID251"]
 "tests/test_app.py" = ["TID251"]
 "tests/test_browser_outputs.py" = ["TID251"]
 "tests/test_cached_cells.py" = ["TID251"]

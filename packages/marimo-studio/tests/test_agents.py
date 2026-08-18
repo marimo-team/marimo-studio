@@ -5,6 +5,7 @@ from importlib.metadata import distribution
 from types import SimpleNamespace
 from typing import get_type_hints
 
+import marimo._code_mode as code_mode
 import pytest
 
 import marimo_studio.agents as studio_agents
@@ -18,7 +19,11 @@ from marimo_studio.errors import ProtocolError
 from marimo_studio.types import CheckResult
 
 
-def test_agent_capability_discovers_its_instruction_module() -> None:
+def test_marimo_code_mode_discovers_the_studio_capability() -> None:
+    assert code_mode.capabilities()["studio"] == "marimo_studio.agents"
+
+
+def test_agent_capability_entry_point_loads_the_instruction_module() -> None:
     capabilities = [
         entry_point
         for entry_point in distribution("marimo-studio").entry_points

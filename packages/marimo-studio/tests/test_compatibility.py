@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import re
 import sys
 from pathlib import Path
 
@@ -44,6 +46,57 @@ def test_python_projects_pin_the_supported_marimo_release() -> None:
     version = layout_module.MARIMO_VERSION
     assert f"marimo[recommended]=={version}" in workspace["dependency-groups"]["dev"]
     assert f"marimo=={version}" in package["project"]["dependencies"]
+
+
+def test_private_marimo_imports_stay_in_the_compatibility_package() -> None:
+    root = Path(__file__).parents[3]
+    source_root = root / "packages/marimo-studio/src/marimo_studio"
+    violations: list[str] = []
+
+    for path in sorted(source_root.rglob("*.py")):
+        relative = path.relative_to(source_root)
+        if relative.parts[0] == "_compat":
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                modules = [node.module]
+            else:
+                continue
+            violations.extend(
+                f"{relative}:{node.lineno}: {module}"
+                for module in modules
+                if module.startswith("marimo._")
+            )
+
+    assert violations == []
+
+
+def test_documentation_uses_indirect_marimo_release_references() -> None:
+    root = Path(__file__).parents[3]
+    patterns = (
+        re.compile(r"(?i)\bmarimo\b[^\n]{0,120}\b\d+\.\d+\.\d+\b"),
+        re.compile(r"(?i)\b\d+\.\d+\.\d+\b[^\n]{0,120}\bmarimo\b"),
+        re.compile(
+            r"\b(?:MARIMO_RELEASE|MARIMO_VERSION|PREVIOUS_MARIMO_VERSION)="
+            r"v?\d+\.\d+\.\d+\b"
+        ),
+    )
+    violations: list[str] = []
+
+    for directory in (root / "docs", root / "development_docs"):
+        for path in sorted(directory.rglob("*.md")):
+            for line_number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(),
+                start=1,
+            ):
+                if any(pattern.search(line) for pattern in patterns):
+                    relative = path.relative_to(root)
+                    violations.append(f"{relative}:{line_number}: {line.strip()}")
+
+    assert violations == []
 
 
 def test_same_version_source_drift_fails_with_the_observed_fingerprint(
