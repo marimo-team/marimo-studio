@@ -23,8 +23,8 @@ Call `activate_view` again when the visible page looks stale or stuck, then run
 focused analysis in the next code-mode call.
 
 An active Studio workspace acknowledges its in-place transition. Creating the
-first view from a native editor can return `state="reload-requested"`. Let that
-code-mode call finish so Marimo can reload after releasing the execution lock.
+first view opens the Build workspace around the existing native editor, so the
+code-mode call stays connected until the browser acknowledges activation.
 
 A regular agent activates a view through the running server:
 

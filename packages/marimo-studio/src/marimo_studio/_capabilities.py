@@ -102,13 +102,6 @@ class SessionState(Protocol):
         session_id: str | None,
     ) -> LiveCellSnapshot | None: ...
 
-    async def reload_page(
-        self,
-        context: ServerContext,
-        view_name: str,
-        session_id: str | None = None,
-    ) -> None: ...
-
 
 class ExistingSessionAttachment(Protocol):
     """Attach a consumer to one exact existing Marimo session."""

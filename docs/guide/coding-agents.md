@@ -48,9 +48,10 @@ paths. A new view starts with every notebook cell in source order.
 
 `studio.activate_view` targets the Studio tab attached to the current Marimo
 code-mode session and selects Build. When `ensure_view` added the notebook's
-first Studio view, the call reloads that native editor into Studio after code
-mode returns. Reactivating the selected view reloads every prepared preview
-runtime and clears its ready status until the refreshed document reports back.
+first Studio view, the existing editor becomes the notebook pane without
+interrupting code mode. Reactivating the selected view reloads every prepared
+preview runtime and clears its ready status until the refreshed document
+reports back.
 
 ## Inspect before editing
 

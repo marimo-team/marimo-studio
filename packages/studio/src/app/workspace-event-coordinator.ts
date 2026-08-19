@@ -4,6 +4,7 @@ import {
   parseObserveViewRequest,
   parseShellChange,
   type EditorSessionBinding,
+  type ActiveViewRequest,
   type ObserveViewRequest,
   type ShellChangeKind,
 } from "@marimo-studio/protocol/development-events";
@@ -51,6 +52,8 @@ export class WorkspaceEventCoordinator {
   private stopViews: (() => void) | undefined;
   private connectionGeneration = 0;
   private currentView: string;
+  private acknowledgedActivation = -1;
+  private readonly activationInFlight = new Set<number>();
   private started = false;
   private disposed = false;
 
@@ -58,13 +61,16 @@ export class WorkspaceEventCoordinator {
     this.currentView = options.views.getSnapshot().current;
   }
 
-  start(): void {
+  start(initialActivation?: ActiveViewRequest): void {
     if (this.started || this.disposed) {
       return;
     }
     this.started = true;
     this.stopViews = this.options.views.subscribe(this.viewChanged);
     this.connect();
+    if (initialActivation) {
+      this.requestActivation(initialActivation, false);
+    }
   }
 
   dispose(): void {
@@ -119,7 +125,7 @@ export class WorkspaceEventCoordinator {
       current(() => {
         const payload = parseActiveViewRequest(this.data(event));
         if (payload) {
-          void this.activate(payload.view, payload.generation);
+          this.requestActivation(payload, true);
         }
       }),
     );
@@ -158,10 +164,32 @@ export class WorkspaceEventCoordinator {
     }
   }
 
-  private async activate(view: string, generation: number): Promise<void> {
+  private requestActivation(request: ActiveViewRequest, reloadActive: boolean): void {
+    if (
+      request.generation <= this.acknowledgedActivation ||
+      this.activationInFlight.has(request.generation)
+    ) {
+      return;
+    }
+    this.activationInFlight.add(request.generation);
+    void this.activate(request.view, request.generation, reloadActive).then((acknowledged) => {
+      this.activationInFlight.delete(request.generation);
+      if (acknowledged) {
+        this.acknowledgedActivation = Math.max(this.acknowledgedActivation, request.generation);
+      } else if (!this.disposed) {
+        this.connect();
+      }
+    });
+  }
+
+  private async activate(
+    view: string,
+    generation: number,
+    reloadActive: boolean,
+  ): Promise<boolean> {
     try {
       if (!(await this.options.views.ensureAvailable(view))) {
-        return;
+        return false;
       }
       const alreadyActive = this.options.views.getSnapshot().current === view;
       if (
@@ -169,16 +197,18 @@ export class WorkspaceEventCoordinator {
         this.disposed ||
         this.options.views.getSnapshot().current !== view
       ) {
-        return;
+        return false;
       }
-      if (alreadyActive) {
+      if (alreadyActive && reloadActive) {
         this.options.preview.reload();
       }
       await this.options.acknowledge(generation, view, this.lifecycle.signal);
+      return true;
     } catch (error) {
       if (!this.disposed) {
         console.warn("Studio view could not be activated", error);
       }
+      return false;
     }
   }
 

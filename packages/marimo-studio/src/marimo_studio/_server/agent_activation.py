@@ -17,10 +17,6 @@ class ActivationCoordinator:
     def __init__(self, store: AgentOperationStore) -> None:
         self._store = store
 
-    async def reserve_generation(self) -> int:
-        async with self._store.condition:
-            return self._store.next_generation()
-
     async def activate(self, target: PeerTarget, view: str) -> ViewActivation:
         if not self._store.clients.matches(target, require_connected=True):
             raise AgentRequestError(

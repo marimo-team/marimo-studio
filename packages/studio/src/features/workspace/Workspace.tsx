@@ -7,11 +7,11 @@ import type { WorkspaceModel } from "./useWorkspace.ts";
 import { SourcePane } from "../source-editor/SourcePane.tsx";
 import { Divider } from "./Divider.tsx";
 import { SurfacePane } from "./SurfacePane.tsx";
-import { PreviewFrame, TrustedFrame } from "./TrustedFrame.tsx";
+import { PositionedEditorFrame, PreviewFrame } from "./TrustedFrame.tsx";
 
 interface WorkspaceProps {
   bootstrap: StudioBootstrap;
-  editorRef: RefCallback<HTMLIFrameElement>;
+  editorFrame: HTMLIFrameElement;
   frameRef: (runtime: string) => RefCallback<HTMLIFrameElement>;
   source: SourceController;
   workspace: WorkspaceModel;
@@ -19,7 +19,7 @@ interface WorkspaceProps {
 
 export const Workspace = ({
   bootstrap,
-  editorRef,
+  editorFrame,
   frameRef,
   source,
   workspace,
@@ -49,7 +49,11 @@ export const Workspace = ({
           onArrange={actions.arrangePane}
         >
           <div className="studio-pane-content">
-            <TrustedFrame frameRef={editorRef} src={bootstrap.urls.editor} title="Marimo editor" />
+            <PositionedEditorFrame
+              frame={editorFrame}
+              measured={workspace.measured}
+              placement={notebookRectangle}
+            />
           </div>
         </SurfacePane>
 

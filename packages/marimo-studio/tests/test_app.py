@@ -48,8 +48,9 @@ from .helpers import empty_notebook_source, notebook_source
 
 
 class _BootstrapParser(HTMLParser):
-    def __init__(self) -> None:
+    def __init__(self, script_id: str = "marimo-studio-bootstrap") -> None:
         super().__init__()
+        self.script_id = script_id
         self._reading = False
         self.parts: list[str] = []
 
@@ -58,9 +59,7 @@ class _BootstrapParser(HTMLParser):
         tag: str,
         attrs: list[tuple[str, str | None]],
     ) -> None:
-        self._reading = tag == "script" and dict(attrs).get("id") == (
-            "marimo-studio-bootstrap"
-        )
+        self._reading = tag == "script" and dict(attrs).get("id") == self.script_id
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "script":
@@ -73,6 +72,12 @@ class _BootstrapParser(HTMLParser):
 
 def _studio_bootstrap(document: str) -> dict[str, Any]:
     parser = _BootstrapParser()
+    parser.feed(document)
+    return json.loads("".join(parser.parts))
+
+
+def _studio_host(document: str) -> dict[str, Any]:
+    parser = _BootstrapParser("marimo-studio-host")
     parser.feed(document)
     return json.loads("".join(parser.parts))
 
@@ -446,6 +451,65 @@ def test_mounted_directory_routes_preserve_notebook_identity(tmp_path: Path) -> 
     assert authored_document.headers["location"] == (
         "/parent/base/dashboard/?file=nested%2Fanalysis.py&region=us"
     )
+
+
+def test_mounted_directory_host_promotes_with_canonical_urls(tmp_path: Path) -> None:
+    from marimo._server.workspace._directory import DirectoryWorkspace
+
+    notebook = tmp_path / "nested" / "analysis.py"
+    notebook.parent.mkdir()
+    notebook.write_text(notebook_source(tmp_path / "output"), encoding="utf-8")
+    studio = _configured(notebook)
+    shutil.rmtree(studio.view_root)
+    child = _marimo_app(notebook, path="/base", programmatic=True)
+    _edit_mode(child)
+    _session_manager(child).workspace = DirectoryWorkspace(
+        str(tmp_path),
+        include_markdown=False,
+    )
+    parent = Starlette(routes=[Mount("/parent", app=child)])
+    file_key = "nested/analysis.py"
+
+    with TestClient(parent) as client:
+        document = client.get(f"/parent/base/?file={file_key}")
+        host = _studio_host(document.text)
+        created = client.post(
+            host["urls"]["views"],
+            headers={"Marimo-Server-Token": host["serverToken"]},
+            json={"name": "dashboard"},
+        )
+        ready = client.get(f"{host['urls']['bootstrap']}&marimo_studio_view=dashboard")
+        stale = client.get(
+            host["urls"]["bootstrap"].replace(host["serverInstance"], "stale")
+        )
+
+    assert host["state"] == "needs-view"
+    assert created.status_code == 201
+    assert ready.status_code == 200
+    assert stale.status_code == 204
+    bootstrap = ready.json()
+    assert bootstrap["clientId"] == host["clientId"]
+    assert bootstrap["selectedView"] == "dashboard"
+    expected_query = {
+        "file": [file_key],
+        "marimo_studio_client": [host["clientId"]],
+        "marimo_studio_server": [host["serverInstance"]],
+    }
+    editor = urlsplit(bootstrap["urls"]["editor"])
+    assert editor.path == "/parent/base/_marimo-studio/editor/"
+    assert parse_qs(editor.query) == expected_query
+    events = urlsplit(bootstrap["urls"]["events"])
+    assert events.path == "/parent/base/_marimo-studio/dev/events"
+    assert parse_qs(events.query) == {
+        **expected_query,
+        "marimo_studio_view": ["dashboard"],
+    }
+    studio_prefix = urlsplit(bootstrap["urls"]["studioPrefix"])
+    assert studio_prefix.path == "/parent/base/studio/"
+    assert parse_qs(studio_prefix.query) == {"file": [file_key]}
+    view_prefix = urlsplit(bootstrap["urls"]["viewPrefix"])
+    assert view_prefix.path == "/parent/base/"
+    assert parse_qs(view_prefix.query) == {"file": [file_key]}
 
 
 def test_directory_auth_precedes_notebook_configuration(tmp_path: Path) -> None:
@@ -2074,12 +2138,16 @@ def test_definition_state_initializes_the_first_view_from_edit_mode(
         status_before = client.get("/_marimo-studio/status")
         views_before = client.get("/_marimo-studio/views")
         initializer = client.get("/")
+        host = _studio_host(initializer.text)
         created = client.post(
             "/_marimo-studio/views",
             json={"name": definition.default_view},
             headers=headers,
         )
         status_after = client.get("/_marimo-studio/status")
+        bootstrap = client.get(
+            f"{host['urls']['bootstrap']}&marimo_studio_view=dashboard"
+        )
         workspace = client.get("/studio/dashboard/")
 
     assert status_before.json() == {
@@ -2095,7 +2163,9 @@ def test_definition_state_initializes_the_first_view_from_edit_mode(
     }
     assert initializer.status_code == 200
     assert 'data-marimo-studio-state="needs-view"' in initializer.text
-    assert "Create the first view" in initializer.text
+    assert 'id="marimo-studio-editor"' in initializer.text
+    assert host["state"] == "needs-view"
+    assert host["defaultView"] == "dashboard"
     assert created.status_code == 201
     assert created.json()["studio_url"] == "/studio/dashboard/"
     assert status_after.json() == {
@@ -2104,6 +2174,9 @@ def test_definition_state_initializes_the_first_view_from_edit_mode(
         "default_view": "dashboard",
         "views": ["dashboard"],
     }
+    assert bootstrap.status_code == 200
+    assert bootstrap.json()["selectedView"] == "dashboard"
+    assert bootstrap.json()["clientId"] == host["clientId"]
     assert workspace.status_code == 200
     assert (definition.view_root / "dashboard" / "index.html").is_file()
 
@@ -2534,7 +2607,9 @@ def test_invalid_studio_config_does_not_intercept_marimo_routes(
     assert refresh.json()["error"] == "configuration-error"
 
 
-def test_middleware_is_inert_for_an_unconfigured_notebook(tmp_path: Path) -> None:
+def test_edit_mode_hosts_an_unconfigured_notebook_without_intercepting_run_mode(
+    tmp_path: Path,
+) -> None:
     notebook = tmp_path / "plain.py"
     notebook.write_text(
         notebook_source(tmp_path / "executed"),
@@ -2554,6 +2629,9 @@ def test_middleware_is_inert_for_an_unconfigured_notebook(tmp_path: Path) -> Non
 
     assert page.status_code == 200
     assert editor.status_code == 200
+    assert "marimo-studio-host" not in page.text
+    assert _studio_host(editor.text)["state"] == "unconfigured"
+    assert 'id="marimo-studio-editor"' in editor.text
     assert support.status_code == 404
     assert missing.status_code == 404
 

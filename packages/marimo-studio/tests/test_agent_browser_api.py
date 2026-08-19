@@ -9,8 +9,7 @@ from typing import Any, cast
 import pytest
 from starlette.testclient import TestClient
 
-from marimo_studio._capabilities import ServerContext, ServerHandle, SessionState
-from marimo_studio._compat.server.gateway import _ContextHandle
+from marimo_studio._capabilities import SessionState
 from marimo_studio._compat.server.session_state import PrivateSessionState
 from marimo_studio._server import agent_api, browser_agent, dev
 from marimo_studio._server.agent_coordinator import AgentCoordinator
@@ -125,6 +124,31 @@ def test_change_stream_delivers_agent_view_activation(
         asyncio.run(clients.select_target(client_id="browser-client-1234"))
 
 
+def test_change_stream_registers_a_browser_before_the_first_view() -> None:
+    clients = StudioClientRegistry()
+    agents = AgentCoordinator(clients)
+    client_id = "browser-client-1234"
+    stopping = False
+
+    async def exercise() -> None:
+        nonlocal stopping
+        stream = dev.change_events(
+            None,
+            stop_requested=lambda: stopping,
+            clients=clients,
+            agents=agents,
+            client_id=client_id,
+        )
+        assert await anext(stream) == b"event: ready\ndata: {}\n\n"
+        target = await clients.select_target(client_id=client_id)
+        assert target.active_view is None
+        stopping = True
+        with pytest.raises(StopAsyncIteration):
+            await anext(stream)
+
+    asyncio.run(exercise())
+
+
 def test_change_stream_reports_each_editor_session_binding(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -176,49 +200,6 @@ def test_change_stream_reports_each_editor_session_binding(
     }
 
 
-def test_native_page_reload_waits_for_code_mode_to_finish() -> None:
-    notifications: list[Any] = []
-    scratchpad_lock = asyncio.Lock()
-    session = SimpleNamespace(
-        scratchpad_lock=scratchpad_lock,
-        notify=lambda notification, **_kwargs: notifications.append(notification),
-    )
-    manager = SimpleNamespace(
-        get_session_by_file_key=lambda _file_key: session,
-    )
-    context = ServerContext(
-        notebook=Path("analysis.py"),
-        file_key="analysis.py",
-        base_url="",
-        mode="edit",
-        dev=True,
-        routing_query=(),
-        user_config={},
-        config_overrides={},
-        server_token="",
-        handle=ServerHandle(_ContextHandle(server=None, session_manager=manager)),
-    )
-
-    async def exercise() -> None:
-        await scratchpad_lock.acquire()
-        transition = asyncio.create_task(
-            PrivateSessionState().reload_page(context, "executive")
-        )
-        await asyncio.sleep(0)
-        assert notifications == []
-        scratchpad_lock.release()
-        await transition
-
-    asyncio.run(exercise())
-
-    assert [notification.name for notification in notifications] == [
-        "query-params-set",
-        "reload",
-    ]
-    assert notifications[0].key == "marimo_studio_view"
-    assert notifications[0].value == "executive"
-
-
 def test_edit_workspace_records_browser_readiness_and_requests_active_view(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -259,9 +240,6 @@ def test_edit_workspace_records_browser_readiness_and_requests_active_view(
             ),
         )
 
-    async def ignore_reload(*_args: object, **_kwargs: object) -> None:
-        return None
-
     async def no_session_client(*_args: object, **_kwargs: object) -> None:
         return None
 
@@ -273,7 +251,6 @@ def test_edit_workspace_records_browser_readiness_and_requests_active_view(
     )
     monkeypatch.setattr(browser_agent, "observe_views", observe)
     monkeypatch.setattr(PrivateSessionState, "exists", lambda *_args: True)
-    monkeypatch.setattr(PrivateSessionState, "reload_page", ignore_reload)
 
     with TestClient(app) as client:
         recorded = client.put(
@@ -409,11 +386,8 @@ def test_edit_workspace_records_browser_readiness_and_requests_active_view(
             "query": "",
         }
     ]
-    assert activated.status_code == 202
-    assert activated.json()["view"] == "executive"
-    assert activated.json()["state"] == "reload-requested"
-    assert activated.json()["transition"] == "reload"
-    assert activated.json()["session_id"] == "s_123456"
+    assert activated.status_code == 409
+    assert activated.json()["error"] == "browser-client-unavailable"
     assert missing_activation.status_code == 404
     assert missing_activation.json() == {
         "error": "view-not-found",

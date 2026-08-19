@@ -70,9 +70,9 @@ current view reloads every prepared preview runtime and clears its ready status
 until the refreshed document reports back. Use the same call when the visible
 page looks stale or stuck.
 
-Let the activation call finish. A first view can reload the native editor into
-Studio after code mode releases its execution lock. Run analysis in the next
-code-mode call after the page loads:
+Let the activation call finish. First-view activation opens Studio around the
+existing native editor and keeps its code-mode session connected. Run analysis
+in the next code-mode call:
 
 ```python
 import marimo._code_mode as cm

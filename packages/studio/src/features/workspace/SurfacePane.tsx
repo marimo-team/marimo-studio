@@ -27,6 +27,7 @@ export const SurfacePane = ({
   return (
     <section
       className="studio-pane"
+      data-surface={surface}
       aria-label={label}
       hidden={hidden}
       inert={hidden}

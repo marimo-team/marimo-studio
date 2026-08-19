@@ -34,7 +34,6 @@ describe("feature controller lifecycle", () => {
       remote,
       vi.fn(async () => true),
       vi.fn(async () => true),
-      vi.fn(),
     );
     const refreshing = controller.refreshInventory();
     await Promise.resolve();
@@ -62,7 +61,6 @@ describe("feature controller lifecycle", () => {
       remote,
       select,
       vi.fn(async () => true),
-      vi.fn(),
     );
     const refreshing = controller.refreshInventory();
     await Promise.resolve();
@@ -112,7 +110,6 @@ describe("feature controller lifecycle", () => {
         order.push("prepare");
         return true;
       }),
-      vi.fn(),
     );
 
     controller.beginRemoval("dashboard");
@@ -140,7 +137,6 @@ describe("feature controller lifecycle", () => {
       remote,
       vi.fn(async () => false),
       vi.fn(async () => true),
-      vi.fn(),
     );
 
     controller.beginRemoval("dashboard");
@@ -151,6 +147,34 @@ describe("feature controller lifecycle", () => {
     expect(controller.getSnapshot().removeError).toBe(
       "Select another view before removing this one.",
     );
+    controller.dispose();
+  });
+
+  it("recovers a concurrent inventory change through in-place selection", async () => {
+    const select = vi.fn(async () => true);
+    const remote: ViewRemote = {
+      list: vi.fn(),
+      create: vi.fn(),
+      remove: vi.fn(async (name: string) => ({
+        schema: 1 as const,
+        name,
+        default_view: "executive",
+        views: ["executive"],
+      })),
+    };
+    const controller = new ViewController(
+      "dashboard",
+      ["dashboard", "report"],
+      remote,
+      select,
+      vi.fn(async () => true),
+    );
+
+    controller.beginRemoval("report");
+    expect(await controller.deleteSelected()).toBe(true);
+
+    expect(select).toHaveBeenCalledWith("executive", "split");
+    expect(controller.getSnapshot().current).toBe("executive");
     controller.dispose();
   });
 });

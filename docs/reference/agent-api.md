@@ -19,8 +19,8 @@ view = studio.ensure_view(ctx, "dashboard")
 activation = await studio.activate_view(ctx, view.name)
 ```
 
-Let that code-mode call return so a first view can reload the native editor
-into Studio. Run the analysis in the next code-mode call after the page loads:
+Activation keeps the native editor and its code-mode session mounted while the
+workspace opens around it. Run the analysis in the next code-mode call:
 
 ```python
 import marimo._code_mode as cm
@@ -170,18 +170,15 @@ runtime. The reload clears the previous ready revision and current diagnostics
 until each frame reports its new state. Call `activate_view` again to recover a
 visible page that looks stale or stuck.
 
-When the notebook gained its first Studio view during that native editor
-session, Marimo reloads the page into the selected Studio view after the
-code-mode call returns.
+When the notebook gains its first Studio view, the existing editor becomes the
+notebook pane in the selected Build workspace. The code-mode call remains
+connected through the transition.
 
 The returned `ViewActivationResult` contains the notebook path, view name,
 a monotonically increasing generation, the selected transition, and the bound
-Marimo `session_id`. An active transition also identifies the selected browser
-through `client_id`.
+Marimo `session_id`, and selected browser `client_id`.
 `state="active"` with `transition="in-place"` means the targeted workspace
-selected Build and acknowledged the activation. `state="reload-requested"` with
-`transition="reload"` means the exact native editor session will reload after
-the code-mode call releases its execution lock. Call `analyze` for the same
+selected Build and acknowledged the activation. Call `analyze` for the same
 view to confirm that the rendered page read the current source revision.
 
 Raises:

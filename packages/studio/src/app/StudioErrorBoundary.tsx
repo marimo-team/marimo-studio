@@ -7,6 +7,7 @@ interface BoundaryState {
 interface StudioErrorBoundaryProps {
   children: ReactNode;
   editorUrl: string;
+  onRetry?: () => void;
 }
 
 export class StudioErrorBoundary extends Component<StudioErrorBoundaryProps, BoundaryState> {
@@ -27,6 +28,11 @@ export class StudioErrorBoundary extends Component<StudioErrorBoundaryProps, Bou
         <main className="studio-startup-error" role="alert">
           <strong>Studio could not open</strong>
           <p>{error.message}</p>
+          {this.props.onRetry ? (
+            <button type="button" onClick={this.props.onRetry}>
+              Retry Studio
+            </button>
+          ) : null}
           <a className="studio-native-editor-link" href={this.props.editorUrl}>
             Open the Marimo editor
           </a>

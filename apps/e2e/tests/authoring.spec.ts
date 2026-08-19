@@ -234,22 +234,55 @@ test("activates Studio after the first view is created", async ({ page }) => {
       new URL(response.url()).pathname.endsWith("/api/kernel/instantiate") &&
       response.ok(),
   );
-  const resumedUsage = page.waitForRequest(
-    (request) =>
-      new URL(request.url()).pathname.endsWith("/_marimo-studio/editor/api/usage") &&
-      Boolean(request.headers()["marimo-session-id"]),
-  );
   await page.goto("/?file=plain.py");
   const instantiateResponse = await instantiated;
   await expect(page.locator("#marimo-studio-bootstrap")).toHaveCount(0);
-  await expect(page.getByText("Native Marimo notebook").first()).toBeVisible();
+  await expect(page.locator("#marimo-studio-host")).toBeAttached();
+  await expect(editorFrame(page).getByText("Native Marimo notebook").first()).toBeVisible();
 
   const sessionId = instantiateResponse.request().headers()["marimo-session-id"];
   expect(sessionId).toBeTruthy();
-  const execution = await page.request.post("/api/kernel/execute?file=plain.py", {
-    headers: { "Marimo-Session-Id": sessionId },
-    data: {
-      code: `
+  await page.evaluate(() => {
+    const frame = document.querySelector<HTMLIFrameElement>('iframe[title="Marimo editor"]');
+    if (!frame) {
+      throw new Error("Marimo editor frame did not mount");
+    }
+    globalThis.__e2eRuntimeMarker = "outer-live";
+    globalThis.__e2eEditorFrame = frame;
+    globalThis.__e2eEditorWindow = frame.contentWindow;
+  });
+  await editorFrame(page)
+    .locator("html")
+    .evaluate(() => {
+      globalThis.__e2eRuntimeMarker = "editor-live";
+      const target = document.querySelector<HTMLElement>(".cm-content");
+      if (!target) {
+        throw new Error("Marimo code editor did not mount");
+      }
+      target.focus();
+      globalThis.__e2eEditorFocus = target;
+    });
+  const editorIdentityPreserved = () =>
+    page.evaluate(() => {
+      const frame = document.querySelector<HTMLIFrameElement>('iframe[title="Marimo editor"]');
+      return (
+        globalThis.__e2eRuntimeMarker === "outer-live" &&
+        globalThis.__e2eEditorFrame === frame &&
+        globalThis.__e2eEditorWindow === frame?.contentWindow
+      );
+    });
+
+  const execution = editorFrame(page)
+    .locator("html")
+    .evaluate(async (_, activeSessionId) => {
+      const response = await fetch("/_marimo-studio/editor/api/kernel/execute?file=plain.py", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Marimo-Session-Id": activeSessionId,
+        },
+        body: JSON.stringify({
+          code: `
 import marimo._code_mode as cm
 import marimo_studio.agent as studio
 
@@ -258,11 +291,37 @@ setup = studio.ensure_view(ctx, "dashboard")
 activation = await studio.activate_view(ctx, setup.name)
 activation.to_dict()
 `,
-    },
-  });
-  expect(execution.ok()).toBe(true);
-  expect(await execution.text()).toContain('"success": true');
+        }),
+      });
+      return { ok: response.ok, text: await response.text() };
+    }, sessionId);
+
   await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=plain\.py$/);
+  const result = await execution;
+  expect(result.ok).toBe(true);
+  expect(result.text).toContain('"success": true');
+  await expect(page.locator("#marimo-studio-bootstrap")).toBeAttached();
+  expect(await editorIdentityPreserved()).toBe(true);
+  expect(
+    await editorFrame(page)
+      .locator("html")
+      .evaluate(() => globalThis.__e2eRuntimeMarker),
+  ).toBe("editor-live");
+  const editorFocus = await editorFrame(page)
+    .locator("html")
+    .evaluate(() => ({
+      preserved: document.activeElement === globalThis.__e2eEditorFocus,
+      activeTag: document.activeElement?.tagName,
+      activeTestId:
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement.dataset.testId
+          : undefined,
+    }));
+  expect(editorFocus).toEqual({
+    preserved: true,
+    activeTag: "DIV",
+    activeTestId: undefined,
+  });
 
   const source = await readWorkspaceFile(plainDashboardHtmlPath);
   await writeWorkspaceFile(
@@ -276,11 +335,10 @@ activation.to_dict()
   const preview = await waitForPreview(page);
   await expect(preview.locator("#papers")).toHaveText("3877 papers");
 
-  const resumedSessionId = (await resumedUsage).headers()["marimo-session-id"];
   const analysis = await page.request.post(
     "/_marimo-studio/editor/api/kernel/execute?file=plain.py",
     {
-      headers: { "Marimo-Session-Id": resumedSessionId },
+      headers: { "Marimo-Session-Id": sessionId },
       data: {
         code: `
 import marimo._code_mode as cm
@@ -299,7 +357,7 @@ report = await studio.analyze(ctx, view="dashboard")
   const created = await page.request.post(
     "/_marimo-studio/editor/api/kernel/execute?file=plain.py",
     {
-      headers: { "Marimo-Session-Id": resumedSessionId },
+      headers: { "Marimo-Session-Id": sessionId },
       data: {
         code: `
 import marimo._code_mode as cm
@@ -330,7 +388,7 @@ studio.ensure_view(ctx, "report").to_dict()
   const activated = await page.request.post(
     "/_marimo-studio/editor/api/kernel/execute?file=plain.py",
     {
-      headers: { "Marimo-Session-Id": resumedSessionId },
+      headers: { "Marimo-Session-Id": sessionId },
       data: {
         code: `
 import marimo._code_mode as cm
@@ -350,6 +408,7 @@ ctx = cm.get_context()
     "true",
   );
   await expect(preview.locator("#report-papers")).toHaveText("3877 papers");
+  expect(await editorIdentityPreserved()).toBe(true);
   await preview.locator("html").evaluate(() => {
     globalThis.__e2eRuntimeMarker = "stale";
   });
@@ -357,7 +416,7 @@ ctx = cm.get_context()
   const reactivated = await page.request.post(
     "/_marimo-studio/editor/api/kernel/execute?file=plain.py",
     {
-      headers: { "Marimo-Session-Id": resumedSessionId },
+      headers: { "Marimo-Session-Id": sessionId },
       data: {
         code: `
 import marimo._code_mode as cm
@@ -380,11 +439,12 @@ ctx = cm.get_context()
     )
     .toBeUndefined();
   await expect(preview.locator("#report-papers")).toHaveText("3877 papers");
+  expect(await editorIdentityPreserved()).toBe(true);
 
   const focused = await page.request.post(
     "/_marimo-studio/editor/api/kernel/execute?file=plain.py",
     {
-      headers: { "Marimo-Session-Id": resumedSessionId },
+      headers: { "Marimo-Session-Id": sessionId },
       data: {
         code: `
 import marimo._code_mode as cm

@@ -1,6 +1,7 @@
+import type { ActiveViewRequest } from "@marimo-studio/protocol/development-events";
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
-import { type RefCallback, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type RefCallback, useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ControlFrameConnector } from "../features/preview/control-sync.ts";
 import type { StudioServices } from "./services.ts";
@@ -9,8 +10,7 @@ import { errorMessage } from "../shared/errors.ts";
 import { createStudioServices } from "./services.ts";
 
 interface StudioServiceBinding extends StudioServices {
-  editorFrame: HTMLIFrameElement | null;
-  editorRef: RefCallback<HTMLIFrameElement>;
+  editorFrame: HTMLIFrameElement;
   frameRef: (runtime: string) => RefCallback<HTMLIFrameElement>;
 }
 
@@ -21,14 +21,14 @@ interface StartupFailure {
 
 export const useStudioServices = (
   bootstrap: StudioBootstrap,
+  editorFrame: HTMLIFrameElement,
+  initialActivation?: ActiveViewRequest,
   connectControlFrame?: ControlFrameConnector,
 ): StudioServiceBinding => {
   const services = useMemo(
-    () => createStudioServices(bootstrap, connectControlFrame),
-    [bootstrap, connectControlFrame],
+    () => createStudioServices(bootstrap, connectControlFrame, initialActivation),
+    [bootstrap, connectControlFrame, initialActivation],
   );
-  const editor = useRef<HTMLIFrameElement | null>(null);
-  const [editorFrame, setEditorFrame] = useState<HTMLIFrameElement | null>(null);
   const [startupFailure, setStartupFailure] = useState<StartupFailure | null>(null);
   const [previewFrames] = useState(() => new Map<string, HTMLIFrameElement>());
   const frameCallbacks = useMemo(
@@ -47,10 +47,6 @@ export const useStudioServices = (
       ),
     [previewFrames, services.runtimeIds],
   );
-  const editorRef = useCallback((element: HTMLIFrameElement | null) => {
-    editor.current = element;
-    setEditorFrame(element);
-  }, []);
   const frameRef = useCallback(
     (runtime: string) => {
       const callback = frameCallbacks.get(runtime);
@@ -63,14 +59,6 @@ export const useStudioServices = (
   );
 
   useEffect(() => {
-    const editorFrame = editor.current;
-    if (!editorFrame) {
-      setStartupFailure({
-        services,
-        error: new Error("Studio notebook frame did not mount"),
-      });
-      return;
-    }
     let active = true;
     void services.start(editorFrame, previewFrames).catch((cause: unknown) => {
       if (active) {
@@ -97,11 +85,11 @@ export const useStudioServices = (
       globalThis.removeEventListener("keydown", stopArranging);
       services.dispose();
     };
-  }, [previewFrames, services]);
+  }, [editorFrame, previewFrames, services]);
 
   if (startupFailure?.services === services) {
     throw startupFailure.error;
   }
 
-  return { ...services, editorFrame, editorRef, frameRef };
+  return { ...services, editorFrame, frameRef };
 };

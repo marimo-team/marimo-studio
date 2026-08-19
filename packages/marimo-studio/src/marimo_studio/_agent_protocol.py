@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 from marimo_studio._agent_analysis_protocol import parse_analysis_report
 from marimo_studio._agent_browser_protocol import (
@@ -57,23 +57,22 @@ def parse_activation_result(
         or schema != 1
         or payload.get("notebook") != str(notebook)
         or payload.get("view") != view
-        or state not in {"active", "reload-requested"}
-        or transition not in {"in-place", "reload"}
+        or state != "active"
+        or transition != "in-place"
         or not _nonnegative_int(generation)
         or (client_id is not None and not _nonempty(client_id))
         or not _nonempty(session_id)
-        or (state == "active" and (not client_id_present or not _nonempty(client_id)))
-        or (state == "reload-requested" and client_id_present)
-        or (state == "active") != (transition == "in-place")
+        or not client_id_present
+        or not _nonempty(client_id)
     ):
         raise ProtocolError("The Studio activation response is invalid.")
     return ViewActivationResult(
         notebook=notebook,
         view=view,
-        state=cast(Literal["active", "reload-requested"], state),
+        state="active",
         generation=cast(int, generation),
-        transition=cast(Literal["in-place", "reload"], transition),
-        client_id=cast(str | None, client_id),
+        transition="in-place",
+        client_id=cast(str, client_id),
         session_id=cast(str, session_id),
     )
 

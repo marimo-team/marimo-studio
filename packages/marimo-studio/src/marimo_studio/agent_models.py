@@ -412,15 +412,15 @@ def _browser_status(
 
 @dataclass(frozen=True)
 class ViewActivationResult:
-    """The browser transition completed or was scheduled after code mode exits."""
+    """The browser completed an in-place view transition."""
 
     notebook: Path
     view: str
-    state: Literal["active", "reload-requested"]
+    state: Literal["active"]
     generation: int
-    transition: Literal["in-place", "reload"]
+    transition: Literal["in-place"]
     session_id: str
-    client_id: str | None = None
+    client_id: str
 
     def to_dict(self) -> dict[str, object]:
         value: dict[str, object] = {
@@ -431,8 +431,7 @@ class ViewActivationResult:
             "generation": self.generation,
             "transition": self.transition,
         }
-        if self.client_id is not None:
-            value["client_id"] = self.client_id
+        value["client_id"] = self.client_id
         value["session_id"] = self.session_id
         return value
 

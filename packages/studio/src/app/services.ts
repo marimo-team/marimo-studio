@@ -1,3 +1,4 @@
+import type { ActiveViewRequest } from "@marimo-studio/protocol/development-events";
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
 import type { ControlFrameConnector } from "../features/preview/control-sync.ts";
@@ -28,6 +29,7 @@ export interface StudioServices {
 export const createStudioServices = (
   bootstrap: StudioBootstrap,
   connectControlFrame?: ControlFrameConnector,
+  initialActivation?: ActiveViewRequest,
 ): StudioServices => {
   const routes = new StudioRoutes(bootstrap);
   const storagePrefix = `marimo-studio:workspace-layout:v1:${bootstrap.workspaceId}`;
@@ -88,7 +90,6 @@ export const createStudioServices = (
     createViewRemote(routes.endpoint(bootstrap.urls.views), bootstrap.serverToken),
     (view, landing) => transition.select(view, landing),
     () => source.prepareViewChange(),
-    (view) => globalThis.location.assign(routes.studio(view)),
   );
   const workspaceEvents = new WorkspaceEventCoordinator({
     eventsUrl: routes.endpoint(bootstrap.urls.events),
@@ -111,8 +112,8 @@ export const createStudioServices = (
     views,
     async start(editor, frames) {
       preview.attach(editor, frames);
+      workspaceEvents.start(initialActivation);
       await source.start();
-      workspaceEvents.start();
     },
     dispose() {
       if (disposed) {

@@ -325,23 +325,14 @@ def _activation_payload(notebook: Path) -> dict[str, object]:
     }
 
 
-def test_activation_protocol_accepts_active_and_reload_results(tmp_path: Path) -> None:
+def test_activation_protocol_accepts_in_place_results(tmp_path: Path) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
     active = parse_activation_result(
         _activation_payload(notebook),
         notebook,
         "dashboard",
     )
-    reload_payload = {
-        **_activation_payload(notebook),
-        "state": "reload-requested",
-        "transition": "reload",
-    }
-    reload_payload.pop("client_id")
-    reload = parse_activation_result(reload_payload, notebook, "dashboard")
-
     assert active.client_id == "browser-client-1234"
-    assert reload.client_id is None
 
 
 @pytest.mark.parametrize(
@@ -363,13 +354,12 @@ def test_activation_protocol_rejects_invalid_active_results(
         parse_activation_result(payload, notebook, "dashboard")
 
 
-def test_activation_protocol_rejects_a_reload_client_field(tmp_path: Path) -> None:
+def test_activation_protocol_rejects_reload_results(tmp_path: Path) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
     payload = {
         **_activation_payload(notebook),
         "state": "reload-requested",
         "transition": "reload",
-        "client_id": None,
     }
 
     with pytest.raises(ProtocolError, match="activation response"):

@@ -32,7 +32,6 @@ export class ViewController {
     private readonly remote: ViewRemote,
     private readonly selectView: (view: string, landing: ViewLanding) => Promise<boolean>,
     private readonly prepareCurrentView: () => Promise<boolean>,
-    private readonly recoverView: (view: string) => void,
   ) {
     this.snapshot = {
       current: initialView,
@@ -163,8 +162,10 @@ export class ViewController {
       }
       this.update({ views: removed.views });
       if (!removed.views.includes(this.snapshot.current)) {
-        this.recoverView(removed.default_view);
-        return false;
+        if (!(await this.choose(removed.default_view))) {
+          this.update({ removeError: "Select an available view to continue." });
+          return false;
+        }
       }
       this.update({ removing: undefined });
       return true;

@@ -1,4 +1,7 @@
-import type { ObserveViewRequest } from "@marimo-studio/protocol/development-events";
+import type {
+  ActiveViewRequest,
+  ObserveViewRequest,
+} from "@marimo-studio/protocol/development-events";
 
 import { beforeEach, expect, it, vi } from "vite-plus/test";
 
@@ -64,7 +67,11 @@ const workspace = (initialViews = ["dashboard", "report"]) => {
   };
 };
 
-const setup = (initialViews?: string[]) => {
+const setup = (
+  initialViews?: string[],
+  initialActivation?: ActiveViewRequest,
+  failFirstActivation = false,
+) => {
   const model = workspace(initialViews);
   const preview = {
     requestObservation: vi.fn(),
@@ -77,6 +84,9 @@ const setup = (initialViews?: string[]) => {
   const acknowledge = vi.fn(
     async (_generation: number, _view: string, _signal: AbortSignal) => undefined,
   );
+  if (failFirstActivation) {
+    acknowledge.mockRejectedValueOnce(new Error("temporary acknowledgement failure"));
+  }
   const coordinator = new WorkspaceEventCoordinator({
     eventsUrl: "/events?file=notebook.py",
     views: model.views,
@@ -84,7 +94,7 @@ const setup = (initialViews?: string[]) => {
     source,
     acknowledge,
   });
-  coordinator.start();
+  coordinator.start(initialActivation);
   return { acknowledge, coordinator, model, preview, source };
 };
 
@@ -177,6 +187,35 @@ it("refreshes an already active view before acknowledging its activation", async
   expect(preview.reload.mock.invocationCallOrder[0]).toBeLessThan(
     acknowledge.mock.invocationCallOrder[0]!,
   );
+  coordinator.dispose();
+});
+
+it("acknowledges host promotion without reloading the starting preview", async () => {
+  const activation = { schema: 1, generation: 8, view: "dashboard" } as const;
+  const { acknowledge, coordinator, preview } = setup(undefined, activation);
+
+  await vi.waitFor(() =>
+    expect(acknowledge).toHaveBeenCalledWith(8, "dashboard", expect.any(AbortSignal)),
+  );
+  EventSourceStub.instances[0]?.emit("activate", JSON.stringify(activation));
+  await Promise.resolve();
+
+  expect(acknowledge).toHaveBeenCalledOnce();
+  expect(preview.reload).not.toHaveBeenCalled();
+  coordinator.dispose();
+});
+
+it("retries a failed host-promotion acknowledgement after replay", async () => {
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  const activation = { schema: 1, generation: 8, view: "dashboard" } as const;
+  const { acknowledge, coordinator } = setup(undefined, activation, true);
+  await vi.waitFor(() => expect(EventSourceStub.instances).toHaveLength(2));
+
+  EventSourceStub.instances[1]?.emit("activate", JSON.stringify(activation));
+  await vi.waitFor(() => expect(acknowledge).toHaveBeenCalledTimes(2));
+
+  expect(EventSourceStub.instances).toHaveLength(2);
+  warning.mockRestore();
   coordinator.dispose();
 });
 

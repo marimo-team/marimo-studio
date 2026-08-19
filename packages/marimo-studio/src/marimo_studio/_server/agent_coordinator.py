@@ -45,9 +45,6 @@ class AgentCoordinator:
             self._store.observation_sequences.clear()
             self._store.condition.notify_all()
 
-    async def reserve_generation(self) -> int:
-        return await self._activations.reserve_generation()
-
     async def activate(
         self,
         target: PeerTarget,

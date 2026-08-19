@@ -34,6 +34,7 @@ export interface WorkspaceModel {
   currentView: ViewSnapshot["current"];
   geometry: WorkspaceGeometry;
   layout: LayoutSnapshot;
+  measured: boolean;
   preview: PreviewDeckSnapshot;
   element: HTMLElement | null;
   ref: RefCallback<HTMLElement>;
@@ -99,6 +100,7 @@ export const useWorkspace = (
     ref,
     geometry,
     layout: workspaceSnapshot,
+    measured: size.width > 0 && size.height > 0,
     preview: previewSnapshot,
     currentView: viewSnapshot.current,
     resizing,
