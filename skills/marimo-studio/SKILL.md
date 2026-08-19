@@ -119,6 +119,50 @@ evidence across configured views without a browser handoff gate.
 - Review the notebook diff before finishing so presentation code remains in the
   view.
 
+### Mount Lens for view feedback
+
+Install `marimo-lens` in the Marimo environment before mounting it. Read its
+packaged Agent Skill from Python:
+
+```python
+from marimo_lens.agent import agent_skill
+
+skill = agent_skill()
+print(skill.body)
+```
+
+Use the Marimo Lens skill when a person should point to a projected result or
+authored page region.
+
+```python
+from marimo_lens import Lens
+from marimo_studio import LENS_TARGET_SELECTOR
+
+lens = Lens(
+    dom_selector=(
+        f"{LENS_TARGET_SELECTOR}, "
+        "#app-shell :is(header, section, article)"
+    ),
+)
+lens
+```
+
+Render that notebook value inside the active view:
+
+```html
+<marimo-output value="lens"></marimo-output>
+```
+
+`LENS_TARGET_SELECTOR` is Studio's projection-host policy for Lens. Compose
+additional HTML regions into the same CSS selector when layout, copy, styling,
+or browser behavior can receive feedback. Keep those regions bounded to
+meaningful page roots.
+
+Write semantic `name`, `value`, and `mo-value` references in the view. Studio
+resolves current producer cell IDs at runtime and exposes them as host metadata.
+Lens reads the generic target and producer metadata selected by the supplied
+CSS policy. Producer IDs stay out of authored HTML.
+
 `marimo-studio view add` may write `[tool.marimo-studio]` metadata and the
 `marimo-studio` dependency into the notebook header. `--dry-run` returns the
 planned paths and configuration changes without writing them.

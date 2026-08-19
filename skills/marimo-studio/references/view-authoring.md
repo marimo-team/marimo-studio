@@ -99,6 +99,16 @@ starts with a notebook variable and can read attributes, dictionary keys, and
 list items. Put arithmetic, formatting, slicing, function calls, and
 comprehensions in notebook cells.
 
+Studio resolves every cell, output, and value host to its current producing cell
+after the runtime connects. Integrations such as Marimo Lens consume that
+derived identity. Keep view source anchored to `name`, `value`, and `mo-value`
+references so the page remains readable and editable.
+
+`marimo_studio.LENS_TARGET_SELECTOR` owns the projection-host CSS policy used
+when mounting Lens. Compose authored page regions into that selector in the
+notebook. Import the public constant so Studio remains the owner of host
+selector policy.
+
 ## Write the document
 
 Write one complete HTML document with one `<main id="app-shell">`. Put every
