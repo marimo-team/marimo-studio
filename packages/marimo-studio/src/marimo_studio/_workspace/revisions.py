@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from marimo_studio._workspace.models import StudioWorkspace, View
-from marimo_studio.errors import ConfigurationError, TemplateError
+from marimo_studio.errors import ConfigurationError, TemplateError, ViewNotFoundError
 
 
 def _configuration_identity(studio: StudioWorkspace) -> tuple[object, ...]:
@@ -86,7 +86,10 @@ def capture_studio_sources(
     )
     unknown = set(selected).difference(studio.views)
     if unknown:
-        raise ConfigurationError(f"Unknown view {sorted(unknown)[0]!r}")
+        raise ViewNotFoundError(
+            sorted(unknown)[0],
+            available=tuple(studio.views),
+        )
     paths = tuple(
         dict.fromkeys(
             (

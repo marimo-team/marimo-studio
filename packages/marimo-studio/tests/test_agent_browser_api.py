@@ -26,6 +26,11 @@ from .app_helpers import configured, edit_mode, marimo_app, session_manager
 from .helpers import ready_runtime_status
 
 
+def test_browser_timeout_rejects_oversized_integers() -> None:
+    assert browser_agent._finite_timeout(10**1000, default=10.0) is None
+    assert browser_agent._finite_timeout(-(10**1000), default=10.0) is None
+
+
 def test_authenticated_agent_connection_returns_the_mutation_token(
     notebook_path: Path,
 ) -> None:
@@ -349,6 +354,41 @@ def test_edit_workspace_records_browser_readiness_and_requests_active_view(
         activated = client.patch(
             "/_marimo-studio/views/executive/activate",
             headers={**headers, "Marimo-Session-Id": "s_123456"},
+            json={"schema": 1, "browser_client": None},
+        )
+        missing_activation = client.patch(
+            "/_marimo-studio/views/missing/activate",
+            headers=headers,
+            json={"schema": 1, "browser_client": None},
+        )
+        invalid_activation = client.patch(
+            "/_marimo-studio/views/dashboard/activate",
+            headers=headers,
+            json={},
+        )
+        unknown_activation_field = client.patch(
+            "/_marimo-studio/views/dashboard/activate",
+            headers=headers,
+            json={"schema": 1, "browser_client": None, "unexpected": True},
+        )
+        mixed_activation = client.patch(
+            "/_marimo-studio/views/dashboard/activate",
+            headers={**headers, "Marimo-Session-Id": "s_123456"},
+            json={"schema": 1, "browser_client": "browser-client-1234"},
+        )
+        boolean_schema_activation = client.patch(
+            "/_marimo-studio/views/dashboard/activate",
+            headers=headers,
+            json={"schema": True, "browser_client": None},
+        )
+        boolean_schema_ack = client.post(
+            "/_marimo-studio/activations/1/ack",
+            headers=headers,
+            json={
+                "schema": True,
+                "clientId": "browser-client-1234",
+                "view": "dashboard",
+            },
         )
 
     assert recorded.status_code == 204
@@ -374,6 +414,27 @@ def test_edit_workspace_records_browser_readiness_and_requests_active_view(
     assert activated.json()["state"] == "reload-requested"
     assert activated.json()["transition"] == "reload"
     assert activated.json()["session_id"] == "s_123456"
+    assert missing_activation.status_code == 404
+    assert missing_activation.json() == {
+        "error": "view-not-found",
+        "message": (
+            "View 'missing' does not exist. Available views: dashboard, executive."
+        ),
+        "view": "missing",
+        "available_views": ["dashboard", "executive"],
+    }
+    assert invalid_activation.status_code == 400
+    assert invalid_activation.json()["error"] == "invalid-activation-request"
+    assert invalid_activation.json()["field"] == "request"
+    assert unknown_activation_field.status_code == 400
+    assert unknown_activation_field.json()["error"] == "invalid-activation-request"
+    assert mixed_activation.status_code == 400
+    assert mixed_activation.json()["error"] == "invalid-activation-request"
+    assert mixed_activation.json()["field"] == "browser_client"
+    assert boolean_schema_activation.status_code == 400
+    assert boolean_schema_activation.json()["error"] == "invalid-activation-request"
+    assert boolean_schema_ack.status_code == 400
+    assert boolean_schema_ack.json()["error"] == "invalid-activation-ack"
 
 
 def test_external_observation_uses_the_selected_browser_session(
@@ -620,8 +681,9 @@ def test_edit_server_runs_the_agent_handoff_analysis(
             "/_marimo-studio/analyze",
             headers=headers,
             json={
+                "schema": 1,
                 "view": "dashboard",
-                "timeout": 0,
+                "browser_timeout": 0,
                 "runtime_timeout": 75,
                 "require_browser": True,
             },
@@ -691,14 +753,15 @@ def test_code_mode_analysis_requires_one_named_view(
         unfocused = client.post(
             "/_marimo-studio/analyze",
             headers=headers,
-            json={"timeout": 0, "require_browser": True},
+            json={"schema": 1, "browser_timeout": 0, "require_browser": True},
         )
         focused = client.post(
             "/_marimo-studio/analyze",
             headers=headers,
             json={
+                "schema": 1,
                 "view": "dashboard",
-                "timeout": 0,
+                "browser_timeout": 0,
                 "require_browser": True,
             },
         )
@@ -730,15 +793,32 @@ def test_agent_analysis_rejects_unknown_request_fields(
         response = client.post(
             "/_marimo-studio/analyze",
             headers=headers,
-            json={"view": "dashboard", "unexpected": True},
+            json={"schema": 1, "view": "dashboard", "unexpected": True},
+        )
+        boolean_schema = client.post(
+            "/_marimo-studio/analyze",
+            headers=headers,
+            json={"schema": True, "view": "dashboard"},
         )
 
     assert response.status_code == 400
     assert response.json()["error"] == "invalid-analysis-request"
+    assert boolean_schema.status_code == 400
+    assert boolean_schema.json()["error"] == "invalid-analysis-request"
 
 
-def test_agent_analysis_rejects_an_out_of_range_runtime_timeout(
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("runtime_timeout", 301),
+        ("runtime_timeout", 10**1000),
+        ("browser_timeout", 10**1000),
+    ],
+)
+def test_agent_analysis_rejects_an_out_of_range_timeout(
     notebook_path: Path,
+    field: str,
+    value: int,
 ) -> None:
     studio = configured(notebook_path)
     app = marimo_app(studio.notebook)
@@ -749,8 +829,9 @@ def test_agent_analysis_rejects_an_out_of_range_runtime_timeout(
         response = client.post(
             "/_marimo-studio/analyze",
             headers=headers,
-            json={"view": "dashboard", "runtime_timeout": 301},
+            json={"schema": 1, "view": "dashboard", field: value},
         )
 
     assert response.status_code == 400
     assert response.json()["error"] == "invalid-analysis-request"
+    assert response.json()["field"] == field

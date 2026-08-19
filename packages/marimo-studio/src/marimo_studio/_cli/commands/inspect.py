@@ -14,24 +14,19 @@ from marimo_studio._cli.diagnostics import (
     run_in_environment,
 )
 from marimo_studio._cli.help import ColoredCommand
-from marimo_studio._cli.options import output_format_option, target_argument
-from marimo_studio._cli.output import (
-    echo_json,
-    inspection_payload,
-    render_inspection,
+from marimo_studio._cli.options import (
+    output_format_option,
+    runtime_timeout_option,
+    target_argument,
 )
+from marimo_studio._cli.output import echo_json, render_inspection
 from marimo_studio._workspace.environment import should_reenter
 from marimo_studio._workspace.targets import (
     resolve_environment_target,
     resolve_notebook,
 )
 from marimo_studio.errors import ConfigurationError
-from marimo_studio.inspect import (
-    RuntimeInspection,
-    inspect_notebook,
-    inspect_runtime,
-    select_cells,
-)
+from marimo_studio.inspect import inspect_notebook_result, inspect_runtime
 
 
 @click.command("inspect", cls=ColoredCommand)
@@ -49,6 +44,7 @@ from marimo_studio.inspect import (
     help="Execute cells and include MIME outputs and JSON values.",
 )
 @click.option("--limit", type=click.IntRange(min=1), help="Limit cell records.")
+@runtime_timeout_option
 @output_format_option
 @diagnostic_format_option
 def inspect(
@@ -57,6 +53,7 @@ def inspect(
     output_expressions: bool,
     runtime: bool,
     limit: int | None,
+    runtime_timeout: float,
     output_format: str,
 ) -> None:
     """Inspect cells in TARGET.
@@ -68,28 +65,31 @@ def inspect(
     if not notebook_path.is_file():
         raise ConfigurationError(f"Notebook does not exist: {notebook_path}")
 
-    runtime_inspection: RuntimeInspection | None = None
     if runtime:
         environment = resolve_environment_target(target, notebook_path)
         if should_reenter(environment, None):
             raise click.exceptions.Exit(run_in_environment(environment, sys.argv[1:]))
         with capture_runtime_stderr():
-            runtime_inspection = asyncio.run(
-                inspect_runtime(notebook_path, include_code=include_code)
+            result = asyncio.run(
+                inspect_runtime(
+                    notebook_path,
+                    include_code=include_code,
+                    runtime_timeout=runtime_timeout,
+                )
             )
-        notebook_spec = runtime_inspection.notebook
+        result = result.select(
+            output_expressions=output_expressions,
+            limit=limit,
+        )
     else:
-        notebook_spec = inspect_notebook(
+        result = inspect_notebook_result(
             notebook_path,
             include_code=include_code,
+            output_expressions=output_expressions,
+            limit=limit,
         )
 
-    cells = select_cells(
-        notebook_spec,
-        output_expressions=output_expressions,
-        limit=limit,
-    )
     if output_format == "json":
-        echo_json(inspection_payload(notebook_spec, cells, runtime_inspection))
+        echo_json(result.to_dict())
     else:
-        render_inspection(notebook_spec, cells, runtime_inspection)
+        render_inspection(result)

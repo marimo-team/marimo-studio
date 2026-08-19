@@ -5,15 +5,16 @@ description: Inspect the active notebook, create and activate views, and analyze
 
 # Agent API reference
 
-`marimo_studio.agents` adapts the saved notebook and Studio workspace for a
+`marimo_studio.agent` adapts the saved notebook and Studio workspace for a
 coding agent running in Marimo code mode.
 
 ```python
 import marimo._code_mode as cm
-import marimo_studio.agents as studio
+import marimo_studio.agent as studio
 
 ctx = cm.get_context()
-notebook = studio.inspect(ctx, include_code=True)
+workspace = studio.overview(ctx)
+inspection = studio.inspect(ctx, include_code=True)
 view = studio.ensure_view(ctx, "dashboard")
 activation = await studio.activate_view(ctx, view.name)
 ```
@@ -23,10 +24,10 @@ into Studio. Run the analysis in the next code-mode call after the page loads:
 
 ```python
 import marimo._code_mode as cm
-import marimo_studio.agents as studio
+import marimo_studio.agent as studio
 
 ctx = cm.get_context()
-report = await studio.analyze(ctx, view_name="dashboard")
+report = await studio.analyze(ctx, view="dashboard")
 ```
 
 ::: info Saved notebook required
@@ -54,21 +55,41 @@ Raises:
 - `RuntimeError` when the active notebook has not been saved.
 - `FileNotFoundError` when the saved path is unavailable.
 
-## `inspect(context, *, include_code=False)`
+## `overview(context)`
+
+```python
+overview(context: object) -> StudioOverview
+```
+
+Returns configuration and authored-view state for the saved notebook. The
+result works before Studio configuration exists and has `state` equal to
+`unconfigured`, `needs-view`, or `ready`. It includes the notebook, canonical
+view root, configuration path and source, default view and runtime, available
+runtimes, cell bindings, and view summaries.
+
+`StudioOverview.to_dict()` is the JSON schema returned by
+`marimo-studio overview --format json`.
+
+## `inspect(context, *, include_code=False, display=False, limit=None)`
 
 ```python
 inspect(
     context: object,
     *,
     include_code: bool = False,
-) -> NotebookSpec
+    display: bool = False,
+    limit: int | None = None,
+) -> InspectionResult
 ```
 
-Compiles the saved notebook and returns its cells, source positions, names,
-definitions, references, configuration, and dependency relationships. It
+Compiles the saved notebook and returns an `InspectionResult` with the complete
+`NotebookSpec` and selected cells. Cells include source positions, names,
+definitions, references, configuration, and dependency relationships. The call
 leaves notebook cells unevaluated.
 
 Set `include_code=True` to include each complete cell body in `CellSpec.code`.
+Set `display=True` to keep cells ending in a displayed expression. Set `limit`
+to return at most that many selected cells.
 
 ## `ensure_view(context, name=None, *, dry_run=False)`
 
@@ -117,7 +138,7 @@ check(
     context: object,
     *,
     view_name: str | None = None,
-) -> tuple[CheckResult, ...]
+) -> CheckReport
 ```
 
 Compiles the saved notebook and checks the configured view documents, cell
@@ -125,11 +146,12 @@ references, rich-output references, and JSON-compatible value references. It
 leaves notebook cells unevaluated.
 
 Pass `view_name` to check one named view. The default checks every configured
-view. Each `CheckResult.status` is `pass`, `warn`, or `fail`.
+view. `CheckReport.ok` is false when any result fails. Each
+`CheckResult.status` is `pass`, `warn`, or `fail`.
 
 ```python
-results = studio.check(ctx, view_name="dashboard")
-failures = [result for result in results if result.status == "fail"]
+report = studio.check(ctx, view_name="dashboard")
+failures = [result for result in report.checks if result.status == "fail"]
 ```
 
 ## `activate_view(context, name)`
@@ -149,7 +171,9 @@ during that native editor session, Marimo reloads the page into the selected
 Studio view after the code-mode call returns.
 
 The returned `ViewActivationResult` contains the notebook path, view name,
-a monotonically increasing generation, and the selected transition.
+a monotonically increasing generation, the selected transition, and the bound
+Marimo `session_id`. An active transition also identifies the selected browser
+through `client_id`.
 `state="active"` with `transition="in-place"` means the targeted workspace
 acknowledged the completed transition. `state="reload-requested"` with
 `transition="reload"` means the exact native editor session will reload after
@@ -158,20 +182,20 @@ view to confirm that the rendered page read the current source revision.
 
 Raises:
 
-- `ConfigurationError` when `name` is not configured for the notebook.
 - `ProtocolError` when code mode has no live Marimo callback credentials.
 - `AgentRequestError` when the server, session, or targeted browser cannot
   complete the transition, or when the server is attached to another
-  notebook. The exception's `code` identifies the failure.
+  notebook. The exception's `code` identifies failures such as
+  `view-not-found`, `browser-client-unavailable`, or `activation-timeout`.
 
-## `analyze(context, *, view_name=None, timeout=10.0, runtime_timeout=60.0, require_browser=True)`
+## `analyze(context, *, view=None, browser_timeout=10.0, runtime_timeout=60.0, require_browser=True)`
 
 ```python
 async def analyze(
     context: object,
     *,
-    view_name: str | None = None,
-    timeout: float = 10.0,
+    view: str | None = None,
+    browser_timeout: float = 10.0,
     runtime_timeout: float = 60.0,
     require_browser: bool = True,
 ) -> AnalysisReport: ...
@@ -197,7 +221,7 @@ captured revision map. An edit during analysis adds an
 produce a handoff-ready report. Code mode requires one named, active view for
 browser validation. Activate the view in one code-mode call, let that call
 finish, then analyze it in the next call. Setting `require_browser=False`
-allows a code-mode call with no `view_name` to validate every configured view
+allows a code-mode call with no `view` to validate every configured view
 through the static and isolated runtime stages. The external
 `marimo-studio analyze` command can visit every configured view because it does
 not occupy the notebook kernel while Studio switches views.
@@ -216,17 +240,18 @@ advice, and available view, target, or source location.
 Keep `require_browser=True` for agent handoff. Setting it to false limits the
 gate to deterministic source and runtime evidence.
 
-`timeout` must be finite and between 0 and 20 seconds. It bounds the rendered
-browser observation. `runtime_timeout` must be finite and between 0 and 300
-seconds. It bounds isolated notebook execution and defaults to 60 seconds. A
-runtime deadline produces a `runtime-timeout` action with repair advice.
+`browser_timeout` must be finite and between 0 and 300 seconds. It bounds the
+rendered browser observation. `runtime_timeout` must be finite and between 0
+and 300 seconds. It bounds isolated notebook execution and defaults to 60
+seconds. A runtime deadline produces a `runtime-timeout` action with repair
+advice.
 Transport, protocol, authentication, session, revision, and rendered-view
 failures appear as stable error codes in `actions` or raise
 `AgentRequestError` before a report can be created.
 
 ```python
 while True:
-    report = await studio.analyze(ctx, view_name="dashboard")
+    report = await studio.analyze(ctx, view="dashboard")
     if report.handoff_ready:
         break
     for action in report.actions:

@@ -139,8 +139,9 @@ def test_analysis_disconnect_cancels_runtime_validation(
         request, messages = _request(
             "/_marimo-studio/analyze",
             {
+                "schema": 1,
                 "view": "dashboard",
-                "timeout": 10,
+                "browser_timeout": 10,
                 "require_browser": False,
             },
         )
@@ -291,7 +292,7 @@ def test_activation_disconnect_clears_the_browser_operation(
         target = await notebook_scope.clients.select_target(client_id=client_id)
         request, messages = _request(
             "/_marimo-studio/views/dashboard/activate",
-            {},
+            {"schema": 1, "browser_client": None},
             method="PATCH",
             session_id="s_123456",
         )

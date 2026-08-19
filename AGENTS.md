@@ -48,7 +48,8 @@ and [Agents and delivery](development_docs/architecture/agents-and-delivery.md).
 Keep product policy on Studio-owned contracts. Put host-specific knowledge at
 the edge.
 
-1. Define Python capabilities in `_capabilities.py` and browser contracts in
+1. Define Marimo integration ports in `_capabilities.py`, application
+   capabilities in the public service modules, and browser contracts in
    `packages/protocol` or `packages/runtime`.
 2. Implement private Marimo integration in `_compat` and unstable frontend
    integration in `packages/marimo-frontend`.
@@ -110,6 +111,10 @@ user behavior
 5. `development_docs/` for engineering reasoning and `docs/` for supported
    user workflows.
 
+For notebook and view authoring through an agent, start with the
+[Marimo Studio skill](skills/marimo-studio/SKILL.md). Its capability catalog
+maps each workflow operation to the code-mode API and CLI.
+
 ## Keep one mutable owner
 
 | State                      | Owner                                   | Release boundary                   |
@@ -167,6 +172,7 @@ checks, tests, builds, and task execution.
 | Python architecture or Marimo upgrade     | [Marimo integration](development_docs/architecture/marimo-integration.md)                       |
 | Frontend facade or browser lifecycle      | [Browser runtime and authoring](development_docs/architecture/browser-runtime-and-authoring.md) |
 | Agent APIs, analysis, export, or delivery | [Agents and delivery](development_docs/architecture/agents-and-delivery.md)                     |
+| Agent notebook and view workflow          | [Marimo Studio skill](skills/marimo-studio/SKILL.md)                                            |
 | Focused frontend workflow                 | [Frontend workspace](development_docs/frontend.md)                                              |
 | Studio distribution or release            | [Releasing](development_docs/releasing.md)                                                      |
 | Live cross-boundary behavior              | `apps/e2e` and the browser acceptance commands                                                  |

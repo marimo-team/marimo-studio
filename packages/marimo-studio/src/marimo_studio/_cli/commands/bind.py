@@ -10,7 +10,6 @@ from marimo_studio._cli.diagnostics import diagnostic_format_option
 from marimo_studio._cli.help import ColoredCommand
 from marimo_studio._cli.options import output_format_option, target_argument
 from marimo_studio._cli.output import (
-    binding_payload,
     echo_json,
     render_binding,
 )
@@ -53,6 +52,6 @@ def bind(
         overwrite=overwrite,
     )
     if output_format == "json":
-        echo_json(binding_payload(result, dry_run=dry_run))
+        echo_json(result.to_dict())
     else:
-        render_binding(result, dry_run=dry_run)
+        render_binding(result)

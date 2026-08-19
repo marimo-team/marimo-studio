@@ -8,16 +8,16 @@ import shlex
 import subprocess
 from typing import Any
 
+from marimo_studio._cli.diagnostics import diagnostics
 from marimo_studio._cli.print import echo, green, light_blue, red, yellow
-from marimo_studio._workspace.models import (
-    BindingResult,
-    StudioWorkspace,
-    ViewSetupResult,
-)
-from marimo_studio.agent_models import AnalysisReport
+from marimo_studio._workspace.models import BindingResult, ViewSetupResult
+from marimo_studio.activation import ViewActivationResult
+from marimo_studio.analysis import AnalysisReport
 from marimo_studio.export import StaticExportResult
-from marimo_studio.inspect import RuntimeInspection
-from marimo_studio.types import CellSpec, CheckResult, NotebookSpec
+from marimo_studio.inspect import InspectionResult
+from marimo_studio.overview import StudioOverview
+from marimo_studio.types import CheckResult
+from marimo_studio.workspace import ViewRemovalResult
 
 
 def _shell_command(arguments: list[str]) -> str:
@@ -36,6 +36,17 @@ def echo_json(value: Any) -> None:
     echo(json.dumps(value, indent=2, sort_keys=True))
 
 
+def _echo_next_command(action: str, command: str) -> None:
+    if diagnostics().emit(
+        code="next-command",
+        message=command,
+        severity="info",
+        details={"action": action},
+    ):
+        return
+    echo(f"  {light_blue(action)} {command}", err=True)
+
+
 def render_view_setup(result: ViewSetupResult) -> None:
     """Write a view setup result in human text."""
     verb = "Would add" if result.dry_run else "Added"
@@ -46,48 +57,46 @@ def render_view_setup(result: ViewSetupResult) -> None:
         echo(f"  {light_blue('update')} {path}")
     if not result.dry_run:
         command = _shell_command(["marimo", "edit", str(result.notebook), "--sandbox"])
-        echo(f"  {light_blue('edit')} {command}", err=True)
+        _echo_next_command("edit", command)
 
 
-def view_list_payload(studio: StudioWorkspace) -> dict[str, object]:
-    """Serialize the configured view inventory."""
-    return {
-        "schema": 1,
-        "notebook": str(studio.notebook),
-        "default_view": studio.default_view,
-        "views": [
-            {
-                "name": name,
-                "path": str(view.root),
-                "default": name == studio.default_view,
-            }
-            for name, view in studio.views.items()
-        ],
-    }
+def render_overview(result: StudioOverview) -> None:
+    """Write Studio workspace state in human text."""
+    echo(f"{result.notebook} · {result.state}")
+    if result.config_path is not None:
+        echo(f"  {light_blue('config')} {result.config_path}")
+    if result.default_runtime is not None:
+        echo(f"  {light_blue('runtime')} {result.default_runtime}")
+    for view in result.views:
+        suffix = " (default)" if view.default else ""
+        echo(f"  {light_blue(view.name)}{suffix}\n    {view.path}")
+    if result.state == "unconfigured":
+        command = _shell_command(["marimo-studio", "view", "add", str(result.notebook)])
+        _echo_next_command("create", command)
+    elif result.state == "needs-view" and result.default_view is not None:
+        command = _shell_command(
+            [
+                "marimo-studio",
+                "view",
+                "add",
+                str(result.notebook),
+                "--name",
+                result.default_view,
+            ]
+        )
+        _echo_next_command("create", command)
 
 
-def render_view_list(studio: StudioWorkspace) -> None:
-    """Write configured views in human text."""
-    for name, view in studio.views.items():
-        suffix = " (default)" if name == studio.default_view else ""
-        echo(f"{light_blue(name)}{suffix}\n  {view.root}")
-
-
-def view_removal_payload(studio: StudioWorkspace, name: str) -> dict[str, object]:
-    """Serialize a completed view removal."""
-    return {
-        "schema": 1,
-        "notebook": str(studio.notebook),
-        "view": name,
-        "default_view": studio.default_view,
-        "views": list(studio.views),
-    }
-
-
-def render_view_removal(studio: StudioWorkspace, name: str) -> None:
+def render_view_removal(result: ViewRemovalResult) -> None:
     """Write a completed view removal in human text."""
-    echo(f"{green('Removed')} view {name} from {studio.notebook}")
-    echo(f"  {light_blue('default')} {studio.default_view}")
+    echo(f"{green('Removed')} view {result.view} from {result.notebook}")
+    echo(f"  {light_blue('default')} {result.default_view}")
+
+
+def render_view_activation(result: ViewActivationResult) -> None:
+    """Write a completed browser view activation in human text."""
+    echo(f"{green('Activated')} view {result.view} in {result.client_id}")
+    echo(f"  {light_blue('session')} {result.session_id}")
 
 
 def render_static_export(result: StaticExportResult) -> None:
@@ -100,44 +109,16 @@ def render_static_export(result: StaticExportResult) -> None:
     echo(f"  {light_blue('serve')} {command}")
 
 
-def render_binding(result: BindingResult, *, dry_run: bool) -> None:
+def render_binding(result: BindingResult) -> None:
     """Write a cell binding result in human text."""
     if result.previous_ref == result.cell.ref:
         echo(f"{result.alias} already points to cell {result.cell.index}")
         return
-    verb = "Would bind" if dry_run else "Bound"
+    verb = "Would bind" if result.dry_run else "Bound"
     echo(
         f"{green(verb)} {result.alias} to cell {result.cell.index} "
         f"({result.cell.source.start_line}-{result.cell.source.end_line})"
     )
-
-
-def binding_payload(result: BindingResult, *, dry_run: bool) -> dict[str, Any]:
-    """Serialize a cell binding result."""
-    payload = result.to_dict()
-    payload["dry_run"] = dry_run
-    return payload
-
-
-def inspection_payload(
-    notebook: NotebookSpec,
-    cells: tuple[CellSpec, ...],
-    runtime: RuntimeInspection | None,
-) -> dict[str, Any]:
-    """Serialize selected static and runtime inspection records."""
-    payload = notebook.to_dict()
-    if runtime is None:
-        payload["cells"] = [cell.to_dict() for cell in cells]
-        return payload
-    payload["cells"] = [
-        {
-            **cell.to_dict(),
-            "runtime": runtime.runtime.cells[cell.runtime_id].to_dict(),
-        }
-        for cell in cells
-    ]
-    payload["runtime"] = runtime.runtime.values.to_dict()
-    return payload
 
 
 def _json_preview(value: object, *, limit: int = 160) -> str:
@@ -145,12 +126,11 @@ def _json_preview(value: object, *, limit: int = 160) -> str:
     return rendered if len(rendered) <= limit else rendered[: limit - 1] + "…"
 
 
-def render_inspection(
-    notebook: NotebookSpec,
-    cells: tuple[CellSpec, ...],
-    runtime: RuntimeInspection | None,
-) -> None:
+def render_inspection(result: InspectionResult) -> None:
     """Write selected notebook cells and runtime values in human text."""
+    notebook = result.notebook
+    cells = result.cells
+    runtime = result.runtime
     echo(f"{notebook.path} · {len(notebook.cells)} cells")
     for position, cell in enumerate(cells):
         if position:
@@ -165,7 +145,7 @@ def render_inspection(
         if cell.definitions:
             echo(f"     defines: {', '.join(cell.definitions)}")
         if runtime is not None:
-            runtime_cell = runtime.runtime.cells[cell.runtime_id]
+            runtime_cell = runtime.cells[cell.runtime_id]
             echo(f"     runtime: {runtime_cell.status or 'missing'}")
             outputs = ", ".join(
                 (
@@ -178,7 +158,7 @@ def render_inspection(
             if runtime_cell.errors:
                 echo(f"     error: {runtime_cell.errors[0]}")
     if runtime is not None:
-        values = runtime.runtime.values
+        values = runtime.values
         echo(f"\n{light_blue('JSON values')}")
         for name, value in values.values.items():
             echo(f"  {name} = {_json_preview(value)}")
@@ -188,22 +168,6 @@ def render_inspection(
             echo(f"\n{red('Value errors')}")
             for name, error in values.errors.items():
                 echo(f"  {name}: {error.code}: {error.message}")
-
-
-def checks_payload(
-    studio: StudioWorkspace,
-    results: tuple[CheckResult, ...],
-    *,
-    view_name: str | None,
-) -> dict[str, object]:
-    """Serialize check results."""
-    return {
-        "schema": 1,
-        "ok": not any(result.status == "fail" for result in results),
-        "notebook": str(studio.notebook),
-        "view": view_name,
-        "checks": [result.to_dict() for result in results],
-    }
 
 
 def render_checks(results: tuple[CheckResult, ...]) -> None:

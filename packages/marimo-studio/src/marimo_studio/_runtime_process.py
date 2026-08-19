@@ -105,6 +105,7 @@ async def check_runtime_studio_isolated(
         )
     if (
         not isinstance(payload, dict)
+        or type(payload.get("schema")) is not int
         or payload.get("schema") != 1
         or not isinstance(payload.get("checks"), list)
     ):

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -11,13 +10,13 @@ from types import ModuleType
 
 import agent_plugins
 
-from marimo_studio._runtime_limits import (
-    DEFAULT_RUNTIME_TIMEOUT,
-    MAX_RUNTIME_TIMEOUT,
-)
-from marimo_studio._workspace.models import BindingResult, ViewSetupResult
-from marimo_studio.agent_models import AnalysisReport, ViewActivationResult
-from marimo_studio.types import CheckResult, NotebookSpec
+from marimo_studio._runtime_limits import DEFAULT_RUNTIME_TIMEOUT
+from marimo_studio.activation import ViewActivationResult
+from marimo_studio.analysis import DEFAULT_BROWSER_TIMEOUT, AnalysisReport
+from marimo_studio.checks import CheckReport
+from marimo_studio.inspect import InspectionResult
+from marimo_studio.overview import StudioOverview
+from marimo_studio.workspace import BindingResult, ViewSetupResult
 
 _DISTRIBUTION_NAME = "marimo-studio"
 _SKILL_NAME = "marimo-studio"
@@ -52,10 +51,11 @@ def _module_help(summary: str) -> str:
 Start with the active notebook context:
 
     import marimo._code_mode as cm
-    import marimo_studio.agents as studio
+    import marimo_studio.agent as studio
 
     ctx = cm.get_context()
-    notebook = studio.inspect(ctx, include_code=True)
+    workspace = studio.overview(ctx)
+    inspection = studio.inspect(ctx, include_code=True)
     view = studio.ensure_view(ctx, "dashboard")
 
 The installed Agent Plugin carries the complete authoring workflow and the
@@ -102,15 +102,29 @@ def inspect(
     context: object,
     *,
     include_code: bool = False,
-) -> NotebookSpec:
+    display: bool = False,
+    limit: int | None = None,
+) -> InspectionResult:
     """Read the cells and their relationships from the saved notebook.
 
     Set ``include_code`` to include complete cell bodies. This compiles the
     saved notebook to understand its structure and does not run its code.
     """
-    from marimo_studio import inspect_notebook
+    from marimo_studio.inspect import inspect_notebook_result
 
-    return inspect_notebook(notebook_path(context), include_code=include_code)
+    return inspect_notebook_result(
+        notebook_path(context),
+        include_code=include_code,
+        output_expressions=display,
+        limit=limit,
+    )
+
+
+def overview(context: object) -> StudioOverview:
+    """Describe Studio configuration and views for the active notebook."""
+    from marimo_studio.overview import overview as inspect_overview
+
+    return inspect_overview(notebook_path(context))
 
 
 def ensure_view(
@@ -161,7 +175,7 @@ def check(
     context: object,
     *,
     view_name: str | None = None,
-) -> tuple[CheckResult, ...]:
+) -> CheckReport:
     """Check that custom pages reference notebook cells and values.
 
     Pass ``view_name`` to check one named view. The default checks every view.
@@ -180,52 +194,45 @@ def check(
 async def analyze(
     context: object,
     *,
-    view_name: str | None = None,
-    timeout: float = 10.0,
+    view: str | None = None,
+    browser_timeout: float = DEFAULT_BROWSER_TIMEOUT,
     runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     require_browser: bool = True,
 ) -> AnalysisReport:
     """Validate view sources, notebook projections, and rendered readiness.
 
-    Browser analysis requires ``view_name`` for the active Studio view. Activate
+    Browser analysis requires ``view`` for the active Studio view. Activate
     that view in a separate code-mode call before analyzing it. Set
     ``require_browser=False`` to run static and runtime validation across every
-    configured view when ``view_name`` is absent. ``timeout`` controls how long
-    Studio waits for the browser to report the saved view revision. Code mode
-    runs the analysis through its attached Studio server. ``runtime_timeout``
-    bounds isolated notebook execution.
+    configured view when ``view`` is absent. ``browser_timeout`` controls how
+    long Studio waits for the browser to report the saved view revision. Code
+    mode runs the analysis through its attached Studio server.
+    ``runtime_timeout`` bounds isolated notebook execution.
 
     Raises:
-        ValueError: A timeout is outside its supported range, or browser
-            analysis has no named view.
+        CapabilityInputError: A request field or timeout is invalid.
+        AgentRequestError: The attached server or browser cannot complete the
+            analysis.
     """
     from marimo_studio._agent_client import request_analysis
     from marimo_studio._composition import create_tooling_adapters
     from marimo_studio._workspace import load_studio
+    from marimo_studio.analysis import AnalysisRequest
 
-    if not math.isfinite(timeout) or not 0 <= timeout <= 20:
-        raise ValueError("timeout must be a finite number between 0 and 20 seconds")
-    if (
-        not math.isfinite(runtime_timeout)
-        or not 0 <= runtime_timeout <= MAX_RUNTIME_TIMEOUT
-    ):
-        raise ValueError(
-            "runtime_timeout must be a finite number between 0 and "
-            f"{MAX_RUNTIME_TIMEOUT:g} seconds"
-        )
-    if require_browser and view_name is None:
-        raise ValueError(
-            "Code-mode browser analysis requires view_name. Activate that view "
-            "in one code-mode call, then analyze it in the next call."
-        )
-    workspace = load_studio(notebook_path(context))
-    return await request_analysis(
-        create_tooling_adapters().code_mode.connection(),
-        workspace.notebook,
-        view_name=view_name,
-        timeout=timeout,
+    notebook = notebook_path(context)
+    request = AnalysisRequest(
+        view=view,
+        browser_timeout=browser_timeout,
         runtime_timeout=runtime_timeout,
         require_browser=require_browser,
+    )
+    request.require_focused_view()
+    workspace = load_studio(notebook)
+    connection = create_tooling_adapters().code_mode.connection()
+    return await request_analysis(
+        connection,
+        workspace.notebook,
+        request,
     )
 
 
@@ -239,20 +246,14 @@ async def activate_view(
     editor reloads into Studio when this call follows the first view setup.
     The reload waits for the code-mode result before navigating.
     """
-    from marimo_studio._agent_client import request_view_activation
     from marimo_studio._composition import create_tooling_adapters
     from marimo_studio._workspace import load_studio
-    from marimo_studio.errors import ConfigurationError
+    from marimo_studio.activation import activate_view as activate
 
     workspace = load_studio(notebook_path(context))
-    if name not in workspace.views:
-        available = ", ".join(workspace.views)
-        raise ConfigurationError(
-            f"Unknown view {name!r}. Available views: {available}."
-        )
-    return await request_view_activation(
+    return await activate(
+        workspace,
         create_tooling_adapters().code_mode.connection(),
-        workspace.notebook,
         name,
     )
 
@@ -267,6 +268,7 @@ __all__ = [
     "ensure_view",
     "inspect",
     "notebook_path",
+    "overview",
 ]
 
 

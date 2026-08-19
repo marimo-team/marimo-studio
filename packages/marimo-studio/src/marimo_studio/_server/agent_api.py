@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 from typing import Any
 
 from starlette.background import BackgroundTask
@@ -11,10 +10,6 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from marimo_studio._capabilities import ServerContext, SessionState
-from marimo_studio._runtime_limits import (
-    DEFAULT_RUNTIME_TIMEOUT,
-    MAX_RUNTIME_TIMEOUT,
-)
 from marimo_studio._runtime_process import check_runtime_studio_isolated
 from marimo_studio._server.auth import (
     error_response,
@@ -30,14 +25,19 @@ from marimo_studio._server.request_lifecycle import (
     run_while_connected,
 )
 from marimo_studio._server.runtimes import RuntimeRegistry
+from marimo_studio._server.view_activation import (
+    BrowserViewTarget,
+    SessionViewTarget,
+    activate_studio_view,
+)
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio.activation import ViewActivationRequest
 from marimo_studio.agent_models import BrowserObservation
-from marimo_studio.analysis import analyze_studio
-from marimo_studio.errors import AgentRequestError, MarimoStudioError
-
-_MAX_ANALYSIS_BROWSER_TIMEOUT = 20.0
-_ACTIVATION_TIMEOUT = 5.0
-_CLIENT_CONNECT_TIMEOUT = 1.0
+from marimo_studio.analysis import AnalysisRequest, analyze_studio
+from marimo_studio.errors import (
+    CapabilityInputError,
+    MarimoStudioError,
+)
 
 
 def agent_connection_response(
@@ -68,88 +68,65 @@ async def activate_view_response(
     notebook_scope: NotebookScope,
     sessions: SessionState,
 ) -> Response:
-    """Select one view in the Studio tab that owns the calling code session."""
+    """Select one view in a session-bound or external Studio browser."""
     if request.method != "PATCH":
         return Response(status_code=405)
     if not has_edit_access(request.scope):
         return forbidden_response()
     if token_error := invalid_server_token_response(request, context.server_token):
         return token_error
-    if view_name not in studio.views:
-        return Response(status_code=404)
     session_id = request.headers.get("Marimo-Session-Id")
-    if not session_id or not sessions.exists(context, session_id):
-        return JSONResponse(
-            {
-                "error": "unknown-session",
-                "message": "View activation requires the active Marimo session.",
-            },
-            status_code=409,
-            headers=NO_STORE,
+    try:
+        activation_request = ViewActivationRequest.from_dict(
+            view_name,
+            await _json_body(request),
         )
-
-    async def activate() -> Response:
-        target = await notebook_scope.clients.wait_for_session_target(
-            session_id,
-            _CLIENT_CONNECT_TIMEOUT,
+        if session_id is not None and activation_request.browser_client is not None:
+            raise CapabilityInputError(
+                "invalid-activation-request",
+                "browser_client",
+                "Session-bound activation cannot select another browser client",
+            )
+        target = (
+            SessionViewTarget(session_id)
+            if session_id is not None
+            else BrowserViewTarget(activation_request.browser_client)
         )
-        if target is not None:
-            activation = await notebook_scope.agents.activate(
-                target,
-                view_name,
-            )
-            await notebook_scope.agents.wait_for_activation(
-                activation,
-                _ACTIVATION_TIMEOUT,
-            )
-            return JSONResponse(
-                {
-                    "schema": 1,
-                    "notebook": str(studio.notebook),
-                    "view": view_name,
-                    "state": "active",
-                    "generation": activation.generation,
-                    "transition": "in-place",
-                    "client_id": target.client_id,
-                    "session_id": session_id,
-                },
-                headers=NO_STORE,
-            )
-
-        retained = await notebook_scope.clients.binding_for_session(session_id)
-        if retained is not None:
-            raise AgentRequestError(
-                "browser-client-unavailable",
-                "The Studio browser is reconnecting. Retry view activation shortly.",
-                status_code=409,
-            )
-        generation = await notebook_scope.agents.reserve_generation()
-        return JSONResponse(
-            {
-                "schema": 1,
-                "notebook": str(studio.notebook),
-                "view": view_name,
-                "state": "reload-requested",
-                "generation": generation,
-                "transition": "reload",
-                "session_id": session_id,
-            },
-            status_code=202,
-            headers=NO_STORE,
-            background=BackgroundTask(
-                sessions.reload_page,
-                context,
-                view_name,
-                session_id,
-            ),
-        )
+    except CapabilityInputError as error:
+        return error_response(error)
 
     try:
-        return await run_while_connected(request, activate())
+        result = await run_while_connected(
+            request,
+            activate_studio_view(
+                context,
+                studio,
+                notebook_scope,
+                sessions,
+                view_name,
+                target,
+            ),
+        )
     except RequestDisconnected:
         return Response(status_code=499)
     except MarimoStudioError as error:
         return error_response(error)
+    background = (
+        BackgroundTask(
+            sessions.reload_page,
+            context,
+            result.view,
+            result.session_id,
+        )
+        if result.state == "reload-requested"
+        else None
+    )
+    return JSONResponse(
+        result.to_dict(),
+        status_code=202 if result.state == "reload-requested" else 200,
+        headers=NO_STORE,
+        background=background,
+    )
 
 
 async def activation_ack_response(
@@ -166,10 +143,13 @@ async def activation_ack_response(
     if token_error := invalid_server_token_response(request, context.server_token):
         return token_error
     body = await _json_body(request)
+    schema = body.get("schema") if isinstance(body, dict) else None
     if (
         not isinstance(body, dict)
         or set(body) != {"schema", "clientId", "view"}
-        or body.get("schema") != 1
+        or not isinstance(schema, int)
+        or isinstance(schema, bool)
+        or schema != 1
         or not _nonempty(body.get("clientId"))
         or not _nonempty(body.get("view"))
     ):
@@ -216,42 +196,15 @@ async def analyze_views_response(
             status_code=409,
             headers=NO_STORE,
         )
-    body = await _json_body(request)
-    if not isinstance(body, dict) or not set(body).issubset(
-        {
-            "view",
-            "timeout",
-            "runtime_timeout",
-            "require_browser",
-            "browser_client",
-        }
-    ):
-        return _invalid_analysis_request()
-    view_name = body.get("view")
-    timeout = body.get("timeout", 10.0)
-    runtime_timeout = body.get("runtime_timeout", DEFAULT_RUNTIME_TIMEOUT)
-    require_browser = body.get("require_browser", True)
-    client_id = body.get("browser_client")
-    if (
-        (view_name is not None and not isinstance(view_name, str))
-        or not _valid_number(timeout, _MAX_ANALYSIS_BROWSER_TIMEOUT)
-        or not _valid_number(runtime_timeout, MAX_RUNTIME_TIMEOUT)
-        or not isinstance(require_browser, bool)
-        or (client_id is not None and not _nonempty(client_id))
-    ):
-        return _invalid_analysis_request()
-    if session_id is not None and require_browser and view_name is None:
-        return JSONResponse(
-            {
-                "error": "focused-analysis-required",
-                "message": (
-                    "Code-mode browser analysis requires one active view. "
-                    "Activate it in one call, then analyze it in the next call."
-                ),
-            },
-            status_code=400,
-            headers=NO_STORE,
-        )
+    try:
+        analysis_request = AnalysisRequest.from_dict(await _json_body(request))
+    except CapabilityInputError as error:
+        return error_response(error)
+    if session_id is not None:
+        try:
+            analysis_request.require_focused_view()
+        except CapabilityInputError as error:
+            return error_response(error)
 
     async def observe(
         _studio: StudioWorkspace,
@@ -264,9 +217,9 @@ async def analyze_views_response(
             views,
             revisions,
             runtime=studio.default_runtime,
-            timeout=float(timeout),
+            timeout=analysis_request.browser_timeout,
             session_id=session_id,
-            client_id=client_id,
+            client_id=analysis_request.browser_client,
             allow_view_activation=session_id is None,
             sessions=sessions,
             runtimes=runtimes,
@@ -277,11 +230,9 @@ async def analyze_views_response(
             request,
             analyze_studio(
                 studio,
-                view_name=view_name,
-                observe_browser=observe if require_browser else None,
-                require_browser=require_browser,
+                analysis_request.options,
+                observe_browser=(observe if analysis_request.require_browser else None),
                 runtime_checker=check_runtime_studio_isolated,
-                runtime_timeout=float(runtime_timeout),
             ),
         )
     except RequestDisconnected:
@@ -289,23 +240,6 @@ async def analyze_views_response(
     except MarimoStudioError as error:
         return error_response(error)
     return JSONResponse(report.to_dict(), headers=NO_STORE)
-
-
-def _invalid_analysis_request() -> JSONResponse:
-    return JSONResponse(
-        {
-            "error": "invalid-analysis-request",
-            "message": (
-                "view must be a string or null, timeout must be a finite number "
-                f"between 0 and {_MAX_ANALYSIS_BROWSER_TIMEOUT:g}, runtime_timeout "
-                f"must be a finite number between 0 and {MAX_RUNTIME_TIMEOUT:g}, "
-                "require_browser must be a boolean, and browser_client must be a "
-                "string or null."
-            ),
-        },
-        status_code=400,
-        headers=NO_STORE,
-    )
 
 
 def _invalid_payload(code: str) -> JSONResponse:
@@ -321,15 +255,6 @@ async def _json_body(request: Request) -> Any:
         return await request.json()
     except (json.JSONDecodeError, UnicodeDecodeError):
         return None
-
-
-def _valid_number(value: object, maximum: float) -> bool:
-    return (
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-        and 0 <= value <= maximum
-    )
 
 
 def _nonempty(value: object) -> bool:

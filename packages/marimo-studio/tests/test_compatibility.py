@@ -212,7 +212,7 @@ def test_check_reports_the_validated_release_identity(notebook_path: Path) -> No
 
     result = next(
         item
-        for item in check_studio(load_studio(notebook_path))
+        for item in check_studio(load_studio(notebook_path)).checks
         if item.name == "compatibility"
     )
 
@@ -252,7 +252,7 @@ def test_check_reports_the_required_release_when_validation_fails(
         fail_validation,
     )
 
-    result = check_studio(load_studio(notebook_path))[0]
+    result = check_studio(load_studio(notebook_path)).checks[0]
 
     assert result.status == "fail"
     assert result.details is not None

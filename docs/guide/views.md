@@ -39,10 +39,10 @@ A view name starts with a lowercase letter and contains lowercase letters,
 numbers, or hyphens. The new page starts with every notebook cell in source
 order.
 
-List the configured views and current default:
+Inspect the configured views and current default:
 
 ```console
-uvx marimo-studio view list analysis.py
+uvx marimo-studio overview analysis.py
 ```
 
 ## Switch between views

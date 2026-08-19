@@ -179,6 +179,14 @@ class StudioClientRegistry:
                 binding_replaced=client.binding_count > 1,
             )
 
+    async def retained_binding_generations(self) -> dict[str, int]:
+        """Return the identity generation retained for each browser client."""
+        async with self._condition:
+            return {
+                client_id: client.binding_generation
+                for client_id, client in self._clients.items()
+            }
+
     async def claim_query_operation(
         self,
         client_id: str,

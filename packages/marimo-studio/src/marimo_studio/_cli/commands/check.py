@@ -21,7 +21,6 @@ from marimo_studio._cli.options import (
     target_argument,
 )
 from marimo_studio._cli.output import (
-    checks_payload,
     echo_json,
     render_checks,
 )
@@ -60,19 +59,21 @@ def check(
     studio = load_studio_target(target)
     if runtime_check and should_reenter(studio, None):
         raise click.exceptions.Exit(run_in_environment(studio, sys.argv[1:]))
-    results = check_studio(studio, view_name=view_name)
-    if runtime_check and not any(result.status == "fail" for result in results):
+    report = check_studio(studio, view_name=view_name)
+    if runtime_check and report.ok:
         with capture_runtime_stderr():
-            results += asyncio.run(
-                check_runtime_studio_isolated(
-                    studio,
-                    view_name=view_name,
-                    timeout=runtime_timeout,
+            report = report.extend(
+                asyncio.run(
+                    check_runtime_studio_isolated(
+                        studio,
+                        view_name=view_name,
+                        timeout=runtime_timeout,
+                    )
                 )
             )
 
     stream = diagnostics()
-    for result in results:
+    for result in report.checks:
         stream.emit(
             code=result.code or result.name,
             message=result.message,
@@ -80,10 +81,9 @@ def check(
             status=result.status,
             details=result.details,
         )
-    payload = checks_payload(studio, results, view_name=view_name)
     if output_format == "json":
-        echo_json(payload)
+        echo_json(report.to_dict())
     else:
-        render_checks(results)
-    if not payload["ok"]:
+        render_checks(report.checks)
+    if not report.ok:
         raise click.exceptions.Exit(1)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import replace
 
 import pytest
@@ -10,12 +11,61 @@ from marimo_studio._runtime_process import check_runtime_studio_isolated
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.agent_models import BrowserObservation
-from marimo_studio.analysis import analyze_studio
-from marimo_studio.errors import ProtocolError
+from marimo_studio.analysis import AnalysisOptions, AnalysisRequest, analyze_studio
+from marimo_studio.checks import CheckReport
+from marimo_studio.errors import CapabilityInputError, ProtocolError
 from marimo_studio.types import CheckResult
 from marimo_studio.workspace import ensure_view
 
 from .helpers import ready_runtime_status
+
+
+@pytest.mark.parametrize(
+    ("field", "create"),
+    [
+        ("browser_timeout", lambda value: AnalysisOptions(browser_timeout=value)),
+        ("runtime_timeout", lambda value: AnalysisOptions(runtime_timeout=value)),
+    ],
+)
+@pytest.mark.parametrize("value", [10**1000, -(10**1000)])
+def test_analysis_options_reject_oversized_timeout_integers(
+    field: str,
+    create: Callable[[int], AnalysisOptions],
+    value: int,
+) -> None:
+    with pytest.raises(CapabilityInputError) as raised:
+        create(value)
+
+    assert raised.value.code == "invalid-analysis-request"
+    assert raised.value.field == field
+
+
+def test_analysis_request_round_trips_its_versioned_record() -> None:
+    request = AnalysisRequest(
+        view="dashboard",
+        browser_timeout=20,
+        runtime_timeout=75,
+        require_browser=False,
+        browser_client="browser-client-1234",
+    )
+
+    assert AnalysisRequest.from_dict(request.to_dict()) == request
+    assert request.to_dict()["schema"] == 1
+    for payload in (
+        {},
+        {**request.to_dict(), "schema": True},
+        {**request.to_dict(), "unexpected": True},
+    ):
+        with pytest.raises(CapabilityInputError) as raised:
+            AnalysisRequest.from_dict(payload)
+        assert raised.value.field == "request"
+
+
+def _check_report(
+    studio: StudioWorkspace,
+    *checks: CheckResult,
+) -> CheckReport:
+    return CheckReport(studio.notebook, None, checks)
 
 
 def test_runtime_analysis_runs_in_a_dedicated_process(notebook_path) -> None:
@@ -39,7 +89,8 @@ def test_analysis_skips_runtime_and_builds_repair_actions(
     monkeypatch.setattr(
         analysis_module,
         "check_studio",
-        lambda *_args, **_kwargs: (
+        lambda studio, *_args, **_kwargs: _check_report(
+            studio,
             CheckResult(
                 "view:dashboard:value:missing",
                 "fail",
@@ -60,7 +111,7 @@ def test_analysis_skips_runtime_and_builds_repair_actions(
         return ()
 
     monkeypatch.setattr(analysis_module, "check_runtime_studio", runtime)
-    report = asyncio.run(analyze_studio(studio, require_browser=True))
+    report = asyncio.run(analyze_studio(studio, AnalysisOptions(require_browser=True)))
 
     assert not runtime_called
     assert report.ok is False
@@ -87,7 +138,9 @@ def test_required_browser_evidence_controls_handoff_readiness(
     monkeypatch.setattr(
         analysis_module,
         "check_studio",
-        lambda *_args, **_kwargs: (CheckResult("static", "pass", "ready"),),
+        lambda studio, *_args, **_kwargs: _check_report(
+            studio, CheckResult("static", "pass", "ready")
+        ),
     )
 
     async def runtime(*_args, **_kwargs):
@@ -114,11 +167,13 @@ def test_required_browser_evidence_controls_handoff_readiness(
     observed = asyncio.run(
         analyze_studio(
             studio,
+            AnalysisOptions(require_browser=True),
             observe_browser=observe,
-            require_browser=True,
         )
     )
-    unobserved = asyncio.run(analyze_studio(studio, require_browser=True))
+    unobserved = asyncio.run(
+        analyze_studio(studio, AnalysisOptions(require_browser=True))
+    )
 
     assert observed.ok is True
     assert observed.handoff_ready is True
@@ -148,7 +203,9 @@ def test_browser_connection_errors_become_repair_actions(
     monkeypatch.setattr(
         analysis_module,
         "check_studio",
-        lambda *_args, **_kwargs: (CheckResult("static", "pass", "ready"),),
+        lambda studio, *_args, **_kwargs: _check_report(
+            studio, CheckResult("static", "pass", "ready")
+        ),
     )
 
     async def runtime(*_args, **_kwargs):
@@ -161,8 +218,8 @@ def test_browser_connection_errors_become_repair_actions(
     report = asyncio.run(
         analyze_studio(
             studio,
+            AnalysisOptions(require_browser=True),
             observe_browser=observe,
-            require_browser=True,
         )
     )
 
@@ -184,7 +241,9 @@ def test_unexpected_stage_failure_cancels_sibling_analysis_work(
     monkeypatch.setattr(
         analysis_module,
         "check_studio",
-        lambda *_args, **_kwargs: (CheckResult("static", "pass", "ready"),),
+        lambda studio, *_args, **_kwargs: _check_report(
+            studio, CheckResult("static", "pass", "ready")
+        ),
     )
     sibling_cancelled = False
 
@@ -231,8 +290,8 @@ def test_unexpected_stage_failure_cancels_sibling_analysis_work(
         with pytest.raises(RuntimeError, match=f"{failing_stage} failed"):
             await analyze_studio(
                 studio,
+                AnalysisOptions(require_browser=True),
                 observe_browser=observe,
-                require_browser=True,
                 runtime_checker=runtime,
             )
 
@@ -250,7 +309,9 @@ def test_analysis_rejects_evidence_collected_across_source_revisions(
     monkeypatch.setattr(
         analysis_module,
         "check_studio",
-        lambda *_args, **_kwargs: (CheckResult("static", "pass", "ready"),),
+        lambda studio, *_args, **_kwargs: _check_report(
+            studio, CheckResult("static", "pass", "ready")
+        ),
     )
 
     async def runtime(
@@ -291,8 +352,8 @@ def test_analysis_rejects_evidence_collected_across_source_revisions(
     report = asyncio.run(
         analyze_studio(
             studio,
+            AnalysisOptions(require_browser=True),
             observe_browser=observe,
-            require_browser=True,
             runtime_checker=runtime,
         )
     )
@@ -314,10 +375,10 @@ def test_analysis_rejects_a_source_change_during_static_validation(
             template.read_text(encoding="utf-8") + "\n<!-- newer -->\n",
             encoding="utf-8",
         )
-        return (CheckResult("static", "pass", "ready"),)
+        return _check_report(studio, CheckResult("static", "pass", "ready"))
 
     monkeypatch.setattr(analysis_module, "check_studio", static)
-    report = asyncio.run(analyze_studio(studio, require_browser=True))
+    report = asyncio.run(analyze_studio(studio, AnalysisOptions(require_browser=True)))
 
     assert not report.handoff_ready
     assert report.runtime_checks == ()
@@ -334,7 +395,9 @@ def test_focused_analysis_ignores_an_unrelated_view_edit(
     monkeypatch.setattr(
         analysis_module,
         "check_studio",
-        lambda *_args, **_kwargs: (CheckResult("static", "pass", "ready"),),
+        lambda studio, *_args, **_kwargs: _check_report(
+            studio, CheckResult("static", "pass", "ready")
+        ),
     )
 
     async def runtime(*_args, **_kwargs):
@@ -367,9 +430,8 @@ def test_focused_analysis_ignores_an_unrelated_view_edit(
     report = asyncio.run(
         analyze_studio(
             studio,
-            view_name="dashboard",
+            AnalysisOptions(view="dashboard", require_browser=True),
             observe_browser=observe,
-            require_browser=True,
             runtime_checker=runtime,
         )
     )
@@ -387,7 +449,9 @@ def test_selected_view_deletion_becomes_a_source_unavailable_action(
     monkeypatch.setattr(
         analysis_module,
         "check_studio",
-        lambda *_args, **_kwargs: (CheckResult("static", "pass", "ready"),),
+        lambda studio, *_args, **_kwargs: _check_report(
+            studio, CheckResult("static", "pass", "ready")
+        ),
     )
 
     async def runtime(*_args, **_kwargs):
@@ -416,9 +480,8 @@ def test_selected_view_deletion_becomes_a_source_unavailable_action(
     report = asyncio.run(
         analyze_studio(
             studio,
-            view_name="dashboard",
+            AnalysisOptions(view="dashboard", require_browser=True),
             observe_browser=observe,
-            require_browser=True,
             runtime_checker=runtime,
         )
     )
@@ -434,7 +497,7 @@ def test_missing_view_source_becomes_a_static_repair_action(notebook_path) -> No
     studio = load_studio(notebook_path)
     studio.views["dashboard"].template.unlink()
 
-    report = asyncio.run(analyze_studio(studio, view_name="dashboard"))
+    report = asyncio.run(analyze_studio(studio, AnalysisOptions(view="dashboard")))
 
     assert not report.handoff_ready
     assert "analysis-source-unavailable" in {action.code for action in report.actions}

@@ -71,6 +71,74 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
     asyncio.run(exercise())
 
 
+def test_activation_acknowledgement_expires_with_the_browser_identity() -> None:
+    async def exercise() -> None:
+        clients = StudioClientRegistry(disconnect_grace=0)
+        agents = AgentCoordinator(clients)
+        target = await connected_target(clients, active_view="dashboard")
+        activation = await agents.activate(target, "executive")
+        waiting = asyncio.create_task(agents.wait_for_activation(activation, 1))
+        assert await agents.acknowledge_activation(
+            target.client_id,
+            activation.generation,
+            "executive",
+        )
+        await waiting
+
+        await clients.disconnect(target.client_id)
+        for _attempt in range(100):
+            retained = await clients.retained_binding_generations()
+            if target.client_id not in retained:
+                break
+            await asyncio.sleep(0.001)
+        else:
+            raise AssertionError("browser identity remained after disconnect grace")
+
+        await clients.connect(target.client_id, "executive")
+        await clients.bind_session("s_654321", target.client_id)
+        assert not await agents.acknowledge_activation(
+            target.client_id,
+            activation.generation,
+            "executive",
+        )
+        replacement = await clients.select_target(client_id=target.client_id)
+        current = await agents.activate(replacement, "dashboard")
+        current_wait = asyncio.create_task(agents.wait_for_activation(current, 1))
+        assert await agents.acknowledge_activation(
+            replacement.client_id,
+            current.generation,
+            "dashboard",
+        )
+        await current_wait
+
+    asyncio.run(exercise())
+
+
+def test_activation_acknowledgement_expires_when_the_session_rebinds() -> None:
+    async def exercise() -> None:
+        clients = StudioClientRegistry()
+        agents = AgentCoordinator(clients)
+        target = await connected_target(clients, active_view="dashboard")
+        activation = await agents.activate(target, "executive")
+        waiting = asyncio.create_task(agents.wait_for_activation(activation, 1))
+        assert await agents.acknowledge_activation(
+            target.client_id,
+            activation.generation,
+            "executive",
+        )
+        await waiting
+
+        await clients.bind_session("s_654321", target.client_id)
+
+        assert not await agents.acknowledge_activation(
+            target.client_id,
+            activation.generation,
+            "executive",
+        )
+
+    asyncio.run(exercise())
+
+
 def test_manual_view_change_invalidates_an_older_activation() -> None:
     async def exercise() -> None:
         clients = StudioClientRegistry()

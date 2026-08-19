@@ -419,8 +419,8 @@ class ViewActivationResult:
     state: Literal["active", "reload-requested"]
     generation: int
     transition: Literal["in-place", "reload"]
+    session_id: str
     client_id: str | None = None
-    session_id: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         value: dict[str, object] = {
@@ -433,8 +433,7 @@ class ViewActivationResult:
         }
         if self.client_id is not None:
             value["client_id"] = self.client_id
-        if self.session_id is not None:
-            value["session_id"] = self.session_id
+        value["session_id"] = self.session_id
         return value
 
 

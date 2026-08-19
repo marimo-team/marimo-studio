@@ -163,7 +163,7 @@ query-driven views.
 
 ## Agent-native authoring
 
-The `marimo_studio.agents` module exposes a bounded view-authoring workflow. A
+The `marimo_studio.agent` module exposes a bounded view-authoring workflow. A
 coding agent can inspect the saved notebook graph, create and activate a named
 view, bind a stable cell reference, edit ordinary web files, and repair source,
 runtime, and rendered browser errors. Transformations, metric definitions, and

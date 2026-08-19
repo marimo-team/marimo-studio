@@ -4,9 +4,41 @@ Studio treats authoring, verification, hosting, export, documentation, and
 packaging as one product chain. The chain starts from saved notebook and view
 source and ends with evidence or an artifact a person can inspect.
 
+The repository skill defines the supported agent workflow. Its capability
+catalog maps each operation to two thin interfaces:
+
+```text
+skills/marimo-studio
+  -> marimo_studio.agent for Marimo code mode
+  -> marimo-studio CLI for regular agents and scripts
+  -> overview.py, inspect.py, workspace.py, activation.py, checks.py,
+     analysis.py, and export.py
+  -> _workspace, _server, and Marimo integration ports
+```
+
+`agent.py` resolves the active code-mode context and connection. `_cli` owns
+command parsing, target and environment selection, credentials, rendering,
+and exit status. Request validation, application results, and operation policy
+belong to the capability modules below both interfaces. `_capabilities.py`
+remains the Marimo integration port layer.
+
 ## Semantic inventory
 
-### 1. Static notebook inspection
+### 1. Workspace overview
+
+`overview` describes configuration and authored views for one saved notebook.
+It returns `unconfigured`, `needs-view`, or `ready` and works before the first
+Studio mutation.
+
+- **User capability:** an agent can discover the current workspace and its
+  next valid operation without probing a failing mutation command.
+- **Complexity carried:** notebook target resolution, configuration
+  precedence, canonical view roots, and view discovery must describe the same
+  source that later capabilities load.
+- **Maintenance surface:** `overview.py`, workspace discovery, CLI and
+  code-mode adapters, result parity tests, and the capability catalog.
+
+### 2. Static notebook inspection
 
 `inspect_notebook` compiles a saved notebook into `NotebookSpec` and `CellSpec`
 records. The records include source spans, native names, semantic references,
@@ -20,7 +52,7 @@ optional complete cell body.
 - **Maintenance surface:** public inspection API, static notebook adapter,
   types, CLI rendering, agent wrapper, and inspection tests.
 
-### 2. View creation for agents
+### 3. View creation for agents
 
 `ensure_view` resolves the saved notebook, plans or creates a named view, and
 returns its paths and configuration changes. A new view starts with every cell
@@ -34,7 +66,7 @@ in source order.
 - **Maintenance surface:** workspace setup, scaffold templates, public agent
   API, CLI command, and creation tests.
 
-### 3. Stable binding
+### 4. Stable binding
 
 `bind` maps a human alias to the semantic cell at a zero-based notebook
 position. It supports dry-run and explicit overwrite.
@@ -46,23 +78,26 @@ position. It supports dry-run and explicit overwrite.
 - **Maintenance surface:** semantic cell reference logic, binding service,
   metadata writer, CLI and agent APIs, and alias lifecycle tests.
 
-### 4. Session-targeted activation
+### 5. Browser-targeted activation
 
-`activate_view` resolves the Marimo code-mode session to its containing Studio
-browser. An active workspace performs an in-place transition and acknowledges
-its generation. Creating the first view requests a reload of that exact native
-editor after code mode releases its execution lock.
+`activate_view` selects one connected Studio browser and returns its browser
+client, Marimo session, transition, and generation. Code mode resolves its
+current Marimo session to the containing browser. The CLI accepts an explicit
+browser client or requires the server to have exactly one connected browser.
+An active workspace performs an in-place transition and acknowledges its
+generation. Creating the first view in code mode requests a reload of that
+exact native editor after the execution lock is released.
 
-- **User capability:** an agent can place the human's current tab on the view it
-  is about to edit or validate.
+- **User capability:** code-mode and regular agents can place the intended tab
+  on the view they are about to edit or validate.
 - **Complexity carried:** browser client ID, Marimo session ID, active view,
   binding generation, code-mode lock, and acknowledgement generation must refer
   to the same tab.
-- **Maintenance surface:** code-mode bridge, agent client, activation
-  coordinator, client registry, workspace event coordinator, and activation
-  acceptance.
+- **Maintenance surface:** `activation.py`, code-mode and CLI adapters, agent
+  client, activation route, client registry, workspace event coordinator, and
+  browser acceptance.
 
-### 5. Three-stage analysis
+### 6. Three-stage analysis
 
 `analyze_studio` produces one repair-oriented `AnalysisReport`:
 
@@ -85,16 +120,16 @@ editor after code mode releases its execution lock.
 sequenceDiagram
     autonumber
     actor Agent
-    participant API as Agent API or CLI
+    participant API as Code-mode API or CLI
     participant Source as Saved notebook and views
     participant Runtime as Isolated runtime process
     participant Server as Studio agent route
     participant Browser as Session-bound Studio tab
 
-    Agent->>API: inspect and ensure_view
+    Agent->>API: overview, inspect, and ensure_view
     API->>Source: Read graph and authored files
     Agent->>API: activate_view
-    API->>Server: Target current code-mode session
+    API->>Server: Target current session or browser client
     Server->>Browser: Activate named view and generation
     Browser-->>Server: Acknowledge completed transition
     Server-->>API: Activation result
@@ -113,7 +148,7 @@ sequenceDiagram
     API-->>Agent: Repair actions and handoff_ready
 ```
 
-### 6. Handoff evidence identity
+### 7. Handoff evidence identity
 
 `AnalysisReport.handoff_ready` requires completed static and runtime checks. A
 browser-required report also requires one `ready` observation for every
@@ -142,7 +177,7 @@ request ID
 observation sequence
 ```
 
-### 7. Repair queue and structured errors
+### 8. Repair queue and structured errors
 
 Static checks, runtime checks, browser diagnostics, transport errors, and source
 revision changes become ordered `AnalysisAction` records. Each action carries a
@@ -156,7 +191,7 @@ source location.
 - **Maintenance surface:** error classes, protocol parsers, action mapping, CLI
   diagnostics, public references, and schema tests.
 
-### 8. Agent transport and authentication
+### 9. Agent transport and authentication
 
 Code mode obtains callback coordinates from the attached Marimo session. The
 agent client authenticates a connection handshake, receives a Studio mutation
@@ -172,7 +207,7 @@ and access token separately and rejects credentials embedded in the URL.
 - **Maintenance surface:** `_agent_transport.py`, `_agent_client.py`, code-mode
   bridge, agent routes, auth tests, and public agent documentation.
 
-### 9. Runtime process supervision
+### 10. Runtime process supervision
 
 Runtime analysis starts a bounded child process with standard input closed and
 bounded standard output and error capture. Cancellation, deadline, output
@@ -191,12 +226,12 @@ Notebook code that creates another POSIX process session crosses the owned
 process-group boundary. Runtime code should keep descendants within the worker
 session when the analysis command must own their cleanup.
 
-### 10. Command-line interface
+### 11. Command-line interface
 
-The CLI exposes inspection, binding, view creation and removal, static and
-runtime checks, complete analysis, and static export. Every data command offers
-human text or stable JSON on standard output and human diagnostics or JSON
-Lines on standard error.
+The CLI exposes overview, inspection, binding, view creation, browser
+activation and removal, static and runtime checks, complete analysis, and
+static export. Every data command offers human text or stable JSON on standard
+output and human diagnostics or JSON Lines on standard error.
 
 - **User capability:** the same workflow works interactively, in scripts, and
   through coding agents.
@@ -206,7 +241,7 @@ Lines on standard error.
 - **Maintenance surface:** `_cli`, public application services, CLI tests,
   examples, and the CLI reference.
 
-### 11. Notebook environment re-entry
+### 12. Notebook environment re-entry
 
 Commands resolve PEP 723 dependencies or project metadata and can re-enter the
 notebook environment through `uv`. The adapter builds arguments while the
@@ -220,7 +255,7 @@ workspace decides when re-entry is needed.
 - **Maintenance surface:** `environment.py`, `_workspace/environment.py`,
   environment adapter, CLI diagnostics, and isolated environment tests.
 
-### 12. Programmatic ASGI application
+### 13. Programmatic ASGI application
 
 `create_asgi_app` returns a Marimo run-mode application for one configured
 notebook. `marimo_studio.asgi:app` reads the notebook path from
@@ -235,7 +270,7 @@ notebook. `marimo_studio.asgi:app` reads the notebook path from
 - **Maintenance surface:** `app.py`, `asgi.py`, programmatic middleware adapter,
   hosted mount tests, and Python API reference.
 
-### 13. Static WebAssembly export
+### 14. Static WebAssembly export
 
 `export_view` resolves one view, validates its projections and output plan,
 asks the shared browser projector for the runtime record, stages a complete
@@ -250,7 +285,7 @@ directory, then publishes it atomically.
 - **Maintenance surface:** `export.py`, export adapters, browser projector,
   asset and collision tests, static runtime acceptance, and package checks.
 
-### 14. Examples and public documentation
+### 15. Examples and public documentation
 
 The repository ships one-view and multi-view notebooks with committed authored
 source. The docs site presents the product model, guide workflows, exact
@@ -265,25 +300,28 @@ VitePress language-model text plugin.
 - **Maintenance surface:** `examples`, `docs`, `apps/docs`, example checks,
   docs build, link and rendering review, and release support labels.
 
-### 15. Reusable agent skill
+### 16. Portable agent skill
 
-`skills/marimo-studio` packages the inspect, create, activate, edit, analyze,
-repair, and handoff workflow for coding agents. Its examples use the same CLI,
-Python API, view grammar, and readiness contract as the public docs.
+The root Agent Plugin packages `skills/marimo-studio` as the canonical inspect,
+create, activate, edit, analyze, repair, and handoff workflow. The capability
+catalog maps every supported operation to its code-mode and CLI surface.
+Focused references carry the view grammar and evidence contract.
 
 - **User capability:** an agent receives the repository's intended workflow and
   ownership rules before changing a notebook or view.
-- **Complexity carried:** the skill must stay aligned with CLI options, agent
-  signatures, source paths, projection semantics, and handoff evidence.
-- **Maintenance surface:** skill source, public guide and reference, package
-  entry-point metadata, capability tests, and representative agent runs.
+- **Complexity carried:** the packaged skill inventory and bytes must match the
+  repository tree while its catalog stays aligned with CLI options, API
+  signatures, result schemas, projection semantics, and handoff evidence.
+- **Maintenance surface:** root `plugin.json`, skill source and references,
+  package entry-point metadata, capability parity tests, distribution checks,
+  and representative agent runs.
 
 The distribution declares the `marimo.agent.capability` entry point. The
 supported Marimo code-mode API exposes it as `studio` through
 `cm.capabilities()` and lists the module in `help(cm)`. An agent imports
-`marimo_studio.agents` explicitly before calling its authoring operations.
+`marimo_studio.agent` explicitly before calling its authoring operations.
 
-### 16. Browser acceptance
+### 17. Browser acceptance
 
 `apps/e2e` starts real Marimo edit, run, and hosted applications in Chromium.
 It owns contracts that package tests cannot prove in one process.
@@ -302,13 +340,14 @@ It owns contracts that package tests cannot prove in one process.
 | Hosted deployment | Token-protected nested mounting initializes and runs a Studio workspace                            |
 | Responsive layout | Authored content and Studio controls remain operable at narrow widths                              |
 
-### 17. Build and package pipeline
+### 18. Build and package pipeline
 
 `make build` prepares the pinned Marimo frontend source and emits browser entry
 points, styles, workers, chunks, and release metadata into the Python package.
 `make package` builds wheel and source distributions, checks both, rebuilds a
-wheel from the source distribution, and verifies entry points and packaged
-browser assets in isolated environments.
+wheel from the source distribution, and verifies entry points, portable Agent
+Plugin files, installed CLI operations, and packaged browser assets in isolated
+environments.
 
 - **User capability:** installing the Python distribution supplies the server,
   CLI, Studio workspace, native frontend integration, and static export assets

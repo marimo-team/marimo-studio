@@ -21,45 +21,45 @@ from marimo_studio._cli.diagnostics import (
 )
 from marimo_studio._cli.help import ColoredCommand
 from marimo_studio._cli.options import (
+    browser_client_option,
     finite_timeout,
     output_format_option,
     runtime_timeout_option,
+    server_option,
     target_argument,
 )
 from marimo_studio._cli.output import echo_json, render_analysis
 from marimo_studio._runtime_process import check_runtime_studio_isolated
 from marimo_studio._workspace.environment import should_reenter
 from marimo_studio._workspace.targets import load_studio_target
-from marimo_studio.analysis import analyze_studio
+from marimo_studio.analysis import (
+    DEFAULT_BROWSER_TIMEOUT,
+    MAX_BROWSER_TIMEOUT,
+    AnalysisRequest,
+    analyze_studio,
+)
 from marimo_studio.errors import ProtocolError
-
-_MAX_BROWSER_TIMEOUT = 300.0
 
 
 @click.command("analyze", cls=ColoredCommand)
 @target_argument
 @click.option("--view", "view_name", help="Analyze one named view.")
-@click.option(
-    "--server",
-    "server_url",
-    envvar="MARIMO_STUDIO_SERVER_URL",
-    help=(
-        "Read rendered readiness from a running Studio server URL. Set "
-        "MARIMO_STUDIO_ACCESS_TOKEN when the server requires authentication."
-    ),
-)
-@click.option(
-    "--browser-client",
-    envvar="MARIMO_STUDIO_BROWSER_CLIENT",
-    help="Target one connected Studio browser client.",
-)
+@server_option()
+@browser_client_option
 @click.option(
     "--browser-timeout",
-    type=click.FloatRange(min=0, max=_MAX_BROWSER_TIMEOUT),
+    type=click.FloatRange(min=0, max=MAX_BROWSER_TIMEOUT),
     callback=finite_timeout,
-    default=10.0,
+    default=DEFAULT_BROWSER_TIMEOUT,
     show_default=True,
     help="Seconds to wait for current rendered-view evidence.",
+)
+@click.option(
+    "--browser/--no-browser",
+    "require_browser",
+    default=True,
+    show_default=True,
+    help="Require current rendered-view evidence for handoff readiness.",
 )
 @runtime_timeout_option
 @output_format_option
@@ -70,6 +70,7 @@ def analyze(
     server_url: str | None,
     browser_client: str | None,
     browser_timeout: float,
+    require_browser: bool,
     runtime_timeout: float,
     output_format: str,
 ) -> None:
@@ -101,6 +102,14 @@ def analyze(
     except ProtocolError as error:
         raise click.BadParameter(str(error), param_hint="--server") from error
 
+    request = AnalysisRequest(
+        view=view_name,
+        browser_timeout=browser_timeout,
+        runtime_timeout=runtime_timeout,
+        require_browser=require_browser,
+        browser_client=browser_client,
+    )
+
     async def observe(
         _studio: object,
         views: tuple[str, ...],
@@ -113,18 +122,20 @@ def analyze(
             views,
             revisions=revisions,
             runtime=studio.default_runtime,
-            timeout=browser_timeout,
+            timeout=request.browser_timeout,
         )
 
     with capture_runtime_stderr():
         report = asyncio.run(
             analyze_studio(
                 studio,
-                view_name=view_name,
-                observe_browser=observe if connection is not None else None,
-                require_browser=True,
+                request.options,
+                observe_browser=(
+                    observe
+                    if connection is not None and request.require_browser
+                    else None
+                ),
                 runtime_checker=check_runtime_studio_isolated,
-                runtime_timeout=runtime_timeout,
             )
         )
 

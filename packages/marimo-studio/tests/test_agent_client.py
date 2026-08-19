@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+from dataclasses import replace
 from typing import cast
 
 import pytest
@@ -21,8 +22,26 @@ from marimo_studio._compat.code_mode import (
     attach_code_mode_session,
     code_mode_connection,
 )
+from marimo_studio.activation import ViewActivationRequest
 from marimo_studio.agent_models import AnalysisReport, BrowserObservation
-from marimo_studio.errors import ProtocolError
+from marimo_studio.analysis import AnalysisRequest
+from marimo_studio.errors import CapabilityInputError, ProtocolError
+
+from .helpers import ready_runtime_status
+
+
+def test_http_errors_preserve_structured_details() -> None:
+    with pytest.raises(agent_transport.AgentRequestError) as raised:
+        agent_transport._raise_response_error(
+            404,
+            b'{"error":"view-not-found","message":"missing",'
+            b'"view":"missing","available_views":["dashboard"]}',
+        )
+
+    assert raised.value.diagnostic_details() == {
+        "view": "missing",
+        "available_views": ["dashboard"],
+    }
 
 
 def test_analysis_transport_budget_covers_runtime_and_browser_deadlines(
@@ -58,17 +77,207 @@ def test_analysis_transport_budget_covers_runtime_and_browser_deadlines(
                 server_token="server-token",
             ),
             notebook,
-            view_name="dashboard",
-            timeout=20,
-            runtime_timeout=75,
-            require_browser=False,
+            AnalysisRequest(
+                view="dashboard",
+                browser_timeout=20,
+                runtime_timeout=75,
+                require_browser=False,
+            ),
         )
     )
 
     assert captured["timeout"] == 105.0
     body = captured["body"]
     assert isinstance(body, dict)
+    assert cast(dict[str, object], body)["schema"] == 1
     assert cast(dict[str, object], body)["runtime_timeout"] == 75
+
+
+def test_analysis_rejects_a_browser_policy_downgrade(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = (tmp_path / "analysis.py").resolve()
+    report = AnalysisReport(
+        notebook=notebook,
+        views=("dashboard",),
+        runtime="server",
+        revisions={"dashboard": "revision-1"},
+        static_checks=(),
+        runtime_checks=(),
+        runtime_skipped=None,
+        browser_observations=(),
+        browser_required=False,
+        actions=(),
+    )
+
+    async def request(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return report.to_dict()
+
+    monkeypatch.setattr(agent_client, "request_json", request)
+
+    with pytest.raises(ProtocolError, match="analysis response"):
+        asyncio.run(
+            agent_client.request_analysis(
+                agent_transport.StudioServerConnection(
+                    "http://localhost:2718",
+                    server_token="server-token",
+                ),
+                notebook,
+                AnalysisRequest(view="dashboard", require_browser=True),
+            )
+        )
+
+
+def test_observation_rejects_evidence_from_another_selected_browser(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = (tmp_path / "analysis.py").resolve()
+    observation = BrowserObservation(
+        view="dashboard",
+        state="ready",
+        runtime="server",
+        revision="revision-1",
+        client_id="other-browser",
+        runtime_instance="runtime-instance",
+        session_id="s_123456",
+        request_id="request-dashboard",
+        sequence=1,
+        runtime_status=ready_runtime_status("dashboard", "revision-1"),
+    )
+
+    async def request(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "schema": 1,
+            "notebook": str(notebook),
+            "observations": [observation.to_dict()],
+        }
+
+    monkeypatch.setattr(agent_client, "request_json", request)
+
+    with pytest.raises(ProtocolError, match="another browser"):
+        asyncio.run(
+            agent_client.observe_browser_views(
+                agent_transport.StudioServerConnection(
+                    "http://localhost:2718",
+                    server_token="server-token",
+                    browser_client="selected-browser",
+                ),
+                notebook,
+                ("dashboard",),
+                revisions={"dashboard": "revision-1"},
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("observed_revision", "observed_runtime"),
+    [
+        ("wrong-revision", "server"),
+        ("revision-1", "wasm"),
+    ],
+)
+def test_observation_rejects_evidence_for_another_revision_or_runtime(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    observed_revision: str,
+    observed_runtime: str,
+) -> None:
+    notebook = (tmp_path / "analysis.py").resolve()
+    runtime_status = replace(
+        ready_runtime_status("dashboard", observed_revision),
+        runtime=observed_runtime,
+    )
+    observation = BrowserObservation(
+        view="dashboard",
+        state="ready",
+        runtime=observed_runtime,
+        revision=observed_revision,
+        client_id="browser-client-1234",
+        runtime_instance="runtime-instance",
+        session_id="s_123456",
+        request_id="request-dashboard",
+        sequence=1,
+        runtime_status=runtime_status,
+    )
+
+    async def request(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "schema": 1,
+            "notebook": str(notebook),
+            "observations": [observation.to_dict()],
+        }
+
+    monkeypatch.setattr(agent_client, "request_json", request)
+
+    with pytest.raises(ProtocolError, match=r"another (revision|runtime)"):
+        asyncio.run(
+            agent_client.observe_browser_views(
+                agent_transport.StudioServerConnection(
+                    "http://localhost:2718",
+                    server_token="server-token",
+                    browser_client="browser-client-1234",
+                ),
+                notebook,
+                ("dashboard",),
+                revisions={"dashboard": "revision-1"},
+                runtime="server",
+            )
+        )
+
+
+def test_analysis_rejects_evidence_from_another_selected_browser(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = (tmp_path / "analysis.py").resolve()
+    report = AnalysisReport(
+        notebook=notebook,
+        views=("dashboard",),
+        runtime="server",
+        revisions={"dashboard": "revision-1"},
+        static_checks=(),
+        runtime_checks=(),
+        runtime_skipped=None,
+        browser_observations=(
+            BrowserObservation(
+                view="dashboard",
+                state="ready",
+                runtime="server",
+                revision="revision-1",
+                client_id="other-browser",
+                runtime_instance="runtime-instance",
+                session_id="s_123456",
+                request_id="request-dashboard",
+                sequence=1,
+                runtime_status=ready_runtime_status("dashboard", "revision-1"),
+            ),
+        ),
+        browser_required=True,
+        actions=(),
+    )
+
+    async def request(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return report.to_dict()
+
+    monkeypatch.setattr(agent_client, "request_json", request)
+
+    with pytest.raises(ProtocolError, match="another browser"):
+        asyncio.run(
+            agent_client.request_analysis(
+                agent_transport.StudioServerConnection(
+                    "http://localhost:2718",
+                    server_token="server-token",
+                    browser_client="selected-browser",
+                ),
+                notebook,
+                AnalysisRequest(
+                    view="dashboard",
+                    browser_client="selected-browser",
+                ),
+            )
+        )
 
 
 def test_code_mode_analysis_rejects_evidence_from_another_session(
@@ -115,7 +324,7 @@ def test_code_mode_analysis_rejects_evidence_from_another_session(
                     session_id="s_123456",
                 ),
                 notebook,
-                view_name="dashboard",
+                AnalysisRequest(view="dashboard"),
             )
         )
 
@@ -287,7 +496,7 @@ def test_code_mode_request_negotiates_the_server_token(
             agent_client.request_view_activation(
                 code_mode_connection(),
                 notebook,
-                "dashboard",
+                ViewActivationRequest("dashboard"),
             )
         )
 
@@ -299,6 +508,70 @@ def test_code_mode_request_negotiates_the_server_token(
     assert requests[0][0].server_token == ""
     assert requests[1][0].server_token == "server-token"
     assert requests[1][0].session_id == "s_123456"
+
+
+def test_activation_rejects_mixed_selectors_before_token_negotiation(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = (tmp_path / "analysis.py").resolve()
+    requested = False
+
+    async def request(*_args: object, **_kwargs: object) -> dict[str, object]:
+        nonlocal requested
+        requested = True
+        return {}
+
+    monkeypatch.setattr(agent_client, "request_json", request)
+
+    with pytest.raises(CapabilityInputError, match="cannot select another"):
+        asyncio.run(
+            agent_client.request_view_activation(
+                agent_transport.StudioServerConnection(
+                    "http://localhost:2718",
+                    session_id="s_123456",
+                ),
+                notebook,
+                ViewActivationRequest(
+                    "dashboard",
+                    browser_client="browser-client-1234",
+                ),
+            )
+        )
+
+    assert requested is False
+
+
+def test_external_activation_rejects_a_reload_result(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = (tmp_path / "analysis.py").resolve()
+
+    async def request(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "schema": 1,
+            "notebook": str(notebook),
+            "view": "dashboard",
+            "state": "reload-requested",
+            "generation": 1,
+            "transition": "reload",
+            "session_id": "s_123456",
+        }
+
+    monkeypatch.setattr(agent_client, "request_json", request)
+
+    with pytest.raises(ProtocolError, match="cannot request a page reload"):
+        asyncio.run(
+            agent_client.request_view_activation(
+                agent_transport.StudioServerConnection(
+                    "http://localhost:2718",
+                    server_token="server-token",
+                ),
+                notebook,
+                ViewActivationRequest("dashboard"),
+            )
+        )
 
 
 def test_code_mode_scope_adds_session_without_mutating_request_meta() -> None:

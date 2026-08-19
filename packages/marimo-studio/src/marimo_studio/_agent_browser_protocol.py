@@ -33,6 +33,7 @@ def parse_observation_response(
 ) -> tuple[BrowserObservation, ...]:
     if (
         set(payload) != {"schema", "notebook", "observations"}
+        or type(payload.get("schema")) is not int
         or payload.get("schema") != 1
     ):
         raise ProtocolError("The Studio observation response is invalid.")
@@ -83,7 +84,8 @@ def decode_browser_observation(
         wire=True,
     )
     if (
-        value.get("schema") != 1
+        type(value.get("schema")) is not int
+        or value.get("schema") != 1
         or view != expected_view
         or not _runtime_id(runtime)
         or not _nonempty(revision)

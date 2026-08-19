@@ -5,15 +5,16 @@ description: Commands, options, machine output, diagnostics, and exit codes for 
 
 # CLI reference
 
-`marimo-studio` creates view source, inspects notebook cells, records stable
-aliases, validates projections, and exports static sites. Marimo's `edit` and
-`run` commands own notebook servers.
+`marimo-studio` reports workspace state, creates and activates view source,
+inspects notebook cells, records stable aliases, validates projections, and
+exports static sites. Marimo's `edit` and `run` commands own notebook servers.
 
 ```text
+marimo-studio overview [OPTIONS] [TARGET]
 marimo-studio inspect [OPTIONS] [TARGET]
 marimo-studio bind [OPTIONS] [TARGET]
 marimo-studio view add [OPTIONS] [TARGET]
-marimo-studio view list [OPTIONS] [TARGET]
+marimo-studio view activate [OPTIONS] [TARGET]
 marimo-studio view remove [OPTIONS] [TARGET]
 marimo-studio analyze [OPTIONS] [TARGET]
 marimo-studio check [OPTIONS] [TARGET]
@@ -37,6 +38,25 @@ notebook's file, network, database, and data access. Run them in the notebook
 environment.
 :::
 
+## `overview`
+
+```console
+uvx marimo-studio overview analysis.py --format json
+```
+
+Reports the saved notebook, configuration state, canonical view root, default
+view and runtime, cell bindings, and every authored view. It works before the
+notebook has Studio configuration and returns one of these states:
+
+| State          | Meaning                                                 |
+| -------------- | ------------------------------------------------------- |
+| `unconfigured` | The notebook has no Studio definition                   |
+| `needs-view`   | Studio configuration exists and awaits its first view   |
+| `ready`        | The configured default and authored views are available |
+
+JSON output is the same `StudioOverview` record returned by
+`marimo_studio.agent.overview`.
+
 ## `inspect`
 
 ```console
@@ -45,12 +65,13 @@ uvx marimo-studio inspect analysis.py --display
 
 Compiles the notebook graph and prints one record per selected cell.
 
-| Option           | Behavior                                                                 |
-| ---------------- | ------------------------------------------------------------------------ |
-| `--display`      | Keep cells whose body ends with a displayed expression                   |
-| `--include-code` | Include each complete cell body                                          |
-| `--runtime`      | Execute the notebook and include MIME outputs and JSON-compatible values |
-| `--limit N`      | Return at most `N` cell records, where `N` is at least 1                 |
+| Option                      | Behavior                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------ |
+| `--display`                 | Keep cells whose body ends with a displayed expression                         |
+| `--include-code`            | Include each complete cell body                                                |
+| `--runtime`                 | Execute the notebook and include MIME outputs and JSON-compatible values       |
+| `--limit N`                 | Return at most `N` cell records, where `N` is at least 1                       |
+| `--runtime-timeout SECONDS` | Wait 0 to 300 finite seconds for runtime inspection. The default is 60 seconds |
 
 Static inspection leaves cell bodies unevaluated.
 
@@ -97,14 +118,31 @@ uvx marimo-studio view add analysis.py --name executive
 A view name starts with a lowercase letter and contains lowercase letters,
 digits, or hyphens. Names claimed by Marimo or Studio routes are reserved.
 
-## `view list`
+## `view activate`
 
 ```console
-uvx marimo-studio view list analysis.py
+MARIMO_STUDIO_SERVER_URL=http://localhost:2718 \
+MARIMO_STUDIO_ACCESS_TOKEN="$STUDIO_TOKEN" \
+  uvx marimo-studio view activate analysis.py \
+    --name dashboard \
+    --format json
 ```
 
-Lists every configured view, its source directory, and the current default.
-JSON output includes `schema`, `notebook`, `default_view`, and a `views` array.
+Activates the named view in one connected Studio browser. Pass
+`--browser-client ID` or `MARIMO_STUDIO_BROWSER_CLIENT` when several tabs are
+connected. With no ID, the command requires exactly one connected browser.
+
+`--server` or `MARIMO_STUDIO_SERVER_URL` identifies the running Studio server.
+Set `MARIMO_STUDIO_ACCESS_TOKEN` for authentication. JSON output is the same
+`ViewActivationResult` returned by `marimo_studio.agent.activate_view` and
+includes the selected browser client, Marimo session, transition, and
+activation generation.
+
+An explicit `--server` or `--browser-client` value overrides its environment
+variable. Activation reports stable codes such as `view-not-found`,
+`browser-client-ambiguous`, `browser-client-unavailable`,
+`browser-session-unavailable`, and `activation-timeout` through JSON Lines
+diagnostics.
 
 ## `view remove`
 
@@ -154,13 +192,14 @@ projected output and value. Browser validation asks a connected Studio tab to
 visit each selected view and return fresh readiness and diagnostics for the
 captured source revision, runtime instance, and Marimo session.
 
-| Option                      | Behavior                                                                                                      |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `--view NAME`               | Analyze one named view. The default analyzes every configured view                                            |
-| `--server URL`              | Request rendered evidence from this running Studio server. `MARIMO_STUDIO_SERVER_URL` provides the same value |
-| `--browser-client ID`       | Target one Studio tab when several tabs are connected. `MARIMO_STUDIO_BROWSER_CLIENT` provides the same value |
-| `--browser-timeout SECONDS` | Wait 0 to 300 finite seconds for fresh rendered evidence. The default is 10 seconds                           |
-| `--runtime-timeout SECONDS` | Wait 0 to 300 finite seconds for isolated notebook execution. The default is 60 seconds                       |
+| Option                       | Behavior                                                                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `--view NAME`                | Analyze one named view. The default analyzes every configured view                                            |
+| `--server URL`               | Request rendered evidence from this running Studio server. `MARIMO_STUDIO_SERVER_URL` provides the same value |
+| `--browser-client ID`        | Target one Studio tab when several tabs are connected. `MARIMO_STUDIO_BROWSER_CLIENT` provides the same value |
+| `--browser-timeout SECONDS`  | Wait 0 to 300 finite seconds for fresh rendered evidence. The default is 10 seconds                           |
+| `--runtime-timeout SECONDS`  | Wait 0 to 300 finite seconds for isolated notebook execution. The default is 60 seconds                       |
+| `--browser` / `--no-browser` | Require or skip current rendered evidence. Browser evidence is required by default                            |
 
 Set `MARIMO_STUDIO_ACCESS_TOKEN` to authenticate. The command rejects access
 tokens embedded in `--server` URLs so credentials stay out of shell history
@@ -187,10 +226,12 @@ A runtime deadline produces a `runtime-timeout` action. Increase
 `--runtime-timeout` when the notebook is expected to spend longer on setup.
 Otherwise, fix the notebook operation named by the runtime output.
 
-Without a server URL, the command still returns static and runtime results.
-The browser stage is `not-observed`, `handoff_ready` is false, and the command
-exits with code 1. Open the selected view in Studio, provide its server URL,
-and rerun the command before handoff.
+In the default browser-required mode, omitting the server URL returns static
+and runtime results with a `not-observed` browser stage. `handoff_ready` is
+false and the command exits with code 1. Open the selected view in Studio,
+provide its server URL, and rerun the command before handoff. Use
+`--no-browser` for an explicit source and runtime gate. A passing gate can then
+return `handoff_ready` without rendered evidence.
 
 ## `export`
 
@@ -254,16 +295,17 @@ right boundary or reduce concurrent requests.
 
 ## Exit codes
 
-|  Code | Meaning                                              |
-| ----: | ---------------------------------------------------- |
-|   `0` | Command completed                                    |
-|   `1` | Validation failed or rendered evidence is incomplete |
-|   `2` | CLI syntax or option usage is invalid                |
-|   `3` | Notebook or Studio configuration is invalid          |
-|   `4` | A cell binding cannot be resolved                    |
-|   `6` | The installed Marimo version is incompatible         |
-|   `7` | The notebook environment cannot be prepared          |
-| `130` | The command was interrupted                          |
+|  Code | Meaning                                                       |
+| ----: | ------------------------------------------------------------- |
+|   `0` | Command completed                                             |
+|   `1` | Validation failed or rendered evidence is incomplete          |
+|   `2` | CLI syntax or option usage is invalid                         |
+|   `3` | Notebook or Studio configuration is invalid                   |
+|   `4` | A cell binding cannot be resolved                             |
+|   `5` | A live Studio server or browser request failed                |
+|   `6` | A Studio protocol or installed Marimo version is incompatible |
+|   `7` | The notebook environment cannot be prepared                   |
+| `130` | The command was interrupted                                   |
 
 [Notebook configuration](configuration.md) defines target discovery and
 configuration precedence.

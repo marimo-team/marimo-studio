@@ -10,7 +10,7 @@ from pathlib import Path
 from marimo_studio._cell_refs import cell_refs
 from marimo_studio._composition import create_tooling_adapters
 from marimo_studio._runtime_limits import DEFAULT_RUNTIME_TIMEOUT
-from marimo_studio.errors import ConfigurationError
+from marimo_studio.errors import CapabilityInputError, ConfigurationError
 from marimo_studio.types import (
     CellConfigSpec,
     CellSpec,
@@ -24,9 +24,42 @@ _RUNTIME_VALUE_BYTES = 64 * 1024
 
 
 @dataclass(frozen=True)
-class RuntimeInspection:
+class InspectionResult:
+    """Selected notebook cells with optional runtime evidence."""
+
     notebook: NotebookSpec
-    runtime: RuntimeProbe
+    cells: tuple[CellSpec, ...]
+    runtime: RuntimeProbe | None = None
+
+    def select(
+        self,
+        *,
+        output_expressions: bool = False,
+        limit: int | None = None,
+    ) -> InspectionResult:
+        return replace(
+            self,
+            cells=select_cells(
+                self.notebook,
+                output_expressions=output_expressions,
+                limit=limit,
+            ),
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        payload = self.notebook.to_dict()
+        if self.runtime is None:
+            payload["cells"] = [cell.to_dict() for cell in self.cells]
+            return payload
+        payload["cells"] = [
+            {
+                **cell.to_dict(),
+                "runtime": self.runtime.cells[cell.runtime_id].to_dict(),
+            }
+            for cell in self.cells
+        ]
+        payload["runtime"] = self.runtime.values.to_dict()
+        return payload
 
 
 def select_cells(
@@ -36,6 +69,14 @@ def select_cells(
     limit: int | None = None,
 ) -> tuple[CellSpec, ...]:
     """Select notebook cells for an inspection result."""
+    if limit is not None and (
+        not isinstance(limit, int) or isinstance(limit, bool) or limit < 1
+    ):
+        raise CapabilityInputError(
+            "invalid-inspection-request",
+            "limit",
+            "limit must be an integer greater than or equal to 1",
+        )
     cells = tuple(
         cell
         for cell in notebook.cells
@@ -131,11 +172,31 @@ def inspect_notebook(
     )
 
 
+def inspect_notebook_result(
+    path: str | Path,
+    *,
+    include_code: bool = False,
+    output_expressions: bool = False,
+    limit: int | None = None,
+) -> InspectionResult:
+    """Return selected static notebook cells as one capability result."""
+    notebook = inspect_notebook(path, include_code=include_code)
+    return InspectionResult(
+        notebook=notebook,
+        cells=select_cells(
+            notebook,
+            output_expressions=output_expressions,
+            limit=limit,
+        ),
+    )
+
+
 async def inspect_runtime(
     path: str | Path,
     *,
     include_code: bool = False,
-) -> RuntimeInspection:
+    runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
+) -> InspectionResult:
     """Run a notebook and return its static graph, outputs, and JSON values."""
     notebook = inspect_notebook(path, include_code=include_code)
     variables = tuple(
@@ -149,7 +210,20 @@ async def inspect_runtime(
         variables=variables,
         output_selector_groups=(),
         show_tracebacks=True,
-        timeout=DEFAULT_RUNTIME_TIMEOUT,
+        timeout=runtime_timeout,
         value_max_bytes=_RUNTIME_VALUE_BYTES,
     )
-    return RuntimeInspection(notebook=notebook, runtime=runtime)
+    return InspectionResult(
+        notebook=notebook,
+        cells=notebook.cells,
+        runtime=runtime,
+    )
+
+
+__all__ = [
+    "InspectionResult",
+    "inspect_notebook",
+    "inspect_notebook_result",
+    "inspect_runtime",
+    "select_cells",
+]
