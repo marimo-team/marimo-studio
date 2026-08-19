@@ -187,7 +187,7 @@
     },
     {
       "id": "studio.view.activate",
-      "summary": "Activate a configured view in Build and reload it when already active.",
+      "summary": "Activate a configured view in Build and refresh its preview when already active.",
       "mutation": "browser",
       "executes_notebook": false,
       "prerequisites": ["configured-view", "live-studio-server", "connected-browser"],
