@@ -1,0 +1,28 @@
+skills/marimo-studio/references/view-authoring.md
+  s_9e4558804c2d15::t_39003b3356d9d6 107-108,111
+  s_9e4558804c2d15::t_ebe891f2a776d1 102-106
+  s_9e4558804c2d15::t_4d97dedbf8d34c 109-110
+skills/marimo-studio/SKILL.md
+  s_9e4558804c2d15::t_ebe891f2a776d1 122-123,134-137,141,146,154-155,160-161,165
+  s_9e4558804c2d15::t_dd3a5d9d88e140 126-133
+  s_9e4558804c2d15::t_39003b3356d9d6 139,142-145,156-159,162-164
+  s_9e4558804c2d15::t_0c4b0dc736cd1c 124-125
+  s_9e4558804c2d15::t_3bd74c7e4a3fc2 138,140
+  s_9e4558804c2d15::t_ad55ba7a56b26e 147-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d6321a0dd0b8b09a8e05e960453e926e89560d89",
+  "prompts": {},
+  "sessions": {
+    "s_9e4558804c2d15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0194c-e6d0-7c93-a5ef-ba2a447afe7f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
