@@ -148,6 +148,14 @@ The host uses these `data-state` values:
 connecting | loading | stale | ready | error
 ```
 
+`data-runtime-cell-id` identifies the current defining cell after Studio
+resolves the binding. Studio clears the attribute when the binding is
+unavailable.
+
+Use `marimo_studio.LENS_TARGET_SELECTOR` when a Lens mount should select every
+runtime-bound cell, output, and value host. Compose authored page regions into
+that CSS selector in the notebook.
+
 Each value and the aggregate response are bounded to 1,000,000 encoded bytes.
 
 ## Browser value API

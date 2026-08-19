@@ -18,7 +18,6 @@ export interface OutputDiagnostic {
 }
 
 export interface OutputProjection {
-  cellId: string;
   output: RenderedOutput;
   sourceVersion: number | null;
 }
@@ -132,7 +131,7 @@ export const useOutputProjection = ({
         setState({
           identity: requestIdentity,
           pending: false,
-          projection: { cellId: sourceCellId, output: rendered, sourceVersion },
+          projection: { output: rendered, sourceVersion },
         });
       })
       .catch((cause: unknown) => {

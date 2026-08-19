@@ -216,6 +216,13 @@ The frontend adapter renders the result as a synthetic presentation cell.
 
 `mo-value` resolves a bounded value reference and publishes a JSON snapshot
 through element text, the `marimoValue` property, and update or error events.
+Every runtime-bound value host also receives the current runtime cell ID,
+matching the producer metadata on cell and rich-output hosts. This metadata is
+derived from the runtime binding and changes with that binding.
+
+Studio exports `LENS_TARGET_SELECTOR` as its projection-host selection policy.
+Lens consumes that CSS selector and the generic runtime cell metadata, while
+Studio retains ownership of its custom elements and authored binding syntax.
 
 - **User capability:** authored JavaScript can consume typed notebook data
   through regular document events and properties.

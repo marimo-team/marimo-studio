@@ -90,6 +90,7 @@ export const OutputPortal = ({
     pending: projectionState.pending,
     projection: projectionState.projection,
     projectionCurrent: projectionState.projectionCurrent,
+    runtimeCellId: sourceCellId,
     selector,
   });
 

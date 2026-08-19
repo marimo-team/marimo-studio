@@ -30,6 +30,7 @@ const cachedValues = new Map<string, ProjectedValue>();
 const hostValues = new WeakMap<HTMLElement, JsonValue>();
 const preparedHosts = new WeakSet<HTMLElement>();
 const hostSelectors = new WeakMap<HTMLElement, string>();
+const runtimeCellIds = new Map<string, string>();
 const states = new ValueStates();
 let bindings: Record<string, ValueBindingConfig> = {};
 let observer: MutationObserver | undefined;
@@ -263,6 +264,7 @@ const connectHost = (host: HTMLElement) => {
   if (!binding) {
     delete host.dataset.marimoSelector;
     delete host.dataset.marimoVariable;
+    delete host.dataset.runtimeCellId;
     const diagnostic = diagnosticFor(selector);
     clearProjectedValue(host, selector);
     failHost(
@@ -278,6 +280,12 @@ const connectHost = (host: HTMLElement) => {
   clearHostDiagnostic(host);
   host.dataset.marimoSelector = selector;
   host.dataset.marimoVariable = binding.variable;
+  const runtimeCellId = runtimeCellIds.get(selector);
+  if (runtimeCellId) {
+    host.dataset.runtimeCellId = runtimeCellId;
+  } else {
+    delete host.dataset.runtimeCellId;
+  }
   const cached = cachedValues.get(selector);
   const state = states.connected(selector, cached !== undefined);
   if (state.phase === "error" && state.error) {
@@ -307,6 +315,7 @@ const releaseHost = (host: HTMLElement) => {
   clearHostDiagnostic(host);
   delete host.dataset.marimoSelector;
   delete host.dataset.marimoVariable;
+  delete host.dataset.runtimeCellId;
   delete host.dataset.state;
   host.removeAttribute("aria-busy");
   notifyProjectionChanged();
@@ -385,7 +394,27 @@ export const stopValueBindings = () => {
   observer = undefined;
   unsubscribeConfig?.();
   unsubscribeConfig = undefined;
+  hosts.forEach((host) => delete host.dataset.runtimeCellId);
   hosts.clear();
+  runtimeCellIds.clear();
+};
+
+export const setValueRuntimeCell = (selectors: readonly string[], cellId: string | null): void => {
+  selectors.forEach((selector) => {
+    if (cellId) {
+      runtimeCellIds.set(selector, cellId);
+    } else {
+      runtimeCellIds.delete(selector);
+    }
+  });
+  hosts.forEach((host) => {
+    if (!selectors.includes(selectorFor(host))) return;
+    if (cellId) {
+      host.dataset.runtimeCellId = cellId;
+    } else {
+      delete host.dataset.runtimeCellId;
+    }
+  });
 };
 
 export const markValuePending = (selector: string) => {

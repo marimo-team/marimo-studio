@@ -1,4 +1,4 @@
-"""Public notebook inspection types and ASGI application factory."""
+"""Public Studio application, inspection, and integration contracts."""
 
 from __future__ import annotations
 
@@ -11,6 +11,10 @@ from marimo_studio.types import (
     CellSpec,
     NotebookSpec,
     SourceSpan,
+)
+
+LENS_TARGET_SELECTOR = (
+    ":is(marimo-cell, marimo-output, [mo-value])[data-runtime-cell-id]"
 )
 
 
@@ -33,6 +37,7 @@ def inspect_notebook(
 
 
 __all__ = [
+    "LENS_TARGET_SELECTOR",
     "ASGIApp",
     "CellConfigSpec",
     "CellRef",

@@ -22,6 +22,7 @@ export const useOutputHost = ({
   pending,
   projection,
   projectionCurrent,
+  runtimeCellId,
   selector,
 }: {
   bindingVariable: string | undefined;
@@ -31,9 +32,9 @@ export const useOutputHost = ({
   pending: boolean;
   projection: OutputProjection | undefined;
   projectionCurrent: boolean;
+  runtimeCellId: string | undefined;
   selector: string;
 }): void => {
-  const cellId = projection?.cellId;
   const mimetype = projection?.output.mimetype;
   const failureCode = failure?.code;
   const failureMessage = failure?.message;
@@ -44,14 +45,14 @@ export const useOutputHost = ({
   useLayoutEffect(() => {
     setDataset(host, "marimoSelector", selector);
     setDataset(host, "marimoVariable", bindingVariable);
-    setDataset(host, "runtimeCellId", cellId);
+    setDataset(host, "runtimeCellId", runtimeCellId);
     setDataset(host, "outputMime", mimetype);
     setDataset(host, "marimoDiagnosticCode", failureCode);
     setDataset(host, "marimoDiagnosticMessage", failureMessage);
     setDataset(host, "marimoDiagnosticHint", failureHint);
     const detail = {
       selector,
-      cellId,
+      cellId: runtimeCellId,
       mimetype,
       code: failureCode,
       message: failureMessage,
@@ -73,7 +74,6 @@ export const useOutputHost = ({
     }
   }, [
     bindingVariable,
-    cellId,
     failureCode,
     failureHint,
     failureMessage,
@@ -84,6 +84,7 @@ export const useOutputHost = ({
     modelPhase,
     pending,
     projectionCurrent,
+    runtimeCellId,
     selector,
   ]);
 };

@@ -1,17 +1,18 @@
 ---
 title: Python API reference
-description: Inspect Marimo notebook structure and create a configured run-mode ASGI application.
+description: Inspect Marimo notebook structure, configure integrations, and create a run-mode ASGI application.
 ---
 
 # Python API reference
 
-The public Python API inspects a notebook's static cell graph and creates one
-configured Marimo ASGI application.
+The public Python API inspects a notebook's static cell graph, exposes host
+integration policy, and creates one configured Marimo ASGI application.
 
-| Job                                                              | API                |
-| ---------------------------------------------------------------- | ------------------ |
-| Read cell names, definitions, dependencies, and source locations | `inspect_notebook` |
-| Build one run-mode server application                            | `create_asgi_app`  |
+| Job                                                              | API                    |
+| ---------------------------------------------------------------- | ---------------------- |
+| Read cell names, definitions, dependencies, and source locations | `inspect_notebook`     |
+| Build one run-mode server application                            | `create_asgi_app`      |
+| Select runtime-bound projection hosts through Lens               | `LENS_TARGET_SELECTOR` |
 
 For a regular standalone process, use Marimo's CLI:
 
@@ -21,6 +22,22 @@ uv run --with marimo-studio \
   --sandbox \
   --headless
 ```
+
+## `LENS_TARGET_SELECTOR`
+
+`LENS_TARGET_SELECTOR` is the CSS selector for runtime-bound cell, output, and
+value hosts. Pass it to Lens and compose authored page regions into the same
+selector when they should also receive feedback.
+
+```python
+from marimo_lens import Lens
+from marimo_studio import LENS_TARGET_SELECTOR
+
+lens = Lens(dom_selector=f"{LENS_TARGET_SELECTOR}, #app-shell > header")
+```
+
+Studio owns this selector and the producer metadata on matching hosts. Lens
+remains independent of Studio's custom elements and binding syntax.
 
 ## `inspect_notebook`
 
@@ -145,6 +162,7 @@ ASGIApp
 CellConfigSpec
 CellRef
 CellSpec
+LENS_TARGET_SELECTOR
 NotebookSpec
 SourceSpan
 create_asgi_app
