@@ -321,6 +321,11 @@ studio.ensure_view(ctx, "report").to_dict()
       '<p id="report-papers"><span mo-value="summary.papers"></span> papers</p>\n  </main>',
     ),
   );
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Build", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
 
   const activated = await page.request.post(
     "/_marimo-studio/editor/api/kernel/execute?file=plain.py",
@@ -340,6 +345,40 @@ ctx = cm.get_context()
   expect(activated.ok()).toBe(true);
   expect(await activated.text()).toContain('"success": true');
   await expect(page.getByLabel("Select or manage a view")).toContainText("report");
+  await expect(page.getByRole("button", { name: "Build", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(preview.locator("#report-papers")).toHaveText("3877 papers");
+  await preview.locator("html").evaluate(() => {
+    globalThis.__e2eRuntimeMarker = "stale";
+  });
+
+  const reactivated = await page.request.post(
+    "/_marimo-studio/editor/api/kernel/execute?file=plain.py",
+    {
+      headers: { "Marimo-Session-Id": resumedSessionId },
+      data: {
+        code: `
+import marimo._code_mode as cm
+import marimo_studio.agent as studio
+
+ctx = cm.get_context()
+(await studio.activate_view(ctx, "report")).to_dict()
+`,
+      },
+    },
+  );
+  expect(reactivated.ok()).toBe(true);
+  expect(await reactivated.text()).toContain('"success": true');
+  await expect
+    .poll(() =>
+      preview
+        .locator("html")
+        .evaluate(() => globalThis.__e2eRuntimeMarker)
+        .catch(() => undefined),
+    )
+    .toBeUndefined();
   await expect(preview.locator("#report-papers")).toHaveText("3877 papers");
 
   const focused = await page.request.post(

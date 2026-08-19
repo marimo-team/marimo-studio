@@ -163,19 +163,23 @@ async def activate_view(
 ) -> ViewActivationResult: ...
 ```
 
-Selects `name` in the current browser workspace. An active Studio workspace
-uses the same in-place transition as its selector, which preserves the layout
-and checks current source edits. The request targets the Studio tab attached
-to the current Marimo session. When the notebook gained its first Studio view
-during that native editor session, Marimo reloads the page into the selected
-Studio view after the code-mode call returns.
+Selects `name` and its Build layout in the current browser workspace. The
+request targets the Studio tab attached to the current Marimo session. When
+`name` is already active, activation starts a reload of every prepared preview
+runtime. The reload clears the previous ready revision and current diagnostics
+until each frame reports its new state. Call `activate_view` again to recover a
+visible page that looks stale or stuck.
+
+When the notebook gained its first Studio view during that native editor
+session, Marimo reloads the page into the selected Studio view after the
+code-mode call returns.
 
 The returned `ViewActivationResult` contains the notebook path, view name,
 a monotonically increasing generation, the selected transition, and the bound
 Marimo `session_id`. An active transition also identifies the selected browser
 through `client_id`.
 `state="active"` with `transition="in-place"` means the targeted workspace
-acknowledged the completed transition. `state="reload-requested"` with
+selected Build and acknowledged the activation. `state="reload-requested"` with
 `transition="reload"` means the exact native editor session will reload after
 the code-mode call releases its execution lock. Call `analyze` for the same
 view to confirm that the rendered page read the current source revision.

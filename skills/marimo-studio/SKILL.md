@@ -10,9 +10,22 @@ description: >-
 # Author Marimo Studio views
 
 Marimo Studio lets one notebook power several audience-specific web pages.
-Keep data access, computation, analytical context, domain rules, controls, and
-reusable outputs in notebook cells. Put page structure, display copy, responsive
-layout, browser behavior, and presentation styling in the Studio view files.
+Treat the notebook as the durable analytical source and each Studio view as an
+adaptable presentation of that source. Preserve the notebook source when its
+existing cells already expose the data and results the view needs.
+
+Add notebook code for new datasets, major computations, analytical definitions,
+assumptions, metrics, domain decisions, shared reactive controls, and results
+reused across views. View JavaScript may filter, sort, group, restructure,
+format, and derive display-ready arrays and objects from existing projected
+values when that work serves one view.
+
+The boundary follows analytical ownership. A change that establishes shared
+meaning, fetches a new dataset, or produces a reusable result belongs in the
+notebook. A change that adapts existing values for one audience can stay in the
+view. Browser code can consume JSON-compatible notebook values through
+`mo-value` and `marimo-value-updated`, then render them with browser APIs or
+frontend libraries.
 
 Read [the capability catalog](references/capabilities.json) before selecting a
 Python call or CLI command. It defines the supported operations, parameters,
@@ -22,7 +35,8 @@ results, prerequisites, and intentional interface-specific extensions.
 
 1. Read the workspace overview and inspect the notebook.
 2. Create or select one named view.
-3. Activate that view in the open Studio browser.
+3. Activate that view in Build before substantial authoring, even when it still
+   contains the starter document.
 4. Choose the complete cells, rich objects, and JSON-compatible values needed by
    the audience.
 5. Edit `index.html`, `app.css`, and optional relative assets.
@@ -46,6 +60,15 @@ inspection = studio.inspect(ctx, display=True)
 setup = studio.ensure_view(ctx, "dashboard")
 activation = await studio.activate_view(ctx, setup.name)
 ```
+
+Activate as soon as `ensure_view` returns. The starter document makes the
+user's request visible, and subsequent saves show progress in the same active
+preview.
+
+Activation selects Build in the targeted Studio workspace. Reactivating the
+current view reloads every prepared preview runtime and clears its ready status
+until the refreshed document reports back. Use the same call when the visible
+page looks stale or stuck.
 
 Let the activation call finish. A first view can reload the native editor into
 Studio after code mode releases its execution lock. Run analysis in the next
@@ -109,13 +132,26 @@ evidence across configured views without a browser handoff gate.
 
 - Read the notebook graph and current view files before editing.
 - Use an existing Marimo cell name when it identifies the intended output.
-- Bind an alias when an unnamed cell needs a stable HTML reference.
-- Keep analytical and computational changes in notebook cells.
-- Keep page markup, display wording, layout, CSS, and browser modules in view
-  files.
+- Bind an alias for an isolated unnamed cell when it needs a stable HTML
+  reference.
+- When a large notebook would need many aliases for complete cell projections,
+  give its stable view-facing producer cells semantic native names. Name the
+  small set of cells that express durable concepts and leave incidental cells
+  anonymous.
+- Preserve the notebook when current cells already expose the required data and
+  analytical results.
+- Add notebook code for new datasets, major computations, domain decisions, or
+  results intended for reuse across views.
+- Keep view-specific filtering, restructuring, formatting, display-ready data,
+  markup, copy, interaction, layout, styling, and transient UI state in the
+  view.
+- Keep small view-specific JavaScript in an inline `<script type="module">` in
+  `index.html`. Extract `app.js` or additional modules when the code grows
+  enough to benefit from separate organization, reuse, or testing.
 - Use the Server preview while developing against the active Python kernel.
 - Treat `report.actions` as the repair queue.
-- Require current browser evidence for final handoff.
+- Run focused analysis immediately before handoff and require current browser
+  evidence.
 - Review the notebook diff before finishing so presentation code remains in the
   view.
 
@@ -176,6 +212,12 @@ planned paths and configuration changes without writing them.
   serving, exporting, or reporting completion.
 
 ## Handoff
+
+Immediately before handoff, activate each changed view and run focused analysis
+in the next code-mode call. Repair every reported action and repeat until
+`handoff_ready is True`. Inspect the live page after the final pass. If the page
+still looks stale or broken, reactivate the current view, rerun focused
+analysis, and inspect the refreshed result.
 
 Report the notebook and changed views, the audience and primary task, the view
 files changed, the projected cell names and values, configuration changes, and

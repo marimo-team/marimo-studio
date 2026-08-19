@@ -126,6 +126,10 @@ export class PreviewDeck {
     this.ensure(request.runtime)?.requestObservation(request);
   }
 
+  reload(): void {
+    this.previews.forEach((controller) => controller.reload());
+  }
+
   editorSessionChanged(binding: EditorSessionBinding): void {
     if (binding.generation <= this.editorBindingGeneration) {
       return;

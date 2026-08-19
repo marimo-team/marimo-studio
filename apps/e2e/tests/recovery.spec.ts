@@ -343,6 +343,7 @@ test("preserves run-mode kernel state across a page reload", async ({ page }) =>
     const widget = page.getByRole("button", { name: "Widget count: 7" });
     await widget.click();
     await expect(page.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
+    await waitForRunMode();
     const sessionId = await page.evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__);
     expect(sessionId).toMatch(/^s_[\da-z]{6}$/);
 

@@ -380,7 +380,7 @@ export class PreviewController {
     this.preview.contentWindow?.postMessage(message, globalThis.location.origin);
   }
 
-  private reload(): void {
+  reload(): void {
     this.cancelRetry();
     this.controls.stop();
     this.queries.cancel();

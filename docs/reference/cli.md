@@ -128,9 +128,13 @@ MARIMO_STUDIO_ACCESS_TOKEN="$STUDIO_TOKEN" \
     --format json
 ```
 
-Activates the named view in one connected Studio browser. Pass
-`--browser-client ID` or `MARIMO_STUDIO_BROWSER_CLIENT` when several tabs are
-connected. With no ID, the command requires exactly one connected browser.
+Activates the named view and its Build layout in one connected Studio browser.
+Activating the current view reloads every prepared preview runtime and clears
+its ready status until the refreshed document reports back. Run the command
+again to recover a visible page that looks stale or stuck.
+
+Pass `--browser-client ID` or `MARIMO_STUDIO_BROWSER_CLIENT` when several tabs
+are connected. With no ID, the command requires exactly one connected browser.
 
 `--server` or `MARIMO_STUDIO_SERVER_URL` identifies the running Studio server.
 Set `MARIMO_STUDIO_ACCESS_TOKEN` for authentication. JSON output is the same

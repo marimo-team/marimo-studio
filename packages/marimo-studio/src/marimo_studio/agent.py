@@ -57,6 +57,11 @@ Start with the active notebook context:
     workspace = studio.overview(ctx)
     inspection = studio.inspect(ctx, include_code=True)
     view = studio.ensure_view(ctx, "dashboard")
+    activation = await studio.activate_view(ctx, view.name)
+
+Activate the returned view before substantial authoring. The starter document
+makes the user's request visible, and later saves show progress in the active
+preview.
 
 The installed Agent Plugin carries the complete authoring workflow and the
 resources that match this Studio version:
@@ -240,11 +245,14 @@ async def activate_view(
     context: object,
     name: str,
 ) -> ViewActivationResult:
-    """Select a named view in the current browser workspace.
+    """Select a named view and its Build layout in the current browser.
 
-    An active Studio workspace uses its normal in-place transition. A native
-    editor reloads into Studio when this call follows the first view setup.
-    The reload waits for the code-mode result before navigating.
+    Call this as soon as ``ensure_view`` returns, including for a starter view,
+    so the user sees the requested view while authoring continues.
+
+    Reactivating the current view reloads its prepared preview runtimes. A
+    native editor reloads into Studio when this call follows the first view
+    setup. The page reload waits for the code-mode result before navigating.
     """
     from marimo_studio._composition import create_tooling_adapters
     from marimo_studio._workspace import load_studio

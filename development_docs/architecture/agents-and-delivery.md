@@ -85,8 +85,11 @@ client, Marimo session, transition, and generation. Code mode resolves its
 current Marimo session to the containing browser. The CLI accepts an explicit
 browser client or requires the server to have exactly one connected browser.
 An active workspace performs an in-place transition and acknowledges its
-generation. Creating the first view in code mode requests a reload of that
-exact native editor after the execution lock is released.
+generation. It selects Build for the notebook and preview. Reactivating the
+current view starts a reload of every prepared preview frame and clears its
+ready status before acknowledgement. Creating the first view in code mode
+requests a reload of that exact native editor after the execution lock is
+released.
 
 - **User capability:** code-mode and regular agents can place the intended tab
   on the view they are about to edit or validate.
@@ -94,8 +97,8 @@ exact native editor after the execution lock is released.
   binding generation, code-mode lock, and acknowledgement generation must refer
   to the same tab.
 - **Maintenance surface:** `activation.py`, code-mode and CLI adapters, agent
-  client, activation route, client registry, workspace event coordinator, and
-  browser acceptance.
+  client, activation route, client registry, workspace event coordinator,
+  preview controller, and browser acceptance.
 
 ### 6. Three-stage analysis
 

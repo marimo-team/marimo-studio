@@ -15,6 +15,13 @@ setup = studio.ensure_view(ctx, "dashboard")
 activation = await studio.activate_view(ctx, setup.name)
 ```
 
+Activation selects Build so the notebook and preview share the workspace. When
+the requested view is already active, Studio starts a reload of every prepared
+preview runtime before acknowledging the activation. The reload clears the
+current ready revision and diagnostics until each frame reports its new state.
+Call `activate_view` again when the visible page looks stale or stuck, then run
+focused analysis in the next code-mode call.
+
 An active Studio workspace acknowledges its in-place transition. Creating the
 first view from a native editor can return `state="reload-requested"`. Let that
 code-mode call finish so Marimo can reload after releasing the execution lock.
@@ -111,15 +118,16 @@ stable code, message, advice, and available view, target, or source location.
 Fix one cause, save the source, rerun the same analysis, and continue until the
 queue is empty and `handoff_ready` is true.
 
-| Problem                                | Repair                                                   |
-| -------------------------------------- | -------------------------------------------------------- |
-| Cell name is missing                   | Use a current native name or bind the intended cell      |
-| Saved cell alias is stale or ambiguous | Reinspect and bind the intended cell with `--overwrite`  |
-| Python value reference is unknown      | Correct its root variable or nested path                 |
-| Python value fails during execution    | Inspect the defining cell and its current output         |
-| View files are missing                 | Create the configured default view                       |
-| Browser evidence is stale              | Wait for the saved revision to render and rerun analysis |
-| Browser selection is ambiguous         | Pass the intended `--browser-client`                     |
+| Problem                                 | Repair                                                   |
+| --------------------------------------- | -------------------------------------------------------- |
+| Cell name is missing                    | Use a current native name or bind the intended cell      |
+| Saved cell alias is stale or ambiguous  | Reinspect and bind the intended cell with `--overwrite`  |
+| Python value reference is unknown       | Correct its root variable or nested path                 |
+| Python value fails during execution     | Inspect the defining cell and its current output         |
+| View files are missing                  | Create the configured default view                       |
+| Browser evidence is stale               | Wait for the saved revision to render and rerun analysis |
+| Visible page is stale with ready status | Reactivate the view, then rerun focused analysis         |
+| Browser selection is ambiguous          | Pass the intended `--browser-client`                     |
 
 A static or runtime pass cannot prove that the current browser read the saved
 view revision. Keep browser evidence required for final agent handoff.
@@ -164,6 +172,10 @@ destination that should be replaced. Edit notebook or view source for later
 changes, then export again.
 
 ## Handoff record
+
+Run focused analysis immediately before handoff. Repair the ordered actions and
+repeat until `handoff_ready` is true, then inspect the live result. Reactivate
+and recheck a page that remains stale or broken after the first pass.
 
 Report:
 
