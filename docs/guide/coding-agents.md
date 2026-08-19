@@ -47,10 +47,10 @@ relationships. It leaves notebook cells unevaluated.
 paths. A new view starts with every notebook cell in source order.
 
 `studio.activate_view` targets the Studio tab attached to the current Marimo
-code-mode session. When `ensure_view` added the notebook's first Studio view,
-the call reloads that native editor into Studio after code mode returns. Later
-calls wait for the targeted workspace to complete its normal in-place view
-transition.
+code-mode session and selects Build. When `ensure_view` added the notebook's
+first Studio view, the call reloads that native editor into Studio after code
+mode returns. Reactivating the selected view reloads every prepared preview
+runtime and clears its ready status until the refreshed document reports back.
 
 ## Inspect before editing
 
@@ -127,8 +127,9 @@ The report combines three stages:
    report projection, presentation, host, and runtime errors.
 
 Treat `report.actions` as the repair queue. Apply the advice, save the affected
-source, and call `studio.analyze` again. Hand off the view when
-`report.handoff_ready` is true. A static or runtime pass cannot substitute for
+source, and call `studio.analyze` again. Run the final focused analysis
+immediately before handoff. Hand off the view when `report.handoff_ready` is
+true and the live page works. A static or runtime pass cannot substitute for
 current rendered browser evidence.
 
 Runtime execution waits 60 seconds by default. Give expected remote data or
@@ -147,8 +148,10 @@ analysis, controls, or reusable outputs. Move page markup, display wording,
 layout helpers, CSS strings, and presentation-only formatting into the view
 files.
 
-If the view changes during the loop, activate the target explicitly before
-analyzing it. Let the activation call return and wait for the page to render:
+Activate the target explicitly before analyzing when the view changes or the
+visible page looks stale or stuck. Reactivating the current view resets its
+preview runtimes. Let the activation call return and wait for the page to
+render:
 
 ```python
 await studio.activate_view(ctx, "executive")

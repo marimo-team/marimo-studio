@@ -190,6 +190,69 @@ it("reloads every preview after its editor session binding changes", () => {
   wasm.dispose();
 });
 
+it("refreshes every attached preview on demand", () => {
+  const editor = frame("loading");
+  const serverFrame = frame("complete");
+  const wasmFrame = frame("complete");
+  const serverWindow = { dispatchEvent: vi.fn(), postMessage: vi.fn() };
+  const wasmWindow = { dispatchEvent: vi.fn(), postMessage: vi.fn() };
+  Object.defineProperty(serverFrame, "contentWindow", {
+    configurable: true,
+    value: serverWindow,
+  });
+  Object.defineProperty(wasmFrame, "contentWindow", {
+    configurable: true,
+    value: wasmWindow,
+  });
+  const viewUrl = vi.fn((view: string, runtime: string) => `/${view}?runtime=${runtime}`);
+  const deck = new PreviewDeck({
+    initialView: "dashboard",
+    initialRuntime: "server",
+    runtimes: ["server", "wasm"],
+    viewUrl,
+    supportUrl: (view) => `/support/${view}`,
+    syncQuery: vi.fn(),
+    syncEditorQuery: vi.fn(async () => "accepted" as const),
+    navigate: vi.fn(),
+  });
+  deck.attach(
+    editor,
+    new Map([
+      ["server", serverFrame],
+      ["wasm", wasmFrame],
+    ]),
+  );
+  deck.switchRuntime("wasm");
+  expect(viewUrl).toHaveBeenCalledTimes(4);
+  for (const [runtime, source] of [
+    ["server", serverWindow],
+    ["wasm", wasmWindow],
+  ] as const) {
+    dispatchPreviewMessage(source, {
+      type: "marimo-studio:view-ready",
+      runtime,
+      view: "dashboard",
+      revision: "revision-1",
+    });
+    expect(deck.runtimeDiagnostics(runtime)?.current.phase).toBe("ready");
+  }
+
+  deck.reload();
+
+  expect(viewUrl).toHaveBeenCalledTimes(6);
+  expect(serverFrame.src).toContain("runtime=server");
+  expect(wasmFrame.src).toContain("runtime=wasm");
+  expect(deck.runtimeDiagnostics("server")).toMatchObject({
+    revision: null,
+    current: { phase: "connecting", diagnostics: [] },
+  });
+  expect(deck.runtimeDiagnostics("wasm")).toMatchObject({
+    revision: null,
+    current: { phase: "connecting", diagnostics: [] },
+  });
+  deck.dispose();
+});
+
 it("reconciles source changes across the rendered preview lifecycle", () => {
   const editor = frame("complete");
   const preview = frame("complete");

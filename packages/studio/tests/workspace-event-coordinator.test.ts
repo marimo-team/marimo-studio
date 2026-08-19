@@ -69,6 +69,7 @@ const setup = (initialViews?: string[]) => {
   const preview = {
     requestObservation: vi.fn(),
     editorSessionChanged: vi.fn(),
+    reload: vi.fn(),
     sourceBaseline: vi.fn(),
     sourceChanged: vi.fn(),
   };
@@ -142,7 +143,7 @@ it("ignores callbacks from a replaced stream", async () => {
 });
 
 it("selects and then acknowledges an agent activation", async () => {
-  const { acknowledge, coordinator, model } = setup(["dashboard"]);
+  const { acknowledge, coordinator, model, preview } = setup(["dashboard"]);
   model.replaceViews(["dashboard", "report"]);
   model.ensureAvailable.mockResolvedValue(true);
 
@@ -155,7 +156,27 @@ it("selects and then acknowledges an agent activation", async () => {
     expect(acknowledge).toHaveBeenCalledWith(7, "report", expect.any(AbortSignal)),
   );
   expect(model.ensureAvailable).toHaveBeenCalledWith("report");
-  expect(model.choose).toHaveBeenCalledWith("report", "preserve");
+  expect(model.choose).toHaveBeenCalledWith("report", "split");
+  expect(preview.reload).not.toHaveBeenCalled();
+  coordinator.dispose();
+});
+
+it("refreshes an already active view before acknowledging its activation", async () => {
+  const { acknowledge, coordinator, model, preview } = setup();
+
+  EventSourceStub.instances[0]?.emit(
+    "activate",
+    JSON.stringify({ schema: 1, generation: 8, view: "dashboard" }),
+  );
+
+  await vi.waitFor(() =>
+    expect(acknowledge).toHaveBeenCalledWith(8, "dashboard", expect.any(AbortSignal)),
+  );
+  expect(model.choose).toHaveBeenCalledWith("dashboard", "split");
+  expect(preview.reload).toHaveBeenCalledOnce();
+  expect(preview.reload.mock.invocationCallOrder[0]).toBeLessThan(
+    acknowledge.mock.invocationCallOrder[0]!,
+  );
   coordinator.dispose();
 });
 

@@ -27,6 +27,7 @@ interface WorkspaceViewPort {
 interface WorkspacePreviewPort {
   requestObservation(request: ObserveViewRequest): void;
   editorSessionChanged(binding: EditorSessionBinding): void;
+  reload(): void;
   sourceBaseline(revision: string | null): void;
   sourceChanged(kind: ShellChangeKind): void;
 }
@@ -159,13 +160,19 @@ export class WorkspaceEventCoordinator {
 
   private async activate(view: string, generation: number): Promise<void> {
     try {
+      if (!(await this.options.views.ensureAvailable(view))) {
+        return;
+      }
+      const alreadyActive = this.options.views.getSnapshot().current === view;
       if (
-        !(await this.options.views.ensureAvailable(view)) ||
-        !(await this.options.views.choose(view, "preserve")) ||
+        !(await this.options.views.choose(view, "split")) ||
         this.disposed ||
         this.options.views.getSnapshot().current !== view
       ) {
         return;
+      }
+      if (alreadyActive) {
+        this.options.preview.reload();
       }
       await this.options.acknowledge(generation, view, this.lifecycle.signal);
     } catch (error) {

@@ -2,7 +2,8 @@
 
 A Studio view is one complete web document backed by a Marimo notebook. Each
 named view owns its HTML, CSS, browser modules, images, fonts, and other relative
-assets. The notebook owns Python computation and reactive objects.
+assets. The notebook owns analytical context and reusable Python computation.
+The view may derive display data from projected JSON-compatible values.
 
 ## Inspect and select notebook content
 
@@ -46,8 +47,10 @@ __marimo__/studio/analysis/dashboard/
   app.css
 ```
 
-Add `app.js`, images, fonts, or data beneath the same directory and reference
-them with relative URLs.
+Keep small view-specific JavaScript in an inline `<script type="module">` in
+`index.html`. Add `app.js` or additional modules when the code grows enough to
+benefit from separate organization, reuse, or testing. Add images, fonts, or
+data beneath the same directory and reference them with relative URLs.
 
 ## Choose a projection
 
@@ -77,6 +80,23 @@ marimo-studio bind analysis.py \
 Reinspect before using `--overwrite`. A saved alias follows the intended cell
 through routine source movement and formatting changes.
 
+Use bindings for a small number of anonymous cells. When a large notebook would
+accumulate many bindings, give its stable producer cells semantic native names
+in the notebook:
+
+```python
+@app.cell
+def revenue_summary(mo, report):
+    summary = mo.md(f"Projected revenue: {report['total']}")
+    summary
+    return (summary,)
+```
+
+Name the small set of cells that represent durable view-facing outputs or major
+conceptual stages. Leave imports, plumbing, and incidental intermediate cells
+anonymous. Reference the native name directly with
+`<marimo-cell name="revenue_summary">`.
+
 Show one rich Python object through Marimo's native output formatter:
 
 ```html
@@ -96,8 +116,12 @@ Show a JSON-compatible value as text:
 
 `<marimo-output value>` and `mo-value` share one selector grammar. A selector
 starts with a notebook variable and can read attributes, dictionary keys, and
-list items. Put arithmetic, formatting, slicing, function calls, and
-comprehensions in notebook cells.
+list items. Preserve the notebook when its existing JSON-compatible values
+already contain the rows and fields the view needs. View JavaScript may filter,
+sort, group, restructure, format, and derive display-ready arrays and objects
+from those values. Add notebook code when the work introduces a data source,
+establishes analytical meaning, performs a major computation, or produces a
+result intended for reuse across views.
 
 Studio resolves every cell, output, and value host to its current producing cell
 after the runtime connects. Integrations such as Marimo Lens consume that
@@ -148,33 +172,36 @@ let wide plots and tables shrink or scroll inside their sections.
 
 ## Add browser behavior
 
-Use standard browser APIs and ECMAScript modules. A hidden `mo-value` host can
-pass structured Python data to a module:
+Use standard browser APIs and ECMAScript modules. Start small view-specific
+behavior in an inline module. A hidden `mo-value` host can pass structured
+Python data to that module:
 
 ```html
 <span id="report-data" hidden mo-value="report"></span>
 <output id="report-total"></output>
-<script type="module" src="app.js"></script>
+
+<script type="module">
+  const source = document.querySelector("#report-data");
+  const total = document.querySelector("#report-total");
+
+  const render = (value) => {
+    total.textContent = value.total;
+  };
+
+  source.addEventListener("marimo-value-updated", (event) => {
+    render(event.detail.value);
+  });
+
+  if (source.marimoValue !== undefined) {
+    render(source.marimoValue);
+  }
+</script>
 ```
 
-Listen for updates before reading the current value:
-
-```js
-const source = document.querySelector("#report-data");
-const total = document.querySelector("#report-total");
-
-const render = (value) => {
-  total.textContent = value.total;
-};
-
-source.addEventListener("marimo-value-updated", (event) => {
-  render(event.detail.value);
-});
-
-if (source.marimoValue !== undefined) {
-  render(source.marimoValue);
-}
-```
+Register the update listener before reading the current value. The inline module
+or `app.js` can reshape each projected value into the exact arrays and objects
+needed by the view. Move the module body to `app.js` when it grows enough to
+benefit from separate organization, reuse, or testing.
 
 `source.marimoValue` contains the current JSON-compatible Python value.
 `undefined` means the value has not arrived or cannot currently be read. JSON
