@@ -39,7 +39,7 @@ class AgentCoordinator:
             await asyncio.gather(*tasks, return_exceptions=True)
         async with self._store.condition:
             self._store.activations.clear()
-            self._store.acknowledged_generations.clear()
+            self._store.acknowledged_activations.clear()
             self._store.observation_requests.clear()
             self._store.observations.clear()
             self._store.observation_sequences.clear()
@@ -137,6 +137,16 @@ class AgentCoordinator:
 
     async def _notify_client_change(self) -> None:
         async with self._store.condition:
+            acknowledgements = dict(self._store.acknowledged_activations)
+        retained = await self._store.clients.retained_binding_generations()
+        async with self._store.condition:
+            for client_id, acknowledged in acknowledgements.items():
+                if (
+                    self._store.acknowledged_activations.get(client_id) is acknowledged
+                    and retained.get(client_id)
+                    != acknowledged.activation.binding_generation
+                ):
+                    self._store.acknowledged_activations.pop(client_id)
             self._store.condition.notify_all()
 
 

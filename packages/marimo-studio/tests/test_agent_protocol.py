@@ -12,6 +12,7 @@ from marimo_studio._agent_protocol import (
     parse_activation_result,
     parse_analysis_report,
     parse_connection_token,
+    parse_observation_response,
 )
 from marimo_studio.agent_models import (
     AnalysisReport,
@@ -64,6 +65,8 @@ def test_connection_protocol_requires_the_target_notebook(tmp_path: Path) -> Non
     assert parse_connection_token(payload, notebook) == "server-token"
     with pytest.raises(ProtocolError, match="connection response"):
         parse_connection_token({**payload, "notebook": "other.py"}, notebook)
+    with pytest.raises(ProtocolError, match="connection response"):
+        parse_connection_token({**payload, "schema": True}, notebook)
 
 
 def test_analysis_report_round_trips_through_the_agent_protocol(
@@ -269,18 +272,104 @@ def test_analysis_protocol_rejects_unrecognized_fields(tmp_path: Path) -> None:
     with pytest.raises(ProtocolError, match="analysis response"):
         parse_analysis_report(payload)
 
+    payload.pop("unexpected")
+    payload["schema"] = True
+    with pytest.raises(ProtocolError, match="analysis response"):
+        parse_analysis_report(payload)
 
-def test_activation_protocol_rejects_boolean_generations(tmp_path: Path) -> None:
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("ok", 1),
+        ("handoff_ready", 0),
+        ("summary", {"pass": True, "warn": 0, "fail": 0}),
+        ("summary", {"pass": -1, "warn": 0, "fail": 0}),
+        ("summary", {"pass": 1, "warn": 0}),
+    ],
+)
+def test_analysis_protocol_rejects_noncanonical_summary_fields(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
-    payload = {
+    payload = AnalysisReport(
+        notebook=notebook,
+        views=("dashboard",),
+        runtime="server",
+        revisions={"dashboard": "revision-1"},
+        static_checks=(),
+        runtime_checks=(),
+        runtime_skipped=None,
+        browser_observations=(),
+        browser_required=False,
+        actions=(),
+    ).to_dict()
+    payload[field] = value
+
+    with pytest.raises(ProtocolError, match="analysis response"):
+        parse_analysis_report(payload)
+
+
+def _activation_payload(notebook: Path) -> dict[str, object]:
+    return {
         "schema": 1,
         "notebook": str(notebook),
         "view": "dashboard",
         "state": "active",
-        "generation": True,
+        "generation": 1,
         "transition": "in-place",
         "client_id": "browser-client-1234",
         "session_id": "s_123456",
+    }
+
+
+def test_activation_protocol_accepts_active_and_reload_results(tmp_path: Path) -> None:
+    notebook = (tmp_path / "analysis.py").resolve()
+    active = parse_activation_result(
+        _activation_payload(notebook),
+        notebook,
+        "dashboard",
+    )
+    reload_payload = {
+        **_activation_payload(notebook),
+        "state": "reload-requested",
+        "transition": "reload",
+    }
+    reload_payload.pop("client_id")
+    reload = parse_activation_result(reload_payload, notebook, "dashboard")
+
+    assert active.client_id == "browser-client-1234"
+    assert reload.client_id is None
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"schema": True},
+        {"generation": True},
+        {"unexpected": True},
+    ],
+)
+def test_activation_protocol_rejects_invalid_active_results(
+    tmp_path: Path,
+    patch: dict[str, object],
+) -> None:
+    notebook = (tmp_path / "analysis.py").resolve()
+    payload = {**_activation_payload(notebook), **patch}
+
+    with pytest.raises(ProtocolError, match="activation response"):
+        parse_activation_result(payload, notebook, "dashboard")
+
+
+def test_activation_protocol_rejects_a_reload_client_field(tmp_path: Path) -> None:
+    notebook = (tmp_path / "analysis.py").resolve()
+    payload = {
+        **_activation_payload(notebook),
+        "state": "reload-requested",
+        "transition": "reload",
+        "client_id": None,
     }
 
     with pytest.raises(ProtocolError, match="activation response"):
@@ -310,6 +399,17 @@ def test_browser_protocol_requires_the_server_observation_challenge() -> None:
 
     with pytest.raises(ProtocolError, match="observation payload"):
         decode_browser_observation({**payload, "unexpected": True}, "dashboard")
+    with pytest.raises(ProtocolError, match="observation payload"):
+        decode_browser_observation({**payload, "schema": True}, "dashboard")
+    with pytest.raises(ProtocolError, match="observation response"):
+        parse_observation_response(
+            {
+                "schema": True,
+                "notebook": "/tmp/analysis.py",
+                "observations": [observation.to_dict()],
+            },
+            ("dashboard",),
+        )
 
 
 @pytest.mark.parametrize(

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, replace
 from importlib.metadata import version
+from pathlib import Path
 
 from marimo_studio._composition import (
     create_browser_runtime_projector,
@@ -16,6 +18,31 @@ from marimo_studio._workspace.runtime_checks import run_runtime_checks
 from marimo_studio.errors import MarimoStudioError
 from marimo_studio.inspect import inspect_notebook
 from marimo_studio.types import CheckResult
+
+
+@dataclass(frozen=True)
+class CheckReport:
+    """Static and optional runtime checks for a Studio workspace."""
+
+    notebook: Path
+    view: str | None
+    checks: tuple[CheckResult, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not any(result.status == "fail" for result in self.checks)
+
+    def extend(self, checks: tuple[CheckResult, ...]) -> CheckReport:
+        return replace(self, checks=(*self.checks, *checks))
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema": 1,
+            "ok": self.ok,
+            "notebook": str(self.notebook),
+            "view": self.view,
+            "checks": [result.to_dict() for result in self.checks],
+        }
 
 
 def _compatibility_details(*, passed: bool) -> dict[str, object]:
@@ -53,18 +80,22 @@ def check_studio(
     studio: StudioWorkspace,
     *,
     view_name: str | None = None,
-) -> tuple[CheckResult, ...]:
+) -> CheckReport:
     """Validate the notebook, bindings, templates, and packaged runtime."""
     compatibility = _compatibility_check()
     if compatibility.status == "fail":
-        return (compatibility,)
-    return (
-        *_check_studio(
-            studio,
-            inspect_notebook=inspect_notebook,
-            view_name=view_name,
+        return CheckReport(studio.notebook, view_name, (compatibility,))
+    return CheckReport(
+        notebook=studio.notebook,
+        view=view_name,
+        checks=(
+            *_check_studio(
+                studio,
+                inspect_notebook=inspect_notebook,
+                view_name=view_name,
+            ),
+            compatibility,
         ),
-        compatibility,
     )
 
 
@@ -84,4 +115,4 @@ async def check_runtime_studio(
     )
 
 
-__all__ = ["check_runtime_studio", "check_studio"]
+__all__ = ["CheckReport", "check_runtime_studio", "check_studio"]

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import math
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Literal, Protocol, cast
 
-from marimo_studio._runtime_limits import DEFAULT_RUNTIME_TIMEOUT
+from marimo_studio._runtime_limits import DEFAULT_RUNTIME_TIMEOUT, MAX_RUNTIME_TIMEOUT
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.revisions import capture_studio_sources
 from marimo_studio.agent_models import (
@@ -15,13 +17,149 @@ from marimo_studio.agent_models import (
     BrowserObservation,
 )
 from marimo_studio.checks import check_runtime_studio, check_studio
-from marimo_studio.errors import ConfigurationError, MarimoStudioError
+from marimo_studio.errors import (
+    CapabilityInputError,
+    MarimoStudioError,
+    ViewNotFoundError,
+)
 from marimo_studio.types import CheckResult
 
 BrowserObserver = Callable[
     [StudioWorkspace, tuple[str, ...], dict[str, str]],
     Awaitable[tuple[BrowserObservation, ...]],
 ]
+
+DEFAULT_BROWSER_TIMEOUT = 10.0
+MAX_BROWSER_TIMEOUT = 300.0
+
+
+@dataclass(frozen=True)
+class AnalysisOptions:
+    """Select views and evidence budgets for one analysis."""
+
+    view: str | None = None
+    browser_timeout: float = DEFAULT_BROWSER_TIMEOUT
+    runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT
+    require_browser: bool = True
+
+    def __post_init__(self) -> None:
+        if self.view is not None and not isinstance(self.view, str):
+            raise CapabilityInputError(
+                "invalid-analysis-request",
+                "view",
+                "view must be a string or null",
+            )
+        _validate_timeout(
+            "browser_timeout",
+            self.browser_timeout,
+            MAX_BROWSER_TIMEOUT,
+        )
+        _validate_timeout(
+            "runtime_timeout",
+            self.runtime_timeout,
+            MAX_RUNTIME_TIMEOUT,
+        )
+        if not isinstance(self.require_browser, bool):
+            raise CapabilityInputError(
+                "invalid-analysis-request",
+                "require_browser",
+                "require_browser must be a boolean",
+            )
+
+
+@dataclass(frozen=True)
+class AnalysisRequest:
+    """Analysis options plus an optional external browser selector."""
+
+    view: str | None = None
+    browser_timeout: float = DEFAULT_BROWSER_TIMEOUT
+    runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT
+    require_browser: bool = True
+    browser_client: str | None = None
+
+    def __post_init__(self) -> None:
+        _ = self.options
+        if self.browser_client is not None and (
+            not isinstance(self.browser_client, str) or not self.browser_client
+        ):
+            raise CapabilityInputError(
+                "invalid-analysis-request",
+                "browser_client",
+                "browser_client must be a non-empty string or null",
+            )
+
+    @property
+    def options(self) -> AnalysisOptions:
+        return AnalysisOptions(
+            view=self.view,
+            browser_timeout=self.browser_timeout,
+            runtime_timeout=self.runtime_timeout,
+            require_browser=self.require_browser,
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema": 1,
+            "view": self.view,
+            "browser_timeout": self.browser_timeout,
+            "runtime_timeout": self.runtime_timeout,
+            "require_browser": self.require_browser,
+            "browser_client": self.browser_client,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: object) -> AnalysisRequest:
+        schema = payload.get("schema") if isinstance(payload, dict) else None
+        if (
+            not isinstance(payload, dict)
+            or type(schema) is not int
+            or schema != 1
+            or not set(payload).issubset(
+                {
+                    "schema",
+                    "view",
+                    "browser_timeout",
+                    "runtime_timeout",
+                    "require_browser",
+                    "browser_client",
+                }
+            )
+        ):
+            raise CapabilityInputError(
+                "invalid-analysis-request",
+                "request",
+                "The analysis request must use schema 1 and supported fields",
+            )
+        return cls(
+            view=payload.get("view"),
+            browser_timeout=payload.get("browser_timeout", DEFAULT_BROWSER_TIMEOUT),
+            runtime_timeout=payload.get("runtime_timeout", DEFAULT_RUNTIME_TIMEOUT),
+            require_browser=payload.get("require_browser", True),
+            browser_client=payload.get("browser_client"),
+        )
+
+    def require_focused_view(self) -> None:
+        if self.require_browser and self.view is None:
+            raise CapabilityInputError(
+                "focused-analysis-required",
+                "view",
+                "Code-mode browser analysis requires one active view. "
+                "Activate it in one call, then analyze it in the next call.",
+            )
+
+
+def _validate_timeout(field: str, value: object, maximum: float) -> None:
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not 0 <= value <= maximum
+        or not math.isfinite(value)
+    ):
+        raise CapabilityInputError(
+            "invalid-analysis-request",
+            field,
+            f"{field} must be a finite number between 0 and {maximum:g} seconds",
+        )
 
 
 class RuntimeChecker(Protocol):
@@ -37,12 +175,10 @@ class RuntimeChecker(Protocol):
 
 async def analyze_studio(
     studio: StudioWorkspace,
+    options: AnalysisOptions | None = None,
     *,
-    view_name: str | None = None,
     observe_browser: BrowserObserver | None = None,
-    require_browser: bool = False,
     runtime_checker: RuntimeChecker | None = None,
-    runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
 ) -> AnalysisReport:
     """Validate selected views and return a repair-oriented report.
 
@@ -50,12 +186,13 @@ async def analyze_studio(
     stage succeeds. Pass ``observe_browser`` to include readiness reported by
     rendered Studio pages.
     """
-    views = _selected_views(studio, view_name)
+    options = options or AnalysisOptions()
+    views = _selected_views(studio, options.view)
     before, before_error, static_checks, after, after_error = await asyncio.to_thread(
         _static_stage,
         studio,
         views,
-        view_name,
+        options.view,
     )
     source_stable = before is not None and before == after
     revisions = after or before or {view: "unavailable" for view in views}
@@ -106,10 +243,10 @@ async def analyze_studio(
             studio,
             views,
             revisions,
-            view_name=view_name,
+            view_name=options.view,
             observe_browser=observe_browser,
             runtime_checker=runtime_checker,
-            runtime_timeout=runtime_timeout,
+            runtime_timeout=options.runtime_timeout,
         )
         runtime_checks = runtime_result
         runtime_skipped = None
@@ -117,7 +254,7 @@ async def analyze_studio(
         static_checks,
         runtime_checks,
         observations,
-        browser_required=require_browser,
+        browser_required=options.require_browser,
     )
     current_revisions, current_error = await asyncio.to_thread(
         _try_selected_revisions,
@@ -164,7 +301,7 @@ async def analyze_studio(
         runtime_checks=runtime_checks,
         runtime_skipped=runtime_skipped,
         browser_observations=observations,
-        browser_required=require_browser,
+        browser_required=options.require_browser,
         actions=actions,
     )
 
@@ -181,7 +318,7 @@ def _static_stage(
     Exception | None,
 ]:
     before, before_error = _try_selected_revisions(studio, views)
-    static_checks = check_studio(studio, view_name=view_name)
+    static_checks = check_studio(studio, view_name=view_name).checks
     after, after_error = _try_selected_revisions(studio, views)
     return before, before_error, static_checks, after, after_error
 
@@ -277,10 +414,7 @@ def _selected_views(
     if view_name is None:
         return tuple(studio.views)
     if view_name not in studio.views:
-        available = ", ".join(studio.views)
-        raise ConfigurationError(
-            f"Unknown view {view_name!r}. Available views: {available}."
-        )
+        raise ViewNotFoundError(view_name, available=tuple(studio.views))
     return (view_name,)
 
 
@@ -427,4 +561,13 @@ def _default_browser_advice(state: str, code: str | None = None) -> str:
     return "Fix the rendered view diagnostic, then rerun the analysis."
 
 
-__all__ = ["BrowserObserver", "RuntimeChecker", "analyze_studio"]
+__all__ = [
+    "DEFAULT_BROWSER_TIMEOUT",
+    "MAX_BROWSER_TIMEOUT",
+    "AnalysisOptions",
+    "AnalysisReport",
+    "AnalysisRequest",
+    "BrowserObserver",
+    "RuntimeChecker",
+    "analyze_studio",
+]

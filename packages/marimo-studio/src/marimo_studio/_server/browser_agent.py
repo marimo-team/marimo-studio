@@ -95,7 +95,8 @@ async def browser_observations_response(
     runtime_value = body.get("runtime")
     client_id = body.get("browserClient")
     if (
-        body.get("schema") != 1
+        type(body.get("schema")) is not int
+        or body.get("schema") != 1
         or not isinstance(requested, list)
         or not all(isinstance(view, str) and view for view in requested)
         or not isinstance(raw_revisions, dict)
@@ -296,8 +297,10 @@ def _finite_timeout(raw: object, *, default: float) -> float | None:
         return default
     if not isinstance(raw, (int, float)) or isinstance(raw, bool):
         return None
+    if not 0 <= raw <= _MAX_OBSERVATION_TIMEOUT:
+        return None
     value = float(raw)
-    if math.isfinite(value) and 0 <= value <= _MAX_OBSERVATION_TIMEOUT:
+    if math.isfinite(value):
         return value
     return None
 

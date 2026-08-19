@@ -17,7 +17,9 @@ import click
 from marimo_studio._workspace.environment import EnvironmentTarget
 from marimo_studio.environment import run_in_notebook_environment
 
-_COMMAND_NAMES = frozenset({"analyze", "bind", "check", "export", "inspect", "view"})
+_COMMAND_NAMES = frozenset(
+    {"analyze", "bind", "check", "export", "inspect", "overview", "view"}
+)
 _MAX_PROCESS_OUTPUT_CHARS = 16 * 1024
 
 
@@ -98,6 +100,7 @@ class DiagnosticStream:
             return None
         if (
             isinstance(event, dict)
+            and type(event.get("schema")) is int
             and event.get("schema") == 1
             and event.get("event") == "diagnostic"
             and event.get("severity") in {"info", "warning", "error"}
@@ -154,7 +157,7 @@ def _command_from_argv(args: list[str]) -> str:
     if not args:
         return "marimo-studio"
     first = args[0]
-    if first == "view" and len(args) > 1 and args[1] in {"add", "list", "remove"}:
+    if first == "view" and len(args) > 1 and args[1] in {"activate", "add", "remove"}:
         return f"view {args[1]}"
     return first if first in _COMMAND_NAMES else "marimo-studio"
 

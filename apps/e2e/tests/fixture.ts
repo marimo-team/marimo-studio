@@ -38,6 +38,16 @@ const workspaceAnalysisSchema = z.object({
   actions: z.array(z.record(z.string(), z.json())),
   handoff_ready: z.boolean(),
 });
+const workspaceActivationSchema = z.object({
+  schema: z.literal(1),
+  notebook: z.string(),
+  view: z.string(),
+  state: z.enum(["active", "reload-requested"]),
+  generation: z.number().int().positive(),
+  transition: z.enum(["in-place", "reload"]),
+  client_id: z.string().optional(),
+  session_id: z.string(),
+});
 const sessionAdminBootstrapSchema = z.object({
   serverToken: z.string(),
   urls: z.object({ query: z.string() }),
@@ -103,6 +113,25 @@ export const bindWorkspaceCell = (alias: string, cell: number) =>
 
 export const addWorkspaceView = (target: string, name: string) =>
   runStudioCli(["view", "add", target, "--name", name]);
+
+export const activateWorkspaceView = async (view: string, browserClient?: string) => {
+  const args = [
+    "view",
+    "activate",
+    workspaceNotebookPath,
+    "--name",
+    view,
+    "--server",
+    "http://127.0.0.1:4321?file=notebook.py",
+    "--format",
+    "json",
+  ];
+  if (browserClient) {
+    args.push("--browser-client", browserClient);
+  }
+  const { stdout } = await runStudioCli(args);
+  return workspaceActivationSchema.parse(JSON.parse(stdout));
+};
 
 export const checkWorkspace = async (): Promise<boolean> => {
   const { stdout } = await runStudioCli(["check", workspaceNotebookPath, "--format", "json"]);

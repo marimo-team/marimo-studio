@@ -10,12 +10,20 @@ from marimo_studio._server.live_clients import StudioClientRegistry
 from marimo_studio.agent_models import BrowserObservation
 
 
+@dataclass(frozen=True)
+class ActivationAcknowledgement:
+    activation: ViewActivation
+    active_view_generation: int
+
+
 @dataclass
 class AgentOperationStore:
     clients: StudioClientRegistry
     condition: asyncio.Condition = field(default_factory=asyncio.Condition)
     activations: dict[str, ViewActivation] = field(default_factory=dict)
-    acknowledged_generations: dict[str, int] = field(default_factory=dict)
+    acknowledged_activations: dict[str, ActivationAcknowledgement] = field(
+        default_factory=dict
+    )
     observation_requests: dict[str, dict[str, ObservationRequest]] = field(
         default_factory=dict
     )
@@ -42,4 +50,4 @@ class AgentOperationStore:
             self.observation_sequences.pop(request_id, None)
 
 
-__all__ = ["AgentOperationStore"]
+__all__ = ["ActivationAcknowledgement", "AgentOperationStore"]

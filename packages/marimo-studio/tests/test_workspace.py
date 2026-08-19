@@ -1303,8 +1303,8 @@ def test_selected_view_check_isolated_from_other_templates(
     selected = check_studio(load_studio(notebook_path), view_name="executive")
     all_views = check_studio(load_studio(notebook_path))
 
-    assert all(result.status == "pass" for result in selected)
-    assert any(result.status == "fail" for result in all_views)
+    assert all(result.status == "pass" for result in selected.checks)
+    assert any(result.status == "fail" for result in all_views.checks)
 
 
 def test_mutable_symlink_rejects_the_setup_before_notebook_changes(

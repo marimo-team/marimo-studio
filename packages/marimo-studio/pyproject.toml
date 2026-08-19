@@ -34,7 +34,7 @@ marimo-studio = "marimo_studio._entrypoints:server_middleware"
 marimo-studio = "marimo_studio._entrypoints:kernel_lifespan"
 
 [project.entry-points."marimo.agent.capability"]
-studio = "marimo_studio.agents"
+studio = "marimo_studio.agent"
 
 [tool.ruff]
 src = ["src"]
@@ -67,7 +67,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID251"]
 "tests/conftest.py" = ["TID251"]
 "tests/test_agent_browser_api.py" = ["TID251"]
 "tests/test_agent_client.py" = ["TID251"]
-"tests/test_agents.py" = ["TID251"]
+"tests/test_agent.py" = ["TID251"]
 "tests/test_app.py" = ["TID251"]
 "tests/test_browser_outputs.py" = ["TID251"]
 "tests/test_cached_cells.py" = ["TID251"]

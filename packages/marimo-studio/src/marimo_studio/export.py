@@ -23,7 +23,7 @@ from marimo_studio._workspace.models import (
     StudioWorkspace,
 )
 from marimo_studio._workspace.templates import TemplateParser
-from marimo_studio.errors import StaticExportError
+from marimo_studio.errors import StaticExportError, ViewNotFoundError
 from marimo_studio.types import ValueReference
 from marimo_studio.workspace import resolve_studio
 
@@ -510,10 +510,7 @@ def export_view(
     studio = load_studio(target)
     selected = view or studio.default_view
     if selected not in studio.views:
-        available = ", ".join(studio.views)
-        raise StaticExportError(
-            f"Unknown view {selected!r}. Available views: {available}."
-        )
+        raise ViewNotFoundError(selected, available=tuple(studio.views))
 
     document = studio.views[selected].template.read_text(encoding="utf-8")
     notebook_source = studio.notebook.read_text(encoding="utf-8")

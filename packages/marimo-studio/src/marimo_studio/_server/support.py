@@ -243,6 +243,15 @@ async def _view_response(
             view_name,
             context.server_token,
         )
+    if route == "activate":
+        return await activate_view_response(
+            request,
+            context,
+            studio,
+            view_name,
+            notebook_scope,
+            session_state,
+        )
     if view_name not in studio.views:
         return Response(status_code=404)
     if route == "dev/events" and request.method == "GET" and context.dev:
@@ -253,15 +262,6 @@ async def _view_response(
             notebook_scope=notebook_scope,
             view_name=view_name,
             server=server,
-        )
-    if route == "activate":
-        return await activate_view_response(
-            request,
-            context,
-            studio,
-            view_name,
-            notebook_scope,
-            session_state,
         )
     if route == "observation":
         return await browser_observation_response(

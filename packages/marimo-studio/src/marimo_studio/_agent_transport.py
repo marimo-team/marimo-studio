@@ -265,10 +265,20 @@ def _raise_response_error(status: int, raw: bytes) -> None:
         payload = None
     code = payload.get("error") if isinstance(payload, dict) else None
     message = payload.get("message") if isinstance(payload, dict) else None
+    details = (
+        {
+            key: value
+            for key, value in payload.items()
+            if key not in {"error", "message"}
+        }
+        if isinstance(payload, dict)
+        else None
+    )
     raise AgentRequestError(
         code if isinstance(code, str) and code else f"http-{status}",
         message if isinstance(message, str) and message else f"HTTP {status}",
         status_code=status,
+        details=details,
     )
 
 

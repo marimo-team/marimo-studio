@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 from marimo_studio._workspace.bindings import (
@@ -18,7 +19,27 @@ from marimo_studio._workspace.models import (
     ViewSetupResult,
 )
 from marimo_studio._workspace.setup import ensure_view as _ensure_view
+from marimo_studio._workspace.views import delete_view as _delete_view
 from marimo_studio.inspect import inspect_notebook
+
+
+@dataclass(frozen=True)
+class ViewRemovalResult:
+    """Describe a removed view and the remaining workspace."""
+
+    notebook: Path
+    view: str
+    default_view: str
+    views: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema": 1,
+            "notebook": str(self.notebook),
+            "view": self.view,
+            "default_view": self.default_view,
+            "views": list(self.views),
+        }
 
 
 def resolve_studio(
@@ -72,4 +93,23 @@ def ensure_view(
     )
 
 
-__all__ = ["bind_cell", "ensure_view", "resolve_studio"]
+def remove_view(studio: StudioWorkspace, name: str) -> ViewRemovalResult:
+    """Remove one named view and return the remaining workspace identity."""
+    updated = _delete_view(studio, name)
+    return ViewRemovalResult(
+        notebook=updated.notebook,
+        view=name,
+        default_view=updated.default_view,
+        views=tuple(updated.views),
+    )
+
+
+__all__ = [
+    "BindingResult",
+    "ViewRemovalResult",
+    "ViewSetupResult",
+    "bind_cell",
+    "ensure_view",
+    "remove_view",
+    "resolve_studio",
+]

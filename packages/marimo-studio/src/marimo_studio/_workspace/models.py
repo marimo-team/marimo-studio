@@ -11,6 +11,7 @@ from marimo_studio._cell_refs import cell_ref_candidates
 from marimo_studio.errors import (
     ConfigurationError,
     RuntimeSyncError,
+    ViewNotFoundError,
     WorkspaceInitializationError,
 )
 from marimo_studio.types import (
@@ -103,9 +104,9 @@ class StudioWorkspace(StudioDefinition):
         try:
             return self.views[selected]
         except KeyError as error:
-            available = ", ".join(self.views) or "none"
-            raise KeyError(
-                f"Unknown view {selected!r}. Available views: {available}."
+            raise ViewNotFoundError(
+                selected,
+                available=tuple(self.views),
             ) from error
 
 
@@ -158,7 +159,14 @@ class ResolvedStudio:
     views: dict[str, ResolvedView]
 
     def view(self, name: str | None = None) -> ResolvedView:
-        return self.views[name or self.workspace.default_view]
+        selected = name or self.workspace.default_view
+        try:
+            return self.views[selected]
+        except KeyError as error:
+            raise ViewNotFoundError(
+                selected,
+                available=tuple(self.views),
+            ) from error
 
     @property
     def diagnostics(self) -> tuple[ProjectionDiagnostic, ...]:
@@ -314,6 +322,7 @@ class BindingResult:
     alias: str
     cell: CellSpec
     config_path: Path
+    dry_run: bool
     previous_ref: CellRef | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -328,6 +337,7 @@ class BindingResult:
                 "source": asdict(self.cell.source),
             },
             "config": str(self.config_path),
+            "dry_run": self.dry_run,
             "previous_ref": (
                 str(self.previous_ref) if self.previous_ref is not None else None
             ),

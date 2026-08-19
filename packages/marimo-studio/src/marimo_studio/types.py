@@ -121,6 +121,8 @@ class CellSpec:
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)
         value["ref"] = str(self.ref)
+        value["definitions"] = list(self.definitions)
+        value["references"] = list(self.references)
         value["upstream"] = [str(ref) for ref in self.upstream]
         value["downstream"] = [str(ref) for ref in self.downstream]
         if self.code is None:

@@ -52,7 +52,7 @@ def delete_view(studio: StudioWorkspace, name: str) -> StudioWorkspace:
     """Delete one view directory and return the updated workspace."""
     current = load_studio(studio.config_path)
     if name not in current.views:
-        raise ViewNotFoundError(name)
+        raise ViewNotFoundError(name, available=tuple(current.views))
     if len(current.views) == 1:
         raise LastViewError()
 
@@ -62,7 +62,7 @@ def delete_view(studio: StudioWorkspace, name: str) -> StudioWorkspace:
         {current.config_path, current.view_root.parent, target},
     )
     if not target.is_dir() or not (target / "index.html").is_file():
-        raise ViewNotFoundError(name)
+        raise ViewNotFoundError(name, available=tuple(current.views))
 
     remaining = tuple(view for view in current.views if view != name)
     next_default = (

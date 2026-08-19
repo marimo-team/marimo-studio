@@ -17,6 +17,8 @@ from marimo_studio._cli import cli, main
 from marimo_studio._cli.diagnostics import DiagnosticStream
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.environment import SANDBOX_ENV
+from marimo_studio.activation import ViewActivationResult
+from marimo_studio.errors import AgentRequestError
 from marimo_studio.workspace import ensure_view
 
 from .helpers import replace_app_shell
@@ -69,9 +71,9 @@ def test_view_add_bootstraps_lists_and_checks_named_views(
             "json",
         ],
     )
-    listed = runner.invoke(
+    overview = runner.invoke(
         cli,
-        ["view", "list", str(notebook_path), "--format", "json"],
+        ["overview", str(notebook_path), "--format", "json"],
     )
     checked = runner.invoke(
         cli,
@@ -80,14 +82,14 @@ def test_view_add_bootstraps_lists_and_checks_named_views(
 
     assert created.exit_code == 0, created.output
     assert added.exit_code == 0, added.output
-    assert listed.exit_code == 0, listed.output
+    assert overview.exit_code == 0, overview.output
     assert checked.exit_code == 0, checked.output
     assert json.loads(created.output)["view"] == "dashboard"
     assert Path(json.loads(created.output)["root"]) == (
         notebook_path.parent / "__marimo__" / "studio" / "analysis" / "dashboard"
     )
     assert json.loads(added.output)["view"] == "executive"
-    assert [item["name"] for item in json.loads(listed.output)["views"]] == [
+    assert [item["name"] for item in json.loads(overview.output)["views"]] == [
         "dashboard",
         "executive",
     ]
@@ -166,6 +168,154 @@ def test_view_add_reports_the_editor_command(notebook_path: Path) -> None:
         subprocess.list2cmdline(arguments) if os.name == "nt" else shlex.join(arguments)
     )
     assert expected in unstyle(result.stderr)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["overview"],
+        ["view", "add"],
+    ],
+)
+def test_text_recovery_hints_respect_jsonl_diagnostics(
+    notebook_path: Path,
+    arguments: list[str],
+) -> None:
+    result = CliRunner().invoke(
+        cli,
+        [*arguments, str(notebook_path), "--diagnostics", "jsonl"],
+    )
+
+    assert result.exit_code == 0, result.output
+    events = [json.loads(line) for line in result.stderr.splitlines()]
+    assert events
+    assert all(event["event"] == "diagnostic" for event in events)
+
+
+def test_view_activate_returns_the_shared_result(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_view(notebook_path)
+
+    async def activate(studio, connection, name):
+        assert studio.notebook == notebook_path.resolve()
+        assert connection.server_url == "http://localhost:2718"
+        assert connection.browser_client == "browser-client-1234"
+        assert connection.auth_token == "access-token"
+        assert name == "dashboard"
+        return ViewActivationResult(
+            notebook=studio.notebook,
+            view=name,
+            state="active",
+            generation=2,
+            transition="in-place",
+            session_id="s_123456",
+            client_id=connection.browser_client,
+        )
+
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.view.activate_view",
+        activate,
+    )
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "activate",
+            str(notebook_path),
+            "--name",
+            "dashboard",
+            "--format",
+            "json",
+        ],
+        env={
+            "MARIMO_STUDIO_SERVER_URL": "http://localhost:2718",
+            "MARIMO_STUDIO_BROWSER_CLIENT": "browser-client-1234",
+            "MARIMO_STUDIO_ACCESS_TOKEN": "access-token",
+        },
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == {
+        "schema": 1,
+        "notebook": str(notebook_path),
+        "view": "dashboard",
+        "state": "active",
+        "generation": 2,
+        "transition": "in-place",
+        "session_id": "s_123456",
+        "client_id": "browser-client-1234",
+    }
+
+
+def test_view_activate_requires_a_server(notebook_path: Path) -> None:
+    ensure_view(notebook_path)
+
+    result = CliRunner().invoke(
+        cli,
+        ["view", "activate", str(notebook_path), "--name", "dashboard"],
+    )
+
+    assert result.exit_code == 2
+    assert "--server" in result.output
+
+
+def test_view_activate_flags_override_connection_environment(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_view(notebook_path)
+    captured: dict[str, str] = {}
+
+    def connection(server_url: str, *, access_token: str, browser_client: str):
+        captured.update(
+            server_url=server_url,
+            access_token=access_token,
+            browser_client=browser_client,
+        )
+        raise RuntimeError("connection captured")
+
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.view.studio_server_connection",
+        connection,
+    )
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "activate",
+            str(notebook_path),
+            "--name",
+            "dashboard",
+            "--server",
+            "http://explicit:2718",
+            "--browser-client",
+            "explicit-client",
+        ],
+        env={
+            "MARIMO_STUDIO_SERVER_URL": "http://environment:2718",
+            "MARIMO_STUDIO_BROWSER_CLIENT": "environment-client",
+            "MARIMO_STUDIO_ACCESS_TOKEN": "access-token",
+        },
+    )
+
+    assert isinstance(result.exception, RuntimeError)
+    assert captured == {
+        "server_url": "http://explicit:2718",
+        "access_token": "access-token",
+        "browser_client": "explicit-client",
+    }
+
+
+def test_view_activate_keeps_access_tokens_out_of_arguments() -> None:
+    result = CliRunner().invoke(cli, ["view", "activate", "--help"])
+
+    assert result.exit_code == 0
+    assert "MARIMO_STUDIO_SERVER_URL" in result.output
+    assert "MARIMO_STUDIO_BROWSER_CLIENT" in result.output
+    assert "--access-token" not in result.output
+    assert "MARIMO_STUDIO_ACCESS_TOKEN" in result.output
 
 
 def test_view_add_resolves_an_uninitialized_project_from_the_current_directory(
@@ -478,12 +628,62 @@ def test_analyze_rejects_browser_selection_without_a_server() -> None:
     assert "--server" in result.output
 
 
+def test_analyze_flags_override_connection_environment(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_view(notebook_path)
+    captured: dict[str, str] = {}
+
+    def connection(server_url: str, *, access_token: str, browser_client: str):
+        captured.update(
+            server_url=server_url,
+            access_token=access_token,
+            browser_client=browser_client,
+        )
+        raise RuntimeError("connection captured")
+
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.analyze.should_reenter",
+        lambda *_args: False,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.analyze.studio_server_connection",
+        connection,
+    )
+    result = CliRunner().invoke(
+        cli,
+        [
+            "analyze",
+            str(notebook_path),
+            "--server",
+            "http://explicit:2718",
+            "--browser-client",
+            "explicit-client",
+        ],
+        env={
+            "MARIMO_STUDIO_SERVER_URL": "http://environment:2718",
+            "MARIMO_STUDIO_BROWSER_CLIENT": "environment-client",
+            "MARIMO_STUDIO_ACCESS_TOKEN": "access-token",
+        },
+    )
+
+    assert isinstance(result.exception, RuntimeError)
+    assert captured == {
+        "server_url": "http://explicit:2718",
+        "access_token": "access-token",
+        "browser_client": "explicit-client",
+    }
+
+
 def test_analyze_keeps_access_tokens_out_of_command_arguments() -> None:
     result = CliRunner().invoke(cli, ["analyze", "--help"])
 
     assert result.exit_code == 0
     assert "--access-token" not in result.output
     assert "MARIMO_STUDIO_ACCESS_TOKEN" in result.output
+    assert "MARIMO_STUDIO_SERVER_URL" in result.output
+    assert "MARIMO_STUDIO_BROWSER_CLIENT" in result.output
     assert "--runtime-timeout" in result.output
 
 
@@ -757,3 +957,87 @@ def test_main_structures_configuration_errors(
     assert event["code"] == "configuration-error"
     assert event["severity"] == "error"
     assert event["exit_code"] == 3
+
+
+def test_main_structures_live_agent_request_errors(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ensure_view(notebook_path)
+
+    async def fail_activation(*_args: object) -> None:
+        raise AgentRequestError(
+            "browser-client-ambiguous",
+            "Select one connected Studio browser.",
+            status_code=409,
+        )
+
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.view.activate_view",
+        fail_activation,
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "marimo-studio",
+            "view",
+            "activate",
+            str(notebook_path),
+            "--name",
+            "dashboard",
+            "--server",
+            "http://localhost:2718",
+            "--diagnostics",
+            "jsonl",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    output = capsys.readouterr()
+    event = json.loads(output.err)
+    assert raised.value.code == 5
+    assert output.out == ""
+    assert event["command"] == "view activate"
+    assert event["code"] == "browser-client-ambiguous"
+    assert event["exit_code"] == 5
+
+
+def test_main_preserves_view_not_found_details(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ensure_view(notebook_path, "dashboard")
+    ensure_view(notebook_path, "report")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "marimo-studio",
+            "view",
+            "remove",
+            str(notebook_path),
+            "--name",
+            "missing",
+            "--yes",
+            "--diagnostics",
+            "jsonl",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    output = capsys.readouterr()
+    event = json.loads(output.err)
+    assert raised.value.code == 3
+    assert output.out == ""
+    assert event["code"] == "view-not-found"
+    assert event["details"] == {
+        "view": "missing",
+        "available_views": ["dashboard", "report"],
+    }

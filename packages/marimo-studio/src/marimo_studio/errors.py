@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 
@@ -108,7 +109,7 @@ class BindingError(ConfigurationError):
 
 
 class ProtocolError(ConfigurationError):
-    """The installed marimo runtime is incompatible."""
+    """A Studio protocol record or installed Marimo runtime is incompatible."""
 
     code = "protocol-error"
     exit_code = 6
@@ -118,6 +119,21 @@ class CompatibilityError(ProtocolError):
     """The installed Marimo layout cannot provide a required capability."""
 
     code = "marimo-layout-incompatible"
+
+
+class CapabilityInputError(MarimoStudioError):
+    """A capability request contains an invalid field or value."""
+
+    exit_code = 2
+    status_code = 400
+
+    def __init__(self, code: str, field: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.field = field
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {"field": self.field}
 
 
 class RuntimeTimeoutError(MarimoStudioError):
@@ -131,13 +147,26 @@ class RuntimeTimeoutError(MarimoStudioError):
     )
 
 
-class AgentRequestError(ProtocolError):
+class AgentRequestError(MarimoStudioError):
     """An agent-facing server request failed with a structured error code."""
 
-    def __init__(self, code: str, message: str, *, status_code: int = 500) -> None:
+    exit_code = 5
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        status_code: int = 500,
+        details: Mapping[str, object] | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.status_code = status_code
+        self.details = dict(details or {})
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return self.details.copy()
 
 
 class DependencyError(ConfigurationError):
@@ -202,8 +231,14 @@ class ViewNotFoundError(MarimoStudioError):
     code = "view-not-found"
     status_code = 404
 
-    def __init__(self, name: str) -> None:
-        super().__init__(f"View {name!r} does not exist.")
+    def __init__(self, name: str, *, available: tuple[str, ...] = ()) -> None:
+        choices = f" Available views: {', '.join(available)}." if available else ""
+        super().__init__(f"View {name!r} does not exist.{choices}")
+        self.name = name
+        self.available = available
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {"view": self.name, "available_views": list(self.available)}
 
 
 class LastViewError(MarimoStudioError):

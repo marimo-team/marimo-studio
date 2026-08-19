@@ -11,6 +11,7 @@ from marimo_studio._cli.commands.bind import bind
 from marimo_studio._cli.commands.check import check
 from marimo_studio._cli.commands.export import export as export_command
 from marimo_studio._cli.commands.inspect import inspect
+from marimo_studio._cli.commands.overview import overview
 from marimo_studio._cli.commands.view import view
 from marimo_studio._cli.diagnostics import diagnostics_from_argv
 from marimo_studio._cli.help import ColoredGroup
@@ -23,9 +24,9 @@ from marimo_studio.errors import MarimoStudioError
     context_settings={"help_option_names": ["-h", "--help"]},
     epilog="""\b
 Examples:
+  marimo-studio overview analysis.py
   marimo-studio view add analysis.py
   marimo edit analysis.py --sandbox
-  marimo-studio view add analysis.py --name executive
 """,
     no_args_is_help=True,
 )
@@ -39,6 +40,7 @@ cli.add_command(analyze)
 cli.add_command(check)
 cli.add_command(export_command)
 cli.add_command(inspect)
+cli.add_command(overview)
 cli.add_command(view)
 
 
@@ -78,6 +80,7 @@ def main() -> None:
             message=str(error),
             severity="error",
             exit_code=error.exit_code,
+            details=error.diagnostic_details() or None,
         ):
             echo_error(f"Error: {error}")
         raise SystemExit(error.exit_code) from None

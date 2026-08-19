@@ -208,7 +208,7 @@ def canonical_view_root(notebook: str | Path) -> Path:
     return path.parent / MARIMO_DIRECTORY / STUDIO_DIRECTORY / path.stem
 
 
-def _discover_views(
+def discover_views(
     view_root: Path,
 ) -> dict[str, View]:
     if not view_root.is_dir():
@@ -283,7 +283,7 @@ def materialize_studio_workspace(
     definition: StudioDefinition,
 ) -> StudioWorkspace:
     """Resolve a Studio definition into its initialized workspace."""
-    views = _discover_views(definition.view_root)
+    views = discover_views(definition.view_root)
     return StudioWorkspace(
         root=definition.root,
         config_path=definition.config_path,

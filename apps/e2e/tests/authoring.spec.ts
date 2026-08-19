@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { z } from "zod";
 
 import {
+  activateWorkspaceView,
   addWorkspaceView,
   analyzeWorkspace,
   bindWorkspaceCell,
@@ -250,7 +251,7 @@ test("activates Studio after the first view is created", async ({ page }) => {
     data: {
       code: `
 import marimo._code_mode as cm
-import marimo_studio.agents as studio
+import marimo_studio.agent as studio
 
 ctx = cm.get_context()
 setup = studio.ensure_view(ctx, "dashboard")
@@ -283,10 +284,10 @@ activation.to_dict()
       data: {
         code: `
 import marimo._code_mode as cm
-import marimo_studio.agents as studio
+import marimo_studio.agent as studio
 
 ctx = cm.get_context()
-report = await studio.analyze(ctx, view_name="dashboard")
+report = await studio.analyze(ctx, view="dashboard")
 {"handoff_ready": report.handoff_ready, "actions": [item.to_dict() for item in report.actions]}
 `,
       },
@@ -302,7 +303,7 @@ report = await studio.analyze(ctx, view_name="dashboard")
       data: {
         code: `
 import marimo._code_mode as cm
-import marimo_studio.agents as studio
+import marimo_studio.agent as studio
 
 ctx = cm.get_context()
 studio.ensure_view(ctx, "report").to_dict()
@@ -328,7 +329,7 @@ studio.ensure_view(ctx, "report").to_dict()
       data: {
         code: `
 import marimo._code_mode as cm
-import marimo_studio.agents as studio
+import marimo_studio.agent as studio
 
 ctx = cm.get_context()
 (await studio.activate_view(ctx, "report")).to_dict()
@@ -348,10 +349,10 @@ ctx = cm.get_context()
       data: {
         code: `
 import marimo._code_mode as cm
-import marimo_studio.agents as studio
+import marimo_studio.agent as studio
 
 ctx = cm.get_context()
-report = await studio.analyze(ctx, view_name="report")
+report = await studio.analyze(ctx, view="report")
 {"handoff_ready": report.handoff_ready, "actions": [item.to_dict() for item in report.actions]}
 `,
       },
@@ -537,17 +538,16 @@ test("activates an agent-requested view and records its rendered revision", asyn
 
   const sessionId = (await sessionRequest).headers()["marimo-session-id"];
   const serverToken = await studioServerToken(page);
-  const activated = await page.request.patch(
-    "/_marimo-studio/views/qa-view/activate?file=notebook.py",
-    {
-      headers: {
-        "Marimo-Server-Token": serverToken,
-        "Marimo-Session-Id": sessionId,
-      },
-    },
-  );
-  expect(activated.status()).toBe(200);
-  expect(await activated.json()).toMatchObject({ transition: "in-place" });
+  const source = await page.locator("#marimo-studio-bootstrap").textContent();
+  const clientId = readStudioClientId(source ?? "null");
+  const activated = await activateWorkspaceView("qa-view", clientId);
+  expect(activated).toMatchObject({
+    client_id: clientId,
+    session_id: sessionId,
+    state: "active",
+    transition: "in-place",
+    view: "qa-view",
+  });
   await expect(page.getByLabel("Select or manage a view")).toContainText("qa-view");
   await expect(previewFrame(page).getByRole("heading", { name: "Qa View" })).toBeVisible();
 
@@ -640,8 +640,9 @@ test("rebinds agent analysis after the native editor reconnects", async ({ page 
   const response = await page.request.post("/_marimo-studio/analyze?file=notebook.py", {
     headers: { "Marimo-Server-Token": await studioServerToken(page) },
     data: {
+      schema: 1,
       view: "dashboard",
-      timeout: 10,
+      browser_timeout: 10,
       require_browser: true,
       browser_client: clientId,
     },

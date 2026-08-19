@@ -30,7 +30,13 @@ from marimo_studio._workspace.templates import (
     TemplateParser,
     validate_template_structure,
 )
-from marimo_studio.errors import BindingError, ConfigurationError, TemplateError
+from marimo_studio.errors import (
+    BindingError,
+    CapabilityInputError,
+    ConfigurationError,
+    TemplateError,
+    ViewNotFoundError,
+)
 from marimo_studio.types import CellRef, CellSpec, ValueBinding
 from marimo_studio.values import MAX_OUTPUT_SELECTORS
 
@@ -357,10 +363,7 @@ def resolve_studio(
         for definition in cell.definitions:
             defining_cells.setdefault(definition, []).append(cell)
     if view_name is not None and view_name not in studio.views:
-        available = ", ".join(studio.views)
-        raise ConfigurationError(
-            f"Unknown view {view_name!r}. Available views: {available}."
-        )
+        raise ViewNotFoundError(view_name, available=tuple(studio.views))
     selected_views = (
         {view_name: studio.views[view_name]} if view_name is not None else studio.views
     )
@@ -387,6 +390,16 @@ def bind_cell(
     overwrite: bool = False,
 ) -> BindingResult:
     """Bind a stable alias to a notebook cell."""
+    if (
+        not isinstance(cell_index, int)
+        or isinstance(cell_index, bool)
+        or cell_index < 0
+    ):
+        raise CapabilityInputError(
+            "invalid-binding-request",
+            "cell_index",
+            "cell_index must be a nonnegative integer",
+        )
     if not ALIAS_PATTERN.fullmatch(alias):
         raise ConfigurationError(f"Invalid cell alias: {alias}")
     notebook = inspect_notebook(studio.notebook)
@@ -405,7 +418,13 @@ def bind_cell(
             f"Alias {alias!r} already points to {previous_ref}. "
             "Pass --overwrite to replace it."
         )
-    result = BindingResult(alias, cell, studio.config_path, previous_ref)
+    result = BindingResult(
+        alias=alias,
+        cell=cell,
+        config_path=studio.config_path,
+        dry_run=dry_run,
+        previous_ref=previous_ref,
+    )
     if dry_run:
         return result
     _write_cell_bindings(studio, {alias: cell.ref})

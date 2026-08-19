@@ -38,6 +38,29 @@ runtime_timeout_option = click.option(
     show_default=True,
     help="Seconds to wait for isolated notebook execution.",
 )
+browser_client_option = click.option(
+    "--browser-client",
+    envvar="MARIMO_STUDIO_BROWSER_CLIENT",
+    show_envvar=True,
+    help="Target one connected Studio browser client.",
+)
+
+
+def server_option(*, required: bool = False):
+    """Add the running Studio server URL option."""
+    return click.option(
+        "--server",
+        "server_url",
+        envvar="MARIMO_STUDIO_SERVER_URL",
+        show_envvar=True,
+        required=required,
+        help=(
+            "Connect to this running Studio server URL. Set "
+            "MARIMO_STUDIO_ACCESS_TOKEN when the server requires authentication."
+        ),
+    )
+
+
 target_argument = click.argument(
     "target",
     required=False,

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from marimo_studio._workspace.models import ResolvedStudio, StudioWorkspace
 from marimo_studio.errors import (
-    ConfigurationError,
     MarimoStudioError,
     NotebookSourceError,
+    ViewNotFoundError,
 )
 from marimo_studio.types import CellSpec, CheckResult, ValueBinding
 
@@ -18,10 +18,7 @@ def selected_views(
     if view_name is None:
         return tuple(resolved.views)
     if view_name not in resolved.views:
-        available = ", ".join(resolved.views)
-        raise ConfigurationError(
-            f"Unknown view {view_name!r}. Available views: {available}."
-        )
+        raise ViewNotFoundError(view_name, available=tuple(resolved.views))
     return (view_name,)
 
 

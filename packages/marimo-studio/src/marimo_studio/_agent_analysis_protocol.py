@@ -16,6 +16,9 @@ def parse_analysis_report(payload: dict[str, Any]) -> AnalysisReport:
     views = payload.get("views")
     runtime_id = payload.get("runtime")
     revisions = payload.get("revisions")
+    ok = payload.get("ok")
+    handoff_ready = payload.get("handoff_ready")
+    summary = payload.get("summary")
     stages = payload.get("stages")
     actions = payload.get("actions")
     if (
@@ -32,12 +35,16 @@ def parse_analysis_report(payload: dict[str, Any]) -> AnalysisReport:
             "stages",
             "actions",
         }
+        or type(payload.get("schema")) is not int
         or payload.get("schema") != 1
         or not _nonempty(notebook)
         or not isinstance(views, list)
         or not all(_nonempty(view) for view in views)
         or not _nonempty(runtime_id)
         or not _string_mapping(revisions)
+        or type(ok) is not bool
+        or type(handoff_ready) is not bool
+        or not _summary_counts(summary)
         or not isinstance(stages, dict)
         or not isinstance(actions, list)
     ):
@@ -152,6 +159,14 @@ def _string_mapping(value: object) -> bool:
 
 def _string_keyed_mapping(value: object) -> bool:
     return isinstance(value, dict) and all(isinstance(key, str) for key in value)
+
+
+def _summary_counts(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == {"pass", "warn", "fail"}
+        and all(type(count) is int and count >= 0 for count in value.values())
+    )
 
 
 __all__ = ["parse_analysis_report"]

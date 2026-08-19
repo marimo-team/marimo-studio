@@ -1,31 +1,37 @@
-"""Create, list, and remove Studio views."""
+"""Create, activate, and remove Studio views."""
 
 from __future__ import annotations
 
+import asyncio
+import os
 from pathlib import Path
 
 import click
 
+from marimo_studio._agent_transport import studio_server_connection
 from marimo_studio._cli.diagnostics import diagnostic_format_option, diagnostics
 from marimo_studio._cli.help import ColoredCommand, ColoredGroup
-from marimo_studio._cli.options import output_format_option, target_argument
+from marimo_studio._cli.options import (
+    browser_client_option,
+    output_format_option,
+    server_option,
+    target_argument,
+)
 from marimo_studio._cli.output import (
     echo_json,
-    render_view_list,
+    render_view_activation,
     render_view_removal,
     render_view_setup,
-    view_list_payload,
-    view_removal_payload,
 )
 from marimo_studio._workspace.targets import load_studio_target, resolve_notebook
-from marimo_studio._workspace.views import delete_view
-from marimo_studio.errors import LastViewError, ViewNotFoundError
-from marimo_studio.workspace import ensure_view
+from marimo_studio.activation import activate_view
+from marimo_studio.errors import LastViewError, ProtocolError
+from marimo_studio.workspace import ensure_view, remove_view
 
 
 @click.group("view", cls=ColoredGroup)
 def view() -> None:
-    """Create, list, and remove notebook views."""
+    """Create, activate, and remove notebook views."""
 
 
 @click.command("add", cls=ColoredCommand)
@@ -57,21 +63,37 @@ def add(
         render_view_setup(result)
 
 
-@click.command("list", cls=ColoredCommand)
+@click.command("activate", cls=ColoredCommand)
 @target_argument
+@click.option(
+    "--name", required=True, metavar="NAME", help="Name the view to activate."
+)
+@server_option(required=True)
+@browser_client_option
 @output_format_option
 @diagnostic_format_option
-def list_views(target: Path | None, output_format: str) -> None:
-    """List views configured for TARGET.
-
-    TARGET may be a notebook, project directory, or pyproject.toml. The current
-    directory is used when TARGET is omitted.
-    """
+def activate(
+    target: Path | None,
+    name: str,
+    server_url: str,
+    browser_client: str | None,
+    output_format: str,
+) -> None:
+    """Activate a view in one connected Studio browser."""
     studio = load_studio_target(target)
+    try:
+        connection = studio_server_connection(
+            server_url,
+            access_token=os.environ.get("MARIMO_STUDIO_ACCESS_TOKEN", ""),
+            browser_client=browser_client or "",
+        )
+    except ProtocolError as error:
+        raise click.BadParameter(str(error), param_hint="--server") from error
+    result = asyncio.run(activate_view(studio, connection, name))
     if output_format == "json":
-        echo_json(view_list_payload(studio))
+        echo_json(result.to_dict())
     else:
-        render_view_list(studio)
+        render_view_activation(result)
 
 
 @click.command(
@@ -100,8 +122,7 @@ def remove(
     directory is used when TARGET is omitted.
     """
     studio = load_studio_target(target)
-    if name not in studio.views:
-        raise ViewNotFoundError(name)
+    studio.view(name)
     if len(studio.views) == 1:
         raise LastViewError()
     if not yes and diagnostics().format == "jsonl":
@@ -112,13 +133,13 @@ def remove(
         err=True,
     ):
         raise click.exceptions.Exit(1)
-    updated = delete_view(studio, name)
+    result = remove_view(studio, name)
     if output_format == "json":
-        echo_json(view_removal_payload(updated, name))
+        echo_json(result.to_dict())
     else:
-        render_view_removal(updated, name)
+        render_view_removal(result)
 
 
 view.add_command(add)
-view.add_command(list_views)
+view.add_command(activate)
 view.add_command(remove)
