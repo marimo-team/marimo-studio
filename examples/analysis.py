@@ -108,5 +108,28 @@ def revenue_table(mo, rows):
     return (revenue_table,)
 
 
+@app.cell(hide_code=True)
+def _():
+    # marimo-lens: agent-managed Lens cell
+    import importlib.util as _importlib_util
+
+    import marimo as _mo
+
+    if _importlib_util.find_spec("marimo_lens") is None:
+        lens = _mo.md("Install `marimo-lens` to annotate this Studio view.")
+    else:
+        from marimo_lens import Lens as _Lens
+        from marimo_studio import LENS_TARGET_SELECTOR as _LENS_TARGET_SELECTOR
+
+        lens = _Lens(
+            dom_selector=(
+                f"{_LENS_TARGET_SELECTOR}, "
+                "#app-shell :is(header, section, article)"
+            ),
+        )
+    _mo.output.append(lens)
+    return (lens,)
+
+
 if __name__ == "__main__":
     app.run()
