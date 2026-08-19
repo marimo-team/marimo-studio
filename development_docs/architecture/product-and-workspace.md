@@ -64,16 +64,16 @@ materialized view.
 - **Complexity carried:** routes must distinguish configured, initialized, and
   invalid workspaces instead of treating every missing file as the same error.
 - **Maintenance surface:** `_workspace/models.py`, `_server/workspace_lifecycle.py`,
-  `_server/studio/initialize.py`, and hosted lifecycle acceptance tests.
+  `_server/studio/document.py`, and hosted lifecycle acceptance tests.
 
 ```mermaid
 flowchart TD
     request[Resolved notebook request] --> configured{Studio definition found?}
-    configured -->|No| unconfigured[Unconfigured<br/>delegate to Marimo]
+    configured -->|No| unconfigured[Unconfigured<br/>stable editor host in edit mode]
     configured -->|Yes| valid{Configuration valid?}
     valid -->|No| invalid[Invalid<br/>structured repair response]
     valid -->|Yes| views{Default view materialized?}
-    views -->|No| needs[NeedsView<br/>authenticated initializer]
+    views -->|No| needs[NeedsView<br/>initializer over stable editor host]
     views -->|Yes| ready[Ready<br/>serve workspace or view]
 ```
 

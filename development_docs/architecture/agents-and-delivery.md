@@ -87,14 +87,21 @@ browser client or requires the server to have exactly one connected browser.
 An active workspace performs an in-place transition and acknowledges its
 generation. It selects Build for the notebook and preview. Reactivating the
 current view starts a reload of every prepared preview frame and clears its
-ready status before acknowledgement. Creating the first view in code mode
-requests a reload of that exact native editor after the execution lock is
-released.
+ready status before acknowledgement.
+
+Edit mode mounts the native editor inside a stable Studio host before a view
+exists. First-view activation fills that host with the Build workspace and
+positions the original editor frame as its notebook pane. The frame and outer
+document keep their identity, so the code-mode stream that requested activation
+can receive the acknowledgement and finish its turn. The host carries the
+activation generation into the workspace, which acknowledges the transition
+before source-editor hydration. Bootstrap and startup failures retry inside the
+same host.
 
 - **User capability:** code-mode and regular agents can place the intended tab
   on the view they are about to edit or validate.
 - **Complexity carried:** browser client ID, Marimo session ID, active view,
-  binding generation, code-mode lock, and acknowledgement generation must refer
+  binding generation, host lifetime, and acknowledgement generation must refer
   to the same tab.
 - **Maintenance surface:** `activation.py`, code-mode and CLI adapters, agent
   client, activation route, client registry, workspace event coordinator,
