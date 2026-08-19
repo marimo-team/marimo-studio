@@ -24,19 +24,22 @@ Notebook cells hold the analysis and reusable outputs. View files hold page
 wrappers, layout markup, styles, and presentation wording. The notebook remains
 focused on analysis while several views reuse the same Python results.
 
-Use `marimo_studio.agents` from Marimo code mode:
+Use `marimo_studio.agent` from Marimo code mode:
 
 ```python
 import marimo._code_mode as cm
-import marimo_studio.agents as studio
+import marimo_studio.agent as studio
 
 ctx = cm.get_context()
-notebook = studio.inspect(ctx, include_code=True)
+workspace = studio.overview(ctx)
+inspection = studio.inspect(ctx, include_code=True)
 view = studio.ensure_view(ctx, "dashboard")
 await studio.activate_view(ctx, view.name)
 ```
 
-`studio.inspect` compiles the saved notebook and returns its cells,
+`studio.overview` returns configuration state, runtimes, bindings, and authored
+views before any mutation. `studio.inspect` compiles the saved notebook and
+returns selected cells,
 definitions, references, source positions, native names, and dependency
 relationships. It leaves notebook cells unevaluated.
 
@@ -54,7 +57,7 @@ transition.
 Read the notebook graph and current view files before choosing content:
 
 ```python
-for cell in notebook.cells:
+for cell in inspection.cells:
     print(cell.index, cell.name, cell.definitions, cell.references)
 
 index_html = (view.root / "index.html").read_text()
@@ -111,7 +114,7 @@ changes refresh the live preview.
 Analyze the active view after each saved change:
 
 ```python
-report = await studio.analyze(ctx, view_name=view.name)
+report = await studio.analyze(ctx, view=view.name)
 for action in report.actions:
     print(action.stage, action.code, action.advice)
 ```
@@ -134,7 +137,7 @@ model setup a larger explicit budget:
 ```python
 report = await studio.analyze(
     ctx,
-    view_name=view.name,
+    view=view.name,
     runtime_timeout=120,
 )
 ```
@@ -154,11 +157,11 @@ await studio.activate_view(ctx, "executive")
 Run the focused analysis in the next code-mode call:
 
 ```python
-report = await studio.analyze(ctx, view_name="executive")
+report = await studio.analyze(ctx, view="executive")
 ```
 
-`studio.check` remains available for a static check that leaves notebook cells
-unevaluated. It is not the handoff gate.
+`studio.check` returns a `CheckReport` for a static check that leaves notebook
+cells unevaluated. It is not the handoff gate.
 
 Inspect the live view during the repair loop. Confirm the reading order,
 reactive updates, browser behavior, loading states, controls, plots, tables,
@@ -166,12 +169,18 @@ downloads, widgets, and narrow and wide layouts.
 
 ## Use the terminal workflow
 
-The command-line interface exposes the same inspection, creation, binding, and
-analysis operations for agents working outside Marimo code mode:
+The CLI exposes the same overview, inspection, creation, activation, binding,
+and analysis operations for agents working outside Marimo code mode:
 
 ```console
+uvx marimo-studio overview analysis.py --format json
 uvx marimo-studio inspect analysis.py --include-code --format json
 uvx marimo-studio view add analysis.py --name dashboard --format json
+MARIMO_STUDIO_SERVER_URL=http://localhost:2718 \
+MARIMO_STUDIO_ACCESS_TOKEN="$STUDIO_TOKEN" \
+  uvx marimo-studio view activate analysis.py \
+    --name dashboard \
+    --format json
 MARIMO_STUDIO_SERVER_URL=http://localhost:2718 \
 MARIMO_STUDIO_ACCESS_TOKEN="$STUDIO_TOKEN" \
   uvx marimo-studio analyze analysis.py \
