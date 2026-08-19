@@ -2,7 +2,7 @@ import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useMemo } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { ViewRemote } from "../src/features/views/remote.ts";
@@ -104,7 +104,6 @@ const controllers = () => {
     remote(),
     vi.fn(async () => true),
     vi.fn(async () => true),
-    vi.fn(),
   );
   const source = new SourceController(
     (view) => `${bootstrap.urls.viewSupportPrefix}/${view}`,
@@ -124,11 +123,16 @@ const WorkspaceHarness = ({
   views,
 }: ReturnType<typeof controllers> & { frames: Map<string, HTMLIFrameElement> }) => {
   const workspace = useWorkspace(layout, preview, views);
-  const editor = useRef<HTMLIFrameElement | null>(null);
+  const editorHost = useMemo(() => {
+    const host = document.createElement("div");
+    const frame = document.createElement("iframe");
+    frame.title = "Marimo editor";
+    host.append(frame);
+    return { frame, host };
+  }, []);
+  const editor = editorHost.frame;
   useLayoutEffect(() => {
-    if (!editor.current) {
-      return;
-    }
+    document.body.append(editorHost.host);
     frames.forEach((frame, runtime) => {
       Object.defineProperty(frame, "src", {
         configurable: true,
@@ -136,17 +140,16 @@ const WorkspaceHarness = ({
         writable: true,
       });
     });
-    preview.attach(editor.current, frames);
-  }, [frames, preview]);
+    preview.attach(editor, frames);
+    return () => editorHost.host.remove();
+  }, [editor, editorHost.host, frames, preview]);
   return (
     <Workspace
       bootstrap={{
         ...bootstrap,
         urls: { ...bootstrap.urls, editor: "about:blank" },
       }}
-      editorRef={(element) => {
-        editor.current = element;
-      }}
+      editorFrame={editor}
       frameRef={(runtime) => (element) => {
         if (element) {
           frames.set(runtime, element);
@@ -222,6 +225,43 @@ describe("Studio shell", () => {
     expect(serverPreviewUrl.searchParams.get("marimo_studio_server")).toBe(
       bootstrap.serverInstance,
     );
+    services.dispose();
+  });
+
+  it("acknowledges host promotion before source hydration finishes", async () => {
+    class EventSourceStub {
+      addEventListener(): void {}
+      close(): void {}
+    }
+    vi.stubGlobal("EventSource", EventSourceStub);
+    const request = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", request);
+    let finishSource!: () => void;
+    const sourcePending = new Promise<void>((resolve) => {
+      finishSource = resolve;
+    });
+    const services = createStudioServices(bootstrap, undefined, {
+      schema: 1,
+      generation: 12,
+      view: "dashboard",
+    });
+    vi.spyOn(services.source, "start").mockReturnValue(sourcePending);
+    const editor = document.createElement("iframe");
+    const frames = new Map(
+      bootstrap.runtimes.map((runtime) => [runtime.id, document.createElement("iframe")]),
+    );
+
+    const starting = services.start(editor, frames);
+    await vi.waitFor(() =>
+      expect(request).toHaveBeenCalledWith(
+        expect.stringContaining("/activations/12/ack"),
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
+    expect(services.source.start).toHaveBeenCalledOnce();
+
+    finishSource();
+    await starting;
     services.dispose();
   });
 
@@ -457,19 +497,22 @@ describe("Studio shell", () => {
     views.dispose();
   });
 
-  it("links back to the notebook when Studio rendering fails", () => {
+  it("retries in place when Studio rendering fails", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const retry = vi.fn();
     const Broken = () => {
       throw new Error("render failed");
     };
 
     render(
-      <StudioErrorBoundary editorUrl="/?file=analysis.py">
+      <StudioErrorBoundary editorUrl="/?file=analysis.py" onRetry={retry}>
         <Broken />
       </StudioErrorBoundary>,
     );
 
     expect(screen.getByRole("alert")).toHaveTextContent("render failed");
+    await userEvent.click(screen.getByRole("button", { name: "Retry Studio" }));
+    expect(retry).toHaveBeenCalledOnce();
     expect(screen.getByRole("link", { name: "Open the Marimo editor" })).toHaveAttribute(
       "href",
       "/?file=analysis.py",

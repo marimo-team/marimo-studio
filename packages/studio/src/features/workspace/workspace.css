@@ -23,6 +23,10 @@
   position: absolute;
 }
 
+.studio-pane[data-surface="notebook"] {
+  background: transparent;
+}
+
 .studio-pane-content {
   flex: 1;
   min-height: 0;

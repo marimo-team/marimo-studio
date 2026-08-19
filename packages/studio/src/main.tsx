@@ -1,7 +1,11 @@
+import { jsonValueSchema, type JsonValue } from "@marimo-studio/protocol/runtime-config";
 import { parseStudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
+import { parseStudioHostBootstrap } from "@marimo-studio/protocol/studio-host";
 import { createRoot } from "react-dom/client";
 
-import { StudioApp, type StudioOptions } from "./app/StudioApp.tsx";
+import type { StudioOptions } from "./app/StudioApp.tsx";
+
+import { StudioHost } from "./app/StudioHost.tsx";
 import "./style.css";
 
 const required = <T extends Element>(selector: string): T => {
@@ -12,19 +16,30 @@ const required = <T extends Element>(selector: string): T => {
   return element;
 };
 
-const readBootstrap = () => {
-  const source = required<HTMLScriptElement>("#marimo-studio-bootstrap").textContent;
+const readJson = (selector: string): JsonValue => {
+  const source = required<HTMLScriptElement>(selector).textContent;
   if (!source) {
-    throw new Error("Studio bootstrap is empty");
+    throw new Error(`${selector} is empty`);
   }
-  return parseStudioBootstrap(JSON.parse(source));
+  return jsonValueSchema.parse(JSON.parse(source));
+};
+
+const readBootstrap = () => parseStudioBootstrap(readJson("#marimo-studio-bootstrap"));
+
+const publishBootstrap = (bootstrap: ReturnType<typeof parseStudioBootstrap>): void => {
+  let element = document.querySelector<HTMLScriptElement>("#marimo-studio-bootstrap");
+  if (!element) {
+    element = document.createElement("script");
+    element.id = "marimo-studio-bootstrap";
+    element.type = "application/json";
+    document.body.append(element);
+  }
+  element.textContent = JSON.stringify(bootstrap);
 };
 
 const showStartupError = (root: HTMLElement, cause: unknown): void => {
   const error = cause instanceof Error ? cause : new Error(String(cause));
-  const editorLink = root
-    .querySelector<HTMLAnchorElement>("[data-native-editor-link]")
-    ?.cloneNode(true);
+  const editorUrl = document.querySelector<HTMLIFrameElement>("#marimo-studio-editor")?.src;
   const message = document.createElement("p");
   message.textContent = error.message;
   const title = document.createElement("strong");
@@ -33,7 +48,11 @@ const showStartupError = (root: HTMLElement, cause: unknown): void => {
   alert.className = "studio-startup-error";
   alert.setAttribute("role", "alert");
   alert.append(title, message);
-  if (editorLink) {
+  if (editorUrl) {
+    const editorLink = document.createElement("a");
+    editorLink.className = "studio-native-editor-link";
+    editorLink.href = editorUrl;
+    editorLink.textContent = "Open notebook editor";
     alert.append(editorLink);
   }
   root.replaceChildren(alert);
@@ -43,8 +62,18 @@ const showStartupError = (root: HTMLElement, cause: unknown): void => {
 export const startStudio = (options: StudioOptions): void => {
   const root = required<HTMLElement>("#marimo-studio-root");
   try {
-    const bootstrap = readBootstrap();
-    createRoot(root).render(<StudioApp bootstrap={bootstrap} {...options} />);
+    const host = parseStudioHostBootstrap(readJson("#marimo-studio-host"));
+    const editorFrame = required<HTMLIFrameElement>("#marimo-studio-editor");
+    const initialBootstrap = host.state === "ready" ? readBootstrap() : undefined;
+    createRoot(root).render(
+      <StudioHost
+        host={host}
+        editorFrame={editorFrame}
+        initialBootstrap={initialBootstrap}
+        publishBootstrap={publishBootstrap}
+        {...options}
+      />,
+    );
   } catch (error) {
     showStartupError(root, error);
   }

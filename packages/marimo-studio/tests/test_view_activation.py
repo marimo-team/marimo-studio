@@ -13,6 +13,7 @@ from marimo_studio._server.view_activation import (
     SessionViewTarget,
     activate_studio_view,
 )
+from marimo_studio._server.workspace_client_events import WorkspaceClientEventProducer
 from marimo_studio.activation import ViewActivationRequest
 from marimo_studio.errors import (
     AgentRequestError,
@@ -158,24 +159,92 @@ def test_external_activation_requires_a_bound_session(notebook_path) -> None:
     asyncio.run(exercise())
 
 
-def test_session_activation_can_request_the_first_view_reload(notebook_path) -> None:
+def test_session_activation_requires_its_studio_host(notebook_path) -> None:
     studio = configured(notebook_path)
     notebook_scope = NotebookScope.create(studio.notebook)
 
-    result = asyncio.run(
-        activate_studio_view(
-            cast(ServerContext, SimpleNamespace()),
-            studio,
-            notebook_scope,
-            cast(SessionState, SimpleNamespace(exists=lambda *_args: True)),
-            "dashboard",
-            SessionViewTarget("s_123456"),
+    with pytest.raises(AgentRequestError) as raised:
+        asyncio.run(
+            activate_studio_view(
+                cast(ServerContext, SimpleNamespace()),
+                studio,
+                notebook_scope,
+                cast(SessionState, SimpleNamespace(exists=lambda *_args: True)),
+                "dashboard",
+                SessionViewTarget("s_123456"),
+            )
         )
-    )
 
-    assert result.state == "reload-requested"
-    assert result.session_id == "s_123456"
-    assert result.client_id is None
+    assert raised.value.code == "browser-client-unavailable"
+
+
+def test_first_view_activation_replays_across_host_promotion(notebook_path) -> None:
+    studio = configured(notebook_path)
+    notebook_scope = NotebookScope.create(studio.notebook)
+    client_id = "browser-client-1234"
+
+    async def next_activation(
+        producer: WorkspaceClientEventProducer,
+    ) -> tuple[int, str]:
+        for _attempt in range(100):
+            events = await producer.poll()
+            activation = next(
+                (event for event in events if event.kind == "activate"), None
+            )
+            if activation is not None:
+                generation = activation.payload["generation"]
+                view = activation.payload["view"]
+                assert isinstance(generation, int) and not isinstance(generation, bool)
+                assert isinstance(view, str)
+                return generation, view
+            await asyncio.sleep(0.01)
+        raise AssertionError("view activation was not delivered")
+
+    async def exercise():
+        pre_host = WorkspaceClientEventProducer(
+            notebook_scope.clients,
+            notebook_scope.agents,
+            client_id,
+            None,
+        )
+        await pre_host.connect()
+        await notebook_scope.clients.bind_session("s_123456", client_id)
+        operation = asyncio.create_task(
+            activate_studio_view(
+                cast(ServerContext, SimpleNamespace()),
+                studio,
+                notebook_scope,
+                cast(SessionState, SimpleNamespace(exists=lambda *_args: True)),
+                "dashboard",
+                SessionViewTarget("s_123456"),
+            )
+        )
+        delivered = await next_activation(pre_host)
+        await pre_host.close()
+
+        workspace = WorkspaceClientEventProducer(
+            notebook_scope.clients,
+            notebook_scope.agents,
+            client_id,
+            "dashboard",
+        )
+        await workspace.connect()
+        replayed = await next_activation(workspace)
+        assert replayed == delivered
+        assert await notebook_scope.agents.acknowledge_activation(
+            client_id,
+            replayed[0],
+            replayed[1],
+        )
+        result = await operation
+        await workspace.close()
+        await notebook_scope.close()
+        return result
+
+    result = asyncio.run(exercise())
+
+    assert result.state == "active"
+    assert result.client_id == client_id
 
 
 def test_activation_reports_unknown_views(notebook_path) -> None:

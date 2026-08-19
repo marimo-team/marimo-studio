@@ -1,3 +1,4 @@
+import type { ActiveViewRequest } from "@marimo-studio/protocol/development-events";
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
 import type { ControlFrameConnector } from "../features/preview/control-sync.ts";
@@ -18,6 +19,9 @@ export interface StudioOptions {
 
 interface StudioAppProps extends StudioOptions {
   bootstrap: StudioBootstrap;
+  editorFrame: HTMLIFrameElement;
+  initialActivation?: ActiveViewRequest;
+  onRetry: () => void;
 }
 
 const StudioWorkspace = ({
@@ -25,8 +29,15 @@ const StudioWorkspace = ({
   brand,
   connectControlFrame,
   connectThemeFrame,
+  editorFrame,
+  initialActivation,
 }: StudioAppProps) => {
-  const services = useStudioServices(bootstrap, connectControlFrame);
+  const services = useStudioServices(
+    bootstrap,
+    editorFrame,
+    initialActivation,
+    connectControlFrame,
+  );
   const workspace = useWorkspace(services.layout, services.preview, services.views);
   const theme = useResolvedStudioTheme(services.editorFrame, connectThemeFrame);
 
@@ -44,7 +55,7 @@ const StudioWorkspace = ({
         />
         <Workspace
           bootstrap={bootstrap}
-          editorRef={services.editorRef}
+          editorFrame={editorFrame}
           frameRef={services.frameRef}
           source={services.source}
           workspace={workspace}
@@ -55,7 +66,7 @@ const StudioWorkspace = ({
 };
 
 export const StudioApp = (props: StudioAppProps) => (
-  <StudioErrorBoundary editorUrl={props.bootstrap.urls.editor}>
+  <StudioErrorBoundary editorUrl={props.bootstrap.urls.editor} onRetry={props.onRetry}>
     <StudioWorkspace {...props} />
   </StudioErrorBoundary>
 );

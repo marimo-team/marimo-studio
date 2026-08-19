@@ -101,14 +101,10 @@ async def _activate_session_view(
             "The Studio browser is reconnecting. Retry view activation shortly.",
             status_code=409,
         )
-    generation = await notebook_scope.agents.reserve_generation()
-    return ViewActivationResult(
-        notebook=studio.notebook,
-        view=view_name,
-        state="reload-requested",
-        generation=generation,
-        transition="reload",
-        session_id=session_id,
+    raise AgentRequestError(
+        "browser-client-unavailable",
+        "The Studio host for this Marimo session is not connected.",
+        status_code=409,
     )
 
 

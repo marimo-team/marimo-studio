@@ -48,6 +48,36 @@ body,
   margin: 0;
 }
 
+#marimo-studio-editor-host,
+#marimo-studio-root {
+  inset: 0;
+  position: fixed;
+}
+
+#marimo-studio-editor-host {
+  z-index: 1;
+}
+
+#marimo-studio-editor-host iframe,
+.studio-editor-frame-mount,
+.studio-editor-frame-mount iframe {
+  border: 0;
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+#marimo-studio-root {
+  pointer-events: none;
+  z-index: 2;
+}
+
+.studio-startup-error,
+.studio-host-status,
+.studio-initialization-card {
+  pointer-events: auto;
+}
+
 .studio-opening,
 .studio-startup-error {
   align-items: center;
@@ -77,6 +107,16 @@ body,
   margin: 0;
 }
 
+.studio-startup-error button {
+  background: var(--studio-primary);
+  border: 1px solid var(--studio-primary);
+  border-radius: 0.25rem;
+  color: var(--studio-on-primary);
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0.55rem 0.8rem;
+}
+
 .studio-native-editor-link {
   color: var(--studio-primary);
   font-size: 0.8125rem;
@@ -97,6 +137,20 @@ html[data-marimo-studio-state="needs-view"] body {
   min-height: 100%;
   padding: clamp(1.5rem, 6vw, 5rem);
   place-items: center;
+  pointer-events: none;
+}
+
+.studio-host-status {
+  background: var(--studio-popover);
+  border: 1px solid var(--studio-border);
+  border-radius: 0.25rem;
+  color: var(--studio-muted);
+  font-size: 0.8125rem;
+  left: 50%;
+  padding: 0.45rem 0.65rem;
+  position: fixed;
+  top: 0.75rem;
+  transform: translateX(-50%);
 }
 
 .studio-initialization-card {
@@ -185,10 +239,17 @@ summary:active,
 }
 
 .studio {
-  background: var(--studio-background);
+  background: transparent;
   color: var(--studio-foreground);
   display: grid;
   grid-template-rows: var(--studio-toolbar-height) minmax(0, 1fr);
+  pointer-events: none;
+}
+
+.studio-toolbar,
+.studio-pane:not([data-surface="notebook"]),
+.studio-arrange-chrome {
+  pointer-events: auto;
 }
 
 .studio-toolbar :is(button, a, summary, input):focus-visible,

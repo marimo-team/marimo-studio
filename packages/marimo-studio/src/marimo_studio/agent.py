@@ -250,9 +250,9 @@ async def activate_view(
     Call this as soon as ``ensure_view`` returns, including for a starter view,
     so the user sees the requested view while authoring continues.
 
-    Reactivating the current view reloads its prepared preview runtimes. A
-    native editor reloads into Studio when this call follows the first view
-    setup. The page reload waits for the code-mode result before navigating.
+    Reactivating the current view reloads its prepared preview runtimes. First
+    view setup opens Studio around the existing native editor and preserves the
+    code-mode call until the Build workspace acknowledges the transition.
     """
     from marimo_studio._composition import create_tooling_adapters
     from marimo_studio._workspace import load_studio

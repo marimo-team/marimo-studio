@@ -10,7 +10,6 @@ from marimo._session.session import Session
 from marimo_studio._capabilities import ServerContext
 from marimo_studio._cell_refs import cell_refs
 from marimo_studio._compat.server.gateway import context_handle
-from marimo_studio._urls import ACTIVE_VIEW_QUERY_PARAM
 from marimo_studio.errors import RuntimeSyncError
 from marimo_studio.types import LiveCellIdentity, LiveCellSnapshot
 
@@ -55,36 +54,6 @@ def session_matches_notebook(
 def _has_notebook_session(context: ServerContext) -> bool:
     manager = context_handle(context).session_manager
     return manager.get_session_by_file_key(context.file_key) is not None
-
-
-async def _reload_page(
-    context: ServerContext,
-    view_name: str,
-    session_id: str | None = None,
-) -> None:
-    from marimo._messaging.notification import (
-        QueryParamsSetNotification,
-        ReloadNotification,
-    )
-
-    session = (
-        current_session(context, session_id)
-        if session_id is not None
-        else context_handle(context).session_manager.get_session_by_file_key(
-            context.file_key
-        )
-    )
-    if session is None:
-        return
-
-    # Code mode holds this lock until its result has been delivered. Waiting
-    # here keeps the navigation from aborting the agent call that requested it.
-    async with session.scratchpad_lock:
-        session.notify(
-            QueryParamsSetNotification(ACTIVE_VIEW_QUERY_PARAM, view_name),
-            from_consumer_id=None,
-        )
-        session.notify(ReloadNotification(), from_consumer_id=None)
 
 
 def _live_cells(
@@ -138,14 +107,6 @@ class PrivateSessionState:
         session_id: str | None,
     ) -> LiveCellSnapshot | None:
         return _live_cells(context, session_id)
-
-    async def reload_page(
-        self,
-        context: ServerContext,
-        view_name: str,
-        session_id: str | None = None,
-    ) -> None:
-        await _reload_page(context, view_name, session_id)
 
 
 __all__ = [

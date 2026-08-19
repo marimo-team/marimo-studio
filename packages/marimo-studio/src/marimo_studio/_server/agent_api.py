@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from starlette.background import BackgroundTask
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
@@ -111,21 +110,9 @@ async def activate_view_response(
         return Response(status_code=499)
     except MarimoStudioError as error:
         return error_response(error)
-    background = (
-        BackgroundTask(
-            sessions.reload_page,
-            context,
-            result.view,
-            result.session_id,
-        )
-        if result.state == "reload-requested"
-        else None
-    )
     return JSONResponse(
         result.to_dict(),
-        status_code=202 if result.state == "reload-requested" else 200,
         headers=NO_STORE,
-        background=background,
     )
 
 

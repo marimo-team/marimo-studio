@@ -542,7 +542,7 @@ def test_activation_rejects_mixed_selectors_before_token_negotiation(
     assert requested is False
 
 
-def test_external_activation_rejects_a_reload_result(
+def test_activation_client_rejects_a_reload_result(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -561,7 +561,7 @@ def test_external_activation_rejects_a_reload_result(
 
     monkeypatch.setattr(agent_client, "request_json", request)
 
-    with pytest.raises(ProtocolError, match="cannot request a page reload"):
+    with pytest.raises(ProtocolError, match="activation response"):
         asyncio.run(
             agent_client.request_view_activation(
                 agent_transport.StudioServerConnection(

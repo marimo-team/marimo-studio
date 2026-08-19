@@ -51,8 +51,6 @@ async def request_view_activation(
     result = parse_activation_result(payload, notebook, request.view)
     if connection.session_id and result.session_id != connection.session_id:
         raise ProtocolError("The Studio activation response targets another session.")
-    if not connection.session_id and result.state != "active":
-        raise ProtocolError("External Studio activation cannot request a page reload.")
     if request.browser_client and result.client_id != request.browser_client:
         raise ProtocolError("The Studio activation response targets another browser.")
     return result

@@ -42,9 +42,9 @@ const workspaceActivationSchema = z.object({
   schema: z.literal(1),
   notebook: z.string(),
   view: z.string(),
-  state: z.enum(["active", "reload-requested"]),
+  state: z.literal("active"),
   generation: z.number().int().positive(),
-  transition: z.enum(["in-place", "reload"]),
+  transition: z.literal("in-place"),
   client_id: z.string().optional(),
   session_id: z.string(),
 });
@@ -139,6 +139,9 @@ export const checkWorkspace = async (): Promise<boolean> => {
 };
 
 declare global {
+  var __e2eEditorFrame: HTMLIFrameElement | undefined;
+  var __e2eEditorFocus: HTMLElement | undefined;
+  var __e2eEditorWindow: Window | null | undefined;
   var __e2eRuntimeMarker: string | undefined;
 }
 

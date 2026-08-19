@@ -47,6 +47,7 @@ from marimo_studio._server.query_api import query_response
 from marimo_studio._server.runtime_config_api import runtime_config_response
 from marimo_studio._server.runtimes import RuntimeRegistry
 from marimo_studio._server.server_instance import server_instance_id
+from marimo_studio._server.studio.document import studio_bootstrap_payload
 from marimo_studio._server.studio_api import (
     create_view_response,
     delete_view_response,
@@ -56,6 +57,7 @@ from marimo_studio._server.workspace_lifecycle import (
     Invalid,
     NeedsView,
     Ready,
+    Unconfigured,
     WorkspaceLifecycle,
 )
 from marimo_studio._urls import (
@@ -92,10 +94,22 @@ async def support_response(
         return _status_response(lifecycle)
     if isinstance(lifecycle, Invalid):
         return _lifecycle_error_response(lifecycle.error)
+    workspace = lifecycle.workspace if isinstance(lifecycle, Ready) else None
+    if support_path == "/dev/events" and request.method == "GET" and context.dev:
+        return events_response(
+            request,
+            workspace,
+            context=context,
+            notebook_scope=notebook_scope,
+            server=server,
+        )
+    if support_path == "/bootstrap" and request.method == "GET":
+        if not isinstance(lifecycle, Ready):
+            return _workspace_pending_response(lifecycle)
+        return _bootstrap_response(request, context, lifecycle.workspace, runtimes)
     if not isinstance(lifecycle, (NeedsView, Ready)):
         return Response(status_code=404)
     definition = lifecycle.definition
-    workspace = lifecycle.workspace if isinstance(lifecycle, Ready) else None
     if support_path == "/views":
         if request.method == "GET":
             return JSONResponse(
@@ -119,14 +133,6 @@ async def support_response(
     assert workspace is not None
     if support_path == "/agent/connection":
         return agent_connection_response(request, context, workspace)
-    if support_path == "/dev/events" and request.method == "GET" and context.dev:
-        return events_response(
-            request,
-            workspace,
-            context=context,
-            notebook_scope=notebook_scope,
-            server=server,
-        )
     if support_path == "/analyze":
         return await analyze_views_response(
             request,
@@ -217,6 +223,57 @@ def _lifecycle_error_response(error: MarimoStudioError) -> JSONResponse:
             **({"hint": error.public_hint} if error.public_hint else {}),
         },
         status_code=error.status_code,
+        headers=NO_STORE,
+    )
+
+
+def _workspace_pending_response(lifecycle: Unconfigured | NeedsView) -> JSONResponse:
+    if isinstance(lifecycle, NeedsView):
+        return _lifecycle_error_response(lifecycle.error)
+    return JSONResponse(
+        {
+            "error": "workspace-unconfigured",
+            "message": "Studio is not configured for this notebook.",
+        },
+        status_code=409,
+        headers=NO_STORE,
+    )
+
+
+def _bootstrap_response(
+    request: Request,
+    context: ServerContext,
+    studio: StudioWorkspace,
+    runtimes: RuntimeRegistry,
+) -> Response:
+    client_id = request.query_params.get(STUDIO_CLIENT_QUERY_PARAM)
+    if client_id is None or re.fullmatch(r"[A-Za-z0-9_-]{16,128}", client_id) is None:
+        return JSONResponse(
+            {
+                "error": "invalid-browser-client",
+                "message": "The Studio browser client identifier is invalid.",
+            },
+            status_code=400,
+            headers=NO_STORE,
+        )
+    if request.query_params.get(SERVER_INSTANCE_QUERY_PARAM) != server_instance_id(
+        context.server_token
+    ):
+        return Response(status_code=204, headers=NO_STORE)
+    requested = request.query_params.get(ACTIVE_VIEW_QUERY_PARAM)
+    selected = requested if requested in studio.views else studio.default_view
+    return JSONResponse(
+        studio_bootstrap_payload(
+            studio,
+            context.base_url,
+            selected,
+            context.server_token,
+            context.file_key,
+            request.query_params.multi_items(),
+            context.routing_query,
+            runtimes.options,
+            client_id,
+        ),
         headers=NO_STORE,
     )
 
@@ -324,7 +381,7 @@ async def _view_response(
 
 def events_response(
     request: Request,
-    studio: StudioWorkspace,
+    studio: StudioWorkspace | None,
     context: ServerContext,
     notebook_scope: NotebookScope,
     view_name: str | None = None,
@@ -358,7 +415,7 @@ def events_response(
             status_code=400,
             headers=NO_STORE,
         )
-    if active_view is not None and active_view not in studio.views:
+    if active_view is not None and (studio is None or active_view not in studio.views):
         return JSONResponse(
             {
                 "error": "view-not-found",

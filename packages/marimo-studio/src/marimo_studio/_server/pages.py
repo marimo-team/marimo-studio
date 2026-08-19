@@ -24,7 +24,6 @@ from marimo_studio._server.presentation_payload import (
 )
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.studio import (
-    initialization_document,
     repair_document,
     studio_document,
     waiting_document,
@@ -158,14 +157,16 @@ def studio_response(
         )
     return HTMLResponse(
         studio_document(
-            studio,
+            studio.notebook,
             context.base_url,
-            selected,
             context.server_token,
             context.file_key,
             request.query_params.multi_items(),
             context.routing_query,
             runtimes,
+            state="ready",
+            config=studio,
+            selected=selected,
         ),
         headers=DOCUMENT_HEADERS,
     )
@@ -175,6 +176,7 @@ def initialization_response(
     request: Request,
     context: ServerContext,
     definition: StudioDefinition,
+    runtimes: tuple[tuple[str, str], ...],
 ) -> Response:
     """Render the authenticated first-view initializer in edit mode."""
     if context.mode != "edit":
@@ -182,13 +184,42 @@ def initialization_response(
     if request.method not in {"GET", "HEAD"}:
         return Response(status_code=405)
     return HTMLResponse(
-        initialization_document(
-            definition,
+        studio_document(
+            definition.notebook,
             context.base_url,
             context.server_token,
             context.file_key,
             request.query_params.multi_items(),
             context.routing_query,
+            runtimes,
+            state="needs-view",
+            default_view=definition.default_view,
+        ),
+        headers=DOCUMENT_HEADERS,
+    )
+
+
+def unconfigured_response(
+    request: Request,
+    context: ServerContext,
+    notebook: Path,
+    runtimes: tuple[tuple[str, str], ...],
+) -> Response:
+    """Render the stable editor host before Studio is configured."""
+    if context.mode != "edit":
+        return Response(status_code=404)
+    if request.method not in {"GET", "HEAD"}:
+        return Response(status_code=405)
+    return HTMLResponse(
+        studio_document(
+            notebook,
+            context.base_url,
+            context.server_token,
+            context.file_key,
+            request.query_params.multi_items(),
+            context.routing_query,
+            runtimes,
+            state="unconfigured",
         ),
         headers=DOCUMENT_HEADERS,
     )

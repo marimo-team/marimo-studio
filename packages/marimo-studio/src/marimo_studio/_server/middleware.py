@@ -27,6 +27,7 @@ from marimo_studio._server.pages import (
     page_redirect,
     studio_landing_redirect,
     studio_response,
+    unconfigured_response,
 )
 from marimo_studio._server.routing import (
     authored_view_route,
@@ -211,7 +212,14 @@ class PresentationMiddleware:
         notebook_scope = self._notebooks.get(location.notebook)
         presentation = notebook_scope.presentation
         lifecycle = resolve_workspace_lifecycle(presentation)
-        if isinstance(lifecycle, Unconfigured):
+        if isinstance(lifecycle, Unconfigured) and not (
+            location.mode == "edit"
+            and (
+                landing
+                or is_support_route(relative)
+                or relative.strip("/").split("/")[0] == "studio"
+            )
+        ):
             await self.app(scope, receive, send)
             return
         if isinstance(lifecycle, Invalid) and landing:
@@ -260,6 +268,56 @@ class PresentationMiddleware:
 
         context = self._adapters.server.context(location)
         dev = context.dev
+        if isinstance(lifecycle, (Unconfigured, NeedsView)):
+            if relative.startswith(SUPPORT_PATH):
+                response = await support_response(
+                    request,
+                    context,
+                    lifecycle,
+                    notebook_scope,
+                    relative.removeprefix(SUPPORT_PATH),
+                    server=self._adapters.server,
+                    session_state=self._adapters.session_state,
+                    sessions=self._adapters.sessions,
+                    projections=self._adapters.projections,
+                    runtimes=self._runtimes,
+                )
+            elif location.mode == "edit" and (
+                landing or relative.strip("/").split("/")[0] == "studio"
+            ):
+                redirect = page_redirect(request, relative, not landing)
+                if redirect is not None:
+                    response = redirect
+                elif isinstance(lifecycle, Unconfigured):
+                    response = unconfigured_response(
+                        request,
+                        context,
+                        lifecycle.notebook,
+                        self._runtimes.options,
+                    )
+                else:
+                    response = initialization_response(
+                        request,
+                        context,
+                        lifecycle.definition,
+                        self._runtimes.options,
+                    )
+            elif isinstance(lifecycle, NeedsView):
+                response = error_response(
+                    relative,
+                    lifecycle.error,
+                    presentation.notebook,
+                    base_url=location.base_url,
+                    dev=dev,
+                    structured=_accepts_json(request),
+                    server_token=context.server_token,
+                    routing_query=context.routing_query,
+                )
+            else:
+                await self.app(scope, receive, send)
+                return
+            await response(scope, receive, send)
+            return
         if isinstance(lifecycle, Invalid):
             response = (
                 await support_response(
@@ -286,43 +344,6 @@ class PresentationMiddleware:
                     routing_query=context.routing_query,
                 )
             )
-            await response(scope, receive, send)
-            return
-
-        if isinstance(lifecycle, NeedsView):
-            if relative.startswith(SUPPORT_PATH):
-                response = await support_response(
-                    request,
-                    context,
-                    lifecycle,
-                    notebook_scope,
-                    relative.removeprefix(SUPPORT_PATH),
-                    server=self._adapters.server,
-                    session_state=self._adapters.session_state,
-                    sessions=self._adapters.sessions,
-                    projections=self._adapters.projections,
-                    runtimes=self._runtimes,
-                )
-            elif location.mode == "edit" and (
-                landing or relative.strip("/").split("/")[0] == "studio"
-            ):
-                redirect = page_redirect(request, relative, not landing)
-                response = redirect or initialization_response(
-                    request,
-                    context,
-                    lifecycle.definition,
-                )
-            else:
-                response = error_response(
-                    relative,
-                    lifecycle.error,
-                    presentation.notebook,
-                    base_url=location.base_url,
-                    dev=dev,
-                    structured=_accepts_json(request),
-                    server_token=context.server_token,
-                    routing_query=context.routing_query,
-                )
             await response(scope, receive, send)
             return
 

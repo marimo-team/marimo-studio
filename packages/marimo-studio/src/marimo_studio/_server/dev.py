@@ -24,7 +24,7 @@ def _encode(kind: str, payload: dict[str, object]) -> bytes:
 
 
 async def change_events(
-    studio: StudioWorkspace,
+    studio: StudioWorkspace | None,
     view_name: str | None = None,
     stop_requested: Callable[[], bool] | None = None,
     clients: StudioClientRegistry | None = None,
@@ -35,7 +35,9 @@ async def change_events(
     """Yield source and agent events until the client disconnects."""
     should_stop = stop_requested or (lambda: False)
     selected_view = view_name or active_view
-    sources = SourceChangeProducer(studio, selected_view)
+    sources = (
+        SourceChangeProducer(studio, selected_view) if studio is not None else None
+    )
     browser = _browser_events(
         view_name,
         clients,
@@ -46,7 +48,11 @@ async def change_events(
     if browser is not None:
         await browser.connect()
     try:
-        baseline = await asyncio.to_thread(_source_baseline, studio, selected_view)
+        baseline = (
+            await asyncio.to_thread(_source_baseline, studio, selected_view)
+            if studio is not None
+            else {}
+        )
         yield _encode("ready", baseline)
         last_heartbeat = time.monotonic()
         while not should_stop():
@@ -56,7 +62,7 @@ async def change_events(
             if browser is not None:
                 for event in await browser.poll():
                     yield _encode(event.kind, event.payload)
-            change = sources.poll()
+            change = sources.poll() if sources is not None else None
             if change is not None:
                 last_heartbeat = time.monotonic()
                 yield _encode(
