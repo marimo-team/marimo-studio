@@ -1,0 +1,43 @@
+packages/presentation/src/runtime/outputs/use-output-host.ts
+  s_9e4558804c2d15::t_09bad5552a9acf 25,35,48,55,87
+packages/marimo-studio/src/marimo_studio/__init__.py
+  s_9e4558804c2d15::t_5c7d8c633eec58 16-19,40
+  s_9e4558804c2d15::t_39003b3356d9d6 1
+packages/presentation/src/runtime/values/use-runtime-value.ts
+  s_9e4558804c2d15::t_df440973e0b3c3 10,39-42
+packages/presentation/src/values/hosts.ts
+  s_9e4558804c2d15::t_2e5125a069cd79 267
+  s_9e4558804c2d15::t_df440973e0b3c3 33,283-288,318,397,399-417
+packages/presentation/src/runtime/outputs/OutputPortal.tsx
+  s_9e4558804c2d15::t_09bad5552a9acf 93
+packages/presentation/tests/value-hosts.test.ts
+  s_9e4558804c2d15::t_2e5125a069cd79 4-5,14,27-31,110-111,239-293
+packages/presentation/tests/output-portal.test.ts
+  s_9e4558804c2d15::t_8449e5c4768623 89,196
+docs/reference/view-document.md
+  s_9e4558804c2d15::t_9075b4a5ffbf06 155-158
+  s_9e4558804c2d15::t_2e5125a069cd79 151-154
+packages/presentation/src/runtime/outputs/use-output-projection.ts
+  s_9e4558804c2d15::t_2e5125a069cd79 134
+development_docs/architecture/browser-runtime-and-authoring.md
+  s_9e4558804c2d15::t_39003b3356d9d6 223-225
+  s_9e4558804c2d15::t_2e5125a069cd79 219-221
+docs/reference/python-api.md
+  s_9e4558804c2d15::t_fc7c02d943c0fc 3,8-9,11-15,26-41,165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "94890253d037d01a653b08c0ec30bf19b1698fb6",
+  "prompts": {},
+  "sessions": {
+    "s_9e4558804c2d15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0194c-e6d0-7c93-a5ef-ba2a447afe7f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
