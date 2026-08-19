@@ -7,7 +7,7 @@ import type { RuntimeConnectionState } from "../cell-state";
 import type { RuntimeCell } from "../runtime-cell";
 
 import { errorMessage } from "../../errors";
-import { markValueError, markValuePending } from "../../values/hosts";
+import { markValueError, markValuePending, setValueRuntimeCell } from "../../values/hosts";
 import { ValueRequestError } from "../../values/remote";
 import { applyValueReadResponse } from "../../values/response";
 import { useDeliveryTimeout } from "../use-delivery-timeout";
@@ -35,6 +35,11 @@ export const useRuntimeValue = ({
 }): void => {
   const deliveryTimedOut = useDeliveryTimeout(runtimeReady && cell === undefined, cell?.id);
   const model = valueCellModel(cell, runtimeReady, deliveryTimedOut);
+
+  useLayoutEffect(() => {
+    setValueRuntimeCell(selectors, model.cellId);
+    return () => setValueRuntimeCell(selectors, null);
+  }, [model.cellId, selectors]);
 
   useLayoutEffect(() => {
     if (model.phase === "loading" || model.phase === "stale") {

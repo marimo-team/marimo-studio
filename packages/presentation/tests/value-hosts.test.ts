@@ -1,6 +1,8 @@
 import type { JsonValue } from "@marimo-studio/protocol/runtime-config";
 
 import assert from "node:assert/strict";
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vite-plus/test";
 import { z } from "zod";
 
@@ -9,6 +11,7 @@ import {
   loadRuntimeConfig,
   type RuntimeConfig,
 } from "../src/runtime-config/index.ts";
+import { RuntimeValueCell } from "../src/runtime/values/RuntimeValueCell.tsx";
 import {
   applyValues,
   isMarimoValueHost,
@@ -21,6 +24,11 @@ import {
   stopValueBindings,
 } from "../src/values/hosts.ts";
 import { applyValueReadResponse } from "../src/values/response.ts";
+import { runtimeCellFixture } from "./runtime-cell-fixture.ts";
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+let root: Root | undefined;
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
   supportUrl: "/_marimo-studio/views/dashboard",
@@ -99,6 +107,8 @@ const configWithBindings = (...selectors: string[]): RuntimeConfig => ({
 });
 
 afterEach(() => {
+  act(() => root?.unmount());
+  root = undefined;
   stopValueBindings();
   document.body.replaceChildren();
 });
@@ -224,6 +234,63 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
     ],
     ["missing-variable", "Variable 'report' is unavailable.", "Restore the notebook variable."],
   );
+});
+
+test("runtime value cells own producer identity across host changes", async () => {
+  await installConfig();
+  document.body.innerHTML = `
+    <span id="report" mo-value="report" data-runtime-cell-id="authored"></span>
+    <span id="unknown" mo-value="unknown" data-runtime-cell-id="authored"></span>
+    <div id="root"></div>
+  `;
+  startValueBindings();
+
+  const report = document.querySelector<HTMLElement>("#report")!;
+  const unknown = document.querySelector<HTMLElement>("#unknown")!;
+  assert.equal(report.dataset.runtimeCellId, undefined);
+  assert.equal(unknown.dataset.runtimeCellId, undefined);
+
+  root = createRoot(document.querySelector("#root")!);
+  const renderCell = (cell = runtimeCellFixture({ id: "report-cell" })) => {
+    root?.render(
+      createElement(RuntimeValueCell, {
+        revision: "presentation-revision",
+        selectors: ["report"],
+        cell,
+        connectionState: "CLOSED",
+        runtimeReady: true,
+        readValues: async () => ({ values: {}, errors: {} }),
+      }),
+    );
+  };
+
+  act(() => renderCell());
+  assert.equal(report.dataset.runtimeCellId, "report-cell");
+
+  const late = document.createElement("span");
+  late.setAttribute("mo-value", "report");
+  document.body.append(late);
+  await settleMutations();
+  assert.equal(late.dataset.runtimeCellId, "report-cell");
+
+  act(() => renderCell(runtimeCellFixture({ id: "next-cell" })));
+  assert.equal(report.dataset.runtimeCellId, "next-cell");
+  assert.equal(late.dataset.runtimeCellId, "next-cell");
+
+  act(() => {
+    root?.render(
+      createElement(RuntimeValueCell, {
+        revision: "presentation-revision",
+        selectors: ["report"],
+        cell: undefined,
+        connectionState: "CLOSED",
+        runtimeReady: false,
+        readValues: async () => ({ values: {}, errors: {} }),
+      }),
+    );
+  });
+  assert.equal(report.dataset.runtimeCellId, undefined);
+  assert.equal(late.dataset.runtimeCellId, undefined);
 });
 
 test("dynamic value hosts follow their active selector", async () => {

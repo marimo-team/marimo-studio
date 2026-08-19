@@ -86,6 +86,7 @@ test("keeps readiness stale until the requested source version mounts", async ()
   await act(async () => {
     root.render(createElement(OutputPortal, { ...props, cell: runtimeCell(1) }));
   });
+  expect(host.dataset.runtimeCellId).toBe("source-cell");
   await act(async () => {
     resolveFirst({ outputs: { report: output("first", 1) }, errors: {} });
     await first;
@@ -192,7 +193,7 @@ test("clears prior projection metadata when its binding changes", async () => {
   });
   expect(host.dataset.state).toBe("loading");
   expect(host.dataset.marimoVariable).toBe("second");
-  expect(host.dataset.runtimeCellId).toBeUndefined();
+  expect(host.dataset.runtimeCellId).toBe("next-cell");
   expect(host.dataset.outputMime).toBeUndefined();
 
   await act(async () => {
