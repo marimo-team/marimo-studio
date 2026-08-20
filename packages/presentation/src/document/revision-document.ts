@@ -53,7 +53,41 @@ export interface DocumentRevisionCommit {
   target: PresentationTarget;
   supportChanged: boolean;
   reloadDocument: boolean;
+  finish(): void;
+  rollback(): void;
 }
+
+const settledCommit = (
+  commit: Omit<DocumentRevisionCommit, "finish" | "rollback">,
+): DocumentRevisionCommit => ({ ...commit, finish: () => {}, rollback: () => {} });
+
+const attempt = (failures: unknown[], action: () => void): void => {
+  try {
+    action();
+  } catch (error) {
+    failures.push(error);
+  }
+};
+
+interface ProjectionAttributes {
+  readonly attributes: readonly (readonly [string, string])[];
+  readonly id: string;
+  readonly localName: string;
+}
+
+interface ParkedProjectionHosts {
+  readonly entries: readonly ParkedProjectionHost[];
+  readonly pantry: HTMLElement;
+}
+
+interface ParkedProjectionHost {
+  readonly host: HTMLElement;
+  readonly placeholder: HTMLElement;
+  placed: boolean;
+}
+
+const PRESERVED_HOST_SELECTOR =
+  "marimo-cell[data-hx-preserve][id], marimo-output[data-hx-preserve][id]";
 
 export class DocumentRevisionAdapter {
   private readonly styles = new PageStyles();
@@ -196,7 +230,7 @@ export class DocumentRevisionAdapter {
           target,
           supportChanged: getSupportUrl() !== target.supportUrl,
           reloadDocument: true,
-        };
+        });
       }
       const projectionChanged =
         getRuntimeConfig().projectionRevision !== nextConfig.projectionRevision;
@@ -232,7 +266,65 @@ export class DocumentRevisionAdapter {
       const previousTitle = document.title;
       const previousDocumentUrl = this.documentUrl;
       const previousBase = document.baseURI;
+      const projectionAttributes = this.captureProjectionAttributes(current);
+      const activeElement = document.activeElement;
+      const focused =
+        activeElement instanceof HTMLElement && current.contains(activeElement)
+          ? activeElement
+          : undefined;
+      const scroll = { x: globalThis.scrollX, y: globalThis.scrollY };
       const nextBase = resolveDocumentBase(nextDocument, nextDocumentUrl);
+      const committedStyles = stagedStyles;
+      const committedViewStyles = stagedViewStyles;
+      let restorePageStyles = () => {};
+      let restoreViewStyles = () => {};
+      let restored = false;
+      let inFlightParked: ParkedProjectionHosts | undefined;
+      const restore = () => {
+        if (restored) {
+          return;
+        }
+        restored = true;
+        const failures: unknown[] = [];
+        attempt(failures, () => {
+          const active = document.querySelector<HTMLElement>("#app-shell");
+          if (active && active !== current) {
+            if (inFlightParked !== undefined) {
+              this.reparkPlacedHosts(inFlightParked);
+            }
+            active.replaceWith(current);
+          }
+          if (inFlightParked !== undefined) {
+            this.restoreParkedHosts(inFlightParked);
+            inFlightParked = undefined;
+          }
+        });
+        attempt(failures, () => setSupportUrl(previousSupportUrl));
+        attempt(failures, () => {
+          commitRuntimeConfig(previousConfig);
+        });
+        attempt(failures, () => {
+          document.title = previousTitle;
+        });
+        attempt(failures, () => {
+          globalThis.history.replaceState(globalThis.history.state, "", previousDocumentUrl);
+        });
+        attempt(failures, () => documentBase.set(previousBase));
+        attempt(failures, restoreViewStyles);
+        attempt(failures, restorePageStyles);
+        attempt(failures, () => projectionHosts.prepare(document));
+        attempt(failures, () => this.restoreProjectionAttributes(projectionAttributes));
+        attempt(failures, () => focused?.focus());
+        attempt(failures, () => {
+          if (globalThis.scrollX !== scroll.x || globalThis.scrollY !== scroll.y) {
+            globalThis.scrollTo(scroll.x, scroll.y);
+          }
+        });
+        this.documentUrl = previousDocumentUrl;
+        if (failures.length > 0) {
+          throw new AggregateError(failures, "Document revision rollback failed.");
+        }
+      };
       try {
         setSupportUrl(target.supportUrl);
         commitRuntimeConfig(nextConfig);
@@ -293,6 +385,21 @@ export class DocumentRevisionAdapter {
         target,
         supportChanged: previousSupportUrl !== target.supportUrl,
         reloadDocument: false,
+        finish: () => {
+          if (!finished) {
+            if (inFlightParked !== undefined) {
+              this.finishParkedHosts(inFlightParked);
+              inFlightParked = undefined;
+            }
+            finished = true;
+          }
+        },
+        rollback: () => {
+          if (!finished) {
+            restore();
+            finished = true;
+          }
+        },
       };
     } finally {
       stagedStyles?.discard();

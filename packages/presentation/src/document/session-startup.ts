@@ -1,5 +1,3 @@
-import type { SessionId } from "@marimo-studio/marimo-frontend/session-bootstrap";
-
 import type { RuntimeConfig } from "../runtime-config/index.ts";
 
 interface SessionReplayPreflight {
@@ -36,8 +34,15 @@ const settleOwned = async <T>(operation: Promise<T>, signal?: AbortSignal): Prom
 export interface PresentationSessionBootstrapResult {
   config: RuntimeConfig;
   replaying: boolean;
-  sessionId: SessionId;
+  sessionId?: string;
 }
+
+export const bootstrapSessionlessPresentation = async (
+  loadConfig: () => Promise<RuntimeConfig>,
+): Promise<PresentationSessionBootstrapResult> => ({
+  config: await loadConfig(),
+  replaying: false,
+});
 
 export const bootstrapPresentationSession = async ({
   bootstrap,
@@ -46,8 +51,8 @@ export const bootstrapPresentationSession = async ({
   requiresSessionForConfig,
   signal,
 }: {
-  bootstrap: (preflight: () => void | Promise<void>) => Promise<SessionId>;
-  loadConfig: (sessionId?: SessionId) => Promise<RuntimeConfig>;
+  bootstrap: (preflight: () => void | Promise<void>) => Promise<string>;
+  loadConfig: (sessionId?: string) => Promise<RuntimeConfig>;
   replay: SessionReplayPreflight;
   requiresSessionForConfig: boolean;
   signal?: AbortSignal;

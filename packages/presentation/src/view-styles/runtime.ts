@@ -75,7 +75,9 @@ const mutationTouchesView = (mutation: MutationRecord): boolean => {
     return false;
   }
   if (target.closest(APP_SHELL)) {
-    return true;
+    return [...mutation.addedNodes, ...mutation.removedNodes].some(
+      (node) => node instanceof Element && node.closest(OUTPUT_BOUNDARY) === null,
+    );
   }
   return Array.from(mutation.addedNodes).some(
     (node) =>
@@ -159,8 +161,9 @@ export class ViewStyleController {
     return {
       commit: () => {
         if (discarded) {
-          return;
+          return () => {};
         }
+        const previous = this.style.textContent;
         this.requestedGeneration += 1;
         this.completedGeneration = this.requestedGeneration;
         this.style.textContent = css;

@@ -5,6 +5,8 @@ import { bootstrapSession } from "@marimo-studio/marimo-frontend/session-bootstr
 import { publicNotebookQuery } from "@marimo-studio/protocol/query";
 import htmx from "htmx.org";
 
+import type { PresentationSessionReplay } from "./document/revision-runtime";
+
 import { documentBase } from "./document/base";
 import {
   activeDocumentLifecycleId,
@@ -44,10 +46,12 @@ import {
   runtimeConfigSessionId,
   RuntimeConfigRequestError,
 } from "./runtime-config/index";
+import { runtimeStartupRecovery } from "./runtime-config/startup-recovery";
 import {
   disposeConfiguredRuntime,
   mountConfiguredRuntime,
   RuntimeMountCancelledError,
+  updateConfiguredRuntime,
   updateConfiguredRuntimeQuery,
 } from "./runtime/coordinator";
 import { initializeViewStyles } from "./view-styles/runtime";
@@ -72,6 +76,21 @@ onFinalPageHide(() => documentLifetime.abort(new PresentationDocumentRetiredErro
 startQuerySync();
 globalThis.addEventListener("pagehide", () => documentBase.stop());
 globalThis.addEventListener("pageshow", () => documentBase.start());
+
+export interface PresentationSessionIntegration {
+  bootstrap(preflight: () => void | Promise<void>): Promise<string>;
+  replay: PresentationSessionReplay;
+}
+
+export type LoadPresentationSessionIntegration = () => Promise<PresentationSessionIntegration>;
+
+const sessionlessReplay: PresentationSessionReplay = Object.freeze({
+  preflight: () => false,
+  pending: () => false,
+  preservedUrl: (_config: RuntimeConfig, target: string) => target,
+  finish: () => {},
+  remember: () => {},
+});
 
 const showRuntimeError = (cause: unknown) => {
   browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "failed";
@@ -346,7 +365,8 @@ const bootstrap = async (registry: RuntimeRegistry, signal = documentLifetime.si
   }
   onFinalPageHide(disposeConfiguredRuntime);
   const session = await mountConfiguredRuntime(registry, config, runtimeRoot);
-  if (session.update(getRuntimeConfig()) === "reload") {
+  if ((await updateConfiguredRuntime(getRuntimeConfig())) === "reload") {
+    await disposeConfiguredRuntime();
     globalThis.location.reload();
     return;
   }
@@ -398,6 +418,9 @@ const start = (registry: RuntimeRegistry) => {
   });
 };
 
-export const startPresentation = (registry: RuntimeRegistry): void => {
-  start(registry);
+export const startPresentation = (
+  registry: RuntimeRegistry,
+  loadSessionIntegration?: LoadPresentationSessionIntegration,
+): void => {
+  start(registry, loadSessionIntegration);
 };

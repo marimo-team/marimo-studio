@@ -41,7 +41,7 @@ interface ServerSessionConfig {
 }
 
 const serverSessionConfig = (config: RuntimeConfig): ServerSessionConfig | undefined => {
-  if (config.runtime.id !== "server") {
+  if (config.runtime.descriptor.id !== "server") {
     return undefined;
   }
   const parsed = serverRuntimeDataSchema.safeParse(config.runtime.data);

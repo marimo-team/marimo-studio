@@ -26,3 +26,13 @@ test("WebAssembly RPC retries preserve terminal errors", async () => {
   );
   assert.equal(isWasmRpcTimeout(failure), false);
 });
+
+test("WebAssembly RPC cancellation settles a stalled active invocation", async () => {
+  const controller = new AbortController();
+  const waiting = retryWasmRpc(() => new Promise<never>(() => {}), controller.signal);
+  const cancelled = assert.rejects(waiting, { name: "AbortError" });
+
+  controller.abort(new DOMException("Query superseded", "AbortError"));
+
+  await cancelled;
+});

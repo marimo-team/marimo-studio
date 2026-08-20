@@ -54,7 +54,7 @@ export class PageStyles {
     this.active?.abort();
   }
 
-  async refresh(documentUrl: string): Promise<void> {
+  async refresh(documentUrl: string): Promise<() => void> {
     this.abort();
     const controller = new AbortController();
     this.active = controller;
@@ -67,6 +67,7 @@ export class PageStyles {
       staged.commit();
       staged.finalize();
       staged = undefined;
+      return rollback;
     } finally {
       staged?.discard();
       if (this.active === controller) {

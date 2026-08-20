@@ -1,11 +1,9 @@
-import type { SessionId } from "@marimo-studio/marimo-frontend/session-bootstrap";
-
-import type { BrowserSessionReplay } from "./session-preservation.ts";
+import type { RuntimeConfig } from "../runtime-config/index.ts";
 
 import { errorMessage } from "../errors.ts";
 import { renderedViewIdentity } from "../rendered-view-state.ts";
 import { getRuntimeConfig, RuntimeConfigRequestError } from "../runtime-config/index.ts";
-import { updateConfiguredRuntime } from "../runtime/coordinator.ts";
+import { beginConfiguredRuntimeRevision } from "../runtime/coordinator.ts";
 import {
   PresentationRevisionController,
   type RevisionOperation,
@@ -29,7 +27,15 @@ const classifyFailure = (cause: unknown, _operation: RevisionOperation) => ({
   },
 });
 
-let activeSessionId: SessionId | undefined;
+export interface PresentationSessionReplay {
+  preflight(config: RuntimeConfig): boolean;
+  pending(): boolean;
+  preservedUrl(config: RuntimeConfig, target: string): string;
+  finish(): void;
+  remember(config: RuntimeConfig, sessionId: string): void;
+}
+
+let activeSessionId: string | undefined;
 let activeController: PresentationRevisionController | undefined;
 let resolveController: (controller: PresentationRevisionController) => void;
 const controllerReady = new Promise<PresentationRevisionController>((resolve) => {
@@ -56,7 +62,14 @@ export const createPresentationRevisions = (
   activeController = new PresentationRevisionController(
     new DocumentRevisionAdapter(presentationSessionId, sessionId),
     {
-      applyRuntime: () => updateConfiguredRuntime(getRuntimeConfig()),
+      beginRuntimeRevision: async (signal) => {
+        const revision = await beginConfiguredRuntimeRevision(signal);
+        return {
+          apply: async () => await revision.apply(getRuntimeConfig()),
+          commit: async () => await revision.commit(),
+          rollback: async () => await revision.rollback(),
+        };
+      },
       reloadDocument: (url) => globalThis.location.assign(url),
       reloadRuntime: () => globalThis.location.reload(),
       classifyFailure,

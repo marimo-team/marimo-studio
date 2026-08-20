@@ -9,6 +9,8 @@ const commit = (supportChanged = false): DocumentRevisionCommit => ({
   target: { documentUrl: "/report/", supportUrl: "/support/report" },
   supportChanged,
   reloadDocument: false,
+  finish: () => {},
+  rollback: () => {},
 });
 
 const deferred = <Value>() => {

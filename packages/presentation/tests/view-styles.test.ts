@@ -205,6 +205,27 @@ test("a staged shell replacement retains its revision readiness owner", async ()
   controller.disconnect();
 });
 
+test("value text updates do not regenerate authored utility CSS", async () => {
+  document.body.innerHTML = `
+    <main id="app-shell" class="grid">
+      <strong mo-value="count">1</strong>
+    </main>
+  `;
+  let calls = 0;
+  const controller = new ViewStyleController(async (tokens) => {
+    calls += 1;
+    return `/* ${[...tokens].sort().join(" ")} */`;
+  });
+  await controller.refresh();
+  controller.observe();
+
+  document.querySelector("[mo-value]")!.textContent = "2";
+  await settleMutations();
+
+  assert.equal(calls, 1);
+  controller.disconnect();
+});
+
 test("initial generation includes classes added while the generator loads", async () => {
   document.body.innerHTML = '<main id="app-shell" class="grid"></main>';
   let release: (() => void) | undefined;
