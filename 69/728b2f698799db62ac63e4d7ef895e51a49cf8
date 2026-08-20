@@ -1,0 +1,108 @@
+packages/marimo-studio/tests/test_zero_python_api.py
+  s_36badbebc98a54::t_0986716c7f182f 78-92,246
+  s_36badbebc98a54::t_c7da9aea9a80a0 115,142,356-357,395,486
+  s_36badbebc98a54::t_0be2cb59c7319f 1-7,11-17,19-55,93-114,116-141,143-216,257,259-312,314-355,358-394,396-485,487
+  s_36badbebc98a54::t_6f4d396f69fb72 8-10,18,56-77,217-245,247-256,258,313
+packages/marimo-studio/src/marimo_studio/_server/zero_python_api.py
+  s_0553c3864c0a2b::t_3194da139f1b60 1-6,10,12-14,22,26-27,29-30,32,34-35,38-41,89-95,103,109-113,120-121,125-126,170-172
+  s_0553c3864c0a2b::t_5f4479b48a0edd 8,123
+  s_36badbebc98a54::t_65113a66ea0561 23,33
+  s_0553c3864c0a2b::t_043b227b7b70ad 9,59-68,74
+  s_0553c3864c0a2b::t_0e0a285291f50f 21,24,42-47,56-57,73,96,137-155,167-169
+  s_0553c3864c0a2b::t_f86eb3bb815fe9 31,98-99,101
+  s_0553c3864c0a2b::t_8e6bf0c787627a 58,69-72,75-76,88
+  s_0553c3864c0a2b::t_5075ae66ef4c89 28,48-50,52,54,156-166
+  s_0553c3864c0a2b::t_4a87f84025027b 7,11,104,106,108,122,124,127-136
+  s_0553c3864c0a2b::t_47fe27f6725d40 36-37,51,53,55
+  s_36badbebc98a54::t_557519b5a676cc 15-20,25,77-87
+  s_0553c3864c0a2b::t_60013bc9c13e1c 97,100,102,105,107
+  s_36badbebc98a54::t_64a56488619b37 114-119
+packages/marimo-studio/tests/test_view_compiler.py
+  s_36badbebc98a54::t_10aa3db398181e 77-78,119-120
+  s_36badbebc98a54::t_4976a6e241298b 4-5,8-9,11,13-16,23,25-32,37-68,87-118,121-124,126-131
+  s_36badbebc98a54::t_7b2aa2d69bac28 7,202-203
+  s_36badbebc98a54::t_b1400257c9641a 2-3,12,33-36,69-71,82-83,132-150,168-201,204
+  s_36badbebc98a54::t_b58d68ed1cefcd 1,10,17-22,24,151-167
+  s_36badbebc98a54::t_97f068b438aefd 6
+  s_36badbebc98a54::t_5f0fc536c037e7 72-76,79-81,84-86,125
+packages/marimo-studio/src/marimo_studio/_server/prepared_view_models.py
+  s_36badbebc98a54::t_42cba644f29d5a 47-48
+  s_36badbebc98a54::t_c72e605e8d9f8e 53-55
+  s_36badbebc98a54::t_18ed9261cbc077 9,34-35,57-85,116
+  s_36badbebc98a54::t_3ce878d15f0748 102
+  s_36badbebc98a54::t_557519b5a676cc 10,112-113
+  s_36badbebc98a54::t_e1cdcbba188b98 1-8,11-33,36-46,49-52,56,86-101,103-111,114-115
+packages/marimo-studio/src/marimo_studio/_server/studio/view_compiler.py
+  s_36badbebc98a54::t_b1400257c9641a 19,73-82,85-99,102-104,119-121,136,138-146,148-156,159-190
+  s_36badbebc98a54::t_bb2bd03d6cb1f0 18,100-101,114-116
+  s_36badbebc98a54::t_49518f88f51fd5 27,42
+  s_36badbebc98a54::t_3145dc5134b8f6 105-113,117-118,122,124
+  s_36badbebc98a54::t_6765e5cbc428e2 123,125
+  s_36badbebc98a54::t_1e8f585add71e9 83
+  s_36badbebc98a54::t_e0ac3085d83bf2 20,26,28-41,43-48
+  s_36badbebc98a54::t_4976a6e241298b 1-17,21-25,49-72,84,126-135,137,147,157-158,191-202
+packages/marimo-studio/src/marimo_studio/_server/prepared_views.py
+  s_36badbebc98a54::t_b2678bdce2253a 1-20,22-141,143-177
+  s_36badbebc98a54::t_ef2baa4a1cd22c 21,142
+packages/marimo-studio/src/marimo_studio/_server/publication_runtime.py
+  s_0553c3864c0a2b::t_5eee8c7a20b3a6 1-9,14-23,26,28-49,56-78,80-82,88-108
+  s_36badbebc98a54::t_acee598a2a02ac 10-13
+  s_0553c3864c0a2b::t_60013bc9c13e1c 83
+  s_0553c3864c0a2b::t_ce9bcb826ebe10 24-25,84,86-87,109
+  s_36badbebc98a54::t_65113a66ea0561 27,50-55,79,85
+packages/marimo-studio/tests/test_prepared_views.py
+  s_36badbebc98a54::t_3ca68ff035e629 1-3,5-11,13,18-19,21-23,28-32,34-37,40,45,59-63,71-76,83-85,87-113,124-143,145-153,159-173,184-203,205-206,208-213,243-258,306-319,322,327-336,366-396,515-545,550-558,563-584,592-612,614-615,617-619,658-661,705-720,732,734-750,755-779,781-788,894,899-900
+  s_36badbebc98a54::t_523ad35427db17 144,174-183,320,460,613,780,813,815,886
+  s_36badbebc98a54::t_d2e0e3cd4f1649 24,214-242
+  s_36badbebc98a54::t_96bd744ebedd53 154-158
+  s_36badbebc98a54::t_33f20dabf669b7 337-365
+  s_36badbebc98a54::t_f6c36720710265 511-513
+  s_36badbebc98a54::t_9e8c3ad35eb7a7 559-562
+  s_36badbebc98a54::t_292ded73b4d77c 628-631,814
+  s_36badbebc98a54::t_f5182bc26825d0 14-15,27,620-627,632-657
+  s_36badbebc98a54::t_b61eac381bd503 33,41,48-58,64-70,77-82,86,114-123
+  s_36badbebc98a54::t_1866372223f150 798-812,816-831
+  s_36badbebc98a54::t_44ae3b6f45b8b3 901-912,915-939,943-954
+  s_36badbebc98a54::t_53ad6b6f2756a3 4,17,26,282-305,721-731,733,751-754
+  s_36badbebc98a54::t_107a29648fa459 42,47,914
+  s_36badbebc98a54::t_717430476a66ef 662-671,676,678-679,682-687,691-704
+  s_36badbebc98a54::t_21b10dbdbdba5a 38,46,895-898,913
+  s_36badbebc98a54::t_2c1f789c772f0a 16,399-429,475-510,514
+  s_36badbebc98a54::t_7f664b08f58e6c 39,43-44
+  s_36badbebc98a54::t_0986716c7f182f 672-675,677,680-681,688-690
+  s_36badbebc98a54::t_486d4920fe8671 20,259-281,321,591,616,852
+  s_36badbebc98a54::t_c7da9aea9a80a0 847-849,888-890,940-942
+  s_36badbebc98a54::t_af29257e19661e 12,25,397-398,430-459,461-474
+  s_36badbebc98a54::t_90f5382e8e85a8 323-326,546-549,585-590
+  s_36badbebc98a54::t_c0f89affe147a5 204,207,789-797,832-846,850-851,853-885,887,891-893
+packages/marimo-studio/src/marimo_studio/_server/prepared_view_spec.py
+  s_36badbebc98a54::t_43800c37439c04 16,86,106,112-118,128-130,133,138-150
+  s_36badbebc98a54::t_b53a8a84248793 73
+  s_36badbebc98a54::t_21b10dbdbdba5a 52,59
+  s_36badbebc98a54::t_d04848fb2ea9e8 1-10,12-15,17-51,53-58,60-72,74-85,87-105,107-111,119-121,124-127,132,135-137,151-153
+  s_36badbebc98a54::t_96bd744ebedd53 11,122-123,131,134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "69728b2f698799db62ac63e4d7ef895e51a49cf8",
+  "prompts": {},
+  "sessions": {
+    "s_0553c3864c0a2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01457-511e-7fa0-b5b2-4e7f4b59a0d8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    },
+    "s_36badbebc98a54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0192c-d072-77a2-86c3-cdc5c0383d92",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
