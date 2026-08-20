@@ -13,6 +13,7 @@ const buildMetadataSchema = z.object({
     repository: z.string().min(1),
     version: z.string().min(1),
     commit: z.string().min(1),
+    patchSha256: z.string().min(1),
   }),
   htmx: z.object({ version: z.string().min(1) }),
 });
@@ -47,6 +48,7 @@ export const buildMetadata = (): Plugin => ({
         repository: marimo.repository,
         version: marimo.version,
         commit: marimo.commit,
+        patchSha256: marimo.patchSha256,
       },
       htmx: { version: htmx.version },
     });

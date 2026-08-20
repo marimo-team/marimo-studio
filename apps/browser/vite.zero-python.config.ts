@@ -3,23 +3,23 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite-plus";
 
-import { buildMetadata } from "./build-metadata.ts";
 import { entryClosures } from "./entry-closures.ts";
 
 const packageRoot = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = resolve(packageRoot, "../..");
 const marimo = createMarimoViteIntegration();
-const entrypoint = (specifier: string) => fileURLToPath(import.meta.resolve(specifier));
 
 export default defineConfig({
   base: "./",
   css: {
     postcss: marimo.postcss,
   },
-  plugins: [...marimo.plugins, buildMetadata()],
-  worker: {
-    plugins: () => marimo.workerPlugins(),
-  },
+  plugins: [
+    entryClosures({
+      entries: ["zero-python"],
+      fileName: "entry-closures.zero-python.json",
+    }),
+  ],
   resolve: {
     alias: marimo.aliases,
   },
@@ -33,24 +33,20 @@ export default defineConfig({
       "_static",
       "browser",
     ),
-    emptyOutDir: true,
+    emptyOutDir: false,
     cssCodeSplit: true,
-    manifest: "entry-manifest.json",
     rollupOptions: {
       input: {
-        runtime: join(packageRoot, "src", "runtime.ts"),
-        "dev-reload": entrypoint("@marimo-studio/presentation/dev-reload"),
-        "host-session-handoff": join(packageRoot, "src", "host-session-handoff.ts"),
-        studio: join(packageRoot, "src", "studio.ts"),
+        "zero-python": join(packageRoot, "src", "zero-python.ts"),
       },
       output: {
         entryFileNames: "[name].js",
-        chunkFileNames: "chunks/[name]-[hash].js",
+        chunkFileNames: "zero-python/chunks/[name]-[hash].js",
         assetFileNames(assetInfo) {
           if (assetInfo.names.some((name) => name.endsWith(".css"))) {
-            return "[name][extname]";
+            return "zero-python/[name][extname]";
           }
-          return "assets/[name]-[hash][extname]";
+          return "zero-python/assets/[name]-[hash][extname]";
         },
       },
     },

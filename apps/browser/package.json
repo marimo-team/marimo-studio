@@ -12,11 +12,15 @@
     "@marimo-studio/presentation": "workspace:*",
     "@marimo-studio/runtime": "workspace:*",
     "@marimo-studio/studio": "workspace:*",
+    "@marimo-team/marimo-export": "link:../../../../marimo-export/packages/browser",
+    "@marimo-team/portable-json": "link:../../../../marimo-export/packages/portable-json",
     "htmx.org": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "jsdom": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:"
