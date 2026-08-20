@@ -1,0 +1,164 @@
+skills/marimo-studio/SKILL.md
+  s_36badbebc98a54::t_0b12370007ddae 7-8,126
+development_docs/architecture/agents-and-delivery.md
+  s_0553c3864c0a2b::t_009337dd834a06 309-311,357-358,360-370,439-442,444-448
+  s_0553c3864c0a2b::t_21898447ea86f3 283
+  s_36badbebc98a54::t_3d934d87716df7 302-308,312-314
+  s_0553c3864c0a2b::t_60628462714942 286,289,297-301,359,423,443
+  s_0553c3864c0a2b::t_030ed177979fbe 287-288
+  s_36badbebc98a54::t_91e89d80179326 290-296,385-386
+docs/guide/views.md
+  s_36badbebc98a54::t_2c0a93145452a5 97,101-103
+  s_36badbebc98a54::t_f5a74df593a5fd 98-100
+  s_0553c3864c0a2b::t_eb3d7a40177f8d 51
+docs/guide/getting-started.md
+  s_0553c3864c0a2b::t_780f7f86344737 53
+development_docs/architecture/browser-runtime-and-authoring.md
+  s_0553c3864c0a2b::t_4e16a71ba4b194 25,30,34-36,80-84,131,140,411-412,415-416,505-506,552-556,584
+  s_0553c3864c0a2b::t_38cc098115558b 105-107,110-113,122-125
+  s_36badbebc98a54::t_bb2d9b2edd968b 575
+  s_36badbebc98a54::t_5667c4d49032e6 142-156,162-166
+  s_0553c3864c0a2b::t_e90215c12e51b0 75,77-79,85-90,127-130
+  s_36badbebc98a54::t_adbc3767be7932 21,47-52
+  s_0553c3864c0a2b::t_c60c33ab0c2636 92,96-99,108,117-121,126,137-138,407,409-410,489-491,498-500
+  s_0553c3864c0a2b::t_009337dd834a06 133-135,520-529,602
+  s_36badbebc98a54::t_654e0e5298f81d 157-161,587
+  s_0553c3864c0a2b::t_f90e030aa0120b 256-262,599-601,603-608
+  s_0553c3864c0a2b::t_593a8199f0cdf3 290-291
+development_docs/README.md
+  s_36badbebc98a54::t_52a042920f3e60 12-15,57-59,61-73,111-112,115
+  s_0553c3864c0a2b::t_4f085ecd4a231d 44-45,48-56,60
+  s_36badbebc98a54::t_24de67f2608ba2 46-47
+skills/marimo-studio/references/analysis-and-handoff.md
+  s_36badbebc98a54::t_0b12370007ddae 160,170-173
+docs/reference/cli.md
+  s_0553c3864c0a2b::t_0934700320816b 278
+  s_36badbebc98a54::t_aa802cc68e6b52 36-38
+  s_36badbebc98a54::t_b7f9da8afa7ba4 248-254,274-276
+  s_0553c3864c0a2b::t_030ed177979fbe 267,273
+  s_36badbebc98a54::t_bb2d9b2edd968b 279
+  s_0553c3864c0a2b::t_cb69a6bf77b536 260,280-281
+  s_0553c3864c0a2b::t_2b74c95c4b2944 268-272
+  s_0553c3864c0a2b::t_fa0db48be96d5f 256-259,262
+  s_36badbebc98a54::t_e6fc7ee94ad963 261,263-265
+docs/guide/live-authoring.md
+  s_0553c3864c0a2b::t_f90e030aa0120b 39-45
+  s_0553c3864c0a2b::t_6663aa217023df 115
+  s_36badbebc98a54::t_2c0a93145452a5 109,116-119
+  s_0553c3864c0a2b::t_eb3d7a40177f8d 35,111-113,123-125,128,159
+  s_0553c3864c0a2b::t_d4c73681fbf53a 127
+README.md
+  s_0553c3864c0a2b::t_eb3d7a40177f8d 36,41-42,145
+  s_0553c3864c0a2b::t_009337dd834a06 146
+  s_0553c3864c0a2b::t_62bbd9f323195f 150
+  s_36badbebc98a54::t_ad875e0731848c 148,157-161
+  s_36badbebc98a54::t_fc40da49be93a9 147
+docs/reference/runtimes.md
+  s_0553c3864c0a2b::t_eb3d7a40177f8d 12-16
+  s_36badbebc98a54::t_bb2d9b2edd968b 24
+  s_0553c3864c0a2b::t_54d5f3879adcbe 89
+  s_0553c3864c0a2b::t_6663aa217023df 33-37,139,141
+  s_0553c3864c0a2b::t_6c12fe8baaf68d 3,8-10,17-19,29-32,38-47,56-61,73,90-92,97-99,102-104,117,135,137
+  s_36badbebc98a54::t_ec496d27f5d0ce 124-127
+  s_0553c3864c0a2b::t_2179f09191977d 129-132
+  s_0553c3864c0a2b::t_d7e7aff9f01bcf 20-23,25-27
+  s_0553c3864c0a2b::t_84394fc8a75618 118-123
+  s_36badbebc98a54::t_14752bc6cfc192 48-52,100-101,105-116,136
+  s_36badbebc98a54::t_0e94505940d5fa 28,140
+development_docs/releasing.md
+  s_0553c3864c0a2b::t_780f7f86344737 13-14
+  s_36badbebc98a54::t_4aca2ede04b742 33-34,97,113-117,126-128
+  s_0553c3864c0a2b::t_4f085ecd4a231d 42
+  s_36badbebc98a54::t_c2e860a2b2ed84 26-32,35-41
+  s_36badbebc98a54::t_52a042920f3e60 24-25
+development_docs/frontend.md
+  s_36badbebc98a54::t_975647c08bf559 20,23,43,79-80
+  s_0553c3864c0a2b::t_eb3d7a40177f8d 139,171,212-214,230
+  s_0553c3864c0a2b::t_0737b5dcfc0bee 215-216,227-229,231-237
+  s_0553c3864c0a2b::t_d5da8fcf38c294 77
+  s_0553c3864c0a2b::t_9fe56a0dcd1baf 14-19,21-22,24-25
+docs/reference/view-document.md
+  s_36badbebc98a54::t_2ee80dd28f79b4 252-287
+  s_36badbebc98a54::t_8c2bd07869af37 41
+  s_0553c3864c0a2b::t_7577421afb9243 35-37
+  s_36badbebc98a54::t_cb655a2e5c619e 39-40
+AGENTS.md
+  s_36badbebc98a54::t_bf02f03683c2ae 25-26,40,101-103,117-122
+  s_36badbebc98a54::t_80cf0f238d6139 27-29,137
+development_docs/architecture/marimo-integration.md
+  s_0553c3864c0a2b::t_2c8d4bd51103d4 530-538
+  s_36badbebc98a54::t_ec496d27f5d0ce 121
+  s_36badbebc98a54::t_f78299ae1bc41d 106-114,315-318,322-333,337-345,347,349-350
+  s_36badbebc98a54::t_dd9825e7e96730 102-105,115-120,122-125
+  s_36badbebc98a54::t_1204f4f45339f4 96-100,258,260-262,264-267
+  s_36badbebc98a54::t_a672f006718022 335-336,351-357,369-372
+  s_36badbebc98a54::t_cf240c41abb8e6 67,348,359-368
+  s_36badbebc98a54::t_9a9f6ed26abc07 69,213-216
+  s_36badbebc98a54::t_0da7fb18df2d5c 211-212
+  s_36badbebc98a54::t_93bd6627befa7e 312
+  s_36badbebc98a54::t_f11f31dd00a412 4-5,9
+  s_36badbebc98a54::t_60aae1d22515dd 202,241,387-388
+  s_36badbebc98a54::t_b8b97dfd4c3292 346,358
+  s_36badbebc98a54::t_0e94505940d5fa 516
+development_docs/architecture/product-and-workspace.md
+  s_36badbebc98a54::t_678477f2f66f90 9-20,155-159
+  s_0553c3864c0a2b::t_f26a5b7726c4c8 115-119
+  s_36badbebc98a54::t_9a3fcf2eb7bd8c 145-154,160-179,201,216,232,248,264,277,291,322-323
+docs/reference/configuration.md
+  s_36badbebc98a54::t_8bd1b340ad5c59 134-165
+  s_0553c3864c0a2b::t_b2db5016ccac61 54-58
+docs/overview.md
+  s_0553c3864c0a2b::t_6663aa217023df 12-20,221-224
+  s_36badbebc98a54::t_bb2d9b2edd968b 199
+  s_0553c3864c0a2b::t_eb3d7a40177f8d 153,193,217-219
+  s_36badbebc98a54::t_ad875e0731848c 209-214
+docs/guide/run-and-share.md
+  s_0553c3864c0a2b::t_d7e7aff9f01bcf 11-16
+  s_36badbebc98a54::t_4afa41f0f45aca 165-198,225
+  s_0553c3864c0a2b::t_e2bc779b9fe9bd 3,154,207-210,213-224
+  s_0553c3864c0a2b::t_6663aa217023df 199-201
+  s_36badbebc98a54::t_0e94505940d5fa 202
+skills/marimo-studio/references/view-authoring.md
+  s_36badbebc98a54::t_0b12370007ddae 136-158
+docs/index.md
+  s_0553c3864c0a2b::t_780f7f86344737 68
+  s_0553c3864c0a2b::t_6663aa217023df 142
+  s_0553c3864c0a2b::t_eb3d7a40177f8d 120,137-139
+development_docs/architecture.md
+  s_0553c3864c0a2b::t_593a8199f0cdf3 24
+  s_36badbebc98a54::t_3d97fc1705a805 125-136,138-147,155
+  s_36badbebc98a54::t_93bd6627befa7e 61-62,180,201
+  s_36badbebc98a54::t_cf240c41abb8e6 149-154
+  s_36badbebc98a54::t_bb185c8f93d560 4-7,58-60,163
+  s_36badbebc98a54::t_80cf0f238d6139 172-179,181-188
+  s_36badbebc98a54::t_3973221cb5cce8 69-76,137,148,200
+skills/marimo-studio/references/capabilities.json
+  s_36badbebc98a54::t_5d35ac78640ccd 395
+  s_36badbebc98a54::t_c95e49ae72cc8d 379,381-382,411-421
+  s_0553c3864c0a2b::t_1e6901e0facaea 394,396-397
+  s_36badbebc98a54::t_cf3a01bfaac76a 422-427
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2ba8c7ab088c61cefbf38d40965e7a803a9836f4",
+  "prompts": {},
+  "sessions": {
+    "s_0553c3864c0a2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01457-511e-7fa0-b5b2-4e7f4b59a0d8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    },
+    "s_36badbebc98a54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0192c-d072-77a2-86c3-cdc5c0383d92",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
