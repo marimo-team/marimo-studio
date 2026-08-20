@@ -1,0 +1,136 @@
+apps/e2e/fixtures/public/report.txt
+  s_0553c3864c0a2b::t_752d88e5fe1ba2 1
+apps/e2e/tests/zero-python.spec.ts
+  s_36badbebc98a54::t_00da8de70c7bcc 313,319,321,323-329,331-332
+  s_36badbebc98a54::t_e7840a8cb8236d 136-155
+  s_0553c3864c0a2b::t_7329c4c04d2af1 223-225
+  s_0553c3864c0a2b::t_c0f84cb529a87d 235,240,245
+  s_0553c3864c0a2b::t_d0e6a20e0c5914 92-115,117-119
+  s_0553c3864c0a2b::t_6d7133206182a7 5,12,15,366-372,374-389,393-414,418-423,425-434
+  s_36badbebc98a54::t_46bc1a09abc101 1-2
+  s_0553c3864c0a2b::t_02c98ad8a9f9ee 88,120-129,131,133
+  s_0553c3864c0a2b::t_91f890cd1f1a20 130
+  s_0553c3864c0a2b::t_196b0ad0eb48cc 220
+  s_0553c3864c0a2b::t_75a024cc3b1630 281,285-287,297-298,354-357,359-361
+  s_0553c3864c0a2b::t_05cfa62545408f 249
+  s_36badbebc98a54::t_cc36d52ea22856 310-312,314-315
+  s_0553c3864c0a2b::t_b8b91eaa6a0597 132
+  s_0553c3864c0a2b::t_47e5812e5730d7 238,243
+  s_0553c3864c0a2b::t_39b933d999ce03 6,22-33,55,69,358
+  s_0553c3864c0a2b::t_0bb29689835f1b 227,231
+  s_0553c3864c0a2b::t_2c9ae684d19515 4,72-75,174,178-180,274-276
+  s_0553c3864c0a2b::t_02b09c5a577ec0 14,18,162,164-165,173,270
+  s_0553c3864c0a2b::t_e536896df733d4 221
+  s_0553c3864c0a2b::t_c13c6b1536c95c 91
+  s_0553c3864c0a2b::t_643d3dd6589490 216-218
+  s_0553c3864c0a2b::t_8e0dbc904a03ad 248,252-253
+  s_0553c3864c0a2b::t_5a759dac4ddc39 170,176
+  s_0553c3864c0a2b::t_62650b3933e345 166-168
+  s_0553c3864c0a2b::t_b23a58f74a05b6 3,7-9,11,13,16-17,19-21,34-54,56-68,70-71,76-78,89-90,161,163,169,171,175,177,181-209,211,260-263,265,268-269,271-273,277-280,282-284,288-295,299-309,320,322,330,333-353,363-365,435-437
+  s_36badbebc98a54::t_2cec6a0e225f5b 296,316-317
+  s_36badbebc98a54::t_a3f07086459619 79-87,116,134-135,156-160,264,267
+  s_0553c3864c0a2b::t_506cd428852d4b 318
+  s_0553c3864c0a2b::t_9637dbf33d2c8b 255-259
+  s_0553c3864c0a2b::t_6b92cb82105a14 222,226,228-230,232-233
+  s_0553c3864c0a2b::t_19b140cf5f740d 10,212-215,219,234,236-237,239,241-242,244,246-247,250-251,254,362,373,390-392,415-417,424
+  s_0553c3864c0a2b::t_b5b5101e4085f5 172
+  s_36badbebc98a54::t_dfa058c8803621 266
+  s_0553c3864c0a2b::t_65628444119a6a 210
+apps/e2e/tests/recovery.spec.ts
+  s_0553c3864c0a2b::t_a604dcc5d8c1cb 394-396,398
+  s_0553c3864c0a2b::t_4691deea8bd781 10
+  s_0553c3864c0a2b::t_83fca26af867c3 359-377,391-393
+  s_0553c3864c0a2b::t_9fa9e50a10672a 411-412
+  s_0553c3864c0a2b::t_b78850b8bedc50 415
+  s_0553c3864c0a2b::t_2a11b1cd07fa15 101-102,104,291-296
+  s_0553c3864c0a2b::t_0ec2b0ecfdc030 1-7,52,79,94,96,98
+  s_0553c3864c0a2b::t_70cace9aa2f6b6 9,358
+  s_36badbebc98a54::t_b5cebf16822cf9 32-33,95,97,103,215,300
+apps/e2e/fixtures/__marimo__/studio/prepared/pure/pure.js
+  s_0553c3864c0a2b::t_752d88e5fe1ba2 1
+apps/e2e/fixtures/prepared.py
+  s_0553c3864c0a2b::t_5937bf4313b11b 42,48-51
+  s_0553c3864c0a2b::t_a5481dbbbd3e42 45
+  s_0553c3864c0a2b::t_f71d483a14c97b 1-41,69-115
+  s_0553c3864c0a2b::t_7209bdf8f136ce 43-44,46-47,52-68
+apps/e2e/scripts/serve.mjs
+  s_36badbebc98a54::t_b5cebf16822cf9 27,35
+  s_36badbebc98a54::t_be89a134a6871f 41-69
+  s_0553c3864c0a2b::t_c354cb075450f9 76-77,79-80,85,101-102,108,110-111
+  s_0553c3864c0a2b::t_e62cd825e2de71 3
+  s_0553c3864c0a2b::t_233c6a789eed50 143-145
+  s_36badbebc98a54::t_e8346011002f4f 14,100,103-105,109,112-114,117-125,127
+apps/e2e/fixtures/__marimo__/studio/prepared/prepared/index.html
+  s_0553c3864c0a2b::t_f71d483a14c97b 1-25,36-49
+  s_0553c3864c0a2b::t_7209bdf8f136ce 31-35
+  s_36badbebc98a54::t_e43b9454d93f69 26-30
+apps/e2e/package.json
+  s_36badbebc98a54::t_e8346011002f4f 10
+  s_36badbebc98a54::t_6cbff3d995ff6a 11
+apps/e2e/scripts/export-repository.test.mjs
+  s_36badbebc98a54::t_6cbff3d995ff6a 1-43
+apps/e2e/scripts/process-tree.test.mjs
+  s_36badbebc98a54::t_704a2ed946d0ed 7,56
+  s_36badbebc98a54::t_64cb19e0162bd3 31-55
+  s_36badbebc98a54::t_99717272e4dbc0 1-6,8-30,57-67
+apps/e2e/fixtures/notebook.py
+  s_0553c3864c0a2b::t_d28ea7d301c768 63-78
+apps/e2e/tests/fixture.ts
+  s_36badbebc98a54::t_b2c71d89a09ff6 8,139-141
+  s_0553c3864c0a2b::t_f71d483a14c97b 32,41,86,92-93,173-177,180
+  s_0553c3864c0a2b::t_752d88e5fe1ba2 22,33,94-97,185-198,200-203
+  s_36badbebc98a54::t_51a1ebcac74b2a 321-329,338
+  s_36badbebc98a54::t_0919b3dbc7b557 378
+  s_36badbebc98a54::t_114ba0600c3625 311-316
+  s_0553c3864c0a2b::t_216b3d49bc4be5 34,58-63,179,181-184,204-210
+  s_36badbebc98a54::t_6cbff3d995ff6a 126-129,134,138,142,178,199
+  s_0553c3864c0a2b::t_14ac41d9878e89 345,388-400,405
+  s_0553c3864c0a2b::t_76a489700df246 375-377,382-387
+  s_0553c3864c0a2b::t_bb1a99c2ca4555 10,132-133,135
+  s_0553c3864c0a2b::t_17b8d57d1f7ffd 424,426
+apps/e2e/tests/authoring.spec.ts
+  s_36badbebc98a54::t_8c5bc55bd76c94 425
+apps/e2e/tests/runtime.spec.ts
+  s_0553c3864c0a2b::t_f4054abf23f1ec 65-68,70-79,84-99,106-108
+  s_0553c3864c0a2b::t_a562e360144a3c 206-215,294-295
+  s_0553c3864c0a2b::t_878f2d0bb3274e 69,80-83,109
+  s_0553c3864c0a2b::t_5beb840aeac6ca 100-105
+  s_0553c3864c0a2b::t_0e711674413a01 390,398,408-409
+apps/e2e/fixtures/__marimo__/studio/prepared/prepared/app.css
+  s_0553c3864c0a2b::t_f71d483a14c97b 1-43
+apps/e2e/fixtures/__marimo__/studio/prepared/pure/index.html
+  s_0553c3864c0a2b::t_9d4b2ce490cd3f 11
+  s_0553c3864c0a2b::t_752d88e5fe1ba2 1-10,12-16
+apps/e2e/scripts/export-repository.mjs
+  s_36badbebc98a54::t_6cbff3d995ff6a 1-12
+apps/e2e/scripts/process-tree.mjs
+  s_36badbebc98a54::t_64cb19e0162bd3 5,11-25,27-39,50,58
+  s_36badbebc98a54::t_e8346011002f4f 1-2,6,26,40-46,48-49,51-57,59-68
+  s_36badbebc98a54::t_704a2ed946d0ed 3-4,7-10,47
+apps/e2e/fixtures/__marimo__/studio/prepared/pure/app.css
+  s_0553c3864c0a2b::t_752d88e5fe1ba2 1-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "49f26e9ec7ba3d11e6fcc4bf96aabe3878d74bcf",
+  "prompts": {},
+  "sessions": {
+    "s_0553c3864c0a2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01457-511e-7fa0-b5b2-4e7f4b59a0d8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    },
+    "s_36badbebc98a54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0192c-d072-77a2-86c3-cdc5c0383d92",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
