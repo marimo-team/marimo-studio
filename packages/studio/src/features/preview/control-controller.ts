@@ -1,7 +1,16 @@
-import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
+import type { RuntimeDescriptor } from "@marimo-studio/protocol/runtime-descriptor";
 
-import type { fetchRuntimeControls } from "./control-remote.ts";
+import { runtimeControlsSchema } from "@marimo-studio/protocol/runtime-config";
 
+import type { fetchRuntimeControls, RuntimeControlSnapshot } from "./control-remote.ts";
+import type {
+  ControlFrameConnector,
+  ControlSync,
+  EndpointControlBindings,
+} from "./control-types.ts";
+
+import { RuntimeControlRequestError } from "./control-remote.ts";
+import { synchronizeControlEndpoints } from "./control-sync.ts";
 import {
   type ControlFrameConnector,
   type ControlSync,
@@ -12,9 +21,12 @@ import { connectFrameControlBridge } from "./frame-bridge.ts";
 
 const RETRY_DELAYS = [100, 250, 500, 1_000, 2_000, 5_000] as const;
 const ATTEMPT_TIMEOUT_MS = 3_000;
+const CONTROL_POLL_INTERVAL_MS = 1_000;
+const SESSION_PENDING_RETRY_LIMIT = 3;
 
 interface ControlControllerOptions {
-  runtime: string;
+  runtime: RuntimeDescriptor;
+  peerRuntime: string | undefined;
   editor: HTMLIFrameElement;
   preview: HTMLIFrameElement;
   supportUrl: () => string;
@@ -49,6 +61,7 @@ export class PreviewControlController {
   private request: ControlRequest | undefined;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private retryAttempt = 0;
+  private sessionPendingAttempts = 0;
 
   constructor(private readonly options: ControlControllerOptions) {}
 
@@ -59,6 +72,12 @@ export class PreviewControlController {
   ): void {
     if (!this.options.connect || this.options.runtime === DEFAULT_RUNTIME_ID) {
       return;
+    }
+    const cacheContext = `${this.options.supportUrl()}\0${revision}\0${sessionId ?? ""}`;
+    if (cacheContext !== this.controlCacheContext) {
+      this.controlCacheContext = cacheContext;
+      this.controlEtags.clear();
+      this.controlSnapshots.clear();
     }
     if (
       (this.sync &&
@@ -80,7 +99,9 @@ export class PreviewControlController {
       this.request.controller.abort();
     }
     this.request = undefined;
-    this.sync?.dispose();
+    const stopBindingSubscription = this.stopBindingSubscription;
+    this.stopBindingSubscription = undefined;
+    const sync = this.sync;
     this.sync = undefined;
     this.syncRequest = undefined;
     this.revision = undefined;
@@ -91,6 +112,40 @@ export class PreviewControlController {
       this.retryTimer = undefined;
     }
     this.retryAttempt = 0;
+    this.sessionPendingAttempts = 0;
+
+    const failures: unknown[] = [];
+    const attempt = (operation: () => void) => {
+      try {
+        operation();
+      } catch (error) {
+        failures.push(error);
+      }
+    };
+    if (pollController !== undefined) {
+      attempt(() => pollController.abort());
+    }
+    if (pollTimer !== undefined) {
+      attempt(() => clearTimeout(pollTimer));
+    }
+    if (requestController !== undefined) {
+      attempt(() => requestController.abort());
+    }
+    if (stopBindingSubscription !== undefined) {
+      attempt(stopBindingSubscription);
+    }
+    if (sync !== undefined) {
+      attempt(() => sync.dispose());
+    }
+    if (retryTimer !== undefined) {
+      attempt(() => clearTimeout(retryTimer));
+    }
+    if (failures.length === 1) {
+      throw failures[0];
+    }
+    if (failures.length > 1) {
+      throw new AggregateError(failures, "Marimo control synchronization cleanup failed");
+    }
   }
 
   private async start(
@@ -133,6 +188,8 @@ export class PreviewControlController {
           attempt.signal,
         ),
       ]);
+      const editorConfig = editorRead.snapshot;
+      const previewConfig = previewRead.snapshot;
       if (attempt.signal.aborted || this.request !== request) {
         return;
       }
@@ -158,11 +215,34 @@ export class PreviewControlController {
         failure = new Error("Marimo control endpoints are still starting");
         return;
       }
+      const editorBindings = editor.controlBindings?.();
+      const previewBindings = preview.controlBindings?.();
+      const editorControls =
+        editorConfig.controls ??
+        (editorBindings === undefined
+          ? undefined
+          : runtimeControlsSchema.parse({ bindings: editorBindings }));
+      const previewControls =
+        previewConfig.controls ??
+        (previewBindings === undefined
+          ? undefined
+          : runtimeControlsSchema.parse({ bindings: previewBindings }));
+      if (
+        !editorControls ||
+        !previewControls ||
+        !controlBindingsConverged(editorControls, previewControls)
+      ) {
+        editor.dispose();
+        preview.dispose();
+        retry = true;
+        failure = new Error("Control bindings have not converged");
+        return;
+      }
       const sync = await synchronizeControlEndpoints({
         editor,
         preview,
-        editorControls: editorConfig.controls,
-        previewControls: previewConfig.controls,
+        editorControls,
+        previewControls,
         signal: attempt.signal,
         onStatus: (status) => {
           if (this.request === request || this.syncRequest === request) {
@@ -174,6 +254,72 @@ export class PreviewControlController {
         sync.dispose();
         return;
       }
+      const bindingSubscriptions: Array<() => void> = [];
+      const stopBindingSubscriptions = () => {
+        const failures: unknown[] = [];
+        for (const stop of bindingSubscriptions.splice(0)) {
+          try {
+            stop();
+          } catch (error) {
+            failures.push(error);
+          }
+        }
+        if (failures.length === 1) {
+          throw failures[0];
+        }
+        if (failures.length > 1) {
+          throw new AggregateError(failures, "Control binding subscription cleanup failed");
+        }
+      };
+      const refreshBindings = (source: "editor" | "preview", bindings: EndpointControlBindings) => {
+        sync.invalidateControls(source);
+        const controls = runtimeControlsSchema.parse({ bindings });
+        void sync
+          .updateControls(source === "editor" ? { editor: controls } : { preview: controls })
+          .catch(() => {});
+      };
+      try {
+        if (editorBindings !== undefined && editor.subscribeControlBindings !== undefined) {
+          let currentBindings = editorBindings;
+          bindingSubscriptions.push(
+            editor.subscribeControlBindings((bindings) => {
+              if (!sameControlBindings(currentBindings, bindings)) {
+                currentBindings = bindings;
+                refreshBindings("editor", bindings);
+              }
+            }),
+          );
+        }
+        if (previewBindings !== undefined && preview.subscribeControlBindings !== undefined) {
+          let currentBindings = previewBindings;
+          bindingSubscriptions.push(
+            preview.subscribeControlBindings((bindings) => {
+              if (!sameControlBindings(currentBindings, bindings)) {
+                currentBindings = bindings;
+                refreshBindings("preview", bindings);
+              }
+            }),
+          );
+        }
+      } catch (error) {
+        const failures = [error];
+        try {
+          stopBindingSubscriptions();
+        } catch (cleanupError) {
+          failures.push(cleanupError);
+        }
+        try {
+          sync.dispose();
+        } catch (cleanupError) {
+          failures.push(cleanupError);
+        }
+        if (failures.length === 1) {
+          throw error;
+        }
+        throw new AggregateError(failures, "Control binding subscription setup failed");
+      }
+      this.stopBindingSubscription =
+        bindingSubscriptions.length === 0 ? undefined : stopBindingSubscriptions;
       this.sync = sync;
       this.syncRequest = request;
       this.revision = revision;
@@ -216,6 +362,155 @@ export class PreviewControlController {
       this.retryTimer = undefined;
       void this.start(revision, previewSessionId, editorSessionId);
     }, delay);
+  }
+
+  private async readControlSnapshot(
+    supportUrl: string,
+    runtime: string,
+    sessionId: string,
+    revision: string,
+    clientId: string,
+    signal: AbortSignal,
+    force = false,
+  ): Promise<ControlSnapshotRead> {
+    const key = `${supportUrl}\0${runtime}\0${revision}\0${sessionId}`;
+    const result = await this.options.fetchControls(
+      supportUrl,
+      runtime,
+      sessionId,
+      revision,
+      clientId,
+      force ? undefined : this.controlEtags.get(key),
+      signal,
+    );
+    this.controlEtags.set(key, result.etag);
+    if (result.kind === "changed") {
+      const previous = this.controlSnapshots.get(key);
+      this.controlSnapshots.set(key, result.snapshot);
+      return {
+        changed:
+          previous === undefined ||
+          !sameRuntimeControls(previous.controls, result.snapshot.controls),
+        refreshed: true,
+        snapshot: result.snapshot,
+      };
+    }
+    const snapshot = this.controlSnapshots.get(key);
+    if (!snapshot) {
+      throw new Error("Control configuration returned 304 before its initial snapshot");
+    }
+    return { changed: false, refreshed: false, snapshot };
+  }
+
+  private scheduleControlPoll(context: ControlPollContext): void {
+    if (!this.sync || this.pollTimer !== undefined) {
+      return;
+    }
+    this.pollTimer = setTimeout(() => {
+      this.pollTimer = undefined;
+      void this.pollControls(context);
+    }, CONTROL_POLL_INTERVAL_MS);
+  }
+
+  private async pollControls(context: ControlPollContext): Promise<void> {
+    const sync = this.sync;
+    if (!sync) {
+      return;
+    }
+    const controller = new AbortController();
+    const attempt = attemptSignal(controller.signal);
+    const quarantineVersion = sync.quarantineVersion();
+    const quarantinedSources = sync.quarantinedSources();
+    this.pollController = controller;
+    try {
+      const results = await Promise.all([
+        this.readControlSnapshot(
+          context.supportUrl,
+          context.peerRuntime,
+          context.sessionId,
+          context.revision,
+          context.clientId,
+          attempt.signal,
+          quarantinedSources.has("editor"),
+        ),
+        this.readControlSnapshot(
+          context.supportUrl,
+          this.options.runtime.id,
+          context.sessionId,
+          context.revision,
+          context.clientId,
+          attempt.signal,
+          quarantinedSources.has("preview"),
+        ),
+      ]);
+      const changed = results.some((result) => result.changed);
+      this.sessionPendingAttempts = 0;
+      const refreshedQuarantine = Array.from(sync.quarantinedSources()).every((source) =>
+        source === "editor" ? results[0].refreshed : results[1].refreshed,
+      );
+      if (
+        this.sync === sync &&
+        quarantineVersion === sync.quarantineVersion() &&
+        (changed || (sync.isQuarantined() && refreshedQuarantine))
+      ) {
+        await sync.updateControls({
+          editor: results[0].snapshot.controls,
+          preview: results[1].snapshot.controls,
+        });
+      }
+    } catch (error) {
+      if (!controller.signal.aborted && !this.recoverRequestFailure(error)) {
+        console.warn("Marimo control bindings poll failed", error);
+      }
+    } finally {
+      attempt.dispose();
+      if (this.pollController === controller) {
+        this.pollController = undefined;
+      }
+    }
+    if (controller.signal.aborted) {
+      return;
+    }
+    this.scheduleControlPoll(context);
+  }
+
+  private recoverRequestFailure(error: UnparsedControlFailure): boolean {
+    if (!(error instanceof RuntimeControlRequestError) || error.status !== 409) {
+      return false;
+    }
+    if (error.code === "presentation-revision-unavailable") {
+      this.rebootstrap(this.options.onContextUnavailable);
+      return true;
+    }
+    if (error.code !== "runtime-sync-pending") {
+      return false;
+    }
+    this.sessionPendingAttempts += 1;
+    if (this.sessionPendingAttempts < SESSION_PENDING_RETRY_LIMIT) {
+      return false;
+    }
+    this.rebootstrap(this.options.onContextUnavailable);
+    return true;
+  }
+
+  private rebootstrap(callback: (() => void) | undefined): void {
+    const failures: unknown[] = [];
+    try {
+      this.stop();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      callback?.();
+    } catch (error) {
+      failures.push(error);
+    }
+    if (failures.length > 0) {
+      console.warn(
+        "Marimo control synchronization could not reload its preview",
+        failures.length === 1 ? failures[0] : new AggregateError(failures),
+      );
+    }
   }
 }
 

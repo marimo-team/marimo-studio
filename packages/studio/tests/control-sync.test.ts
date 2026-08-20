@@ -1,10 +1,9 @@
+import type { RuntimeControlBinding } from "@marimo-studio/protocol/runtime-config";
+
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  type ControlEndpoint,
-  type ControlUpdate,
-  synchronizeControlEndpoints,
-} from "../src/features/preview/control-sync";
+import { synchronizeControlEndpoints } from "../src/features/preview/control-sync.ts";
+import { controls, keyBinding, MemoryEndpoint, rootBinding } from "./control-sync-fixture.ts";
 
 class MemoryEndpoint implements ControlEndpoint {
   readonly values = new Map<string, unknown>();
@@ -51,7 +50,6 @@ class DeferredApplyEndpoint extends MemoryEndpoint {
     return new Promise((resolve, reject) => {
       this.pending.push({ reject, resolve, updates });
     });
-  }
 
   rejectNext(error = new Error("control write failed")): void {
     this.pending.shift()?.reject(error);
@@ -87,20 +85,72 @@ describe("control state synchronization", () => {
     const sync = await synchronizeControlEndpoints({
       editor,
       preview,
-      editorControls: { cells: { controls: "live-control" } },
-      previewControls: { cells: { controls: "wasm-shifted-control" } },
+      editorControls: { native: { cells: { controls: "live-control" } } },
+      previewControls: { native: { cells: { controls: "wasm-shifted-control" } } },
     });
 
     expect(preview.values.get("wasm-shifted-control-0")).toEqual(["Growth"]);
-
     editor.emit({ objectId: "live-control-0", value: ["Stretch"] });
     await Promise.resolve();
     expect(preview.values.get("wasm-shifted-control-0")).toEqual(["Stretch"]);
-
     preview.emit({ objectId: "wasm-shifted-control-0", value: ["Base"] });
     await Promise.resolve();
     expect(editor.values.get("live-control-0")).toEqual(["Base"]);
     sync.dispose();
+  });
+
+  it("routes a quiescent native registration reset to its peer", async () => {
+    const editor = new MemoryEndpoint({ objectId: "live-control-0", value: 3 });
+    const preview = new MemoryEndpoint({ objectId: "wasm-control-0", value: 3 });
+    const sync = await synchronizeControlEndpoints({
+      editor,
+      preview,
+      editorControls: { native: { cells: { controls: "live-control" } } },
+      previewControls: { native: { cells: { controls: "wasm-control" } } },
+    });
+
+    editor.register({ objectId: "live-control-0", value: 1 });
+
+    await vi.waitFor(() => expect(preview.values.get("wasm-control-0")).toBe(1));
+    expect(preview.applied).toEqual([[{ objectId: "wasm-control-0", value: 1 }]]);
+    sync.dispose();
+  });
+
+  it("keeps native registration churn live without echoing direct editor updates", async () => {
+    const editor = new MemoryEndpoint({ objectId: "live-control-0", value: 3 });
+    const firstPreview = new MemoryEndpoint({ objectId: "wasm-control-0", value: 3 });
+    const secondPreview = new MemoryEndpoint({ objectId: "server-control-0", value: 3 });
+    const editorControls = { native: { cells: { controls: "live-control" } } };
+    const first = await synchronizeControlEndpoints({
+      editor,
+      preview: firstPreview,
+      editorControls,
+      previewControls: { native: { cells: { controls: "wasm-control" } } },
+    });
+    const second = await synchronizeControlEndpoints({
+      editor,
+      preview: secondPreview,
+      editorControls,
+      previewControls: { native: { cells: { controls: "server-control" } } },
+    });
+
+    editor.emit({ objectId: "live-control-0", value: 1 });
+    await vi.waitFor(() => expect(firstPreview.values.get("wasm-control-0")).toBe(1));
+    await vi.waitFor(() => expect(secondPreview.values.get("server-control-0")).toBe(1));
+    for (let index = 0; index < 100; index += 1) {
+      editor.register({ objectId: "live-control-0", value: 1 });
+      firstPreview.register({ objectId: "wasm-control-0", value: 1 });
+      secondPreview.register({ objectId: "server-control-0", value: 1 });
+    }
+
+    expect(first.isQuarantined()).toBe(false);
+    expect(second.isQuarantined()).toBe(false);
+    expect(editor.applied).toEqual([]);
+    firstPreview.emit({ objectId: "wasm-control-0", value: 2 });
+    await vi.waitFor(() => expect(editor.values.get("live-control-0")).toBe(2));
+    expect(editor.applied).toEqual([[{ objectId: "live-control-0", value: 2 }]]);
+    first.dispose();
+    second.dispose();
   });
 
   it("leaves unmatched and non-JSON control values local", async () => {
@@ -112,10 +162,11 @@ describe("control state synchronization", () => {
     const sync = await synchronizeControlEndpoints({
       editor,
       preview,
-      editorControls: {
-        cells: { known: "live-known", private: "live-private" },
-      },
-      previewControls: { cells: { known: "wasm-known" } },
+      editorControls: controls({
+        "live-known-0": rootBinding("known"),
+        "live-private-0": rootBinding("private"),
+      }),
+      previewControls: controls({ "wasm-known-0": rootBinding("known") }),
     });
 
     expect(preview.applied).toEqual([[{ objectId: "wasm-known-0", value: 2 }]]);
