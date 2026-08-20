@@ -314,8 +314,15 @@ const setState = (host: HTMLElement, state: ValuePhase): boolean => {
   return previous !== state;
 };
 
-const failHost = (host: HTMLElement, error: ValueReadError, diagnostic?: ProjectionDiagnostic) => {
-  clearHostValue(host);
+const failHost = (
+  host: HTMLElement,
+  error: ValueReadError,
+  diagnostic?: ProjectionDiagnostic,
+  retainValue = false,
+) => {
+  if (!retainValue) {
+    clearHostValue(host);
+  }
   const hint = diagnostic?.hint || error.hint;
   host.dataset.marimoError = error.message;
   host.dataset.marimoErrorCode = error.code;

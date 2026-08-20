@@ -22,6 +22,17 @@ type RuntimeReaderContext = Pick<EmbeddedRuntimeView, "initialized" | "invoke" |
 
 export type RuntimeInvoke = EmbeddedFunction;
 
+export const runRuntimeQuery = async (
+  update: NonNullable<RuntimeMountOptions["updateQuery"]>,
+  invoke: RuntimeInvoke,
+  query: string,
+  signal: AbortSignal,
+): Promise<void> => {
+  signal.throwIfAborted();
+  await update(invoke, query, signal);
+  signal.throwIfAborted();
+};
+
 export interface RuntimeMountOptions {
   autoInstantiate: boolean;
   id: string;
@@ -49,7 +60,10 @@ export const mountSharedRuntime = (
   config: RuntimeConfig,
   runtimeRoot: HTMLElement,
   options: RuntimeMountOptions,
+  mount: typeof mountEmbeddedRuntime = mountEmbeddedRuntime,
 ): RuntimeSession => {
+  let presentation = embeddedPresentation(config);
+  const revisionReads = new RuntimeRevisionReads(config.revision);
   let readValues: ValueReader | undefined;
   let readOutputs: OutputReader | undefined;
   let presentation = embeddedPresentation(config);
@@ -68,15 +82,22 @@ export const mountSharedRuntime = (
     transport: options.transport,
     viewMode: options.viewMode,
     render(embedded) {
-      readValues ??= options.valueReader(embedded);
-      readOutputs ??= options.outputReader(embedded);
+      if (readValues === undefined) {
+        const reader = options.valueReader(embedded);
+        readValues = (request, signal) => revisionReads.read(reader, request, signal);
+      }
+      if (readOutputs === undefined) {
+        const reader = options.outputReader(embedded);
+        readOutputs = (request, signal) => revisionReads.read(reader, request, signal);
+      }
       return (
         <RuntimeProjections readOutputs={readOutputs} readValues={readValues} runtime={embedded} />
       );
     },
   });
 
-  return {
+  const updateQuery = options.updateQuery;
+  const session = {
     id: options.id,
     sessionId: options.exposeSession ? runtime.sessionId : undefined,
     update(next) {
@@ -99,7 +120,17 @@ export const mountSharedRuntime = (
       }
       return "applied";
     },
-    updateQuery: (query) => options.updateQuery(runtime.invoke, query),
-    dispose: () => runtime.dispose(),
+    dispose: () => {
+      revisionReads.dispose();
+      runtime.dispose();
+    },
+  };
+  if (!updateQuery) {
+    return session;
+  }
+  return {
+    ...session,
+    updateQuery: (value: string, signal: AbortSignal) =>
+      runRuntimeQuery(updateQuery, runtime.invoke, value, signal),
   };
 };

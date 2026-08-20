@@ -320,3 +320,43 @@ test("browser evidence waits for live utility regeneration", async () => {
   expect(states).toEqual(["loading", "error"]);
   styles.disconnect();
 });
+
+test("browser evidence publishes after a background runtime instance rotation", async () => {
+  document.body.innerHTML = '<main id="app-shell"></main>';
+  commitRuntimeConfig(runtimeConfig("presentation-revision", "instance-old"));
+  const postMessage = vi.spyOn(globalThis.parent, "postMessage");
+  startPresentationObservers(async () => {});
+  setRuntimeConnectionState("ready");
+  await settleMutations();
+
+  globalThis.dispatchEvent(
+    new MessageEvent("message", {
+      origin: globalThis.location.origin,
+      source: globalThis.parent,
+      data: {
+        type: "marimo-studio:observe-view",
+        runtime: "server",
+        view: "dashboard",
+        revision: "presentation-revision",
+        runtimeInstance: "instance-next",
+        requestId: "request-instance-rotation",
+      },
+    }),
+  );
+  await settleMutations();
+  commitRuntimeInstance("instance-next");
+  await settleMutations();
+
+  const states = postMessage.mock.calls.flatMap(([message]) => {
+    const payload = jsonValueSchema.safeParse(message);
+    if (!payload.success) {
+      return [];
+    }
+    const observation = parsePreviewMessage(payload.data);
+    return observation?.type === "marimo-studio:view-observation" &&
+      observation.requestId === "request-instance-rotation"
+      ? [observation.state]
+      : [];
+  });
+  expect(states).toEqual(["ready"]);
+});

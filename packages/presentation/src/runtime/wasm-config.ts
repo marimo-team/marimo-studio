@@ -1,3 +1,4 @@
+import { losslessRecordSchema } from "@marimo-studio/protocol/json";
 import { z } from "zod";
 
 export const wasmExecutionCellSchema = z.strictObject({

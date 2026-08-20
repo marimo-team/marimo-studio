@@ -18,12 +18,25 @@ import { renderedViewDiagnostics, renderedViewIdentity } from "./rendered-view-s
 import { getRuntimeConfig } from "./runtime-config/index.ts";
 import { viewStyleDiagnostic } from "./view-styles/runtime.ts";
 
+export interface RuntimeStateDescription {
+  readonly fingerprint: string;
+  readonly aliases: readonly string[];
+  readonly inputs: Readonly<Record<string, JsonValue>>;
+}
+
+export interface RuntimeStateApi {
+  inputs(): Readonly<Record<string, JsonValue>>;
+  states(): readonly RuntimeStateDescription[];
+  update(patch: Readonly<Record<string, JsonValue>>): Promise<void>;
+}
+
 interface MarimoStudioApi {
   ready: () => Promise<void>;
   diagnostics: () => readonly StudioDiagnostic[];
   identity: () => { readonly projectionRevision: string; readonly revision: string };
   projections: () => readonly ObservedProjectionInstance[];
   updateQuery: (query: string) => Promise<void>;
+  state?: RuntimeStateApi;
 }
 
 let observer: MutationObserver | undefined;

@@ -22,10 +22,12 @@ import { toBrowserDiagnostics } from "./readiness-diagnostics.ts";
 import { readiness } from "./readiness.ts";
 import { refreshRenderedView } from "./rendered-view-observer.ts";
 import { renderedViewDiagnostics, renderedViewIdentity } from "./rendered-view-state.ts";
+import { subscribeRuntimeConfig } from "./runtime-config/index.ts";
 
 type BrowserObservationState = "loading" | "ready" | "error";
 
 let pending: { request: ObserveViewMessage; state?: BrowserObservationState } | undefined;
+let stopConfig: (() => void) | undefined;
 let stopReadiness: (() => void) | undefined;
 
 const observationState = (
@@ -105,10 +107,13 @@ const observationRequested = (event: MessageEvent<unknown>): void => {
 export const startAgentObserver = (): void => {
   stopAgentObserver();
   stopReadiness = readiness.subscribe(publish);
+  stopConfig = subscribeRuntimeConfig(() => publish(readiness.snapshot()));
   globalThis.addEventListener("message", observationRequested);
 };
 
 export const stopAgentObserver = (): void => {
+  stopConfig?.();
+  stopConfig = undefined;
   stopReadiness?.();
   stopReadiness = undefined;
   pending = undefined;

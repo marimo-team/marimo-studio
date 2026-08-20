@@ -203,3 +203,79 @@ describe("WebAssembly query synchronization", () => {
     expect(invoke).toHaveBeenCalledOnce();
   });
 });
+
+it("waits for the raw WebAssembly query RPC before revision admission", async () => {
+  let finishRaw = (_value: null) => {};
+  const raw = new Promise<null>((resolve) => {
+    finishRaw = resolve;
+  });
+  const invoke = vi.fn(() => raw);
+  const queries = createWasmQueryController(invoke);
+  const queryController = new AbortController();
+
+  const querying = queries.update("?mode=stale", queryController.signal);
+  const cancelled = expect(querying).rejects.toMatchObject({ name: "AbortError" });
+  await vi.waitFor(() => expect(invoke).toHaveBeenCalledOnce());
+  queryController.abort(new DOMException("Query superseded", "AbortError"));
+  await cancelled;
+
+  let admitted = false;
+  const quiesced = queries.quiesce(new AbortController().signal).then(() => {
+    admitted = true;
+  });
+  await Promise.resolve();
+  expect(admitted).toBe(false);
+  finishRaw(null);
+  await quiesced;
+  expect(admitted).toBe(true);
+});
+
+it("cancels revision admission while retaining the raw WebAssembly query fence", async () => {
+  let finishRaw = (_value: null) => {};
+  const raw = new Promise<null>((resolve) => {
+    finishRaw = resolve;
+  });
+  const queries = createWasmQueryController(vi.fn(() => raw));
+  const queryController = new AbortController();
+  const querying = queries.update("?mode=stale", queryController.signal);
+  const queryFailure = expect(querying).rejects.toMatchObject({ name: "AbortError" });
+  queryController.abort(new DOMException("Query superseded", "AbortError"));
+  await queryFailure;
+  const revisionController = new AbortController();
+  const quiescing = queries.quiesce(revisionController.signal);
+  const revisionFailure = expect(quiescing).rejects.toMatchObject({ name: "AbortError" });
+
+  revisionController.abort(new DOMException("Revision cancelled", "AbortError"));
+  await revisionFailure;
+  let admitted = false;
+  const nextRevision = queries.quiesce(new AbortController().signal).then(() => {
+    admitted = true;
+  });
+  await Promise.resolve();
+  expect(admitted).toBe(false);
+  finishRaw(null);
+  await nextRevision;
+  expect(admitted).toBe(true);
+});
+
+it("fences a timed-out WebAssembly query before revision admission", async () => {
+  vi.useFakeTimers();
+  try {
+    const invoke = vi.fn(async () => {
+      throw new Error("RPC request timed out.");
+    });
+    const queries = createWasmQueryController(invoke);
+    const querying = queries.update("?mode=stale", new AbortController().signal);
+    const timedOut = expect(querying).rejects.toThrow("RPC request timed out.");
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await timedOut;
+
+    await expect(queries.quiesce(new AbortController().signal)).rejects.toThrow(
+      "query completion is uncertain",
+    );
+    expect(invoke).toHaveBeenCalledTimes(3);
+  } finally {
+    vi.useRealTimers();
+  }
+});

@@ -16,6 +16,7 @@ import {
   loadRuntimeConfig,
   type RuntimeConfig,
 } from "../src/runtime-config/index.ts";
+import { serverRuntime } from "../src/runtime/catalog.ts";
 import { RuntimeValueCell } from "../src/runtime/values/RuntimeValueCell.tsx";
 import { RuntimeValues } from "../src/runtime/values/RuntimeValues.tsx";
 import { createValueDecoder, decodeValueReadResponse } from "../src/values/codecs.ts";
@@ -56,7 +57,7 @@ const baseConfig = {
   view: "dashboard",
   views: ["dashboard"],
   runtime: {
-    id: "server",
+    descriptor: serverRuntime.descriptor,
     instance: "server-instance",
     data: {
       fileKey: "/workspace/notebook.py",
@@ -799,6 +800,31 @@ test("a projection replacement reconciles hosts against incoming symbols", async
   applyValues(jsonValues({ incoming: "ready" }), incomingConfig.projectionRevision);
   assert.equal(outgoingErrors, 0);
   assert.deepEqual(update, { selector: "incoming", value: "ready" });
+});
+
+test("inherited selector names require own value bindings and response entries", async () => {
+  await installConfig(configWithBindings());
+  document.body.innerHTML = '<span id="unknown" mo-value="toString"></span>';
+  startValueBindings();
+
+  const unknown = document.querySelector<MarimoValueHost>("#unknown")!;
+  assert.equal(unknown.dataset.marimoErrorCode, "unknown-selector");
+
+  stopValueBindings();
+  await installConfig(configWithBindings("toString"));
+  document.body.innerHTML = '<span id="reserved" mo-value="toString"></span>';
+  startValueBindings();
+
+  const reserved = document.querySelector<MarimoValueHost>("#reserved")!;
+  applyValueReadResponse(["toString"], { values: {}, errors: {} });
+  assert.equal(reserved.dataset.marimoErrorCode, "missing-value-response");
+
+  applyValueReadResponse(["toString"], {
+    values: Object.fromEntries([["toString", "ready"]]),
+    errors: {},
+  });
+  assert.equal(reserved.dataset.state, "ready");
+  assert.equal(reserved.marimoValue, "ready");
 });
 
 test("response-wide read failures retain their structured error", async () => {

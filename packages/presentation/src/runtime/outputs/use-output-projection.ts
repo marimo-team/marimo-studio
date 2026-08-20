@@ -45,6 +45,9 @@ const requestFailure = (cause: unknown): ValueReadError => ({
   message: errorMessage(cause),
 });
 
+const ownValue = <Value>(record: Readonly<Record<string, Value>>, key: string): Value | undefined =>
+  Object.hasOwn(record, key) ? record[key] : undefined;
+
 export const useOutputProjection = ({
   activeProjections,
   request,

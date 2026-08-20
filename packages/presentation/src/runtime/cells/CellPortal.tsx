@@ -72,7 +72,12 @@ export const CellPortal = memo(function CellPortal({
   }
 
   return createPortal(
-    <CellOutput cell={cell} projection={projection} onSubmitStdin={onSubmitStdin} />,
+    <CellOutput
+      accessibleName={host.getAttribute("aria-label")?.trim() || host.cellName}
+      cell={cell}
+      projection={projection}
+      onSubmitStdin={onSubmitStdin}
+    />,
     host,
   );
 });

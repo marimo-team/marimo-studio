@@ -5,6 +5,7 @@ export * from "./remote.ts";
 export * from "@marimo-studio/protocol/runtime-config";
 export {
   commitRuntimeConfig,
+  commitRuntimeInstance,
   getMountConfig,
   getRuntimeCellRefs,
   getRuntimeConfig,

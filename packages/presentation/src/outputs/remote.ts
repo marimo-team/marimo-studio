@@ -39,7 +39,7 @@ interface ServerOutputTarget {
 
 const serverOutputTarget = (): ServerOutputTarget => {
   const config = getRuntimeConfig();
-  if (config.runtime.id !== "server") {
+  if (config.runtime.descriptor.id !== "server") {
     throw new OutputRequestError("The server output reader is inactive.", "wrong-runtime", false);
   }
   const serverData = serverRuntimeDataSchema.safeParse(config.runtime.data);

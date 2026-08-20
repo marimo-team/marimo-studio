@@ -34,7 +34,7 @@ const config = {
   view: "dashboard",
   views: ["dashboard"],
   runtime: {
-    id: "server",
+    descriptor: serverRuntime.descriptor,
     instance: "server-instance",
     data: {
       fileKey: "/workspace/notebook.py",

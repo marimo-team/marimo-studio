@@ -5,8 +5,11 @@
   "type": "module",
   "exports": {
     "./dev-reload": "./src/dev-reload.ts",
+    "./prepared-projections": "./src/prepared/index.ts",
     "./runtime": "./src/main.ts",
-    "./runtimes": "./src/runtime/catalog.ts"
+    "./runtime-state": "./src/runtime-state.ts",
+    "./runtimes": "./src/runtime/catalog.ts",
+    "./session-replay": "./src/document/session-preservation.ts"
   },
   "scripts": {
     "check:upstream": "pnpm --filter @marimo-studio/marimo-frontend check:upstream",
@@ -16,6 +19,7 @@
     "@marimo-studio/marimo-frontend": "workspace:*",
     "@marimo-studio/protocol": "workspace:*",
     "@marimo-studio/runtime": "workspace:*",
+    "@marimo-team/marimo-export": "link:../../../../marimo-export/packages/browser",
     "@unocss/core": "catalog:",
     "@unocss/preset-wind4": "catalog:",
     "css-tree": "catalog:",
