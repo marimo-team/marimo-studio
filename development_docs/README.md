@@ -79,6 +79,36 @@ Deno-backed providers use the exact executable supplied by the Python package
 extra. Their frontend dependency versions and lockfiles belong to the view
 project or packaged starter that consumes them.
 
+### Link the marimo-export checkout
+
+Zero-Python development resolves the marimo-export Python package and browser
+libraries from one local checkout. Use this worktree layout:
+
+```text
+marimo-team/
+├── marimo-export/
+└── trees/
+    └── marimo-studio/
+```
+
+The uv source points to `../../marimo-export/packages/python` from the Studio
+root. Studio browser packages link `marimo-export/packages/browser` and
+`marimo-export/packages/portable-json` through the corresponding
+package-relative paths.
+
+Build the dependency from its owning checkout before running Studio gates:
+
+```console
+cd ../../marimo-export
+make bootstrap
+make build
+cd -
+make install
+```
+
+Studio release preparation replaces the editable Python source and npm links
+with the coordinated published marimo-export versions.
+
 ## Work in one owning slice
 
 Use the smallest loop that proves the changed contract:
@@ -122,8 +152,11 @@ Python policy -> Studio ports -> _compat adapters -> Marimo
               -> ViewProvider -> view_providers._bundled
               -> artifact store
 
+Studio prepared-view policy -> public marimo-export Python SDK
+
 apps/browser -> presentation -> runtime -> protocol
              -> studio -----------------> protocol
+             -> marimo-export prepared browser API
 presentation -> marimo-frontend --------> Marimo frontend
 
 Studio app -> features -> shared
