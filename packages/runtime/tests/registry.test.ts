@@ -6,12 +6,28 @@ import {
   type PresentationRuntime,
 } from "../src/index";
 
+const descriptor = (id: string) => ({
+  id,
+  label: id,
+  description: `Runs ${id}`,
+  execution: "prepared" as const,
+  projections: { cell: true, output: true, value: true },
+  controls: "none" as const,
+  query: "none" as const,
+  preparation: "on-select" as const,
+  session: "none" as const,
+});
+
 const runtime = (id: string): PresentationRuntime =>
   definePresentationRuntime({
-    id,
+    descriptor: descriptor(id),
     mount: async () => ({
       id,
-      update: () => "applied",
+      beginRevision: async () => ({
+        apply: async () => "applied" as const,
+        commit: () => {},
+        rollback: () => {},
+      }),
       updateQuery: async () => {},
       dispose: () => {},
     }),
@@ -36,6 +52,14 @@ describe("runtime registry", () => {
     );
     expect(() => createRuntimeRegistry([runtime("server")]).get("wasm")).toThrow(
       'Unknown runtime "wasm"',
+    );
+  });
+
+  it("rejects server descriptors that diverge from browser composition", () => {
+    const registry = createRuntimeRegistry([runtime("server")]);
+
+    expect(() => registry.resolve({ ...descriptor("server"), controls: "peer" })).toThrow(
+      'Runtime descriptor "server" does not match the registered runtime',
     );
   });
 });

@@ -25,6 +25,18 @@ const diagnostic = {
   },
 } as const;
 
+const serverDescriptor = {
+  id: "server",
+  label: "Server",
+  description: "Uses the notebook kernel",
+  execution: "kernel",
+  projections: { cell: true, output: true, value: true },
+  controls: "peer",
+  query: "reactive",
+  preparation: "primary",
+  session: "shared",
+} as const;
+
 const baseRuntimeConfig = {
   schema: 1,
   revision: "presentation-revision",
@@ -32,7 +44,7 @@ const baseRuntimeConfig = {
   view: "dashboard",
   views: ["dashboard", "executive"],
   runtime: {
-    id: "server",
+    descriptor: serverDescriptor,
     instance: "server-instance",
     data: {
       fileKey: "/workspace/notebook.py",
@@ -62,6 +74,10 @@ const runtimeConfig = (overrides: RuntimeConfigOverrides = {}) => ({
   ...baseRuntimeConfig,
   ...overrides,
 });
+
+const pythonRuntimeConfig = JSON.parse(
+  readFileSync(new URL("../fixtures/runtime-config.json", import.meta.url), "utf8"),
+);
 
 test("runtime configuration accepts the browser contract", () => {
   const parsed = parseRuntimeConfig(runtimeConfig());
@@ -138,6 +154,10 @@ test("runtime configuration preserves prototype-named projection targets", () =>
     });
     assert.equal(Object.hasOwn(parsed.projectionTargets.variables, name), true);
   });
+});
+
+test("runtime configuration parses the Python payload", () => {
+  assert.deepEqual(parseRuntimeConfig(pythonRuntimeConfig), pythonRuntimeConfig);
 });
 
 test("runtime configuration rejects malformed contracts", () => {

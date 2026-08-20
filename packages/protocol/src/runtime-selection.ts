@@ -1,4 +1,4 @@
-import { runtimeIdSchema } from "./runtime-config";
+import { runtimeIdSchema } from "./runtime-descriptor";
 
 export const DEFAULT_RUNTIME_ID = "server";
 export const RUNTIME_QUERY_KEY = "runtime";

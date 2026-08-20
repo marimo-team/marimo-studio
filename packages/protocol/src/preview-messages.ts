@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { JsonValue } from "./runtime-config";
+
 import { browserDiagnosticSchema, type BrowserDiagnostic } from "./browser-observations";
 import {
   FRAME_BRIDGE_MESSAGE_BOUNDS,

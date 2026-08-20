@@ -3,10 +3,7 @@ import { z } from "zod";
 import { runtimeIdSchema, type JsonValue } from "./runtime-config";
 import { viewNameSchema } from "./views.ts";
 
-export const studioRuntimeSchema = z.object({
-  id: runtimeIdSchema,
-  label: z.string().trim().min(1),
-});
+import { runtimeDescriptorSchema, runtimeIdSchema } from "./runtime-descriptor";
 
 export const studioBootstrapSchema = z
   .object({
@@ -50,6 +47,22 @@ export const studioBootstrapSchema = z
         message: "Runtimes must have unique identifiers",
       });
     }
+    if (new Set(value.availableRuntimes).size !== value.availableRuntimes.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["availableRuntimes"],
+        message: "Available runtimes must have unique identifiers",
+      });
+    }
+    value.availableRuntimes.forEach((runtime, index) => {
+      if (!runtimeIds.includes(runtime)) {
+        context.addIssue({
+          code: "custom",
+          path: ["availableRuntimes", index],
+          message: "Available runtime is not present in the runtime catalog",
+        });
+      }
+    });
     if (!value.views.includes(value.selectedView)) {
       context.addIssue({
         code: "custom",
@@ -68,12 +81,12 @@ export const studioBootstrapSchema = z
       context.addIssue({
         code: "custom",
         path: ["defaultRuntime"],
-        message: "Default runtime is not present in runtimes",
+        message: "Default runtime is not available for the selected view",
       });
     }
   });
 
-export type StudioRuntime = z.infer<typeof studioRuntimeSchema>;
+export type StudioRuntime = z.infer<typeof runtimeDescriptorSchema>;
 export type StudioBootstrap = z.infer<typeof studioBootstrapSchema>;
 
 export const parseStudioBootstrap = (value: JsonValue): StudioBootstrap =>
