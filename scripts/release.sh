@@ -56,6 +56,7 @@ fi
 
 require_command gh
 require_command git
+require_command python3
 require_command uv
 
 BRANCH="$(git branch --show-current)"
@@ -85,6 +86,8 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	error "Package version must be a final X.Y.Z version. Current version: $VERSION"
 	exit 1
 fi
+
+python3 scripts/check-release-dependencies.py --release --public
 
 TAG="v$VERSION"
 RELEASE_NOTES=".github/release-notes/$TAG.md"

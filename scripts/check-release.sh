@@ -15,6 +15,7 @@ require_env() {
 require_env GITHUB_REF_NAME
 require_env GITHUB_REF
 require_env GITHUB_SHA
+require_env GH_TOKEN
 
 if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	error "Release tag must use final-version form vX.Y.Z: $GITHUB_REF_NAME"

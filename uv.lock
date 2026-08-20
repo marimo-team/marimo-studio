@@ -1190,6 +1190,42 @@ recommended = [
 ]
 
 [[package]]
+name = "marimo-export"
+version = "0.1.0"
+source = { editable = "../../marimo-export/packages/python" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "idna" },
+    { name = "marimo" },
+    { name = "msgspec" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "altair", marker = "extra == 'all'", specifier = ">=5,<7" },
+    { name = "altair", marker = "extra == 'charts'", specifier = ">=5,<7" },
+    { name = "anywidget", marker = "extra == 'all'", specifier = ">=0.9,<1" },
+    { name = "anywidget", marker = "extra == 'anywidget'", specifier = ">=0.9,<1" },
+    { name = "cryptography", specifier = "==50.0.0" },
+    { name = "idna", specifier = "==3.18" },
+    { name = "marimo", specifier = "==0.24.0" },
+    { name = "msgspec", specifier = ">=0.20" },
+    { name = "numpy", specifier = ">=1.23.5" },
+    { name = "pyarrow", marker = "extra == 'all'", specifier = ">=15" },
+    { name = "pyarrow", marker = "extra == 'parquet'", specifier = ">=15" },
+    { name = "pydantic", specifier = ">=2,<3" },
+    { name = "pyyaml", specifier = ">=6.0.1" },
+    { name = "vl-convert-python", marker = "extra == 'all'", specifier = ">=1.8" },
+    { name = "vl-convert-python", marker = "extra == 'charts'", specifier = ">=1.8" },
+]
+provides-extras = ["anywidget", "charts", "parquet", "all"]
+
+[[package]]
 name = "marimo-studio"
 version = "0.1.0"
 source = { editable = "packages/marimo-studio" }
@@ -1198,6 +1234,7 @@ dependencies = [
     { name = "click" },
     { name = "htpy" },
     { name = "marimo" },
+    { name = "marimo-export" },
     { name = "markupsafe" },
     { name = "packaging" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
@@ -1219,6 +1256,7 @@ requires-dist = [
     { name = "deno", marker = "extra == 'deno'", specifier = "==2.9.5" },
     { name = "htpy", specifier = ">=26.5.1,<27" },
     { name = "marimo", specifier = "==0.24.0" },
+    { name = "marimo-export", editable = "../../marimo-export/packages/python" },
     { name = "markupsafe", specifier = ">=3" },
     { name = "packaging", specifier = ">=25" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2" },

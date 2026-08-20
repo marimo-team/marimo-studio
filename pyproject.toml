@@ -1,6 +1,9 @@
 [tool.uv.workspace]
 members = ["apps/e2e/fixtures-provider/provider", "packages/marimo-studio"]
 
+[tool.uv.sources]
+marimo-export = { path = "../../marimo-export/packages/python", editable = true }
+
 [dependency-groups]
 test = [
   "httpx2>=2.9",
