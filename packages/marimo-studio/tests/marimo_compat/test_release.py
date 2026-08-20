@@ -102,7 +102,7 @@ def test_kernel_root_validates_the_release_before_construction(
     layout_module.clear_release_cache()
 
 
-@pytest.mark.parametrize("field", ["version", "commit"])
+@pytest.mark.parametrize("field", ["version", "commit", "patchSha256"])
 def test_browser_projector_rejects_release_drift(
     monkeypatch: pytest.MonkeyPatch,
     field: str,
@@ -110,6 +110,7 @@ def test_browser_projector_rejects_release_drift(
     observed = {
         "version": layout_module.MARIMO_VERSION,
         "commit": layout_module.MARIMO_RELEASE_COMMIT,
+        "patchSha256": layout_module.MARIMO_FRONTEND_PATCH_SHA256,
     }
     observed[field] = "different"
     monkeypatch.setattr(

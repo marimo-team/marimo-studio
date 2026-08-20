@@ -21,6 +21,7 @@ from typing import Any
 import marimo_studio._delivery.assets as _assets
 from marimo_studio._browser_client.ports import CodeModeBridge
 from marimo_studio._compat.layout import (
+    MARIMO_FRONTEND_PATCH_SHA256,
     MARIMO_RELEASE_COMMIT,
     MARIMO_VERSION,
     assert_pinned_release,
@@ -71,10 +72,7 @@ def create_browser_runtime_projector() -> BrowserRuntimeProjector:
     validate_marimo_release()
     from marimo_studio._compat.browser_runtime import PrivateBrowserRuntimeProjector
 
-    _assets.validate_runtime_marimo_release(
-        version=MARIMO_VERSION,
-        commit=MARIMO_RELEASE_COMMIT,
-    )
+    validate_packaged_browser_release()
     return PrivateBrowserRuntimeProjector(
         version=MARIMO_VERSION,
         commit=MARIMO_RELEASE_COMMIT,
@@ -87,6 +85,17 @@ def marimo_release_identity() -> dict[str, str]:
         "version": MARIMO_VERSION,
         "commit": MARIMO_RELEASE_COMMIT,
     }
+
+
+def validate_packaged_browser_release() -> str:
+    """Validate packaged browser assets against the pinned Marimo release."""
+
+    _assets.validate_runtime_marimo_release(
+        version=MARIMO_VERSION,
+        commit=MARIMO_RELEASE_COMMIT,
+        patch_sha256=MARIMO_FRONTEND_PATCH_SHA256,
+    )
+    return MARIMO_VERSION
 
 
 def create_server_adapters() -> ServerAdapters:
@@ -208,13 +217,7 @@ def create_code_mode_bridge() -> CodeModeBridge:
 
 def create_export_adapters() -> ExportAdapters:
     """Construct Marimo adapters for static browser export."""
-    browser = create_browser_runtime_projector()
-    from marimo_studio._compat.static_export import static_runtime_config
-
-    return ExportAdapters(
-        browser=browser,
-        runtime_config=static_runtime_config,
-    )
+    return ExportAdapters(browser=create_browser_runtime_projector())
 
 
 def programmatic_middleware(
