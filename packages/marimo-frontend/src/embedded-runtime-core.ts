@@ -39,6 +39,7 @@ export interface EmbeddedRuntimeHost {
   configureTheme(config: EmbeddedPresentationConfig, theme: "light" | "dark" | undefined): void;
   createRenderer(root: HTMLElement): EmbeddedRuntimeRenderer;
   currentSessionId(): SessionId;
+  deactivateRequests(): void;
   initialize(): void;
   initializeTransport(transport: EmbeddedTransport): InitializedTransport;
   setConnecting(): void;
@@ -280,6 +281,7 @@ export const createEmbeddedRuntimeMount = (host: EmbeddedRuntimeHost) => {
     let stopExposingSession = () => {};
     let renderer: EmbeddedRuntimeRenderer | undefined;
     const disposers = new Set<() => void>([
+      () => host.deactivateRequests(),
       () => renderer?.dispose(),
       () => stopExposingSession(),
       () => stopTheme(),

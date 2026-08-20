@@ -1,23 +1,8 @@
-import { z } from "zod";
+import type { JsonValue, UnparsedJsonValue } from "@marimo-team/portable-json";
 
-export type EmbeddedJsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | readonly EmbeddedJsonValue[]
-  | { readonly [key: string]: EmbeddedJsonValue };
+import { jsonValueSchema } from "@marimo-team/portable-json/zod";
 
-const embeddedJsonValueSchema: z.ZodType<EmbeddedJsonValue> = z.lazy(() =>
-  z.union([
-    z.null(),
-    z.boolean(),
-    z.number(),
-    z.string(),
-    z.array(embeddedJsonValueSchema),
-    z.record(z.string(), embeddedJsonValueSchema),
-  ]),
-);
+export type EmbeddedJsonValue = JsonValue;
 
-export const parseEmbeddedJsonValue = (value: z.input<typeof embeddedJsonValueSchema>) =>
-  embeddedJsonValueSchema.parse(value);
+export const parseEmbeddedJsonValue = (value: UnparsedJsonValue): EmbeddedJsonValue =>
+  jsonValueSchema.parse(value);

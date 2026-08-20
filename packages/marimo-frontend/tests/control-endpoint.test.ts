@@ -2,9 +2,11 @@
 
 import { UIElementId } from "@marimo-team/frontend/unstable_internal/core/cells/ids";
 import { describe, expect, test, vi } from "vite-plus/test";
+import { z } from "zod";
 
 import type {
   ControlEndpoint,
+  ControlEvent,
   ControlRegistry,
   ControlUpdate,
   SendControlValues,
@@ -24,6 +26,11 @@ type ControlMessage = Parameters<ControlRegistry["broadcastMessage"]>[1];
 interface RegistryEntry {
   value: ControlValue;
 }
+
+const valueUpdateMessageSchema = z.object({
+  type: z.literal("marimo-ui-value-update"),
+  value: z.unknown(),
+});
 
 const initialValues = new WeakMap<HTMLElement, ControlValue>();
 
@@ -67,6 +74,10 @@ class FakeRegistry implements ControlRegistry {
 
   broadcastMessage(objectId: string, message: ControlMessage): void {
     this.messages.push({ objectId, message });
+    const update = valueUpdateMessageSchema.safeParse(message);
+    if (update.success) {
+      this.set(objectId, update.data.value);
+    }
   }
 
   broadcastValueUpdate(_initiator: HTMLElement, _objectId: string, _value: ControlValue): void {}
@@ -104,13 +115,21 @@ describe("Control endpoint", () => {
     const registry = new FakeRegistry();
     registry.set(objectId, 7);
     browser._marimo_private_UIElementRegistry = registry;
-    browser._marimo_private_RuntimeState = { _sendComponentValues: async () => null };
+    browser._marimo_private_RuntimeState = {
+      _controlBindings: {
+        [objectId]: { input: "scale", path: [] },
+      },
+      _sendComponentValues: async () => null,
+    };
 
     const controls = connectFrameControlEndpoint(frame);
     if (!controls) {
       throw new Error("Expected the iframe control endpoint to connect");
     }
-    const updates: ControlUpdate[] = [];
+    expect(controls.controlBindings()).toEqual({
+      [objectId]: { input: "scale", path: [] },
+    });
+    const updates: ControlEvent[] = [];
     controls.subscribe((update) => updates.push(update));
     browser.document.dispatchEvent(
       MarimoValueReadyEvent.create({
@@ -118,7 +137,7 @@ describe("Control endpoint", () => {
       }),
     );
 
-    expect(updates).toEqual([{ objectId, value: 7 }]);
+    expect(updates).toEqual([{ objectId, value: 7, origin: "input" }]);
     controls.dispose();
     frame.remove();
   });
@@ -230,12 +249,35 @@ describe("Control endpoint", () => {
   test("publishes a native control when it mounts after subscription", () => {
     const registry = new FakeRegistry();
     const controls = endpoint(registry, async () => null);
-    const updates: ControlUpdate[] = [];
+    const updates: ControlEvent[] = [];
     controls.subscribe((update) => updates.push(update));
 
     registry.registerInstance("slider-0", controlElement(7));
 
-    expect(updates).toEqual([{ objectId: "slider-0", value: 7 }]);
+    expect(updates).toEqual([{ objectId: "slider-0", value: 7, origin: "registration" }]);
+  });
+
+  test("publishes topology before retained values for reused registrations", () => {
+    const registry = new FakeRegistry();
+    registry.set("control-0", 7);
+    const controls = endpoint(registry, async () => null);
+    const observed: string[] = [];
+    controls.subscribeTopology((objectId) => {
+      observed.push(`topology:${objectId}:${registry.messages.length}`);
+    });
+    controls.subscribe(({ objectId, origin, value }) => {
+      observed.push(`value:${objectId}:${String(value)}:${origin}:${registry.messages.length}`);
+    });
+
+    registry.registerInstance("control-0", controlElement(7));
+    registry.registerInstance("control-0", controlElement(7));
+
+    expect(observed).toEqual([
+      "topology:control-0:0",
+      "value:control-0:7:registration:1",
+      "topology:control-0:1",
+      "value:control-0:7:registration:2",
+    ]);
   });
 
   test("applies a snapshot with one kernel request", async () => {
@@ -257,6 +299,33 @@ describe("Control endpoint", () => {
     });
   });
 
+  test("restores local controls after a failed send and converges on retry", async () => {
+    const registry = new FakeRegistry();
+    registry.set("slider-0", 1);
+    let kernelValue = 1;
+    const send = vi
+      .fn<SendControlValues>()
+      .mockRejectedValueOnce(new Error("send failed"))
+      .mockImplementationOnce(async ({ values }) => {
+        expect(values).toEqual([2]);
+        kernelValue = 2;
+        return null;
+      });
+    const controls = endpoint(registry, send);
+
+    await expect(controls.apply([{ objectId: "slider-0", value: 2 }])).rejects.toThrow(
+      "send failed",
+    );
+    expect(registry.lookupValue("slider-0")).toBe(1);
+    expect(kernelValue).toBe(1);
+
+    await controls.apply([{ objectId: "slider-0", value: 2 }]);
+
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(registry.lookupValue("slider-0")).toBe(2);
+    expect(kernelValue).toBe(2);
+  });
+
   test("keeps anywidget model references out of native control snapshots", () => {
     const registry = new FakeRegistry();
     registry.set("slider-0", 3);
@@ -273,8 +342,8 @@ describe("Control endpoint", () => {
     const first = endpoint(registry, async () => null);
     const broker = registry.registerInstance;
     const second = endpoint(registry, async () => null);
-    const firstUpdates: ControlUpdate[] = [];
-    const secondUpdates: ControlUpdate[] = [];
+    const firstUpdates: ControlEvent[] = [];
+    const secondUpdates: ControlEvent[] = [];
     first.subscribe((update) => firstUpdates.push(update));
     second.subscribe((update) => secondUpdates.push(update));
 
@@ -285,7 +354,7 @@ describe("Control endpoint", () => {
     registry.registerInstance("slider-0", controlElement(7));
 
     expect(firstUpdates).toEqual([]);
-    expect(secondUpdates).toEqual([{ objectId: "slider-0", value: 7 }]);
+    expect(secondUpdates).toEqual([{ objectId: "slider-0", value: 7, origin: "registration" }]);
     expect(registry.messages).toEqual([
       {
         objectId: "slider-0",

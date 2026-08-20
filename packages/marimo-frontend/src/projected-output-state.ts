@@ -1,7 +1,10 @@
+import type { EmbeddedJsonValue } from "./embedded-json.ts";
+
 interface ProjectedOutputUpdate {
   ownerCellId: string;
+  channel?: "marimo-error" | "media" | "output" | "pdb" | "stderr" | "stdin" | "stdout";
   mimetype: string;
-  data: string;
+  data: EmbeddedJsonValue;
   timestamp: number;
   resetUiObjectIds: readonly string[];
 }
@@ -13,9 +16,9 @@ interface UIElementEntries {
 interface VirtualFileMessage {
   cell_id: string;
   output: {
-    channel: "output";
+    channel: "marimo-error" | "media" | "output" | "pdb" | "stderr" | "stdin" | "stdout";
     mimetype: string;
-    data: string;
+    data: EmbeddedJsonValue;
     timestamp: number;
   };
 }
@@ -40,7 +43,7 @@ export const reconcileProjectedOutputState = (
   trackVirtualFiles({
     cell_id: output.ownerCellId,
     output: {
-      channel: "output",
+      channel: output.channel ?? "output",
       mimetype: output.mimetype,
       data: output.data,
       timestamp: output.timestamp,
