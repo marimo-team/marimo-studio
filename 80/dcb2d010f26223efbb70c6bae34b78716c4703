@@ -1,0 +1,166 @@
+packages/studio/tests/view-transition.test.ts
+  s_0553c3864c0a2b::t_4e7978aaa4c108 63-92,129
+  s_0553c3864c0a2b::t_35d7dbefe69640 130-158
+  s_0553c3864c0a2b::t_19c1727c34753f 60,93-128
+packages/studio/tests/preview-controller.test.ts
+  s_0553c3864c0a2b::t_2286fc858e0f8b 540-541
+  s_0553c3864c0a2b::t_50a31d5ffbeae2 1
+  s_0553c3864c0a2b::t_67c91f9e948d27 9
+  s_0553c3864c0a2b::t_b5075b48dc7342 107,118-119,130,134
+  s_0553c3864c0a2b::t_51ab5140386c24 108-117,120-129,167-169
+  s_0553c3864c0a2b::t_93087a099546c3 277,282,305,319,328,354
+  s_0553c3864c0a2b::t_7dab15bad911de 13,810-843,853-856
+  s_0553c3864c0a2b::t_bba4ea8da6290e 626-629
+  s_0553c3864c0a2b::t_44d5c4a973899d 68-72,676-803,805-809
+  s_0553c3864c0a2b::t_2e7b907e316de0 630-634
+  s_36badbebc98a54::t_fe03443eb05488 844-852,936-937,939
+  s_0553c3864c0a2b::t_999f13a0bd776f 5
+  s_0553c3864c0a2b::t_b539c5ab377799 40-41,138-139,622-623
+  s_0553c3864c0a2b::t_3c2d2d30632436 413,459
+  s_36badbebc98a54::t_6ed1561a73d5f6 214-223,804,857-935,938,940-943
+  s_0553c3864c0a2b::t_bb327d82f98342 624-625
+  s_0553c3864c0a2b::t_ca18ce5f10168a 11-12,14-15
+packages/studio/src/features/source-editor/sync.ts
+  s_36badbebc98a54::t_0b06bdeea5c54c 96-97,107-111,128-132
+  s_0553c3864c0a2b::t_79e38ec0ef1228 59-62
+packages/studio/src/app/useStudioServices.ts
+  s_0553c3864c0a2b::t_999f13a0bd776f 6
+packages/studio/tests/query-controller.test.ts
+  s_0553c3864c0a2b::t_b539c5ab377799 6
+packages/studio/tests/studio-host.test.tsx
+  s_36badbebc98a54::t_6ed1561a73d5f6 9,32-38
+packages/studio/src/features/views/controller.ts
+  s_0553c3864c0a2b::t_1de3dfb6d0b5a6 18,56-65,68,193-198
+packages/studio/src/features/preview/deck.ts
+  s_0553c3864c0a2b::t_eb9d31a44e5691 7,24-25,68,91,99,182,414-415,420,447,451-452
+  s_0553c3864c0a2b::t_4cc027a2e2b56b 28,83,94,145-148,153,159-162,164,172-173,177,254,568,590
+  s_0553c3864c0a2b::t_999f13a0bd776f 10
+  s_0553c3864c0a2b::t_1662ac4024434b 29,31,84,95,104-108,149,155,163,174-176,185-189,277,424,507,570
+  s_0553c3864c0a2b::t_38f8e64d374649 193,196-200,204-211
+  s_0553c3864c0a2b::t_387f957712eea5 242-244,247,252-253,257,262,290,295,537-543
+  s_0553c3864c0a2b::t_aaa637e4619a86 19,26-27,30,46,72,85,93,96-98,132,134-136,169,178-181,194-195,201-202,221-222,268-269,273-274,282,286-287,296,406-407,450,468,472-487,518-523,532-536
+  s_0553c3864c0a2b::t_cc52a3badb8267 271,283-284,308
+  s_0553c3864c0a2b::t_e9dca430885b76 87,245,297-298,300-302,560-563
+  s_0553c3864c0a2b::t_96a8acb445b284 325-327
+  s_0553c3864c0a2b::t_edfff982f783dc 246,258,260,278,280,291,293,299,315-316
+  s_0553c3864c0a2b::t_ddd7c1d6df7274 69,92,421
+  s_0553c3864c0a2b::t_3760fb7c6fa610 8,13,270,272,285,324
+  s_0553c3864c0a2b::t_33cd0b752571ad 347-357
+  s_0553c3864c0a2b::t_1c2f7b472a9ddf 53-58,103,184,309-310
+  s_0553c3864c0a2b::t_8264810d8cbc4b 311
+  s_0553c3864c0a2b::t_eec59fc8219ff1 448
+  s_0553c3864c0a2b::t_ed7998693fe9f1 255-256,259,275-276,279,288-289,292,319-322
+  s_0553c3864c0a2b::t_eb45673f53806e 51,86,88,122,133,150,152,165-168,220,230,248-250,261,263-267,281,294,303-307,312-314,341-345,367-368,405,458-460,488-489,491-506,508-510,516-517,544-559,596
+  s_0553c3864c0a2b::t_a7a1b54d478362 154
+  s_0553c3864c0a2b::t_22415beac9e22e 156
+  s_0553c3864c0a2b::t_eb34ad3737fb33 151
+  s_0553c3864c0a2b::t_0d3aa5f794118a 346,358-364,369-374,490,511-515,524-531,564-567,569,571-589,591-595
+packages/studio/src/app/workspace-event-coordinator.ts
+  s_36badbebc98a54::t_6ff8018800cd7f 195-196
+  s_0553c3864c0a2b::t_a24dd29de91022 125-127,183-185
+  s_0553c3864c0a2b::t_35878f5f062e97 33,123,130-132
+  s_0553c3864c0a2b::t_387f957712eea5 34,124,128-129,179-182,186-194
+  s_0553c3864c0a2b::t_79e38ec0ef1228 15,41
+  s_0553c3864c0a2b::t_4cc027a2e2b56b 177
+packages/studio/src/features/preview/query-controller.ts
+  s_0553c3864c0a2b::t_2167ac44767ccf 2,32,44-45
+packages/studio/src/features/views/ViewMenu.tsx
+  s_0553c3864c0a2b::t_1de3dfb6d0b5a6 99-103
+packages/studio/src/features/preview/status.ts
+  s_0553c3864c0a2b::t_3620b02d1c3225 5,21-22,40-43
+  s_0553c3864c0a2b::t_11c21897193bd6 13-20,59
+packages/studio/src/features/preview/runtime.ts
+  s_0553c3864c0a2b::t_11c21897193bd6 1-2,7,9-12
+packages/studio/src/features/source-editor/controller.ts
+  s_0553c3864c0a2b::t_79e38ec0ef1228 226,228,231-232
+  s_0553c3864c0a2b::t_387f957712eea5 235-243
+  s_0553c3864c0a2b::t_785a17305391a1 74,76,83,88
+  s_0553c3864c0a2b::t_6dedb3e00e4a6d 4,19-25,92-96,101-122,125-167
+  s_0553c3864c0a2b::t_2ba585cb43dfce 227
+packages/studio/tests/source-sync.test.ts
+  s_36badbebc98a54::t_35b3861fa1b541 140-156
+packages/studio/src/features/navigation/RuntimeOptions.tsx
+  s_0553c3864c0a2b::t_11c21897193bd6 7-9,11,13,29,44
+packages/studio/tests/workspace-event-coordinator.test.ts
+  s_0553c3864c0a2b::t_c04c839fefc833 145-151
+  s_0553c3864c0a2b::t_2a9ab55e294f6d 174-175,178-179,181-206
+  s_0553c3864c0a2b::t_ea0f2e64fd6d71 176-177,180
+  s_0553c3864c0a2b::t_92cc6828d39232 88-91
+  s_0553c3864c0a2b::t_41779a78afbf4d 80,83-87,92
+  s_0553c3864c0a2b::t_7159948fef6594 143,152-155
+packages/studio/src/features/preview/frame-api.ts
+  s_0553c3864c0a2b::t_2167ac44767ccf 6
+packages/studio/src/app/services.ts
+  s_0553c3864c0a2b::t_eb34ad3737fb33 65,89-92,101-102
+  s_0553c3864c0a2b::t_5861d36c9a1948 38-39,108
+  s_0553c3864c0a2b::t_056f5e4e272cb5 168-170
+  s_0553c3864c0a2b::t_116f4156826d7c 190-210
+  s_0553c3864c0a2b::t_11c21897193bd6 61
+  s_0553c3864c0a2b::t_0ebfa2fd1c81a1 5
+  s_0553c3864c0a2b::t_92057c9b8c3b6b 110-125,127-133
+  s_0553c3864c0a2b::t_785a17305391a1 167,171,175-183
+  s_0553c3864c0a2b::t_a24dd29de91022 172-174
+  s_0553c3864c0a2b::t_aaa637e4619a86 10,50-53,58,62-63,66
+  s_0553c3864c0a2b::t_4cc027a2e2b56b 64,87-88,93-100,103-105,107,109
+  s_0553c3864c0a2b::t_999f13a0bd776f 4
+  s_0553c3864c0a2b::t_658c26c949f591 35,126
+packages/studio/src/features/views/transition.ts
+  s_0553c3864c0a2b::t_a7a1b54d478362 4,22,34-37,39-43,45-46,48-50,52-57,60-68
+  s_0553c3864c0a2b::t_aaa637e4619a86 3,10-15,27
+  s_0553c3864c0a2b::t_4cc027a2e2b56b 5-6,8-9,47
+  s_0553c3864c0a2b::t_5861d36c9a1948 7,19,44,51,58
+  s_0553c3864c0a2b::t_35d7dbefe69640 23,31-33,70-74,76-80
+  s_0553c3864c0a2b::t_4e7978aaa4c108 20
+packages/studio/src/app/StudioApp.tsx
+  s_0553c3864c0a2b::t_999f13a0bd776f 4
+packages/studio/tests/runtime-diagnostics.test.ts
+  s_0553c3864c0a2b::t_63604cf4006d1a 8,90,104-105
+  s_0553c3864c0a2b::t_bb327d82f98342 106-107
+  s_0553c3864c0a2b::t_2e7b907e316de0 112-116
+  s_0553c3864c0a2b::t_bba4ea8da6290e 108-111
+packages/studio/src/features/navigation/useToolbar.ts
+  s_0553c3864c0a2b::t_aaa637e4619a86 32-34,62
+packages/studio/src/app/routes.ts
+  s_0553c3864c0a2b::t_9813b2a7b6d078 5,18,33-35
+packages/studio/tests/studio-app.test.tsx
+  s_0553c3864c0a2b::t_2e7b907e316de0 37,107-111,360-364
+  s_0553c3864c0a2b::t_1b561bdc3ece9f 391,393-396,414,416-422,424-429
+  s_0553c3864c0a2b::t_bba4ea8da6290e 33-36,106,359
+  s_0553c3864c0a2b::t_f7d12ad495e2d6 392,415
+  s_0553c3864c0a2b::t_2b38cdfd6c5fb2 423
+  s_0553c3864c0a2b::t_fc47f157f8391c 530-550,552-562
+  s_0553c3864c0a2b::t_ff1c69d6f5e417 18,400,405-407,433,438-440,442-443,491-509
+  s_0553c3864c0a2b::t_60f6d6bcafa361 187
+  s_36badbebc98a54::t_6ff8018800cd7f 257-265,551
+  s_0553c3864c0a2b::t_1bea871aa2eaed 444-490
+  s_0553c3864c0a2b::t_bb327d82f98342 24,31-32,104-105,352-358,365-385
+  s_0553c3864c0a2b::t_116f4156826d7c 389-390,397,510-527
+  s_0553c3864c0a2b::t_0e8ecb58b0ade8 6,62-65,386-388,398-399,401-404,408-413,430-432,434-437,441
+packages/studio/tests/runtime-fixtures.ts
+  s_0553c3864c0a2b::t_a7622f246ef32c 1-25
+  s_0553c3864c0a2b::t_bb327d82f98342 26-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "80dcb2d010f26223efbb70c6bae34b78716c4703",
+  "prompts": {},
+  "sessions": {
+    "s_0553c3864c0a2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01457-511e-7fa0-b5b2-4e7f4b59a0d8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    },
+    "s_36badbebc98a54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0192c-d072-77a2-86c3-cdc5c0383d92",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
