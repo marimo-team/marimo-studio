@@ -81,6 +81,7 @@ def _location(manager: _Manager, *, mode: str = "edit") -> ServerLocation:
         notebook=Path("analysis.py"),
         file_key="analysis.py",
         base_url="",
+        internal_url=None,
         mode=cast(ServerMode, mode),
         routing_query=(),
         handle=ServerHandle(

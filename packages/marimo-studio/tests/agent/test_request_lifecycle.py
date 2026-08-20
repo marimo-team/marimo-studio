@@ -51,7 +51,13 @@ def test_observation_disconnect_clears_the_browser_operation(
     async def project_runtime(*_args: object) -> object:
         return SimpleNamespace(instance="runtime-instance")
 
-    sessions = cast(SessionState, SimpleNamespace(exists=lambda *_args: True))
+    sessions = cast(
+        SessionState,
+        SimpleNamespace(
+            exists=lambda *_args: True,
+            is_session_id=lambda value: isinstance(value, str),
+        ),
+    )
     runtimes = cast(
         RuntimeRegistry,
         SimpleNamespace(ids=("server",), project=project_runtime),
@@ -154,7 +160,13 @@ def test_validation_disconnect_cancels_runtime_validation(
                 context,
                 studio,
                 notebook_scope,
-                cast(SessionState, SimpleNamespace(exists=lambda *_args: True)),
+                cast(
+                    SessionState,
+                    SimpleNamespace(
+                        exists=lambda *_args: True,
+                        is_session_id=lambda value: isinstance(value, str),
+                    ),
+                ),
                 cast(RuntimeRegistry, SimpleNamespace()),
             )
         )
@@ -206,7 +218,13 @@ def test_already_disconnected_observation_skips_source_capture(
             context,
             studio,
             notebook_scope,
-            cast(SessionState, SimpleNamespace(exists=lambda *_args: True)),
+            cast(
+                SessionState,
+                SimpleNamespace(
+                    exists=lambda *_args: True,
+                    is_session_id=lambda value: isinstance(value, str),
+                ),
+            ),
             cast(RuntimeRegistry, SimpleNamespace(ids=("server",))),
         )
         return response.status_code
@@ -246,7 +264,13 @@ def test_observation_view_limit_applies_after_default_expansion(
             context,
             studio,
             notebook_scope,
-            cast(SessionState, SimpleNamespace(exists=lambda *_args: True)),
+            cast(
+                SessionState,
+                SimpleNamespace(
+                    exists=lambda *_args: True,
+                    is_session_id=lambda value: isinstance(value, str),
+                ),
+            ),
             cast(RuntimeRegistry, SimpleNamespace(ids=("server",))),
         )
     )
@@ -289,7 +313,13 @@ def test_show_disconnect_clears_the_browser_operation(
                 studio,
                 "dashboard",
                 notebook_scope,
-                cast(SessionState, SimpleNamespace(exists=lambda *_args: True)),
+                cast(
+                    SessionState,
+                    SimpleNamespace(
+                        exists=lambda *_args: True,
+                        is_session_id=lambda value: isinstance(value, str),
+                    ),
+                ),
             )
         )
         await asyncio.wait_for(requested.wait(), timeout=1)

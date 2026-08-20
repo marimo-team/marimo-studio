@@ -20,6 +20,7 @@ from marimo_studio._server.records import (
     ServerLocation,
     ServerMode,
 )
+from marimo_studio._urls import public_url
 
 
 @dataclass(frozen=True)
@@ -120,10 +121,12 @@ async def _server_location(
         mode = "edit"
     else:
         return None
+    base_url = effective_base_url(scope, str(getattr(state, "base_url", "")))
     return ServerLocation(
         notebook=notebook,
         file_key=str(file_key),
-        base_url=effective_base_url(scope, str(getattr(state, "base_url", ""))),
+        base_url=base_url,
+        internal_url=_internal_server_url(scope, base_url),
         mode=mode,
         routing_query=((("file", str(file_key)),) if unique_file is None else ()),
         handle=ServerHandle(
@@ -176,6 +179,7 @@ def _server_context(location: ServerLocation) -> ServerContext:
         notebook=location.notebook,
         file_key=location.file_key,
         base_url=location.base_url,
+        internal_url=location.internal_url,
         mode=location.mode,
         dev=location.mode == "edit"
         or bool(getattr(handle.session_manager, "watch", False)),

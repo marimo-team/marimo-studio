@@ -117,7 +117,7 @@ class ObservationCoordinator:
         async with self._store.condition:
             try:
                 await asyncio.wait_for(
-                    self._store.condition.wait_for(lambda: self._finished(request)),
+                    self._store.condition.wait_for(finished),
                     timeout,
                 )
             except asyncio.TimeoutError:
@@ -150,24 +150,32 @@ class ObservationCoordinator:
                 "browser-view-not-active",
                 "The Studio browser changed active views during validation.",
             )
-        if observed is not None:
-            return observed
-        if timed_out:
-            if not self._store.clients.matches(
-                self._target(request),
-                require_connected=True,
-            ):
-                return self._unobserved(
-                    request,
-                    "browser-client-unavailable",
-                    "The Studio browser disconnected during browser validation.",
-                )
+        observation = self._store.observations.get(request.request_id)
+        if observation is not None and observation.state in {"ready", "error"}:
+            return observation
+        return None
+
+    def _timeout_completion(
+        self,
+        request: ObservationRequest,
+    ) -> BrowserObservation:
+        completion = self._completion(request)
+        if completion is not None:
+            return completion
+        if not self._store.clients.matches(
+            self._target(request),
+            require_connected=True,
+        ):
             return self._unobserved(
                 request,
-                "browser-observation-timeout",
-                "Studio did not return fresh browser evidence in time.",
+                "browser-client-unavailable",
+                "The Studio browser disconnected during browser validation.",
             )
-        raise RuntimeError("Observation wait completed without a terminal state")
+        return self._unobserved(
+            request,
+            "browser-observation-timeout",
+            "Studio did not return fresh browser evidence in time.",
+        )
 
     def pending_for(
         self,

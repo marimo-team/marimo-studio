@@ -617,6 +617,37 @@ class PrivateSessionState:
             )
         return snapshot
 
+    def _advance_control_revision(self, session: object) -> None:
+        with self._control_lock:
+            revision = self._control_revisions.get(session)
+            if revision is not None:
+                self._control_revisions[session] = revision + 1
+
+
+class _ControlRevisionListener(SessionEventListener):
+    def __init__(self, sessions: PrivateSessionState) -> None:
+        self._sessions = sessions
+
+    def on_notification_sent(self, session: Session, notification: object) -> None:
+        from marimo._messaging.notification import CompletedRunNotification
+        from marimo._messaging.serde import (
+            deserialize_kernel_message,
+            try_deserialize_kernel_notification_name,
+        )
+        from marimo._messaging.types import KernelMessage
+
+        if not isinstance(notification, bytes):
+            return
+        message = KernelMessage(notification)
+        if (
+            try_deserialize_kernel_notification_name(message)
+            != CompletedRunNotification.name
+        ):
+            return
+        completed = deserialize_kernel_message(message)
+        if isinstance(completed, CompletedRunNotification) and completed.run_id is None:
+            self._sessions._advance_control_revision(session)
+
 
 def _single_string(value: object) -> str | None:
     if isinstance(value, str):
