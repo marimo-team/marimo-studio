@@ -196,7 +196,7 @@ def render_view_show(result: ShowResult) -> None:
 
 def render_static_export(result: StaticExportResult) -> None:
     """Write a static export result in human text."""
-    echo(f"{green('Exported')} {result.view} to {result.output}")
+    echo(f"{green('Exported')} {result.view} with {result.runtime} to {result.output}")
     echo(f"  {light_blue('open')} {result.entrypoint}")
     command = _shell_command(
         [
