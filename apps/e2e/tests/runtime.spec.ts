@@ -368,6 +368,8 @@ test("preserves projected controls across refresh and owner removal", async ({ p
     await expect(slider).toHaveAttribute("aria-valuenow", "3");
     await expect(peer.getByRole("slider")).toHaveAttribute("aria-valuenow", "3");
   }
+  expect(controlRuntimes).toEqual(expect.arrayContaining(["server", "wasm"]));
+  expect(controlRuntimes).not.toContain("zero-python");
 });
 
 test("preserves runtime state while modes and controls change", async ({
@@ -423,6 +425,7 @@ test("preserves runtime state while modes and controls change", async ({
   const currentWasm = await page
     .locator('iframe[data-preview-runtime-frame="wasm"]')
     .elementHandle();
+  const zeroPythonFrame = page.locator('iframe[data-preview-runtime-frame="zero-python"]');
   expect(
     await page.evaluate(([before, after]) => before === after, [editorElement, currentEditor]),
   ).toBe(true);
@@ -432,6 +435,8 @@ test("preserves runtime state while modes and controls change", async ({
   expect(
     await page.evaluate(([before, after]) => before === after, [wasmElement, currentWasm]),
   ).toBe(true);
+  await expect(zeroPythonFrame).toHaveAttribute("src", "about:blank");
+  await expect(zeroPythonFrame).toHaveAttribute("inert", "");
   await expect(page.locator('iframe[data-preview-runtime-frame="server"]')).toBeVisible();
   await expect(page.locator('iframe[data-preview-runtime-frame="wasm"]')).toHaveAttribute(
     "inert",
