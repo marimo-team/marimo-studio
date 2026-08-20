@@ -1,0 +1,119 @@
+packages/protocol/fixtures/projection-host-boundary.json
+  s_36badbebc98a54::t_47142b09ddb4ce 1-7
+packages/protocol/src/json.ts
+  s_0553c3864c0a2b::t_01a2596345bbf5 4-9
+  s_0553c3864c0a2b::t_8e1a9650355d70 15
+  s_0553c3864c0a2b::t_4f9c23e5d25036 1
+  s_0553c3864c0a2b::t_4739fb57decdac 16
+  s_0553c3864c0a2b::t_190fe63d077a90 10-14
+  s_0553c3864c0a2b::t_c523e20746c792 21-22
+packages/protocol/tests/runtime-descriptor.test.ts
+  s_0553c3864c0a2b::t_589f615977d9ce 3-6,37-57
+  s_0553c3864c0a2b::t_a4c1b49f8d8e7f 1-2,7-20,22,24-27,29
+  s_0553c3864c0a2b::t_70c86309801278 21,23,28
+  s_0553c3864c0a2b::t_a4501e94b72b2f 30-36
+packages/protocol/src/query.ts
+  s_0553c3864c0a2b::t_9813b2a7b6d078 2,10
+packages/protocol/src/browser-observations.ts
+  s_0553c3864c0a2b::t_14733580d81326 3
+packages/protocol/tests/json.test.ts
+  s_0553c3864c0a2b::t_c81207316b9b3b 1-8,10-47
+  s_0553c3864c0a2b::t_4f9c23e5d25036 9,48-54
+packages/protocol/src/output-read.ts
+  s_0553c3864c0a2b::t_221117612a743b 12-14
+  s_0553c3864c0a2b::t_4efcbbed5fe630 3
+packages/runtime/tests/registry.test.ts
+  s_0553c3864c0a2b::t_b574a16398e5af 9-20,23,40,48-51
+  s_0553c3864c0a2b::t_616803984b85ed 52-54
+  s_36badbebc98a54::t_6023406fa7f222 26-30,55
+packages/protocol/tests/output-read.test.ts
+  s_0553c3864c0a2b::t_221117612a743b 56-89,97
+  s_0553c3864c0a2b::t_566d9c6138b7ce 6,91-92,103-104
+packages/protocol/tests/runtime-config.test.ts
+  s_0553c3864c0a2b::t_cbbdc6e468afef 27-38,45,139-141,168-175
+  s_0553c3864c0a2b::t_ae28035823e398 129,137-138
+  s_0553c3864c0a2b::t_527aeb4e31c8a8 2,108-111,120
+  s_0553c3864c0a2b::t_67e4bd02a88255 142-167
+  s_0553c3864c0a2b::t_c33ca1e006e898 65-69,131-136
+  s_0553c3864c0a2b::t_bc8ce40cb80c04 60-61,63,130
+  s_0553c3864c0a2b::t_5ba53106c5ba94 55-59,62
+packages/protocol/src/value-read.ts
+  s_0553c3864c0a2b::t_4efcbbed5fe630 3
+packages/protocol/src/runtime-selection.ts
+  s_0553c3864c0a2b::t_14733580d81326 1
+packages/protocol/src/runtime-descriptor.ts
+  s_0553c3864c0a2b::t_5861d36c9a1948 3-4,50
+  s_0553c3864c0a2b::t_ccff53c05fc4bf 1-2,5-6,26-27
+  s_0553c3864c0a2b::t_018e81a43b8647 28-33,41-49,51
+  s_0553c3864c0a2b::t_e56d909dc5419a 35-40
+  s_0553c3864c0a2b::t_dd5ffc2841a911 7-25
+  s_0553c3864c0a2b::t_f71acb3b4c6e02 34
+packages/protocol/tests/studio-bootstrap.test.ts
+  s_0553c3864c0a2b::t_018e81a43b8647 23,54-56
+  s_0553c3864c0a2b::t_f71acb3b4c6e02 28
+  s_0553c3864c0a2b::t_464fe0d2caa281 24-27
+  s_0553c3864c0a2b::t_ef52f3f763afd4 5-16,22
+packages/protocol/fixtures/runtime-config.json
+  s_0553c3864c0a2b::t_c33ca1e006e898 51-55,95
+  s_0553c3864c0a2b::t_42353601ad07ab 83
+  s_0553c3864c0a2b::t_527aeb4e31c8a8 1-50,56-82,84-94,96
+packages/protocol/src/development-events.ts
+  s_0553c3864c0a2b::t_14733580d81326 4
+packages/protocol/src/preview-messages.ts
+  s_0553c3864c0a2b::t_b4f8050a065c47 46
+  s_0553c3864c0a2b::t_14733580d81326 4,7
+packages/protocol/tests/preview-messages.test.ts
+  s_0553c3864c0a2b::t_3c2d2d30632436 140,147
+packages/protocol/src/studio-bootstrap.ts
+  s_0553c3864c0a2b::t_f71acb3b4c6e02 23
+  s_0553c3864c0a2b::t_464fe0d2caa281 17-22
+  s_0553c3864c0a2b::t_018e81a43b8647 5,16,56-71,79,83
+  s_0553c3864c0a2b::t_ccff53c05fc4bf 3,15,88
+packages/protocol/package.json
+  s_0553c3864c0a2b::t_190fe63d077a90 28
+  s_0553c3864c0a2b::t_ccff53c05fc4bf 15
+  s_0553c3864c0a2b::t_4739fb57decdac 10
+packages/runtime/src/index.ts
+  s_0553c3864c0a2b::t_5e73cc8b3efc66 41-52,83
+  s_36badbebc98a54::t_08e033b7af8e71 15
+  s_0553c3864c0a2b::t_1726924c5b24ad 2,9,19,31,37,54,60-61,69-71,73,78-79,81-82,84-86
+  s_36badbebc98a54::t_cddd15f0b3b549 10
+  s_0553c3864c0a2b::t_70c86309801278 4,55
+  s_36badbebc98a54::t_7ed203ad43af7f 18,23
+  s_0553c3864c0a2b::t_9903868c5918c8 17
+  s_0553c3864c0a2b::t_f665425f26c265 56-59
+  s_0553c3864c0a2b::t_d0b1fa63edfa82 20-22,24-25
+packages/protocol/src/runtime-config.ts
+  s_0553c3864c0a2b::t_c33ca1e006e898 85,110,113-114,116,118-119,131
+  s_0553c3864c0a2b::t_2ba8c74fbe7769 42-84,86-97,99-103,107-108
+  s_0553c3864c0a2b::t_c7818efde1d33f 10-11
+  s_0553c3864c0a2b::t_4efcbbed5fe630 3,6-9,12-14,111,115,145-147
+  s_0553c3864c0a2b::t_ccff53c05fc4bf 4-5,112,121-123,125
+  s_0553c3864c0a2b::t_17d8b90947ca39 124,149-151
+  s_0553c3864c0a2b::t_bc8ce40cb80c04 106,130
+  s_0553c3864c0a2b::t_5ba53106c5ba94 98,104-105,129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "05800732542d61507ac2458fe697692523ae13c8",
+  "prompts": {},
+  "sessions": {
+    "s_0553c3864c0a2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01457-511e-7fa0-b5b2-4e7f4b59a0d8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    },
+    "s_36badbebc98a54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0192c-d072-77a2-86c3-cdc5c0383d92",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
