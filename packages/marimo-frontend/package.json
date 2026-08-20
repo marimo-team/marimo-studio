@@ -9,6 +9,7 @@
     "./cell-presentation": "./src/cell-presentation.tsx",
     "./control-endpoint": "./src/control-endpoint.ts",
     "./embedded-runtime": "./src/embedded-runtime.tsx",
+    "./prepared-presentation": "./src/prepared-presentation.tsx",
     "./projected-output": "./src/projected-output.tsx",
     "./session-bootstrap": "./src/session-bootstrap.ts",
     "./theme-frame": "./src/theme-frame.ts",

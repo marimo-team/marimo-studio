@@ -9,6 +9,7 @@ const metadataPath = join(packageRoot, ".cache", "source.json");
 
 export const marimoSourceSchema = z.object({
   commit: z.string().min(1),
+  patchSha256: z.string().regex(/^[\da-f]{64}$/u),
   path: z.string().min(1),
   repository: z.string().min(1),
   version: z.string().min(1),

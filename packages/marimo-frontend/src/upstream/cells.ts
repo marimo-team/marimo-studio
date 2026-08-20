@@ -1,6 +1,8 @@
 export { cellDomProps } from "@marimo-team/frontend/unstable_internal/components/editor/common";
-export { OutputArea } from "@marimo-team/frontend/unstable_internal/components/editor/Output";
-export { ConsoleOutput } from "@marimo-team/frontend/unstable_internal/components/editor/output/console/ConsoleOutput";
+export {
+  OutputArea,
+  OutputRenderer,
+} from "@marimo-team/frontend/unstable_internal/components/editor/Output";
 export {
   outputIsLoading,
   outputIsStale,
