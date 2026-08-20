@@ -1,0 +1,234 @@
+apps/browser/src/zero-python/lifecycle.ts
+  s_36badbebc98a54::t_e1be8a84399eed 1-25
+apps/browser/build-metadata.ts
+  s_0553c3864c0a2b::t_86b8d13f1e53ba 16,51
+apps/browser/src/zero-python/metadata.ts
+  s_36badbebc98a54::t_d8662d5f6d23b6 1-10
+apps/browser/src/zero-python/metadata-validation.ts
+  s_36badbebc98a54::t_9e933cd042f1d6 11,16
+  s_36badbebc98a54::t_dc2f9724dd93be 26-27
+  s_36badbebc98a54::t_c9b75d1e7e8cd0 1-10,12-14,17-24,29-43,45-46,48-64,70-75
+  s_36badbebc98a54::t_4d059204f87864 15,25
+  s_36badbebc98a54::t_1e83923adbbb18 28,44,47
+  s_36badbebc98a54::t_3c3fab83d689fb 65-69
+apps/browser/vite.zero-python.config.ts
+  s_0553c3864c0a2b::t_261d2785f5fd05 1-54
+apps/browser/tests/static-prepared-smoke-support.ts
+  s_36badbebc98a54::t_d05453b530ceb1 1-46
+apps/browser/src/zero-python/projections.ts
+  s_36badbebc98a54::t_971264e377fb57 1,13,51,60
+  s_36badbebc98a54::t_0520530a4653c8 2-12,14-50,52-59,61-98
+apps/browser/tests/zero-python-projections.test.ts
+  s_36badbebc98a54::t_b4aa6ffb07167c 72,127-136
+  s_36badbebc98a54::t_6518af1333b022 81,112
+  s_36badbebc98a54::t_46e049f5ee882c 11-34,52-71,73-80,110-111,113-126,137-138,145-160
+  s_36badbebc98a54::t_72ca3470be9212 1-3,5,8-10,82-109,142-144,161-171
+  s_36badbebc98a54::t_559d3f9a01f5ea 4,6-7,35-51,139-141
+apps/browser/tests/zero-python-fixture.ts
+  s_36badbebc98a54::t_a6f5d629cbcb32 34
+  s_36badbebc98a54::t_bc79a24e4f91b8 1-16,18-21,25-33,35-167,172,178-185,187-195,199-230
+  s_36badbebc98a54::t_52aadd34a6b5bf 22-24
+  s_36badbebc98a54::t_785ddf5b0fd207 17,168-171,196-198
+  s_36badbebc98a54::t_ba96742c47de43 173-177,186
+apps/browser/src/zero-python/state-api.ts
+  s_36badbebc98a54::t_41384898a35603 1-6,8-25,28-54,56-64
+  s_36badbebc98a54::t_69907f3ce62231 7,55
+  s_36badbebc98a54::t_08bd20748a9dba 26-27
+apps/browser/package.json
+  s_0553c3864c0a2b::t_225506d03a0be5 8-9
+  s_36badbebc98a54::t_60557b9d6d9fff 16-17
+  s_36badbebc98a54::t_6cd8e504ca1a8d 23
+  s_36badbebc98a54::t_bf0021210c3cc4 7
+  s_36badbebc98a54::t_9f2a9a66e22e8e 24
+apps/browser/src/zero-python/renderer.ts
+  s_36badbebc98a54::t_5e408507d09b86 1-16,18-20,22-30,33-37,39-52
+  s_36badbebc98a54::t_18ad7cde5745bc 21,31
+  s_36badbebc98a54::t_d34c8667f95024 17,32,38
+apps/browser/tests/entry-closures.test.ts
+  s_0553c3864c0a2b::t_f6ed6dd362b9c5 2-3,37
+  s_36badbebc98a54::t_6fb519c67f4f38 84
+  s_36badbebc98a54::t_30c5572a0f37b7 94-137
+  s_0553c3864c0a2b::t_bf7bce77a5b35e 7-12,15-16,18-23,28-29,31-35
+  s_0553c3864c0a2b::t_3ae114fb9b16b8 13,17,30,45-46,161-162,164,173,175-176
+  s_36badbebc98a54::t_bf29488abcf673 88-93,138-139
+  s_36badbebc98a54::t_29099862c37d17 77,87
+  s_0553c3864c0a2b::t_c59eff4ce761eb 5,14,24-25,27,163,165-172,174,178,183,185-207,209-212,221-223
+  s_0553c3864c0a2b::t_67e11ac714e19a 177,179-182,184,213-220
+  s_0553c3864c0a2b::t_bc21c5f4f8a8aa 78-83,85-86
+  s_0553c3864c0a2b::t_225506d03a0be5 1,4,6,36,38-44,47-76,152-160,224-225
+  s_0553c3864c0a2b::t_18d20e18a9068d 26,140-151,208
+apps/browser/src/zero-python/metadata-source.ts
+  s_36badbebc98a54::t_18ad7cde5745bc 50,54-65
+  s_36badbebc98a54::t_7a6233cab5fef2 25,36,52
+  s_36badbebc98a54::t_9e933cd042f1d6 8,32
+  s_36badbebc98a54::t_c9b75d1e7e8cd0 1-7,9-24,26-31,33-35,37-49,51,53,66-67
+apps/browser/src/zero-python/hosts.ts
+  s_36badbebc98a54::t_98a67e06ad942f 1-27
+apps/browser/tests/zero-python-runtime.test.ts
+  s_36badbebc98a54::t_b5a3995f345443 107-121,128-138
+  s_36badbebc98a54::t_dd7fe92bce62d0 488-493
+  s_36badbebc98a54::t_53f277203ef8d6 205-215,222-233
+  s_36badbebc98a54::t_8891ac990c9604 528-533
+  s_36badbebc98a54::t_ba96742c47de43 1-5,7-46,53-61,63-68,169-174,181-188,190,197,199,201-204,234-249,256-258,261-263,265-266,268,270-272,509-516,525-527,534-545
+  s_36badbebc98a54::t_a6f5d629cbcb32 264,450,503
+  s_36badbebc98a54::t_f8f7076e5e15bf 260
+  s_36badbebc98a54::t_e95a1768ba0220 122-127
+  s_36badbebc98a54::t_2dad17610052a3 139-151,158-168
+  s_36badbebc98a54::t_db6b25092c21ea 175-180
+  s_36badbebc98a54::t_eb2b2060f1f211 200
+  s_36badbebc98a54::t_7d4226312861e8 62,276-278,409-434,441-443,445-446,452-487,494-496,498-499,505-508
+  s_36badbebc98a54::t_2d742abc2bd7e2 100-102
+  s_36badbebc98a54::t_fa1dcc17fa4145 152-157
+  s_36badbebc98a54::t_cb63a2ae6cb88f 279-293,295-330,332-371,373-393,395-408
+  s_36badbebc98a54::t_11bd3ca69c38f9 6,273-275,517-524
+  s_36badbebc98a54::t_00f8bbf740ba65 69-83,90-96,103-106
+  s_36badbebc98a54::t_f53f62972a6b11 84-89
+  s_36badbebc98a54::t_fc29b5f5bb3a01 97-99,189,191-196,198,259,267,444,447-449,451,497,500-502,504
+  s_36badbebc98a54::t_2973a0a319528d 47-52
+  s_36badbebc98a54::t_c1d90d19262c9b 269
+  s_36badbebc98a54::t_43b9dab77b21a4 250-255
+  s_36badbebc98a54::t_4cf908309e7c65 294,331,372,394
+  s_36badbebc98a54::t_48063dc2b0be86 216-221
+  s_36badbebc98a54::t_7db520d7e72d5e 435-440
+apps/browser/vite.config.ts
+  s_0553c3864c0a2b::t_225506d03a0be5 7
+  s_0553c3864c0a2b::t_261d2785f5fd05 19-22
+apps/browser/src/zero-python/metadata-records.ts
+  s_36badbebc98a54::t_feee11ee52e888 19,106-107,109-116
+  s_36badbebc98a54::t_3c3fab83d689fb 4,12-18,20,26,102-105,108
+  s_36badbebc98a54::t_80370ce2a831bb 1-3,5-11,21-25,27-101
+apps/browser/tests/static-prepared-smoke.ts
+  s_36badbebc98a54::t_d05453b530ceb1 3,10,33,37-38
+  s_36badbebc98a54::t_e5d9c39a0d1ff2 1,28
+  s_36badbebc98a54::t_890e6aa124ebca 2,4-9,11-16,18-27,29-32,34-36,39-51,53-66
+  s_36badbebc98a54::t_979e8af9830963 17
+  s_36badbebc98a54::t_3e5992806f141e 52
+apps/browser/src/zero-python/errors.ts
+  s_36badbebc98a54::t_3ec9afe655db34 23
+  s_36badbebc98a54::t_9154a8aff02529 24-27
+  s_36badbebc98a54::t_98a67e06ad942f 1-2,4,12-15,17-22,29-37,39-40,42-44
+  s_36badbebc98a54::t_97bc63564c290e 3,5-11,16,28,38,41
+apps/browser/src/zero-python/runtime.ts
+  s_36badbebc98a54::t_156333c08ed4a9 1-4,6-31
+  s_36badbebc98a54::t_785ddf5b0fd207 5
+apps/browser/src/zero-python/metadata-fetch.ts
+  s_36badbebc98a54::t_c9b75d1e7e8cd0 1-17,19-20,24-40,42-48,125,127
+  s_36badbebc98a54::t_954824895c5081 41,55-68,73-114,116-124,126
+  s_36badbebc98a54::t_cf1a1db3f635cd 69-72
+  s_36badbebc98a54::t_97bc63564c290e 18,21-23,49-54,115
+apps/browser/entry-closures.ts
+  s_0553c3864c0a2b::t_c59eff4ce761eb 59-61,99-121,123-124,126-127,136,156-158,160-164,168,185-194,211,213-214,219-223,225,228,285,289-300,302-304,340
+  s_0553c3864c0a2b::t_225506d03a0be5 2,6-10,41-49,51-52,58,62-74,76-88,90-98,142-148,159,169-175,180-184,195-203,205-210,216,224,226,229-242,254-257,305-306
+  s_0553c3864c0a2b::t_0d3d94cf4ef75f 53-57,149-151,262-264,270-272,274,276-278,280-281
+  s_36badbebc98a54::t_30c5572a0f37b7 35-39,128-135,140,166-167,247,249,253,265-267,269,273
+  s_0553c3864c0a2b::t_261d2785f5fd05 50,258-261,307-309
+  s_0553c3864c0a2b::t_1eb4a99494206f 328,336
+  s_0553c3864c0a2b::t_3ae114fb9b16b8 176-179,204,212,215,217-218,275,279
+  s_0553c3864c0a2b::t_3c0032ee3fcbf0 40
+  s_0553c3864c0a2b::t_67e11ac714e19a 3-5,282-284,286-288,301,310-327,329-335,337-339,342-344
+  s_36badbebc98a54::t_085bee0073b458 153-155,165,268
+  s_0553c3864c0a2b::t_18e7a7f3d4a92d 11-18,27
+  s_0553c3864c0a2b::t_f6ed6dd362b9c5 1,19-25,28-34,75,89,138
+  s_0553c3864c0a2b::t_21c1d5464a44a8 122,125
+  s_0553c3864c0a2b::t_f3737f67202bf6 26,227
+  s_0553c3864c0a2b::t_85bc731fdc8cd3 341
+  s_0553c3864c0a2b::t_bc21c5f4f8a8aa 137,139,141,152,243-246,248,250-252
+apps/browser/tests/zero-python-metadata.test.ts
+  s_36badbebc98a54::t_4f742f16cd9794 257-275,277-283
+  s_36badbebc98a54::t_315a04a32b5644 241-251,255-256
+  s_36badbebc98a54::t_7c1f2b9cab9b5c 68-70,73,81-83,85-98
+  s_36badbebc98a54::t_f8f7076e5e15bf 12,62,64,220-228,408
+  s_36badbebc98a54::t_233fd5af4e82ae 1,3,14-24,29-33,71-72,74-80,84
+  s_36badbebc98a54::t_52aadd34a6b5bf 132,136-145,147-159,162,164-166,168,170,173-180,182,184-186,188-200,202-208
+  s_36badbebc98a54::t_5f55d99fd2a090 232,252-254,276,298,300
+  s_36badbebc98a54::t_0fae9323f10e2a 134-135,238-240,284-286,289-297,299,301-313
+  s_36badbebc98a54::t_42f3f056b8add3 288
+  s_36badbebc98a54::t_1f1d21f7a97a86 2,5,25-28,335,360-383,389,391
+  s_36badbebc98a54::t_7d4226312861e8 314-334,336-359,384-388,390,392
+  s_36badbebc98a54::t_d090c7ae3af9b0 114-122,129,133,169,181,210
+  s_36badbebc98a54::t_fe5aa641544fa7 4,6-11,13,34-61,63,65-67,100-112,125-128,130,161,163,167,209,211,213-219,229-231,233-237,287,393-407,409-410
+  s_36badbebc98a54::t_a7c6a3e5511c90 99,113,123-124,131,146,160,171-172,183,187,201,212
+apps/browser/src/zero-python.ts
+  s_0553c3864c0a2b::t_6b57001b124b08 1-2,5-6
+  s_36badbebc98a54::t_156333c08ed4a9 3-4
+apps/browser/src/zero-python/controller.ts
+  s_36badbebc98a54::t_4d059204f87864 28-31,61
+  s_36badbebc98a54::t_15fd83bcdcbd79 19,167-178
+  s_36badbebc98a54::t_08bd20748a9dba 36-37,40-41,46-47
+  s_36badbebc98a54::t_bf56701da0312d 6,8,10,17,20,22-26,32-35,38-39,42-43,45,48,51,55,62-67,75-84,93-98,100-101,103,119-120,139-141,143-144,146-151,157-165,179-180,183-185,187-188,205-208,214-215
+  s_36badbebc98a54::t_d34c8667f95024 44,50,194-204
+  s_36badbebc98a54::t_71cd0767106cfc 11-12,14-15,21,49,52-54,56-60,166,181-182,186,189
+  s_36badbebc98a54::t_16ba8f73efbb1c 114,145,190-193
+  s_36badbebc98a54::t_b04a33adb12ca8 134
+  s_36badbebc98a54::t_3fd5ec507dcc24 2-5,7,9,13,85-92,105-113,115-117,152-156
+  s_36badbebc98a54::t_f07ae7fab884c4 1,102,118,121-133,135-138
+  s_36badbebc98a54::t_fa436e3e1ff9e0 27,99,104,142
+  s_36badbebc98a54::t_9154a8aff02529 16,68-74
+  s_36badbebc98a54::t_e1be8a84399eed 18,209-213
+apps/browser/src/zero-python/mount.ts
+  s_36badbebc98a54::t_52ebf5d9f75e93 45-57
+  s_36badbebc98a54::t_b111df29221ba2 33
+  s_36badbebc98a54::t_08bd20748a9dba 7
+  s_36badbebc98a54::t_156333c08ed4a9 1-6,8,10-32,34-42,44,58-60
+  s_36badbebc98a54::t_08e033b7af8e71 43
+  s_36badbebc98a54::t_785ddf5b0fd207 9
+apps/browser/tests/static-prepared-smoke-support.test.ts
+  s_36badbebc98a54::t_d05453b530ceb1 1-45
+apps/browser/src/zero-python/composition.ts
+  s_36badbebc98a54::t_d1a6254ed61d6b 87
+  s_36badbebc98a54::t_d34c8667f95024 55,84
+  s_36badbebc98a54::t_72ca3470be9212 7,24-26,35,118,124-125
+  s_36badbebc98a54::t_16ba8f73efbb1c 102-103,106-107,114,116,119-123
+  s_36badbebc98a54::t_a7224817e67de1 90-95
+  s_36badbebc98a54::t_3840e2662c07cc 1-4,104-105,109-113,115,117,126-133
+  s_36badbebc98a54::t_4d059204f87864 48-51
+  s_36badbebc98a54::t_dc2f9724dd93be 67-71
+  s_36badbebc98a54::t_11bd3ca69c38f9 9-12,65-66,72
+  s_36badbebc98a54::t_5926bb8558f6ce 5-6,8,13-23,27-34,36-47,52-54,56-64,73-83,85-86,88-89,96-101,108,134-140
+apps/browser/src/zero-python/interactions.ts
+  s_36badbebc98a54::t_1631d5dd8248c8 1,4-9,11-36,58-66,69-123,131-135
+  s_36badbebc98a54::t_08e033b7af8e71 3,10,37-57,67-68
+  s_36badbebc98a54::t_d1a6254ed61d6b 2,124-130
+apps/browser/src/runtime.ts
+  s_36badbebc98a54::t_156333c08ed4a9 5
+  s_0553c3864c0a2b::t_6b57001b124b08 7
+  s_0553c3864c0a2b::t_cb111fc4f673bb 8-13
+  s_0553c3864c0a2b::t_a4c1b49f8d8e7f 2
+apps/browser/src/zero-python/revision.ts
+  s_36badbebc98a54::t_34e99c5948bf46 6,51
+  s_36badbebc98a54::t_16ba8f73efbb1c 86-89
+  s_36badbebc98a54::t_4d059204f87864 73-76
+  s_36badbebc98a54::t_16df2973d80b3f 1-5,7-8,10,13-47,92
+  s_36badbebc98a54::t_938f6f3aec5750 11-12,48-50,52-68
+  s_36badbebc98a54::t_15fd83bcdcbd79 9,69-72,77-85,90-91
+apps/browser/tests/zero-python-interactions.test.ts
+  s_36badbebc98a54::t_ebdd41155a1495 2-4,6-14,16-55
+  s_36badbebc98a54::t_37403da80908e8 1,5,15
+apps/browser/merge-entry-closures.mjs
+  s_0553c3864c0a2b::t_261d2785f5fd05 1-3,5-14,29,31-53
+  s_0553c3864c0a2b::t_626c8dc41d3b4e 4,15-28,30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "5b5d7496f36095c10d6270e413e39c77b0c9236e",
+  "prompts": {},
+  "sessions": {
+    "s_0553c3864c0a2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01457-511e-7fa0-b5b2-4e7f4b59a0d8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    },
+    "s_36badbebc98a54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0192c-d072-77a2-86c3-cdc5c0383d92",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
