@@ -1,0 +1,181 @@
+packages/presentation/src/runtime/cells/CellPortal.tsx
+  s_36badbebc98a54::t_2c73cd6a760cc7 72-77
+packages/presentation/src/runtime/cells/CellOutput.tsx
+  s_36badbebc98a54::t_2c73cd6a760cc7 7,12,18
+packages/presentation/tests/value-bindings.test.ts
+  s_0553c3864c0a2b::t_e3b092449a5504 6,26
+packages/presentation/src/runtime/selection.ts
+  s_0553c3864c0a2b::t_14733580d81326 1
+packages/presentation/tests/agent-observer.test.ts
+  s_0553c3864c0a2b::t_c58c7d84bec1bf 2,9,23-54,270,272,274-286,288,290-293,295-303,305-308
+  s_36badbebc98a54::t_706f2fa360dd58 8,271,273,287,289,294,304,309
+packages/presentation/src/values/hosts.ts
+  s_0553c3864c0a2b::t_46a3b1a1d11626 103-104
+  s_0553c3864c0a2b::t_489578f74910ba 153-161,452-455
+packages/presentation/src/runtime/catalog.ts
+  s_0553c3864c0a2b::t_6a1005540df3db 7-17,21,27-37,44-51
+  s_0553c3864c0a2b::t_a4c1b49f8d8e7f 54-55
+packages/presentation/src/values/response.ts
+  s_0553c3864c0a2b::t_9642a79ca1cdda 13-16
+  s_0553c3864c0a2b::t_6913d5fe6a6e5b 10
+packages/presentation/src/runtime/outputs/ProjectedOutput.tsx
+  s_36badbebc98a54::t_e43b9454d93f69 5-13
+packages/presentation/src/rendered-view-observer.ts
+  s_0553c3864c0a2b::t_b16350d8d57880 15-16,18-20,22,24-25
+  s_0553c3864c0a2b::t_c2421f12ce08a1 6,17,21,23
+packages/presentation/src/runtime/outputs/RuntimeOutputs.tsx
+  s_0553c3864c0a2b::t_4a24476045d465 52-54,81-83
+packages/presentation/tests/server-outputs.test.ts
+  s_0553c3864c0a2b::t_e3b092449a5504 12,33
+  s_0553c3864c0a2b::t_34f0b17cfa0b3d 62,145-152
+packages/presentation/src/runtime/outputs/use-output-projection.ts
+  s_0553c3864c0a2b::t_f7a49a51ca93ec 44-46
+packages/presentation/src/runtime/style.css
+  s_36badbebc98a54::t_f9cab2ec957f93 208,215-232
+packages/presentation/src/agent-observer.ts
+  s_0553c3864c0a2b::t_7e1b8de6b3e1f3 16,21,87,92-93
+packages/presentation/tests/runtime-coordinator.test.ts
+  s_0553c3864c0a2b::t_0a2bf4289a5199 145-146,149,166-167,173-174,177,179-180,185
+  s_0553c3864c0a2b::t_e1de30c4a9f225 297-306,308-318,320-323,325-329,331-333,335-345,347,373,409-410
+  s_36badbebc98a54::t_c3d92afb917275 51,53,57-73
+  s_36badbebc98a54::t_7bbfdc233fe8bc 83-84,128,181,202,204,239,269-271,273,307,330,334,358,362,396,420,444,472,490,503
+  s_0553c3864c0a2b::t_99b6b729fdf5f7 11,404,407
+  s_0553c3864c0a2b::t_4f3113f8a00bba 175-176
+  s_0553c3864c0a2b::t_d13a655ddf16a8 93,96,153
+  s_0553c3864c0a2b::t_87772891622512 17-28,34,76,85,129-138,147,491
+  s_36badbebc98a54::t_4de9b9161aaaa3 100-120
+  s_0553c3864c0a2b::t_dcee1104d07cf4 411-419,421-443,445-471,473-485
+  s_0553c3864c0a2b::t_6fe2ee852080a8 189-201,203,205-228
+  s_0553c3864c0a2b::t_46e43b1d4e86e0 324,346,348-357,359-361,363-372
+  s_0553c3864c0a2b::t_5cae2799c6e7ef 251,291,319,496
+  s_0553c3864c0a2b::t_4c627c4f09210b 374-395,397-403,405-406,408
+  s_0553c3864c0a2b::t_544fbb620f6394 229-238,240-250,252-268,272,274-290,292-296
+  s_36badbebc98a54::t_79b8038c012c0d 52,54-56,74,154-155
+  s_0553c3864c0a2b::t_326ae6798cca82 156-165,168-172,178,182-184,186-188,497-502,504-509
+packages/presentation/tests/runtime-adapters.test.ts
+  s_0553c3864c0a2b::t_ff87348daf75de 2,8,11,22-73
+  s_36badbebc98a54::t_4f4b1b6d900fc4 241
+  s_0553c3864c0a2b::t_56996de88fbf1f 158-180,182-183,185,187-188,190,193-195
+  s_0553c3864c0a2b::t_8d7a8494d7e1ac 4,6-7,10,12-21,74-104,106-110,113-122,156-157,196-216,218,224-240,242-243,245-246,248,250,253-269
+  s_0553c3864c0a2b::t_404b5301aeb585 136-139,144,153,184,191-192
+  s_0553c3864c0a2b::t_c523e20746c792 9,252
+  s_36badbebc98a54::t_a0d010a991baa0 105,111-112,143,148,151,181,186,189,217,219-223,244,247,249,251,270
+  s_0553c3864c0a2b::t_98f52338dddc7a 1,3,5,123-135,140-142,145-147,149-150,152,154-155
+packages/presentation/src/cells/host.ts
+  s_36badbebc98a54::t_e868f9a97fcf74 173-175
+  s_36badbebc98a54::t_a7b2abb2c9cb65 215
+packages/presentation/tests/wasm-runtime.test.ts
+  s_0553c3864c0a2b::t_624f41c3952725 65,94-114
+  s_0553c3864c0a2b::t_ca5908e1bff672 66-82,89,92-93
+  s_0553c3864c0a2b::t_c987bdb92d8f59 83-88,90-91
+  s_0553c3864c0a2b::t_2a3112cde1247c 4,39-63
+packages/presentation/src/runtime-config/index.ts
+  s_0553c3864c0a2b::t_d481953ba955df 20,30
+  s_36badbebc98a54::t_cddd15f0b3b549 8
+packages/presentation/src/runtime-state.ts
+  s_0553c3864c0a2b::t_b16350d8d57880 1-2
+packages/presentation/tests/runtime-config.test.ts
+  s_0553c3864c0a2b::t_e3b092449a5504 17,25
+  s_0553c3864c0a2b::t_8d83d606914b87 167-193
+packages/presentation/tests/cell-host-projections.test.ts
+  s_0553c3864c0a2b::t_b8c09fc61d6a0f 1-8,10-15,17-19,51,53-69
+  s_0553c3864c0a2b::t_cd7708d0b1c586 9,16,20-50,52
+packages/presentation/src/outputs/host.ts
+  s_36badbebc98a54::t_a7b2abb2c9cb65 101
+  s_36badbebc98a54::t_e868f9a97fcf74 77-79
+packages/presentation/tests/output-portal.test.ts
+  s_0553c3864c0a2b::t_79f7b410a9afc3 210-250,253-258
+  s_0553c3864c0a2b::t_bb8abdfafbb45f 251-252
+packages/presentation/src/runtime/runtime.tsx
+  s_36badbebc98a54::t_ac4e7b745b4af6 239-256,258-260
+  s_0553c3864c0a2b::t_70c86309801278 230,281-286
+  s_0553c3864c0a2b::t_64971ace5d5447 60,62-67,74-75,77-82,86,115-117,119,121-125,127-168,170-174,176-185,187-195,267-270,272,276-277,279
+  s_0553c3864c0a2b::t_f50075f4686a05 202,209,233-235,237-238,257,261,263-266,273-275
+  s_0553c3864c0a2b::t_3569ee4cb199ed 200,206
+  s_0553c3864c0a2b::t_3b7ad829091389 53-59,88-114
+  s_0553c3864c0a2b::t_c32911ea65c703 215-216,218
+  s_0553c3864c0a2b::t_60d50f89ea2845 61,73,76,83-85,87,126,169,175,186,203,217,219-222,236,262,271,278
+  s_0553c3864c0a2b::t_499dd8c1ad5dec 42
+  s_0553c3864c0a2b::t_17e26df0c25d92 68-72,118,120
+  s_0553c3864c0a2b::t_6464a7b23038ca 24-34,287-288
+  s_0553c3864c0a2b::t_1b101d619a7e4c 229
+packages/presentation/src/outputs/remote.ts
+  s_0553c3864c0a2b::t_e72894eb0c415d 34,119-131
+packages/presentation/tests/runtime-query.test.ts
+  s_0553c3864c0a2b::t_6464a7b23038ca 1-21
+packages/presentation/package.json
+  s_0553c3864c0a2b::t_ef13492cdf3ed6 8
+  s_0553c3864c0a2b::t_cb111fc4f673bb 11-12
+  s_0553c3864c0a2b::t_b16350d8d57880 10
+  s_0553c3864c0a2b::t_4414dab8f12d8c 16
+  s_36badbebc98a54::t_605e8fb72908e6 22
+packages/presentation/src/runtime/cells/cell-host-projections.ts
+  s_0553c3864c0a2b::t_b3e7256284f0dc 59-61
+packages/presentation/src/runtime/outputs/OutputPortal.tsx
+  s_36badbebc98a54::t_e43b9454d93f69 112
+packages/presentation/src/runtime/wasm.ts
+  s_0553c3864c0a2b::t_40f6d620045365 39-40,42-43,47-56,65-66,68,72-73,83,135-138,161-162
+  s_0553c3864c0a2b::t_e42fcf3e522969 164-166,186-188,190-204,206-216
+  s_0553c3864c0a2b::t_ca5908e1bff672 12,67
+  s_0553c3864c0a2b::t_3569ee4cb199ed 79,111
+  s_36badbebc98a54::t_2dee65d690e2a1 163,167-185,189,205
+  s_0553c3864c0a2b::t_2402e4347e8da5 160
+  s_0553c3864c0a2b::t_48dff18e8f6967 15,41,57-64,69-71
+packages/presentation/src/runtime/runtime-configuration.ts
+  s_0553c3864c0a2b::t_295a3e6d0c4f6b 6-7,12,18,20,23
+packages/presentation/src/runtime-config/store.ts
+  s_36badbebc98a54::t_cddd15f0b3b549 108-118
+packages/presentation/tests/cell-host-preservation.test.ts
+  s_36badbebc98a54::t_272ef468e0d602 75
+packages/presentation/tests/value-hosts.test.ts
+  s_0553c3864c0a2b::t_e3b092449a5504 14,47
+  s_0553c3864c0a2b::t_d152c20b26e54b 377-400
+packages/presentation/src/runtime-config/remote.ts
+  s_0553c3864c0a2b::t_d481953ba955df 87,105,146,148,165,176,206,215
+packages/presentation/src/runtime/coordinator.ts
+  s_0553c3864c0a2b::t_ffa8f483846116 61,63-67,69,74-90,92-105,107-110,112,114-122
+  s_36badbebc98a54::t_3c46168221783d 91,111,113,202,208-209,213-225,231,240,258-259,265
+  s_0553c3864c0a2b::t_8e927284f90102 40,59-60,68,70-73
+  s_0553c3864c0a2b::t_d5f7a557e07416 8,135-139,183,267
+  s_36badbebc98a54::t_973bfa606d3d4d 62,106
+  s_0553c3864c0a2b::t_46e43b1d4e86e0 196-199
+  s_0553c3864c0a2b::t_e1de30c4a9f225 236,238,246,257
+  s_0553c3864c0a2b::t_0744f053603cc0 13-16,36
+  s_0553c3864c0a2b::t_db20027d3f7e9d 187-190
+  s_0553c3864c0a2b::t_9903868c5918c8 10-11,37-39,41-58,123-124,130-133,200,203-207,210,212,226,232-235,241-245,247-254,261,263-264
+  s_0553c3864c0a2b::t_220f5c45a65b9b 141,144-145
+  s_36badbebc98a54::t_cddd15f0b3b549 4-5,147-158,161,175-177
+  s_0553c3864c0a2b::t_6fe2ee852080a8 9,27-35,125,140,142-143,146,159-160,162-174,178-182,184,260
+  s_0553c3864c0a2b::t_544fbb620f6394 191-195,201,229-230
+  s_36badbebc98a54::t_eb2b2060f1f211 211
+  s_0553c3864c0a2b::t_c43a76e83c67ed 239
+packages/presentation/tests/runtime-catalog.test.ts
+  s_0553c3864c0a2b::t_a4c1b49f8d8e7f 1-3,5-32,35
+  s_0553c3864c0a2b::t_8872313f6d2730 4,33-34
+packages/presentation/src/runtime/wasm-config.ts
+  s_0553c3864c0a2b::t_2117ca36e7b23e 1,15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "cf9af31f425cc690d2b703c4408afeebb6a962d0",
+  "prompts": {},
+  "sessions": {
+    "s_0553c3864c0a2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01457-511e-7fa0-b5b2-4e7f4b59a0d8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    },
+    "s_36badbebc98a54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0192c-d072-77a2-86c3-cdc5c0383d92",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
