@@ -1,0 +1,83 @@
+Makefile
+  s_36badbebc98a54::t_0777de281cf883 13,26,28-32,65,76
+  s_36badbebc98a54::t_260b448894b0b8 50
+  s_36badbebc98a54::t_2d18f4de5c9a39 27
+scripts/release.sh
+  s_36badbebc98a54::t_3151294d61b5d5 90
+  s_36badbebc98a54::t_4aca2ede04b742 58,89
+pyproject.toml
+  s_0553c3864c0a2b::t_cb03a419410c8e 4-6
+scripts/check-release.sh
+  s_36badbebc98a54::t_4aca2ede04b742 18,36-41,43-72,76
+  s_36badbebc98a54::t_7e6d88a0306736 42,73-75
+.github/workflows/publish.yml
+  s_36badbebc98a54::t_2cb99c1495f892 17-19
+  s_36badbebc98a54::t_4aca2ede04b742 35-42,67
+  s_36badbebc98a54::t_3151294d61b5d5 65-66
+scripts/check-release-dependencies.py
+  s_36badbebc98a54::t_34ea47271614e2 19,21
+  s_36badbebc98a54::t_1c3cc020b31bed 1-5,8-10,13-14,17-18,20,22-23,28,41-42,52-64,78,82-89,91-92,94,96-108,110-117,119-122,124-126,128-129,133,135-140,284-285,323,327-329,337,341,345,371-373,387-388,390-393,399-400,407-408,486,499-500,508,520,522-524,528,533-537,544-550,554-560
+  s_36badbebc98a54::t_ff39e5d284c8d6 203-204,208-209,228-236,340,357-358,362-368
+  s_36badbebc98a54::t_48df8c35e69cbe 11-12,15-16,29-40,43-51,66-68,71-73,79-81,130-132,141-190,192-202,205-207,210-227,237-283,289-292,294-299,304-312,322,324-326,330-336,338-339,343-344,346,348,353-355,360-361,369-370,374-386,389,394,398,401-406,409-410,412-421,427-433,435-443,445-485,487-498,501-507,510-513,516,519,521,525-527,538-543,551-553
+  s_36badbebc98a54::t_26c9f66fb3e910 191,286-288,293,300-303,342,395-397,411,422-426,434,444
+  s_36badbebc98a54::t_97e7a767e5d381 90
+  s_36badbebc98a54::t_50c64a290d3f8e 349-352,356
+  s_36badbebc98a54::t_293d5c6e5eeada 24-27,65,69-70,74-77,93,95,109,118,123,127,134,347,509,514-515,517-518,529-532
+  s_36badbebc98a54::t_1d56e23b348b17 6-7,313-321,359
+packages/marimo-studio/tests/test_release_dependencies.py
+  s_36badbebc98a54::t_80acaaa9abde4d 433-436,439-444,446
+  s_36badbebc98a54::t_eaf0842459685b 1-16,18-50,54,63-84,86-91,93-94,96-119,121-141,192,201-205,207-215,227-239,241-251,253-272,276-277,279-432
+  s_36badbebc98a54::t_2cb99c1495f892 437-438,445
+  s_36badbebc98a54::t_26c9f66fb3e910 55-56,95,206,216,240
+  s_36badbebc98a54::t_9670550d47da4f 155-157,195
+  s_36badbebc98a54::t_ff39e5d284c8d6 17,51,120,217-226,252,273-275,278
+  s_36badbebc98a54::t_48d30e99b76003 52-53,57-62,85,92,142-154,158-191,193-194,196-200
+packages/marimo-studio/pyproject.toml
+  s_0553c3864c0a2b::t_cf8cc5a34c79cd 83
+  s_36badbebc98a54::t_8ccb5ac209a654 3,15
+  s_0553c3864c0a2b::t_f5e18defe45abe 81
+pnpm-workspace.yaml
+  s_36badbebc98a54::t_4e02d7989ca224 73-74
+  s_36badbebc98a54::t_9f2a9a66e22e8e 35
+scripts/verify-dist.sh
+  s_36badbebc98a54::t_d4a74ab30bc23b 307
+  s_36badbebc98a54::t_9f2a9a66e22e8e 303-304
+  s_0553c3864c0a2b::t_8876f6571b92bd 128,136
+  s_36badbebc98a54::t_5366cbdd40927d 84-108,112-113,138
+  s_36badbebc98a54::t_a544f4fdb1f145 237-238,245-302,305-306,308,310-316,325-350
+  s_36badbebc98a54::t_32f369ea65ff49 124-125,139-143,147-148
+  s_36badbebc98a54::t_890e6aa124ebca 309,317-324
+  s_36badbebc98a54::t_8175f38f3b21b3 110-111,359-365
+  s_36badbebc98a54::t_a6f419dfbd2721 131-133
+scripts/verify-pypi.sh
+  s_36badbebc98a54::t_c2e860a2b2ed84 24
+packages/marimo-studio/src/marimo_studio/_compat/release.json
+  s_36badbebc98a54::t_954824895c5081 3
+  s_36badbebc98a54::t_250ce37e2aab4f 4
+vite.config.ts
+  s_0553c3864c0a2b::t_d5da8fcf38c294 195-198
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c75af02e1b454ad7831a61f74de5685a17555fb7",
+  "prompts": {},
+  "sessions": {
+    "s_0553c3864c0a2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01457-511e-7fa0-b5b2-4e7f4b59a0d8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    },
+    "s_36badbebc98a54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0192c-d072-77a2-86c3-cdc5c0383d92",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
