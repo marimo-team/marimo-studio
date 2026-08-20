@@ -20,6 +20,7 @@ _RELEASE = json.loads(
 )
 MARIMO_VERSION: str = _RELEASE["version"]
 MARIMO_RELEASE_COMMIT: str = _RELEASE["commit"]
+MARIMO_FRONTEND_PATCH_SHA256: str = _RELEASE["frontendPatchSha256"]
 
 ParameterKind = Literal[
     "POSITIONAL_ONLY",
@@ -294,21 +295,16 @@ _SYMBOLS = {
             "a7a8e3ce7df349424cd2fb8ee67d0d8bc5cddb0c9dbc2777dd3b0f8e299fcf86",
         ),
     ),
-    "cached-cell-repair": (
+    "zero-python-state-ledger": (
         SymbolContract(
-            "marimo._runtime.executor.lifecycles.cached",
-            "CachedLifecycle._restored_ui_defs",
+            "marimo._runtime.runner.hooks",
+            "NotebookCellHooks.add_on_finish",
             _parameters(
-                ("attempt", "POSITIONAL_OR_KEYWORD", False),
-                ("glbls", "POSITIONAL_OR_KEYWORD", False),
+                ("self", "POSITIONAL_OR_KEYWORD", False),
+                ("hook", "POSITIONAL_OR_KEYWORD", False),
+                ("priority", "POSITIONAL_OR_KEYWORD", True),
             ),
-            "9b5f7e2c2a95464bb7506baf152b4163dc9d954b0bbbdd9c487e68f49d123a71",
-        ),
-        SymbolContract(
-            "marimo._save.encode",
-            "_contiguous_tensor_bytes",
-            _parameters(("data", "POSITIONAL_OR_KEYWORD", False)),
-            "b5af49d65687b2ee6b1469ebe46299cb0f975d2f3135962108cbe1b7255f4642",
+            "5037f538d99c5a5bb280900fbc6bc817fd85c43d313639f08f730e3ca9cf4635",
         ),
     ),
     "kernel-projection-host": (

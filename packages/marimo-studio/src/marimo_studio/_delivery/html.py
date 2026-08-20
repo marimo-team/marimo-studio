@@ -111,7 +111,7 @@ def runtime_head(
                 {
                     "data-marimo-studio-runtime": True,
                     "type": "module",
-                    "src": f"{assets_url}/runtime.js",
+                    "src": f"{assets_url}/{runtime_entry}",
                 }
             ),
             dev

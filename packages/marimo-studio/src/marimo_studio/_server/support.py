@@ -395,10 +395,11 @@ def _workspace_pending_response(lifecycle: Unconfigured | NeedsView) -> JSONResp
     )
 
 
-def _bootstrap_response(
+async def _bootstrap_response(
     request: Request,
     context: ServerContext,
     studio: StudioWorkspace,
+    notebook_scope: NotebookScope,
     runtimes: RuntimeRegistry,
     session_state: SessionState,
 ) -> Response:
@@ -437,6 +438,20 @@ def _bootstrap_response(
         )
     requested = request.query_params.get(ACTIVE_VIEW_QUERY_PARAM)
     selected = requested if requested in studio.views else studio.default_view
+    try:
+        (
+            available,
+            source_revisions,
+            presentation_revision,
+        ) = await available_runtime_descriptors(
+            context,
+            notebook_scope.presentation,
+            studio,
+            selected,
+            runtimes,
+        )
+    except MarimoStudioError as error:
+        return _lifecycle_error_response(error)
     return JSONResponse(
         studio_bootstrap_payload(
             studio,
@@ -446,7 +461,7 @@ def _bootstrap_response(
             context.file_key,
             request.query_params.multi_items(),
             context.routing_query,
-            runtimes.options,
+            runtimes.descriptors,
             client_id,
             native_session_id,
         ),
@@ -523,6 +538,23 @@ async def _view_response(
             context.server_token,
             notebook_scope.development,
         )
+    if route.startswith("zero-python/"):
+        return await zero_python_response(
+            request,
+            notebook_scope.publications,
+            view_name,
+            route.removeprefix("zero-python/"),
+            allow_refresh=context.mode == "edit" and has_edit_access(request.scope),
+        )
+    if route == "runtimes" and request.method == "GET":
+        return await runtime_availability_response(
+            request,
+            context,
+            presentation,
+            studio,
+            view_name,
+            runtimes,
+        )
     if route == "config" and request.method == "GET":
         return await runtime_config_response(
             request,
@@ -530,11 +562,27 @@ async def _view_response(
             presentation,
             notebook_scope.clients,
             view_name,
+            services=notebook_scope.runtime_services,
             sessions=session_state,
             attachment=sessions,
             runtimes=runtimes,
             session_ids=notebook_scope.session_ids,
             presentation_capability=presentation_capability,
+        )
+    if route == "controls":
+        return (
+            await control_config_response(
+                request,
+                context,
+                presentation,
+                notebook_scope.clients,
+                view_name,
+                services=notebook_scope.runtime_services,
+                sessions=session_state,
+                runtimes=runtimes,
+            )
+            if request.method == "GET"
+            else Response(status_code=405)
         )
     if route == "values" and request.method == "POST":
         return await values_response(
