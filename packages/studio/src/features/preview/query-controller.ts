@@ -1,5 +1,6 @@
+import type { RuntimeDescriptor } from "@marimo-studio/protocol/runtime-descriptor";
+
 import { publicNotebookQuery } from "@marimo-studio/protocol/query";
-import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
 
 import type { EditorQuerySyncResult } from "./query-remote.ts";
 
@@ -72,7 +73,7 @@ export class PreviewQueryController {
   private lastStatusError: Error | undefined;
 
   constructor(
-    private readonly runtime: string,
+    private readonly runtime: RuntimeDescriptor,
     private readonly preview: HTMLIFrameElement,
     private readonly syncQuery: (query: string) => void,
     private readonly syncEditorQuery: (
@@ -130,7 +131,7 @@ export class PreviewQueryController {
     }
     this.supersedeNavigationTransaction();
     if (
-      this.runtime !== DEFAULT_RUNTIME_ID &&
+      this.runtime.query === "state" &&
       (this.writing || this.pending !== undefined || this.retryTimer !== undefined)
     ) {
       this.setPending(pendingQuery(this.query));

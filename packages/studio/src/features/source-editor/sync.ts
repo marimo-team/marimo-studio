@@ -181,6 +181,10 @@ export class SyncedSource {
     return this.dirty || this.conflict !== undefined;
   }
 
+  get currentRevision(): string {
+    return this.revision;
+  }
+
   beginLoad(): void {
     this.loadState ??= this.state;
     this.publish({ path: this.path, phase: "loading" });
@@ -216,6 +220,8 @@ export class SyncedSource {
     }
     this.cancelSave();
     const generation = ++this.generation;
+    const sourceVersion = this.sourceVersion;
+    const readGeneration = ++this.readGeneration;
     this.view = view;
     this.content = "";
     this.revision = "";
@@ -243,7 +249,11 @@ export class SyncedSource {
       this.open(view, source);
       return true;
     } catch (error) {
-      if (generation === this.generation) {
+      if (
+        generation === this.generation &&
+        sourceVersion === this.sourceVersion &&
+        readGeneration === this.readGeneration
+      ) {
         this.emit("error", errorMessage(error));
       }
       return false;

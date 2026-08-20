@@ -70,7 +70,7 @@ export class ViewTransition {
 
   constructor(
     private current: string,
-    private readonly hooks: ViewTransitionHooks,
+    private readonly hooks: ViewTransitionHooks<Preparation>,
   ) {}
 
   async select(

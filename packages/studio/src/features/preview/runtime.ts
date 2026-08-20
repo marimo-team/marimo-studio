@@ -1,12 +1,15 @@
+import type { RuntimeDescriptor } from "@marimo-studio/protocol/runtime-descriptor";
+
 export const initialPreviewRuntime = ({
   available,
   configured,
 }: {
-  available: readonly string[];
+  available: readonly RuntimeDescriptor[];
   configured: string;
-}): string => {
-  if (available.includes(configured)) {
-    return configured;
+}): RuntimeDescriptor => {
+  const selected = available.find((runtime) => runtime.id === configured);
+  if (selected) {
+    return selected;
   }
   const fallback = available[0];
   if (!fallback) {

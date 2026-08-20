@@ -31,6 +31,7 @@ export interface ViewSnapshot {
   removingGeneration?: string;
   selectionMessage?: ViewMessage;
   createMessage?: ViewMessage;
+  selectionMessage?: ViewMessage;
   removeError?: string;
   removeMessage?: ViewMessage;
 }
@@ -179,7 +180,7 @@ export class ViewController {
     if (!selected || signal?.aborted || !this.isCurrentMutation(generation)) {
       return false;
     }
-    this.update({ current: view, createMessage: undefined });
+    this.update({ current: view, createMessage: undefined, selectionMessage: undefined });
     return true;
   }
 

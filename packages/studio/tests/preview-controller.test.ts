@@ -163,6 +163,11 @@ it("preserves document identity through same-view navigation", () => {
   server.dispose();
 });
 
+const sourceRevisions = {
+  "index.html": "sha256:index",
+  "app.css": "sha256:style",
+} as const;
+
 it("accepts sessionless WASM readiness from the rendered view", () => {
   const editor = frame("loading");
   const preview = frame("complete");
@@ -241,8 +246,30 @@ it.each(["load-first", "message-first"] as const)(
 
 it("starts WASM control synchronization from an active rendered-view session", async () => {
   const fetch = vi.fn<typeof globalThis.fetch>();
-  fetch.mockResolvedValueOnce(Response.json(runtimeConfig("server")));
-  fetch.mockResolvedValueOnce(Response.json(runtimeConfig("wasm")));
+  fetch.mockResolvedValueOnce(
+    new Response(
+      JSON.stringify({
+        schema: 1,
+        revision: "revision-1",
+        runtime: "server",
+        controlRevision: 1,
+        controls: { native: { cells: {} } },
+      }),
+      { headers: { ETag: '"server-controls"', "Content-Type": "application/json" } },
+    ),
+  );
+  fetch.mockResolvedValueOnce(
+    new Response(
+      JSON.stringify({
+        schema: 1,
+        revision: "revision-1",
+        runtime: "wasm",
+        controlRevision: 1,
+        controls: { native: { cells: {} } },
+      }),
+      { headers: { ETag: '"wasm-controls"', "Content-Type": "application/json" } },
+    ),
+  );
   vi.stubGlobal("fetch", fetch);
   const editor = frame("loading");
   const preview = frame("complete");
@@ -257,7 +284,8 @@ it("starts WASM control synchronization from an active rendered-view session", a
   const connect = vi.fn(() => controlEndpoint());
   const wasm = new PreviewController(
     "dashboard",
-    "wasm",
+    wasmRuntime,
+    serverRuntime.id,
     editor,
     preview,
     (view, runtime) => `/${view}?runtime=${runtime}`,
@@ -648,4 +676,272 @@ it("restores the committed query after an editor-session reload interrupts dispa
 
   expect(syncEditorQuery.mock.calls[1]?.[0]).toBe("?region=emea");
   server.dispose();
+});
+
+it("retires an unavailable runtime and recreates it on the current view", async () => {
+  const editor = frame("complete");
+  const serverFrame = frame("complete");
+  const wasmFrame = frame("complete");
+  const zeroFrame = frame("complete");
+  const availability = vi.fn(async () => ({
+    runtimes: ["server", "wasm", "zero-python"],
+    revision: "plain-r2",
+  }));
+  const viewUrl = vi.fn(
+    (view: string, runtime: string, revision?: string | null) =>
+      `/${view}?runtime=${runtime}${revision ? `&revision=${revision}` : ""}`,
+  );
+  const deck = new PreviewDeck({
+    initialView: "projected",
+    initialRuntime: serverRuntime,
+    runtimes: [serverRuntime, wasmRuntime, zeroPythonRuntime],
+    availableRuntimes: ["server", "wasm", "zero-python"],
+    defaultRuntime: "server",
+    sourceRevisions,
+    presentationRevision: "projected-r1",
+    loadRuntimeAvailability: availability,
+    viewUrl,
+    supportUrl: (view) => `/support/${view}`,
+    syncQuery: vi.fn(),
+    syncEditorQuery: vi.fn(async () => "accepted" as const),
+    navigate: vi.fn(),
+  });
+  deck.attach(
+    editor,
+    new Map([
+      ["server", serverFrame],
+      ["wasm", wasmFrame],
+      ["zero-python", zeroFrame],
+    ]),
+  );
+  deck.switchRuntime("zero-python");
+
+  deck.switchView("plain", ["server", "wasm"], sourceRevisions, "plain-r1");
+  expect(zeroFrame.src).toBe("about:blank");
+  deck.sourceChanged("html", sourceRevisions);
+  await vi.waitFor(() =>
+    expect(deck.getSnapshot().runtimes.map(({ id }) => id)).toContain("zero-python"),
+  );
+  deck.switchRuntime("zero-python");
+
+  expect(zeroFrame.src).toContain("/plain?runtime=zero-python&revision=plain-r2");
+  expect(availability).toHaveBeenCalledOnce();
+  deck.dispose();
+});
+
+it("recovers runtime availability after one bounded timeout", async () => {
+  vi.useFakeTimers();
+  const editor = frame("complete");
+  const serverFrame = frame("complete");
+  const wasmFrame = frame("complete");
+  const zeroFrame = frame("complete");
+  const availability = vi
+    .fn()
+    .mockImplementationOnce(async () => await new Promise<never>(() => {}))
+    .mockResolvedValue({
+      runtimes: ["server", "wasm", "zero-python"],
+      revision: "recovered-r2",
+    });
+  const deck = new PreviewDeck({
+    initialView: "dashboard",
+    initialRuntime: serverRuntime,
+    runtimes: [serverRuntime, wasmRuntime, zeroPythonRuntime],
+    availableRuntimes: ["server", "wasm", "zero-python"],
+    defaultRuntime: "server",
+    sourceRevisions,
+    presentationRevision: "dashboard-r1",
+    loadRuntimeAvailability: availability,
+    viewUrl: (view, runtime, revision) =>
+      `/${view}?runtime=${runtime}${revision ? `&revision=${revision}` : ""}`,
+    supportUrl: (view) => `/support/${view}`,
+    syncQuery: vi.fn(),
+    syncEditorQuery: vi.fn(async () => "accepted" as const),
+    navigate: vi.fn(),
+  });
+  deck.attach(
+    editor,
+    new Map([
+      ["server", serverFrame],
+      ["wasm", wasmFrame],
+      ["zero-python", zeroFrame],
+    ]),
+  );
+
+  deck.sourceChanged("html", sourceRevisions);
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(deck.getSnapshot().runtimes.map(({ id }) => id)).toEqual(["server", "wasm"]);
+  await vi.advanceTimersByTimeAsync(250);
+
+  expect(deck.getSnapshot().runtimes.map(({ id }) => id)).toEqual([
+    "server",
+    "wasm",
+    "zero-python",
+  ]);
+  expect(availability).toHaveBeenCalledTimes(2);
+  deck.dispose();
+});
+
+it("ignores a late runtime availability result after disposal", async () => {
+  let release = (_value: { runtimes: string[]; revision: string }) => {};
+  const pending = new Promise<{ runtimes: string[]; revision: string }>((resolve) => {
+    release = resolve;
+  });
+  const viewUrl = vi.fn((view: string, runtime: string) => `/${view}?runtime=${runtime}`);
+  const deck = new PreviewDeck({
+    initialView: "dashboard",
+    initialRuntime: serverRuntime,
+    runtimes: [serverRuntime, wasmRuntime],
+    availableRuntimes: ["server", "wasm"],
+    defaultRuntime: "server",
+    sourceRevisions,
+    presentationRevision: "dashboard-r1",
+    loadRuntimeAvailability: async () => await pending,
+    viewUrl,
+    supportUrl: (view) => `/support/${view}`,
+    syncQuery: vi.fn(),
+    syncEditorQuery: vi.fn(async () => "accepted" as const),
+    navigate: vi.fn(),
+  });
+  const calls = viewUrl.mock.calls.length;
+
+  deck.sourceChanged("html", sourceRevisions);
+  deck.dispose();
+  release({ runtimes: ["server", "wasm"], revision: "dashboard-r2" });
+  await Promise.resolve();
+  await Promise.resolve();
+
+  expect(viewUrl).toHaveBeenCalledTimes(calls);
+});
+
+it("disposes later preview controllers after the first cleanup fails", () => {
+  const editor = frame("complete");
+  const serverFrame = frame("complete");
+  const wasmFrame = frame("complete");
+  const deck = new PreviewDeck({
+    initialView: "dashboard",
+    initialRuntime: serverRuntime,
+    runtimes: [serverRuntime, wasmRuntime],
+    availableRuntimes: ["server", "wasm"],
+    defaultRuntime: "server",
+    sourceRevisions,
+    presentationRevision: "dashboard-r1",
+    loadRuntimeAvailability: async () => ({
+      runtimes: ["server", "wasm"],
+      revision: "dashboard-r1",
+    }),
+    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
+    supportUrl: (view) => `/support/${view}`,
+    syncQuery: vi.fn(),
+    syncEditorQuery: vi.fn(async () => "accepted" as const),
+    navigate: vi.fn(),
+  });
+  deck.attach(
+    editor,
+    new Map([
+      ["server", serverFrame],
+      ["wasm", wasmFrame],
+    ]),
+  );
+  deck.switchRuntime("wasm");
+  const original = PreviewController.prototype.dispose;
+  let disposals = 0;
+  vi.spyOn(PreviewController.prototype, "dispose").mockImplementation(
+    function (this: PreviewController) {
+      disposals += 1;
+      if (disposals === 1) {
+        throw new Error("first preview cleanup failed");
+      }
+      original.call(this);
+    },
+  );
+
+  expect(() => deck.dispose()).toThrow("first preview cleanup failed");
+  expect(disposals).toBe(2);
+  expect(() => deck.dispose()).not.toThrow();
+});
+
+it("reloads one held preview when its control revision expires", async () => {
+  vi.useFakeTimers();
+  let editorReads = 0;
+  let previewReads = 0;
+  const fetch = vi.fn<typeof globalThis.fetch>(async (input) => {
+    const url = new URL(input instanceof Request ? input.url : input, globalThis.location.href);
+    const runtime = url.searchParams.get("runtime");
+    if (runtime === "server") {
+      editorReads += 1;
+      if (editorReads > 1) {
+        return Response.json(
+          {
+            error: "presentation-revision-unavailable",
+            message: "Presentation revision unavailable",
+            transient: true,
+          },
+          { status: 409 },
+        );
+      }
+    } else {
+      previewReads += 1;
+      if (previewReads > 1) {
+        return new Response(null, { status: 304, headers: { ETag: '"wasm-controls"' } });
+      }
+    }
+    return Response.json(
+      {
+        schema: 1,
+        revision: "revision-1",
+        runtime,
+        controlRevision: 1,
+        controls: { native: { cells: {} } },
+      },
+      { headers: { ETag: `"${runtime}-controls"` } },
+    );
+  });
+  vi.stubGlobal("fetch", fetch);
+  const editor = frame("loading");
+  const preview = frame("complete");
+  preview.src = "/loaded?marimo_studio_client=browser-client-1234";
+  const viewUrl = vi.fn(
+    (view: string, runtime: string) =>
+      `/${view}?runtime=${runtime}&marimo_studio_client=browser-client-1234`,
+  );
+  const endpoints = [controlEndpoint(), controlEndpoint()];
+  const connect = vi.fn().mockReturnValueOnce(endpoints[0]).mockReturnValueOnce(endpoints[1]);
+  const wasm = new PreviewController(
+    "dashboard",
+    wasmRuntime,
+    serverRuntime.id,
+    editor,
+    preview,
+    viewUrl,
+    (view) => `/support/${view}`,
+    vi.fn(),
+    vi.fn(async () => "accepted" as const),
+    vi.fn(),
+    vi.fn(),
+    undefined,
+    connect,
+  );
+
+  globalThis.dispatchEvent(
+    new MessageEvent("message", {
+      origin: globalThis.location.origin,
+      data: {
+        type: "marimo-studio:view-ready",
+        runtime: "wasm",
+        view: "dashboard",
+        revision: "revision-1",
+        sessionId: "s_123456",
+      },
+    }),
+  );
+  await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(2));
+  await vi.advanceTimersByTimeAsync(1_000);
+  await vi.waitFor(() => expect(viewUrl).toHaveBeenCalledTimes(2));
+  const reloads = viewUrl.mock.calls.length;
+  await vi.runAllTimersAsync();
+
+  expect(viewUrl).toHaveBeenCalledTimes(reloads);
+  expect(endpoints[0]?.dispose).toHaveBeenCalledOnce();
+  expect(endpoints[1]?.dispose).toHaveBeenCalledOnce();
+  wasm.dispose();
 });

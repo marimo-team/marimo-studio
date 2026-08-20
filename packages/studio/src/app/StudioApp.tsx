@@ -1,7 +1,7 @@
 import type { ActiveViewRequest } from "@marimo-studio/protocol/development-events";
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
-import type { ControlFrameConnector } from "../features/preview/control-sync.ts";
+import type { ControlFrameConnector } from "../features/preview/control-types.ts";
 import type { StudioBrand, ThemeFrameConnector } from "../shared/theme.tsx";
 
 import { Toolbar } from "../features/navigation/Toolbar.tsx";

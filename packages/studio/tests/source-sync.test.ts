@@ -350,6 +350,23 @@ test("the latest reconciliation wins across completion orders and stale failures
   assert.deepEqual(result.states.at(-1)?.phase, "external");
 });
 
+test("a delayed initial load cannot replace a newer reconciliation", async () => {
+  const remote = new DeferredReadRemote();
+  const result = observed();
+  const source = new SyncedSource("index.html", remote, result.observer, 1);
+
+  const loading = source.load("dashboard");
+  const reconciling = source.reconcile();
+  remote.reads[1].resolve({ content: "newest", revision: "r2" });
+  await reconciling;
+  remote.reads[0].resolve({ content: "older", revision: "r1" });
+
+  assert.equal(await loading, false);
+  assert.equal(source.currentRevision, "r2");
+  assert.deepEqual(result.documents.at(-1), "newest");
+  assert.deepEqual(result.states.at(-1)?.phase, "external");
+});
+
 test("a stale reconciliation cannot replace the current conflict", async () => {
   const remote = new DeferredReadRemote();
   const result = observed();

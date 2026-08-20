@@ -15,6 +15,7 @@ import type { ControlFrameConnector } from "./control-sync.ts";
 import type { NotebookMutationCompletion } from "./notebook-mutation-coordinator.ts";
 import type { RecordBrowserObservation } from "./observation-remote.ts";
 import type { EditorQuerySyncResult } from "./query-remote.ts";
+import type { LoadedRuntimeAvailability, LoadRuntimeAvailability } from "./runtime-remote.ts";
 
 import {
   nextPreviewDocumentLifecycleId,
@@ -24,6 +25,7 @@ import {
 import { NotebookMutationCoordinator } from "./notebook-mutation-coordinator.ts";
 import { observeFrameQuery } from "./query-sync.ts";
 import { cloneRuntimeStatusReport, RuntimeDiagnostics } from "./runtime-diagnostics.ts";
+import { initialPreviewRuntime } from "./runtime.ts";
 import { previewStatus } from "./status.ts";
 
 interface PreviewDeckOptions {
@@ -60,6 +62,7 @@ export interface PreviewFrameDescriptor {
 export interface PreviewDeckSnapshot {
   frames: readonly PreviewFrameDescriptor[];
   runtime: string;
+  runtimes: readonly RuntimeDescriptor[];
   states: Readonly<Record<string, PreviewFrameState>>;
 }
 
@@ -91,6 +94,7 @@ interface PreviewNavigationTransaction {
 }
 
 type Listener = () => void;
+const RUNTIME_AVAILABILITY_TIMEOUT_MS = 2_000;
 
 const startingFrameState = (
   runtime: string,
@@ -136,7 +140,15 @@ export class PreviewDeck {
   };
 
   constructor(private readonly options: PreviewDeckOptions) {
-    this.runtime = options.initialRuntime;
+    this.runtimes = new Map(options.runtimes.map((runtime) => [runtime.id, runtime]));
+    this.controlPeer = options.runtimes.find((runtime) => runtime.controls === "peer")?.id;
+    this.availableRuntimes = this.resolveRuntimes(options.availableRuntimes);
+    this.sourceRevisions = { ...options.sourceRevisions };
+    this.presentationRevision = options.presentationRevision;
+    if (!this.availableRuntimes.some((runtime) => runtime.id === options.initialRuntime.id)) {
+      throw new Error("The initial preview runtime is unavailable for the selected view");
+    }
+    this.runtime = options.initialRuntime.id;
     this.view = options.initialView;
     this.navigation = options.initialNavigation;
     this.notebookMutations = new NotebookMutationCoordinator({
@@ -205,7 +217,7 @@ export class PreviewDeck {
   };
 
   attach(editor: HTMLIFrameElement, frames: ReadonlyMap<string, HTMLIFrameElement>): void {
-    if (this.editor) {
+    if (this.disposed || this.editor) {
       return;
     }
     this.editor = editor;
@@ -483,7 +495,7 @@ export class PreviewDeck {
   }
 
   editorSessionChanged(binding: EditorSessionBinding): void {
-    if (binding.generation <= this.editorBindingGeneration) {
+    if (this.disposed || binding.generation <= this.editorBindingGeneration) {
       return;
     }
     const previousSessionId = this.editorSessionId;
@@ -619,6 +631,14 @@ export class PreviewDeck {
     this.stopEditorQuerySync?.();
     this.slots.forEach((slot) => this.releaseSlot(slot));
     this.listeners.clear();
+    this.editor = undefined;
+    this.frames = undefined;
+    if (failures.length === 1) {
+      throw failures[0];
+    }
+    if (failures.length > 1) {
+      throw new AggregateError(failures, "Preview deck disposal failed");
+    }
   }
 
   private bindEditor(): void {
@@ -947,6 +967,9 @@ export class PreviewDeck {
   }
 
   private publish(): void {
+    if (this.disposed) {
+      return;
+    }
     this.updateSnapshot();
     this.listeners.forEach((listener) => listener());
   }
@@ -954,6 +977,7 @@ export class PreviewDeck {
   private updateSnapshot(): void {
     this.snapshot = {
       runtime: this.runtime,
+      runtimes: this.availableRuntimes,
       states: Object.fromEntries(this.states),
       frames: this.slots.map(({ controller, id, runtime, stale, view }) => {
         const active = runtime === this.runtime && view === this.view;
@@ -967,5 +991,131 @@ export class PreviewDeck {
         };
       }),
     };
+  }
+
+  private resolveRuntimes(runtimeIds: readonly string[]): readonly RuntimeDescriptor[] {
+    const runtimes = runtimeIds.map((runtime) => {
+      const descriptor = this.runtimes.get(runtime);
+      if (!descriptor) {
+        throw new Error(`Preview runtime ${JSON.stringify(runtime)} is not in the runtime catalog`);
+      }
+      return descriptor;
+    });
+    if (runtimes.length === 0 || new Set(runtimeIds).size !== runtimes.length) {
+      throw new Error("Preview runtime availability must contain unique runtime IDs");
+    }
+    return runtimes;
+  }
+
+  private setAvailableRuntimes(runtimeIds: readonly string[]): void {
+    const available = this.resolveRuntimes(runtimeIds);
+    const nextIds = new Set(available.map(({ id }) => id));
+    const cleanupFailures: unknown[] = [];
+    this.previews.forEach((controller, runtime) => {
+      if (nextIds.has(runtime)) {
+        return;
+      }
+      this.previews.delete(runtime);
+      const frame = this.frames?.get(runtime);
+      if (frame) {
+        frame.src = "about:blank";
+      }
+      const descriptor = this.runtimes.get(runtime);
+      if (descriptor) {
+        this.states.set(
+          runtime,
+          startingFrameState(
+            descriptor,
+            this.view,
+            this.options.viewUrl(this.view, descriptor.id, this.presentationRevision),
+          ),
+        );
+      }
+      try {
+        controller.dispose();
+      } catch (error) {
+        cleanupFailures.push(error);
+      }
+    });
+    this.availableRuntimes = available;
+    if (!this.isAvailable(this.runtime)) {
+      this.runtime = initialPreviewRuntime({
+        available: this.availableRuntimes,
+        configured: this.options.defaultRuntime,
+      }).id;
+      this.ensure(this.runtime);
+    }
+    if (cleanupFailures.length > 0) {
+      console.warn(
+        "Unavailable preview runtime cleanup failed",
+        cleanupFailures.length === 1
+          ? cleanupFailures[0]
+          : new AggregateError(cleanupFailures, "Preview runtime retirement failed"),
+      );
+    }
+  }
+
+  private isAvailable(runtime: string): boolean {
+    return this.availableRuntimes.some((candidate) => candidate.id === runtime);
+  }
+
+  private repairRuntimeIds(): readonly string[] {
+    const runtimes = this.options.runtimes
+      .filter(({ execution }) => execution !== "prepared")
+      .map(({ id }) => id);
+    return runtimes.length > 0 ? runtimes : [this.options.runtimes[0]!.id];
+  }
+
+  private forwardSourceChange(kind: ShellChangeKind): void {
+    this.previews.forEach((controller, runtime) => {
+      if (this.isAvailable(runtime)) {
+        controller.sourceChanged(kind);
+      }
+    });
+  }
+
+  private cancelAvailabilityRefresh(): void {
+    this.availabilityGeneration += 1;
+    this.availabilityController?.abort(
+      new DOMException("Runtime availability was superseded", "AbortError"),
+    );
+    this.availabilityController = undefined;
+    if (this.availabilityRetryTimer !== undefined) {
+      clearTimeout(this.availabilityRetryTimer);
+      this.availabilityRetryTimer = undefined;
+    }
+  }
+
+  private async loadAvailability(
+    view: string,
+    sources: Readonly<Record<SourceName, string>>,
+    parentSignal?: AbortSignal,
+  ): Promise<LoadedRuntimeAvailability> {
+    const controller = new AbortController();
+    const abort = () => controller.abort(parentSignal?.reason);
+    parentSignal?.addEventListener("abort", abort, { once: true });
+    if (parentSignal?.aborted) {
+      abort();
+    }
+    const timer = setTimeout(() => {
+      controller.abort(new DOMException("Runtime availability timed out", "TimeoutError"));
+    }, RUNTIME_AVAILABILITY_TIMEOUT_MS);
+    const aborted = new Promise<never>((_resolve, reject) => {
+      controller.signal.addEventListener("abort", () => reject(controller.signal.reason), {
+        once: true,
+      });
+      if (controller.signal.aborted) {
+        reject(controller.signal.reason);
+      }
+    });
+    try {
+      return await Promise.race([
+        this.options.loadRuntimeAvailability(view, sources, controller.signal),
+        aborted,
+      ]);
+    } finally {
+      clearTimeout(timer);
+      parentSignal?.removeEventListener("abort", abort);
+    }
   }
 }

@@ -35,7 +35,7 @@ it("applies an editor query through the rendered preview bridge", async () => {
     sessionId: null,
     view: "dashboard",
   });
-  const controller = new PreviewQueryController("wasm", preview, vi.fn(), vi.fn(), vi.fn());
+  const controller = new PreviewQueryController(wasmRuntime, preview, vi.fn(), vi.fn(), vi.fn());
 
   controller.editorChanged("region=emea", true);
 
@@ -101,7 +101,7 @@ it("serializes writes and coalesces them to the latest query", async () => {
     .fn<SyncEditorQuery>()
     .mockReturnValueOnce(first.promise)
     .mockReturnValueOnce(second.promise);
-  const controller = new PreviewQueryController("wasm", frame(), vi.fn(), sync, vi.fn());
+  const controller = new PreviewQueryController(wasmRuntime, frame(), vi.fn(), sync, vi.fn());
 
   controller.previewChanged("region=emea");
   controller.previewChanged("region=apac");
@@ -124,7 +124,7 @@ it("retries the latest query after the editor reconnects", async () => {
     .fn<SyncEditorQuery>()
     .mockResolvedValueOnce("retry")
     .mockResolvedValueOnce("accepted");
-  const controller = new PreviewQueryController("wasm", frame(), vi.fn(), sync, vi.fn());
+  const controller = new PreviewQueryController(wasmRuntime, frame(), vi.fn(), sync, vi.fn());
 
   controller.previewChanged("region=emea");
   await vi.waitFor(() => expect(sync).toHaveBeenCalledTimes(1));
@@ -489,7 +489,7 @@ it("preserves newer editor intent across a delayed preview echo", async () => {
     .fn<SyncEditorQuery>()
     .mockReturnValueOnce(first.promise)
     .mockResolvedValueOnce("accepted");
-  const controller = new PreviewQueryController("wasm", frame(), vi.fn(), sync, vi.fn());
+  const controller = new PreviewQueryController(wasmRuntime, frame(), vi.fn(), sync, vi.fn());
 
   controller.previewChanged("region=preview");
   const operationId = sync.mock.calls[0]?.[1];
@@ -511,7 +511,7 @@ it("keeps a real editor change that equals an in-flight preview query", async ()
     .mockReturnValueOnce(first.promise)
     .mockResolvedValueOnce("accepted");
   const changed = vi.fn();
-  const controller = new PreviewQueryController("wasm", frame(), vi.fn(), sync, changed);
+  const controller = new PreviewQueryController(wasmRuntime, frame(), vi.fn(), sync, changed);
 
   controller.previewChanged("region=preview");
   controller.editorChanged("region=editor", false);
@@ -531,7 +531,7 @@ it("preserves newer editor intent when an accepted response is lost", async () =
     .fn<SyncEditorQuery>()
     .mockReturnValueOnce(first.promise)
     .mockResolvedValueOnce("accepted");
-  const controller = new PreviewQueryController("wasm", frame(), vi.fn(), sync, vi.fn());
+  const controller = new PreviewQueryController(wasmRuntime, frame(), vi.fn(), sync, vi.fn());
 
   controller.previewChanged("region=preview");
   const operationId = sync.mock.calls[0]?.[1];
