@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import stat
 import subprocess
 import sys
@@ -59,12 +60,17 @@ def _passthrough_uv(directory: Path, *, emit_process_output: bool = False) -> Pa
         if emit_process_output
         else ""
     )
+    studio = shlex.quote(str(Path(sys.executable).with_name("marimo-studio")))
     executable.write_text(
         f"""#!/bin/sh
 {process_output}\
 while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done
 [ "$#" -gt 0 ] || exit 90
 shift
+if [ "$1" = "marimo-studio" ]; then
+    shift
+    exec {studio} "$@"
+fi
 exec "$@"
 """,
         encoding="utf-8",

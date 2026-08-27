@@ -325,6 +325,7 @@ def test_starter_list_separates_human_records(
     ]
 
 
+@pytest.mark.native_process
 def test_new_command_errors_emit_the_complete_diagnostic_command(
     tmp_path: Path,
     runtime_assets: Path,
@@ -649,16 +650,42 @@ def test_view_remove_reports_the_updated_view_inventory(notebook_path: Path) -> 
 
 @pytest.mark.parametrize(
     "machine_args",
-    (
-        ("--diagnostics", "jsonl"),
-        ("--format", "json"),
-        (),
-    ),
+    (("--format", "json"), ("--diagnostics", "jsonl")),
+    ids=("result-json", "diagnostics-jsonl"),
 )
-def test_view_remove_requires_yes_for_machine_or_noninteractive_use(
+def test_view_remove_requires_yes_for_machine_output(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    machine_args: tuple[str, ...],
+) -> None:
+    ensure_view(notebook_path)
+    added = ensure_view(notebook_path, "executive")
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.view._stdin_is_interactive",
+        lambda: True,
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "remove",
+            str(notebook_path),
+            "--name",
+            "executive",
+            *machine_args,
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "Pass --yes" in result.output
+    assert added.root.is_dir()
+
+
+@pytest.mark.native_process
+def test_view_remove_requires_yes_for_noninteractive_use(
     notebook_path: Path,
     runtime_assets: Path,
-    machine_args: tuple[str, ...],
 ) -> None:
     ensure_view(notebook_path)
     added = ensure_view(notebook_path, "executive")
@@ -670,20 +697,15 @@ def test_view_remove_requires_yes_for_machine_or_noninteractive_use(
         str(notebook_path),
         "--name",
         "executive",
-        *machine_args,
     )
 
     assert result.returncode == 2
     assert result.stdout == ""
-    message = (
-        json.loads(result.stderr)["message"]
-        if machine_args == ("--diagnostics", "jsonl")
-        else result.stderr
-    )
-    assert "Pass --yes" in message
+    assert "Pass --yes" in result.stderr
     assert added.root.is_dir()
 
 
+@pytest.mark.native_process
 def test_cli_inspect_runtime_reports_mime_and_json_values(
     notebook_path: Path,
     runtime_assets: Path,
@@ -705,6 +727,7 @@ def test_cli_inspect_runtime_reports_mime_and_json_values(
 
 
 @pytest.mark.skipif(os.name == "nt", reason="The re-entry probe uses a POSIX shim")
+@pytest.mark.native_process
 @pytest.mark.parametrize(
     "diagnostic_args",
     [(), ("--diagnostics", "jsonl")],
