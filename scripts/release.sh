@@ -9,8 +9,9 @@ usage() {
 Usage: ./scripts/release.sh [--dry-run]
 
 Releases the package version committed to main. The command requires a clean,
-synchronized main branch and successful CI for its current commit. It creates
-and pushes the annotated vX.Y.Z tag that starts trusted publishing.
+synchronized main branch plus successful CI, Browser acceptance, and
+documentation workflows for its current commit. It creates and pushes the
+annotated vX.Y.Z tag that starts trusted publishing.
 
 Add the version change to the release pull request with:
 
@@ -91,40 +92,13 @@ if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
 	exit 1
 fi
 
-CI_RUN="$(gh run list \
-	--workflow ci.yml \
-	--branch main \
-	--commit "$COMMIT" \
-	--event push \
-	--limit 1 \
-	--json databaseId,status,conclusion,url \
-	--jq 'if length == 0 then "" else (.[0] | [.databaseId, .status, .conclusion, .url] | .[]) end')"
-
-if [[ -z "$CI_RUN" ]]; then
-	error "No main CI run found for $COMMIT"
-	printf 'Wait for the main CI workflow to start, then retry.\n' >&2
-	exit 1
-fi
-
-{
-	IFS= read -r CI_RUN_ID
-	IFS= read -r CI_STATUS
-	IFS= read -r CI_CONCLUSION
-	IFS= read -r CI_URL
-} <<<"$CI_RUN"
-CI_CONCLUSION="${CI_CONCLUSION:-pending}"
-if [[ "$CI_STATUS" != "completed" || "$CI_CONCLUSION" != "success" ]]; then
-	error "Main CI must pass before releasing. Current result: $CI_STATUS/$CI_CONCLUSION"
-	printf 'CI run: %s\n' "$CI_URL" >&2
-	printf 'Run gh run watch %s --exit-status, then retry.\n' "$CI_RUN_ID" >&2
-	exit 1
-fi
+CHECKS="$(./scripts/require-release-checks.sh "$COMMIT")"
 
 REPOSITORY_URL="$(gh repo view --json url --jq .url)"
 
 printf 'Release: %s\n' "$TAG"
 printf 'Commit:  %s\n' "$COMMIT"
-printf 'CI:      %s\n' "$CI_URL"
+printf '%s\n' "$CHECKS"
 
 if [[ "$DRY_RUN" == "1" ]]; then
 	printf '\nDry run complete. Run ./scripts/release.sh to create and push %s.\n' "$TAG"
