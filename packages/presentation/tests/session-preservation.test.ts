@@ -26,7 +26,6 @@ const config = (preserveSession: boolean, mode: RuntimeConfig["mode"] = "run"): 
   runtime: {
     id: "server",
     instance: "server-instance",
-    available: ["server"],
     data: {
       fileKey: "/workspace/analysis.py",
       capabilityToken: "presentation-capability",
@@ -55,7 +54,6 @@ const wasmConfig = (): RuntimeConfig => ({
   runtime: {
     id: "wasm",
     instance: "wasm-instance",
-    available: ["server", "wasm"],
     data: {
       code: "pass",
       filename: "analysis.py",

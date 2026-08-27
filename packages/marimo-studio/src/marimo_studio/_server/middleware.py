@@ -397,11 +397,7 @@ class PresentationMiddleware:
             and presentation_session is None
             and request.method in {"GET", "HEAD"}
             and not landing
-            and (
-                relative.endswith("/")
-                or relative.endswith("/index.html")
-                or relative in {"", "/"}
-            )
+            and (relative.endswith("/") or relative in {"", "/"})
             and not relative.startswith(SUPPORT_PATH)
             and authored is None
             and selected_studio is None

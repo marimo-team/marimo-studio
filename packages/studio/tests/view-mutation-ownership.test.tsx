@@ -231,9 +231,6 @@ it.each(["success", "failure"] as const)(
       created.resolve({
         schema: 2,
         name: "created",
-        provider: "marimo-studio/vanilla",
-        studio_url: "/studio/created/",
-        view_url: "/created/",
       });
       await vi.waitFor(() => expect(menu?.open).toBe(false));
     } else {

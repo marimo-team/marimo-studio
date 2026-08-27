@@ -36,7 +36,6 @@ const config = {
   runtime: {
     id: "server",
     instance: "server-instance",
-    available: ["server"],
     data: {
       fileKey: "/workspace/notebook.py",
       capabilityToken: "presentation-capability",
@@ -99,7 +98,7 @@ test("discards canceled queued output work before dispatch", async () => {
     });
   });
   const reconcile = vi.fn<OutputResponseReconciler>((response) => response);
-  const reader = createServerOutputReader("preview-a", reconcile);
+  const reader = createServerOutputReader(reconcile);
   const controller = new AbortController();
   const firstProjection = projectionRequest("first", "output", "projection-first");
   const secondProjection = projectionRequest("second", "output", "projection-second");

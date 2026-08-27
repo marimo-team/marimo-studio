@@ -182,8 +182,7 @@ def test_directory_support_routes_keep_notebook_identity(tmp_path: Path) -> None
     _assert_server_runtime(config["runtime"]["data"], "/")
     assert config["runtime"]["data"]["file"] == "first.py"
     assert created.status_code == 201
-    assert created.json()["studio_url"] == "/studio/detail/?file=first.py"
-    assert created.json()["view_url"] == "/detail/?file=first.py"
+    assert created.json() == {"schema": 2, "name": "detail"}
     assert marimo_resource.status_code == 200
     assert authored_document.status_code == 307
     assert authored_document.headers["location"] == (

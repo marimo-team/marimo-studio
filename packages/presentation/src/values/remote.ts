@@ -31,7 +31,6 @@ export class ValueRequestError extends Error {
 }
 
 export const readServerValues = async (
-  _sessionId: string,
   request: ValueReadRequest,
   signal?: AbortSignal,
 ): Promise<ValueReadResponse> =>
@@ -82,12 +81,11 @@ export const readServerValues = async (
 const RETRY_DELAYS = [250, 500, 1_000, 2_000] as const;
 
 export const readServerValuesWithRetry = async (
-  sessionId: string,
   request: ValueReadRequest,
   signal?: AbortSignal,
 ): Promise<ValueReadResponse> =>
   retry({
-    operation: () => readServerValues(sessionId, request, signal),
+    operation: () => readServerValues(request, signal),
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof ValueRequestError && error.transient,
     signal,

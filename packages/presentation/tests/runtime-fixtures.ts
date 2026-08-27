@@ -54,7 +54,6 @@ export const runtimeConfig = (overrides: Partial<RuntimeConfig> = {}): RuntimeCo
   runtime: {
     id: "server",
     instance: "server-instance",
-    available: ["server", "wasm"],
     data: {
       fileKey: "/workspace/notebook.py",
       capabilityToken: "presentation-capability",

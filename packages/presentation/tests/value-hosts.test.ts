@@ -53,7 +53,6 @@ const baseConfig = {
   runtime: {
     id: "server",
     instance: "server-instance",
-    available: ["server"],
     data: {
       fileKey: "/workspace/notebook.py",
       capabilityToken: "presentation-capability",

@@ -288,9 +288,6 @@ it("opens an already-created first view after a bootstrap retry", async () => {
           {
             schema: 2,
             name: "dashboard",
-            provider: "marimo-studio/vanilla",
-            studio_url: "/studio/dashboard/",
-            view_url: "/dashboard/",
           },
           { status: 201 },
         );

@@ -54,7 +54,6 @@ def test_edit_mode_offers_the_configured_preview_runtimes(notebook_path: Path) -
         workspace = client.get("/studio/dashboard/")
 
     assert config["runtime"]["id"] == "wasm"
-    assert config["runtime"]["available"] == ["server", "wasm"]
     bootstrap = _studio_bootstrap(workspace.text)
     assert bootstrap["schema"] == 1
     assert bootstrap["selectedView"] == "dashboard"

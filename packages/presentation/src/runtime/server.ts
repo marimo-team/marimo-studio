@@ -53,11 +53,7 @@ export const mountServerRuntime = (
       return serverTransport(next, serverRuntimeDataSchema.parse(next.runtime.data));
     },
     updateQuery: async () => {},
-    valueReader:
-      ({ sessionId }) =>
-      (request, signal) =>
-        readServerValuesWithRetry(sessionId, request, signal),
-    outputReader: ({ sessionId }) =>
-      createServerOutputReader(sessionId, reconcileOutputReadResponse),
+    valueReader: () => (request, signal) => readServerValuesWithRetry(request, signal),
+    outputReader: () => createServerOutputReader(reconcileOutputReadResponse),
   });
 };

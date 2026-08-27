@@ -45,9 +45,6 @@ const remote = (starters = [starter], defaultStarter = starter.id): ViewRemote =
       return {
         schema: 2 as const,
         name,
-        provider: "marimo-studio/vanilla",
-        studio_url: `/studio/${name}/`,
-        view_url: `/${name}/`,
       };
     }),
     remove: vi.fn(async (name: string) => {

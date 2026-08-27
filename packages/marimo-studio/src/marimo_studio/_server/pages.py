@@ -93,11 +93,7 @@ def page_redirect(request: Request, relative: str, page: bool) -> Response | Non
     """Canonicalize page routes with a trailing slash."""
     if not page or relative in {"", "/"} or relative.endswith("/"):
         return None
-    target = (
-        request.url.path.removesuffix("index.html")
-        if relative.endswith("/index.html")
-        else request.url.path + "/"
-    )
+    target = request.url.path + "/"
     if request.url.query:
         target += f"?{request.url.query}"
     return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
@@ -194,7 +190,7 @@ async def document_response(
         if context.mode == "edit"
         else await presentation.snapshot_async(selected, profile="production")
     )
-    runtime, _available_runtimes = runtimes.select(
+    runtime, _ = runtimes.select(
         snapshot.resolved.workspace,
         context,
         request.query_params.get("runtime"),

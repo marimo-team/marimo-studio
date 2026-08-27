@@ -80,8 +80,6 @@ def document_view(relative: str, studio: StudioWorkspace, mode: str) -> str | No
     parts = relative.strip("/").split("/")
     if len(parts) == 1:
         return parts[0] if parts[0] in studio.views else None
-    if len(parts) == 2 and parts[1] == "index.html":
-        return parts[0] if parts[0] in studio.views else None
     return None
 
 

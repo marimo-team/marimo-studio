@@ -56,7 +56,6 @@ const serverOutputTarget = (): ServerOutputTarget => {
 
 const readServerOutputsAtTarget = async (
   target: ServerOutputTarget,
-  _sessionId: string,
   request: OutputReadRequest,
   signal?: AbortSignal,
 ): Promise<OutputReadResponse> => {
@@ -105,12 +104,11 @@ const RETRY_DELAYS = [250, 500, 1_000, 2_000] as const;
 
 const readServerOutputsAtTargetWithRetry = (
   target: ServerOutputTarget,
-  sessionId: string,
   request: OutputReadRequest,
   signal?: AbortSignal,
 ): Promise<OutputReadResponse> =>
   retry({
-    operation: () => readServerOutputsAtTarget(target, sessionId, request, signal),
+    operation: () => readServerOutputsAtTarget(target, request, signal),
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof OutputRequestError && error.transient,
     signal,
@@ -133,10 +131,7 @@ export const waitForOutputCaller = <T>(operation: Promise<T>, signal?: AbortSign
   });
 };
 
-export const createServerOutputReader = (
-  sessionId: string,
-  reconcile: OutputResponseReconciler,
-): OutputReader => {
+export const createServerOutputReader = (reconcile: OutputResponseReconciler): OutputReader => {
   let queue: Promise<void> = Promise.resolve();
   return (request, signal) => {
     const operation = queue.then(() => {
@@ -147,7 +142,6 @@ export const createServerOutputReader = (
         const target = serverOutputTarget();
         return readServerOutputsAtTargetWithRetry(
           target,
-          sessionId,
           { ...request, revision: target.revision },
           activeSignal,
         );

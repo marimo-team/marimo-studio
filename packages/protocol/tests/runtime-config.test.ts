@@ -34,7 +34,6 @@ const baseRuntimeConfig = {
   runtime: {
     id: "server",
     instance: "server-instance",
-    available: ["server", "wasm"],
     data: {
       fileKey: "/workspace/notebook.py",
       capabilityToken: "presentation-capability",
@@ -181,9 +180,6 @@ test("runtime configuration rejects malformed contracts", () => {
     }),
     runtimeConfig({ view: "missing" }),
     runtimeConfig({ runtime: { ...baseRuntimeConfig.runtime, id: "WASM" } }),
-    runtimeConfig({
-      runtime: { ...baseRuntimeConfig.runtime, id: "custom", available: ["server"] },
-    }),
     runtimeConfig({ ignored: true }),
     runtimeConfig({
       runtime: { ...baseRuntimeConfig.runtime, unexpected: true },

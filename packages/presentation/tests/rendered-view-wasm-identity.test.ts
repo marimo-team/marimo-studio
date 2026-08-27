@@ -41,7 +41,6 @@ test("WASM evidence omits forged native session identity", () => {
       runtime: {
         id: "wasm",
         instance: "wasm-instance",
-        available: ["server", "wasm"],
         data: {},
       },
     }),
@@ -57,7 +56,6 @@ test("WASM committed errors attest an explicit sessionless identity", async () =
     runtime: {
       id: "wasm",
       instance: "wasm-instance",
-      available: ["server", "wasm"],
       data: {},
     },
   });

@@ -44,10 +44,7 @@ export const viewList = (
   schema: 1,
   default_view: defaultView,
   default_starter: defaultStarter,
-  views: names.map((name) => ({
-    name,
-    provider: "marimo-studio/vanilla",
-  })),
+  views: names.map((name) => ({ name })),
   starters: [...starters],
 });
 

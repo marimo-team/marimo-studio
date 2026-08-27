@@ -42,10 +42,8 @@ def test_run_mode_serves_default_and_named_view_documents(
     with TestClient(create_asgi_app(studio.notebook)) as client:
         default = client.get("/")
         named = client.get("/executive/")
-        explicit_index = client.get("/executive/index.html")
         default_document = client.get(_presentation_fallback_url(default.text))
         named_document = client.get(_presentation_fallback_url(named.text))
-        explicit_document = client.get(_presentation_fallback_url(explicit_index.text))
         native_editor = client.get("/_marimo-studio/editor/")
 
     assert default.status_code == 200
@@ -58,8 +56,6 @@ def test_run_mode_serves_default_and_named_view_documents(
     assert (
         "/_marimo-studio/views/executive?marimo_studio_server=" in named_document.text
     )
-    assert explicit_index.url.path == "/executive/"
-    assert explicit_document.text.count('id="marimo-runtime-root"') == 1
     assert native_editor.status_code == 404
 
 
@@ -142,6 +138,7 @@ def test_run_preserved_session_ignores_forged_studio_frame_identity(
     assert "allow-same-origin" not in artifact_sandbox_policy[1:]
 
 
+@pytest.mark.requires_node
 def test_run_wrapper_freezes_the_validated_runtime_selection(
     notebook_path: Path,
 ) -> None:
@@ -477,7 +474,6 @@ def test_run_mode_serves_the_configured_wasm_runtime_and_source(
     assert unavailable.json()["error"] == "runtime-unavailable"
     assert '"runtime":"wasm"' in page.text
     assert dashboard["runtime"]["id"] == "wasm"
-    assert dashboard["runtime"]["available"] == ["server", "wasm"]
     assert dashboard["runtime"]["instance"] == executive["runtime"]["instance"]
     code = dashboard["runtime"]["data"]["code"]
     compile(code, "notebook.py", "exec")

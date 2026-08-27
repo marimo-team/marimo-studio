@@ -58,7 +58,6 @@ def test_export_view_writes_a_complete_static_bundle(
     assert result.output == output
     assert result.files == sum(1 for path in output.rglob("*") if path.is_file())
     assert config["runtime"]["id"] == "wasm"
-    assert config["runtime"]["available"] == ["wasm"]
     assert config["rootUrl"] == "./"
     assert config["publicRootUrl"] == "./"
     assert config["supportUrl"] == "./_marimo-studio/views/dashboard"

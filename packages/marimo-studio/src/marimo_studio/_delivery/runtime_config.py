@@ -90,7 +90,6 @@ class RuntimeConfigInputs:
     views: tuple[str, ...]
     runtime_id: str
     runtime_instance: str
-    available_runtimes: tuple[str, ...]
     runtime_data: Mapping[str, object]
     root_url: str
     public_root_url: str
@@ -121,7 +120,6 @@ class RuntimeConfigInputs:
             "runtime": {
                 "id": self.runtime_id,
                 "instance": self.runtime_instance,
-                "available": list(self.available_runtimes),
                 "data": dict(self.runtime_data),
             },
             "rootUrl": self.root_url,

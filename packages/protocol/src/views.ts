@@ -2,14 +2,13 @@ import { z } from "zod";
 
 import type { JsonValue } from "./runtime-config.ts";
 
-import { providerKeySchema, starterIdSchema, starterSchema } from "./provider-catalog.ts";
+import { starterIdSchema, starterSchema } from "./provider-catalog.ts";
 
 const viewNameSchema = z.string().regex(/^[a-z][a-z0-9-]*$/, "Expected a canonical view name");
 
-export const viewSummarySchema = z
+const viewSummarySchema = z
   .object({
     name: viewNameSchema,
-    provider: providerKeySchema,
   })
   .strict();
 
@@ -61,9 +60,6 @@ export const createdViewSchema = z
   .object({
     schema: z.literal(2),
     name: viewNameSchema,
-    provider: providerKeySchema,
-    studio_url: z.string().min(1),
-    view_url: z.string().min(1),
   })
   .strict();
 export const deletedViewSchema = z
@@ -98,7 +94,6 @@ export const deletedViewSchema = z
 export type ViewList = z.infer<typeof viewListSchema>;
 export type CreatedView = z.infer<typeof createdViewSchema>;
 export type DeletedView = z.infer<typeof deletedViewSchema>;
-export type ViewSummary = z.infer<typeof viewSummarySchema>;
 
 export const parseViewList = (payload: JsonValue): ViewList => {
   return viewListSchema.parse(payload);

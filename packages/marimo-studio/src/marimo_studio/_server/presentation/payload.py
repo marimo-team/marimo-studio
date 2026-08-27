@@ -126,7 +126,7 @@ def build_runtime_config(
     resolved = snapshot.resolved
     view_name = snapshot.view_name
     view = resolved.views[view_name]
-    provider, available = runtimes.select(
+    provider, _ = runtimes.select(
         resolved.workspace,
         context,
         runtime_id,
@@ -174,7 +174,6 @@ def build_runtime_config(
         views=tuple(resolved.workspace.views),
         runtime_id=provider.id,
         runtime_instance=projection.instance,
-        available_runtimes=available,
         runtime_data=projection.data,
         root_url=public_url(context.base_url, "/"),
         public_root_url=public_root_url,

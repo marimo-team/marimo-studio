@@ -37,7 +37,6 @@ test("uses distinct frame generations when randomUUID is unavailable", async () 
       runtime: {
         id: "wasm",
         instance: "wasm-instance",
-        available: ["server", "wasm"],
         data: {},
       },
     }),
@@ -186,7 +185,6 @@ test("opaque WASM frames synchronize controls and navigation through document id
       runtime: {
         id: "wasm",
         instance: "wasm-instance",
-        available: ["server", "wasm"],
         data: {},
       },
     }),
@@ -307,7 +305,6 @@ test("acquires a control endpoint that becomes available after bridge startup", 
       runtime: {
         id: "wasm",
         instance: "wasm-instance",
-        available: ["server", "wasm"],
         data: {},
       },
     }),

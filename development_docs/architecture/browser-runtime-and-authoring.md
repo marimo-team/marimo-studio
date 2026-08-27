@@ -61,7 +61,7 @@ inside one immutable public file tree.
 Runtime configuration carries:
 
 - Presentation revision, projection revision, and selected view
-- Available and selected runtime
+- Selected runtime and runtime instance
 - Runtime-specific connection or worker data
 - Precomputed projection targets and dependency closures
 - Artifact mount declarations
@@ -69,6 +69,8 @@ Runtime configuration carries:
 - Projection diagnostics
 - Marimo app, user, and override configuration
 - Development and mode state
+
+Studio bootstrap carries the runtime catalog used by authoring controls.
 
 `_delivery/runtime_config.py` serializes this record for live Server and static
 export delivery. The shared JSON fixture is parsed by the Zod protocol tests.

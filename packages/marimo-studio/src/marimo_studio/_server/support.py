@@ -249,9 +249,7 @@ async def support_response(
         return await create_view_response(
             request,
             definition,
-            context.base_url,
             context.server_token,
-            context.routing_query,
         )
     if isinstance(lifecycle, NeedsView):
         return _lifecycle_error_response(lifecycle.error)

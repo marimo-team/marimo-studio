@@ -7,7 +7,6 @@
   "runtime": {
     "id": "server",
     "instance": "server-instance",
-    "available": ["server", "wasm"],
     "data": {
       "url": "/proxy/app/"
     }

@@ -18,7 +18,7 @@ const config = (instance: string): RuntimeConfig => ({
   revision: "revision-a",
   view: "dashboard",
   views: ["dashboard"],
-  runtime: { id: "test", instance, available: ["test"], data: {} },
+  runtime: { id: "test", instance, data: {} },
   rootUrl: "/",
   publicRootUrl: "/",
   documentRootUrl: "/",

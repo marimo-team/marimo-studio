@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from marimo_studio._delivery.runtime_config import (
     RuntimeConfigInputs,
     runtime_projection_revision,
@@ -19,6 +21,8 @@ _FIXTURE = (
     / "runtime-config.json"
 )
 
+pytestmark = pytest.mark.supported_python
+
 
 def test_runtime_config_matches_the_browser_protocol_fixture() -> None:
     inputs = RuntimeConfigInputs(
@@ -26,7 +30,6 @@ def test_runtime_config_matches_the_browser_protocol_fixture() -> None:
         views=("dashboard", "executive"),
         runtime_id="server",
         runtime_instance="server-instance",
-        available_runtimes=("server", "wasm"),
         runtime_data={"url": "/proxy/app/"},
         root_url="/proxy/app/",
         public_root_url="/proxy/app/",

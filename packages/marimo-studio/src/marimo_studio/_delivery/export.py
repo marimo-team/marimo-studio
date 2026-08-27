@@ -194,7 +194,6 @@ def _runtime_config(
         views=(view_name,),
         runtime_id=RUNTIME_ID,
         runtime_instance=projection.instance,
-        available_runtimes=(RUNTIME_ID,),
         runtime_data=projection.runtime_data(),
         root_url=root_prefix,
         public_root_url=root_prefix,

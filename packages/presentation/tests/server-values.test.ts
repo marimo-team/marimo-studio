@@ -31,7 +31,6 @@ const config = {
   runtime: {
     id: "server",
     instance: "server-instance",
-    available: ["server", "wasm"],
     data: {
       fileKey: "/workspace/notebook.py",
       capabilityToken: "presentation-capability",
@@ -86,7 +85,7 @@ test("value reads send exact selectors through the configured base URL", async (
     return Promise.resolve(Response.json({ values: { "context.label": "ready" }, errors: {} }));
   };
   try {
-    const result = await readServerValues("session-id", {
+    const result = await readServerValues({
       revision: "presentation-revision",
       projections: [projectionRequest("context.label", "value")],
     });
@@ -124,7 +123,7 @@ test("terminal value failures do not retry", async () => {
   try {
     await assert.rejects(
       () =>
-        readServerValuesWithRetry("session", {
+        readServerValuesWithRetry({
           revision: "presentation-revision",
           projections: [projectionRequest("context.label", "value")],
         }),
@@ -163,13 +162,13 @@ test("a stale live binding requests a presentation refresh", async () => {
   });
   try {
     await assert.rejects(() =>
-      readServerValues("session", {
+      readServerValues({
         revision: "presentation-revision",
         projections: [projectionRequest("context.label", "value")],
       }),
     );
     await assert.rejects(() =>
-      readServerValues("session", {
+      readServerValues({
         revision: "presentation-revision",
         projections: [projectionRequest("context.label", "value")],
       }),

@@ -30,7 +30,6 @@ const baseRuntimeConfig = {
   runtime: {
     id: "server",
     instance: "server-instance",
-    available: ["server", "wasm"],
     data: {
       fileKey: "/workspace/notebook.py",
       capabilityToken: "presentation-capability",
@@ -64,7 +63,6 @@ const wasmRuntimeConfig = (): RuntimeConfig => ({
   runtime: {
     id: "wasm",
     instance: "wasm-instance",
-    available: ["server", "wasm"],
     data: {
       code: "pass",
       filename: "notebook.py",

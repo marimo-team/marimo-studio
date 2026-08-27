@@ -22,24 +22,12 @@ test("view responses validate list, create, and delete envelopes", () => {
     schema: 1,
     default_view: "dashboard",
     default_starter: "marimo-studio/vanilla:default",
-    views: [
-      {
-        name: "dashboard",
-        provider: "marimo-studio/vanilla",
-      },
-      {
-        name: "report",
-        provider: "marimo-studio/vanilla",
-      },
-    ],
+    views: [{ name: "dashboard" }, { name: "report" }],
     starters: [componentStarter, starter],
   };
   const created: CreatedView = {
     schema: 2,
     name: "report",
-    provider: "marimo-studio/vanilla",
-    studio_url: "/studio/report/",
-    view_url: "/report/",
   };
   const deleted = {
     ...views,

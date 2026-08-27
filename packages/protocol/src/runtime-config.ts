@@ -53,14 +53,9 @@ export const runtimeEnvelopeSchema = z
   .object({
     id: runtimeIdSchema,
     instance: z.string().min(1),
-    available: z.array(runtimeIdSchema).min(1),
     data: ownRecordSchema(z.string(), z.unknown()),
   })
-  .strict()
-  .refine((runtime) => runtime.available.includes(runtime.id), {
-    message: "The active runtime must be present in the available runtime list.",
-    path: ["id"],
-  });
+  .strict();
 
 export type RuntimeEnvelope = z.infer<typeof runtimeEnvelopeSchema>;
 

@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from functools import partial
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
 
 from marimo_studio._artifacts.inputs import project_input_state
-from marimo_studio._delivery.urls import studio_url, view_url, with_query
 from marimo_studio._processes.ownership import (
     propagate_cancellation,
     settle_ownership,
@@ -74,9 +73,7 @@ _STUDIO_MUTATION_JSON_MAX_BYTES = 64 * 1024
 async def create_view_response(
     request: Request,
     definition: StudioDefinition,
-    base_url: str,
     server_token: str,
-    routing_query: Sequence[tuple[str, str]] = (),
 ) -> Response:
     """Create a named view from an authenticated Studio definition."""
     if request.method != "POST":
@@ -121,7 +118,7 @@ async def create_view_response(
             headers=NO_STORE,
         )
     try:
-        result = await run_provider_operation(
+        await run_provider_operation(
             partial(
                 create_view,
                 definition.notebook,
@@ -135,9 +132,6 @@ async def create_view_response(
         {
             "schema": 2,
             "name": name,
-            "provider": result.provider,
-            "studio_url": with_query(studio_url(base_url, name), routing_query),
-            "view_url": with_query(view_url(base_url, name), routing_query),
         },
         status_code=201,
         headers=NO_STORE,
@@ -215,13 +209,7 @@ def view_inventory_payload(
         "default_view": definition.default_view,
         "default_starter": DEFAULT_STARTER_ID,
         "views": (
-            [
-                {
-                    "name": project.name,
-                    "provider": project.provider,
-                }
-                for project in workspace.views.values()
-            ]
+            [{"name": project.name} for project in workspace.views.values()]
             if workspace is not None
             else []
         ),
