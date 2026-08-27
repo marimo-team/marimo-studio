@@ -102,6 +102,12 @@
   min-width: 6.25rem;
 }
 
+.studio-runtime-trigger[aria-disabled="true"],
+.studio-runtime-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .studio-workspace-popover,
 .studio-runtime-popover {
   left: auto;
@@ -140,13 +146,13 @@
 @keyframes studio-runtime-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--studio-connecting) 42%, transparent);
     opacity: 0.72;
+    transform: scale(0.88);
   }
 
   50% {
-    box-shadow: 0 0 0 0.22rem transparent;
     opacity: 1;
+    transform: scale(1);
   }
 }
 
@@ -175,7 +181,7 @@
   text-align: left;
 }
 
-.studio-runtime-option:hover,
+.studio-runtime-option:not(:disabled):hover,
 .studio-runtime-option:focus-visible,
 .studio-runtime-option[aria-pressed="true"] {
   background: var(--studio-subtle);
@@ -224,7 +230,7 @@
   display: grid;
 }
 
-.studio-overflow-modes button:not([data-studio-mode="code"]) {
+.studio-overflow-modes button:not([data-studio-mode="source"]) {
   display: none;
 }
 

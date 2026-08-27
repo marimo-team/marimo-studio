@@ -9,13 +9,13 @@ export interface ModeItem {
 
 export const PRIMARY_MODES: readonly ModeItem[] = [
   { label: "Notebook", mode: "notebook" },
-  { label: "Build", mode: "split" },
+  { label: "Develop", mode: "build" },
   { label: "Preview", mode: "preview" },
 ];
 
 export const OVERFLOW_MODES: readonly ModeItem[] = [
   ...PRIMARY_MODES,
-  { label: "HTML & CSS", mode: "code" },
+  { label: "Source", mode: "source" },
 ];
 
 export type WorkspaceAction = Parameters<LayoutController["applyAction"]>[0];
@@ -35,18 +35,18 @@ export const WORKSPACE_ACTION_GROUPS: readonly (readonly {
 ];
 
 const GROUPED_MODES = {
-  code: "split",
+  build: "build",
   notebook: "notebook",
   preview: "preview",
-  split: "split",
-  workspace: "split",
+  source: "build",
+  workspace: "build",
 } as const satisfies Readonly<Record<StudioMode, ModeItem["mode"] | undefined>>;
 
 const EXACT_MODES = {
-  code: "code",
+  build: "build",
   notebook: "notebook",
   preview: "preview",
-  split: "split",
+  source: "source",
   workspace: undefined,
 } as const satisfies Readonly<Record<StudioMode, ModeItem["mode"] | undefined>>;
 

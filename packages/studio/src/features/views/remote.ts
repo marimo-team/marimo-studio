@@ -11,8 +11,8 @@ import {
 } from "@marimo-studio/protocol/views";
 
 export interface ViewRemote {
-  list(): Promise<ViewList>;
-  create(name: string): Promise<CreatedView>;
+  list(signal?: AbortSignal): Promise<ViewList>;
+  create(name: string, starter: string): Promise<CreatedView>;
   remove(name: string): Promise<DeletedView>;
 }
 
@@ -28,22 +28,22 @@ const errorMessage = async (response: Response, fallback: string): Promise<strin
 };
 
 export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRemote => ({
-  async list() {
-    const response = await fetch(viewsUrl, { cache: "no-store" });
+  async list(signal) {
+    const response = await fetch(viewsUrl, { cache: "no-store", signal });
     if (!response.ok) {
       throw new Error(await errorMessage(response, "Could not load views"));
     }
     return parseViewList(await responseJson(response));
   },
 
-  async create(name) {
+  async create(name, starter) {
     const response = await fetch(viewsUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Marimo-Server-Token": serverToken,
       },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, starter }),
     });
     if (!response.ok) {
       throw new Error(await errorMessage(response, "Could not create view"));

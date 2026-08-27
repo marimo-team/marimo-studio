@@ -26,7 +26,7 @@ export const RemoveViewConfirmation = ({
   >
     <strong id="studio-remove-view-title">Remove view?</strong>
     <p className="studio-remove-view-detail">
-      This deletes the HTML, CSS, and static files for <strong>{view}</strong>.
+      This deletes the authored source and published artifacts for <strong>{view}</strong>.
     </p>
     {error ? (
       <p className="studio-form-message" data-state="error" role="alert">
@@ -34,7 +34,7 @@ export const RemoveViewConfirmation = ({
       </p>
     ) : null}
     <div className="studio-form-actions">
-      <button type="button" className="studio-control" onClick={onCancel}>
+      <button type="button" className="studio-control" disabled={busy} onClick={onCancel}>
         Cancel
       </button>
       <button

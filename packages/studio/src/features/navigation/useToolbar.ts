@@ -4,6 +4,7 @@ import { useCallback } from "react";
 
 import type { StudioBrand } from "../../shared/theme.tsx";
 import type { PreviewDeck } from "../preview/deck.ts";
+import type { ViewController } from "../views/controller.ts";
 import type { LayoutController } from "../workspace/controller.ts";
 import type { StudioMode, Surface } from "../workspace/schema.ts";
 
@@ -18,6 +19,7 @@ export const useToolbar = ({
   compactSurfaces,
   layout,
   preview,
+  views,
 }: {
   bootstrap: StudioBootstrap;
   brand: StudioBrand;
@@ -25,10 +27,12 @@ export const useToolbar = ({
   compactSurfaces: readonly Surface[];
   layout: LayoutController;
   preview: PreviewDeck;
+  views: ViewController;
 }) => {
   const theme = useStudioTheme();
   const layoutSnapshot = useControllerSnapshot(layout);
   const previewSnapshot = useControllerSnapshot(preview);
+  const viewSnapshot = useControllerSnapshot(views);
   const runtime = bootstrap.runtimes.find((candidate) => candidate.id === previewSnapshot.runtime);
   if (!runtime) {
     throw new Error(`Preview runtime ${JSON.stringify(previewSnapshot.runtime)} is unavailable`);
@@ -43,7 +47,14 @@ export const useToolbar = ({
     (action: Parameters<LayoutController["applyAction"]>[0]) => layout.applyAction(action),
     [layout],
   );
-  const switchRuntime = useCallback((runtime: string) => preview.switchRuntime(runtime), [preview]);
+  const switchRuntime = useCallback(
+    (runtime: string) => {
+      if (views.getSnapshot().selecting === undefined) {
+        preview.switchRuntime(runtime);
+      }
+    },
+    [preview, views],
+  );
 
   return {
     actions: { applyWorkspaceAction, selectCompact, selectMode, switchRuntime },
@@ -57,6 +68,7 @@ export const useToolbar = ({
     previewState,
     previewVisible: previewIsVisible(compact, layoutSnapshot.compact, compactSurfaces),
     runtime,
+    runtimeDisabled: viewSnapshot.selecting !== undefined,
     runtimes: bootstrap.runtimes,
     status: previewState.status,
   };

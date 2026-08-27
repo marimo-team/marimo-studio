@@ -31,6 +31,7 @@ export const WorkspaceMenu = ({
   previewUrl,
   previewVisible,
   runtime,
+  runtimeDisabled,
   runtimes,
   status,
   onWorkspaceAction,
@@ -42,6 +43,7 @@ export const WorkspaceMenu = ({
   previewUrl: string;
   previewVisible: boolean;
   runtime: StudioRuntime;
+  runtimeDisabled: boolean;
   runtimes: readonly StudioRuntime[];
   status: PreviewStatus;
   onWorkspaceAction: (action: WorkspaceAction) => void;
@@ -63,12 +65,17 @@ export const WorkspaceMenu = ({
       <div className="studio-overflow-preview" hidden={!previewVisible}>
         <strong className="studio-menu-heading">Preview runtime</strong>
         <RuntimeStatus status={status} />
-        <RuntimeOptions current={runtime.id} runtimes={runtimes} onSelect={onRuntimeSelect} />
+        <RuntimeOptions
+          current={runtime.id}
+          disabled={runtimeDisabled}
+          runtimes={runtimes}
+          onSelect={onRuntimeSelect}
+        />
         <a
           className="studio-menu-item studio-overflow-popout"
           href={previewUrl}
           target="_blank"
-          rel="noopener"
+          rel="noopener noreferrer"
         >
           <PopoutIcon />
           <span>Open preview in new tab</span>
