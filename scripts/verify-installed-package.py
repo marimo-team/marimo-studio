@@ -312,8 +312,12 @@ def _verify_views(*, deno: bool) -> None:
                 ("react", "marimo-studio/react:default"),
                 ("svelte", "marimo-studio/svelte:default"),
             ):
-                if not catalog[identity].availability.available:
-                    raise AssertionError(f"Installed {identity} starter is unavailable")
+                availability = catalog[identity].availability
+                if not availability.available:
+                    raise AssertionError(
+                        f"Installed {identity} starter is unavailable: "
+                        f"{availability.reason or 'no reason reported'}"
+                    )
                 view = await workspace.create_view(
                     view_name,
                     starter=catalog[identity],

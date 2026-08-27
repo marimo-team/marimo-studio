@@ -23,6 +23,7 @@ from marimo_studio.view_providers._bundled._deno.cache import ensure_cache_direc
 
 DENO_VERSION = "2.9.5"
 INSTALL_ACTION = "pip install 'marimo-studio[deno]'"
+_AVAILABILITY_TIMEOUT = 15.0
 _SAFE_ENVIRONMENT = frozenset(
     {
         "COMSPEC",
@@ -231,7 +232,7 @@ def _cached_availability(
     try:
         completed = supervisor.run(
             [binary, "--version"],
-            5,
+            _AVAILABILITY_TIMEOUT,
             env=_filtered_environment(),
         )
     except ProcessCleanupError:
@@ -249,9 +250,19 @@ def _cached_availability(
             unregister()
     if cancellation is not None and cancellation.cancelled:
         raise DenoExecutionError("Deno availability check was cancelled")
+    if completed.timed_out:
+        return ProviderAvailability(
+            False,
+            reason=(
+                "Deno version check exceeded its "
+                f"{_AVAILABILITY_TIMEOUT:g} second limit"
+            ),
+            action=INSTALL_ACTION,
+        )
     stdout = completed.stdout.decode(errors="replace")
     first_line = stdout.splitlines()[0] if stdout else ""
-    version = first_line.removeprefix("deno ").split()[0]
+    fields = first_line.removeprefix("deno ").split()
+    version = fields[0] if fields else ""
     if completed.returncode != 0 or version != expected_version:
         found = version or "unknown"
         return ProviderAvailability(

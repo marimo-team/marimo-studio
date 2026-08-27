@@ -81,16 +81,16 @@ def test_deno_availability_is_cached_by_binary_identity(
 ) -> None:
     binary = tmp_path / "deno"
     binary.write_bytes(b"deno")
-    calls: list[list[str]] = []
+    calls: list[tuple[list[str], float]] = []
 
     class Supervisor:
         def run(
             self,
             command: list[str],
-            _timeout: float,
+            timeout: float,
             **_kwargs: Any,
         ) -> ProcessResult:
-            calls.append(command)
+            calls.append((command, timeout))
             return ProcessResult(0, b"deno 2.9.5\n", b"")
 
     monkeypatch.setattr(_deno_runtime, "deno_binary", lambda: str(binary))
@@ -102,9 +102,31 @@ def test_deno_availability_is_cached_by_binary_identity(
     binary.write_bytes(b"deno-updated")
     assert _deno.deno_availability().available
     assert calls == [
-        [str(binary.resolve()), "--version"],
-        [str(binary.resolve()), "--version"],
+        ([str(binary.resolve()), "--version"], 15.0),
+        ([str(binary.resolve()), "--version"], 15.0),
     ]
+    _deno_runtime._cached_availability.cache_clear()
+
+
+def test_deno_availability_reports_a_cold_start_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binary = tmp_path / "deno"
+    binary.write_bytes(b"deno")
+
+    class Supervisor:
+        def run(self, *_args: object, **_kwargs: object) -> ProcessResult:
+            return ProcessResult(-15, b"", b"", timed_out=True)
+
+    monkeypatch.setattr(_deno_runtime, "deno_binary", lambda: str(binary))
+    monkeypatch.setattr(_deno_runtime, "ProcessSupervisor", Supervisor)
+    _deno_runtime._cached_availability.cache_clear()
+
+    availability = _deno.deno_availability()
+
+    assert not availability.available
+    assert availability.reason == "Deno version check exceeded its 15 second limit"
     _deno_runtime._cached_availability.cache_clear()
 
 
