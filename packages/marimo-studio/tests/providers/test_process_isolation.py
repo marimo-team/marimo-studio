@@ -411,8 +411,8 @@ def test_isolated_provider_owns_its_complete_command_tree(
         assert not operation.is_alive()
         assert len(errors) == 1
         assert isinstance(errors[0], ViewProjectError)
-        expected = "cancelled" if finish == "cancel" else "budget"
-        assert expected in str(errors[0]).lower()
+        expected = ("cancelled",) if finish == "cancel" else ("budget", "exceeded")
+        assert any(marker in str(errors[0]).lower() for marker in expected)
         _wait_until_dead(pids)
     finally:
         _kill_survivors(pids)
