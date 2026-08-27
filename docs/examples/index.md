@@ -1,29 +1,27 @@
 ---
 title: Examples
-description: Run a reactive revenue forecast and a three-view collection research workflow.
+description: Run one National Gallery of Art notebook through vanilla, React, and Svelte views.
 ---
 
 # Examples
 
-The included examples keep source data, transformations, calculations,
-controls, and domain decisions in Marimo notebooks. Their Studio views provide
-separate page structure, browser behavior, and routes for each audience.
+`examples/nga.py` analyzes National Gallery of Art Open Data through one
+reactive Marimo notebook. Three Studio views present that notebook as a
+collection brief, an artwork browser, and an editorial story.
 
-## Revenue forecast <Badge type="info" text="One view" />
+## NGA collection explorer <Badge type="tip" text="Three views" />
 
-One notebook powers a responsive dashboard with scenario controls, forecast
-measures, interpretation, quarterly detail, native Marimo output, and a small
-JavaScript module.
+The example exercises each built-in authoring option:
 
-[Run the revenue forecast](revenue-forecast.md)
+- Vanilla HTML, CSS, and JavaScript
+- React TSX bundled by Deno
+- Svelte components built by Vite running on Deno
 
-## Collection research <Badge type="tip" text="Three views" />
+Each provider discovers its source documents and mount declarations. Studio
+resolves mounted cell, output, and value targets against the notebook's
+symbolic graph.
 
-One notebook powers three views for corpus discovery, visual study, and packet
-preparation. Filters, provenance, and ordered selections move through the
-workflow in the same Marimo session.
-
-[Run the collection research workflow](collection-research.md)
+[Run the NGA collection explorer](nga.md)
 
 Use [Create your first view](../guide/getting-started.md) to apply the same
 model to an existing notebook.
