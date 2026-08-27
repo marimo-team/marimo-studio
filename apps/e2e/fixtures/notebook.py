@@ -1,13 +1,17 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "anywidget==0.9.21",
-#   "marimo-studio",
+#     "anywidget==0.9.21",
+#     "marimo-studio"
 # ]
 #
 # [tool.marimo-studio]
 # default = "dashboard"
 # preserve_session = false
+# runtime = "server"
+# runtimes = ["server", "wasm"]
+#
+# [tool.marimo-studio.cells]
 # ///
 
 import marimo
@@ -25,7 +29,8 @@ def imports():
             self.control = None
 
     mixed_control_cache = MixedControlCache()
-    return mixed_control_cache, mo
+    query_params = mo.query_params()
+    return mixed_control_cache, mo, query_params
 
 
 @app.cell
@@ -41,8 +46,15 @@ def controls(mo):
         show_value=True,
         label="Scale",
     )
-    mo.vstack([scale, fail_outputs])
-    return fail_outputs, scale
+    slow_scale = mo.ui.slider(
+        start=1,
+        stop=3,
+        value=1,
+        show_value=True,
+        label="Slow scale",
+    )
+    mo.vstack([scale, slow_scale, fail_outputs])
+    return fail_outputs, scale, slow_scale
 
 
 @app.cell
@@ -54,26 +66,39 @@ def metric(scale):
 
 
 @app.cell
+def slow_metric(slow_scale):
+    import time
+
+    if slow_scale.value == 3:
+        time.sleep(1)
+    slow_metric = slow_scale.value * 7
+    slow_metric
+    return (slow_metric,)
+
+
+@app.cell
 def counter_widget():
     import anywidget
     import traitlets
 
     class CounterWidget(anywidget.AnyWidget):
         _esm = """
-        export function render({ model, el }) {
-          const button = document.createElement("button");
-          const update = () => {
-            button.textContent = `Widget count: ${model.get("value")}`;
-          };
-          button.addEventListener("click", () => {
-            model.set("value", model.get("value") + 1);
-            model.save_changes();
-          });
-          model.on("change:value", update);
-          update();
-          el.append(button);
-          return () => model.off("change:value", update);
-        }
+        export default {
+          render({ model, el }) {
+            const button = document.createElement("button");
+            const update = () => {
+              button.textContent = `Widget count: ${model.get("value")}`;
+            };
+            button.addEventListener("click", () => {
+              model.set("value", model.get("value") + 1);
+              model.save_changes();
+            });
+            model.on("change:value", update);
+            update();
+            el.append(button);
+            return () => model.off("change:value", update);
+          },
+        };
         """
         value = traitlets.Int(7).tag(sync=True)
 
