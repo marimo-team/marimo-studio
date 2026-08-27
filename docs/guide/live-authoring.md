@@ -1,153 +1,93 @@
 ---
-title: Author with the live workspace
-description: Move among the notebook, source, and preview while keeping runtime state and file changes in view.
+title: Live authoring
+description: Edit notebook and frontend source, switch views, build, and compare runtimes in one Marimo session.
 ---
 
-# Author with the live workspace
-
-Studio keeps the Marimo notebook, view source, and rendered page in one
-workspace. Use the notebook for calculations and controls, edit the view as
-ordinary web files, and inspect the result against the same live analysis.
+# Live authoring
 
 Open a configured notebook:
 
 ```console
-uv run --with marimo-studio marimo edit analysis.py --sandbox
+uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-## Choose the surface for the current task
+Opening a configured Studio workspace starts the notebook after the native
+editor session connects. Preview stays in `connecting` until that first run
+finishes.
 
-The main modes change the arrangement while keeping the underlying work
-available.
+Studio adds four workspace modes:
 
-| Mode           | What you see                                      | Use it for                                                              |
-| -------------- | ------------------------------------------------- | ----------------------------------------------------------------------- |
-| **Notebook**   | The native Marimo editor                          | Data access, transformations, metrics, controls, and reactive debugging |
-| **Build**      | Notebook and selected preview side by side        | Connecting notebook behavior to the audience-facing page                |
-| **Preview**    | The selected view at the available workspace size | Reading, interaction, and responsive review                             |
-| **HTML & CSS** | `index.html`, `app.css`, and the preview          | Page structure, styling, and fast source feedback                       |
+- **Notebook** focuses the Marimo editor.
+- **Develop** shows notebook, Source, and Preview together.
+- **Preview** focuses the selected rendered view.
+- **Source** focuses frontend documents.
 
-Open the workspace menu to arrange the notebook, source, and preview panes.
-Drag the dividers to choose their proportions. Studio remembers the layout for
-each view in the current browser. At narrow sizes, switch among the available
-surfaces while keeping the same saved arrangement for a larger window.
+The selected notebook kernel remains active while modes and views change.
 
-Studio keeps the notebook frame and prepared preview runtimes mounted while
-you move among modes. A mode change therefore preserves the live kernel,
-control state, widget models, and browser state owned by each runtime.
+## Edit source
 
-## Edit in Studio or your editor
+Source tabs come from provider inspection. Each document reports its language
+and `edit` or `read` access. Studio remembers the active document for each view.
 
-Open **HTML & CSS** to edit `index.html` and `app.css` in the browser. Studio
-saves after a short pause and reports whether the active file is saving,
-saved, changed on disk, in conflict, or in error.
+Writes use file ETags. When another browser or editor saves first, Studio shows
+the disk content and keeps the exact local buffer. Reload, copy, or retry after
+reviewing the conflict.
 
-The same files remain available to your regular editor:
+## Build
 
-```text
-__marimo__/
-  studio/
-    analysis/
-      dashboard/
-        index.html
-        app.css
-        app.js
+Source changes queue one development build for the latest view generation.
+Several browser windows share that publication work. Obsolete generations are
+coalesced.
+
+A successful build commits the complete document, styles, runtime config, and
+mount preparation together. A failed build leaves the previous page intact and
+shows the diagnostic beside Source.
+
+```console
+uvx marimo-studio view build analysis.py --name dashboard
 ```
 
-An external save appears in the Studio source editor and preview. When the
-browser and disk both changed from the same earlier revision, Studio keeps
-both versions and asks you to choose:
+## Switch views
 
-| Action        | Result                                                   |
-| ------------- | -------------------------------------------------------- |
-| **Compare**   | Show the browser version beside the current disk version |
-| **Use disk**  | Replace the browser buffer with the external edit        |
-| **Keep mine** | Save the browser buffer against the latest disk revision |
+The view selection transaction:
 
-Resolve the conflict before switching views or closing the workspace. This
-keeps an external editor, a coding agent, and the browser from silently
-overwriting one another.
+1. Flushes pending source.
+2. Synchronizes the notebook query.
+3. Prepares the target preview.
+4. Commits the selected view.
+5. Hydrates the target Source session.
+6. Updates route, layout, and focus.
 
-## See each save at the right scope
+A newer selection supersedes older work. Returning to a warm, non-evicted
+preview frame reuses the current runtime session without a document navigation.
 
-Studio refreshes the smallest page boundary that can apply a source change
-correctly.
+## Compare runtimes
 
-| Change                                 | What you observe                                                                       |
-| -------------------------------------- | -------------------------------------------------------------------------------------- |
-| `app.css`                              | The current page styles update while projections and runtime state remain mounted      |
-| Script-free `index.html`               | The authored `#app-shell` is replaced around the mounted Marimo results                |
-| `index.html` with executable scripts   | The view document reloads so the browser evaluates the authored script lifecycle again |
-| A JavaScript module or imported module | The view document reloads and reads the new module graph                               |
-| A notebook cell                        | Marimo reruns its reactive dependents and updates affected projections                 |
+Use the runtime selector to compare the Python-backed Server runtime with a
+compatible browser-worker execution. Studio keeps a bounded prepared-frame
+cache for each runtime. Up to three recent Server views stay warm with the
+active Python-backed notebook session, while WebAssembly retains its selected
+view's worker frame.
 
-Each presentation refresh uses one complete source revision. If the notebook,
-view files, or runtime configuration are still settling, the preview waits and
-retries instead of presenting a mixed page.
+Preview runtime diagnostics use `connecting`, `synchronizing`, `ready`,
+`degraded`, and `failed`. Details appear beside the state.
 
-::: tip Keep interactive state during layout work
-Start with a script-free `index.html` when the page needs frequent structural
-changes around controls, plots, or widgets. Add authored scripts when the view
-needs browser behavior that justifies a full document lifecycle on save.
-:::
+## Use several browser windows
 
-## Compare execution environments
+Windows share authored files and published artifacts. Each window keeps its own
+session, selected view, layout, and unsaved source buffer. Conflicting saves
+produce one accepted ETag and one explicit conflict.
 
-Choose a preview runtime from the Studio toolbar.
+## Validate the current result
 
-| Runtime         | What it gives you during authoring                                                                                                         |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Server**      | The selected view joins the native editor's Python session, including its packages, data access, controls, and outputs                     |
-| **WebAssembly** | The notebook runs again in a browser worker, which previews the same view under the constraints used by browser delivery and static export |
-
-Studio prepares configured preview runtimes so switching runtimes preserves
-the state that belongs to each one. This makes it practical to compare a
-server-backed page with its browser-executed version during the same authoring
-session.
-
-Native Marimo controls can synchronize JSON-compatible values between the
-editor and prepared previews when the runtimes define matching controls in the
-same cell order. Each runtime then evaluates its own reactive graph. Anywidget
-models and Python objects remain with the runtime that created them.
-
-[Runtime behavior](../reference/runtimes.md) defines the complete server,
-WebAssembly, run-mode, and static-export contracts.
-
-## Keep links and query-driven state aligned
-
-View links work in both the workspace and the finished application:
-
-```html
-<a href="../executive/?region=emea">Open the EMEA brief</a>
+```console
+uvx marimo-studio validate analysis.py --view dashboard --level browser \
+  --server http://localhost:2718 \
+  --browser-client CLIENT_ID
 ```
 
-Studio opens the target view and preserves the active workspace mode. Public
-query parameters follow the notebook editor and active preview, so code that
-uses Marimo query parameters observes the same audience selection across the
-authoring surfaces.
+Exercise relevant controls and dynamic mounts before requesting browser
+evidence.
 
-Internal Studio coordination parameters stay out of the public query exposed
-to notebook code. Treat the remaining query string as part of the view's
-shareable state and test direct links as well as in-page navigation.
-
-## Work safely with authored scripts
-
-View HTML and JavaScript run as application code on the same origin as the
-Marimo session. Give source-editing access to people and agents who are trusted
-with the notebook, its credentials, and its data. Review third-party modules
-and network-loaded assets before using them in a deployed view.
-
-For a browser-facing deliverable, check the view in the environment where it
-will run:
-
-1. Change the controls that drive the main decision.
-2. Switch every configured view and follow its direct links.
-3. Compare Server and WebAssembly when both are delivery targets.
-4. Exercise tables, plots, downloads, controls, and anywidgets.
-5. Reload the page and verify the configured session behavior.
-6. Inspect narrow and wide layouts, keyboard focus, failed requests, and the
-   browser console.
-
-Continue with [Use notebook results](notebook-results.md) for projection
-choices, [Use HTML, CSS, and JavaScript](web-platform.md) for authored page
-APIs, or [Run, export, and share](run-and-share.md) for delivery.
+[Views](views.md) covers view creation and removal. [Notebook
+results](notebook-results.md) covers mount behavior.

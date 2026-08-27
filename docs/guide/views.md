@@ -1,116 +1,73 @@
 ---
-title: Create and manage views
-description: Give several audiences their own pages while reusing one Marimo notebook.
+title: Work with several views
+description: Give each audience its own page while reusing one Marimo notebook.
 ---
 
-# Create and manage views
+# Work with several views
 
-Create one view for each audience or task that needs a distinct page. Views
-reuse the notebook's cells and aliases while owning separate HTML, CSS,
-modules, assets, and routes. The notebook remains the shared owner of data,
-calculations, controls, and domain decisions.
-
-## Plan each view around one job
-
-Start with the reader's first question, then choose the notebook results that
-answer it.
-
-| View         | Reader job                           | Likely content                                        |
-| ------------ | ------------------------------------ | ----------------------------------------------------- |
-| `dashboard`  | Explore and adjust the current model | Controls, detailed measures, plots, and tables        |
-| `operations` | Find conditions that require action  | Exceptions, thresholds, owners, and next steps        |
-| `executive`  | Review the outcome and decision      | Headline measures, material risks, and recommendation |
-
-The [collection research example](../examples/collection-research.md) uses one
-notebook for corpus discovery, visual study, and packet preparation.
-
-## Add a view
-
-In Studio, open the view menu and choose **New view**. Enter a name such as
-`operations` or `executive`.
-
-The equivalent terminal command is:
+One notebook can serve several named views. Each view has its own route,
+frontend source, interactions, and publication.
 
 ```console
-uvx marimo-studio view add analysis.py --name executive
+marimo-studio view create analysis.py --name dashboard
+marimo-studio view create analysis.py --name report
 ```
 
-A view name starts with a lowercase letter and contains lowercase letters,
-numbers, or hyphens. The new page starts with every notebook cell in source
-order.
+The notebook's `[tool.marimo-studio]` table records the default view. Each view
+directory records its provider in `view.toml`.
 
-Inspect the configured views and current default:
+## Switch views
+
+Use the view menu in Studio. Switching flushes pending source, prepares the
+target preview, then commits the selected view and Source session together.
+Rapid selections keep the newest request.
+
+The selected notebook kernel stays active. Studio keeps a bounded prepared-frame
+cache for each runtime. Up to three recent Server views stay warm, while
+WebAssembly retains its selected view's worker frame. A warm Server switch
+reuses the existing notebook session.
+
+## Use different frontends
+
+Each view can choose its own installed starter or extension for the audience:
 
 ```console
-uvx marimo-studio overview analysis.py
+marimo-studio starter list
+marimo-studio view create analysis.py --name report --starter STARTER
 ```
 
-## Switch between views
+The notebook contract remains the same across views. A named cell, output, or
+value target has one analytical meaning even when each page lays it out
+differently.
 
-Choose a view from the Studio toolbar. Studio keeps the notebook editor and
-prepared preview runtimes mounted while the selected page changes.
+## Build one view
 
-Link directly to another authored view with a relative URL:
-
-```html
-<a href="../executive/">Open the executive brief</a>
+```console
+marimo-studio view build analysis.py --name report
 ```
 
-In the Studio workspace, the link opens the target view while preserving the
-current workspace mode. In run mode, the same link opens the target view in
-the current browser session.
+Builds are view-local. A failed report build does not replace its last valid
+page or affect another view.
 
-Public query parameters travel with the link and remain aligned between the
-notebook editor and selected preview. This lets one view link to a filtered or
-otherwise parameterized state in another view.
+## Choose the default
 
-::: info View routes
-The configured `default` view opens at `/`. Every named view is also available
-at `/<view-name>/`.
-:::
+Set `default` in notebook metadata or project configuration:
+
+```toml
+[tool.marimo-studio]
+default = "dashboard"
+```
+
+The default view is served at `/`. Other views use named routes.
 
 ## Remove a view
 
-Open the view menu, choose **Remove view**, and confirm the named view. Studio
-first saves the active source and prepares a successor view. It retargets the
-preview and source stream before deleting the old directory. If the removed
-view was the default, Studio makes the first remaining view the new default.
-
-The equivalent terminal command prompts before deleting the view directory:
-
 ```console
-uvx marimo-studio view remove analysis.py --name executive
+marimo-studio view remove analysis.py --name report
 ```
 
-Pass `--yes` after reviewing the target when a script performs the removal.
+Removal deletes the view directory after confirmation. It leaves Python
+dependencies unchanged. A configured notebook keeps at least one view.
 
-A configured notebook retains at least one view.
-
-## Commit view source
-
-The authored files for `analysis.py` live under:
-
-```text
-__marimo__/studio/analysis/<view-name>/
-```
-
-Commit this directory with the notebook. If the repository broadly ignores
-`__marimo__`, keep the Studio source with targeted rules:
-
-::: details Keep Studio source in a broadly ignored `__marimo__` directory
-
-```text
-!**/__marimo__/
-**/__marimo__/*
-!**/__marimo__/studio/
-!**/__marimo__/studio/**
-```
-
-:::
-
-[Notebook configuration](../reference/configuration.md) defines the default
-view and runtime. [Use notebook results](notebook-results.md) covers the three
-projection forms. [Author with the live workspace](live-authoring.md) covers
-view switching, source synchronization, and saved layouts. [Use HTML, CSS, and
-JavaScript](web-platform.md) covers styling, modules, assets, and loading
-states.
+[Frontend authoring](authoring-options.md) covers custom source trees.
+[Notebook results](notebook-results.md) covers the shared notebook contract.

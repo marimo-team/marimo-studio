@@ -1,138 +1,94 @@
 ---
-title: Create your first view
-description: Add a view to a saved Marimo notebook and render one live notebook output.
+title: Getting started
+description: Create, build, and validate a custom view for a saved Marimo notebook.
 ---
 
-# Create your first view
+# Getting started
 
-Add a view to a saved [marimo](https://marimo.io/) notebook, open it beside the
-native editor, and replace the starter page with one focused output.
-
-The commands use `analysis.py` as the notebook path. You need Python 3.10 or
-newer and [uv](https://docs.astral.sh/uv/).
-
-## Add the view
+Start with a saved Marimo notebook:
 
 ```console
-uvx marimo-studio view add analysis.py
+uvx marimo-studio view create analysis.py --name dashboard
 ```
 
-Studio adds its notebook configuration and creates:
+The first view records Studio configuration, the selected provider
+requirement, and managed view metadata in the notebook's PEP 723 block. For a
+notebook owned by a Python project, add `marimo-studio` and any provider extra
+through that project's dependency workflow before creating the view.
+
+The default starter creates:
 
 ```text
-analysis.py
-__marimo__/
-  studio/
-    analysis/
-      dashboard/
-        index.html
-        app.css
+__marimo__/studio/analysis/
+  .gitignore
+  dashboard/
+    view.toml
+    index.html
 ```
 
-The starter document places every notebook cell in source order. This gives
-you a working preview before you choose the final content.
-
-If the notebook already contains `[tool.marimo-studio]` and its view directory
-is empty, open the notebook with `marimo edit`. Studio presents **Create the
-first view** and uses the configured `default` name.
-
-## Open the workspace
+Open the notebook:
 
 ```console
-uv run --with marimo-studio marimo edit analysis.py --sandbox
+uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-Marimo opens its editor beside the selected view. Choose **Build** to keep both
-visible. Open **HTML & CSS** from the workspace menu when you want the view
-source and preview together.
+Choose **Develop** to see notebook code, frontend source, and the rendered view
+together.
 
-Change a notebook control and confirm that the starter view updates. The
-Server preview and editor use the same Python session.
+## Mount a notebook result
 
-The **Notebook**, **Build**, **Preview**, and **HTML & CSS** modes change what
-fills the workspace while keeping the notebook and prepared previews
-available. Arrange and resize the three surfaces from the workspace menu.
-[Author with the live workspace](live-authoring.md) develops this workflow.
+Give a producing Marimo cell a name:
 
-::: info The same notebook runs as the finished view
-Studio uses Marimo's existing application command. After authoring, run
-`uv run --with marimo-studio marimo run analysis.py --sandbox`. The configured
-default view opens at `/`, and each named view has its own route.
-:::
+```python
+@app.cell
+def summary_table(data):
+    table = data.group_by("category").len()
+    table
+    return (table,)
+```
 
-::: details Browse a notebook folder first
+Add the cell to `index.html` inside `#app-shell`:
 
-Pass the folder to Marimo:
+```html
+<marimo-cell name="summary_table"></marimo-cell>
+```
+
+Build the view after editing:
 
 ```console
-uv run --with marimo-studio marimo edit notebooks/ --sandbox
+uvx marimo-studio view build analysis.py --name dashboard
 ```
 
-The root page remains the Marimo notebook gallery. Opening a configured
-notebook enters its Studio workspace. Other notebooks open in the native
-Marimo editor.
-:::
+The build publishes generated files beneath `.artifacts/`. If a later build
+fails, Source shows the diagnostic and the previous valid page stays available.
 
-## Name the output
-
-Inspect cells that end with a displayed result:
+## Validate
 
 ```console
-uvx marimo-studio inspect analysis.py --display
+uvx marimo-studio validate analysis.py --view dashboard --level static
+uvx marimo-studio validate analysis.py --view dashboard --level runtime
 ```
 
-Use a native Marimo cell name when the intended cell already has one. Bind an
-anonymous cell to a stable alias when it does not:
+Runtime validation starts the complete reactive notebook in an isolated
+process and can perform its configured file, network, database, and data
+access. Studio then checks the selected projected results.
+
+Browser validation uses the active Studio server and selected client:
 
 ```console
-uvx marimo-studio bind analysis.py --cell 3 --as summary
+uvx marimo-studio validate analysis.py --view dashboard \
+  --level browser \
+  --server http://localhost:2718
 ```
 
-Replace `3` with the zero-based index reported by `inspect`.
-
-## Place the output
-
-Open `index.html` and replace the contents of `#app-shell`:
-
-```html{9} [index.html]
-<main id="app-shell" class="studio-view grid gap-6">
-  <header>
-    <p class="studio-eyebrow">Quarterly review</p>
-    <h1 class="text-4xl font-semibold tracking-tight">Revenue at a glance</h1>
-  </header>
-
-  <section class="studio-card p-5" aria-labelledby="summary-title">
-    <h2 id="summary-title" class="text-lg font-semibold">Summary</h2>
-    <marimo-cell name="summary"></marimo-cell>
-  </section>
-</main>
-```
-
-Save the file. Studio refreshes the authored shell and mounts the live Marimo
-output under **Summary**. Change a notebook control again and confirm that the
-summary reacts.
-
-## Check the view
-
-Validate the document, cell alias, and value selectors:
+## Run the view
 
 ```console
-uvx marimo-studio check analysis.py
+uvx --with marimo-studio marimo run analysis.py --sandbox
 ```
 
-Run projected cells and resolve projected values before sharing:
+The default view is served at `/`. Named views have their own routes.
 
-```console
-uvx marimo-studio check analysis.py --runtime
-```
-
-::: warning Runtime checks execute notebook code
-The runtime check executes notebook code. It can perform the same file,
-network, database, and data access as the projected cells.
-:::
-
-Continue with [Create and manage views](views.md) when another audience needs
-its own page. [Use notebook results](notebook-results.md) adds rich objects and
-JSON-compatible values. [Author with the live workspace](live-authoring.md)
-covers source feedback and runtime comparison. [Use HTML, CSS, and
-JavaScript](web-platform.md) adds styling, assets, and browser behavior.
+[Frontend authoring](authoring-options.md) covers custom toolchains.
+[Notebook results](notebook-results.md) covers cells, outputs, values, and
+controls.
