@@ -20,6 +20,10 @@ apps/e2e/.workspace/
 apps/e2e/playwright-report/
 apps/e2e/test-results/
 
+# Generated state within authored Studio workspaces
+**/__marimo__/studio/*/*/.artifacts/
+**/__marimo__/studio/*/.locks/
+
 # Generated frontend assets
 packages/marimo-studio/src/marimo_studio/_static/
 
