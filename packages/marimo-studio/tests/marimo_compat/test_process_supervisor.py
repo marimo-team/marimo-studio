@@ -352,6 +352,7 @@ def test_process_supervisor_surfaces_cleanup_failure_over_setup_failure(
     monkeypatch.setattr(
         process_supervisor, "_start_process", lambda *_args, **_kwargs: process
     )
+    monkeypatch.setattr(process_supervisor, "_own_process_tree", lambda *_args: None)
     monkeypatch.setattr(process_supervisor, "_ProcessExitObserver", fail_observer)
     monkeypatch.setattr(process_supervisor, "_terminate_owned_processes", fail_cleanup)
 
@@ -392,6 +393,7 @@ def test_process_supervisor_fails_when_final_forced_termination_does_not_exit(
     monkeypatch.setattr(
         process_supervisor, "_start_process", lambda *_args, **_kwargs: process
     )
+    monkeypatch.setattr(process_supervisor, "_own_process_tree", lambda *_args: None)
     monkeypatch.setattr(process_supervisor, "_ProcessExitObserver", fail_observer)
     monkeypatch.setattr(
         process_supervisor, "_terminate_owned_processes", lambda *_args: None
