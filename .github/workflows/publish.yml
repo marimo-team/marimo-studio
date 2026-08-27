@@ -6,6 +6,7 @@ on:
       - "v[0-9]*.[0-9]*.[0-9]*"
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -51,6 +52,8 @@ jobs:
         run: corepack enable pnpm
 
       - name: Build release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           ./scripts/check-release.sh
           make package
@@ -118,19 +121,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
-
-      - name: Update release notes
-        run: npx --yes changelogithub@14.0.0
+      - name: Create GitHub release notes
+        run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          --verify-tag
+          --generate-notes
+          --title "${GITHUB_REF_NAME}"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
