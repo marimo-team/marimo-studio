@@ -254,8 +254,8 @@ def test_start_failure_retains_timed_out_observer_for_next_acquisition(
             )
         assert isinstance(captured.value.__cause__, OSError)
         assert str(captured.value.__cause__) == "watchdog start failed"
-        assert failed.stop_calls == 1
-        assert failed.join_timeouts == [0.125]
+        assert failed.stop_calls == 2
+        assert failed.join_timeouts == [0.125, 0.125]
         assert file_watcher._SHARED_WATCHDOG is not None
         assert file_watcher._SHARED_WATCHDOG.cleanup_pending
 
@@ -266,8 +266,8 @@ def test_start_failure_retains_timed_out_observer_for_next_acquisition(
             lambda _path: None,
         )
         assert owner is not None
-        assert failed.stop_calls == 2
-        assert failed.join_timeouts == [0.125, 0.125]
+        assert failed.stop_calls == 3
+        assert failed.join_timeouts == [0.125, 0.125, 0.125]
         assert replacement.alive
         owner.stop()
         assert replacement.stop_calls == 1
@@ -345,8 +345,8 @@ def test_project_watcher_surfaces_bounded_native_teardown_and_retries(
             match="Watchdog observer did not stop",
         ):
             await asyncio.wait_for(watcher.close(), timeout=1)
-        assert observer.stop_calls == 1
-        assert observer.join_timeouts == [0.125]
+        assert observer.stop_calls == 2
+        assert observer.join_timeouts == [0.125, 0.125]
         assert file_watcher._SHARED_WATCHDOG is not None
         assert watcher._observer is not None
         assert watcher._callback is None
@@ -355,8 +355,8 @@ def test_project_watcher_surfaces_bounded_native_teardown_and_retries(
 
         observer.alive = False
         await asyncio.wait_for(watcher.close(), timeout=1)
-        assert observer.stop_calls == 2
-        assert observer.join_timeouts == [0.125, 0.125]
+        assert observer.stop_calls == 3
+        assert observer.join_timeouts == [0.125, 0.125, 0.125]
         assert file_watcher._SHARED_WATCHDOG is None
         assert watcher._observer is None
         assert watcher._notify_task is None or watcher._notify_task.done()

@@ -27,12 +27,14 @@ _SHARED_WATCHDOG: _WatchdogRegistry | None = None
 
 
 def _stop_watchdog_observer(observer: Any) -> None:
-    observer.stop()
-    observer.join(timeout=_WATCHDOG_JOIN_TIMEOUT)
-    if observer.is_alive():
-        raise ProcessCleanupError(
-            f"Watchdog observer did not stop within {_WATCHDOG_JOIN_TIMEOUT:g} seconds"
-        )
+    for _attempt in range(2):
+        observer.stop()
+        observer.join(timeout=_WATCHDOG_JOIN_TIMEOUT)
+        if not observer.is_alive():
+            return
+    raise ProcessCleanupError(
+        f"Watchdog observer did not stop within {_WATCHDOG_JOIN_TIMEOUT:g} seconds"
+    )
 
 
 class _WatchdogEntry:
