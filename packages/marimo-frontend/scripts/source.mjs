@@ -57,6 +57,22 @@ const run = (command, args, cwd) =>
     });
   });
 
+export const pnpmInvocation = (
+  args,
+  { platform = process.platform, commandInterpreter = process.env.ComSpec } = {},
+) =>
+  platform === "win32"
+    ? {
+        command: commandInterpreter || "cmd.exe",
+        args: ["/d", "/s", "/c", "corepack", "pnpm", ...args],
+      }
+    : { command: "corepack", args: ["pnpm", ...args] };
+
+const runPnpm = async (args, cwd) => {
+  const invocation = pnpmInvocation(args);
+  await run(invocation.command, invocation.args, cwd);
+};
+
 const exists = async (path) => {
   try {
     await access(path);
@@ -122,8 +138,8 @@ export const assertCleanCheckout = async (path) => {
 };
 
 const installWorkspace = async (path) => {
-  await run("corepack", ["pnpm", "install", "--frozen-lockfile"], path);
-  await run("corepack", ["pnpm", "--dir", "packages/llm-info", "codegen"], path);
+  await runPnpm(["install", "--frozen-lockfile"], path);
+  await runPnpm(["--dir", "packages/llm-info", "codegen"], path);
 };
 
 const workspacePaths = (path) => [

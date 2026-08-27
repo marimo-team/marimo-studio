@@ -11,6 +11,7 @@ import {
   assertMarimoCommit,
   expectedCommit,
   isPreparedOwnedCheckout,
+  pnpmInvocation,
   prepareOwnedCheckout,
 } from "../scripts/source.mjs";
 import {
@@ -95,6 +96,22 @@ test("source metadata validates the prepared checkout contract", () => {
   });
   expect(() => decodeMarimoSource('{"commit":42}')).toThrow();
   expect(() => decodeMarimoSource("invalid")).toThrow();
+});
+
+test("package preparation enters Corepack through the Windows interpreter", () => {
+  expect(
+    pnpmInvocation(["install", "--frozen-lockfile"], {
+      platform: "win32",
+      commandInterpreter: "C:\\Windows\\System32\\cmd.exe",
+    }),
+  ).toEqual({
+    command: "C:\\Windows\\System32\\cmd.exe",
+    args: ["/d", "/s", "/c", "corepack", "pnpm", "install", "--frozen-lockfile"],
+  });
+  expect(pnpmInvocation(["install", "--frozen-lockfile"], { platform: "linux" })).toEqual({
+    command: "corepack",
+    args: ["pnpm", "install", "--frozen-lockfile"],
+  });
 });
 
 test("the package exposes capability facades", async () => {
