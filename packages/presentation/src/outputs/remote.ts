@@ -9,6 +9,12 @@ import { appendUrlPath } from "@marimo-studio/protocol/url";
 import type { OutputReader, OutputResponseReconciler } from "./reader";
 
 import { responseJson, responseJsonOrNull } from "../json.ts";
+import { projectionWireRequest } from "../projections/identity.ts";
+import { projectionReadGate } from "../projections/read-gate.ts";
+import {
+  notifyProjectionBindingStale,
+  projectionBindingIsStale,
+} from "../projections/staleness.ts";
 import { retry } from "../retry.ts";
 import { getRuntimeConfig } from "../runtime-config/index.ts";
 import { serverRuntimeDataSchema } from "../runtime/server-config.ts";
@@ -25,7 +31,9 @@ export class OutputRequestError extends Error {
 }
 
 interface ServerOutputTarget {
-  serverToken: string;
+  presentationSessionId: string;
+  projectionRevision: string;
+  revision: string;
   url: string;
 }
 
@@ -35,39 +43,60 @@ const serverOutputTarget = (): ServerOutputTarget => {
     throw new OutputRequestError("The server output reader is inactive.", "wrong-runtime", false);
   }
   const serverData = serverRuntimeDataSchema.safeParse(config.runtime.data);
-  if (!serverData.success) {
+  if (!serverData.success || !config.presentationSessionId) {
     throw new OutputRequestError("The server token is unavailable.", "invalid-runtime", false);
   }
-  const { serverToken } = serverData.data;
   return {
-    serverToken,
+    presentationSessionId: config.presentationSessionId,
+    projectionRevision: config.projectionRevision,
+    revision: config.revision,
     url: appendUrlPath(config.supportUrl, "outputs", globalThis.location.href),
   };
 };
 
 const readServerOutputsAtTarget = async (
   target: ServerOutputTarget,
-  sessionId: string,
+  _sessionId: string,
   request: OutputReadRequest,
   signal?: AbortSignal,
 ): Promise<OutputReadResponse> => {
-  const response = await fetch(target.url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Marimo-Server-Token": target.serverToken,
-      "Marimo-Session-Id": sessionId,
-    },
-    body: JSON.stringify(request),
-    signal,
-  });
+  if (projectionBindingIsStale(target.projectionRevision)) {
+    throw new OutputRequestError(
+      "The presentation is refreshing its notebook bindings.",
+      "stale-projection-binding",
+      false,
+    );
+  }
+  let response: Response;
+  try {
+    response = await fetch(target.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Marimo-Session-Id": target.presentationSessionId,
+      },
+      body: JSON.stringify({
+        ...request,
+        projections: request.projections.map(projectionWireRequest),
+        activeProjections: request.activeProjections.map(projectionWireRequest),
+      }),
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new OutputRequestError(error.message, "output-network-failed", true);
+    }
+    throw error;
+  }
   if (!response.ok) {
     const detail = parseErrorResponse(await responseJsonOrNull(response));
-    throw new OutputRequestError(
+    const error = new OutputRequestError(
       detail.message ?? `Output request failed with ${response.status}`,
       detail.error ?? "output-request-failed",
       detail.transient ?? false,
     );
+    notifyProjectionBindingStale(error, target.projectionRevision);
+    throw error;
   }
   return parseOutputReadResponse(await responseJson(response));
 };
@@ -87,18 +116,18 @@ const readServerOutputsAtTargetWithRetry = (
     signal,
   });
 
-const callerAbortError = (): DOMException =>
+export const outputCallerAbortError = (): DOMException =>
   new DOMException("The output request was cancelled.", "AbortError");
 
-const waitForCaller = <T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> => {
+export const waitForOutputCaller = <T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> => {
   if (!signal) {
     return operation;
   }
   if (signal.aborted) {
-    return Promise.reject(callerAbortError());
+    return Promise.reject(outputCallerAbortError());
   }
   return new Promise<T>((resolve, reject) => {
-    const abort = () => reject(callerAbortError());
+    const abort = () => reject(outputCallerAbortError());
     signal.addEventListener("abort", abort, { once: true });
     operation.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
   });
@@ -110,19 +139,24 @@ export const createServerOutputReader = (
 ): OutputReader => {
   let queue: Promise<void> = Promise.resolve();
   return (request, signal) => {
-    let target: ServerOutputTarget;
-    try {
-      target = serverOutputTarget();
-    } catch (error) {
-      return waitForCaller(Promise.reject(error), signal);
-    }
-    const operation = queue.then(() =>
-      readServerOutputsAtTargetWithRetry(target, sessionId, request),
-    );
+    const operation = queue.then(() => {
+      if (signal?.aborted) {
+        throw outputCallerAbortError();
+      }
+      return projectionReadGate.run(signal, (activeSignal) => {
+        const target = serverOutputTarget();
+        return readServerOutputsAtTargetWithRetry(
+          target,
+          sessionId,
+          { ...request, revision: target.revision },
+          activeSignal,
+        );
+      });
+    });
     queue = operation.then(
       () => undefined,
       () => undefined,
     );
-    return waitForCaller(operation, signal).then(reconcile);
+    return waitForOutputCaller(operation, signal).then(reconcile);
   };
 };

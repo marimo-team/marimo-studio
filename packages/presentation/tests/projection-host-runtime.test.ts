@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "vite-plus/test";
 
 import { ProjectionHostRuntime } from "../src/projections/host-runtime.ts";
+import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
+import { runtimeConfig } from "./runtime-fixtures.ts";
 
 afterEach(() => document.body.replaceChildren());
 
@@ -12,26 +14,118 @@ test("projection readiness covers cell, output, and value hosts", () => {
     <span mo-value="total" data-state="error"></span>
   `;
   const runtime = new ProjectionHostRuntime();
+  commitRuntimeConfig(runtimeConfig());
+  runtime.connect();
+  document.querySelector<HTMLElement>("marimo-cell")!.dataset.state = "ready";
+  document.querySelector<HTMLElement>("marimo-output")!.dataset.state = "loading";
+  document.querySelector<HTMLElement>("[mo-value]")!.dataset.state = "error";
 
   assert.deepEqual(runtime.states(), ["ready", "loading", "error"]);
+  runtime.disconnect();
 });
 
-test("projection preparation assigns preservation identity through adapters", () => {
+test("committing a shell swap moves retained hosts into the incoming tree", () => {
   document.body.innerHTML = `
-    <marimo-cell name="summary"></marimo-cell>
-    <marimo-output value="report.total"></marimo-output>
-    <span mo-value="total"></span>
+    <main id="app-shell">
+      <marimo-cell
+        id="marimo-studio-cell-summary"
+        name="summary"
+        data-hx-preserve
+      ><em>Rendered cell</em></marimo-cell>
+      <marimo-output
+        id="marimo-studio-output-report"
+        value="report"
+        data-hx-preserve
+      ><strong>Rendered report</strong></marimo-output>
+      <strong mo-value="metric" data-marimo-studio-site="site-value">42</strong>
+    </main>
   `;
+  const liveCell = document.querySelector<HTMLElement>("marimo-cell")!;
+  const liveOutput = document.querySelector<HTMLElement>("marimo-output")!;
+  const liveValue = document.querySelector<HTMLElement>("[mo-value]")!;
+  const next = new DOMParser().parseFromString(
+    `<main id="app-shell">
+      <marimo-cell
+        id="marimo-studio-cell-summary"
+        name="summary"
+        class="updated-cell"
+        data-hx-preserve
+      ></marimo-cell>
+      <marimo-output
+        id="marimo-studio-output-report"
+        value="report"
+        class="updated"
+        data-hx-preserve
+      ></marimo-output>
+      <strong
+        mo-value="metric"
+        class="updated-value"
+        data-marimo-studio-site="site-value"
+      ></strong>
+    </main>`,
+    "text/html",
+  );
   const runtime = new ProjectionHostRuntime();
-
   runtime.prepare(document);
+  runtime.prepare(next);
+  const incoming = document.importNode(next.querySelector<HTMLElement>("#app-shell")!, true);
+  const staged = runtime.stagePreservation(incoming, document);
+  const current = document.querySelector<HTMLElement>("#app-shell")!;
+  current.before(incoming);
+  staged.commit();
+  current.remove();
 
-  const cell = document.querySelector("marimo-cell")!;
-  const output = document.querySelector("marimo-output")!;
-  const value = document.querySelector("[mo-value]")!;
-  assert.equal(cell.id, "marimo-studio-cell-summary");
-  assert.equal(cell.hasAttribute("data-hx-preserve"), true);
-  assert.equal(output.id, "marimo-studio-output-report.total");
-  assert.equal(output.hasAttribute("data-hx-preserve"), true);
-  assert.equal(value.hasAttribute("data-hx-preserve"), false);
+  staged.finalize();
+
+  assert.equal(document.getElementById("marimo-studio-cell-summary"), liveCell);
+  assert.equal(document.getElementById("marimo-studio-output-report"), liveOutput);
+  assert.equal(document.getElementById("marimo-studio-value-site-value"), liveValue);
+  assert.equal(liveCell.className, "updated-cell");
+  assert.equal(liveOutput.className, "updated");
+  assert.equal(liveValue.className, "updated-value");
+  assert.equal(liveCell.textContent, "Rendered cell");
+  assert.equal(liveOutput.textContent, "Rendered report");
+  assert.equal(liveValue.textContent, "42");
+});
+
+test("rolling back staged preservation restores live host attributes", () => {
+  document.body.innerHTML = `
+    <main id="app-shell">
+      <marimo-output
+        id="marimo-studio-output-report"
+        value="report"
+        class="current"
+        data-hx-preserve
+      ><strong>Rendered report</strong></marimo-output>
+    </main>
+  `;
+  const live = document.querySelector<HTMLElement>("marimo-output")!;
+  const next = new DOMParser().parseFromString(
+    `<main id="app-shell">
+      <marimo-output
+        id="marimo-studio-output-report"
+        value="report"
+        class="incoming"
+        data-hx-preserve
+      ></marimo-output>
+    </main>`,
+    "text/html",
+  );
+  const runtime = new ProjectionHostRuntime();
+  const incoming = document.importNode(next.querySelector<HTMLElement>("#app-shell")!, true);
+  const staged = runtime.stagePreservation(incoming, document);
+  assert.equal(live.className, "incoming");
+  const current = document.querySelector<HTMLElement>("#app-shell")!;
+  current.before(incoming);
+  staged.commit();
+  assert.equal(incoming.querySelector("marimo-output"), live);
+  assert.equal(current.querySelector("marimo-output"), null);
+
+  staged.rollback();
+
+  assert.equal(current.querySelector("marimo-output"), live);
+  assert.notEqual(incoming.querySelector("marimo-output"), live);
+  assert.equal(live.isConnected, true);
+  assert.equal(live.className, "current");
+  assert.equal(live.textContent, "Rendered report");
 });

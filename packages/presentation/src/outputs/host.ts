@@ -1,5 +1,9 @@
 import { syncProjectionHostAttributes } from "../cells/host.ts";
+import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
 import { notifyProjectionChanged } from "../projections/changes.ts";
+import { hostsInDocumentOrder } from "../projections/host-order.ts";
+import { PROJECTION_SITE_ATTRIBUTE } from "../projections/identity.ts";
+import { resetProjectionHostMetadata } from "../projections/instances.ts";
 
 export type OutputHostState = "connecting" | "loading" | "stale" | "ready" | "error";
 
@@ -19,14 +23,41 @@ const PRESERVED_ID_PREFIX = "marimo-studio-output-";
 const hosts = new Set<MarimoOutputElement>();
 const listeners = new Set<HostListener>();
 let snapshot: readonly MarimoOutputElement[] = [];
+let publishMovePending = false;
 
 const publish = () => {
-  snapshot = Array.from(hosts);
+  snapshot = hostsInDocumentOrder(hosts);
   listeners.forEach((listener) => listener());
 };
 
+const publishAfterMove = () => {
+  if (publishMovePending) {
+    return;
+  }
+  publishMovePending = true;
+  queueMicrotask(() => {
+    publishMovePending = false;
+    const next = hostsInDocumentOrder(hosts);
+    if (next.length !== snapshot.length || next.some((host, index) => host !== snapshot[index])) {
+      publish();
+    }
+  });
+};
+
+const releaseOutputHost = (host: MarimoOutputElement) => {
+  if (!hosts.delete(host)) {
+    return;
+  }
+  resetProjectionHostMetadata(host);
+  delete host.dataset.state;
+  host.removeAttribute("aria-busy");
+  hosts.forEach(prepareOutputHost);
+  publish();
+  notifyProjectionChanged();
+};
+
 export class MarimoOutputElement extends HTMLElement {
-  static observedAttributes = ["value"];
+  static observedAttributes = ["value", PROJECTION_SITE_ATTRIBUTE];
   private hasRendered = false;
 
   get valueSelector(): string {
@@ -34,6 +65,9 @@ export class MarimoOutputElement extends HTMLElement {
   }
 
   connectedCallback() {
+    if (!isArtifactProjectionHost(this)) {
+      return;
+    }
     prepareOutputHost(this);
     hosts.add(this);
     if (!this.querySelector(OUTPUT_SELECTOR)) {
@@ -42,24 +76,39 @@ export class MarimoOutputElement extends HTMLElement {
     publish();
   }
 
-  connectedMoveCallback() {}
+  connectedMoveCallback() {
+    if (!isArtifactProjectionHost(this)) {
+      releaseOutputHost(this);
+      return;
+    }
+    if (!hosts.has(this)) {
+      prepareOutputHost(this);
+      hosts.add(this);
+      if (!this.querySelector(OUTPUT_SELECTOR)) {
+        setOutputHostState(this, "connecting");
+      }
+    }
+    publishAfterMove();
+    notifyProjectionChanged();
+  }
 
   disconnectedCallback() {
     queueMicrotask(() => {
-      if (this.isConnected) {
+      if (this.isConnected && isArtifactProjectionHost(this)) {
         return;
       }
-      hosts.delete(this);
-      hosts.forEach(prepareOutputHost);
-      publish();
+      releaseOutputHost(this);
     });
   }
 
-  attributeChangedCallback() {
-    if (this.isConnected) {
-      prepareOutputHost(this);
-      publish();
+  attributeChangedCallback(_name: string, previous: string | null, current: string | null) {
+    if (!this.isConnected || previous === current || !isArtifactProjectionHost(this)) {
+      return;
     }
+    resetProjectionHostMetadata(this);
+    setOutputHostState(this, "connecting");
+    prepareOutputHost(this);
+    publish();
   }
 
   markRendered(): boolean {
@@ -70,6 +119,9 @@ export class MarimoOutputElement extends HTMLElement {
 }
 
 export const prepareOutputHost = (host: Element) => {
+  if (!isArtifactProjectionHost(host)) {
+    return;
+  }
   const selector = host.getAttribute("value")?.trim();
   if (!selector) {
     return;
@@ -87,11 +139,16 @@ export const prepareOutputHost = (host: Element) => {
 };
 
 export const prepareOutputHosts = (root: ParentNode) => {
-  root.querySelectorAll("marimo-output").forEach(prepareOutputHost);
+  root
+    .querySelectorAll("marimo-output")
+    .forEach((host) => isArtifactProjectionHost(host) && prepareOutputHost(host));
 };
 
 export const syncPreservedOutputHosts = (source: ParentNode, live: Document): void => {
   source.querySelectorAll<HTMLElement>("marimo-output[data-hx-preserve][id]").forEach((host) => {
+    if (!isArtifactProjectionHost(host)) {
+      return;
+    }
     const preserved = live.getElementById(host.id);
     if (preserved?.localName === "marimo-output" && preserved !== host) {
       syncProjectionHostAttributes(preserved, host);
