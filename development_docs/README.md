@@ -40,12 +40,14 @@ recovery.
 Install the locked Python and JavaScript environments:
 
 ```console
-make install
+make setup
 ```
 
-Python tooling runs through `uv`. Browser and documentation tooling runs
-through the pnpm workspace, where Vite Plus owns formatting, linting,
-TypeScript checks, tests, builds, and task execution.
+`make setup` installs the Python and pnpm workspaces, prepares the pinned Marimo
+frontend source, builds Studio's browser assets, and installs Chromium for
+browser acceptance tests. Python tooling runs through `uv`. Browser and
+documentation tooling runs through the pnpm workspace, where Vite Plus owns
+formatting, linting, TypeScript checks, tests, builds, and task execution.
 
 Deno-backed providers use the exact executable supplied by the Python package
 extra. Their frontend dependency versions and lockfiles belong to the view
@@ -58,6 +60,8 @@ Use the smallest loop that proves the changed contract:
 | Owner                                            | Focused loop                                                |
 | ------------------------------------------------ | ----------------------------------------------------------- |
 | Python workspace, provider, artifact, or service | `uv run pytest packages/marimo-studio/tests/<test-file>.py` |
+| Complete Python profile for the current platform | `make python-test`                                          |
+| Frontend workspace                               | `make frontend-test`                                        |
 | Protocol                                         | `pnpm --filter @marimo-studio/protocol test`                |
 | Runtime SPI                                      | `pnpm --filter @marimo-studio/runtime test`                 |
 | Presentation document                            | `pnpm --filter @marimo-studio/presentation test`            |
@@ -160,8 +164,9 @@ Add the matching boundary checks:
 | Generated browser assets or distribution contents                                 | `make package`                                               |
 | Public documentation                                                              | `make docs-build` and rendered desktop and narrow inspection |
 
-`make check` covers formatting, linting, types, tests, examples, runtime checks,
-and package-owned contracts. Live browser acceptance remains the evidence for
+`make test` runs the complete Python profile for the current platform and the
+frontend package tests. `make check` adds formatting, linting, type checks,
+and example builds. Live browser acceptance remains the evidence for
 cross-document behavior.
 
 ## Keep authored and generated files distinct
@@ -169,7 +174,7 @@ cross-document behavior.
 Edit repository source under `packages/`, `apps/`, `docs/`,
 `development_docs/`, `examples/`, and `skills/`.
 
-`make build` prepares the pinned Marimo frontend and writes packaged browser
+`make build` validates the prepared Marimo frontend and writes packaged browser
 assets to:
 
 ```text
@@ -179,6 +184,11 @@ packages/marimo-studio/src/marimo_studio/_static/browser/
 The prepared Marimo checkout lives under
 `packages/marimo-frontend/.cache/`. Both paths are generated and remain
 untracked.
+
+`make lint`, `make typecheck`, `make frontend-test`, and `make build` validate
+the prepared checkout without changing it. Run `make setup` when readiness
+validation reports stale metadata, missing dependencies, or a mismatched
+checkout.
 
 A user view owns its build and publication surface beneath the project:
 

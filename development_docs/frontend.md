@@ -29,7 +29,7 @@ cross-package responsibility.
 Install the locked workspace:
 
 ```console
-make install
+make setup
 ```
 
 Run the owning package test while iterating:
@@ -242,17 +242,17 @@ and frame globals inside the facade. Expose the smallest behavior and lifecycle
 the caller needs. A stateful facade returns a handle with an explicit `dispose`
 or `close` boundary.
 
-Prepare the exact Marimo frontend source with:
+Prepare dependencies and the exact Marimo frontend source with:
 
 ```console
-pnpm --filter @marimo-studio/marimo-frontend prepare:upstream
+make setup
 ```
 
 Set `MARIMO_REPO` to use a clean local checkout at the configured release
 commit:
 
 ```console
-MARIMO_REPO=/path/to/marimo make build
+MARIMO_REPO=/path/to/marimo make setup
 ```
 
 ## Inspect the browser build

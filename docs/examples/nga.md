@@ -13,7 +13,7 @@ access to the same notebook graph.
 Install the repository dependencies and open the notebook in Studio:
 
 ```console
-make install
+make setup
 uv run --with polars --with pyobservablejs marimo edit examples/nga.py
 ```
 

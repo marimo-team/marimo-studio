@@ -14,6 +14,7 @@
     "./vite": "./src/vite.ts"
   },
   "scripts": {
+    "check:upstream": "node scripts/check.mjs",
     "prepare:upstream": "node scripts/prepare.mjs",
     "test": "vp test tests/source.test.mjs tests/control-endpoint.test.ts tests/embedded-control-state.test.ts tests/embedded-runtime.test.ts tests/projected-output-state.test.ts tests/radix-compose-refs.test.tsx tests/runtime-logger.test.ts tests/session-bootstrap.test.ts tests/theme-frame.test.ts"
   },

@@ -33,7 +33,7 @@ From a repository checkout, open the National Gallery of Art notebook and its
 three views:
 
 ```console
-make install
+make setup
 uv run --with polars --with pyobservablejs marimo edit examples/nga.py
 ```
 

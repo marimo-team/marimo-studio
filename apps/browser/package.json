@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm prepare:upstream && vp build",
-    "prepare:upstream": "pnpm --filter @marimo-studio/marimo-frontend prepare:upstream"
+    "build": "pnpm check:upstream && vp build",
+    "check:upstream": "pnpm --filter @marimo-studio/marimo-frontend check:upstream"
   },
   "dependencies": {
     "@marimo-studio/marimo-frontend": "workspace:*",

@@ -9,8 +9,8 @@
     "./runtimes": "./src/runtime/catalog.ts"
   },
   "scripts": {
-    "prepare:upstream": "pnpm --filter @marimo-studio/marimo-frontend prepare:upstream",
-    "test": "pnpm prepare:upstream && vp test"
+    "check:upstream": "pnpm --filter @marimo-studio/marimo-frontend check:upstream",
+    "test": "pnpm check:upstream && vp test"
   },
   "dependencies": {
     "@marimo-studio/marimo-frontend": "workspace:*",

@@ -55,7 +55,7 @@ packaged starter changes its frontend dependencies.
 Run the release gates from the repository root:
 
 ```console
-make install
+make setup
 make check
 make e2e
 make docs-build

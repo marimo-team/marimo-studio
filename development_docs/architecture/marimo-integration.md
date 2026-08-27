@@ -339,10 +339,12 @@ A Marimo upgrade changes one compatibility unit:
 Use a clean local Marimo checkout at the configured commit with:
 
 ```console
-MARIMO_REPO=/path/to/marimo make build
+export MARIMO_REPO=/path/to/marimo
+make setup
 ```
 
-The prepared source metadata must match the release manifest.
+Keep `MARIMO_REPO` set while running frontend gates. The prepared source
+metadata must match the release manifest.
 
 ## Test the boundary
 
