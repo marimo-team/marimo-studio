@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import sys
 from pathlib import Path
 
 import click
@@ -39,7 +38,7 @@ def view() -> None:
 
 
 def _stdin_is_interactive() -> bool:
-    return sys.stdin.isatty()
+    return click.get_text_stream("stdin").isatty()
 
 
 @click.command("create", cls=ColoredCommand)
