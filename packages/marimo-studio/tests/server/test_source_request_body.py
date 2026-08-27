@@ -6,7 +6,6 @@ import asyncio
 from collections.abc import Callable
 from typing import cast
 
-import pytest
 from starlette.authentication import AuthCredentials
 from starlette.requests import Request
 from starlette.responses import Response
@@ -126,18 +125,17 @@ def test_source_body_longer_than_declared_is_rejected_without_mutation(
     assert source.read_bytes() == original
 
 
-@pytest.mark.parametrize("content_length", ("invalid", "-1"))
 def test_source_upload_rejects_invalid_content_length_before_receiving(
     notebook_path,
-    content_length: str,
 ) -> None:
     studio = configured(notebook_path)
     source = studio.views["dashboard"].root / "index.html"
     original = source.read_bytes()
-    request, receive_calls = _request([], content_length)
 
-    response = _source_response(request, studio)
+    for content_length in ("invalid", "-1"):
+        request, receive_calls = _request([], content_length)
+        response = _source_response(request, studio)
 
-    assert response.status_code == 400
-    assert receive_calls() == 0
-    assert source.read_bytes() == original
+        assert response.status_code == 400, content_length
+        assert receive_calls() == 0, content_length
+        assert source.read_bytes() == original, content_length

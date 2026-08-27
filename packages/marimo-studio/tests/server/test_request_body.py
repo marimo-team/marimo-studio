@@ -137,10 +137,7 @@ def test_json_reader_rejects_bytes_past_the_declared_length_immediately() -> Non
     assert receive_calls() == 1
 
 
-@pytest.mark.parametrize(
-    "content_lengths",
-    (("2", "2"), ("2", "3")),
-)
+@pytest.mark.parametrize("content_lengths", (("2", "2"), ("2", "3")))
 def test_json_reader_rejects_ambiguous_content_length_declarations(
     content_lengths: tuple[str, ...],
 ) -> None:
@@ -189,7 +186,6 @@ def test_view_creation_rejects_mismatched_body_length_without_mutation(
         create_view_response(
             request,
             definition,
-            "",
             "server-token",
         )
     )

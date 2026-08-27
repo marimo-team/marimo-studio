@@ -42,9 +42,9 @@ def test_request_cancellation_drains_cleanup_through_repeated_cancellation() -> 
         running = asyncio.create_task(
             run_while_connected(cast(Request, peer), operation())
         )
-        await started.wait()
+        await asyncio.wait_for(started.wait(), timeout=1)
         running.cancel()
-        await cleaning.wait()
+        await asyncio.wait_for(cleaning.wait(), timeout=1)
         running.cancel()
         await asyncio.sleep(0)
         assert not running.done()
@@ -72,7 +72,7 @@ def test_disconnect_surfaces_operation_cleanup_failure() -> None:
         running = asyncio.create_task(
             run_while_connected(cast(Request, peer), operation())
         )
-        await started.wait()
+        await asyncio.wait_for(started.wait(), timeout=1)
         await peer.messages.put({"type": "http.disconnect"})
         with pytest.raises(RequestCleanupError) as raised:
             await running

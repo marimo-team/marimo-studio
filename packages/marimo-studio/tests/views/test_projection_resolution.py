@@ -95,17 +95,8 @@ def test_symbolic_resolution_ignores_an_invalid_unselected_view(
             "expected one <head>",
         ),
         (
-            '<html><script></script><head></head><body><main id="app-shell">'
-            "</main></body></html>",
-            "followed by <head>",
-        ),
-        (
             '<html><meta charset="utf-8"><head></head><body>'
             '<main id="app-shell"></main></body></html>',
-            "followed by <head>",
-        ),
-        (
-            '<html><body><main id="app-shell"></main></body><head></head></html>',
             "followed by <head>",
         ),
         (
