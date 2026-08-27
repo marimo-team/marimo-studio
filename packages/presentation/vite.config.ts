@@ -4,6 +4,7 @@ import { defineConfig } from "vite-plus";
 const marimo = createMarimoViteIntegration();
 
 export default defineConfig({
+  plugins: marimo.plugins,
   resolve: {
     alias: marimo.aliases,
   },

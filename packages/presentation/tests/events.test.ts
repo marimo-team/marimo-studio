@@ -1,7 +1,26 @@
-import assert from "node:assert/strict";
-import { beforeEach, test, vi } from "vite-plus/test";
+import type { JsonValue } from "@marimo-studio/protocol/runtime-config";
 
-import { DevelopmentEvents } from "../src/document/events.ts";
+import assert from "node:assert/strict";
+import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
+
+import { setActiveDocumentLifecycleId } from "../src/document/document-lifecycle-id.ts";
+import {
+  DevelopmentEvents,
+  bindFragmentRestores,
+  bindPresentationEvents,
+  bindViewNavigation,
+} from "../src/document/events.ts";
+import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
+import { runtimeConfig } from "./runtime-fixtures.ts";
+
+globalThis.__MARIMO_MOUNT_CONFIG__ = {
+  supportUrl: "/_marimo-studio/views/dashboard",
+  version: "test-version",
+  revision: "presentation-revision",
+  runtime: "server",
+  runtimeExplicit: false,
+  replay: false,
+};
 
 class EventSourceStub extends EventTarget {
   static instances: EventSourceStub[] = [];
@@ -24,6 +43,12 @@ class EventSourceStub extends EventTarget {
 beforeEach(() => {
   EventSourceStub.instances = [];
   vi.stubGlobal("EventSource", EventSourceStub);
+  document.body.replaceChildren();
+});
+
+afterEach(() => {
+  globalThis.history.replaceState({}, "", "/");
+  vi.unstubAllGlobals();
 });
 
 test("closed development streams ignore late events", () => {
@@ -36,19 +61,288 @@ test("closed development streams ignore late events", () => {
   events.connect("/second", ready, changed);
   const second = EventSourceStub.instances[1];
   first?.emit("ready");
-  first?.emit("change", JSON.stringify({ kind: "html" }));
+  first?.emit("change", JSON.stringify({ kind: "project" }));
 
   assert.equal(first?.closed, true);
   assert.equal(ready.mock.calls.length, 0);
   assert.equal(changed.mock.calls.length, 0);
 
   second?.emit("ready");
-  second?.emit("change", JSON.stringify({ kind: "runtime" }));
+  second?.emit("change", JSON.stringify({ kind: "presentation" }));
   assert.equal(ready.mock.calls.length, 1);
-  assert.deepEqual(changed.mock.calls, [["runtime"]]);
+  assert.deepEqual(changed.mock.calls, [[]]);
 
   events.close();
   second?.emit("ready");
   assert.equal(second?.closed, true);
   assert.equal(ready.mock.calls.length, 1);
+});
+
+test("embedded same-view links delegate query and hash navigation to Studio", () => {
+  setActiveDocumentLifecycleId(7);
+  globalThis.history.replaceState(
+    {},
+    "",
+    "/?marimo_studio_client=client-123&marimo_studio_lifecycle=7",
+  );
+  commitRuntimeConfig(runtimeConfig());
+  const postMessage = vi.fn();
+  vi.stubGlobal("parent", { postMessage });
+  const direct = vi.fn();
+  const dispose = bindViewNavigation(direct, false);
+  const anchor = document.createElement("a");
+  anchor.href = "/proxy/app/dashboard/?region=emea#details";
+  document.body.append(anchor);
+
+  const click = new MouseEvent("click", {
+    bubbles: true,
+    button: 0,
+    cancelable: true,
+  });
+  anchor.dispatchEvent(click);
+
+  expect(click.defaultPrevented).toBe(true);
+  expect(postMessage).toHaveBeenCalledWith(
+    {
+      type: "marimo-studio:navigate-view",
+      runtime: "server",
+      lifecycleId: 7,
+      view: "dashboard",
+      query: "?region=emea",
+      hash: "#details",
+    },
+    globalThis.location.origin,
+  );
+  expect(direct).not.toHaveBeenCalled();
+  dispose();
+});
+
+test("standalone navigation trusts the active runtime and scrubs private query", () => {
+  globalThis.history.replaceState({}, "", "/proxy/app/dashboard/?region=emea");
+  commitRuntimeConfig(runtimeConfig({ dev: false, views: ["dashboard", "report"] }));
+  const direct = vi.fn();
+  const dispose = bindViewNavigation(direct, false);
+  const forged = document.createElement("a");
+  forged.href =
+    "/proxy/app/report/?region=emea&runtime=wasm&access_token=forged" +
+    "&session_id=s_forged&marimo_studio_client=forged#details";
+  const absent = document.createElement("a");
+  absent.href = "/proxy/app/report/?region=emea#summary";
+  document.body.append(forged, absent);
+
+  forged.dispatchEvent(
+    new MouseEvent("click", {
+      bubbles: true,
+      button: 0,
+      cancelable: true,
+    }),
+  );
+  absent.dispatchEvent(
+    new MouseEvent("click", {
+      bubbles: true,
+      button: 0,
+      cancelable: true,
+    }),
+  );
+
+  expect(direct.mock.calls).toEqual([
+    [
+      {
+        documentUrl: "http://localhost:3000/proxy/app/report/?region=emea#details",
+        view: "report",
+      },
+    ],
+    [
+      {
+        documentUrl: "http://localhost:3000/proxy/app/report/?region=emea#summary",
+        view: "report",
+      },
+    ],
+  ]);
+  dispose();
+});
+
+test("direct wrapper navigation commits in the child before pushing public history", async () => {
+  setActiveDocumentLifecycleId(8);
+  globalThis.history.replaceState({}, "", "/proxy/app/dashboard/?region=emea&runtime=server");
+  commitRuntimeConfig(runtimeConfig({ dev: false, views: ["dashboard", "report"] }));
+  const postMessage = vi.fn();
+  vi.stubGlobal("parent", { postMessage });
+  const direct = vi.fn().mockResolvedValue(true);
+  const dispose = bindViewNavigation(direct, true);
+  const anchor = document.createElement("a");
+  anchor.href = "/proxy/app/report/?region=emea#details";
+  document.body.append(anchor);
+
+  anchor.dispatchEvent(
+    new MouseEvent("click", {
+      bubbles: true,
+      button: 0,
+      cancelable: true,
+    }),
+  );
+  await vi.waitFor(() => expect(postMessage).toHaveBeenCalledOnce());
+
+  expect(direct).toHaveBeenCalledWith({
+    documentUrl: "http://localhost:3000/proxy/app/report/?region=emea&runtime=server#details",
+    view: "report",
+  });
+  expect(postMessage).toHaveBeenCalledWith(
+    {
+      type: "marimo-studio:navigate-view",
+      runtime: "server",
+      lifecycleId: 8,
+      view: "report",
+      query: "?region=emea&runtime=server",
+      hash: "#details",
+      history: "push",
+    },
+    globalThis.location.origin,
+  );
+  setActiveDocumentLifecycleId(7);
+  dispose();
+});
+
+test("direct wrapper fragment links scroll and push public history without a view fetch", () => {
+  setActiveDocumentLifecycleId(9);
+  globalThis.history.replaceState({}, "", "/proxy/app/dashboard/?runtime=server");
+  commitRuntimeConfig(runtimeConfig({ dev: false }));
+  const postMessage = vi.fn();
+  vi.stubGlobal("parent", { postMessage });
+  const direct = vi.fn();
+  const dispose = bindViewNavigation(direct, true);
+  const target = document.createElement("section");
+  target.id = "details";
+  target.scrollIntoView = vi.fn();
+  const anchor = document.createElement("a");
+  anchor.href = "#details";
+  document.body.append(anchor, target);
+
+  anchor.click();
+
+  expect(direct).not.toHaveBeenCalled();
+  expect(target.scrollIntoView).toHaveBeenCalledOnce();
+  expect(postMessage).toHaveBeenCalledWith(
+    {
+      type: "marimo-studio:navigate-view",
+      runtime: "server",
+      lifecycleId: 9,
+      view: "dashboard",
+      query: "?runtime=server",
+      hash: "#details",
+      history: "push",
+    },
+    globalThis.location.origin,
+  );
+  setActiveDocumentLifecycleId(7);
+  dispose();
+});
+
+test("wrapper popstate restores a fragment without a presentation transition", () => {
+  setActiveDocumentLifecycleId(10);
+  commitRuntimeConfig(runtimeConfig({ dev: false }));
+  const parent = {};
+  vi.stubGlobal("parent", parent);
+  const target = document.createElement("section");
+  target.id = "restored";
+  target.scrollIntoView = vi.fn();
+  document.body.append(target);
+  const dispose = bindFragmentRestores();
+  const event = new MessageEvent("message", {
+    origin: globalThis.location.origin,
+    data: {
+      type: "marimo-studio:restore-fragment",
+      runtime: "server",
+      lifecycleId: 10,
+      hash: "#restored",
+    },
+  });
+  Object.defineProperty(event, "source", { value: parent });
+
+  globalThis.dispatchEvent(event);
+
+  expect(target.scrollIntoView).toHaveBeenCalledOnce();
+  expect(globalThis.location.hash).toBe("#restored");
+  setActiveDocumentLifecycleId(7);
+  dispose();
+});
+
+test("presentation refresh events target the current document lifecycle", () => {
+  globalThis.history.replaceState({}, "", "/?marimo_studio_lifecycle=7");
+  commitRuntimeConfig(runtimeConfig());
+  const parent = {};
+  vi.stubGlobal("parent", parent);
+  const changed = vi.fn();
+  const refresh = vi.fn();
+  const barrier = vi.fn();
+  const dispose = bindPresentationEvents({ changed, refresh, barrier });
+  const dispatch = (data: JsonValue, ports: MessagePort[] = []) => {
+    const event = new MessageEvent("message", {
+      origin: globalThis.location.origin,
+      data,
+      ports,
+    });
+    Object.defineProperty(event, "source", { value: parent });
+    globalThis.dispatchEvent(event);
+  };
+
+  dispatch({
+    type: "marimo-studio:presentation-change",
+    runtime: "server",
+    view: "dashboard",
+  });
+  dispatch({
+    type: "marimo-studio:presentation-change",
+    runtime: "server",
+    lifecycleId: 6,
+    view: "dashboard",
+  });
+  expect(changed).not.toHaveBeenCalled();
+  dispatch({
+    type: "marimo-studio:presentation-change",
+    runtime: "server",
+    lifecycleId: 7,
+    view: "dashboard",
+  });
+  expect(changed).toHaveBeenCalledOnce();
+  dispatch({
+    type: "marimo-studio:presentation-refresh",
+    runtime: "server",
+    lifecycleId: 7,
+    view: "dashboard",
+    phase: "pending",
+  });
+  dispatch({
+    type: "marimo-studio:presentation-refresh",
+    runtime: "server",
+    lifecycleId: 7,
+    view: "dashboard",
+    phase: "settled",
+  });
+  expect(refresh.mock.calls).toEqual([["pending"], ["settled"]]);
+  const channel = new MessageChannel();
+  const port = channel.port1;
+  dispatch(
+    {
+      type: "marimo-studio:presentation-refresh-barrier",
+      runtime: "server",
+      lifecycleId: 7,
+      view: "dashboard",
+      generation: 4,
+    },
+    [port],
+  );
+  expect(barrier.mock.calls[0]?.[0]).toBe(port);
+  expect(barrier.mock.calls[0]?.[1]).toBe(4);
+  dispatch({
+    type: "marimo-studio:presentation-refresh-barrier",
+    runtime: "server",
+    lifecycleId: 7,
+    view: "dashboard",
+    generation: 5,
+  });
+  expect(barrier).toHaveBeenCalledOnce();
+  channel.port1.close();
+  channel.port2.close();
+  dispose();
 });

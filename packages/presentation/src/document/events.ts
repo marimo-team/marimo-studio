@@ -1,13 +1,25 @@
-import { parseShellChange, type ShellChangeKind } from "@marimo-studio/protocol/development-events";
+import {
+  parsePresentationBuild,
+  parseWorkspaceChange,
+  type PresentationBuild,
+} from "@marimo-studio/protocol/development-events";
 import {
   parsePreviewMessage,
   type NavigateViewMessage,
+  type PresentationRefreshMessage,
   type SwitchViewMessage,
 } from "@marimo-studio/protocol/preview-messages";
 import { publicNotebookQuery } from "@marimo-studio/protocol/query";
 
 import { messageJson } from "../json.ts";
-import { getRuntimeConfig, hasRuntimeConfig } from "../runtime-config/index.ts";
+import { getMountConfig, getRuntimeConfig, hasRuntimeConfig } from "../runtime-config/index.ts";
+import {
+  activeDocumentLifecycleId,
+  documentLifecycleEnvelope,
+  setActiveDocumentLifecycleId,
+} from "./document-lifecycle-id.ts";
+import { isStudioParentMessage, postToStudioParent } from "./parent-bridge.ts";
+import { studioOwned } from "./studio-ownership.ts";
 import { viewNavigationForUrl } from "./view-navigation.ts";
 
 export interface DirectViewNavigation {
@@ -15,10 +27,59 @@ export interface DirectViewNavigation {
   view: string;
 }
 
+const scrollToFragment = (hash: string): void => {
+  let identifier = hash.startsWith("#") ? hash.slice(1) : hash;
+  try {
+    identifier = decodeURIComponent(identifier);
+  } catch {
+    return;
+  }
+  try {
+    (
+      document.getElementById(identifier) ?? document.getElementsByName(identifier)[0]
+    )?.scrollIntoView();
+  } catch {
+    return;
+  }
+};
+
+const replaceFragment = (hash: string): void => {
+  const target = new URL(globalThis.location.href);
+  target.hash = hash;
+  globalThis.history.replaceState(globalThis.history.state, "", target);
+  scrollToFragment(hash);
+};
+
+export const bindFragmentRestores = (): (() => void) => {
+  const listener = (event: MessageEvent<unknown>) => {
+    if (!isStudioParentMessage(event)) {
+      return;
+    }
+    const payload = messageJson(event);
+    const request = payload === undefined ? undefined : parsePreviewMessage(payload);
+    if (
+      request?.type !== "marimo-studio:restore-fragment" ||
+      !hasRuntimeConfig() ||
+      request.runtime !== getRuntimeConfig().runtime.id ||
+      request.lifecycleId !== activeDocumentLifecycleId()
+    ) {
+      return;
+    }
+    replaceFragment(request.hash);
+  };
+  globalThis.addEventListener("message", listener);
+  return () => globalThis.removeEventListener("message", listener);
+};
+
 export class DevelopmentEvents {
   private source: EventSource | undefined;
 
-  connect(url: string, onReady: () => void, onChange: (kind: ShellChangeKind) => void): void {
+  connect(
+    url: string,
+    onReady: () => void,
+    onPresentation: () => void,
+    onBuild: (build: PresentationBuild) => void = () => {},
+  ): void {
     this.close();
     const source = new EventSource(url);
     this.source = source;
@@ -32,9 +93,15 @@ export class DevelopmentEvents {
       if (!(event instanceof MessageEvent)) {
         return;
       }
-      const payload = parseShellChange(event.data);
-      if (payload) {
-        current(() => onChange(payload));
+      const data = event.data;
+      const change = parseWorkspaceChange(data);
+      if (change === "presentation") {
+        current(onPresentation);
+      } else if (change === "build") {
+        const build = parsePresentationBuild(data);
+        if (build) {
+          current(() => onBuild(build));
+        }
       }
     });
   }
@@ -47,7 +114,7 @@ export class DevelopmentEvents {
 
 export const bindViewSwitches = (callback: (request: SwitchViewMessage) => void): (() => void) => {
   const listener = (event: MessageEvent<unknown>) => {
-    if (event.origin !== globalThis.location.origin || event.source !== globalThis.parent) {
+    if (!isStudioParentMessage(event)) {
       return;
     }
     const payload = messageJson(event);
@@ -59,6 +126,7 @@ export const bindViewSwitches = (callback: (request: SwitchViewMessage) => void)
       request?.type === "marimo-studio:switch-view" &&
       (!hasRuntimeConfig() || request.runtime === getRuntimeConfig().runtime.id)
     ) {
+      setActiveDocumentLifecycleId(request.lifecycleId);
       callback(request);
     }
   };
@@ -66,9 +134,15 @@ export const bindViewSwitches = (callback: (request: SwitchViewMessage) => void)
   return () => globalThis.removeEventListener("message", listener);
 };
 
-export const bindSourceChanges = (callback: (kind: ShellChangeKind) => void): (() => void) => {
+interface PresentationEventCallbacks {
+  readonly changed: () => void;
+  readonly refresh: (phase: PresentationRefreshMessage["phase"]) => void;
+  readonly barrier?: (port: MessagePort, generation: number) => void;
+}
+
+export const bindPresentationEvents = (callbacks: PresentationEventCallbacks): (() => void) => {
   const listener = (event: MessageEvent<unknown>) => {
-    if (event.origin !== globalThis.location.origin || event.source !== globalThis.parent) {
+    if (!isStudioParentMessage(event)) {
       return;
     }
     const payload = messageJson(event);
@@ -76,12 +150,30 @@ export const bindSourceChanges = (callback: (kind: ShellChangeKind) => void): ((
       return;
     }
     const request = parsePreviewMessage(payload);
-    if (request?.type !== "marimo-studio:source-change" || !hasRuntimeConfig()) {
+    if (
+      (request?.type !== "marimo-studio:presentation-change" &&
+        request?.type !== "marimo-studio:presentation-refresh" &&
+        request?.type !== "marimo-studio:presentation-refresh-barrier") ||
+      !hasRuntimeConfig()
+    ) {
       return;
     }
     const config = getRuntimeConfig();
-    if (request.runtime === config.runtime.id && request.view === config.view) {
-      callback(request.kind);
+    if (
+      request.runtime === config.runtime.id &&
+      request.view === config.view &&
+      request.lifecycleId === activeDocumentLifecycleId()
+    ) {
+      if (request.type === "marimo-studio:presentation-change") {
+        callbacks.changed();
+      } else if (request.type === "marimo-studio:presentation-refresh-barrier") {
+        const port = event.ports.length === 1 ? event.ports[0] : undefined;
+        if (port) {
+          callbacks.barrier?.(port, request.generation);
+        }
+      } else {
+        callbacks.refresh(request.phase);
+      }
     }
   };
   globalThis.addEventListener("message", listener);
@@ -89,7 +181,8 @@ export const bindSourceChanges = (callback: (kind: ShellChangeKind) => void): ((
 };
 
 export const bindViewNavigation = (
-  navigate: (request: DirectViewNavigation) => void,
+  navigate: (request: DirectViewNavigation) => boolean | Promise<boolean>,
+  runtimeExplicit = getMountConfig().runtimeExplicit,
 ): (() => void) => {
   const listener = (event: MouseEvent) => {
     if (
@@ -113,12 +206,17 @@ export const bindViewNavigation = (
       return;
     }
     const config = getRuntimeConfig();
+    const href = anchor.getAttribute("href");
+    if (href === null) {
+      return;
+    }
     const navigation = viewNavigationForUrl({
-      href: anchor.href,
+      href,
       origin: globalThis.location.origin,
       publicRootUrl: config.publicRootUrl,
       documentRootUrl: config.documentRootUrl,
       publicQuery: publicNotebookQuery(globalThis.location.search),
+      trustedRuntime: { id: config.runtime.id, explicit: runtimeExplicit },
       views: config.views,
       currentView: config.view,
     });
@@ -128,26 +226,70 @@ export const bindViewNavigation = (
     event.preventDefault();
     const current = new URL(globalThis.location.href);
     const target = new URL(navigation.documentUrl);
-    if (navigation.current) {
-      if (target.href !== current.href) {
-        globalThis.location.assign(target.href);
+    const queryChanged = publicNotebookQuery(target.search) !== publicNotebookQuery(current.search);
+    if (
+      globalThis.parent !== globalThis.window &&
+      (studioOwned() || getRuntimeConfig().dev || queryChanged)
+    ) {
+      const message: NavigateViewMessage = {
+        type: "marimo-studio:navigate-view",
+        runtime: config.runtime.id,
+        ...documentLifecycleEnvelope(),
+        view: navigation.view,
+        query: target.search,
+        hash: target.hash,
+      };
+      postToStudioParent(message);
+      return;
+    }
+    if (navigation.current && !queryChanged && target.hash === current.hash) {
+      return;
+    }
+    if (navigation.current && !queryChanged) {
+      if (globalThis.parent === globalThis.window) {
+        globalThis.history.pushState(globalThis.history.state, "", target);
+        scrollToFragment(target.hash);
+      } else {
+        replaceFragment(target.hash);
+        const message: NavigateViewMessage = {
+          type: "marimo-studio:navigate-view",
+          runtime: getRuntimeConfig().runtime.id,
+          ...documentLifecycleEnvelope(),
+          view: navigation.view,
+          query: target.search,
+          hash: target.hash,
+          history: "push",
+        };
+        postToStudioParent(message);
       }
       return;
     }
-    if (target.search !== current.search || target.hash) {
+    if (queryChanged) {
       globalThis.location.assign(target.href);
       return;
     }
-    if (globalThis.parent === globalThis.window) {
-      navigate({ documentUrl: navigation.documentUrl, view: navigation.view });
-      return;
+    const committed = Promise.resolve(
+      navigate({ documentUrl: target.href, view: navigation.view }),
+    );
+    if (globalThis.parent !== globalThis.window) {
+      void committed.then((ready) => {
+        if (!ready) {
+          return;
+        }
+        const message: NavigateViewMessage = {
+          type: "marimo-studio:navigate-view",
+          runtime: getRuntimeConfig().runtime.id,
+          ...documentLifecycleEnvelope(),
+          view: navigation.view,
+          query: target.search,
+          hash: target.hash,
+          history: "push",
+        };
+        postToStudioParent(message);
+      });
+    } else {
+      void committed;
     }
-    const message: NavigateViewMessage = {
-      type: "marimo-studio:navigate-view",
-      runtime: config.runtime.id,
-      view: navigation.view,
-    };
-    globalThis.parent.postMessage(message, globalThis.location.origin);
   };
   document.addEventListener("click", listener);
   return () => document.removeEventListener("click", listener);

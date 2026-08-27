@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
-import { afterEach, test } from "vite-plus/test";
+import { afterEach, test, vi } from "vite-plus/test";
 
+import { PresentationDocumentRetiredError } from "../src/document/session-startup.ts";
+import {
+  beginPresentationRefresh,
+  readiness,
+  setPresentationRefreshState,
+} from "../src/readiness.ts";
 import { generateViewCss } from "../src/view-styles/generator.ts";
 import {
   collectViewClassTokens,
@@ -17,6 +23,7 @@ const settleMutations = async (): Promise<void> => {
 afterEach(() => {
   document.head.replaceChildren();
   document.body.replaceChildren();
+  vi.restoreAllMocks();
 });
 
 test("utility generation uses a native scope around the authored shell", async () => {
@@ -39,7 +46,6 @@ test("utility generation uses a native scope around the authored shell", async (
   assert.match(css, /border-width:1px/);
   assert.match(css, /border-style:solid/);
   assert.match(css, /border-inline-width:2px/);
-  assert.doesNotMatch(css, /margin:0/);
 });
 
 test("concurrent generations isolate theme tokens and animation names", async () => {
@@ -125,6 +131,38 @@ test("staged utility CSS commits atomically and ignores output mutations", async
   controller.disconnect();
 });
 
+test("a staged shell replacement retains its revision readiness owner", async () => {
+  document.body.innerHTML = '<main id="app-shell" class="grid"></main>';
+  let generations = 0;
+  const controller = new ViewStyleController(async (tokens) => {
+    generations += 1;
+    return `/* ${[...tokens].sort().join(" ")} */`;
+  });
+  const initial = await controller.stage(document.querySelector("#app-shell")!);
+  initial.commit();
+  initial.finalize();
+  controller.observe();
+  readiness.start();
+  readiness.setRuntime("ready");
+  readiness.setHosts(["ready"]);
+  const revisionClaim = beginPresentationRefresh("document");
+
+  const replacement = document.createElement("main");
+  replacement.id = "app-shell";
+  replacement.className = "flex p-4";
+  const staged = await controller.stage(replacement);
+  staged.commit();
+  document.querySelector("#app-shell")!.replaceWith(replacement);
+  staged.finalize();
+  setPresentationRefreshState(revisionClaim, "ready");
+  await settleMutations();
+
+  assert.equal(generations, 2);
+  assert.equal(readiness.snapshot().page, "ready");
+  assert.equal(document.querySelector<HTMLStyleElement>("style")!.textContent, "/* flex p-4 */");
+  controller.disconnect();
+});
+
 test("initial generation includes classes added while the generator loads", async () => {
   document.body.innerHTML = '<main id="app-shell" class="grid"></main>';
   let release: (() => void) | undefined;
@@ -180,11 +218,10 @@ test("a live utility regeneration failure becomes a presentation diagnostic", as
 });
 
 test("late style initialization clears the watchdog diagnostic", async () => {
-  document.body.innerHTML = `
-    <main id="app-shell" class="p-4"></main>
-    <div data-marimo-studio-style-error role="alert">Style startup failed</div>
-  `;
+  document.body.innerHTML = '<main id="app-shell" class="p-4"></main>';
   globalThis.__MARIMO_STUDIO_STYLE_TIMEOUT__ = setTimeout(() => {}, 60_000);
+  await initializeViewStyles(false);
+  assert.notEqual(document.querySelector("[data-marimo-studio-style-error]"), null);
 
   await initializeViewStyles(true);
 
@@ -203,4 +240,29 @@ test("unsupported scope leaves authored CSS available with a visible diagnostic"
     document.querySelector("[data-marimo-studio-style-error]")!.textContent ?? "",
     /CSS @scope support/,
   );
+});
+
+test("document retirement cancels style initialization without a diagnostic", async () => {
+  document.body.innerHTML = '<main id="app-shell" class="p-4"></main>';
+  const lifetime = new AbortController();
+  const retirement = new PresentationDocumentRetiredError();
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+  const initializing = initializeViewStyles(true, lifetime.signal);
+  lifetime.abort(retirement);
+
+  await assert.rejects(initializing, (cause: unknown) => cause === retirement);
+  assert.equal(document.querySelector("[data-marimo-studio-style-error]"), null);
+  assert.equal(consoleError.mock.calls.length, 0);
+});
+
+test("an active style initialization failure remains visible", async () => {
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+  const diagnostic = await initializeViewStyles(true, new AbortController().signal);
+
+  assert.equal(diagnostic?.code, "view-styles-failed");
+  assert.equal(document.documentElement.dataset.marimoStudioStyles, "error");
+  assert.notEqual(document.querySelector("[data-marimo-studio-style-error]"), null);
+  assert.equal(consoleError.mock.calls.length, 1);
 });

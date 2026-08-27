@@ -1,23 +1,17 @@
-import type { ShellChangeKind } from "@marimo-studio/protocol/development-events";
-
 import type { PresentationDiagnostic } from "../diagnostics.ts";
-import type { ShellTarget } from "./refresh-state.ts";
+import type { PresentationTarget } from "./presentation-refresh.ts";
 import type { DocumentRevisionCommit } from "./revision-document.ts";
 
+import { projectionReadGate } from "../projections/read-gate.ts";
 import { beginPresentationRefresh, setPresentationRefreshState } from "../readiness.ts";
-import {
-  commitRuntimeConfig,
-  fetchRuntimeConfig,
-  getMountConfig,
-  getRuntimeConfig,
-  getSupportUrl,
-  hasRuntimeConfig,
-} from "../runtime-config/index.ts";
 import { isAbortError } from "./styles.ts";
 
+export type RevisionOperationKind = "presentation" | "view";
+export type RevisionHistoryMode = "push" | "replace";
+
 export interface RevisionOperation {
-  readonly kind: ShellChangeKind;
-  readonly target: ShellTarget;
+  readonly kind: RevisionOperationKind;
+  readonly target: PresentationTarget;
 }
 
 export interface RevisionFailure {
@@ -46,23 +40,24 @@ export interface SessionReplayPort {
 export interface RevisionDocumentPort {
   readonly url: string;
   abort(): void;
-  refreshStylesheets(): Promise<void>;
   replace(
     documentUrl: string,
     supportUrl: string,
     signal: AbortSignal,
-    onTarget: (target: ShellTarget) => void,
+    onTarget: (target: PresentationTarget) => void,
+    historyMode: RevisionHistoryMode,
+    historyUrl: string,
   ): Promise<DocumentRevisionCommit>;
 }
 
 export class PresentationRevisionController {
   private active: AbortController | undefined;
+  private latestTransition: Promise<DocumentRevisionCommit | undefined> | undefined;
   private operationGeneration = 0;
   private disposed = false;
 
   constructor(
     private readonly document: RevisionDocumentPort,
-    private readonly previewSessionId: string,
     private readonly options: PresentationRevisionOptions,
     private readonly sessionReplay: SessionReplayPort,
   ) {}
@@ -74,56 +69,102 @@ export class PresentationRevisionController {
   async transition(
     documentUrl: string,
     supportUrl: string,
-    kind: ShellChangeKind = "html",
+    kind: RevisionOperationKind = "presentation",
     policy: PresentationRevisionPolicy = this.options,
   ): Promise<DocumentRevisionCommit | undefined> {
-    return await this.run(
+    return await this.transitionWithHistory(documentUrl, supportUrl, kind, policy, "replace");
+  }
+
+  async navigate(
+    documentUrl: string,
+    supportUrl: string,
+    historyUrl = documentUrl,
+    policy: PresentationRevisionPolicy = this.options,
+  ): Promise<DocumentRevisionCommit | undefined> {
+    return await this.transitionWithHistory(
+      documentUrl,
+      supportUrl,
+      "view",
+      policy,
+      "push",
+      historyUrl,
+    );
+  }
+
+  async restore(
+    documentUrl: string,
+    supportUrl: string,
+    historyUrl: string,
+    policy: PresentationRevisionPolicy = this.options,
+  ): Promise<DocumentRevisionCommit | undefined> {
+    return await this.transitionWithHistory(
+      documentUrl,
+      supportUrl,
+      "view",
+      policy,
+      "replace",
+      historyUrl,
+    );
+  }
+
+  private async transitionWithHistory(
+    documentUrl: string,
+    supportUrl: string,
+    kind: RevisionOperationKind,
+    policy: PresentationRevisionPolicy,
+    historyMode: RevisionHistoryMode,
+    historyUrl = documentUrl,
+  ): Promise<DocumentRevisionCommit | undefined> {
+    let reloadPending = false;
+    const transitionPolicy: PresentationRevisionPolicy = {
+      ...policy,
+      onReady: (operation) => {
+        if (!reloadPending) {
+          policy.onReady?.(operation);
+        }
+      },
+    };
+    const transition = this.run(
       { kind, target: { documentUrl, supportUrl } },
       async (signal, updateTarget) => {
         this.document.abort();
-        const commit = await this.document.replace(documentUrl, supportUrl, signal, updateTarget);
+        const commit = await this.document.replace(
+          documentUrl,
+          supportUrl,
+          signal,
+          updateTarget,
+          historyMode,
+          historyUrl,
+        );
         if (commit.reloadDocument) {
-          this.options.reloadDocument(this.sessionReplay.preservedUrl(commit.target.documentUrl));
+          reloadPending = true;
+          this.options.reloadDocument(this.sessionReplay.preservedUrl(historyUrl));
           return commit;
         }
         if (this.options.applyRuntime() === "reload") {
+          reloadPending = true;
           this.options.reloadRuntime();
         }
-        if (commit.supportChanged) {
+        if (commit.supportChanged && !reloadPending) {
           policy.onSupportChanged?.();
         }
         return commit;
       },
-      policy,
+      transitionPolicy,
     );
+    this.latestTransition = transition;
+    return await transition;
   }
 
-  async refreshStyles(policy: PresentationRevisionPolicy = this.options): Promise<void> {
-    await this.run(
-      {
-        kind: "css",
-        target: { documentUrl: this.document.url, supportUrl: getSupportUrl() },
-      },
-      async (signal) => {
-        await this.document.refreshStylesheets();
-        await this.refreshRuntimeConfig(signal);
-      },
-      policy,
-    );
-  }
-
-  async refreshRuntime(policy: PresentationRevisionPolicy = this.options): Promise<void> {
-    await this.run(
-      {
-        kind: "runtime",
-        target: { documentUrl: this.document.url, supportUrl: getSupportUrl() },
-      },
-      async (signal) => {
-        this.document.abort();
-        await this.refreshRuntimeConfig(signal);
-      },
-      policy,
-    );
+  async waitUntilIdle(): Promise<DocumentRevisionCommit | undefined> {
+    while (this.latestTransition) {
+      const transition = this.latestTransition;
+      const result = await transition;
+      if (this.latestTransition === transition) {
+        return result;
+      }
+    }
+    return undefined;
   }
 
   rememberSession(sessionId: string): void {
@@ -143,23 +184,13 @@ export class PresentationRevisionController {
     }
     this.disposed = true;
     this.cancel();
-  }
-
-  private async refreshRuntimeConfig(signal: AbortSignal): Promise<void> {
-    const fallbackRuntime = hasRuntimeConfig()
-      ? getRuntimeConfig().runtime.id
-      : getMountConfig().runtime;
-    commitRuntimeConfig(
-      await fetchRuntimeConfig(getSupportUrl(), signal, fallbackRuntime, this.previewSessionId),
-    );
-    if (this.options.applyRuntime() === "reload") {
-      this.options.reloadRuntime();
-    }
+    projectionReadGate.release();
+    this.latestTransition = undefined;
   }
 
   private async run<T>(
     initialOperation: RevisionOperation,
-    task: (signal: AbortSignal, updateTarget: (target: ShellTarget) => void) => Promise<T>,
+    task: (signal: AbortSignal, updateTarget: (target: PresentationTarget) => void) => Promise<T>,
     policy: PresentationRevisionPolicy,
   ): Promise<T | undefined> {
     if (this.disposed) {
@@ -168,7 +199,8 @@ export class PresentationRevisionController {
     this.cancel();
     const controller = new AbortController();
     const operationGeneration = ++this.operationGeneration;
-    const readinessGeneration = beginPresentationRefresh();
+    const readinessClaim = beginPresentationRefresh("document");
+    const projectionClaim = projectionReadGate.begin();
     let operation = initialOperation;
     this.active = controller;
     try {
@@ -182,7 +214,8 @@ export class PresentationRevisionController {
       ) {
         return undefined;
       }
-      setPresentationRefreshState(readinessGeneration, "ready");
+      setPresentationRefreshState(readinessClaim, "ready");
+      projectionReadGate.complete(projectionClaim);
       policy.onReady?.(operation);
       return result;
     } catch (error) {
@@ -190,7 +223,10 @@ export class PresentationRevisionController {
         return undefined;
       }
       const failure = policy.classifyFailure(error, operation);
-      setPresentationRefreshState(readinessGeneration, failure.state, failure.diagnostic);
+      setPresentationRefreshState(readinessClaim, failure.state, failure.diagnostic);
+      if (failure.state === "error") {
+        projectionReadGate.complete(projectionClaim);
+      }
       policy.onFailure?.(error, operation, failure);
       throw error;
     } finally {

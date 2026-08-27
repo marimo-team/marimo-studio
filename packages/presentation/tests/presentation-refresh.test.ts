@@ -4,9 +4,10 @@ import { test } from "vite-plus/test";
 import {
   BaselineReconciler,
   RefreshRetrySchedule,
-  sameShellPresentation,
-  ShellRefreshState,
-} from "../src/document/refresh-state.ts";
+  samePresentationRevision,
+  PresentationRefreshState,
+  StaleBindingRefresh,
+} from "../src/document/presentation-refresh.ts";
 
 const dashboard = {
   documentUrl: "/studio/dashboard/",
@@ -17,44 +18,36 @@ const executive = {
   supportUrl: "/_marimo-studio/views/executive",
 };
 
-test("unchanged presentation revisions preserve the current shell", () => {
+test("a revision identifies one published presentation across capability URLs", () => {
   const current = { ...dashboard, revision: "same" };
 
-  assert.deepEqual(sameShellPresentation(current, { ...current }), true);
-  assert.deepEqual(sameShellPresentation(current, { ...current, revision: "changed" }), false);
-  assert.deepEqual(sameShellPresentation(current, { ...current, documentUrl: "/other/" }), false);
+  assert.deepEqual(samePresentationRevision(current, { ...current }), true);
+  assert.deepEqual(samePresentationRevision(current, { ...current, revision: "changed" }), false);
+  assert.deepEqual(samePresentationRevision(current, { ...current, documentUrl: "/other/" }), true);
   assert.deepEqual(
-    sameShellPresentation(current, {
+    samePresentationRevision(current, {
       ...current,
       supportUrl: "/_marimo-studio/views/other",
     }),
-    false,
+    true,
   );
 });
 
-test("shell changes recover the exact failed view", () => {
-  const state = new ShellRefreshState();
+test("presentation refresh recovers the exact failed view", () => {
+  const state = new PresentationRefreshState();
 
   state.rememberFailure(executive);
 
   assert.deepEqual(state.failedTarget, executive);
-  assert.deepEqual(state.targetForChange("runtime", dashboard), executive);
-  assert.deepEqual(state.targetForChange("css", dashboard), executive);
-  assert.deepEqual(state.pending, true);
-
   state.complete(dashboard);
-  assert.deepEqual(state.targetForChange("runtime", dashboard), executive);
+  assert.deepEqual(state.failedTarget, executive);
 
   state.complete(executive);
   assert.deepEqual(state.failedTarget, undefined);
-  assert.deepEqual(state.targetForChange("runtime", dashboard), dashboard);
-  assert.deepEqual(state.targetForChange("views", dashboard), undefined);
-  assert.deepEqual(state.targetForChange("css", dashboard), undefined);
-  assert.deepEqual(state.pending, false);
 
   state.rememberFailure(executive);
   state.supersede();
-  assert.deepEqual(state.targetForChange("runtime", dashboard), dashboard);
+  assert.deepEqual(state.failedTarget, undefined);
 });
 
 test("stream baselines reconcile after runtime configuration", () => {
@@ -66,8 +59,8 @@ test("stream baselines reconcile after runtime configuration", () => {
 
   const configured = new BaselineReconciler(true);
 
-  assert.deepEqual(configured.ready(), true);
-  assert.deepEqual(configured.ready(), true);
+  assert.deepEqual(configured.ready(), false);
+  assert.deepEqual(configured.configure(), false);
 });
 
 test("refresh retries back off and reset after recovery", () => {
@@ -79,4 +72,16 @@ test("refresh retries back off and reset after recovery", () => {
   );
   schedule.reset();
   assert.deepEqual(schedule.next(), 10);
+});
+
+test("stale bindings retry until the presentation revision changes", () => {
+  const refresh = new StaleBindingRefresh();
+
+  assert.equal(refresh.request("revision-a"), true);
+  assert.equal(refresh.request("revision-a"), false);
+  assert.equal(refresh.needsRetry("revision-a"), true);
+  assert.equal(refresh.needsRetry("revision-b"), false);
+  assert.equal(refresh.request("revision-b"), true);
+  refresh.clear();
+  assert.equal(refresh.needsRetry("revision-b"), false);
 });

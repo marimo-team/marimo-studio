@@ -2,7 +2,13 @@ import type { PresentationDiagnostic, RuntimeDiagnostic } from "./diagnostics.ts
 
 export type RuntimeConnectionState = "connecting" | "ready" | "error";
 export type PresentationRefreshState = "ready" | "loading" | "error";
+export type PresentationRefreshOwner = "document" | "styles";
 export type PageReadinessState = "connecting" | "loading" | "ready" | "error";
+
+export interface PresentationRefreshClaim {
+  readonly generation: number;
+  readonly owner: PresentationRefreshOwner;
+}
 
 export interface ReadinessSnapshot {
   readonly connection: RuntimeConnectionState;
@@ -17,6 +23,13 @@ interface Deferred {
   promise: Promise<void>;
   resolve: () => void;
 }
+
+interface DocumentScope {
+  readonly document?: Document;
+}
+
+const hasDocument = (scope: DocumentScope): scope is { readonly document: Document } =>
+  scope.document !== undefined;
 
 const deferred = (): Deferred => {
   let resolve = () => {};
@@ -57,7 +70,14 @@ export class ReadinessController {
   private runtimeDiagnostic: RuntimeDiagnostic | undefined;
   private presentationDiagnostic: PresentationDiagnostic | undefined;
   private hostStates: readonly string[] = [];
-  private presentationGeneration = 0;
+  private readonly presentationOwners = new Map<
+    PresentationRefreshOwner,
+    {
+      diagnostic?: PresentationDiagnostic;
+      generation: number;
+      state: PresentationRefreshState;
+    }
+  >();
   private waiter = deferred();
   private snapshotValue: ReadinessSnapshot = {
     connection: "connecting",
@@ -73,7 +93,7 @@ export class ReadinessController {
     this.runtimeDiagnostic = undefined;
     this.presentationDiagnostic = undefined;
     this.hostStates = [];
-    this.presentationGeneration = 0;
+    this.presentationOwners.clear();
     this.waiter = deferred();
     this.commit();
   }
@@ -112,25 +132,47 @@ export class ReadinessController {
     this.commit();
   }
 
-  beginPresentation(): number {
-    this.presentationGeneration += 1;
-    this.presentation = "loading";
-    this.presentationDiagnostic = undefined;
+  beginPresentation(owner: PresentationRefreshOwner): PresentationRefreshClaim {
+    const generation = (this.presentationOwners.get(owner)?.generation ?? 0) + 1;
+    this.presentationOwners.set(owner, { generation, state: "loading" });
+    this.updatePresentation();
     this.commit();
-    return this.presentationGeneration;
+    return { generation, owner };
   }
 
   setPresentation(
-    generation: number,
+    claim: PresentationRefreshClaim,
     state: PresentationRefreshState,
     diagnostic?: PresentationDiagnostic,
   ): void {
-    if (generation !== this.presentationGeneration) {
+    const current = this.presentationOwners.get(claim.owner);
+    if (!current || claim.generation !== current.generation) {
       return;
     }
-    this.presentation = state;
-    this.presentationDiagnostic = diagnostic;
+    this.presentationOwners.set(claim.owner, {
+      generation: claim.generation,
+      state,
+      diagnostic,
+    });
+    this.updatePresentation();
     this.commit();
+  }
+
+  private updatePresentation(): void {
+    const owners = [...this.presentationOwners.values()];
+    const failed = owners.find(({ state }) => state === "error");
+    if (failed) {
+      this.presentation = "error";
+      this.presentationDiagnostic = failed.diagnostic;
+      return;
+    }
+    if (owners.some(({ state }) => state === "loading")) {
+      this.presentation = "loading";
+      this.presentationDiagnostic = undefined;
+      return;
+    }
+    this.presentation = "ready";
+    this.presentationDiagnostic = undefined;
   }
 
   private commit(): void {
@@ -153,6 +195,15 @@ export class ReadinessController {
       runtimeDiagnostic: this.runtimeDiagnostic,
       presentationDiagnostic: this.presentationDiagnostic,
     };
+    if (hasDocument(globalThis)) {
+      globalThis.document.documentElement.dataset.marimoStudioConnectionState = this.connection;
+      globalThis.document.documentElement.dataset.marimoStudioPresentationState = this.presentation;
+      globalThis.document.documentElement.dataset.marimoStudioPresentationOwners = [
+        ...this.presentationOwners.entries(),
+      ]
+        .map(([owner, state]) => `${owner}:${state.generation}:${state.state}`)
+        .join(",");
+    }
     if (settled && !previous.settled) {
       this.waiter.resolve();
     }
@@ -162,10 +213,12 @@ export class ReadinessController {
 
 export const readiness = new ReadinessController();
 
-export const beginPresentationRefresh = (): number => readiness.beginPresentation();
+export const beginPresentationRefresh = (
+  owner: PresentationRefreshOwner,
+): PresentationRefreshClaim => readiness.beginPresentation(owner);
 
 export const setPresentationRefreshState = (
-  generation: number,
+  claim: PresentationRefreshClaim,
   state: PresentationRefreshState,
   diagnostic?: PresentationDiagnostic,
-): void => readiness.setPresentation(generation, state, diagnostic);
+): void => readiness.setPresentation(claim, state, diagnostic);

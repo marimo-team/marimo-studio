@@ -3,18 +3,29 @@ import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 import assert from "node:assert/strict";
 import { afterEach, test, vi } from "vite-plus/test";
 
+import { activeDocumentLifecycleId } from "../src/document/document-lifecycle-id.ts";
 import { startPresentationObservers, stopPresentationObservers } from "../src/observers.ts";
+import { projectionHosts } from "../src/projections/host-runtime.ts";
 import { toBrowserDiagnostics } from "../src/readiness-diagnostics.ts";
-import { pageReadinessState } from "../src/readiness.ts";
-import { setRuntimeConnectionState } from "../src/rendered-view-observer.ts";
+import { pageReadinessState, ReadinessController } from "../src/readiness.ts";
+import {
+  announceRenderedViewReady,
+  setRuntimeConnectionState,
+} from "../src/rendered-view-observer.ts";
+import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
 import { valueCellPhase } from "../src/runtime/value-cell-state.ts";
 import { initializeViewStyles } from "../src/view-styles/runtime.ts";
+import { projectionRequest, projectionRuntimeConfig } from "./runtime-fixtures.ts";
 
 const mountConfig = {
   supportUrl: "/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "presentation-revision",
   runtime: "server",
+  runtimeExplicit: false,
+  replay: false,
+  clientId: "client-123456789",
+  lifecycleId: 7,
 } as const;
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = mountConfig;
@@ -25,6 +36,8 @@ const settleMutations = async (): Promise<void> => {
 
 afterEach(() => {
   stopPresentationObservers();
+  projectionHosts.disconnect();
+  globalThis.history.replaceState({}, "", "/");
   globalThis.__MARIMO_MOUNT_CONFIG__ = mountConfig;
   globalThis.__MARIMO_STUDIO_SESSION_ID__ = undefined;
   vi.restoreAllMocks();
@@ -52,6 +65,31 @@ test("page readiness accounts for pending and retained hosts", () => {
   assert.deepEqual(pageReadinessState("ready", ["ready"], "error"), "error");
 });
 
+test("document and style refresh owners settle independently", () => {
+  const controller = new ReadinessController();
+  controller.start();
+  controller.setRuntime("ready");
+  controller.setHosts(["ready"]);
+  const documentClaim = controller.beginPresentation("document");
+  const styleClaim = controller.beginPresentation("styles");
+
+  controller.setPresentation(documentClaim, "ready");
+  assert.equal(controller.snapshot().page, "loading");
+  assert.equal(
+    document.documentElement.dataset.marimoStudioPresentationOwners,
+    "document:1:ready,styles:1:loading",
+  );
+  controller.setPresentation(styleClaim, "ready");
+  assert.equal(controller.snapshot().page, "ready");
+
+  const stale = controller.beginPresentation("document");
+  const current = controller.beginPresentation("document");
+  controller.setPresentation(stale, "ready");
+  assert.equal(controller.snapshot().page, "loading");
+  controller.setPresentation(current, "ready");
+  assert.equal(controller.snapshot().page, "ready");
+});
+
 test("browser evidence reports deterministic diagnostic truncation", () => {
   const diagnostics = Array.from({ length: 205 }, (_, index) => ({
     scope: "presentation" as const,
@@ -70,7 +108,7 @@ test("browser evidence reports deterministic diagnostic truncation", () => {
     code: "browser-diagnostics-truncated",
     severity: "error",
     message: "6 additional browser diagnostics were omitted.",
-    hint: "Fix repeated rendered-view errors, then rerun the analysis.",
+    hint: "Fix repeated rendered-view errors, then rerun validation.",
     view: "dashboard",
     scope: "presentation",
   });
@@ -96,10 +134,54 @@ test("WASM readiness omits an unavailable session from its preview message", asy
     {
       type: "marimo-studio:view-ready",
       runtime: "wasm",
+      lifecycleId: 7,
       view: "dashboard",
       revision: "presentation-revision",
     },
   ]);
+});
+
+test("readiness acknowledges the active preview switch", async () => {
+  globalThis.history.replaceState({}, "", "/?marimo_studio_lifecycle=7");
+  const postMessage = vi.spyOn(globalThis.parent, "postMessage");
+
+  startPresentationObservers(async () => {});
+  setRuntimeConnectionState("ready");
+  await settleMutations();
+
+  const ready = postMessage.mock.calls.flatMap(([message]) => {
+    const payload = jsonValueSchema.safeParse(message);
+    if (!payload.success) {
+      return [];
+    }
+    const parsed = parsePreviewMessage(payload.data);
+    return parsed?.type === "marimo-studio:view-ready" ? [parsed] : [];
+  });
+  assert.equal(
+    ready.some((message) => message.lifecycleId === 7),
+    true,
+  );
+  postMessage.mockClear();
+  announceRenderedViewReady();
+  assert.equal(
+    postMessage.mock.calls.some(([message]) => {
+      const payload = jsonValueSchema.safeParse(message);
+      if (!payload.success) {
+        return false;
+      }
+      const parsed = parsePreviewMessage(payload.data);
+      return parsed?.type === "marimo-studio:view-ready" && parsed.lifecycleId === 7;
+    }),
+    true,
+  );
+});
+
+test("document identity survives browser URL canonicalization", () => {
+  globalThis.history.replaceState({}, "", "/?marimo_studio_lifecycle=7");
+  assert.equal(activeDocumentLifecycleId(), 7);
+
+  globalThis.history.replaceState({}, "", "/?runtime=wasm");
+  assert.equal(activeDocumentLifecycleId(), 7);
 });
 
 test("runtime readiness preserves a visible style failure", async () => {
@@ -119,8 +201,11 @@ test("runtime readiness preserves a visible style failure", async () => {
 });
 
 test("a stale value opens a new idle batch while its snapshot remains visible", async () => {
-  document.body.innerHTML = `<span mo-value="report" data-state="ready"></span>`;
+  commitRuntimeConfig(projectionRuntimeConfig([projectionRequest("report", "value")]));
+  document.body.innerHTML = `<span mo-value="report" data-marimo-studio-site="site:value:report"></span>`;
   const source = document.querySelector<HTMLElement>("[mo-value]")!;
+  projectionHosts.connect();
+  source.dataset.state = "ready";
   let idleEvents = 0;
   document.addEventListener("marimo-studio:idle", () => idleEvents++);
   startPresentationObservers(async () => {});

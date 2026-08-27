@@ -1,24 +1,16 @@
-import type { ShellChangeKind } from "@marimo-studio/protocol/development-events";
-
-export interface ShellTarget {
+export interface PresentationTarget {
   documentUrl: string;
   supportUrl: string;
 }
 
-export interface VersionedShellTarget extends ShellTarget {
+export interface VersionedPresentationTarget extends PresentationTarget {
   revision: string;
 }
 
-export const sameShellPresentation = (
-  current: VersionedShellTarget,
-  next: VersionedShellTarget,
-): boolean => {
-  return (
-    current.documentUrl === next.documentUrl &&
-    current.supportUrl === next.supportUrl &&
-    current.revision === next.revision
-  );
-};
+export const samePresentationRevision = (
+  current: VersionedPresentationTarget,
+  next: VersionedPresentationTarget,
+): boolean => current.revision === next.revision;
 
 export class RefreshRetrySchedule {
   #attempt = 0;
@@ -51,9 +43,8 @@ export class BaselineReconciler {
   ready(): boolean {
     if (!this.#configured) {
       this.#pending = true;
-      return false;
     }
-    return true;
+    return false;
   }
 
   configure(): boolean {
@@ -66,18 +57,41 @@ export class BaselineReconciler {
   }
 }
 
-export class ShellRefreshState {
-  #failedTarget: ShellTarget | undefined;
+export class StaleBindingRefresh {
+  #revision: string | undefined;
 
-  get pending(): boolean {
-    return this.#failedTarget !== undefined;
+  request(revision: string): boolean {
+    if (this.#revision === revision) {
+      return false;
+    }
+    this.#revision = revision;
+    return true;
   }
 
-  get failedTarget(): ShellTarget | undefined {
+  needsRetry(currentRevision: string): boolean {
+    if (this.#revision === undefined) {
+      return false;
+    }
+    if (this.#revision === currentRevision) {
+      return true;
+    }
+    this.#revision = undefined;
+    return false;
+  }
+
+  clear(): void {
+    this.#revision = undefined;
+  }
+}
+
+export class PresentationRefreshState {
+  #failedTarget: PresentationTarget | undefined;
+
+  get failedTarget(): PresentationTarget | undefined {
     return this.#failedTarget && { ...this.#failedTarget };
   }
 
-  rememberFailure(target: ShellTarget): void {
+  rememberFailure(target: PresentationTarget): void {
     this.#failedTarget = target;
   }
 
@@ -85,22 +99,12 @@ export class ShellRefreshState {
     this.#failedTarget = undefined;
   }
 
-  complete(target: ShellTarget): void {
+  complete(target: PresentationTarget): void {
     if (
       this.#failedTarget?.documentUrl === target.documentUrl &&
       this.#failedTarget.supportUrl === target.supportUrl
     ) {
       this.#failedTarget = undefined;
     }
-  }
-
-  targetForChange(kind: ShellChangeKind, fallback: ShellTarget): ShellTarget | undefined {
-    if (kind === "css") {
-      return this.#failedTarget;
-    }
-    if (kind === "views" && !this.#failedTarget) {
-      return undefined;
-    }
-    return this.#failedTarget ?? fallback;
   }
 }

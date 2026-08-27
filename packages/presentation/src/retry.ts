@@ -2,6 +2,7 @@ interface RetryOptions<T> {
   operation: () => Promise<T>;
   delays: readonly number[];
   retryWhen: (cause: unknown) => boolean;
+  retryAfterExhaustion?: (cause: unknown) => number | undefined;
   signal?: AbortSignal;
 }
 
@@ -26,13 +27,14 @@ export const retry = async <T>({
   operation,
   delays,
   retryWhen,
+  retryAfterExhaustion,
   signal,
 }: RetryOptions<T>): Promise<T> => {
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await operation();
     } catch (error) {
-      const delay = delays[attempt];
+      const delay = delays[attempt] ?? retryAfterExhaustion?.(error);
       if (delay === undefined || !retryWhen(error)) {
         throw error;
       }
