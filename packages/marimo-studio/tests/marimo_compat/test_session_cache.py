@@ -23,6 +23,7 @@ from marimo_studio._compat.server.session_cache import (
 )
 from marimo_studio._composition import create_server_adapters
 from marimo_studio._filesystem import _secure_operations as secure_operations
+from marimo_studio._filesystem.io import read_text
 from marimo_studio._filesystem.secure import FileIdentity
 
 
@@ -203,10 +204,10 @@ def test_session_cache_multi_process_writers_publish_complete_json(
         while not all(event.is_set() for event in commit_ready):
             if time.monotonic() >= deadline:
                 pytest.fail("session-cache writers did not reach the commit barrier")
-            document = json.loads(path.read_text(encoding="utf-8"))
+            document = json.loads(read_text(path))
             _assert_complete_snapshot(document, exports)
             reads += 1
-        document = json.loads(path.read_text(encoding="utf-8"))
+        document = json.loads(read_text(path))
         assert document == {"writer": "initial"}
         reads += 1
         first_commit.wait(timeout=10)
@@ -214,7 +215,7 @@ def test_session_cache_multi_process_writers_publish_complete_json(
             if time.monotonic() >= deadline:
                 pytest.fail("session-cache writer processes did not finish")
             try:
-                document = json.loads(path.read_text(encoding="utf-8"))
+                document = json.loads(read_text(path))
                 _assert_complete_snapshot(document, exports)
             except (AssertionError, json.JSONDecodeError) as error:
                 failures.append(str(error))
@@ -242,7 +243,7 @@ def test_session_cache_multi_process_writers_publish_complete_json(
         "short": (exports, exports, exports, True),
         "long": (exports, exports, exports, True),
     }
-    final = json.loads(path.read_text(encoding="utf-8"))
+    final = json.loads(read_text(path))
     _assert_complete_snapshot(final, exports)
     assert final["writer"] in {"short", "long"}
     assert {item.name for item in tmp_path.iterdir()} == {"session.json"}
@@ -338,7 +339,7 @@ def test_session_cache_cancellation_waits_for_async_publication(
     async def cancel() -> None:
         writer.start()
         assert await asyncio.to_thread(entered.wait, 10)
-        assert json.loads(path.read_text(encoding="utf-8")) == {"writer": "published"}
+        assert json.loads(read_text(path)) == {"writer": "published"}
         assert len(tuple(tmp_path.iterdir())) == 2
         assert writer.task is not None
         writer.task.cancel()
@@ -353,7 +354,7 @@ def test_session_cache_cancellation_waits_for_async_publication(
             await writer.task
         assert writer.running is False
         assert finished.is_set()
-        assert json.loads(path.read_text(encoding="utf-8"))["writer"] == "short"
+        assert json.loads(read_text(path))["writer"] == "short"
         assert {item.name for item in tmp_path.iterdir()} == {"session.json"}
 
     try:
@@ -389,7 +390,7 @@ def test_session_cache_path_writer_keeps_synchronous_publication(
         handle.close()
 
     assert calls == [path]
-    assert json.loads(path.read_text(encoding="utf-8"))["writer"] == "short"
+    assert json.loads(read_text(path))["writer"] == "short"
 
 
 def test_session_cache_reports_failure_before_propagating_cancellation(
@@ -424,7 +425,7 @@ def test_session_cache_reports_failure_before_propagating_cancellation(
     async def cancel() -> None:
         writer.start()
         assert await asyncio.to_thread(entered.wait, 10)
-        assert json.loads(path.read_text(encoding="utf-8")) == {"writer": "published"}
+        assert json.loads(read_text(path)) == {"writer": "published"}
         assert len(tuple(tmp_path.iterdir())) == 2
         assert writer.task is not None
         writer.task.cancel()
@@ -446,7 +447,7 @@ def test_session_cache_reports_failure_before_propagating_cancellation(
         release.set()
         handle.close()
 
-    assert json.loads(path.read_text(encoding="utf-8")) == {"writer": "published"}
+    assert json.loads(read_text(path)) == {"writer": "published"}
     assert {item.name for item in tmp_path.iterdir()} == {"session.json"}
     assert "Write error: Could not replace mutable workspace file" in caplog.text
 
