@@ -15,6 +15,7 @@ from typing import Any, cast
 import pytest
 from marimo._session.state import serialize as native_session_cache
 from marimo._session.state.serialize import SessionCacheWriter
+from marimo._utils.async_path import AsyncPath
 
 import marimo_studio._compat.server.session_cache as session_cache_module
 from marimo_studio._compat.server.session_cache import (
@@ -157,6 +158,7 @@ def _assert_complete_snapshot(document: object, exports: int) -> None:
     assert 1 <= generation <= exports
 
 
+@pytest.mark.native_process
 def test_session_cache_multi_process_writers_publish_complete_json(
     tmp_path: Path,
 ) -> None:
@@ -297,7 +299,7 @@ def test_session_cache_preserves_export_order_interval_and_error_policy(
     assert "Write error: disk stopped" in caplog.text
 
 
-def test_session_cache_cancellation_propagates_from_async_publication(
+def test_session_cache_cancellation_waits_for_async_publication(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -305,31 +307,54 @@ def test_session_cache_cancellation_propagates_from_async_publication(
     release = threading.Event()
     finished = threading.Event()
     path = tmp_path / "session.json"
+    path.write_text(json.dumps({"writer": "published"}), encoding="utf-8")
     view = _ExportingView("short", 1)
     writer = _writer(path, view)
+    writer.path = AsyncPath(path)
+    rename = secure_operations.os.rename
+    replace = secure_operations.os.replace
 
-    def publish(_destination: Path, _content: str) -> object:
+    def commit(operation: Any, *args: Any, **kwargs: Any) -> Any:
         entered.set()
-        release.wait(timeout=10)
+        if not release.wait(timeout=10):
+            raise TimeoutError("session-cache publication was not released")
+        committed = operation(*args, **kwargs)
         finished.set()
-        return object()
+        return committed
+
+    def commit_rename(*args: Any, **kwargs: Any) -> Any:
+        return commit(rename, *args, **kwargs)
+
+    def commit_replace(*args: Any, **kwargs: Any) -> Any:
+        return commit(replace, *args, **kwargs)
 
     monkeypatch.setattr(
         native_session_cache, "serialize_session_view", _serialized_view
     )
-    monkeypatch.setattr(session_cache_module, "atomic_write_text", publish)
+    monkeypatch.setattr(secure_operations.os, "rename", commit_rename)
+    monkeypatch.setattr(secure_operations.os, "replace", commit_replace)
     handle = PrivateSessionCachePublication().open()
 
     async def cancel() -> None:
         writer.start()
         assert await asyncio.to_thread(entered.wait, 10)
+        assert json.loads(path.read_text(encoding="utf-8")) == {"writer": "published"}
+        assert len(tuple(tmp_path.iterdir())) == 2
         assert writer.task is not None
         writer.task.cancel()
+        try:
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+            assert not writer.task.done()
+            assert not finished.is_set()
+        finally:
+            release.set()
         with pytest.raises(asyncio.CancelledError):
             await writer.task
         assert writer.running is False
-        release.set()
-        assert await asyncio.to_thread(finished.wait, 10)
+        assert finished.is_set()
+        assert json.loads(path.read_text(encoding="utf-8"))["writer"] == "short"
+        assert {item.name for item in tmp_path.iterdir()} == {"session.json"}
 
     try:
         asyncio.run(cancel())
@@ -367,16 +392,25 @@ def test_session_cache_path_writer_keeps_synchronous_publication(
     assert json.loads(path.read_text(encoding="utf-8"))["writer"] == "short"
 
 
-def test_session_cache_failed_replace_keeps_published_file_and_cleans_staging(
+def test_session_cache_reports_failure_before_propagating_cancellation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
     path = tmp_path / "session.json"
     path.write_text(json.dumps({"writer": "published"}), encoding="utf-8")
     view = _ExportingView("short", 1)
     writer = _writer(path, view)
+    writer.path = AsyncPath(path)
 
     def reject_replace(*_args: object, **_kwargs: object) -> None:
+        entered.set()
+        if not release.wait(timeout=10):
+            raise TimeoutError("session-cache publication was not released")
+        finished.set()
         raise OSError("replace unavailable")
 
     monkeypatch.setattr(
@@ -384,14 +418,37 @@ def test_session_cache_failed_replace_keeps_published_file_and_cleans_staging(
     )
     monkeypatch.setattr(secure_operations.os, "rename", reject_replace)
     monkeypatch.setattr(secure_operations.os, "replace", reject_replace)
+    caplog.set_level("ERROR", logger="marimo")
     handle = PrivateSessionCachePublication().open()
+
+    async def cancel() -> None:
+        writer.start()
+        assert await asyncio.to_thread(entered.wait, 10)
+        assert json.loads(path.read_text(encoding="utf-8")) == {"writer": "published"}
+        assert len(tuple(tmp_path.iterdir())) == 2
+        assert writer.task is not None
+        writer.task.cancel()
+        try:
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+            assert not writer.task.done()
+        finally:
+            release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await writer.task
+        assert writer.task.cancelled()
+        assert writer.running is False
+        assert finished.is_set()
+
     try:
-        asyncio.run(writer.run())
+        asyncio.run(cancel())
     finally:
+        release.set()
         handle.close()
 
     assert json.loads(path.read_text(encoding="utf-8")) == {"writer": "published"}
     assert {item.name for item in tmp_path.iterdir()} == {"session.json"}
+    assert "Write error: Could not replace mutable workspace file" in caplog.text
 
 
 def test_server_composition_reference_counts_and_restores_session_cache_patch() -> None:

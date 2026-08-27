@@ -22,6 +22,10 @@ from marimo._utils.async_path import AsyncPath
 
 from marimo_studio._compat.patch import CallbackCloseHandle, ReversiblePatch
 from marimo_studio._filesystem.io import atomic_write_text
+from marimo_studio._processes.ownership import (
+    propagate_cancellation,
+    settle_ownership_outcome,
+)
 
 
 def _run_replacement(_native_run: Any) -> Any:
@@ -46,7 +50,18 @@ def _run_replacement(_native_run: Any) -> Any:
                     content = json.dumps(data, indent=2)
                     path = Path(writer.path)
                     if isinstance(writer.path, AsyncPath):
-                        await asyncio.to_thread(atomic_write_text, path, content)
+                        (
+                            _identity,
+                            failure,
+                            cancellation,
+                        ) = await settle_ownership_outcome(
+                            asyncio.to_thread(atomic_write_text, path, content)
+                        )
+                        if failure is not None:
+                            native_session_cache.LOGGER.error(f"Write error: {failure}")
+                            propagate_cancellation(cancellation)
+                            break
+                        propagate_cancellation(cancellation)
                     else:
                         atomic_write_text(path, content)
                 await asyncio.sleep(writer.interval)

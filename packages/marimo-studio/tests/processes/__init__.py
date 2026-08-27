@@ -1,0 +1,1 @@
+"""Process ownership contract tests."""
