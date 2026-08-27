@@ -33,8 +33,6 @@ const isExpectedRuntimeUnmount = (data: unknown[]): boolean =>
 const isExpectedOpaqueFrameLimitation = (data: unknown[]): boolean =>
   data[0] === "[iframe] localStorage unavailable - using fallback storage" ||
   data[0] === "[iframe] Fullscreen API unavailable" ||
-  data[0] === "localStorage unavailable - using fallback storage" ||
-  data[0] === "Fullscreen API unavailable" ||
   data[0] === "Not running in a secure context; interrupts are not available.";
 
 const createLogger = (namespace?: string): RuntimeLogger => {
