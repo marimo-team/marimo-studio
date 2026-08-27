@@ -1,315 +1,196 @@
 ---
 title: CLI reference
-description: Commands, options, machine output, diagnostics, and exit codes for marimo-studio.
+description: Create, inspect, build, validate, activate, export, and extend Studio views.
 ---
 
 # CLI reference
 
-`marimo-studio` reports workspace state, creates and activates view source,
-inspects notebook cells, records stable aliases, validates projections, and
-exports static sites. Marimo's `edit` and `run` commands own notebook servers.
+`marimo-studio` works with saved notebooks. `TARGET` may be a notebook, a
+project directory, or `pyproject.toml`. The current directory is used when it
+contains one configured notebook.
 
 ```text
-marimo-studio overview [OPTIONS] [TARGET]
-marimo-studio inspect [OPTIONS] [TARGET]
-marimo-studio bind [OPTIONS] [TARGET]
-marimo-studio view add [OPTIONS] [TARGET]
-marimo-studio view activate [OPTIONS] [TARGET]
-marimo-studio view remove [OPTIONS] [TARGET]
-marimo-studio analyze [OPTIONS] [TARGET]
-marimo-studio check [OPTIONS] [TARGET]
-marimo-studio export [OPTIONS] [TARGET]
+marimo-studio overview [TARGET]
+marimo-studio inspect [TARGET]
+marimo-studio bind [TARGET]
+
+marimo-studio starter list
+marimo-studio starter show STARTER_ID
+
+marimo-studio view create [TARGET] [--name NAME] [--starter STARTER_ID]
+marimo-studio view inspect [TARGET] --name NAME
+marimo-studio view build [TARGET] --name NAME
+marimo-studio view activate [TARGET] --name NAME --server URL
+marimo-studio view remove [TARGET] --name NAME
+
+marimo-studio validate [TARGET] [--view NAME] --level static|runtime|browser
+marimo-studio export [TARGET] --view NAME --output DIRECTORY
+marimo-studio provider doctor [PROVIDER]
 ```
 
-`TARGET` accepts a notebook path, project directory, or `pyproject.toml`. Pass
-a notebook path when creating the first view. Commands discover one configured
-notebook from the current directory when `TARGET` is omitted.
+Use `--format json` for data and `--diagnostics jsonl` for one diagnostic event
+per stderr line.
 
-Every data command accepts:
+With `--format json`, stdout contains one result document. Provider, runtime,
+and child-process output stays on stderr. JSONL diagnostics bound that output
+and report it as `process-output` events.
 
-| Option                      | Default | Behavior                                                          |
-| --------------------------- | ------- | ----------------------------------------------------------------- |
-| `--format text\|json`       | `text`  | Write human text or stable JSON to standard output                |
-| `--diagnostics text\|jsonl` | `text`  | Write human diagnostics or one JSON event per standard-error line |
+| Exit  | Meaning                                     |
+| ----- | ------------------------------------------- |
+| `0`   | The requested operation completed           |
+| `1`   | Validation found a failed contract          |
+| `2`   | Arguments or capability input are invalid   |
+| `3`   | Configuration or authored source is invalid |
+| `4`   | A notebook cell binding is invalid          |
+| `5`   | A live Studio request failed                |
+| `6`   | The installed protocol is incompatible      |
+| `7`   | The notebook environment cannot be prepared |
+| `130` | The command was interrupted                 |
 
-::: warning Runtime mode executes notebook code
-`analyze`, `inspect --runtime`, and `check --runtime` can perform the
-notebook's file, network, database, and data access. Run them in the notebook
-environment.
-:::
+## JSON results
 
-## `overview`
+Every JSON result contains `schema`. The main command-specific fields are:
+
+| Command           | Fields                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `overview`        | `notebook`, `state`, `config`, `config_source`, `view_root`, `default_view`, `default_runtime`, `runtimes`, `bindings`, `views` |
+| `inspect`         | `notebook`, `app_config`, `cells`, and `runtime` when requested                                                                 |
+| `bind`            | `alias`, `cell`, `config`, `dry_run`, `previous_ref`, `changed`                                                                 |
+| `starter list`    | `starters`                                                                                                                      |
+| `starter show`    | `id`, `title`, `summary`, `provider`, `documents`, `availability`                                                               |
+| `view create`     | `notebook`, `config`, `view`, `root`, `provider`, `documents`, `created`, `updated`, `dry_run`                                  |
+| `view inspect`    | `view`, `provider`, `documents`, `diagnostics`, `freshness`, `publication`                                                      |
+| `view build`      | `view`, `profile`, `input_id`, `artifact_id`, `diagnostics`, `duration_ms`                                                      |
+| `view activate`   | `notebook`, `view`, `generation`, `client_id`, `session_id`                                                                     |
+| `view remove`     | `notebook`, `view`, `default_view`, `views`                                                                                     |
+| `validate`        | `notebook`, `view`, `level`, `ok`, `handoff_ready`, `actions`, `evidence`                                                       |
+| `export`          | `notebook`, `view`, `runtime`, `output`, `entrypoint`, `files`                                                                  |
+| `provider doctor` | `providers`                                                                                                                     |
+
+`overview`, `view create`, and `view activate` emit schema 2 records. The
+remaining command records emit schema 1.
+
+Diagnostic events contain `event`, `command`, `code`, `severity`, and
+`message`. Process and command failures add `exit_code`. A diagnostic may also
+add `status` and structured `details`.
+
+## Create a view
 
 ```console
-uvx marimo-studio overview analysis.py --format json
+marimo-studio starter list
+marimo-studio view create analysis.py \
+  --name dashboard \
+  --starter marimo-studio/vanilla:default
 ```
 
-Reports the saved notebook, configuration state, canonical view root, default
-view and runtime, cell bindings, and every authored view. It works before the
-notebook has Studio configuration and returns one of these states:
+`starter list` reports provider-qualified IDs. Omitting `--starter` selects
+`marimo-studio/vanilla:default`.
 
-| State          | Meaning                                                 |
-| -------------- | ------------------------------------------------------- |
-| `unconfigured` | The notebook has no Studio definition                   |
-| `needs-view`   | Studio configuration exists and awaits its first view   |
-| `ready`        | The configured default and authored views are available |
+The default starter creates:
 
-JSON output is the same `StudioOverview` record returned by
-`marimo_studio.agent.overview`.
-
-## `inspect`
-
-```console
-uvx marimo-studio inspect analysis.py --display
+```text
+dashboard/
+  view.toml
+  index.html
 ```
 
-Compiles the notebook graph and prints one record per selected cell.
+`view create` fails when the name already exists. `--dry-run` reports planned
+writes. The view remains `unbuilt` until an explicit build or live preview
+publishes `.artifacts/`. A view name starts with a lowercase letter and
+contains lowercase letters, numbers, or hyphens.
 
-| Option                      | Behavior                                                                       |
-| --------------------------- | ------------------------------------------------------------------------------ |
-| `--display`                 | Keep cells whose body ends with a displayed expression                         |
-| `--include-code`            | Include each complete cell body                                                |
-| `--runtime`                 | Execute the notebook and include MIME outputs and JSON-compatible values       |
-| `--limit N`                 | Return at most `N` cell records, where `N` is at least 1                       |
-| `--runtime-timeout SECONDS` | Wait 0 to 300 finite seconds for runtime inspection. The default is 60 seconds |
-
-Static inspection leaves cell bodies unevaluated.
-
-## `bind`
+## Inspect and build
 
 ```console
-uvx marimo-studio bind analysis.py --cell 12 --as summary
+marimo-studio view inspect analysis.py --name dashboard --format json
+marimo-studio view build analysis.py --name dashboard
 ```
 
-Records `summary` as a stable alias for zero-based cell index `12`.
+`view inspect` returns the provider, source documents and access, diagnostics,
+build freshness, and the current publication. Projection declarations and
+runtime evidence are returned by `validate`. `view build` writes a candidate to
+generated staging, validates it, and atomically publishes it. A failed build
+keeps the last published page available.
 
-| Option         | Behavior                                             |
-| -------------- | ---------------------------------------------------- |
-| `--cell INDEX` | Select the zero-based cell. Required                 |
-| `--as ALIAS`   | Name the selected cell. Required                     |
-| `--dry-run`    | Report the binding and leave configuration unchanged |
-| `--overwrite`  | Replace an existing alias                            |
+`--profile development|production` selects the build profile. The default is
+`development`.
 
-Use a native Marimo cell name directly when one exists. An alias starts with a
-letter and contains letters, digits, underscores, or hyphens.
-
-An alias follows its cell across formatting and comment changes. Reinspect the
-notebook before using `--overwrite` after the cell's Python meaning changes or
-its match becomes ambiguous.
-
-## `view add`
+## Validate
 
 ```console
-uvx marimo-studio view add analysis.py
+marimo-studio validate analysis.py --view dashboard --level static
+marimo-studio validate analysis.py --view dashboard --level runtime
+marimo-studio validate analysis.py --view dashboard --level browser --server http://localhost:2718
 ```
 
-Creates the `dashboard` view directory and configures the notebook when needed.
-A new view contains `index.html` and `app.css` and starts with every notebook
-cell in source order.
+Validation levels are cumulative:
 
-Name another view with `--name`:
+| Level     | Evidence                                                          |
+| --------- | ----------------------------------------------------------------- |
+| `static`  | Saved notebook, view source, configuration, and target resolution |
+| `runtime` | Static evidence plus complete isolated notebook execution         |
+| `browser` | Runtime evidence plus the selected rendered Studio client         |
 
-```console
-uvx marimo-studio view add analysis.py --name executive
-```
+Use `--browser-client ID` when several browser clients are connected. Set
+`MARIMO_STUDIO_ACCESS_TOKEN` when the running server requires authentication.
+`--runtime-timeout` and `--browser-timeout` accept finite seconds from 0 to 300.
+Runtime validation can perform the notebook's configured file, network,
+database, and data access before Studio checks the selected projected results.
 
-`--dry-run` reports the files and configuration changes without writing them.
-
-A view name starts with a lowercase letter and contains lowercase letters,
-digits, or hyphens. Names claimed by Marimo or Studio routes are reserved.
-
-## `view activate`
-
-```console
-MARIMO_STUDIO_SERVER_URL=http://localhost:2718 \
-MARIMO_STUDIO_ACCESS_TOKEN="$STUDIO_TOKEN" \
-  uvx marimo-studio view activate analysis.py \
-    --name dashboard \
-    --format json
-```
-
-Activates the named view and its Build layout in one connected Studio browser.
-Activating the current view reloads every prepared preview runtime and clears
-its ready status until the refreshed document reports back. Run the command
-again to recover a visible page that looks stale or stuck.
-
-Pass `--browser-client ID` or `MARIMO_STUDIO_BROWSER_CLIENT` when several tabs
-are connected. With no ID, the command requires exactly one connected browser.
-
-`--server` or `MARIMO_STUDIO_SERVER_URL` identifies the running Studio server.
-Set `MARIMO_STUDIO_ACCESS_TOKEN` for authentication. JSON output is the same
-`ViewActivationResult` returned by `marimo_studio.agent.activate_view` and
-includes the selected browser client, Marimo session, transition, and
-activation generation.
-
-An explicit `--server` or `--browser-client` value overrides its environment
-variable. Activation reports stable codes such as `view-not-found`,
-`browser-client-ambiguous`, `browser-client-unavailable`,
-`browser-session-unavailable`, and `activation-timeout` through JSON Lines
-diagnostics.
-
-## `view remove`
+## Activate a browser
 
 ```console
-uvx marimo-studio view remove analysis.py --name executive
-```
-
-Removes the named view directory after confirmation. If the selected view is
-the default, the first remaining view becomes the default. A configured
-notebook retains at least one view.
-
-Use `--yes` for a reviewed non-interactive removal. JSON output includes
-`schema`, `notebook`, `view`, `default_view`, and the remaining `views`.
-
-## `check`
-
-```console
-uvx marimo-studio check analysis.py --view dashboard --runtime
-```
-
-Static checks validate view documents, aliases, and value selectors. Add
-`--runtime` to execute projected cells and resolve projected values. Omit
-`--view` to check every configured view. Runtime execution waits 60 seconds by
-default. Set `--runtime-timeout SECONDS` for notebooks with expected setup work
-such as remote data loading.
-
-Text output reports one `PASS`, `WARN`, or `FAIL` record per check. JSON output
-contains `schema`, `ok`, `notebook`, `view`, and a `checks` array. Its
-`compatibility` records the Studio version, required Marimo release, observed
-Marimo and browser identities, adapter family, and validation state. Observed
-identities are `null` when release validation fails.
-
-## `analyze`
-
-```console
-MARIMO_STUDIO_SERVER_URL=http://localhost:2718 \
-MARIMO_STUDIO_ACCESS_TOKEN="$STUDIO_TOKEN" \
-  uvx marimo-studio analyze analysis.py \
-    --view dashboard \
-    --format json \
-    --diagnostics jsonl
-```
-
-Runs the complete agent handoff gate. Static validation reads the notebook and
-view sources. Runtime validation executes the notebook and resolves every
-projected output and value. Browser validation asks a connected Studio tab to
-visit each selected view and return fresh readiness and diagnostics for the
-captured source revision, runtime instance, and Marimo session.
-
-| Option                       | Behavior                                                                                                      |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `--view NAME`                | Analyze one named view. The default analyzes every configured view                                            |
-| `--server URL`               | Request rendered evidence from this running Studio server. `MARIMO_STUDIO_SERVER_URL` provides the same value |
-| `--browser-client ID`        | Target one Studio tab when several tabs are connected. `MARIMO_STUDIO_BROWSER_CLIENT` provides the same value |
-| `--browser-timeout SECONDS`  | Wait 0 to 300 finite seconds for fresh rendered evidence. The default is 10 seconds                           |
-| `--runtime-timeout SECONDS`  | Wait 0 to 300 finite seconds for isolated notebook execution. The default is 60 seconds                       |
-| `--browser` / `--no-browser` | Require or skip current rendered evidence. Browser evidence is required by default                            |
-
-Set `MARIMO_STUDIO_ACCESS_TOKEN` to authenticate. The command rejects access
-tokens embedded in `--server` URLs so credentials stay out of shell history
-and process arguments.
-
-The Studio bootstrap record contains its browser client ID. With several tabs
-open for one notebook, read `clientId` from the target tab's
-`#marimo-studio-bootstrap` JSON and pass it through `--browser-client` or the
-environment variable. Browser selection requires `--server` or
-`MARIMO_STUDIO_SERVER_URL`. Supplying a client ID without a server is a usage
-error with exit code 2.
-
-The JSON response contains:
-
-- `ok`, which is true when no stage reports an error
-- `handoff_ready`, which also requires completed runtime validation and a
-  `ready` browser observation for every selected view
-- `stages.static`, `stages.runtime`, and `stages.browser`
-- `runtime` and `revisions`, which identify the evidence set
-- `actions`, an ordered repair queue with stage, severity, code, message,
-  advice, and available view, target, or source location
-
-A runtime deadline produces a `runtime-timeout` action. Increase
-`--runtime-timeout` when the notebook is expected to spend longer on setup.
-Otherwise, fix the notebook operation named by the runtime output.
-
-In the default browser-required mode, omitting the server URL returns static
-and runtime results with a `not-observed` browser stage. `handoff_ready` is
-false and the command exits with code 1. Open the selected view in Studio,
-provide its server URL, and rerun the command before handoff. Use
-`--no-browser` for an explicit source and runtime gate. A passing gate can then
-return `handoff_ready` without rendered evidence.
-
-## `export`
-
-```console
-uvx marimo-studio export analysis.py \
-  --view dashboard \
-  --output dist/dashboard
-```
-
-Writes the selected view as a static WebAssembly site. The configured default
-view is selected when `--view` is absent.
-
-| Option             | Behavior                                          |
-| ------------------ | ------------------------------------------------- |
-| `-o, --output DIR` | Write the complete static site to `DIR`. Required |
-| `--view NAME`      | Export a named view                               |
-| `--force`          | Replace an existing output directory              |
-
-The command validates projected cells, values, and output paths before writing
-the export. JSON output includes the selected view, runtime, output directory,
-entry point, and file count.
-
-Serve the directory over HTTP so the browser can load worker modules and
-runtime assets. [Run, export, and
-share](../guide/run-and-share.md#export-a-static-site) covers the notebook-source
-and browser-network boundaries.
-
-## Machine diagnostics
-
-Use JSON output and JSON Lines diagnostics when another program or agent will
-consume the result:
-
-```console
-uvx marimo-studio analyze analysis.py \
-  --view dashboard \
+marimo-studio view activate analysis.py \
+  --name dashboard \
   --server http://localhost:2718 \
-  --format json \
-  --diagnostics jsonl
+  --browser-client CLIENT_ID
 ```
 
-Each diagnostic event contains:
+Activation targets one connected browser. The client selector is required when
+the server cannot choose a single client unambiguously.
 
-```json
-{
-  "schema": 1,
-  "event": "diagnostic",
-  "command": "analyze",
-  "severity": "error",
-  "code": "cell-not-found",
-  "message": "Cell 'summary' is not defined in the notebook.",
-  "status": "fail"
-}
+## Export
+
+```console
+marimo-studio export analysis.py --view dashboard --output dist/dashboard
 ```
 
-Projection diagnostics can also include the view, target, source location, and
-repair hint. Command failures include `exit_code`. Native process output is
-bounded and emitted as a warning event when JSON Lines diagnostics are active.
-Transport failures use stable codes such as `authentication-required`,
-`request-timeout`, and `request-capacity-exhausted` so an agent can retry the
-right boundary or reduce concurrent requests.
+Export builds the production artifact and writes a static WebAssembly site.
+Use `--force` to replace a reviewed destination.
 
-## Exit codes
+## Remove a view
 
-|  Code | Meaning                                                       |
-| ----: | ------------------------------------------------------------- |
-|   `0` | Command completed                                             |
-|   `1` | Validation failed or rendered evidence is incomplete          |
-|   `2` | CLI syntax or option usage is invalid                         |
-|   `3` | Notebook or Studio configuration is invalid                   |
-|   `4` | A cell binding cannot be resolved                             |
-|   `5` | A live Studio server or browser request failed                |
-|   `6` | A Studio protocol or installed Marimo version is incompatible |
-|   `7` | The notebook environment cannot be prepared                   |
-| `130` | The command was interrupted                                   |
+```console
+marimo-studio view remove analysis.py --name dashboard
+```
 
-[Notebook configuration](configuration.md) defines target discovery and
-configuration precedence.
+Removal deletes the view directory after confirmation. It does not rewrite
+Python dependencies. A configured notebook retains at least one view. Use
+`--yes` for reviewed non-interactive removal.
+
+## Diagnose an extension
+
+```console
+marimo-studio provider doctor
+marimo-studio provider doctor acme-views/report --format json
+```
+
+`provider doctor` reports entry-point loading, package version, availability,
+and provider-qualified starter IDs.
+
+## Inspect notebook cells
+
+```console
+marimo-studio inspect analysis.py --cell summary --include-code
+marimo-studio bind analysis.py --cell 12 --as summary
+```
+
+`inspect` reads the saved notebook graph. Repeat `--cell` to select cells by
+reference, name, or zero-based index. Add `--runtime` to include their MIME
+outputs and JSON-compatible values. `bind` gives an anonymous cell a stable
+target when naming the Marimo cell directly is not practical.
+
+::: warning Runtime inspection executes the complete notebook
+Cell selectors bound collected source, outputs, and values. Marimo still runs
+the notebook's reactive graph to produce those results.
+:::
