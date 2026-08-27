@@ -1,4 +1,4 @@
-import type { SourceName } from "@marimo-studio/protocol/source-events";
+import type { SourceDocument, SourceDocumentPath } from "@marimo-studio/protocol/source-documents";
 
 import { errorMessage } from "../../shared/errors.ts";
 import {
@@ -11,19 +11,23 @@ import {
 export type SourcePhase = "loading" | "saved" | "saving" | "external" | "conflict" | "error";
 
 export interface SourceState {
-  name: SourceName;
+  path: SourceDocumentPath;
   phase: SourcePhase;
   conflict?: SourceConflict;
   message?: string;
 }
 
 export interface SourceObserver {
-  document(name: SourceName, content: string): void;
+  document(path: SourceDocumentPath, content: string): void;
   state(state: SourceState): void;
 }
 
+let sourceIncarnationSequence = 0;
+
 export class SyncedSource {
-  readonly name: SourceName;
+  readonly path: SourceDocumentPath;
+  readonly incarnation = ++sourceIncarnationSequence;
+  private documentSpec: SourceDocument;
   private view = "";
   private content = "";
   private revision = "";
@@ -33,19 +37,133 @@ export class SyncedSource {
   private conflict: SourceConflict | undefined;
   private write: Promise<boolean> | undefined;
   private writingContent: string | undefined;
+  private diskSource: RemoteSource | undefined;
   private state: SourceState;
   private loadState: SourceState | undefined;
   private sourceVersion = 0;
   private readGeneration = 0;
+  private accessGeneration = 0;
+  private disposed = false;
 
   constructor(
-    name: SourceName,
+    document: SourceDocument,
     private readonly remote: SourceRemote,
     private readonly observer: SourceObserver,
     private readonly saveDelay = 350,
   ) {
-    this.name = name;
-    this.state = { name, phase: "loading" };
+    this.path = document.path;
+    this.documentSpec = document;
+    this.state = { path: document.path, phase: "loading" };
+  }
+
+  get access(): SourceDocument["access"] {
+    return this.documentSpec.access;
+  }
+
+  get isLoaded(): boolean {
+    return this.diskSource !== undefined;
+  }
+
+  get replacementVersion(): number {
+    return this.sourceVersion;
+  }
+
+  async updateDocument(document: SourceDocument): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
+    if (document.path !== this.path) {
+      throw new TypeError("A synchronized source cannot change paths");
+    }
+    const becameReadOnly =
+      this.documentSpec.access === "edit" && document.access === "read" && this.hasPendingChanges;
+    const wasOrphaned = this.conflict?.kind === "orphan";
+    const accessGeneration = ++this.accessGeneration;
+    this.documentSpec = document;
+    if (wasOrphaned && this.conflict) {
+      this.conflict = {
+        ...this.conflict,
+        kind: document.access === "read" ? "read-only" : "revision",
+      };
+      this.emit("conflict");
+      return;
+    }
+    if (!becameReadOnly) {
+      return;
+    }
+    this.cancelSave();
+    if (this.write) {
+      await this.write;
+    }
+    if (this.disposed) {
+      return;
+    }
+    if (accessGeneration !== this.accessGeneration || this.access !== "read") {
+      return;
+    }
+    const generation = ++this.generation;
+    try {
+      const remote = await this.remote.read(this.view, this.path);
+      if (generation !== this.generation || accessGeneration !== this.accessGeneration) {
+        return;
+      }
+      if (remote.content === this.content) {
+        this.conflict = undefined;
+        this.apply(remote);
+        this.emit("saved");
+        return;
+      }
+      this.conflict = { kind: "read-only", local: this.content, remote };
+      this.dirty = true;
+      this.emit("conflict");
+    } catch (error) {
+      if (generation === this.generation && accessGeneration === this.accessGeneration) {
+        this.emit("error", errorMessage(error));
+      }
+    }
+  }
+
+  async orphan(): Promise<boolean> {
+    if (this.disposed) {
+      return false;
+    }
+    if (!this.hasPendingChanges) {
+      return false;
+    }
+    if (this.conflict?.kind === "orphan") {
+      return true;
+    }
+    const accessGeneration = ++this.accessGeneration;
+    this.documentSpec = { ...this.documentSpec, access: "read" };
+    this.cancelSave();
+    if (this.write) {
+      await this.write;
+    }
+    if (this.disposed) {
+      return false;
+    }
+    if (accessGeneration !== this.accessGeneration || this.access !== "read") {
+      return false;
+    }
+    if (!this.hasPendingChanges) {
+      return false;
+    }
+    const generation = ++this.generation;
+    try {
+      const remote = await this.remote.read(this.view, this.path);
+      if (generation !== this.generation || accessGeneration !== this.accessGeneration) {
+        return false;
+      }
+      this.conflict = { kind: "orphan", local: this.content, remote };
+      this.dirty = true;
+      this.emit("conflict");
+      return true;
+    } catch (error) {
+      if (generation === this.generation && accessGeneration === this.accessGeneration) {
+        this.emit("error", errorMessage(error));
+      }
+      return false;
+    }
   }
 
   get hasConflict(): boolean {
@@ -58,7 +176,7 @@ export class SyncedSource {
 
   beginLoad(): void {
     this.loadState ??= this.state;
-    this.publish({ name: this.name, phase: "loading" });
+    this.publish({ path: this.path, phase: "loading" });
   }
 
   cancelLoad(): void {
@@ -69,11 +187,10 @@ export class SyncedSource {
     }
   }
 
-  read(view: string): Promise<RemoteSource> {
-    return this.remote.read(view, this.name);
-  }
-
   open(view: string, source: RemoteSource): void {
+    if (this.disposed) {
+      return;
+    }
     this.cancelSave();
     this.generation += 1;
     this.view = view;
@@ -87,17 +204,21 @@ export class SyncedSource {
   }
 
   async load(view: string): Promise<boolean> {
+    if (this.disposed) {
+      return false;
+    }
     this.cancelSave();
     const generation = ++this.generation;
     this.view = view;
     this.content = "";
     this.revision = "";
+    this.diskSource = undefined;
     this.dirty = false;
     this.conflict = undefined;
-    this.observer.document(this.name, "");
+    this.observer.document(this.path, "");
     this.emit("loading");
     try {
-      const source = await this.remote.read(view, this.name);
+      const source = await this.remote.read(view, this.path);
       if (generation !== this.generation) {
         return false;
       }
@@ -107,7 +228,7 @@ export class SyncedSource {
           this.emit("saved");
           return true;
         }
-        this.conflict = { local: this.content, remote: source };
+        this.conflict = { kind: "revision", local: this.content, remote: source };
         this.cancelSave();
         this.emit("conflict");
         return false;
@@ -123,6 +244,9 @@ export class SyncedSource {
   }
 
   edit(content: string): void {
+    if (this.disposed || this.access === "read") {
+      return;
+    }
     if (content === this.content && !this.conflict) {
       return;
     }
@@ -135,22 +259,29 @@ export class SyncedSource {
   }
 
   async save(): Promise<boolean> {
+    if (this.disposed) {
+      return false;
+    }
+    if (this.access === "read") {
+      return !this.hasPendingChanges;
+    }
     this.cancelSave();
     if (this.write) {
       return await this.write;
     }
-    const write = this.saveLatest();
-    this.write = write;
-    try {
-      return await write;
-    } finally {
+    const write = this.saveLatest().finally(() => {
       if (this.write === write) {
         this.write = undefined;
       }
-    }
+    });
+    this.write = write;
+    return await write;
   }
 
   async externalChange(revision: string | null): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
     if (revision === null) {
       this.cancelSave();
       this.revision = "";
@@ -158,9 +289,9 @@ export class SyncedSource {
       this.conflict = undefined;
       if (!this.dirty) {
         this.content = "";
-        this.observer.document(this.name, "");
+        this.observer.document(this.path, "");
       }
-      this.emit("error", `${this.name} was deleted on disk. Restore it before saving in Studio.`);
+      this.emit("error", `${this.path} was deleted on disk. Restore it before saving in Studio.`);
       return;
     }
     if (revision === this.revision) {
@@ -170,11 +301,14 @@ export class SyncedSource {
   }
 
   async reconcile(): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
     const generation = this.generation;
     const sourceVersion = this.sourceVersion;
     const readGeneration = ++this.readGeneration;
     try {
-      const remote = await this.remote.read(this.view, this.name);
+      const remote = await this.remote.read(this.view, this.path);
       if (
         generation !== this.generation ||
         sourceVersion !== this.sourceVersion ||
@@ -184,6 +318,12 @@ export class SyncedSource {
         return;
       }
       if (this.dirty) {
+        if (this.access === "read") {
+          this.conflict = { kind: "read-only", local: this.content, remote };
+          this.cancelSave();
+          this.emit("conflict");
+          return;
+        }
         if (remote.content === this.content) {
           this.apply(remote);
           this.emit("saved");
@@ -195,7 +335,7 @@ export class SyncedSource {
           this.emit("saving");
           return;
         }
-        this.conflict = { local: this.content, remote };
+        this.conflict = { kind: "revision", local: this.content, remote };
         this.cancelSave();
         this.emit("conflict");
         return;
@@ -214,20 +354,28 @@ export class SyncedSource {
   }
 
   useDisk(): void {
-    if (!this.conflict) {
+    if (this.disposed || !this.conflict) {
       return;
     }
     this.apply(this.conflict.remote);
-    this.conflict = undefined;
-    this.dirty = false;
     this.emit("saved");
   }
 
   async keepLocal(): Promise<boolean> {
-    if (!this.conflict) {
-      return true;
+    if (this.disposed || this.access === "read") {
+      return false;
     }
-    this.revision = this.conflict.remote.revision;
+    if (this.write) {
+      await this.write;
+    }
+    if (this.disposed) {
+      return false;
+    }
+    const conflict = this.conflict;
+    if (!conflict) {
+      return this.dirty ? await this.save() : true;
+    }
+    this.revision = conflict.remote.revision;
     this.sourceVersion += 1;
     this.conflict = undefined;
     this.dirty = true;
@@ -235,32 +383,49 @@ export class SyncedSource {
   }
 
   dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
     this.generation += 1;
+    this.accessGeneration += 1;
     this.cancelSave();
   }
 
   private async saveLatest(): Promise<boolean> {
     while (this.dirty) {
       this.cancelSave();
+      if (this.access === "read") {
+        return false;
+      }
       if (this.conflict) {
         return false;
       }
       if (!this.revision) {
-        this.emit("error", `${this.name} cannot be saved until its source is available.`);
+        this.emit("error", `${this.path} cannot be saved until its source is available.`);
         return false;
       }
       const generation = this.generation;
       const view = this.view;
       const content = this.content;
       const revision = this.revision;
+      const sourceVersion = this.sourceVersion;
       this.writingContent = content;
       this.emit("saving");
       try {
-        const next = await this.remote.write(view, this.name, content, revision);
+        const next = await this.remote.write(view, this.path, content, revision);
         if (generation !== this.generation) {
           return false;
         }
+        const ownWriteWasObserved = this.conflict === undefined && this.revision === next;
+        if (
+          this.conflict !== undefined ||
+          (sourceVersion !== this.sourceVersion && !ownWriteWasObserved)
+        ) {
+          return !this.hasPendingChanges;
+        }
         this.revision = next;
+        this.diskSource = { content, revision: next };
         this.sourceVersion += 1;
         if (this.content === content) {
           this.dirty = false;
@@ -272,7 +437,7 @@ export class SyncedSource {
           return false;
         }
         if (error instanceof RevisionConflict) {
-          return await this.loadConflict(generation);
+          return await this.loadConflict(generation, error.externalRecovery);
         }
         this.emit("error", errorMessage(error));
         return false;
@@ -285,11 +450,11 @@ export class SyncedSource {
     return !this.conflict;
   }
 
-  private async loadConflict(generation: number): Promise<boolean> {
+  private async loadConflict(generation: number, externalRecovery?: string): Promise<boolean> {
     const sourceVersion = this.sourceVersion;
     const readGeneration = ++this.readGeneration;
     try {
-      const remote = await this.remote.read(this.view, this.name);
+      const remote = await this.remote.read(this.view, this.path);
       if (
         generation !== this.generation ||
         sourceVersion !== this.sourceVersion ||
@@ -299,11 +464,15 @@ export class SyncedSource {
       }
       if (remote.content === this.content) {
         this.apply(remote);
-        this.conflict = undefined;
         this.emit("saved");
         return true;
       }
-      this.conflict = { local: this.content, remote };
+      this.conflict = {
+        kind: "revision",
+        local: this.content,
+        remote,
+        externalRecovery,
+      };
       this.emit("conflict");
       return false;
     } catch (error) {
@@ -321,15 +490,17 @@ export class SyncedSource {
   private apply(source: RemoteSource): void {
     this.content = source.content;
     this.revision = source.revision;
+    this.diskSource = source;
     this.sourceVersion += 1;
+    this.conflict = undefined;
     this.dirty = false;
-    this.observer.document(this.name, source.content);
+    this.observer.document(this.path, source.content);
   }
 
   private emit(phase: SourcePhase, message?: string): void {
     this.loadState = undefined;
     this.publish({
-      name: this.name,
+      path: this.path,
       phase,
       conflict: this.conflict,
       message,

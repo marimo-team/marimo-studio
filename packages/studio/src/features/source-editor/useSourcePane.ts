@@ -1,81 +1,76 @@
-import type { SourceName } from "@marimo-studio/protocol/source-events";
+import type { SourceDocumentPath } from "@marimo-studio/protocol/source-documents";
 
-import { type RefCallback, useCallback, useEffect, useMemo, useRef } from "react";
+import { type RefCallback, useCallback, useEffect, useRef } from "react";
 
 import type { SourceController, SourceSnapshot } from "./controller.ts";
 import type { SourceEditorHandle } from "./SourceEditor.tsx";
 
 import { useControllerSnapshot } from "../../shared/useControllerSnapshot.ts";
-import { sourceRecord, sourceTabForKey } from "./files.ts";
+import { sourceTabForKey } from "./tabs.ts";
 
-interface EditorActions {
+const SOURCE_TAB_END_GUTTER = 4;
+
+const revealSourceTab = (tab: HTMLButtonElement): void => {
+  const scroller = tab.parentElement;
+  if (!scroller) {
+    return;
+  }
+  const tabBounds = tab.getBoundingClientRect();
+  const scrollerBounds = scroller.getBoundingClientRect();
+  if (tabBounds.left < scrollerBounds.left) {
+    scroller.scrollLeft += tabBounds.left - scrollerBounds.left;
+  } else if (tabBounds.right > scrollerBounds.right - SOURCE_TAB_END_GUTTER) {
+    scroller.scrollLeft += tabBounds.right - scrollerBounds.right + SOURCE_TAB_END_GUTTER;
+  }
+};
+
+export interface SourcePaneModel {
+  activeDocument: SourceSnapshot["documents"][number] | undefined;
+  editorRef: RefCallback<SourceEditorHandle>;
+  focusEditor: () => void;
+  snapshot: SourceSnapshot;
+  tabKeyDown: (path: SourceDocumentPath, key: string) => boolean;
+  tabRef: (path: SourceDocumentPath) => RefCallback<HTMLButtonElement>;
+  selectTab: (path: SourceDocumentPath) => void;
   change: (content: string) => void;
   save: () => void;
 }
 
-export interface SourcePaneModel {
-  activeDocument: SourceSnapshot["documents"][SourceName];
-  editorActions: Readonly<Record<SourceName, EditorActions>>;
-  editorRefs: Readonly<Record<SourceName, RefCallback<SourceEditorHandle>>>;
-  snapshot: SourceSnapshot;
-  tabKeyDown: (name: SourceName, key: string) => boolean;
-  tabRef: (name: SourceName) => RefCallback<HTMLButtonElement>;
-  selectTab: (name: SourceName) => void;
-}
-
 export const useSourcePane = (controller: SourceController, visible: boolean): SourcePaneModel => {
   const snapshot = useControllerSnapshot(controller);
-  const editors = useRef(new Map<SourceName, SourceEditorHandle>());
-  const tabs = useRef(new Map<SourceName, HTMLButtonElement>());
-  const pendingHtmlFocus = useRef<number | undefined>(undefined);
+  const editor = useRef<SourceEditorHandle | null>(null);
+  const tabs = useRef(new Map<SourceDocumentPath, HTMLButtonElement>());
+  const pendingFocus = useRef<number | undefined>(undefined);
   const previousFocusRequest = useRef(snapshot.focusRequest);
+  const paths = snapshot.documents.map(({ path }) => path);
+  const activeDocument = snapshot.documents.find(({ path }) => path === snapshot.active);
 
-  const registerEditor = useCallback((name: SourceName, handle: SourceEditorHandle | null) => {
-    if (handle) {
-      editors.current.set(name, handle);
-    } else {
-      editors.current.delete(name);
-    }
-    if (name === "index.html" && handle && pendingHtmlFocus.current !== undefined) {
-      pendingHtmlFocus.current = undefined;
+  const editorRef = useCallback((handle: SourceEditorHandle | null) => {
+    editor.current = handle;
+    if (handle && pendingFocus.current !== undefined) {
+      pendingFocus.current = undefined;
       handle.focus();
     }
   }, []);
-  const editorRefs = useMemo<Readonly<Record<SourceName, RefCallback<SourceEditorHandle>>>>(
-    () => sourceRecord((name) => (handle) => registerEditor(name, handle)),
-    [registerEditor],
-  );
-  const tabRefs = useMemo<Readonly<Record<SourceName, RefCallback<HTMLButtonElement>>>>(
-    () =>
-      sourceRecord((name) => (element) => {
-        if (element) {
-          tabs.current.set(name, element);
-        } else {
-          tabs.current.delete(name);
-        }
-      }),
-    [],
-  );
-  const editorActions = useMemo<Readonly<Record<SourceName, EditorActions>>>(
-    () =>
-      sourceRecord((name) => ({
-        change: (content) => controller.edit(name, content),
-        save: () => controller.save(name),
-      })),
-    [controller],
-  );
+
+  const focusEditor = useCallback(() => {
+    pendingFocus.current = snapshot.focusRequest;
+    if (editor.current) {
+      pendingFocus.current = undefined;
+      editor.current.focus();
+    }
+  }, [snapshot.focusRequest]);
 
   useEffect(() => {
     if (snapshot.focusRequest === previousFocusRequest.current) {
       return;
     }
     previousFocusRequest.current = snapshot.focusRequest;
-    pendingHtmlFocus.current = snapshot.focusRequest;
+    pendingFocus.current = snapshot.focusRequest;
     const frame = globalThis.requestAnimationFrame(() => {
-      const handle = editors.current.get("index.html");
-      if (handle && pendingHtmlFocus.current === snapshot.focusRequest) {
-        pendingHtmlFocus.current = undefined;
-        handle.focus();
+      if (pendingFocus.current === snapshot.focusRequest) {
+        pendingFocus.current = undefined;
+        editor.current?.focus();
       }
     });
     return () => globalThis.cancelAnimationFrame(frame);
@@ -83,29 +78,77 @@ export const useSourcePane = (controller: SourceController, visible: boolean): S
 
   useEffect(() => {
     if (visible) {
-      editors.current.forEach((editor) => editor.requestMeasure());
+      editor.current?.requestMeasure();
     }
-  }, [visible]);
+  }, [visible, snapshot.active]);
 
-  const selectTab = useCallback((name: SourceName) => controller.activate(name), [controller]);
+  useEffect(() => {
+    const active = snapshot.active;
+    if (!active) {
+      return;
+    }
+    const frame = globalThis.requestAnimationFrame(() => {
+      const tab = tabs.current.get(active);
+      if (tab) {
+        revealSourceTab(tab);
+      }
+    });
+    return () => globalThis.cancelAnimationFrame(frame);
+  }, [snapshot.active]);
+
+  const selectTab = useCallback(
+    (path: SourceDocumentPath) => controller.activate(path),
+    [controller],
+  );
   const tabKeyDown = useCallback(
-    (name: SourceName, key: string): boolean => {
-      const next = sourceTabForKey(name, key);
+    (path: SourceDocumentPath, key: string): boolean => {
+      const next = sourceTabForKey(paths, path, key);
       if (!next) {
         return false;
       }
       controller.activate(next);
-      globalThis.requestAnimationFrame(() => tabs.current.get(next)?.focus());
+      globalThis.requestAnimationFrame(() => {
+        const tab = tabs.current.get(next);
+        tab?.focus();
+        if (tab) {
+          revealSourceTab(tab);
+        }
+      });
       return true;
     },
-    [controller],
+    [controller, paths],
   );
-  const tabRef = useCallback((name: SourceName) => tabRefs[name], [tabRefs]);
+  const tabRef = useCallback(
+    (path: SourceDocumentPath): RefCallback<HTMLButtonElement> =>
+      (element) => {
+        if (element) {
+          tabs.current.set(path, element);
+        } else {
+          tabs.current.delete(path);
+        }
+      },
+    [],
+  );
+  const change = useCallback(
+    (content: string) => {
+      if (snapshot.active) {
+        controller.edit(snapshot.active, content);
+      }
+    },
+    [controller, snapshot.active],
+  );
+  const save = useCallback(() => {
+    if (snapshot.active) {
+      controller.save(snapshot.active);
+    }
+  }, [controller, snapshot.active]);
 
   return {
-    activeDocument: snapshot.documents[snapshot.active],
-    editorActions,
-    editorRefs,
+    activeDocument,
+    change,
+    editorRef,
+    focusEditor,
+    save,
     selectTab,
     snapshot,
     tabKeyDown,

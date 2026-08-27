@@ -6,7 +6,7 @@ const SOURCE_STATUS = {
   conflict: "Conflict",
   external: "Updated from disk",
   loading: "Loading",
-  saved: "Saved ✓",
+  saved: "Saved",
   saving: "Saving…",
 } satisfies Record<Exclude<SourcePhase, "error">, string>;
 

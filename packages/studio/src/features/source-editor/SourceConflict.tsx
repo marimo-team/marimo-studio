@@ -11,10 +11,21 @@ interface SourceConflictProps {
 
 export const SourceConflict = ({ conflict, name, onKeepLocal, onUseDisk }: SourceConflictProps) => {
   const [comparisonOpen, setComparisonOpen] = useState(false);
+  const discardOnly = conflict.kind !== "revision";
+  const message = {
+    orphan: `${name} is no longer part of this view.`,
+    "read-only": `${name} became read-only while you were editing.`,
+    revision: `${name} changed on disk while you were editing.`,
+  }[conflict.kind];
   return (
     <>
       <div className="studio-source-conflict" role="alert">
-        <span>{name} changed on disk while you were editing.</span>
+        <span>{message}</span>
+        {conflict.externalRecovery ? (
+          <span>
+            Previous disk content is preserved at <code>{conflict.externalRecovery}</code>.
+          </span>
+        ) : null}
         <div>
           <button
             type="button"
@@ -25,11 +36,13 @@ export const SourceConflict = ({ conflict, name, onKeepLocal, onUseDisk }: Sourc
             Compare
           </button>
           <button type="button" onClick={onUseDisk}>
-            Use disk
+            {discardOnly ? "Discard edits" : "Use disk"}
           </button>
-          <button type="button" onClick={onKeepLocal}>
-            Keep mine
-          </button>
+          {discardOnly ? null : (
+            <button type="button" onClick={onKeepLocal}>
+              Keep mine
+            </button>
+          )}
         </div>
       </div>
 
@@ -40,7 +53,7 @@ export const SourceConflict = ({ conflict, name, onKeepLocal, onUseDisk }: Sourc
             <pre>{conflict.local}</pre>
           </section>
           <section>
-            <strong>On disk</strong>
+            <strong>{conflict.kind === "orphan" ? "Last on disk" : "On disk"}</strong>
             <pre>{conflict.remote.content}</pre>
           </section>
         </div>
