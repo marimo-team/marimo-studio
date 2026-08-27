@@ -13,10 +13,15 @@ from click import unstyle
 from click.testing import CliRunner
 
 from marimo_studio._cli import cli
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio.agent import ViewActivationResult
-from marimo_studio.errors import ViewExistsError
+from marimo_studio.errors import (
+    SourceConflictError,
+    SourceEncodingError,
+    SourceTooLargeError,
+    ViewExistsError,
+)
 from marimo_studio.view_providers._host.registry import (
     ProviderCandidate,
     ProviderRegistry,
@@ -46,12 +51,12 @@ def test_provider_doctor_renders_finalized_registration_failures(
         )
     )
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.provider.provider_registry",
+        "marimo_studio._authoring.workspace.provider_registry",
         lambda: registry,
     )
 
-    human = CliRunner().invoke(cli, ["provider", "doctor"])
-    result = CliRunner().invoke(cli, ["provider", "doctor", "--format", "json"])
+    human = CliRunner().invoke(cli, ["doctor"])
+    result = CliRunner().invoke(cli, ["doctor", "--format", "json"])
 
     assert human.exit_code == 0, human.output
     human_output = unstyle(human.output)
@@ -88,13 +93,13 @@ def test_provider_doctor_keeps_the_derived_key_for_import_failure(
         )
     )
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.provider.provider_registry",
+        "marimo_studio._authoring.workspace.provider_registry",
         lambda: import_registry,
     )
 
     result = CliRunner().invoke(
         cli,
-        ["provider", "doctor", "import-package/report", "--format", "json"],
+        ["doctor", "import-package/report", "--format", "json"],
     )
 
     assert result.exit_code == 0, result.output
@@ -111,31 +116,39 @@ def test_view_create_bootstraps_lists_and_checks_named_views(
 
     created = runner.invoke(
         cli,
-        ["view", "create", str(notebook_path), "--format", "json"],
+        [
+            "view",
+            "create",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--format",
+            "json",
+        ],
     )
     added = runner.invoke(
         cli,
         [
             "view",
             "create",
-            str(notebook_path),
-            "--name",
             "executive",
+            "--target",
+            str(notebook_path),
             "--format",
             "json",
         ],
     )
     overview = runner.invoke(
         cli,
-        ["overview", str(notebook_path), "--format", "json"],
+        ["status", "--target", str(notebook_path), "--format", "json"],
     )
     checked = runner.invoke(
         cli,
         [
             "validate",
-            str(notebook_path),
-            "--view",
             "executive",
+            "--target",
+            str(notebook_path),
             "--format",
             "json",
         ],
@@ -176,6 +189,8 @@ def test_view_create_dry_run_matches_the_live_document_catalog_without_writing(
         [
             "view",
             "create",
+            "dashboard",
+            "--target",
             str(notebook_path),
             "--dry-run",
             "--format",
@@ -194,7 +209,15 @@ def test_view_create_dry_run_matches_the_live_document_catalog_without_writing(
 
     created = runner.invoke(
         cli,
-        ["view", "create", str(notebook_path), "--format", "json"],
+        [
+            "view",
+            "create",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--format",
+            "json",
+        ],
     )
 
     assert created.exit_code == 0, created.output
@@ -209,11 +232,18 @@ def test_view_create_dry_run_matches_the_live_document_catalog_without_writing(
 def test_view_create_rejects_an_existing_name_during_dry_run(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
 
     result = CliRunner().invoke(
         cli,
-        ["view", "create", str(notebook_path), "--dry-run"],
+        [
+            "view",
+            "create",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--dry-run",
+        ],
     )
 
     assert result.exit_code != 0
@@ -229,6 +259,8 @@ def test_human_output_uses_color_and_json_remains_machine_readable(
         [
             "view",
             "create",
+            "dashboard",
+            "--target",
             str(notebook_path),
             "--dry-run",
         ],
@@ -239,6 +271,8 @@ def test_human_output_uses_color_and_json_remains_machine_readable(
         [
             "view",
             "create",
+            "dashboard",
+            "--target",
             str(notebook_path),
             "--dry-run",
             "--format",
@@ -270,12 +304,16 @@ def test_starter_human_output_reports_unavailable_recovery_once(
             action="pip install 'marimo-studio[deno]'",
         ),
     )
+
+    async def records():
+        return (starter,)
+
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.starter.starters",
-        lambda: (starter,),
+        "marimo_studio._cli.commands.starters.installed_starters",
+        records,
     )
 
-    result = CliRunner().invoke(cli, ["starter", "list"])
+    result = CliRunner().invoke(cli, ["starters"])
 
     assert result.exit_code == 0, result.output
     output = unstyle(result.output)
@@ -306,12 +344,16 @@ def test_starter_list_separates_human_records(
         summary="Second starter.",
         provider="example/second",
     )
+
+    async def records():
+        return (first, second)
+
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.starter.starters",
-        lambda: (first, second),
+        "marimo_studio._cli.commands.starters.installed_starters",
+        records,
     )
 
-    result = CliRunner().invoke(cli, ["starter", "list"])
+    result = CliRunner().invoke(cli, ["starters"])
 
     assert result.exit_code == 0, result.output
     assert unstyle(result.output).splitlines() == [
@@ -334,9 +376,9 @@ def test_new_command_errors_emit_the_complete_diagnostic_command(
         runtime_assets,
         "view",
         "build",
-        str(tmp_path / "missing.py"),
-        "--name",
         "dashboard",
+        "--target",
+        str(tmp_path / "missing.py"),
         "--diagnostics",
         "jsonl",
     )
@@ -348,7 +390,10 @@ def test_new_command_errors_emit_the_complete_diagnostic_command(
 
 
 def test_view_create_reports_the_editor_command(notebook_path: Path) -> None:
-    result = CliRunner().invoke(cli, ["view", "create", str(notebook_path)])
+    result = CliRunner().invoke(
+        cli,
+        ["view", "create", "dashboard", "--target", str(notebook_path)],
+    )
 
     assert result.exit_code == 0, result.output
     arguments = ["marimo", "edit", str(notebook_path), "--sandbox"]
@@ -361,20 +406,20 @@ def test_view_create_reports_the_editor_command(notebook_path: Path) -> None:
 def test_view_inspect_human_output_renders_the_provider_project_catalog(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
 
     result = CliRunner().invoke(
         cli,
-        ["view", "inspect", str(notebook_path), "--name", "dashboard"],
+        ["view", "inspect", "dashboard", "--target", str(notebook_path)],
     )
     machine = CliRunner().invoke(
         cli,
         [
             "view",
             "inspect",
-            str(notebook_path),
-            "--name",
             "dashboard",
+            "--target",
+            str(notebook_path),
             "--format",
             "json",
         ],
@@ -392,12 +437,130 @@ def test_view_inspect_human_output_renders_the_provider_project_catalog(
     assert payload["publication"] is None
 
 
+def test_view_read_and_write_share_revision_aware_source_contract(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+    runner = CliRunner()
+    loaded = runner.invoke(
+        cli,
+        [
+            "view",
+            "read",
+            "dashboard",
+            "index.html",
+            "--target",
+            str(notebook_path),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert loaded.exit_code == 0, loaded.output
+    document = json.loads(loaded.output)
+    content = document["content"].replace("Dashboard", "CLI dashboard")
+    written = runner.invoke(
+        cli,
+        [
+            "view",
+            "write",
+            "dashboard",
+            "index.html",
+            "--target",
+            str(notebook_path),
+            "--expected-revision",
+            document["revision"],
+            "--from",
+            "-",
+            "--format",
+            "json",
+        ],
+        input=content,
+    )
+
+    assert written.exit_code == 0, written.output
+    updated = json.loads(written.output)
+    assert updated["revision"] != document["revision"]
+    assert "CLI dashboard" in updated["content"]
+    stale = runner.invoke(
+        cli,
+        [
+            "view",
+            "write",
+            "dashboard",
+            "index.html",
+            "--target",
+            str(notebook_path),
+            "--expected-revision",
+            document["revision"],
+            "--from",
+            "-",
+        ],
+        input=document["content"],
+    )
+    assert stale.exit_code != 0
+    assert isinstance(stale.exception, SourceConflictError)
+
+
+def test_view_write_bounds_and_decodes_replacement_source(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path)
+    runner = CliRunner()
+    loaded = runner.invoke(
+        cli,
+        [
+            "view",
+            "read",
+            "dashboard",
+            "index.html",
+            "--target",
+            str(notebook_path),
+            "--format",
+            "json",
+        ],
+    )
+    revision = json.loads(loaded.output)["revision"]
+    monkeypatch.setattr("marimo_studio._cli.input.SOURCE_DOCUMENT_MAX_BYTES", 4)
+    oversized = tmp_path / "oversized.html"
+    oversized.write_bytes(b"12345")
+    invalid = tmp_path / "invalid.html"
+    invalid.write_bytes(b"\xff")
+
+    arguments = [
+        "view",
+        "write",
+        "dashboard",
+        "index.html",
+        "--target",
+        str(notebook_path),
+        "--expected-revision",
+        revision,
+        "--from",
+    ]
+    too_large = runner.invoke(cli, [*arguments, str(oversized)])
+    invalid_text = runner.invoke(cli, [*arguments, str(invalid)])
+
+    assert isinstance(too_large.exception, SourceTooLargeError)
+    assert isinstance(invalid_text.exception, SourceEncodingError)
+
+
 def test_text_recovery_hints_respect_jsonl_diagnostics(
     notebook_path: Path,
 ) -> None:
     result = CliRunner().invoke(
         cli,
-        ["view", "create", str(notebook_path), "--diagnostics", "jsonl"],
+        [
+            "view",
+            "create",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--diagnostics",
+            "jsonl",
+        ],
     )
 
     assert result.exit_code == 0, result.output
@@ -417,13 +580,13 @@ def test_view_activate_returns_the_shared_result(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
 
-    async def activate(studio, connection, name):
-        assert studio.notebook == notebook_path.resolve()
+    async def activate(notebook, name, connection):
+        assert notebook == notebook_path.resolve()
         assert name == "dashboard"
         return ViewActivationResult(
-            notebook=studio.notebook,
+            notebook=notebook,
             view=name,
             generation=2,
             session_id="s_123456",
@@ -431,7 +594,7 @@ def test_view_activate_returns_the_shared_result(
         )
 
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.view.activate_view",
+        "marimo_studio._cli.commands.view_delivery.activate_view",
         activate,
     )
     result = CliRunner().invoke(
@@ -439,9 +602,9 @@ def test_view_activate_returns_the_shared_result(
         [
             "view",
             "activate",
-            str(notebook_path),
-            "--name",
             "dashboard",
+            "--target",
+            str(notebook_path),
             "--format",
             "json",
         ],
@@ -464,11 +627,11 @@ def test_view_activate_returns_the_shared_result(
 
 
 def test_view_activate_requires_a_server(notebook_path: Path) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
 
     result = CliRunner().invoke(
         cli,
-        ["view", "activate", str(notebook_path), "--name", "dashboard"],
+        ["view", "activate", "dashboard", "--target", str(notebook_path)],
     )
 
     assert result.exit_code == 2
@@ -479,7 +642,7 @@ def test_view_activate_flags_override_connection_environment(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     captured: dict[str, str] = {}
 
     def connection(server_url: str, *, access_token: str, browser_client: str):
@@ -491,7 +654,7 @@ def test_view_activate_flags_override_connection_environment(
         raise RuntimeError("connection captured")
 
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.view.studio_server_connection",
+        "marimo_studio._cli.commands.view_delivery.studio_server_connection",
         connection,
     )
     result = CliRunner().invoke(
@@ -499,9 +662,9 @@ def test_view_activate_flags_override_connection_environment(
         [
             "view",
             "activate",
-            str(notebook_path),
-            "--name",
             "dashboard",
+            "--target",
+            str(notebook_path),
             "--server",
             "http://explicit:2718",
             "--browser-client",
@@ -537,7 +700,10 @@ default = "dashboard"
     )
     monkeypatch.chdir(notebook_path.parent)
 
-    result = CliRunner().invoke(cli, ["view", "create", "--format", "json"])
+    result = CliRunner().invoke(
+        cli,
+        ["view", "create", "dashboard", "--format", "json"],
+    )
 
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["config"] == str(pyproject)
@@ -554,31 +720,32 @@ def test_command_help_exposes_target_and_required_options() -> None:
     )
     bind_help = runner.invoke(
         cli,
-        ["bind", "--help"],
+        ["notebook", "bind", "--help"],
         prog_name="marimo-studio",
     )
 
-    assert "Usage: marimo-studio view create [OPTIONS] [TARGET]" in create_help.output
-    assert "--name NAME" in create_help.output
-    assert "Usage: marimo-studio bind [OPTIONS] [TARGET]" in bind_help.output
-    assert "--as ALIAS" in bind_help.output
+    assert "Usage: marimo-studio view create [OPTIONS] VIEW" in create_help.output
+    assert "--target PATH" in create_help.output
+    assert "Usage: marimo-studio notebook bind [OPTIONS] ALIAS" in bind_help.output
+    assert "--cell TEXT" in bind_help.output
 
 
 def test_cli_bind_updates_the_shared_cell_registry(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     runner = CliRunner()
 
     bound = runner.invoke(
         cli,
         [
+            "notebook",
             "bind",
+            "summary",
+            "--target",
             str(notebook_path),
             "--cell",
             "1",
-            "--as",
-            "summary",
             "--format",
             "json",
         ],
@@ -596,41 +763,58 @@ def test_cli_bind_updates_the_shared_cell_registry(
     }
     assert str(load_studio(notebook_path).cells["summary"]) == payload["cell"]["ref"]
 
+    by_ref = runner.invoke(
+        cli,
+        [
+            "notebook",
+            "bind",
+            "summary-ref",
+            "--target",
+            str(notebook_path),
+            "--cell",
+            payload["cell"]["ref"],
+            "--format",
+            "json",
+        ],
+    )
+    assert by_ref.exit_code == 0, by_ref.output
+    assert json.loads(by_ref.output)["cell"]["ref"] == payload["cell"]["ref"]
+
 
 def test_view_remove_preserves_source_when_confirmation_is_declined(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
-    added = ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path)
+    added = prepare_view(notebook_path, "executive")
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.view._stdin_is_interactive",
+        "marimo_studio._cli.commands.view_create._stdin_is_interactive",
         lambda: True,
     )
 
     result = CliRunner().invoke(
         cli,
-        ["view", "remove", str(notebook_path), "--name", "executive"],
+        ["view", "remove", "executive", "--target", str(notebook_path)],
         input="n\n",
     )
 
-    assert result.exit_code == 1
+    assert result.exit_code == 0
     assert added.root.is_dir()
     assert set(load_studio(notebook_path).views) == {"dashboard", "executive"}
 
 
 def test_view_remove_reports_the_updated_view_inventory(notebook_path: Path) -> None:
-    dashboard = ensure_view(notebook_path).root
-    ensure_view(notebook_path, "executive")
+    dashboard = prepare_view(notebook_path).root
+    prepare_view(notebook_path, "executive")
 
     result = CliRunner().invoke(
         cli,
         [
             "view",
             "remove",
-            str(notebook_path),
-            "--name",
             "dashboard",
+            "--target",
+            str(notebook_path),
             "--yes",
             "--format",
             "json",
@@ -658,10 +842,10 @@ def test_view_remove_requires_yes_for_machine_output(
     monkeypatch: pytest.MonkeyPatch,
     machine_args: tuple[str, ...],
 ) -> None:
-    ensure_view(notebook_path)
-    added = ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path)
+    added = prepare_view(notebook_path, "executive")
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.view._stdin_is_interactive",
+        "marimo_studio._cli.commands.view_create._stdin_is_interactive",
         lambda: True,
     )
 
@@ -670,9 +854,9 @@ def test_view_remove_requires_yes_for_machine_output(
         [
             "view",
             "remove",
-            str(notebook_path),
-            "--name",
             "executive",
+            "--target",
+            str(notebook_path),
             *machine_args,
         ],
     )
@@ -687,16 +871,16 @@ def test_view_remove_requires_yes_for_noninteractive_use(
     notebook_path: Path,
     runtime_assets: Path,
 ) -> None:
-    ensure_view(notebook_path)
-    added = ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path)
+    added = prepare_view(notebook_path, "executive")
 
     result = _run_cli(
         runtime_assets,
         "view",
         "remove",
-        str(notebook_path),
-        "--name",
         "executive",
+        "--target",
+        str(notebook_path),
     )
 
     assert result.returncode == 2
@@ -712,7 +896,9 @@ def test_cli_inspect_runtime_reports_mime_and_json_values(
 ) -> None:
     result = _run_cli(
         runtime_assets,
+        "notebook",
         "inspect",
+        "--target",
         str(notebook_path),
         "--runtime",
         "--format",
@@ -747,7 +933,9 @@ def test_cli_runtime_inspection_preserves_json_across_environment_reentry(
 
     result = _run_cli(
         runtime_assets,
+        "notebook",
         "inspect",
+        "--target",
         str(notebook_path),
         "--runtime",
         "--format",

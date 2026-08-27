@@ -13,7 +13,7 @@ from click.testing import CliRunner
 
 from marimo_studio._cli import cli, main
 from marimo_studio._cli.diagnostics import DiagnosticStream
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio.errors import AgentRequestError
 from marimo_studio.view_providers._host import provider_registry
 
@@ -79,7 +79,7 @@ def test_structured_diagnostics_bound_large_process_output(
 def test_failed_validation_reports_exit_status_and_error_diagnostic(
     notebook_path: Path,
 ) -> None:
-    setup = ensure_view(notebook_path)
+    setup = prepare_view(notebook_path)
     template = setup.root / "index.html"
     template.write_text(
         replace_app_shell(
@@ -93,9 +93,9 @@ def test_failed_validation_reports_exit_status_and_error_diagnostic(
         cli,
         [
             "validate",
-            str(notebook_path),
-            "--view",
             "dashboard",
+            "--target",
+            str(notebook_path),
             "--level",
             "static",
             "--format",
@@ -115,13 +115,18 @@ def test_failed_validation_reports_exit_status_and_error_diagnostic(
         for check in payload["evidence"]["static"]["checks"]
         if check["status"] == "fail"
     )
+    action = next(
+        action
+        for action in payload["actions"]
+        if action["code"] == "projection-cell-not-found"
+    )
     assert event["code"] == "projection-cell-not-found"
-    assert event["details"] == check["details"]
+    assert event["details"] == action
     assert event["details"]["view"] == "dashboard"
-    assert event["details"]["projection"] == "cell"
-    assert event["details"]["target"] == "missing"
-    assert event["details"]["source"]["path"] == str(template)
-    assert "Name the notebook cell" in event["details"]["hint"]
+    assert check["details"]["projection"] == "cell"
+    assert check["details"]["target"] == "missing"
+    assert check["details"]["source"]["path"] == str(template)
+    assert "Name the notebook cell" in check["details"]["hint"]
 
 
 @pytest.mark.parametrize(
@@ -145,7 +150,7 @@ def test_validation_preserves_repair_diagnostics(
     expected_code: str,
     expected_hint: str,
 ) -> None:
-    setup = ensure_view(notebook_path)
+    setup = prepare_view(notebook_path)
     if failure == "notebook":
         notebook_path.write_text(
             notebook_path.read_text(encoding="utf-8").replace(
@@ -167,6 +172,7 @@ def test_validation_preserves_repair_diagnostics(
         cli,
         [
             "validate",
+            "--target",
             str(notebook_path),
             "--format",
             "json",
@@ -194,7 +200,10 @@ def test_validation_preserves_repair_diagnostics(
     )
     assert failed["details"]["source"]["path"] == str(expected_source)
     assert event["code"] == expected_code
-    assert event["details"] == failed["details"]
+    action = next(
+        action for action in payload["actions"] if action["code"] == expected_code
+    )
+    assert event["details"] == action
 
 
 def test_main_structures_configuration_errors(
@@ -206,7 +215,14 @@ def test_main_structures_configuration_errors(
     monkeypatch.setattr(
         sys,
         "argv",
-        ["marimo-studio", "validate", str(missing), "--diagnostics", "jsonl"],
+        [
+            "marimo-studio",
+            "validate",
+            "--target",
+            str(missing),
+            "--diagnostics",
+            "jsonl",
+        ],
     )
 
     with pytest.raises(SystemExit) as raised:
@@ -270,6 +286,8 @@ def test_provider_stdout_cannot_corrupt_machine_output(
             "marimo-studio",
             "view",
             "create",
+            "dashboard",
+            "--target",
             str(notebook_path),
             "--format",
             "json",
@@ -298,7 +316,7 @@ def test_main_structures_live_agent_request_errors(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
 
     async def fail_activation(*_args: object) -> None:
         raise AgentRequestError(
@@ -308,7 +326,7 @@ def test_main_structures_live_agent_request_errors(
         )
 
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.view.activate_view",
+        "marimo_studio._cli.commands.view_delivery.activate_view",
         fail_activation,
     )
     monkeypatch.setattr(
@@ -318,9 +336,9 @@ def test_main_structures_live_agent_request_errors(
             "marimo-studio",
             "view",
             "activate",
-            str(notebook_path),
-            "--name",
             "dashboard",
+            "--target",
+            str(notebook_path),
             "--server",
             "http://localhost:2718",
             "--diagnostics",
@@ -345,8 +363,8 @@ def test_main_preserves_view_not_found_details(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    ensure_view(notebook_path, "dashboard")
-    ensure_view(notebook_path, "report")
+    prepare_view(notebook_path, "dashboard")
+    prepare_view(notebook_path, "report")
     monkeypatch.setattr(
         sys,
         "argv",
@@ -354,9 +372,9 @@ def test_main_preserves_view_not_found_details(
             "marimo-studio",
             "view",
             "remove",
-            str(notebook_path),
-            "--name",
             "missing",
+            "--target",
+            str(notebook_path),
             "--yes",
             "--diagnostics",
             "jsonl",

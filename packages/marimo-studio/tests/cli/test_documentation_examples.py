@@ -189,7 +189,7 @@ def test_documented_result_cells_survive_marimo_parsing(tmp_path) -> None:
         notebook.write_text(_notebook_source(document), encoding="utf-8")
 
         result = asyncio.run(
-            studio.open(notebook=notebook).inspect(
+            studio.open(notebook=notebook).inspect_notebook(
                 include_code=True,
                 output_expressions=True,
             )

@@ -16,7 +16,7 @@ import marimo_studio._server.studio.routes as studio_routes
 import marimo_studio._views.sources as sources_module
 from marimo_studio._artifacts.inputs import ProjectInputState
 from marimo_studio._filesystem.secure import SecureDirectory
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._views.records import ViewDocument
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
@@ -122,7 +122,7 @@ def test_waiting_put_revalidates_access_from_another_provider_input(
     provider = _InputAccessProvider()
     registry = ProviderRegistry((candidate("source-policy", provider),))
     install_registry(monkeypatch, registry)
-    ensure_view(
+    prepare_view(
         notebook_path,
         starter=starter_id(registry.ids[0], provider.starter.key),
     )
@@ -164,7 +164,7 @@ def test_policy_change_after_target_replacement_rolls_back_the_source(
     provider = _InputAccessProvider()
     registry = ProviderRegistry((candidate("source-policy", provider),))
     install_registry(monkeypatch, registry)
-    ensure_view(
+    prepare_view(
         notebook_path,
         starter=starter_id(registry.ids[0], provider.starter.key),
     )
@@ -224,7 +224,7 @@ def test_source_get_retries_when_the_provider_catalog_changes_after_read(
     provider = _InputAccessProvider()
     registry = ProviderRegistry((candidate("source-policy", provider),))
     install_registry(monkeypatch, registry)
-    ensure_view(
+    prepare_view(
         notebook_path,
         starter=starter_id(registry.ids[0], provider.starter.key),
     )

@@ -438,7 +438,7 @@ def test_export_view_reports_unresolved_projections_before_writing(
         export_view(notebook_path, output)
 
     assert (
-        f"marimo-studio validate {notebook_path} --view dashboard --level static"
+        f"marimo-studio validate dashboard --target {notebook_path} --level static"
         in str(error.value)
     )
     assert not output.exists()

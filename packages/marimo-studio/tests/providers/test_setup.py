@@ -6,7 +6,7 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace.metadata import read_notebook_metadata
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import BuildResult, ProjectDiagnostic
@@ -47,7 +47,7 @@ def test_unavailable_starter_rejects_setup_before_any_write(
     original = notebook_path.read_bytes()
 
     with pytest.raises(ConfigurationError, match="unavailable"):
-        ensure_view(notebook_path, starter=starter, dry_run=dry_run)
+        prepare_view(notebook_path, starter=starter, dry_run=dry_run)
 
     assert notebook_path.read_bytes() == original
     assert not (notebook_path.parent / "__marimo__").exists()
@@ -63,7 +63,7 @@ def test_starter_failure_rejects_setup_before_any_write(
     original = notebook_path.read_bytes()
 
     with pytest.raises(ConfigurationError, match="could not render starter"):
-        ensure_view(notebook_path, starter=starter)
+        prepare_view(notebook_path, starter=starter)
 
     assert notebook_path.read_bytes() == original
     assert not (notebook_path.parent / "__marimo__").exists()
@@ -79,7 +79,7 @@ def test_invalid_starter_paths_reject_setup_before_any_write(
     original = notebook_path.read_bytes()
 
     with pytest.raises(ConfigurationError, match=r"reserves|overlapping|colliding"):
-        ensure_view(notebook_path, starter=starter)
+        prepare_view(notebook_path, starter=starter)
 
     assert notebook_path.read_bytes() == original
     assert not (notebook_path.parent / "__marimo__").exists()
@@ -103,7 +103,7 @@ def test_creation_does_not_inspect_or_build_the_authored_project(
     provider.inspection_error = RuntimeError("inspection must be explicit")
     starter = _install(monkeypatch, provider)
 
-    result = ensure_view(notebook_path, starter=starter)
+    result = prepare_view(notebook_path, starter=starter)
 
     assert result.root.joinpath("view.toml").is_file()
     assert result.root.joinpath("index.html").is_file()
@@ -126,9 +126,9 @@ def test_repeated_setup_and_vanilla_preserve_the_react_requirement(
     )
     install_registry(monkeypatch, registry)
 
-    ensure_view(notebook_path, "dashboard", starter="marimo-studio/react:react")
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "report", starter="marimo-studio/vanilla:vanilla")
+    prepare_view(notebook_path, "dashboard", starter="marimo-studio/react:react")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "report", starter="marimo-studio/vanilla:vanilla")
 
     dependencies = _dependencies(notebook_path)
     assert dependencies.count("marimo-studio[deno]") == 1
@@ -151,9 +151,9 @@ def test_setup_keeps_requirements_for_every_installed_third_party_view(
     )
     install_registry(monkeypatch, registry)
 
-    ensure_view(notebook_path, "dashboard", starter="example-suite/first:first")
-    ensure_view(notebook_path, "detail", starter="example-suite/second:second")
-    ensure_view(notebook_path, "report", starter="other-suite/report:report")
+    prepare_view(notebook_path, "dashboard", starter="example-suite/first:first")
+    prepare_view(notebook_path, "detail", starter="example-suite/second:second")
+    prepare_view(notebook_path, "report", starter="other-suite/report:report")
 
     dependencies = _dependencies(notebook_path)
     assert dependencies.count("example-suite==1.0.0") == 1

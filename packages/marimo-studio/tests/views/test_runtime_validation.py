@@ -20,7 +20,7 @@ from marimo_studio._projections.runtime_records import (
 )
 from marimo_studio._validation.service import prepare_validation
 from marimo_studio._validation.static import check_runtime_studio, check_studio
-from marimo_studio._views.api import bind_cell, ensure_view
+from marimo_studio._views.api import bind_cell, prepare_view
 from marimo_studio._views.resolve import resolve_studio
 from marimo_studio._workspace import load_studio
 
@@ -33,7 +33,7 @@ def test_validation_preserves_mount_inspection_cleanup_failure(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
 
     def fail(*_args: object, **_kwargs: object) -> object:
         raise ProcessCleanupError("mount inspection process survived")
@@ -53,10 +53,10 @@ def test_runtime_check_scopes_values_to_the_selected_view(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     bound = bind_cell(studio, "result", 1)
-    ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     _shell(
         studio,
@@ -164,7 +164,7 @@ def test_runtime_check_reports_rich_output_format_failures(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     _shell(studio, "dashboard", '<marimo-output value="doubled"></marimo-output>')
     captured: dict[str, object] = {}
@@ -210,7 +210,7 @@ def test_runtime_check_propagates_output_response_errors(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     _shell(studio, "dashboard", '<marimo-output value="doubled"></marimo-output>')
 
@@ -270,8 +270,8 @@ if __name__ == "__main__":
 ''',
         encoding="utf-8",
     )
-    ensure_view(notebook)
-    ensure_view(notebook, "executive")
+    prepare_view(notebook)
+    prepare_view(notebook, "executive")
     studio = load_studio(notebook)
     _shell(
         studio,
@@ -349,7 +349,7 @@ if __name__ == "__main__":
 """,
         encoding="utf-8",
     )
-    ensure_view(notebook)
+    prepare_view(notebook)
     studio = load_studio(notebook)
     _shell(
         studio,
@@ -403,7 +403,7 @@ if __name__ == "__main__":
 """,
         encoding="utf-8",
     )
-    ensure_view(notebook)
+    prepare_view(notebook)
     studio = load_studio(notebook)
     _shell(studio, "dashboard", '<marimo-cell name="broken"></marimo-cell>')
 
@@ -420,7 +420,7 @@ def test_runtime_check_ignores_plain_htmx_routes(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     _shell(
         studio,
@@ -456,9 +456,9 @@ def test_runtime_check_ignores_plain_htmx_routes(
 def test_selected_view_check_isolated_from_other_templates(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
-    ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     _shell(studio, "dashboard", '<span mo-value="missing"></span>')
 

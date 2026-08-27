@@ -143,7 +143,7 @@ def _reject_workspace_ignore_shape(view_root: Path) -> None:
         raise ConfigurationError(f"Workspace ignore path is not a file: {path}")
 
 
-def _ensure_view_locked(
+def _prepare_view_locked(
     notebook: str | Path,
     name: str | None = None,
     *,
@@ -315,7 +315,7 @@ def _ensure_view_locked(
     )
 
 
-def ensure_view(
+def prepare_view(
     notebook: str | Path,
     name: str | None = None,
     *,
@@ -340,7 +340,7 @@ def ensure_view(
     ):
         raise ViewExistsError(selected)
     if dry_run:
-        return _ensure_view_locked(
+        return _prepare_view_locked(
             notebook_path,
             name,
             starter=starter,
@@ -399,7 +399,7 @@ def ensure_view(
         with ExitStack() as locks:
             for view_name in sorted({locked_default, locked_selected}):
                 locks.enter_context(view_mutation_lock(view_root, view_name))
-            return _ensure_view_locked(
+            return _prepare_view_locked(
                 notebook_path,
                 name,
                 starter=starter,

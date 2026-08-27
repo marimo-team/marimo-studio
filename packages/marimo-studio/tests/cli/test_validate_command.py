@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from marimo_studio._cli import cli
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 
 from ..helpers import replace_app_shell
 from .commands_test_support import (
@@ -23,11 +23,12 @@ def test_validate_emits_structured_diagnostics(
     notebook_path: Path,
     runtime_assets: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
 
     result = _run_cli(
         runtime_assets,
         "validate",
+        "--target",
         str(notebook_path),
         "--format",
         "json",
@@ -52,6 +53,7 @@ def test_browser_validation_requires_a_server_before_loading_the_target(
     result = _run_cli(
         runtime_assets,
         "validate",
+        "--target",
         str(tmp_path / "missing.py"),
         "--level",
         "browser",
@@ -74,11 +76,12 @@ def test_validate_rejects_malformed_server_urls_as_usage_errors(
     notebook_path: Path,
     runtime_assets: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
 
     result = _run_cli(
         runtime_assets,
         "validate",
+        "--target",
         str(notebook_path),
         "--level",
         "browser",
@@ -118,7 +121,7 @@ def test_validate_flags_override_connection_environment(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     captured: dict[str, str] = {}
 
     def connection(server_url: str, *, access_token: str, browser_client: str):
@@ -141,6 +144,7 @@ def test_validate_flags_override_connection_environment(
         cli,
         [
             "validate",
+            "--target",
             str(notebook_path),
             "--level",
             "browser",
@@ -227,7 +231,7 @@ if __name__ == "__main__":
 ''',
         encoding="utf-8",
     )
-    setup = ensure_view(notebook)
+    setup = prepare_view(notebook)
     template = setup.root / "index.html"
     template.write_text(
         replace_app_shell(
@@ -241,6 +245,7 @@ if __name__ == "__main__":
     result = _run_cli(
         runtime_assets,
         "validate",
+        "--target",
         str(notebook),
         "--level",
         "runtime",
@@ -267,7 +272,7 @@ def test_failed_validation_preserves_json_across_environment_reentry(
     runtime_assets: Path,
     diagnostic_args: tuple[str, ...],
 ) -> None:
-    setup = ensure_view(notebook_path)
+    setup = prepare_view(notebook_path)
     template = setup.root / "index.html"
     template.write_text(
         template.read_text(encoding="utf-8").replace(
@@ -286,9 +291,9 @@ def test_failed_validation_preserves_json_across_environment_reentry(
     result = _run_cli(
         runtime_assets,
         "validate",
-        str(notebook_path),
-        "--view",
         "dashboard",
+        "--target",
+        str(notebook_path),
         "--level",
         "runtime",
         "--format",

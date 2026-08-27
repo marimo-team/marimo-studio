@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 
@@ -17,5 +17,5 @@ def document(label: str) -> str:
 
 
 def studio(notebook: Path) -> StudioWorkspace:
-    ensure_view(notebook)
+    prepare_view(notebook)
     return load_studio(notebook)

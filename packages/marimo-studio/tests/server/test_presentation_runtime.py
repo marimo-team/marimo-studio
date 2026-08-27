@@ -24,7 +24,7 @@ from marimo_studio._delivery.urls import (
 from marimo_studio._server.presentation.capability import (
     parse_presentation_capability,
 )
-from marimo_studio._views.api import bind_cell, ensure_view
+from marimo_studio._views.api import bind_cell, prepare_view
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.metadata import update_notebook_config
@@ -53,7 +53,7 @@ def test_deleted_named_cell_keeps_the_view_live_until_repaired(
         1,
     )
     notebook.write_text(source, encoding="utf-8")
-    ensure_view(notebook)
+    prepare_view(notebook)
     studio = load_studio(notebook)
     _set_shell(studio, "dashboard", '<marimo-cell name="imports"></marimo-cell>')
     configured_source = notebook.read_text(encoding="utf-8")
@@ -204,7 +204,7 @@ def test_named_cell_binding_waits_for_active_name_and_source_sync(
         ),
         encoding="utf-8",
     )
-    ensure_view(notebook)
+    prepare_view(notebook)
     studio = load_studio(notebook)
     _set_shell(studio, "dashboard", '<marimo-cell name="imports"></marimo-cell>')
     static = load_static_notebook(notebook)
@@ -309,7 +309,7 @@ def test_unrelated_named_cell_does_not_block_the_selected_view(
         1,
     )
     notebook.write_text(source, encoding="utf-8")
-    ensure_view(notebook)
+    prepare_view(notebook)
     studio = load_studio(notebook)
     _set_shell(studio, "dashboard", '<marimo-cell name="imports"></marimo-cell>')
     static = load_static_notebook(notebook)
@@ -539,7 +539,7 @@ def _(mo):
 """,
         encoding="utf-8",
     )
-    ensure_view(notebook)
+    prepare_view(notebook)
     studio = load_studio(notebook)
     bind_cell(studio, "report", 1)
     studio = load_studio(notebook)

@@ -15,7 +15,7 @@ from marimo_studio._cli.environment import (
     run_in_notebook_environment,
 )
 from marimo_studio._compat.environment import inline_environment_flags
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import DependencyError
 
@@ -45,7 +45,7 @@ default = "dashboard"
 """,
         encoding="utf-8",
     )
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     (studio.root / "uv.lock").write_text("version = 1\n", encoding="utf-8")
     captured: dict[str, Any] = {}
@@ -316,7 +316,7 @@ project-demo = { path = "./project-demo" }
 """,
         encoding="utf-8",
     )
-    studio = ensure_view(notebook).workspace
+    studio = prepare_view(notebook).workspace
     assert studio is not None
 
     command = environment_command(

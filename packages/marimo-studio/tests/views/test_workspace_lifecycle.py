@@ -12,7 +12,7 @@ import pytest
 
 import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._views.remove as workspace_views
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._views.remove import delete_view
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
@@ -31,8 +31,8 @@ from .workspace_test_support import (
 def test_concurrent_thread_deletion_keeps_one_final_view(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     start = Barrier(2)
 
@@ -64,9 +64,9 @@ def test_spawn_process_deletion_preserves_default_for_remaining_view(
     notebook_path: Path,
     tmp_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "executive")
-    ensure_view(notebook_path, "operations")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
+    prepare_view(notebook_path, "operations")
     signals = tmp_path / "delete-signals"
     signals.mkdir()
     context = multiprocessing.get_context("spawn")
@@ -102,8 +102,8 @@ def test_view_deletion_rolls_back_when_updated_workspace_cannot_load(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     original_notebook = notebook_path.read_bytes()
     original_document = (studio.views["dashboard"].root / "index.html").read_bytes()
@@ -136,8 +136,8 @@ def test_view_deletion_preserves_a_source_edit_at_the_commit_boundary(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     target = studio.views["executive"].root
     document = target / "index.html"
@@ -170,8 +170,8 @@ def test_view_deletion_reports_a_target_removed_before_its_claim(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     target = studio.views["executive"].root
     identity = secure_files.SecureDirectory.directory_tree_identity
@@ -206,8 +206,8 @@ def test_view_deletion_keeps_partial_cleanup_outside_the_workspace(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
 
     def fail_cleanup(
@@ -234,8 +234,8 @@ def test_view_deletion_keeps_partial_cleanup_outside_the_workspace(
 def test_view_deletion_rejects_a_symlinked_view_directory(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     external = notebook_path.parent / "external-view"
     external.mkdir()
@@ -258,8 +258,8 @@ def test_view_deletion_cannot_follow_a_raced_workspace_root(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     target = studio.view_root / "executive"
     external = tmp_path / "external"
@@ -316,8 +316,8 @@ def test_notebooks_with_the_same_parent_have_independent_presentations(
     second = notebook_path.with_name("forecast.py")
     second.write_text(notebook_path.read_text(encoding="utf-8"), encoding="utf-8")
 
-    ensure_view(notebook_path, "dashboard")
-    ensure_view(second, "forecast")
+    prepare_view(notebook_path, "dashboard")
+    prepare_view(second, "forecast")
 
     first_studio = load_studio(notebook_path)
     second_studio = load_studio(second)
@@ -331,7 +331,7 @@ def test_directory_discovery_requires_an_explicit_notebook_on_conflict(
 ) -> None:
     inline = notebook_path.with_name("inline.py")
     inline.write_text(notebook_path.read_text(encoding="utf-8"), encoding="utf-8")
-    ensure_view(inline)
+    prepare_view(inline)
     (notebook_path.parent / "pyproject.toml").write_text(
         f"""\
 [tool.marimo-studio]
@@ -350,7 +350,7 @@ default = "dashboard"
 def test_notebook_configuration_controls_presentation_options(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
 
     def configure(config: MutableMapping[str, object]) -> None:
         config["preserve_session"] = True

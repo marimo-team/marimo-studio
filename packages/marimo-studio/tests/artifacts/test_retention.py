@@ -22,7 +22,7 @@ from marimo_studio._artifacts.retention import (
     prune_artifacts,
     prune_artifacts_locked,
 )
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.remove import delete_view
 from marimo_studio._workspace import load_studio
@@ -255,8 +255,8 @@ def test_concurrent_processes_publish_one_verified_revision(tmp_path: Path) -> N
 def test_external_publication_cannot_recreate_a_deleted_view(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "operations")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "operations")
     studio = load_studio(notebook_path)
     project = studio.views["operations"]
     signals = notebook_path.parent / "mutation-signals"
@@ -294,8 +294,8 @@ def test_external_publication_cannot_recreate_a_deleted_view(
 def test_deletion_rejects_artifact_lease_owned_by_another_process(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "operations")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "operations")
     project = load_studio(notebook_path).views["operations"]
     with publish_artifact_lease(project, "development"):
         pass
@@ -327,8 +327,8 @@ def test_deletion_closes_view_local_lock_before_rename(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "operations")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "operations")
     project = load_studio(notebook_path).views["operations"]
     with publish_artifact_lease(project, "development"):
         pass

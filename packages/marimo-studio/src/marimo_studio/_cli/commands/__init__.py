@@ -1,6 +1,5 @@
-"""Implement Studio's notebook, view, provider, validation, and export commands.
+"""Parse Studio commands and render shared authoring results.
 
-Shared CLI modules define reusable options and output formatting. The root
-command registers each workflow and handles console-script diagnostics and
-failures.
+Command handlers select inputs, call authoring services, and render results.
+The root command owns console-script diagnostics and failures.
 """

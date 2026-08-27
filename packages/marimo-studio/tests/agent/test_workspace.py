@@ -12,6 +12,7 @@ import marimo._code_mode as code_mode
 import pytest
 
 import marimo_studio.agent as studio_agent
+from marimo_studio._browser_client.transport import StudioServerConnection
 from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio._validation.analysis import AnalysisRequest
 from marimo_studio._validation.evidence import (
@@ -20,7 +21,6 @@ from marimo_studio._validation.evidence import (
 )
 from marimo_studio._validation.results import CheckResult
 from marimo_studio.agent import CellSelector, InspectionResult, ViewActivationResult
-from marimo_studio.agent._client import StudioServerConnection
 from marimo_studio.errors import (
     CapabilityInputError,
     ConfigurationError,
@@ -59,9 +59,14 @@ def test_agent_creation_and_binding_share_the_saved_notebook(
     workspace = _workspace(notebook_path)
 
     async def exercise():
-        starter = await workspace.starter("marimo-studio/vanilla:default")
-        view = await workspace.ensure_view("dashboard", starter=starter)
-        binding = await workspace.bind("summary", 1)
+        starter = next(
+            starter
+            for starter in await workspace.starters()
+            if starter.id == "marimo-studio/vanilla:default"
+        )
+        view = await workspace.create_view("dashboard", starter=starter)
+        notebook = await workspace.inspect_notebook()
+        binding = await workspace.bind("summary", notebook.cells[1].ref)
         return view, binding
 
     view, binding = asyncio.run(exercise())
@@ -86,10 +91,10 @@ def test_workspace_sync_operations_preserve_context_from_an_active_loop(
         observations.append((threading.get_ident(), request_context.get()))
         return SimpleNamespace(notebook=notebook)
 
-    monkeypatch.setattr("marimo_studio._views.overview.overview", overview)
+    monkeypatch.setattr("marimo_studio._authoring.workspace.overview", overview)
 
     async def exercise():
-        return await workspace.overview()
+        return await workspace.status()
 
     result = asyncio.run(exercise())
 
@@ -100,7 +105,7 @@ def test_workspace_sync_operations_preserve_context_from_an_active_loop(
 
 def test_view_inspection_matches_its_json_shape(notebook_path: Path) -> None:
     workspace = _workspace(notebook_path)
-    view = asyncio.run(workspace.ensure_view("dashboard"))
+    view = asyncio.run(workspace.create_view("dashboard"))
 
     result = asyncio.run(view.inspect())
     payload = result.to_dict()
@@ -121,7 +126,7 @@ def test_view_documents_use_revision_aware_source_operations(
     workspace = _workspace(notebook_path)
 
     async def exercise() -> None:
-        view = await workspace.ensure_view("dashboard")
+        view = await workspace.create_view("dashboard")
         document = await view.read("index.html")
         updated = await view.write(
             "index.html",
@@ -140,28 +145,9 @@ def test_view_documents_use_revision_aware_source_operations(
     asyncio.run(exercise())
 
 
-def test_manifest_provider_identity_is_rejected_for_source_documents(
-    notebook_path: Path,
-) -> None:
-    workspace = _workspace(notebook_path)
-
-    async def exercise() -> None:
-        view = await workspace.ensure_view("dashboard")
-        document = await view.read("index.html")
-        with pytest.raises(ValueError, match=r"view\.toml"):
-            await view.write(
-                "index.html",
-                document.content,
-                expected_revision=document.revision,
-                expected_provider="marimo-studio/vanilla",
-            )
-
-    asyncio.run(exercise())
-
-
 def test_agent_repairs_a_malformed_view_manifest(notebook_path: Path) -> None:
     workspace = _workspace(notebook_path)
-    asyncio.run(workspace.ensure_view("dashboard"))
+    asyncio.run(workspace.create_view("dashboard"))
     manifest = (
         notebook_path.parent
         / "__marimo__"
@@ -184,14 +170,6 @@ def test_agent_repairs_a_malformed_view_manifest(notebook_path: Path) -> None:
                 "view.toml",
                 "provider = [\n",
                 expected_revision=broken.revision,
-                expected_provider="marimo-studio/vanilla",
-            )
-        with pytest.raises(SourceValidationError, match="keeps one provider"):
-            await recovered.write(
-                "view.toml",
-                valid,
-                expected_revision=broken.revision,
-                expected_provider="marimo-studio/react",
             )
         with pytest.raises(SourceConflictError):
             await recovered.write(
@@ -215,7 +193,7 @@ def test_validation_evidence_grows_by_level(notebook_path: Path) -> None:
     workspace = _workspace(notebook_path)
 
     async def exercise() -> None:
-        await workspace.ensure_view("dashboard")
+        await workspace.create_view("dashboard")
         static = await workspace.validate(level="static", view="dashboard")
         runtime = await workspace.validate(level="runtime", view="dashboard")
         assert set(static.evidence) == {"static"}
@@ -228,12 +206,48 @@ def test_validation_evidence_grows_by_level(notebook_path: Path) -> None:
     asyncio.run(exercise())
 
 
+@pytest.mark.native_process
+def test_workspace_runtime_inspection_returns_selected_outputs(
+    notebook_path: Path,
+) -> None:
+    workspace = _workspace(notebook_path)
+
+    result = asyncio.run(
+        workspace.inspect_notebook(
+            runtime=True,
+            selectors=(1,),
+        )
+    )
+
+    assert [cell.index for cell in result.cells] == [1]
+    assert result.runtime is not None
+    assert result.runtime.cells[result.cells[0].runtime_id].status == "idle"
+
+
+def test_view_remove_returns_the_remaining_workspace(notebook_path: Path) -> None:
+    workspace = _workspace(notebook_path)
+    asyncio.run(workspace.create_view("dashboard"))
+    view = asyncio.run(workspace.create_view("report"))
+
+    result = asyncio.run(view.remove())
+
+    assert result.view == "report"
+    assert result.views == ("dashboard",)
+
+
+def test_agent_doctor_returns_provider_diagnostics() -> None:
+    report = asyncio.run(studio_agent.doctor())
+
+    assert report.providers
+    assert report.to_dict()["schema"] == 1
+
+
 def test_view_inspection_propagates_notebook_resolution_errors(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace = _workspace(notebook_path)
-    view = asyncio.run(workspace.ensure_view("dashboard"))
+    view = asyncio.run(workspace.create_view("dashboard"))
 
     def fail_resolution(*_args, **_kwargs):
         raise ConfigurationError("Notebook graph is invalid")
@@ -249,7 +263,7 @@ def test_view_build_cancellation_closes_a_late_lease(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace = _workspace(notebook_path)
-    view = asyncio.run(workspace.ensure_view("dashboard"))
+    view = asyncio.run(workspace.create_view("dashboard"))
     started = threading.Event()
     cancelled = threading.Event()
     release = threading.Event()
@@ -290,10 +304,11 @@ def test_view_write_cancellation_drains_atomic_commit_before_return(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import marimo_studio._authoring.view as view_operations
     import marimo_studio._views.sources as sources_module
 
     workspace = _workspace(notebook_path)
-    view = asyncio.run(workspace.ensure_view("dashboard"))
+    view = asyncio.run(workspace.create_view("dashboard"))
     loaded = asyncio.run(view.read("index.html"))
     updated = loaded.content + "\n"
     started = threading.Event()
@@ -312,7 +327,7 @@ def test_view_write_cancellation_drains_atomic_commit_before_return(
         finally:
             unregister()
 
-    monkeypatch.setattr(sources_module, "write_source", write)
+    monkeypatch.setattr(view_operations, "write_source", write)
 
     async def exercise() -> None:
         mutation = asyncio.create_task(
@@ -351,11 +366,12 @@ def test_workspace_bind_cancellation_drains_atomic_commit_before_return(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import marimo_studio._authoring.workspace as workspace_operations
     import marimo_studio._views.api as views_api
     from marimo_studio._workspace import load_studio
 
     workspace = _workspace(notebook_path)
-    asyncio.run(workspace.ensure_view("dashboard"))
+    asyncio.run(workspace.create_view("dashboard"))
     started = threading.Event()
     cancelled = threading.Event()
     release = threading.Event()
@@ -372,7 +388,7 @@ def test_workspace_bind_cancellation_drains_atomic_commit_before_return(
         finally:
             unregister()
 
-    monkeypatch.setattr(views_api, "bind_cell", bind)
+    monkeypatch.setattr(workspace_operations, "bind_cell_operation", bind)
 
     async def exercise() -> None:
         mutation = asyncio.create_task(workspace.bind("late-binding", 0))
@@ -400,7 +416,10 @@ def test_open_uses_the_notebook_attached_to_code_mode(
 ) -> None:
     monkeypatch.setattr(
         "marimo_studio._composition.create_code_mode_bridge",
-        lambda: SimpleNamespace(active_notebook=lambda: notebook_path.resolve()),
+        lambda: SimpleNamespace(
+            active_notebook=lambda: notebook_path.resolve(),
+            connection=lambda: StudioServerConnection("http://localhost:2718"),
+        ),
     )
 
     assert studio_agent.open().notebook == notebook_path.resolve()
@@ -415,26 +434,33 @@ def test_open_uses_the_notebook_attached_to_code_mode(
 
 def test_workspace_validates_notebook_and_binding_inputs(notebook_path: Path) -> None:
     workspace = _workspace(notebook_path)
-    asyncio.run(workspace.ensure_view("dashboard"))
+    asyncio.run(workspace.create_view("dashboard"))
 
     with pytest.raises(CapabilityInputError, match="greater than or equal to 1"):
-        asyncio.run(workspace.inspect(limit=0))
-    for cell_index in (-1, True):
-        with pytest.raises(CapabilityInputError, match="nonnegative integer"):
-            asyncio.run(workspace.bind("summary", cast(int, cell_index)))
+        asyncio.run(workspace.inspect_notebook(limit=0))
+    for selector in (-1, True):
+        with pytest.raises(CapabilityInputError, match="Unknown cell selector"):
+            asyncio.run(workspace.bind("summary", cast(Any, selector)))
 
 
 def test_view_analysis_uses_the_attached_studio_server(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    workspace = _workspace(notebook_path)
-    view = asyncio.run(workspace.ensure_view("dashboard"))
-    connection = StudioServerConnection("http://localhost:2718")
+    asyncio.run(_workspace(notebook_path).create_view("dashboard"))
+    connection = StudioServerConnection(
+        "http://localhost:2718",
+        session_id="s_123456",
+    )
     monkeypatch.setattr(
         "marimo_studio._composition.create_code_mode_bridge",
-        lambda: SimpleNamespace(connection=lambda: connection),
+        lambda: SimpleNamespace(
+            active_notebook=lambda: notebook_path.resolve(),
+            connection=lambda: connection,
+        ),
     )
+    workspace = studio_agent.open()
+    view = workspace.view("dashboard")
 
     async def analyze(_connection, notebook, request):
         assert request == AnalysisRequest(view="dashboard")
@@ -464,7 +490,7 @@ def test_view_analysis_uses_the_attached_studio_server(
             actions=(),
         )
 
-    monkeypatch.setattr("marimo_studio.agent._client.request_analysis", analyze)
+    monkeypatch.setattr("marimo_studio._authoring.validation.request_analysis", analyze)
 
     report = asyncio.run(view.validate(level="browser"))
 
@@ -477,16 +503,19 @@ def test_view_analysis_requires_the_attached_server(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    workspace = _workspace(notebook_path)
-    view = asyncio.run(workspace.ensure_view("dashboard"))
+    asyncio.run(_workspace(notebook_path).create_view("dashboard"))
 
     def unavailable() -> StudioServerConnection:
         raise ProtocolError("Studio metadata is unavailable.")
 
     monkeypatch.setattr(
         "marimo_studio._composition.create_code_mode_bridge",
-        lambda: SimpleNamespace(connection=unavailable),
+        lambda: SimpleNamespace(
+            active_notebook=lambda: notebook_path.resolve(),
+            connection=unavailable,
+        ),
     )
+    view = studio_agent.open().view("dashboard")
 
     with pytest.raises(ProtocolError, match="Studio metadata is unavailable"):
         asyncio.run(view.validate(level="browser"))
@@ -496,25 +525,31 @@ def test_view_activation_targets_the_attached_browser(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    workspace = _workspace(notebook_path)
-    view = asyncio.run(workspace.ensure_view("dashboard"))
-    connection = StudioServerConnection("http://localhost:2718")
+    asyncio.run(_workspace(notebook_path).create_view("dashboard"))
+    connection = StudioServerConnection(
+        "http://localhost:2718",
+        session_id="s_123456",
+    )
     monkeypatch.setattr(
         "marimo_studio._composition.create_code_mode_bridge",
-        lambda: SimpleNamespace(connection=lambda: connection),
+        lambda: SimpleNamespace(
+            active_notebook=lambda: notebook_path.resolve(),
+            connection=lambda: connection,
+        ),
     )
+    view = studio_agent.open().view("dashboard")
 
-    async def activate(_connection, notebook, request):
+    async def activate(studio, _connection, name):
         return ViewActivationResult(
-            notebook=notebook,
-            view=request.view,
+            notebook=studio.notebook,
+            view=name,
             generation=2,
             client_id="browser-client-1234",
             session_id="s_123456",
         )
 
     monkeypatch.setattr(
-        "marimo_studio.agent._client.request_view_activation",
+        "marimo_studio._authoring.view.activate_browser_view",
         activate,
     )
 

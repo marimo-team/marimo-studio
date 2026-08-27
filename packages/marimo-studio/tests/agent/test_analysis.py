@@ -24,7 +24,7 @@ from marimo_studio._validation.records import ValidationReport
 from marimo_studio._validation.results import CheckResult
 from marimo_studio._validation.runtime_process import check_runtime_studio_isolated
 from marimo_studio._validation.static import CheckReport
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._views.presentation_publication import publish_presentation
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
@@ -153,7 +153,7 @@ def test_validation_levels_preserve_projection_repair_context(
 
 @pytest.mark.native_process
 def test_runtime_analysis_runs_in_a_dedicated_process(notebook_path) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     _build, presentation_revision, artifact_revision = publish_presentation(
         studio,
@@ -173,7 +173,7 @@ def test_analysis_skips_runtime_and_builds_repair_actions(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     runtime_called = False
 
@@ -224,7 +224,7 @@ def test_required_browser_evidence_controls_handoff_readiness(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     monkeypatch.setattr(
         validation_service,
@@ -290,7 +290,7 @@ def _analyze_mounts(
     monkeypatch: pytest.MonkeyPatch,
     allowed_targets: tuple[tuple[str, ...] | None, ...],
 ) -> AnalysisReport:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     sites = tuple(
         MountDeclaration(
@@ -382,7 +382,7 @@ def test_browser_connection_errors_become_repair_actions(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     monkeypatch.setattr(
         validation_service,
@@ -420,7 +420,7 @@ def test_unexpected_stage_failure_cancels_sibling_analysis_work(
     monkeypatch: pytest.MonkeyPatch,
     failing_stage: str,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     monkeypatch.setattr(
         validation_service,
@@ -488,7 +488,7 @@ def test_analysis_rejects_evidence_collected_across_source_revisions(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     monkeypatch.setattr(
         validation_service,
@@ -550,8 +550,8 @@ def test_focused_analysis_ignores_an_unrelated_view_edit(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     monkeypatch.setattr(
         validation_service,
@@ -605,7 +605,7 @@ def test_selected_view_deletion_becomes_a_source_unavailable_action(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     monkeypatch.setattr(
         validation_service,
@@ -656,7 +656,7 @@ def test_selected_view_deletion_becomes_a_source_unavailable_action(
 
 
 def test_missing_view_source_becomes_a_static_repair_action(notebook_path) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     (studio.views["dashboard"].root / "index.html").unlink()
 

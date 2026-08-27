@@ -14,7 +14,7 @@ from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._server.development import routes as dev_module
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 
 from ..app_helpers import configured
@@ -55,7 +55,7 @@ def test_project_catalog_reconciles_a_recreated_view_after_queued_deletion(
     notebook_path: Path,
 ) -> None:
     configured(notebook_path)
-    ensure_view(notebook_path, "qa-view")
+    prepare_view(notebook_path, "qa-view")
     studio = load_studio(notebook_path)
 
     async def exercise() -> None:
@@ -64,7 +64,7 @@ def test_project_catalog_reconciles_a_recreated_view_after_queued_deletion(
             initial = await coordinator.project_catalog(studio, "qa-view")
             await asyncio.to_thread(shutil.rmtree, initial.project.root)
             await coordinator.refresh("qa-view")
-            await asyncio.to_thread(ensure_view, notebook_path, "qa-view")
+            await asyncio.to_thread(prepare_view, notebook_path, "qa-view")
 
             current = await asyncio.to_thread(load_studio, notebook_path)
             reconciled = await coordinator.project_catalog(current, "qa-view")

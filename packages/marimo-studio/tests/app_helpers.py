@@ -9,7 +9,7 @@ from marimo_studio._composition import (
     own_programmatic_lifespans,
     programmatic_middleware,
 )
-from marimo_studio._views.api import bind_cell, ensure_view
+from marimo_studio._views.api import bind_cell, prepare_view
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
@@ -26,7 +26,7 @@ def set_shell(studio: StudioWorkspace, view_name: str, content: str) -> None:
 
 
 def created_one_view(notebook: Path) -> StudioWorkspace:
-    ensure_view(notebook)
+    prepare_view(notebook)
     return load_studio(notebook)
 
 
@@ -53,7 +53,7 @@ def published_dashboard(notebook: Path) -> StudioWorkspace:
 
 def configured(notebook: Path) -> StudioWorkspace:
     studio = _configured_dashboard(notebook)
-    ensure_view(notebook, "executive")
+    prepare_view(notebook, "executive")
     studio = load_studio(notebook)
     set_shell(
         studio,

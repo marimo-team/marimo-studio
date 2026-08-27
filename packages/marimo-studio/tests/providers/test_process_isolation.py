@@ -549,8 +549,8 @@ def test_cli_sigint_drains_the_provider_process_tree(
         "from tests.providers.test_process_isolation import _registry; "
         "providers._REGISTRY = _registry('build-tree', 'build_tree_provider'); "
         "from marimo_studio._cli.main import cli; "
-        f"cli.main(args=['validate', {str(studio.notebook)!r}, "
-        "'--view', 'dashboard'])"
+        f"cli.main(args=['validate', 'dashboard', '--target', "
+        f"{str(studio.notebook)!r}])"
     )
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(Path(__file__).parents[2])

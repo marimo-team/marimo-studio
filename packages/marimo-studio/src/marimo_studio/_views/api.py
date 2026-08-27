@@ -7,7 +7,7 @@ from pathlib import Path
 
 from marimo_studio._notebook.inspection import inspect_notebook
 from marimo_studio._notebook.records import CellSelector
-from marimo_studio._views.create import ensure_view as _ensure_view
+from marimo_studio._views.create import prepare_view as _prepare_view
 from marimo_studio._views.records import Starter, ViewSetupResult
 from marimo_studio._views.remove import delete_view as _delete_view
 from marimo_studio._views.resolve import resolve_studio as resolve_studio
@@ -58,7 +58,7 @@ def bind_cell(
     )
 
 
-def ensure_view(
+def prepare_view(
     notebook: str | Path,
     name: str | None = None,
     *,
@@ -66,7 +66,7 @@ def ensure_view(
     dry_run: bool = False,
 ) -> ViewSetupResult:
     """Configure a notebook and create a named view."""
-    return _ensure_view(
+    return _prepare_view(
         notebook,
         name,
         starter=starter,
@@ -83,7 +83,7 @@ def create_view(
     dry_run: bool = False,
 ) -> ViewSetupResult:
     """Create one new view and reject an existing name."""
-    return _ensure_view(
+    return _prepare_view(
         notebook,
         name,
         starter=starter,

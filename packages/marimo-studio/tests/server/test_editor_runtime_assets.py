@@ -25,7 +25,7 @@ from marimo_studio._compat.server.editor_runtime import (
     _protect_editor_query_parameters,
     _serialize_document_transactions,
 )
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio.errors import ProtocolError
 
 from ..app_helpers import configured as _configured
@@ -785,7 +785,7 @@ def test_unconfigured_editor_cannot_cache_unadapted_runtime_assets(
 
     with TestClient(app) as client:
         before = [client.get(url, params={"file": str(notebook)}) for url in urls]
-        ensure_view(notebook)
+        prepare_view(notebook)
         after = [
             client.get(
                 url,

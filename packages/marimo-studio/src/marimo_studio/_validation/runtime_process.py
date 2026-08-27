@@ -195,7 +195,8 @@ def _process_failure(
                 "source": {"path": str(studio.notebook)},
                 "hint": hint
                 or (
-                    f"Run marimo-studio validate {studio.notebook} --level runtime "
+                    f"Run marimo-studio validate --target {studio.notebook} "
+                    "--level runtime "
                     "in the notebook environment, fix the reported setup error, "
                     "then rerun validation."
                 ),

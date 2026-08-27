@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from marimo_studio._views.api import bind_cell, ensure_view
+from marimo_studio._views.api import bind_cell, prepare_view
 from marimo_studio._workspace import load_studio
 
 from ..helpers import replace_app_shell
 
 
 def configure_export_view(notebook: Path) -> Path:
-    setup = ensure_view(notebook)
+    setup = prepare_view(notebook)
     bind_cell(load_studio(notebook), "cell-2", 1)
     document = setup.root / "index.html"
     document.write_text(

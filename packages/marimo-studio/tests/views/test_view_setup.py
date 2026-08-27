@@ -14,7 +14,7 @@ import pytest
 import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._views.create as create_module
 import marimo_studio._workspace.transactions as workspace_transactions
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._views.inspection import inspect_view_project_sync
 from marimo_studio._views.remove import delete_view
 from marimo_studio._views.resolve import resolve_studio
@@ -40,7 +40,7 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
 ) -> None:
     original = notebook_path.read_text(encoding="utf-8")
 
-    result = ensure_view(notebook_path)
+    result = prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     document = read_notebook_metadata(notebook_path)
     document_source = result.root.joinpath("index.html").read_text(encoding="utf-8")
@@ -66,7 +66,7 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
         encoding="utf-8",
     )
 
-    ensure_view(notebook_path, "report")
+    prepare_view(notebook_path, "report")
 
     assert ".custom {}" in dashboard.read_text(encoding="utf-8")
     report = load_studio(notebook_path).views["report"].root
@@ -84,9 +84,9 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
 def test_repeated_and_dry_run_setup_report_file_changes(
     notebook_path: Path,
 ) -> None:
-    created = ensure_view(notebook_path)
-    repeated = ensure_view(notebook_path)
-    preview = ensure_view(notebook_path, dry_run=True)
+    created = prepare_view(notebook_path)
+    repeated = prepare_view(notebook_path)
+    preview = prepare_view(notebook_path, dry_run=True)
 
     payload = created.to_dict()
     assert payload["schema"] == 2
@@ -103,7 +103,7 @@ def test_concurrent_view_setup_serializes_the_same_view_name(
 
     def create():
         barrier.wait(timeout=2)
-        return ensure_view(notebook_path, "dashboard")
+        return prepare_view(notebook_path, "dashboard")
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = tuple(executor.map(lambda _index: create(), range(2)))
@@ -122,7 +122,7 @@ def test_concurrent_first_view_threads_create_one_coherent_catalog(
 
     def create(name: str) -> str:
         start.wait()
-        return ensure_view(notebook_path, name).name
+        return prepare_view(notebook_path, name).name
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = tuple(
@@ -172,7 +172,7 @@ default = "dashboard"
     monkeypatch.setattr(vanilla_provider, "create", change_catalog_after_planning)
 
     with pytest.raises(ConfigurationError, match="catalog changed"):
-        ensure_view(notebook_path, "report")
+        prepare_view(notebook_path, "report")
 
     assert calls == 2
     assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
@@ -182,7 +182,7 @@ def test_existing_view_inspection_runs_outside_mutation_locks(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     held = 0
     inspections = 0
     workspace_lock = create_module.workspace_catalog_lock
@@ -225,7 +225,7 @@ def test_existing_view_inspection_runs_outside_mutation_locks(
         observed_inspection,
     )
 
-    result = ensure_view(notebook_path)
+    result = prepare_view(notebook_path)
 
     assert inspections == 1
     assert result.documents == (
@@ -302,7 +302,7 @@ def test_spawned_first_view_processes_create_one_coherent_catalog(
 def test_definition_materializes_only_after_a_view_exists(
     notebook_path: Path,
 ) -> None:
-    setup = ensure_view(notebook_path)
+    setup = prepare_view(notebook_path)
     shutil.rmtree(
         setup.workspace.view_root if setup.workspace is not None else setup.root
     )
@@ -315,7 +315,7 @@ def test_definition_materializes_only_after_a_view_exists(
     with pytest.raises(WorkspaceInitializationError, match="first view"):
         load_studio(notebook_path)
 
-    initialized = ensure_view(notebook_path).workspace
+    initialized = prepare_view(notebook_path).workspace
 
     assert isinstance(initialized, StudioWorkspace)
     assert list(initialized.views) == ["dashboard"]
@@ -325,7 +325,7 @@ def test_view_discovery_rejects_a_symlinked_view_directory(
     notebook_path: Path,
     tmp_path: Path,
 ) -> None:
-    setup = ensure_view(notebook_path)
+    setup = prepare_view(notebook_path)
     external = tmp_path / "external-view"
     setup.root.rename(external)
     setup.root.symlink_to(external, target_is_directory=True)
@@ -346,7 +346,7 @@ def test_new_view_exposes_one_editable_html_document_without_mounts(
         encoding="utf-8",
     )
 
-    result = ensure_view(notebook_path)
+    result = prepare_view(notebook_path)
     inspection = inspect_view_project_sync(load_studio(notebook_path).view(result.name))
     document = read_notebook_metadata(notebook_path)
 
@@ -371,7 +371,7 @@ def test_zero_cell_notebook_rejects_non_notebook_source(
         encoding="utf-8",
     )
     with pytest.raises(NotebookSourceError):
-        ensure_view(notebook)
+        prepare_view(notebook)
 
 
 def test_setup_preserves_crlf_preamble_and_notebook_body(tmp_path: Path) -> None:
@@ -387,7 +387,7 @@ def test_setup_preserves_crlf_preamble_and_notebook_body(tmp_path: Path) -> None
     )
     notebook.write_bytes(source.encode())
 
-    ensure_view(notebook)
+    prepare_view(notebook)
 
     updated = notebook.read_bytes()
     assert updated.startswith(
@@ -413,8 +413,8 @@ def test_repeated_setup_preserves_crlf_metadata(tmp_path: Path) -> None:
     )
     notebook.write_bytes(source.encode())
 
-    ensure_view(notebook, "dashboard")
-    ensure_view(notebook, "report")
+    prepare_view(notebook, "dashboard")
+    prepare_view(notebook, "report")
 
     updated = notebook.read_bytes()
     assert b"\r\r\n" not in updated
@@ -457,7 +457,7 @@ def test_setup_rolls_back_notebook_and_view_files_after_write_failure(
     )
 
     with pytest.raises(OSError, match="simulated write failure"):
-        ensure_view(notebook_path)
+        prepare_view(notebook_path)
 
     assert notebook_path.read_bytes() == original
     assert not (canonical_view_root(notebook_path) / "dashboard").exists()
@@ -473,7 +473,7 @@ def test_setup_rejects_non_notebooks_without_mutation(
     original = target.read_bytes()
 
     with pytest.raises(ConfigurationError):
-        ensure_view(target)
+        prepare_view(target)
 
     assert target.read_bytes() == original
     assert not (tmp_path / "__marimo__").exists()
@@ -505,7 +505,7 @@ default = "executive"
         encoding="utf-8",
     )
 
-    ensure_view(notebook)
+    prepare_view(notebook)
     studio = load_studio(notebook)
 
     assert studio.config_source == "pyproject"
@@ -531,8 +531,8 @@ default = "dashboard"
 """,
         encoding="utf-8",
     )
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
 
     delete_view(load_studio(pyproject), "dashboard")
 

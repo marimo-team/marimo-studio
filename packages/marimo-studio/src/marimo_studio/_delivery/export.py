@@ -143,8 +143,8 @@ def _projection_error(resolved: ResolvedStudio, view_name: str) -> None:
     raise StaticExportError(
         f"View {view_name!r} has unresolved projections: "
         f"{first.message} ({location}){suffix}. "
-        f"Run `marimo-studio validate {resolved.workspace.notebook} "
-        f"--view {view_name} "
+        f"Run `marimo-studio validate {view_name} "
+        f"--target {resolved.workspace.notebook} "
         "--level static` for repair details."
     )
 

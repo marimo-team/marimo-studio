@@ -6,12 +6,10 @@ import sys
 
 import click
 
-from marimo_studio._cli.commands.bind import bind
-from marimo_studio._cli.commands.export import export as export_command
-from marimo_studio._cli.commands.inspect import inspect
-from marimo_studio._cli.commands.overview import overview
-from marimo_studio._cli.commands.provider import provider
-from marimo_studio._cli.commands.starter import starter
+from marimo_studio._cli.commands.doctor import doctor
+from marimo_studio._cli.commands.notebook import notebook
+from marimo_studio._cli.commands.starters import starters
+from marimo_studio._cli.commands.status import status
 from marimo_studio._cli.commands.validate import validate
 from marimo_studio._cli.commands.view import view
 from marimo_studio._cli.diagnostics import (
@@ -29,8 +27,8 @@ from marimo_studio.errors import MarimoStudioError
     context_settings={"help_option_names": ["-h", "--help"]},
     epilog="""\b
 Examples:
-  marimo-studio overview analysis.py
-  marimo-studio view create analysis.py
+  marimo-studio status --target analysis.py
+  marimo-studio view create dashboard --target analysis.py
   marimo edit analysis.py --sandbox
 """,
     no_args_is_help=True,
@@ -40,12 +38,10 @@ def cli() -> None:
     """Design custom views for Marimo notebooks."""
 
 
-cli.add_command(bind)
-cli.add_command(export_command)
-cli.add_command(inspect)
-cli.add_command(overview)
-cli.add_command(provider)
-cli.add_command(starter)
+cli.add_command(doctor)
+cli.add_command(notebook)
+cli.add_command(starters)
+cli.add_command(status)
 cli.add_command(validate)
 cli.add_command(view)
 

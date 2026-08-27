@@ -16,7 +16,7 @@ from marimo_studio._delivery.urls import (
     STUDIO_CLIENT_QUERY_PARAM,
 )
 from marimo_studio._server.presentation import service as presentation_service
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace.metadata import (
     read_notebook_metadata,
     update_notebook_config,
@@ -389,7 +389,7 @@ def test_revisiting_a_view_reuses_its_watcher_generation_snapshot(
 def test_empty_notebook_serves_a_ready_starter_view(tmp_path: Path) -> None:
     notebook = tmp_path / "analysis.py"
     notebook.write_text(empty_notebook_source(), encoding="utf-8")
-    ensure_view(notebook)
+    prepare_view(notebook)
 
     with TestClient(create_asgi_app(notebook)) as client:
         page = client.get("/")

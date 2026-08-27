@@ -21,7 +21,7 @@ from marimo_studio._compat.patch import ReversiblePatch
 from marimo_studio._compat.runtime_probe import probe_runtime
 from marimo_studio._composition import create_browser_runtime_projector
 from marimo_studio._validation.static import check_studio
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors._internal import CompatibilityError
 
@@ -200,7 +200,7 @@ def test_browser_projection_bootstrap_executes_in_the_native_kernel(
 
 
 def test_check_reports_the_validated_release_identity(notebook_path: Path) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
 
     result = next(
         item
@@ -225,7 +225,7 @@ def test_check_reports_the_required_release_when_validation_fails(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
 
     def fail_validation() -> object:
         raise CompatibilityError("release mismatch")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._views.remove import delete_view
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import canonical_view_root
@@ -45,7 +45,7 @@ def _delete_view_in_process(
 
 def _reject_manifestless_view_in_process(notebook: str, view_name: str) -> str:
     try:
-        ensure_view(Path(notebook), view_name)
+        prepare_view(Path(notebook), view_name)
     except ViewExistsError as error:
         return str(error)
     raise AssertionError("Manifestless view directory was adopted")
@@ -64,7 +64,7 @@ def _create_view_in_process(
         if time.monotonic() >= deadline:
             raise TimeoutError("Concurrent creation participants did not start")
         time.sleep(0.01)
-    return ensure_view(Path(notebook), view_name).name
+    return prepare_view(Path(notebook), view_name).name
 
 
 def _shell(studio: StudioWorkspace, view_name: str, content: str) -> None:

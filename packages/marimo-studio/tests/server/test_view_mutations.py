@@ -20,7 +20,7 @@ from marimo_studio._server.development.coordinator import (
     DevelopmentCoordinator,
 )
 from marimo_studio._server.notebook_scope import NotebookScope
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._views.records import ViewDocument
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
@@ -46,7 +46,7 @@ def test_view_list_tracks_new_folders_without_restarting_marimo(
 
     with TestClient(app) as client:
         before = client.get("/_marimo-studio/views").json()
-        ensure_view(studio.notebook, "operations")
+        prepare_view(studio.notebook, "operations")
         after = client.get("/_marimo-studio/views").json()
         page = client.get("/operations/")
 
@@ -119,7 +119,7 @@ def test_cancelled_http_source_write_finishes_commit_and_refresh_once(
 def test_definition_state_initializes_the_first_view_from_edit_mode(
     notebook_path: Path,
 ) -> None:
-    setup = ensure_view(notebook_path)
+    setup = prepare_view(notebook_path)
     assert setup.workspace is not None
     shutil.rmtree(setup.workspace.view_root)
     definition = load_studio_definition(notebook_path)
@@ -182,7 +182,7 @@ def test_definition_state_initializes_the_first_view_from_edit_mode(
 def test_definition_state_returns_structured_run_repair(
     notebook_path: Path,
 ) -> None:
-    setup = ensure_view(notebook_path)
+    setup = prepare_view(notebook_path)
     assert setup.workspace is not None
     shutil.rmtree(setup.workspace.view_root)
 
@@ -533,7 +533,7 @@ def test_view_deletion_removes_files_promotes_the_default_and_keeps_one_view(
     notebook_path: Path,
 ) -> None:
     studio = _configured(notebook_path)
-    ensure_view(studio.notebook, "operations")
+    prepare_view(studio.notebook, "operations")
     asset = studio.view_root / "operations" / "assets" / "note.txt"
     asset.parent.mkdir(parents=True)
     asset.write_text("authored view asset", encoding="utf-8")
@@ -587,7 +587,7 @@ def test_view_deletion_builds_provider_inventory_off_the_event_loop(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = _configured(notebook_path)
-    ensure_view(studio.notebook, "operations")
+    prepare_view(studio.notebook, "operations")
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
     headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
@@ -622,7 +622,7 @@ def test_view_deletion_releases_retained_artifacts_before_windows_cleanup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = _configured(notebook_path)
-    ensure_view(studio.notebook, "operations")
+    prepare_view(studio.notebook, "operations")
     scopes: list[NotebookScope] = []
     create_scope = NotebookScope.create
 
@@ -677,7 +677,7 @@ def test_project_and_source_reads_report_transient_deletion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = _configured(notebook_path)
-    ensure_view(studio.notebook, "operations")
+    prepare_view(studio.notebook, "operations")
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
     headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
@@ -725,7 +725,7 @@ def test_view_deletion_cancels_build_before_off_thread_filesystem_cleanup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = _configured(notebook_path)
-    ensure_view(studio.notebook, "operations")
+    prepare_view(studio.notebook, "operations")
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
     headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}

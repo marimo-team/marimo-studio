@@ -35,7 +35,7 @@ from marimo_studio._server.records import (
 from marimo_studio._server.routing import ArtifactAssetRoute
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
 from marimo_studio._server.workspace_lifecycle import Ready
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.revisions import PresentationSourceSnapshot
 from marimo_studio._workspace import load_studio
@@ -107,7 +107,7 @@ def _presentation_snapshot(view_name: str, revision: str) -> PresentationSnapsho
 def _artifact_route(
     notebook_path: Path,
 ) -> tuple[ReadyWorkspaceHandler, ReadyWorkspaceRoute, NotebookPresentation]:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     presentation = NotebookPresentation(notebook_path)
     snapshot = presentation.snapshot("dashboard")
     definition = presentation.discover_definition()
@@ -460,7 +460,7 @@ def test_open_response_is_isolated_from_later_source_growth(tmp_path: Path) -> N
 def test_presentation_history_pins_revisions_until_scope_release(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     presentation = NotebookPresentation(notebook_path)
     first = presentation.snapshot("dashboard")
     project = load_studio(notebook_path).view("dashboard")
@@ -480,7 +480,7 @@ def test_display_snapshot_uses_the_verified_publication_before_validation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     publish_artifact(
         load_studio(notebook_path).view("dashboard"),
         "development",
@@ -524,7 +524,7 @@ def test_presentation_rejects_artifact_corruption_before_document_read(
     corruption: str,
     message: str,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     verify_membership = ArtifactLease.verify_membership
     corrupted = False
 
@@ -583,7 +583,7 @@ def test_presentation_close_releases_every_lease_after_one_fails(
 def test_presentation_snapshot_releases_every_removed_view_lease(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     calls: list[str] = []
     first = _LeaseCloser("first", calls, RuntimeError("prune close failed"))
     second = _LeaseCloser("second", calls)
@@ -706,9 +706,9 @@ def test_presentation_capture_retains_construction_error_after_cleanup_failures(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
-    ensure_view(notebook_path, "executive")
-    ensure_view(notebook_path, "operations")
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "executive")
+    prepare_view(notebook_path, "operations")
     studio = load_studio(notebook_path)
     calls: list[str] = []
     leases = {

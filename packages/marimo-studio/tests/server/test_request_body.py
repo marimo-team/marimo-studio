@@ -17,7 +17,7 @@ from marimo_studio._server.request_body import (
     read_json_body,
 )
 from marimo_studio._server.studio.routes import create_view_response
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace.config import load_studio_definition
 
 
@@ -172,7 +172,7 @@ def test_view_creation_rejects_mismatched_body_length_without_mutation(
     declared_delta: int,
     expected_status: int,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     definition = load_studio_definition(notebook_path)
     payload = b'{"name":"operations"}'
     request, receive_calls = _request(

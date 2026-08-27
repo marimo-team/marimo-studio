@@ -61,8 +61,12 @@ def server_option(*, required: bool = False):
     )
 
 
-target_argument = click.argument(
-    "target",
-    required=False,
+target_option = click.option(
+    "--target",
     type=click.Path(path_type=Path),
+    help=(
+        "Select a notebook, project directory, or pyproject.toml. "
+        "Defaults to the current Studio configuration."
+    ),
 )
+view_name_argument = click.argument("view_name", metavar="VIEW")

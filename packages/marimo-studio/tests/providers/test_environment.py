@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._views.remove import delete_view
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.metadata import read_notebook_metadata
@@ -41,7 +41,7 @@ def test_setup_preserves_pep_723_metadata_and_notebook_body(
         encoding="utf-8",
     )
 
-    ensure_view(notebook_path, "finance")
+    prepare_view(notebook_path, "finance")
     document = read_notebook_metadata(notebook_path)
 
     assert document is not None
@@ -68,12 +68,12 @@ def test_view_deletion_keeps_dependencies_and_updates_the_default(
             BUNDLED_PROVIDER_REQUIREMENTS,
         ),
     )
-    ensure_view(
+    prepare_view(
         notebook_path,
         "dashboard",
         starter="marimo-studio/react:react",
     )
-    ensure_view(
+    prepare_view(
         notebook_path,
         "report",
         starter="marimo-studio/react:react",
@@ -106,7 +106,7 @@ def test_setup_tightens_the_notebook_python_requirement(
         encoding="utf-8",
     )
 
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
 
     document = read_notebook_metadata(notebook_path)
     assert document is not None
@@ -127,7 +127,7 @@ def test_setup_rejects_disjoint_python_requirements_before_mutation(
     original = notebook_path.read_bytes()
 
     with pytest.raises(ConfigurationError, match="do not overlap"):
-        ensure_view(notebook_path)
+        prepare_view(notebook_path)
 
     assert notebook_path.read_bytes() == original
     assert not (notebook_path.parent / "__marimo__").exists()

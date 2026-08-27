@@ -5,7 +5,7 @@ from pathlib import Path
 import marimo
 import pytest
 
-from marimo_studio._views.api import bind_cell, ensure_view
+from marimo_studio._views.api import bind_cell, prepare_view
 from marimo_studio._views.resolve import resolve_studio
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import (
@@ -18,9 +18,9 @@ from .workspace_test_support import (
 
 
 def test_symbolic_projections_include_each_valid_view(notebook_path: Path) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
-    ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     _shell(
         studio,
@@ -50,7 +50,7 @@ def test_symbolic_projections_include_each_valid_view(notebook_path: Path) -> No
 
 
 def test_output_projection_binds_to_the_defining_cell(notebook_path: Path) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     _shell(
         studio,
@@ -75,10 +75,10 @@ def test_output_projection_binds_to_the_defining_cell(notebook_path: Path) -> No
 def test_symbolic_resolution_ignores_an_invalid_unselected_view(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     _shell(studio, "dashboard", '<span mo-value="doubled"></span>')
-    ensure_view(notebook_path, "draft")
+    prepare_view(notebook_path, "draft")
     studio = load_studio(notebook_path)
     _shell(studio, "draft", '<span mo-value="doubled + 1"></span>')
 
@@ -136,7 +136,7 @@ def test_each_view_enforces_the_projection_shell(
     template: str,
     message: str,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     if not template.startswith("<html"):
         template = f"<html><head></head><body>{template}</body></html>"
@@ -151,7 +151,7 @@ def test_each_view_enforces_the_projection_shell(
 def test_view_reports_each_unresolved_projection_with_its_source(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     (studio.views["dashboard"].root / "index.html").write_text(
         """\
@@ -188,7 +188,7 @@ def test_view_reports_each_unresolved_projection_with_its_source(
 
 
 def test_repeated_output_sites_survive_static_resolution(notebook_path: Path) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     _shell(
         studio,
@@ -208,7 +208,7 @@ def test_repeated_output_sites_survive_static_resolution(notebook_path: Path) ->
 def test_view_accepts_at_most_one_hundred_output_selectors(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
 
     def outputs(count: int) -> str:
@@ -231,13 +231,13 @@ def test_view_names_cannot_claim_application_routes(
     notebook_path: Path,
     name: str,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     with pytest.raises(ConfigurationError, match=f"{name!r} is reserved"):
-        ensure_view(notebook_path, name)
+        prepare_view(notebook_path, name)
 
 
 def test_changed_binding_reports_one_recovery_path(notebook_path: Path) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     bind_cell(studio, "result", 1)
     _shell(studio, "dashboard", '<marimo-cell name="result"></marimo-cell>')
@@ -261,7 +261,7 @@ def test_changed_binding_reports_one_recovery_path(notebook_path: Path) -> None:
 def test_native_cell_name_supersedes_a_stale_configured_alias(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     bind_cell(studio, "result", 1)
     _shell(studio, "dashboard", '<marimo-cell name="result"></marimo-cell>')
@@ -326,7 +326,7 @@ app = marimo.App()
 """,
         encoding="utf-8",
     )
-    ensure_view(notebook)
+    prepare_view(notebook)
     studio = load_studio(notebook)
     bind_cell(studio, "report", 0)
     _shell(studio, "dashboard", '<marimo-cell name="report"></marimo-cell>')

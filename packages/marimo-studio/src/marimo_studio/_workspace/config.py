@@ -169,7 +169,8 @@ def _load_config(target: Path) -> tuple[Path, Mapping[str, Any]]:
             return project_config
         raise ConfigurationError(
             f"No [tool.marimo-studio] configuration found for {target}. "
-            f"Run `marimo-studio view create {target}` to create one."
+            "Run `marimo-studio view create dashboard "
+            f"--target {target}` to create one."
         )
     start = target if target.is_dir() else target.parent
     inline = _notebook_configured_in(start)

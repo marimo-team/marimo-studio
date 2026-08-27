@@ -11,9 +11,9 @@ import pytest
 from click.testing import CliRunner
 from starlette.testclient import TestClient
 
+import marimo_studio._authoring.validation as authoring_validation
 import marimo_studio._cli.commands.validate as validate_command
 import marimo_studio._validation.analysis as analysis_module
-import marimo_studio._validation.runtime_process as runtime_process
 import marimo_studio._validation.service as validation_service
 import marimo_studio._validation.static as checks_module
 import marimo_studio.agent as studio_agent
@@ -136,11 +136,15 @@ def test_agent_runtime_validation_uses_the_supervised_process_boundary(
     async def in_process(*_args: object, **_kwargs: object) -> tuple[CheckResult, ...]:
         raise AssertionError("Agent validation bypassed process supervision")
 
-    monkeypatch.setattr(runtime_process, "check_runtime_studio_isolated", isolated)
+    monkeypatch.setattr(
+        authoring_validation,
+        "check_runtime_studio_isolated",
+        isolated,
+    )
     monkeypatch.setattr(checks_module, "check_runtime_studio", in_process)
 
     async def exercise():
-        await workspace.ensure_view("dashboard")
+        await workspace.create_view("dashboard")
         return await workspace.validate(
             level="runtime",
             view="dashboard",
@@ -163,7 +167,7 @@ def test_validation_rejects_source_mutation_between_static_and_runtime_stages(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    asyncio.run(studio_agent.open(notebook=notebook_path).ensure_view("dashboard"))
+    asyncio.run(studio_agent.open(notebook=notebook_path).create_view("dashboard"))
     selected = load_studio(notebook_path)
     document = selected.view("dashboard").root / "index.html"
     native_check = validation_service.check_studio
@@ -217,8 +221,11 @@ def _validation_entry_reports(
     restore: Callable[[], None] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     notebook = workspace.notebook
-    monkeypatch.setattr(runtime_process, "check_runtime_studio_isolated", checker)
-    monkeypatch.setattr(validate_command, "check_runtime_studio_isolated", checker)
+    monkeypatch.setattr(
+        authoring_validation,
+        "check_runtime_studio_isolated",
+        checker,
+    )
     monkeypatch.setattr(validate_command, "should_reenter", lambda *_args: False)
     monkeypatch.setattr(agent_api, "check_runtime_studio_isolated", checker)
 
@@ -235,9 +242,9 @@ def _validation_entry_reports(
         cli,
         [
             "validate",
-            str(notebook),
-            "--view",
             "dashboard",
+            "--target",
+            str(notebook),
             "--level",
             "runtime",
             "--runtime-timeout",
@@ -276,7 +283,7 @@ def test_runtime_failure_is_identical_through_agent_cli_and_server_analysis(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace = studio_agent.open(notebook=notebook_path)
-    asyncio.run(workspace.ensure_view("dashboard"))
+    asyncio.run(workspace.create_view("dashboard"))
     failure = CheckResult(
         "runtime",
         "fail",
@@ -340,7 +347,7 @@ def test_source_revision_failures_match_agent_cli_and_server_analysis(
     advice: str,
 ) -> None:
     workspace = studio_agent.open(notebook=notebook_path)
-    asyncio.run(workspace.ensure_view("dashboard"))
+    asyncio.run(workspace.create_view("dashboard"))
     source = load_studio(notebook_path).view("dashboard").root / "index.html"
     original = source.read_text(encoding="utf-8")
     notebook_source = notebook_path.read_text(encoding="utf-8")
@@ -397,7 +404,7 @@ def test_invalid_static_source_matches_agent_cli_and_server_analysis(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace = studio_agent.open(notebook=notebook_path)
-    asyncio.run(workspace.ensure_view("dashboard"))
+    asyncio.run(workspace.create_view("dashboard"))
     source = load_studio(notebook_path).view("dashboard").root / "index.html"
     original = source.read_text(encoding="utf-8")
     native_check = validation_service.check_studio

@@ -27,7 +27,7 @@ from marimo_studio._compat.server.notebook_save import (
 )
 from marimo_studio._server.cell_alias_policy import CellAliasSourcePolicy
 from marimo_studio._server.records import ServerHandle, ServerLocation
-from marimo_studio._views.api import bind_cell, ensure_view
+from marimo_studio._views.api import bind_cell, prepare_view
 from marimo_studio._views.resolve import resolve_studio
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors._internal import CompatibilityError
@@ -175,7 +175,7 @@ def _bind_cells(notebook: Path, count: int) -> None:
 def test_live_save_tracks_aliases_across_reorder_and_subsequent_edits(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path, "main")
+    prepare_view(notebook_path, "main")
     _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     session = _Session(manager)
@@ -220,7 +220,7 @@ def test_live_save_tracks_aliases_across_reorder_and_subsequent_edits(
 def test_live_save_tracks_alias_rebound_by_another_process(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     session = _Session(manager)
@@ -256,7 +256,7 @@ def test_live_save_tracks_alias_rebound_by_another_process(
 def test_code_mode_save_updates_aliases(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     session = _Session(manager)
@@ -277,7 +277,7 @@ def test_code_mode_save_updates_aliases(
 def test_non_persistent_save_returns_refreshed_source_without_writing(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     before = notebook_path.read_text(encoding="utf-8")
     manager = AppFileManager(notebook_path)
     _enable_sync(notebook_path, _Session(manager))
@@ -310,7 +310,7 @@ def test_full_save_updates_the_shared_session_document(notebook_path: Path) -> N
 
 
 def test_notebook_rename_keeps_native_save_available(notebook_path: Path) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     manager = AppFileManager(notebook_path)
     _enable_sync(notebook_path, _Session(manager))
     renamed = notebook_path.with_name("renamed.py")
@@ -331,7 +331,7 @@ def test_notebook_rename_keeps_native_save_available(notebook_path: Path) -> Non
 
 def test_project_config_tracks_edits_and_deletions(notebook_path: Path) -> None:
     _configure_project(notebook_path)
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     session = _Session(manager)
@@ -368,7 +368,7 @@ def test_project_alias_write_failure_is_visible(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _configure_project(notebook_path)
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     _enable_sync(notebook_path, _Session(manager))
@@ -395,7 +395,7 @@ def test_live_edit_of_duplicate_cells_keeps_distinct_aliases(
     notebook_path: Path,
 ) -> None:
     _duplicate_notebook(notebook_path, 2)
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     _enable_sync(notebook_path, _Session(manager))
@@ -416,7 +416,7 @@ def test_live_deletion_renumbers_every_surviving_duplicate_alias(
     notebook_path: Path,
 ) -> None:
     _duplicate_notebook(notebook_path, 3)
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     _bind_cells(notebook_path, 3)
     manager = AppFileManager(notebook_path)
     _enable_sync(notebook_path, _Session(manager))
@@ -438,7 +438,7 @@ def test_offline_duplicate_edit_does_not_collapse_distinct_aliases(
     notebook_path: Path,
 ) -> None:
     _duplicate_notebook(notebook_path, 2)
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     first, second = tuple(manager.app.cell_manager.document.cells)
@@ -459,7 +459,7 @@ def test_offline_duplicate_edit_does_not_collapse_distinct_aliases(
 def test_live_save_does_not_guess_after_offline_reorder(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     first, second = tuple(manager.app.cell_manager.document.cells)
@@ -485,7 +485,7 @@ def test_live_save_does_not_guess_after_offline_reorder(
 def test_session_close_restores_save_method_and_releases_state(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     manager = AppFileManager(notebook_path)
     original_save_file = manager._save_file
     session = _Session(manager)
@@ -508,7 +508,7 @@ def test_session_close_restores_save_method_and_releases_state(
 def test_session_detach_retries_after_save_method_owner_unwinds(
     notebook_path: Path,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     manager = AppFileManager(notebook_path)
     original_save_file = manager._save_file
     session = _Session(manager)
@@ -541,7 +541,7 @@ def test_session_detach_retries_after_save_method_owner_unwinds(
 
 
 def test_session_detach_waits_for_in_flight_save(notebook_path: Path) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     manager = AppFileManager(notebook_path)
     session = _Session(manager)
     _enable_sync(notebook_path, session)
@@ -581,7 +581,7 @@ def test_session_detach_waits_for_in_flight_save(notebook_path: Path) -> None:
 
 
 def test_listener_attaches_sessions_created_after_enable(notebook_path: Path) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     manager = _Manager()
     adapter = PrivateNotebookSaveTransform(CellAliasSourcePolicy())
     adapter.enable(_location(notebook_path, manager))

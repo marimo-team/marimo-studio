@@ -8,7 +8,7 @@ import pytest
 
 import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._workspace.config as workspace_config
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._views.resolve import resolve_studio
 from marimo_studio._workspace import load_studio
@@ -55,7 +55,7 @@ def test_explicit_mounts_resolve_without_provider_inspection(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ensure_view(notebook_path)
+    prepare_view(notebook_path)
     studio = load_studio(notebook_path)
     project = studio.views["dashboard"]
     provider = provider_registry().get(project.provider)

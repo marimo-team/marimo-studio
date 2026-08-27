@@ -9,7 +9,7 @@ import marimo_studio._delivery.export as export_module
 import marimo_studio._delivery.export_output as output_module
 from marimo_studio._delivery.export import export_view
 from marimo_studio._filesystem.secure import secure_directory
-from marimo_studio._views.api import ensure_view
+from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import StaticExportError
 
@@ -285,7 +285,7 @@ def test_export_reports_a_non_directory_output_parent(
 
 def test_forced_export_protects_authored_namespaces(notebook_path: Path) -> None:
     configure_export_view(notebook_path)
-    ensure_view(notebook_path, "executive")
+    prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
     protected = (
         ("notebook parent", notebook_path.parent),
