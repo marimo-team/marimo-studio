@@ -36,3 +36,55 @@ test("browser observation fixtures reject invalid protocol values", () => {
     );
   }
 });
+
+test("browser observations reject contradictory projection evidence", () => {
+  const readyWithFailedProjection = structuredClone(fixture);
+  readyWithFailedProjection.state = "ready";
+  readyWithFailedProjection.diagnostics = [];
+  readyWithFailedProjection.runtimeStatus.current = {
+    phase: "ready",
+    diagnostics: [],
+  };
+  readyWithFailedProjection.runtimeStatus.transitions = [
+    {
+      sequence: 1,
+      observedAt: 1_100,
+      revision: "revision-1",
+      sessionId: "s_123456",
+      phase: "ready",
+      diagnostics: [],
+      diagnosticsTruncated: false,
+    },
+  ];
+  assert.equal(browserObservationSchema.safeParse(readyWithFailedProjection).success, false);
+
+  const missingError = structuredClone(fixture);
+  missingError.projectionInstances[0].error = null;
+  assert.equal(browserObservationSchema.safeParse(missingError).success, false);
+});
+
+test("browser observations retain compact mount failure evidence", () => {
+  const emptyTarget = structuredClone(fixture);
+  emptyTarget.projectionInstances[0].target = "";
+  emptyTarget.projectionInstances[0].error.code = "projection-target-empty";
+  assert.equal(browserObservationSchema.safeParse(emptyTarget).success, true);
+
+  const oversizedTarget = structuredClone(fixture);
+  oversizedTarget.projectionInstances[0].target = `summary.${"x".repeat(4_096)}`;
+  oversizedTarget.projectionInstances[0].error.code = "projection-target-too-large";
+  assert.equal(browserObservationSchema.safeParse(oversizedTarget).success, true);
+
+  const overflow = structuredClone(fixture);
+  overflow.projectionInstances = Array.from({ length: 513 }, (_, index) => ({
+    ...structuredClone(fixture.projectionInstances[0]),
+    instanceId: `projection-${index}`,
+  }));
+  overflow.projectionInstances.at(-1).error.code = "projection-instance-limit";
+  assert.equal(browserObservationSchema.safeParse(overflow).success, true);
+
+  overflow.projectionInstances.push({
+    ...structuredClone(fixture.projectionInstances[0]),
+    instanceId: "projection-513",
+  });
+  assert.equal(browserObservationSchema.safeParse(overflow).success, false);
+});

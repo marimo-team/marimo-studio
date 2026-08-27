@@ -1,10 +1,12 @@
 import { z } from "zod";
 
+import { MAX_ACTIVE_PROJECTION_INSTANCES, projectionRequestSchema } from "./projections.ts";
+import { ownRecordSchema } from "./records.ts";
 import { jsonValueSchema, type JsonValue } from "./runtime-config.ts";
 
 export const valueReadRequestSchema = z.object({
   revision: z.string().min(1),
-  selectors: z.array(z.string()).max(100),
+  projections: z.array(projectionRequestSchema).max(MAX_ACTIVE_PROJECTION_INSTANCES),
 });
 
 export const valueReadErrorSchema = z.object({
@@ -14,8 +16,8 @@ export const valueReadErrorSchema = z.object({
 });
 
 export const valueReadResponseSchema = z.object({
-  values: z.record(z.string(), jsonValueSchema),
-  errors: z.record(z.string(), valueReadErrorSchema),
+  values: ownRecordSchema(z.string(), jsonValueSchema),
+  errors: ownRecordSchema(z.string(), valueReadErrorSchema),
 });
 
 export type ValueReadError = z.infer<typeof valueReadErrorSchema>;

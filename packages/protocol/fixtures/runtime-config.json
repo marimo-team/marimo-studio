@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "revision": "presentation-revision",
+  "projectionRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "view": "dashboard",
+  "views": ["dashboard", "executive"],
+  "runtime": {
+    "id": "server",
+    "instance": "server-instance",
+    "available": ["server", "wasm"],
+    "data": {
+      "url": "/proxy/app/"
+    }
+  },
+  "rootUrl": "/proxy/app/",
+  "publicRootUrl": "/proxy/app/",
+  "documentRootUrl": "/proxy/app/",
+  "supportUrl": "/proxy/app/_marimo-studio/views/dashboard",
+  "showCellLogs": true,
+  "projectionTargets": {
+    "cells": {
+      "result": {
+        "status": "ready",
+        "producer": "cell:v1:result",
+        "dependencyClosure": ["cell:v1:result"]
+      }
+    },
+    "variables": {}
+  },
+  "mounts": [
+    {
+      "id": "site:result",
+      "kind": "cell",
+      "source": {
+        "path": "src/index.html",
+        "line": 12,
+        "column": 5
+      },
+      "allowedTargets": ["result"]
+    }
+  ],
+  "projectionPolicy": {
+    "maxActiveInstances": 512,
+    "maxUniqueCellTargets": 256,
+    "maxUniqueOutputTargets": 100,
+    "maxUniqueValueTargets": 100,
+    "maxTargetBytes": 4096,
+    "maxPathSteps": 64,
+    "maxInstanceIdBytes": 256
+  },
+  "runtimeBindings": {
+    "cellRefs": {
+      "cell:v1:result": "runtime-result"
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "cell-not-found",
+      "severity": "error",
+      "message": "Cell 'summary' is unavailable.",
+      "hint": "Restore the cell or update the view.",
+      "view": "dashboard",
+      "projection": "cell",
+      "target": "summary",
+      "source": {
+        "path": "src/index.html",
+        "line": 18,
+        "column": 7
+      }
+    }
+  ],
+  "appConfig": {
+    "width": "medium"
+  },
+  "userConfig": {
+    "theme": "system"
+  },
+  "configOverrides": {},
+  "dev": true,
+  "mode": "edit"
+}

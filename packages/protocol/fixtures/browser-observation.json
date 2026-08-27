@@ -27,6 +27,19 @@
   "requestId": "request-dashboard",
   "sequence": 3,
   "query": "region=emea",
+  "projectionInstances": [
+    {
+      "mountId": "site:v1:summary",
+      "instanceId": "projection-1",
+      "target": "summary.total",
+      "runtimeCellId": null,
+      "phase": "error",
+      "error": {
+        "code": "missing-variable",
+        "message": "summary is unavailable."
+      }
+    }
+  ],
   "runtimeStatus": {
     "runtime": "server",
     "view": "dashboard",

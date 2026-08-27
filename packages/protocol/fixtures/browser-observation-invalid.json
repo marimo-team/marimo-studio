@@ -12,6 +12,12 @@
     }
   },
   {
+    "name": "observation sequences are JavaScript safe integers",
+    "patch": {
+      "sequence": 9007199254740992
+    }
+  },
+  {
     "name": "observation states match runtime phases",
     "patch": {
       "state": "loading"
@@ -30,6 +36,94 @@
           "diagnostics": []
         },
         "transitions": []
+      }
+    }
+  },
+  {
+    "name": "transition sequences are JavaScript safe integers",
+    "patch": {
+      "runtimeStatus": {
+        "runtime": "server",
+        "view": "dashboard",
+        "revision": "revision-1",
+        "sessionId": "s_123456",
+        "current": {
+          "phase": "failed",
+          "diagnostics": [
+            {
+              "code": "projection-missing",
+              "severity": "error",
+              "message": "Projection missing",
+              "hint": "Restore it.",
+              "view": "dashboard",
+              "scope": "projection"
+            }
+          ]
+        },
+        "transitions": [
+          {
+            "sequence": 9007199254740992,
+            "observedAt": 1100,
+            "revision": "revision-1",
+            "sessionId": "s_123456",
+            "phase": "failed",
+            "diagnostics": [
+              {
+                "code": "projection-missing",
+                "severity": "error",
+                "message": "Projection missing",
+                "hint": "Restore it.",
+                "view": "dashboard",
+                "scope": "projection"
+              }
+            ],
+            "diagnosticsTruncated": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "transition timestamps are JavaScript safe integers",
+    "patch": {
+      "runtimeStatus": {
+        "runtime": "server",
+        "view": "dashboard",
+        "revision": "revision-1",
+        "sessionId": "s_123456",
+        "current": {
+          "phase": "failed",
+          "diagnostics": [
+            {
+              "code": "projection-missing",
+              "severity": "error",
+              "message": "Projection missing",
+              "hint": "Restore it.",
+              "view": "dashboard",
+              "scope": "projection"
+            }
+          ]
+        },
+        "transitions": [
+          {
+            "sequence": 1,
+            "observedAt": 9007199254740992,
+            "revision": "revision-1",
+            "sessionId": "s_123456",
+            "phase": "failed",
+            "diagnostics": [
+              {
+                "code": "projection-missing",
+                "severity": "error",
+                "message": "Projection missing",
+                "hint": "Restore it.",
+                "view": "dashboard",
+                "scope": "projection"
+              }
+            ],
+            "diagnosticsTruncated": false
+          }
+        ]
       }
     }
   }

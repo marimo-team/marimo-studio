@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+import {
+  MAX_ACTIVE_PROJECTION_INSTANCES,
+  observedProjectionInstanceSchema,
+  projectionInstanceIsReady,
+} from "./projections";
 import { runtimeIdSchema } from "./runtime-config";
 
 export const browserDiagnosticSchema = z
@@ -59,8 +64,8 @@ export const runtimeStatusSnapshotSchema = z
 
 export const runtimeStatusTransitionSchema = z
   .object({
-    sequence: z.int().nonnegative(),
-    observedAt: z.int().nonnegative(),
+    sequence: z.int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    observedAt: z.int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     revision: z.string().min(1).nullable(),
     sessionId: z.string().min(1).nullable(),
     phase: runtimeStatusPhaseSchema,
@@ -151,12 +156,33 @@ export const browserObservationSchema = z
     runtimeInstance: z.string().min(1),
     sessionId: z.string().min(1).nullable(),
     requestId: z.string().min(1),
-    sequence: z.int().nonnegative(),
+    sequence: z.int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     query: z.string(),
+    projectionInstances: z
+      .array(observedProjectionInstanceSchema)
+      .max(MAX_ACTIVE_PROJECTION_INSTANCES + 1),
     runtimeStatus: runtimeStatusReportSchema,
   })
   .strict()
   .superRefine((observation, context) => {
+    const instanceIds = observation.projectionInstances.map((instance) => instance.instanceId);
+    if (new Set(instanceIds).size !== instanceIds.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Projection instance identifiers must be unique",
+        path: ["projectionInstances"],
+      });
+    }
+    if (
+      observation.state === "ready" &&
+      !observation.projectionInstances.every(projectionInstanceIsReady)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Ready browser observations require every projection instance to be ready",
+        path: ["projectionInstances"],
+      });
+    }
     const status = observation.runtimeStatus;
     const matches =
       status.runtime === observation.runtime &&

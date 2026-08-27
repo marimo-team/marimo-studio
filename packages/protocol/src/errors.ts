@@ -11,6 +11,7 @@ export const errorResponseSchema = z.object({
   hint: optionalString,
   transient: optionalBoolean,
   revision: optionalString,
+  external_recovery: optionalString,
 });
 
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;

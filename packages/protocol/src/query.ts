@@ -1,14 +1,26 @@
 export const QUERY_OPERATION_QUERY_PARAM = "marimo_studio_query_operation";
 export const SERVER_INSTANCE_QUERY_PARAM = "marimo_studio_server";
+export const DOCUMENT_LIFECYCLE_QUERY_PARAM = "marimo_studio_lifecycle";
+export const STUDIO_CLIENT_QUERY_PARAM = "marimo_studio_client";
+export const WORKSPACE_STREAM_QUERY_PARAM = "marimo_studio_connection";
+export const WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM = "marimo_studio_events";
+export const EDITOR_BINDING_CAPABILITY_QUERY_PARAM = "marimo_studio_editor";
+export const PRESENTATION_RENEWAL_QUERY_PARAM = "marimo_studio_renewal";
+export const DOCUMENT_REPLAY_QUERY_PARAM = "marimo_studio_resume";
 
 const PRIVATE_QUERY_KEYS = [
   "access_token",
   "file",
   "kiosk",
-  "marimo_studio_client",
+  STUDIO_CLIENT_QUERY_PARAM,
   QUERY_OPERATION_QUERY_PARAM,
+  PRESENTATION_RENEWAL_QUERY_PARAM,
   SERVER_INSTANCE_QUERY_PARAM,
-  "marimo_studio_resume",
+  DOCUMENT_LIFECYCLE_QUERY_PARAM,
+  EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
+  WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM,
+  WORKSPACE_STREAM_QUERY_PARAM,
+  DOCUMENT_REPLAY_QUERY_PARAM,
   "marimo_studio_view",
   "refresh_token",
   "session_id",
