@@ -37,4 +37,8 @@ export class ValueStates {
   clear(selector: string): void {
     this.#states.delete(selector);
   }
+
+  clearAll(): void {
+    this.#states.clear();
+  }
 }

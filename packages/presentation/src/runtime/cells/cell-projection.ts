@@ -31,7 +31,7 @@ export interface CellProjection {
 
 interface CellProjectionInput {
   alias: string;
-  bindingPresent: boolean;
+  projectionPresent: boolean;
   cell: RuntimeCell | undefined;
   diagnostic?: CellDiagnostic;
   deliveryTimedOut: boolean;
@@ -113,7 +113,7 @@ const resolvedCellPhase = (
 
 export const projectCell = ({
   alias,
-  bindingPresent,
+  projectionPresent,
   cell,
   diagnostic,
   deliveryTimedOut,
@@ -148,7 +148,7 @@ export const projectCell = ({
     );
   const delivery = cellDeliveryPhase({
     runtimeReady,
-    bindingPresent,
+    projectionPresent,
     hasCell: cell !== undefined,
     hasDiagnostic: diagnostic !== undefined,
     timedOut: deliveryTimedOut,

@@ -1,46 +1,22 @@
 import {
   parseMountConfig,
-  type CellBindingConfig,
   type MountConfig,
   type ProjectionDiagnostic,
   type RuntimeConfig,
-  type ValueBindingConfig,
 } from "@marimo-studio/protocol/runtime-config";
 
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
+const projectionListeners = new Set<Listener>();
 const cellListeners = new Set<Listener>();
 let current: RuntimeConfig | undefined;
+let projectionConfig: RuntimeConfig | undefined;
 let mount: MountConfig | undefined;
 
-const sameCellBindings = (
-  left: Record<string, CellBindingConfig>,
-  right: Record<string, CellBindingConfig>,
-): boolean => {
+const sameCellRefs = (left: Record<string, string>, right: Record<string, string>): boolean => {
   const keys = Object.keys(left);
-  return (
-    keys.length === Object.keys(right).length &&
-    keys.every(
-      (key) => left[key]?.kind === right[key]?.kind && left[key]?.value === right[key]?.value,
-    )
-  );
-};
-
-const sameValueBindings = (
-  left: Record<string, ValueBindingConfig>,
-  right: Record<string, ValueBindingConfig>,
-): boolean => {
-  const keys = Object.keys(left);
-  return (
-    keys.length === Object.keys(right).length &&
-    keys.every(
-      (key) =>
-        left[key]?.variable === right[key]?.variable &&
-        left[key]?.cell.kind === right[key]?.cell.kind &&
-        left[key]?.cell.value === right[key]?.cell.value,
-    )
-  );
+  return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
 };
 
 export const getMountConfig = (): MountConfig => {
@@ -78,37 +54,48 @@ export const subscribeRuntimeConfig = (listener: Listener): (() => void) => {
   return () => listeners.delete(listener);
 };
 
+export const getRuntimeProjectionConfig = (): RuntimeConfig => {
+  if (!projectionConfig) {
+    throw new Error("Runtime projection config has not loaded");
+  }
+  return projectionConfig;
+};
+
+export const subscribeRuntimeProjectionConfig = (listener: Listener): (() => void) => {
+  projectionListeners.add(listener);
+  return () => projectionListeners.delete(listener);
+};
+
 export const commitRuntimeConfig = (config: RuntimeConfig): RuntimeConfig => {
-  const cellBindings =
-    current && sameCellBindings(current.cellBindings, config.cellBindings)
-      ? current.cellBindings
-      : config.cellBindings;
-  const valueBindings =
-    current && sameValueBindings(current.valueBindings, config.valueBindings)
-      ? current.valueBindings
-      : config.valueBindings;
-  const outputBindings =
-    current && sameValueBindings(current.outputBindings, config.outputBindings)
-      ? current.outputBindings
-      : config.outputBindings;
-  const cellsChanged = current?.cellBindings !== cellBindings;
+  const cellRefs =
+    current && sameCellRefs(current.runtimeBindings.cellRefs, config.runtimeBindings.cellRefs)
+      ? current.runtimeBindings.cellRefs
+      : config.runtimeBindings.cellRefs;
+  const cellsChanged = current?.runtimeBindings.cellRefs !== cellRefs;
   current =
-    cellBindings === config.cellBindings &&
-    valueBindings === config.valueBindings &&
-    outputBindings === config.outputBindings
+    cellRefs === config.runtimeBindings.cellRefs
       ? config
-      : { ...config, cellBindings, valueBindings, outputBindings };
+      : { ...config, runtimeBindings: { cellRefs } };
+  // The server folds every projection behavior change into this revision.
+  // Retaining its snapshot keeps presentation-only commits off the projection lane.
+  const projectionChanged = projectionConfig?.projectionRevision !== current.projectionRevision;
+  if (projectionChanged) {
+    projectionConfig = current;
+  }
   listeners.forEach((listener) => listener());
+  if (projectionChanged) {
+    projectionListeners.forEach((listener) => listener());
+  }
   if (cellsChanged) {
     cellListeners.forEach((listener) => listener());
   }
   return current;
 };
 
-export const getRuntimeCellBindings = (): Record<string, CellBindingConfig> =>
-  getRuntimeConfig().cellBindings;
+export const getRuntimeCellRefs = (): Record<string, string> =>
+  getRuntimeConfig().runtimeBindings.cellRefs;
 
-export const subscribeRuntimeCellBindings = (listener: Listener): (() => void) => {
+export const subscribeRuntimeCellRefs = (listener: Listener): (() => void) => {
   cellListeners.add(listener);
   return () => cellListeners.delete(listener);
 };

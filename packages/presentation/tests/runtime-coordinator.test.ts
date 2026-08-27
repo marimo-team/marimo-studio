@@ -11,6 +11,7 @@ import {
   updateConfiguredRuntime,
   updateConfiguredRuntimeQuery,
 } from "../src/runtime/coordinator";
+import { symbolicRuntimeFields } from "./runtime-fixtures";
 
 const config = (instance: string): RuntimeConfig => ({
   schema: 1,
@@ -23,9 +24,7 @@ const config = (instance: string): RuntimeConfig => ({
   documentRootUrl: "/",
   supportUrl: "/_marimo-studio/views/dashboard",
   showCellLogs: true,
-  cellBindings: {},
-  valueBindings: {},
-  outputBindings: {},
+  ...symbolicRuntimeFields,
   diagnostics: [],
   appConfig: {},
   userConfig: {},

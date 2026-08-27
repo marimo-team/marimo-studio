@@ -1,3 +1,4 @@
+import type { RuntimeProjectionRequest as ProjectionRequest } from "../../projections/resolution";
 import type { ValueReader } from "../../values/reader";
 import type { RuntimeConnectionState } from "../cell-state";
 import type { RuntimeCell } from "../runtime-cell";
@@ -5,20 +6,30 @@ import type { RuntimeCell } from "../runtime-cell";
 import { useRuntimeValue } from "./use-runtime-value";
 
 export const RuntimeValueCell = ({
-  revision,
+  projectionRevision,
   selectors,
+  projections,
   cell,
   connectionState,
   runtimeReady,
   readValues,
 }: {
-  revision: string;
+  projectionRevision: string;
   selectors: string[];
+  projections: ProjectionRequest[];
   cell: RuntimeCell | undefined;
   connectionState: RuntimeConnectionState;
   runtimeReady: boolean;
   readValues: ValueReader;
 }) => {
-  useRuntimeValue({ revision, selectors, cell, connectionState, runtimeReady, readValues });
+  useRuntimeValue({
+    projectionRevision,
+    selectors,
+    projections,
+    cell,
+    connectionState,
+    runtimeReady,
+    readValues,
+  });
   return null;
 };

@@ -1,5 +1,7 @@
 import { retry } from "./retry.ts";
 
+export const WASM_PROJECTION_NAMESPACE = "_marimo_studio_wasm";
+
 const RPC_TIMEOUT = "RPC request timed out.";
 const RPC_RETRY_DELAYS = [250, 750] as const;
 

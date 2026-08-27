@@ -1,59 +1,35 @@
 import { z } from "zod";
 
-const selectorPathStepSchema = z.tuple([
-  z.enum(["attribute", "item"]),
-  z.union([z.string(), z.number()]),
-]);
-
-const selectorSpecSchema = z.tuple([z.string(), z.array(selectorPathStepSchema)]);
-
-export const wasmRuntimeDataSchema = z.object({
+export const wasmExecutionCellSchema = z.strictObject({
+  id: z.string().min(1),
   code: z.string(),
-  filename: z.string(),
-  version: z.string(),
-  valueSpecs: z.record(z.string(), selectorSpecSchema),
-  outputSpecs: z.record(z.string(), selectorSpecSchema),
 });
 
-export type WasmRuntimeData = z.infer<typeof wasmRuntimeDataSchema>;
-
-export type WasmProjectionSpecs = Pick<WasmRuntimeData, "outputSpecs" | "valueSpecs">;
-
-const projectionSpecKey = (specs: WasmProjectionSpecs): string =>
-  JSON.stringify([specs.valueSpecs, specs.outputSpecs]);
-
-export const createProjectionSpecSynchronizer = (
-  initial: WasmProjectionSpecs,
-  apply: (specs: WasmProjectionSpecs) => Promise<void>,
-): ((specs: WasmProjectionSpecs) => Promise<void>) => {
-  let appliedKey = projectionSpecKey(initial);
-  let pendingKey: string | undefined;
-  let queue: Promise<void> = Promise.resolve();
-
-  return (specs) => {
-    const nextKey = projectionSpecKey(specs);
-    if (pendingKey === nextKey) {
-      return queue;
-    }
-    if (pendingKey === undefined && appliedKey === nextKey) {
-      return Promise.resolve();
-    }
-    const nextSpecs = {
-      valueSpecs: specs.valueSpecs,
-      outputSpecs: specs.outputSpecs,
-    };
-    pendingKey = nextKey;
-    const operation = queue
-      .catch(() => {})
-      .then(() => apply(nextSpecs))
-      .then(() => {
-        appliedKey = nextKey;
+export const wasmRuntimeDataSchema = z
+  .strictObject({
+    code: z.string(),
+    filename: z.string(),
+    version: z.string(),
+    executionCells: z.array(wasmExecutionCellSchema).min(1),
+    bootstrapCellId: z.string().min(1),
+  })
+  .superRefine((data, context) => {
+    const ids = data.executionCells.map((cell) => cell.id);
+    if (new Set(ids).size !== ids.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["executionCells"],
+        message: "WebAssembly execution cells require unique runtime IDs",
       });
-    queue = operation.finally(() => {
-      if (pendingKey === nextKey) {
-        pendingKey = undefined;
-      }
-    });
-    return queue;
-  };
-};
+    }
+    if (ids.filter((id) => id === data.bootstrapCellId).length !== 1) {
+      context.addIssue({
+        code: "custom",
+        path: ["bootstrapCellId"],
+        message: "The WebAssembly bootstrap cell must exist in the execution catalog",
+      });
+    }
+  });
+
+export type WasmExecutionCell = z.infer<typeof wasmExecutionCellSchema>;
+export type WasmRuntimeData = z.infer<typeof wasmRuntimeDataSchema>;

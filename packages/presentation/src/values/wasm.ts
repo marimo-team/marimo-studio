@@ -1,9 +1,14 @@
 import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
-import { parseValueReadResponse, type ValueReadResponse } from "@marimo-studio/protocol/value-read";
+import {
+  parseValueReadResponse,
+  type ValueReadRequest,
+  type ValueReadResponse,
+} from "@marimo-studio/protocol/value-read";
 import { z } from "zod";
 
 import type { ValueReader } from "./reader";
 
+import { projectionWireRequest } from "../projections/identity";
 import { ValueRequestError } from "./remote";
 
 export const functionResultSchema = z.object({
@@ -17,9 +22,11 @@ export type FunctionResult = z.infer<typeof functionResultSchema>;
 const BRIDGE_RETRY_DELAY_MS = 250;
 
 export type FunctionRequest = (
-  selectors: string[],
+  request: ValueReadRequest,
   signal?: AbortSignal,
 ) => Promise<FunctionResult>;
+
+export type ProjectionBridgeRequest = (signal: AbortSignal) => Promise<FunctionResult>;
 
 const abortError = (): DOMException =>
   new DOMException("The runtime request was cancelled.", "AbortError");
@@ -62,10 +69,13 @@ export const waitForWasmCaller = <T>(request: Promise<T>, signal?: AbortSignal):
 };
 
 const readWasmValues = async (
-  selectors: string[],
+  valueRequest: ValueReadRequest,
   request: FunctionRequest,
 ): Promise<ValueReadResponse> => {
-  const result = await request(selectors);
+  const result = await request({
+    ...valueRequest,
+    projections: valueRequest.projections.map(projectionWireRequest),
+  });
   if (!result.found) {
     throw new ValueRequestError(
       "The notebook value bridge is unavailable.",
@@ -83,15 +93,15 @@ const readWasmValues = async (
   return parseValueReadResponse(result.return_value);
 };
 
-export const waitForWasmValueBridge = async (
-  request: FunctionRequest,
+export const waitForWasmProjectionBridge = async (
+  request: ProjectionBridgeRequest,
   signal: AbortSignal,
 ): Promise<void> => {
   // The injected function enters the same kernel queue as notebook
   // instantiation. A successful call therefore proves that dependencies
   // loaded, the initial graph settled, and its Python controls exist.
   while (!signal.aborted) {
-    const result = await waitForWasmCaller(request([], signal), signal);
+    const result = await waitForWasmCaller(request(signal), signal);
     if (result.found) {
       if (result.status.code !== "ok") {
         throw new ValueRequestError(
@@ -113,12 +123,12 @@ export const createWasmValueReader = (
   request: FunctionRequest,
 ): ValueReader => {
   let queue: Promise<void> = Promise.resolve();
-  return ({ selectors }, signal) => {
+  return (valueRequest, signal) => {
     const operation = queue.then(async () => {
       throwIfWasmAborted(signal);
       await ready();
       throwIfWasmAborted(signal);
-      return readWasmValues(selectors, (requested) => request(requested, signal));
+      return readWasmValues(valueRequest, (requested) => request(requested, signal));
     });
     queue = operation.then(
       () => undefined,

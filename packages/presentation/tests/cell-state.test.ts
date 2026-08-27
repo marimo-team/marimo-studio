@@ -28,7 +28,7 @@ test("cell phases preserve retained output during recovery", () => {
 test("cell delivery bounds browser synchronization", () => {
   const pending = {
     runtimeReady: true,
-    bindingPresent: true,
+    projectionPresent: true,
     hasCell: false,
     hasDiagnostic: false,
     timedOut: false,
@@ -40,7 +40,7 @@ test("cell delivery bounds browser synchronization", () => {
   assert.deepEqual(cellDeliveryPhase({ ...pending, hasCell: true }), "received");
 });
 
-test("a delivery timeout belongs to one binding cycle", () => {
+test("a delivery timeout belongs to one projection cycle", () => {
   const timeout = { identity: "cell:v1:old" };
 
   assert.equal(deliveryTimedOut(true, "cell:v1:old", timeout), true);

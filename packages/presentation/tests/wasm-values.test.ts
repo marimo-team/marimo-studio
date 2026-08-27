@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
+import { projectionWireRequest } from "../src/projections/identity";
+import { commitRuntimeConfig } from "../src/runtime-config";
 import {
   createWasmValueReader,
   type FunctionRequest,
   type FunctionResult,
-  waitForWasmValueBridge,
+  waitForWasmProjectionBridge,
 } from "../src/values/wasm";
+import { projectionRequest, projectionRuntimeConfig } from "./runtime-fixtures";
 
 const response = (value: number): FunctionResult => ({
   found: true,
@@ -19,14 +22,14 @@ describe("WebAssembly value reads", () => {
   test("waits for the notebook value bridge", async () => {
     vi.useFakeTimers();
     const request = vi
-      .fn<FunctionRequest>()
+      .fn<(signal: AbortSignal) => Promise<FunctionResult>>()
       .mockResolvedValueOnce({
         found: false,
         status: { code: "ok", message: null },
         return_value: null,
       })
       .mockResolvedValueOnce(response(0));
-    const waiting = waitForWasmValueBridge(request, new AbortController().signal);
+    const waiting = waitForWasmProjectionBridge(request, new AbortController().signal);
 
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
     await vi.advanceTimersByTimeAsync(250);
@@ -36,6 +39,8 @@ describe("WebAssembly value reads", () => {
   });
 
   test("waits for runtime initialization", async () => {
+    const requestProjection = projectionRequest("total", "value");
+    commitRuntimeConfig(projectionRuntimeConfig([requestProjection]));
     let initialize = () => {};
     const initialized = new Promise<void>((resolve) => {
       initialize = resolve;
@@ -46,7 +51,7 @@ describe("WebAssembly value reads", () => {
       request,
     )({
       revision: "presentation-revision",
-      selectors: ["total"],
+      projections: [requestProjection],
     });
 
     await Promise.resolve();
@@ -54,9 +59,18 @@ describe("WebAssembly value reads", () => {
     initialize();
 
     await expect(reading).resolves.toEqual({ values: { total: 3 }, errors: {} });
+    expect(request).toHaveBeenCalledWith(
+      {
+        revision: "presentation-revision",
+        projections: [projectionWireRequest(requestProjection)],
+      },
+      undefined,
+    );
   });
 
   test("serializes calls while one native request is pending", async () => {
+    const requestProjection = projectionRequest("total", "value");
+    commitRuntimeConfig(projectionRuntimeConfig([requestProjection]));
     let complete: (value: FunctionResult) => void = () => {};
     const firstResponse = new Promise<FunctionResult>((resolve) => {
       complete = resolve;
@@ -67,7 +81,10 @@ describe("WebAssembly value reads", () => {
       .mockResolvedValueOnce(response(2));
     const reader = createWasmValueReader(async () => {}, request);
 
-    const valueRequest = { revision: "presentation-revision", selectors: ["total"] };
+    const valueRequest = {
+      revision: "presentation-revision",
+      projections: [requestProjection],
+    };
     const first = reader(valueRequest);
     const second = reader(valueRequest);
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
@@ -79,6 +96,9 @@ describe("WebAssembly value reads", () => {
   });
 
   test("drops an aborted read before it reaches the native queue", async () => {
+    const firstProjection = projectionRequest("first", "value");
+    const staleProjection = projectionRequest("stale", "value");
+    commitRuntimeConfig(projectionRuntimeConfig([firstProjection, staleProjection]));
     let complete: (value: FunctionResult) => void = () => {};
     const firstResponse = new Promise<FunctionResult>((resolve) => {
       complete = resolve;
@@ -87,9 +107,12 @@ describe("WebAssembly value reads", () => {
     const reader = createWasmValueReader(async () => {}, request);
     const controller = new AbortController();
 
-    const first = reader({ revision: "presentation-revision", selectors: ["first"] });
+    const first = reader({
+      revision: "presentation-revision",
+      projections: [firstProjection],
+    });
     const stale = reader(
-      { revision: "presentation-revision", selectors: ["stale"] },
+      { revision: "presentation-revision", projections: [staleProjection] },
       controller.signal,
     );
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));

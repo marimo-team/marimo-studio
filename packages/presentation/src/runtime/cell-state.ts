@@ -52,13 +52,13 @@ export const runtimeConnectionDiagnostic = ({
 
 export const cellDeliveryPhase = ({
   runtimeReady,
-  bindingPresent,
+  projectionPresent,
   hasCell,
   hasDiagnostic,
   timedOut,
 }: {
   runtimeReady: boolean;
-  bindingPresent: boolean;
+  projectionPresent: boolean;
   hasCell: boolean;
   hasDiagnostic: boolean;
   timedOut: boolean;
@@ -66,7 +66,7 @@ export const cellDeliveryPhase = ({
   if (hasCell) {
     return "received";
   }
-  if (runtimeReady && bindingPresent && !hasDiagnostic) {
+  if (runtimeReady && projectionPresent && !hasDiagnostic) {
     return timedOut ? "timed-out" : "waiting";
   }
   return "missing";

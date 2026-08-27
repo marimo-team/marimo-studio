@@ -6,26 +6,28 @@ export * from "@marimo-studio/protocol/runtime-config";
 export {
   commitRuntimeConfig,
   getMountConfig,
-  getRuntimeCellBindings,
+  getRuntimeCellRefs,
   getRuntimeConfig,
   getRuntimeDiagnostics,
+  getRuntimeProjectionConfig,
   getSupportUrl,
   hasRuntimeConfig,
   setSupportUrl,
-  subscribeRuntimeCellBindings,
+  subscribeRuntimeCellRefs,
   subscribeRuntimeConfig,
+  subscribeRuntimeProjectionConfig,
 } from "./store.ts";
 
-export const loadRuntimeConfig = async (sessionId?: string) => {
+export const loadRuntimeConfig = async (runtimeSessionId?: string, signal?: AbortSignal) => {
   const mount = getMountConfig();
   return commitRuntimeConfig(
     await fetchRuntimeConfigForRevision(
       mount.supportUrl,
       mount.revision,
-      undefined,
+      signal,
       mount.runtime,
-      sessionId,
-      sessionId,
+      mount.sessionId,
+      runtimeSessionId,
     ),
   );
 };

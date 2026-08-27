@@ -2,18 +2,25 @@ import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 import { z } from "zod";
 
+import { projectionWireRequest } from "../src/projections/identity.ts";
+import { bindProjectionBindingStale } from "../src/projections/staleness.ts";
 import { loadRuntimeConfig } from "../src/runtime-config/index.ts";
 import {
   readServerValues,
   readServerValuesWithRetry,
   ValueRequestError,
-} from "../src/values/index.ts";
+} from "../src/values/remote.ts";
+import { projectionRequest, symbolicRuntimeFields } from "./runtime-fixtures.ts";
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
   version: "test-version",
   revision: "presentation-revision",
   runtime: "server",
+  runtimeExplicit: false,
+  replay: false,
+  sessionId: "s_view01",
+  runtimeSessionId: "s_abc123",
 };
 
 const config = {
@@ -27,7 +34,8 @@ const config = {
     available: ["server", "wasm"],
     data: {
       fileKey: "/workspace/notebook.py",
-      serverToken: "server-token",
+      capabilityToken: "presentation-capability",
+      sessionId: "s_abc123",
       serverInstance: "server-instance",
       preserveSession: false,
       url: "/proxy/app/",
@@ -37,14 +45,9 @@ const config = {
   publicRootUrl: "/proxy/app/",
   documentRootUrl: "/proxy/app/",
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
-  cellBindings: {},
-  valueBindings: {
-    "context.label": {
-      variable: "context",
-      cell: { kind: "id", value: "cell-id" },
-    },
-  },
-  outputBindings: {},
+  presentationSessionId: "s_view01",
+  showCellLogs: true,
+  ...symbolicRuntimeFields,
   diagnostics: [],
   appConfig: {},
   userConfig: {},
@@ -85,15 +88,16 @@ test("value reads send exact selectors through the configured base URL", async (
   try {
     const result = await readServerValues("session-id", {
       revision: "presentation-revision",
-      selectors: ["context.label"],
+      projections: [projectionRequest("context.label", "value")],
     });
-    assert.deepEqual(result.values, { "context.label": "ready" });
+    assert.equal(Object.getPrototypeOf(result.values), null);
+    assert.equal(result.values["context.label"], "ready");
     assert.deepEqual(url, "http://localhost:3000/proxy/app/_marimo-studio/views/dashboard/values");
-    assert.deepEqual(headers.get("Marimo-Session-Id"), "session-id");
-    assert.deepEqual(headers.get("Marimo-Server-Token"), "server-token");
+    assert.deepEqual(headers.get("Marimo-Session-Id"), "s_view01");
+    assert.equal(headers.get("Marimo-Server-Token"), null);
     assert.deepEqual(JSON.parse(body), {
       revision: "presentation-revision",
-      selectors: ["context.label"],
+      projections: [projectionWireRequest(projectionRequest("context.label", "value"))],
     });
   } finally {
     globalThis.fetch = originalFetch;
@@ -122,7 +126,7 @@ test("terminal value failures do not retry", async () => {
       () =>
         readServerValuesWithRetry("session", {
           revision: "presentation-revision",
-          selectors: ["context.label"],
+          projections: [projectionRequest("context.label", "value")],
         }),
       (cause: unknown) => {
         assert.ok(cause instanceof ValueRequestError);
@@ -132,6 +136,48 @@ test("terminal value failures do not retry", async () => {
     );
     assert.deepEqual(requests, 1);
   } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("a stale live binding requests a presentation refresh", async () => {
+  await installConfig();
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = () => {
+    requests += 1;
+    return Promise.resolve(
+      Response.json(
+        {
+          error: "stale-projection-binding",
+          message: "The projection binding changed.",
+          transient: false,
+        },
+        { status: 409 },
+      ),
+    );
+  };
+  let refreshes = 0;
+  const unbind = bindProjectionBindingStale(() => {
+    refreshes += 1;
+  });
+  try {
+    await assert.rejects(() =>
+      readServerValues("session", {
+        revision: "presentation-revision",
+        projections: [projectionRequest("context.label", "value")],
+      }),
+    );
+    await assert.rejects(() =>
+      readServerValues("session", {
+        revision: "presentation-revision",
+        projections: [projectionRequest("context.label", "value")],
+      }),
+    );
+    assert.equal(refreshes, 1);
+    assert.equal(requests, 1);
+  } finally {
+    unbind();
     globalThis.fetch = originalFetch;
   }
 });

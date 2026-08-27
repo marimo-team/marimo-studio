@@ -1,34 +1,44 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 import type { OutputReader } from "../../outputs/reader";
+import type { RuntimeProjectionRequest as ProjectionRequest } from "../../projections/resolution";
 import type { RuntimeConnectionState } from "../cell-state";
 
-import { useLatest } from "../use-latest";
+import { getRuntimeConfig } from "../../runtime-config";
+import { OutputOwnerReconciler } from "./output-owner-reconciler";
 
 export const useOutputLifecycle = ({
-  activeSelectors,
+  activeProjections,
   connectionState,
   readOutputs,
-  revision,
+  projectionRevision,
   runtimeReady,
 }: {
-  activeSelectors: string[];
+  activeProjections: ProjectionRequest[];
   connectionState: RuntimeConnectionState;
   readOutputs: OutputReader;
-  revision: string;
+  projectionRevision: string;
   runtimeReady: boolean;
-}): void => {
-  const revisionRef = useLatest(revision);
+}): OutputReader => {
+  const reconciler = useMemo(() => new OutputOwnerReconciler(readOutputs), [readOutputs]);
+  const ownedReader = useMemo<OutputReader>(
+    () => (request, signal) => reconciler.read(projectionRevision, request, signal),
+    [projectionRevision, reconciler],
+  );
+
+  useEffect(() => () => reconciler.dispose(), [reconciler]);
 
   useEffect(() => {
     if (!runtimeReady || connectionState !== "OPEN") {
+      reconciler.pause();
       return;
     }
-    const controller = new AbortController();
-    void readOutputs(
-      { revision: revisionRef.current, selectors: [], activeSelectors },
-      controller.signal,
-    ).catch(() => {});
-    return () => controller.abort();
-  }, [activeSelectors, connectionState, readOutputs, revisionRef, runtimeReady]);
+    reconciler.update(projectionRevision, {
+      revision: getRuntimeConfig().revision,
+      projections: [],
+      activeProjections,
+    });
+  }, [activeProjections, connectionState, projectionRevision, reconciler, runtimeReady]);
+
+  return ownedReader;
 };

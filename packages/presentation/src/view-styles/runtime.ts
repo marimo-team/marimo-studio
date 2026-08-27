@@ -11,12 +11,16 @@ declare global {
 
 export interface StagedViewStyles {
   commit(): void;
+  rollback(): void;
+  finalize(): void;
   discard(): void;
 }
 
 type GenerateViewCss = (tokens: ReadonlySet<string>) => Promise<string>;
 
 let controller: ViewStyleController | undefined;
+let currentDiagnostic: ViewStyleDiagnostic | undefined;
+let ownedDiagnosticHost: HTMLElement | undefined;
 
 const appShell = (): HTMLElement | undefined =>
   document.querySelector<HTMLElement>(APP_SHELL) ?? undefined;
@@ -98,11 +102,11 @@ export class ViewStyleController {
     insertRuntimeStyle(this.style);
     this.observer = new MutationObserver((mutations) => {
       if (mutations.some(mutationTouchesView)) {
-        const generation = beginPresentationRefresh();
+        const claim = beginPresentationRefresh("styles");
         void this.refresh()
           .then(() => {
             markStylesReady();
-            setPresentationRefreshState(generation, "ready");
+            setPresentationRefreshState(claim, "ready");
           })
           .catch((cause: unknown) => {
             styleFailure(
@@ -110,7 +114,7 @@ export class ViewStyleController {
               "View styling could not update. The authored page remains available.",
               "Check the browser console and the view utility classes.",
             );
-            setPresentationRefreshState(generation, "error");
+            setPresentationRefreshState(claim, "error");
             console.error("marimo-studio view styling error", cause);
           });
       }
@@ -134,6 +138,19 @@ export class ViewStyleController {
     const css = await this.generate(collectViewClassTokens(root));
     await prepareIcons(root);
     let discarded = false;
+    let committed = false;
+    const previous = this.style.textContent;
+    const requested = this.requestedGeneration;
+    const completed = this.completedGeneration;
+    const rollback = () => {
+      if (!committed) {
+        return;
+      }
+      this.requestedGeneration = requested;
+      this.completedGeneration = completed;
+      this.style.textContent = previous;
+      committed = false;
+    };
     return {
       commit: () => {
         if (discarded) {
@@ -142,8 +159,16 @@ export class ViewStyleController {
         this.requestedGeneration += 1;
         this.completedGeneration = this.requestedGeneration;
         this.style.textContent = css;
+        committed = true;
+      },
+      rollback,
+      finalize: () => {
+        if (committed && this.observed) {
+          this.observer.takeRecords();
+        }
       },
       discard: () => {
+        rollback();
         discarded = true;
       },
     };
@@ -209,16 +234,16 @@ export interface ViewStyleDiagnostic {
 }
 
 const styleFailure = (code: string, message: string, hint: string): ViewStyleDiagnostic => {
+  currentDiagnostic = { code, message, hint };
   clearTimeout(globalThis.__MARIMO_STUDIO_STYLE_TIMEOUT__);
   document.documentElement.dataset.marimoStudioStyles = "error";
-  const existing = document.querySelector<HTMLElement>("[data-marimo-studio-style-error]");
-  if (existing) {
-    existing.dataset.marimoDiagnosticCode = code;
-    existing.dataset.marimoDiagnosticMessage = message;
-    existing.dataset.marimoDiagnosticHint = hint;
-    existing.dataset.marimoDiagnosticScope = "presentation";
-    existing.dataset.state = "error";
-    existing.textContent = message;
+  if (ownedDiagnosticHost?.isConnected) {
+    ownedDiagnosticHost.dataset.marimoDiagnosticCode = code;
+    ownedDiagnosticHost.dataset.marimoDiagnosticMessage = message;
+    ownedDiagnosticHost.dataset.marimoDiagnosticHint = hint;
+    ownedDiagnosticHost.dataset.marimoDiagnosticScope = "presentation";
+    ownedDiagnosticHost.dataset.state = "error";
+    ownedDiagnosticHost.textContent = message;
     return { code, message, hint };
   }
   const status = document.createElement("div");
@@ -231,12 +256,15 @@ const styleFailure = (code: string, message: string, hint: string): ViewStyleDia
   status.setAttribute("role", "alert");
   status.textContent = message;
   document.body.append(status);
+  ownedDiagnosticHost = status;
   return { code, message, hint };
 };
 
 const markStylesReady = (): void => {
+  currentDiagnostic = undefined;
   clearTimeout(globalThis.__MARIMO_STUDIO_STYLE_TIMEOUT__);
-  document.querySelector("[data-marimo-studio-style-error]")?.remove();
+  ownedDiagnosticHost?.remove();
+  ownedDiagnosticHost = undefined;
   document.documentElement.dataset.marimoStudioStyles = "ready";
 };
 
@@ -244,12 +272,23 @@ export interface ViewStyleScopeTarget {
   readonly CSSScopeRule?: abstract new (...arguments_: never[]) => CSSRule;
 }
 
+export const viewStyleDiagnostic = (): ViewStyleDiagnostic | undefined => {
+  if (currentDiagnostic && !ownedDiagnosticHost?.isConnected) {
+    currentDiagnostic = undefined;
+  }
+  return currentDiagnostic;
+};
+
 export const supportsViewStyleScope = (target: ViewStyleScopeTarget = globalThis): boolean =>
   "CSSScopeRule" in target;
 
 export const initializeViewStyles = async (
   scopeSupported = supportsViewStyleScope(),
+  signal?: AbortSignal,
 ): Promise<ViewStyleDiagnostic | undefined> => {
+  if (signal?.aborted) {
+    throw signal.reason;
+  }
   document.documentElement.dataset.marimoStudioStyles = "loading";
   if (!scopeSupported) {
     return styleFailure(
@@ -266,9 +305,15 @@ export const initializeViewStyles = async (
     const styles = viewStyles();
     styles.observe();
     await styles.refresh();
+    if (signal?.aborted) {
+      throw signal.reason;
+    }
     markStylesReady();
     return undefined;
   } catch (error) {
+    if (signal?.aborted) {
+      throw signal.reason;
+    }
     const diagnostic = styleFailure(
       "view-styles-failed",
       "View styling could not start. The authored page remains available.",

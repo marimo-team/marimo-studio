@@ -1,9 +1,15 @@
 import type { MarimoCellElement } from "../../cells/host";
+import type { CellIndex } from "../../cells/index";
 import type { RuntimeConfig } from "../../runtime-config/index";
 import type { RuntimeCell } from "../runtime-cell";
 import type { CellDiagnostic } from "./cell-projection";
 
-import { cellBindingKey, type CellIndex, resolveCellBinding } from "../../cells/bindings";
+import { projectionRequestForHost } from "../../projections/identity";
+import { applyProjectionMetadata } from "../../projections/instances";
+import {
+  createProjectionResolutionContext,
+  resolveHostProjection,
+} from "../../projections/resolution";
 
 const hostIds = new WeakMap<MarimoCellElement, number>();
 let nextHostId = 0;
@@ -23,8 +29,8 @@ export type CellHostProjection =
   | {
       key: number;
       kind: "cell";
-      bindingKey?: string;
-      bindingPresent: boolean;
+      projectionKey?: string;
+      projectionPresent: boolean;
       cell: RuntimeCell | undefined;
       developer: boolean;
       diagnostic?: CellDiagnostic;
@@ -37,34 +43,53 @@ export const projectCellHosts = (
   cells: CellIndex<RuntimeCell>,
   hosts: readonly MarimoCellElement[],
 ): CellHostProjection[] => {
-  const diagnostics = new Map<string, CellDiagnostic>();
-  config.diagnostics.forEach((diagnostic) => {
-    if (diagnostic.projection === "cell") {
-      diagnostics.set(diagnostic.target, diagnostic);
-    }
+  const context = createProjectionResolutionContext(config, document);
+  const resolved = hosts.map((host) => {
+    const resolution = resolveHostProjection(
+      config,
+      host,
+      projectionRequestForHost(host, "cell", host.cellName),
+      context,
+    );
+    applyProjectionMetadata(host, resolution);
+    return { host, resolution };
   });
   const primaryHosts = new Map<string, MarimoCellElement>();
-  hosts.forEach((host) => {
-    if (!primaryHosts.has(host.cellName)) {
-      primaryHosts.set(host.cellName, host);
+  resolved.forEach(({ host, resolution }) => {
+    if (resolution.ok && !primaryHosts.has(resolution.value.producer)) {
+      primaryHosts.set(resolution.value.producer, host);
     }
   });
   const developer = config.dev || config.mode === "edit";
 
-  return hosts.map((host) => {
+  return resolved.map(({ host, resolution }) => {
     const key = getHostId(host);
-    if (primaryHosts.get(host.cellName) !== host) {
+    if (resolution.ok && primaryHosts.get(resolution.value.producer) !== host) {
       return { key, kind: "duplicate", host };
     }
-    const binding = config.cellBindings[host.cellName];
+    const diagnostic = resolution.ok
+      ? config.diagnostics.find(
+          (item) =>
+            item.projection === "cell" &&
+            item.target === host.cellName &&
+            (item.siteId === undefined || item.siteId === resolution.value.site.id),
+        )
+      : {
+          code: resolution.error.code,
+          message: resolution.error.message,
+          hint: "Fix the projection target at its reported source site.",
+        };
+    const runtimeCellId = resolution.ok ? resolution.value.runtimeCellId : undefined;
     return {
       key,
       kind: "cell",
-      bindingKey: binding ? cellBindingKey(binding) : undefined,
-      bindingPresent: binding !== undefined,
-      cell: resolveCellBinding(binding, cells),
+      projectionKey: resolution.ok
+        ? `${resolution.value.producer}\0${runtimeCellId ?? ""}`
+        : undefined,
+      projectionPresent: resolution.ok,
+      cell: runtimeCellId === undefined ? undefined : cells.byId.get(runtimeCellId),
       developer,
-      diagnostic: diagnostics.get(host.cellName),
+      diagnostic,
       host,
       showCellLogs: config.showCellLogs,
     };

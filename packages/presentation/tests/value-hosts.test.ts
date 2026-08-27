@@ -1,10 +1,13 @@
 import type { JsonValue } from "@marimo-studio/protocol/runtime-config";
 
+import { parseValueReadResponse, type ValueReadResponse } from "@marimo-studio/protocol/value-read";
 import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vite-plus/test";
 import { z } from "zod";
+
+import type { ValueReader } from "../src/values/reader.ts";
 
 import {
   commitRuntimeConfig,
@@ -14,17 +17,20 @@ import {
 import { RuntimeValueCell } from "../src/runtime/values/RuntimeValueCell.tsx";
 import {
   applyValues,
+  getValueHostProjections,
   isMarimoValueHost,
   type MarimoValueErrorDetail,
   type MarimoValueHost,
   type MarimoValueUpdatedDetail,
   markValueError,
   markValuePending,
-  startValueBindings,
-  stopValueBindings,
+  startValueHosts,
+  stopValueHosts,
+  subscribeValueHostProjections,
 } from "../src/values/hosts.ts";
 import { applyValueReadResponse } from "../src/values/response.ts";
 import { runtimeCellFixture } from "./runtime-cell-fixture.ts";
+import { projectionRequest, symbolicRuntimeFields } from "./runtime-fixtures.ts";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -35,9 +41,11 @@ globalThis.__MARIMO_MOUNT_CONFIG__ = {
   version: "test-version",
   revision: "presentation-revision",
   runtime: "server",
+  runtimeExplicit: false,
+  replay: false,
 };
 
-const config = {
+const baseConfig = {
   schema: 1,
   revision: "presentation-revision",
   view: "dashboard",
@@ -48,7 +56,8 @@ const config = {
     available: ["server"],
     data: {
       fileKey: "/workspace/notebook.py",
-      serverToken: "server-token",
+      capabilityToken: "presentation-capability",
+      sessionId: "s_abc123",
       serverInstance: "server-instance",
       preserveSession: false,
       url: "/",
@@ -58,18 +67,7 @@ const config = {
   publicRootUrl: "/",
   documentRootUrl: "/",
   supportUrl: "/_marimo-studio/views/dashboard",
-  cellBindings: {},
-  valueBindings: {
-    nullable: {
-      variable: "nullable",
-      cell: { kind: "id", value: "nullable-cell" },
-    },
-    report: {
-      variable: "report",
-      cell: { kind: "id", value: "report-cell" },
-    },
-  },
-  outputBindings: {},
+  ...symbolicRuntimeFields,
   diagnostics: [],
   appConfig: {},
   userConfig: {},
@@ -78,6 +76,58 @@ const config = {
   dev: false,
   mode: "run",
 } satisfies RuntimeConfig;
+
+const projectionRevisionFor = (selectors: readonly string[]): string => {
+  const hash = selectors
+    .join("\0")
+    .split("")
+    .reduce(
+      (value, character) => Math.imul(value ^ character.charCodeAt(0), 16_777_619),
+      2_166_136_261,
+    );
+  return (hash >>> 0).toString(16).padStart(8, "0").repeat(8);
+};
+
+const configWithValues = (selectors: readonly string[], namespaceSite?: string): RuntimeConfig => ({
+  ...baseConfig,
+  projectionRevision: projectionRevisionFor(selectors),
+  projectionTargets: {
+    cells: {},
+    variables: Object.fromEntries(
+      selectors.map((selector) => [
+        selector,
+        {
+          status: "ready",
+          producer: `cell:v1:${selector}`,
+          dependencyClosure: [`cell:v1:${selector}`],
+        },
+      ]),
+    ),
+  },
+  mounts:
+    namespaceSite === undefined
+      ? selectors.map((selector) => ({
+          id: `site:value:${selector}`,
+          kind: "value" as const,
+          source: { path: "src/App.tsx", line: 1, column: 1 },
+          allowedTargets: [selector],
+        }))
+      : [
+          {
+            id: namespaceSite,
+            kind: "value",
+            source: { path: "src/App.tsx", line: 1, column: 1 },
+            allowedTargets: null,
+          },
+        ],
+  runtimeBindings: {
+    cellRefs: Object.fromEntries(
+      selectors.map((selector) => [`cell:v1:${selector}`, `${selector}-cell`]),
+    ),
+  },
+});
+
+const config = configWithValues(["nullable", "report"]);
 
 const settleMutations = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -93,23 +143,10 @@ const installConfig = async (next: RuntimeConfig = config): Promise<void> => {
   }
 };
 
-const configWithBindings = (...selectors: string[]): RuntimeConfig => ({
-  ...config,
-  valueBindings: Object.fromEntries(
-    selectors.map((selector) => [
-      selector,
-      {
-        variable: selector,
-        cell: { kind: "id" as const, value: `${selector}-cell` },
-      },
-    ]),
-  ),
-});
-
 afterEach(() => {
   act(() => root?.unmount());
   root = undefined;
-  stopValueBindings();
+  stopValueHosts();
   document.body.replaceChildren();
 });
 
@@ -117,11 +154,11 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
   await installConfig();
 
   document.body.innerHTML = `
-    <span id="first" mo-value="report"></span>
-    <span id="second" mo-value="report"></span>
-    <span id="nullable" mo-value="nullable"></span>
+    <span id="first" mo-value="report" data-marimo-studio-site="site:value:report"></span>
+    <span id="second" mo-value="report" data-marimo-studio-site="site:value:report"></span>
+    <span id="nullable" mo-value="nullable" data-marimo-studio-site="site:value:nullable"></span>
   `;
-  startValueBindings();
+  startValueHosts();
 
   const first = document.querySelector<MarimoValueHost>("#first")!;
   const second = document.querySelector<MarimoValueHost>("#second")!;
@@ -169,7 +206,7 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
   assert.equal(property?.get instanceof Function, true);
   assert.equal(property?.set, undefined);
   const report = { labels: ["North", "South"], total: 42 };
-  applyValues({ report });
+  applyValues({ report }, config.projectionRevision);
 
   assert.deepEqual(updates, [
     {
@@ -188,17 +225,17 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
   nullable.addEventListener("marimo-value-updated", (event) => {
     nullUpdate = event.detail;
   });
-  applyValues({ nullable: null });
+  applyValues({ nullable: null }, config.projectionRevision);
   assert.equal(nullable.marimoValue, null);
   assert.deepEqual(nullUpdate, { selector: "nullable", value: null });
 
-  markValuePending("report");
+  markValuePending("report", config.projectionRevision);
   const retained = structuredClone(first.marimoValue);
   assert.equal(first.dataset.state, "stale");
   assert.equal(first.getAttribute("aria-busy"), "true");
   assert.deepEqual(first.marimoValue, retained);
 
-  applyValues({ report: { labels: ["North", "South"], total: 42 } });
+  applyValues({ report: { labels: ["North", "South"], total: 42 } }, config.projectionRevision);
   assert.equal(updates.length, 1);
   assert.deepEqual(first.marimoValue, report);
   assert.equal(first.dataset.state, "ready");
@@ -208,8 +245,8 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
     message: "Variable 'report' is unavailable.",
     hint: "Restore the notebook variable.",
   };
-  markValueError("report", missingReport);
-  markValueError("report", missingReport);
+  markValueError("report", missingReport, config.projectionRevision);
+  markValueError("report", missingReport, config.projectionRevision);
 
   assert.equal(first.marimoValue, undefined);
   assert.equal(errorEvent?.bubbles, true);
@@ -239,23 +276,25 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
 test("runtime value cells own producer identity across host changes", async () => {
   await installConfig();
   document.body.innerHTML = `
-    <span id="report" mo-value="report" data-runtime-cell-id="authored"></span>
-    <span id="unknown" mo-value="unknown" data-runtime-cell-id="authored"></span>
+    <span id="report" mo-value="report" data-marimo-studio-site="site:value:report" data-runtime-cell-id="authored"></span>
+    <span id="unknown" mo-value="unknown" data-marimo-studio-site="site:value:unknown" data-runtime-cell-id="authored"></span>
     <div id="root"></div>
   `;
-  startValueBindings();
+  startValueHosts();
 
   const report = document.querySelector<HTMLElement>("#report")!;
   const unknown = document.querySelector<HTMLElement>("#unknown")!;
-  assert.equal(report.dataset.runtimeCellId, undefined);
+  assert.equal(report.dataset.runtimeCellId, "report-cell");
+  assert.equal(report.dataset.marimoProducerRef, "cell:v1:report");
   assert.equal(unknown.dataset.runtimeCellId, undefined);
 
   root = createRoot(document.querySelector("#root")!);
   const renderCell = (cell = runtimeCellFixture({ id: "report-cell" })) => {
     root?.render(
       createElement(RuntimeValueCell, {
-        revision: "presentation-revision",
+        projectionRevision: config.projectionRevision,
         selectors: ["report"],
+        projections: [projectionRequest("report", "value")],
         cell,
         connectionState: "CLOSED",
         runtimeReady: true,
@@ -269,6 +308,7 @@ test("runtime value cells own producer identity across host changes", async () =
 
   const late = document.createElement("span");
   late.setAttribute("mo-value", "report");
+  late.dataset.marimoStudioSite = "site:value:report";
   document.body.append(late);
   await settleMutations();
   assert.equal(late.dataset.runtimeCellId, "report-cell");
@@ -280,8 +320,9 @@ test("runtime value cells own producer identity across host changes", async () =
   act(() => {
     root?.render(
       createElement(RuntimeValueCell, {
-        revision: "presentation-revision",
+        projectionRevision: config.projectionRevision,
         selectors: ["report"],
+        projections: [projectionRequest("report", "value")],
         cell: undefined,
         connectionState: "CLOSED",
         runtimeReady: false,
@@ -293,10 +334,194 @@ test("runtime value cells own producer identity across host changes", async () =
   assert.equal(late.dataset.runtimeCellId, undefined);
 });
 
+test("value reads keep their projection while advancing the next wire revision", async () => {
+  const valueConfig = configWithValues(["report"]);
+  await installConfig(valueConfig);
+  document.body.innerHTML = `
+    <span mo-value="report" data-marimo-studio-site="site:value:report"></span>
+    <div id="root"></div>
+  `;
+  startValueHosts();
+  root = createRoot(document.querySelector("#root")!);
+  const selectors = ["report"];
+  const projections = [projectionRequest("report", "value")];
+  const revisions: string[] = [];
+  let aborts = 0;
+  const readValues = async (request: { revision: string }, signal?: AbortSignal) => {
+    revisions.push(request.revision);
+    signal?.addEventListener("abort", () => aborts++, { once: true });
+    return { values: { report: revisions.length }, errors: {} };
+  };
+  const render = async (requestRevision: string, version: number) => {
+    await act(async () => {
+      commitRuntimeConfig({ ...valueConfig, revision: requestRevision });
+      root?.render(
+        createElement(RuntimeValueCell, {
+          projectionRevision: valueConfig.projectionRevision,
+          selectors,
+          projections,
+          cell: runtimeCellFixture({
+            id: "report-cell",
+            lastRunStartTimestamp: version,
+          }),
+          connectionState: "OPEN",
+          runtimeReady: true,
+          readValues,
+        }),
+      );
+      await Promise.resolve();
+    });
+  };
+
+  await render("presentation-a", 1);
+  await render("presentation-b", 1);
+  assert.deepEqual(revisions, ["presentation-a"]);
+  assert.equal(aborts, 0);
+
+  await render("presentation-b", 2);
+  assert.deepEqual(revisions, ["presentation-a", "presentation-b"]);
+});
+
+test("a replaced projection rejects a late value response that ignored abort", async () => {
+  const previousConfig = {
+    ...configWithValues(["report"]),
+    revision: "presentation-revision",
+    projectionRevision: "a".repeat(64),
+  };
+  const currentConfig = {
+    ...previousConfig,
+    revision: "presentation-b",
+    projectionRevision: "b".repeat(64),
+  };
+  await installConfig(previousConfig);
+  document.body.innerHTML = `
+    <span mo-value="report" data-marimo-studio-site="site:value:report"></span>
+    <div id="root"></div>
+  `;
+  startValueHosts();
+  root = createRoot(document.querySelector("#root")!);
+  const host = document.querySelector<MarimoValueHost>("[mo-value]")!;
+  const selectors = ["report"];
+  const projections = [projectionRequest("report", "value")];
+  let resolvePrevious!: (response: ValueReadResponse) => void;
+  const previousResponse = new Promise<ValueReadResponse>((resolve) => {
+    resolvePrevious = resolve;
+  });
+  let previousSignal: AbortSignal | undefined;
+  const previousReader: ValueReader = (_request, signal) => {
+    previousSignal = signal;
+    return previousResponse;
+  };
+  const currentReader: ValueReader = async () => ({
+    values: { report: "current" },
+    errors: {},
+  });
+  const render = async (nextConfig: RuntimeConfig, version: number, readValues: ValueReader) => {
+    await act(async () => {
+      commitRuntimeConfig(nextConfig);
+      root?.render(
+        createElement(RuntimeValueCell, {
+          projectionRevision: nextConfig.projectionRevision,
+          selectors,
+          projections,
+          cell: runtimeCellFixture({
+            id: "report-cell",
+            lastRunStartTimestamp: version,
+          }),
+          connectionState: "OPEN",
+          runtimeReady: true,
+          readValues,
+        }),
+      );
+      await Promise.resolve();
+    });
+  };
+
+  await render(previousConfig, 1, previousReader);
+  assert.ok(previousSignal);
+  await render(currentConfig, 2, currentReader);
+  assert.equal(previousSignal.aborted, true);
+  assert.equal(host.marimoValue, "current");
+
+  await act(async () => {
+    resolvePrevious({ values: { report: "stale" }, errors: {} });
+    await previousResponse;
+    await Promise.resolve();
+  });
+
+  assert.equal(host.marimoValue, "current");
+  assert.equal(host.textContent, "current");
+});
+
+test("value host ownership follows authored DOM reparenting", async () => {
+  await installConfig();
+  document.body.innerHTML = `
+    <div id="first"><span mo-value="report" data-marimo-studio-site="site:value:report"></span></div>
+    <div id="second"></div>
+  `;
+  startValueHosts();
+  const host = document.querySelector<MarimoValueHost>("[mo-value]")!;
+  applyValues({ report: { total: 42 } }, config.projectionRevision);
+  let projectionChanges = 0;
+  const unsubscribe = subscribeValueHostProjections(() => projectionChanges++);
+  let updates = 0;
+  host.addEventListener("marimo-value-updated", () => updates++);
+
+  document.querySelector("#second")!.append(host);
+  await settleMutations();
+
+  assert.deepEqual(host.marimoValue, { total: 42 });
+  assert.equal(host.dataset.state, "ready");
+  assert.equal(projectionChanges, 0);
+  assert.equal(updates, 0);
+
+  const nativeOutput = document.createElement("div");
+  nativeOutput.setAttribute("data-marimo-cell-output", "");
+  const shadow = nativeOutput.attachShadow({ mode: "open" });
+  document.body.append(nativeOutput);
+  shadow.append(host);
+  await settleMutations();
+
+  assert.deepEqual(getValueHostProjections(), []);
+  assert.equal(isMarimoValueHost(host), false);
+  assert.equal(host.dataset.state, undefined);
+  assert.equal(host.textContent, "");
+
+  document.querySelector("#second")!.append(host);
+  await settleMutations();
+
+  assert.equal(isMarimoValueHost(host), true);
+  assert.equal(host.dataset.state, "connecting");
+  assert.equal(getValueHostProjections().length, 1);
+  applyValues({ report: { total: 43 } }, config.projectionRevision);
+  assert.deepEqual(host.marimoValue, { total: 43 });
+  assert.equal(updates, 1);
+  unsubscribe();
+});
+
+test("value host observation leaves other projection hosts intact", async () => {
+  await installConfig();
+  document.body.innerHTML = `
+    <marimo-output data-marimo-studio-site="site:output:first">
+      <div data-marimo-cell-output>Rendered output</div>
+    </marimo-output>
+  `;
+  startValueHosts();
+  const output = document.querySelector<HTMLElement>("marimo-output")!;
+
+  output.dataset.marimoStudioSite = "site:output:second";
+  await settleMutations();
+
+  assert.equal(output.textContent?.trim(), "Rendered output");
+  assert.equal(isMarimoValueHost(output), false);
+});
+
 test("dynamic value hosts follow their active selector", async () => {
-  await installConfig(configWithBindings("dynamic", "copy", "mirror"));
-  document.body.innerHTML = `<span id="source" mo-value="dynamic"></span>`;
-  startValueBindings();
+  const dynamicSite = "site:value:dynamic";
+  const dynamicConfig = configWithValues(["dynamic", "copy", "mirror"], dynamicSite);
+  await installConfig(dynamicConfig);
+  document.body.innerHTML = `<span id="source" mo-value="dynamic" data-marimo-studio-site="${dynamicSite}"></span>`;
+  startValueHosts();
 
   const source = document.querySelector<MarimoValueHost>("#source")!;
   const report = { labels: ["North", "South"], total: 42 };
@@ -306,10 +531,11 @@ test("dynamic value hosts follow their active selector", async () => {
     updates.push(structuredClone(event.detail));
   });
   source.addEventListener("marimo-value-error", () => errors++);
-  applyValues({ dynamic: report });
+  applyValues({ dynamic: report }, dynamicConfig.projectionRevision);
 
   const late = document.createElement("span");
   late.setAttribute("mo-value", "dynamic");
+  late.dataset.marimoStudioSite = dynamicSite;
   document.body.append(late);
   await settleMutations();
   assert.ok(isMarimoValueHost(late));
@@ -320,48 +546,126 @@ test("dynamic value hosts follow their active selector", async () => {
   assert.equal(source.marimoValue, undefined);
   assert.equal(source.textContent, "");
 
-  applyValues({ copy: report });
+  applyValues({ copy: report }, dynamicConfig.projectionRevision);
   assert.deepEqual(source.marimoValue, report);
   assert.deepEqual(updates.at(-1), { selector: "copy", value: report });
 
-  applyValues({ mirror: report });
+  applyValues({ mirror: report }, dynamicConfig.projectionRevision);
   const updatesBeforeBatch = updates.length;
   source.setAttribute("mo-value", "dynamic");
   source.setAttribute("mo-value", "mirror");
   await settleMutations();
+  assert.equal(updates.length, updatesBeforeBatch);
+  assert.equal(source.marimoValue, undefined);
+  assert.equal(source.dataset.state, "connecting");
+
+  applyValues({ mirror: report }, dynamicConfig.projectionRevision);
   assert.equal(updates.length, updatesBeforeBatch + 1);
   assert.deepEqual(updates.at(-1), { selector: "mirror", value: report });
 
   source.removeAttribute("mo-value");
   await settleMutations();
   const updatesAfterRemoval = updates.length;
-  applyValues({ mirror: "new value" });
+  applyValues({ mirror: "new value" }, dynamicConfig.projectionRevision);
   assert.equal(errors, 0);
   assert.equal(updates.length, updatesAfterRemoval);
   assert.equal(source.textContent, "");
   assert.equal(source.dataset.state, undefined);
 
-  stopValueBindings();
+  source.setAttribute("mo-value", "mirror");
+  await settleMutations();
+  assert.equal(source.marimoValue, undefined);
+  assert.equal(source.dataset.state, "connecting");
+
+  stopValueHosts();
   const dormant = document.createElement("span");
   dormant.setAttribute("mo-value", "dynamic");
+  dormant.dataset.marimoStudioSite = dynamicSite;
   document.body.append(dormant);
   await settleMutations();
   assert.equal(dormant.dataset.state, undefined);
 });
 
-test("a shell replacement reconciles hosts against the incoming bindings", async () => {
-  const legacyConfig = configWithBindings("legacy");
-  await installConfig(legacyConfig);
-  document.body.innerHTML = `<span id="legacy" mo-value="legacy"></span>`;
-  startValueBindings();
+test("changing a value source site reconnects the same projection instance", async () => {
+  const next = configWithValues(["report"]);
+  await installConfig({
+    ...next,
+    mounts: [
+      {
+        id: "site:value:first",
+        kind: "value",
+        source: { path: "src/App.tsx", line: 1, column: 1 },
+        allowedTargets: ["report"],
+      },
+      {
+        id: "site:value:second",
+        kind: "value",
+        source: { path: "src/App.tsx", line: 2, column: 1 },
+        allowedTargets: ["report"],
+      },
+    ],
+  });
+  document.body.innerHTML = `
+    <span mo-value="report" data-marimo-studio-site="site:value:first"></span>
+  `;
+  startValueHosts();
+  const host = document.querySelector<MarimoValueHost>("span")!;
+  const initial = getValueHostProjections()[0]!.request;
 
-  const legacy = document.querySelector<MarimoValueHost>("#legacy")!;
+  host.dataset.marimoStudioSite = "site:value:second";
+  await settleMutations();
+
+  const current = getValueHostProjections()[0]!.request;
+  assert.equal(current.siteId, "site:value:second");
+  assert.equal(current.instanceId, initial.instanceId);
+  assert.equal(host.dataset.state, "connecting");
+});
+
+test("an empty dynamic value target recovers through the same host instance", async () => {
+  const dynamicSite = "site:value:dynamic-recovery";
+  const dynamicConfig = configWithValues(["metric"], dynamicSite);
+  await installConfig(dynamicConfig);
+  document.body.innerHTML = `<strong mo-value="" data-marimo-studio-site="${dynamicSite}"></strong>`;
+  startValueHosts();
+
+  const host = document.querySelector<MarimoValueHost>("strong")!;
+  const instanceId = host.dataset.marimoStudioInstance;
+  assert.equal(host.dataset.state, "error");
+  assert.equal(host.dataset.marimoDiagnosticCode, "projection-target-empty");
+  assert.equal(host.dataset.marimoProducerRef, undefined);
+
+  host.setAttribute("mo-value", "metric");
+  await settleMutations();
+  assert.equal(host.dataset.marimoStudioInstance, instanceId);
+  assert.equal(host.dataset.state, "connecting");
+  assert.equal(host.dataset.marimoDiagnosticCode, undefined);
+  assert.equal(host.dataset.marimoProducerRef, "cell:v1:metric");
+
+  applyValues({ metric: 42 }, dynamicConfig.projectionRevision);
+  assert.equal(host.dataset.state, "ready");
+  assert.equal(host.textContent, "42");
+});
+
+test("a projection replacement reconciles hosts against incoming symbols", async () => {
+  const previousConfig = configWithValues(["previous"]);
+  await installConfig(previousConfig);
+  document.body.innerHTML = `<span id="previous" mo-value="previous" data-marimo-studio-site="site:value:previous"></span>`;
+  startValueHosts();
+
+  const previous = document.querySelector<MarimoValueHost>("#previous")!;
   let outgoingErrors = 0;
-  legacy.addEventListener("marimo-value-error", () => outgoingErrors++);
-  applyValues({ legacy: "ready" });
+  previous.addEventListener("marimo-value-error", () => outgoingErrors++);
+  applyValues({ previous: "ready" }, previousConfig.projectionRevision);
 
-  commitRuntimeConfig(configWithBindings("incoming"));
-  document.body.innerHTML = `<span id="incoming" mo-value="incoming"></span>`;
+  const incomingConfig = {
+    ...configWithValues(["incoming"]),
+    revision: "incoming-revision",
+    projectionRevision: "b".repeat(64),
+  };
+  commitRuntimeConfig(incomingConfig);
+  assert.equal(previous.marimoValue, undefined);
+  assert.equal(previous.dataset.state, "connecting");
+  document.body.innerHTML = `<span id="incoming" mo-value="incoming" data-marimo-studio-site="site:value:incoming"></span>`;
   await settleMutations();
 
   const incoming = document.querySelector<MarimoValueHost>("#incoming")!;
@@ -369,34 +673,84 @@ test("a shell replacement reconciles hosts against the incoming bindings", async
   incoming.addEventListener("marimo-value-updated", (event) => {
     update = event.detail;
   });
-  applyValues({ incoming: "ready" });
+  applyValues({ previous: "stale" }, previousConfig.projectionRevision);
+  applyValues({ incoming: "ready" }, incomingConfig.projectionRevision);
   assert.equal(outgoingErrors, 0);
   assert.deepEqual(update, { selector: "incoming", value: "ready" });
 });
 
 test("response-wide read failures retain their structured error", async () => {
-  await installConfig(configWithBindings("wide"));
-  document.body.innerHTML = `<span id="wide" mo-value="wide"></span>`;
-  startValueBindings();
+  const wideConfig = configWithValues(["wide"]);
+  await installConfig(wideConfig);
+  document.body.innerHTML = `<span id="wide" mo-value="wide" data-marimo-studio-site="site:value:wide"></span>`;
+  startValueHosts();
 
   const wide = document.querySelector<MarimoValueHost>("#wide")!;
   let failure: MarimoValueErrorDetail | undefined;
   wide.addEventListener("marimo-value-error", (event) => {
     failure = event.detail;
   });
-  applyValueReadResponse(["wide"], {
-    values: {},
-    errors: {
-      "*": {
-        code: "response-too-large",
-        message: "The value response exceeds the aggregate byte limit.",
+  applyValueReadResponse(
+    ["wide"],
+    {
+      values: {},
+      errors: {
+        "*": {
+          code: "response-too-large",
+          message: "The value response exceeds the aggregate byte limit.",
+        },
       },
     },
-  });
+    wideConfig.projectionRevision,
+  );
 
   assert.deepEqual(failure, {
     selector: "wide",
     code: "response-too-large",
     message: "The value response exceeds the aggregate byte limit.",
   });
+});
+
+test("value hosts resolve prototype-named notebook symbols from own response records", async () => {
+  const selectors = ["__proto__", "constructor"];
+  const siteId = "site:value:prototype-names";
+  const prototypeConfig = configWithValues(selectors, siteId);
+  await installConfig(prototypeConfig);
+  document.body.innerHTML = selectors
+    .map(
+      (selector, index) =>
+        `<span id="prototype-${index}" mo-value="${selector}" data-marimo-studio-site="${siteId}"></span>`,
+    )
+    .join("");
+  startValueHosts();
+
+  const response = parseValueReadResponse({
+    values: Object.fromEntries(selectors.map((selector, index) => [selector, `value-${index}`])),
+    errors: {},
+  });
+  applyValueReadResponse(selectors, response, prototypeConfig.projectionRevision);
+
+  selectors.forEach((_, index) => {
+    const host = document.querySelector<MarimoValueHost>(`#prototype-${index}`)!;
+    assert.equal(host.dataset.state, "ready");
+    assert.equal(host.marimoValue, `value-${index}`);
+  });
+});
+
+test("value hosts treat inherited response properties as absent", async () => {
+  const siteId = "site:value:prototype-absence";
+  const prototypeConfig = configWithValues(["constructor"], siteId);
+  await installConfig(prototypeConfig);
+  document.body.innerHTML = `<span mo-value="constructor" data-marimo-studio-site="${siteId}"></span>`;
+  startValueHosts();
+
+  const host = document.querySelector<MarimoValueHost>("span")!;
+  applyValueReadResponse(
+    ["constructor"],
+    { values: {}, errors: {} },
+    prototypeConfig.projectionRevision,
+  );
+
+  assert.equal(host.dataset.state, "error");
+  assert.equal(host.dataset.marimoDiagnosticCode, "missing-value-response");
 });

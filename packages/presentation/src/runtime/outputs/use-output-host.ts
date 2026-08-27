@@ -15,7 +15,7 @@ const setDataset = (host: HTMLElement, name: string, value: string | undefined) 
 };
 
 export const useOutputHost = ({
-  bindingVariable,
+  projectionVariable,
   failure,
   host,
   modelPhase,
@@ -25,7 +25,7 @@ export const useOutputHost = ({
   runtimeCellId,
   selector,
 }: {
-  bindingVariable: string | undefined;
+  projectionVariable: string | undefined;
   failure: OutputDiagnostic | undefined;
   host: MarimoOutputElement;
   modelPhase: ValueCellModel["phase"];
@@ -44,7 +44,7 @@ export const useOutputHost = ({
 
   useLayoutEffect(() => {
     setDataset(host, "marimoSelector", selector);
-    setDataset(host, "marimoVariable", bindingVariable);
+    setDataset(host, "marimoVariable", projectionVariable);
     setDataset(host, "runtimeCellId", runtimeCellId);
     setDataset(host, "outputMime", mimetype);
     setDataset(host, "marimoDiagnosticCode", failureCode);
@@ -73,7 +73,7 @@ export const useOutputHost = ({
       setOutputHostState(host, "loading", detail);
     }
   }, [
-    bindingVariable,
+    projectionVariable,
     failureCode,
     failureHint,
     failureMessage,

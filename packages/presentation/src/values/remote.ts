@@ -7,6 +7,12 @@ import {
 } from "@marimo-studio/protocol/value-read";
 
 import { responseJson, responseJsonOrNull } from "../json.ts";
+import { projectionWireRequest } from "../projections/identity.ts";
+import { projectionReadGate } from "../projections/read-gate.ts";
+import {
+  notifyProjectionBindingStale,
+  projectionBindingIsStale,
+} from "../projections/staleness.ts";
 import { retry } from "../retry.ts";
 import { getRuntimeConfig } from "../runtime-config/index.ts";
 import { serverRuntimeDataSchema } from "../runtime/server-config.ts";
@@ -25,41 +31,53 @@ export class ValueRequestError extends Error {
 }
 
 export const readServerValues = async (
-  sessionId: string,
+  _sessionId: string,
   request: ValueReadRequest,
   signal?: AbortSignal,
-): Promise<ValueReadResponse> => {
-  const config = getRuntimeConfig();
-  if (config.runtime.id !== "server") {
-    throw new ValueRequestError("The server value reader is inactive.", "wrong-runtime", false);
-  }
-  const serverData = serverRuntimeDataSchema.safeParse(config.runtime.data);
-  if (!serverData.success) {
-    throw new ValueRequestError("The server token is unavailable.", "invalid-runtime", false);
-  }
-  const { serverToken } = serverData.data;
-  const response = await fetch(
-    appendUrlPath(config.supportUrl, "values", globalThis.location.href),
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Marimo-Server-Token": serverToken,
-        "Marimo-Session-Id": sessionId,
+): Promise<ValueReadResponse> =>
+  projectionReadGate.run(signal, async (activeSignal) => {
+    const config = getRuntimeConfig();
+    if (projectionBindingIsStale(config.projectionRevision)) {
+      throw new ValueRequestError(
+        "The presentation is refreshing its notebook bindings.",
+        "stale-projection-binding",
+        false,
+      );
+    }
+    if (config.runtime.id !== "server") {
+      throw new ValueRequestError("The server value reader is inactive.", "wrong-runtime", false);
+    }
+    const serverData = serverRuntimeDataSchema.safeParse(config.runtime.data);
+    if (!serverData.success || !config.presentationSessionId) {
+      throw new ValueRequestError("The server token is unavailable.", "invalid-runtime", false);
+    }
+    const response = await fetch(
+      appendUrlPath(config.supportUrl, "values", globalThis.location.href),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Marimo-Session-Id": config.presentationSessionId,
+        },
+        body: JSON.stringify({
+          ...request,
+          revision: config.revision,
+          projections: request.projections.map(projectionWireRequest),
+        }),
+        signal: activeSignal,
       },
-      body: JSON.stringify(request),
-      signal,
-    },
-  );
-  if (!response.ok) {
-    const detail = parseErrorResponse(await responseJsonOrNull(response));
-    const message = detail.message ?? `Value request failed with ${response.status}`;
-    const code = detail.error ?? "value-request-failed";
-    const transient = detail.transient ?? false;
-    throw new ValueRequestError(message, code, transient);
-  }
-  return parseValueReadResponse(await responseJson(response));
-};
+    );
+    if (!response.ok) {
+      const detail = parseErrorResponse(await responseJsonOrNull(response));
+      const message = detail.message ?? `Value request failed with ${response.status}`;
+      const code = detail.error ?? "value-request-failed";
+      const transient = detail.transient ?? false;
+      const error = new ValueRequestError(message, code, transient);
+      notifyProjectionBindingStale(error, config.projectionRevision);
+      throw error;
+    }
+    return parseValueReadResponse(await responseJson(response));
+  });
 
 const RETRY_DELAYS = [250, 500, 1_000, 2_000] as const;
 

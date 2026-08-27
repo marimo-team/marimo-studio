@@ -1,10 +1,15 @@
 import { parseErrorResponse } from "@marimo-studio/protocol/errors";
-import { parseRuntimeConfig, type RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
-import { DEFAULT_RUNTIME_ID, runtimeIdFromSearch } from "@marimo-studio/protocol/runtime-selection";
+import {
+  type MountConfig,
+  parseRuntimeConfig,
+  type RuntimeConfig,
+} from "@marimo-studio/protocol/runtime-config";
+import { DEFAULT_RUNTIME_ID } from "@marimo-studio/protocol/runtime-selection";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 import { responseJson, responseJsonOrNull } from "../json.ts";
 import { retry } from "../retry.ts";
+import { getMountConfig } from "./store.ts";
 
 const PREVIEW_SESSION_HEADER = "Marimo-Studio-Preview-Session-Id";
 
@@ -49,56 +54,34 @@ export class RuntimeConfigRequestError extends Error {
 
 export const runtimeConfigSessionId = ({
   connected,
-  href,
+  mounted = getMountConfig().runtime === "server" ? getMountConfig().runtimeSessionId : undefined,
+  server = getMountConfig().runtime === "server",
 }: {
   connected?: string;
-  href?: string;
-}): string | undefined => {
-  if (connected) {
-    return connected;
-  }
-  try {
-    const url = new URL(href ?? "");
-    if (url.searchParams.get("marimo_studio_resume") === "1") {
-      return url.searchParams.get("session_id") ?? undefined;
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
-};
-
-export const requestedRuntimeId = (fallback = DEFAULT_RUNTIME_ID): string =>
-  runtimeIdFromSearch(globalThis.location?.search ?? "", fallback);
-
-export const runtimeSelectionChanged = (
-  active: string,
-  fallback = DEFAULT_RUNTIME_ID,
-  search = globalThis.location?.search ?? "",
-): boolean => runtimeIdFromSearch(search, fallback) !== active;
+  mounted?: string;
+  server?: boolean;
+}): string | undefined => (server ? (mounted ?? connected) : undefined);
 
 export const fetchRuntimeConfig = async (
   supportUrl: string,
   signal?: AbortSignal,
-  fallbackRuntime = DEFAULT_RUNTIME_ID,
+  runtime = DEFAULT_RUNTIME_ID,
   previewSessionId?: string,
   revision?: string,
   runtimeSessionId?: string,
+  mount: Pick<MountConfig, "clientId" | "runtime" | "runtimeSessionId"> = getMountConfig(),
 ): Promise<RuntimeConfig> => {
-  const sessionId =
-    runtimeSessionId ??
-    runtimeConfigSessionId({
-      connected: globalThis.__MARIMO_STUDIO_SESSION_ID__,
-      href: globalThis.location?.href,
-    });
-  const runtime = requestedRuntimeId(fallbackRuntime);
+  const sessionId = runtimeConfigSessionId({
+    connected: runtimeSessionId ?? globalThis.__MARIMO_STUDIO_SESSION_ID__,
+    mounted: mount.runtime === "server" ? mount.runtimeSessionId : undefined,
+    server: mount.runtime === "server",
+  });
   const url = new URL(appendUrlPath(supportUrl, "config", globalThis.location.href));
   url.searchParams.set("runtime", runtime);
   if (revision) {
     url.searchParams.set("revision", revision);
   }
-  const page = new URL(globalThis.location.href);
-  const clientId = page.searchParams.get("marimo_studio_client");
+  const clientId = mount.clientId;
   if (clientId) {
     url.searchParams.set("marimo_studio_client", clientId);
     if (!previewSessionId) {
@@ -157,23 +140,20 @@ const RETRY_DELAYS = [100, 250, 500, 1_000] as const;
 export const fetchRuntimeConfigWithRetry = async (
   supportUrl: string,
   signal?: AbortSignal,
-  fallbackRuntime = DEFAULT_RUNTIME_ID,
+  runtime = DEFAULT_RUNTIME_ID,
   previewSessionId?: string,
   revision?: string,
   runtimeSessionId?: string,
 ): Promise<RuntimeConfig> =>
   retry({
     operation: () =>
-      fetchRuntimeConfig(
-        supportUrl,
-        signal,
-        fallbackRuntime,
-        previewSessionId,
-        revision,
-        runtimeSessionId,
-      ),
+      fetchRuntimeConfig(supportUrl, signal, runtime, previewSessionId, revision, runtimeSessionId),
     delays: RETRY_DELAYS,
     retryWhen: (error) => error instanceof RuntimeConfigRequestError && error.transient,
+    retryAfterExhaustion: (error) =>
+      error instanceof RuntimeConfigRequestError && error.code === "runtime-startup-pending"
+        ? 5_000
+        : undefined,
     signal,
   });
 
@@ -185,7 +165,7 @@ export const requireMatchingPresentationRevision = (
     return;
   }
   throw new RuntimeConfigRequestError(
-    "The view document and notebook bindings changed at the same time. " +
+    "The view document and notebook symbol graph changed at the same time. " +
       "Studio will retry with one source revision.",
     "presentation-revision-mismatch",
     true,
@@ -197,14 +177,14 @@ export const fetchRuntimeConfigForRevision = async (
   supportUrl: string,
   documentRevision: string,
   signal?: AbortSignal,
-  fallbackRuntime = DEFAULT_RUNTIME_ID,
+  runtime = DEFAULT_RUNTIME_ID,
   previewSessionId?: string,
   runtimeSessionId?: string,
 ): Promise<RuntimeConfig> => {
   const config = await fetchRuntimeConfigWithRetry(
     supportUrl,
     signal,
-    fallbackRuntime,
+    runtime,
     previewSessionId,
     documentRevision,
     runtimeSessionId,
@@ -212,3 +192,64 @@ export const fetchRuntimeConfigForRevision = async (
   requireMatchingPresentationRevision(documentRevision, config);
   return config;
 };
+
+export const fetchCurrentRuntimeConfig = async (
+  documentUrl: string,
+  supportUrl: string,
+  runtime = DEFAULT_RUNTIME_ID,
+  previewSessionId?: string,
+  runtimeSessionId?: string,
+  signal?: AbortSignal,
+): Promise<RuntimeConfig> =>
+  retry({
+    operation: async () => {
+      const headers = new Headers();
+      if (previewSessionId) {
+        headers.set(PREVIEW_SESSION_HEADER, previewSessionId);
+      }
+      const document = await fetch(documentUrl, {
+        cache: "no-store",
+        headers,
+        method: "HEAD",
+        signal,
+      });
+      if (!document.ok) {
+        const detail = await readResponseError(
+          document,
+          `Presentation revision check failed with ${document.status}`,
+        );
+        throw new RuntimeConfigRequestError(
+          detail.message,
+          detail.code,
+          detail.transient,
+          detail.hint,
+        );
+      }
+      const revision = document.headers.get("Marimo-Studio-Revision");
+      if (!revision) {
+        throw new RuntimeConfigRequestError(
+          "The view document did not identify its presentation revision.",
+          "presentation-revision-missing",
+          true,
+          "Wait for the current view sources to settle.",
+        );
+      }
+      const config = await fetchRuntimeConfig(
+        supportUrl,
+        signal,
+        runtime,
+        previewSessionId,
+        revision,
+        runtimeSessionId,
+      );
+      requireMatchingPresentationRevision(revision, config);
+      return config;
+    },
+    delays: RETRY_DELAYS,
+    retryWhen: (error) => error instanceof RuntimeConfigRequestError && error.transient,
+    retryAfterExhaustion: (error) =>
+      error instanceof RuntimeConfigRequestError && error.code === "runtime-startup-pending"
+        ? 5_000
+        : undefined,
+    signal,
+  });
