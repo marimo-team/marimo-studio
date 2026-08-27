@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>$notebook · $view</title>
+    <style>
+      body {
+        margin: 0;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: var(--text-font);
+      }
+
+      .view-results {
+        display: grid;
+        gap: 1.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app-shell" class="studio-view">
+      <header class="view-header">
+        <p class="studio-eyebrow">$notebook</p>
+        <h1>$heading</h1>
+      </header>
+      <section class="view-results" aria-label="Notebook results"></section>
+    </main>
+    <script type="module">
+      document.querySelector("#app-shell")?.setAttribute("data-ready", "");
+    </script>
+  </body>
+</html>
