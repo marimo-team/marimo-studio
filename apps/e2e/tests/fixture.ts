@@ -1,11 +1,14 @@
-import { expect, test as base, type FrameLocator, type Page } from "@playwright/test";
+import { expect, test as base, type FrameLocator, type Locator, type Page } from "@playwright/test";
 import { execFile as execFileCallback } from "node:child_process";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { z } from "zod";
 
+import { prepareCollaborativeWorkspace } from "../scripts/collaborative-workspace.mjs";
+import { e2eNetwork } from "../scripts/network.mjs";
 import {
+  collaborativeWorkspaceDirectory,
   fixtureDirectory,
   hostedFixtureDirectory,
   hostedNotebookPath,
@@ -14,14 +17,62 @@ import {
   repositoryDirectory,
   workspaceDirectory,
 } from "../scripts/paths.mjs";
+import {
+  observeBrowserContext,
+  type BrowserDiagnostics,
+  type BrowserDiagnosticsScope,
+  type ProjectionRefreshCapture,
+  type RequestAbortCapture,
+  type ResponseTransitionCapture,
+} from "./browser-diagnostics.ts";
+import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
+
+export {
+  expectSupersededRenewalConfig,
+  observeBrowserContext,
+  type BrowserActiveRequestAbortExpectation,
+  type BrowserConsoleExpectation,
+  type BrowserDiagnostics,
+  type BrowserDiagnosticsScope,
+  type BrowserRequestAbortExpectation,
+  type BrowserRequestFailureExpectation,
+  type BrowserResponseExpectation,
+  type BrowserResponseTransitionExpectation,
+  type BrowserResponseRecovery,
+  type HeldRequestAbortCapture,
+  type ProjectionRefreshCapture,
+  type RequestAbortCapture,
+  type ResponseTransitionCapture,
+} from "./browser-diagnostics.ts";
 
 const execFile = promisify(execFileCallback);
 const dashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/notebook/dashboard");
+const collaborativeDashboardDirectory = resolve(
+  collaborativeWorkspaceDirectory,
+  "__marimo__/studio/notebook/dashboard",
+);
+const collaborativeNotebookPath = resolve(collaborativeWorkspaceDirectory, "notebook.py");
 const plainDashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/plain/dashboard");
 const plainReportDirectory = resolve(workspaceDirectory, "__marimo__/studio/plain/report");
+const removeTree = (path: string) =>
+  rm(path, {
+    force: true,
+    maxRetries: 20,
+    recursive: true,
+    retryDelay: 25,
+  });
 
-export const dashboardHtmlPath = resolve(dashboardDirectory, "index.html");
-export const dashboardCssPath = resolve(dashboardDirectory, "app.css");
+export const dashboardHtmlPath = resolve(dashboardDirectory, "src/index.html");
+export const dashboardCssPath = resolve(dashboardDirectory, "src/app.css");
+export const dashboardManifestPath = resolve(dashboardDirectory, "view.toml");
+export const collaborativeDashboardHtmlPath = resolve(
+  collaborativeDashboardDirectory,
+  "src/index.html",
+);
+export const collaborativeCreatedViewHtmlPath = (view: string) =>
+  resolve(collaborativeWorkspaceDirectory, "__marimo__/studio/notebook", view, "index.html");
+export const workspaceCreatedViewHtmlPath = (view: string) =>
+  resolve(workspaceDirectory, "__marimo__/studio/notebook", view, "index.html");
 export const plainDashboardHtmlPath = resolve(plainDashboardDirectory, "index.html");
 export const plainReportHtmlPath = resolve(plainReportDirectory, "index.html");
 export const plainNotebookPath = resolve(workspaceDirectory, "plain.py");
@@ -31,21 +82,19 @@ export const hostedDashboardHtmlPath = resolve(
   "__marimo__/studio/notebook/dashboard/index.html",
 );
 export const hostedViewFixturePath = resolve(hostedFixtureDirectory, "dashboard.html");
+export const studioOrigin = e2eNetwork.main.studio.origin;
+export const hostedOrigin = e2eNetwork.main.hosted.origin;
 export const studioEntryUrl = "/?file=notebook.py";
+export const collaborativeStudioEntryUrl = `${e2eNetwork.main.collaboration.origin}/?file=notebook.py`;
+export const staticExportUrl = `${e2eNetwork.main.exported.origin}/src/index.html`;
 
 const workspaceCheckSchema = z.object({ ok: z.boolean() });
-const workspaceAnalysisSchema = z.object({
-  actions: z.array(z.record(z.string(), z.json())),
-  handoff_ready: z.boolean(),
-});
 const workspaceActivationSchema = z.object({
-  schema: z.literal(1),
+  schema: z.literal(2),
   notebook: z.string(),
   view: z.string(),
-  state: z.literal("active"),
   generation: z.number().int().positive(),
-  transition: z.literal("in-place"),
-  client_id: z.string().optional(),
+  client_id: z.string(),
   session_id: z.string(),
 });
 const sessionAdminBootstrapSchema = z.object({
@@ -55,7 +104,6 @@ const sessionAdminBootstrapSchema = z.object({
 const sessionInventorySchema = z.object({
   files: z.array(z.object({ sessionId: z.string() })),
 });
-
 const copyFixtureFile = async (relativePath: string) => {
   const source = resolve(fixtureDirectory, relativePath);
   const target = resolve(workspaceDirectory, relativePath);
@@ -69,33 +117,25 @@ const copyFixtureFile = async (relativePath: string) => {
 };
 
 export const restoreWorkspace = async () => {
+  await removeTree(resolve(workspaceDirectory, "__marimo__/studio/notebook"));
   await copyFixtureFile("notebook.py");
   await copyFixtureFile("plain.py");
-  await copyFixtureFile("__marimo__/studio/notebook/dashboard/index.html");
-  await copyFixtureFile("__marimo__/studio/notebook/dashboard/app.css");
-  await copyFixtureFile("__marimo__/studio/notebook/dashboard/scripts/app.js");
-  await copyFixtureFile("__marimo__/studio/notebook/dashboard/scripts/message.js");
-  await rm(resolve(workspaceDirectory, "__marimo__/studio/notebook/qa-view"), {
-    force: true,
-    recursive: true,
-  });
-  await rm(resolve(workspaceDirectory, "__marimo__/studio/plain"), {
-    force: true,
-    recursive: true,
-  });
+  await copyFixtureFile("__marimo__/studio/notebook/dashboard/view.toml");
+  await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/index.html");
+  await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/app.css");
+  await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/scripts/app.js");
+  await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/scripts/message.js");
+  await removeTree(resolve(workspaceDirectory, "__marimo__/studio/plain"));
 };
 
 export const restoreHostedWorkspace = async () => {
-  for (const relativePath of ["notebook.py", "pyproject.toml", "dashboard.html"]) {
+  for (const relativePath of ["notebook.py", "dashboard.html"]) {
     const source = resolve(hostedFixtureDirectory, relativePath);
     const target = resolve(hostedWorkspaceDirectory, relativePath);
     await mkdir(resolve(target, ".."), { recursive: true });
     await cp(source, target, { force: true });
   }
-  await rm(resolve(hostedWorkspaceDirectory, "__marimo__"), {
-    force: true,
-    recursive: true,
-  });
+  await removeTree(resolve(hostedWorkspaceDirectory, "__marimo__"));
 };
 
 export const hostedWorkspaceNotebookPath = hostedNotebookPath;
@@ -104,15 +144,36 @@ export const readWorkspaceFile = (path: string) => readFile(path, "utf8");
 export const writeWorkspaceFile = (path: string, content: string) => writeFile(path, content);
 
 const runStudioCli = (args: string[]) =>
-  execFile("uv", ["run", "--frozen", "--project", repositoryDirectory, "marimo-studio", ...args], {
+  execFile("uv", ["run", "--frozen", "--group", "e2e", "marimo-studio", ...args], {
     cwd: repositoryDirectory,
   });
 
 export const bindWorkspaceCell = (alias: string, cell: number) =>
   runStudioCli(["bind", workspaceNotebookPath, "--cell", String(cell), "--as", alias]);
 
-export const addWorkspaceView = (target: string, name: string) =>
-  runStudioCli(["view", "add", target, "--name", name]);
+export const addWorkspaceView = (target: string, name: string, starter?: string) =>
+  runStudioCli([
+    "view",
+    "create",
+    target,
+    "--name",
+    name,
+    ...(starter ? ["--starter", starter] : []),
+  ]);
+
+export const buildWorkspaceView = (name: string) =>
+  runStudioCli([
+    "view",
+    "build",
+    workspaceNotebookPath,
+    "--name",
+    name,
+    "--profile",
+    "development",
+  ]);
+
+export const addCollaborativeView = (name: string) =>
+  runStudioCli(["view", "create", collaborativeNotebookPath, "--name", name]);
 
 export const activateWorkspaceView = async (view: string, browserClient?: string) => {
   const args = [
@@ -122,7 +183,7 @@ export const activateWorkspaceView = async (view: string, browserClient?: string
     "--name",
     view,
     "--server",
-    "http://127.0.0.1:4321?file=notebook.py",
+    `${studioOrigin}?file=notebook.py`,
     "--format",
     "json",
   ];
@@ -134,35 +195,25 @@ export const activateWorkspaceView = async (view: string, browserClient?: string
 };
 
 export const checkWorkspace = async (): Promise<boolean> => {
-  const { stdout } = await runStudioCli(["check", workspaceNotebookPath, "--format", "json"]);
+  const { stdout } = await runStudioCli(["validate", workspaceNotebookPath, "--format", "json"]);
   return workspaceCheckSchema.parse(JSON.parse(stdout)).ok;
 };
 
 declare global {
-  var __e2eEditorFrame: HTMLIFrameElement | undefined;
-  var __e2eEditorFocus: HTMLElement | undefined;
-  var __e2eEditorWindow: Window | null | undefined;
   var __e2eRuntimeMarker: string | undefined;
 }
-
-export const analyzeWorkspace = async (view: string) => {
-  const { stdout } = await runStudioCli([
-    "analyze",
-    workspaceNotebookPath,
-    "--view",
-    view,
-    "--server",
-    "http://127.0.0.1:4321?file=notebook.py",
-    "--format",
-    "json",
-  ]);
-  return workspaceAnalysisSchema.parse(JSON.parse(stdout));
-};
 
 export const editorFrame = (page: Page): FrameLocator =>
   page.frameLocator('iframe[title="Marimo editor"]');
 
-export const editorSlider = (page: Page) => editorFrame(page).getByRole("slider");
+export const labeledSlider = (root: FrameLocator | Locator, label: RegExp | string): Locator =>
+  root.locator("marimo-slider").filter({ hasText: label }).getByRole("slider");
+
+export const editorSlider = (page: Page, label: RegExp | string = /^Scale/) =>
+  labeledSlider(editorFrame(page), label);
+
+export const presentationFrame = (page: Page): FrameLocator =>
+  page.frameLocator("iframe#marimo-studio-presentation");
 
 export const previewFrame = (page: Page, runtime = "server"): FrameLocator =>
   page.frameLocator(`iframe[data-preview-runtime-frame="${runtime}"]`);
@@ -186,14 +237,81 @@ export const waitForPreview = async (page: Page, runtime = "server") => {
             ]);
           })
           .catch(() => false),
-      { timeout: 30_000 },
+      { timeout: 65_000 },
     )
     .toBe(true);
+  await expect(frame).not.toHaveAttribute("inert", { timeout: 65_000 });
+  await expect(frame).not.toHaveAttribute("aria-busy", { timeout: 65_000 });
   return preview;
 };
 
-type BrowserDiagnostics = {
-  messages: string[];
+interface ProjectionRefreshScope {
+  readonly capture: ProjectionRefreshCapture;
+  readonly initialRevision: string;
+}
+
+const projectionRevision = (preview: FrameLocator): Promise<string> =>
+  preview.locator("html").evaluate(() => globalThis.marimoStudio.identity().projectionRevision);
+
+export const captureProjectionRefresh = async (
+  page: Page,
+  diagnostics: BrowserDiagnostics,
+): Promise<ProjectionRefreshScope> => {
+  const preview = previewFrame(page);
+  const frameElement = await page
+    .locator('iframe[data-preview-runtime-frame="server"]')
+    .elementHandle();
+  const frame = await frameElement?.contentFrame().finally(() => frameElement.dispose());
+  if (frame === null || frame === undefined) {
+    throw new Error("The server preview frame is unavailable.");
+  }
+  const initialRevision = await projectionRevision(preview);
+  return {
+    capture: diagnostics.expectProjectionRefresh(frame, initialRevision),
+    initialRevision,
+  };
+};
+
+export const recoverProjectionRefresh = async (
+  scope: ProjectionRefreshScope,
+  page: Page,
+): Promise<void> => {
+  const preview = previewFrame(page);
+  await expect
+    .poll(() => projectionRevision(preview), { timeout: 65_000 })
+    .not.toBe(scope.initialRevision);
+  scope.capture.seal();
+  let currentProjectionRevision = scope.initialRevision;
+  await expect
+    .poll(
+      async () => {
+        currentProjectionRevision = await projectionRevision(preview);
+        return scope.capture.ready(currentProjectionRevision);
+      },
+      { timeout: 65_000 },
+    )
+    .toBe(true);
+  if (!scope.capture.recovered(currentProjectionRevision)) {
+    throw new Error("The projection refresh changed while recovery was committing.");
+  }
+  scope.capture.dispose();
+};
+
+export const recoverRequestAbort = async (capture: RequestAbortCapture): Promise<void> => {
+  capture.seal();
+  await expect.poll(() => capture.ready(), { timeout: 10_000 }).toBe(true);
+  if (!capture.recovered()) {
+    throw new Error("The request abort changed while recovery was committing.");
+  }
+};
+
+export const recoverResponseTransition = async (
+  capture: ResponseTransitionCapture,
+): Promise<void> => {
+  await expect.poll(() => capture.ready(), { timeout: 10_000 }).toBe(true);
+  if (!capture.recovered()) {
+    throw new Error("The response transition changed while recovery was committing.");
+  }
 };
 
 interface SessionAdmin {
@@ -233,6 +351,50 @@ export const studioServerToken = async (page: Page): Promise<string> => {
   return admin.serverToken;
 };
 
+export const writeViewSource = async (
+  page: Page,
+  view: string,
+  path: string,
+  content: string,
+  file = "notebook.py",
+): Promise<void> => {
+  const encoded = path.split("/").map(encodeURIComponent).join("/");
+  const url = `/_marimo-studio/views/${encodeURIComponent(view)}/source/${encoded}?file=${encodeURIComponent(file)}`;
+  const current = await page.request.get(url);
+  const revision = current.headers().etag;
+  if (!current.ok() || !revision) {
+    throw new Error(`Could not load dashboard source (${current.status()})`);
+  }
+  const saved = await page.request.put(url, {
+    data: content,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "If-Match": revision,
+      "Marimo-Server-Token": await studioServerToken(page),
+    },
+  });
+  if (!saved.ok()) {
+    throw new Error(`Could not save ${view} source (${saved.status()}): ${await saved.text()}`);
+  }
+};
+
+export const writeDashboardSource = async (page: Page, content: string): Promise<void> =>
+  writeViewSource(page, "dashboard", "src/index.html", content);
+
+export const removeWorkspaceView = async (
+  page: Page,
+  view: string,
+  file = "notebook.py",
+): Promise<void> => {
+  const response = await page.request.delete(
+    `/_marimo-studio/views/${encodeURIComponent(view)}?file=${encodeURIComponent(file)}`,
+    { headers: { "Marimo-Server-Token": await studioServerToken(page) } },
+  );
+  if (!response.ok()) {
+    throw new Error(`Could not remove ${view} (${response.status()}): ${await response.text()}`);
+  }
+};
+
 const closeNotebookSessions = async (page: Page): Promise<void> => {
   const admin = await sessionAdmin(page);
   const request = page.request;
@@ -255,52 +417,43 @@ const closeNotebookSessions = async (page: Page): Promise<void> => {
       throw new Error(`Could not close Marimo session: ${closed.status()}`);
     }
   }
+  await expect
+    .poll(async () => {
+      const response = await request.post(`${admin.apiRoot}/running_notebooks`, { headers });
+      if (!response.ok()) {
+        throw new Error(`Could not inspect Marimo sessions: ${response.status()}`);
+      }
+      return sessionInventorySchema.parse(await response.json()).files.length;
+    })
+    .toBe(0);
 };
 
-export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
+export const test = base.extend<{
+  browserDiagnostics: BrowserDiagnosticsScope;
+  collaborativeWorkspace: void;
+  pyodideAssets: void;
+}>({
+  collaborativeWorkspace: async ({ browserName: _browserName }, use) => {
+    await prepareCollaborativeWorkspace();
+    await use();
+  },
+  pyodideAssets: [
+    async ({ context }, use) => {
+      await installPinnedPyodideAssets(context);
+      await use();
+    },
+    { auto: true },
+  ],
   browserDiagnostics: [
-    async ({ page }, use, testInfo) => {
-      const messages: string[] = [];
-      page.on("pageerror", (error) => messages.push(`pageerror: ${error.message}`));
-      page.on("console", (message) => {
-        const missingProjectedControl = message.text().includes("UIElementRegistry missing entry");
-        const nativeLanguageServerTimeout =
-          message.location().url.includes("/_marimo-studio/editor/assets/") &&
-          message.text().startsWith("Language server initialization failed") &&
-          message.text().includes('Request "initialize" timed out');
-        if (
-          missingProjectedControl ||
-          (message.type() === "error" &&
-            !nativeLanguageServerTimeout &&
-            !message.text().startsWith("Failed to load resource:"))
-        ) {
-          const source = message.location().url;
-          messages.push(`console${source ? ` (${source})` : ""}: ${message.text()}`);
-        }
-      });
-      page.on("requestfailed", (request) => {
-        const failure = request.failure()?.errorText ?? "unknown error";
-        if (failure !== "net::ERR_ABORTED") {
-          messages.push(`request failed: ${request.url()} (${failure})`);
-        }
-      });
-      page.on("response", (response) => {
-        const url = new URL(response.url());
-        const transientConfig =
-          response.status() === 409 &&
-          url.pathname.includes("/_marimo-studio/views/") &&
-          url.pathname.endsWith("/config");
-        const transientActivation =
-          response.status() === 409 &&
-          /^\/_marimo-studio\/activations\/\d+\/ack$/.test(url.pathname);
-        if (response.status() >= 400 && !transientConfig && !transientActivation) {
-          messages.push(`http ${response.status()}: ${response.url()}`);
-        }
-      });
+    async ({ context, page }, use, testInfo) => {
+      const observed = observeBrowserContext(context);
+      const { messages } = observed;
 
-      await use({ messages });
+      await use(observed);
 
-      const hosted = page.url().startsWith("http://127.0.0.1:4322/");
+      await observed.close();
+
+      const hosted = page.url().startsWith(`${hostedOrigin}/`);
       try {
         if (messages.length > 0 || testInfo.status !== testInfo.expectedStatus) {
           await testInfo.attach("browser-diagnostics", {
@@ -326,10 +479,6 @@ export const test = base.extend<{ browserDiagnostics: BrowserDiagnostics }>({
     },
     { auto: true },
   ],
-});
-
-test.beforeEach(async () => {
-  await restoreWorkspace();
 });
 
 export { expect };
