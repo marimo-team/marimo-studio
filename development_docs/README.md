@@ -169,6 +169,11 @@ frontend package tests. `make check` adds formatting, linting, type checks,
 and example builds. Live browser acceptance remains the evidence for
 cross-document behavior.
 
+`make typecheck` runs ty, Pyrefly, basedpyright, and the TypeScript checks.
+Basedpyright analyzes the distributed package against Python 3.10 and analyzes
+tests and contributor scripts against Python 3.11. Error diagnostics fail the
+type-check gate.
+
 ## Keep authored and generated files distinct
 
 Edit repository source under `packages/`, `apps/`, `docs/`,

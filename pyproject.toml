@@ -6,10 +6,13 @@ test = ["httpx2>=2.9", "polars>=1.42", "pytest>=9.1"]
 test-deno = [{ include-group = "test" }, "deno==2.9.5"]
 dev = [
   { include-group = "test" },
+  "agent-plugins==0.1.0",
+  "basedpyright==1.39.10",
   "deno==2.9.5",
   "marimo[recommended]==0.24.0",
   "pyrefly>=1.1",
   "ruff>=0.16",
+  "tomli==2.3.1",
   "ty>=0.0.64",
 ]
 e2e = ["anywidget", "marimo-studio-e2e-provider"]
@@ -31,6 +34,66 @@ include = ["packages/marimo-studio/src", "packages/marimo-studio/tests"]
 [tool.pyrefly]
 project-includes = ["packages/marimo-studio/src/**/*.py", "packages/marimo-studio/tests/**/*.py"]
 search-path = ["packages/marimo-studio/src", "packages/marimo-studio/tests"]
+
+[tool.basedpyright]
+include = [
+  "packages/marimo-studio/src",
+  "packages/marimo-studio/tests",
+  "scripts",
+]
+extraPaths = ["packages/marimo-studio/src", "packages/marimo-studio/tests"]
+pythonVersion = "3.10"
+pythonPlatform = "All"
+typeCheckingMode = "recommended"
+failOnWarnings = false
+reportImplicitStringConcatenation = false
+reportConstantRedefinition = false
+
+[[tool.basedpyright.executionEnvironments]]
+root = "packages/marimo-studio/tests"
+pythonVersion = "3.11"
+reportAny = false
+reportExplicitAny = false
+reportInvalidCast = false
+reportMissingParameterType = false
+reportMissingTypeStubs = false
+reportPrivateUsage = false
+reportPrivateImportUsage = false
+reportPrivateLocalImportUsage = false
+reportUnannotatedClassAttribute = false
+reportUninitializedInstanceVariable = false
+reportUnknownArgumentType = false
+reportUnknownLambdaType = false
+reportUnknownMemberType = false
+reportUnknownParameterType = false
+reportUnknownVariableType = false
+reportUnusedCallResult = false
+
+[[tool.basedpyright.executionEnvironments]]
+root = "packages/marimo-studio/src/marimo_studio/_compat"
+reportAny = false
+reportExplicitAny = false
+reportInvalidCast = false
+reportMissingParameterType = false
+reportMissingTypeArgument = false
+reportMissingTypeStubs = false
+reportPrivateUsage = false
+reportPrivateImportUsage = false
+reportUnannotatedClassAttribute = false
+reportUnknownArgumentType = false
+reportUnknownLambdaType = false
+reportUnknownMemberType = false
+reportUnknownParameterType = false
+reportUnknownVariableType = false
+
+[[tool.basedpyright.executionEnvironments]]
+root = "scripts"
+pythonVersion = "3.11"
+reportPrivateUsage = false
+reportPrivateLocalImportUsage = false
+
+[[tool.basedpyright.executionEnvironments]]
+root = "packages/marimo-studio/src"
 
 [tool.uv]
 required-version = ">=0.12,<0.13"

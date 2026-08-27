@@ -55,6 +55,7 @@ lint: _frontend-ready _anti-slop-check _architecture-check _provider-sources-che
 typecheck: _frontend-ready ## Type-check Python and TypeScript sources.
 	$(UV) run ty check
 	$(UV) run pyrefly check
+	$(UV) run basedpyright --level error
 	$(VP) check --no-fmt --no-lint $(TYPECHECK_PATHS)
 
 python-test: ## Run the complete Python test profile for this environment.
