@@ -406,7 +406,7 @@ def test_isolated_provider_owns_its_complete_command_tree(
         pids = _wait_for_pids(marker, 3)
         if finish == "cancel":
             cancellation.cancel()
-        operation.join(timeout=5)
+        operation.join(timeout=_PROCESS_START_TIMEOUT)
 
         assert not operation.is_alive()
         assert len(errors) == 1
