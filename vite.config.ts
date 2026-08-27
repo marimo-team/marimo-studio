@@ -11,7 +11,13 @@ const generated = [
   "packages/marimo-studio/src/marimo_studio/_static/**",
 ];
 
-const ignored = [...generated, ...antiSlopIgnorePatterns];
+const providerToolSources = [
+  "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/**/analyzer.ts",
+  "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/**/analyzers/**",
+  "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/**/template/**",
+];
+
+const ignored = [...generated, ...providerToolSources, ...antiSlopIgnorePatterns];
 
 const studioPackageRestrictedImports = [
   "@marimo-studio/marimo-frontend",
