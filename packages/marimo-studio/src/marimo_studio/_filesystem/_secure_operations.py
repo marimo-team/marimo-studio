@@ -7,6 +7,7 @@ import hashlib
 import os
 import secrets
 import stat
+import time
 from contextlib import suppress
 from pathlib import Path
 
@@ -22,6 +23,31 @@ from marimo_studio._filesystem._secure_windows import (
     open_directory_handle as open_windows_directory,
 )
 from marimo_studio._filesystem._secure_windows import open_file as open_windows_file
+
+_WINDOWS_REPLACE_ATTEMPTS = 100
+_WINDOWS_REPLACE_INTERVAL_SECONDS = 0.01
+
+
+def _replace(
+    source: str | Path,
+    target: str | Path,
+    *,
+    parent: ParentHandle,
+) -> None:
+    attempts = _WINDOWS_REPLACE_ATTEMPTS if os.name == "nt" else 1
+    for attempt in range(attempts):
+        try:
+            os.replace(
+                source,
+                target,
+                src_dir_fd=parent.descriptor,
+                dst_dir_fd=parent.descriptor,
+            )
+            return
+        except PermissionError:
+            if attempt + 1 == attempts:
+                raise
+            time.sleep(_WINDOWS_REPLACE_INTERVAL_SECONDS)
 
 
 def directory_flags() -> int:
@@ -402,7 +428,7 @@ def atomic_write_at(
             with suppress(OSError):
                 os.fsync(parent.descriptor)
         else:
-            os.replace(parent.path / temporary_name, path)
+            _replace(parent.path / temporary_name, path, parent=parent)
         temporary_exists = False
         if identity is None:
             raise SecureFileError(f"Atomic write identity is unavailable: {path}")

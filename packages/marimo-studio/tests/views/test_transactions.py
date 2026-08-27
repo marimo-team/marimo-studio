@@ -11,6 +11,8 @@ import pytest
 
 import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._workspace.transactions as workspace_transactions
+from marimo_studio._filesystem import _secure_operations as secure_operations
+from marimo_studio._filesystem._secure_types import ParentHandle
 from marimo_studio.errors import ConfigurationError
 
 
@@ -524,4 +526,35 @@ def test_atomic_write_does_not_report_failure_after_its_replace_commits(
     ):
         pass
 
+    assert target.read_bytes() == b"after"
+
+
+def test_atomic_write_retries_a_windows_sharing_violation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "source.txt"
+    target.write_bytes(b"before")
+    native_replace = secure_operations.os.replace
+    attempts = 0
+
+    def replace(*args: object, **kwargs: object) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise PermissionError(errno.EACCES, "sharing violation")
+        native_replace(*args, **kwargs)
+
+    monkeypatch.setattr(secure_operations.os, "name", "nt")
+    monkeypatch.setattr(secure_operations.os, "replace", replace)
+    monkeypatch.setattr(secure_operations.time, "sleep", lambda _interval: None)
+
+    identity = secure_operations.atomic_write_at(
+        ParentHandle(tmp_path, None),
+        target,
+        b"after",
+    )
+
+    assert attempts == 2
+    assert identity.size == len(b"after")
     assert target.read_bytes() == b"after"
