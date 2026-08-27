@@ -1,16 +1,19 @@
 [tool.uv.workspace]
-members = ["packages/marimo-studio"]
+members = ["apps/e2e/fixtures-provider/provider", "packages/marimo-studio"]
 
 [dependency-groups]
 test = ["httpx2>=2.9", "polars>=1.42", "pytest>=9.1"]
+test-deno = [{ include-group = "test" }, "deno==2.9.5"]
 dev = [
   { include-group = "test" },
+  "deno==2.9.5",
   "marimo[recommended]==0.24.0",
   "pyrefly>=1.1",
   "ruff>=0.16",
   "ty>=0.0.64",
 ]
-e2e = ["anywidget"]
+e2e = ["anywidget", "marimo-studio-e2e-provider"]
+release = ["twine==6.2.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["packages/marimo-studio/tests"]
@@ -23,5 +26,10 @@ project-includes = ["packages/marimo-studio/src/**/*.py", "packages/marimo-studi
 search-path = ["packages/marimo-studio/src", "packages/marimo-studio/tests"]
 
 [tool.uv]
+required-version = ">=0.12,<0.13"
 exclude-newer = "3 days"
-exclude-newer-package = { agent-plugins = false, marimo = false }
+exclude-newer-package = { marimo = false, marimo-studio = false }
+
+[tool.uv.sources]
+marimo-studio = { workspace = true }
+marimo-studio-e2e-provider = { workspace = true }
