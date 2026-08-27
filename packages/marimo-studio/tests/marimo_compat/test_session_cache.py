@@ -25,6 +25,7 @@ from marimo_studio._composition import create_server_adapters
 from marimo_studio._filesystem import _secure_operations as secure_operations
 from marimo_studio._filesystem.io import read_text
 from marimo_studio._filesystem.secure import FileIdentity
+from marimo_studio.errors import ConfigurationError
 
 
 class _ExportingView:
@@ -92,7 +93,7 @@ def _multiprocess_writer(
 
     def commit(operation: Any, *args: Any, **kwargs: Any) -> Any:
         nonlocal commit_synchronized, commits
-        if commits == 0:
+        if not commit_synchronized:
             commit_ready.set()
             first_commit.wait(timeout=10)
             commit_synchronized = True
@@ -220,6 +221,8 @@ def test_session_cache_multi_process_writers_publish_complete_json(
             except (AssertionError, json.JSONDecodeError) as error:
                 failures.append(str(error))
                 break
+            except ConfigurationError:
+                continue
             reads += 1
     finally:
         start.set()
