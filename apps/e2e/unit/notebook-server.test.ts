@@ -29,6 +29,19 @@ import {
 
 const boundAddressSchema = z.object({ port: z.number().int().positive() });
 const PROBE_TIMEOUT = 500;
+const NATIVE_SERVER_START_TIMEOUT = process.platform === "win32" ? 15_000 : 5_000;
+const posixTest = process.platform === "win32" ? test.skip : test;
+
+const expectProcessTreeRootStopped = (
+  child: ReturnType<typeof spawn>,
+  processGroupId: number | undefined,
+) => {
+  if (processGroupId !== undefined) {
+    const groupRunning = processGroupIsRunning(processGroupId);
+    if (groupRunning !== undefined) expect(groupRunning).toBe(false);
+  }
+  expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+};
 
 const availablePort = async (): Promise<number> => {
   const server = createServer();
@@ -240,7 +253,7 @@ test("reports bootstrap failure after containing the registered notebook process
       ),
     ).rejects.toThrow("Marimo bootstrap returned 503");
 
-    expect(processGroupIsRunning(registration.processGroupId)).toBe(false);
+    expectProcessTreeRootStopped(registration.child, registration.processGroupId);
     expect(await notebookServerPortIsOpen(port)).toBe(false);
     unregisterNotebookProcess(registration, { directory });
     expect(existsSync(directory)).toBe(false);
@@ -283,7 +296,7 @@ test("run shutdown owns the full grace period before forcing a resistant group",
     );
 
     expect(performance.now() - started).toBeGreaterThanOrEqual(650);
-    expect(processGroupIsRunning(registration.processGroupId)).toBe(false);
+    expectProcessTreeRootStopped(registration.child, registration.processGroupId);
     expect(await notebookServerPortIsOpen(port)).toBe(false);
     unregisterNotebookProcess(registration, { directory });
     expect(existsSync(directory)).toBe(false);
@@ -293,7 +306,7 @@ test("run shutdown owns the full grace period before forcing a resistant group",
   }
 });
 
-test("run shutdown lets a delayed cooperative kernel exit inside its grace period", async () => {
+const delayedCooperativeKernelExit = async () => {
   const directory = mkdtempSync(resolve(tmpdir(), "marimo-studio-run-cooperative-"));
   const port = await availablePort();
   const source = `
@@ -341,7 +354,11 @@ test("run shutdown lets a delayed cooperative kernel exit inside its grace perio
     stopProcessGroup(registration.processGroupId, "SIGKILL");
     rmSync(directory, { force: true, recursive: true });
   }
-});
+};
+posixTest(
+  "run shutdown lets a delayed cooperative kernel exit inside its grace period",
+  delayedCooperativeKernelExit,
+);
 
 test("stops a native authenticated Marimo run server without Studio bootstrap", async () => {
   const root = mkdtempSync(resolve(tmpdir(), "marimo-studio-run-wrapper-"));
@@ -360,7 +377,7 @@ test("stops a native authenticated Marimo run server without Studio bootstrap", 
     let stopped = false;
     try {
       await waitForNotebookServer(server, `${server.serverUrl}/?access_token=run-access-token`, {
-        timeout: 5_000,
+        timeout: NATIVE_SERVER_START_TIMEOUT,
       });
       const studioAsset = await fetch(
         `${server.serverUrl}/_marimo-studio/views/assets/runtime.js?access_token=run-access-token`,
@@ -380,7 +397,7 @@ test("stops a native authenticated Marimo run server without Studio bootstrap", 
         ? await closeFailedNotebookServer(server, { timeout: 2_000 })
         : undefined;
       expect.soft(cleanupFailure).toBeUndefined();
-      expect(processGroupIsRunning(server.processGroupId)).toBe(false);
+      expectProcessTreeRootStopped(server.process, server.processGroupId);
       expect(await notebookServerPortIsOpen(port)).toBe(false);
       expect(existsSync(notebookProcessRegistryDirectory)).toBe(false);
     }
@@ -429,7 +446,7 @@ test("bounds a readiness request that never returns headers", async () => {
   }
 });
 
-test("stops a listening descendant after its wrapper exits", async () => {
+const stopListeningDescendant = async () => {
   const port = await availablePort();
   const descendant = `
     const { createServer } = require("node:http");
@@ -478,7 +495,8 @@ test("stops a listening descendant after its wrapper exits", async () => {
       stopProcessGroup(child.pid, "SIGKILL");
     }
   }
-}, 15_000);
+};
+posixTest("stops a listening descendant after its wrapper exits", stopListeningDescendant, 15_000);
 
 test("forces shutdown when the graceful endpoint leaves the server alive", async () => {
   const port = await availablePort();

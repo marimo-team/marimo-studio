@@ -1,3 +1,4 @@
+import { resolve, sep } from "node:path";
 import { expect, test } from "vite-plus/test";
 
 import { createE2ENetwork } from "../scripts/network.mjs";
@@ -21,17 +22,17 @@ test("offsets every E2E endpoint while preserving the default port map", () => {
 });
 
 test("isolates every mutable path while preserving default CI locations", () => {
-  const defaults = createE2EPaths("/repo/apps/e2e");
-  const offset = createE2EPaths("/repo/apps/e2e", 100);
+  const root = resolve("/repo/apps/e2e");
+  const defaults = createE2EPaths(root);
+  const offset = createE2EPaths(root, 100);
 
-  expect(defaults.workspaceDirectory).toBe("/repo/apps/e2e/.workspace");
-  expect(defaults.configDirectory).toBe("/repo/apps/e2e/test-results/xdg-config");
-  expect(defaults.mainPlaywrightOutputDirectory).toBe("/repo/apps/e2e/test-results");
-  expect(defaults.mainPlaywrightReportDirectory).toBe("/repo/apps/e2e/playwright-report");
+  expect(defaults.workspaceDirectory).toBe(resolve(root, ".workspace"));
+  expect(defaults.configDirectory).toBe(resolve(root, "test-results/xdg-config"));
+  expect(defaults.mainPlaywrightOutputDirectory).toBe(resolve(root, "test-results"));
+  expect(defaults.mainPlaywrightReportDirectory).toBe(resolve(root, "playwright-report"));
   expect(new Set(Object.values(offset)).size).toBe(Object.values(offset).length);
-  expect(Object.values(offset).every((path) => path.includes("/test-results/offset-100/"))).toBe(
-    true,
-  );
+  const offsetRoot = resolve(root, "test-results/offset-100") + sep;
+  expect(Object.values(offset).every((path) => path.includes(offsetRoot))).toBe(true);
 });
 
 test("rejects invalid E2E port offsets before starting a server", () => {
