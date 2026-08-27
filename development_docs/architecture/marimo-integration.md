@@ -48,7 +48,7 @@ Feature packages define records and ports that use Studio nouns:
 - `_server/ports.py` owns Marimo server and session adapters.
 - `_server/presentation/ports.py` owns kernel projection behavior.
 - `_delivery/ports.py` and `_delivery/browser_ports.py` own export and browser projection.
-- `agent/_ports.py` owns the code-mode bridge. `_composition.py` constructs
+- `_browser_client/ports.py` owns the code-mode bridge. `_composition.py` constructs
   separate notebook loader, runtime probe, environment flag, and code-mode
   adapters.
 

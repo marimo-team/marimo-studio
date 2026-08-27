@@ -41,8 +41,8 @@ browser identity.
 
 ## Creation transaction
 
-`ensure_view()` is idempotent for Python and agent callers. CLI `view create`
-fails when the selected name exists.
+`Workspace.create_view()` and CLI `view create` reject an existing view name.
+Call `Workspace.view(name)` to operate an existing project.
 
 Creation validates the notebook and starter before writing. Under the workspace
 catalog lock, one file transaction writes in this order:

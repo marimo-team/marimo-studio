@@ -18,7 +18,7 @@ Use the smallest workflow that answers the request.
 
 | Request                     | Operations                                                                                 |
 | --------------------------- | ------------------------------------------------------------------------------------------ |
-| Inspect a notebook or view  | `workspace.inspect()`, `workspace.overview()`, `view.inspect()`, and `view.read()`         |
+| Inspect a notebook or view  | `workspace.inspect_notebook()`, `workspace.status()`, `view.inspect()`, and `view.read()`  |
 | Author a view               | Inspect, choose a starter when creation is needed, write revision-aware source, then build |
 | Validate saved source       | `validate(level="static")`                                                                 |
 | Validate notebook execution | `validate(level="runtime")`                                                                |
@@ -36,9 +36,9 @@ Open the current notebook workspace in each code-mode execution:
 import marimo_studio.agent as studio
 
 workspace = studio.open()
-inventory = await workspace.inspect()
+inventory = await workspace.inspect_notebook()
 producer = inventory.notebook.named_cells()["summary"]
-notebook = await workspace.inspect(
+notebook = await workspace.inspect_notebook(
     include_code=True,
     selectors=(producer.ref, *producer.upstream),
 )
@@ -52,7 +52,7 @@ import marimo_studio.agent as studio
 
 workspace = studio.open()
 starters = await workspace.starters()
-view = await workspace.ensure_view(
+view = await workspace.create_view(
     "dashboard",
     starter="marimo-studio/vanilla:default",
 )
@@ -130,15 +130,15 @@ Use `workspace.view(name)` in later calls to recover the same view handle.
 Use the CLI when code mode is unavailable:
 
 ```console
-marimo-studio starter list --format json
-marimo-studio view create notebook.py --name dashboard --format json
-marimo-studio view inspect notebook.py --name dashboard --format json
-marimo-studio view build notebook.py --name dashboard --format json
-marimo-studio view activate notebook.py \
-  --name dashboard \
+marimo-studio starters --format json
+marimo-studio view create dashboard --target notebook.py --format json
+marimo-studio view inspect dashboard --target notebook.py --format json
+marimo-studio view build dashboard --target notebook.py --format json
+marimo-studio view activate dashboard \
+  --target notebook.py \
   --server http://localhost:2718 \
   --browser-client CLIENT_ID
-marimo-studio validate notebook.py --view dashboard \
+marimo-studio validate dashboard --target notebook.py \
   --level browser \
   --server http://localhost:2718 \
   --browser-client CLIENT_ID
@@ -161,8 +161,8 @@ Export one view for static hosting when the notebook and dependencies run in
 Pyodide:
 
 ```console
-marimo-studio export notebook.py \
-  --view dashboard \
+marimo-studio view export dashboard \
+  --target notebook.py \
   --output dist/dashboard
 ```
 

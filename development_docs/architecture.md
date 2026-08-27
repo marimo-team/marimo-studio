@@ -30,7 +30,10 @@ notebook configuration
 | `_projections`            | Notebook symbols, target resolution, values, and evidence  |
 | `_filesystem`             | Secure path operations and bounded tree traversal          |
 | `_processes`              | Supervision, cancellation, and output bounds               |
-| `agent`                   | Notebook-bound authoring API and server transport          |
+| `_authoring`              | Shared workspace and view application operations           |
+| `_browser_client`         | Browser activation, observation, protocol, and transport   |
+| `agent`                   | Notebook-bound public interfaces                           |
+| `_cli`                    | Command parsing, diagnostics, and result rendering         |
 | `_server`                 | HTTP policy, notebook scope, and development coordination  |
 | `_compat`                 | Private Marimo imports and reversible host integration     |
 | `packages/protocol`       | Serializable browser records                               |

@@ -6,8 +6,10 @@ Open the notebook-bound workspace in each code-mode execution:
 import marimo_studio.agent as studio
 
 workspace = studio.open()
-starter = await workspace.starter("marimo-studio/vanilla:default")
-view = await workspace.ensure_view("dashboard", starter=starter)
+view = await workspace.create_view(
+    "dashboard",
+    starter="marimo-studio/vanilla:default",
+)
 inspection = await view.inspect()
 ```
 

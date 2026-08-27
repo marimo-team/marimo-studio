@@ -16,7 +16,7 @@ acme-views + report -> acme-views/report
 ```
 
 This makes ownership structural. A third-party distribution cannot claim a
-built-in key. Candidate load failures remain visible through `provider doctor`
+built-in key. Candidate load failures remain visible through `doctor`
 and do not hide healthy registrations.
 
 ## Provider protocol

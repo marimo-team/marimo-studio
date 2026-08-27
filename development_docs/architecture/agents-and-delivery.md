@@ -12,17 +12,19 @@ responsibilities.
 import marimo_studio.agent as studio
 
 workspace = studio.open()
-starter = await workspace.starter("marimo-studio/vanilla:default")
-view = await workspace.ensure_view("dashboard", starter=starter)
+view = await workspace.create_view(
+    "dashboard",
+    starter="marimo-studio/vanilla:default",
+)
 inspection = await view.inspect()
 artifact = await view.build()
 await view.activate()
 report = await view.validate(level="browser")
 ```
 
-`open()` resolves the saved notebook once. `Workspace` owns notebook-level
-inspection, starters, view creation, aliases, and validation. `View` owns one
-project's inspection, build, activation, and focused validation.
+`agent` exports the notebook-bound `Workspace` and `View` interfaces.
+`_authoring` owns their operations. `_browser_client` owns activation,
+observation, protocol decoding, and bounded HTTP transport.
 
 Agents inspect the provider document catalog, then read and conditionally write
 each editable document through `View.read()` and `View.write()`. The expected
@@ -33,11 +35,12 @@ source revision prevents a late save from replacing newer work.
 The CLI uses the same application services:
 
 ```text
-starter list/show
-view create/inspect/build/activate/remove
+status
+notebook inspect/bind
+starters
+view create/inspect/read/write/build/activate/export/remove
 validate --level static|runtime|browser
-provider doctor
-export
+doctor
 ```
 
 JSON data uses stdout. Progress and diagnostics use stderr. Validation failure,
