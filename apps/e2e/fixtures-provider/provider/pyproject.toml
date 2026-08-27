@@ -1,0 +1,17 @@
+[project]
+name = "marimo-studio-e2e-provider"
+version = "1.0.0"
+requires-python = ">=3.10"
+dependencies = ["marimo-studio"]
+
+[project.entry-points."marimo_studio.view_provider"]
+report = "fixture_provider:provider"
+web = "fixture_provider:multi_provider"
+
+[build-system]
+requires = ["uv_build==0.12.2"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+module-name = "fixture_provider"
