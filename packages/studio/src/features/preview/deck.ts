@@ -21,7 +21,6 @@ import {
   PreviewController,
   type PreviewFrameState,
 } from "./controller.ts";
-import { installEditorOutlineGuard } from "./editor-outline.ts";
 import { NotebookMutationCoordinator } from "./notebook-mutation-coordinator.ts";
 import { observeFrameQuery } from "./query-sync.ts";
 import { cloneRuntimeStatusReport, RuntimeDiagnostics } from "./runtime-diagnostics.ts";
@@ -122,7 +121,6 @@ export class PreviewDeck {
   private editor: HTMLIFrameElement | undefined;
   private snapshot!: PreviewDeckSnapshot;
   private stopEditorQuerySync: (() => void) | undefined;
-  private stopEditorOutlineGuard: (() => void) | undefined;
   private editorBindingGeneration = 0;
   private editorSessionId: string | undefined;
   private readonly notebookMutations: NotebookMutationCoordinator;
@@ -598,8 +596,6 @@ export class PreviewDeck {
 
   dispose(): void {
     this.stopEditorQuerySync?.();
-    this.stopEditorOutlineGuard?.();
-    this.editor?.removeEventListener("load", this.editorLoaded);
     this.slots.forEach((slot) => this.releaseSlot(slot));
     this.listeners.clear();
   }
@@ -609,8 +605,6 @@ export class PreviewDeck {
     if (!editor) {
       return;
     }
-    this.guardEditorOutline();
-    editor.addEventListener("load", this.editorLoaded);
     this.stopEditorQuerySync = observeFrameQuery(editor, (query, operationId, completed) => {
       if (operationId === undefined) {
         this.receiveNavigationQuery(query);
@@ -621,19 +615,6 @@ export class PreviewDeck {
         completed,
       );
     });
-  }
-
-  private readonly editorLoaded = (): void => {
-    this.guardEditorOutline();
-  };
-
-  private guardEditorOutline(): void {
-    this.stopEditorOutlineGuard?.();
-    this.stopEditorOutlineGuard = undefined;
-    const editorDocument = this.editor?.contentDocument;
-    if (editorDocument) {
-      this.stopEditorOutlineGuard = installEditorOutlineGuard(editorDocument);
-    }
   }
 
   private ensure(runtime: string, view: string): PreviewController | undefined {
