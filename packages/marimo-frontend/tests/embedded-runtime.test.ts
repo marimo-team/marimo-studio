@@ -35,9 +35,9 @@ import type { SessionId } from "../src/session-bootstrap.ts";
 
 import { parseEmbeddedJsonValue } from "../src/embedded-json.ts";
 import {
+  bindModelValueSenderToPage,
   createEmbeddedRuntimeMount,
   createTransportInitializer,
-  resolveEmbeddedCellId,
 } from "../src/embedded-runtime-core.ts";
 import { EmbeddedRuntimeViewComponent } from "../src/embedded-runtime-view.tsx";
 import { mountEmbeddedRuntime as mountMarimoRuntime } from "../src/embedded-runtime.tsx";
@@ -58,6 +58,10 @@ const functionResult: EmbeddedFunctionResult = {
 };
 
 class RuntimeManagerDouble {
+  headers = () => ({ "Marimo-Session-Id": "s_native" });
+
+  sessionHeaders = () => ({ "Marimo-Session-Id": "s_native" });
+
   getWsURL = (_sessionId: SessionId): URL => new URL("ws://example.test/ws?session_id=s_abc123");
 
   getSseURL = (_sessionId: SessionId): URL =>
@@ -70,9 +74,19 @@ class TransportHostDouble implements EmbeddedTransportHost {
   readonly wasmTransports = new Array<EmbeddedWasmTransport>();
   readonly workerInitialized = Promise.resolve();
   serverRequestActivations = 0;
+  serverRequestReleases = 0;
+  readonly executeWasmCells = vi.fn(async () => {});
 
-  activateServerRequests(): void {
+  activateServerRequests(): () => void {
     this.serverRequestActivations += 1;
+    let active = true;
+    return () => {
+      if (!active) {
+        return;
+      }
+      active = false;
+      this.serverRequestReleases += 1;
+    };
   }
 
   prepareServer(transport: EmbeddedServerTransport): RuntimeManagerDouble {
@@ -189,6 +203,7 @@ class KernelDouble implements EmbeddedRuntimeKernel<KernelNotebook> {
     async () => null,
   );
   readonly sendStdin: EmbeddedRequestClient["sendStdin"] = vi.fn(async () => null);
+  readonly connectionAutoInstantiate = new Array<boolean>();
   readonly connectionSessions = new Array<SessionId>();
   startCalls = 0;
   stopCalls = 0;
@@ -217,6 +232,7 @@ class KernelDouble implements EmbeddedRuntimeKernel<KernelNotebook> {
   useConnection(
     input: Parameters<EmbeddedRuntimeKernel<KernelNotebook>["useConnection"]>[0],
   ): EmbeddedConnection {
+    this.connectionAutoInstantiate.push(input.autoInstantiate);
     this.connectionSessions.push(input.sessionId);
     return { state: "OPEN" };
   }
@@ -273,6 +289,7 @@ const serverTransport = (
   transformTransportURL: EmbeddedServerTransport["transformTransportURL"] = (url) => url,
 ): EmbeddedServerTransport => ({
   kind: "server",
+  presentationSessionId: "s_view01",
   serverToken: "token",
   transformTransportURL,
   url: "https://example.test/base/",
@@ -282,6 +299,7 @@ const wasmTransport = (
   waitForReady: EmbeddedWasmTransport["waitForReady"] = () => undefined,
 ): EmbeddedWasmTransport => ({
   kind: "wasm",
+  autoInstantiate: false,
   code: "print('ready')",
   filename: "notebook.py",
   url: "https://example.test/",
@@ -306,6 +324,7 @@ test("mounts, updates, and disposes the server runtime through one handle", asyn
 
   await act(async () => {
     handle = mountEmbeddedRuntime({
+      autoInstantiate: true,
       exposeSession: true,
       initialMode: "read",
       presentation: presentation(),
@@ -347,6 +366,27 @@ test("mounts, updates, and disposes the server runtime through one handle", asyn
   expect(host.transport.runtime.getSseURL(testSessionId()).searchParams.get("embedded")).toBe(
     "true",
   );
+  expect(host.transport.runtime.headers()["Marimo-Session-Id"]).toBe("s_view01");
+  expect(host.transport.runtime.sessionHeaders()["Marimo-Session-Id"]).toBe("s_view01");
+  handle.updateServerTransport({
+    ...serverTransport((url) => {
+      url.searchParams.set("revision", "next");
+      return url;
+    }),
+    serverToken: "next-token",
+    url: "https://example.test/next/",
+  });
+  expect(host.transport.serverTransports).toHaveLength(2);
+  expect(host.transport.serverTransports[1]).toMatchObject({
+    serverToken: "next-token",
+    url: "https://example.test/next/",
+  });
+  expect(host.transport.serverRequestActivations).toBe(2);
+  expect(host.transport.serverRequestReleases).toBe(1);
+  expect(host.transport.runtime.getWsURL(testSessionId()).searchParams.get("revision")).toBe(
+    "next",
+  );
+  expect(host.transport.runtime.headers()["Marimo-Session-Id"]).toBe("s_view01");
   await expect(
     handle.invoke({ namespace: "studio", functionName: "ping", args: {} }),
   ).resolves.toEqual(functionResult);
@@ -372,6 +412,46 @@ test("mounts, updates, and disposes the server runtime through one handle", asyn
   expect(globalThis.__MARIMO_STUDIO_SESSION_ID__).toBe("s_before");
   expect(host.transport.runtime.getWsURL).toBe(originalGetWsURL);
   expect(host.transport.runtime.getSseURL).toBe(originalGetSseURL);
+  expect(host.transport.runtime.headers()["Marimo-Session-Id"]).toBe("s_native");
+  expect(host.transport.serverRequestReleases).toBe(2);
+});
+
+test("model value requests become inert after final page and transport teardown", async () => {
+  const assertInertAfter = async (
+    teardown: (sender: ReturnType<typeof bindModelValueSenderToPage>) => void,
+  ) => {
+    let reject!: (cause: Error) => void;
+    const pending = new Promise<null>((_resolve, fail) => {
+      reject = fail;
+    });
+    const request = vi.fn(() => pending);
+    const sender = bindModelValueSenderToPage(request);
+
+    const inFlight = sender.send({ modelId: "model-1" });
+    teardown(sender);
+    reject(new TypeError("Failed to fetch"));
+
+    await expect(inFlight).resolves.toBeNull();
+    await expect(sender.send({ modelId: "model-2" })).resolves.toBeNull();
+    expect(request).toHaveBeenCalledOnce();
+    sender.dispose();
+  };
+
+  await assertInertAfter(() => {
+    globalThis.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
+  });
+  await assertInertAfter((sender) => sender.dispose());
+});
+
+test("model value request failures remain visible while the page is active", async () => {
+  const failure = new TypeError("Failed to fetch");
+  const request = vi.fn(async () => Promise.reject(failure));
+  const sender = bindModelValueSenderToPage(request);
+
+  globalThis.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+
+  await expect(sender.send({ modelId: "model-1" })).rejects.toBe(failure);
+  sender.dispose();
 });
 
 test("retries only failed disposal work", async () => {
@@ -399,6 +479,7 @@ test("retries only failed disposal work", async () => {
 
   await act(async () => {
     handle = mountEmbeddedRuntime({
+      autoInstantiate: true,
       exposeSession: true,
       initialMode: "read",
       presentation: presentation(),
@@ -447,6 +528,7 @@ test("waits for WebAssembly readiness before reporting initialization", async ()
 
   await act(async () => {
     handle = mountEmbeddedRuntime({
+      autoInstantiate: false,
       exposeSession: false,
       initialMode: "read",
       presentation: presentation(),
@@ -459,7 +541,11 @@ test("waits for WebAssembly readiness before reporting initialization", async ()
     await handle.initialized;
   });
 
-  expect(waitForReady).toHaveBeenCalledWith(host.transport.workerInitialized, handle.invoke);
+  expect(waitForReady).toHaveBeenCalledWith(
+    host.transport.workerInitialized,
+    handle.invoke,
+    host.transport.executeWasmCells,
+  );
   expect(host.transport.wasmTransports).toHaveLength(1);
   await act(async () => handle.dispose());
 });
@@ -473,6 +559,7 @@ test("reports synchronous transport failures through the handle", async () => {
 
   await act(async () => {
     handle = mountEmbeddedRuntime({
+      autoInstantiate: false,
       exposeSession: false,
       initialMode: "read",
       presentation: presentation(),
@@ -497,6 +584,7 @@ test("allows one embedded runtime owner per mount boundary", async () => {
   let first!: EmbeddedRuntimeHandle;
   await act(async () => {
     first = mountEmbeddedRuntime({
+      autoInstantiate: false,
       exposeSession: false,
       initialMode: "read",
       presentation: presentation(),
@@ -511,6 +599,7 @@ test("allows one embedded runtime owner per mount boundary", async () => {
 
   expect(() =>
     mountEmbeddedRuntime({
+      autoInstantiate: false,
       exposeSession: false,
       initialMode: "read",
       presentation: presentation(),
@@ -527,6 +616,7 @@ test("allows one embedded runtime owner per mount boundary", async () => {
   let replacement!: EmbeddedRuntimeHandle;
   await act(async () => {
     replacement = mountEmbeddedRuntime({
+      autoInstantiate: false,
       exposeSession: false,
       initialMode: "read",
       presentation: presentation(),
@@ -556,6 +646,7 @@ test("retains runtime ownership when mount rollback cannot release a resource", 
 
   try {
     mountEmbeddedRuntime({
+      autoInstantiate: false,
       exposeSession: false,
       initialMode: "read",
       presentation: presentation(),
@@ -576,6 +667,7 @@ test("retains runtime ownership when mount rollback cannot release a resource", 
   expect(failure.errors).toContain(cleanupError);
   expect(() =>
     mountEmbeddedRuntime({
+      autoInstantiate: false,
       exposeSession: false,
       initialMode: "read",
       presentation: presentation(),
@@ -586,13 +678,6 @@ test("retains runtime ownership when mount rollback cannot release a resource", 
       viewMode: "read",
     }),
   ).toThrow("already mounted");
-});
-
-test("resolves stdin against the live runtime cells", () => {
-  const cells = [{ id: "cell-1" }];
-
-  expect(resolveEmbeddedCellId(cells, "cell-1")).toBe("cell-1");
-  expect(() => resolveEmbeddedCellId(cells, "missing-cell")).toThrow("unknown cell");
 });
 
 test("accepts JSON function results and rejects runtime-only values", () => {
@@ -619,6 +704,7 @@ test("composes the live kernel view and submits stdin through both Marimo paths"
   await act(async () => {
     renderRoot.render(
       createElement(EmbeddedRuntimeViewComponent<KernelNotebook>, {
+        autoInstantiate: false,
         initialized,
         kernel,
         render(runtime) {
@@ -640,6 +726,7 @@ test("composes the live kernel view and submits stdin through both Marimo paths"
   expect(renderedView.connection).toEqual({ state: "OPEN" });
   expect(kernel.connectionSessions.length).toBeGreaterThan(0);
   expect(new Set(kernel.connectionSessions)).toEqual(new Set([sessionId]));
+  expect(new Set(kernel.connectionAutoInstantiate)).toEqual(new Set([false]));
   expect(kernel.startCalls).toBe(1);
 
   renderedView.submitStdin(cellId, "answer", 2);
@@ -666,6 +753,7 @@ test("mounts the exported Marimo runtime facade", async () => {
   try {
     await act(async () => {
       handle = mountMarimoRuntime({
+        autoInstantiate: true,
         exposeSession: true,
         initialMode: "read",
         presentation: {
