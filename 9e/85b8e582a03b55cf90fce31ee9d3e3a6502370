@@ -1,0 +1,19 @@
+packages/marimo-frontend/scripts/source.mjs
+  s_f3e9d62fd08be8::t_cc7084f48d9378 142-147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9e85b8e582a03b55cf90fce31ee9d3e3a6502370",
+  "prompts": {},
+  "sessions": {
+    "s_f3e9d62fd08be8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04359-5a10-7513-84ba-e5f791e0974b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
