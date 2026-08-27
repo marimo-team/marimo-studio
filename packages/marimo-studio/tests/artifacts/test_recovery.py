@@ -1,0 +1,273 @@
+"""Exercise interrupted-build recovery and project-incarnation safety."""
+
+from __future__ import annotations
+
+import os
+import shutil
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from pathlib import Path
+from threading import Event
+from typing import Any
+
+import pytest
+
+import marimo_studio._artifacts.repository as repository_module
+from marimo_studio._artifacts.lock import build_lock as artifact_build_lock
+from marimo_studio._artifacts.paths import artifact_root
+from marimo_studio._artifacts.repository import (
+    read_artifact_state,
+    read_build_state,
+)
+from marimo_studio._views.build import publish_view as publish_artifact_lease
+from marimo_studio._workspace.project_manifest import load_view_project
+from marimo_studio.view_providers import (
+    ViewProject,
+)
+
+from ..artifact_test_support import (
+    profile_path as _profile_path,
+)
+from ..artifact_test_support import (
+    project as _project,
+)
+from ..artifact_test_support import (
+    publish_artifact,
+)
+from ..artifact_test_support import (
+    read_json as _read_json,
+)
+from ..artifact_test_support import (
+    write_json as _write_json,
+)
+
+
+def _project_with_interrupted_build(tmp_path: Path) -> ViewProject:
+    project = _project(tmp_path)
+    publish_artifact_lease(project, "development").close()
+    pointer = _profile_path(project)
+    state = _read_json(pointer)
+    state["build"]["phase"] = "building"
+    _write_json(pointer, state)
+    return project
+
+
+def _replace_with_active_build(
+    project: ViewProject,
+    tmp_path: Path,
+) -> tuple[ViewProject, Path, str]:
+    retired = tmp_path / f"{project.name}-retired"
+    os.replace(project.root, retired)
+    shutil.copytree(retired, project.root)
+    current = load_view_project(project.root)
+    pointer = _profile_path(current)
+    state = _read_json(pointer)
+    revision = f"sha256:{'f' * 64}"
+    state["build"]["phase"] = "building"
+    state["build"]["project_revision"] = revision
+    _write_json(pointer, state)
+    sentinel = artifact_root(current) / ".staging" / "new-build" / "active.txt"
+    sentinel.parent.mkdir(parents=True)
+    sentinel.write_text("active\n", encoding="utf-8")
+    return current, sentinel, revision
+
+
+def test_interrupted_build_becomes_stale_and_cleans_staging(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    artifact = publish_artifact(project, "development")
+    pointer = _profile_path(project)
+    state = _read_json(pointer)
+    state["build"]["phase"] = "building"
+    _write_json(pointer, state)
+    abandoned = artifact_root(project) / ".staging" / "abandoned" / "work"
+    abandoned.mkdir(parents=True)
+    (abandoned / "partial.js").write_text("partial", encoding="utf-8")
+
+    recovered = read_build_state(project, "development")
+
+    assert recovered.phase == "stale"
+    assert recovered.artifact_revision == artifact.artifact_revision
+    assert recovered.diagnostics[0].code == "build-interrupted"
+    assert tuple((artifact_root(project) / ".staging").iterdir()) == ()
+
+
+@pytest.mark.parametrize("damage", ("receipt", "missing-revision", "manifest"))
+def test_build_repairs_replaceable_generated_state(
+    tmp_path: Path,
+    damage: str,
+) -> None:
+    project = _project(tmp_path)
+    first = publish_artifact_lease(project, "development")
+    revision = first.artifact.root.parent
+    first.close()
+    if damage == "receipt":
+        _profile_path(project).write_text("{", encoding="utf-8")
+    elif damage == "missing-revision":
+        shutil.rmtree(revision)
+    else:
+        (revision / "artifact.json").write_text("{}\n", encoding="utf-8")
+
+    rebuilt = publish_artifact_lease(project, "development")
+    rebuilt.close()
+
+    state = read_build_state(project, "development")
+    assert state.phase == "published"
+    assert any(item.code == "artifact-state-repaired" for item in state.diagnostics)
+
+
+def test_provider_api_upgrade_rebuilds_generated_state_without_a_repair_warning(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    publish_artifact_lease(project, "development").close()
+    pointer = _profile_path(project)
+    state = _read_json(pointer)
+    state["published"]["provider"]["api_version"] = 1
+    _write_json(pointer, state)
+
+    stale = read_artifact_state(project, "development")
+    assert stale.artifact is None
+    assert stale.build.phase == "unbuilt"
+
+    publish_artifact_lease(project, "development").close()
+    rebuilt = read_build_state(project, "development")
+    assert rebuilt.phase == "published"
+    assert rebuilt.diagnostics == ()
+
+
+def test_artifact_state_settles_when_its_view_is_removed_during_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path)
+    publish_artifact_lease(project, "development").close()
+
+    def removed_revision(*_args: object, **_kwargs: object) -> object:
+        shutil.rmtree(project.root)
+        raise FileNotFoundError("view removed")
+
+    monkeypatch.setattr(repository_module, "read_artifact_revision", removed_revision)
+
+    state = read_artifact_state(project, "development")
+
+    assert state.artifact is None
+    assert state.build.phase == "unbuilt"
+
+
+def test_build_repairs_a_revision_while_its_previous_lease_is_live(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    first = publish_artifact_lease(project, "development")
+    document = first.artifact.document
+    expected = first.read_text(document)
+    (first.artifact.root.parent / "artifact.json").write_text(
+        "{}\n",
+        encoding="utf-8",
+    )
+
+    rebuilt = publish_artifact_lease(project, "development")
+    try:
+        assert rebuilt.read_text(document) == expected
+        assert first.read_text(document) == expected
+    finally:
+        rebuilt.close()
+        first.close()
+
+    state = read_build_state(project, "development")
+    assert state.phase == "published"
+    assert any(item.code == "artifact-state-repaired" for item in state.diagnostics)
+
+
+@pytest.mark.parametrize("reader", ("build", "artifact"))
+def test_state_read_does_not_recreate_project_deleted_before_read_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reader: str,
+) -> None:
+    project = _project_with_interrupted_build(tmp_path)
+    artifact_lock = repository_module.artifact_lock
+    ready = Event()
+    release = Event()
+
+    @contextmanager
+    def paused_artifact_lock(*args: Any, **kwargs: Any):
+        ready.set()
+        if not release.wait(timeout=2):
+            raise RuntimeError("state read was not released")
+        with artifact_lock(*args, **kwargs) as acquired:
+            yield acquired
+
+    monkeypatch.setattr(repository_module, "artifact_lock", paused_artifact_lock)
+
+    def read() -> str:
+        state = (
+            read_build_state(project, "development")
+            if reader == "build"
+            else read_artifact_state(project, "development").build
+        )
+        return state.phase
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        pending = executor.submit(read)
+        assert ready.wait(timeout=2)
+        shutil.rmtree(project.root)
+        release.set()
+        assert pending.result(timeout=2) == "unbuilt"
+
+    assert not project.root.exists()
+
+
+@pytest.mark.parametrize("reader", ("build", "artifact"))
+def test_state_recovery_rejects_recreated_project_after_old_build_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reader: str,
+) -> None:
+    project = _project_with_interrupted_build(tmp_path)
+    build_lock = repository_module.build_lock
+    ready = Event()
+    release = Event()
+
+    @contextmanager
+    def paused_build_lock(*args: Any, **kwargs: Any):
+        with build_lock(*args, **kwargs) as acquired:
+            if acquired:
+                ready.set()
+                if not release.wait(timeout=2):
+                    raise RuntimeError("ABA state read was not released")
+            yield acquired
+
+    monkeypatch.setattr(repository_module, "build_lock", paused_build_lock)
+
+    def read() -> str:
+        state = (
+            read_build_state(project, "development")
+            if reader == "build"
+            else read_artifact_state(project, "development").build
+        )
+        return state.phase
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        pending = executor.submit(read)
+        assert ready.wait(timeout=2)
+        if os.name == "nt":
+            # The open build-lock directory handles prevent project replacement
+            # until the active reader releases its ownership.
+            try:
+                with pytest.raises(PermissionError):
+                    _replace_with_active_build(project, tmp_path)
+            finally:
+                release.set()
+            assert pending.result(timeout=2) == "stale"
+            return
+        current, sentinel, revision = _replace_with_active_build(project, tmp_path)
+        with artifact_build_lock(current) as acquired:
+            assert acquired
+            release.set()
+            assert pending.result(timeout=2) == "unbuilt"
+
+    state = _read_json(_profile_path(current))
+    assert state["build"]["phase"] == "building"
+    assert state["build"]["project_revision"] == revision
+    assert sentinel.read_text(encoding="utf-8") == "active\n"
