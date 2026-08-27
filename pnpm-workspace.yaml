@@ -14,7 +14,7 @@ catalog:
   "@playwright/test": 1.61.1
   "@codemirror/lang-css": ^6.3.1
   "@codemirror/lang-html": ^6.4.9
-  "@codemirror/state": ^6.7.1
+  "@codemirror/state": 6.7.1
   "@testing-library/jest-dom": 6.9.1
   "@testing-library/react": 16.3.2
   "@testing-library/user-event": 14.6.1
@@ -42,6 +42,8 @@ catalog:
   oxlint: 1.76.0
   "@oxlint/plugins": 1.76.0
   oxlint-tsgolint: 7.0.2001
+  "@codemirror/lang-javascript": 6.2.5
+  "@codemirror/language": 6.12.4
 
 overrides:
   nanoid: 3.3.18
