@@ -1,0 +1,15 @@
+apps/e2e/fixtures-hosted/notebook.py
+  ai_agent 4,10-12
+apps/e2e/fixtures/__marimo__/studio/notebook/.gitignore
+  ai_agent 1-2
+apps/e2e/fixtures/__marimo__/studio/notebook/dashboard/view.toml
+  ai_agent 1-5
+apps/e2e/fixtures/notebook.py
+  ai_agent 4-5,11-14,32-33,49-57,68-78,86-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ef465ea9b6bb6a70d6a23928beb5dfd20868685d",
+  "prompts": {}
+}
