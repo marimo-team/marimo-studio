@@ -1,0 +1,11 @@
+development_docs/architecture/browser-runtime-and-authoring.md
+  ai_agent 3-100,103-113,115,117-119,121-123,125,127-133,135-136,138,140-150,153-263,266-306,309-475
+development_docs/frontend.md
+  ai_agent 3-5,8-12,16-25,45,59,87-88,92-93,97-117,121,123-132,134-136,139-141,145-147,149-188,190-192,194,196-220,224,229-230,242-243,270-272,274,277-286,292-304
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "dcb96b793392b91fb8032a431407b16053333746",
+  "prompts": {}
+}
