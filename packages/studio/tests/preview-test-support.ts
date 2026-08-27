@@ -113,7 +113,6 @@ export const runtimeConfig = (runtime: string) =>
     runtime: {
       id: runtime,
       instance: `${runtime}-instance`,
-      available: ["server", "wasm"],
       data: {},
     },
     rootUrl: "/",

@@ -128,9 +128,6 @@ describe("feature controller lifecycle", () => {
       create: vi.fn(async (name: string, _starter: string) => ({
         schema: 2 as const,
         name,
-        provider: "marimo-studio/vanilla",
-        studio_url: `/studio/${name}/`,
-        view_url: `/${name}/`,
       })),
       remove: vi.fn(),
     };
@@ -195,9 +192,6 @@ describe("feature controller lifecycle", () => {
         create: vi.fn(async (name: string, _starter: string) => ({
           schema: 2 as const,
           name,
-          provider: "marimo-studio/vanilla",
-          studio_url: `/studio/${name}/`,
-          view_url: `/${name}/`,
         })),
         remove: vi.fn(),
       },
@@ -301,9 +295,6 @@ describe("feature controller lifecycle", () => {
       create: vi.fn(async (name: string, _starter: string) => ({
         schema: 2 as const,
         name,
-        provider: "marimo-studio/vanilla",
-        studio_url: `/studio/${name}/`,
-        view_url: `/${name}/`,
       })),
       remove: vi.fn(),
     };
