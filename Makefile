@@ -7,29 +7,41 @@ PNPM ?= pnpm
 VP := $(PNPM) exec vp
 DIST_DIR := $(CURDIR)/dist
 PY_PACKAGE := packages/marimo-studio
+PYTHON_PATHS := $(PY_PACKAGE) scripts
 FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples packages skills package.json plugin.json pnpm-workspace.yaml tsconfig.json vite.config.ts
 TYPECHECK_PATHS := apps/browser apps/docs/.vitepress apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/src vite.config.ts
+DENO_PROVIDER_ROOTS := $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/_deno $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_react $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_svelte
+DENO_PROVIDER_LINT_SOURCES := $(shell find $(DENO_PROVIDER_ROOTS) -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' | sort)
 
-.PHONY: help install anti-slop-check format lint typecheck test examples-check e2e e2e-ui check build docs-build docs-serve package prepare-frontend
+.PHONY: help install anti-slop-check architecture-check provider-sources-check format lint typecheck test examples-check e2e e2e-ui check build docs-build docs-serve package prepare-frontend
 
 help: ## List development targets.
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 install: ## Install locked Python and JavaScript dependencies.
-	$(UV) sync --locked
+	$(UV) sync --locked --reinstall-package marimo-studio
 	$(PNPM) install --frozen-lockfile
+	$(MAKE) build
 
 anti-slop-check: ## Verify the managed Oxlint policy.
 	node --test --test-concurrency=1 tools/oxlint/anti-slop/test/*.test.ts tools/oxlint/anti-slop/test/compatibility/*.test.ts
 	$(PNPM) exec tsc -p tools/oxlint/anti-slop/tsconfig.json --noEmit
 
 format: ## Format Python and JavaScript sources.
-	cd $(PY_PACKAGE) && $(UV) run --project ../.. ruff format .
+	$(UV) run ruff format $(PYTHON_PATHS)
 	$(VP) fmt $(FORMAT_PATHS)
+	$(UV) run --frozen deno fmt $(DENO_PROVIDER_ROOTS)
 
-lint: prepare-frontend anti-slop-check ## Check formatting, source, workflows, and shell scripts.
-	cd $(PY_PACKAGE) && $(UV) run --project ../.. ruff format --check .
-	cd $(PY_PACKAGE) && $(UV) run --project ../.. ruff check .
+provider-sources-check: ## Check Deno-owned provider tools and templates.
+	$(UV) run --frozen deno fmt --check $(DENO_PROVIDER_ROOTS)
+	$(UV) run --frozen deno lint --rules-exclude=no-import-prefix $(DENO_PROVIDER_LINT_SOURCES)
+
+architecture-check: ## Check Python import cycles and ownership direction.
+	$(UV) run python scripts/check_python_architecture.py
+
+lint: prepare-frontend anti-slop-check architecture-check provider-sources-check ## Check formatting, source, workflows, and shell scripts.
+	$(UV) run ruff format --check $(PYTHON_PATHS)
+	$(UV) run ruff check $(PYTHON_PATHS)
 	$(VP) fmt --check $(FORMAT_PATHS)
 	$(VP) lint apps packages vite.config.ts
 	uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
@@ -40,17 +52,16 @@ typecheck: prepare-frontend ## Type-check Python and TypeScript sources.
 	$(UV) run pyrefly check
 	$(VP) check --no-fmt --no-lint $(TYPECHECK_PATHS)
 
-test: ## Run Python and browser-runtime tests.
+test: prepare-frontend ## Run Python and browser-runtime tests.
 	$(UV) run pytest
 	$(VP) run -r test
 
 examples-check: build ## Validate every example notebook and Studio view.
-	$(UV) run marimo check examples/analysis.py examples/nga_collection.py
-	$(UV) run marimo-studio check examples/analysis.py --runtime
-	$(UV) run marimo-studio check examples/nga_collection.py
+	$(UV) run python scripts/verify-example-artifacts.py
 
 e2e: build ## Test Studio in Chromium with a live Marimo kernel.
 	$(PNPM) --filter @marimo-studio/e2e e2e
+	$(PNPM) --filter @marimo-studio/e2e e2e:providers
 
 e2e-ui: build ## Open the browser test runner.
 	$(PNPM) --filter @marimo-studio/e2e e2e:ui
@@ -69,9 +80,12 @@ docs-serve: ## Serve documentation at http://127.0.0.1:4173/.
 package: build ## Build and validate the wheel and source distribution.
 	rm -rf "$(DIST_DIR)"
 	$(UV) build --package marimo-studio --out-dir "$(DIST_DIR)"
-	uvx twine check "$(DIST_DIR)"/*.whl "$(DIST_DIR)"/*.tar.gz
 	mkdir -p "$(DIST_DIR)/from-sdist"
 	$(UV) build --wheel "$(DIST_DIR)"/*.tar.gz --out-dir "$(DIST_DIR)/from-sdist"
+	$(UV) run --frozen --group release twine check \
+		"$(DIST_DIR)"/*.whl \
+		"$(DIST_DIR)"/*.tar.gz \
+		"$(DIST_DIR)"/from-sdist/*.whl
 	./scripts/verify-dist.sh
 
 prepare-frontend:
