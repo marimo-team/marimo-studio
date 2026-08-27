@@ -9,13 +9,12 @@ from typing import cast
 from htpy import Element, Node, Renderable, base, div, fragment, link, script
 from markupsafe import Markup
 
-from marimo_studio._workspace.templates import (
-    TemplateParser,
-    validate_template_structure,
+from marimo_studio.errors import ViewProjectError
+from marimo_studio.view_providers._document import (
+    HTMLDocumentParser,
+    validate_html_document,
 )
-from marimo_studio.errors import TemplateError
 
-_MARIMO_CELL = Element("marimo-cell")
 _MARIMO_FILENAME = Element("marimo-filename")
 _STYLE_LOADING_SCRIPT = """\
 (() => {
@@ -61,7 +60,14 @@ def runtime_head(
     dev: bool,
     revision: str,
     runtime: str,
+    runtime_explicit: bool,
+    replay: bool,
+    renewal_token: str | None,
     marimo_version: str,
+    session_id: str | None = None,
+    client_id: str | None = None,
+    lifecycle_id: int | None = None,
+    runtime_session_id: str | None = None,
 ) -> Renderable:
     mount_config = json.dumps(
         {
@@ -69,6 +75,17 @@ def runtime_head(
             "version": marimo_version,
             "revision": revision,
             "runtime": runtime,
+            "runtimeExplicit": runtime_explicit,
+            "replay": replay,
+            **({"renewalToken": renewal_token} if renewal_token is not None else {}),
+            **({"sessionId": session_id} if session_id is not None else {}),
+            **({"clientId": client_id} if client_id is not None else {}),
+            **({"lifecycleId": lifecycle_id} if lifecycle_id is not None else {}),
+            **(
+                {"runtimeSessionId": runtime_session_id}
+                if runtime_session_id is not None
+                else {}
+            ),
         },
         separators=(",", ":"),
     ).replace("<", "\\u003c")
@@ -78,13 +95,16 @@ def runtime_head(
                 {
                     "data-marimo-studio-runtime": True,
                     "rel": "stylesheet",
+                    "crossorigin": "anonymous",
                     "href": f"{assets_url}/runtime.css",
                 }
             ),
             script({"data-marimo-studio-runtime": True})[
                 Markup(
                     _STYLE_LOADING_SCRIPT
-                    + f"window.__MARIMO_MOUNT_CONFIG__=Object.freeze({mount_config});"
+                    + "Object.defineProperty(window,'__MARIMO_MOUNT_CONFIG__',{"
+                    + f"value:Object.freeze({mount_config}),"
+                    + "writable:false,configurable:false,enumerable:true});"
                 )
             ],
             script(
@@ -112,10 +132,6 @@ def runtime_root() -> Renderable:
 
 def runtime_metadata(filename: str) -> Renderable:
     return _MARIMO_FILENAME(hidden=True)[filename]
-
-
-def cell_host(alias: str) -> Renderable:
-    return _MARIMO_CELL(name=alias)
 
 
 class _DocumentLayout(HTMLParser):
@@ -159,13 +175,20 @@ def runtime_document(
     dev: bool,
     revision: str,
     runtime: str,
+    runtime_explicit: bool,
+    replay: bool,
+    renewal_token: str | None,
     filename: str,
     marimo_version: str,
+    session_id: str | None = None,
+    client_id: str | None = None,
+    lifecycle_id: int | None = None,
+    runtime_session_id: str | None = None,
 ) -> str:
     """Inject one presentation runtime into an authored view document."""
-    parser = TemplateParser()
+    parser = HTMLDocumentParser()
     parser.feed(document)
-    validate_template_structure(parser, "Template")
+    validate_html_document(parser, "HTML document")
 
     layout = _DocumentLayout(document)
     layout.feed(document)
@@ -174,7 +197,9 @@ def runtime_document(
         or layout.head_close is None
         or layout.body_close is None
     ):
-        raise TemplateError("Template must contain <head>, </head>, and </body>")
+        raise ViewProjectError(
+            "HTML document must contain <head>, </head>, and </body>"
+        )
 
     head_content = (
         f"\n{base(href=root_url)}\n"
@@ -185,7 +210,14 @@ def runtime_document(
                 dev=dev,
                 revision=revision,
                 runtime=runtime,
+                runtime_explicit=runtime_explicit,
+                replay=replay,
+                renewal_token=renewal_token,
                 marimo_version=marimo_version,
+                session_id=session_id,
+                client_id=client_id,
+                lifecycle_id=lifecycle_id,
+                runtime_session_id=runtime_session_id,
             )
         )
         + "\n"

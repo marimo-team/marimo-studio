@@ -6,7 +6,8 @@ import json
 from importlib.resources import files
 from pathlib import Path
 
-from marimo_studio.errors import CompatibilityError, ProtocolError
+from marimo_studio.errors import ProtocolError
+from marimo_studio.errors._internal import CompatibilityError
 
 
 def runtime_assets_path() -> Path:
