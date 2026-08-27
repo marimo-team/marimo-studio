@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vitepress build",
+    "build": "vitepress build && pnpm verify",
     "dev": "vitepress dev --host 127.0.0.1 --port 4173 --strictPort",
-    "preview": "vitepress preview --host 127.0.0.1 --port 4173 --strictPort"
+    "preview": "vitepress preview --host 127.0.0.1 --port 4173 --strictPort",
+    "verify": "node scripts/verify-build.ts"
   },
   "devDependencies": {
     "@types/node": "catalog:",
