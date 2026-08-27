@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Legacy dashboard</title>
+    <style>
+      body {
+        color: #202020;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app-shell">
+      <h1>Legacy dashboard</h1>
+      <marimo-cell name="summary"></marimo-cell>
+    </main>
+    <script type="module">
+      document.querySelector("#app-shell")?.setAttribute("data-ready", "true");
+    </script>
+  </body>
+</html>
