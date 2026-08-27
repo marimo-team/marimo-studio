@@ -36,6 +36,13 @@ with ZipFile(path) as wheel:
     print(BytesParser().parsebytes(wheel.read(metadata))["Version"])
 PY
 )"
+wheel_uri="$(uv run --no-project --isolated python - "$wheel" <<'PY'
+from pathlib import Path
+import sys
+
+print(Path(sys.argv[1]).resolve().as_uri())
+PY
+)"
 
 uv run --no-project --isolated --no-cache \
 	--with "$wheel" \
@@ -49,7 +56,7 @@ uv run --no-project --isolated --no-cache --no-sources-package marimo-studio \
 	--with "ty==0.0.69" \
 	python scripts/verify-external-provider.py --typecheck
 uv run --no-project --isolated --no-cache \
-	--with "${wheel}[deno]" \
+	--with "marimo-studio[deno] @ $wheel_uri" \
 	--with "agent-plugins==0.1.0" \
 	python scripts/verify-installed-package.py \
 	--expected-version "$package_version" \
