@@ -556,7 +556,7 @@ def test_view_deletion_removes_files_promotes_the_default_and_keeps_one_view(
         )
         views = client.get("/_marimo-studio/views").json()
 
-    assert removed.status_code == 200
+    assert removed.status_code == 200, removed.text
     removed_payload = removed.json()
     assert removed_payload["schema"] == 1
     assert removed_payload["name"] == "operations"

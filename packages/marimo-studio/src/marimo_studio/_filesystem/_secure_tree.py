@@ -136,6 +136,16 @@ def directory_tree_identity(
             raise SecureFileError(
                 f"Contained tree contains more than {max_entries} entries: {path}"
             )
+        if stat.S_ISDIR(state.st_mode):
+            identity.append(
+                (
+                    relative.as_posix(),
+                    state.st_mode,
+                    state.st_dev,
+                    state.st_ino,
+                )
+            )
+            return
         identity.append(
             (
                 relative.as_posix(),
@@ -170,7 +180,7 @@ def directory_tree_identity(
                         for child in sorted(children, key=lambda item: item.name):
                             child_path = directory / child.name
                             child_relative = relative / child.name
-                            state = child.stat(follow_symlinks=False)
+                            state = child_path.stat(follow_symlinks=False)
                             record(child_relative, state)
                             if stat.S_ISDIR(state.st_mode):
                                 visit_windows(child_path, child_relative)

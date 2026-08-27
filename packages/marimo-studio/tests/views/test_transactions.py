@@ -27,6 +27,30 @@ def test_secure_directory_reports_a_missing_leaf_as_not_found(tmp_path: Path) ->
         filesystem.open_file(root / "missing.txt")
 
 
+def test_directory_tree_identity_tracks_contents_not_directory_timestamps(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "workspace"
+    nested = root / "assets"
+    nested.mkdir(parents=True)
+    document = nested / "index.html"
+    document.write_text("initial", encoding="utf-8")
+
+    with secure_files.secure_directory(tmp_path) as filesystem:
+        initial = filesystem.directory_tree_identity(root, max_entries=10)
+        state = nested.stat()
+        os.utime(
+            nested,
+            ns=(state.st_atime_ns, state.st_mtime_ns + 1_000_000_000),
+        )
+        touched = filesystem.directory_tree_identity(root, max_entries=10)
+        document.write_text("changed content", encoding="utf-8")
+        changed = filesystem.directory_tree_identity(root, max_entries=10)
+
+    assert touched == initial
+    assert changed != touched
+
+
 def test_file_transaction_restores_a_colliding_file_tree_without_masking_failure(
     tmp_path: Path,
 ) -> None:
