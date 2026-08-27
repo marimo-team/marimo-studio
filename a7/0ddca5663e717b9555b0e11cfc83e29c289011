@@ -1,0 +1,51 @@
+packages/marimo-studio/src/marimo_studio/_composition.py
+  ai_agent 21
+packages/marimo-studio/src/marimo_studio/_server/agent/browser.py
+  ai_agent 12
+packages/marimo-studio/src/marimo_studio/_browser_client/ports.py
+  ai_agent 1-18
+packages/marimo-studio/src/marimo_studio/_server/ports.py
+  ai_agent 14
+packages/marimo-studio/tests/server/test_view_activation.py
+  ai_agent 9
+packages/marimo-studio/tests/agent/test_client_evidence.py
+  ai_agent 9-10,19-20,56,59-60,102,106-107,142,146-147,197,201-202,249,253-254,301,305-306
+packages/marimo-studio/tests/agent/test_protocol.py
+  ai_agent 11-17
+packages/marimo-studio/src/marimo_studio/_browser_client/analysis_protocol.py
+  ai_agent 1-171
+packages/marimo-studio/src/marimo_studio/_server/agent/api.py
+  ai_agent 10
+packages/marimo-studio/src/marimo_studio/_browser_client/client.py
+  ai_agent 1-198
+packages/marimo-studio/src/marimo_studio/_server/editor_bridge.py
+  ai_agent 17
+packages/marimo-studio/src/marimo_studio/_browser_client/records.py
+  ai_agent 1-27
+packages/marimo-studio/src/marimo_studio/_browser_client/transport.py
+  ai_agent 1-282
+packages/marimo-studio/src/marimo_studio/_compat/code_mode_adapter.py
+  ai_agent 9
+packages/marimo-studio/src/marimo_studio/_browser_client/limits.py
+  ai_agent 1-4
+packages/marimo-studio/src/marimo_studio/_compat/code_mode.py
+  ai_agent 10
+packages/marimo-studio/src/marimo_studio/_browser_client/browser_protocol.py
+  ai_agent 1-553
+packages/marimo-studio/src/marimo_studio/_server/presentation/activation.py
+  ai_agent 7-8
+packages/marimo-studio/src/marimo_studio/_browser_client/__init__.py
+  ai_agent 1
+packages/marimo-studio/src/marimo_studio/_browser_client/protocol.py
+  ai_agent 1-128
+packages/marimo-studio/tests/agent/test_client_connection.py
+  ai_agent 14-17,50,80,83-84,187,207,211,240,244-245
+packages/marimo-studio/tests/agent/test_client_transport.py
+  ai_agent 8,27-28,32-33,76,79-81,107,109,111-112,148,150,153,156,165-166,177,217,221-222,270,272,274-275,299-300,303,339,343-344
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a70ddca5663e717b9555b0e11cfc83e29c289011",
+  "prompts": {}
+}
