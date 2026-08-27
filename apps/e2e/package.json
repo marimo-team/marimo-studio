@@ -5,11 +5,15 @@
   "type": "module",
   "scripts": {
     "e2e": "playwright test",
+    "e2e:providers": "playwright test --config playwright.providers.config.ts",
     "e2e:ui": "playwright test --ui",
     "install-browser": "playwright install --with-deps chromium",
-    "serve": "node scripts/serve.mjs"
+    "serve": "node scripts/serve.mjs",
+    "serve:providers": "node scripts/serve-providers.mjs",
+    "test": "vp test unit"
   },
   "devDependencies": {
+    "@marimo-studio/protocol": "workspace:*",
     "@playwright/test": "catalog:",
     "@types/node": "catalog:",
     "zod": "catalog:"
