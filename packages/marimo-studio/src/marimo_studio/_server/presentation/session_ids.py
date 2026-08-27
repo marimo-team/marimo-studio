@@ -91,7 +91,9 @@ class SessionIdAllocator:
                 candidate not in excluded
                 and sessions.ownership(context, candidate) == "unclaimed"
             ):
-                return candidate
+                with self._lock:
+                    self._require_open()
+                    return candidate
         raise RuntimeError("Unable to allocate a distinct Studio session ID")
 
     def allocate_pair(

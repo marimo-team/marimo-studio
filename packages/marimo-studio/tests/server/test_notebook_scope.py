@@ -203,7 +203,7 @@ def test_scope_close_drains_each_async_owner_before_advancing(
         blocked_index = sequence.index(f"{blocked_owner}:enter")
         closing = asyncio.create_task(notebook_scope.close())
         try:
-            await close_entered.wait()
+            await asyncio.wait_for(close_entered.wait(), timeout=1)
             closing.cancel()
             await asyncio.sleep(0)
             closing.cancel()
@@ -249,6 +249,22 @@ def test_registry_closes_every_scope_after_one_fails(tmp_path: Path) -> None:
     assert not registry.contains(tmp_path / "first.py")
     with pytest.raises(RuntimeError, match="registry is closed"):
         registry.get(tmp_path / "late.py")
+
+
+def test_registry_close_retires_shared_session_allocation(tmp_path: Path) -> None:
+    registry = NotebookScopeRegistry(
+        session_ids=SessionIdAllocator(key=b"test-key", start=0)
+    )
+    retained = registry.get(tmp_path / "analysis.py")
+    sessions = cast(
+        Any,
+        SimpleNamespace(ownership=lambda _context, _session_id: "unclaimed"),
+    )
+
+    asyncio.run(registry.close())
+
+    with pytest.raises(RuntimeError, match="Session ID allocator is closed"):
+        retained.session_ids.allocate(cast(Any, SimpleNamespace()), sessions)
 
 
 def test_middleware_restores_adapters_after_scope_shutdown_fails() -> None:

@@ -259,9 +259,15 @@ def test_observed_ids_do_not_reveal_an_allocatable_next_window() -> None:
 
 
 def test_concurrent_session_pair_allocations_are_globally_unique() -> None:
+    barrier = Barrier(2, timeout=5)
+
+    def ownership(_context: object, _session_id: str) -> str:
+        barrier.wait()
+        return "unclaimed"
+
     sessions = cast(
         Any,
-        SimpleNamespace(ownership=lambda _context, _session_id: "unclaimed"),
+        SimpleNamespace(ownership=ownership),
     )
     session_ids = SessionIdAllocator(key=b"test-key", start=0)
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -279,6 +285,32 @@ def test_concurrent_session_pair_allocations_are_globally_unique() -> None:
     assert len(issued) == 4
     assert all(presentation != runtime for presentation, runtime in allocated)
     assert allocated[0] != allocated[1]
+
+
+def test_session_allocation_rejects_close_during_ownership_check() -> None:
+    ownership_started = Barrier(2, timeout=5)
+    ownership_finished = Barrier(2, timeout=5)
+
+    def ownership(_context: object, _session_id: str) -> str:
+        ownership_started.wait()
+        ownership_finished.wait()
+        return "unclaimed"
+
+    sessions = cast(Any, SimpleNamespace(ownership=ownership))
+    session_ids = SessionIdAllocator(key=b"test-key", start=0)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        allocation = pool.submit(
+            session_ids.allocate,
+            _assignment_context(),
+            sessions,
+        )
+        ownership_started.wait()
+        session_ids.close()
+        ownership_finished.wait()
+
+        with pytest.raises(RuntimeError, match="Session ID allocator is closed"):
+            allocation.result()
 
 
 def test_failed_pair_allocation_leaves_the_allocator_usable() -> None:
