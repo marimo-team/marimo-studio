@@ -26,6 +26,7 @@ from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 
 from ..app_helpers import edit_mode, marimo_app, session_manager
+from ..async_test_support import wait_for_event
 
 
 def test_validation_sibling_cleanup_failure_survives_primary_failure(
@@ -34,7 +35,7 @@ def test_validation_sibling_cleanup_failure_survives_primary_failure(
     browser_started = asyncio.Event()
 
     async def fail_runtime(*_args: object, **_kwargs: object) -> object:
-        await browser_started.wait()
+        await wait_for_event(browser_started)
         raise RuntimeError("runtime validation failed")
 
     async def observe_browser(*_args: object) -> tuple[()]:
@@ -85,7 +86,7 @@ def test_runtime_cleanup_failure_survives_browser_primary_failure(
             ) from cancellation
 
     async def fail_browser(*_args: object) -> tuple[()]:
-        await runtime_started.wait()
+        await wait_for_event(runtime_started)
         raise RuntimeError("browser validation failed")
 
     monkeypatch.setattr(

@@ -18,6 +18,7 @@ from marimo_studio._server.development.client_events import WorkspaceClientEvent
 from marimo_studio.errors import AgentRequestError
 
 from ..app_helpers import configured
+from ..async_test_support import wait_for_event
 
 
 def test_workspace_client_lease_drains_cancelled_reservation_and_release(
@@ -59,7 +60,7 @@ def test_workspace_client_lease_drains_cancelled_reservation_and_release(
 
         monkeypatch.setattr(clients, "reserve_stream", delayed_reserve)
         acquiring = asyncio.create_task(producer.connect())
-        await connected.wait()
+        await wait_for_event(connected)
         acquiring.cancel()
         release_connect.set()
         with pytest.raises(asyncio.CancelledError):
@@ -78,7 +79,7 @@ def test_workspace_client_lease_drains_cancelled_reservation_and_release(
 
         monkeypatch.setattr(clients, "release_stream", delayed_release)
         closing = asyncio.create_task(producer.close())
-        await disconnecting.wait()
+        await wait_for_event(disconnecting)
         closing.cancel()
         release_disconnect.set()
         with pytest.raises(asyncio.CancelledError):
@@ -277,7 +278,7 @@ def test_cancelled_source_cleanup_still_disconnects_browser(
         assert await clients.select_target(client_id="browser-client-1234")
 
         closing = asyncio.create_task(stream.aclose())
-        await subscription.closing.wait()
+        await wait_for_event(subscription.closing)
         closing.cancel()
         subscription.release.set()
         with pytest.raises(asyncio.CancelledError):

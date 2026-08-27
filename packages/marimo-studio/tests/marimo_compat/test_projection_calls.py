@@ -24,6 +24,7 @@ from marimo_studio._server.presentation.ports import (
 )
 from marimo_studio._server.presentation.query_state import query_fingerprint
 
+from ..async_test_support import wait_for_event
 from .values_test_support import (
     _bound_projection,
 )
@@ -417,7 +418,7 @@ def test_cancelled_projection_calls_retain_session_backlog_ownership(
                 consumer_id="editor",
             )
         )
-        await session.dispatched.wait()
+        await wait_for_event(session.dispatched)
         first.cancel()
         with pytest.raises(asyncio.CancelledError):
             await first
@@ -498,7 +499,7 @@ def test_disconnected_projection_calls_retain_backlog_ownership(
                 timeout=10,
             )
         )
-        await session.dispatched.wait()
+        await wait_for_event(session.dispatched)
         session.room.connected = False
         consumer.on_detach()
         with pytest.raises(ProjectionUnavailable) as detached:
@@ -582,7 +583,7 @@ def test_output_consumer_detach_finishes_read_and_releases_owners() -> None:
                 timeout=10,
             )
         )
-        await session.dispatched.wait()
+        await wait_for_event(session.dispatched)
         session.room.connected = False
         consumer.on_detach()
         with pytest.raises(ProjectionUnavailable) as raised:
@@ -665,7 +666,7 @@ def test_output_detach_queues_cleanup_when_projection_quota_is_saturated(
                 timeout=10,
             )
         )
-        await session.dispatched.wait()
+        await wait_for_event(session.dispatched)
         session.room.connected = False
         consumer.on_detach()
         with pytest.raises(ProjectionUnavailable) as raised:
@@ -735,7 +736,7 @@ def test_session_detach_finishes_value_read_without_a_timeout() -> None:
                 timeout=None,
             )
         )
-        await session.dispatched.wait()
+        await wait_for_event(session.dispatched)
         assert session.extension is not None
         session.extension.on_detach()
         with pytest.raises(ProjectionUnavailable) as raised:

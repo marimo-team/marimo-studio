@@ -15,7 +15,7 @@ from marimo_studio._notebook.cell_refs import cell_refs
 from marimo_studio._notebook.records import CellRef, LiveCellSnapshot
 from marimo_studio.errors._internal import RuntimeSyncError
 
-from ..app_helpers import configured as _configured
+from ..app_helpers import published_dashboard
 from ..app_helpers import set_shell as _set_shell
 from .app_test_support import (
     _live_test_session,
@@ -25,7 +25,7 @@ from .app_test_support import (
 
 
 def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         config = client.get("/_marimo-studio/views/dashboard/config").json()
@@ -65,7 +65,7 @@ def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
 def test_value_requests_allow_repeated_instances_with_one_target(
     notebook_path: Path,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         config = client.get("/_marimo-studio/views/dashboard/config").json()
@@ -91,7 +91,7 @@ def test_value_requests_allow_repeated_instances_with_one_target(
 
 
 def test_output_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         config = client.get("/_marimo-studio/views/dashboard/config").json()
@@ -144,7 +144,7 @@ def test_output_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
 def test_output_requests_reject_duplicate_mounted_owners(
     notebook_path: Path,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
     _set_shell(
         studio,
         "dashboard",
@@ -187,7 +187,7 @@ def test_projection_http_rejects_padded_wildcard_targets(
     endpoint: str,
     kind: str,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
     tag = (
         '<span mo-value="doubled" data-marimo-allow="*"></span>'
         if kind == "value"
@@ -230,7 +230,7 @@ def test_projection_http_rejects_padded_wildcard_targets(
 def test_projection_http_rejects_unpaired_utf16_surrogates(
     notebook_path: Path,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         config = client.get("/_marimo-studio/views/dashboard/config").json()
@@ -266,7 +266,7 @@ def test_projection_resolves_session_once(
     kind: str,
     reader_name: str,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
     app = create_asgi_app(studio.notebook)
     resolved: list[str] = []
     projection_calls: list[tuple[object, ...]] = []
@@ -327,7 +327,7 @@ def test_projection_uses_live_runtime_ids_after_a_cell_is_inserted(
     kind: str,
     reader_name: str,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
     static = load_static_notebook(studio.notebook)
     references = cell_refs(cell.code for cell in static.cells)
     live_ids = {
@@ -397,7 +397,7 @@ def test_projection_waits_for_the_live_session_binding(
     kind: str,
     reader_name: str,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
     calls: list[object] = []
 
     async def read_projection(*args: object, **_options: object) -> SimpleNamespace:
@@ -451,7 +451,7 @@ def test_projection_retries_while_the_kernel_applies_the_current_binding(
     kind: str,
     reader_name: str,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
 
     async def read_projection(*_args: object, **_kwargs: object) -> SimpleNamespace:
         error = SimpleNamespace(
@@ -490,7 +490,7 @@ def test_projection_retries_while_the_kernel_applies_the_current_binding(
 def test_value_permissions_follow_the_browser_presentation_revision(
     notebook_path: Path,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
 
     with TestClient(create_asgi_app(studio.notebook)) as client:
         first = client.get("/_marimo-studio/views/dashboard/config").json()
@@ -535,7 +535,7 @@ def test_retained_value_revision_rejects_a_variable_moved_to_another_cell(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
     fake_session = _live_test_session(
         [
             SimpleNamespace(id="runtime-moved", code="doubled = 999", name="moved"),
@@ -574,7 +574,7 @@ def test_retained_value_revision_rejects_an_upstream_only_edit(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
     static = load_static_notebook(studio.notebook)
     rows = [
         SimpleNamespace(
@@ -617,7 +617,7 @@ def test_retained_value_revision_rejects_a_newly_resolved_reference(
         .replace("return (x,)", "return (y,)"),
         encoding="utf-8",
     )
-    studio = _configured(notebook_path)
+    studio = published_dashboard(notebook_path)
     static = load_static_notebook(studio.notebook)
     rows = [
         SimpleNamespace(

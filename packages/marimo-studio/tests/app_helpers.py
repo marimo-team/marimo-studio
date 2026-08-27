@@ -25,11 +25,14 @@ def set_shell(studio: StudioWorkspace, view_name: str, content: str) -> None:
     )
 
 
-def configured(notebook: Path) -> StudioWorkspace:
+def created_one_view(notebook: Path) -> StudioWorkspace:
     ensure_view(notebook)
-    studio = load_studio(notebook)
+    return load_studio(notebook)
+
+
+def _configured_dashboard(notebook: Path) -> StudioWorkspace:
+    studio = created_one_view(notebook)
     bind_cell(studio, "result", 1)
-    ensure_view(notebook, "executive")
     studio = load_studio(notebook)
     set_shell(
         studio,
@@ -38,6 +41,20 @@ def configured(notebook: Path) -> StudioWorkspace:
         '<marimo-output value="doubled"></marimo-output>'
         '<marimo-cell name="result"></marimo-cell>',
     )
+    return studio
+
+
+def published_dashboard(notebook: Path) -> StudioWorkspace:
+    studio = _configured_dashboard(notebook)
+    with build_view_project_sync(studio.views[studio.default_view]):
+        pass
+    return load_studio(notebook)
+
+
+def configured(notebook: Path) -> StudioWorkspace:
+    studio = _configured_dashboard(notebook)
+    ensure_view(notebook, "executive")
+    studio = load_studio(notebook)
     set_shell(
         studio,
         "executive",
@@ -86,4 +103,12 @@ def edit_mode(app: Any) -> None:
     session_manager(app).mode = SessionMode.EDIT
 
 
-__all__ = ["configured", "edit_mode", "marimo_app", "session_manager", "set_shell"]
+__all__ = [
+    "configured",
+    "created_one_view",
+    "edit_mode",
+    "marimo_app",
+    "published_dashboard",
+    "session_manager",
+    "set_shell",
+]

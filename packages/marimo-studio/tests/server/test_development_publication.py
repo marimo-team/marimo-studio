@@ -9,6 +9,8 @@ import pytest
 from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 
+from ..async_test_support import wait_for_event
+
 
 def test_two_subscribers_share_one_publication_task() -> None:
     calls = 0
@@ -208,7 +210,7 @@ def test_repeated_cancellation_drains_a_baseline_waiter_blocked_on_the_lock(
         await coordinator._lock.acquire()
         try:
             waiting.cancel()
-            await release_entered.wait()
+            await wait_for_event(release_entered)
             waiting.cancel()
             await asyncio.sleep(0)
             still_releasing = not waiting.done()

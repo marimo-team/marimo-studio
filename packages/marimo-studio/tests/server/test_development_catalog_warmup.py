@@ -139,7 +139,6 @@ def test_inactive_presentation_warmup_is_bounded_across_clients(
         )
         try:
             assert await asyncio.to_thread(started.wait, 1)
-            await asyncio.sleep(0.05)
             assert peak == 2
             release.set()
             await asyncio.gather(first, second)
@@ -210,7 +209,7 @@ def test_foreground_publication_promotes_a_queued_warmup() -> None:
             queued = asyncio.create_task(
                 coordinator.publish("target", 1, target, warmup=True)
             )
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0)
             assert not target_started.is_set()
             foreground = asyncio.create_task(
                 coordinator.publish(
@@ -281,7 +280,7 @@ def test_foreground_waits_for_a_preempted_same_generation_owner() -> None:
                     ),
                 )
             )
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0)
             assert not replacement_started.is_set()
             release_warmup.set()
             assert await asyncio.to_thread(replacement_started.wait, 1)
@@ -317,7 +316,7 @@ def test_inactive_presentation_warmup_drains_siblings_after_failure(
                 await asyncio.Event().wait()
             finally:
                 sibling_cancelled.set()
-        await sibling_started.wait()
+        await asyncio.wait_for(sibling_started.wait(), timeout=1)
         raise RuntimeError("warmup failed")
 
     async def exercise() -> None:
@@ -362,7 +361,7 @@ def test_inactive_warmup_cleanup_failure_survives_primary_failure(
                 raise ProcessCleanupError(
                     "warmup provider process survived"
                 ) from cancellation
-        await sibling_started.wait()
+        await asyncio.wait_for(sibling_started.wait(), timeout=1)
         raise RuntimeError("warmup failed")
 
     async def exercise() -> None:

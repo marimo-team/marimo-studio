@@ -21,6 +21,7 @@ from marimo_studio._validation.evidence import (
 )
 from marimo_studio.errors import AgentRequestError
 
+from ..async_test_support import wait_for_event
 from ..client_test_support import bind_native_session
 
 
@@ -169,7 +170,7 @@ def test_activation_commit_wins_atomically_over_timeout(
             )
         )
 
-        await committed.wait()
+        await wait_for_event(committed)
         await asyncio.sleep(0.02)
         assert not waiting.done()
         release.set()
@@ -194,7 +195,7 @@ def test_activation_cancellation_clears_the_pending_transition(
 
         admitted = wait_admission(monkeypatch, agents._activations)
         waiting = asyncio.create_task(agents.wait_for_activation(activation, 10))
-        await admitted.wait()
+        await wait_for_event(admitted)
         waiting.cancel()
         with pytest.raises(asyncio.CancelledError):
             await waiting
@@ -223,7 +224,7 @@ def test_observation_requires_the_requested_revision_instance_and_order(
         assert request.runtime_session_id == "s_123456"
         admitted = wait_admission(monkeypatch, agents._observations)
         waiting = asyncio.create_task(agents.wait_for_observation(request, 1))
-        await admitted.wait()
+        await wait_for_event(admitted)
         pending_mount = ObservedProjectionInstance(
             mount_id="site:value:summary",
             instance_id="projection-summary",
@@ -338,7 +339,7 @@ def test_browser_observation_survives_an_event_stream_reconnect(
         )
         admitted = wait_admission(monkeypatch, agents._observations)
         waiting = asyncio.create_task(agents.wait_for_observation(request, 1))
-        await admitted.wait()
+        await wait_for_event(admitted)
         await clients.release_stream(lease)
         assert not waiting.done()
         assert await clients.connect_stream(target.client_id, 2)
@@ -395,7 +396,7 @@ def test_view_activation_survives_an_event_stream_reconnect(
         activation = await agents.activate(target, "executive")
         admitted = wait_admission(monkeypatch, agents._activations)
         waiting = asyncio.create_task(agents.wait_for_activation(activation, 1))
-        await admitted.wait()
+        await wait_for_event(admitted)
 
         await clients.release_stream(lease)
         assert not waiting.done()
@@ -502,7 +503,7 @@ def test_close_finishes_an_active_activation_wait_with_a_terminal_error(
         activation = await agents.activate(target, "dashboard")
         admitted = wait_admission(monkeypatch, agents._activations)
         waiting = asyncio.create_task(agents.wait_for_activation(activation, 300))
-        await admitted.wait()
+        await wait_for_event(admitted)
 
         await agents.close()
         with pytest.raises(AgentRequestError) as raised:
@@ -533,7 +534,7 @@ def test_close_finishes_an_active_observation_wait_with_a_terminal_error(
         )
         admitted = wait_admission(monkeypatch, agents._observations)
         waiting = asyncio.create_task(agents.wait_for_observation(request, 300))
-        await admitted.wait()
+        await wait_for_event(admitted)
 
         await agents.close()
         with pytest.raises(AgentRequestError) as raised:
@@ -628,7 +629,7 @@ def test_close_rejects_operations_paused_before_store_admission(
             return await agents.record(observation)
 
         admitted = asyncio.create_task(invoke())
-        await entered.wait()
+        await wait_for_event(entered)
         await agents.close()
         release.set()
         with pytest.raises(AgentRequestError) as raised:
@@ -646,43 +647,27 @@ def test_close_rejects_operations_paused_before_store_admission(
     asyncio.run(exercise())
 
 
-@pytest.mark.parametrize(
-    "operation",
-    (
-        "activate",
-        "acknowledge",
-        "wait-activation",
-        "request-observation",
-        "record-observation",
-        "wait-observation",
-        "pending-operations",
-    ),
-)
-def test_closed_coordinator_rejects_every_request_visible_operation(
-    operation: str,
-) -> None:
+def test_closed_coordinator_rejects_every_request_visible_operation() -> None:
     async def exercise() -> None:
         clients = StudioClientRegistry()
         agents = AgentCoordinator(clients)
-        target, _lease = await connected_target(
+        activation_target, _activation_lease = await connected_target(
             clients,
             active_view="dashboard",
         )
-        activation = (
-            await agents.activate(target, "executive")
-            if operation in {"acknowledge", "wait-activation"}
-            else None
+        observation_target, _observation_lease = await connected_target(
+            clients,
+            client_id="observation-browser-1234",
+            session_id="s_observation",
+            active_view="dashboard",
         )
-        request = (
-            await agents.request_observation(
-                target,
-                "dashboard",
-                "server",
-                "runtime-instance",
-                "revision-1",
-            )
-            if operation == "wait-observation"
-            else None
+        activation = await agents.activate(activation_target, "executive")
+        request = await agents.request_observation(
+            observation_target,
+            "dashboard",
+            "server",
+            "runtime-instance",
+            "revision-1",
         )
         observation = BrowserObservation(
             view="dashboard",
@@ -690,30 +675,28 @@ def test_closed_coordinator_rejects_every_request_visible_operation(
             runtime_instance="runtime-instance",
             revision="revision-1",
             state="loading",
-            client_id=target.client_id,
-            session_id=target.session_id,
+            client_id=observation_target.client_id,
+            session_id=observation_target.session_id,
             request_id="request-after-close",
             sequence=0,
             query="",
         )
         await agents.close()
 
-        async def invoke() -> object:
+        async def invoke(operation: str) -> object:
             if operation == "activate":
-                return await agents.activate(target, "executive")
+                return await agents.activate(activation_target, "executive")
             if operation == "acknowledge":
-                assert activation is not None
                 return await agents.acknowledge_activation(
-                    target.client_id,
+                    activation_target.client_id,
                     activation.generation,
                     activation.view,
                 )
             if operation == "wait-activation":
-                assert activation is not None
                 return await agents.wait_for_activation(activation, 1)
             if operation == "request-observation":
                 return await agents.request_observation(
-                    target,
+                    observation_target,
                     "dashboard",
                     "server",
                     "runtime-instance",
@@ -722,14 +705,22 @@ def test_closed_coordinator_rejects_every_request_visible_operation(
             if operation == "record-observation":
                 return await agents.record(observation)
             if operation == "wait-observation":
-                assert request is not None
                 return await agents.wait_for_observation(request, 1)
-            return await agents.pending_operations(target, None, None)
+            return await agents.pending_operations(observation_target, None, None)
 
-        with pytest.raises(AgentRequestError) as raised:
-            await invoke()
-        assert raised.value.code == "browser-coordinator-closed"
-        assert raised.value.status_code == 503
+        for operation in (
+            "activate",
+            "acknowledge",
+            "wait-activation",
+            "request-observation",
+            "record-observation",
+            "wait-observation",
+            "pending-operations",
+        ):
+            with pytest.raises(AgentRequestError) as raised:
+                await invoke(operation)
+            assert raised.value.code == "browser-coordinator-closed", operation
+            assert raised.value.status_code == 503, operation
         await clients.close()
 
     asyncio.run(exercise())

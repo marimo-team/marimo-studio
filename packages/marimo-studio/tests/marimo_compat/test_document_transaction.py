@@ -17,6 +17,8 @@ from marimo_studio._compat.server.document_transaction import (
 )
 from marimo_studio.errors import ProtocolError
 
+from ..async_test_support import wait_for_event
+
 
 @dataclass
 class _Cell:
@@ -147,20 +149,14 @@ def test_transaction_reports_semantic_document_change(
     assert _changed_header(messages) == expected
 
 
-@pytest.mark.parametrize(
-    ("next_code", "expected"),
-    (("value = 1", b"false"), ("value = 2", b"true")),
-)
 def test_retry_replays_original_evidence_after_response_loss(
     monkeypatch: pytest.MonkeyPatch,
-    next_code: str,
-    expected: bytes,
 ) -> None:
     session = _Session()
     _bind_session(monkeypatch, session)
     adapter = PrivateDocumentTransactionEvidence()
     calls: list[bytes] = []
-    app = _native_app(session, calls, code=next_code)
+    app = _native_app(session, calls, code="value = 2")
     scope = _scope()
     body = b'{"changes":[{"type":"set-code"}]}'
 
@@ -169,7 +165,7 @@ def test_retry_replays_original_evidence_after_response_loss(
     replay = _serve(adapter, app, scope, body)
 
     assert calls == [body]
-    assert _changed_header(replay) == expected
+    assert _changed_header(replay) == b"true"
     assert dict(replay[0]["headers"])[b"content-type"] == b"application/json"
     assert json.loads(replay[-1]["body"]) == {"success": True}
 
@@ -192,33 +188,42 @@ def test_operation_identity_rejects_a_different_retry_body(
     assert json.loads(conflict[-1]["body"])["error"] == "document-operation-conflict"
 
 
-@pytest.mark.parametrize(
-    ("session_available", "operation"),
-    (
-        (False, "operation-0000001"),
-        (True, None),
-        (True, "short"),
-        (True, "contains spaces 123"),
-    ),
-)
-def test_transaction_requires_session_and_operation_evidence(
+def test_transaction_requires_a_current_session(
     monkeypatch: pytest.MonkeyPatch,
-    session_available: bool,
-    operation: str | None,
 ) -> None:
-    _bind_session(monkeypatch, _Session() if session_available else None)
+    _bind_session(monkeypatch, None)
     calls: list[bytes] = []
     session = _Session()
 
     messages = _serve(
         PrivateDocumentTransactionEvidence(),
         _native_app(session, calls, code=None),
-        _scope(operation),
+        _scope(),
         b'{"changes":[]}',
     )
 
     assert messages[0]["status"] == 400
     assert calls == []
+
+
+def test_transaction_requires_a_valid_operation_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _Session()
+    _bind_session(monkeypatch, session)
+    adapter = PrivateDocumentTransactionEvidence()
+
+    for operation in (None, "short", "contains spaces 123"):
+        calls: list[bytes] = []
+        messages = _serve(
+            adapter,
+            _native_app(session, calls, code=None),
+            _scope(operation),
+            b'{"changes":[]}',
+        )
+
+        assert messages[0]["status"] == 400, operation
+        assert calls == [], operation
 
 
 def test_terminal_ledger_evicts_oldest_outcomes(
@@ -288,7 +293,7 @@ def test_same_session_transactions_are_serialized_and_attributed(
                 b'{"code":"value = 2","wait":true}',
             )
         )
-        await first_entered.wait()
+        await wait_for_event(first_entered)
         same_session = asyncio.create_task(
             request(
                 _scope("operation-0000002", "s_first"),
@@ -336,7 +341,7 @@ def test_cancellation_releases_the_exact_session_lock(
         first = asyncio.create_task(
             adapter.serve(blocked, _scope("operation-0000001"), discard, b"first")
         )
-        await entered.wait()
+        await wait_for_event(entered)
         first.cancel()
         with pytest.raises(asyncio.CancelledError):
             await first

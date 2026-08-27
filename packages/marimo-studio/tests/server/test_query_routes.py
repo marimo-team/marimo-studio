@@ -24,6 +24,7 @@ from marimo_studio._server.presentation.ports import (
 from marimo_studio._server.presentation.query_routes import query_response
 from marimo_studio._server.records import ServerContext
 
+from ..async_test_support import wait_for_event
 from ..client_test_support import bind_native_session
 
 
@@ -280,7 +281,7 @@ def test_query_fence_survives_repeated_request_cancellation() -> None:
                 cast(KernelProjectionHost, projections),
             )
         )
-        await projections.started.wait()
+        await wait_for_event(projections.started)
         response.cancel()
         response.cancel()
         assert response.cancelling() == 2
@@ -397,7 +398,7 @@ def test_cancelled_request_transfers_its_fence_to_late_terminal() -> None:
                 cast(KernelProjectionHost, projections),
             )
         )
-        await projections.started.wait()
+        await wait_for_event(projections.started)
         response.cancel()
         projections.timeout.set()
 

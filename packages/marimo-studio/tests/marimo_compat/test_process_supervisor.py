@@ -17,6 +17,15 @@ import pytest
 
 import marimo_studio._processes.supervisor as process_supervisor
 
+from ..async_test_support import wait_for_event
+
+pytestmark = pytest.mark.native_process
+
+_POSIX_ONLY = pytest.mark.skipif(
+    os.name != "posix",
+    reason="POSIX process groups are required",
+)
+
 
 def test_process_supervisor_times_out_and_terminates_the_worker() -> None:
     supervisor = process_supervisor.ProcessSupervisor()
@@ -103,12 +112,11 @@ def test_process_supervisor_cancellation_terminates_the_worker(
     assert results[0].returncode != 0
 
 
+@_POSIX_ONLY
 def test_process_supervisor_cancellation_does_not_block_asyncio(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    if os.name != "posix":
-        return
     monkeypatch.setattr(process_supervisor, "_TERMINATION_TIMEOUT", 0.2)
     supervisor = process_supervisor.ProcessSupervisor()
     ready = tmp_path / "ready"
@@ -135,7 +143,7 @@ def test_process_supervisor_cancellation_does_not_block_asyncio(
         supervisor.cancel()
         heartbeat = asyncio.Event()
         asyncio.get_running_loop().call_soon(heartbeat.set)
-        await heartbeat.wait()
+        await wait_for_event(heartbeat)
         assert not worker.done()
         result = await worker
         return result
@@ -235,12 +243,11 @@ def test_process_supervisor_cleans_up_when_exit_observer_setup_fails(
     assert process.stderr is not None and process.stderr.closed
 
 
+@_POSIX_ONLY
 def test_observer_setup_failure_terminates_a_fast_detached_descendant(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    if os.name != "posix":
-        return
     marker = tmp_path / "detached-child.pid"
     child_pid = 0
 
@@ -485,11 +492,10 @@ def test_process_supervisor_closes_every_owner_when_wait_raises(
     assert observer_closed
 
 
+@_POSIX_ONLY
 def test_process_supervisor_cleans_group_once_before_reaping_leader(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    if os.name != "posix":
-        return
     process = SimpleNamespace(
         pid=42,
         returncode=None,
@@ -541,11 +547,10 @@ def test_process_supervisor_cleans_group_once_before_reaping_leader(
     assert cleanup_calls == 1
 
 
+@_POSIX_ONLY
 def test_process_supervisor_terminates_detached_descendant_and_returns(
     tmp_path: Path,
 ) -> None:
-    if os.name != "posix":
-        return
     supervisor = process_supervisor.ProcessSupervisor()
     marker = tmp_path / "detached-child.pid"
     child_pid = 0
@@ -584,12 +589,11 @@ def test_process_supervisor_terminates_detached_descendant_and_returns(
 
 
 @pytest.mark.parametrize("finish", ("cancel", "timeout"))
+@_POSIX_ONLY
 def test_process_supervisor_terminates_detached_process_on_early_finish(
     tmp_path: Path,
     finish: str,
 ) -> None:
-    if os.name != "posix":
-        return
     supervisor = process_supervisor.ProcessSupervisor()
     marker = tmp_path / "detached-child.pid"
     executor = ThreadPoolExecutor(max_workers=1)

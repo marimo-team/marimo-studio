@@ -24,8 +24,10 @@ from marimo_studio._composition import (
 from marimo_studio._server.ports import CloseHandle
 from marimo_studio.errors import ProtocolError
 
-from ..app_helpers import configured, session_manager
+from ..app_helpers import published_dashboard, session_manager
 from ..helpers import notebook_source
+
+pytestmark = pytest.mark.native_process
 
 
 class _TrackedClose:
@@ -66,13 +68,13 @@ def test_programmatic_apps_own_each_notebook_lifespan(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    first = configured(notebook_path)
+    first = published_dashboard(notebook_path)
     second_notebook = tmp_path / "second.py"
     second_notebook.write_text(
         notebook_source(tmp_path / "second-executed"),
         encoding="utf-8",
     )
-    second = configured(second_notebook)
+    second = published_dashboard(second_notebook)
     opened: list[int] = []
     closed: list[int] = []
     native_open: Callable[[_PrivateAdapterLifecycle], CloseHandle] = (
@@ -125,7 +127,7 @@ def test_programmatic_lifespan_cancellation_drains_owned_resources(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = published_dashboard(notebook_path)
     opened = 0
     closed = 0
     native_open: Callable[[_PrivateAdapterLifecycle], CloseHandle] = (
@@ -200,13 +202,13 @@ def test_programmatic_startup_failure_closes_siblings_and_session_managers(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    first = configured(notebook_path)
+    first = published_dashboard(notebook_path)
     second_notebook = tmp_path / "second.py"
     second_notebook.write_text(
         notebook_source(tmp_path / "second-executed"),
         encoding="utf-8",
     )
-    second = configured(second_notebook)
+    second = published_dashboard(second_notebook)
     opened: list[int] = []
     closed: list[int] = []
     native_open: Callable[[_PrivateAdapterLifecycle], CloseHandle] = (
@@ -272,7 +274,7 @@ def test_programmatic_shutdown_retries_and_preserves_the_first_failure(
     monkeypatch: pytest.MonkeyPatch,
     retry_fails: bool,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = published_dashboard(notebook_path)
     app = create_asgi_app(studio.notebook)
     manager = session_manager(app)
     native_shutdown = manager.shutdown
@@ -306,7 +308,7 @@ def test_programmatic_shutdown_settles_native_kernels_before_return(
     notebook_path: Path,
 ) -> None:
     host_main = sys.modules["__main__"]
-    studio = configured(notebook_path)
+    studio = published_dashboard(notebook_path)
     app = create_asgi_app(studio.notebook)
     manager = session_manager(app)
     kernel_thread: Thread | None = None
@@ -329,7 +331,7 @@ def test_programmatic_shutdown_preserves_a_foreign_main_module(
     notebook_path: Path,
 ) -> None:
     host_main = sys.modules["__main__"]
-    app = create_asgi_app(configured(notebook_path).notebook)
+    app = create_asgi_app(published_dashboard(notebook_path).notebook)
     client = TestClient(app)
     client.__enter__()
     foreign = ModuleType("foreign_main")
@@ -350,7 +352,7 @@ def test_startup_failure_remains_primary_when_main_restoration_conflicts(
     host_main = sys.modules["__main__"]
     foreign = ModuleType("foreign_main")
     foreign.__dict__["owner"] = "foreign-runtime"
-    app = create_asgi_app(configured(notebook_path).notebook)
+    app = create_asgi_app(published_dashboard(notebook_path).notebook)
 
     def fail_start(_lifecycle: _PrivateAdapterLifecycle) -> CloseHandle:
         sys.modules["__main__"] = foreign
@@ -382,8 +384,8 @@ def test_overlapping_programmatic_apps_restore_main_after_the_final_kernel(
         encoding="utf-8",
     )
     apps = (
-        create_asgi_app(configured(notebook_path).notebook),
-        create_asgi_app(configured(other_notebook).notebook),
+        create_asgi_app(published_dashboard(notebook_path).notebook),
+        create_asgi_app(published_dashboard(other_notebook).notebook),
     )
     managers = tuple(session_manager(app) for app in apps)
     clients = tuple(TestClient(app) for app in apps)
@@ -425,8 +427,8 @@ def test_zero_kernel_app_cannot_restore_main_while_an_owned_kernel_runs(
         notebook_source(tmp_path / "idle-executed"),
         encoding="utf-8",
     )
-    kernel_app = create_asgi_app(configured(notebook_path).notebook)
-    idle_app = create_asgi_app(configured(idle_notebook).notebook)
+    kernel_app = create_asgi_app(published_dashboard(notebook_path).notebook)
+    idle_app = create_asgi_app(published_dashboard(idle_notebook).notebook)
     kernel_manager = session_manager(kernel_app)
     kernel_client = TestClient(kernel_app)
     idle_client = TestClient(idle_app)

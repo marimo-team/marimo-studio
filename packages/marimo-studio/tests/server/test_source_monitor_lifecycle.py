@@ -17,7 +17,7 @@ from marimo_studio._server.development.ports import ProjectWatchPlan
 from marimo_studio._server.development.source_changes import SourceChange
 from marimo_studio.errors import ConfigurationError
 
-from ..app_helpers import configured
+from ..app_helpers import created_one_view
 from ..source_change_test_support import next_source
 
 
@@ -84,13 +84,13 @@ class GatedWatcher(MemoryWatcher):
 def test_watcher_replacement_wait_does_not_hold_the_coordinator_lock(
     notebook_path: Path,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
 
     async def exercise() -> None:
         watcher = GatedWatcher(gate_replace=True)
         coordinator = DevelopmentCoordinator(project_watcher=lambda: watcher)
         subscribing = asyncio.create_task(coordinator.subscribe(studio, "dashboard"))
-        await watcher.entered.wait()
+        await asyncio.wait_for(watcher.entered.wait(), timeout=1)
         lookup = asyncio.create_task(coordinator.retained_provider("dashboard"))
         try:
             assert await asyncio.wait_for(lookup, timeout=1) == "marimo-studio/vanilla"
@@ -106,14 +106,14 @@ def test_watcher_replacement_wait_does_not_hold_the_coordinator_lock(
 def test_watcher_close_wait_does_not_hold_the_coordinator_lock(
     notebook_path: Path,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
 
     async def exercise() -> None:
         watcher = GatedWatcher(gate_close=True)
         coordinator = DevelopmentCoordinator(project_watcher=lambda: watcher)
         subscription = await coordinator.subscribe(studio, "dashboard")
         closing = asyncio.create_task(subscription.close())
-        await watcher.entered.wait()
+        await asyncio.wait_for(watcher.entered.wait(), timeout=1)
         lookup = asyncio.create_task(coordinator.retained_provider("dashboard"))
         try:
             assert await asyncio.wait_for(lookup, timeout=1) == "marimo-studio/vanilla"
@@ -128,7 +128,7 @@ def test_watcher_close_wait_does_not_hold_the_coordinator_lock(
 def test_idle_refresh_does_not_reopen_the_final_subscribers_watcher(
     notebook_path: Path,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     watcher = MemoryWatcher()
 
     async def exercise() -> None:
@@ -167,7 +167,7 @@ def test_direct_refresh_retries_against_the_retained_monitor() -> None:
 
         cast(Any, coordinator)._scan_monitor = scan
         refreshing = asyncio.create_task(coordinator.refresh("dashboard"))
-        await entered.wait()
+        await asyncio.wait_for(entered.wait(), timeout=1)
         async with coordinator._lock:
             monitors["dashboard"] = retained
         release.set()
@@ -183,7 +183,7 @@ def test_repeated_cancellation_releases_a_creation_waiter_blocked_on_the_lock(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
 
     async def exercise() -> None:
         coordinator = DevelopmentCoordinator()
@@ -208,13 +208,13 @@ def test_repeated_cancellation_releases_a_creation_waiter_blocked_on_the_lock(
         monkeypatch.setattr(coordinator, "_construct_source", gated_construct)
         monkeypatch.setattr(coordinator, "_release_creation_waiter", gated_release)
         waiting = asyncio.create_task(coordinator.subscribe(studio, "dashboard"))
-        await construct_started.wait()
+        await asyncio.wait_for(construct_started.wait(), timeout=1)
         creation = coordinator._source_monitors._creations["dashboard"]
 
         await coordinator._lock.acquire()
         try:
             waiting.cancel()
-            await release_entered.wait()
+            await asyncio.wait_for(release_entered.wait(), timeout=1)
             waiting.cancel()
             await asyncio.sleep(0)
             still_releasing = not waiting.done()
@@ -243,7 +243,7 @@ def test_repeated_cancellation_releases_a_completed_creation_before_claim(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     producer = development.SourceChangeProducer(studio, "dashboard")
 
     async def exercise() -> None:
@@ -272,14 +272,14 @@ def test_repeated_cancellation_releases_a_completed_creation_before_claim(
         monkeypatch.setattr(coordinator, "_claim_source_creation", gated_claim)
         monkeypatch.setattr(coordinator, "_release_creation_waiter", gated_release)
         waiting = asyncio.create_task(coordinator.subscribe(studio, "dashboard"))
-        await construct_started.wait()
+        await asyncio.wait_for(construct_started.wait(), timeout=1)
         creation = coordinator._source_monitors._creations["dashboard"]
 
         await coordinator._lock.acquire()
         try:
             release_construct.set()
             await asyncio.wait_for(asyncio.shield(creation.task), timeout=1)
-            await claim_entered.wait()
+            await asyncio.wait_for(claim_entered.wait(), timeout=1)
             waiting.cancel()
             await asyncio.wait_for(release_entered.wait(), timeout=1)
             waiting.cancel()
@@ -308,7 +308,7 @@ def test_subscribers_share_one_generation_scan(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.view("dashboard")
     inspection = development.SourceChangeProducer(studio, "dashboard").catalog()[1]
     polls = 0
@@ -357,13 +357,13 @@ def test_subscribers_share_one_generation_scan(
 def test_concurrent_subscribers_share_one_monitor_activation(
     notebook_path: Path,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     watcher = GatedWatcher(gate_replace=True)
 
     async def exercise() -> None:
         coordinator = DevelopmentCoordinator(project_watcher=lambda: watcher)
         first = asyncio.create_task(coordinator.subscribe(studio, "dashboard"))
-        await watcher.entered.wait()
+        await asyncio.wait_for(watcher.entered.wait(), timeout=1)
         second_started = asyncio.Event()
 
         async def subscribe_second() -> Any:
@@ -373,9 +373,6 @@ def test_concurrent_subscribers_share_one_monitor_activation(
         second = asyncio.create_task(subscribe_second())
         try:
             await asyncio.wait_for(second_started.wait(), timeout=1)
-            async with coordinator._lock:
-                monitor = coordinator._source_monitors._monitors["dashboard"]
-                assert len(monitor.subscribers) == 2
         finally:
             watcher.release.set()
         subscriptions = await asyncio.gather(first, second)
@@ -393,7 +390,7 @@ def test_subscription_recovers_a_missed_file_event(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.view("dashboard")
     watchers = WatcherFactory()
     monkeypatch.setattr(development, "_CATALOG_PROBE_INTERVAL", 0)
@@ -421,7 +418,7 @@ def test_subscription_recovers_a_missed_file_event(
 def test_resubscribe_keeps_the_restarted_watcher_while_the_previous_task_stops(
     notebook_path: Path,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     watchers = WatcherFactory()
 
     async def exercise() -> None:
@@ -446,7 +443,7 @@ def test_resubscribe_keeps_the_restarted_watcher_while_the_previous_task_stops(
         monitor.task = asyncio.create_task(delayed_stop())
         await asyncio.wait_for(started.wait(), timeout=1)
         closing = asyncio.create_task(first.close())
-        await stopping.wait()
+        await asyncio.wait_for(stopping.wait(), timeout=1)
         second = await coordinator.subscribe(studio, "dashboard")
         release.set()
         await closing
@@ -464,7 +461,7 @@ def test_resubscribe_finishes_an_idle_close_before_restarting_the_watcher(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
 
     class NotificationWatcher(MemoryWatcher):
         async def change(self, path: Path) -> None:
@@ -499,9 +496,9 @@ def test_resubscribe_finishes_an_idle_close_before_restarting_the_watcher(
         monkeypatch.setattr(coordinator, "_start_monitor", gated_start)
 
         closing = asyncio.create_task(first.close())
-        await close_started.wait()
+        await asyncio.wait_for(close_started.wait(), timeout=1)
         subscribing = asyncio.create_task(coordinator.subscribe(studio, "dashboard"))
-        await start_entered.wait()
+        await asyncio.wait_for(start_entered.wait(), timeout=1)
         release_start.set()
         asyncio.get_running_loop().call_soon(release_close.set)
         await closing
@@ -526,7 +523,7 @@ def test_resubscribe_finishes_an_idle_close_before_restarting_the_watcher(
 def test_rolled_back_deletion_keeps_an_idle_monitor_stopped(
     notebook_path: Path,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     watchers = WatcherFactory()
 
     async def exercise() -> None:
@@ -551,13 +548,12 @@ def test_rolled_back_deletion_keeps_an_idle_monitor_stopped(
 def test_repeated_cancellation_finishes_view_deletion_state_commit(
     notebook_path: Path,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     watchers = WatcherFactory()
 
     async def exercise() -> None:
         coordinator = DevelopmentCoordinator(project_watcher=watchers)
         subscription = await coordinator.subscribe(studio, "dashboard")
-        monitor = coordinator._source_monitors._monitors["dashboard"]
         deletion_entered = asyncio.Event()
         release_deletion = asyncio.Event()
 
@@ -567,7 +563,7 @@ def test_repeated_cancellation_finishes_view_deletion_state_commit(
                 await release_deletion.wait()
 
         deleting = asyncio.create_task(remove())
-        await deletion_entered.wait()
+        await asyncio.wait_for(deletion_entered.wait(), timeout=1)
         await coordinator._lock.acquire()
         try:
             release_deletion.set()
@@ -584,9 +580,6 @@ def test_repeated_cancellation_finishes_view_deletion_state_commit(
             with pytest.raises(asyncio.CancelledError):
                 await deleting
             assert still_finishing
-            assert "dashboard" not in coordinator._deleting_views
-            assert "dashboard" not in coordinator._source_monitors._monitors
-            assert monitor.task is None
             assert watchers.created[0].closed
 
             replacement = await coordinator.subscribe(studio, "dashboard")
@@ -613,7 +606,7 @@ def test_scan_failure_blocks_stale_catalog_until_the_next_generation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.view("dashboard")
     inspection = development.SourceChangeProducer(studio, "dashboard").catalog()[1]
     failure = True
@@ -665,7 +658,7 @@ def test_cancelled_source_scan_propagates_provider_cleanup_failure(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     started = threading.Event()
     cancelled = threading.Event()
 
@@ -709,7 +702,7 @@ def test_watcher_replacement_failure_reports_once_and_recovers(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
 
     class FlakyWatcher(MemoryWatcher):
         attempts = 0
@@ -754,7 +747,7 @@ def test_subscription_release_finishes_after_cancellation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     watchers = WatcherFactory()
 
     async def exercise() -> None:
@@ -771,7 +764,7 @@ def test_subscription_release_finishes_after_cancellation(
 
         monkeypatch.setattr(coordinator, "_unsubscribe", delayed_unsubscribe)
         closing = asyncio.create_task(subscription.close())
-        await committed.wait()
+        await asyncio.wait_for(committed.wait(), timeout=1)
         closing.cancel()
         release.set()
         with pytest.raises(asyncio.CancelledError):

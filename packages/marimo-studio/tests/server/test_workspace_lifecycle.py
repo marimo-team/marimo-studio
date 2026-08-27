@@ -22,6 +22,8 @@ from marimo_studio._server.workspace_lifecycle import (
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.errors._internal import WorkspaceInitializationError
 
+from ..async_test_support import wait_for_event
+
 
 def presentation(
     notebook: Path,
@@ -217,7 +219,7 @@ def test_scope_close_drains_workspace_discovery_before_later_owners(
         assert await asyncio.to_thread(discovery_started.wait, 1)
         closing = asyncio.create_task(scope.close())
         try:
-            await lifecycle_close_entered.wait()
+            await wait_for_event(lifecycle_close_entered)
             closing.cancel()
             closing.cancel()
             assert closing.cancelling() == 2

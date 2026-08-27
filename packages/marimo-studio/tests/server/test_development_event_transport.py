@@ -11,6 +11,8 @@ from marimo_studio._server.support import (
     _OwnedStreamingResponse,
 )
 
+from ..async_test_support import wait_for_event
+
 
 async def _disconnect_after_first_body(response: _OwnedStreamingResponse) -> None:
     body_sent = asyncio.Event()
@@ -20,7 +22,7 @@ async def _disconnect_after_first_body(response: _OwnedStreamingResponse) -> Non
             body_sent.set()
 
     async def receive() -> dict[str, object]:
-        await body_sent.wait()
+        await wait_for_event(body_sent)
         return {"type": "http.disconnect"}
 
     await response(

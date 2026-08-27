@@ -34,6 +34,7 @@ from marimo_studio.view_providers import (
     SourceLocation,
 )
 
+from ..async_test_support import wait_for_event
 from ..helpers import ready_runtime_status
 
 
@@ -150,6 +151,7 @@ def test_validation_levels_preserve_projection_repair_context(
         assert action.advice == "Restore the projected summary value."
 
 
+@pytest.mark.native_process
 def test_runtime_analysis_runs_in_a_dedicated_process(notebook_path) -> None:
     ensure_view(notebook_path)
     studio = load_studio(notebook_path)
@@ -442,7 +444,7 @@ def test_unexpected_stage_failure_cancels_sibling_analysis_work(
             nonlocal sibling_cancelled
             del studio, view_name, expected_revisions, timeout
             if failing_stage == "runtime":
-                await started.wait()
+                await wait_for_event(started)
                 raise RuntimeError("runtime failed")
             started.set()
             try:
@@ -459,7 +461,7 @@ def test_unexpected_stage_failure_cancels_sibling_analysis_work(
         ) -> tuple[BrowserObservation, ...]:
             nonlocal sibling_cancelled
             if failing_stage == "browser":
-                await started.wait()
+                await wait_for_event(started)
                 raise RuntimeError("browser failed")
             started.set()
             try:

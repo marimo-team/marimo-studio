@@ -14,6 +14,7 @@ from marimo_studio._server.agent.clients import (
 )
 from marimo_studio.errors import AgentRequestError
 
+from ..async_test_support import wait_for_event
 from ..client_test_support import bind_native_session
 
 
@@ -519,7 +520,7 @@ def test_session_target_waits_for_the_workspace_event_stream() -> None:
             return await clients.wait_for_session_target("s_123456", 1)
 
         waiting = asyncio.create_task(wait_for_target())
-        await started.wait()
+        await wait_for_event(started)
         await bind_native_session(clients, "s_123456", "browser-client-1234")
         assert not waiting.done()
         await _connect(clients, "browser-client-1234")
@@ -554,7 +555,7 @@ def test_native_accept_replaces_the_provisional_target_identity() -> None:
             return await clients.wait_for_session_target("s_123456", 1)
 
         waiting = asyncio.create_task(wait_for_session())
-        await started.wait()
+        await wait_for_event(started)
         assert not waiting.done()
         assert clients.accept_session_binding(binding, object()) is binding
         accepted_by_session = await waiting

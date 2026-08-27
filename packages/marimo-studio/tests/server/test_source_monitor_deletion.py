@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+import threading
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,7 +17,7 @@ from marimo_studio._workspace import load_studio
 from marimo_studio.errors._internal import ViewDeletionInProgress
 from marimo_studio.view_providers._host import provider_registry
 
-from ..app_helpers import configured
+from ..app_helpers import created_one_view
 from ..source_change_test_support import next_source
 
 
@@ -27,7 +28,7 @@ def test_committed_deletion_evicts_monitor_before_provider_recreation(
     monkeypatch: pytest.MonkeyPatch,
     active: bool,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     manifest = tomlkit.parse(project.manifest.read_text(encoding="utf-8"))
     manifest["provider"] = "third-party/old"
@@ -42,9 +43,11 @@ def test_committed_deletion_evicts_monitor_before_provider_recreation(
     class Provider:
         def __init__(self) -> None:
             self.inspections = 0
+            self.inspected = threading.Event()
 
         def inspect(self, selected: Any) -> Any:
             self.inspections += 1
+            self.inspected.set()
             return builtin.inspect(
                 replace(
                     selected,
@@ -72,7 +75,7 @@ def test_committed_deletion_evicts_monitor_before_provider_recreation(
         coordinator = DevelopmentCoordinator(interval=60)
         subscription = await coordinator.subscribe(old_studio, "dashboard")
         try:
-            await asyncio.sleep(0.05)
+            assert await asyncio.to_thread(old_provider.inspected.wait, 1)
             if not active:
                 await subscription.close()
             old_inspections = old_provider.inspections
@@ -124,7 +127,7 @@ def test_completed_source_constructor_is_superseded_by_deletion(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
 
     async def exercise() -> ViewDeletionInProgress:
         coordinator = DevelopmentCoordinator(interval=60)

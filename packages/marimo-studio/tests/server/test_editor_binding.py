@@ -20,6 +20,8 @@ from marimo_studio._server.records import ServerContext
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.studio.editor_capability import editor_binding_capability
 
+from ..async_test_support import wait_for_event
+
 _CLIENT_ID = "browser-client-1234"
 _SESSION_ID = "s_123456"
 _LIFETIME_OWNER = object()
@@ -276,7 +278,7 @@ def test_current_native_identity_restores_a_pruned_client_binding() -> None:
         clients = StudioClientRegistry(disconnect_grace=0, wait=wait)
         sessions = _Sessions()
         assert await clients.bind_session(_SESSION_ID, _CLIENT_ID) is not None
-        await cleanup_started.wait()
+        await wait_for_event(cleanup_started)
         removed = asyncio.Event()
         unsubscribe = clients.subscribe(removed.set)
         release_cleanup.set()

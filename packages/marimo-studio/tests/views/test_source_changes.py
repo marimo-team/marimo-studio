@@ -24,7 +24,7 @@ from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import InspectionRequest, ProjectInput
 from marimo_studio.view_providers._host import provider_registry
 
-from ..app_helpers import configured
+from ..app_helpers import configured, created_one_view
 from ..source_change_test_support import counting_registry as _counting_registry
 
 
@@ -64,7 +64,7 @@ def test_catalog_reuses_unchanged_inspection_and_detects_direct_edits(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     provider = _counting_registry(monkeypatch, project.provider)
 
@@ -91,7 +91,7 @@ def test_source_monitor_surfaces_provider_process_cleanup_failure(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
 
     class Provider:
         def inspect(self, _request: object) -> object:
@@ -117,7 +117,7 @@ def test_catalog_walks_the_provider_input_scope_once_per_change(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     _watch_only_registry(monkeypatch, project.provider, PurePosixPath("."))
     walks = 0
@@ -144,7 +144,7 @@ def test_catalog_probe_detects_a_file_added_to_an_existing_empty_directory(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     empty = project.root / "empty"
     empty.mkdir()
@@ -160,7 +160,7 @@ def test_watched_file_addition_and_removal_each_reinspect_once(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     provider = _watch_only_registry(
         monkeypatch,
@@ -186,7 +186,7 @@ def test_watch_plan_stays_bounded_by_declared_roots(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     for index in range(len(studio.views) + 5):
         (project.root / f"source-{index}.txt").write_text(
@@ -207,7 +207,7 @@ def test_source_scan_counts_directories_toward_its_entry_limit(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     watched = project.root / "watched"
     watched.mkdir()
@@ -229,7 +229,7 @@ def test_source_scan_stops_when_its_owner_is_cancelled_mid_scan(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     watched = project.root / "watched"
     watched.mkdir()
@@ -257,6 +257,7 @@ def test_source_scan_stops_when_its_owner_is_cancelled_mid_scan(
         producer.poll()
 
 
+@pytest.mark.supported_python
 def test_windows_stamp_hashes_a_bounded_descriptor(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -275,6 +276,7 @@ def test_windows_stamp_hashes_a_bounded_descriptor(
     )
 
 
+@pytest.mark.supported_python
 def test_windows_stamp_uses_metadata_for_an_oversized_sparse_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -300,7 +302,7 @@ def test_changed_file_details_ignore_unadvertised_watch_root_files(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     inspection = (
         provider_registry().get(project.provider).inspect(inspection_request(project))
@@ -328,7 +330,7 @@ def test_changed_file_details_fall_back_to_full_reconciliation_when_one_is_unsta
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     inspection = (
         provider_registry().get(project.provider).inspect(inspection_request(project))
@@ -362,13 +364,13 @@ def test_view_manifest_addition_and_removal_reload_workspace_discovery(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     provider = _counting_registry(monkeypatch, project.provider)
     producer = SourceChangeProducer(studio, project.name)
     added = studio.view_root / "comparison"
 
-    shutil.copytree(studio.views["executive"].root, added)
+    shutil.copytree(project.root, added)
     created = producer.poll()
     assert "comparison" in producer.studio.views
     shutil.rmtree(added)
@@ -384,7 +386,7 @@ def test_selected_manifest_change_reloads_provider_options(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     provider = _counting_registry(monkeypatch, project.provider)
     producer = SourceChangeProducer(studio, project.name)
@@ -413,7 +415,7 @@ def test_selected_manifest_change_reloads_provider_options(
 def test_config_change_refreshes_inventory_then_selected_project(
     notebook_path: Path,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     producer = SourceChangeProducer(studio, "dashboard")
 
     def update(config: MutableMapping[str, object]) -> None:
@@ -428,7 +430,7 @@ def test_config_change_refreshes_inventory_then_selected_project(
 def test_selected_manifest_missing_and_recovery_each_refresh_project(
     notebook_path: Path,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     producer = SourceChangeProducer(studio, "dashboard")
     manifest = studio.views["dashboard"].manifest
     source = manifest.read_text(encoding="utf-8")
@@ -470,7 +472,7 @@ def test_inspection_failure_keeps_a_repair_watch(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     registered = provider_registry().get(project.provider)
     source = project.root / "index.html"
@@ -514,7 +516,7 @@ def test_failed_reinspection_invalidates_the_previous_catalog(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = configured(notebook_path)
+    studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
     registered = provider_registry().get(project.provider)
     source = project.root / "index.html"

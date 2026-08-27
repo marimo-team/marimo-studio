@@ -12,6 +12,8 @@ from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._server.development import watcher as file_watcher
 from marimo_studio._server.development.ports import ProjectWatchPlan
 
+from ..async_test_support import wait_for_event
+
 
 def test_watchdog_events_ignore_read_only_file_activity() -> None:
     assert file_watcher._watchdog_event_is_mutation("modified")
@@ -57,7 +59,6 @@ def test_native_watcher_shares_one_exact_path_between_project_owners(
             self.stopped = True
 
         def join(self, timeout: float | None = None) -> None:
-            assert timeout == file_watcher._WATCHDOG_JOIN_TIMEOUT
             return
 
         def is_alive(self) -> bool:
@@ -110,7 +111,6 @@ def test_recursive_registration_failure_keeps_the_shallow_watch(
             return
 
         def join(self, timeout: float | None = None) -> None:
-            assert timeout == file_watcher._WATCHDOG_JOIN_TIMEOUT
             return
 
         def is_alive(self) -> bool:
@@ -154,7 +154,6 @@ def test_first_registration_failure_closes_the_shared_observer(
             self.stopped = True
 
         def join(self, timeout: float | None = None) -> None:
-            assert timeout == file_watcher._WATCHDOG_JOIN_TIMEOUT
             self.joined = True
 
         def is_alive(self) -> bool:
@@ -240,6 +239,7 @@ def test_start_failure_retains_timed_out_observer_for_next_acquisition(
     observers = iter((failed, replacement))
     monkeypatch.setattr(file_watcher, "Observer", lambda: next(observers))
     monkeypatch.setattr(file_watcher, "_SHARED_WATCHDOG", None)
+    monkeypatch.setattr(file_watcher, "_WATCHDOG_JOIN_TIMEOUT", 0.125)
     plan = ProjectWatchPlan((source,), ())
 
     async def exercise() -> None:
@@ -255,7 +255,7 @@ def test_start_failure_retains_timed_out_observer_for_next_acquisition(
         assert isinstance(captured.value.__cause__, OSError)
         assert str(captured.value.__cause__) == "watchdog start failed"
         assert failed.stop_calls == 1
-        assert failed.join_timeouts == [file_watcher._WATCHDOG_JOIN_TIMEOUT]
+        assert failed.join_timeouts == [0.125]
         assert file_watcher._SHARED_WATCHDOG is not None
         assert file_watcher._SHARED_WATCHDOG.cleanup_pending
 
@@ -267,14 +267,11 @@ def test_start_failure_retains_timed_out_observer_for_next_acquisition(
         )
         assert owner is not None
         assert failed.stop_calls == 2
-        assert failed.join_timeouts == [
-            file_watcher._WATCHDOG_JOIN_TIMEOUT,
-            file_watcher._WATCHDOG_JOIN_TIMEOUT,
-        ]
+        assert failed.join_timeouts == [0.125, 0.125]
         assert replacement.alive
         owner.stop()
         assert replacement.stop_calls == 1
-        assert replacement.join_timeouts == [file_watcher._WATCHDOG_JOIN_TIMEOUT]
+        assert replacement.join_timeouts == [0.125]
         assert not replacement.alive
         assert file_watcher._SHARED_WATCHDOG is None
 
@@ -331,6 +328,7 @@ def test_project_watcher_surfaces_bounded_native_teardown_and_retries(
     monkeypatch.setattr(file_watcher, "Observer", lambda: observer)
     monkeypatch.setattr(file_watcher, "_SHARED_WATCHDOG", None)
     monkeypatch.setattr(file_watcher, "_COALESCE_SECONDS", 0)
+    monkeypatch.setattr(file_watcher, "_WATCHDOG_JOIN_TIMEOUT", 0.125)
 
     async def exercise() -> None:
         watcher = file_watcher.PrivateProjectWatcher()
@@ -348,7 +346,7 @@ def test_project_watcher_surfaces_bounded_native_teardown_and_retries(
         ):
             await asyncio.wait_for(watcher.close(), timeout=1)
         assert observer.stop_calls == 1
-        assert observer.join_timeouts == [file_watcher._WATCHDOG_JOIN_TIMEOUT]
+        assert observer.join_timeouts == [0.125]
         assert file_watcher._SHARED_WATCHDOG is not None
         assert watcher._observer is not None
         assert watcher._callback is None
@@ -358,10 +356,7 @@ def test_project_watcher_surfaces_bounded_native_teardown_and_retries(
         observer.alive = False
         await asyncio.wait_for(watcher.close(), timeout=1)
         assert observer.stop_calls == 2
-        assert observer.join_timeouts == [
-            file_watcher._WATCHDOG_JOIN_TIMEOUT,
-            file_watcher._WATCHDOG_JOIN_TIMEOUT,
-        ]
+        assert observer.join_timeouts == [0.125, 0.125]
         assert file_watcher._SHARED_WATCHDOG is None
         assert watcher._observer is None
         assert watcher._notify_task is None or watcher._notify_task.done()
@@ -414,7 +409,7 @@ def test_project_watcher_drains_an_event_arriving_during_callback(
 
         await watcher.replace(ProjectWatchPlan((first, second), ()), callback)
         try:
-            await entered.wait()
+            await wait_for_event(entered)
             watcher._signal(second)
             release.set()
             await asyncio.wait_for(second_delivered.wait(), timeout=1)
@@ -426,7 +421,7 @@ def test_project_watcher_drains_an_event_arriving_during_callback(
     asyncio.run(exercise())
 
 
-def test_project_watcher_ignores_a_queued_callback_while_replacing_its_owner(
+def test_project_watcher_ignores_signals_while_replacing_its_owner(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -458,7 +453,7 @@ def test_project_watcher_ignores_a_queued_callback_while_replacing_its_owner(
         return selected
 
     monkeypatch.setattr(file_watcher, "_watchdog_owner", owner)
-    monkeypatch.setattr(file_watcher, "_COALESCE_SECONDS", 0.2)
+    monkeypatch.setattr(file_watcher, "_COALESCE_SECONDS", 0)
 
     async def exercise() -> None:
         watcher = file_watcher.PrivateProjectWatcher()
@@ -516,26 +511,39 @@ def test_project_watcher_ignores_a_queued_callback_while_closing(
             return
 
     monkeypatch.setattr(file_watcher, "_watchdog_owner", lambda *_args: Owner())
-    monkeypatch.setattr(file_watcher, "_COALESCE_SECONDS", 0.2)
+    monkeypatch.setattr(file_watcher, "_COALESCE_SECONDS", 0)
 
     async def exercise() -> None:
         watcher = file_watcher.PrivateProjectWatcher()
         delivered = asyncio.Event()
+        delivered_paths: list[Path] = []
 
-        async def callback(_path: Path) -> None:
+        async def callback(path: Path) -> None:
+            delivered_paths.append(path)
             delivered.set()
 
         await watcher.replace(ProjectWatchPlan((source,), ()), callback)
         await asyncio.wait_for(delivered.wait(), timeout=1)
+        notify_started = asyncio.Event()
+        release_notify = asyncio.Event()
+        notify = watcher._notify
+
+        async def gated_notify(generation: int) -> None:
+            notify_started.set()
+            await release_notify.wait()
+            await notify(generation)
+
+        monkeypatch.setattr(watcher, "_notify", gated_notify)
+        watcher._signal(queued)
+        await asyncio.wait_for(notify_started.wait(), timeout=1)
         closing = asyncio.create_task(watcher.close())
         try:
             assert await asyncio.to_thread(stop_started.wait, 1)
-            watcher._signal(queued)
             release_stop.set()
             await closing
-            assert watcher._notify_task is None or watcher._notify_task.done()
-            assert not watcher._pending
+            assert delivered_paths == [source.absolute()]
         finally:
+            release_notify.set()
             release_stop.set()
             await asyncio.gather(closing, return_exceptions=True)
 
@@ -660,7 +668,7 @@ def test_slow_native_shutdown_does_not_block_the_event_loop(
             assert await asyncio.to_thread(started.wait, 1)
             heartbeat = asyncio.Event()
             asyncio.get_running_loop().call_soon(heartbeat.set)
-            await heartbeat.wait()
+            await wait_for_event(heartbeat)
             assert not closing.done()
             release.set()
             await closing

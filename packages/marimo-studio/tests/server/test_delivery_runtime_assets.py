@@ -9,7 +9,7 @@ from starlette.testclient import TestClient
 
 from marimo_studio import create_asgi_app
 
-from ..app_helpers import configured as _configured
+from ..app_helpers import created_one_view
 
 
 def test_runtime_asset_resolution_does_not_block_health_requests(
@@ -17,7 +17,7 @@ def test_runtime_asset_resolution_does_not_block_health_requests(
     runtime_assets: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = created_one_view(notebook_path)
     started = threading.Event()
     release = threading.Event()
     resolve = Path.resolve
@@ -53,7 +53,7 @@ def test_runtime_assets_preserve_range_head_and_cache_headers(
     notebook_path: Path,
     runtime_assets: Path,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = created_one_view(notebook_path)
     asset = runtime_assets / "range-test.js"
     asset.write_bytes(b"abcdef")
     try:
@@ -83,7 +83,7 @@ def test_runtime_asset_route_rejects_missing_and_unsafe_paths(
     notebook_path: Path,
     runtime_assets: Path,
 ) -> None:
-    studio = _configured(notebook_path)
+    studio = created_one_view(notebook_path)
     outside = runtime_assets.parent / "outside.js"
     alias = runtime_assets / "alias.js"
     outside.write_text("export {};\n", encoding="utf-8")
