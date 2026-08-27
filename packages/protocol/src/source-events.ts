@@ -1,10 +1,10 @@
 import { z } from "zod";
 
 import { jsonCodec } from "./json.ts";
+import { sourceDocumentPathSchema } from "./source-documents.ts";
 
-export const sourceNameSchema = z.enum(["index.html", "app.css"]);
 export const sourceFileChangeSchema = z.object({
-  path: sourceNameSchema,
+  path: sourceDocumentPathSchema,
   revision: z.string().nullable(),
 });
 
@@ -15,22 +15,21 @@ const sourceChangesSchema = z.object({
 });
 const sourceChangesCodec = jsonCodec(sourceChangesSchema);
 
-export type SourceName = z.infer<typeof sourceNameSchema>;
 export type SourceFileChange = z.infer<typeof sourceFileChangeSchema>;
 
-const sourceBaselineSchema = z
+const presentationBaselineSchema = z
   .object({
     schema: z.literal(1),
     view: z.string().min(1),
     revision: z.string().min(1).nullable(),
   })
   .strict();
-const sourceBaselineCodec = jsonCodec(sourceBaselineSchema);
+const presentationBaselineCodec = jsonCodec(presentationBaselineSchema);
 
-export type SourceBaseline = z.infer<typeof sourceBaselineSchema>;
+export type PresentationBaseline = z.infer<typeof presentationBaselineSchema>;
 
-export const parseSourceBaseline = (source: string): SourceBaseline | undefined => {
-  const result = sourceBaselineCodec.safeDecode(source);
+export const parsePresentationBaseline = (source: string): PresentationBaseline | undefined => {
+  const result = presentationBaselineCodec.safeDecode(source);
   return result.success ? result.data : undefined;
 };
 

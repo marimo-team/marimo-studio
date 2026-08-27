@@ -2,17 +2,53 @@ import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
 import {
+  parseActivationAckResponse,
   parseActiveViewRequest,
+  parseEditorDocumentMutation,
   parseEditorSessionBinding,
   parseObserveViewRequest,
-  parseShellChange,
+  parsePresentationBuild,
+  parsePresentationChange,
+  parseWorkspaceChange,
 } from "../src/development-events.ts";
 import { parseSourceChanges } from "../src/source-events.ts";
 
-test("development events accept supported shell changes", () => {
-  assert.deepEqual(parseShellChange('{"kind":"runtime"}'), "runtime");
-  assert.deepEqual(parseShellChange('{"kind":"unknown"}'), undefined);
-  assert.deepEqual(parseShellChange("invalid"), undefined);
+test("development events accept authoritative workspace changes", () => {
+  assert.deepEqual(parseWorkspaceChange('{"kind":"project"}'), "project");
+  assert.deepEqual(parseWorkspaceChange('{"kind":"build"}'), "build");
+  assert.deepEqual(parseWorkspaceChange('{"kind":"presentation"}'), "presentation");
+  assert.deepEqual(parseWorkspaceChange('{"kind":"views"}'), "views");
+  assert.deepEqual(parseWorkspaceChange('{"kind":"html"}'), undefined);
+  assert.deepEqual(parseWorkspaceChange("invalid"), undefined);
+});
+
+test("presentation build events identify admission boundaries", () => {
+  assert.deepEqual(parsePresentationBuild('{"kind":"build","phase":"building","files":[]}'), {
+    phase: "building",
+  });
+  assert.deepEqual(
+    parsePresentationBuild(
+      '{"kind":"build","build":{"phase":"ready"},"revision":"revision-2","files":[]}',
+    ),
+    { phase: "complete", revision: "revision-2" },
+  );
+  assert.deepEqual(
+    parsePresentationBuild(
+      '{"kind":"build","build":{"phase":"failed"},"revision":null,"files":[]}',
+    ),
+    { phase: "complete", revision: null },
+  );
+  assert.equal(parsePresentationBuild('{"kind":"project"}'), undefined);
+});
+
+test("presentation changes carry the published revision", () => {
+  assert.deepEqual(
+    parsePresentationChange(
+      '{"kind":"presentation","view":"dashboard","revision":"revision-2","files":[]}',
+    ),
+    { view: "dashboard", revision: "revision-2" },
+  );
+  assert.equal(parsePresentationChange('{"kind":"presentation"}'), undefined);
 });
 
 test("development events decode active-view requests", () => {
@@ -22,6 +58,16 @@ test("development events decode active-view requests", () => {
     view: "report",
   });
   assert.deepEqual(parseActiveViewRequest('{"schema":1,"view":""}'), undefined);
+});
+
+test("activation acknowledgements expose terminal browser outcomes", () => {
+  for (const outcome of ["applied", "retryable", "rejected"] as const) {
+    assert.deepEqual(parseActivationAckResponse({ schema: 1, outcome }), {
+      schema: 1,
+      outcome,
+    });
+  }
+  assert.deepEqual(parseActivationAckResponse({ schema: 1, outcome: "unknown" }), undefined);
 });
 
 test("development events decode editor session bindings", () => {
@@ -37,6 +83,46 @@ test("development events decode editor session bindings", () => {
     ),
     undefined,
   );
+});
+
+test("editor document mutations require the exact bounded schema", () => {
+  const mutation = {
+    schema: 1,
+    type: "marimo-studio:editor-document-mutation",
+    generation: 3,
+  } as const;
+  assert.deepEqual(parseEditorDocumentMutation(mutation), mutation);
+  assert.deepEqual(
+    parseEditorDocumentMutation({
+      schema: 1,
+      type: "marimo-studio:editor-document-saved",
+      generation: 3,
+    }),
+    {
+      schema: 1,
+      type: "marimo-studio:editor-document-saved",
+      generation: 3,
+    },
+  );
+  const applied = {
+    schema: 1,
+    type: "marimo-studio:editor-document-transaction-applied",
+    generation: 3,
+    changed: false,
+  } as const;
+  assert.deepEqual(parseEditorDocumentMutation(applied), applied);
+  assert.equal(parseEditorDocumentMutation({ ...applied, changed: "false" }), undefined);
+  assert.equal(
+    parseEditorDocumentMutation({
+      schema: 1,
+      type: "marimo-studio:editor-document-transaction-applied",
+      generation: 3,
+    }),
+    undefined,
+  );
+  assert.equal(parseEditorDocumentMutation({ ...mutation, generation: 0 }), undefined);
+  assert.equal(parseEditorDocumentMutation({ ...mutation, extra: true }), undefined);
+  assert.equal(parseEditorDocumentMutation({ ...mutation, type: "unknown" }), undefined);
 });
 
 test("development events decode browser observation requests", () => {
@@ -63,14 +149,15 @@ test("development events decode browser observation requests", () => {
   );
 });
 
-test("source events retain valid authored files", () => {
+test("source events retain valid provider-discovered files", () => {
   assert.deepEqual(
     parseSourceChanges(
       JSON.stringify({
         files: [
           { path: "index.html", revision: "html-r2" },
           { path: "app.css", revision: null },
-          { path: "notes.txt", revision: "ignored" },
+          { path: "src/App.tsx", revision: "tsx-r2" },
+          { path: "../outside.ts", revision: "ignored" },
           { path: "index.html", revision: 42 },
         ],
       }),
@@ -78,6 +165,7 @@ test("source events retain valid authored files", () => {
     [
       { path: "index.html", revision: "html-r2" },
       { path: "app.css", revision: null },
+      { path: "src/App.tsx", revision: "tsx-r2" },
     ],
   );
   assert.deepEqual(parseSourceChanges("invalid"), []);
