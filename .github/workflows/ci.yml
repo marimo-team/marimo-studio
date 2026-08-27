@@ -48,7 +48,7 @@ jobs:
           --python "${{ matrix.python-version }}"
           pytest
 
-      - name: Test pinned Marimo release
+      - name: Test the standalone pinned-release boundary
         if: matrix.python-version == '3.10'
         run: >-
           uv run
@@ -60,6 +60,9 @@ jobs:
           --with pytest==9.1.1
           --with httpx2==2.9.1
           pytest
+          packages/marimo-studio/tests/marimo_compat/test_release.py
+          packages/marimo-studio/tests/providers/test_builtin_identity.py
+          packages/marimo-studio/tests/agent/test_workspace.py::test_marimo_code_mode_loads_the_studio_workspace_api
 
   quality:
     runs-on: ubuntu-latest
@@ -106,8 +109,100 @@ jobs:
       - name: Test frontend
         run: pnpm exec vp run -r test
 
-      - name: Build documentation
-        run: make docs-build
-
       - name: Build package and validate examples
         run: make package examples-check
+
+      - name: Upload the verified wheel for Windows
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-package
+          path: |
+            dist/marimo_studio-*.whl
+            dist/agent-plugin-digests.json
+          retention-days: 1
+          if-no-files-found: error
+
+  windows-package:
+    name: Installed package and provider (Windows)
+    needs: quality
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Download the verified wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-package
+          path: dist
+
+      - name: Verify installed package and providers
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist/marimo_studio-*.whl).FullName
+          $denoWheel = "$wheel[deno]"
+          uv run --no-project --isolated --no-cache --with $wheel --with agent-plugins==0.1.0 python scripts/verify-installed-package.py --expected-plugin-digests dist/agent-plugin-digests.json
+          uv run --no-project --isolated --no-cache --with $denoWheel --with agent-plugins==0.1.0 python scripts/verify-installed-package.py --expected-plugin-digests dist/agent-plugin-digests.json --deno
+          uv run --no-project --isolated --no-cache --with $wheel --with apps/e2e/fixtures-provider/provider --with ty==0.0.69 python scripts/verify-external-provider.py --typecheck
+
+  deno-providers:
+    name: Deno providers (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Require the pinned Deno runtime
+        run: >-
+          uv run
+          --frozen
+          --isolated
+          --no-dev
+          --group test-deno
+          python -c "from marimo_studio.view_providers._bundled import _deno; assert _deno.deno_availability().available"
+
+      - name: Test Deno provider contracts
+        run: >-
+          uv run
+          --frozen
+          --isolated
+          --no-dev
+          --group test-deno
+          pytest
+          packages/marimo-studio/tests/providers/test_deno_runtime.py
+          packages/marimo-studio/tests/providers/test_deno_react.py
+          packages/marimo-studio/tests/providers/test_deno_svelte.py
+          -rs
+
+      - name: Test an independently packaged provider
+        if: runner.os != 'Windows'
+        run: >-
+          uv run
+          --no-project
+          --isolated
+          --with-editable packages/marimo-studio
+          --with apps/e2e/fixtures-provider/provider
+          --with ty==0.0.69
+          python scripts/verify-external-provider.py --typecheck
