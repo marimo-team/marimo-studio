@@ -63,6 +63,12 @@ def _candidate(
     )
 
 
+def _import_pids(marker: Path) -> tuple[int, ...]:
+    if not marker.is_dir():
+        return ()
+    return tuple(int(item.name.split("-", 1)[0]) for item in marker.iterdir())
+
+
 def test_provider_python_work_does_not_consume_the_command_budget(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -103,9 +109,7 @@ def test_external_catalog_and_starter_creation_stay_out_of_process(
         "starters",
         "create",
     ]
-    worker_pids = tuple(
-        int(line) for line in import_marker.read_text(encoding="utf-8").splitlines()
-    )
+    worker_pids = _import_pids(import_marker)
     assert len(worker_pids) == 4
     assert os.getpid() not in worker_pids
     assert all(int(pid) != os.getpid() for _operation, pid in operations)
@@ -142,11 +146,8 @@ def test_cancelled_initial_discovery_retries_without_a_partial_catalog(
     try:
         deadline = time.monotonic() + _PROCESS_START_TIMEOUT
         while time.monotonic() < deadline:
-            if marker.is_file():
-                pids = tuple(
-                    int(line)
-                    for line in marker.read_text(encoding="utf-8").splitlines()
-                )
+            if marker.is_dir():
+                pids = _import_pids(marker)
                 if len(pids) == 2:
                     break
             threading.Event().wait(0.01)
@@ -164,19 +165,12 @@ def test_cancelled_initial_discovery_retries_without_a_partial_catalog(
         monkeypatch.delenv("MARIMO_STUDIO_PROVIDER_BLOCK")
         assert registry.ids == ("test-retry/first", "test-retry/second")
         assert all(diagnostic.loaded for diagnostic in registry.diagnostics())
-        _wait_until_dead(
-            tuple(int(line) for line in marker.read_text(encoding="utf-8").splitlines())
-        )
+        _wait_until_dead(_import_pids(marker))
     finally:
         control.cancel()
         worker.join(timeout=_PROCESS_START_TIMEOUT)
-        if marker.is_file():
-            _kill_survivors(
-                tuple(
-                    int(line)
-                    for line in marker.read_text(encoding="utf-8").splitlines()
-                )
-            )
+        if marker.is_dir():
+            _kill_survivors(_import_pids(marker))
 
 
 def test_external_descriptions_run_concurrently_in_candidate_order(

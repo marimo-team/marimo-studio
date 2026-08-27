@@ -46,8 +46,9 @@ _PROCESS_START_TIMEOUT = 15.0
 
 _IMPORT_MARKER = os.environ.get("MARIMO_STUDIO_PROVIDER_IMPORT_MARKER")
 if _IMPORT_MARKER:
-    with Path(_IMPORT_MARKER).open("a", encoding="utf-8") as stream:
-        stream.write(f"{os.getpid()}\n")
+    marker = Path(_IMPORT_MARKER)
+    marker.mkdir(parents=True, exist_ok=True)
+    (marker / f"{os.getpid()}-{time.time_ns()}").touch()
 if os.environ.get("MARIMO_STUDIO_PROVIDER_BLOCK") == "describe":
     threading.Event().wait(30)
 _DISCOVERY_BARRIER = os.environ.get("MARIMO_STUDIO_PROVIDER_DISCOVERY_BARRIER")
