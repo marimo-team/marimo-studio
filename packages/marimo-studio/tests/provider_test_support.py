@@ -100,7 +100,7 @@ class ProviderStub:
         self.report: BuildResult | None = None
         self.build_calls = 0
         self.plan_calls = 0
-        self.template_calls = 0
+        self.starter_calls = 0
 
     def availability(
         self,
@@ -118,7 +118,7 @@ class ProviderStub:
         )
 
     def starters(self) -> tuple[ProviderStarter, ...]:
-        self.template_calls += 1
+        self.starter_calls += 1
         if self.starters_error is not None:
             raise self.starters_error
         return (self.starter,)

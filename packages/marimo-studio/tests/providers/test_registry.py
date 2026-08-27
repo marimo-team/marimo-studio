@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import threading
-import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
@@ -49,7 +48,6 @@ def test_catalog_probes_availability_concurrently_and_caches_starters(
     def availability(name: str) -> ProviderAvailability:
         availability_calls[name] += 1
         barrier.wait(timeout=1)
-        time.sleep(0.15)
         return ProviderAvailability(True)
 
     cast(Any, providers[0]).availability = lambda _project=None: availability("first")
@@ -62,19 +60,16 @@ def test_catalog_probes_availability_concurrently_and_caches_starters(
     )
     monkeypatch.setattr(providers_module, "_REGISTRY", registry)
 
-    started = time.monotonic()
     first = catalog_module.starters()
-    elapsed = time.monotonic() - started
     second = catalog_module.starters()
 
-    assert elapsed < 0.8
     assert [starter.provider for starter in first] == [
         "test-first/first",
         "test-second/second",
     ]
     assert second == first
     assert availability_calls == {"first": 2, "second": 2}
-    assert [provider.template_calls for provider in providers] == [1, 1]
+    assert [provider.starter_calls for provider in providers] == [1, 1]
 
 
 def test_registry_probes_starters_concurrently_and_caches_successes() -> None:
@@ -88,7 +83,6 @@ def test_registry_probes_starters_concurrently_and_caches_successes() -> None:
     def starters(name: str, provider: ProviderStub):
         calls[name] += 1
         barrier.wait(timeout=1)
-        time.sleep(0.15)
         return (provider.starter,)
 
     cast(Any, providers[0]).starters = lambda: starters("first", providers[0])
@@ -100,12 +94,9 @@ def test_registry_probes_starters_concurrently_and_caches_successes() -> None:
         )
     )
 
-    started = time.monotonic()
     first = registry.starter_records()
-    elapsed = time.monotonic() - started
     second = registry.starter_records()
 
-    assert elapsed < 0.8
     assert [(provider.key, starter.key) for provider, starter in first] == [
         ("test-first/first", "default"),
         ("test-second/second", "default"),

@@ -77,7 +77,7 @@ def starters() -> tuple[Starter, ...]:
     """Return every installed view starter."""
     return tuple(
         sorted(
-            (starter for starter, _provider, _template in _starter_records()),
+            (starter for starter, _provider, _provider_starter in _starter_records()),
             key=lambda item: item.id,
         )
     )

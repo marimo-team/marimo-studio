@@ -35,7 +35,7 @@ from .workspace_test_support import (
 )
 
 
-def test_view_setup_configures_the_notebook_and_scaffolds_each_view(
+def test_view_setup_configures_the_notebook_and_creates_each_view(
     notebook_path: Path,
 ) -> None:
     original = notebook_path.read_text(encoding="utf-8")
@@ -43,7 +43,7 @@ def test_view_setup_configures_the_notebook_and_scaffolds_each_view(
     result = ensure_view(notebook_path)
     studio = load_studio(notebook_path)
     document = read_notebook_metadata(notebook_path)
-    template = result.root.joinpath("index.html").read_text(encoding="utf-8")
+    document_source = result.root.joinpath("index.html").read_text(encoding="utf-8")
 
     assert result.workspace == studio
     assert studio.uses_notebook_config
@@ -55,7 +55,7 @@ def test_view_setup_configures_the_notebook_and_scaffolds_each_view(
     assert document["tool"]["marimo-studio"]["default"] == "dashboard"
     assert "marimo-studio" in document["dependencies"]
     assert notebook_path.read_text(encoding="utf-8").endswith(original)
-    assert re.search(r"<h1[^>]*>\s*Dashboard\s*</h1>", template)
+    assert re.search(r"<h1[^>]*>\s*Dashboard\s*</h1>", document_source)
     assert document["tool"]["marimo-studio"].get("cells", {}) == {}
     assert resolve_studio(studio).aliases == {}
     dashboard = studio.views["dashboard"].root / "index.html"

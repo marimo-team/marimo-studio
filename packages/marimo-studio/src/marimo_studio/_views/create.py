@@ -97,7 +97,7 @@ def _select_starter(
     value: str | Starter | None,
 ) -> tuple[Starter, ViewProvider, ProviderStarter]:
     identity = value.id if isinstance(value, Starter) else value or DEFAULT_STARTER_ID
-    starter, provider, template = resolve_starter(identity)
+    starter, provider, provider_starter = resolve_starter(identity)
     if not starter.availability.available:
         reason = starter.availability.reason or "The provider is unavailable."
         action = starter.availability.action
@@ -105,7 +105,7 @@ def _select_starter(
         raise ConfigurationError(
             f"Starter {identity!r} is unavailable: {reason}{detail}"
         )
-    return starter, provider, template
+    return starter, provider, provider_starter
 
 
 def _workspace_provider_requirements(
@@ -174,16 +174,16 @@ def _ensure_view_locked(
         if not (view_root / view_name / "view.toml").is_file()
     )
     plans: dict[str, Mapping[PurePosixPath, bytes]] = {}
-    template: ProviderStarter | None
+    provider_starter: ProviderStarter | None
     if new_views:
         if preplanned is None:
-            selected_starter, provider, template = _select_starter(starter)
+            selected_starter, provider, provider_starter = _select_starter(starter)
         else:
-            selected_starter, provider, template, plans = preplanned
+            selected_starter, provider, provider_starter, plans = preplanned
     else:
         selected_starter = None
         provider = None
-        template = None
+        provider_starter = None
     provider_requirements: tuple[str, ...] = ()
     if studio is None or studio.uses_notebook_config:
         provider_requirements = _workspace_provider_requirements(
@@ -216,7 +216,7 @@ def _ensure_view_locked(
     for view_name in new_views:
         assert selected_starter is not None
         assert provider is not None
-        assert template is not None
+        assert provider_starter is not None
         plan = plans.get(view_name)
         if plan is None:
             if not dry_run:
@@ -225,7 +225,7 @@ def _ensure_view_locked(
                     "Run the operation again."
                 )
             plan = provider.create(
-                template,
+                provider_starter,
                 StarterContext(view_name, notebook_path.stem),
             )
         project_root = view_root / view_name
@@ -362,15 +362,15 @@ def ensure_view(
     prepared_existing: _PreparedExistingView | None = None
     pending_starter: Starter | None = None
     if missing:
-        pending_starter, provider, template = _select_starter(starter)
+        pending_starter, provider, provider_starter = _select_starter(starter)
         plans = {
             view_name: provider.create(
-                template,
+                provider_starter,
                 StarterContext(view_name, notebook_path.stem),
             )
             for view_name in missing
         }
-        preplanned = (pending_starter, provider, template, plans)
+        preplanned = (pending_starter, provider, provider_starter, plans)
     current_views = discover_views(view_root)
     if selected in current_views and selected not in missing:
         prepared_existing = _prepare_existing_view(current_views[selected])

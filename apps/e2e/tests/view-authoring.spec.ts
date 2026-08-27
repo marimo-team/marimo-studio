@@ -590,7 +590,7 @@ test("keeps relative navigation public across direct view reloads", async ({
   }
 });
 
-test("creates a scaffolded view and removes its files", async ({ browserDiagnostics, page }) => {
+test("creates a view and removes its files", async ({ browserDiagnostics, page }) => {
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
     2,
