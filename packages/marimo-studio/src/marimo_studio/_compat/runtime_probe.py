@@ -150,6 +150,8 @@ async def probe_runtime(
                 file_key=str(path),
                 auto_instantiate=True,
             )
+            if session is None:
+                raise ProtocolError("Marimo session creation returned no session")
             session.instantiate(
                 instantiate_notebook_request(auto_run=True),
                 http_request=None,

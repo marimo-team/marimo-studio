@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 import time
 from collections import deque
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
@@ -444,7 +445,7 @@ def _start_producer(
                 raise
             raise_process_cleanup(error)
             task = asyncio.current_task()
-            if task is not None and task.cancelling():
+            if task is not None and sys.version_info >= (3, 11) and task.cancelling():
                 raise
 
     return asyncio.create_task(run())

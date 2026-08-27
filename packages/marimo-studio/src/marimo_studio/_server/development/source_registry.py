@@ -100,7 +100,11 @@ class SourceMonitorRegistry:
         token: object,
     ) -> asyncio.Task[None] | None:
         monitor = self._monitors.get(key)
-        if monitor is not expected or token not in monitor.subscribers:
+        if (
+            monitor is None
+            or monitor is not expected
+            or token not in monitor.subscribers
+        ):
             return None
         monitor.subscribers.remove(token)
         if monitor.subscribers:
@@ -112,7 +116,12 @@ class SourceMonitorRegistry:
 
     def idle_locked(self, key: str | None, expected: _SourceMonitor) -> bool:
         monitor = self._monitors.get(key)
-        return monitor is expected and not monitor.subscribers and monitor.task is None
+        return (
+            monitor is not None
+            and monitor is expected
+            and not monitor.subscribers
+            and monitor.task is None
+        )
 
     def contains_locked(self, key: str | None, expected: _SourceMonitor) -> bool:
         return self._monitors.get(key) is expected

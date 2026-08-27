@@ -284,7 +284,7 @@ def test_query_fence_survives_repeated_request_cancellation() -> None:
         await wait_for_event(projections.started)
         response.cancel()
         response.cancel()
-        assert response.cancelling() == 2
+        assert response.cancelling() == 2  # pyright: ignore[reportAttributeAccessIssue]
         checkpoint = asyncio.Event()
         asyncio.get_running_loop().call_soon(checkpoint.set)
         await asyncio.wait_for(checkpoint.wait(), timeout=1)

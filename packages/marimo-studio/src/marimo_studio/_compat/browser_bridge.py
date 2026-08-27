@@ -374,7 +374,7 @@ def install_browser_bridge(
                 else:
                     current = getattr(current, key)
             else:
-                current = current[key]
+                current = _studio_cast(_StudioAny, current)[key]
         return current
 
     def _studio_read(args):

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Coroutine
-from typing import Any, TypeVar
+from collections.abc import Awaitable, Coroutine
+from typing import Any, TypeVar, cast
 
 from starlette.requests import Request
 
@@ -60,7 +60,7 @@ async def run_while_connected(
     finally:
         if operation_task is None:
             operation.close()
-        tasks = (
+        tasks: tuple[asyncio.Task[Any], ...] = (
             (disconnect_task,)
             if operation_task is None
             else (operation_task, disconnect_task)
@@ -68,8 +68,9 @@ async def run_while_connected(
         for task in tasks:
             if not task.done():
                 task.cancel()
+        awaitables = cast(tuple[Awaitable[Any], ...], tasks)
         results, cancellation = await settle_ownership(
-            asyncio.gather(*tasks, return_exceptions=True)
+            asyncio.gather(*awaitables, return_exceptions=True)
         )
         errors = tuple(
             result

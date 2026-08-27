@@ -37,7 +37,7 @@ def installed_provider_sources() -> tuple[Path, ...]:
         raise AssertionError("External provider distribution has no file manifest")
     provider_files = tuple(
         sorted(
-            Path(installed.locate_file(item)).resolve()
+            Path(str(installed.locate_file(item))).resolve()
             for item in files
             if item.parts[:1] == ("fixture_provider",) and item.suffix == ".py"
         )
@@ -95,7 +95,7 @@ async def verify() -> None:
 def verify_types(provider_sources: tuple[Path, ...]) -> None:
     installed_packages = Path(marimo_studio.__file__).resolve().parents[1]
     provider_packages = Path(
-        distribution("marimo-studio-e2e-provider").locate_file("")
+        str(distribution("marimo-studio-e2e-provider").locate_file(""))
     ).resolve()
     subprocess.run(
         [

@@ -222,7 +222,7 @@ def test_scope_close_drains_workspace_discovery_before_later_owners(
             await wait_for_event(lifecycle_close_entered)
             closing.cancel()
             closing.cancel()
-            assert closing.cancelling() == 2
+            assert closing.cancelling() == 2  # pyright: ignore[reportAttributeAccessIssue]
             assert not downstream_started.is_set()
             assert not closing.done()
 

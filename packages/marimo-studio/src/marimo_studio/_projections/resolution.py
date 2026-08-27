@@ -299,7 +299,7 @@ def _target_record(
         return None
     if len(candidates) > 1:
         return {"status": "ambiguous"}
-    producer = candidates[0]
+    producer = next(iter(candidates))
     return {
         "status": "ready",
         "producer": str(producer),

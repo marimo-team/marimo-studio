@@ -367,6 +367,7 @@ async def _read_current_project_source(
     name: str,
     development: DevelopmentCoordinator,
 ) -> ViewDocument:
+    last_conflict: tuple[str, str] | None = None
     for _attempt in range(2):
         catalog = await development.project_catalog(studio, view_name)
         spec = source_spec(catalog.inspection, name, view_name)
@@ -384,7 +385,10 @@ async def _read_current_project_source(
             and current_spec == spec
         ):
             return source
-    raise SourceConflictError(spec.path.as_posix(), source.revision)
+        last_conflict = (spec.path.as_posix(), source.revision)
+    if last_conflict is None:
+        raise RuntimeError("Source read made no attempts")
+    raise SourceConflictError(*last_conflict)
 
 
 async def _prepare_source_write(
@@ -393,6 +397,7 @@ async def _prepare_source_write(
     name: str,
     development: DevelopmentCoordinator,
 ) -> PreparedSourceWrite:
+    last_conflict_path: str | None = None
     for _attempt in range(2):
         catalog = await development.project_catalog(studio, view_name)
         spec = source_spec(catalog.inspection, name, view_name)
@@ -415,7 +420,10 @@ async def _prepare_source_write(
                 spec,
                 state,
             )
-    raise SourceConflictError(spec.path.as_posix(), None)
+        last_conflict_path = spec.path.as_posix()
+    if last_conflict_path is None:
+        raise RuntimeError("Source write preparation made no attempts")
+    raise SourceConflictError(last_conflict_path, None)
 
 
 async def _source_body(request: Request) -> str:

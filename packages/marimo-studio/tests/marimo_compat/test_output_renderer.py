@@ -255,11 +255,13 @@ def test_output_renderer_preserves_cached_ui_elements_across_selectors(
             self.element: Any | None = None
 
         def _mime_(self) -> tuple[str, str]:
-            if self.element is None:
+            element = self.element
+            if element is None:
                 item = VirtualFileLifecycleItem(ext="txt", buffer=b"resource")
                 item.add_to_cell_lifecycle_registry()
-                self.element = ResourceElement(item.virtual_file.url)
-            return self.element._mime_()
+                element = ResourceElement(item.virtual_file.url)
+                self.element = element
+            return element._mime_()
 
     monkeypatch.setattr(
         "marimo._messaging.notification_utils.broadcast_notification",
@@ -418,9 +420,11 @@ def test_output_renderer_defers_creator_notification_for_shared_ui(
             self.element: Any | None = None
 
         def _mime_(self) -> tuple[str, str]:
-            if self.element is None:
-                self.element = ResourceElement("https://example.com/resource")
-            return self.element._mime_()
+            element = self.element
+            if element is None:
+                element = ResourceElement("https://example.com/resource")
+                self.element = element
+            return element._mime_()
 
     notifications: list[str] = []
     monkeypatch.setattr(

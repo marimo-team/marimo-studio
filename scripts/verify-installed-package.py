@@ -154,7 +154,7 @@ def _verify_agent_plugin(expected_path: Path | None) -> None:
     if len(relative) != len(set(relative)):
         raise AssertionError("Installed Agent Plugin contains duplicate paths")
     actual = {
-        path: sha256(Path(installed.locate_file(item)).read_bytes()).hexdigest()
+        path: sha256(Path(str(installed.locate_file(item))).read_bytes()).hexdigest()
         for path, item in zip(relative, selected, strict=True)
     }
     required = {
@@ -166,7 +166,8 @@ def _verify_agent_plugin(expected_path: Path | None) -> None:
     }
     if not required.issubset(actual):
         raise AssertionError(
-            f"Missing installed Agent Plugin resources: {sorted(required - actual)}"
+            "Missing installed Agent Plugin resources: "
+            f"{sorted(required.difference(actual))}"
         )
     if expected_path is not None:
         expected = json.loads(expected_path.read_text(encoding="utf-8"))

@@ -381,7 +381,7 @@ class DevelopmentCoordinator:
             if key is not None and key in self._deleting_views:
                 return None
             monitor = self._source_monitors.monitor_locked(key)
-            if monitor is not expected:
+            if monitor is None or monitor is not expected:
                 return None
             if monitor.journal and after < monitor.journal[0].generation - 1:
                 return SourcePoll(

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from html.parser import HTMLParser
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -17,7 +17,7 @@ from marimo_studio.view_providers._bundled.vanilla import provider
 from ..provider_test_support import provider_build_request
 
 
-def _write_files(root: Path, files: dict) -> ViewProject:
+def _write_files(root: Path, files: dict[PurePosixPath, bytes]) -> ViewProject:
     for relative, content in files.items():
         path = root.joinpath(*relative.parts)
         path.parent.mkdir(parents=True, exist_ok=True)

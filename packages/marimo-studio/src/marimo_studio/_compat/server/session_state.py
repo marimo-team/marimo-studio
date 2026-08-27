@@ -71,9 +71,13 @@ def _session_creation_query(session: object) -> CanonicalPublicQuery | None:
             isinstance(value, Sequence)
             and not isinstance(value, (str, bytes))
             and value
-            and all(isinstance(item, str) for item in value)
         ):
-            items.extend((key, item) for item in value)
+            text_values: list[str] = []
+            for item in value:
+                if not isinstance(item, str):
+                    return None
+                text_values.append(item)
+            items.extend((key, item) for item in text_values)
             continue
         return None
     return _canonical_public_query(items)

@@ -499,12 +499,12 @@ def test_analysis_rejects_evidence_collected_across_source_revisions(
     )
 
     async def runtime(
-        studio,
+        studio: StudioWorkspace,
         *,
-        view_name=None,
-        expected_revisions=None,
-        timeout=60,
-    ):
+        view_name: str | None = None,
+        expected_revisions: dict[str, str] | None = None,
+        timeout: float = 60.0,
+    ) -> tuple[CheckResult, ...]:
         assert view_name is None
         assert timeout == 60
         assert expected_revisions is not None

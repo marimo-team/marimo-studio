@@ -24,7 +24,7 @@ def _add_error_note(error: BaseException, note: str) -> None:
         return
     notes: list[str] = list(getattr(error, "__notes__", ()))
     notes.append(note)
-    error.__notes__ = notes
+    error.__notes__ = notes  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def _rollback(

@@ -120,7 +120,7 @@ class _ExternalVanillaProvider:
         self,
         starter: ProviderStarter,
         context: StarterContext,
-    ) -> dict:
+    ) -> dict[PurePosixPath, bytes]:
         raise ValueError((starter.key, context))
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:

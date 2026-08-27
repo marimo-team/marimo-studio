@@ -51,7 +51,9 @@ from marimo_studio.view_providers._validation import validate_relative_path
 
 PROVIDER_KEY = "marimo-studio/vanilla"
 STARTER_KEY = "default"
-_STARTER_TEMPLATE = resources.files(__name__).joinpath("template", "index.html")
+_STARTER_TEMPLATE = (
+    resources.files(__name__).joinpath("template").joinpath("index.html")
+)
 
 
 def _site_id(path: PurePosixPath, kind: str, target: str, occurrence: int) -> str:

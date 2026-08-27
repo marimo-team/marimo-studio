@@ -11,7 +11,7 @@ from marimo_studio.errors._internal import CompatibilityError
 
 
 def runtime_assets_path() -> Path:
-    return Path(str(files("marimo_studio").joinpath("_static", "browser")))
+    return Path(str(files("marimo_studio").joinpath("_static").joinpath("browser")))
 
 
 def validate_runtime_marimo_release(
