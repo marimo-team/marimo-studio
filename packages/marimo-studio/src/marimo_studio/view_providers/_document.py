@@ -1,0 +1,497 @@
+"""Parse provider HTML documents and validate their projection boundary."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from html.parser import HTMLParser
+from pathlib import Path
+from typing import Literal
+from urllib.parse import urlsplit
+
+from marimo_studio.errors import ViewProjectError
+from marimo_studio.view_providers._css_resources import css_resource_urls
+from marimo_studio.view_providers._mounts import MOUNT_ATTRIBUTE
+from marimo_studio.view_providers._targets import parse_value_target
+
+_VOID_ELEMENTS = {
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+}
+
+
+@dataclass(frozen=True)
+class HTMLMountDeclaration:
+    """One normalized projection declaration and its UTF-8 insertion offset."""
+
+    kind: Literal["cell", "output", "value"]
+    target: str
+    position: tuple[int, int]
+    insertion_offset: int
+
+
+@dataclass(frozen=True)
+class HTMLLocalResource:
+    """One fetched project-local URL that a single-file view cannot publish."""
+
+    tag: str
+    attribute: str
+    value: str
+    position: tuple[int, int]
+
+
+class HTMLLocalResourceError(ViewProjectError):
+    """A document fetches a project-local resource outside its artifact."""
+
+
+_FETCHED_ATTRIBUTES = {
+    "audio": ("src",),
+    "embed": ("src",),
+    "iframe": ("src",),
+    "img": ("src",),
+    "input": ("src",),
+    "object": ("data",),
+    "script": ("src", "href", "xlink:href"),
+    "source": ("src",),
+    "track": ("src",),
+    "video": ("src", "poster"),
+}
+_FETCHED_SVG_HREF_TAGS = frozenset(
+    {
+        "animate",
+        "animatemotion",
+        "animatetransform",
+        "cursor",
+        "feimage",
+        "image",
+        "lineargradient",
+        "mpath",
+        "pattern",
+        "radialgradient",
+        "set",
+        "textpath",
+        "use",
+    }
+)
+_FETCHED_LINK_RELATIONS = frozenset(
+    {
+        "apple-touch-icon",
+        "icon",
+        "manifest",
+        "mask-icon",
+        "modulepreload",
+        "prefetch",
+        "preload",
+        "stylesheet",
+    }
+)
+
+
+def _advance_source_position(
+    source: str,
+    start: int,
+    end: int,
+    line: int,
+    column: int,
+) -> tuple[int, int]:
+    segment = source[start:end]
+    added_lines = segment.count("\n")
+    if added_lines:
+        return line + added_lines, len(segment.rsplit("\n", maxsplit=1)[-1]) + 1
+    return line, column + len(segment)
+
+
+def _is_local_resource(value: str) -> bool:
+    selected = value.strip()
+    if not selected or selected.startswith("#"):
+        return False
+    parsed = urlsplit(selected)
+    return not parsed.scheme and not parsed.netloc
+
+
+def _resource_is_local(value: str, position: tuple[int, int]) -> bool:
+    try:
+        return _is_local_resource(value)
+    except ValueError as error:
+        line, column = position
+        raise ViewProjectError(
+            f"Invalid resource URL {value!r}: {error}",
+            line=line,
+            column=column,
+        ) from error
+
+
+def _srcset_urls(source: str) -> tuple[str, ...]:
+    """Collect responsive image candidates using HTML token boundaries."""
+    urls: list[str] = []
+    index = 0
+    while index < len(source):
+        while index < len(source) and (source[index].isspace() or source[index] == ","):
+            index += 1
+        start = index
+        while index < len(source) and not source[index].isspace():
+            index += 1
+        candidate = source[start:index]
+        if not candidate:
+            break
+        trailing_commas = len(candidate) - len(candidate.rstrip(","))
+        if trailing_commas:
+            candidate = candidate[:-trailing_commas]
+            if candidate:
+                urls.append(candidate)
+            continue
+        urls.append(candidate)
+        parentheses = 0
+        while index < len(source):
+            character = source[index]
+            if character == "(":
+                parentheses += 1
+            elif character == ")" and parentheses:
+                parentheses -= 1
+            elif character == "," and not parentheses:
+                index += 1
+                break
+            index += 1
+    return tuple(urls)
+
+
+def validate_self_contained_html(
+    parser: HTMLDocumentParser,
+    path: str,
+) -> None:
+    """Reject fetched local files that cannot enter a single-file artifact."""
+    if not parser.local_resources:
+        return
+    resource = parser.local_resources[0]
+    line, column = resource.position
+    raise HTMLLocalResourceError(
+        f"{path}: Vanilla cannot publish local resource {resource.value!r} "
+        f"from <{resource.tag} {resource.attribute}>. Inline the resource or "
+        "create another view with a provider for multi-file projects.",
+        source=path,
+        line=line,
+        column=column,
+    )
+
+
+class HTMLDocumentParser(HTMLParser):
+    """Collect projection hosts and enforce the replaceable shell boundary."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.mounts: list[HTMLMountDeclaration] = []
+        self.local_resources: list[HTMLLocalResource] = []
+        self.app_shells = 0
+        self.heads = 0
+        self.bodies = 0
+        self.head_closes = 0
+        self.body_closes = 0
+        self.projection_outside_shell = False
+        self.has_reserved_runtime_markup = False
+        self.canonical_head_order = True
+        self._document_phase = "before-html"
+        self.authored_mount_declaration_position: tuple[int, int] | None = None
+        self._open_tags: list[tuple[str, bool]] = []
+        self._shell_depth = 0
+        self._source = ""
+        self._line_offsets = [0]
+        self._insertion_character_offset = 0
+        self._insertion_byte_offset = 0
+
+    def feed(self, data: str) -> None:
+        self._source += data
+        self._line_offsets = [0]
+        self._line_offsets.extend(
+            index + 1
+            for index, character in enumerate(self._source)
+            if character == "\n"
+        )
+        super().feed(data)
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        self._start(tag, attrs, self_closing=tag in _VOID_ELEMENTS)
+
+    def handle_startendtag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        self._start(tag, attrs, self_closing=True)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "head":
+            self.head_closes += 1
+        elif tag == "body":
+            self.body_closes += 1
+        for index in range(len(self._open_tags) - 1, -1, -1):
+            opened_tag, _ = self._open_tags[index]
+            if opened_tag != tag:
+                continue
+            closed = self._open_tags[index:]
+            del self._open_tags[index:]
+            self._shell_depth -= sum(is_shell for _, is_shell in closed)
+            return
+
+    def handle_data(self, data: str) -> None:
+        if self._document_phase in {"before-html", "before-head"} and data.strip():
+            self.canonical_head_order = False
+        if not self._open_tags or self._open_tags[-1][0] != "style":
+            return
+        line, column = self.getpos()
+        resource_line = line
+        resource_column = column + 1
+        previous_offset = 0
+        for value, offset in css_resource_urls(data):
+            if offset < previous_offset:
+                raise ViewProjectError("CSS resources are out of source order")
+            resource_line, resource_column = _advance_source_position(
+                data,
+                previous_offset,
+                offset,
+                resource_line,
+                resource_column,
+            )
+            previous_offset = offset
+            position = (resource_line, resource_column)
+            if not _resource_is_local(value, position):
+                continue
+            self.local_resources.append(
+                HTMLLocalResource(
+                    "style",
+                    "url",
+                    value,
+                    position,
+                )
+            )
+
+    def _start(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+        *,
+        self_closing: bool,
+    ) -> None:
+        line, column = self.getpos()
+        position = (line, column + 1)
+        if self._document_phase == "before-html":
+            if tag == "html":
+                self._document_phase = "before-head"
+            else:
+                self.canonical_head_order = False
+        elif self._document_phase == "before-head":
+            if tag == "head":
+                self._document_phase = "in-head"
+            else:
+                self.canonical_head_order = False
+        attribute_names: set[str] = set()
+        for name, _ in attrs:
+            normalized_name = name.casefold()
+            if normalized_name in attribute_names:
+                raise ViewProjectError(
+                    f"Duplicate HTML attribute {name!r}",
+                    line=line,
+                    column=column + 1,
+                )
+            attribute_names.add(normalized_name)
+        attributes = dict(attrs)
+        inline_style = attributes.get("style")
+        if inline_style is not None:
+            for value, _ in css_resource_urls(inline_style):
+                if _resource_is_local(value, position):
+                    self.local_resources.append(
+                        HTMLLocalResource(tag, "style", value, position)
+                    )
+        responsive_attribute = "imagesrcset" if tag == "link" else "srcset"
+        responsive = attributes.get(responsive_attribute)
+        if responsive is not None:
+            for value in _srcset_urls(responsive):
+                if _resource_is_local(value, position):
+                    self.local_resources.append(
+                        HTMLLocalResource(
+                            tag,
+                            responsive_attribute,
+                            value,
+                            position,
+                        )
+                    )
+        fetched = _FETCHED_ATTRIBUTES.get(tag, ())
+        if tag in _FETCHED_SVG_HREF_TAGS:
+            fetched = (*fetched, "href", "xlink:href")
+        if tag == "link":
+            relations = {
+                item.casefold() for item in (attributes.get("rel") or "").split()
+            }
+            if relations & _FETCHED_LINK_RELATIONS:
+                fetched = ("href",)
+        for attribute in fetched:
+            value = attributes.get(attribute)
+            if value is not None and _resource_is_local(value, position):
+                self.local_resources.append(
+                    HTMLLocalResource(tag, attribute, value.strip(), position)
+                )
+        if (
+            MOUNT_ATTRIBUTE in attributes
+            and self.authored_mount_declaration_position is None
+        ):
+            self.authored_mount_declaration_position = position
+        if tag == "head":
+            self.heads += 1
+        elif tag == "body":
+            self.bodies += 1
+        if (
+            tag == "marimo-filename"
+            or attributes.get("id") == "marimo-runtime-root"
+            or "data-marimo-studio-runtime" in attributes
+            or "data-marimo-studio-dev" in attributes
+        ):
+            self.has_reserved_runtime_markup = True
+        is_shell = attributes.get("id") == "app-shell"
+        if is_shell:
+            self.app_shells += 1
+            self._shell_depth += 1
+        if (tag in ("marimo-cell", "marimo-output") or "mo-value" in attributes) and (
+            self._shell_depth == 0
+        ):
+            self.projection_outside_shell = True
+        declarations: list[tuple[Literal["cell", "output", "value"], str]] = []
+        if tag == "marimo-cell":
+            alias = attributes.get("name")
+            if alias is None or not alias.strip():
+                raise ViewProjectError(
+                    "Every <marimo-cell> requires a non-empty name",
+                    line=line,
+                    column=column + 1,
+                )
+            declarations.append(("cell", alias.strip()))
+        if "mo-value" in attributes:
+            source = attributes["mo-value"]
+            if source is None:
+                raise ViewProjectError(
+                    "Every mo-value attribute requires a reference",
+                    line=line,
+                    column=column + 1,
+                )
+            try:
+                reference = parse_value_target(source)
+            except ValueError as error:
+                raise ViewProjectError(
+                    f"Invalid mo-value reference {source!r} at line {line}: {error}",
+                    line=line,
+                    column=column + 1,
+                ) from error
+            declarations.append(("value", reference.source))
+        if tag == "marimo-output":
+            source = attributes.get("value")
+            if source is None:
+                raise ViewProjectError(
+                    "Every <marimo-output> requires a value reference",
+                    line=line,
+                    column=column + 1,
+                )
+            try:
+                reference = parse_value_target(source)
+            except ValueError as error:
+                raise ViewProjectError(
+                    f"Invalid marimo-output value {source!r} at line {line}: {error}",
+                    line=line,
+                    column=column + 1,
+                ) from error
+            declarations.append(("output", reference.source))
+        if len(declarations) > 1:
+            raise ViewProjectError(
+                "One element cannot declare several projection kinds",
+                line=line,
+                column=column + 1,
+            )
+        if declarations:
+            kind, target = declarations[0]
+            self.mounts.append(
+                HTMLMountDeclaration(
+                    kind,
+                    target,
+                    position,
+                    self._start_tag_insertion_offset(line, column),
+                )
+            )
+        if self_closing:
+            if is_shell:
+                self._shell_depth -= 1
+        else:
+            self._open_tags.append((tag, is_shell))
+
+    def _start_tag_insertion_offset(self, line: int, column: int) -> int:
+        raw = self.get_starttag_text()
+        if raw is None or not raw.endswith(">"):
+            raise ViewProjectError(
+                "HTML parser could not locate a projection start tag",
+                line=line,
+                column=column + 1,
+            )
+        before_close = raw[:-1]
+        stripped = before_close.rstrip()
+        local_offset = (
+            len(stripped) - 1 if stripped.endswith("/") else len(before_close)
+        )
+        try:
+            character_offset = self._line_offsets[line - 1] + column + local_offset
+        except IndexError as error:
+            raise ViewProjectError(
+                "HTML parser returned an invalid source position",
+                line=line,
+                column=column + 1,
+            ) from error
+        if character_offset < self._insertion_character_offset:
+            raise ViewProjectError(
+                "HTML parser returned projection tags out of source order",
+                line=line,
+                column=column + 1,
+            )
+        self._insertion_byte_offset += len(
+            self._source[self._insertion_character_offset : character_offset].encode(
+                "utf-8"
+            )
+        )
+        self._insertion_character_offset = character_offset
+        return self._insertion_byte_offset
+
+
+def validate_html_document(
+    parser: HTMLDocumentParser,
+    source: Path | str,
+) -> None:
+    """Validate the document boundary used by checks and runtime injection."""
+    if not parser.canonical_head_order:
+        raise ViewProjectError(
+            f"{source}: expected <html> followed by <head> before authored content",
+            source=source,
+        )
+    if (
+        parser.heads != 1
+        or parser.head_closes != 1
+        or parser.bodies != 1
+        or parser.body_closes != 1
+    ):
+        raise ViewProjectError(
+            f"{source}: expected one <head>, </head>, <body>, and </body>",
+            source=source,
+        )
+    if parser.app_shells != 1:
+        raise ViewProjectError(
+            f'{source}: expected one element with id="app-shell"',
+            source=source,
+        )
