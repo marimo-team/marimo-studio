@@ -1,213 +1,146 @@
 ---
-title: Agent-native authoring
-description: Create and activate a Studio view, then repair source, runtime, and rendered browser errors until it is ready to hand off.
+title: Author views with a coding agent
+description: Inspect a notebook, edit view source, build, activate, and validate the current page.
 ---
 
-# Agent-native authoring
+# Author views with a coding agent
 
-Marimo Studio exposes a bounded authoring and repair workflow for a saved
-notebook and its audience-specific views. A coding agent inspects the notebook
-graph, creates or locates a view, selects it in the open workspace, edits
-ordinary web files, and analyzes the source, executed notebook, and rendered
-page.
-
-## Keep notebook and view ownership clear
-
-| Owner               | Content                                                                                                         |
-| ------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Notebook cells      | Computation, analytical context, data access, domain rules, reactive controls, and reusable rich outputs        |
-| `index.html`        | Page structure, display copy, responsive layout, projections, and Wind4 utility classes using Tailwind 4 syntax |
-| `app.css`           | Theme tokens, custom keyframes, and CSS rules that Wind4 utilities cannot express                               |
-| Relative view files | Browser modules, images, fonts, and other presentation assets                                                   |
-
-Notebook cells hold the analysis and reusable outputs. View files hold page
-wrappers, layout markup, styles, and presentation wording. The notebook remains
-focused on analysis while several views reuse the same Python results.
-
-Use `marimo_studio.agent` from Marimo code mode:
+Open the saved notebook once per code-mode execution:
 
 ```python
-import marimo._code_mode as cm
 import marimo_studio.agent as studio
 
-ctx = cm.get_context()
-workspace = studio.overview(ctx)
-inspection = studio.inspect(ctx, include_code=True)
-view = studio.ensure_view(ctx, "dashboard")
-await studio.activate_view(ctx, view.name)
+workspace = studio.open()
+inventory = await workspace.inspect()
+producer = inventory.notebook.named_cells()["summary"]
+notebook = await workspace.inspect(
+    include_code=True,
+    selectors=(producer.ref, *producer.upstream),
+)
+view = await workspace.ensure_view("dashboard")
 ```
 
-`studio.overview` returns configuration state, runtimes, bindings, and authored
-views before any mutation. `studio.inspect` compiles the saved notebook and
-returns selected cells,
-definitions, references, source positions, native names, and dependency
-relationships. It leaves notebook cells unevaluated.
-
-`studio.ensure_view` creates the named view when needed and returns the current
-paths. A new view starts with every notebook cell in source order.
-
-`studio.activate_view` targets the Studio tab attached to the current Marimo
-code-mode session and selects Build. When `ensure_view` added the notebook's
-first Studio view, the existing editor becomes the notebook pane without
-interrupting code mode. Reactivating the selected view reloads every prepared
-preview runtime and clears its ready status until the refreshed document
-reports back.
+The notebook owns data access, transformations, controls, and reusable results.
+The view owns its page structure, copy, styles, and browser interaction.
 
 ## Inspect before editing
 
-Read the notebook graph and current view files before choosing content:
-
 ```python
-for cell in inspection.cells:
-    print(cell.index, cell.name, cell.definitions, cell.references)
+import marimo_studio.agent as studio
 
-index_html = (view.root / "index.html").read_text()
-app_css = (view.root / "app.css").read_text()
+workspace = studio.open()
+view = workspace.view("dashboard")
+inspection = await view.inspect()
+for document in inspection.documents:
+    print(document.path, document.language, document.access)
 ```
 
-Use `include_code=True` when cell names and definitions leave the intended
-output unclear.
-
-## Select the projection
-
-Choose the projection from the result the page needs:
-
-```html
-<marimo-cell name="analysis"></marimo-cell>
-<marimo-output value="revenue_chart"></marimo-output>
-<strong mo-value="report.total"></strong>
-```
-
-- `<marimo-cell>` includes everything a named cell produced.
-- `<marimo-output>` renders one selected Python object through Marimo.
-- `mo-value` provides a JSON-compatible value to HTML and JavaScript.
-
-[Use notebook results](notebook-results.md) defines the three projection
-forms.
-
-## Bind an unnamed cell
-
-Give an unnamed cell a stable reference with its zero-based notebook position:
+Read each affected document immediately before writing. Save through the
+revision-aware view API:
 
 ```python
-binding = studio.bind(ctx, "revenue-chart", 4)
+import marimo_studio.agent as studio
+
+workspace = studio.open()
+view = workspace.view("dashboard")
+document = await view.read("index.html")
+updated = document.content.replace("Current heading", "New heading")
+await view.write(
+    "index.html",
+    updated,
+    expected_revision=document.revision,
+)
 ```
 
-Read the current notebook again before setting `overwrite=True` for an
-existing alias. The returned binding identifies the selected cell and the
-configuration update.
+Write project-relative paths whose access is `edit`. A concurrent save raises
+`SourceConflictError` and keeps the newer disk revision.
 
-## Edit the web files
+Use a native Marimo cell name for a durable view-facing result. An existing
+anonymous cell can receive an alias through `workspace.bind(alias, index)`.
 
-Write one complete HTML document with one `#app-shell`. Place every projection
-inside that shell. Use Wind4 utilities for regular layout, spacing,
-typography, colors, borders, and state variants. The vocabulary follows UnoCSS
-Wind4 and Tailwind 4 syntax. Put custom CSS, theme tokens, and keyframes in
-`app.css`. Add JavaScript modules, images, fonts, and other assets under
-`view.root` and reference them with relative URLs.
+[Use notebook results](notebook-results.md) defines complete-cell, rendered
+object, and JSON-compatible value mounts.
 
-Read each file immediately before writing it so the edit incorporates changes
-from the Studio workspace or another editor. Saved HTML, CSS, and module
-changes refresh the live preview.
+## Build the view
 
-## Analyze, repair, and hand off
-
-Analyze the active view after each saved change:
+Build after changing source:
 
 ```python
-report = await studio.analyze(ctx, view=view.name)
+import marimo_studio.agent as studio
+
+workspace = studio.open()
+view = workspace.view("dashboard")
+publication = await view.build()
+print(publication.artifact_id)
+```
+
+Studio validates the candidate before publishing it. A failed build leaves the
+last published page available. Repair diagnostics at their reported source
+locations, then build again.
+
+## Activate and exercise the page
+
+Activate in a separate code-mode call so the browser can complete the
+transition:
+
+```python
+import marimo_studio.agent as studio
+
+workspace = studio.open()
+view = workspace.view("dashboard")
+activation = await view.activate()
+```
+
+Exercise controls, navigation, conditional content, and dynamic mounts used by
+the view. When several Studio browsers are connected, the active code-mode
+session targets its attached client.
+
+## Validate the current presentation
+
+Run focused validation after the page settles:
+
+```python
+import marimo_studio.agent as studio
+
+workspace = studio.open()
+report = await workspace.view("dashboard").validate(level="browser")
+
 for action in report.actions:
     print(action.stage, action.code, action.advice)
 ```
 
-The report combines three stages:
+The report combines saved source checks, isolated notebook execution, and
+browser evidence for the active presentation. Runtime validation starts the
+complete reactive notebook and can use its configured files, network,
+databases, and data. Studio then checks the selected projected results.
 
-1. Static checks read the notebook graph and view files.
-2. Runtime checks execute the projected notebook code and resolve values.
-3. Browser checks confirm that Studio rendered the current source revision and
-   report projection, presentation, host, and runtime errors.
-
-Treat `report.actions` as the repair queue. Apply the advice, save the affected
-source, and call `studio.analyze` again. Run the final focused analysis
-immediately before handoff. Hand off the view when `report.handoff_ready` is
-true and the live page works. A static or runtime pass cannot substitute for
-current rendered browser evidence.
-
-Runtime execution waits 60 seconds by default. Give expected remote data or
-model setup a larger explicit budget:
-
-```python
-report = await studio.analyze(
-    ctx,
-    view=view.name,
-    runtime_timeout=120,
-)
-```
-
-Before handoff, review the notebook diff. Keep changes that define data,
-analysis, controls, or reusable outputs. Move page markup, display wording,
-layout helpers, CSS strings, and presentation-only formatting into the view
-files.
-
-Activate the target explicitly before analyzing when the view changes or the
-visible page looks stale or stuck. Reactivating the current view resets its
-preview runtimes. Let the activation call return and wait for the page to
-render:
-
-```python
-await studio.activate_view(ctx, "executive")
-```
-
-Run the focused analysis in the next code-mode call:
-
-```python
-report = await studio.analyze(ctx, view="executive")
-```
-
-`studio.check` returns a `CheckReport` for a static check that leaves notebook
-cells unevaluated. It is not the handoff gate.
-
-Inspect the live view during the repair loop. Confirm the reading order,
-reactive updates, browser behavior, loading states, controls, plots, tables,
-downloads, widgets, and narrow and wide layouts.
+`report.actions` contains errors and warnings. Errors make `report.ok` false.
+Evaluate warnings against the requested workflow. For browser validation,
+`report.handoff_ready` confirms that the evidence belongs to one current
+presentation. Reinspect the named source, rebuild, reactivate when needed, and
+validate again.
 
 ## Use the terminal workflow
 
-The CLI exposes the same overview, inspection, creation, activation, binding,
-and analysis operations for agents working outside Marimo code mode:
+Use the CLI outside code mode:
 
 ```console
-uvx marimo-studio overview analysis.py --format json
-uvx marimo-studio inspect analysis.py --include-code --format json
-uvx marimo-studio view add analysis.py --name dashboard --format json
-MARIMO_STUDIO_SERVER_URL=http://localhost:2718 \
-MARIMO_STUDIO_ACCESS_TOKEN="$STUDIO_TOKEN" \
-  uvx marimo-studio view activate analysis.py \
-    --name dashboard \
-    --format json
-MARIMO_STUDIO_SERVER_URL=http://localhost:2718 \
-MARIMO_STUDIO_ACCESS_TOKEN="$STUDIO_TOKEN" \
-  uvx marimo-studio analyze analysis.py \
-    --view dashboard \
-    --runtime-timeout 120 \
-    --format json \
-    --diagnostics jsonl
+marimo-studio view create notebook.py --name dashboard --format json
+marimo-studio view inspect notebook.py --name dashboard --format json
+marimo-studio view build notebook.py --name dashboard --format json
+marimo-studio view activate notebook.py \
+  --name dashboard \
+  --server http://localhost:2718 \
+  --browser-client CLIENT_ID
+marimo-studio validate notebook.py --view dashboard \
+  --level browser \
+  --server http://localhost:2718 \
+  --browser-client CLIENT_ID
 ```
 
-The server URL identifies the running Marimo process for this notebook. The
-access token comes from that editor session. Prefer the environment variable
-so it does not enter shell history.
+Activation and browser validation connect to a running Studio server. Supply
+`MARIMO_STUDIO_ACCESS_TOKEN` through the parent process or a secret manager.
 
-Without `--server` or `MARIMO_STUDIO_SERVER_URL`, `analyze` still returns
-static and runtime diagnostics. It reports the browser stage as
-`not-observed`, sets `handoff_ready` to false, adds an action for opening the
-view, and exits with code 1.
-
-::: warning Analysis executes notebook code
-`analyze` can perform the notebook's configured file, network, database, and
-data access. Run it in the notebook environment.
-:::
-
-The [Agent API reference](../reference/agent-api.md) defines signatures,
-returns, errors, and side effects. The [CLI reference](../reference/cli.md)
-defines machine output and exit codes.
+[Agent API reference](../reference/agent-api.md) lists exact method signatures.
+[Run, export, and share](run-and-share.md) covers Server, WebAssembly, and
+static delivery.

@@ -1,270 +1,227 @@
 ---
 title: Agent API reference
-description: Inspect the active notebook, create and activate views, and analyze source, runtime, and rendered browser state from Marimo code mode.
+description: Open one notebook workspace, author its views, and validate the rendered result from Marimo code mode.
 ---
 
 # Agent API reference
 
-`marimo_studio.agent` adapts the saved notebook and Studio workspace for a
-coding agent running in Marimo code mode.
+`marimo_studio.agent` binds Studio operations to the active saved notebook.
 
 ```python
-import marimo._code_mode as cm
 import marimo_studio.agent as studio
 
-ctx = cm.get_context()
-workspace = studio.overview(ctx)
-inspection = studio.inspect(ctx, include_code=True)
-view = studio.ensure_view(ctx, "dashboard")
-activation = await studio.activate_view(ctx, view.name)
+workspace = studio.open()
+view = await workspace.ensure_view("dashboard")
+inspection = await view.inspect()
 ```
 
-Activation keeps the native editor and its code-mode session mounted while the
-workspace opens around it. Run the analysis in the next code-mode call:
+Call `studio.open()` once in each code-mode execution. Use
+`workspace.view(name)` to recover a view handle in a later execution. Build,
+activation, and browser validation each run in their own execution so the
+browser can settle between transitions.
+
+## `open()`
 
 ```python
-import marimo._code_mode as cm
-import marimo_studio.agent as studio
-
-ctx = cm.get_context()
-report = await studio.analyze(ctx, view="dashboard")
+open(notebook: str | Path | None = None) -> Workspace
 ```
 
-::: info Saved notebook required
-The active notebook must be saved before these functions resolve its path.
-:::
-
-Keep computation, analytical context, data access, domain rules, reactive
-controls, and reusable rich outputs in notebook cells. Keep page structure,
-display copy, responsive layout, and presentation styling in the view files.
-Use Wind4 utility classes in `index.html`. They follow the UnoCSS Wind4
-vocabulary and Tailwind 4 syntax. Put custom keyframes and CSS rules in
-`app.css`.
-
-## `notebook_path(context)`
-
-```python
-notebook_path(context: object) -> pathlib.Path
-```
-
-Returns the saved notebook path from a code-mode context.
+Returns a workspace bound to the saved notebook attached to the current Marimo
+code-mode request. Pass `notebook` for a path-bound workspace outside code mode.
 
 Raises:
 
-- `TypeError` when `context` has no globals mapping.
-- `RuntimeError` when the active notebook has not been saved.
-- `FileNotFoundError` when the saved path is unavailable.
+- `ProtocolError` when the call is outside code mode or the attached notebook
+  path is unavailable.
+- `ConfigurationError` when an explicit notebook path is not a file.
 
-## `overview(context)`
+## `Workspace`
 
-```python
-overview(context: object) -> StudioOverview
-```
-
-Returns configuration and authored-view state for the saved notebook. The
-result works before Studio configuration exists and has `state` equal to
-`unconfigured`, `needs-view`, or `ready`. It includes the notebook, canonical
-view root, configuration path and source, default view and runtime, available
-runtimes, cell bindings, and view summaries.
-
-`StudioOverview.to_dict()` is the JSON schema returned by
-`marimo-studio overview --format json`.
-
-## `inspect(context, *, include_code=False, display=False, limit=None)`
+### `Workspace.inspect`
 
 ```python
-inspect(
-    context: object,
+await workspace.inspect(
     *,
     include_code: bool = False,
-    display: bool = False,
+    selectors: tuple[CellSelector, ...] = (),
+    output_expressions: bool = False,
     limit: int | None = None,
 ) -> InspectionResult
 ```
 
-Compiles the saved notebook and returns an `InspectionResult` with the complete
-`NotebookSpec` and selected cells. Cells include source positions, names,
-definitions, references, configuration, and dependency relationships. The call
-leaves notebook cells unevaluated.
+Compiles the saved notebook and returns selected cells and their static
+dependency relationships. The call leaves cell bodies unevaluated.
+`selectors` accepts exact cell refs, names, or zero-based indices. Inspect the
+inventory first, then request code for the producer and its `upstream` refs.
+`output_expressions=True` filters the saved cells to bodies whose final
+statement is an expression. It does not inspect current runtime output.
 
-Set `include_code=True` to include each complete cell body in `CellSpec.code`.
-Set `display=True` to keep cells ending in a displayed expression. Set `limit`
-to return at most that many selected cells.
-
-## `ensure_view(context, name=None, *, dry_run=False)`
+### `Workspace.overview`
 
 ```python
-ensure_view(
-    context: object,
-    name: str | None = None,
-    *,
-    dry_run: bool = False,
-) -> ViewSetupResult
+await workspace.overview() -> StudioOverview
 ```
 
-Returns the current files for a named view. The function creates the view and
-updates notebook configuration when the view is missing. A new view starts
-with every notebook cell in source order.
+Returns notebook configuration and view state. The result works before Studio
+configuration exists.
 
-The default name is the configured view or `dashboard`. Set `dry_run=True` to
-return the planned paths and configuration changes without writing files.
-
-`ViewSetupResult.root` is the view directory. Its initial authored files are
-`index.html` and `app.css`.
-
-## `bind(context, alias, cell_index, *, dry_run=False, overwrite=False)`
+### `Workspace.starters`
 
 ```python
-bind(
-    context: object,
+await workspace.starters() -> tuple[Starter, ...]
+await workspace.starter(identity: str) -> Starter
+```
+
+Returns installed view starters and their availability. `Starter.id` has
+`provider:key` form, such as `marimo-studio/vanilla:default`. Pass the returned
+record to `Workspace.ensure_view` when selecting a starter.
+
+### `Workspace.ensure_view`
+
+```python
+await workspace.ensure_view(
+    name: str | None = None,
+    *,
+    starter: str | Starter | None = None,
+) -> View
+```
+
+Creates the named view when needed and returns its handle. The default name is
+the configured view or `dashboard`. An omitted starter selects
+`marimo-studio/vanilla:default`. A newly created view is `unbuilt` until
+`View.build()` or a live preview publishes it.
+
+For notebook-local configuration, creation writes the PEP 723 metadata and
+provider requirements, updates the existing workspace `.gitignore`, writes
+`view.toml`, then writes provider starter files. These writes commit through
+one filesystem transaction.
+
+### `Workspace.view`
+
+```python
+workspace.view(name: str) -> View
+```
+
+Returns a handle for a named view. The method performs no I/O. Operations on
+the handle report a missing or invalid project.
+
+### `Workspace.bind`
+
+```python
+await workspace.bind(
     alias: str,
     cell_index: int,
     *,
-    dry_run: bool = False,
     overwrite: bool = False,
 ) -> BindingResult
 ```
 
-Records `alias` as a stable reference to the cell at zero-based
-`cell_index`. Set `overwrite=True` when the alias should point to a different
-cell. Set `dry_run=True` to return the planned configuration update.
+Assigns `alias` to the notebook cell at zero-based `cell_index`. Use native
+Marimo cell names for new view-facing results.
 
-Use a native Marimo cell name directly when one exists.
-
-## `check(context, *, view_name=None)`
+### `Workspace.validate`
 
 ```python
-check(
-    context: object,
+await workspace.validate(
     *,
-    view_name: str | None = None,
-) -> CheckReport
-```
-
-Compiles the saved notebook and checks the configured view documents, cell
-references, rich-output references, and JSON-compatible value references. It
-leaves notebook cells unevaluated.
-
-Pass `view_name` to check one named view. The default checks every configured
-view. `CheckReport.ok` is false when any result fails. Each
-`CheckResult.status` is `pass`, `warn`, or `fail`.
-
-```python
-report = studio.check(ctx, view_name="dashboard")
-failures = [result for result in report.checks if result.status == "fail"]
-```
-
-## `activate_view(context, name)`
-
-```python
-async def activate_view(
-    context: object,
-    name: str,
-) -> ViewActivationResult: ...
-```
-
-Selects `name` and its Build layout in the current browser workspace. The
-request targets the Studio tab attached to the current Marimo session. When
-`name` is already active, activation starts a reload of every prepared preview
-runtime. The reload clears the previous ready revision and current diagnostics
-until each frame reports its new state. Call `activate_view` again to recover a
-visible page that looks stale or stuck.
-
-When the notebook gains its first Studio view, the existing editor becomes the
-notebook pane in the selected Build workspace. The code-mode call remains
-connected through the transition.
-
-The returned `ViewActivationResult` contains the notebook path, view name,
-a monotonically increasing generation, the selected transition, and the bound
-Marimo `session_id`, and selected browser `client_id`.
-`state="active"` with `transition="in-place"` means the targeted workspace
-selected Build and acknowledged the activation. Call `analyze` for the same
-view to confirm that the rendered page read the current source revision.
-
-Raises:
-
-- `ProtocolError` when code mode has no live Marimo callback credentials.
-- `AgentRequestError` when the server, session, or targeted browser cannot
-  complete the transition, or when the server is attached to another
-  notebook. The exception's `code` identifies failures such as
-  `view-not-found`, `browser-client-unavailable`, or `activation-timeout`.
-
-## `analyze(context, *, view=None, browser_timeout=10.0, runtime_timeout=60.0, require_browser=True)`
-
-```python
-async def analyze(
-    context: object,
-    *,
+    level: ValidationLevel = "static",
     view: str | None = None,
     browser_timeout: float = 10.0,
     runtime_timeout: float = 60.0,
-    require_browser: bool = True,
-) -> AnalysisReport: ...
+) -> ValidationReport
 ```
 
-Runs the complete agent handoff gate:
+`level` accepts `static`, `runtime`, or `browser`. Each level includes the
+evidence from the previous level. Browser validation requires one focused view
+and an attached Studio browser. Runtime validation starts the complete reactive
+notebook in an isolated process and can perform its configured file, network,
+database, and data access. Studio then checks the selected projected results.
 
-1. Static validation checks the notebook graph, view documents, projection
-   references, and packaged browser assets.
-2. Runtime validation executes the notebook in an isolated process and reads
-   each projected cell and Python value.
-3. Browser validation issues a fresh request to the session-bound Studio tab
-   and waits for `ready` or `error` for the selected runtime instance and
-   saved source revision.
+## `View`
 
-Code mode delegates this work to the attached Studio server. The server runs
-the isolated validation process and returns one structured report to the
-active notebook kernel.
-
-Static failures skip runtime validation. Runtime and browser checks use one
-captured revision map. An edit during analysis adds an
-`analysis-source-changed` action, so evidence from different saves cannot
-produce a handoff-ready report. Code mode requires one named, active view for
-browser validation. Activate the view in one code-mode call, let that call
-finish, then analyze it in the next call. Setting `require_browser=False`
-allows a code-mode call with no `view` to validate every configured view
-through the static and isolated runtime stages. The external
-`marimo-studio analyze` command can visit every configured view because it does
-not occupy the notebook kernel while Studio switches views.
-
-`AnalysisReport.to_dict()` returns the stable schema used by the CLI. It
-contains `stages.static`, `stages.runtime`, `stages.browser`, and an `actions`
-repair queue. Each action identifies its stage, severity, code, message,
-advice, and available view, target, or source location.
-
-- `report.ok` is true when no validation stage reports an error.
-- `report.handoff_ready` is true when runtime validation completed, no stage
-  reports an error, and every required rendered view is `ready` for the report
-  runtime, revision, runtime instance, Marimo session, browser client, and
-  request ID.
-
-Keep `require_browser=True` for agent handoff. Setting it to false limits the
-gate to deterministic source and runtime evidence.
-
-`browser_timeout` must be finite and between 0 and 300 seconds. It bounds the
-rendered browser observation. `runtime_timeout` must be finite and between 0
-and 300 seconds. It bounds isolated notebook execution and defaults to 60
-seconds. A runtime deadline produces a `runtime-timeout` action with repair
-advice.
-Transport, protocol, authentication, session, revision, and rendered-view
-failures appear as stable error codes in `actions` or raise
-`AgentRequestError` before a report can be created.
+### `View.inspect`
 
 ```python
-while True:
-    report = await studio.analyze(ctx, view="dashboard")
-    if report.handoff_ready:
-        break
-    for action in report.actions:
-        print(action.stage, action.advice)
-    # Apply the repairs, save the affected files, and run the loop again.
+await view.inspect() -> ViewInspection
 ```
 
-::: warning Analysis executes notebook code
-Runtime analysis can perform the notebook's configured file, network,
-database, and data access. Run it in the notebook environment.
-:::
+Returns the provider, source documents and access, diagnostics, build
+freshness, and the current publication. The document catalog contains the core
+`view.toml` manifest followed by the provider's authoring documents.
+`freshness` is `current`, `stale`, `unbuilt`, `building`, or `failed`.
 
-Use the [agent-native authoring guide](../guide/coding-agents.md) for the complete
-authoring workflow. Use the [CLI reference](cli.md) when the agent works
-outside Marimo code mode.
+### `View.read` and `View.write`
+
+```python
+document = await view.read(path: str | PurePosixPath) -> ViewDocument
+updated = await view.write(
+    path: str | PurePosixPath,
+    content: str,
+    *,
+    expected_revision: str,
+    expected_provider: str | None = None,
+) -> ViewDocument
+```
+
+`ViewDocument` contains `path`, `language`, `access`, `content`, and `revision`.
+`write()` checks access and compares `expected_revision` under the same source
+lock used by Studio browsers. A stale revision raises `SourceConflictError`.
+Its `revision` is the current disk revision when readable and `None` when the
+document is unavailable. When `external_recovery` is set, inspect and preserve
+the file at that path before retrying the write.
+
+`expected_provider` applies to `view.toml`. When supplied, the replacement must
+declare that provider. A parseable current manifest always retains its provider.
+If a cold process cannot recover the prior identity from a malformed manifest,
+omit `expected_provider`. Studio then validates the provider declared by the
+replacement. Invalid manifest content and provider changes raise
+`SourceValidationError`. Passing `expected_provider` for another document raises
+`ValueError`.
+
+### `View.build`
+
+```python
+await view.build(*, profile: BuildProfile = "development") -> Publication
+```
+
+Builds `development` or `production` output and returns detached publication
+metadata. `Publication` contains `view`, `profile`, `input_id`, `artifact_id`,
+`diagnostics`, and `duration_ms`. A failed build preserves the last published
+page.
+
+### `View.activate`
+
+```python
+await view.activate() -> ViewActivationResult
+```
+
+Selects the view in the Studio browser attached to the current Marimo session.
+The result identifies the browser client and session that acknowledged the
+selection.
+
+### `View.validate`
+
+```python
+await view.validate(
+    *,
+    level: ValidationLevel = "static",
+    browser_timeout: float = 10.0,
+    runtime_timeout: float = 60.0,
+) -> ValidationReport
+```
+
+Validates this view at the selected level. `ValidationReport` keeps stable
+`ok`, `actions`, and `evidence` fields. Static evidence contains saved-source
+checks. Runtime and browser levels add their evidence under the same mapping.
+Exercise relevant interactions before browser validation so the report
+describes the state being handed off.
+
+## Returned records
+
+Import `CellSelector`, `InspectionResult`, and direct authoring records from
+`marimo_studio.agent`. Static notebook records returned by `inspect_notebook()`
+live in `marimo_studio`. Provider records live in
+`marimo_studio.view_providers`.
+
+[Agent workflow](../guide/coding-agents.md) develops the authoring and repair
+sequence. [CLI reference](cli.md) defines the terminal interface.
