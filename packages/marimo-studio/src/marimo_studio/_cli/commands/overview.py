@@ -10,8 +10,8 @@ from marimo_studio._cli.diagnostics import diagnostic_format_option
 from marimo_studio._cli.help import ColoredCommand
 from marimo_studio._cli.options import output_format_option, target_argument
 from marimo_studio._cli.output import echo_json, render_overview
-from marimo_studio._workspace.targets import resolve_notebook
-from marimo_studio.overview import overview as inspect_overview
+from marimo_studio._cli.targets import resolve_notebook
+from marimo_studio._views.overview import overview as inspect_overview
 
 
 @click.command("overview", cls=ColoredCommand)
@@ -29,6 +29,3 @@ def overview(target: Path | None, output_format: str) -> None:
         echo_json(result.to_dict())
     else:
         render_overview(result)
-
-
-__all__ = ["overview"]

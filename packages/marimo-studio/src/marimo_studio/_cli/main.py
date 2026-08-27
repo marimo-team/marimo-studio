@@ -6,14 +6,19 @@ import sys
 
 import click
 
-from marimo_studio._cli.commands.analyze import analyze
 from marimo_studio._cli.commands.bind import bind
-from marimo_studio._cli.commands.check import check
 from marimo_studio._cli.commands.export import export as export_command
 from marimo_studio._cli.commands.inspect import inspect
 from marimo_studio._cli.commands.overview import overview
+from marimo_studio._cli.commands.provider import provider
+from marimo_studio._cli.commands.starter import starter
+from marimo_studio._cli.commands.validate import validate
 from marimo_studio._cli.commands.view import view
-from marimo_studio._cli.diagnostics import diagnostics_from_argv
+from marimo_studio._cli.diagnostics import (
+    capture_command_output,
+    diagnostics_from_argv,
+    machine_output_from_argv,
+)
 from marimo_studio._cli.help import ColoredGroup
 from marimo_studio._cli.output import echo_error
 from marimo_studio.errors import MarimoStudioError
@@ -25,7 +30,7 @@ from marimo_studio.errors import MarimoStudioError
     epilog="""\b
 Examples:
   marimo-studio overview analysis.py
-  marimo-studio view add analysis.py
+  marimo-studio view create analysis.py
   marimo edit analysis.py --sandbox
 """,
     no_args_is_help=True,
@@ -36,11 +41,12 @@ def cli() -> None:
 
 
 cli.add_command(bind)
-cli.add_command(analyze)
-cli.add_command(check)
 cli.add_command(export_command)
 cli.add_command(inspect)
 cli.add_command(overview)
+cli.add_command(provider)
+cli.add_command(starter)
+cli.add_command(validate)
 cli.add_command(view)
 
 
@@ -66,12 +72,18 @@ def _show_click_error(error: click.ClickException) -> None:
 def main() -> None:
     """Run the Marimo Studio console script."""
     diagnostics = diagnostics_from_argv(sys.argv[1:])
+    machine_result = machine_output_from_argv(sys.argv[1:])
     try:
-        exit_code = cli(
-            standalone_mode=False,
-            obj=diagnostics,
-            prog_name="marimo-studio",
-        )
+        with capture_command_output(
+            diagnostics,
+            capture_stdout=machine_result,
+            capture_stderr=diagnostics.format == "jsonl",
+        ):
+            exit_code = cli(
+                standalone_mode=False,
+                obj=diagnostics,
+                prog_name="marimo-studio",
+            )
         if exit_code:
             raise SystemExit(exit_code)
     except MarimoStudioError as error:
@@ -104,6 +116,8 @@ def main() -> None:
         ):
             echo_error("Command interrupted")
         raise SystemExit(130) from None
+    finally:
+        diagnostics.close()
 
 
 if __name__ == "__main__":

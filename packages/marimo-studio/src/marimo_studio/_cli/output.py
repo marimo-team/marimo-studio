@@ -10,14 +10,16 @@ from typing import Any
 
 from marimo_studio._cli.diagnostics import diagnostics
 from marimo_studio._cli.print import echo, green, light_blue, red, yellow
-from marimo_studio._workspace.models import BindingResult, ViewSetupResult
-from marimo_studio.activation import ViewActivationResult
-from marimo_studio.analysis import AnalysisReport
-from marimo_studio.export import StaticExportResult
-from marimo_studio.inspect import InspectionResult
-from marimo_studio.overview import StudioOverview
-from marimo_studio.types import CheckResult
-from marimo_studio.workspace import ViewRemovalResult
+from marimo_studio._delivery.export import StaticExportResult
+from marimo_studio._notebook.inspection import InspectionResult
+from marimo_studio._validation.analysis import AnalysisReport
+from marimo_studio._validation.results import CheckResult
+from marimo_studio._views.api import ViewRemovalResult
+from marimo_studio._views.migrate import WorkspaceMigrationResult
+from marimo_studio._views.overview import StudioOverview
+from marimo_studio._views.records import ViewInspection, ViewSetupResult
+from marimo_studio._workspace.models import BindingResult
+from marimo_studio.agent._records import ViewActivationResult
 
 
 def _shell_command(arguments: list[str]) -> str:
@@ -33,7 +35,7 @@ def echo_error(message: str) -> None:
 
 def echo_json(value: Any) -> None:
     """Write a deterministic JSON result to stdout."""
-    echo(json.dumps(value, indent=2, sort_keys=True))
+    diagnostics().write_result(json.dumps(value, indent=2, sort_keys=True))
 
 
 def _echo_next_command(action: str, command: str) -> None:
@@ -49,7 +51,7 @@ def _echo_next_command(action: str, command: str) -> None:
 
 def render_view_setup(result: ViewSetupResult) -> None:
     """Write a view setup result in human text."""
-    verb = "Would add" if result.dry_run else "Added"
+    verb = "Would create" if result.dry_run else "Created"
     echo(f"{green(verb)} view {result.name} at {result.root}")
     for path in result.created:
         echo(f"  {light_blue('create')} {path}")
@@ -58,6 +60,41 @@ def render_view_setup(result: ViewSetupResult) -> None:
     if not result.dry_run:
         command = _shell_command(["marimo", "edit", str(result.notebook), "--sandbox"])
         _echo_next_command("edit", command)
+
+
+def render_workspace_migration(result: WorkspaceMigrationResult) -> None:
+    """Write an authored workspace migration in human text."""
+    verb = "Would migrate" if result.dry_run else "Migrated"
+    echo(f"{green(verb)} {len(result.views)} view directories at {result.view_root}")
+    for path in result.created:
+        echo(f"  {light_blue('create')} {path}")
+    for path in result.updated:
+        echo(f"  {light_blue('update')} {path}")
+
+
+def render_view_inspection(result: ViewInspection) -> None:
+    """Write view authoring state in human text."""
+    echo(result.view)
+    echo(f"  {light_blue('provider')} {result.provider}")
+    echo(f"  build {result.freshness}")
+    echo(f"  {light_blue('documents')}")
+    for document in result.documents:
+        echo(
+            f"    {document.access:<4} {document.language:<18} "
+            f"{document.path.as_posix()}"
+        )
+    echo(f"  {light_blue('diagnostics')}")
+    for diagnostic in result.diagnostics:
+        source = (
+            f" · {diagnostic.path}:{diagnostic.line}:{diagnostic.column}"
+            if diagnostic.path is not None
+            else ""
+        )
+        echo(
+            f"    {diagnostic.severity} {diagnostic.code}: {diagnostic.message}{source}"
+        )
+    if not result.diagnostics:
+        echo("    none")
 
 
 def render_overview(result: StudioOverview) -> None:
@@ -71,14 +108,16 @@ def render_overview(result: StudioOverview) -> None:
         suffix = " (default)" if view.default else ""
         echo(f"  {light_blue(view.name)}{suffix}\n    {view.path}")
     if result.state == "unconfigured":
-        command = _shell_command(["marimo-studio", "view", "add", str(result.notebook)])
+        command = _shell_command(
+            ["marimo-studio", "view", "create", str(result.notebook)]
+        )
         _echo_next_command("create", command)
     elif result.state == "needs-view" and result.default_view is not None:
         command = _shell_command(
             [
                 "marimo-studio",
                 "view",
-                "add",
+                "create",
                 str(result.notebook),
                 "--name",
                 result.default_view,
@@ -104,7 +143,15 @@ def render_static_export(result: StaticExportResult) -> None:
     echo(f"{green('Exported')} {result.view} to {result.output}")
     echo(f"  {light_blue('open')} {result.entrypoint}")
     command = _shell_command(
-        ["python", "-m", "http.server", "--directory", str(result.output)]
+        [
+            "python",
+            "-m",
+            "http.server",
+            "--bind",
+            "127.0.0.1",
+            "--directory",
+            str(result.output),
+        ]
     )
     echo(f"  {light_blue('serve')} {command}")
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import click
 
-from marimo_studio._runtime_limits import (
+from marimo_studio._processes.limits import (
     DEFAULT_RUNTIME_TIMEOUT,
     MAX_RUNTIME_TIMEOUT,
 )

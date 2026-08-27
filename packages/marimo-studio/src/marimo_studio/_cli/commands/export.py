@@ -10,7 +10,7 @@ from marimo_studio._cli.diagnostics import diagnostic_format_option
 from marimo_studio._cli.help import ColoredCommand
 from marimo_studio._cli.options import output_format_option, target_argument
 from marimo_studio._cli.output import echo_json, render_static_export
-from marimo_studio.export import export_view
+from marimo_studio._delivery.export import export_view
 
 
 @click.command(

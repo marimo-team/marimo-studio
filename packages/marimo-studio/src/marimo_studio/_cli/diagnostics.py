@@ -7,20 +7,24 @@ import os
 import sys
 import tempfile
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
-from dataclasses import dataclass
+from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
+from dataclasses import dataclass, field
 from io import StringIO
 from typing import TextIO
 
 import click
 
-from marimo_studio._workspace.environment import EnvironmentTarget
-from marimo_studio.environment import run_in_notebook_environment
-
-_COMMAND_NAMES = frozenset(
-    {"analyze", "bind", "check", "export", "inspect", "overview", "view"}
+from marimo_studio._cli.environment import (
+    _DIAGNOSTIC_CHANNEL_ENV,
+    _RESULT_CHANNEL_ENV,
+    SANDBOX_ENV,
+    EnvironmentTarget,
+    run_in_notebook_environment,
 )
+from marimo_studio.errors import DependencyError
+
 _MAX_PROCESS_OUTPUT_CHARS = 16 * 1024
+_MAX_DIAGNOSTIC_EVENT_CHARS = 64 * 1024
 
 
 @dataclass
@@ -40,6 +44,12 @@ class _PlainOutput:
         else:
             self.tail = (self.tail + piece)[-_MAX_PROCESS_OUTPUT_CHARS:]
 
+    def append_text(self, value: str) -> None:
+        self.line_count += value.count("\n")
+        self.char_count += len(value)
+        self.has_content = self.has_content or bool(value.strip())
+        self.tail = (self.tail + value)[-_MAX_PROCESS_OUTPUT_CHARS:]
+
 
 @dataclass
 class DiagnosticStream:
@@ -48,6 +58,9 @@ class DiagnosticStream:
     format: str = "text"
     command: str | None = None
     error_count: int = 0
+    result_stream: TextIO | None = None
+    diagnostic_stream: TextIO | None = None
+    _owned_streams: tuple[TextIO, ...] = field(default=(), repr=False)
 
     def _write(self, event: dict[str, object]) -> None:
         click.echo(
@@ -57,7 +70,8 @@ class DiagnosticStream:
                 separators=(",", ":"),
                 sort_keys=True,
             ),
-            err=True,
+            file=self.diagnostic_stream,
+            err=self.diagnostic_stream is None,
         )
 
     def emit(
@@ -92,8 +106,9 @@ class DiagnosticStream:
         self._write(event)
         return True
 
-    @staticmethod
-    def _diagnostic_event(line: str) -> dict[str, object] | None:
+    def _diagnostic_event(self, line: str) -> dict[str, object] | None:
+        if len(line) > _MAX_DIAGNOSTIC_EVENT_CHARS:
+            return None
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
@@ -106,6 +121,7 @@ class DiagnosticStream:
             and event.get("severity") in {"info", "warning", "error"}
             and isinstance(event.get("code"), str)
             and isinstance(event.get("message"), str)
+            and event.get("command") == self.command
         ):
             return event
         return None
@@ -134,12 +150,12 @@ class DiagnosticStream:
             details=details,
         )
 
-    def relay_output(self, output: str) -> None:
-        """Relay child JSON Lines and group adjacent plain stderr."""
-        self.relay_stream(StringIO(output))
+    def relay_trusted_output(self, output: str) -> None:
+        """Relay diagnostics emitted by a re-entered Studio CLI."""
+        self.relay_trusted_stream(StringIO(output))
 
-    def relay_stream(self, output: TextIO) -> None:
-        """Relay child diagnostics from a text stream with bounded buffering."""
+    def relay_trusted_stream(self, output: TextIO) -> None:
+        """Relay bounded diagnostics from a trusted Studio stream."""
         plain = _PlainOutput()
         for record in output:
             line = record.removesuffix("\n").removesuffix("\r")
@@ -152,19 +168,64 @@ class DiagnosticStream:
             self._relay_event(event)
         self._relay_plain(plain)
 
+    def write_result(self, value: str) -> None:
+        click.echo(value, file=self.result_stream)
 
-def _command_from_argv(args: list[str]) -> str:
-    if not args:
-        return "marimo-studio"
-    first = args[0]
-    if first == "view" and len(args) > 1 and args[1] in {"activate", "add", "remove"}:
-        return f"view {args[1]}"
-    return first if first in _COMMAND_NAMES else "marimo-studio"
+    def relay_process_stream(self, output: TextIO) -> None:
+        """Relay uncontrolled extension output without trusting its contents."""
+        plain = _PlainOutput()
+        last_character = ""
+        while chunk := output.read(8192):
+            plain.append_text(chunk)
+            last_character = chunk[-1]
+        if plain.char_count and last_character != "\n":
+            plain.line_count += 1
+        if not plain.has_content:
+            return
+        if self.format == "jsonl":
+            self._relay_plain(plain)
+            return
+        message = plain.tail.rstrip()
+        if plain.char_count > _MAX_PROCESS_OUTPUT_CHARS:
+            message = f"[Earlier process output omitted]\n{message}"
+        click.echo(message, err=True)
+
+    def relay_captured_stdout(self, output: TextIO) -> None:
+        self.relay_process_stream(output)
+
+    def close(self) -> None:
+        for output in self._owned_streams:
+            output.close()
+        self._owned_streams = ()
+
+
+def _open_child_channel(variable: str) -> TextIO | None:
+    channel = os.environ.pop(variable, None)
+    if channel is None or os.environ.get(SANDBOX_ENV) != "1":
+        return None
+    return open(
+        channel,
+        mode="a",
+        encoding="utf-8",
+        errors="replace",
+        buffering=1,
+    )
 
 
 def diagnostics_from_argv(args: list[str]) -> DiagnosticStream:
     """Create the root diagnostic stream before Click parses arguments."""
-    stream = DiagnosticStream(command=_command_from_argv(args))
+    result_stream = _open_child_channel(_RESULT_CHANNEL_ENV)
+    diagnostic_stream = _open_child_channel(_DIAGNOSTIC_CHANNEL_ENV)
+    stream = DiagnosticStream(
+        command="marimo-studio",
+        result_stream=result_stream,
+        diagnostic_stream=diagnostic_stream,
+        _owned_streams=tuple(
+            output
+            for output in (result_stream, diagnostic_stream)
+            if output is not None
+        ),
+    )
     for index, argument in enumerate(args):
         if argument == "--":
             break
@@ -175,6 +236,17 @@ def diagnostics_from_argv(args: list[str]) -> DiagnosticStream:
     if stream.format not in {"text", "jsonl"}:
         stream.format = "text"
     return stream
+
+
+def machine_output_from_argv(args: list[str]) -> bool:
+    for index, argument in enumerate(args):
+        if argument == "--":
+            break
+        if argument == "--format" and index + 1 < len(args):
+            return args[index + 1] == "json"
+        if argument.startswith("--format="):
+            return argument.partition("=")[2] == "json"
+    return False
 
 
 def diagnostics() -> DiagnosticStream:
@@ -229,18 +301,162 @@ def capture_runtime_stderr() -> Iterator[None]:
             os.dup2(saved_fd, stderr_fd)
             os.close(saved_fd)
             captured.seek(0)
-            stream.relay_stream(captured)
+            stream.relay_process_stream(captured)
+
+
+@contextmanager
+def capture_command_output(
+    stream: DiagnosticStream,
+    *,
+    capture_stdout: bool,
+    capture_stderr: bool,
+) -> Iterator[None]:
+    """Isolate machine descriptors and relay bounded extension output."""
+    if not capture_stdout and not capture_stderr:
+        yield
+        return
+    configured_result = stream.result_stream
+    configured_diagnostics = stream.diagnostic_stream
+    try:
+        sys.stdout.fileno()
+        sys.stderr.fileno()
+    except (AttributeError, OSError):
+        with (
+            tempfile.TemporaryFile(
+                mode="w+t",
+                encoding="utf-8",
+                errors="replace",
+            ) as out,
+            tempfile.TemporaryFile(
+                mode="w+t",
+                encoding="utf-8",
+                errors="replace",
+            ) as error,
+            ExitStack() as redirects,
+        ):
+            result_destination = (
+                configured_result
+                if configured_result is not None
+                else sys.stdout
+                if capture_stdout
+                else None
+            )
+            diagnostic_destination = (
+                configured_diagnostics
+                if configured_diagnostics is not None
+                else sys.stderr
+                if capture_stderr
+                else None
+            )
+            stream.result_stream = result_destination
+            stream.diagnostic_stream = diagnostic_destination
+            if capture_stdout:
+                redirects.enter_context(redirect_stdout(out))
+            if capture_stderr:
+                redirects.enter_context(redirect_stderr(error))
+            try:
+                yield
+            finally:
+                try:
+                    if capture_stdout:
+                        out.seek(0)
+                        stream.relay_captured_stdout(out)
+                    if capture_stderr:
+                        error.seek(0)
+                        stream.relay_process_stream(error)
+                finally:
+                    stream.result_stream = configured_result
+                    stream.diagnostic_stream = configured_diagnostics
+        return
+    with (
+        tempfile.TemporaryFile(mode="w+t", encoding="utf-8", errors="replace") as out,
+        tempfile.TemporaryFile(mode="w+t", encoding="utf-8", errors="replace") as error,
+        os.fdopen(os.dup(1), "w", encoding="utf-8", closefd=True) as result,
+        os.fdopen(
+            os.dup(2),
+            "w",
+            encoding="utf-8",
+            closefd=True,
+        ) as diagnostic,
+        ExitStack() as redirects,
+    ):
+        stdout_fd = 1
+        stderr_fd = 2
+        result_destination = (
+            configured_result
+            if configured_result is not None
+            else result
+            if capture_stdout
+            else None
+        )
+        diagnostic_destination = (
+            configured_diagnostics
+            if configured_diagnostics is not None
+            else diagnostic
+            if capture_stderr
+            else None
+        )
+        stream.result_stream = result_destination
+        stream.diagnostic_stream = diagnostic_destination
+        sys.stdout.flush()
+        sys.stderr.flush()
+        if capture_stdout:
+            os.dup2(out.fileno(), stdout_fd)
+            redirects.enter_context(redirect_stdout(out))
+        if capture_stderr:
+            os.dup2(error.fileno(), stderr_fd)
+            redirects.enter_context(redirect_stderr(error))
+        try:
+            yield
+        finally:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            result.flush()
+            diagnostic.flush()
+            if capture_stdout:
+                os.dup2(result.fileno(), stdout_fd)
+            if capture_stderr:
+                os.dup2(diagnostic.fileno(), stderr_fd)
+            try:
+                if capture_stdout:
+                    out.seek(0)
+                    stream.relay_captured_stdout(out)
+                if capture_stderr:
+                    error.seek(0)
+                    stream.relay_process_stream(error)
+            finally:
+                stream.result_stream = configured_result
+                stream.diagnostic_stream = configured_diagnostics
 
 
 def run_in_environment(target: EnvironmentTarget, args: list[str]) -> int:
     """Run the current CLI command in the notebook's uv environment."""
     stream = diagnostics()
     errors_before = stream.error_count
-    exit_code = run_in_notebook_environment(
+    machine_result = machine_output_from_argv(args)
+    completed = run_in_notebook_environment(
         target,
         args,
-        diagnostic_stream=stream.relay_stream if stream.format == "jsonl" else None,
+        capture_result=machine_result,
+        diagnostic_stream=(
+            stream.relay_trusted_stream if stream.format == "jsonl" else None
+        ),
+        process_stream=stream.relay_process_stream,
     )
+    if machine_result and completed.result.strip():
+        try:
+            json.loads(completed.result)
+        except json.JSONDecodeError as error:
+            stream.relay_process_stream(StringIO(completed.result))
+            if completed.returncode in {0, 1}:
+                raise DependencyError(
+                    "Notebook environment returned an invalid JSON result"
+                ) from error
+        else:
+            stream.write_result(completed.result.rstrip("\r\n"))
+    elif machine_result and completed.returncode in {0, 1}:
+        raise DependencyError("Notebook environment returned no JSON result")
+    exit_code = completed.returncode
     if exit_code and stream.format == "jsonl" and stream.error_count == errors_before:
         stream.emit(
             code="notebook-environment-error",

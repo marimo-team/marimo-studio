@@ -13,8 +13,8 @@ from marimo_studio._cli.output import (
     echo_json,
     render_binding,
 )
-from marimo_studio._workspace.targets import load_studio_target
-from marimo_studio.workspace import bind_cell
+from marimo_studio._cli.targets import load_studio_target
+from marimo_studio._views.api import bind_cell
 
 
 @click.command("bind", cls=ColoredCommand)

@@ -1,0 +1,287 @@
+"""Execute copyable documentation examples at their consumer boundaries."""
+
+from __future__ import annotations
+
+import ast
+import asyncio
+import shlex
+from pathlib import Path
+from typing import cast
+
+import click
+import marimo
+from click.testing import CliRunner
+
+import marimo_studio.agent as studio
+from marimo_studio._artifacts.repository import validate_document
+from marimo_studio._cli import cli
+from marimo_studio._views.inspection import inspection_request
+from marimo_studio._workspace.project_manifest import (
+    encode_view_manifest,
+    load_view_project,
+)
+from marimo_studio.view_providers import (
+    StarterContext,
+    ViewProvider,
+)
+from marimo_studio.view_providers._host.registry import ProviderRegistry
+
+from ..provider_test_support import candidate, provider_build_request
+
+
+def _documentation_paths() -> tuple[Path, ...]:
+    paths = {
+        Path("README.md"),
+        Path("packages/marimo-studio/README.md"),
+        *Path("docs").rglob("*.md"),
+        *Path("skills/marimo-studio").rglob("*.md"),
+    }
+    return tuple(sorted(path for path in paths if path.is_file()))
+
+
+def _python_block(document: str, heading: str) -> str:
+    section = document.split(heading, 1)[1]
+    return section.split("```python\n", 1)[1].split("\n```", 1)[0]
+
+
+def _python_blocks(document: str) -> tuple[str, ...]:
+    sections = document.split("```python\n")[1:]
+    return tuple(section.split("\n```", 1)[0] for section in sections)
+
+
+def _is_api_signature(block: str) -> bool:
+    return "->" in block and not block.lstrip().startswith(("def ", "async def "))
+
+
+def _studio_cli_arguments(arguments: tuple[str, ...]) -> tuple[str, ...] | None:
+    if arguments[:1] == ("marimo-studio",):
+        return arguments[1:]
+    if arguments[:2] == ("uvx", "marimo-studio"):
+        return arguments[2:]
+    if arguments[:3] == ("uv", "run", "marimo-studio"):
+        return arguments[3:]
+    return None
+
+
+def _console_commands(document: str) -> tuple[tuple[str, ...], ...]:
+    commands: list[tuple[str, ...]] = []
+    for section in document.split("```console\n")[1:]:
+        block = section.split("\n```", 1)[0]
+        pending = ""
+        for raw_line in block.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("export "):
+                continue
+            pending += line.removesuffix("\\").rstrip() + " "
+            if line.endswith("\\"):
+                continue
+            arguments = tuple(shlex.split(pending))
+            pending = ""
+            normalized = _studio_cli_arguments(arguments)
+            if normalized is not None:
+                commands.append(normalized)
+    return tuple(commands)
+
+
+def _cli_signatures(document: str) -> tuple[tuple[str, ...], ...]:
+    signatures: list[tuple[str, ...]] = []
+    for section in document.split("```text\n")[1:]:
+        block = section.split("\n```", 1)[0]
+        for line in block.splitlines():
+            arguments = tuple(shlex.split(line))
+            if arguments and arguments[0] == "marimo-studio":
+                signatures.append(arguments[1:])
+    return tuple(signatures)
+
+
+def _parse_click_command(
+    command: click.Command,
+    arguments: list[str],
+    parent: click.Context | None = None,
+) -> click.Context:
+    name = "marimo-studio" if parent is None else command.name or "marimo-studio"
+    if isinstance(command, click.Group):
+        context = command.make_context(
+            name,
+            arguments,
+            parent=parent,
+            resilient_parsing=True,
+        )
+        _name, child, remaining = command.resolve_command(context, arguments)
+        assert child is not None
+        return _parse_click_command(child, remaining, context)
+    context = command.make_context(name, arguments, parent=parent)
+    assert context.args == []
+    return context
+
+
+def _resolve_click_path(
+    command: click.Command,
+    arguments: list[str],
+    parent: click.Context | None = None,
+) -> str:
+    name = "marimo-studio" if parent is None else command.name or "marimo-studio"
+    if not isinstance(command, click.Group):
+        return f"{parent.command_path} {command.name}" if parent is not None else name
+    context = command.make_context(
+        name,
+        arguments,
+        parent=parent,
+        resilient_parsing=True,
+    )
+    _name, child, remaining = command.resolve_command(context, arguments)
+    assert child is not None
+    if isinstance(child, click.Group):
+        return _resolve_click_path(child, remaining, context)
+    return f"{context.command_path} {child.name}"
+
+
+def _is_cli_signature(arguments: tuple[str, ...]) -> bool:
+    return any(
+        any(marker in argument for marker in ("[", "]", "|")) for argument in arguments
+    )
+
+
+def _parse_documented_command(arguments: tuple[str, ...]) -> str:
+    if arguments == ("--version",):
+        result = CliRunner().invoke(cli, list(arguments))
+        assert result.exit_code == 0, result.output
+        return "marimo-studio"
+    return _parse_click_command(cli, list(arguments)).command_path
+
+
+def _notebook_source(cell: str) -> str:
+    return f'''import marimo
+
+__generated_with = "{marimo.__version__}"
+app = marimo.App()
+
+@app.cell
+def _():
+    class Data:
+        def group_by(self, _name):
+            return self
+
+        def len(self):
+            return self
+
+        def describe(self):
+            return self
+
+    data = Data()
+    return (data,)
+
+{cell}
+
+if __name__ == "__main__":
+    app.run()
+'''
+
+
+def test_documented_result_cells_survive_marimo_parsing(tmp_path) -> None:
+    examples = (
+        ("docs/guide/getting-started.md", "Give a producing Marimo cell a name:"),
+        ("docs/guide/notebook-results.md", "Prefer native Marimo cell names:"),
+    )
+    for index, (path, heading) in enumerate(examples):
+        document = _python_block(Path(path).read_text(encoding="utf-8"), heading)
+        notebook = tmp_path / f"documented-cell-{index}.py"
+        notebook.write_text(_notebook_source(document), encoding="utf-8")
+
+        result = asyncio.run(
+            studio.open(notebook=notebook).inspect(
+                include_code=True,
+                output_expressions=True,
+            )
+        )
+
+        assert any(cell.name is not None and cell.code for cell in result.cells)
+
+
+def test_documented_provider_builds_a_complete_html_artifact(tmp_path) -> None:
+    source = _python_block(
+        Path("docs/reference/provider-api.md").read_text(encoding="utf-8"),
+        "## Minimal provider",
+    )
+    namespace: dict[str, object] = {}
+    exec(compile(source, "provider-api.md", "exec"), namespace)
+    provider = cast(ViewProvider, namespace["provider"])
+    registry = ProviderRegistry(
+        (candidate("report", provider, distribution="acme-views"),)
+    )
+    installed = registry.get("acme-views/report")
+    root = tmp_path / "report"
+    root.mkdir()
+    starter = installed.starters()[0]
+    for relative, payload in installed.create(
+        starter,
+        StarterContext("report", "analysis"),
+    ).items():
+        path = root.joinpath(*relative.parts)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+    (root / "view.toml").write_text(
+        encode_view_manifest(installed.key),
+        encoding="utf-8",
+    )
+    project = load_view_project(root)
+    inspection = installed.inspect(inspection_request(project))
+    staging = tmp_path / "staging"
+    staging.mkdir()
+
+    result = installed.build(
+        provider_build_request(
+            project,
+            inspection,
+            staging,
+            cache_root=tmp_path / "cache-owner" / ".artifacts" / ".cache",
+        )
+    )
+
+    assert result.document is not None
+    document = staging.joinpath(*result.document.parts).read_text(encoding="utf-8")
+    assert document
+    validate_document(staging, result.document)
+
+
+def test_every_standalone_python_block_compiles() -> None:
+    compiled = 0
+    for path in _documentation_paths():
+        for block in _python_blocks(path.read_text(encoding="utf-8")):
+            if _is_api_signature(block):
+                continue
+            compile(
+                block,
+                str(path),
+                "exec",
+                flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT,
+            )
+            compiled += 1
+    assert compiled > 0
+
+
+def test_documented_cli_workflows_parse_to_supported_commands() -> None:
+    commands: set[tuple[str, ...]] = set()
+    signatures: set[tuple[str, ...]] = set()
+    for path in _documentation_paths():
+        document = path.read_text(encoding="utf-8")
+        commands.update(_console_commands(document))
+        signatures.update(_cli_signatures(document))
+
+    direct = commands - {
+        arguments for arguments in commands if _is_cli_signature(arguments)
+    }
+    for arguments in direct:
+        _parse_documented_command(arguments)
+    for arguments in signatures:
+        _resolve_click_path(
+            cli,
+            [
+                argument
+                for argument in arguments
+                if not any(marker in argument for marker in ("[", "]", "|"))
+            ],
+        )
+
+    assert direct
+    assert signatures
