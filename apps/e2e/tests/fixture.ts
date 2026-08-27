@@ -149,15 +149,23 @@ const runStudioCli = (args: string[]) =>
   });
 
 export const bindWorkspaceCell = (alias: string, cell: number) =>
-  runStudioCli(["bind", workspaceNotebookPath, "--cell", String(cell), "--as", alias]);
+  runStudioCli([
+    "notebook",
+    "bind",
+    alias,
+    "--target",
+    workspaceNotebookPath,
+    "--cell",
+    String(cell),
+  ]);
 
 export const addWorkspaceView = (target: string, name: string, starter?: string) =>
   runStudioCli([
     "view",
     "create",
-    target,
-    "--name",
     name,
+    "--target",
+    target,
     ...(starter ? ["--starter", starter] : []),
   ]);
 
@@ -165,23 +173,23 @@ export const buildWorkspaceView = (name: string) =>
   runStudioCli([
     "view",
     "build",
-    workspaceNotebookPath,
-    "--name",
     name,
+    "--target",
+    workspaceNotebookPath,
     "--profile",
     "development",
   ]);
 
 export const addCollaborativeView = (name: string) =>
-  runStudioCli(["view", "create", collaborativeNotebookPath, "--name", name]);
+  runStudioCli(["view", "create", name, "--target", collaborativeNotebookPath]);
 
 export const activateWorkspaceView = async (view: string, browserClient?: string) => {
   const args = [
     "view",
     "activate",
-    workspaceNotebookPath,
-    "--name",
     view,
+    "--target",
+    workspaceNotebookPath,
     "--server",
     `${studioOrigin}?file=notebook.py`,
     "--format",
@@ -195,7 +203,13 @@ export const activateWorkspaceView = async (view: string, browserClient?: string
 };
 
 export const checkWorkspace = async (): Promise<boolean> => {
-  const { stdout } = await runStudioCli(["validate", workspaceNotebookPath, "--format", "json"]);
+  const { stdout } = await runStudioCli([
+    "validate",
+    "--target",
+    workspaceNotebookPath,
+    "--format",
+    "json",
+  ]);
   return workspaceCheckSchema.parse(JSON.parse(stdout)).ok;
 };
 

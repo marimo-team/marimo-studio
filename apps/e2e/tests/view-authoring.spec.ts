@@ -120,7 +120,7 @@ import marimo_studio.agent as studio
 mo.query_params().clear()
 mo.query_params().set("region", "eu")
 workspace = studio.open()
-view = await workspace.ensure_view("dashboard")
+view = await workspace.create_view("dashboard")
 activation = await view.activate()
 activation.to_dict()
 `,
