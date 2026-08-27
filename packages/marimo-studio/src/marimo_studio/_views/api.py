@@ -7,12 +7,6 @@ from pathlib import Path
 
 from marimo_studio._notebook.inspection import inspect_notebook
 from marimo_studio._views.create import ensure_view as _ensure_view
-from marimo_studio._views.migrate import (
-    WorkspaceMigrationResult as WorkspaceMigrationResult,
-)
-from marimo_studio._views.migrate import (
-    migrate_workspace as migrate_workspace,
-)
 from marimo_studio._views.records import Starter, ViewSetupResult
 from marimo_studio._views.remove import delete_view as _delete_view
 from marimo_studio._views.resolve import resolve_studio as resolve_studio

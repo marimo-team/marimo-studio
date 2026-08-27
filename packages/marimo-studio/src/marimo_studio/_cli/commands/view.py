@@ -22,10 +22,9 @@ from marimo_studio._cli.output import (
     render_view_inspection,
     render_view_removal,
     render_view_setup,
-    render_workspace_migration,
 )
 from marimo_studio._cli.targets import load_studio_target, resolve_notebook
-from marimo_studio._views.api import create_view, migrate_workspace, remove_view
+from marimo_studio._views.api import create_view, remove_view
 from marimo_studio._views.build import build_view_project
 from marimo_studio._views.inspect import inspect_view as inspect_project
 from marimo_studio.agent._client import activate_view
@@ -81,24 +80,6 @@ def create(
         echo_json(result.to_dict())
     else:
         render_view_setup(result)
-
-
-@click.command("migrate", cls=ColoredCommand)
-@target_argument
-@click.option("--dry-run", is_flag=True, help="Report changes without writing.")
-@output_format_option
-@diagnostic_format_option
-def migrate(
-    target: Path | None,
-    dry_run: bool,
-    output_format: str,
-) -> None:
-    """Add required manifests to authored 0.0.6 view directories."""
-    result = migrate_workspace(resolve_notebook(target), dry_run=dry_run)
-    if output_format == "json":
-        echo_json(result.to_dict())
-    else:
-        render_workspace_migration(result)
 
 
 @click.command("activate", cls=ColoredCommand)
@@ -239,5 +220,4 @@ view.add_command(create)
 view.add_command(activate)
 view.add_command(build_view)
 view.add_command(inspect_view)
-view.add_command(migrate)
 view.add_command(remove)

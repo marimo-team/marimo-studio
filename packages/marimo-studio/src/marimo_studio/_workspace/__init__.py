@@ -9,7 +9,7 @@ in its own ``view.toml``.
 A materialized workspace contains at least one valid view and a valid default.
 Server, editor, export, validation, CLI, and agent callers load the same model.
 Cross-process locks and recoverable file transactions keep view creation,
-configuration changes, migration, and removal coherent.
+configuration changes, and removal coherent.
 """
 
 from marimo_studio._workspace.config import discover_studio as discover_studio

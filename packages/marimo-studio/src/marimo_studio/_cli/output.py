@@ -15,7 +15,6 @@ from marimo_studio._notebook.inspection import InspectionResult
 from marimo_studio._validation.analysis import AnalysisReport
 from marimo_studio._validation.results import CheckResult
 from marimo_studio._views.api import ViewRemovalResult
-from marimo_studio._views.migrate import WorkspaceMigrationResult
 from marimo_studio._views.overview import StudioOverview
 from marimo_studio._views.records import ViewInspection, ViewSetupResult
 from marimo_studio._workspace.models import BindingResult
@@ -60,16 +59,6 @@ def render_view_setup(result: ViewSetupResult) -> None:
     if not result.dry_run:
         command = _shell_command(["marimo", "edit", str(result.notebook), "--sandbox"])
         _echo_next_command("edit", command)
-
-
-def render_workspace_migration(result: WorkspaceMigrationResult) -> None:
-    """Write an authored workspace migration in human text."""
-    verb = "Would migrate" if result.dry_run else "Migrated"
-    echo(f"{green(verb)} {len(result.views)} view directories at {result.view_root}")
-    for path in result.created:
-        echo(f"  {light_blue('create')} {path}")
-    for path in result.updated:
-        echo(f"  {light_blue('update')} {path}")
 
 
 def render_view_inspection(result: ViewInspection) -> None:
