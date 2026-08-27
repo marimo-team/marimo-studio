@@ -61,7 +61,12 @@ jobs:
         run: |
           index="apps/docs/.vitepress/dist/index.html"
           test -f apps/docs/.vitepress/dist/guide/getting-started.html
+          test -f apps/docs/.vitepress/dist/guide/authoring-options.html
+          test -f apps/docs/.vitepress/dist/examples/nga.html
           test -f apps/docs/.vitepress/dist/reference/index.html
+          test -f apps/docs/.vitepress/dist/reference/view-project.html
+          test -f apps/docs/.vitepress/dist/reference/provider-api.html
+          test -f apps/docs/.vitepress/dist/reference/projections.html
           grep -q "href=\"${BASE_PATH}/assets/" "$index"
           grep -q "src=\"${BASE_PATH}/assets/" "$index"
           grep -q "href=\"${BASE_PATH}/brand/marimo-studio-mark-light.svg\"" "$index"
