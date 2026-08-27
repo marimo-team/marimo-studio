@@ -14,6 +14,11 @@ describe("Marimo runtime logging", () => {
     Logger.debug("[rpc] Worker -> Parent", { id: "kernelMessage" });
     Logger.warn("useConnectionTransport is unmounting. This likely means there is a bug.");
     Logger.warn("WebSocket closed", undefined, undefined);
+    Logger.warn("[iframe] localStorage unavailable - using fallback storage");
+    Logger.warn("[iframe] Fullscreen API unavailable");
+    Logger.get("iframe").warn("localStorage unavailable - using fallback storage");
+    Logger.get("iframe").warn("Fullscreen API unavailable");
+    Logger.warn("Not running in a secure context; interrupts are not available.");
     Logger.warn("WebSocket closed", 1006, "network failure");
 
     expect(debug).not.toHaveBeenCalled();
