@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "vite-plus/test";
 
 import {
@@ -11,78 +12,157 @@ import {
   parsePresentationChange,
   parseWorkspaceChange,
 } from "../src/development-events.ts";
-import { parseSourceChanges } from "../src/source-events.ts";
+import { parsePresentationBaseline, parseSourceChanges } from "../src/source-events.ts";
 
-test("development events accept authoritative workspace changes", () => {
-  assert.deepEqual(parseWorkspaceChange('{"kind":"project"}'), "project");
-  assert.deepEqual(parseWorkspaceChange('{"kind":"build"}'), "build");
-  assert.deepEqual(parseWorkspaceChange('{"kind":"presentation"}'), "presentation");
-  assert.deepEqual(parseWorkspaceChange('{"kind":"views"}'), "views");
-  assert.deepEqual(parseWorkspaceChange('{"kind":"html"}'), undefined);
-  assert.deepEqual(parseWorkspaceChange("invalid"), undefined);
-});
+type DevelopmentEventsFixture = {
+  sourceChanges: Array<{
+    schema: 1;
+    kind: "project" | "views";
+    files: Array<{ path: string; revision: string | null }>;
+  }>;
+  presentationBaselines: Array<{
+    schema: 1;
+    view: string;
+    revision: string | null;
+  }>;
+  presentationBuilds: Array<
+    | { schema: 1; kind: "build"; view: string; phase: "building"; files: [] }
+    | {
+        schema: 1;
+        kind: "build";
+        view: string;
+        build: {
+          schema: 1;
+          profile: "development";
+          phase: "ready" | "failed";
+        };
+        revision: string | null;
+        files: [];
+      }
+  >;
+  presentationChanges: Array<{
+    schema: 1;
+    kind: "presentation";
+    view: string;
+    revision: string;
+    artifact_revision: string;
+    files: [];
+  }>;
+  activationAcknowledgements: Array<{
+    schema: 1;
+    outcome: "applied" | "retryable" | "rejected";
+  }>;
+  activeViewRequests: Array<{ schema: 1; generation: number; view: string }>;
+  editorSessionBindings: Array<{
+    schema: 1;
+    generation: number;
+    sessionId: string;
+    replaced: boolean;
+  }>;
+  observationRequests: Array<{
+    schema: 1;
+    requestId: string;
+    view: string;
+    runtime: "server" | "wasm";
+    runtimeInstance: string;
+    revision: string;
+    activeViewGeneration?: number;
+  }>;
+};
 
-test("presentation build events identify admission boundaries", () => {
-  assert.deepEqual(parsePresentationBuild('{"kind":"build","phase":"building","files":[]}'), {
-    phase: "building",
-  });
-  assert.deepEqual(
-    parsePresentationBuild(
-      '{"kind":"build","build":{"phase":"ready"},"revision":"revision-2","files":[]}',
-    ),
-    { phase: "complete", revision: "revision-2" },
-  );
-  assert.deepEqual(
-    parsePresentationBuild(
-      '{"kind":"build","build":{"phase":"failed"},"revision":null,"files":[]}',
-    ),
-    { phase: "complete", revision: null },
-  );
-  assert.equal(parsePresentationBuild('{"kind":"project"}'), undefined);
-});
+// SAFETY: The Python producer test owns this repository fixture, and each
+// payload below is passed through its browser parser before use.
+const fixture = JSON.parse(
+  readFileSync(new URL("../fixtures/development-events.json", import.meta.url), "utf8"),
+) as DevelopmentEventsFixture;
 
-test("presentation changes carry the published revision", () => {
-  assert.deepEqual(
-    parsePresentationChange(
-      '{"kind":"presentation","view":"dashboard","revision":"revision-2","files":[]}',
-    ),
-    { view: "dashboard", revision: "revision-2" },
-  );
-  assert.equal(parsePresentationChange('{"kind":"presentation"}'), undefined);
-});
-
-test("development events decode active-view requests", () => {
-  assert.deepEqual(parseActiveViewRequest('{"schema":1,"generation":4,"view":"report"}'), {
-    schema: 1,
-    generation: 4,
-    view: "report",
-  });
-  assert.deepEqual(parseActiveViewRequest('{"schema":1,"view":""}'), undefined);
-});
-
-test("activation acknowledgements expose terminal browser outcomes", () => {
-  for (const outcome of ["applied", "retryable", "rejected"] as const) {
-    assert.deepEqual(parseActivationAckResponse({ schema: 1, outcome }), {
-      schema: 1,
-      outcome,
-    });
+test("development event parsers accept the Python producer fixture", () => {
+  for (const payload of fixture.sourceChanges) {
+    const source = JSON.stringify(payload);
+    assert.deepEqual(parseSourceChanges(source), payload.files);
+    assert.equal(parseWorkspaceChange(source), payload.kind);
   }
-  assert.deepEqual(parseActivationAckResponse({ schema: 1, outcome: "unknown" }), undefined);
+  for (const payload of fixture.presentationBaselines) {
+    assert.deepEqual(parsePresentationBaseline(JSON.stringify(payload)), payload);
+  }
+  for (const payload of fixture.presentationBuilds) {
+    const expected =
+      "phase" in payload
+        ? { phase: "building" }
+        : { phase: "complete", revision: payload.revision };
+    const source = JSON.stringify(payload);
+    assert.deepEqual(parsePresentationBuild(source), expected);
+    assert.equal(parseWorkspaceChange(source), payload.kind);
+  }
+  for (const payload of fixture.presentationChanges) {
+    const source = JSON.stringify(payload);
+    assert.deepEqual(parsePresentationChange(source), {
+      view: payload.view,
+      revision: payload.revision,
+    });
+    assert.equal(parseWorkspaceChange(source), payload.kind);
+  }
+  for (const payload of fixture.activeViewRequests) {
+    assert.deepEqual(parseActiveViewRequest(JSON.stringify(payload)), payload);
+  }
+  for (const payload of fixture.activationAcknowledgements) {
+    assert.deepEqual(parseActivationAckResponse(payload), payload);
+  }
+  for (const payload of fixture.editorSessionBindings) {
+    assert.deepEqual(parseEditorSessionBinding(JSON.stringify(payload)), payload);
+  }
+  for (const payload of fixture.observationRequests) {
+    assert.deepEqual(parseObserveViewRequest(JSON.stringify(payload)), payload);
+  }
 });
 
-test("development events decode editor session bindings", () => {
-  assert.deepEqual(
-    parseEditorSessionBinding(
-      '{"schema":1,"generation":2,"sessionId":"s_reconnected","replaced":true}',
-    ),
-    { schema: 1, generation: 2, sessionId: "s_reconnected", replaced: true },
-  );
-  assert.deepEqual(
+test("development event parsers reject malformed browser contracts", () => {
+  assert.equal(parseWorkspaceChange('{"kind":"html"}'), undefined);
+  assert.equal(parseWorkspaceChange("invalid"), undefined);
+  assert.equal(parsePresentationBuild('{"kind":"project"}'), undefined);
+  assert.equal(parsePresentationChange('{"kind":"presentation"}'), undefined);
+  assert.equal(parsePresentationBaseline('{"schema":1,"view":"dashboard"}'), undefined);
+  assert.equal(parseActiveViewRequest('{"schema":1,"view":""}'), undefined);
+  assert.equal(parseActivationAckResponse({ schema: 1, outcome: "unknown" }), undefined);
+  assert.equal(
     parseEditorSessionBinding(
       '{"schema":1,"generation":0,"sessionId":"s_reconnected","replaced":false}',
     ),
     undefined,
   );
+
+  const observation = fixture.observationRequests[0];
+  assert.ok(observation);
+  assert.equal(
+    parseObserveViewRequest(JSON.stringify({ ...observation, runtimeInstance: "" })),
+    undefined,
+  );
+  assert.equal(
+    parseObserveViewRequest(JSON.stringify({ ...observation, activeViewGeneration: -1 })),
+    undefined,
+  );
+  assert.deepEqual(
+    parseSourceChanges(
+      JSON.stringify({
+        files: [
+          { path: "../outside.ts", revision: "ignored" },
+          { path: "index.html", revision: 42 },
+        ],
+      }),
+    ),
+    [],
+  );
+  const retained = fixture.sourceChanges[0]?.files[0];
+  assert.ok(retained);
+  assert.deepEqual(
+    parseSourceChanges(
+      JSON.stringify({
+        files: [retained, { path: "../outside.ts", revision: "ignored" }],
+      }),
+    ),
+    [retained],
+  );
+  assert.deepEqual(parseSourceChanges("invalid"), []);
 });
 
 test("editor document mutations require the exact bounded schema", () => {
@@ -123,50 +203,4 @@ test("editor document mutations require the exact bounded schema", () => {
   assert.equal(parseEditorDocumentMutation({ ...mutation, generation: 0 }), undefined);
   assert.equal(parseEditorDocumentMutation({ ...mutation, extra: true }), undefined);
   assert.equal(parseEditorDocumentMutation({ ...mutation, type: "unknown" }), undefined);
-});
-
-test("development events decode browser observation requests", () => {
-  const payload = {
-    schema: 1,
-    requestId: "request-dashboard",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "runtime-instance",
-    revision: "revision-1",
-  };
-  assert.deepEqual(parseObserveViewRequest(JSON.stringify(payload)), payload);
-  assert.deepEqual(
-    parseObserveViewRequest(JSON.stringify({ ...payload, activeViewGeneration: 3 })),
-    { ...payload, activeViewGeneration: 3 },
-  );
-  assert.deepEqual(
-    parseObserveViewRequest(JSON.stringify({ ...payload, runtimeInstance: "" })),
-    undefined,
-  );
-  assert.deepEqual(
-    parseObserveViewRequest(JSON.stringify({ ...payload, activeViewGeneration: -1 })),
-    undefined,
-  );
-});
-
-test("source events retain valid provider-discovered files", () => {
-  assert.deepEqual(
-    parseSourceChanges(
-      JSON.stringify({
-        files: [
-          { path: "index.html", revision: "html-r2" },
-          { path: "app.css", revision: null },
-          { path: "src/App.tsx", revision: "tsx-r2" },
-          { path: "../outside.ts", revision: "ignored" },
-          { path: "index.html", revision: 42 },
-        ],
-      }),
-    ),
-    [
-      { path: "index.html", revision: "html-r2" },
-      { path: "app.css", revision: null },
-      { path: "src/App.tsx", revision: "tsx-r2" },
-    ],
-  );
-  assert.deepEqual(parseSourceChanges("invalid"), []);
 });

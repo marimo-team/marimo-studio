@@ -1,0 +1,136 @@
+{
+  "sourceChanges": [
+    {
+      "schema": 1,
+      "kind": "project",
+      "files": [
+        {
+          "path": "index.html",
+          "revision": "html-r2"
+        },
+        {
+          "path": "app.css",
+          "revision": null
+        },
+        {
+          "path": "src/App.tsx",
+          "revision": "tsx-r2"
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "kind": "views",
+      "files": []
+    }
+  ],
+  "presentationBaselines": [
+    {
+      "schema": 1,
+      "view": "dashboard",
+      "revision": "presentation-revision"
+    },
+    {
+      "schema": 1,
+      "view": "dashboard",
+      "revision": null
+    }
+  ],
+  "presentationBuilds": [
+    {
+      "schema": 1,
+      "kind": "build",
+      "view": "dashboard",
+      "phase": "building",
+      "files": []
+    },
+    {
+      "schema": 1,
+      "kind": "build",
+      "view": "dashboard",
+      "build": {
+        "schema": 1,
+        "profile": "development",
+        "phase": "ready"
+      },
+      "revision": "presentation-revision",
+      "files": []
+    },
+    {
+      "schema": 1,
+      "kind": "build",
+      "view": "dashboard",
+      "build": {
+        "schema": 1,
+        "profile": "development",
+        "phase": "failed"
+      },
+      "revision": null,
+      "files": []
+    }
+  ],
+  "presentationChanges": [
+    {
+      "schema": 1,
+      "kind": "presentation",
+      "view": "dashboard",
+      "revision": "presentation-revision",
+      "artifact_revision": "artifact-revision",
+      "files": []
+    }
+  ],
+  "activationAcknowledgements": [
+    {
+      "schema": 1,
+      "outcome": "applied"
+    },
+    {
+      "schema": 1,
+      "outcome": "retryable"
+    },
+    {
+      "schema": 1,
+      "outcome": "rejected"
+    }
+  ],
+  "activeViewRequests": [
+    {
+      "schema": 1,
+      "generation": 1,
+      "view": "executive"
+    }
+  ],
+  "editorSessionBindings": [
+    {
+      "schema": 1,
+      "generation": 1,
+      "sessionId": "s_123456",
+      "replaced": false
+    },
+    {
+      "schema": 1,
+      "generation": 2,
+      "sessionId": "s_123456",
+      "replaced": true
+    }
+  ],
+  "observationRequests": [
+    {
+      "schema": 1,
+      "requestId": "request-dashboard",
+      "view": "executive",
+      "runtime": "server",
+      "runtimeInstance": "server-instance",
+      "revision": "presentation-revision"
+    },
+    {
+      "schema": 1,
+      "requestId": "request-dashboard-with-generation",
+      "view": "executive",
+      "runtime": "server",
+      "runtimeInstance": "server-instance",
+      "revision": "presentation-revision",
+      "activeViewGeneration": 2
+    }
+  ]
+}
