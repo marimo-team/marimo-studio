@@ -1,0 +1,41 @@
+packages/marimo-studio/src/marimo_studio/_authoring/ports.py
+  s_a43478d5345041::t_505278c0e6c320 1-10,13-23
+  s_a43478d5345041::t_189d1c2a05bb64 11-12
+packages/marimo-studio/src/marimo_studio/_authoring/view_api.py
+  s_a43478d5345041::t_60849c9f77fc4d 1-7,9-26,28-31,33-40,42-122
+  s_a43478d5345041::t_505278c0e6c320 8,32,41
+  s_a43478d5345041::t_e10c2a026ff909 27
+packages/marimo-studio/src/marimo_studio/_workspace/bindings.py
+  s_a43478d5345041::t_dfb7a3c069107e 16,33,43-48
+  s_a43478d5345041::t_25777abdc3023f 27
+  s_a43478d5345041::t_3387caa3a2924b 56
+packages/marimo-studio/src/marimo_studio/_authoring/workspace_api.py
+  s_a43478d5345041::t_60849c9f77fc4d 1-9,16-28,30-103,105-111,113-153
+  s_a43478d5345041::t_7692fb8158901c 11-15
+  s_a43478d5345041::t_e10c2a026ff909 29
+  s_a43478d5345041::t_467770775ba013 10
+  s_a43478d5345041::t_dfb7a3c069107e 104,112
+packages/marimo-studio/src/marimo_studio/_authoring/workspace.py
+  s_a43478d5345041::t_dfb7a3c069107e 1-133
+packages/marimo-studio/src/marimo_studio/_views/api.py
+  s_a43478d5345041::t_dfb7a3c069107e 9
+packages/marimo-studio/src/marimo_studio/_notebook/records.py
+  s_a43478d5345041::t_dfb7a3c069107e 144-175
+  s_a43478d5345041::t_46f62832d78c9f 200
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e19cb54f892fb683b86ed14833f857bc662e4041",
+  "prompts": {},
+  "sessions": {
+    "s_a43478d5345041": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a041df-db54-71d2-85a7-8654dad51411",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
