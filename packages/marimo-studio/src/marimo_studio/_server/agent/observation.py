@@ -5,10 +5,13 @@ from __future__ import annotations
 import asyncio
 import secrets
 
-from marimo_studio._server.agent_events import ObservationRequest
-from marimo_studio._server.agent_store import AgentOperationStore
-from marimo_studio._server.live_clients import PeerStatus, PeerTarget
-from marimo_studio.agent_models import BrowserObservation
+from marimo_studio._server.agent.clients import PeerStatus, PeerTarget
+from marimo_studio._server.agent.events import ObservationRequest
+from marimo_studio._server.agent.store import (
+    AgentOperationStore,
+    coordinator_closed_error,
+)
+from marimo_studio._validation.evidence import BrowserObservation
 from marimo_studio.errors import AgentRequestError
 
 
@@ -38,6 +41,7 @@ class ObservationCoordinator:
                 status_code=409,
             )
         async with self._store.condition:
+            self._store.require_open()
             if self._store.has_operation(target.client_id):
                 raise AgentRequestError(
                     "browser-operation-in-progress",
@@ -48,7 +52,8 @@ class ObservationCoordinator:
                 request_id=secrets.token_urlsafe(18),
                 binding_generation=target.binding_generation,
                 client_id=target.client_id,
-                session_id=target.session_id,
+                binding_session_id=target.session_id,
+                runtime_session_id=(target.session_id if runtime == "server" else None),
                 view=view,
                 runtime=runtime,
                 runtime_instance=runtime_instance,
@@ -58,14 +63,15 @@ class ObservationCoordinator:
             self._store.requests_for(target.client_id)[request.request_id] = request
             self._store.observation_sequences[request.request_id] = -1
             self._store.condition.notify_all()
-        if not self._matches(request, require_connected=True):
-            async with self._store.condition:
+        async with self._store.condition:
+            self._store.require_open()
+            if not self._matches(request, require_connected=True):
                 self._clear(request)
-            raise AgentRequestError(
-                "browser-session-changed",
-                "The Studio browser changed before browser validation began.",
-                status_code=409,
-            )
+                raise AgentRequestError(
+                    "browser-session-changed",
+                    "The Studio browser changed before browser validation began.",
+                    status_code=409,
+                )
         return request
 
     async def record(self, observation: BrowserObservation) -> bool:
@@ -75,6 +81,7 @@ class ObservationCoordinator:
         if request_id is None or client_id is None or sequence is None:
             return False
         async with self._store.condition:
+            self._store.require_open()
             request = self._store.observation_requests.get(client_id, {}).get(
                 request_id
             )
@@ -88,7 +95,11 @@ class ObservationCoordinator:
                 or observation.runtime != request.runtime
                 or observation.runtime_instance != request.runtime_instance
                 or observation.revision != request.revision
-                or observation.session_id != request.session_id
+                or observation.session_id != request.runtime_session_id
+                or (
+                    observation.state == "ready"
+                    and not observation.projection_evidence_ready
+                )
             ):
                 return False
             self._store.observation_sequences[request_id] = sequence
@@ -102,6 +113,7 @@ class ObservationCoordinator:
         timeout: float,
     ) -> BrowserObservation:
         timed_out = False
+        closed = False
         async with self._store.condition:
             try:
                 await asyncio.wait_for(
@@ -114,8 +126,11 @@ class ObservationCoordinator:
                 self._store.observations.pop(request.request_id, None)
                 raise
             finally:
+                closed = self._store.closed
                 self._clear(request)
             observed = self._store.observations.pop(request.request_id, None)
+        if closed:
+            raise coordinator_closed_error()
         status = self._store.clients.status(self._target(request))
         if status is PeerStatus.REBOUND:
             return self._unobserved(
@@ -170,7 +185,8 @@ class ObservationCoordinator:
     def _finished(self, request: ObservationRequest) -> bool:
         observation = self._store.observations.get(request.request_id)
         return (
-            request
+            self._store.closed
+            or request
             not in self._store.observation_requests.get(request.client_id, {}).values()
             or not self._matches(request)
             or (observation is not None and observation.state in {"ready", "error"})
@@ -217,7 +233,7 @@ class ObservationCoordinator:
     def _target(request: ObservationRequest) -> PeerTarget:
         return PeerTarget(
             client_id=request.client_id,
-            session_id=request.session_id,
+            session_id=request.binding_session_id,
             binding_generation=request.binding_generation,
             active_view=request.view,
             active_view_generation=request.active_view_generation or 0,
@@ -240,6 +256,3 @@ class ObservationCoordinator:
             client_id=request.client_id,
             request_id=request.request_id,
         )
-
-
-__all__ = ["ObservationCoordinator"]

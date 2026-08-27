@@ -3,14 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+from enum import Enum
 
-from marimo_studio._server.agent_events import ViewActivation
-from marimo_studio._server.agent_store import (
+from marimo_studio._server.agent.clients import PeerStatus, PeerTarget
+from marimo_studio._server.agent.events import ViewActivation
+from marimo_studio._server.agent.store import (
     ActivationAcknowledgement,
     AgentOperationStore,
+    coordinator_closed_error,
 )
-from marimo_studio._server.live_clients import PeerStatus, PeerTarget
 from marimo_studio.errors import AgentRequestError
+
+
+class ActivationAckOutcome(str, Enum):
+    APPLIED = "applied"
+    RETRYABLE = "retryable"
+    REJECTED = "rejected"
 
 
 class ActivationCoordinator:
@@ -31,6 +39,7 @@ class ActivationCoordinator:
                 status_code=409,
             )
         async with self._store.condition:
+            self._store.require_open()
             if self._store.has_operation(target.client_id):
                 raise AgentRequestError(
                     "browser-operation-in-progress",
@@ -47,15 +56,17 @@ class ActivationCoordinator:
             )
             self._store.activations[target.client_id] = activation
             self._store.condition.notify_all()
-        if not self._matches(activation, require_connected=True):
-            async with self._store.condition:
+        async with self._store.condition:
+            self._store.require_open()
+            if not self._matches(activation, require_connected=True):
                 self._store.activations.pop(target.client_id, None)
                 self._store.condition.notify_all()
-            raise AgentRequestError(
-                "browser-session-changed",
-                "The Studio browser changed Marimo sessions before activation began.",
-                status_code=409,
-            )
+                raise AgentRequestError(
+                    "browser-session-changed",
+                    "The Studio browser changed Marimo sessions before "
+                    "activation began.",
+                    status_code=409,
+                )
         return activation
 
     async def acknowledge(
@@ -63,53 +74,62 @@ class ActivationCoordinator:
         client_id: str,
         generation: int,
         view: str,
-    ) -> bool:
+    ) -> ActivationAckOutcome:
         async with self._store.condition:
+            self._store.require_open()
             activation = self._store.activations.get(client_id)
             acknowledged = self._store.acknowledged_activations.get(client_id)
-        if (
-            activation is None
-            and acknowledged is not None
-            and acknowledged.activation.generation == generation
-            and acknowledged.activation.view == view
-        ):
-            target = await self._store.clients.target_for_client(client_id)
-            return (
-                target is not None
-                and target.session_id == acknowledged.activation.session_id
-                and target.binding_generation
-                == acknowledged.activation.binding_generation
-                and target.active_view == view
-                and target.active_view_generation == acknowledged.active_view_generation
-            )
-        if (
-            activation is None
-            or activation.generation != generation
-            or activation.view != view
-        ):
-            return False
-        target = self._target(activation)
-        if not await self._store.clients.commit_active_view(target, view):
-            return False
-        committed = await self._store.clients.target_for_client(client_id)
-        if (
-            committed is None
-            or committed.session_id != activation.session_id
-            or committed.binding_generation != activation.binding_generation
-        ):
-            return False
-        async with self._store.condition:
-            if self._store.activations.get(client_id) != activation:
-                return False
+            if (
+                activation is None
+                and acknowledged is not None
+                and acknowledged.activation.generation == generation
+                and acknowledged.activation.view == view
+            ):
+                target = await self._store.clients.target_for_client(client_id)
+                return (
+                    ActivationAckOutcome.APPLIED
+                    if target is not None
+                    and target.session_id == acknowledged.activation.session_id
+                    and target.binding_generation
+                    == acknowledged.activation.binding_generation
+                    and target.active_view == view
+                    and target.active_view_generation
+                    == acknowledged.active_view_generation
+                    else ActivationAckOutcome.REJECTED
+                )
+            if (
+                activation is None
+                or activation.generation != generation
+                or activation.view != view
+            ):
+                return ActivationAckOutcome.REJECTED
+            target = self._target(activation)
+            committed = await self._store.clients.commit_active_view(target, view)
+            if committed is None:
+                return (
+                    ActivationAckOutcome.RETRYABLE
+                    if self._store.clients.status(
+                        target,
+                        require_connected=True,
+                    )
+                    is PeerStatus.UNAVAILABLE
+                    else ActivationAckOutcome.REJECTED
+                )
+            if (
+                committed.session_id != activation.session_id
+                or committed.binding_generation != activation.binding_generation
+            ):
+                return ActivationAckOutcome.REJECTED
             self._store.acknowledged_activations[client_id] = ActivationAcknowledgement(
                 activation=activation,
                 active_view_generation=committed.active_view_generation,
             )
             self._store.condition.notify_all()
-        return True
+            return ActivationAckOutcome.APPLIED
 
     async def wait(self, activation: ViewActivation, timeout: float) -> None:
         timed_out = False
+        closed = False
         async with self._store.condition:
             try:
                 await asyncio.wait_for(
@@ -117,11 +137,14 @@ class ActivationCoordinator:
                     timeout,
                 )
             except asyncio.TimeoutError:
-                timed_out = True
+                timed_out = not self._finished(activation)
             except asyncio.CancelledError:
                 self._clear(activation)
                 raise
+            closed = self._store.closed
             self._clear(activation)
+        if closed:
+            raise coordinator_closed_error()
         status = self._store.clients.status(self._target(activation))
         if status is PeerStatus.REBOUND:
             raise AgentRequestError(
@@ -180,7 +203,8 @@ class ActivationCoordinator:
     def _finished(self, activation: ViewActivation) -> bool:
         acknowledged = self._store.acknowledged_activations.get(activation.client_id)
         return (
-            self._store.activations.get(activation.client_id) != activation
+            self._store.closed
+            or self._store.activations.get(activation.client_id) != activation
             or not self._matches(activation)
             or (
                 acknowledged is not None
@@ -214,6 +238,3 @@ class ActivationCoordinator:
             active_view=None,
             active_view_generation=activation.active_view_generation,
         )
-
-
-__all__ = ["ActivationCoordinator"]

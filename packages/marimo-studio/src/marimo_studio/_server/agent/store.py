@@ -5,9 +5,19 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 
-from marimo_studio._server.agent_events import ObservationRequest, ViewActivation
-from marimo_studio._server.live_clients import StudioClientRegistry
-from marimo_studio.agent_models import BrowserObservation
+from marimo_studio._server.agent.clients import StudioClientRegistry
+from marimo_studio._server.agent.events import ObservationRequest, ViewActivation
+from marimo_studio._validation.evidence import BrowserObservation
+from marimo_studio.errors import AgentRequestError
+
+
+def coordinator_closed_error() -> AgentRequestError:
+    """Return the terminal outcome for work interrupted by scope shutdown."""
+    return AgentRequestError(
+        "browser-coordinator-closed",
+        "Studio browser coordination stopped before the request completed.",
+        status_code=503,
+    )
 
 
 @dataclass(frozen=True)
@@ -30,6 +40,12 @@ class AgentOperationStore:
     observations: dict[str, BrowserObservation] = field(default_factory=dict)
     observation_sequences: dict[str, int] = field(default_factory=dict)
     generation: int = 0
+    closed: bool = False
+
+    def require_open(self) -> None:
+        """Reject work while the condition-protected store is terminal."""
+        if self.closed:
+            raise coordinator_closed_error()
 
     def next_generation(self) -> int:
         self.generation += 1
@@ -42,12 +58,3 @@ class AgentOperationStore:
 
     def requests_for(self, client_id: str) -> dict[str, ObservationRequest]:
         return self.observation_requests.setdefault(client_id, {})
-
-    def discard_requests(self, client_id: str) -> None:
-        requests = self.observation_requests.pop(client_id, {})
-        for request_id in requests:
-            self.observations.pop(request_id, None)
-            self.observation_sequences.pop(request_id, None)
-
-
-__all__ = ["ActivationAcknowledgement", "AgentOperationStore"]

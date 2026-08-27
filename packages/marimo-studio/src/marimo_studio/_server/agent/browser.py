@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import math
 from typing import cast
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from marimo_studio._agent_protocol import decode_browser_observation
-from marimo_studio._capabilities import ServerContext, SessionState
 from marimo_studio._server.auth import (
     error_response,
     forbidden_response,
@@ -20,35 +17,87 @@ from marimo_studio._server.auth import (
 )
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.notebook_scope import NotebookScope
+from marimo_studio._server.ports import SessionState
+from marimo_studio._server.presentation.evidence import validate_projection_evidence
+from marimo_studio._server.records import ServerContext
+from marimo_studio._server.request_body import (
+    JSONBodyError,
+    json_body_error_response,
+    read_json_body,
+)
 from marimo_studio._server.request_lifecycle import (
     RequestDisconnected,
     run_while_connected,
 )
-from marimo_studio._server.runtimes import RuntimeRegistry
+from marimo_studio._server.runtime.catalog import RuntimeRegistry
+from marimo_studio._validation.evidence import BrowserObservation
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.agent_models import BrowserObservation
+from marimo_studio.agent._protocol import decode_browser_observation
 from marimo_studio.errors import AgentRequestError, MarimoStudioError, ProtocolError
 
 _MAX_OBSERVATION_TIMEOUT = 300.0
 _CLIENT_CONNECT_TIMEOUT = 1.0
+_OBSERVATION_JSON_MAX_BYTES = 4 * 1024 * 1024
+_OBSERVATION_REQUEST_JSON_MAX_BYTES = 512 * 1024
 
 
 async def browser_observation_response(
     request: Request,
+    context: ServerContext,
     view_name: str,
     notebook_scope: NotebookScope,
-    server_token: str,
+    runtimes: RuntimeRegistry,
 ) -> Response:
     """Record browser evidence for one server-issued observation request."""
     if request.method != "PUT":
         return Response(status_code=405)
     if not has_edit_access(request.scope):
         return forbidden_response()
-    if token_error := invalid_server_token_response(request, server_token):
+    if token_error := invalid_server_token_response(request, context.server_token):
         return token_error
     try:
-        observation = decode_browser_observation(await request.json(), view_name)
-    except (json.JSONDecodeError, UnicodeDecodeError, ProtocolError):
+        payload = await read_json_body(request, max_bytes=_OBSERVATION_JSON_MAX_BYTES)
+    except JSONBodyError as error:
+        return json_body_error_response(error)
+    try:
+        observation = decode_browser_observation(payload, view_name)
+    except ProtocolError:
+        return _invalid_payload("invalid-browser-observation")
+    if observation.runtime == "server" and observation.session_id is None:
+        return _invalid_payload("invalid-browser-observation")
+    snapshot = notebook_scope.presentation.snapshot_for_revision(
+        view_name,
+        observation.revision or "",
+    )
+    if snapshot is None:
+        current = await notebook_scope.presentation.snapshot_async(view_name)
+        if current.revision == observation.revision:
+            snapshot = current
+    if snapshot is None:
+        return JSONResponse(
+            {
+                "error": "presentation-revision-unavailable",
+                "message": "The observed presentation revision is no longer available.",
+            },
+            status_code=409,
+            headers=NO_STORE,
+        )
+    try:
+        provider, _available = runtimes.select(
+            snapshot.resolved.workspace,
+            context,
+            observation.runtime,
+        )
+        runtime = provider.project(
+            snapshot,
+            context,
+            observation.session_id,
+            observation.session_id,
+            observation.session_id,
+            observation.session_id,
+        )
+        validate_projection_evidence(observation, snapshot, runtime)
+    except (MarimoStudioError, ProtocolError):
         return _invalid_payload("invalid-browser-observation")
     if not await notebook_scope.agents.record(observation):
         return JSONResponse(
@@ -78,9 +127,12 @@ async def browser_observations_response(
     if token_error := invalid_server_token_response(request, context.server_token):
         return token_error
     try:
-        body = await request.json()
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return _invalid_payload("invalid-browser-request")
+        body = await read_json_body(
+            request,
+            max_bytes=_OBSERVATION_REQUEST_JSON_MAX_BYTES,
+        )
+    except JSONBodyError as error:
+        return json_body_error_response(error)
     if not isinstance(body, dict) or set(body) != {
         "schema",
         "views",
@@ -235,27 +287,43 @@ async def observe_views(
         if len(views) != 1:
             raise AgentRequestError(
                 "focused-analysis-required",
-                "Code-mode browser analysis accepts one active view at a time.",
+                "Code-mode browser validation accepts one active view at a time.",
                 status_code=400,
             )
         active_view = target.active_view
-        active_view_generation = target.active_view_generation
         if active_view != views[0]:
             raise AgentRequestError(
                 "browser-view-not-active",
                 (
                     f"Activate view {views[0]!r} in one code-mode call, then "
-                    "analyze it in the next call."
+                    "validate it in the next call."
                 ),
                 status_code=409,
             )
-    else:
-        active_view_generation = None
     session_id = bound_session_id
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
     observations: list[BrowserObservation] = []
     for view in views:
+        remaining = max(0.0, deadline - loop.time())
+        if allow_view_activation and target.active_view != view:
+            activation = await notebook_scope.agents.activate(target, view)
+            await notebook_scope.agents.wait_for_activation(activation, remaining)
+            current_target = await notebook_scope.clients.target_for_client(
+                target.client_id
+            )
+            if (
+                current_target is None
+                or current_target.session_id != session_id
+                or current_target.binding_generation != target.binding_generation
+                or current_target.active_view != view
+            ):
+                raise AgentRequestError(
+                    "browser-view-not-active",
+                    "The Studio browser changed before browser validation began.",
+                    status_code=409,
+                )
+            target = current_target
         snapshot = await notebook_scope.presentation.snapshot_async(view)
         if snapshot.revision != revisions[view]:
             raise AgentRequestError(
@@ -273,6 +341,8 @@ async def observe_views(
             context,
             session_id,
             session_id,
+            session_id,
+            session_id,
         ).instance
         observation_request = await notebook_scope.agents.request_observation(
             target,
@@ -280,7 +350,7 @@ async def observe_views(
             runtime,
             runtime_instance,
             revisions[view],
-            active_view_generation=active_view_generation,
+            active_view_generation=target.active_view_generation,
         )
         remaining = max(0.0, deadline - loop.time())
         observations.append(
@@ -311,10 +381,3 @@ def _invalid_payload(code: str) -> JSONResponse:
         status_code=400,
         headers=NO_STORE,
     )
-
-
-__all__ = [
-    "browser_observation_response",
-    "browser_observations_response",
-    "observe_views",
-]

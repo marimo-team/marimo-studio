@@ -4,16 +4,22 @@ from __future__ import annotations
 
 import asyncio
 
-from marimo_studio._server.agent_activation import ActivationCoordinator
-from marimo_studio._server.agent_events import (
+from marimo_studio._server.agent.activation import (
+    ActivationAckOutcome,
+    ActivationCoordinator,
+)
+from marimo_studio._server.agent.clients import PeerTarget, StudioClientRegistry
+from marimo_studio._server.agent.events import (
     AgentOperations,
     ObservationRequest,
     ViewActivation,
 )
-from marimo_studio._server.agent_observation import ObservationCoordinator
-from marimo_studio._server.agent_store import AgentOperationStore
-from marimo_studio._server.live_clients import PeerTarget, StudioClientRegistry
-from marimo_studio.agent_models import BrowserObservation
+from marimo_studio._server.agent.observation import ObservationCoordinator
+from marimo_studio._server.agent.store import (
+    AgentOperationStore,
+    coordinator_closed_error,
+)
+from marimo_studio._validation.evidence import BrowserObservation
 
 
 class AgentCoordinator:
@@ -28,28 +34,30 @@ class AgentCoordinator:
         self._closed = False
 
     async def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
-        self._stop_clients()
-        tasks = tuple(self._notification_tasks)
-        for task in tasks:
-            task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
         async with self._store.condition:
+            if self._store.closed:
+                return
+            self._store.closed = True
+            self._closed = True
             self._store.activations.clear()
             self._store.acknowledged_activations.clear()
             self._store.observation_requests.clear()
             self._store.observations.clear()
             self._store.observation_sequences.clear()
             self._store.condition.notify_all()
+        self._stop_clients()
+        tasks = tuple(self._notification_tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def activate(
         self,
         target: PeerTarget,
         view: str,
     ) -> ViewActivation:
+        self._require_open()
         return await self._activations.activate(target, view)
 
     async def acknowledge_activation(
@@ -57,7 +65,8 @@ class AgentCoordinator:
         client_id: str,
         generation: int,
         view: str,
-    ) -> bool:
+    ) -> ActivationAckOutcome:
+        self._require_open()
         return await self._activations.acknowledge(client_id, generation, view)
 
     async def wait_for_activation(
@@ -65,6 +74,7 @@ class AgentCoordinator:
         activation: ViewActivation,
         timeout: float,
     ) -> None:
+        self._require_open()
         await self._activations.wait(activation, timeout)
 
     async def request_observation(
@@ -77,6 +87,7 @@ class AgentCoordinator:
         *,
         active_view_generation: int | None = None,
     ) -> ObservationRequest:
+        self._require_open()
         return await self._observations.request(
             target,
             view,
@@ -87,6 +98,7 @@ class AgentCoordinator:
         )
 
     async def record(self, observation: BrowserObservation) -> bool:
+        self._require_open()
         return await self._observations.record(observation)
 
     async def wait_for_observation(
@@ -94,6 +106,7 @@ class AgentCoordinator:
         request: ObservationRequest,
         timeout: float,
     ) -> BrowserObservation:
+        self._require_open()
         return await self._observations.wait(request, timeout)
 
     async def pending_operations(
@@ -102,7 +115,9 @@ class AgentCoordinator:
         delivered_activation: int | None,
         delivered_observation: str | None,
     ) -> AgentOperations:
+        self._require_open()
         async with self._store.condition:
+            self._store.require_open()
             activation = self._activations.pending_for(
                 target.client_id,
                 delivered_activation,
@@ -134,9 +149,13 @@ class AgentCoordinator:
 
     async def _notify_client_change(self) -> None:
         async with self._store.condition:
+            if self._store.closed:
+                return
             acknowledgements = dict(self._store.acknowledged_activations)
         retained = await self._store.clients.retained_binding_generations()
         async with self._store.condition:
+            if self._store.closed:
+                return
             for client_id, acknowledged in acknowledgements.items():
                 if (
                     self._store.acknowledged_activations.get(client_id) is acknowledged
@@ -146,10 +165,6 @@ class AgentCoordinator:
                     self._store.acknowledged_activations.pop(client_id)
             self._store.condition.notify_all()
 
-
-__all__ = [
-    "AgentCoordinator",
-    "AgentOperations",
-    "ObservationRequest",
-    "ViewActivation",
-]
+    def _require_open(self) -> None:
+        if self._closed:
+            raise coordinator_closed_error()

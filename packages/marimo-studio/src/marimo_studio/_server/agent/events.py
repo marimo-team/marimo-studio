@@ -20,7 +20,8 @@ class ObservationRequest:
     request_id: str
     binding_generation: int
     client_id: str
-    session_id: str | None
+    binding_session_id: str | None
+    runtime_session_id: str | None
     view: str
     runtime: str
     runtime_instance: str
@@ -32,10 +33,3 @@ class ObservationRequest:
 class AgentOperations:
     activation: ViewActivation | None
     observations: tuple[ObservationRequest, ...]
-
-
-__all__ = [
-    "AgentOperations",
-    "ObservationRequest",
-    "ViewActivation",
-]

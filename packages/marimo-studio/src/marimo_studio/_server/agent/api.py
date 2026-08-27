@@ -1,42 +1,50 @@
-"""Serve targeted activation and fresh browser analysis requests."""
+"""Serve targeted activation and fresh browser validation requests."""
 
 from __future__ import annotations
 
-import json
-from typing import Any
+import re
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from marimo_studio._capabilities import ServerContext, SessionState
-from marimo_studio._runtime_process import check_runtime_studio_isolated
+from marimo_studio._server.agent.activation import ActivationAckOutcome
+from marimo_studio._server.agent.browser import observe_views
 from marimo_studio._server.auth import (
     error_response,
     forbidden_response,
     has_edit_access,
     invalid_server_token_response,
 )
-from marimo_studio._server.browser_agent import observe_views
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.notebook_scope import NotebookScope
-from marimo_studio._server.request_lifecycle import (
-    RequestDisconnected,
-    run_while_connected,
-)
-from marimo_studio._server.runtimes import RuntimeRegistry
-from marimo_studio._server.view_activation import (
+from marimo_studio._server.ports import SessionState
+from marimo_studio._server.presentation.activation import (
     BrowserViewTarget,
     SessionViewTarget,
     activate_studio_view,
 )
+from marimo_studio._server.records import ServerContext
+from marimo_studio._server.request_body import (
+    JSONBodyError,
+    json_body_error_response,
+    read_json_body,
+)
+from marimo_studio._server.request_lifecycle import (
+    RequestDisconnected,
+    run_while_connected,
+)
+from marimo_studio._server.runtime.catalog import RuntimeRegistry
+from marimo_studio._validation.analysis import AnalysisRequest, analyze_studio
+from marimo_studio._validation.evidence import BrowserObservation
+from marimo_studio._validation.runtime_process import check_runtime_studio_isolated
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.activation import ViewActivationRequest
-from marimo_studio.agent_models import BrowserObservation
-from marimo_studio.analysis import AnalysisRequest, analyze_studio
+from marimo_studio.agent._protocol import ViewActivationRequest
 from marimo_studio.errors import (
     CapabilityInputError,
     MarimoStudioError,
 )
+
+_AGENT_JSON_MAX_BYTES = 256 * 1024
 
 
 def agent_connection_response(
@@ -76,9 +84,13 @@ async def activate_view_response(
         return token_error
     session_id = request.headers.get("Marimo-Session-Id")
     try:
+        body = await read_json_body(request, max_bytes=_AGENT_JSON_MAX_BYTES)
+    except JSONBodyError as error:
+        return json_body_error_response(error)
+    try:
         activation_request = ViewActivationRequest.from_dict(
             view_name,
-            await _json_body(request),
+            body,
         )
         if session_id is not None and activation_request.browser_client is not None:
             raise CapabilityInputError(
@@ -129,7 +141,10 @@ async def activation_ack_response(
         return forbidden_response()
     if token_error := invalid_server_token_response(request, context.server_token):
         return token_error
-    body = await _json_body(request)
+    try:
+        body = await read_json_body(request, max_bytes=_AGENT_JSON_MAX_BYTES)
+    except JSONBodyError as error:
+        return json_body_error_response(error)
     schema = body.get("schema") if isinstance(body, dict) else None
     if (
         not isinstance(body, dict)
@@ -141,21 +156,77 @@ async def activation_ack_response(
         or not _nonempty(body.get("view"))
     ):
         return _invalid_payload("invalid-activation-ack")
-    acknowledged = await notebook_scope.agents.acknowledge_activation(
+    outcome = await notebook_scope.agents.acknowledge_activation(
         body["clientId"],
         generation,
         body["view"],
     )
-    if not acknowledged:
-        return JSONResponse(
-            {
-                "error": "activation-not-pending",
-                "message": "The view activation is no longer pending.",
-            },
-            status_code=409,
-            headers=NO_STORE,
+    return JSONResponse(
+        {"schema": 1, "outcome": outcome.value},
+        status_code=(
+            200
+            if outcome is ActivationAckOutcome.APPLIED
+            else 202
+            if outcome is ActivationAckOutcome.RETRYABLE
+            else 409
+        ),
+        headers=NO_STORE,
+    )
+
+
+async def active_view_handoff_response(
+    request: Request,
+    context: ServerContext,
+    studio: StudioWorkspace,
+    notebook_scope: NotebookScope,
+    operation_id: str,
+) -> Response:
+    """Suspend or restore agent targeting around a committed view handoff."""
+    if request.method not in {"POST", "DELETE"}:
+        return Response(status_code=405)
+    if not has_edit_access(request.scope):
+        return forbidden_response()
+    if token_error := invalid_server_token_response(request, context.server_token):
+        return token_error
+    if re.fullmatch(r"[A-Za-z0-9_-]{16,128}", operation_id) is None:
+        return Response(status_code=404)
+    try:
+        body = await read_json_body(request, max_bytes=_AGENT_JSON_MAX_BYTES)
+    except JSONBodyError as error:
+        return json_body_error_response(error)
+    if request.method == "DELETE":
+        if (
+            not isinstance(body, dict)
+            or set(body) != {"schema", "clientId"}
+            or body.get("schema") != 1
+            or isinstance(body.get("schema"), bool)
+            or not _nonempty(body.get("clientId"))
+        ):
+            return _invalid_payload("invalid-active-view-handoff")
+        restored = await notebook_scope.clients.rollback_active_view_handoff(
+            body["clientId"],
+            operation_id,
         )
-    return Response(status_code=204, headers=NO_STORE)
+        return Response(status_code=204 if restored else 409, headers=NO_STORE)
+    if (
+        not isinstance(body, dict)
+        or set(body) != {"schema", "clientId", "fromView", "toView"}
+        or body.get("schema") != 1
+        or isinstance(body.get("schema"), bool)
+        or not _nonempty(body.get("clientId"))
+        or not _nonempty(body.get("fromView"))
+        or not _nonempty(body.get("toView"))
+        or body["fromView"] not in studio.views
+        or body["toView"] not in studio.views
+    ):
+        return _invalid_payload("invalid-active-view-handoff")
+    suspended = await notebook_scope.clients.begin_active_view_handoff(
+        body["clientId"],
+        operation_id,
+        body["fromView"],
+        body["toView"],
+    )
+    return Response(status_code=204 if suspended else 409, headers=NO_STORE)
 
 
 async def analyze_views_response(
@@ -184,7 +255,11 @@ async def analyze_views_response(
             headers=NO_STORE,
         )
     try:
-        analysis_request = AnalysisRequest.from_dict(await _json_body(request))
+        body = await read_json_body(request, max_bytes=_AGENT_JSON_MAX_BYTES)
+    except JSONBodyError as error:
+        return json_body_error_response(error)
+    try:
+        analysis_request = AnalysisRequest.from_dict(body)
     except CapabilityInputError as error:
         return error_response(error)
     if session_id is not None:
@@ -220,6 +295,7 @@ async def analyze_views_response(
                 analysis_request.options,
                 observe_browser=(observe if analysis_request.require_browser else None),
                 runtime_checker=check_runtime_studio_isolated,
+                development=notebook_scope.development,
             ),
         )
     except RequestDisconnected:
@@ -237,20 +313,5 @@ def _invalid_payload(code: str) -> JSONResponse:
     )
 
 
-async def _json_body(request: Request) -> Any:
-    try:
-        return await request.json()
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return None
-
-
 def _nonempty(value: object) -> bool:
     return isinstance(value, str) and bool(value)
-
-
-__all__ = [
-    "activate_view_response",
-    "activation_ack_response",
-    "agent_connection_response",
-    "analyze_views_response",
-]
