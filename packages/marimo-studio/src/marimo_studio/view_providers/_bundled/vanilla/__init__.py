@@ -1,4 +1,15 @@
-"""Build browser-native view projects from an HTML entry document."""
+"""Provide single-document HTML views with live notebook mounts.
+
+The Vanilla provider gives a view author one editable HTML file containing the
+page structure, styles, and scripts. It finds literal cell, output, and value
+hosts, records their source locations, and adds stable mount IDs to the browser
+file that Studio validates and publishes.
+
+Projection hosts must live inside the page's application shell. Project-local
+assets must be inlined into the HTML file, while external URLs, data URLs, and
+page fragments remain available. This keeps the project small and directly
+editable without a frontend build tool.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,10 @@
-"""Author Studio views from the active Marimo notebook.
+"""Author and validate Studio views from notebook-bound agent code.
+
+This facade opens the active or explicit notebook and exposes its saved cells,
+installed starters, named views, Source documents, builds, browser activation,
+and validation through ``Workspace`` and ``View`` handles. Source writes carry
+the revision the agent read so a late edit reports a conflict and preserves
+newer work.
 
 Open the current notebook in each code-mode execution:
 
@@ -8,8 +14,11 @@ Open the current notebook in each code-mode execution:
     view = await workspace.ensure_view("dashboard")
     inspection = await view.inspect()
 
-The installed ``marimo-studio`` Agent Skill develops the complete authoring
-and validation workflow.
+Static validation checks saved source. Runtime validation executes the complete
+notebook in isolation. Browser validation requires a running Studio browser and
+confirms the rendered page and mounted notebook results. The installed
+``marimo-studio`` Agent Skill uses this API to move from notebook inspection to
+a built, browser-visible, and validated view.
 """
 
 from __future__ import annotations

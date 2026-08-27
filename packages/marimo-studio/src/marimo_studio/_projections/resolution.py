@@ -1,4 +1,15 @@
-"""Resolve provider projection requests against one notebook symbol graph."""
+"""Authorize one concrete mount request against the saved notebook graph.
+
+Resolution starts from a mount site recorded in the published artifact. It
+checks the requested kind, allowed target, selector syntax, and browser-visible
+size limits, then requires one unambiguous source cell or variable. The result
+includes the upstream cells Marimo must execute before that target is ready.
+
+Missing, ambiguous, disallowed, and oversized requests return stable error
+codes before they reach a kernel. Runtime configuration derives target records
+and limits from this module, while browser-evidence verification resolves each
+observed instance through it.
+"""
 
 from __future__ import annotations
 

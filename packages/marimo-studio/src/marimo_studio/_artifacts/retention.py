@@ -1,4 +1,17 @@
-"""Lease artifact revisions and prune content after final release."""
+"""Keep immutable artifact revisions alive for every active reader.
+
+A lease promises that an artifact revision will remain available until its
+reader finishes. Browser responses, presentation snapshots, static exports,
+and retained page history may therefore keep an older revision after a new
+build publishes. That promise also applies across Studio processes, so pruning
+skips the revision and view deletion rejects while readers are active.
+
+Reads verify manifest membership, size, and digest before bytes reach a
+consumer. The lease lets server delivery report a damaged revision and mark
+matching publications stale for a rebuild. Studio keeps a revision while a
+build profile, browser, presentation, or export still uses it, then removes it
+after the final lease closes.
+"""
 
 from __future__ import annotations
 

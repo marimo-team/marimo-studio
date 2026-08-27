@@ -1,4 +1,15 @@
-"""Load Studio configuration and required view project manifests."""
+"""Turn supported configuration files into Studio definitions and workspaces.
+
+The loader resolves an unambiguous notebook target, reads PEP 723 metadata or
+``[tool.marimo-studio]`` from ``pyproject.toml``, validates names and settings,
+and discovers contained view projects through ``view.toml``. Discovery can
+return ``None`` for an unconfigured notebook. A ``StudioDefinition`` can
+represent a configured notebook that still needs its first view, while
+materialization requires at least one valid view and a valid default.
+
+This is the single parsing and target-selection path used by Studio's command,
+server, agent, build, validation, and export entry points.
+"""
 
 from __future__ import annotations
 

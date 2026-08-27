@@ -1,4 +1,15 @@
-"""Mint and verify revision-bound kernel projection capabilities."""
+"""Authenticate presentation requests before they enter a live kernel.
+
+The server resolves each allowed notebook target and signs it together with
+the presentation revision and current runtime-cell mapping. The kernel verifies
+that permission and recomputes the live dependency path before reading values
+or formatting native output. A tampered request or stale page therefore cannot
+read notebook state from a newer presentation.
+
+Output permissions also follow the browser's current mounted set. Isolated
+runtime probes use a separate short-lived lease for the exact selectors being
+validated.
+"""
 
 from __future__ import annotations
 

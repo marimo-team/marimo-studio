@@ -1,4 +1,14 @@
-"""Shared Deno execution and project primitives for built-in providers."""
+"""Share project and Deno capabilities across framework providers.
+
+React and Svelte use this package to render starters, identify the files shown
+in Source, copy immutable build inputs, find notebook mounts, merge public
+assets, locate the pinned Deno executable, and reuse its dependency cache.
+
+Both providers therefore apply the same file limits, frozen dependency inputs,
+command cancellation, and setup diagnostics. A missing or incompatible Deno
+runtime is reported before a build starts with the installation guidance needed
+to restore the provider.
+"""
 
 from marimo_studio.view_providers._bundled._deno.files import (
     copy_project_inputs as copy_project_inputs,

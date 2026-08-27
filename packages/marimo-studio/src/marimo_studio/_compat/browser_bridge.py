@@ -1,4 +1,17 @@
-"""Install Studio projection services in a browser-runtime notebook."""
+"""Install Studio's projection services inside a browser-runtime notebook.
+
+The source of ``install_browser_bridge`` is copied into a hidden notebook cell
+when Studio prepares saved source for WebAssembly execution. It provides the
+browser-worker equivalents of approved value reads, native Marimo output
+rendering, public query synchronization, projection readiness, and resource
+release without requiring the host-side Studio package in Pyodide.
+
+The bridge accepts only mounts configured for the current page, applies
+bounded target and response rules inside the worker, and ignores updates from
+an older page or query version. It owns projected controls, widgets, functions,
+and virtual files until their mount is replaced or removed, then releases those
+resources through Marimo's browser kernel lifecycle.
+"""
 
 from __future__ import annotations
 

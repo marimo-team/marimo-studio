@@ -1,4 +1,15 @@
-"""Capture revision-bound notebook and published view artifacts."""
+"""Capture notebook source and published artifacts for presentation.
+
+Capture hashes the saved notebook, Studio configuration, and cell bindings,
+then pairs each selected view with a leased immutable artifact and an explicit
+presentation revision. Consumers compare those revisions when later evidence
+must still belong to the source they observed.
+
+Artifact leases transfer explicitly to the presentation owner and remain open
+for as long as that revision may be requested. Capture can build current source
+or retain an existing publication, which gives presentation and validation
+services a precise last-working fallback when a new build fails.
+"""
 
 from __future__ import annotations
 

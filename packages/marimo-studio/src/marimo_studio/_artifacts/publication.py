@@ -1,4 +1,16 @@
-"""Validate and atomically publish provider-built browser candidates."""
+"""Convert provider-built browser files into a current immutable publication.
+
+Provider output is a candidate, not trusted application state. Studio detaches
+its files from provider scratch space, enforces file and path limits, validates
+the entry document and complete manifest, and computes a content-addressed
+revision from the browser files and notebook mount declarations.
+
+Studio makes the candidate current for the selected build profile only after it
+is complete and the caller confirms that the live project still matches the
+source that was built. Build-start and failure records remain separate from the
+successful publication, so a later failed attempt can report diagnostics while
+the last working page remains available.
+"""
 
 from __future__ import annotations
 

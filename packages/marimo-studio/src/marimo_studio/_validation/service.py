@@ -1,3 +1,16 @@
+"""Validate selected views against source that stays unchanged during the run.
+
+Validation captures the selected views' source revisions, inspects their
+notebook mounts, runs static checks, and optionally executes the complete
+notebook in an isolated runtime. Live-development validation first publishes
+the presentation revisions being checked.
+
+Source identity is checked again after each later stage. A concurrent edit
+becomes an explicit stale-source result instead of mixing static evidence from
+one revision with runtime evidence from another. CLI and agent workflows share
+these check results, while browser analysis adds rendered observations on top.
+"""
+
 from __future__ import annotations
 
 import asyncio

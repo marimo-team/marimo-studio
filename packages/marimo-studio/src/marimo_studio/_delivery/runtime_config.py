@@ -1,4 +1,15 @@
-"""Serialize the browser runtime contract for every delivery environment."""
+"""Serialize one runtime contract for live pages and static exports.
+
+Server presentations, WebAssembly presentations, and exported sites receive
+the same detached browser record for the selected view, runtime, notebook
+mounts, permitted targets, diagnostics, URLs, and Marimo settings. Browser
+packages can consume that record without knowing which Python service produced
+it.
+
+Its projection revision changes whenever the notebook behavior available to
+the page changes. Moving a mount or diagnostic to another source line leaves
+that execution identity stable.
+"""
 
 from __future__ import annotations
 

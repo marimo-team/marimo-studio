@@ -1,4 +1,16 @@
-"""Capture immutable provider inputs and compute canonical project identity."""
+"""Identify and copy the exact view inputs that a provider may build.
+
+A project revision combines provider package identity, provider build
+semantics, explicit view options, ``view.toml``, and every file in the bounded
+input scope returned by inspection. Generated artifact state stays outside
+that identity, so a build output cannot make its own source appear changed.
+
+Studio compares each input before and after reading it, then copies the exact
+bytes into an isolated build directory. If any input changes during capture,
+the operation fails. Builds, source writes, presentation capture, cache reuse,
+and export use this revision so one result cannot combine different versions
+of the authored files.
+"""
 
 from __future__ import annotations
 

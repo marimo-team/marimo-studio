@@ -1,4 +1,17 @@
-"""Render the trusted shell that contains an authored presentation."""
+"""Contain provider-authored pages inside a trusted navigation shell.
+
+The outer Studio document places the authored artifact in a sandboxed iframe
+with an opaque browser origin. The parent owns allowed view navigation, public
+query and fragment history, replay admission, readiness, errors, and agent
+observation messages without giving the child access to Studio credentials or
+same-origin server data.
+
+Parent and child exchange a small set of validated messages. The shell keeps
+browser back and reload behavior aligned with the selected view, preserves an
+eligible live session across reloads, and recovers from browser page-cache
+restoration while the authored page remains responsible for its own layout and
+frontend code.
+"""
 
 from __future__ import annotations
 

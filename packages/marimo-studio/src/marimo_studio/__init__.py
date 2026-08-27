@@ -1,4 +1,16 @@
-"""Public Studio application, inspection, and integration contracts."""
+"""Expose Studio's public Python API for notebooks and applications.
+
+``inspect_notebook`` describes saved cells, names, dependencies, and source
+locations without running the notebook. ``create_asgi_app`` builds a Marimo
+ASGI application for a configured notebook, its named Studio views, and the
+browser runtime that presents them.
+
+The notebook remains the source of data, computation, controls, and reactive
+behavior. Studio adds frontend view projects and browser delivery around that
+model. ``LENS_TARGET_SELECTOR`` lets browser tools locate mounted cells,
+outputs, and values inside a rendered view. View authoring and validation live
+in the notebook-bound ``marimo_studio.agent`` API.
+"""
 
 from __future__ import annotations
 

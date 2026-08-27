@@ -1,4 +1,16 @@
-"""Read and conditionally replace provider-discovered source documents."""
+"""Authorize and update the Source documents of one view project.
+
+Provider inspection determines which project files appear in Source and
+whether each file may be edited. Studio separately owns ``view.toml`` so a
+broken provider can still expose a repair path without allowing the view to
+switch provider during a save.
+
+Every read returns a content revision. A save succeeds only while that
+revision, the file identity, the provider's access decision, and the surrounding
+build inputs remain current. Conditional replacement and rollback preserve a
+newer external edit, while conflict responses let the browser or agent keep its
+unsaved buffer and retry against the latest source.
+"""
 
 from __future__ import annotations
 

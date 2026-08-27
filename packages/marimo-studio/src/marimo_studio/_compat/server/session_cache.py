@@ -1,4 +1,13 @@
-"""Publish pinned Marimo session caches as complete files."""
+"""Publish Marimo session snapshots without exposing partial cache files.
+
+Marimo uses its session cache to restore notebook sessions. Studio wraps the
+pinned cache writer for one server lifetime so each changed snapshot replaces
+the previous JSON file atomically. Readers see either the previous complete
+snapshot or the new complete snapshot.
+
+An in-flight threaded write settles before cancellation is propagated. The
+original Marimo writer is restored when the owning application closes.
+"""
 
 from __future__ import annotations
 

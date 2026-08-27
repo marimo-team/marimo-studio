@@ -1,4 +1,15 @@
-"""Expected configuration, dependency, protocol, and server failures."""
+"""Give expected Studio failures one meaning across every user surface.
+
+Configuration, source, provider, artifact, protocol, runtime, session, and
+workspace failures use the same codes and recovery details in the CLI, HTTP
+responses, and agent results. These error types also carry CLI exit codes, HTTP
+status, whether retrying may succeed, repair hints, and structured details such
+as paths, revisions, and available choices.
+
+Callers can render a human explanation and a machine-readable result from the
+same failure. Error types may override ``public_message`` when browser text
+must differ from diagnostic detail.
+"""
 
 from __future__ import annotations
 

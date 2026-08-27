@@ -1,4 +1,17 @@
-"""Coordinate provider builds and immutable artifact publication."""
+"""Turn one current view project into a verified published artifact.
+
+Studio checks provider availability, inspects the live project, captures the
+declared inputs into an immutable snapshot, and runs the provider with bounded
+commands and cancellation. Provider output stays in staging until artifact
+validation succeeds.
+
+Immediately before publication, Studio confirms that the live source still
+matches the snapshot that was built. Matching published output may be reused
+after the same check. A failed, cancelled, or superseded build records its
+diagnostics while preserving the last successful publication when one exists.
+This service backs direct builds, live development, presentation capture, and
+static export.
+"""
 
 from __future__ import annotations
 

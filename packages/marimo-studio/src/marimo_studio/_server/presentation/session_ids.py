@@ -1,4 +1,15 @@
-"""Allocate process-unique runtime IDs and bind signed document owners."""
+"""Allocate presentation session IDs and Marimo runtime session IDs.
+
+Each presentation document receives a presentation session ID and a distinct
+Marimo runtime session ID. The allocator checks Marimo's current sessions
+before issuing either value, then tracks which pair Studio may admit or replay.
+This prevents a new document from claiming a runtime session owned by another
+server context.
+
+Authority records are process-local and bounded. Expired pending or abandoned
+claims are discarded before new bindings are added, current Marimo owners
+remain eligible, and closing the allocator rejects new work.
+"""
 
 from __future__ import annotations
 
@@ -32,7 +43,7 @@ class _SessionAuthority:
 
 
 class SessionIdAllocator:
-    """Issue process-unique session IDs and bind their signed document owners."""
+    """Issue presentation and Marimo runtime IDs and track their authority."""
 
     def __init__(
         self,

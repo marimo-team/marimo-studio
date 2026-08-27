@@ -1,4 +1,16 @@
-"""Track live Studio browsers and their Marimo session bindings."""
+"""Bind each Studio browser to its intended editor session and active view.
+
+The registry tracks the current browser connection, its Marimo editor session,
+the view it is showing, and any view handoff in progress. A short reconnect
+window keeps the editor session available through a network interruption while
+the replacement browser connection becomes ready.
+
+One native session belongs to one Studio client at a time. Agent work and public
+query writes are checked against the browser and editor session they observed.
+Retrying the same query does not apply it twice, and an older URL update cannot
+overtake a newer one. Closing the registry rejects pending work and releases
+every remaining browser-to-session association.
+"""
 
 from __future__ import annotations
 

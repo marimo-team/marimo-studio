@@ -1,4 +1,19 @@
-"""Resolve named views into browser documents and runtime configuration."""
+"""Own the coherent presentation snapshots served for one notebook.
+
+A presentation snapshot binds saved notebook source, Studio configuration,
+the notebook symbol graph, provider-declared mounts, and one leased immutable
+artifact into one presentation revision. Page rendering, runtime configuration,
+projection routes, and browser evidence all resolve against that same captured
+state. Validation independently checks the corresponding published
+presentation revisions.
+
+The service caches current snapshots and retains a bounded history so a page
+can finish revision-qualified requests after a newer build publishes. During
+edits or provider failures it can continue serving the last verified
+publication while current source is repaired. History eviction releases older
+leases, while view deletion and notebook shutdown release every retained
+snapshot.
+"""
 
 from __future__ import annotations
 

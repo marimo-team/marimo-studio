@@ -1,4 +1,16 @@
-"""Discover installed view providers through one derived-key registry."""
+"""Build and cache the installed-provider registry.
+
+The registry derives each durable key from distribution and entry-point
+identity, rejects conflicts, and scans independent candidates concurrently.
+Import, metadata, availability, and starter failures remain attached to their
+registration so healthy providers stay available and provider diagnostics can
+explain how to recover.
+
+Bundled providers run in process. Third-party calls use owned worker processes.
+Both return through the same conformance checks. Discovery, provider identity,
+installed version, and starters are cached, while availability is checked when
+an operation needs it.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,15 @@
-"""Attach Studio presentation routes to Marimo's ASGI application."""
+"""Dispatch Studio-owned ASGI routes while preserving Marimo's server surface.
+
+The middleware resolves the selected notebook, server mode, authentication,
+and signed presentation access before handing a request to the matching Studio
+handler or embedded native editor. Requests outside Studio's route space
+continue to the original Marimo application.
+
+Private Marimo adapters belong to the application lifespan. Notebook scopes are
+created lazily for routed notebooks, then retained by that lifespan. Shutdown
+closes every scope and adapter created during the application, even when one
+owner reports a failure.
+"""
 
 from __future__ import annotations
 

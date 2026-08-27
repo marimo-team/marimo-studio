@@ -1,4 +1,15 @@
-"""Inspect Svelte source and build it with the pinned Deno toolchain."""
+"""Provide Svelte projects as editable Studio views.
+
+The Svelte provider creates a complete TypeScript and Vite starter, shows
+component and configuration files in Source, identifies cell, output, and value
+mounts in Svelte templates, and builds browser files with the pinned Deno
+toolchain for Studio to validate and publish.
+
+Inspection records which documents may be edited and which inputs affect a
+build. ``deno.lock`` and ``src/vite-env.d.ts`` remain read-only. Svelte,
+TypeScript, and mount diagnostics point back to authored source, and every
+mount records the notebook targets that source location may request.
+"""
 
 from __future__ import annotations
 

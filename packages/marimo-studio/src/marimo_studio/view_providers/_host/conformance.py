@@ -1,4 +1,15 @@
-"""Validate records returned by one installed view provider."""
+"""Validate provider requests and results before Studio trusts them.
+
+The conformance boundary checks record types, API versions, browser-safe data,
+portable contained paths, and explicit size and count limits. It also keeps
+documents shown in Source distinct from the broader build-input scope, requires
+those documents to be covered by that scope, and rejects path collisions or
+overlapping declarations before they enter workspace or artifact state.
+
+Studio reserves ``view.toml`` and generated control paths. Installed providers
+can describe and build their frontend format while Studio retains ownership of
+workspace mutation, publication, sessions, and browser policy.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,16 @@
-"""Create notebook-local Studio view files."""
+"""Create the first or an additional view as one recoverable transaction.
+
+View setup combines provider-owned starter files with Studio-owned notebook
+configuration, provider requirements, workspace ignore rules, and
+``view.toml``. The provider chooses the frontend project shape while Studio
+chooses the durable manifest and notebook-to-workspace relationship.
+
+Planning and provider work happen before the final workspace mutation. View
+creation applies the notebook and complete view plan through one recoverable
+file transaction. On failure it restores prior files or preserves recovery
+copies when an external edit prevents rollback. A dry run returns the same plan
+without changing files.
+"""
 
 from __future__ import annotations
 

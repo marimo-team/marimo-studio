@@ -1,4 +1,16 @@
-"""Coalesce source scans and development builds for one notebook scope."""
+"""Share source monitoring and rebuilds across browsers for one notebook.
+
+Browsers share one provider inspection and source monitor per view, plus one
+in-flight rebuild for each view, source version, and build profile. Newer source
+cancels work for older source. A browser that falls behind receives a complete
+current state instead of an unbounded sequence of missed updates.
+
+Project reads, Source writes, presentation capture, and validation ask this
+coordinator to confirm that the view source they observed is still current.
+View deletion and notebook shutdown stop new work, drain provider operations
+and rebuilds, and close every file watcher before the filesystem mutation or
+scope close completes.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,18 @@
-"""Export one custom view as a static WebAssembly site."""
+"""Export one view as a self-contained WebAssembly site.
+
+Static export combines a production artifact, saved notebook source, packaged
+Studio browser runtime, notebook public files, and the same mount and runtime
+configuration used by live delivery. The exported page executes notebook logic
+in a browser worker and can render the authored cells, values, outputs, and
+controls without a Python server.
+
+Studio verifies artifact membership, reserved routes, case-insensitive path
+collisions, source and configuration stability, runtime release identity, and
+every copied asset. The complete bundle is written to a private staging
+directory before it can replace the destination. The output transaction
+protects notebook and view source and preserves the previous bundle or a
+recoverable copy when replacement fails.
+"""
 
 from __future__ import annotations
 

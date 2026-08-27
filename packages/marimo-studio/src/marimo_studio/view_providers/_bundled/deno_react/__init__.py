@@ -1,4 +1,15 @@
-"""Inspect React source and build it with the pinned Deno toolchain."""
+"""Provide React projects as editable Studio views.
+
+The React provider creates a complete TypeScript starter, shows its project
+files in Source, identifies cell, output, and value mounts in JSX, and builds
+browser files with the pinned Deno toolchain for Studio to validate and
+publish.
+
+Inspection records which documents may be edited and which inputs affect a
+build. ``deno.lock`` remains read-only. TypeScript and mount diagnostics point
+back to authored source, and every mount records the notebook targets that
+source location may request.
+"""
 
 from __future__ import annotations
 

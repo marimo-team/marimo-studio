@@ -1,4 +1,15 @@
-"""Construct process-specific Marimo adapters for the pinned release."""
+"""Assemble pinned Marimo integrations behind Studio-owned contracts.
+
+This module is the construction point for server, kernel, browser,
+code-mode, notebook-inspection, runtime-probe, and export adapters. The rest of
+Studio asks for its own interfaces and records instead of importing private
+Marimo APIs throughout the product.
+
+Every factory validates the required Marimo release before exposing an
+adapter, and the browser projector checks that packaged assets identify the
+same release. Opening several lifecycle adapters is all-or-nothing: a partial
+setup is closed before the original startup failure returns to its owner.
+"""
 
 from __future__ import annotations
 

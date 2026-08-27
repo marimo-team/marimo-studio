@@ -1,4 +1,17 @@
-"""Resolve and authorize presentation capability requests."""
+"""Grant an authored presentation the narrow server access it needs.
+
+Presentation URLs carry signed authority for one notebook, view, presentation
+revision, artifact revision, presentation session, and runtime session. After
+validating that identity, this module applies the allowed target and method
+policy before rewriting a request onto Studio support or native Marimo routes.
+Caller-supplied native credentials are replaced only after the presentation
+request is accepted.
+
+Stale pages may retain immutable assets, while stale value and output reads
+receive a refresh or retry response. Native HTTP, WebSocket, and
+server-sent-event connections also pass through explicit session admission, so
+an unrelated document or replaced session cannot attach to the live notebook.
+"""
 
 from __future__ import annotations
 

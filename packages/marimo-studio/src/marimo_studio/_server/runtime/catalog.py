@@ -1,4 +1,14 @@
-"""Build runtime-specific configuration behind one presentation contract."""
+"""Convert Server and WebAssembly execution into one runtime projection.
+
+Server mode maps saved cell identities to the current native Marimo session and
+waits until that session has applied the page's notebook source. WebAssembly
+mode transforms saved source into a browser-worker program with the same
+executable cell and dependency information.
+
+The registry validates the requested runtime against workspace configuration
+and returns a common projection record. Changing execution environment does
+not change the published artifact or the meaning of its notebook mounts.
+"""
 
 from __future__ import annotations
 

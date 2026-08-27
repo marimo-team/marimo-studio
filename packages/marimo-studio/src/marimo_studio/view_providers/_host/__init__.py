@@ -1,4 +1,14 @@
-"""Discover installed view providers and enforce host policy."""
+"""Expose one validated catalog of installed view providers.
+
+Provider keys come from the installed distribution and entry-point name, so a
+project does not depend on a provider's Python module path. Conflicting or
+invalid registrations remain visible through diagnostics while healthy
+providers and starters stay available.
+
+Source access, builds, export, server routes, and provider diagnostics share one
+process-wide registry so they agree about provider identity and starter
+selection.
+"""
 
 from threading import Lock
 
