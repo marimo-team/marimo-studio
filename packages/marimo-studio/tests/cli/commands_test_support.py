@@ -44,6 +44,7 @@ main()
         check=False,
         capture_output=True,
         env=child_environment,
+        stdin=subprocess.DEVNULL,
         text=True,
     )
 
