@@ -18,9 +18,9 @@ class ArtifactIntegrityError(ConfigurationError):
 
 
 class CompatibilityError(ProtocolError):
-    """The installed Marimo layout cannot provide a required capability."""
+    """The pinned Marimo release cannot provide a required integration capability."""
 
-    code = "marimo-layout-incompatible"
+    code = "marimo-integration-incompatible"
 
 
 class RuntimeStartupError(MarimoStudioError):
