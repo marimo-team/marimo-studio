@@ -55,7 +55,7 @@ async def verify() -> None:
         starters = {item.id: item for item in await workspace.starters()}
         if _STARTER not in starters or _WEB_STARTER not in starters:
             raise AssertionError(f"External starter is missing: {sorted(starters)}")
-        view = await workspace.ensure_view("dashboard", starter=starters[_STARTER])
+        view = await workspace.create_view("dashboard", starter=starters[_STARTER])
         await view.build()
         inspection = await view.inspect()
         if inspection.provider != "marimo-studio-e2e-provider/report":
@@ -72,7 +72,7 @@ async def verify() -> None:
         document = await view.read("index.html")
         if "<h1 data-external-provider>Dashboard</h1>" not in document.content:
             raise AssertionError("External provider source was not created")
-        web = await workspace.ensure_view("web", starter=starters[_WEB_STARTER])
+        web = await workspace.create_view("web", starter=starters[_WEB_STARTER])
         await web.build()
         web_inspection = await web.inspect()
         if web_inspection.provider != "marimo-studio-e2e-provider/web":

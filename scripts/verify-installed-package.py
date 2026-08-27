@@ -108,10 +108,11 @@ assert set(marimo_studio.__all__) == {
     "NotebookSpec", "SourceSpan", "create_asgi_app", "inspect_notebook",
 }
 assert set(marimo_studio.agent.__all__) == {
-    "AnalysisAction", "BindingResult", "CellSelector", "InspectionResult", "Publication", "Starter",
-    "StudioDiagnostic", "StudioOverview", "ValidationLevel", "ValidationReport",
-    "View", "ViewActivationResult", "ViewDocument", "ViewFreshness",
-    "ViewInspection", "ViewOverview", "Workspace", "open",
+    "AnalysisAction", "BindingResult", "CellSelector", "InspectionResult", "ProviderReport",
+    "Publication", "Starter", "StaticExportResult", "StudioDiagnostic", "StudioOverview",
+    "ValidationLevel", "ValidationReport", "View", "ViewActivationResult", "ViewDocument",
+    "ViewFreshness", "ViewInspection", "ViewOverview", "ViewRemovalResult", "Workspace",
+    "doctor", "open",
 }
 assert set(marimo_studio.view_providers.__all__) == {
     "PROVIDER_API_VERSION", "BuildProfile", "BuildRequest", "BuildResult",
@@ -246,9 +247,9 @@ def _validate_cli(notebook: Path, view: str) -> None:
         [
             "marimo-studio",
             "validate",
-            str(notebook),
-            "--view",
             view,
+            "--target",
+            str(notebook),
             "--format",
             "json",
         ],
@@ -283,7 +284,7 @@ def _verify_views(*, deno: bool) -> None:
                 vanilla_starter = catalog["marimo-studio/vanilla:default"]
                 if not vanilla_starter.availability.available:
                     raise AssertionError("Installed Vanilla starter is unavailable")
-                vanilla = await workspace.ensure_view(
+                vanilla = await workspace.create_view(
                     "dashboard",
                     starter=vanilla_starter,
                 )
@@ -313,7 +314,7 @@ def _verify_views(*, deno: bool) -> None:
             ):
                 if not catalog[identity].availability.available:
                     raise AssertionError(f"Installed {identity} starter is unavailable")
-                view = await workspace.ensure_view(
+                view = await workspace.create_view(
                     view_name,
                     starter=catalog[identity],
                 )
