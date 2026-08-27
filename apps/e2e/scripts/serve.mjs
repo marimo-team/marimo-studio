@@ -1,145 +1,251 @@
 import { spawn } from "node:child_process";
 import { cp, mkdir, rm } from "node:fs/promises";
 
+import { e2eNetwork } from "./network.mjs";
+import {
+  closeNotebookProcessRegistry,
+  stopRegisteredNotebookProcesses,
+} from "./notebook-process-registry.mjs";
 import {
   configDirectory,
   fixtureDirectory,
   hostedFixtureDirectory,
   hostedNotebookPath,
   hostedWorkspaceDirectory,
+  lazyNotebookPath,
   repositoryDirectory,
+  staticExportDirectory,
   workspaceDirectory,
 } from "./paths.mjs";
+import { PreparationProcessOwner } from "./preparation-process.mjs";
+import { captureProcessOutput, stopNotebookProcess, waitForServer } from "./server-process.mjs";
 
-await rm(configDirectory, { force: true, recursive: true });
-await mkdir(configDirectory, { recursive: true });
-for (const [fixture, workspace] of [
-  [fixtureDirectory, workspaceDirectory],
-  [hostedFixtureDirectory, hostedWorkspaceDirectory],
-]) {
-  await rm(workspace, { force: true, recursive: true });
-  await mkdir(workspace, { recursive: true });
-  await cp(fixture, workspace, { recursive: true });
-}
-
-const startServer = (args) =>
-  spawn("uv", ["run", "--frozen", "--group", "e2e", "marimo", "edit", ...args], {
+const outputs = new WeakMap();
+const startServer = (args) => {
+  const child = spawn("uv", ["run", "--frozen", "--group", "e2e", "marimo", "edit", ...args], {
     cwd: repositoryDirectory,
     detached: process.platform !== "win32",
     env: {
       ...process.env,
       PYTHONUNBUFFERED: "1",
       XDG_CONFIG_HOME: configDirectory,
-      _MARIMO_CONFIG_OVERLOAD_RUNTIME_AUTO_INSTANTIATE: "true",
     },
-    stdio: "inherit",
+    stdio: ["ignore", "pipe", "pipe"],
   });
+  outputs.set(
+    child,
+    captureProcessOutput(child, { stdout: process.stdout, stderr: process.stderr }),
+  );
+  return child;
+};
 
-const primary = startServer([
-  workspaceDirectory,
-  "--no-sandbox",
-  "--headless",
-  "--no-token",
-  "--host",
-  "127.0.0.1",
-  "--port",
-  "4321",
-]);
-const hosted = startServer([
-  hostedNotebookPath,
-  "--no-sandbox",
-  "--headless",
-  "--token-password",
-  "studio-e2e-token",
-  "--base-url",
-  "/hosted",
-  "--host",
-  "127.0.0.1",
-  "--port",
-  "4322",
-]);
-const children = [primary, hosted];
-
+const preparation = new PreparationProcessOwner();
+let primary;
+let hosted;
+let exported;
 let stopping = false;
 let exitCode = 0;
-const exited = new Set();
-const serverUrl = "http://127.0.0.1:4321";
-
-const killChildTree = (child, signal) => {
-  if (process.platform === "win32" || child.pid === undefined) {
-    child.kill(signal);
-    return;
-  }
-  try {
-    process.kill(-child.pid, signal);
-  } catch (error) {
-    if (error?.code !== "ESRCH") {
-      throw error;
-    }
-  }
-};
-
-const requestGracefulShutdown = async () => {
-  const document = await fetch(`${serverUrl}/?file=notebook.py`).then((response) =>
-    response.text(),
-  );
-  const token = document.match(/"serverToken":"([^"]+)"/)?.[1];
-  if (!token) {
-    throw new Error("Studio bootstrap did not contain a server token");
-  }
-  const response = await fetch(`${serverUrl}/api/kernel/shutdown`, {
-    method: "POST",
-    headers: { "Marimo-Server-Token": token },
-  });
-  if (!response.ok) {
-    throw new Error(`Marimo shutdown returned ${response.status}`);
-  }
-};
+const closures = [];
+const shutdowns = [];
 
 const stop = (signal) => {
-  if (stopping) {
-    return;
-  }
+  if (stopping) return;
   stopping = true;
-  if (primary.exitCode === null) {
-    requestGracefulShutdown().catch(() => killChildTree(primary, signal));
+  closeNotebookProcessRegistry();
+  shutdowns.push(
+    preparation.stop(signal).catch((error) => {
+      console.error(error);
+      exitCode = 1;
+    }),
+  );
+  shutdowns.push(
+    stopRegisteredNotebookProcesses({ signal }).catch((error) => {
+      console.error(error);
+      exitCode = 1;
+    }),
+  );
+  for (const server of [
+    primary && {
+      child: primary,
+      output: outputs.get(primary),
+      port: e2eNetwork.main.studio.port,
+      serverUrl: e2eNetwork.main.studio.origin,
+      shutdown: "studio",
+    },
+    hosted && {
+      authToken: "studio-e2e-token",
+      child: hosted,
+      output: outputs.get(hosted),
+      port: e2eNetwork.main.hosted.port,
+      serverUrl: `${e2eNetwork.main.hosted.origin}/hosted`,
+      shutdown: "studio",
+    },
+    exported && {
+      child: exported,
+      port: e2eNetwork.main.exported.port,
+      serverUrl: e2eNetwork.main.exported.origin,
+      shutdown: "process",
+    },
+  ]) {
+    if (!server) continue;
+    shutdowns.push(
+      stopNotebookProcess(server, { shutdown: server.shutdown, signal }).catch((error) => {
+        console.error(error);
+        exitCode = 1;
+      }),
+    );
   }
-  if (hosted.exitCode === null) {
-    killChildTree(hosted, signal);
-  }
-  setTimeout(() => {
-    for (const child of children) {
-      if (child.exitCode === null) {
-        killChildTree(child, "SIGKILL");
-      }
-    }
-  }, 5_000).unref();
+};
+
+const track = (child) => {
+  closures.push(
+    new Promise((resolve) => {
+      child.on("error", (error) => {
+        console.error(error);
+        exitCode = 1;
+        stop("SIGTERM");
+      });
+      child.on("exit", (code, signal) => {
+        if (!stopping) {
+          exitCode = code === 0 && !signal ? 1 : (code ?? 1);
+          stop("SIGTERM");
+        }
+      });
+      child.on("close", resolve);
+    }),
+  );
+  return child;
 };
 
 process.on("SIGINT", () => stop("SIGINT"));
 process.on("SIGTERM", () => stop("SIGTERM"));
 process.on("SIGHUP", () => stop("SIGTERM"));
 
-for (const child of children) {
-  child.on("error", (error) => {
+try {
+  preparation.requireActive();
+  closeNotebookProcessRegistry();
+  await stopRegisteredNotebookProcesses({ signal: "SIGKILL" });
+  preparation.requireActive();
+  await rm(configDirectory, { force: true, recursive: true });
+  preparation.requireActive();
+  await mkdir(configDirectory, { recursive: true });
+  for (const [fixture, workspace] of [
+    [fixtureDirectory, workspaceDirectory],
+    [hostedFixtureDirectory, hostedWorkspaceDirectory],
+  ]) {
+    preparation.requireActive();
+    await rm(workspace, { force: true, recursive: true });
+    preparation.requireActive();
+    await mkdir(workspace, { recursive: true });
+    preparation.requireActive();
+    await cp(fixture, workspace, { recursive: true });
+  }
+
+  await preparation.run(
+    "static fixture export",
+    "uv",
+    [
+      "run",
+      "--frozen",
+      "--group",
+      "e2e",
+      "marimo-studio",
+      "export",
+      lazyNotebookPath,
+      "--output",
+      staticExportDirectory,
+    ],
+    {
+      cwd: repositoryDirectory,
+      env: { ...process.env, PYTHONUNBUFFERED: "1" },
+      stdio: "inherit",
+    },
+  );
+  preparation.requireActive();
+
+  hosted = track(
+    startServer([
+      hostedNotebookPath,
+      "--no-sandbox",
+      "--headless",
+      "--token-password",
+      "studio-e2e-token",
+      "--base-url",
+      "/hosted",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(e2eNetwork.main.hosted.port),
+    ]),
+  );
+  exported = track(
+    spawn(
+      "uv",
+      [
+        "run",
+        "--group",
+        "e2e",
+        "python",
+        "-m",
+        "http.server",
+        String(e2eNetwork.main.exported.port),
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        staticExportDirectory,
+      ],
+      {
+        cwd: repositoryDirectory,
+        detached: process.platform !== "win32",
+        env: { ...process.env, PYTHONUNBUFFERED: "1" },
+        stdio: "ignore",
+      },
+    ),
+  );
+  await Promise.all([
+    waitForServer(
+      hosted,
+      `${e2eNetwork.main.hosted.origin}/hosted/?access_token=studio-e2e-token`,
+      {
+        output: outputs.get(hosted),
+      },
+    ),
+    waitForServer(exported, `${e2eNetwork.main.exported.origin}/src/index.html`),
+  ]);
+  preparation.requireActive();
+  primary = track(
+    startServer([
+      workspaceDirectory,
+      "--no-sandbox",
+      "--headless",
+      "--no-token",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      String(e2eNetwork.main.studio.port),
+    ]),
+  );
+  await Promise.all(closures);
+} catch (error) {
+  if (!stopping) {
     console.error(error);
     exitCode = 1;
     stop("SIGTERM");
-  });
-  child.on("exit", async (code, signal) => {
-    exited.add(child);
-    if (!stopping) {
-      exitCode = code === 0 && !signal ? 1 : (code ?? 1);
-      stop("SIGTERM");
-    }
-    if (exited.size !== children.length) {
-      return;
-    }
-    await Promise.all(
-      [configDirectory, workspaceDirectory, hostedWorkspaceDirectory].map(async (workspace) =>
-        rm(workspace, { force: true, recursive: true }),
-      ),
-    );
-    process.exitCode = exitCode;
-  });
+  }
+  await Promise.allSettled(closures);
 }
+
+await Promise.allSettled(shutdowns);
+try {
+  closeNotebookProcessRegistry();
+  await stopRegisteredNotebookProcesses({ signal: "SIGKILL" });
+} catch (error) {
+  console.error(error);
+  exitCode = 1;
+}
+await Promise.all(
+  [configDirectory, workspaceDirectory, hostedWorkspaceDirectory].map(async (workspace) =>
+    rm(workspace, { force: true, recursive: true }),
+  ),
+);
+process.exitCode = exitCode;
