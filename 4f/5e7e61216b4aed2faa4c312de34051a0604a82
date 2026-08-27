@@ -1,0 +1,26 @@
+packages/marimo-studio/src/marimo_studio/errors/_internal.py
+  s_9e1d4c6638aeaf::t_409d8bceda2880 1-107
+packages/marimo-studio/src/marimo_studio/errors/__init__.py
+  s_9e1d4c6638aeaf::t_6c334f405f7721 236-250
+  s_9e1d4c6638aeaf::t_9e9e135829e51a 43-44,46-47,62,65,179-192,199-201,203-205,208,214-216,251-269
+  s_9e1d4c6638aeaf::t_03098ead24e706 280-281,287,289,292-293,295,300,302
+  s_9e1d4c6638aeaf::t_d687a4479aea51 235
+  s_9e1d4c6638aeaf::t_96732af0bef490 202,211-213
+  s_9e1d4c6638aeaf::t_5928129ee5eb0d 282-286,288,290-291,294,296-299,301
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4f5e7e61216b4aed2faa4c312de34051a0604a82",
+  "prompts": {},
+  "sessions": {
+    "s_9e1d4c6638aeaf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01b6d-2ea2-70a1-b82f-13b40287da90",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
