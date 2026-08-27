@@ -20,18 +20,19 @@ from marimo._session.session import Session
 from marimo._types.ids import CellId_t
 
 import marimo_studio._server.cell_alias_policy as cell_alias_policy
-from marimo_studio._capabilities import ServerHandle, ServerLocation
 from marimo_studio._compat.server.gateway import _LocationHandle
 from marimo_studio._compat.server.notebook_save import (
     PrivateNotebookSaveTransform,
     _SourceTransformExtension,
 )
 from marimo_studio._server.cell_alias_policy import CellAliasSourcePolicy
+from marimo_studio._server.records import ServerHandle, ServerLocation
+from marimo_studio._views.api import bind_cell, ensure_view
+from marimo_studio._views.resolve import resolve_studio
 from marimo_studio._workspace import load_studio
-from marimo_studio.errors import CompatibilityError
-from marimo_studio.workspace import bind_cell, ensure_view, resolve_studio
+from marimo_studio.errors._internal import CompatibilityError
 
-from .helpers import empty_notebook_source
+from ..helpers import empty_notebook_source, replace_app_shell
 
 _DUPLICATE_CELL = """\
 @app.cell
@@ -157,10 +158,25 @@ default = "main"
     )
 
 
+def _bind_cells(notebook: Path, count: int) -> None:
+    for index in range(count):
+        bind_cell(load_studio(notebook), f"cell-{index + 1}", index)
+    studio = load_studio(notebook)
+    document = studio.view().root / "index.html"
+    hosts = "".join(
+        f'<marimo-cell name="cell-{index + 1}"></marimo-cell>' for index in range(count)
+    )
+    document.write_text(
+        replace_app_shell(document.read_text(encoding="utf-8"), hosts),
+        encoding="utf-8",
+    )
+
+
 def test_live_save_tracks_aliases_across_reorder_and_subsequent_edits(
     notebook_path: Path,
 ) -> None:
     ensure_view(notebook_path, "main")
+    _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     session = _Session(manager)
     _enable_sync(notebook_path, session)
@@ -205,6 +221,7 @@ def test_live_save_tracks_alias_rebound_by_another_process(
     notebook_path: Path,
 ) -> None:
     ensure_view(notebook_path)
+    _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     session = _Session(manager)
     _enable_sync(notebook_path, session)
@@ -240,6 +257,7 @@ def test_code_mode_save_updates_aliases(
     notebook_path: Path,
 ) -> None:
     ensure_view(notebook_path)
+    _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     session = _Session(manager)
     _enable_sync(notebook_path, session)
@@ -274,6 +292,23 @@ def test_non_persistent_save_returns_refreshed_source_without_writing(
     assert "x * 5" in generated
 
 
+def test_full_save_updates_the_shared_session_document(notebook_path: Path) -> None:
+    manager = AppFileManager(notebook_path)
+    session = _Session(manager)
+    document = session.document
+    updated = tuple(
+        _cell_with_code(cell, cell.code.replace("x * 2", "x * 5"))
+        for cell in document.cells
+    )
+
+    _save_cells(manager, updated)
+
+    assert session.document is document
+    assert tuple(cell.code for cell in session.document.cells) == tuple(
+        cell.code for cell in updated
+    )
+
+
 def test_notebook_rename_keeps_native_save_available(notebook_path: Path) -> None:
     ensure_view(notebook_path)
     manager = AppFileManager(notebook_path)
@@ -297,6 +332,7 @@ def test_notebook_rename_keeps_native_save_available(notebook_path: Path) -> Non
 def test_project_config_tracks_edits_and_deletions(notebook_path: Path) -> None:
     _configure_project(notebook_path)
     ensure_view(notebook_path)
+    _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     session = _Session(manager)
     _enable_sync(notebook_path, session)
@@ -323,7 +359,7 @@ def test_project_config_tracks_edits_and_deletions(notebook_path: Path) -> None:
     assert set(deleted.cells) == {"cell-2"}
     assert resolved.aliases["cell-2"].index == 0
     assert {(item.target, item.code) for item in resolved.view().diagnostics} == {
-        ("cell-1", "cell-not-found")
+        ("cell-1", "projection-cell-not-found")
     }
 
 
@@ -333,6 +369,7 @@ def test_project_alias_write_failure_is_visible(
 ) -> None:
     _configure_project(notebook_path)
     ensure_view(notebook_path)
+    _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     _enable_sync(notebook_path, _Session(manager))
     cells = tuple(manager.app.cell_manager.document.cells)
@@ -359,6 +396,7 @@ def test_live_edit_of_duplicate_cells_keeps_distinct_aliases(
 ) -> None:
     _duplicate_notebook(notebook_path, 2)
     ensure_view(notebook_path)
+    _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     _enable_sync(notebook_path, _Session(manager))
     first, second = tuple(manager.app.cell_manager.document.cells)
@@ -379,6 +417,7 @@ def test_live_deletion_renumbers_every_surviving_duplicate_alias(
 ) -> None:
     _duplicate_notebook(notebook_path, 3)
     ensure_view(notebook_path)
+    _bind_cells(notebook_path, 3)
     manager = AppFileManager(notebook_path)
     _enable_sync(notebook_path, _Session(manager))
     _first, second, third = tuple(manager.app.cell_manager.document.cells)
@@ -391,7 +430,7 @@ def test_live_deletion_renumbers_every_surviving_duplicate_alias(
     assert resolved.aliases["cell-2"].index == 0
     assert resolved.aliases["cell-3"].index == 1
     assert {(item.target, item.code) for item in resolved.view().diagnostics} == {
-        ("cell-1", "cell-not-found")
+        ("cell-1", "projection-cell-not-found")
     }
 
 
@@ -400,6 +439,7 @@ def test_offline_duplicate_edit_does_not_collapse_distinct_aliases(
 ) -> None:
     _duplicate_notebook(notebook_path, 2)
     ensure_view(notebook_path)
+    _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     first, second = tuple(manager.app.cell_manager.document.cells)
     _save_cells(
@@ -420,6 +460,7 @@ def test_live_save_does_not_guess_after_offline_reorder(
     notebook_path: Path,
 ) -> None:
     ensure_view(notebook_path)
+    _bind_cells(notebook_path, 2)
     manager = AppFileManager(notebook_path)
     first, second = tuple(manager.app.cell_manager.document.cells)
     _save_cells(

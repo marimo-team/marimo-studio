@@ -14,19 +14,29 @@ DEFAULT_MAX_VALUE_BYTES = 1_000_000
 
 @dataclass
 class ReadValuesArgs:
-    selectors: list[str]
+    revision: str
+    projections: list[object]
+    authorization: str
     max_value_bytes: int = DEFAULT_MAX_VALUE_BYTES
 
 
 @dataclass
 class RenderValuesArgs:
-    selectors: list[str]
-    active_selectors: list[str]
+    revision: str
+    projections: list[object]
+    active_projections: list[object]
     consumer_id: str
+    authorization: str
     max_output_bytes: int = DEFAULT_MAX_VALUE_BYTES
 
 
 @dataclass
 class SyncQueryArgs:
     query: dict[str, str | list[str]]
-    operation_id: str = ""
+    operation_id: str
+    fingerprint: str
+    binding_generation: int
+    query_generation: int
+    deadline: float
+    session_id: str
+    authorization: str

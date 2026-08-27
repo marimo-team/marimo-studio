@@ -18,6 +18,36 @@ from marimo_studio._workspace.metadata import set_package_requirement
 _PACKAGE_NAME = canonicalize_name("marimo-studio")
 
 
+def _package_extras(project: dict[str, object]) -> set[str]:
+    dependencies = project.get("dependencies")
+    if not isinstance(dependencies, list):
+        return set()
+    extras: set[str] = set()
+    for dependency in dependencies:
+        if not isinstance(dependency, str):
+            continue
+        try:
+            requirement = Requirement(dependency)
+        except InvalidRequirement:
+            continue
+        if canonicalize_name(requirement.name) == _PACKAGE_NAME:
+            extras.update(requirement.extras)
+    return extras
+
+
+def _with_package_extras(requirement: str, extras: set[str]) -> str:
+    parsed = Requirement(requirement)
+    combined = sorted(parsed.extras | extras)
+    extra_text = f"[{','.join(combined)}]" if combined else ""
+    if parsed.url is not None:
+        rendered = f"{parsed.name}{extra_text} @ {parsed.url}"
+    else:
+        rendered = f"{parsed.name}{extra_text}{parsed.specifier}"
+    if parsed.marker is not None:
+        rendered = f"{rendered}; {parsed.marker}"
+    return rendered
+
+
 def _has_package_requirement(project: dict[str, object]) -> bool:
     dependencies = project.get("dependencies")
     if not isinstance(dependencies, list):
@@ -56,21 +86,27 @@ def inline_environment_flags(
 
     reader = PyProjectReader.from_filename(str(notebook))
     has_package = _has_package_requirement(reader.project)
+    extras = _package_extras(reader.project)
+    resolved_requirement = (
+        _with_package_extras(package_requirement, extras)
+        if package_requirement is not None
+        else (_with_package_extras("marimo-studio", extras) if extras else None)
+    )
     replace_package = has_package and (
-        package_requirement is None
+        resolved_requirement is None
         or _has_package_source(reader.project)
-        or reader.dependencies.count(package_requirement) != 1
+        or reader.dependencies.count(resolved_requirement) != 1
     )
     if replace_package:
         project = copy.deepcopy(reader.project)
-        set_package_requirement(project, package_requirement)
+        set_package_requirement(project, resolved_requirement)
         reader = PyProjectReader(
             project,
             config_path=str(notebook),
         )
     additional_dependencies = (
-        [package_requirement]
-        if package_requirement is not None and not has_package
+        [resolved_requirement]
+        if resolved_requirement is not None and not has_package
         else []
     )
     with tempfile.NamedTemporaryFile(

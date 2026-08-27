@@ -4,44 +4,46 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from pathlib import Path
 
 from marimo_studio._compat.kernel_values.models import DEFAULT_MAX_VALUE_BYTES
-from marimo_studio._workspace.config import discover_studio
-from marimo_studio._workspace.templates import TemplateParser
-from marimo_studio.errors import ConfigurationError
-from marimo_studio.types import ValueReadError, ValueReadResult
-from marimo_studio.values import parse_value_reference, resolve_value_reference
+from marimo_studio._projections.runtime_records import ValueReadError, ValueReadResult
+from marimo_studio._projections.values import (
+    parse_value_reference,
+    resolve_value_reference,
+)
+from marimo_studio._server.presentation.ports import SelectorSpec
 
 
-def _template_selectors(notebook: Path) -> tuple[str, ...] | None:
-    studio = discover_studio(notebook)
-    if studio is None:
-        return None
-    selectors: list[str] = []
-    for view in studio.views.values():
-        parser = TemplateParser()
-        try:
-            parser.feed(view.template.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, ConfigurationError):
-            continue
-        selectors.extend(ref.source for ref in parser.value_references)
-    return tuple(dict.fromkeys(selectors))
-
-
-def _template_output_selectors(notebook: Path) -> tuple[str, ...] | None:
-    studio = discover_studio(notebook)
-    if studio is None:
-        return None
-    selectors: list[str] = []
-    for view in studio.views.values():
-        parser = TemplateParser()
-        try:
-            parser.feed(view.template.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, ConfigurationError):
-            continue
-        selectors.extend(ref.source for ref in parser.output_references)
-    return tuple(dict.fromkeys(selectors))
+def normalize_selector_spec(selector: str, value: object) -> SelectorSpec:
+    """Validate a serialized selector spec against its canonical target."""
+    if (
+        not isinstance(value, (list, tuple))
+        or len(value) != 2
+        or not isinstance(value[0], str)
+        or not isinstance(value[1], (list, tuple))
+    ):
+        raise ValueError("selector spec must contain a variable and path")
+    path: list[tuple[str, str | int]] = []
+    for raw_step in value[1]:
+        if (
+            not isinstance(raw_step, (list, tuple))
+            or len(raw_step) != 2
+            or raw_step[0] not in {"attribute", "item"}
+            or not isinstance(raw_step[1], (str, int))
+            or isinstance(raw_step[1], bool)
+            or (raw_step[0] == "attribute" and not isinstance(raw_step[1], str))
+        ):
+            raise ValueError("selector spec contains an invalid path step")
+        path.append((raw_step[0], raw_step[1]))
+    reference = parse_value_reference(selector)
+    expected: SelectorSpec = (
+        reference.variable,
+        tuple((step.kind, step.value) for step in reference.path),
+    )
+    normalized: SelectorSpec = (value[0], tuple(path))
+    if normalized != expected:
+        raise ValueError("selector spec does not match its target")
+    return normalized
 
 
 def _encode_value(
@@ -84,8 +86,7 @@ def _encode_value(
 
 def _read_values(
     namespace: Mapping[str, object],
-    selectors: tuple[str, ...],
-    allowed: set[str],
+    specifications: Mapping[str, SelectorSpec],
     *,
     max_value_bytes: int,
     max_response_bytes: int = DEFAULT_MAX_VALUE_BYTES,
@@ -93,18 +94,9 @@ def _read_values(
     values: dict[str, object] = {}
     errors: dict[str, ValueReadError] = {}
     total = 0
-    for selector in selectors:
-        if selector not in allowed:
-            errors[selector] = ValueReadError(
-                "unknown-selector",
-                f"Selector {selector!r} is not present in a configured view.",
-            )
-            continue
-        try:
-            reference = parse_value_reference(selector)
-        except ValueError as error:
-            errors[selector] = ValueReadError("invalid-selector", str(error))
-            continue
+    for selector, specification in specifications.items():
+        reference = parse_value_reference(selector)
+        assert specification[0] == reference.variable
         if reference.variable not in namespace:
             errors[selector] = ValueReadError(
                 "missing-variable",

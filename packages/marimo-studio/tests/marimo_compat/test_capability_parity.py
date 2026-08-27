@@ -12,19 +12,20 @@ from click.testing import CliRunner
 from starlette.testclient import TestClient
 
 import marimo_studio.agent as studio_agent
-from marimo_studio._agent_transport import StudioServerConnection
 from marimo_studio._cli import cli, main
-from marimo_studio.activation import ViewActivationRequest, ViewActivationResult
-from marimo_studio.agent_models import AnalysisReport
-from marimo_studio.analysis import AnalysisOptions
+from marimo_studio._validation.analysis import AnalysisOptions
+from marimo_studio._validation.evidence import AnalysisReport
+from marimo_studio._validation.results import CheckResult
+from marimo_studio.agent import ViewActivationResult
+from marimo_studio.agent._protocol import ViewActivationRequest
+from marimo_studio.agent._transport import StudioServerConnection
 from marimo_studio.errors import AgentRequestError
-from marimo_studio.types import CheckResult
 
-from .app_helpers import edit_mode, marimo_app, session_manager
+from ..app_helpers import edit_mode, marimo_app, session_manager
 
 
-def _context(notebook_path):
-    return SimpleNamespace(globals={"__file__": str(notebook_path)})
+def _workspace(notebook_path):
+    return studio_agent.open(notebook=notebook_path)
 
 
 def _json_command(*args: str) -> dict[str, object]:
@@ -35,58 +36,52 @@ def _json_command(*args: str) -> dict[str, object]:
     return value
 
 
-def test_overview_matches_before_workspace_setup(notebook_path) -> None:
+def test_overview_adapters_follow_the_workspace_lifecycle(notebook_path) -> None:
+    workspace = _workspace(notebook_path)
     original = notebook_path.read_bytes()
 
-    python = studio_agent.overview(_context(notebook_path)).to_dict()
-    command = _json_command("overview", str(notebook_path))
+    def overview() -> dict[str, object]:
+        python = asyncio.run(workspace.overview()).to_dict()
+        command = _json_command("overview", str(notebook_path))
+        assert command == python
+        return command
 
-    assert command == python
-    assert command["state"] == "unconfigured"
-    assert command["views"] == []
+    unconfigured = overview()
+    assert unconfigured["schema"] == 2
+    assert unconfigured["state"] == "unconfigured"
+    assert unconfigured["views"] == []
     assert notebook_path.read_bytes() == original
     assert not (notebook_path.parent / "__marimo__").exists()
 
-
-def test_overview_matches_after_workspace_setup(notebook_path) -> None:
-    studio_agent.ensure_view(_context(notebook_path), "dashboard")
-
-    python = studio_agent.overview(_context(notebook_path)).to_dict()
-    command = _json_command("overview", str(notebook_path))
-
-    assert command == python
-    assert command["state"] == "ready"
-    views = cast(list[dict[str, object]], command["views"])
+    view = asyncio.run(workspace.ensure_view("dashboard"))
+    ready = overview()
+    assert ready["state"] == "ready"
+    views = cast(list[dict[str, object]], ready["views"])
     assert [view["name"] for view in views] == ["dashboard"]
 
-
-def test_overview_matches_when_configuration_needs_its_first_view(
-    notebook_path,
-) -> None:
-    setup = studio_agent.ensure_view(_context(notebook_path), "dashboard")
-    shutil.rmtree(setup.root.parent)
-
-    python = studio_agent.overview(_context(notebook_path)).to_dict()
-    command = _json_command("overview", str(notebook_path))
-
-    assert command == python
-    assert command["state"] == "needs-view"
-    assert command["default_view"] == "dashboard"
-    assert command["views"] == []
+    shutil.rmtree(view.workspace.notebook.parent / "__marimo__")
+    needs_view = overview()
+    assert needs_view["state"] == "needs-view"
+    assert needs_view["default_view"] == "dashboard"
+    assert needs_view["views"] == []
 
 
 def test_static_inspection_matches(notebook_path) -> None:
-    python = studio_agent.inspect(
-        _context(notebook_path),
-        include_code=True,
-        display=True,
-        limit=1,
+    python = asyncio.run(
+        _workspace(notebook_path).inspect(
+            include_code=True,
+            selectors=(1,),
+            output_expressions=True,
+            limit=1,
+        )
     ).to_dict()
     command = _json_command(
         "inspect",
         str(notebook_path),
         "--include-code",
-        "--display",
+        "--cell",
+        "1",
+        "--output-expressions",
         "--limit",
         "1",
     )
@@ -94,55 +89,29 @@ def test_static_inspection_matches(notebook_path) -> None:
     assert command == python
 
 
-def test_view_setup_dry_run_matches(notebook_path) -> None:
-    python = studio_agent.ensure_view(
-        _context(notebook_path),
-        "dashboard",
-        dry_run=True,
-    ).to_dict()
+def test_view_inspection_matches(notebook_path) -> None:
+    workspace = _workspace(notebook_path)
+    view = asyncio.run(workspace.ensure_view("dashboard"))
+
+    python = asyncio.run(view.inspect()).to_dict()
     command = _json_command(
         "view",
-        "add",
+        "inspect",
         str(notebook_path),
         "--name",
         "dashboard",
-        "--dry-run",
     )
 
     assert command == python
 
 
-def test_binding_dry_run_matches(notebook_path) -> None:
-    studio_agent.ensure_view(_context(notebook_path), "dashboard")
+def test_static_validation_matches(notebook_path) -> None:
+    workspace = _workspace(notebook_path)
+    asyncio.run(workspace.ensure_view("dashboard"))
 
-    python = studio_agent.bind(
-        _context(notebook_path),
-        "summary",
-        1,
-        dry_run=True,
-    ).to_dict()
+    python = asyncio.run(workspace.validate(view="dashboard")).to_dict()
     command = _json_command(
-        "bind",
-        str(notebook_path),
-        "--cell",
-        "1",
-        "--as",
-        "summary",
-        "--dry-run",
-    )
-
-    assert command == python
-
-
-def test_static_check_matches(notebook_path) -> None:
-    studio_agent.ensure_view(_context(notebook_path), "dashboard")
-
-    python = studio_agent.check(
-        _context(notebook_path),
-        view_name="dashboard",
-    ).to_dict()
-    command = _json_command(
-        "check",
+        "validate",
         str(notebook_path),
         "--view",
         "dashboard",
@@ -155,8 +124,8 @@ def test_analysis_adapters_use_the_same_options(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    context = _context(notebook_path)
-    studio_agent.ensure_view(context, "dashboard")
+    workspace = _workspace(notebook_path)
+    asyncio.run(workspace.ensure_view("dashboard"))
     report = AnalysisReport(
         notebook=notebook_path.resolve(),
         views=("dashboard",),
@@ -182,43 +151,43 @@ def test_analysis_adapters_use_the_same_options(
         return report
 
     monkeypatch.setattr(
-        "marimo_studio._composition.create_tooling_adapters",
-        lambda: SimpleNamespace(
-            code_mode=SimpleNamespace(connection=lambda: connection)
-        ),
+        "marimo_studio._composition.create_code_mode_bridge",
+        lambda: SimpleNamespace(connection=lambda: connection),
     )
     monkeypatch.setattr(
-        "marimo_studio._agent_client.request_analysis",
+        "marimo_studio.agent._client.request_analysis",
         request_analysis,
     )
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.analyze.analyze_studio",
+        "marimo_studio._cli.commands.validate.analyze_studio",
         analyze_studio,
     )
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.analyze.should_reenter",
+        "marimo_studio._cli.commands.validate.should_reenter",
         lambda *_args: False,
     )
 
     python = asyncio.run(
-        studio_agent.analyze(
-            context,
+        workspace.validate(
+            level="browser",
             view="dashboard",
             browser_timeout=20,
             runtime_timeout=75,
-            require_browser=False,
         )
     ).to_dict()
     command = _json_command(
-        "analyze",
+        "validate",
         str(notebook_path),
         "--view",
         "dashboard",
+        "--level",
+        "browser",
+        "--server",
+        "http://localhost:2718",
         "--browser-timeout",
         "20",
         "--runtime-timeout",
         "75",
-        "--no-browser",
     )
 
     assert (
@@ -229,7 +198,7 @@ def test_analysis_adapters_use_the_same_options(
                 view="dashboard",
                 browser_timeout=20,
                 runtime_timeout=75,
-                require_browser=False,
+                require_browser=True,
             )
         ]
     )
@@ -240,14 +209,12 @@ def test_activation_adapters_return_the_same_result(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    context = _context(notebook_path)
-    studio_agent.ensure_view(context, "dashboard")
+    workspace = _workspace(notebook_path)
+    view = asyncio.run(workspace.ensure_view("dashboard"))
     result = ViewActivationResult(
         notebook=notebook_path.resolve(),
         view="dashboard",
-        state="active",
         generation=3,
-        transition="in-place",
         client_id="browser-client-1234",
         session_id="s_123456",
     )
@@ -266,13 +233,11 @@ def test_activation_adapters_return_the_same_result(
         return result
 
     monkeypatch.setattr(
-        "marimo_studio._composition.create_tooling_adapters",
-        lambda: SimpleNamespace(
-            code_mode=SimpleNamespace(connection=lambda: code_connection)
-        ),
+        "marimo_studio._composition.create_code_mode_bridge",
+        lambda: SimpleNamespace(connection=lambda: code_connection),
     )
     monkeypatch.setattr(
-        "marimo_studio._agent_client.request_view_activation",
+        "marimo_studio.agent._client.request_view_activation",
         activate,
     )
     monkeypatch.setattr(
@@ -280,7 +245,7 @@ def test_activation_adapters_return_the_same_result(
         lambda *_args, **_kwargs: cli_connection,
     )
 
-    python = asyncio.run(studio_agent.activate_view(context, "dashboard")).to_dict()
+    python = asyncio.run(view.activate()).to_dict()
     command = _json_command(
         "view",
         "activate",
@@ -311,8 +276,8 @@ def test_activation_view_not_found_code_matches_python_http_and_cli(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    context = _context(notebook_path)
-    studio_agent.ensure_view(context, "dashboard")
+    workspace = _workspace(notebook_path)
+    asyncio.run(workspace.ensure_view("dashboard"))
     code_connection = StudioServerConnection(
         "http://localhost:2718",
         server_token="server-token",
@@ -335,19 +300,17 @@ def test_activation_view_not_found_code_matches_python_http_and_cli(
         )
 
     monkeypatch.setattr(
-        "marimo_studio._composition.create_tooling_adapters",
-        lambda: SimpleNamespace(
-            code_mode=SimpleNamespace(connection=lambda: code_connection)
-        ),
+        "marimo_studio._composition.create_code_mode_bridge",
+        lambda: SimpleNamespace(connection=lambda: code_connection),
     )
-    monkeypatch.setattr("marimo_studio._agent_client.request_json", missing)
+    monkeypatch.setattr("marimo_studio.agent._client.request_json", missing)
     monkeypatch.setattr(
         "marimo_studio._cli.commands.view.studio_server_connection",
         lambda *_args, **_kwargs: cli_connection,
     )
 
     with pytest.raises(AgentRequestError) as python_error:
-        asyncio.run(studio_agent.activate_view(context, "missing"))
+        asyncio.run(workspace.view("missing").activate())
 
     app = marimo_app(notebook_path)
     edit_mode(app)

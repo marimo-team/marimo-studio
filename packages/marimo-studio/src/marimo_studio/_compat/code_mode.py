@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from starlette.datastructures import Headers
 from starlette.types import Scope
 
-from marimo_studio._agent_transport import StudioServerConnection
+from marimo_studio.agent._transport import StudioServerConnection
 from marimo_studio.errors import ProtocolError
 
 STUDIO_SESSION_ID_KEY = "marimo_studio_session_id"
+STUDIO_NOTEBOOK_PATH_KEY = "marimo_studio_notebook_path"
 
 
-def attach_code_mode_session(scope: Scope) -> Scope:
+def attach_code_mode_session(scope: Scope, notebook: Path) -> Scope:
     """Attach the calling Marimo session to a code-mode request scope."""
     updated = dict(scope)
     raw_meta = scope.get("meta")
@@ -19,8 +22,27 @@ def attach_code_mode_session(scope: Scope) -> Scope:
     session_id = Headers(raw=list(scope.get("headers", []))).get("Marimo-Session-Id")
     if session_id:
         meta[STUDIO_SESSION_ID_KEY] = session_id
+    meta[STUDIO_NOTEBOOK_PATH_KEY] = str(notebook.resolve())
     updated["meta"] = meta
     return updated
+
+
+def active_notebook() -> Path:
+    """Return the saved notebook attached to the active code-mode request."""
+    from marimo._messaging.context import HTTP_REQUEST_CTX
+
+    request = HTTP_REQUEST_CTX.get(None)
+    if request is None:
+        raise ProtocolError(
+            "Studio operations require an active Marimo code-mode request."
+        )
+    value = request.meta.get(STUDIO_NOTEBOOK_PATH_KEY)
+    if not isinstance(value, str) or not value:
+        raise ProtocolError("The active Marimo notebook path is unavailable.")
+    notebook = Path(value).expanduser().resolve()
+    if not notebook.is_file():
+        raise ProtocolError(f"The active Marimo notebook is unavailable: {notebook}")
+    return notebook
 
 
 def code_mode_connection() -> StudioServerConnection:
@@ -57,10 +79,3 @@ def code_mode_connection() -> StudioServerConnection:
         routing_query=routing_query,
         session_id=session_id,
     )
-
-
-__all__ = [
-    "STUDIO_SESSION_ID_KEY",
-    "attach_code_mode_session",
-    "code_mode_connection",
-]

@@ -1,3 +1,5 @@
+"""Protect Marimo session replay integration."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,13 +15,36 @@ from marimo._server.api.endpoints.ws.ws_session_connector import (
 )
 from starlette.datastructures import QueryParams
 
-from marimo_studio._capabilities import ServerContext, ServerHandle
 from marimo_studio._compat.server.gateway import _ContextHandle
 from marimo_studio._compat.server.session_replay import (
     DOCUMENT_REPLAY_QUERY_PARAM,
     PrivateSessionReplay,
 )
-from marimo_studio.errors import CompatibilityError
+from marimo_studio._server.records import ServerContext, ServerHandle
+from marimo_studio.errors._internal import CompatibilityError
+
+
+def test_replay_configuration_uses_the_gateway_canonical_notebook() -> None:
+    class Manager:
+        pass
+
+    class CanonicalNotebook:
+        def resolve(self) -> None:
+            raise AssertionError("canonical notebook paths must not be resolved here")
+
+    manager = Manager()
+    context = cast(
+        ServerContext,
+        SimpleNamespace(
+            file_key="analysis.py",
+            handle=ServerHandle(_ContextHandle(server=None, session_manager=manager)),
+            notebook=CanonicalNotebook(),
+        ),
+    )
+    replay = PrivateSessionReplay()
+
+    replay.configure(context, True)
+    replay.configure(context, False)
 
 
 def test_document_replay_requires_an_opted_in_manager_and_query(

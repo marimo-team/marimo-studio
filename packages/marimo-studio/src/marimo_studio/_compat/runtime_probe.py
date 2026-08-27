@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import threading
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -12,17 +13,16 @@ from uuid import uuid4
 
 import marimo
 
-from marimo_studio._capabilities import ProjectionUnavailable
+from marimo_studio._compat.browser_notebook import selector_specs
 from marimo_studio._compat.kernel_values import (
     DEFAULT_MAX_VALUE_BYTES,
     probe_selector_lease,
-    read_session_values,
-    render_session_outputs,
+    read_probe_values,
+    render_probe_outputs,
 )
 from marimo_studio._compat.runtime_requests import instantiate_notebook_request
-from marimo_studio._runtime_limits import DEFAULT_RUNTIME_TIMEOUT
-from marimo_studio.errors import ProtocolError, RuntimeTimeoutError
-from marimo_studio.types import (
+from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
+from marimo_studio._projections.runtime_records import (
     OutputRenderResult,
     RenderedOutput,
     RuntimeCell,
@@ -31,6 +31,9 @@ from marimo_studio.types import (
     ValueReadError,
     ValueReadResult,
 )
+from marimo_studio._projections.values import parse_value_reference
+from marimo_studio._server.presentation.ports import ProjectionUnavailable
+from marimo_studio.errors import ProtocolError, RuntimeTimeoutError
 
 _NOTEBOOK_CONFIG_LOCK = threading.RLock()
 _POST_DEADLINE_SHUTDOWN_GRACE = 2.0
@@ -129,6 +132,7 @@ async def probe_runtime(
     allowed_outputs = tuple(
         dict.fromkeys(selector for group in groups for selector in group)
     )
+    main_module = sys.modules["__main__"]
     manager = _build_manager(
         path,
         timeout=timeout,
@@ -184,7 +188,12 @@ async def probe_runtime(
             values = (
                 await _read_values_within_deadline(
                     session,
-                    variables,
+                    selector_specs(
+                        {
+                            selector: parse_value_reference(selector)
+                            for selector in variables
+                        }
+                    ),
                     consumer_id=str(consumer.consumer_id),
                     max_value_bytes=value_max_bytes or DEFAULT_MAX_VALUE_BYTES,
                     loop=loop,
@@ -201,8 +210,13 @@ async def probe_runtime(
                 for selector in active:
                     rendered = await _render_output_within_deadline(
                         session,
-                        selector,
-                        active,
+                        selector_specs({selector: parse_value_reference(selector)}),
+                        selector_specs(
+                            {
+                                active_selector: parse_value_reference(active_selector)
+                                for active_selector in active
+                            }
+                        ),
                         consumer_id=str(consumer.consumer_id),
                         loop=loop,
                         deadline=deadline,
@@ -235,12 +249,18 @@ async def probe_runtime(
                 ):
                     await asyncio.sleep(0.01)
         finally:
-            manager.shutdown()
+            try:
+                manager.shutdown()
+            finally:
+                # The in-process Marimo kernel installs its own main module
+                # for notebook pickling. Return ownership to the caller after
+                # the session and its kernel have stopped.
+                sys.modules["__main__"] = main_module
 
 
 async def _read_values_within_deadline(
     session: Any,
-    selectors: tuple[str, ...],
+    specifications: dict[str, tuple[str, tuple[tuple[str, str | int], ...]]],
     *,
     consumer_id: str,
     max_value_bytes: int,
@@ -249,9 +269,9 @@ async def _read_values_within_deadline(
     timeout: float,
 ) -> ValueReadResult:
     try:
-        return await read_session_values(
+        return await read_probe_values(
             session,
-            selectors,
+            specifications,
             consumer_id=consumer_id,
             timeout=_remaining_runtime_time(loop, deadline, timeout),
             max_value_bytes=max_value_bytes,
@@ -264,8 +284,8 @@ async def _read_values_within_deadline(
 
 async def _render_output_within_deadline(
     session: Any,
-    selector: str,
-    active: tuple[str, ...],
+    specifications: dict[str, tuple[str, tuple[tuple[str, str | int], ...]]],
+    active_specifications: dict[str, tuple[str, tuple[tuple[str, str | int], ...]]],
     *,
     consumer_id: str,
     loop: asyncio.AbstractEventLoop,
@@ -273,10 +293,10 @@ async def _render_output_within_deadline(
     timeout: float,
 ) -> OutputRenderResult:
     try:
-        return await render_session_outputs(
+        return await render_probe_outputs(
             session,
-            (selector,),
-            active,
+            specifications,
+            active_specifications,
             consumer_id=consumer_id,
             timeout=_remaining_runtime_time(loop, deadline, timeout),
         )

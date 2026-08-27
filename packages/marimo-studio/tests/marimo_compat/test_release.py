@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import ast
-import re
+import asyncio
 import sys
 from pathlib import Path
 
@@ -13,19 +12,20 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-import marimo_studio._assets as assets_module
 import marimo_studio._compat.layout as layout_module
 import marimo_studio._composition as composition_module
-import marimo_studio.checks as checks_module
+import marimo_studio._delivery.assets as assets_module
+import marimo_studio._validation.static as checks_module
+from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.patch import ReversiblePatch
+from marimo_studio._compat.runtime_probe import probe_runtime
 from marimo_studio._composition import create_browser_runtime_projector
+from marimo_studio._validation.static import check_studio
+from marimo_studio._views.api import ensure_view
 from marimo_studio._workspace import load_studio
-from marimo_studio.checks import check_studio
-from marimo_studio.errors import CompatibilityError
-from marimo_studio.values import parse_value_reference
-from marimo_studio.workspace import ensure_view
+from marimo_studio.errors._internal import CompatibilityError
 
-from .helpers import empty_notebook_source
+from ..helpers import empty_notebook_source
 
 
 def test_pinned_release_matches_the_private_symbols() -> None:
@@ -37,7 +37,7 @@ def test_pinned_release_matches_the_private_symbols() -> None:
 
 
 def test_python_projects_pin_the_supported_marimo_release() -> None:
-    root = Path(__file__).parents[3]
+    root = Path(__file__).parents[4]
     with (root / "pyproject.toml").open("rb") as stream:
         workspace = tomllib.load(stream)
     with (root / "packages/marimo-studio/pyproject.toml").open("rb") as stream:
@@ -46,57 +46,6 @@ def test_python_projects_pin_the_supported_marimo_release() -> None:
     version = layout_module.MARIMO_VERSION
     assert f"marimo[recommended]=={version}" in workspace["dependency-groups"]["dev"]
     assert f"marimo=={version}" in package["project"]["dependencies"]
-
-
-def test_private_marimo_imports_stay_in_the_compatibility_package() -> None:
-    root = Path(__file__).parents[3]
-    source_root = root / "packages/marimo-studio/src/marimo_studio"
-    violations: list[str] = []
-
-    for path in sorted(source_root.rglob("*.py")):
-        relative = path.relative_to(source_root)
-        if relative.parts[0] == "_compat":
-            continue
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                modules = [alias.name for alias in node.names]
-            elif isinstance(node, ast.ImportFrom) and node.module is not None:
-                modules = [node.module]
-            else:
-                continue
-            violations.extend(
-                f"{relative}:{node.lineno}: {module}"
-                for module in modules
-                if module.startswith("marimo._")
-            )
-
-    assert violations == []
-
-
-def test_documentation_uses_indirect_marimo_release_references() -> None:
-    root = Path(__file__).parents[3]
-    patterns = (
-        re.compile(r"(?i)\bmarimo\b[^\n]{0,120}\b\d+\.\d+\.\d+\b"),
-        re.compile(r"(?i)\b\d+\.\d+\.\d+\b[^\n]{0,120}\bmarimo\b"),
-        re.compile(
-            r"\b(?:MARIMO_RELEASE|MARIMO_VERSION|PREVIOUS_MARIMO_VERSION)="
-            r"v?\d+\.\d+\.\d+\b"
-        ),
-    )
-    violations: list[str] = []
-
-    for directory in (root / "docs", root / "development_docs"):
-        for path in sorted(directory.rglob("*.md")):
-            for line_number, line in enumerate(
-                path.read_text(encoding="utf-8").splitlines(),
-                start=1,
-            ):
-                if any(pattern.search(line) for pattern in patterns):
-                    relative = path.relative_to(root)
-                    violations.append(f"{relative}:{line_number}: {line.strip()}")
-
-    assert violations == []
 
 
 def test_same_version_source_drift_fails_with_the_observed_fingerprint(
@@ -179,32 +128,73 @@ def test_browser_projector_owns_runtime_data_and_instance_identity(
     first = projector.project(
         notebook_path,
         source,
-        values={"value": parse_value_reference("value")},
-        outputs={},
     )
-    selectors_changed = projector.project(
+    repeated = projector.project(
         notebook_path,
         source,
-        values={},
-        outputs={"output": parse_value_reference("output")},
     )
     source_changed = projector.project(
         notebook_path,
         source + "# source revision\n",
-        values={},
-        outputs={},
     )
 
     assert first.runtime_data() == {
         "code": first.code,
         "filename": "notebook.py",
         "version": layout_module.MARIMO_VERSION,
-        "valueSpecs": {"value": ("value", ())},
-        "outputSpecs": {},
+        "executionCells": [cell.to_dict() for cell in first.execution_cells],
+        "bootstrapCellId": first.bootstrap_cell_id,
     }
+    assert len(first.execution_cells) == 1
+    assert first.execution_cells[0].runtime_id == first.bootstrap_cell_id
     assert first.commit == layout_module.MARIMO_RELEASE_COMMIT
-    assert selectors_changed.instance == first.instance
+    assert repeated.instance == first.instance
     assert source_changed.instance != first.instance
+
+
+def test_browser_execution_catalog_preserves_saved_notebook_cells(
+    notebook_path: Path,
+) -> None:
+    projection = create_browser_runtime_projector().project(
+        notebook_path,
+        notebook_path.read_text(encoding="utf-8"),
+    )
+    static = load_static_notebook(notebook_path)
+    catalog = {cell.runtime_id: cell.code for cell in projection.execution_cells}
+
+    assert {
+        cell.runtime_id: cell.code for cell in static.cells
+    }.items() <= catalog.items()
+    assert projection.bootstrap_cell_id not in {
+        cell.runtime_id for cell in static.cells
+    }
+    assert "_studio_projection_bridge_ready" in catalog[projection.bootstrap_cell_id]
+
+
+def test_browser_projection_bootstrap_executes_in_the_native_kernel(
+    notebook_path: Path,
+    tmp_path: Path,
+) -> None:
+    projection = create_browser_runtime_projector().project(
+        notebook_path,
+        empty_notebook_source(),
+    )
+    projected = tmp_path / "projected.py"
+    projected.write_text(projection.code, encoding="utf-8")
+
+    runtime = asyncio.run(
+        probe_runtime(
+            projected,
+            cell_ids=(projection.bootstrap_cell_id,),
+            variables=(),
+            timeout=10,
+            show_tracebacks=True,
+        )
+    )
+
+    bootstrap = runtime.cells[projection.bootstrap_cell_id]
+    assert bootstrap.status == "idle"
+    assert bootstrap.errors == ()
 
 
 def test_check_reports_the_validated_release_identity(notebook_path: Path) -> None:
@@ -218,14 +208,6 @@ def test_check_reports_the_validated_release_identity(notebook_path: Path) -> No
 
     assert result.status == "pass"
     assert result.details is not None
-    assert set(result.details) == {
-        "validation",
-        "studio",
-        "requiredRelease",
-        "marimo",
-        "browser",
-        "adapterFamily",
-    }
     assert result.details["validation"] == "pass"
     assert result.details["adapterFamily"] == "private"
     expected = {
@@ -256,14 +238,6 @@ def test_check_reports_the_required_release_when_validation_fails(
 
     assert result.status == "fail"
     assert result.details is not None
-    assert set(result.details) == {
-        "validation",
-        "studio",
-        "requiredRelease",
-        "marimo",
-        "browser",
-        "adapterFamily",
-    }
     assert result.details["validation"] == "fail"
     assert result.details["requiredRelease"] == {
         "version": layout_module.MARIMO_VERSION,

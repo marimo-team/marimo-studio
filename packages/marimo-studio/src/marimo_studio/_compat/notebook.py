@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import ast
+from hashlib import sha256
 from pathlib import Path
 
-from marimo_studio._capabilities import StaticCell, StaticNotebook
+from marimo_studio._notebook.ports import StaticCell, StaticNotebook
+from marimo_studio._notebook.records import SourceSpan
 from marimo_studio.errors import (
     ConfigurationError,
     NotebookSourceError,
     ProtocolError,
 )
-from marimo_studio.types import SourceSpan
 
 
 def run_guard_line(source: str) -> int | None:
@@ -82,16 +83,37 @@ def _is_canonical_empty_notebook(source: str) -> bool:
 def load_static_notebook(path: Path) -> StaticNotebook:
     """Compile notebook metadata without running cell bodies."""
     try:
-        from marimo._ast.load import get_notebook_status, load_app
+        from marimo._ast.load import (
+            all_violations_soft,
+            get_notebook_serializer,
+            is_non_marimo_markdown,
+            is_non_marimo_python_script,
+            load_notebook_ir,
+        )
         from marimo._ast.scanner import scan_notebook
 
-        source = path.read_text(encoding="utf-8")
-        status = get_notebook_status(str(path))
-        if status.notebook is None:
+        payload = path.read_bytes()
+        source = payload.decode("utf-8")
+        source_revision = sha256(payload).hexdigest()
+        canonical_empty = _is_canonical_empty_notebook(source)
+        serialized = get_notebook_serializer(path).deserialize(
+            source,
+            filepath=str(path),
+        )
+        if (
+            serialized is None
+            or not serialized.valid
+            or is_non_marimo_python_script(serialized)
+            or is_non_marimo_markdown(serialized)
+            or (
+                serialized.violations
+                and not all_violations_soft(serialized.violations)
+                and not canonical_empty
+            )
+        ):
             raise NotebookSourceError(f"marimo could not parse notebook: {path}")
-        app = load_app(path)
-        if app is None:
-            raise NotebookSourceError(f"File does not define a marimo app: {path}")
+        app = load_notebook_ir(serialized, filepath=str(path))
+        app._cell_manager.ensure_one_cell()
         app._maybe_initialize()
     except ConfigurationError:
         raise
@@ -100,7 +122,7 @@ def load_static_notebook(path: Path) -> StaticNotebook:
             f"Could not inspect notebook {path}: {error}"
         ) from error
 
-    serialized_cells = status.notebook.cells
+    serialized_cells = serialized.cells
     rows = list(app._cell_manager.cell_data())
     empty_placeholder = (
         not serialized_cells
@@ -108,14 +130,17 @@ def load_static_notebook(path: Path) -> StaticNotebook:
         and rows[0].cell is None
         and rows[0].code == ""
         and rows[0].name == "_"
-        and _is_canonical_empty_notebook(source)
+        and canonical_empty
     )
     if empty_placeholder:
-        return StaticNotebook(cells=(), app_config=app._config.asdict())
-    if status.status not in {"valid", "has_warnings"}:
-        raise NotebookSourceError(f"marimo could not parse notebook: {path}")
-
-    source_lines = [cell.lineno for cell in serialized_cells]
+        return StaticNotebook(
+            cells=(),
+            app_config=app._config.asdict(),
+            source_revision=source_revision,
+        )
+    leading_whitespace = len(source) - len(source.lstrip())
+    leading_lines = source[:leading_whitespace].count("\n")
+    source_lines = [cell.lineno + leading_lines for cell in serialized_cells]
     scanned_cells = scan_notebook(source).cells
     if len(rows) != len(source_lines) or len(rows) != len(scanned_cells):
         raise ProtocolError("marimo returned inconsistent notebook cell metadata")
@@ -151,4 +176,8 @@ def load_static_notebook(path: Path) -> StaticNotebook:
                 ),
             )
         )
-    return StaticNotebook(cells=tuple(cells), app_config=app._config.asdict())
+    return StaticNotebook(
+        cells=tuple(cells),
+        app_config=app._config.asdict(),
+        source_revision=source_revision,
+    )

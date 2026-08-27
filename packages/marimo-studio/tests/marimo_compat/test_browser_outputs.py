@@ -1,17 +1,30 @@
+"""Protect browser output adapters and resource ownership."""
+
 from __future__ import annotations
 
 import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from pathlib import PurePosixPath
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 
-from marimo_studio._compat.browser_notebook import _value_bridge
+from marimo_studio._compat.browser_notebook import (
+    WASM_PROJECTION_NAMESPACE,
+    _value_bridge,
+)
 from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
 from marimo_studio._compat.kernel_values.outputs import KernelOutputRenderer
-from marimo_studio.values import parse_value_reference
+from marimo_studio.view_providers import (
+    MountDeclaration,
+    SourceLocation,
+)
+
+_REVISION = "presentation-revision"
+_SITE_ID = "site:output:dynamic"
+_VALUE_SITE_ID = "site:value:dynamic"
 
 
 class _CellApp:
@@ -175,6 +188,42 @@ def _format_element(context: _GeneratedContext) -> Any:
     return format_element
 
 
+def _mounts() -> list[dict[str, object]]:
+    return [
+        MountDeclaration(
+            id=_SITE_ID,
+            kind="output",
+            source=SourceLocation(PurePosixPath("src/App.tsx"), 1, 1),
+            allowed_targets=None,
+        ).to_dict(),
+        MountDeclaration(
+            id=_VALUE_SITE_ID,
+            kind="value",
+            source=SourceLocation(PurePosixPath("src/App.tsx"), 2, 1),
+            allowed_targets=None,
+        ).to_dict(),
+    ]
+
+
+def _configure_bridge(
+    context: _GeneratedContext,
+    *,
+    revision: str,
+    generation: int,
+    variables: list[str],
+) -> dict[str, Any]:
+    return _call_bridge(
+        context,
+        "configure_projections",
+        {
+            "revision": revision,
+            "generation": generation,
+            "mounts": _mounts(),
+            "variables": variables,
+        },
+    )
+
+
 def _install_generated_adapter(
     monkeypatch: pytest.MonkeyPatch,
     context: _GeneratedContext,
@@ -187,12 +236,17 @@ def _install_generated_adapter(
         "marimo._messaging.notification_utils.broadcast_notification",
         lambda notification: context.notifications.append(notification.cell_id),
     )
-    reference = parse_value_reference("control")
     app = _CellApp()
     namespace: dict[str, Any] = {"app": app}
-    exec(_value_bridge({"control": reference}, {"control": reference}), namespace)
+    exec(_value_bridge(), namespace)
     assert app.function is not None
     app.function()
+    _configure_bridge(
+        context,
+        revision=_REVISION,
+        generation=1,
+        variables=["control"],
+    )
 
 
 def _call_bridge(
@@ -200,9 +254,21 @@ def _call_bridge(
     name: str,
     payload: dict[str, object],
 ) -> dict[str, Any]:
-    function = context.function_registry.get_function("_marimo_studio", name)
+    function = context.function_registry.get_function(WASM_PROJECTION_NAMESPACE, name)
     assert function is not None
     return cast(dict[str, Any], function(payload))
+
+
+def test_generated_bridge_registers_one_projection_namespace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _GeneratedContext()
+
+    _install_generated_adapter(monkeypatch, context)
+
+    assert set(context.function_registry.namespaces) == {WASM_PROJECTION_NAMESPACE}
+    assert context.function_registry.registration_count == 5
+    assert len(context.function_registry.namespaces[WASM_PROJECTION_NAMESPACE]) == 5
 
 
 def _render(
@@ -211,16 +277,58 @@ def _render(
     selectors: list[str],
     active_selectors: list[str],
 ) -> dict[str, Any]:
+    def projections(values: list[str], group: str) -> list[dict[str, str]]:
+        return [
+            {
+                "siteId": _SITE_ID,
+                "instanceId": f"{group}-{index}",
+                "target": selector,
+            }
+            for index, selector in enumerate(values)
+        ]
+
     return _call_bridge(
         context,
         "render_values",
         {
-            "selectors": selectors,
-            "active_selectors": active_selectors,
+            "revision": _REVISION,
+            "projections": projections(selectors, "requested"),
+            "active_projections": projections(active_selectors, "active"),
             "consumer_id": consumer_id,
             "max_output_bytes": 10_000,
         },
     )
+
+
+def test_generated_query_bridge_keeps_the_newest_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _GeneratedContext()
+    _install_generated_adapter(monkeypatch, context)
+
+    applied = _call_bridge(
+        context,
+        "sync_query",
+        {
+            "query": {"region": "emea", "marimo_studio_lifecycle": "7"},
+            "generation": 2,
+        },
+    )
+    repeated = _call_bridge(
+        context,
+        "sync_query",
+        {"query": {"region": "apac"}, "generation": 2},
+    )
+    stale = _call_bridge(
+        context,
+        "sync_query",
+        {"query": {"region": "americas"}, "generation": 1},
+    )
+
+    assert applied == {"generation": 2, "applied": True}
+    assert repeated == {"generation": 2, "applied": True}
+    assert stale == {"generation": 1, "applied": False}
+    assert context.query_params.values == {"region": "emea"}
 
 
 def test_generated_output_adapter_owns_replaces_and_releases_outputs(
@@ -251,6 +359,229 @@ def test_generated_output_adapter_owns_replaces_and_releases_outputs(
 
     assert _render(context, "preview-a", [], []) == {"outputs": {}, "errors": {}}
     assert context.cell_lifecycle_registry.dispose_attempts.count(owner) == attempts
+
+
+@pytest.mark.parametrize("function_name", ["read_values", "render_values"])
+def test_generated_bridge_rejects_direct_requests_outside_its_catalog(
+    monkeypatch: pytest.MonkeyPatch,
+    function_name: str,
+) -> None:
+    context = _GeneratedContext()
+    _install_generated_adapter(monkeypatch, context)
+    request = {
+        "siteId": _VALUE_SITE_ID if function_name == "read_values" else _SITE_ID,
+        "instanceId": "projection-forged",
+        "target": "secret",
+    }
+    payload: dict[str, object] = {
+        "revision": _REVISION,
+        "projections": [request],
+    }
+    if function_name == "render_values":
+        payload.update(
+            active_projections=[request],
+            consumer_id="preview-a",
+            max_output_bytes=10_000,
+        )
+    else:
+        payload["max_value_bytes"] = 10_000
+
+    result = _call_bridge(context, function_name, payload)
+
+    assert result["errors"]["*"]["code"] == "projection-authorization-invalid"
+
+
+@pytest.mark.parametrize(
+    ("field", "surrogate"),
+    (("target", "\ud800"), ("instanceId", "\udfff")),
+)
+def test_generated_bridge_rejects_unpaired_utf16_surrogates(
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    surrogate: str,
+) -> None:
+    context = _GeneratedContext()
+    _install_generated_adapter(monkeypatch, context)
+    request = {
+        "siteId": _VALUE_SITE_ID,
+        "instanceId": "projection-unicode",
+        "target": "control",
+    }
+    request[field] = surrogate
+
+    result = _call_bridge(
+        context,
+        "read_values",
+        {
+            "revision": _REVISION,
+            "projections": [request],
+            "max_value_bytes": 10_000,
+        },
+    )
+
+    assert result["errors"]["*"]["code"] == "projection-unpaired-surrogate"
+
+
+@pytest.mark.parametrize(
+    "target",
+    [r'control["\ud800"]', r'control["\udfff"]'],
+)
+def test_generated_bridge_rejects_escaped_unpaired_surrogates(
+    monkeypatch: pytest.MonkeyPatch,
+    target: str,
+) -> None:
+    context = _GeneratedContext()
+    _install_generated_adapter(monkeypatch, context)
+
+    result = _call_bridge(
+        context,
+        "read_values",
+        {
+            "revision": _REVISION,
+            "projections": [
+                {
+                    "siteId": _VALUE_SITE_ID,
+                    "instanceId": "projection-unicode-key",
+                    "target": target,
+                }
+            ],
+            "max_value_bytes": 1_000,
+        },
+    )
+
+    assert result["errors"]["*"]["code"] == "projection-unpaired-surrogate"
+
+
+def test_late_timed_out_configuration_cannot_replace_a_newer_revision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _GeneratedContext()
+    context.globals["current"] = 42
+    _install_generated_adapter(monkeypatch, context)
+    assert _configure_bridge(
+        context,
+        revision="revision-b",
+        generation=2,
+        variables=["current"],
+    ) == {"revision": "revision-b", "generation": 2, "applied": True}
+
+    late = _configure_bridge(
+        context,
+        revision=_REVISION,
+        generation=1,
+        variables=["control"],
+    )
+
+    assert late == {"revision": "revision-b", "generation": 2, "applied": False}
+    current = _call_bridge(
+        context,
+        "read_values",
+        {
+            "revision": "revision-b",
+            "projections": [
+                {
+                    "siteId": _VALUE_SITE_ID,
+                    "instanceId": "projection-current",
+                    "target": "current",
+                }
+            ],
+            "max_value_bytes": 1_000,
+        },
+    )
+    assert current == {"values": {"current": 42}, "errors": {}}
+
+
+def test_generated_bridge_matches_server_selector_path_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _GeneratedContext()
+    _install_generated_adapter(monkeypatch, context)
+
+    def read(target: str) -> dict[str, Any]:
+        return _call_bridge(
+            context,
+            "read_values",
+            {
+                "revision": _REVISION,
+                "projections": [
+                    {
+                        "siteId": _VALUE_SITE_ID,
+                        "instanceId": f"projection-{len(target)}",
+                        "target": target,
+                    }
+                ],
+                "max_value_bytes": 1_000,
+            },
+        )
+
+    accepted = read("control" + ".value" * 64)
+    rejected = read("control" + ".value" * 65)
+
+    assert accepted["errors"][next(iter(accepted["errors"]))]["code"] == (
+        "value-path-unavailable"
+    )
+    assert rejected["errors"]["*"]["code"] == "projection-authorization-invalid"
+
+
+def test_generated_bridge_rejects_private_attribute_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _GeneratedContext()
+    _install_generated_adapter(monkeypatch, context)
+
+    result = _call_bridge(
+        context,
+        "read_values",
+        {
+            "revision": _REVISION,
+            "projections": [
+                {
+                    "siteId": _VALUE_SITE_ID,
+                    "instanceId": "projection-private",
+                    "target": "control.__dict__",
+                }
+            ],
+            "max_value_bytes": 1_000,
+        },
+    )
+
+    assert result["errors"]["*"]["code"] == "projection-authorization-invalid"
+
+
+@pytest.mark.parametrize(
+    ("target", "key", "value"),
+    [
+        (r'control["a\/b"]', "a/b", "slash"),
+        (r'control["\ud83d\ude00"]', "😀", "emoji"),
+    ],
+)
+def test_generated_bridge_uses_json_string_selector_grammar(
+    monkeypatch: pytest.MonkeyPatch,
+    target: str,
+    key: str,
+    value: str,
+) -> None:
+    context = _GeneratedContext()
+    context.globals["control"] = {key: value}
+    _install_generated_adapter(monkeypatch, context)
+
+    result = _call_bridge(
+        context,
+        "read_values",
+        {
+            "revision": _REVISION,
+            "projections": [
+                {
+                    "siteId": _VALUE_SITE_ID,
+                    "instanceId": f"projection-{value}",
+                    "target": target,
+                }
+            ],
+            "max_value_bytes": 1_000,
+        },
+    )
+
+    assert result == {"values": {target: value}, "errors": {}}
 
 
 def test_generated_output_adapter_retries_release_after_cleanup_failure(
@@ -285,7 +616,7 @@ def test_generated_output_adapter_retries_and_idempotently_closes(
     assert lifecycle.dispose(context, False) is True
     assert lifecycle.dispose(context, False) is True
     assert context.cell_lifecycle_registry.dispose_attempts.count(owner) == 2
-    assert "_marimo_studio" not in context.function_registry.namespaces
+    assert WASM_PROJECTION_NAMESPACE not in context.function_registry.namespaces
 
 
 @pytest.mark.parametrize("failure", ["function", "lifecycle"])
@@ -301,8 +632,8 @@ def test_generated_output_adapter_cleans_partial_setup(
     with pytest.raises(RuntimeError, match="failed"):
         _install_generated_adapter(monkeypatch, context)
 
-    assert "_marimo_studio" not in context.function_registry.namespaces
-    assert context.function_registry.deleted == ["_marimo_studio"]
+    assert WASM_PROJECTION_NAMESPACE not in context.function_registry.namespaces
+    assert context.function_registry.deleted == [WASM_PROJECTION_NAMESPACE]
     assert context.cell_lifecycle_registry.added == []
 
 

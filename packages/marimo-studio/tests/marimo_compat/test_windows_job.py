@@ -1,10 +1,12 @@
+"""Protect Windows child-process ownership."""
+
 from __future__ import annotations
 
 from typing import Any
 
 import pytest
 
-import marimo_studio._windows_job as windows_job
+import marimo_studio._processes.windows as windows_job
 
 
 class _Function:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from marimo_studio._capabilities import StaticRuntimeConfig
+from marimo_studio._delivery.ports import StaticRuntimeConfig
 
 
 def static_runtime_config(notebook: Path) -> StaticRuntimeConfig:
@@ -16,6 +16,3 @@ def static_runtime_config(notebook: Path) -> StaticRuntimeConfig:
         user=manager.get_user_config(),
         overrides=manager.get_config_overrides(),
     )
-
-
-__all__ = ["StaticRuntimeConfig", "static_runtime_config"]

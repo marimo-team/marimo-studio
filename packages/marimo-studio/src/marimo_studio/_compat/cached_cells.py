@@ -7,7 +7,7 @@ from io import BytesIO
 from threading import Lock
 from typing import Any, cast
 
-from marimo_studio.errors import CompatibilityError
+from marimo_studio.errors._internal import CompatibilityError
 
 _UI_ELEMENT_STUB = "marimo._save.stubs.ui_element_stub.UIElementStub"
 _POLARS_TYPES = (

@@ -1,3 +1,5 @@
+"""Protect cached-cell adaptation."""
+
 from types import SimpleNamespace
 from typing import Any
 

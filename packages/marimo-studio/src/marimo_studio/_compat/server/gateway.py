@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl, urlencode
 
+from starlette.authentication import AuthCredentials, SimpleUser
 from starlette.requests import Request
 from starlette.types import Scope
 from starlette.websockets import WebSocket
 
-from marimo_studio._capabilities import (
+from marimo_studio._server.records import (
     ServerContext,
     ServerHandle,
     ServerLocation,
@@ -78,7 +81,7 @@ def _server_uses_file_routing(scope: Scope) -> bool:
     return manager is not None and manager.workspace.get_unique_file_key() is None
 
 
-def _server_location(
+async def _server_location(
     request: Request | WebSocket,
     selected_file: str | None = None,
 ) -> ServerLocation | None:
@@ -101,13 +104,13 @@ def _server_location(
     from marimo._utils.http import HTTPException
 
     try:
-        resolved = manager.workspace.resolve(file_key)
+        resolved = await asyncio.to_thread(manager.workspace.resolve, file_key)
     except HTTPException:
         return None
     if resolved is None:
         return None
+    notebook = Path(resolved)
 
-    from marimo._server.api.deps import AppState
     from marimo._session.model import SessionMode
 
     if manager.mode is SessionMode.RUN:
@@ -117,14 +120,17 @@ def _server_location(
     else:
         return None
     return ServerLocation(
-        notebook=Path(resolved).resolve(),
+        notebook=notebook,
         file_key=str(file_key),
         base_url=effective_base_url(scope, str(getattr(state, "base_url", ""))),
         mode=mode,
         routing_query=((("file", str(file_key)),) if unique_file is None else ()),
         handle=ServerHandle(
             _LocationHandle(
-                config_manager=AppState(request).config_manager_at_file(str(file_key)),
+                config_manager=config_manager_at_notebook(
+                    state.config_manager,
+                    notebook,
+                ),
                 state=state,
                 session_manager=manager,
             )
@@ -192,6 +198,39 @@ def _relative_request_path(scope: Scope, base_url: str) -> str | None:
     return _path_beneath(path, mounted_base)
 
 
+def _authorize_presentation_request(
+    scope: Scope,
+    context: ServerContext,
+) -> Scope:
+    """Attach private Marimo credentials after Studio authorizes a capability."""
+    handle = context_handle(context)
+    headers = [
+        (name, value)
+        for name, value in scope.get("headers", ())
+        if bytes(name).lower() != b"marimo-server-token"
+    ]
+    headers.append((b"marimo-server-token", context.server_token.encode()))
+    query = [
+        (name, value)
+        for name, value in parse_qsl(
+            bytes(scope.get("query_string", b"")).decode("latin-1"),
+            keep_blank_values=True,
+        )
+        if name != "access_token"
+    ]
+    auth_token = str(getattr(handle.session_manager, "auth_token", ""))
+    if auth_token:
+        query.append(("access_token", auth_token))
+    authorized = dict(scope)
+    authorized["headers"] = headers
+    authorized["query_string"] = urlencode(query).encode("latin-1")
+    authorized["auth"] = AuthCredentials(
+        ["read", "edit"] if context.mode == "edit" else ["read"]
+    )
+    authorized["user"] = SimpleUser("user")
+    return authorized
+
+
 def _path_beneath(path: str, base: str) -> str | None:
     if not base:
         return path
@@ -244,12 +283,12 @@ class PrivateServerGateway:
     def uses_file_routing(self, scope: Scope) -> bool:
         return _server_uses_file_routing(scope)
 
-    def location(
+    async def location(
         self,
         request: Request | WebSocket,
         selected_file: str | None = None,
     ) -> ServerLocation | None:
-        return _server_location(request, selected_file)
+        return await _server_location(request, selected_file)
 
     def context(self, location: ServerLocation) -> ServerContext:
         return _server_context(location)
@@ -257,14 +296,12 @@ class PrivateServerGateway:
     def relative_path(self, scope: Scope, base_url: str) -> str | None:
         return _relative_request_path(scope, base_url)
 
+    def authorize_presentation(
+        self,
+        scope: Scope,
+        context: ServerContext,
+    ) -> Scope:
+        return _authorize_presentation_request(scope, context)
+
     def shutdown_requested(self, context: ServerContext) -> bool:
         return bool(getattr(context_handle(context).server, "should_exit", False))
-
-
-__all__ = [
-    "PrivateServerGateway",
-    "config_manager_at_notebook",
-    "context_handle",
-    "effective_base_url",
-    "location_handle",
-]
