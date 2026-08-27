@@ -4,28 +4,27 @@ import json
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
-from marimo_studio._agent_protocol import (
+from marimo_studio._validation.evidence import (
+    AnalysisReport,
+    BrowserDiagnostic,
+    BrowserObservation,
+    RuntimeStatusReport,
+)
+from marimo_studio._validation.results import CheckResult
+from marimo_studio.agent._protocol import (
     decode_browser_observation,
     parse_activation_result,
     parse_analysis_report,
     parse_connection_token,
     parse_observation_response,
 )
-from marimo_studio.agent_models import (
-    AnalysisReport,
-    BrowserDiagnostic,
-    BrowserObservation,
-    RuntimeStatusReport,
-    RuntimeStatusSnapshot,
-    RuntimeStatusTransition,
-)
 from marimo_studio.errors import ProtocolError
-from marimo_studio.types import CheckResult
 
-from .helpers import ready_runtime_status
+from ..helpers import ready_runtime_status
 
 
 def _runtime_status(
@@ -54,6 +53,52 @@ def _runtime_status(
     }
 
 
+def _empty_projection_evidence() -> dict[str, object]:
+    return {"projectionInstances": []}
+
+
+def _ready_analysis_report(
+    tmp_path: Path,
+    *,
+    runtime: str,
+    session_id: str | None,
+) -> AnalysisReport:
+    revision = "revision-1"
+    view = "dashboard"
+    return AnalysisReport(
+        notebook=(tmp_path / "analysis.py").resolve(),
+        views=(view,),
+        runtime=runtime,
+        revisions={view: revision},
+        static_checks=(CheckResult("static", "pass", "Sources are valid"),),
+        runtime_checks=(CheckResult("runtime", "pass", "Notebook completed"),),
+        runtime_skipped=None,
+        browser_observations=(
+            BrowserObservation(
+                view=view,
+                runtime=runtime,
+                revision=revision,
+                state="ready",
+                client_id="browser-client-1234",
+                runtime_instance=f"{runtime}-instance",
+                session_id=session_id,
+                request_id="request-dashboard",
+                sequence=2,
+                query="",
+                runtime_status=ready_runtime_status(
+                    view,
+                    revision,
+                    session_id,
+                    runtime=runtime,
+                ),
+            ),
+        ),
+        browser_required=True,
+        actions=(),
+        dynamic_browser_required=True,
+    )
+
+
 def test_connection_protocol_requires_the_target_notebook(tmp_path: Path) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
     payload = {
@@ -72,69 +117,53 @@ def test_connection_protocol_requires_the_target_notebook(tmp_path: Path) -> Non
 def test_analysis_report_round_trips_through_the_agent_protocol(
     tmp_path: Path,
 ) -> None:
-    notebook = (tmp_path / "analysis.py").resolve()
-    report = AnalysisReport(
-        notebook=notebook,
-        views=("dashboard",),
+    report = _ready_analysis_report(
+        tmp_path,
         runtime="server",
-        revisions={"dashboard": "revision-1"},
-        static_checks=(CheckResult("static", "pass", "Sources are valid"),),
-        runtime_checks=(CheckResult("runtime", "pass", "Notebook completed"),),
-        runtime_skipped=None,
+        session_id="s_123456",
+    )
+
+    parsed = parse_analysis_report(report.to_dict())
+    assert parsed == report
+    assert parsed.dynamic_browser_required is True
+    assert report.handoff_ready
+
+
+def test_wasm_analysis_round_trip_accepts_coherent_null_runtime_session(
+    tmp_path: Path,
+) -> None:
+    report = _ready_analysis_report(
+        tmp_path,
+        runtime="wasm",
+        session_id=None,
+    )
+    parsed = parse_analysis_report(report.to_dict())
+    observation = report.browser_observations[0]
+    runtime_status = observation.runtime_status
+    assert runtime_status is not None
+
+    assert parsed == report
+    assert parsed.handoff_ready
+    assert not replace(
+        report,
         browser_observations=(
-            BrowserObservation(
-                view="dashboard",
-                runtime="server",
-                revision="revision-1",
-                state="ready",
-                client_id="browser-client-1234",
-                runtime_instance="runtime-instance",
+            replace(
+                observation,
                 session_id="s_123456",
-                request_id="request-dashboard",
-                sequence=2,
-                query="",
-                runtime_status=RuntimeStatusReport(
-                    runtime="server",
-                    view="dashboard",
-                    revision="revision-1",
+                runtime_status=replace(
+                    runtime_status,
                     session_id="s_123456",
-                    current=RuntimeStatusSnapshot(phase="ready"),
                     transitions=(
-                        RuntimeStatusTransition(
-                            sequence=0,
-                            observed_at=1_000,
-                            phase="connecting",
-                        ),
-                        RuntimeStatusTransition(
-                            sequence=1,
-                            observed_at=1_100,
-                            phase="ready",
-                            revision="revision-1",
+                        *runtime_status.transitions[:-1],
+                        replace(
+                            runtime_status.transitions[-1],
                             session_id="s_123456",
                         ),
                     ),
                 ),
             ),
         ),
-        browser_required=True,
-        actions=(),
-    )
-
-    assert parse_analysis_report(report.to_dict()) == report
-    assert report.handoff_ready
-    stages = report.to_dict()["stages"]
-    assert isinstance(stages, dict)
-    browser = stages["browser"]
-    assert isinstance(browser, dict)
-    observations = browser["observations"]
-    assert isinstance(observations, list)
-    observation = observations[0]
-    assert isinstance(observation, dict)
-    runtime_status = observation["runtime_status"]
-    assert isinstance(runtime_status, dict)
-    current = runtime_status["current"]
-    assert isinstance(current, dict)
-    assert current["phase"] == "ready"
+    ).handoff_ready
 
 
 def test_analysis_report_requires_consistent_handoff_evidence(tmp_path: Path) -> None:
@@ -314,18 +343,16 @@ def test_analysis_protocol_rejects_noncanonical_summary_fields(
 
 def _activation_payload(notebook: Path) -> dict[str, object]:
     return {
-        "schema": 1,
+        "schema": 2,
         "notebook": str(notebook),
         "view": "dashboard",
-        "state": "active",
         "generation": 1,
-        "transition": "in-place",
         "client_id": "browser-client-1234",
         "session_id": "s_123456",
     }
 
 
-def test_activation_protocol_accepts_in_place_results(tmp_path: Path) -> None:
+def test_activation_protocol_accepts_identity_results(tmp_path: Path) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
     active = parse_activation_result(
         _activation_payload(notebook),
@@ -343,24 +370,12 @@ def test_activation_protocol_accepts_in_place_results(tmp_path: Path) -> None:
         {"unexpected": True},
     ],
 )
-def test_activation_protocol_rejects_invalid_active_results(
+def test_activation_protocol_rejects_invalid_results(
     tmp_path: Path,
     patch: dict[str, object],
 ) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
     payload = {**_activation_payload(notebook), **patch}
-
-    with pytest.raises(ProtocolError, match="activation response"):
-        parse_activation_result(payload, notebook, "dashboard")
-
-
-def test_activation_protocol_rejects_reload_results(tmp_path: Path) -> None:
-    notebook = (tmp_path / "analysis.py").resolve()
-    payload = {
-        **_activation_payload(notebook),
-        "state": "reload-requested",
-        "transition": "reload",
-    }
 
     with pytest.raises(ProtocolError, match="activation response"):
         parse_activation_result(payload, notebook, "dashboard")
@@ -380,6 +395,7 @@ def test_browser_protocol_requires_the_server_observation_challenge() -> None:
         "requestId": "request-dashboard",
         "sequence": 3,
         "query": "",
+        **_empty_projection_evidence(),
         "runtimeStatus": _runtime_status("ready", []),
     }
 
@@ -427,6 +443,7 @@ def test_browser_protocol_matches_observation_state_to_runtime_phase(
         "requestId": "request-dashboard",
         "sequence": 3,
         "query": "",
+        **_empty_projection_evidence(),
         "runtimeStatus": _runtime_status(phase, []),
     }
 
@@ -435,7 +452,7 @@ def test_browser_protocol_matches_observation_state_to_runtime_phase(
 
 
 def test_browser_observation_fixture_matches_the_python_decoder() -> None:
-    fixture_root = Path(__file__).parents[2] / "protocol" / "fixtures"
+    fixture_root = Path(__file__).parents[3] / "protocol" / "fixtures"
     fixture_path = fixture_root / "browser-observation.json"
     payload = json.loads(fixture_path.read_text(encoding="utf-8"))
 
@@ -456,12 +473,79 @@ def test_browser_observation_fixture_matches_the_python_decoder() -> None:
     for invalid in invalid_cases:
         with pytest.raises(
             ProtocolError,
-            match=r"observation payload|runtime status report",
+            match=(
+                r"observation payload|runtime status report|runtime status transition"
+            ),
         ):
             decode_browser_observation(
                 {**payload, **invalid["patch"]},
                 "dashboard",
             )
+
+
+def test_browser_decoder_rejects_ready_state_with_failed_mounts() -> None:
+    fixture_root = Path(__file__).parents[3] / "protocol" / "fixtures"
+    payload = json.loads(
+        fixture_root.joinpath("browser-observation.json").read_text(encoding="utf-8")
+    )
+
+    ready = deepcopy(payload)
+    ready["state"] = "ready"
+    ready["diagnostics"] = []
+    ready["runtimeStatus"]["current"] = {"phase": "ready", "diagnostics": []}
+    ready["runtimeStatus"]["transitions"] = [
+        {
+            "sequence": 1,
+            "observedAt": 1_100,
+            "revision": "revision-1",
+            "sessionId": "s_123456",
+            "phase": "ready",
+            "diagnostics": [],
+            "diagnosticsTruncated": False,
+        }
+    ]
+    with pytest.raises(ProtocolError, match=r"projection|observation payload"):
+        decode_browser_observation(ready, "dashboard")
+
+
+def test_browser_decoder_retains_bounded_projection_failure_evidence() -> None:
+    fixture_root = Path(__file__).parents[3] / "protocol" / "fixtures"
+    payload = json.loads(
+        fixture_root.joinpath("browser-observation.json").read_text(encoding="utf-8")
+    )
+
+    empty = deepcopy(payload)
+    empty["projectionInstances"][0]["target"] = ""
+    empty["projectionInstances"][0]["error"]["code"] = "projection-target-empty"
+    assert (
+        decode_browser_observation(empty, "dashboard").projection_instances[0].target
+        == ""
+    )
+
+    overflow = cast(dict[str, Any], deepcopy(payload))
+    overflow["projectionInstances"] = [
+        {
+            **deepcopy(payload["projectionInstances"][0]),
+            "instanceId": f"projection-{index}",
+        }
+        for index in range(513)
+    ]
+    instances = cast(list[dict[str, Any]], overflow["projectionInstances"])
+    error = cast(dict[str, object], instances[-1]["error"])
+    error["code"] = "projection-instance-limit"
+    assert (
+        len(decode_browser_observation(overflow, "dashboard").projection_instances)
+        == 513
+    )
+
+    instances.append(
+        {
+            **deepcopy(payload["projectionInstances"][0]),
+            "instanceId": "projection-513",
+        }
+    )
+    with pytest.raises(ProtocolError, match="projection instances"):
+        decode_browser_observation(overflow, "dashboard")
 
 
 def test_loading_browser_evidence_remains_nonterminal_during_error_recovery() -> None:
@@ -488,6 +572,7 @@ def test_loading_browser_evidence_remains_nonterminal_during_error_recovery() ->
         "requestId": "request-dashboard",
         "sequence": 3,
         "query": "",
+        **_empty_projection_evidence(),
         "runtimeStatus": _runtime_status(
             "synchronizing",
             [
@@ -527,7 +612,7 @@ def test_truncated_browser_diagnostics_fit_the_server_protocol() -> None:
             "code": "browser-diagnostics-truncated",
             "severity": "error",
             "message": "6 additional browser diagnostics were omitted.",
-            "hint": "Fix repeated rendered-view errors, then rerun the analysis.",
+            "hint": "Fix repeated rendered-view errors, then rerun validation.",
             "view": "dashboard",
             "scope": "presentation",
         }
@@ -545,6 +630,7 @@ def test_truncated_browser_diagnostics_fit_the_server_protocol() -> None:
         "requestId": "request-dashboard",
         "sequence": 3,
         "query": "",
+        **_empty_projection_evidence(),
         "runtimeStatus": _runtime_status("failed", diagnostics),
     }
 

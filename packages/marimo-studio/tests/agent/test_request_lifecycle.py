@@ -11,13 +11,15 @@ from starlette.authentication import AuthCredentials
 from starlette.requests import Request
 from starlette.types import Message, Scope
 
-from marimo_studio._capabilities import SessionState
-from marimo_studio._server import agent_api, browser_agent
+from marimo_studio._server.agent import api as agent_api
+from marimo_studio._server.agent import browser as browser_agent
 from marimo_studio._server.notebook_scope import NotebookScope
-from marimo_studio._server.runtimes import RuntimeRegistry
+from marimo_studio._server.ports import SessionState
+from marimo_studio._server.runtime.catalog import RuntimeRegistry
 from marimo_studio._workspace.models import StudioWorkspace
 
-from .app_helpers import configured
+from ..app_helpers import configured
+from ..client_test_support import bind_native_session
 
 
 def test_observation_disconnect_clears_the_browser_operation(
@@ -55,12 +57,21 @@ def test_observation_disconnect_clears_the_browser_operation(
 
     async def exercise() -> tuple[int, tuple[object, ...]]:
         client_id = "browser-client-1234"
-        await notebook_scope.clients.connect(client_id)
-        await notebook_scope.clients.bind_session("s_123456", client_id)
+        assert await notebook_scope.clients.connect_stream(client_id, 1, "dashboard")
+        await bind_native_session(notebook_scope.clients, "s_123456", client_id)
         target = await notebook_scope.clients.select_target(client_id=client_id)
         revision = (
             await notebook_scope.presentation.snapshot_async("dashboard")
         ).revision
+        requested = asyncio.Event()
+        request_observation = notebook_scope.agents.request_observation
+
+        async def capture_observation(*args: Any, **kwargs: Any):
+            result = await request_observation(*args, **kwargs)
+            requested.set()
+            return result
+
+        cast(Any, notebook_scope.agents).request_observation = capture_observation
         request, messages = _request(
             "/_marimo-studio/observations",
             {
@@ -82,17 +93,7 @@ def test_observation_disconnect_clears_the_browser_operation(
                 runtimes,
             )
         )
-        for _attempt in range(100):
-            pending = await notebook_scope.agents.pending_operations(
-                target,
-                None,
-                None,
-            )
-            if pending.observations:
-                break
-            await asyncio.sleep(0.01)
-        else:
-            raise AssertionError("browser observation was not requested")
+        await asyncio.wait_for(requested.wait(), timeout=1)
 
         await messages.put({"type": "http.disconnect"})
         response = await asyncio.wait_for(operation, timeout=1)
@@ -197,8 +198,8 @@ def test_already_disconnected_observation_skips_source_capture(
 
     async def exercise() -> int:
         client_id = "browser-client-1234"
-        await notebook_scope.clients.connect(client_id)
-        await notebook_scope.clients.bind_session("s_123456", client_id)
+        assert await notebook_scope.clients.connect_stream(client_id, 1)
+        await bind_native_session(notebook_scope.clients, "s_123456", client_id)
         request, messages = _request(
             "/_marimo-studio/observations",
             {
@@ -287,9 +288,18 @@ def test_activation_disconnect_clears_the_browser_operation(
 
     async def exercise() -> tuple[int, object | None]:
         client_id = "browser-client-1234"
-        await notebook_scope.clients.connect(client_id)
-        await notebook_scope.clients.bind_session("s_123456", client_id)
+        assert await notebook_scope.clients.connect_stream(client_id, 1)
+        await bind_native_session(notebook_scope.clients, "s_123456", client_id)
         target = await notebook_scope.clients.select_target(client_id=client_id)
+        requested = asyncio.Event()
+        activate = notebook_scope.agents.activate
+
+        async def capture_activation(*args: Any, **kwargs: Any):
+            result = await activate(*args, **kwargs)
+            requested.set()
+            return result
+
+        cast(Any, notebook_scope.agents).activate = capture_activation
         request, messages = _request(
             "/_marimo-studio/views/dashboard/activate",
             {"schema": 1, "browser_client": None},
@@ -306,17 +316,7 @@ def test_activation_disconnect_clears_the_browser_operation(
                 cast(SessionState, SimpleNamespace(exists=lambda *_args: True)),
             )
         )
-        for _attempt in range(100):
-            pending = await notebook_scope.agents.pending_operations(
-                target,
-                None,
-                None,
-            )
-            if pending.activation is not None:
-                break
-            await asyncio.sleep(0.01)
-        else:
-            raise AssertionError("view activation was not requested")
+        await asyncio.wait_for(requested.wait(), timeout=1)
 
         await messages.put({"type": "http.disconnect"})
         response = await asyncio.wait_for(operation, timeout=1)
@@ -331,6 +331,62 @@ def test_activation_disconnect_clears_the_browser_operation(
 
     assert status_code == 499
     assert pending is None
+
+
+def test_analysis_disconnect_drains_the_provider_build_process_tree(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ..providers.test_process_isolation import (
+        _external_build_studio,
+        _kill_survivors,
+        _wait_for_pids,
+        _wait_until_dead,
+    )
+
+    studio, marker = _external_build_studio(notebook_path, tmp_path, monkeypatch)
+    notebook_scope = NotebookScope.create(studio.notebook)
+    context: Any = SimpleNamespace(server_token="server-token")
+    pids: tuple[int, ...] = ()
+
+    async def exercise() -> tuple[int, tuple[int, ...]]:
+        request, messages = _request(
+            "/_marimo-studio/analyze",
+            {
+                "schema": 1,
+                "view": "dashboard",
+                "require_browser": False,
+            },
+        )
+        operation = asyncio.create_task(
+            agent_api.analyze_views_response(
+                request,
+                context,
+                studio,
+                notebook_scope,
+                cast(SessionState, SimpleNamespace(exists=lambda *_args: True)),
+                cast(RuntimeRegistry, SimpleNamespace()),
+            )
+        )
+        recorded = await asyncio.to_thread(_wait_for_pids, marker, 3)
+        await messages.put({"type": "http.disconnect"})
+        response = await asyncio.wait_for(operation, timeout=5)
+        await asyncio.to_thread(_wait_until_dead, recorded)
+        return response.status_code, recorded
+
+    try:
+        status_code, pids = asyncio.run(exercise())
+        assert status_code == 499
+    finally:
+        asyncio.run(notebook_scope.close())
+        if not pids and marker.is_file():
+            pids = tuple(
+                int(line)
+                for line in marker.read_text(encoding="utf-8").splitlines()
+                if line
+            )
+        _kill_survivors(pids)
 
 
 def _request(

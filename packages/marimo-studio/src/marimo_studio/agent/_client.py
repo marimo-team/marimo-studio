@@ -6,22 +6,27 @@ from dataclasses import replace
 from pathlib import Path
 from urllib.parse import quote
 
-from marimo_studio._agent_protocol import (
+from marimo_studio._delivery.urls import SUPPORT_PATH
+from marimo_studio._processes.limits import runtime_process_timeout
+from marimo_studio._validation.analysis import AnalysisReport, AnalysisRequest
+from marimo_studio._validation.evidence import BrowserObservation
+from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio.agent._limits import VIEW_ACTIVATION_HTTP_TIMEOUT
+from marimo_studio.agent._protocol import (
+    ViewActivationRequest,
     parse_activation_result,
     parse_analysis_report,
     parse_connection_token,
     parse_observation_response,
 )
-from marimo_studio._agent_transport import (
+from marimo_studio.agent._records import ViewActivationResult
+from marimo_studio.agent._transport import (
     StudioServerConnection,
     request_json,
-    studio_server_connection,
 )
-from marimo_studio._runtime_limits import runtime_process_timeout
-from marimo_studio._urls import SUPPORT_PATH
-from marimo_studio.activation import ViewActivationRequest, ViewActivationResult
-from marimo_studio.agent_models import BrowserObservation
-from marimo_studio.analysis import AnalysisReport, AnalysisRequest
+from marimo_studio.agent._transport import (
+    studio_server_connection as studio_server_connection,
+)
 from marimo_studio.errors import AgentRequestError, CapabilityInputError, ProtocolError
 
 _STATIC_ANALYSIS_BUDGET = 15.0
@@ -46,6 +51,7 @@ async def request_view_activation(
         f"{SUPPORT_PATH}/views/{quote(request.view, safe='')}/activate",
         method="PATCH",
         body=request.to_dict(),
+        timeout=VIEW_ACTIVATION_HTTP_TIMEOUT,
     )
     _require_notebook(payload, notebook)
     result = parse_activation_result(payload, notebook, request.view)
@@ -54,6 +60,22 @@ async def request_view_activation(
     if request.browser_client and result.client_id != request.browser_client:
         raise ProtocolError("The Studio activation response targets another browser.")
     return result
+
+
+async def activate_view(
+    studio: StudioWorkspace,
+    connection: StudioServerConnection,
+    name: str,
+) -> ViewActivationResult:
+    """Select a configured view in one connected Studio browser."""
+    return await request_view_activation(
+        connection,
+        studio.notebook,
+        ViewActivationRequest(
+            view=name,
+            browser_client=connection.browser_client or None,
+        ),
+    )
 
 
 async def request_analysis(
@@ -174,12 +196,3 @@ def _require_notebook(payload: dict[str, object], notebook: Path) -> None:
             "notebook-mismatch",
             "The Studio server is attached to a different notebook.",
         )
-
-
-__all__ = [
-    "StudioServerConnection",
-    "observe_browser_views",
-    "request_analysis",
-    "request_view_activation",
-    "studio_server_connection",
-]

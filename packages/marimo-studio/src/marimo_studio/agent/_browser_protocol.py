@@ -6,10 +6,14 @@ import re
 from itertools import pairwise
 from typing import Any, Literal, cast
 
-from marimo_studio.agent_models import (
+from marimo_studio._projections.resolution import (
+    MAX_ACTIVE_PROJECTION_INSTANCES,
+)
+from marimo_studio._validation.evidence import (
     BrowserDiagnostic,
     BrowserObservation,
     BrowserObservationState,
+    ObservedProjectionInstance,
     RuntimeStatusPhase,
     RuntimeStatusReport,
     RuntimeStatusSnapshot,
@@ -25,6 +29,74 @@ _RUNTIME_STATUS_PHASES = {
     "degraded",
     "failed",
 }
+
+
+def _parse_projection_instances(
+    value: object,
+    *,
+    wire: bool = True,
+) -> tuple[ObservedProjectionInstance, ...]:
+    if not isinstance(value, list) or len(value) > MAX_ACTIVE_PROJECTION_INSTANCES + 1:
+        raise ProtocolError("The browser projection instances are invalid.")
+    parsed: list[ObservedProjectionInstance] = []
+    keys = {
+        "mountId" if wire else "mount_id",
+        "instanceId" if wire else "instance_id",
+        "target",
+        "runtimeCellId" if wire else "runtime_cell_id",
+        "phase",
+        "error",
+    }
+    for item in value:
+        if not isinstance(item, dict) or set(item) != keys:
+            raise ProtocolError("The browser projection instances are invalid.")
+        mount_id = item.get("mountId" if wire else "mount_id")
+        instance_id = item.get("instanceId" if wire else "instance_id")
+        target = item.get("target")
+        runtime_cell_id = item.get("runtimeCellId" if wire else "runtime_cell_id")
+        phase = item.get("phase")
+        error = item.get("error")
+        if error is not None and (
+            not isinstance(error, dict)
+            or set(error) != {"code", "message"}
+            or not _nonempty(error.get("code"))
+            or not isinstance(error.get("message"), str)
+        ):
+            raise ProtocolError("The browser projection instances are invalid.")
+        if (
+            (mount_id is not None and not _nonempty(mount_id))
+            or not _nonempty(instance_id)
+            or not isinstance(target, str)
+            or (runtime_cell_id is not None and not _nonempty(runtime_cell_id))
+            or phase
+            not in {"connecting", "loading", "stale", "ready", "missing", "error"}
+        ):
+            raise ProtocolError("The browser projection instances are invalid.")
+        instance = ObservedProjectionInstance(
+            mount_id=cast(str | None, mount_id),
+            instance_id=cast(str, instance_id),
+            target=cast(str, target),
+            runtime_cell_id=cast(str | None, runtime_cell_id),
+            phase=cast(
+                Literal[
+                    "connecting",
+                    "loading",
+                    "stale",
+                    "ready",
+                    "missing",
+                    "error",
+                ],
+                phase,
+            ),
+            error=cast(dict[str, str] | None, error),
+        )
+        if not _projection_instance_coherent(instance):
+            raise ProtocolError("The browser projection instances are invalid.")
+        parsed.append(instance)
+    instance_ids = [item.instance_id for item in parsed]
+    if len(instance_ids) != len(set(instance_ids)):
+        raise ProtocolError("The browser projection instances are invalid.")
+    return tuple(parsed)
 
 
 def parse_observation_response(
@@ -64,6 +136,7 @@ def decode_browser_observation(
         "requestId",
         "sequence",
         "query",
+        "projectionInstances",
         "runtimeStatus",
     }:
         raise ProtocolError("The browser observation payload is invalid.")
@@ -78,6 +151,7 @@ def decode_browser_observation(
     request_id = value.get("requestId")
     sequence = value.get("sequence")
     query = value.get("query")
+    projection_instances = _parse_projection_instances(value.get("projectionInstances"))
     runtime_status = _parse_runtime_status(
         value.get("runtimeStatus"),
         expected_view,
@@ -96,7 +170,7 @@ def decode_browser_observation(
         or not _nonempty(runtime_instance)
         or (session_id is not None and not _nonempty(session_id))
         or not _nonempty(request_id)
-        or not _nonnegative_int(sequence)
+        or not _safe_nonnegative_int(sequence)
         or not isinstance(query, str)
         or runtime_status.runtime != runtime
         or runtime_status.revision != revision
@@ -107,6 +181,10 @@ def decode_browser_observation(
     if runtime_status.current.diagnostics != parsed:
         raise ProtocolError("The browser observation payload is invalid.")
     if runtime_status.current.phase != _runtime_status_phase(state, parsed):
+        raise ProtocolError("The browser observation payload is invalid.")
+    if state == "ready" and not all(
+        _projection_instance_ready(item) for item in projection_instances
+    ):
         raise ProtocolError("The browser observation payload is invalid.")
     return BrowserObservation(
         view=expected_view,
@@ -121,6 +199,7 @@ def decode_browser_observation(
         sequence=cast(int, sequence),
         query=query,
         runtime_status=runtime_status,
+        projection_instances=projection_instances,
     )
 
 
@@ -139,6 +218,7 @@ def parse_browser_observation(value: object) -> BrowserObservation:
         "request_id",
         "sequence",
         "query",
+        "projection_instances",
         "runtime_status",
     }
     if not required.issubset(value) or not set(value).issubset(required | optional):
@@ -157,6 +237,11 @@ def parse_browser_observation(value: object) -> BrowserObservation:
     sequence = value.get("sequence")
     query = value.get("query")
     raw_runtime_status = value.get("runtime_status")
+    raw_projection_instances = value.get("projection_instances", [])
+    projection_instances = _parse_projection_instances(
+        raw_projection_instances,
+        wire=False,
+    )
     runtime_status = (
         _parse_runtime_status(raw_runtime_status, cast(str, view), wire=False)
         if raw_runtime_status is not None and isinstance(view, str)
@@ -174,7 +259,7 @@ def parse_browser_observation(value: object) -> BrowserObservation:
         or (runtime_instance is not None and not _nonempty(runtime_instance))
         or (session_id is not None and not _nonempty(session_id))
         or (request_id is not None and not _nonempty(request_id))
-        or (sequence is not None and not _nonnegative_int(sequence))
+        or (sequence is not None and not _safe_nonnegative_int(sequence))
         or (query is not None and not isinstance(query, str))
         or (
             runtime_status is not None
@@ -192,6 +277,10 @@ def parse_browser_observation(value: object) -> BrowserObservation:
     if (
         runtime_status is not None
         and runtime_status.current.diagnostics != parsed_diagnostics
+    ):
+        raise ProtocolError("A Studio browser observation is invalid.")
+    if state == "ready" and not all(
+        _projection_instance_ready(item) for item in projection_instances
     ):
         raise ProtocolError("A Studio browser observation is invalid.")
     if (
@@ -215,6 +304,7 @@ def parse_browser_observation(value: object) -> BrowserObservation:
         sequence=cast(int | None, sequence),
         query=query,
         runtime_status=runtime_status,
+        projection_instances=projection_instances,
     )
 
 
@@ -350,8 +440,8 @@ def _parse_runtime_status_transition(
     diagnostics = value.get("diagnostics")
     truncated = value.get(truncated_key)
     if (
-        not _nonnegative_int(sequence)
-        or not _nonnegative_int(observed_at)
+        not _safe_nonnegative_int(sequence)
+        or not _safe_nonnegative_int(observed_at)
         or (revision is not None and not _nonempty(revision))
         or (session_id is not None and not _nonempty(session_id))
         or phase not in _RUNTIME_STATUS_PHASES
@@ -440,8 +530,24 @@ def _nonnegative_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
-__all__ = [
-    "decode_browser_observation",
-    "parse_browser_observation",
-    "parse_observation_response",
-]
+def _safe_nonnegative_int(value: object) -> bool:
+    return _nonnegative_int(value) and cast(int, value) <= (1 << 53) - 1
+
+
+def _projection_instance_ready(instance: ObservedProjectionInstance) -> bool:
+    return (
+        instance.phase == "ready"
+        and instance.mount_id is not None
+        and instance.runtime_cell_id is not None
+        and instance.error is None
+    )
+
+
+def _projection_instance_coherent(instance: ObservedProjectionInstance) -> bool:
+    if instance.phase == "ready" and not _projection_instance_ready(instance):
+        return False
+    if instance.phase in {"error", "missing"} and instance.error is None:
+        return False
+    if instance.error is not None and instance.phase not in {"error", "missing"}:
+        return False
+    return instance.mount_id is not None or instance.runtime_cell_id is None

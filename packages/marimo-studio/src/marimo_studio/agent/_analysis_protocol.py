@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from marimo_studio._agent_browser_protocol import parse_browser_observation
-from marimo_studio.agent_models import AnalysisAction, AnalysisReport
+from marimo_studio._validation.evidence import AnalysisAction, AnalysisReport
+from marimo_studio._validation.results import CheckResult
+from marimo_studio.agent._browser_protocol import parse_browser_observation
 from marimo_studio.errors import ProtocolError
-from marimo_studio.types import CheckResult
 
 
 def parse_analysis_report(payload: dict[str, Any]) -> AnalysisReport:
@@ -63,6 +63,7 @@ def parse_analysis_report(payload: dict[str, Any]) -> AnalysisReport:
         or not isinstance(runtime.get("checks"), list)
         or not isinstance(browser.get("observations"), list)
         or not isinstance(browser.get("required"), bool)
+        or not isinstance(browser.get("required_for_dynamic_sites"), bool)
         or (
             runtime.get("reason") is not None
             and not isinstance(runtime.get("reason"), str)
@@ -82,6 +83,7 @@ def parse_analysis_report(payload: dict[str, Any]) -> AnalysisReport:
         ),
         browser_required=browser["required"],
         actions=tuple(_parse_action(item) for item in actions),
+        dynamic_browser_required=browser["required_for_dynamic_sites"],
     )
     if payload != report.to_dict():
         raise ProtocolError("The Studio analysis response is invalid.")
@@ -167,6 +169,3 @@ def _summary_counts(value: object) -> bool:
         and set(value) == {"pass", "warn", "fail"}
         and all(type(count) is int and count >= 0 for count in value.values())
     )
-
-
-__all__ = ["parse_analysis_report"]
