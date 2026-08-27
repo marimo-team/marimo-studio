@@ -1,4 +1,4 @@
-"""Shared project scaffolding for built-in Deno provider tests."""
+"""Shared project setup for built-in Deno provider tests."""
 
 from __future__ import annotations
 
@@ -39,9 +39,9 @@ def write_plan(
 def project(
     tmp_path: Path,
     provider: ViewProvider,
-    template_id: str,
+    starter_id: str,
 ) -> tuple[Path, ViewProject]:
-    starter_key = template_id.rsplit(":", 1)[-1].rsplit("/", 1)[-1]
+    starter_key = starter_id.rsplit(":", 1)[-1].rsplit("/", 1)[-1]
     root = tmp_path / starter_key
     files = provider.create(
         provider.starters()[0],

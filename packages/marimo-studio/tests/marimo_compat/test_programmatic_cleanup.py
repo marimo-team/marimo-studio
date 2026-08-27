@@ -18,6 +18,7 @@ def _spawned_value(value: str) -> str:
     return value
 
 
+@pytest.mark.native_process
 def test_deferred_kernel_exit_restores_main_without_another_lifespan(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,

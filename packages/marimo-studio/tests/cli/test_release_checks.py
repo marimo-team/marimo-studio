@@ -9,10 +9,12 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.skipif(
-    os.name == "nt",
-    reason="Release shell scripts require a POSIX process environment",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        os.name == "nt",
+        reason="Release shell scripts require a POSIX process environment",
+    ),
+]
 
 _ROOT = Path(__file__).resolve().parents[4]
 _SCRIPT = _ROOT / "scripts" / "require-release-checks.sh"

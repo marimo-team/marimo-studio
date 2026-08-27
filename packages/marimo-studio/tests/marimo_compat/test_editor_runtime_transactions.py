@@ -3,10 +3,14 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from marimo_studio._compat.server.editor_runtime import (
     _await_document_transactions_before_network_run,
     _serialize_document_transactions,
 )
+
+pytestmark = pytest.mark.requires_node
 
 
 def _cells_module() -> bytes:

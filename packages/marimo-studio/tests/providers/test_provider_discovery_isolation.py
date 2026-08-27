@@ -36,6 +36,8 @@ from .test_process_isolation import (
     catalog_provider,
 )
 
+pytestmark = pytest.mark.native_process
+
 _PROVIDER_MODULE = "tests.providers.test_process_isolation"
 
 

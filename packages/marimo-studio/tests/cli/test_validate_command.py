@@ -18,6 +18,7 @@ from .commands_test_support import (
 )
 
 
+@pytest.mark.native_process
 def test_validate_emits_structured_diagnostics(
     notebook_path: Path,
     runtime_assets: Path,
@@ -43,6 +44,7 @@ def test_validate_emits_structured_diagnostics(
     )
 
 
+@pytest.mark.native_process
 def test_browser_validation_requires_a_server_before_loading_the_target(
     tmp_path: Path,
     runtime_assets: Path,
@@ -67,6 +69,7 @@ def test_browser_validation_requires_a_server_before_loading_the_target(
     assert "--server" in event["message"]
 
 
+@pytest.mark.native_process
 def test_validate_rejects_malformed_server_urls_as_usage_errors(
     notebook_path: Path,
     runtime_assets: Path,
@@ -183,6 +186,7 @@ def test_runtime_timeout_must_be_finite() -> None:
     assert "finite number" in result.output
 
 
+@pytest.mark.native_process
 def test_runtime_timeout_bounds_projected_output_rendering(
     tmp_path: Path,
     runtime_assets: Path,
@@ -252,6 +256,7 @@ if __name__ == "__main__":
 
 
 @pytest.mark.skipif(os.name == "nt", reason="The re-entry probe uses a POSIX shim")
+@pytest.mark.native_process
 @pytest.mark.parametrize(
     "diagnostic_args",
     [(), ("--diagnostics", "jsonl")],

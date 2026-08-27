@@ -321,7 +321,7 @@ def test_repeated_cancellation_finishes_close_state_commit(
         async with coordinator._lock:
             coordinator._deleting_views.add("stale-view")
         closing = asyncio.create_task(coordinator.close())
-        await finish_entered.wait()
+        await asyncio.wait_for(finish_entered.wait(), timeout=1)
 
         await coordinator._lock.acquire()
         try:

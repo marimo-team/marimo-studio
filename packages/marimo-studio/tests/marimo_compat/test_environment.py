@@ -125,6 +125,7 @@ default = "dashboard"
     assert process_lines == ["uv stdout\n", "uv stderr\n"]
 
 
+@pytest.mark.native_process
 def test_source_checkout_reentry_uses_local_package_for_unversioned_requirement(
     tmp_path: Path,
 ) -> None:
@@ -256,6 +257,7 @@ dependencies = [
         environment_command(_Target(tmp_path, notebook), ["python", "-V"])
 
 
+@pytest.mark.native_process
 def test_notebook_environment_composes_project_and_pep_723_sources(
     tmp_path: Path,
 ) -> None:

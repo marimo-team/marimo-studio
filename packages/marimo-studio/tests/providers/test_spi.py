@@ -37,6 +37,8 @@ from ..provider_test_support import (
     provider_build_request,
 )
 
+pytestmark = pytest.mark.supported_python
+
 
 @pytest.mark.parametrize(
     "path",

@@ -210,6 +210,7 @@ def test_agent_repairs_a_malformed_view_manifest(notebook_path: Path) -> None:
     asyncio.run(exercise())
 
 
+@pytest.mark.native_process
 def test_validation_evidence_grows_by_level(notebook_path: Path) -> None:
     workspace = _workspace(notebook_path)
 

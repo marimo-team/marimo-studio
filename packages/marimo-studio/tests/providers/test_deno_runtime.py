@@ -38,6 +38,8 @@ from marimo_studio.view_providers._bundled.deno_svelte import (
 
 from ..deno_provider_test_support import project as provider_project
 
+pytestmark = pytest.mark.deno
+
 
 def _project_tree(root: Path) -> tuple[tuple[str, str, bytes], ...]:
     entries = []

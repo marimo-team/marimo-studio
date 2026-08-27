@@ -13,12 +13,18 @@ import pytest
 
 import marimo_studio._processes.supervisor as process_supervisor
 
+pytestmark = pytest.mark.native_process
 
+_POSIX_ONLY = pytest.mark.skipif(
+    os.name != "posix",
+    reason="POSIX process groups are required",
+)
+
+
+@_POSIX_ONLY
 def test_process_supervisor_surfaces_process_group_signal_failures(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    if os.name != "posix":
-        return
     monkeypatch.setattr(process_supervisor, "_TERMINATION_TIMEOUT", 0.2)
     started: list[subprocess.Popen[bytes]] = []
     native_start = process_supervisor._start_process
@@ -46,11 +52,10 @@ def test_process_supervisor_surfaces_process_group_signal_failures(
     assert started[0].poll() is not None
 
 
+@_POSIX_ONLY
 def test_process_group_cleanup_fails_when_forced_termination_leaves_owners(
     monkeypatch,
 ) -> None:
-    if os.name != "posix":
-        return
     signals: list[signal.Signals] = []
     leader_kills = 0
 
@@ -166,11 +171,10 @@ def test_windows_taskkill_cleanup_fails_when_the_process_survives(
     assert kills == 1
 
 
+@_POSIX_ONLY
 def test_process_group_signal_ignores_a_disappearing_darwin_group(
     monkeypatch,
 ) -> None:
-    if os.name != "posix":
-        return
     probes = iter(
         [
             PermissionError("group is exiting"),
@@ -205,11 +209,10 @@ def test_process_group_signal_ignores_a_disappearing_darwin_group(
     process_supervisor._signal_process_group(process, signal.SIGTERM)
 
 
+@_POSIX_ONLY
 def test_process_group_signal_waits_for_an_exited_leader_group(
     monkeypatch,
 ) -> None:
-    if os.name != "posix":
-        return
     probes = 0
 
     def signal_group(_pid, requested_signal):
@@ -243,11 +246,10 @@ def test_process_group_signal_waits_for_an_exited_leader_group(
     assert probes == 2
 
 
+@_POSIX_ONLY
 def test_process_group_signal_surfaces_repeated_permission_denial(
     monkeypatch,
 ) -> None:
-    if os.name != "posix":
-        return
     leader_kills = 0
 
     def fail_signal(_pid, _requested_signal):
@@ -276,12 +278,10 @@ def test_process_group_signal_surfaces_repeated_permission_denial(
     assert leader_kills == 1
 
 
+@_POSIX_ONLY
 def test_process_group_signal_accepts_an_exited_zombie_group(
     monkeypatch,
 ) -> None:
-    if os.name != "posix":
-        return
-
     def fail_signal(_pid, _requested_signal):
         raise PermissionError("zombie group")
 

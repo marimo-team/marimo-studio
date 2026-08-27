@@ -26,6 +26,8 @@ from marimo_studio.errors import ProtocolError
 
 from ..helpers import ready_runtime_status
 
+pytestmark = pytest.mark.supported_python
+
 
 def _runtime_status(
     phase: str,

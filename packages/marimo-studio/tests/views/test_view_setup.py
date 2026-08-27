@@ -234,6 +234,7 @@ def test_existing_view_inspection_runs_outside_mutation_locks(
     )
 
 
+@pytest.mark.native_process
 def test_spawned_setup_rejects_a_manifestless_view_without_mutation(
     notebook_path: Path,
 ) -> None:
@@ -262,6 +263,7 @@ def test_spawned_setup_rejects_a_manifestless_view_without_mutation(
     assert not (view_root / ".locks").exists()
 
 
+@pytest.mark.native_process
 def test_spawned_first_view_processes_create_one_coherent_catalog(
     notebook_path: Path,
     tmp_path: Path,

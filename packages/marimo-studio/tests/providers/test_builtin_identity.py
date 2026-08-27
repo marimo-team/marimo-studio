@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio.view_providers._bundled.vanilla import provider as vanilla_provider
 from marimo_studio.view_providers._host import provider_registry
 
 from ..deno_provider_test_support import project as _project
+
+pytestmark = pytest.mark.supported_python
 
 
 def test_built_in_registration_labels_resolve_canonical_provider_ids() -> None:

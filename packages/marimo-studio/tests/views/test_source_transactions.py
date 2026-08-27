@@ -316,6 +316,7 @@ def test_source_save_is_not_blocked_by_a_provider_build(
             building.result(timeout=2)
 
 
+@pytest.mark.native_process
 def test_source_compare_and_swap_allows_one_cross_process_writer(
     notebook_path: Path,
 ) -> None:

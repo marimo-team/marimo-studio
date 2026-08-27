@@ -27,6 +27,8 @@ from marimo_studio.errors._internal import CompatibilityError
 
 from ..helpers import empty_notebook_source
 
+pytestmark = pytest.mark.supported_python
+
 
 def test_pinned_release_matches_the_private_symbols() -> None:
     layout_module.clear_release_cache()

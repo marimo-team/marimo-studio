@@ -136,6 +136,7 @@ class _Graph:
         return found
 
 
+@pytest.mark.native_process
 def test_parent_authorization_key_is_stable_and_inherited_by_spawned_kernels() -> None:
     initialize_projection_authorization_key()
     first = projection_authorization_key()

@@ -8,6 +8,8 @@ import pytest
 
 import marimo_studio._processes.windows as windows_job
 
+pytestmark = pytest.mark.supported_python
+
 
 class _Function:
     def __init__(self, *results: object) -> None:

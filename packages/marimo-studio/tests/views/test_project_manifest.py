@@ -10,6 +10,8 @@ from marimo_studio._views.inspection import inspection_request
 from marimo_studio._workspace.project_manifest import load_view_project
 from marimo_studio.errors import ConfigurationError
 
+pytestmark = pytest.mark.supported_python
+
 
 def _manifest(tmp_path: Path, source: str) -> Path:
     root = tmp_path / "dashboard"

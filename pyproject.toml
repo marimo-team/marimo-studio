@@ -16,7 +16,14 @@ e2e = ["anywidget", "marimo-studio-e2e-provider"]
 release = ["twine==6.2.0"]
 
 [tool.pytest.ini_options]
+addopts = "--strict-markers"
 testpaths = ["packages/marimo-studio/tests"]
+markers = [
+  "deno: executes or validates the pinned Deno provider runtime",
+  "native_process: spawns native processes or validates operating-system process ownership",
+  "requires_node: executes JavaScript through the pinned Node.js runtime",
+  "supported_python: validates a contract across the supported Python and platform matrix",
+]
 
 [tool.ty.src]
 include = ["packages/marimo-studio/src", "packages/marimo-studio/tests"]

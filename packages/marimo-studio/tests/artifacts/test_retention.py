@@ -236,6 +236,7 @@ def test_concurrent_profiles_publish_one_verified_revision(tmp_path: Path) -> No
     assert read_build_state(project, "production").phase == "published"
 
 
+@pytest.mark.native_process
 def test_concurrent_processes_publish_one_verified_revision(tmp_path: Path) -> None:
     project = _project(tmp_path)
     context = multiprocessing.get_context("spawn")
@@ -289,6 +290,7 @@ def test_external_publication_cannot_recreate_a_deleted_view(
     assert project.name not in load_studio(notebook_path).views
 
 
+@pytest.mark.native_process
 def test_deletion_rejects_artifact_lease_owned_by_another_process(
     notebook_path: Path,
 ) -> None:
@@ -424,6 +426,7 @@ def test_artifact_lease_close_rejects_an_existing_non_directory_root(
     lease.close()
 
 
+@pytest.mark.native_process
 def test_child_leases_share_one_cross_process_pin(tmp_path: Path) -> None:
     project = _project(tmp_path)
     lease = publish_artifact_lease(project, "development")
@@ -464,6 +467,7 @@ def test_profile_publications_and_live_pins_own_revision_retention(
     assert development.root.parent.is_dir()
 
 
+@pytest.mark.native_process
 def test_dead_process_pins_are_removed_during_publication(tmp_path: Path) -> None:
     project = _project(tmp_path)
     with publish_artifact_lease(project, "development") as lease:

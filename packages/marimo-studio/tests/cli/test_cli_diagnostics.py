@@ -221,6 +221,7 @@ def test_main_structures_configuration_errors(
     assert event["exit_code"] == 3
 
 
+@pytest.mark.native_process
 def test_provider_stdout_cannot_corrupt_machine_output(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,

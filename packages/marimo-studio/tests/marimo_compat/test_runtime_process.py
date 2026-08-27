@@ -62,8 +62,9 @@ def test_isolated_runtime_budget_contains_the_notebook_probe(
         pytest.param(
             -1073741819,
             "exited with status 0xC0000005",
-            marks=pytest.mark.skipif(
-                os.name == "posix", reason="Windows process status"
+            marks=(
+                pytest.mark.supported_python,
+                pytest.mark.skipif(os.name == "posix", reason="Windows process status"),
             ),
         ),
     ),

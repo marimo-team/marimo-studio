@@ -333,6 +333,7 @@ def test_activation_disconnect_clears_the_browser_operation(
     assert pending is None
 
 
+@pytest.mark.native_process
 def test_analysis_disconnect_drains_the_provider_build_process_tree(
     notebook_path: Path,
     tmp_path: Path,

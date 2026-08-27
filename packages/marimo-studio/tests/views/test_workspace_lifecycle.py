@@ -59,6 +59,7 @@ def test_concurrent_thread_deletion_keeps_one_final_view(
     assert updated.default_view in updated.views
 
 
+@pytest.mark.native_process
 def test_spawn_process_deletion_preserves_default_for_remaining_view(
     notebook_path: Path,
     tmp_path: Path,

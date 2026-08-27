@@ -19,7 +19,10 @@ from ..deno_provider_test_support import inspect_provider as _inspect
 from ..deno_provider_test_support import project as _project
 from ..provider_test_support import provider_build_request
 
-pytestmark = pytest.mark.usefixtures("shared_deno_test_cache")
+pytestmark = [
+    pytest.mark.deno,
+    pytest.mark.usefixtures("shared_deno_test_cache"),
+]
 
 
 @pytest.mark.skipif(
