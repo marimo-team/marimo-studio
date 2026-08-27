@@ -8,7 +8,7 @@ transformations, controls, and reactive execution.
 Install Studio and create a view:
 
 ```console
-uvx marimo-studio view create analysis.py --name dashboard
+uvx marimo-studio view create dashboard --target analysis.py
 uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
