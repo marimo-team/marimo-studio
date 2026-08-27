@@ -42,9 +42,11 @@ def error_response(error: MarimoStudioError) -> JSONResponse:
             "error": error.code,
             "message": error.public_message(),
             **error.diagnostic_details(),
+            **({"hint": error.public_hint} if error.public_hint else {}),
+            **({"transient": True} if error.transient else {}),
         },
         status_code=error.status_code,
-        headers=NO_STORE,
+        headers={**NO_STORE, "Marimo-Studio-Error": error.code},
     )
 
 
@@ -89,15 +91,3 @@ def invalid_server_token_response(
         status_code=401,
         headers=NO_STORE,
     )
-
-
-__all__ = [
-    "authentication_required_response",
-    "error_response",
-    "forbidden_response",
-    "has_access_token",
-    "has_edit_access",
-    "has_read_access",
-    "invalid_server_token_response",
-    "server_token_matches",
-]

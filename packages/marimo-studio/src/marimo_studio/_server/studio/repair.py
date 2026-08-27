@@ -8,10 +8,19 @@ from typing import cast
 from htpy import Node, body, h1, head, html, main, meta, p, script, style, title
 from markupsafe import Markup
 
-from marimo_studio._html import node_list, render
+from marimo_studio._delivery.html import node_list, render
 
 
-def repair_document(message: str, hint: str, events_url: str) -> str:
+def repair_document(
+    message: str,
+    hint: str,
+    events_url: str,
+    *,
+    code: str = "configuration-error",
+    lifecycle_id: int | None = None,
+    runtime: str = "server",
+    view: str = "",
+) -> str:
     """Return a development page that reloads when its source is repaired."""
     events = json.dumps(events_url).replace("<", "\\u003c")
     node = html(
@@ -65,7 +74,30 @@ def repair_document(message: str, hint: str, events_url: str) -> str:
                     ],
                     script[
                         Markup(
-                            "const events=new EventSource("
+                            (
+                                "parent.postMessage("
+                                + json.dumps(
+                                    {
+                                        "type": "marimo-studio:view-error",
+                                        "runtime": runtime,
+                                        "lifecycleId": lifecycle_id,
+                                        "view": view,
+                                        "diagnostic": {
+                                            "scope": "runtime",
+                                            "code": code,
+                                            "severity": "error",
+                                            "message": message,
+                                            "hint": hint,
+                                            "view": view,
+                                        },
+                                    },
+                                    separators=(",", ":"),
+                                ).replace("<", "\\u003c")
+                                + ", '*');"
+                                if lifecycle_id is not None and view
+                                else ""
+                            )
+                            + "const events=new EventSource("
                             f"{events});"
                             "events.addEventListener('change',()=>location.reload());"
                             "addEventListener('pagehide',()=>events.close(),{once:true});"

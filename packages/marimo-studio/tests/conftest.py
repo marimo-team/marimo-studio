@@ -7,8 +7,9 @@ from pathlib import Path
 import marimo
 import pytest
 
-import marimo_studio._assets as assets_module
+import marimo_studio._delivery.assets as assets_module
 from marimo_studio._compat.layout import MARIMO_RELEASE_COMMIT
+from marimo_studio.view_providers._bundled._deno import runtime as deno_runtime
 
 from .helpers import notebook_source
 
@@ -52,3 +53,24 @@ def notebook_path(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+@pytest.fixture(scope="session")
+def deno_test_cache(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return tmp_path_factory.mktemp("deno-cache")
+
+
+@pytest.fixture
+def shared_deno_test_cache(
+    monkeypatch: pytest.MonkeyPatch,
+    deno_test_cache: Path,
+) -> None:
+    ensure_cache_directory = deno_runtime.ensure_cache_directory
+    monkeypatch.setattr(
+        deno_runtime,
+        "ensure_cache_directory",
+        lambda _root, relative: ensure_cache_directory(
+            deno_test_cache.resolve(),
+            relative,
+        ),
+    )

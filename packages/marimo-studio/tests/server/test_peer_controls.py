@@ -1,3 +1,5 @@
+"""Protect peer control synchronization."""
+
 from __future__ import annotations
 
 import asyncio
@@ -26,10 +28,10 @@ from marimo._session.session import Session
 from marimo._session.state.session_view import SessionView
 from marimo._types.ids import ConsumerId, UIElementId, WidgetModelId
 
-from marimo_studio._capabilities import ServerHandle, ServerLocation, ServerMode
 from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
 from marimo_studio._compat.server.gateway import _LocationHandle
 from marimo_studio._compat.server.peer_state import PrivatePeerCommandRelay
+from marimo_studio._server.records import ServerHandle, ServerLocation, ServerMode
 
 
 class _Room:

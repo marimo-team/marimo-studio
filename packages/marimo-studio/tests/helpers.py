@@ -5,7 +5,7 @@ from pathlib import Path
 
 import marimo
 
-from marimo_studio.agent_models import (
+from marimo_studio._validation.evidence import (
     RuntimeStatusReport,
     RuntimeStatusSnapshot,
     RuntimeStatusTransition,
@@ -15,10 +15,12 @@ from marimo_studio.agent_models import (
 def ready_runtime_status(
     view: str,
     revision: str,
-    session_id: str = "s_123456",
+    session_id: str | None = "s_123456",
+    *,
+    runtime: str = "server",
 ) -> RuntimeStatusReport:
     return RuntimeStatusReport(
-        runtime="server",
+        runtime=runtime,
         view=view,
         revision=revision,
         session_id=session_id,

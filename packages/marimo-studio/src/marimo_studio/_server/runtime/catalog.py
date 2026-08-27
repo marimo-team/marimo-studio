@@ -6,32 +6,34 @@ import hashlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
-from marimo_studio._capabilities import (
-    BrowserRuntimeProjector,
-    ServerContext,
-    SessionState,
+from marimo_studio._delivery.browser_ports import BrowserRuntimeProjector
+from marimo_studio._notebook.cell_refs import safe_cell_ref_matches
+from marimo_studio._notebook.records import CellRef
+from marimo_studio._server.ports import SessionState
+from marimo_studio._server.presentation.capability import (
+    presentation_revision_capability,
+    presentation_revision_url,
 )
+from marimo_studio._server.records import ServerContext
 from marimo_studio._server.server_instance import server_instance_id
-from marimo_studio._urls import public_url
 from marimo_studio._workspace.models import (
     RUNTIME_PATTERN,
-    ResolvedView,
     StudioWorkspace,
 )
 from marimo_studio.errors import RuntimeSelectionError
+from marimo_studio.errors._internal import RuntimeSyncError
 
 if TYPE_CHECKING:
-    from marimo_studio._server.presentation import PresentationSnapshot
+    from marimo_studio._server.presentation.service import PresentationSnapshot
 
 
 @dataclass(frozen=True)
 class RuntimeProjection:
     instance: str
     data: dict[str, object]
-    cell_bindings: dict[str, dict[str, str]]
-    value_bindings: dict[str, dict[str, object]]
-    output_bindings: dict[str, dict[str, object]]
-    control_cells: dict[str, str] | None = None
+    cell_refs: dict[str, str]
+    current_cell_refs: dict[str, str]
+    dependency_closures: dict[str, tuple[str, ...]]
 
 
 class RuntimeProvider(Protocol):
@@ -44,6 +46,8 @@ class RuntimeProvider(Protocol):
         context: ServerContext,
         session_id: str | None,
         binding_id: str | None = None,
+        presentation_session_id: str | None = None,
+        runtime_session_id: str | None = None,
     ) -> RuntimeProjection: ...
 
 
@@ -55,8 +59,22 @@ def _digest(*values: str) -> str:
     return digest.hexdigest()
 
 
-def _view(snapshot: PresentationSnapshot) -> ResolvedView:
-    return snapshot.resolved.views[snapshot.view_name]
+def _static_dependency_closures(
+    snapshot: PresentationSnapshot,
+    bindings: dict[str, str],
+) -> dict[str, tuple[str, ...]]:
+    closures: dict[str, tuple[str, ...]] = {}
+    for producer in snapshot.symbols.cells:
+        runtime_id = bindings.get(str(producer))
+        if runtime_id is None:
+            continue
+        closure = tuple(
+            bindings[str(reference)]
+            for reference in snapshot.symbols.dependency_closure(producer)
+            if str(reference) in bindings
+        )
+        closures[runtime_id] = closure
+    return closures
 
 
 class ServerRuntime:
@@ -72,9 +90,43 @@ class ServerRuntime:
         context: ServerContext,
         session_id: str | None,
         binding_id: str | None = None,
+        presentation_session_id: str | None = None,
+        runtime_session_id: str | None = None,
     ) -> RuntimeProjection:
+        if presentation_session_id is None:
+            raise ValueError("A server runtime requires a presentation session")
+        if runtime_session_id is None:
+            raise ValueError("A server runtime requires a native runtime session")
         cells = self._sessions.live_cells(context, session_id)
-        view = _view(snapshot)
+        bindings = snapshot.resolved.runtime_cell_refs(cells)
+        current_cell_refs = (
+            {
+                cell.runtime_id: str(cell.ref)
+                for cell in snapshot.resolved.notebook.cells
+            }
+            if cells is None
+            else {
+                runtime_id: str(ref) for runtime_id, ref in cells.current_refs.items()
+            }
+        )
+        current_matches = (
+            safe_cell_ref_matches(
+                {reference: CellRef.parse(reference) for reference in bindings},
+                (
+                    (reference, runtime_id)
+                    for runtime_id, reference in cells.current_refs.items()
+                ),
+            )
+            if cells is not None
+            else bindings
+        )
+        if cells is not None and any(
+            current_matches.get(reference) != runtime_id
+            for reference, runtime_id in bindings.items()
+        ):
+            raise RuntimeSyncError(
+                "Studio is waiting for the notebook kernel to apply the saved source."
+            )
         return RuntimeProjection(
             instance=_digest(
                 context.file_key,
@@ -84,20 +136,27 @@ class ServerRuntime:
                 binding_id or "",
             ),
             data={
-                "url": public_url(context.base_url, "/"),
-                "serverToken": context.server_token,
+                "url": presentation_revision_url(
+                    context,
+                    snapshot,
+                    presentation_session_id,
+                    runtime_session_id=runtime_session_id,
+                ),
+                "capabilityToken": presentation_revision_capability(
+                    context,
+                    snapshot,
+                    presentation_session_id,
+                    runtime_session_id,
+                ),
+                "sessionId": runtime_session_id,
                 "serverInstance": server_instance_id(context.server_token),
                 "fileKey": context.file_key,
                 "preserveSession": snapshot.resolved.workspace.preserve_session,
                 **({"file": context.file_key} if context.routing_query else {}),
             },
-            cell_bindings=snapshot.resolved.runtime_cell_bindings(
-                cells,
-                required_aliases=view.cell_aliases,
-            ),
-            value_bindings=view.runtime_value_bindings(cells),
-            output_bindings=view.runtime_output_bindings(cells),
-            control_cells=snapshot.resolved.runtime_control_cells(cells),
+            cell_refs=bindings,
+            current_cell_refs=current_cell_refs,
+            dependency_closures=_static_dependency_closures(snapshot, bindings),
         )
 
 
@@ -114,25 +173,27 @@ class WasmRuntime:
         context: ServerContext,
         session_id: str | None,
         binding_id: str | None = None,
+        presentation_session_id: str | None = None,
+        runtime_session_id: str | None = None,
     ) -> RuntimeProjection:
-        del context, session_id, binding_id
-        view = _view(snapshot)
+        del context, session_id, binding_id, presentation_session_id, runtime_session_id
         projection = self._browser.project(
             snapshot.resolved.workspace.notebook,
             snapshot.notebook_source,
-            values=snapshot.value_references,
-            outputs=snapshot.output_references,
         )
+        bindings = snapshot.resolved.runtime_cell_refs(None)
         return RuntimeProjection(
             instance=projection.instance,
             data=projection.runtime_data(),
-            cell_bindings=snapshot.resolved.runtime_cell_bindings(
-                None,
-                required_aliases=view.cell_aliases,
+            cell_refs=bindings,
+            current_cell_refs={
+                cell.runtime_id: str(cell.ref)
+                for cell in snapshot.resolved.notebook.cells
+            },
+            dependency_closures=_static_dependency_closures(
+                snapshot,
+                bindings,
             ),
-            value_bindings=view.runtime_value_bindings(None),
-            output_bindings=view.runtime_output_bindings(None),
-            control_cells=snapshot.resolved.runtime_control_cells(None),
         )
 
 
@@ -161,14 +222,24 @@ class RuntimeRegistry:
     def options(self) -> tuple[tuple[str, str], ...]:
         return tuple((provider.id, provider.label) for provider in self._providers)
 
+    def configured_options(
+        self,
+        runtime_ids: tuple[str, ...],
+    ) -> tuple[tuple[str, str], ...]:
+        return tuple(
+            (runtime_id, self._by_id[runtime_id].label)
+            for runtime_id in runtime_ids
+            if runtime_id in self._by_id
+        )
+
     def available(
         self,
         studio: StudioWorkspace,
-        context: ServerContext,
+        _context: ServerContext,
     ) -> tuple[str, ...]:
-        configured = self.ids if context.mode == "edit" else studio.runtimes
         return tuple(
-            runtime_id for runtime_id in configured if runtime_id in self._by_id
+            runtime_id
+            for runtime_id, _label in self.configured_options(studio.runtimes)
         )
 
     def select(
@@ -193,11 +264,3 @@ def create_runtime_registry(
 ) -> RuntimeRegistry:
     """Construct Studio runtime policy from the Marimo adapter bundle."""
     return RuntimeRegistry((ServerRuntime(sessions), WasmRuntime(browser)))
-
-
-__all__ = [
-    "RuntimeProjection",
-    "RuntimeProvider",
-    "RuntimeRegistry",
-    "create_runtime_registry",
-]

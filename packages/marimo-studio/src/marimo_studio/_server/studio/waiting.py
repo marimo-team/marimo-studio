@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+import json
 from typing import cast
 
 from htpy import Node, body, head, html, main, meta, p, script, span, style, title
 from markupsafe import Markup
 
-from marimo_studio._html import node_list, render
+from marimo_studio._delivery.html import node_list, render
 
 
-def waiting_document() -> str:
+def waiting_document(
+    *,
+    refresh_url: str,
+    lifecycle_id: int | None = None,
+    runtime: str = "server",
+    view: str = "",
+) -> str:
     """Return a stable loading surface that polls for the notebook session."""
+    refresh = json.dumps(refresh_url).replace("<", "\\u003c")
     node = html(
         lang="en",
         data_marimo_studio_preview_state="waiting",
@@ -83,15 +91,35 @@ def waiting_document() -> str:
                     ],
                     script[
                         Markup(
-                            """
+                            (
+                                (
+                                    "parent.postMessage("
+                                    + json.dumps(
+                                        {
+                                            "type": "marimo-studio:receiver-unready",
+                                            "runtime": runtime,
+                                            "lifecycleId": lifecycle_id,
+                                            "view": view,
+                                        },
+                                        separators=(",", ":"),
+                                    ).replace("<", "\\u003c")
+                                    + ", '*');"
+                                )
+                                if lifecycle_id is not None and view
+                                else ""
+                            )
+                            + """
+                            const refreshUrl = """
+                            + refresh
+                            + """;
                             const poll = async () => {
                               try {
-                                const response = await fetch(location.href, {
+                                const response = await fetch(refreshUrl, {
                                   method: "HEAD",
                                   cache: "no-store",
                                 });
                                 if (response.status !== 202) {
-                                  location.reload();
+                                  location.replace(refreshUrl);
                                   return;
                                 }
                               } catch {}

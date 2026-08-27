@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
-from marimo_studio._urls import STUDIO_PATH, SUPPORT_PATH, authored_file_key
+from marimo_studio._delivery.urls import STUDIO_PATH, SUPPORT_PATH, authored_file_key
 from marimo_studio._workspace.models import (
     RESERVED_VIEW_ASSET_NAMES,
     RESERVED_VIEW_NAMES,
@@ -17,6 +18,15 @@ from marimo_studio._workspace.models import (
 class AuthoredViewRoute:
     file_key: str
     relative: str
+
+
+@dataclass(frozen=True)
+class ArtifactAssetRoute:
+    """One public file from an immutable view artifact revision."""
+
+    view: str
+    revision: str
+    asset: str
 
 
 def authored_view_route(relative: str) -> AuthoredViewRoute | None:
@@ -75,12 +85,21 @@ def document_view(relative: str, studio: StudioWorkspace, mode: str) -> str | No
     return None
 
 
-def view_asset(relative: str, studio: StudioWorkspace) -> tuple[str, str] | None:
-    """Resolve a path below a named view to an authored static asset."""
+def view_asset(relative: str, studio: StudioWorkspace) -> ArtifactAssetRoute | None:
+    """Resolve an artifact-revision-qualified public file route."""
     parts = relative.strip("/").split("/")
-    if len(parts) < 2 or parts[0] not in studio.views:
+    if (
+        len(parts) < 5
+        or parts[0] not in studio.views
+        or parts[1:3] != [SUPPORT_PATH.strip("/"), "artifacts"]
+        or re.fullmatch(r"[0-9a-f]{64}", parts[3]) is None
+    ):
         return None
-    return parts[0], "/".join(parts[1:])
+    return ArtifactAssetRoute(
+        view=parts[0],
+        revision=f"sha256:{parts[3]}",
+        asset="/".join(parts[4:]),
+    )
 
 
 def view_route_alias(relative: str, studio: StudioWorkspace) -> str | None:
@@ -89,6 +108,8 @@ def view_route_alias(relative: str, studio: StudioWorkspace) -> str | None:
     if len(parts) < 2 or parts[0] not in studio.views:
         return None
     nested = parts[1].casefold()
+    if nested == SUPPORT_PATH.strip("/") and parts[2:3] == ["artifacts"]:
+        return None
     if nested in RESERVED_VIEW_ASSET_NAMES:
         return "/" + "/".join((nested, *parts[2:]))
     return None

@@ -5,16 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from marimo_studio._capabilities import (
-    SaveCell,
-    SourceTransformResult,
-    SourceTransformSession,
-)
-from marimo_studio._cell_refs import (
+from marimo_studio._notebook.cell_refs import (
     cell_refs,
     safe_cell_ref_matches,
     safe_cell_ref_updates,
 )
+from marimo_studio._notebook.records import CellRef
+from marimo_studio._server.ports import SourceTransformSession
+from marimo_studio._server.records import SaveCell, SourceTransformResult
 from marimo_studio._workspace import discover_studio
 from marimo_studio._workspace.bindings import _write_cell_bindings
 from marimo_studio._workspace.metadata import (
@@ -23,7 +21,6 @@ from marimo_studio._workspace.metadata import (
 )
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
-from marimo_studio.types import CellRef
 
 
 @dataclass(frozen=True)
@@ -177,6 +174,3 @@ class CellAliasSourcePolicy:
         except MarimoStudioError:
             return None
         return _CellAliasTransform(path, cells) if workspace is not None else None
-
-
-__all__ = ["CellAliasSourcePolicy"]

@@ -5,18 +5,22 @@ from typing import Any
 
 import marimo
 
-from marimo_studio._composition import programmatic_middleware
+from marimo_studio._composition import (
+    own_programmatic_lifespans,
+    programmatic_middleware,
+)
+from marimo_studio._views.api import bind_cell, ensure_view
+from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.workspace import bind_cell, ensure_view
 
 from .helpers import replace_app_shell
 
 
 def set_shell(studio: StudioWorkspace, view_name: str, content: str) -> None:
-    template = studio.views[view_name].template
-    template.write_text(
-        replace_app_shell(template.read_text(encoding="utf-8"), content),
+    document = studio.views[view_name].root / "index.html"
+    document.write_text(
+        replace_app_shell(document.read_text(encoding="utf-8"), content),
         encoding="utf-8",
     )
 
@@ -39,6 +43,9 @@ def configured(notebook: Path) -> StudioWorkspace:
         "executive",
         '<span mo-value="x"></span><marimo-output value="x"></marimo-output>',
     )
+    for project in studio.views.values():
+        with build_view_project_sync(project):
+            pass
     return load_studio(notebook)
 
 
@@ -50,7 +57,7 @@ def marimo_app(
     programmatic: bool = False,
     skew_protection: bool = False,
 ) -> Any:
-    return (
+    app = (
         marimo.create_asgi_app(
             quiet=True,
             token=token,
@@ -63,6 +70,7 @@ def marimo_app(
         )
         .build()
     )
+    return own_programmatic_lifespans(app) if programmatic else app
 
 
 def session_manager(app: Any) -> Any:
