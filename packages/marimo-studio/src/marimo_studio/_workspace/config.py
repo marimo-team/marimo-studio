@@ -1,18 +1,13 @@
-"""Load Studio configuration and parse view templates."""
+"""Load Studio configuration and required view project manifests."""
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
-
-from marimo_studio._workspace.files import reject_mutable_symlinks
+from marimo_studio._filesystem.io import reject_mutable_symlinks
+from marimo_studio._notebook.records import CellRef
 from marimo_studio._workspace.metadata import notebook_config
 from marimo_studio._workspace.models import (
     ALIAS_PATTERN,
@@ -24,10 +19,11 @@ from marimo_studio._workspace.models import (
     VIEW_PATTERN,
     StudioDefinition,
     StudioWorkspace,
-    View,
 )
+from marimo_studio._workspace.project_manifest import load_view_project
+from marimo_studio._workspace.toml import read_toml
 from marimo_studio.errors import ConfigurationError
-from marimo_studio.types import CellRef
+from marimo_studio.view_providers import ViewProject
 
 
 def validate_view_name(name: str) -> str:
@@ -61,15 +57,6 @@ def _runtimes(data: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
     if default not in values:
         raise ConfigurationError("runtime must be present in runtimes")
     return default, values
-
-
-def read_toml(path: Path) -> dict[str, Any]:
-    if path.is_symlink():
-        raise ConfigurationError(f"Configuration is a symlink: {path}")
-    try:
-        return tomllib.loads(path.read_text(encoding="utf-8"))
-    except tomllib.TOMLDecodeError as error:
-        raise ConfigurationError(f"Invalid TOML in {path}: {error}") from error
 
 
 def _pyproject_config(
@@ -171,7 +158,7 @@ def _load_config(target: Path) -> tuple[Path, Mapping[str, Any]]:
             return project_config
         raise ConfigurationError(
             f"No [tool.marimo-studio] configuration found for {target}. "
-            f"Run `marimo-studio view add {target}` to create one."
+            f"Run `marimo-studio view create {target}` to create one."
         )
     start = target if target.is_dir() else target.parent
     inline = _notebook_configured_in(start)
@@ -210,19 +197,30 @@ def canonical_view_root(notebook: str | Path) -> Path:
 
 def discover_views(
     view_root: Path,
-) -> dict[str, View]:
+) -> dict[str, ViewProject]:
     if not view_root.is_dir():
         return {}
-    views: dict[str, View] = {}
+    views: dict[str, ViewProject] = {}
     for directory in sorted(view_root.iterdir(), key=lambda path: path.name):
-        if not directory.is_dir() or not (directory / "index.html").is_file():
+        if directory.is_symlink():
+            reject_mutable_symlinks(view_root, {directory})
+        if not directory.is_dir() or not (directory / "view.toml").is_file():
             continue
         reject_mutable_symlinks(
             view_root,
-            {directory, directory / "index.html"},
+            {directory, directory / "view.toml"},
         )
         validate_view_name(directory.name)
-        views[directory.name] = View(directory.name, directory.resolve())
+        try:
+            project = load_view_project(directory)
+        except FileNotFoundError:
+            # A concurrent view removal can finish between inventory and load.
+            continue
+        except ConfigurationError:
+            if not directory.is_dir() or not (directory / "view.toml").is_file():
+                continue
+            raise
+        views[directory.name] = project
     return views
 
 

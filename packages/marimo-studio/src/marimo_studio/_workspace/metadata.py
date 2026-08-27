@@ -10,15 +10,15 @@ from typing import Any
 
 import tomlkit
 from packaging.requirements import InvalidRequirement, Requirement
-from packaging.utils import canonicalize_name
+from packaging.utils import NormalizedName, canonicalize_name
 from tomlkit import TOMLDocument
 
-from marimo_studio._workspace.files import atomic_write_text, read_text
+from marimo_studio._filesystem.io import atomic_write_text, read_text
+from marimo_studio._notebook.records import CellRef
 from marimo_studio._workspace.python_requirement import (
     intersect_python_requirements,
 )
 from marimo_studio.errors import ConfigurationError, DependencyError
-from marimo_studio.types import CellRef
 
 SCRIPT_START = "# /// script"
 SCRIPT_END = "# ///"
@@ -76,9 +76,10 @@ def read_notebook_metadata(path: Path) -> TOMLDocument | None:
     return _document(read_text(path), path)
 
 
-def notebook_config(path: Path) -> Mapping[str, Any] | None:
-    """Return `[tool.marimo-studio]` from a notebook."""
-    document = read_notebook_metadata(path)
+def _notebook_config(
+    document: Mapping[str, Any] | None,
+    path: Path,
+) -> Mapping[str, Any] | None:
     if document is None:
         return None
     tool = document.get("tool")
@@ -88,6 +89,11 @@ def notebook_config(path: Path) -> Mapping[str, Any] | None:
     if not isinstance(config, Mapping):
         raise ConfigurationError(f"[tool.marimo-studio] must be a TOML table: {path}")
     return config
+
+
+def notebook_config(path: Path) -> Mapping[str, Any] | None:
+    """Return `[tool.marimo-studio]` from a notebook."""
+    return _notebook_config(read_notebook_metadata(path), path)
 
 
 def _render(document: TOMLDocument, newline: str) -> str:
@@ -125,7 +131,7 @@ def _replace_metadata(source: str, path: Path, document: TOMLDocument) -> str:
     return source[:start_offset] + block + ending + source[end_offset:]
 
 
-def _dependency_name(value: object) -> str | None:
+def _dependency_name(value: object) -> NormalizedName | None:
     if not isinstance(value, str):
         return None
     try:
@@ -172,6 +178,72 @@ def set_package_requirement(
                 del sources[name]
 
 
+def _merge_provider_requirements(requirements: Iterable[str]) -> tuple[str, ...]:
+    merged: dict[str, Requirement] = {}
+    for value in requirements:
+        try:
+            requirement = Requirement(value)
+        except InvalidRequirement as error:
+            raise ConfigurationError(
+                f"Invalid provider Python requirement: {value!r}"
+            ) from error
+        name = canonicalize_name(requirement.name)
+        current = merged.get(name)
+        if current is None:
+            merged[name] = requirement
+            continue
+        if (
+            str(current.specifier) != str(requirement.specifier)
+            or current.url != requirement.url
+            or str(current.marker) != str(requirement.marker)
+        ):
+            raise ConfigurationError(
+                f"Configured providers require incompatible {name!r} environments"
+            )
+        extras = sorted(current.extras | requirement.extras)
+        extra_text = f"[{','.join(extras)}]" if extras else ""
+        if current.url is not None:
+            rendered = f"{name}{extra_text} @ {current.url}"
+        else:
+            rendered = f"{name}{extra_text}{current.specifier}"
+        if current.marker is not None:
+            rendered = f"{rendered}; {current.marker}"
+        merged[name] = Requirement(rendered)
+    return tuple(str(item) for item in merged.values())
+
+
+def _set_provider_requirements(
+    document: MutableMapping[str, Any],
+    requirements: Iterable[str],
+) -> None:
+    values = _merge_provider_requirements(requirements)
+    required = {canonicalize_name(Requirement(value).name): value for value in values}
+    dependencies = document.get("dependencies")
+    if dependencies is None:
+        dependencies = tomlkit.array()
+        document["dependencies"] = dependencies
+    if not isinstance(dependencies, list):
+        raise ConfigurationError("PEP 723 dependencies must be an array of strings")
+
+    updated: list[object] = []
+    written: set[NormalizedName] = set()
+    for dependency in dependencies:
+        name = _dependency_name(dependency)
+        if name is None or name not in required:
+            updated.append(dependency)
+            continue
+        if name not in written:
+            updated.append(required[name])
+            written.add(name)
+    updated.extend(
+        requirement for name, requirement in required.items() if name not in written
+    )
+    for index in reversed(range(len(dependencies))):
+        del dependencies[index]
+    for dependency in updated:
+        dependencies.append(dependency)
+
+
 def _package_python_requirement() -> str:
     requirement = metadata("marimo-studio")["Requires-Python"]
     if requirement is None:
@@ -200,6 +272,7 @@ def set_cell_bindings(
 def configured_notebook_source(
     path: Path,
     default_view: str,
+    provider_requirements: Iterable[str] = (),
     cell_bindings: Mapping[str, CellRef] | None = None,
 ) -> str:
     """Return notebook source with the package dependency and view configuration."""
@@ -216,8 +289,6 @@ def configured_notebook_source(
             current_python,
             package_python,
         )
-    set_package_requirement(document, "marimo-studio")
-
     tool = document.get("tool")
     if tool is None:
         tool = tomlkit.table()
@@ -235,6 +306,10 @@ def configured_notebook_source(
     else:
         config.setdefault("default", default_view)
         config.setdefault("cells", tomlkit.table())
+    _set_provider_requirements(
+        document,
+        ("marimo-studio", *provider_requirements),
+    )
     set_cell_bindings(config, cell_bindings or {})
     return _replace_metadata(source, path, document)
 
@@ -246,7 +321,35 @@ def update_notebook_config(
     """Mutate the notebook-local marimo-studio table atomically."""
     source = read_text(path)
     updated = updated_notebook_config_source(path, source, update)
-    atomic_write_text(path, updated)
+    atomic_write_text(path, updated, root=path.parent)
+
+
+def _studio_config(
+    document: Mapping[str, Any],
+    path: Path,
+) -> MutableMapping[str, Any]:
+    tool = document.get("tool")
+    config = tool.get("marimo-studio") if isinstance(tool, Mapping) else None
+    if not isinstance(config, MutableMapping):
+        raise ConfigurationError(
+            f"Notebook has no [tool.marimo-studio] configuration: {path}"
+        )
+    return config
+
+
+def updated_notebook_default_source(
+    path: Path,
+    source: str,
+    *,
+    default_view: str,
+) -> str:
+    """Return notebook source with a new default view."""
+    document = _document(source, path)
+    if document is None:
+        raise ConfigurationError(f"Notebook has no PEP 723 metadata: {path}")
+    config = _studio_config(document, path)
+    config["default"] = default_view
+    return _replace_metadata(source, path, document)
 
 
 def updated_notebook_config_source(
@@ -258,11 +361,5 @@ def updated_notebook_config_source(
     document = _document(source, path)
     if document is None:
         raise ConfigurationError(f"Notebook has no PEP 723 metadata: {path}")
-    tool = document.get("tool")
-    config = tool.get("marimo-studio") if isinstance(tool, Mapping) else None
-    if not isinstance(config, MutableMapping):
-        raise ConfigurationError(
-            f"Notebook has no [tool.marimo-studio] configuration: {path}"
-        )
-    update(config)
+    update(_studio_config(document, path))
     return _replace_metadata(source, path, document)
