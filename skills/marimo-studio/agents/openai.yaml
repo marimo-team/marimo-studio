@@ -1,4 +1,4 @@
 interface:
   display_name: "Marimo Studio"
-  short_description: "Turn Marimo notebooks into custom web pages"
-  default_prompt: "Use $marimo-studio to turn this Marimo notebook into a custom web page, activate the new view, and repair it until the analysis reports handoff_ready."
+  short_description: "Build custom views from Marimo notebooks"
+  default_prompt: "Use $marimo-studio to inspect this notebook, select a starter, build and activate its view, then repair it until browser validation is ready."
