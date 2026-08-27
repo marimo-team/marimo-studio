@@ -68,7 +68,7 @@ def test_inspection_reports_complete_decorated_cell_spans(
         + """\
 import marimo
 
-__generated_with = "0.23.0"
+__generated_with = "0.24.0"
 app = marimo.App()
 
 
@@ -250,7 +250,7 @@ def test_runtime_inspection_rejects_a_change_during_execution(
 
 
 def test_cell_fingerprint_survives_marimo_string_formatting() -> None:
-    legacy = '''\
+    expanded = '''\
 mo.md(
     f"""
     ## Report
@@ -265,8 +265,8 @@ Value: {value}
 """)
 '''
 
-    assert _cell_fingerprint(legacy) != _cell_fingerprint(serialized)
-    assert _layout_fingerprint(legacy) == _layout_fingerprint(serialized)
+    assert _cell_fingerprint(expanded) != _cell_fingerprint(serialized)
+    assert _layout_fingerprint(expanded) == _layout_fingerprint(serialized)
     assert _layout_fingerprint(serialized) != _layout_fingerprint(
         serialized.replace("Report", "Forecast")
     )
