@@ -95,8 +95,8 @@ steps, output formatting failures, oversized responses, stale presentations,
 and invalid capabilities.
 
 ```console
-marimo-studio validate analysis.py --view dashboard --level static
-marimo-studio validate analysis.py --view dashboard --level runtime
+marimo-studio validate dashboard --target analysis.py --level static
+marimo-studio validate dashboard --target analysis.py --level runtime
 ```
 
 [Notebook results](../guide/notebook-results.md) develops the authoring

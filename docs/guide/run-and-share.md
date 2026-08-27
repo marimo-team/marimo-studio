@@ -20,8 +20,8 @@ environment.
 Build the production profile for the selected view:
 
 ```console
-uv run marimo-studio view build analysis.py \
-  --name dashboard \
+uv run marimo-studio view build dashboard \
+  --target analysis.py \
   --profile production
 ```
 
@@ -31,7 +31,7 @@ failed build leaves the last published page available.
 Run the notebook check in the environment you plan to serve:
 
 ```console
-uv run marimo-studio validate analysis.py --view dashboard --level runtime
+uv run marimo-studio validate dashboard --target analysis.py --level runtime
 ```
 
 The runtime check starts the complete notebook reactive app in an isolated
@@ -187,8 +187,8 @@ publishing the directory.
 Export one view, then serve the generated directory over HTTP:
 
 ```console
-uv run marimo-studio export analysis.py \
-  --view dashboard \
+uv run marimo-studio view export dashboard \
+  --target analysis.py \
   --output dist/dashboard
 python -m http.server --bind 127.0.0.1 --directory dist/dashboard
 ```

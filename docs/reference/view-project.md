@@ -54,7 +54,7 @@ and a build fingerprint. Studio enumerates the input scope for revisions,
 snapshots, and file watching.
 
 ```console
-marimo-studio view inspect analysis.py --name dashboard --format json
+marimo-studio view inspect dashboard --target analysis.py --format json
 ```
 
 Agent and CLI inspection prepend the core `view.toml` manifest to the provider
@@ -68,7 +68,7 @@ current revision.
 ## Build and publication
 
 ```console
-marimo-studio view build analysis.py --name dashboard
+marimo-studio view build dashboard --target analysis.py
 ```
 
 Studio:

@@ -96,7 +96,7 @@ the target and ownership contracts.
 
 ## Static export <Badge type="warning" text="Public source" />
 
-`marimo-studio export` builds or reuses the selected view's production
+`marimo-studio view export` builds or reuses the selected view's production
 artifact. The export copies its browser files, then adds notebook source,
 Studio browser assets, and the notebook's `public/` directory. The exported
 page loads the notebook graph in a Pyodide worker and executes the dependency

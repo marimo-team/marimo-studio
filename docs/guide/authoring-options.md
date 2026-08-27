@@ -12,15 +12,14 @@ providers can create other source trees and invoke existing builders.
 List available starting points:
 
 ```console
-marimo-studio starter list
-marimo-studio starter show marimo-studio/vanilla:default
+marimo-studio starters
 ```
 
 Create a view from a selected starter:
 
 ```console
-marimo-studio view create analysis.py \
-  --name dashboard \
+marimo-studio view create dashboard \
+  --target analysis.py \
   --starter marimo-studio/vanilla:default
 ```
 
@@ -56,7 +55,7 @@ entrypoint = "web/report.html"
 Check an installed view provider:
 
 ```console
-marimo-studio provider doctor acme-views/report
+marimo-studio doctor acme-views/report
 ```
 
 ## Source ownership

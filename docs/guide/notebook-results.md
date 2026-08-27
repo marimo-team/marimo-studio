@@ -75,14 +75,14 @@ def summary(data):
 Bind an existing anonymous cell when renaming it is impractical:
 
 ```console
-marimo-studio bind analysis.py --cell 12 --as summary
+marimo-studio notebook bind summary --target analysis.py --cell 12
 ```
 
 ## Validate targets
 
 ```console
-marimo-studio validate analysis.py --view dashboard --level static
-marimo-studio validate analysis.py --view dashboard --level runtime
+marimo-studio validate dashboard --target analysis.py --level static
+marimo-studio validate dashboard --target analysis.py --level runtime
 ```
 
 Static validation checks source declarations and notebook resolution. Runtime

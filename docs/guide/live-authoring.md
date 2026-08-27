@@ -44,7 +44,7 @@ mount preparation together. A failed build leaves the previous page intact and
 shows the diagnostic beside Source.
 
 ```console
-uvx marimo-studio view build analysis.py --name dashboard
+uvx marimo-studio view build dashboard --target analysis.py
 ```
 
 ## Switch views
@@ -81,7 +81,7 @@ produce one accepted ETag and one explicit conflict.
 ## Validate the current result
 
 ```console
-uvx marimo-studio validate analysis.py --view dashboard --level browser \
+uvx marimo-studio validate dashboard --target analysis.py --level browser \
   --server http://localhost:2718 \
   --browser-client CLIENT_ID
 ```

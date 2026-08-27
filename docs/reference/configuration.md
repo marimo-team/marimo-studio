@@ -113,7 +113,7 @@ Native Marimo cell names resolve directly. Bind an anonymous cell when it needs
 a stable target:
 
 ```console
-marimo-studio bind analysis.py --cell 12 --as summary
+marimo-studio notebook bind summary --target analysis.py --cell 12
 ```
 
 Aliases are stored under `[tool.marimo-studio.cells]`. Use native cell names

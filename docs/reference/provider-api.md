@@ -213,6 +213,6 @@ class ReportProvider:
 provider = ReportProvider()
 ```
 
-Run `marimo-studio provider doctor acme-views/report` after installation. Test
+Run `marimo-studio doctor acme-views/report` after installation. Test
 one creation, one build, one failed build that retains the last publication,
 and one browser mount through the installed package.

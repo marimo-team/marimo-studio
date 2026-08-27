@@ -8,7 +8,7 @@ description: Create, build, and validate a custom view for a saved Marimo notebo
 Start with a saved Marimo notebook:
 
 ```console
-uvx marimo-studio view create analysis.py --name dashboard
+uvx marimo-studio view create dashboard --target analysis.py
 ```
 
 The first view records Studio configuration, the selected provider
@@ -56,7 +56,7 @@ Add the cell to `index.html` inside `#app-shell`:
 Build the view after editing:
 
 ```console
-uvx marimo-studio view build analysis.py --name dashboard
+uvx marimo-studio view build dashboard --target analysis.py
 ```
 
 The build publishes generated files beneath `.artifacts/`. If a later build
@@ -65,8 +65,8 @@ fails, Source shows the diagnostic and the previous valid page stays available.
 ## Validate
 
 ```console
-uvx marimo-studio validate analysis.py --view dashboard --level static
-uvx marimo-studio validate analysis.py --view dashboard --level runtime
+uvx marimo-studio validate dashboard --target analysis.py --level static
+uvx marimo-studio validate dashboard --target analysis.py --level runtime
 ```
 
 Runtime validation starts the complete reactive notebook in an isolated
@@ -76,7 +76,7 @@ access. Studio then checks the selected projected results.
 Browser validation uses the active Studio server and selected client:
 
 ```console
-uvx marimo-studio validate analysis.py --view dashboard \
+uvx marimo-studio validate dashboard --target analysis.py \
   --level browser \
   --server http://localhost:2718
 ```

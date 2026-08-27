@@ -9,8 +9,8 @@ One notebook can serve several named views. Each view has its own route,
 frontend source, interactions, and publication.
 
 ```console
-marimo-studio view create analysis.py --name dashboard
-marimo-studio view create analysis.py --name report
+marimo-studio view create dashboard --target analysis.py
+marimo-studio view create report --target analysis.py
 ```
 
 The notebook's `[tool.marimo-studio]` table records the default view. Each view
@@ -32,8 +32,8 @@ reuses the existing notebook session.
 Each view can choose its own installed starter or extension for the audience:
 
 ```console
-marimo-studio starter list
-marimo-studio view create analysis.py --name report --starter STARTER
+marimo-studio starters
+marimo-studio view create report --target analysis.py --starter STARTER
 ```
 
 The notebook contract remains the same across views. A named cell, output, or
@@ -43,7 +43,7 @@ differently.
 ## Build one view
 
 ```console
-marimo-studio view build analysis.py --name report
+marimo-studio view build report --target analysis.py
 ```
 
 Builds are view-local. A failed report build does not replace its last valid
@@ -63,7 +63,7 @@ The default view is served at `/`. Other views use named routes.
 ## Remove a view
 
 ```console
-marimo-studio view remove analysis.py --name report
+marimo-studio view remove report --target analysis.py
 ```
 
 Removal deletes the view directory after confirmation. It leaves Python

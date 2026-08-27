@@ -11,13 +11,13 @@ Open the saved notebook once per code-mode execution:
 import marimo_studio.agent as studio
 
 workspace = studio.open()
-inventory = await workspace.inspect()
+inventory = await workspace.inspect_notebook()
 producer = inventory.notebook.named_cells()["summary"]
-notebook = await workspace.inspect(
+notebook = await workspace.inspect_notebook(
     include_code=True,
     selectors=(producer.ref, *producer.upstream),
 )
-view = await workspace.ensure_view("dashboard")
+view = await workspace.create_view("dashboard")
 ```
 
 The notebook owns data access, transformations, controls, and reusable results.
@@ -125,14 +125,14 @@ validate again.
 Use the CLI outside code mode:
 
 ```console
-marimo-studio view create notebook.py --name dashboard --format json
-marimo-studio view inspect notebook.py --name dashboard --format json
-marimo-studio view build notebook.py --name dashboard --format json
-marimo-studio view activate notebook.py \
-  --name dashboard \
+marimo-studio view create dashboard --target notebook.py --format json
+marimo-studio view inspect dashboard --target notebook.py --format json
+marimo-studio view build dashboard --target notebook.py --format json
+marimo-studio view activate dashboard \
+  --target notebook.py \
   --server http://localhost:2718 \
   --browser-client CLIENT_ID
-marimo-studio validate notebook.py --view dashboard \
+marimo-studio validate dashboard --target notebook.py \
   --level browser \
   --server http://localhost:2718 \
   --browser-client CLIENT_ID

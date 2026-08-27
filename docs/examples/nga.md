@@ -49,16 +49,16 @@ project to a temporary directory and builds every view from source.
 Inspect the Svelte source catalog and mounts from the repository root:
 
 ```console
-uv run marimo-studio view inspect examples/nga.py \
-  --name story \
+uv run marimo-studio view inspect story \
+  --target examples/nga.py \
   --format json
 ```
 
 Build a production artifact for the Overview view:
 
 ```console
-uv run marimo-studio view build examples/nga.py \
-  --name overview \
+uv run marimo-studio view build overview \
+  --target examples/nga.py \
   --profile production
 ```
 
