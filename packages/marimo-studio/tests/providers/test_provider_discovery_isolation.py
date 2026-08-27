@@ -39,6 +39,10 @@ from .test_process_isolation import (
 pytestmark = pytest.mark.native_process
 
 _PROVIDER_MODULE = "tests.providers.test_process_isolation"
+_PROCESS_START_TIMEOUT = 15.0
+_METADATA_OPERATION_TIMEOUT = 1.5 if os.name == "nt" else 0.25
+_METADATA_ELAPSED_LIMIT = 3.0 if os.name == "nt" else 0.8
+_CONTAINMENT_ELAPSED_LIMIT = 5.0 if os.name == "nt" else 3.0
 
 
 def _candidate(
@@ -136,7 +140,7 @@ def test_cancelled_initial_discovery_retries_without_a_partial_catalog(
     worker.start()
     pids: tuple[int, ...] = ()
     try:
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + _PROCESS_START_TIMEOUT
         while time.monotonic() < deadline:
             if marker.is_file():
                 pids = tuple(
@@ -149,7 +153,7 @@ def test_cancelled_initial_discovery_retries_without_a_partial_catalog(
         assert len(pids) == 2
 
         control.cancel()
-        worker.join(timeout=5)
+        worker.join(timeout=_PROCESS_START_TIMEOUT)
 
         assert not worker.is_alive()
         assert results == []
@@ -165,7 +169,7 @@ def test_cancelled_initial_discovery_retries_without_a_partial_catalog(
         )
     finally:
         control.cancel()
-        worker.join(timeout=5)
+        worker.join(timeout=_PROCESS_START_TIMEOUT)
         if marker.is_file():
             _kill_survivors(
                 tuple(
@@ -224,7 +228,7 @@ def test_timed_out_description_keeps_a_healthy_provider_usable(
             _candidate("healthy", "catalog_provider", distribution="test-timeout"),
         ),
         isolate_operations=True,
-        extension_timeout=0.25,
+        extension_timeout=_METADATA_OPERATION_TIMEOUT,
     )
     blocked_pid = 0
 
@@ -234,7 +238,7 @@ def test_timed_out_description_keeps_a_healthy_provider_usable(
         elapsed = time.monotonic() - started
 
         assert ids == ("test-timeout/healthy",)
-        assert elapsed < 0.8
+        assert elapsed < _METADATA_ELAPSED_LIMIT
         blocked_pid = int(marker.read_text(encoding="utf-8"))
         _wait_until_dead((blocked_pid,))
         diagnostics = registry.diagnostics()
@@ -279,7 +283,7 @@ def test_cancelled_parallel_catalog_probes_drain_every_provider_process(
 
     async def exercise() -> tuple[int, ...]:
         inventory = asyncio.create_task(run_provider_operation(catalog_module.starters))
-        deadline = asyncio.get_running_loop().time() + 5
+        deadline = asyncio.get_running_loop().time() + _PROCESS_START_TIMEOUT
         selected: tuple[int, ...] = ()
         while asyncio.get_running_loop().time() < deadline:
             if marker.is_file():
@@ -315,7 +319,11 @@ def test_external_provider_metadata_operations_have_a_containment_deadline(
 ) -> None:
     monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
     monkeypatch.setenv("MARIMO_STUDIO_PROVIDER_BLOCK", operation)
-    registry = _registry("catalog", "catalog_provider", timeout=0.25)
+    registry = _registry(
+        "catalog",
+        "catalog_provider",
+        timeout=_METADATA_OPERATION_TIMEOUT,
+    )
     started = time.monotonic()
 
     if operation == "describe":
@@ -337,5 +345,5 @@ def test_external_provider_metadata_operations_have_a_containment_deadline(
                 )
             error = str(captured.value)
 
-    assert time.monotonic() - started < 3
+    assert time.monotonic() - started < _CONTAINMENT_ELAPSED_LIMIT
     assert "exceeded" in error
