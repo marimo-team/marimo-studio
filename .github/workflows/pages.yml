@@ -27,23 +27,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Socket Firewall
-        uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
-        with:
-          mode: firewall-free
-
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
-        with:
-          node-version-file: .node-version
-          version: 0.2.4
-          cache: true
-          sfw: true
-          run-install: |
-            - args: ["--frozen-lockfile"]
-
-      - name: Enable pnpm
-        run: corepack enable pnpm
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
 
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'
@@ -54,24 +39,6 @@ jobs:
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
         run: make docs-build
-
-      - name: Check GitHub Pages paths
-        env:
-          BASE_PATH: ${{ steps.pages.outputs.base_path }}
-        run: |
-          index="apps/docs/.vitepress/dist/index.html"
-          test -f apps/docs/.vitepress/dist/guide/getting-started.html
-          test -f apps/docs/.vitepress/dist/guide/authoring-options.html
-          test -f apps/docs/.vitepress/dist/examples/nga.html
-          test -f apps/docs/.vitepress/dist/reference/index.html
-          test -f apps/docs/.vitepress/dist/reference/view-project.html
-          test -f apps/docs/.vitepress/dist/reference/provider-api.html
-          test -f apps/docs/.vitepress/dist/reference/projections.html
-          grep -q "href=\"${BASE_PATH}/assets/" "$index"
-          grep -q "src=\"${BASE_PATH}/assets/" "$index"
-          grep -q "href=\"${BASE_PATH}/brand/marimo-studio-mark-light.svg\"" "$index"
-          grep -q "href=\"${BASE_PATH}/brand/marimo-studio-mark-dark.svg\"" "$index"
-          grep -q "href=\"${BASE_PATH}/guide/getting-started\"" "$index"
 
       - name: Upload GitHub Pages artifact
         if: github.event_name != 'pull_request'

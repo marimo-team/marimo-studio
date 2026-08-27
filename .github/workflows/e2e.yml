@@ -31,26 +31,13 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --locked --group e2e
 
-      - name: Set up Socket Firewall
-        uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
         with:
-          mode: firewall-free
-
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
-        with:
-          node-version-file: .node-version
-          version: 0.2.4
-          cache: true
-          sfw: true
-          run-install: |
-            - args: ["--frozen-lockfile"]
-
-      - name: Enable pnpm
-        run: corepack enable pnpm
+          prepare-marimo-frontend: "true"
 
       - name: Install Chromium
-        run: pnpm --filter @marimo-studio/e2e install-browser
+        run: make _browser-install
 
       - name: Run browser acceptance
         run: make e2e
@@ -62,6 +49,7 @@ jobs:
           name: playwright-report
           path: |
             apps/e2e/playwright-report/
+            apps/e2e/playwright-report-installed/
             apps/e2e/test-results/
           if-no-files-found: ignore
           retention-days: 7
