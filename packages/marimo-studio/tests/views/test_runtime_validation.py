@@ -8,6 +8,8 @@ import marimo
 import pytest
 
 import marimo_studio._validation.static as checks_module
+import marimo_studio._views.inspection as inspection_module
+from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._projections.runtime_records import (
     OutputRenderResult,
     RenderedOutput,
@@ -16,6 +18,7 @@ from marimo_studio._projections.runtime_records import (
     ValueReadError,
     ValueReadResult,
 )
+from marimo_studio._validation.service import prepare_validation
 from marimo_studio._validation.static import check_runtime_studio, check_studio
 from marimo_studio._views.api import bind_cell, ensure_view
 from marimo_studio._views.resolve import resolve_studio
@@ -24,6 +27,26 @@ from marimo_studio._workspace import load_studio
 from .workspace_test_support import (
     _shell,
 )
+
+
+def test_validation_preserves_mount_inspection_cleanup_failure(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ensure_view(notebook_path)
+
+    def fail(*_args: object, **_kwargs: object) -> object:
+        raise ProcessCleanupError("mount inspection process survived")
+
+    monkeypatch.setattr(inspection_module, "inspect_view_project_sync", fail)
+
+    with pytest.raises(ProcessCleanupError, match="mount inspection process survived"):
+        asyncio.run(
+            prepare_validation(
+                load_studio(notebook_path),
+                view_name="dashboard",
+            )
+        )
 
 
 def test_runtime_check_scopes_values_to_the_selected_view(

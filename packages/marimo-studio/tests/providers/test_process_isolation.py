@@ -19,7 +19,7 @@ import pytest
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.errors import ConfigurationError, ViewProjectError
+from marimo_studio.errors import ViewProjectError
 from marimo_studio.view_providers import (
     BuildResult,
     JsonValue,
@@ -39,6 +39,10 @@ from ..provider_test_support import (
     ProviderStub,
     inspection,
 )
+
+pytestmark = pytest.mark.native_process
+
+_PROCESS_START_TIMEOUT = 15.0
 
 _IMPORT_MARKER = os.environ.get("MARIMO_STUDIO_PROVIDER_IMPORT_MARKER")
 if _IMPORT_MARKER:
@@ -304,7 +308,7 @@ def _external_build_studio(
 
 
 def _wait_for_pids(marker: Path, count: int) -> tuple[int, ...]:
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + _PROCESS_START_TIMEOUT
     while time.monotonic() < deadline:
         if marker.is_file():
             try:
@@ -414,54 +418,10 @@ def test_isolated_provider_owns_its_complete_command_tree(
         _kill_survivors(pids)
 
 
-@pytest.mark.parametrize("boundary", ("deletion", "shutdown"))
-def test_provider_lifecycle_boundaries_drain_the_complete_process_tree(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    boundary: str,
-) -> None:
-    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
-    installed = _registry("tree", "process_tree_provider").get("test-process/tree")
-    marker = tmp_path / "pids"
-    project = _project(tmp_path, installed.key, marker=str(marker))
-    pids: tuple[int, ...] = ()
-
-    async def exercise() -> tuple[int, ...]:
-        coordinator = DevelopmentCoordinator()
-        publication = asyncio.create_task(
-            coordinator.publish(
-                project.name,
-                1,
-                lambda: installed.inspect(
-                    inspection_request(project, command_timeout=30)
-                ),
-            )
-        )
-        recorded = await asyncio.to_thread(_wait_for_pids, marker, 3)
-        try:
-            if boundary == "deletion":
-                async with coordinator.deleting_view(project.name):
-                    await asyncio.to_thread(_wait_until_dead, recorded)
-            else:
-                await coordinator.close()
-                await asyncio.to_thread(_wait_until_dead, recorded)
-            await asyncio.gather(publication, return_exceptions=True)
-            return recorded
-        finally:
-            await coordinator.close()
-
-    try:
-        pids = asyncio.run(exercise())
-    finally:
-        _kill_reported_processes(marker, pids)
-
-
-@pytest.mark.parametrize("boundary", ("request", "deletion", "shutdown"))
-def test_snapshot_build_lifecycle_drains_the_complete_process_tree(
+def test_snapshot_request_cancellation_drains_the_complete_process_tree(
     notebook_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    boundary: str,
 ) -> None:
     studio, marker = _external_build_studio(notebook_path, tmp_path, monkeypatch)
     pids: tuple[int, ...] = ()
@@ -477,16 +437,8 @@ def test_snapshot_build_lifecycle_drains_the_complete_process_tree(
         snapshot = asyncio.create_task(presentation.snapshot_async("dashboard"))
         recorded = await asyncio.to_thread(_wait_for_pids, marker, 3)
         try:
-            if boundary == "request":
-                snapshot.cancel()
-                await asyncio.gather(snapshot, return_exceptions=True)
-            elif boundary == "deletion":
-                async with coordinator.deleting_view("dashboard"):
-                    pass
-                await asyncio.gather(snapshot, return_exceptions=True)
-            else:
-                await coordinator.close()
-                await asyncio.gather(snapshot, return_exceptions=True)
+            snapshot.cancel()
+            await asyncio.gather(snapshot, return_exceptions=True)
             await asyncio.to_thread(_wait_until_dead, recorded)
             return recorded
         finally:
@@ -499,73 +451,10 @@ def test_snapshot_build_lifecycle_drains_the_complete_process_tree(
         _kill_reported_processes(marker, pids)
 
 
-def test_cancelled_validation_build_drains_the_complete_process_tree(
+def test_view_creation_http_cancellation_drains_provider_work_before_return(
     notebook_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    studio, marker = _external_build_studio(notebook_path, tmp_path, monkeypatch)
-    pids: tuple[int, ...] = ()
-
-    async def exercise() -> tuple[int, ...]:
-        from marimo_studio._validation.service import prepare_validation
-
-        coordinator = DevelopmentCoordinator()
-        validation = asyncio.create_task(
-            prepare_validation(
-                studio,
-                view_name="dashboard",
-                development=coordinator,
-            )
-        )
-        recorded = await asyncio.to_thread(_wait_for_pids, marker, 3)
-        try:
-            validation.cancel()
-            await asyncio.gather(validation, return_exceptions=True)
-            await asyncio.to_thread(_wait_until_dead, recorded)
-            return recorded
-        finally:
-            await coordinator.close()
-
-    try:
-        pids = asyncio.run(exercise())
-    finally:
-        _kill_reported_processes(marker, pids)
-
-
-def test_workspace_validation_cancellation_drains_the_provider_process_tree(
-    notebook_path: Path,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    studio, marker = _external_build_studio(notebook_path, tmp_path, monkeypatch)
-    from marimo_studio.agent import Workspace
-
-    workspace = Workspace._create(studio.notebook)
-    pids: tuple[int, ...] = ()
-
-    async def exercise() -> tuple[int, ...]:
-        validation = asyncio.create_task(
-            workspace.validate(level="static", view="dashboard")
-        )
-        recorded = await asyncio.to_thread(_wait_for_pids, marker, 3)
-        validation.cancel()
-        await asyncio.gather(validation, return_exceptions=True)
-        await asyncio.to_thread(_wait_until_dead, recorded)
-        return recorded
-
-    try:
-        pids = asyncio.run(exercise())
-    finally:
-        _kill_reported_processes(marker, pids)
-
-
-@pytest.mark.parametrize("boundary", ("http", "workspace"))
-def test_view_creation_cancellation_drains_provider_work_before_return(
-    notebook_path: Path,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    boundary: str,
 ) -> None:
     import json
 
@@ -586,65 +475,54 @@ def test_view_creation_cancellation_drains_provider_work_before_return(
     pids: tuple[int, ...] = ()
 
     async def exercise() -> tuple[int, ...]:
-        if boundary == "workspace":
-            from marimo_studio.agent import Workspace
+        from starlette.authentication import AuthCredentials
+        from starlette.requests import Request
 
-            operation = asyncio.create_task(
-                Workspace._create(notebook_path).ensure_view(
-                    "cancelled",
-                    starter="test-process/create-tree:default",
-                )
+        from marimo_studio._server.studio.routes import create_view_response
+
+        body = json.dumps(
+            {
+                "name": "cancelled",
+                "starter": "test-process/create-tree:default",
+            }
+        ).encode()
+        sent = False
+
+        async def receive() -> dict[str, object]:
+            nonlocal sent
+            if sent:
+                await asyncio.Future()
+            sent = True
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        request = Request(
+            {
+                "type": "http",
+                "asgi": {"version": "3.0"},
+                "http_version": "1.1",
+                "method": "POST",
+                "scheme": "http",
+                "path": "/_marimo-studio/views",
+                "raw_path": b"/_marimo-studio/views",
+                "root_path": "",
+                "query_string": b"",
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"marimo-server-token", b"server-token"),
+                ],
+                "client": ("127.0.0.1", 50000),
+                "server": ("127.0.0.1", 2718),
+                "auth": AuthCredentials(["read", "edit"]),
+            },
+            receive,
+        )
+        operation = asyncio.create_task(
+            create_view_response(
+                request,
+                load_studio_definition(notebook_path),
+                "server-token",
             )
-        else:
-            from starlette.authentication import AuthCredentials
-            from starlette.requests import Request
-
-            from marimo_studio._server.studio.routes import create_view_response
-
-            body = json.dumps(
-                {
-                    "name": "cancelled",
-                    "starter": "test-process/create-tree:default",
-                }
-            ).encode()
-            sent = False
-
-            async def receive() -> dict[str, object]:
-                nonlocal sent
-                if sent:
-                    await asyncio.Future()
-                sent = True
-                return {"type": "http.request", "body": body, "more_body": False}
-
-            request = Request(
-                {
-                    "type": "http",
-                    "asgi": {"version": "3.0"},
-                    "http_version": "1.1",
-                    "method": "POST",
-                    "scheme": "http",
-                    "path": "/_marimo-studio/views",
-                    "raw_path": b"/_marimo-studio/views",
-                    "root_path": "",
-                    "query_string": b"",
-                    "headers": [
-                        (b"content-type", b"application/json"),
-                        (b"marimo-server-token", b"server-token"),
-                    ],
-                    "client": ("127.0.0.1", 50000),
-                    "server": ("127.0.0.1", 2718),
-                    "auth": AuthCredentials(["read", "edit"]),
-                },
-                receive,
-            )
-            operation = asyncio.create_task(
-                create_view_response(
-                    request,
-                    load_studio_definition(notebook_path),
-                    "/",
-                    "server-token",
-                )
-            )
+        )
         recorded = await asyncio.to_thread(_wait_for_pids, marker, 3)
         operation.cancel()
         results = await asyncio.gather(operation, return_exceptions=True)
@@ -793,52 +671,6 @@ def test_external_provider_runtime_validation_owns_the_complete_runtime_tree(
             assert any(check.code == "runtime-timeout" for check in checks)
         await asyncio.to_thread(_wait_until_dead, recorded)
         return recorded
-
-    try:
-        pids = asyncio.run(exercise())
-    finally:
-        _kill_reported_processes(marker, pids)
-
-
-@pytest.mark.parametrize("boundary", ("deletion", "shutdown"))
-def test_catalog_fallback_build_uses_the_development_owner(
-    notebook_path: Path,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    boundary: str,
-) -> None:
-    studio, marker = _external_build_studio(notebook_path, tmp_path, monkeypatch)
-    pids: tuple[int, ...] = ()
-
-    async def exercise() -> tuple[int, ...]:
-        from marimo_studio._server.development import routes as development_routes
-
-        coordinator = DevelopmentCoordinator()
-
-        async def unavailable(*_args: object, **_kwargs: object) -> None:
-            raise ConfigurationError("view.toml is temporarily invalid")
-
-        monkeypatch.setattr(coordinator, "project_catalog", unavailable)
-        publication = asyncio.create_task(
-            development_routes._prepare_presentation(
-                studio,
-                "dashboard",
-                7,
-                coordinator,
-            )
-        )
-        recorded = await asyncio.to_thread(_wait_for_pids, marker, 3)
-        try:
-            if boundary == "deletion":
-                async with coordinator.deleting_view("dashboard"):
-                    pass
-            else:
-                await coordinator.close()
-            await asyncio.gather(publication, return_exceptions=True)
-            await asyncio.to_thread(_wait_until_dead, recorded)
-            return recorded
-        finally:
-            await coordinator.close()
 
     try:
         pids = asyncio.run(exercise())

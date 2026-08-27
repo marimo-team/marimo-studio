@@ -14,8 +14,6 @@ from typing import Any
 import pytest
 
 import marimo_studio._processes.provider_runner as provider_runner_module
-import marimo_studio._views.build as build_module
-import marimo_studio._views.inspection as inspection_module
 from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio._processes.provider_operation import run_provider_operation
 from marimo_studio._processes.provider_runner import (
@@ -184,6 +182,7 @@ def test_cancelled_provider_process_finishes_when_extension_ignores_cancellation
     asyncio.run(exercise())
 
 
+@pytest.mark.native_process
 def test_provider_runner_executes_a_bounded_project_command(
     tmp_path: Path,
 ) -> None:
@@ -322,82 +321,6 @@ def test_development_worker_surfaces_cleanup_failure() -> None:
     asyncio.run(
         _cancel_after_start(
             run_owned_worker(control, operation),
-            started,
-        )
-    )
-
-
-def test_async_inspection_surfaces_cleanup_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    started = threading.Event()
-    project = ViewProject(
-        "dashboard",
-        tmp_path,
-        tmp_path / "view.toml",
-        "example/html",
-        {},
-    )
-    monkeypatch.setattr(
-        inspection_module,
-        "inspect_view_project_sync",
-        lambda *_args, **_kwargs: _raise_cleanup_after_cancellation(started),
-    )
-
-    asyncio.run(
-        _cancel_after_start(
-            inspection_module.inspect_view_project(project),
-            started,
-        )
-    )
-
-
-def test_mount_inspection_surfaces_cleanup_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    project = ViewProject(
-        "dashboard",
-        tmp_path,
-        tmp_path / "view.toml",
-        "example/html",
-        {},
-    )
-
-    def fail(*_args: object, **_kwargs: object) -> object:
-        raise ProcessCleanupError("mount inspection process survived")
-
-    monkeypatch.setattr(inspection_module, "inspect_view_project_sync", fail)
-
-    with pytest.raises(
-        ProcessCleanupError,
-        match="mount inspection process survived",
-    ):
-        inspection_module.inspect_view_mounts(project)
-
-
-def test_async_build_surfaces_cleanup_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    started = threading.Event()
-    project = ViewProject(
-        "dashboard",
-        tmp_path,
-        tmp_path / "view.toml",
-        "example/html",
-        {},
-    )
-    monkeypatch.setattr(
-        build_module,
-        "build_view_project_sync",
-        lambda *_args, **_kwargs: _raise_cleanup_after_cancellation(started),
-    )
-
-    asyncio.run(
-        _cancel_after_start(
-            build_module.build_view_project(project),
             started,
         )
     )

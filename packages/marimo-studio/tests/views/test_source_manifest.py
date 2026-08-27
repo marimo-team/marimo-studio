@@ -6,12 +6,37 @@ import pytest
 
 import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._views.sources as sources_module
+from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._views.sources import read_source, write_source
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import SourceConflictError, SourceValidationError
 from marimo_studio.view_providers._host import provider_registry
 
 from .source_test_support import studio as _studio
+
+
+def test_manifest_write_preserves_provider_cleanup_failure(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _studio(notebook_path)
+    current = read_source(studio, "dashboard", "view.toml")
+
+    def fail_registry() -> object:
+        raise ProcessCleanupError("manifest provider process survived")
+
+    monkeypatch.setattr(sources_module, "provider_registry", fail_registry)
+
+    with pytest.raises(ProcessCleanupError, match="manifest provider process survived"):
+        write_source(
+            studio,
+            "dashboard",
+            "view.toml",
+            current.content + '\n[options]\nentrypoint = "index.html"\n',
+            current.revision,
+        )
+
+    assert read_source(studio, "dashboard", "view.toml") == current
 
 
 def test_manifest_write_rejects_invalid_candidates_without_replacing_source(

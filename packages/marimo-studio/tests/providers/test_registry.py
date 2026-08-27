@@ -347,33 +347,6 @@ def test_provider_project_operations_surface_process_cleanup_failure(
             )
 
 
-def test_manifest_validation_surfaces_provider_process_cleanup_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import marimo_studio._views.sources as sources_module
-    from marimo_studio._workspace.project_manifest import encode_view_manifest
-
-    root = tmp_path / "view"
-    root.mkdir()
-
-    def fail_registry() -> object:
-        raise ProcessCleanupError("manifest provider process survived")
-
-    monkeypatch.setattr(sources_module, "provider_registry", fail_registry)
-
-    with pytest.raises(
-        ProcessCleanupError,
-        match="manifest provider process survived",
-    ):
-        sources_module._validate_view_manifest(
-            root,
-            "dashboard",
-            encode_view_manifest("example/provider"),
-            None,
-        )
-
-
 @pytest.mark.parametrize("boundary", ("inspect", "snapshot-inspect", "build"))
 def test_public_build_surfaces_provider_process_cleanup_failure(
     tmp_path: Path,
