@@ -12,12 +12,12 @@ const katexSourcePattern =
 
 export const evergreenKaTeXFontCss = (source: string): string => {
   const transformed = source.replace(katexSourcePattern, "src: $1;");
-  const legacy = transformed.search(/format\("(?:woff|truetype)"\)/);
-  if (legacy >= 0) {
+  const unsupported = transformed.search(/format\("(?:woff|truetype)"\)/);
+  if (unsupported >= 0) {
     throw new Error(
       `KaTeX font CSS contains a non-WOFF2 browser source: ${transformed.slice(
-        Math.max(0, legacy - 160),
-        legacy + 240,
+        Math.max(0, unsupported - 160),
+        unsupported + 240,
       )}`,
     );
   }
