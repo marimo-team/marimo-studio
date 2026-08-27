@@ -562,12 +562,23 @@ def test_atomic_write_retries_a_windows_sharing_violation(
     native_replace = secure_operations.os.replace
     attempts = 0
 
-    def replace(*args: object, **kwargs: object) -> None:
+    def replace(
+        source: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        destination: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        *,
+        src_dir_fd: int | None = None,
+        dst_dir_fd: int | None = None,
+    ) -> None:
         nonlocal attempts
         attempts += 1
         if attempts == 1:
             raise PermissionError(errno.EACCES, "sharing violation")
-        native_replace(*args, **kwargs)
+        native_replace(
+            source,
+            destination,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+        )
 
     monkeypatch.setattr(secure_operations.os, "name", "nt")
     monkeypatch.setattr(secure_operations.os, "replace", replace)
