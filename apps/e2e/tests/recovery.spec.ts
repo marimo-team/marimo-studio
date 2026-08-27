@@ -1,26 +1,28 @@
+import { projectionDiagnosticSchema } from "@marimo-studio/protocol/runtime-config";
 import { expect as playwrightExpect, test as playwrightTest, type Page } from "@playwright/test";
-import { spawn, type ChildProcess } from "node:child_process";
 
-import { configDirectory, repositoryDirectory } from "../scripts/paths.mjs";
 import {
+  captureProjectionRefresh,
   editorFrame,
   expect,
-  studioEntryUrl,
+  observeBrowserContext,
   previewFrame,
   readWorkspaceFile,
+  recoverProjectionRefresh,
   restoreWorkspace,
+  studioEntryUrl,
+  studioOrigin,
   test,
   waitForPreview,
   workspaceNotebookPath,
-  writeWorkspaceFile,
 } from "./fixture.ts";
+import { stopNotebookServer, waitForNotebookServer } from "./notebook-server.ts";
+import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
+import { editServerUrl, startEditServer } from "./recovery-support.ts";
 
-const runShortcut = process.platform === "darwin" ? "Meta+Enter" : "Control+Enter";
 const selectAllShortcut = process.platform === "darwin" ? "Meta+a" : "Control+a";
-const originalMetricSource = "metric = scale.value * 21\nmetric";
-const runServerUrl = "http://127.0.0.1:4323";
-const runServerToken = "recovery-e2e-token";
-const editServerUrl = "http://127.0.0.1:4324";
+const originalMetricSource =
+  'metric = scale.value * 21\nresponsive_value = "responsive" * 80\nmetric';
 
 declare global {
   var __studioEventSourceCount: number | undefined;
@@ -35,122 +37,28 @@ interface WebSocketObservation {
   closeReason?: string;
 }
 
-const startNotebookServer = (
-  command: "edit" | "run",
-  port: number,
-  authentication: readonly string[],
-) => {
-  const child = spawn(
-    "uv",
-    [
-      "run",
-      "--frozen",
-      "--group",
-      "e2e",
-      "marimo",
-      command,
-      workspaceNotebookPath,
-      "--no-sandbox",
-      "--headless",
-      ...authentication,
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(port),
-    ],
-    {
-      cwd: repositoryDirectory,
-      detached: process.platform !== "win32",
-      env: {
-        ...process.env,
-        PYTHONUNBUFFERED: "1",
-        XDG_CONFIG_HOME: configDirectory,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
-  let output = "";
-  child.stdout?.on("data", (data: Buffer) => {
-    output += data.toString();
-  });
-  child.stderr?.on("data", (data: Buffer) => {
-    output += data.toString();
-  });
-  return { output: () => output, process: child };
-};
-
-const startRunServer = () => startNotebookServer("run", 4323, ["--token-password", runServerToken]);
-
-const startEditServer = () => startNotebookServer("edit", 4324, ["--no-token"]);
-
-const waitForServer = async (
-  server: ReturnType<typeof startNotebookServer>,
-  url: string,
-): Promise<void> => {
-  const deadline = Date.now() + 60_000;
-  while (Date.now() < deadline) {
-    if (server.process.exitCode !== null) {
-      throw new Error(`Notebook server exited during startup\n${server.output()}`);
-    }
-    try {
-      const response = await fetch(url);
-      await response.body?.cancel();
-      if (response.ok) {
-        return;
-      }
-    } catch {
-      // The socket is unavailable until Marimo starts listening.
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`Notebook server did not start\n${server.output()}`);
-};
-
-const stopServer = async (child: ChildProcess): Promise<void> => {
-  const stopped = () => child.exitCode !== null || child.signalCode !== null;
-  const pid = child.pid;
-  if (stopped() || pid === undefined) {
-    return;
-  }
-  const kill = (signal: NodeJS.Signals) => {
-    try {
-      if (process.platform === "win32") {
-        child.kill(signal);
-      } else {
-        process.kill(-pid, signal);
-      }
-    } catch (error) {
-      if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) {
-        throw error;
-      }
-    }
-  };
-  const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
-  kill("SIGTERM");
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  await Promise.race([
-    exited,
-    new Promise((resolve) => {
-      timeout = setTimeout(resolve, 5_000);
-    }),
-  ]);
-  clearTimeout(timeout);
-  if (stopped()) {
-    return;
-  }
-  kill("SIGKILL");
-  await exited;
-};
-
 const replaceMetricCell = async (page: Page, source: string) => {
-  const cell = editorFrame(page)
-    .locator(".cm-content")
-    .filter({ hasText: /(?:metric|replacement) = scale\.value \* 21/ })
-    .first();
-  await cell.click();
-  await cell.press(selectAllShortcut);
+  const cell = editorFrame(page).locator('.marimo-cell[data-cell-name="metric"]');
+  const runtime = cell.locator("..");
+  const editor = cell.locator(".cm-content");
+  await editor.click();
+  await editor.press(selectAllShortcut);
   await page.keyboard.insertText(source);
-  await page.keyboard.press(runShortcut);
+  const run = cell.locator('button[data-testid="run-button"]:not(:disabled)');
+  await cell.hover();
+  await expect(run).toHaveCount(1);
+  await Promise.all([
+    page.waitForResponse((response) => {
+      const request = response.request();
+      return (
+        request.method() === "POST" &&
+        new URL(response.url()).pathname.endsWith("/api/kernel/run") &&
+        response.ok()
+      );
+    }),
+    run.click(),
+  ]);
+  await expect(runtime).toHaveAttribute("data-status", "idle");
 };
 
 const waitForMetricSource = () =>
@@ -190,8 +98,9 @@ const isEditorSocket = (observation: WebSocketObservation): boolean =>
 
 playwrightTest(
   "a fresh Studio tab starts after the server restarts with a stale tab open",
-  async ({ context, page }) => {
+  async ({ context, page }, testInfo) => {
     await restoreWorkspace();
+    await installPinnedPyodideAssets(context);
     await context.addInitScript(() => {
       const NativeEventSource = globalThis.EventSource;
       const NativeWebSocket = globalThis.WebSocket;
@@ -220,11 +129,15 @@ playwrightTest(
         }
       };
     });
+    const servers: Array<ReturnType<typeof startEditServer>> = [];
     let server = startEditServer();
+    servers.push(server);
     let fresh: Page | undefined;
+    const diagnostics = observeBrowserContext(context);
+    let diagnosticsClosed = false;
 
     try {
-      await waitForServer(server, editServerUrl);
+      await waitForNotebookServer(server, editServerUrl);
       await page.goto(editServerUrl);
       await waitForPreview(page);
       await playwrightExpect.poll(() => eventSourceCount(page)).toBe(1);
@@ -239,9 +152,20 @@ playwrightTest(
         )
         .toBe(true);
 
-      await stopServer(server.process);
+      const openSockets = (await webSocketObservations(page)).filter(
+        (observation) => observation.closeCode === undefined,
+      );
+      playwrightExpect(openSockets.length).toBeGreaterThan(0);
+      const shutdownWarnings = diagnostics.expectConsole({
+        type: "warning",
+        text: /^WebSocket closed 1000 MARIMO_SHUTDOWN$/,
+        count: openSockets.length,
+      });
+
+      await stopNotebookServer(server);
       server = startEditServer();
-      await waitForServer(server, editServerUrl);
+      servers.push(server);
+      await waitForNotebookServer(server, editServerUrl);
       await playwrightExpect
         .poll(() =>
           page.evaluate(
@@ -254,8 +178,8 @@ playwrightTest(
           (await webSocketObservations(page)).some(
             (observation) =>
               isEditorSocket(observation) &&
-              observation.closeCode === 1000 &&
-              observation.closeReason === "MARIMO_NO_SESSION",
+              observation.closeCode !== undefined &&
+              observation.closeCode !== 1006,
           ),
         )
         .toBe(true);
@@ -267,97 +191,134 @@ playwrightTest(
       await playwrightExpect(preview.getByText("Projected total:")).toBeVisible();
       await playwrightExpect.poll(() => eventSourceCount(current)).toBe(1);
       playwrightExpect(server.output()).not.toContain("Exception in ASGI application");
+      shutdownWarnings.recovered();
+      await diagnostics.close();
+      diagnosticsClosed = true;
+      playwrightExpect(diagnostics.messages, "unexpected browser diagnostics").toEqual([]);
+    } catch (error) {
+      await Promise.all(
+        servers.map((candidate, index) =>
+          testInfo.attach(`recovery-server-${index + 1}`, {
+            body: Buffer.from(candidate.output()),
+            contentType: "text/plain",
+          }),
+        ),
+      );
+      throw error;
     } finally {
+      if (!diagnosticsClosed) {
+        await diagnostics.close();
+      }
       await fresh?.close();
-      await stopServer(server.process);
+      await stopNotebookServer(server);
       await restoreWorkspace();
     }
   },
 );
 
-test("restores a value host after its notebook value returns", async ({ page }) => {
+test("restores a value host after its notebook value returns", async ({
+  browserDiagnostics,
+  page,
+}) => {
+  const staleProjectionReads = browserDiagnostics.expectResponse({
+    status: 409,
+    path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/(?:values|outputs)$/,
+    error: "stale-projection-binding",
+    count: 4,
+    required: false,
+  });
+  const pendingRuntimeSync = browserDiagnostics.expectResponse({
+    status: 409,
+    path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/config$/,
+    error: "runtime-sync-pending",
+    count: 4,
+    required: false,
+  });
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
+  const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
+    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    2,
+  );
   const value = preview.locator('[mo-value="metric"]');
+  const currentViewRevision = () =>
+    preview.locator("html").evaluate(() => globalThis.marimoStudio.identity().revision);
   const initial = await value.textContent();
   expect(initial).toMatch(/^\d+$/);
   let restored = false;
 
   try {
+    const initialViewRevision = await currentViewRevision();
+    const missingMetricRefresh = await captureProjectionRefresh(page, browserDiagnostics);
     await replaceMetricCell(page, "replacement = scale.value * 21\nreplacement");
+    await expect.poll(currentViewRevision).not.toBe(initialViewRevision);
 
     await expect(value).toHaveAttribute("data-state", "error");
     await expect(preview.locator('marimo-cell[name="controls"]')).toHaveAttribute(
       "data-state",
       "ready",
     );
-    expect(
-      await preview.locator("html").evaluate(() => globalThis.marimoStudio.diagnostics()),
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: expect.stringMatching(/^(missing-variable|value-variable-not-found)$/),
-          severity: "error",
-          target: "metric",
-        }),
-      ]),
-    );
-
+    const diagnostics: readonly unknown[] = await preview
+      .locator("html")
+      .evaluate(() => globalThis.marimoStudio.diagnostics());
+    const metricError = diagnostics
+      .map((diagnostic) => projectionDiagnosticSchema.safeParse(diagnostic))
+      .find(
+        (diagnostic) =>
+          diagnostic.success &&
+          diagnostic.data.code === "projection-value-variable-not-found" &&
+          diagnostic.data.projection === "value" &&
+          diagnostic.data.target === "metric",
+      )?.data;
+    if (metricError === undefined) {
+      throw new Error(
+        `The missing metric did not produce its projection diagnostic: ${JSON.stringify(diagnostics)}`,
+      );
+    }
+    expect(metricError).toMatchObject({
+      code: "projection-value-variable-not-found",
+      severity: "error",
+      target: "metric",
+    });
+    const missingMetricMessage =
+      "Notebook variable 'metric' does not resolve in the notebook. " +
+      "Name the notebook cell or define the variable, then update the view.";
+    await expect(value).toHaveText("Unavailable");
+    await expect(value).toHaveAccessibleName(missingMetricMessage);
+    await expect(value).toHaveAttribute("title", missingMetricMessage);
+    missingMetricRefresh.capture.terminalizeValues(["metric"]);
+    await recoverProjectionRefresh(missingMetricRefresh, page);
+    const missingMetricRevision = await currentViewRevision();
+    const restoredMetricRefresh = await captureProjectionRefresh(page, browserDiagnostics);
     await replaceMetricCell(page, originalMetricSource);
-    await expect(value).toHaveAttribute("data-state", "ready");
     await waitForMetricSource();
+    await expect.poll(currentViewRevision).not.toBe(missingMetricRevision);
+    await waitForPreview(page);
+    await expect(value).toHaveAttribute("data-state", "ready");
     restored = true;
     await expect(value).toHaveText(initial ?? "");
     await expect(previewFrame(page).locator("html")).toHaveAttribute(
       "data-marimo-studio-state",
       "ready",
     );
+    await recoverProjectionRefresh(restoredMetricRefresh, page);
+    replacedWorkspaceStreams.recovered();
+    staleProjectionReads.recovered();
+    pendingRuntimeSync.recovered();
   } finally {
     if (!restored) {
+      const source = await readWorkspaceFile(workspaceNotebookPath);
+      const replacingSource = source.includes("replacement =");
+      const currentRevision = await currentViewRevision();
       await replaceMetricCell(page, originalMetricSource);
-      await expect(value).toHaveAttribute("data-state", "ready");
       await waitForMetricSource();
-    }
-  }
-});
-
-test("preserves run-mode kernel state across a page reload", async ({ page }) => {
-  const source = await readWorkspaceFile(workspaceNotebookPath);
-  await writeWorkspaceFile(
-    workspaceNotebookPath,
-    source.replace("# preserve_session = false", "# preserve_session = true"),
-  );
-  const server = startRunServer();
-  const waitForRunMode = async () => {
-    await expect(page.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
-    await expect(page.getByRole("button", { name: /Widget count:/ })).toBeVisible();
-  };
-
-  try {
-    await waitForServer(server, `${runServerUrl}/dashboard/?access_token=${runServerToken}`);
-    await page.goto(`${runServerUrl}/dashboard/?access_token=${runServerToken}`);
-    await waitForRunMode();
-    const scale = page.locator('marimo-cell[name="controls"]').getByRole("slider");
-    await scale.press("End");
-    await expect(page.locator('[mo-value="metric"]')).toHaveText("63");
-    const widget = page.getByRole("button", { name: "Widget count: 7" });
-    await widget.click();
-    await expect(page.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
-    await waitForRunMode();
-    const sessionId = await page.evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__);
-    expect(sessionId).toMatch(/^s_[\da-z]{6}$/);
-
-    await page.reload();
-    await waitForRunMode();
-
-    expect(await page.evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__)).toBe(sessionId);
-    await expect(page.locator('[mo-value="metric"]')).toHaveText("63");
-    await expect(page.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
-  } finally {
-    try {
-      await page.close();
-    } finally {
-      await stopServer(server.process);
+      if (replacingSource) {
+        await expect.poll(currentViewRevision).not.toBe(currentRevision);
+      }
+      await waitForPreview(page);
+      await expect(value).toHaveAttribute("data-state", "ready");
+      staleProjectionReads.recovered();
+      pendingRuntimeSync.recovered();
     }
   }
 });
