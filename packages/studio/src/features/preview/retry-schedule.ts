@@ -1,18 +1,3 @@
-export type PreviewLoadState = "ready" | "waiting" | "error";
-
-export const previewLoadState = ({
-  hasRuntimeRoot,
-  documentState,
-}: {
-  hasRuntimeRoot: boolean;
-  documentState?: string;
-}): PreviewLoadState => {
-  if (hasRuntimeRoot) {
-    return "ready";
-  }
-  return documentState === "waiting" ? "waiting" : "error";
-};
-
 export class RetrySchedule {
   #attempt = 0;
 

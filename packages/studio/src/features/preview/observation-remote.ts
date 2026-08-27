@@ -50,7 +50,8 @@ const responseError = async (response: Response): Promise<BrowserObservationUplo
       code = detail.error;
     }
   } catch {
-    // The status still provides a stable retry classification.
+    // A proxy or non-Studio error may omit the structured JSON body. The HTTP
+    // status still provides the retry classification.
   }
   const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
   return new BrowserObservationUploadError(

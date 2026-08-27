@@ -3,37 +3,42 @@ import type {
   RuntimeStatusPhase,
   RuntimeStatusReport,
 } from "@marimo-studio/protocol/browser-observations";
-import type {
-  ObserveViewRequest,
-  ShellChangeKind,
-} from "@marimo-studio/protocol/development-events";
 
 import {
+  parseEditorDocumentMutationAcknowledgement,
+  type ObserveViewRequest,
+} from "@marimo-studio/protocol/development-events";
+import {
   parsePreviewMessage,
+  type PresentationRefreshBarrierMessage,
   type PresentationToStudioMessage,
-  type SourceChangeMessage,
   type SwitchViewMessage,
+  type ViewNavigationIntent,
   type ViewDiagnostic,
   type ViewObservationMessage,
   type ViewPreviewMessage,
 } from "@marimo-studio/protocol/preview-messages";
-import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
+import { DOCUMENT_LIFECYCLE_QUERY_PARAM } from "@marimo-studio/protocol/query";
 
-import type { ControlFrameConnector } from "./control-sync.ts";
+import type { PreviewAdmissionMessage, PreviewIdentity } from "./admission.ts";
+import type { ControlFrameConnector, ControlSyncStatus } from "./control-sync.ts";
 import type { RecordBrowserObservation } from "./observation-remote.ts";
 import type { EditorQuerySyncResult } from "./query-remote.ts";
 
 import { assertNever } from "../../shared/assertNever.ts";
+import { PreviewAdmission } from "./admission.ts";
 import { PreviewControlController } from "./control-controller.ts";
 import { fetchRuntimeControls } from "./control-remote.ts";
+import { releaseFrameBridge, resizeFrame } from "./frame-bridge.ts";
 import { PreviewObservationController } from "./observation-controller.ts";
-import { PreviewQueryController } from "./query-controller.ts";
+import { PreviewQueryController, type QuerySyncStatus } from "./query-controller.ts";
+import { RetrySchedule } from "./retry-schedule.ts";
 import { RuntimeDiagnostics } from "./runtime-diagnostics.ts";
-import { previewLoadState, RetrySchedule } from "./state.ts";
 import { previewStatus, type PreviewStatus } from "./status.ts";
 
 export interface PreviewFrameState {
   url: string;
+  lifecycleId: number;
   status: PreviewStatus;
   runtimeStatus: RuntimeStatusReport;
 }
@@ -43,18 +48,53 @@ interface RuntimeStatusIdentity {
   sessionId?: string | null;
 }
 
+interface PendingViewSwitch {
+  readonly lifecycleId: number;
+  readonly view: string;
+  readonly resolve: (ready: boolean) => void;
+  readonly timer: ReturnType<typeof setTimeout>;
+  readonly signal?: AbortSignal;
+  readonly abort?: () => void;
+}
+
+interface PendingMutationBarrier {
+  readonly fail: (cause: unknown) => void;
+  readonly start: () => void;
+  readonly timeout: ReturnType<typeof setTimeout>;
+  started: boolean;
+}
+
+let previewDocumentLifecycleSequence = 1;
+// Leave the activation coordinator time to acknowledge the ready document
+// before the server's 120-second request deadline.
+const VIEW_SWITCH_TIMEOUT_MS = 100_000;
+const MUTATION_BARRIER_TIMEOUT_MS = 4_000;
+
+export const nextPreviewDocumentLifecycleId = (): number => ++previewDocumentLifecycleSequence;
+
+export const previewDocumentUrl = (url: string, lifecycleId: number): string => {
+  const target = new URL(url, globalThis.location.href);
+  target.searchParams.set(DOCUMENT_LIFECYCLE_QUERY_PARAM, String(lifecycleId));
+  return target.toString();
+};
+
 export class PreviewController {
   private view: string;
   private state: PreviewFrameState;
-  private receiverReady = false;
-  private viewReady = false;
+  private readonly admission: PreviewAdmission;
   private diagnostics: ViewDiagnostic[] = [];
+  private controlDiagnostic: BrowserDiagnostic | undefined;
+  private queryDiagnostic: BrowserDiagnostic | undefined;
+  private queryPhase: QuerySyncStatus["phase"] = "ready";
+  private activationsInProgress = 0;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly retrySchedule = new RetrySchedule();
-  private readyRevision: string | undefined;
-  private readySessionId: string | undefined;
-  private pendingSourceRefresh = false;
-  private sourceBaselineRevision: string | null | undefined;
+  private editorSessionId: string | undefined;
+  private navigation: ViewNavigationIntent;
+  private pendingViewSwitch: PendingViewSwitch | undefined;
+  private activeLifecycleId: number;
+  private activeOwner = true;
+  private readonly mutationBarriers = new Set<PendingMutationBarrier>();
   private readonly runtimeDiagnostics: RuntimeDiagnostics;
   private readonly controls: PreviewControlController;
   private readonly observations: PreviewObservationController;
@@ -65,24 +105,42 @@ export class PreviewController {
     private readonly runtime: string,
     private readonly editor: HTMLIFrameElement,
     private readonly preview: HTMLIFrameElement,
-    private readonly viewUrl: (view: string, runtime: string) => string,
+    private readonly viewUrl: (
+      view: string,
+      runtime: string,
+      navigation?: ViewNavigationIntent,
+    ) => string,
     private readonly supportUrl: (view: string) => string,
     syncQuery: (query: string) => void,
     syncEditorQuery: (
       query: string,
       operationId: string,
+      writeGeneration: number,
       signal: AbortSignal,
     ) => Promise<EditorQuerySyncResult>,
-    private readonly navigate: (view: string) => void,
+    private readonly navigate: (view: string, intent: ViewNavigationIntent) => Promise<boolean>,
     private readonly report: (state: PreviewFrameState) => void,
     recordObservation?: RecordBrowserObservation,
     connectControlFrame?: ControlFrameConnector,
+    initialNavigation: ViewNavigationIntent = {
+      query: globalThis.location.search,
+      hash: globalThis.location.hash,
+    },
+    private readonly navigationQueryChanged?: (query: string) => void,
+    initialLifecycleId = 1,
+    private readonly nextLifecycleId: () => number = nextPreviewDocumentLifecycleId,
+    initialEditorSessionId?: string,
   ) {
     this.view = initialView;
+    this.navigation = initialNavigation;
+    this.activeLifecycleId = initialLifecycleId;
+    this.editorSessionId = initialEditorSessionId;
+    this.preview.dataset.previewLifecycleId = String(initialLifecycleId);
     this.runtimeDiagnostics = new RuntimeDiagnostics({ runtime, view: initialView });
     const runtimeStatus = this.runtimeDiagnostics.report();
     this.state = {
-      url: this.viewUrl(initialView, runtime),
+      url: this.viewUrl(initialView, runtime, this.navigation),
+      lifecycleId: this.activeLifecycleId,
       status: previewStatus(runtime, runtimeStatus.current),
       runtimeStatus,
     };
@@ -93,6 +151,8 @@ export class PreviewController {
       supportUrl: () => this.supportUrl(this.view),
       connect: connectControlFrame,
       fetchControls: fetchRuntimeControls,
+      status: (status, revision, sessionId) =>
+        this.controlStatusChanged(status, revision, sessionId),
     });
     this.observations = new PreviewObservationController(
       runtime,
@@ -100,96 +160,399 @@ export class PreviewController {
       (message) => this.acceptObservation(message),
       recordObservation,
     );
-    this.queries = new PreviewQueryController(runtime, preview, syncQuery, syncEditorQuery, () =>
-      this.setPopoutUrl(this.viewUrl(this.view, this.runtime)),
+    this.queries = new PreviewQueryController(
+      runtime,
+      preview,
+      syncQuery,
+      syncEditorQuery,
+      () => {
+        const query = this.queries.currentQuery;
+        this.navigation = { ...this.navigation, query };
+        this.navigationQueryChanged?.(query);
+        this.setPopoutUrl(this.viewUrl(this.view, this.runtime, this.navigation));
+      },
+      this.navigation.query,
+      (status) => this.queryStatusChanged(status),
     );
+    this.admission = new PreviewAdmission({
+      clearObservations: () => this.observations.clear(),
+      clearSession: () => delete this.preview.dataset.sessionId,
+      failView: () => this.completeViewSwitch(false, this.activeLifecycleId),
+      localizedInteractive: (identity) => {
+        this.setPreviewSession(identity);
+        this.completeViewSwitch(true, this.activeLifecycleId);
+        if (this.activeOwner && this.activationsInProgress === 0) {
+          this.controls.begin(
+            identity.revision,
+            identity.sessionId ?? undefined,
+            this.editorSessionId,
+          );
+          this.observations.post();
+        }
+        this.report(this.state);
+      },
+      postMessage: (message) => this.postAdmissionMessage(message),
+      postObservations: () => this.observations.post(),
+      postSwitch: () => this.postSwitch(),
+      ready: (identity) => this.commitReadyIdentity(identity),
+      observation: (phase, diagnostics, identity) => {
+        this.setPreviewSession(identity);
+        this.diagnostics = [...diagnostics];
+        if (phase === "ready") {
+          this.showReadyStatus();
+        } else {
+          this.setRuntimeStatus(phase, diagnostics, {
+            revision: identity.revision,
+            sessionId: identity.sessionId,
+          });
+        }
+      },
+      status: (phase, diagnostics, identity) => this.setRuntimeStatus(phase, diagnostics, identity),
+      stopControls: () => this.controls.stop(),
+      viewFailed: (diagnostic, revision) => {
+        const identity =
+          revision !== null && this.admission.identity?.revision === revision
+            ? this.admission.identity
+            : null;
+        if (identity !== null) {
+          this.setPreviewSession(identity);
+        }
+        let statusIdentity = {};
+        if (revision !== null) {
+          statusIdentity =
+            identity === null ? { revision } : { revision, sessionId: identity.sessionId };
+        }
+        this.setRuntimeStatus("failed", [diagnostic], statusIdentity);
+      },
+    });
     this.bind();
   }
 
-  switchView(view: string): void {
-    this.controls.stop();
-    this.readyRevision = undefined;
-    this.readySessionId = undefined;
-    delete this.preview.dataset.sessionId;
-    this.viewReady = false;
-    this.pendingSourceRefresh = true;
-    this.sourceBaselineRevision = undefined;
-    this.view = view;
-    const nextPreview = this.viewUrl(view, this.runtime);
-    this.preview.title = `${view} custom view using ${this.runtime}`;
-    this.diagnostics = [];
-    this.runtimeDiagnostics.reset(view);
-    this.updateRuntimeStatus(
-      this.runtimeDiagnostics.record({ phase: "synchronizing", diagnostics: [] }),
-      nextPreview,
-    );
-    if (this.receiverReady) {
-      this.postSwitch();
-    } else {
-      this.retrySchedule.reset();
-      this.reload();
+  waitUntilReady(signal?: AbortSignal): Promise<boolean> {
+    if (!this.activeOwner || signal?.aborted) {
+      return Promise.resolve(false);
+    }
+    if (this.admission.isInteractive) {
+      return Promise.resolve(true);
+    }
+    this.completeViewSwitch(false, this.pendingViewSwitch?.lifecycleId);
+    return this.waitForView(this.view, this.activeLifecycleId, signal);
+  }
+
+  async activate(
+    navigation: ViewNavigationIntent,
+    signal?: AbortSignal,
+    reload = false,
+  ): Promise<boolean> {
+    if (signal?.aborted) {
+      return false;
+    }
+    this.activationsInProgress += 1;
+    try {
+      const reactivating = !this.activeOwner;
+      this.activeOwner = true;
+      this.navigation = navigation;
+      this.queries.commitNavigation(navigation.query);
+      if (reload) {
+        this.admission.requireReady();
+        this.reload();
+      } else if (reactivating) {
+        this.admission.reactivate(this.admissionOwner());
+      }
+      const ready = await this.waitUntilReady(signal);
+      if (!ready || !this.activeOwner) {
+        return false;
+      }
+      const identity = this.admission.identity;
+      if (this.admission.isInteractive && identity !== null) {
+        await this.queries.applyToPreview(true, navigation.hash);
+        if (!this.activeOwner) {
+          return false;
+        }
+        this.controls.begin(
+          identity.revision,
+          identity.sessionId ?? undefined,
+          this.editorSessionId,
+        );
+        this.observations.post();
+      }
+      return true;
+    } finally {
+      this.activationsInProgress -= 1;
     }
   }
 
+  deactivate(): void {
+    if (!this.activeOwner) {
+      return;
+    }
+    this.failMutationBarriers(new DOMException("The presentation was deactivated.", "AbortError"));
+    this.activeOwner = false;
+    this.completeViewSwitch(false, this.pendingViewSwitch?.lifecycleId);
+    this.cancelRetry();
+    this.controls.stop();
+    this.controlDiagnostic = undefined;
+    this.queries.cancel();
+    this.queryDiagnostic = undefined;
+    this.queryPhase = "ready";
+    this.observations.clear();
+  }
+
+  navigateWithinView(navigation: ViewNavigationIntent): void {
+    this.navigation = navigation;
+    this.queries.commitNavigation(navigation.query);
+    if (!this.activeOwner) {
+      return;
+    }
+    void this.queries.applyToPreview(this.admission.isInteractive, navigation.hash);
+    const next = this.viewUrl(this.view, this.runtime, this.navigation);
+    this.setPopoutUrl(next);
+  }
+
+  synchronizeNavigationQuery(query: string): Promise<boolean> {
+    return this.activeOwner ? this.queries.synchronizeNavigation(query) : Promise.resolve(false);
+  }
+
+  cancelNavigation(): void {
+    this.queries.cancelNavigation();
+  }
+
+  rollbackNavigation(query?: string): Promise<boolean> {
+    return this.queries.rollbackNavigation(query);
+  }
+
   requestResize(): void {
-    this.preview.contentWindow?.dispatchEvent(new Event("resize"));
+    resizeFrame(this.preview);
   }
 
   requestObservation(request: ObserveViewRequest): void {
-    this.observations.request(request);
+    if (this.activeOwner && this.admission.canObserve(request.revision)) {
+      this.observations.request(request, this.activeLifecycleId);
+    }
   }
 
   runtimeStatus(): RuntimeStatusReport {
     return this.runtimeDiagnostics.report();
   }
 
-  editorSessionChanged(): void {
-    this.reload();
+  readyForInteraction(): boolean {
+    return this.admission.isInteractive;
   }
 
-  sourceChanged(kind: ShellChangeKind): void {
-    this.sourceBaselineRevision = undefined;
-    if (!this.receiverReady || !this.viewReady) {
-      this.pendingSourceRefresh = true;
+  editorSessionChanged(sessionId?: string, reload = true): void {
+    this.editorSessionId = sessionId;
+    if (!this.activeOwner) {
       return;
     }
-    this.postSourceChange(kind);
-  }
-
-  sourceBaseline(revision: string | null): void {
-    this.sourceBaselineRevision = revision ?? undefined;
-    const needsRefresh =
-      revision === null || (this.readyRevision !== undefined && this.readyRevision !== revision);
-    if (!needsRefresh) {
+    if (reload) {
+      this.reload();
       return;
     }
-    this.pendingSourceRefresh = true;
-    if (this.receiverReady && this.viewReady) {
-      this.pendingSourceRefresh = false;
-      this.postSourceChange("html");
+    const identity = this.admission.identity;
+    if (this.admission.isInteractive && identity !== null) {
+      this.controls.begin(identity.revision, identity.sessionId ?? undefined, this.editorSessionId);
     }
   }
 
-  private postSourceChange(kind: ShellChangeKind): void {
-    this.setRuntimeStatus("synchronizing", []);
-    const message: SourceChangeMessage = {
-      type: "marimo-studio:source-change",
-      runtime: this.runtime,
-      view: this.view,
-      kind,
-    };
-    this.preview.contentWindow?.postMessage(message, globalThis.location.origin);
+  presentationBuildStarted(): void {
+    this.admission.buildStarted(this.admissionOwner());
+  }
+
+  presentationBuildCompleted(revision: string | null): void {
+    this.admission.buildCompleted(revision, this.admissionOwner());
+  }
+
+  notebookMutationPending(generation: number, enterAdmission: boolean): Promise<() => boolean> {
+    const target = this.preview.contentWindow;
+    const lifecycleId = this.activeLifecycleId;
+    const view = this.view;
+    if (enterAdmission) {
+      this.admission.buildStarted(this.admissionOwner(), false);
+    }
+    if (
+      !this.activeOwner ||
+      target === null ||
+      this.preview.src === "about:blank" ||
+      (this.admission.receiverPresent && !this.admission.receiverReadyForCurrentView)
+    ) {
+      return Promise.reject(
+        new DOMException("The presentation is not ready to pause.", "InvalidStateError"),
+      );
+    }
+    const channel = new MessageChannel();
+    return new Promise<void>((resolve, reject) => {
+      let owner!: PendingMutationBarrier;
+      const settle = (complete: () => void) => {
+        clearTimeout(owner.timeout);
+        channel.port1.onmessage = null;
+        channel.port1.onmessageerror = null;
+        channel.port1.close();
+        if (!owner.started) {
+          channel.port2.close();
+        }
+        this.mutationBarriers.delete(owner);
+        complete();
+      };
+      const fail = (cause: unknown) => settle(() => reject(cause));
+      const start = () => {
+        if (owner.started) {
+          return;
+        }
+        if (
+          !this.activeOwner ||
+          lifecycleId !== this.activeLifecycleId ||
+          view !== this.view ||
+          target !== this.preview.contentWindow ||
+          this.preview.src === "about:blank"
+        ) {
+          fail(new DOMException("The presentation document changed.", "AbortError"));
+          return;
+        }
+        if (!this.admission.receiverReadyForCurrentView) {
+          return;
+        }
+        owner.started = true;
+        const message: PresentationRefreshBarrierMessage = {
+          type: "marimo-studio:presentation-refresh-barrier",
+          runtime: this.runtime,
+          lifecycleId,
+          view,
+          generation,
+        };
+        try {
+          target.postMessage(message, "*", [channel.port2]);
+        } catch (cause) {
+          channel.port2.close();
+          fail(cause);
+        }
+      };
+      owner = {
+        fail,
+        start,
+        started: false,
+        timeout: setTimeout(
+          () => fail(new DOMException("The presentation did not pause in time.", "TimeoutError")),
+          MUTATION_BARRIER_TIMEOUT_MS,
+        ),
+      };
+      channel.port1.onmessage = (event) => {
+        const acknowledgement = parseEditorDocumentMutationAcknowledgement(event.data);
+        if (
+          acknowledgement &&
+          acknowledgement.type === "marimo-studio:editor-document-mutation-ready" &&
+          acknowledgement.generation === generation
+        ) {
+          settle(resolve);
+        } else {
+          fail(new DOMException("The presentation returned an invalid barrier.", "DataError"));
+        }
+      };
+      channel.port1.onmessageerror = () =>
+        fail(new DOMException("The presentation rejected the mutation barrier.", "DataError"));
+      channel.port1.start();
+      this.mutationBarriers.add(owner);
+      owner.start();
+    }).then(() => () => this.admission.buildUnchanged(this.admissionOwner()));
+  }
+
+  notebookMutationSaveFailed(active: boolean): void {
+    if (!active) {
+      return;
+    }
+    this.admission.mutationError(
+      {
+        code: "notebook-save-failed",
+        severity: "error",
+        message: "Notebook save failed.",
+        hint: "Retry the save to update this view.",
+        view: this.view,
+        scope: "runtime",
+      },
+      this.admission.identity?.revision ?? null,
+    );
+  }
+
+  notebookMutationTransactionFailed(active: boolean): void {
+    if (!active) {
+      return;
+    }
+    this.admission.mutationError(
+      {
+        code: "notebook-sync-failed",
+        severity: "error",
+        message: "Notebook change could not be synchronized.",
+        hint: "Retry the edit to update this view.",
+        view: this.view,
+        scope: "runtime",
+      },
+      this.admission.identity?.revision ?? null,
+    );
+  }
+
+  presentationStreamAbandoned(incompleteBuild = false): void {
+    this.admission.streamAbandoned(incompleteBuild);
+  }
+
+  presentationChanged(revision?: string): void {
+    this.admission.presentationChanged(revision ?? null, this.admissionOwner());
+  }
+
+  presentationBaseline(revision: string | null): void {
+    this.admission.presentationBaseline(revision, this.admissionOwner());
+  }
+
+  private admissionOwner(): "active" | "inactive" {
+    return this.activeOwner ? "active" : "inactive";
+  }
+
+  private postAdmissionMessage(message: PreviewAdmissionMessage): void {
+    this.preview.contentWindow?.postMessage(
+      {
+        ...message,
+        runtime: this.runtime,
+        lifecycleId: this.activeLifecycleId,
+        view: this.view,
+      },
+      "*",
+    );
+  }
+
+  private commitReadyIdentity(identity: PreviewIdentity): void {
+    this.setPreviewSession(identity);
+    this.showReadyStatus();
+    if (!this.activeOwner) {
+      return;
+    }
+    this.completeViewSwitch(true, this.activeLifecycleId);
+    this.controls.begin(identity.revision, identity.sessionId ?? undefined, this.editorSessionId);
+    this.observations.post();
+  }
+
+  private setPreviewSession(identity: PreviewIdentity): void {
+    if (identity.sessionId === null) {
+      delete this.preview.dataset.sessionId;
+    } else {
+      this.preview.dataset.sessionId = identity.sessionId;
+    }
   }
 
   editorQueryChanged(query: string, operationId?: string, completed = false): void {
-    this.queries.editorChanged(query, this.viewReady, operationId, completed);
+    if (this.activeOwner) {
+      this.queries.editorChanged(query, this.admission.isInteractive, operationId, completed);
+    }
   }
 
   dispose(): void {
+    this.activeOwner = false;
+    this.failMutationBarriers(new DOMException("The presentation was disposed.", "AbortError"));
+    this.admission.dispose();
+    this.completeViewSwitch(false, this.pendingViewSwitch?.lifecycleId);
     this.cancelRetry();
     this.controls.stop();
+    this.controlDiagnostic = undefined;
     this.queries.cancel();
     this.observations.clear();
+    releaseFrameBridge(this.preview);
     this.editor.removeEventListener("load", this.startFromEditor);
     this.preview.removeEventListener("load", this.previewLoaded);
     globalThis.removeEventListener("message", this.message);
@@ -207,28 +570,40 @@ export class PreviewController {
   private readonly startFromEditor = (): void => {
     this.editor.removeEventListener("load", this.startFromEditor);
     if (this.preview.src === "about:blank") {
-      this.reload();
+      this.reloadCurrentDocument();
     }
   };
 
   private readonly message = (event: MessageEvent<unknown>) => {
     if (
-      event.origin !== globalThis.location.origin ||
+      (event.origin !== "null" && event.origin !== globalThis.location.origin) ||
       event.source !== this.preview.contentWindow
     ) {
       return;
     }
-    const payload = jsonValueSchema.safeParse(event.data);
-    if (!payload.success) {
-      return;
-    }
-    const message = parsePreviewMessage(payload.data);
+    const message = parsePreviewMessage(event.data);
     if (
       !message ||
       message.type === "marimo-studio:switch-view" ||
-      message.type === "marimo-studio:source-change" ||
+      message.type === "marimo-studio:presentation-change" ||
+      message.type === "marimo-studio:presentation-refresh" ||
+      message.type === "marimo-studio:presentation-refresh-barrier" ||
+      message.type === "marimo-studio:replay-document" ||
+      message.type === "marimo-studio:restore-fragment" ||
+      message.type === "marimo-studio:receiver-admitted" ||
       message.type === "marimo-studio:observe-view" ||
       message.runtime !== this.runtime
+    ) {
+      return;
+    }
+    if (!this.acceptsSwitchAcknowledgement(message)) {
+      return;
+    }
+    if (
+      !this.activeOwner &&
+      (message.type === "marimo-studio:navigate-view" ||
+        message.type === "marimo-studio:query-change" ||
+        message.type === "marimo-studio:view-observation")
     ) {
       return;
     }
@@ -238,47 +613,35 @@ export class PreviewController {
   private receive(message: PresentationToStudioMessage): void {
     switch (message.type) {
       case "marimo-studio:navigate-view":
-        this.navigate(message.view);
+        void this.navigate(message.view, { query: message.query, hash: message.hash });
         return;
       case "marimo-studio:query-change":
         this.previewQueryChanged(message.query);
         return;
       case "marimo-studio:receiver-unready":
-        this.controls.stop();
-        this.readyRevision = undefined;
-        this.readySessionId = undefined;
-        delete this.preview.dataset.sessionId;
-        this.receiverReady = false;
-        this.viewReady = false;
-        this.pendingSourceRefresh = true;
-        this.setRuntimeStatus("connecting", [], {
-          revision: null,
-          sessionId: null,
-        });
+        this.controlDiagnostic = undefined;
+        this.failMutationBarriers(
+          new DOMException("The presentation receiver disconnected.", "AbortError"),
+          (barrier) => barrier.started,
+        );
+        this.admission.receiverUnready();
         return;
       case "marimo-studio:receiver-ready":
-        this.controls.stop();
-        this.readyRevision = undefined;
-        this.readySessionId = undefined;
-        delete this.preview.dataset.sessionId;
-        this.receiverReady = true;
-        this.viewReady = false;
+        this.controlDiagnostic = undefined;
         this.cancelRetry();
         this.retrySchedule.reset();
+        this.admission.receiverReady(
+          message.revision,
+          message.view === this.view ? "current" : "other",
+          this.admissionOwner(),
+        );
         if (message.view === this.view) {
-          this.setRuntimeStatus("connecting", [], {
-            revision: null,
-            sessionId: null,
-          });
-          if (this.pendingSourceRefresh && this.sourceBaselineRevision === undefined) {
-            this.pendingSourceRefresh = false;
-            this.postSourceChange("html");
-          }
+          this.startMutationBarriers();
         } else {
-          this.pendingSourceRefresh = true;
-          this.postSwitch();
+          this.failMutationBarriers(
+            new DOMException("The presentation receiver changed views.", "AbortError"),
+          );
         }
-        this.observations.post();
         return;
       case "marimo-studio:view-ready":
       case "marimo-studio:view-sync-pending":
@@ -297,39 +660,28 @@ export class PreviewController {
   private receiveView(message: ViewPreviewMessage): void {
     switch (message.type) {
       case "marimo-studio:view-ready":
-        this.readySessionId = message.sessionId;
-        if (message.sessionId === undefined) {
-          delete this.preview.dataset.sessionId;
-        } else {
-          this.preview.dataset.sessionId = message.sessionId;
-        }
-        this.readyRevision = message.revision;
-        this.viewReady = true;
-        if (this.sourceBaselineRevision !== undefined) {
-          this.pendingSourceRefresh = this.sourceBaselineRevision !== message.revision;
-        }
-        this.showReadyStatus();
-        this.controls.begin(message.revision, message.sessionId);
-        void this.queries.applyToPreview(this.viewReady);
-        this.observations.post();
-        if (this.pendingSourceRefresh) {
-          this.pendingSourceRefresh = false;
-          this.postSourceChange("html");
-        }
+        this.admission.viewReady(
+          message.revision,
+          message.sessionId ?? null,
+          this.admissionOwner(),
+        );
         return;
       case "marimo-studio:view-sync-pending":
-        this.viewReady = false;
-        this.setRuntimeStatus("synchronizing", [message.diagnostic]);
+        this.admission.viewSyncPending(message.diagnostic);
         return;
       case "marimo-studio:view-diagnostics":
         this.diagnostics = message.diagnostics;
-        if (this.viewReady) {
+        if (this.admission.viewIsReady) {
           this.showReadyStatus();
         }
         return;
       case "marimo-studio:view-error":
-        this.viewReady = false;
-        this.setRuntimeStatus("failed", [message.diagnostic]);
+        this.admission.viewError(
+          message.diagnostic,
+          message.revision ?? null,
+          this.admissionOwner(),
+          message.sessionId,
+        );
         return;
       case "marimo-studio:view-observation":
         this.observations.receive(message);
@@ -340,62 +692,99 @@ export class PreviewController {
   }
 
   private previewQueryChanged(query: string): void {
-    this.queries.previewChanged(query);
+    if (this.activeOwner) {
+      this.queries.previewChanged(query);
+    }
   }
 
   private acceptObservation(message: ViewObservationMessage): RuntimeStatusReport {
-    this.readyRevision = message.revision;
-    this.readySessionId = message.sessionId ?? undefined;
-    if (this.readySessionId === undefined) {
-      delete this.preview.dataset.sessionId;
-    } else {
-      this.preview.dataset.sessionId = this.readySessionId;
+    if (!this.activeOwner) {
+      return this.runtimeDiagnostics.report();
     }
-    this.viewReady = message.state === "ready";
     this.diagnostics = message.diagnostics;
-    if (message.state === "ready") {
-      this.showReadyStatus();
-    } else if (message.state === "loading") {
-      this.setRuntimeStatus("synchronizing", message.diagnostics, {
-        revision: message.revision,
-        sessionId: message.sessionId,
-      });
-    } else {
-      this.setRuntimeStatus("failed", message.diagnostics, {
-        revision: message.revision,
-        sessionId: message.sessionId,
-      });
-    }
+    this.admission.observation(
+      message.state,
+      message.diagnostics,
+      message.revision,
+      message.sessionId,
+    );
     return this.runtimeDiagnostics.report();
   }
 
   private postSwitch(): void {
+    if (!this.activeOwner) {
+      return;
+    }
     const message: SwitchViewMessage = {
       type: "marimo-studio:switch-view",
       runtime: this.runtime,
       view: this.view,
-      documentUrl: this.viewUrl(this.view, this.runtime),
+      lifecycleId: this.activeLifecycleId,
+      documentUrl: previewDocumentUrl(
+        this.viewUrl(this.view, this.runtime, this.navigation),
+        this.activeLifecycleId,
+      ),
       supportUrl: this.supportUrl(this.view),
     };
-    this.preview.contentWindow?.postMessage(message, globalThis.location.origin);
+    this.preview.contentWindow?.postMessage(message, "*");
+  }
+
+  private waitForView(view: string, lifecycleId: number, signal?: AbortSignal): Promise<boolean> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(
+        () => this.completeViewSwitch(false, lifecycleId),
+        VIEW_SWITCH_TIMEOUT_MS,
+      );
+      const abort = signal ? () => this.completeViewSwitch(false, lifecycleId) : undefined;
+      if (signal && abort) {
+        signal.addEventListener("abort", abort, { once: true });
+      }
+      this.pendingViewSwitch = { lifecycleId, view, resolve, timer, signal, abort };
+    });
+  }
+
+  private completeViewSwitch(ready: boolean, lifecycleId: number | undefined): void {
+    const pending = this.pendingViewSwitch;
+    if (!pending || pending.lifecycleId !== lifecycleId) {
+      return;
+    }
+    clearTimeout(pending.timer);
+    if (pending.signal && pending.abort) {
+      pending.signal.removeEventListener("abort", pending.abort);
+    }
+    this.pendingViewSwitch = undefined;
+    pending.resolve(ready && pending.view === this.view);
+  }
+
+  private acceptsSwitchAcknowledgement(message: PresentationToStudioMessage): boolean {
+    return message.lifecycleId === this.activeLifecycleId;
   }
 
   reload(): void {
+    if (!this.activeOwner) {
+      return;
+    }
+    this.failMutationBarriers(new DOMException("The presentation document changed.", "AbortError"));
+    this.completeViewSwitch(false, this.pendingViewSwitch?.lifecycleId);
+    this.setActiveLifecycle(this.nextLifecycleId());
+    this.state = { ...this.state, lifecycleId: this.activeLifecycleId };
+    this.reloadCurrentDocument();
+  }
+
+  private reloadCurrentDocument(): void {
     this.cancelRetry();
     this.controls.stop();
+    this.controlDiagnostic = undefined;
     this.queries.cancel();
-    this.readyRevision = undefined;
-    this.readySessionId = undefined;
-    delete this.preview.dataset.sessionId;
-    this.receiverReady = false;
-    this.viewReady = false;
+    releaseFrameBridge(this.preview);
+    this.admission.resetDocument();
     this.setRuntimeStatus("connecting", [], {
       revision: null,
       sessionId: null,
     });
-    const next = this.viewUrl(this.view, this.runtime);
+    const next = this.viewUrl(this.view, this.runtime, this.navigation);
     this.setPopoutUrl(next);
-    this.navigatePreview(next);
+    this.navigatePreview(previewDocumentUrl(next, this.activeLifecycleId));
   }
 
   private setPopoutUrl(url: string): void {
@@ -404,76 +793,87 @@ export class PreviewController {
   }
 
   private navigatePreview(next: string): void {
-    const previewWindow = this.preview.contentWindow;
-    try {
-      if (previewWindow) {
-        // Replace the child history entry before reloading so runtime changes
-        // start a fresh adapter without adding navigation history.
-        previewWindow.history.replaceState(previewWindow.history.state, "", next);
-        previewWindow.location.reload();
-        return;
-      }
-    } catch {
-      // Initial and externally mounted frames navigate through the iframe.
-    }
     this.preview.src = next;
   }
 
   private loaded(): void {
-    if (this.receiverReady) {
+    if (!this.activeOwner || this.admission.receiverPresent || this.preview.src === "about:blank") {
       return;
     }
-    const previewDocument = this.preview.contentDocument;
-    const state = previewLoadState({
-      hasRuntimeRoot: Boolean(previewDocument?.querySelector("#marimo-runtime-root")),
-      documentState: previewDocument?.documentElement.dataset.marimoStudioPreviewState,
-    });
-    if (state === "ready") {
-      this.scheduleRetry(10_000);
-      return;
-    }
-    const repair = previewDocument?.querySelector<HTMLElement>("[data-marimo-studio-repair]");
-    const detail = repair
-      ? [repair.dataset.marimoStudioMessage, repair.dataset.marimoStudioHint]
-          .filter(Boolean)
-          .join(" ")
-      : (previewDocument
-          ?.querySelector<HTMLElement>("main, [role='status'], body > p")
-          ?.textContent?.trim() ?? "");
-    if (state === "waiting") {
-      this.setRuntimeStatus("synchronizing", [
-        this.lifecycleDiagnostic(
-          "notebook-session-pending",
-          "warning",
-          "Waiting for notebook",
-          detail,
-        ),
-      ]);
-      return;
-    }
-    this.setRuntimeStatus("failed", [
-      this.lifecycleDiagnostic(
-        "preview-document-unavailable",
-        "error",
-        "The preview document needs repair.",
-        detail,
-      ),
-    ]);
-    this.scheduleRetry();
+    this.scheduleRetry(10_000);
   }
 
   private readonly previewLoaded = (): void => {
+    if (!this.activeOwner) {
+      return;
+    }
     this.loaded();
-    if (this.receiverReady && this.readyRevision) {
-      this.controls.begin(this.readyRevision, this.readySessionId);
+    const identity = this.admission.identity;
+    if (this.admission.isInteractive && identity !== null) {
+      this.controls.begin(identity.revision, identity.sessionId ?? undefined, this.editorSessionId);
     }
   };
 
   private showReadyStatus(): void {
-    this.setRuntimeStatus(this.diagnostics.length ? "degraded" : "ready", this.diagnostics, {
-      revision: this.readyRevision ?? null,
-      sessionId: this.readySessionId ?? null,
+    const diagnostics = [
+      ...this.diagnostics,
+      ...(this.controlDiagnostic ? [this.controlDiagnostic] : []),
+      ...(this.queryDiagnostic ? [this.queryDiagnostic] : []),
+    ];
+    let phase: RuntimeStatusPhase = "ready";
+    if (this.queryPhase === "synchronizing") {
+      phase = "synchronizing";
+    } else if (diagnostics.length > 0) {
+      phase = "degraded";
+    }
+    this.setRuntimeStatus(phase, diagnostics, {
+      revision: this.admission.identity?.revision ?? null,
+      sessionId: this.admission.identity?.sessionId ?? null,
     });
+  }
+
+  private queryStatusChanged(status: QuerySyncStatus): void {
+    if (!this.activeOwner) {
+      return;
+    }
+    this.queryPhase = status.phase;
+    this.queryDiagnostic =
+      status.phase === "degraded"
+        ? this.lifecycleDiagnostic(
+            "query-sync-failed",
+            "warning",
+            "Query state could not be synchronized.",
+            status.error?.message ?? "Retry the current query.",
+          )
+        : undefined;
+    if (this.admission.viewIsReady) {
+      this.showReadyStatus();
+    }
+  }
+
+  private controlStatusChanged(
+    status: ControlSyncStatus,
+    revision: string,
+    sessionId: string | undefined,
+  ): void {
+    if (
+      !this.activeOwner ||
+      !this.admission.viewIsReady ||
+      revision !== this.admission.identity?.revision ||
+      sessionId !== (this.admission.identity?.sessionId ?? undefined)
+    ) {
+      return;
+    }
+    this.controlDiagnostic =
+      status.phase === "degraded"
+        ? this.lifecycleDiagnostic(
+            "control-sync-failed",
+            "warning",
+            "Control state could not be synchronized.",
+            status.error?.message ?? "Wait for both notebook runtimes, then retry the view.",
+          )
+        : undefined;
+    this.showReadyStatus();
   }
 
   private setRuntimeStatus(
@@ -487,6 +887,7 @@ export class PreviewController {
   private updateRuntimeStatus(runtimeStatus: RuntimeStatusReport, url = this.state.url): void {
     this.state = {
       url,
+      lifecycleId: this.activeLifecycleId,
       runtimeStatus,
       status: previewStatus(this.runtime, runtimeStatus.current),
     };
@@ -510,10 +911,13 @@ export class PreviewController {
   }
 
   private scheduleRetry(delay = this.retrySchedule.next()): void {
+    if (!this.activeOwner) {
+      return;
+    }
     this.cancelRetry();
     this.retryTimer = setTimeout(() => {
       this.retryTimer = undefined;
-      if (!this.receiverReady) {
+      if (this.activeOwner && !this.admission.receiverPresent) {
         this.reload();
       }
     }, delay);
@@ -523,6 +927,28 @@ export class PreviewController {
     if (this.retryTimer !== undefined) {
       clearTimeout(this.retryTimer);
       this.retryTimer = undefined;
+    }
+  }
+
+  private setActiveLifecycle(lifecycleId: number): void {
+    this.activeLifecycleId = lifecycleId;
+    this.preview.dataset.previewLifecycleId = String(lifecycleId);
+  }
+
+  private startMutationBarriers(): void {
+    for (const barrier of this.mutationBarriers) {
+      barrier.start();
+    }
+  }
+
+  private failMutationBarriers(
+    cause: unknown,
+    matches: (barrier: PendingMutationBarrier) => boolean = () => true,
+  ): void {
+    for (const barrier of this.mutationBarriers) {
+      if (matches(barrier)) {
+        barrier.fail(cause);
+      }
     }
   }
 }

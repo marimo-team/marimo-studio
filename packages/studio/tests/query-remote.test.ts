@@ -18,6 +18,7 @@ describe("editor query synchronization", () => {
       "browser-client-1234",
       "region=emea",
       "query-1",
+      7,
     );
 
     expect(fetch).toHaveBeenCalledWith(
@@ -28,6 +29,7 @@ describe("editor query synchronization", () => {
           clientId: "browser-client-1234",
           operationId: "query-1",
           query: "region=emea",
+          writeGeneration: 7,
         }),
       }),
     );
@@ -46,7 +48,7 @@ describe("editor query synchronization", () => {
     );
 
     await expect(
-      syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1"),
+      syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1", 7),
     ).resolves.toBe("retry");
   });
 
@@ -54,7 +56,7 @@ describe("editor query synchronization", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status })));
 
     await expect(
-      syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1"),
+      syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1", 7),
     ).resolves.toBe("retry");
   });
 
@@ -62,7 +64,7 @@ describe("editor query synchronization", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
 
     await expect(
-      syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1"),
+      syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1", 7),
     ).resolves.toBe("retry");
   });
 
@@ -80,7 +82,7 @@ describe("editor query synchronization", () => {
     );
 
     const pending = expect(
-      syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1"),
+      syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1", 7),
     ).resolves.toBe("retry");
     await vi.advanceTimersByTimeAsync(3_000);
 
@@ -108,7 +110,7 @@ describe("editor query synchronization", () => {
     );
 
     const pending = expect(
-      syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1"),
+      syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1", 7),
     ).resolves.toBe("retry");
     await vi.advanceTimersByTimeAsync(3_000);
 
@@ -134,6 +136,7 @@ describe("editor query synchronization", () => {
       "browser-client-1234",
       "region=emea",
       "query-1",
+      7,
       controller.signal,
     );
     const cancelled = expect(request).rejects.toThrow("Aborted");
@@ -154,7 +157,7 @@ describe("editor query synchronization", () => {
     );
 
     await expect(
-      syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1"),
+      syncEditorQuery("/query", "token", "browser-client-1234", "region=emea", "query-1", 7),
     ).rejects.toThrow("failed with 409");
   });
 });

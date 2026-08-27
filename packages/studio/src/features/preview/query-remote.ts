@@ -10,6 +10,7 @@ export const syncEditorQuery = async (
   clientId: string,
   query: string,
   operationId: string,
+  writeGeneration: number,
   signal?: AbortSignal,
 ): Promise<EditorQuerySyncResult> => {
   signal?.throwIfAborted();
@@ -25,7 +26,7 @@ export const syncEditorQuery = async (
         "Content-Type": "application/json",
         "Marimo-Server-Token": serverToken,
       },
-      body: JSON.stringify({ clientId, operationId, query }),
+      body: JSON.stringify({ clientId, operationId, query, writeGeneration }),
       signal: request.signal,
     });
     receivedResponse = true;

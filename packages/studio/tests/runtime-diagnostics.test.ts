@@ -101,12 +101,13 @@ it("queries owned runtime diagnostics through the preview deck", () => {
   const deck = new PreviewDeck({
     initialView: "dashboard",
     initialRuntime: "server",
+    initialNavigation: { query: "", hash: "" },
     runtimes: ["server", "wasm"],
     viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
     supportUrl: (view) => `/support/${view}`,
     syncQuery: () => undefined,
     syncEditorQuery: async () => "accepted",
-    navigate: () => undefined,
+    navigate: async () => true,
   });
 
   const report = deck.runtimeDiagnostics("server");
