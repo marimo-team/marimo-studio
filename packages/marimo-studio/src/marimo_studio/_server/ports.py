@@ -11,6 +11,7 @@ from starlette.requests import Request
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocket
 
+from marimo_studio._browser_client.ports import CodeModeBridge
 from marimo_studio._delivery.browser_ports import BrowserRuntimeProjector
 from marimo_studio._notebook.records import LiveCellSnapshot
 from marimo_studio._server.presentation.ports import KernelProjectionHost
@@ -21,7 +22,6 @@ from marimo_studio._server.records import (
     ServerMode,
     SourceTransformResult,
 )
-from marimo_studio.agent._ports import CodeModeBridge
 
 
 class ASGIMiddlewareFactory(Protocol):

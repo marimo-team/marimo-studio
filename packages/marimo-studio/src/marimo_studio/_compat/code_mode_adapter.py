@@ -6,12 +6,12 @@ from pathlib import Path
 
 from starlette.types import Scope
 
+from marimo_studio._browser_client.transport import StudioServerConnection
 from marimo_studio._compat.code_mode import (
     active_notebook,
     attach_code_mode_session,
     code_mode_connection,
 )
-from marimo_studio.agent._transport import StudioServerConnection
 
 
 class PrivateCodeModeBridge:

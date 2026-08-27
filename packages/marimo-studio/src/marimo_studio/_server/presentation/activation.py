@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from marimo_studio._browser_client.limits import VIEW_ACTIVATION_TIMEOUT
+from marimo_studio._browser_client.records import ViewActivationResult
 from marimo_studio._server.agent.clients import PeerTarget
 from marimo_studio._server.notebook_scope import NotebookScope
 from marimo_studio._server.ports import SessionState
 from marimo_studio._server.records import ServerContext
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.agent._limits import VIEW_ACTIVATION_TIMEOUT
-from marimo_studio.agent._records import ViewActivationResult
 from marimo_studio.errors import AgentRequestError, ViewNotFoundError
 
 _CLIENT_CONNECT_TIMEOUT = 1.0

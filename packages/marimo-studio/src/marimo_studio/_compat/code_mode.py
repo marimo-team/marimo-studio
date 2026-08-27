@@ -7,7 +7,7 @@ from pathlib import Path
 from starlette.datastructures import Headers
 from starlette.types import Scope
 
-from marimo_studio.agent._transport import StudioServerConnection
+from marimo_studio._browser_client.transport import StudioServerConnection
 from marimo_studio.errors import ProtocolError
 
 STUDIO_SESSION_ID_KEY = "marimo_studio_session_id"

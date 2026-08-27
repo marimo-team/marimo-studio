@@ -8,6 +8,13 @@ from typing import Any, cast
 
 import pytest
 
+from marimo_studio._browser_client.protocol import (
+    decode_browser_observation,
+    parse_activation_result,
+    parse_analysis_report,
+    parse_connection_token,
+    parse_observation_response,
+)
 from marimo_studio._validation.evidence import (
     AnalysisReport,
     BrowserDiagnostic,
@@ -15,13 +22,6 @@ from marimo_studio._validation.evidence import (
     RuntimeStatusReport,
 )
 from marimo_studio._validation.results import CheckResult
-from marimo_studio.agent._protocol import (
-    decode_browser_observation,
-    parse_activation_result,
-    parse_analysis_report,
-    parse_connection_token,
-    parse_observation_response,
-)
 from marimo_studio.errors import ProtocolError
 
 from ..helpers import ready_runtime_status

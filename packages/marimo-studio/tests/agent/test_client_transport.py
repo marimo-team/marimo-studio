@@ -5,7 +5,7 @@ import threading
 
 import pytest
 
-import marimo_studio.agent._transport as agent_transport
+import marimo_studio._browser_client.transport as browser_transport
 
 
 def test_cancelled_server_request_closes_its_exchange(
@@ -24,13 +24,13 @@ def test_cancelled_server_request_closes_its_exchange(
         cancelled.set()
         released.set()
 
-    monkeypatch.setattr(agent_transport._HttpExchange, "send", send)
-    monkeypatch.setattr(agent_transport._HttpExchange, "cancel", cancel)
+    monkeypatch.setattr(browser_transport._HttpExchange, "send", send)
+    monkeypatch.setattr(browser_transport._HttpExchange, "cancel", cancel)
 
     async def exercise() -> None:
         task = asyncio.create_task(
-            agent_transport.request_json(
-                agent_transport.StudioServerConnection("http://localhost:2718"),
+            browser_transport.request_json(
+                browser_transport.StudioServerConnection("http://localhost:2718"),
                 "/_marimo-studio/analyze",
             )
         )
@@ -73,12 +73,12 @@ def test_server_request_enforces_one_wall_clock_deadline(
         def getresponse(self) -> FakeResponse:
             return FakeResponse()
 
-    monkeypatch.setattr(agent_transport.http.client, "HTTPConnection", FakeConnection)
+    monkeypatch.setattr(browser_transport.http.client, "HTTPConnection", FakeConnection)
 
     async def exercise() -> None:
-        with pytest.raises(agent_transport.AgentRequestError) as raised:
-            await agent_transport.request_json(
-                agent_transport.StudioServerConnection("http://localhost:2718"),
+        with pytest.raises(browser_transport.AgentRequestError) as raised:
+            await browser_transport.request_json(
+                browser_transport.StudioServerConnection("http://localhost:2718"),
                 "/_marimo-studio/analyze",
                 timeout=0.02,
             )
@@ -104,12 +104,12 @@ def test_server_request_deadline_does_not_wait_for_worker_shutdown(
         finally:
             finished.set()
 
-    monkeypatch.setattr(agent_transport._HttpExchange, "send", send)
+    monkeypatch.setattr(browser_transport._HttpExchange, "send", send)
     try:
-        with pytest.raises(agent_transport.AgentRequestError) as raised:
+        with pytest.raises(browser_transport.AgentRequestError) as raised:
             asyncio.run(
-                agent_transport.request_json(
-                    agent_transport.StudioServerConnection("http://localhost:2718"),
+                browser_transport.request_json(
+                    browser_transport.StudioServerConnection("http://localhost:2718"),
                     "/_marimo-studio/analyze",
                     timeout=0.02,
                 )
@@ -145,15 +145,15 @@ def test_server_request_workers_are_bounded_and_capacity_recovers(
         return b"{}"
 
     monkeypatch.setattr(
-        agent_transport, "_HTTP_WORKER_SLOTS", threading.BoundedSemaphore(2)
+        browser_transport, "_HTTP_WORKER_SLOTS", threading.BoundedSemaphore(2)
     )
-    monkeypatch.setattr(agent_transport._HttpExchange, "send", send)
+    monkeypatch.setattr(browser_transport._HttpExchange, "send", send)
 
     async def exercise() -> None:
-        connection = agent_transport.StudioServerConnection("http://localhost:2718")
+        connection = browser_transport.StudioServerConnection("http://localhost:2718")
         requests = tuple(
             asyncio.create_task(
-                agent_transport.request_json(
+                browser_transport.request_json(
                     connection,
                     "/_marimo-studio/analyze",
                     timeout=1,
@@ -162,8 +162,8 @@ def test_server_request_workers_are_bounded_and_capacity_recovers(
             for _ in range(2)
         )
         assert await asyncio.to_thread(started.wait, 1)
-        with pytest.raises(agent_transport.AgentRequestError) as raised:
-            await agent_transport.request_json(
+        with pytest.raises(browser_transport.AgentRequestError) as raised:
+            await browser_transport.request_json(
                 connection,
                 "/_marimo-studio/analyze",
                 timeout=1,
@@ -174,7 +174,7 @@ def test_server_request_workers_are_bounded_and_capacity_recovers(
         released.set()
         assert await asyncio.gather(*requests) == [{}, {}]
         assert (
-            await agent_transport.request_json(
+            await browser_transport.request_json(
                 connection,
                 "/_marimo-studio/analyze",
                 timeout=1,
@@ -214,12 +214,12 @@ def test_transport_cancellation_does_not_block_the_event_loop(
         def getresponse(self) -> object:
             raise AssertionError("A cancelled request reached the response boundary")
 
-    monkeypatch.setattr(agent_transport.http.client, "HTTPConnection", FakeConnection)
+    monkeypatch.setattr(browser_transport.http.client, "HTTPConnection", FakeConnection)
 
     async def exercise() -> None:
         task = asyncio.create_task(
-            agent_transport.request_json(
-                agent_transport.StudioServerConnection("http://localhost:2718"),
+            browser_transport.request_json(
+                browser_transport.StudioServerConnection("http://localhost:2718"),
                 "/_marimo-studio/analyze",
             )
         )
@@ -267,12 +267,12 @@ def test_server_authentication_error_preserves_its_code(
         def getresponse(self) -> FakeResponse:
             return FakeResponse()
 
-    monkeypatch.setattr(agent_transport.http.client, "HTTPConnection", FakeConnection)
+    monkeypatch.setattr(browser_transport.http.client, "HTTPConnection", FakeConnection)
 
-    with pytest.raises(agent_transport.AgentRequestError) as raised:
+    with pytest.raises(browser_transport.AgentRequestError) as raised:
         asyncio.run(
-            agent_transport.request_json(
-                agent_transport.StudioServerConnection("http://localhost:2718"),
+            browser_transport.request_json(
+                browser_transport.StudioServerConnection("http://localhost:2718"),
                 "/_marimo-studio/agent/connection",
             )
         )
@@ -296,11 +296,11 @@ def test_cancelled_exchange_does_not_start_a_late_request(
             nonlocal requested
             requested = True
 
-    monkeypatch.setattr(agent_transport.http.client, "HTTPConnection", FakeConnection)
-    exchange = agent_transport._HttpExchange()
+    monkeypatch.setattr(browser_transport.http.client, "HTTPConnection", FakeConnection)
+    exchange = browser_transport._HttpExchange()
     exchange.cancel()
 
-    with pytest.raises(agent_transport.AgentRequestError) as raised:
+    with pytest.raises(browser_transport.AgentRequestError) as raised:
         exchange.send("http://localhost:2718", "GET", {}, None, 1)
 
     assert raised.value.code == "request-cancelled"
@@ -336,12 +336,12 @@ def test_cancelled_request_does_not_send_after_connection_finishes(
         def getresponse(self) -> object:
             raise AssertionError("A cancelled request reached the response boundary")
 
-    monkeypatch.setattr(agent_transport.http.client, "HTTPConnection", FakeConnection)
+    monkeypatch.setattr(browser_transport.http.client, "HTTPConnection", FakeConnection)
 
     async def exercise() -> None:
         task = asyncio.create_task(
-            agent_transport.request_json(
-                agent_transport.StudioServerConnection("http://localhost:2718"),
+            browser_transport.request_json(
+                browser_transport.StudioServerConnection("http://localhost:2718"),
                 "/_marimo-studio/analyze",
                 method="POST",
             )

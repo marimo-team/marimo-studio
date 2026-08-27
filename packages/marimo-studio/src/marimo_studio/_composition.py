@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import marimo_studio._delivery.assets as _assets
+from marimo_studio._browser_client.ports import CodeModeBridge
 from marimo_studio._compat.layout import (
     MARIMO_RELEASE_COMMIT,
     MARIMO_VERSION,
@@ -38,7 +39,6 @@ from marimo_studio._server.ports import (
     CloseHandle,
     ServerAdapters,
 )
-from marimo_studio.agent._ports import CodeModeBridge
 
 
 class _PrivateAdapterLifecycle:

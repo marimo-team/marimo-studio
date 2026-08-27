@@ -14,6 +14,7 @@ from starlette.responses import JSONResponse, RedirectResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocket
 
+from marimo_studio._browser_client.ports import CodeModeBridge
 from marimo_studio._delivery.urls import (
     EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
     SERVER_INSTANCE_QUERY_PARAM,
@@ -46,7 +47,6 @@ from marimo_studio._server.studio.editor_capability import (
     editor_binding_capability_matches,
 )
 from marimo_studio._workspace import discover_studio
-from marimo_studio.agent._ports import CodeModeBridge
 from marimo_studio.errors import MarimoStudioError
 
 _CODE_MODE_ROUTES = {"/api/ai/chat", "/api/kernel/execute"}

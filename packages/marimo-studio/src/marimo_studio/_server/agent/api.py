@@ -7,6 +7,7 @@ import re
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from marimo_studio._browser_client.protocol import ViewActivationRequest
 from marimo_studio._server.agent.activation import ActivationAckOutcome
 from marimo_studio._server.agent.browser import observe_views
 from marimo_studio._server.auth import (
@@ -38,7 +39,6 @@ from marimo_studio._validation.analysis import AnalysisRequest, analyze_studio
 from marimo_studio._validation.evidence import BrowserObservation
 from marimo_studio._validation.runtime_process import check_runtime_studio_isolated
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.agent._protocol import ViewActivationRequest
 from marimo_studio.errors import (
     CapabilityInputError,
     MarimoStudioError,

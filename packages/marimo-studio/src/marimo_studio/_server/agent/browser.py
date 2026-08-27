@@ -9,6 +9,7 @@ from typing import cast
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from marimo_studio._browser_client.protocol import decode_browser_observation
 from marimo_studio._server.auth import (
     error_response,
     forbidden_response,
@@ -32,7 +33,6 @@ from marimo_studio._server.request_lifecycle import (
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
 from marimo_studio._validation.evidence import BrowserObservation
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.agent._protocol import decode_browser_observation
 from marimo_studio.errors import AgentRequestError, MarimoStudioError, ProtocolError
 
 _MAX_OBSERVATION_TIMEOUT = 300.0

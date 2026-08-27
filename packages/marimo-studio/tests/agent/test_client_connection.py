@@ -11,8 +11,10 @@ from marimo._messaging.context import http_request_context
 from marimo._runtime.commands import HTTPRequest
 from marimo._types.encodable import Encodable
 
-import marimo_studio.agent._client as agent_client
-import marimo_studio.agent._transport as agent_transport
+import marimo_studio._browser_client.client as browser_client
+import marimo_studio._browser_client.transport as browser_transport
+from marimo_studio._browser_client.client import studio_server_connection
+from marimo_studio._browser_client.protocol import ViewActivationRequest
 from marimo_studio._compat.code_mode import (
     STUDIO_NOTEBOOK_PATH_KEY,
     STUDIO_SESSION_ID_KEY,
@@ -20,8 +22,6 @@ from marimo_studio._compat.code_mode import (
     attach_code_mode_session,
     code_mode_connection,
 )
-from marimo_studio.agent._client import studio_server_connection
-from marimo_studio.agent._protocol import ViewActivationRequest
 from marimo_studio.errors import CapabilityInputError, ProtocolError
 
 
@@ -47,7 +47,7 @@ def test_external_connection_negotiates_the_server_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
-    requests: list[tuple[agent_transport.StudioServerConnection, str]] = []
+    requests: list[tuple[browser_transport.StudioServerConnection, str]] = []
 
     async def request(connection, path, **_kwargs):
         requests.append((connection, path))
@@ -77,11 +77,11 @@ def test_external_connection_negotiates_the_server_token(
             ],
         }
 
-    monkeypatch.setattr(agent_client, "request_json", request)
+    monkeypatch.setattr(browser_client, "request_json", request)
 
     observations = asyncio.run(
-        agent_client.observe_browser_views(
-            agent_transport.StudioServerConnection(
+        browser_client.observe_browser_views(
+            browser_transport.StudioServerConnection(
                 "http://localhost:2718",
                 auth_token="access-token",
             ),
@@ -184,7 +184,7 @@ def test_code_mode_request_negotiates_the_server_token(
         },
     )
     requests: list[
-        tuple[agent_transport.StudioServerConnection, str, float | None]
+        tuple[browser_transport.StudioServerConnection, str, float | None]
     ] = []
 
     async def send(connection, path, **kwargs):
@@ -204,11 +204,11 @@ def test_code_mode_request_negotiates_the_server_token(
             "session_id": "s_123456",
         }
 
-    monkeypatch.setattr(agent_client, "request_json", send)
+    monkeypatch.setattr(browser_client, "request_json", send)
 
     with http_request_context(request):
         result = asyncio.run(
-            agent_client.request_view_activation(
+            browser_client.request_view_activation(
                 code_mode_connection(),
                 notebook,
                 ViewActivationRequest("dashboard"),
@@ -237,12 +237,12 @@ def test_activation_rejects_mixed_selectors_before_token_negotiation(
         requested = True
         return {}
 
-    monkeypatch.setattr(agent_client, "request_json", request)
+    monkeypatch.setattr(browser_client, "request_json", request)
 
     with pytest.raises(CapabilityInputError, match="cannot select another"):
         asyncio.run(
-            agent_client.request_view_activation(
-                agent_transport.StudioServerConnection(
+            browser_client.request_view_activation(
+                browser_transport.StudioServerConnection(
                     "http://localhost:2718",
                     session_id="s_123456",
                 ),

@@ -6,6 +6,7 @@ from typing import cast
 
 import pytest
 
+from marimo_studio._browser_client.protocol import ViewActivationRequest
 from marimo_studio._server.agent.activation import ActivationAckOutcome
 from marimo_studio._server.development.client_events import WorkspaceClientEventProducer
 from marimo_studio._server.notebook_scope import NotebookScope
@@ -16,7 +17,6 @@ from marimo_studio._server.presentation.activation import (
     activate_studio_view,
 )
 from marimo_studio._server.records import ServerContext
-from marimo_studio.agent._protocol import ViewActivationRequest
 from marimo_studio.errors import (
     AgentRequestError,
     CapabilityInputError,

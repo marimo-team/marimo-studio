@@ -6,8 +6,8 @@ from typing import cast
 
 import pytest
 
-import marimo_studio.agent._client as agent_client
-import marimo_studio.agent._transport as agent_transport
+import marimo_studio._browser_client.client as browser_client
+import marimo_studio._browser_client.transport as browser_transport
 from marimo_studio._validation.analysis import AnalysisRequest
 from marimo_studio._validation.evidence import AnalysisReport, BrowserObservation
 from marimo_studio.errors import ProtocolError
@@ -16,8 +16,8 @@ from ..helpers import ready_runtime_status
 
 
 def test_http_errors_preserve_structured_details() -> None:
-    with pytest.raises(agent_transport.AgentRequestError) as raised:
-        agent_transport._raise_response_error(
+    with pytest.raises(browser_transport.AgentRequestError) as raised:
+        browser_transport._raise_response_error(
             404,
             b'{"error":"view-not-found","message":"missing",'
             b'"view":"missing","available_views":["dashboard"]}',
@@ -53,11 +53,11 @@ def test_analysis_transport_budget_covers_runtime_and_browser_deadlines(
         captured.update(kwargs)
         return report.to_dict()
 
-    monkeypatch.setattr(agent_client, "request_json", request)
+    monkeypatch.setattr(browser_client, "request_json", request)
 
     asyncio.run(
-        agent_client.request_analysis(
-            agent_transport.StudioServerConnection(
+        browser_client.request_analysis(
+            browser_transport.StudioServerConnection(
                 "http://localhost:2718",
                 server_token="server-token",
             ),
@@ -99,12 +99,12 @@ def test_analysis_rejects_a_browser_policy_downgrade(
     async def request(*_args: object, **_kwargs: object) -> dict[str, object]:
         return report.to_dict()
 
-    monkeypatch.setattr(agent_client, "request_json", request)
+    monkeypatch.setattr(browser_client, "request_json", request)
 
     with pytest.raises(ProtocolError, match="analysis response"):
         asyncio.run(
-            agent_client.request_analysis(
-                agent_transport.StudioServerConnection(
+            browser_client.request_analysis(
+                browser_transport.StudioServerConnection(
                     "http://localhost:2718",
                     server_token="server-token",
                 ),
@@ -139,12 +139,12 @@ def test_observation_rejects_evidence_from_another_selected_browser(
             "observations": [observation.to_dict()],
         }
 
-    monkeypatch.setattr(agent_client, "request_json", request)
+    monkeypatch.setattr(browser_client, "request_json", request)
 
     with pytest.raises(ProtocolError, match="another browser"):
         asyncio.run(
-            agent_client.observe_browser_views(
-                agent_transport.StudioServerConnection(
+            browser_client.observe_browser_views(
+                browser_transport.StudioServerConnection(
                     "http://localhost:2718",
                     server_token="server-token",
                     browser_client="selected-browser",
@@ -194,12 +194,12 @@ def test_observation_rejects_evidence_for_another_revision_or_runtime(
             "observations": [observation.to_dict()],
         }
 
-    monkeypatch.setattr(agent_client, "request_json", request)
+    monkeypatch.setattr(browser_client, "request_json", request)
 
     with pytest.raises(ProtocolError, match=r"another (revision|runtime)"):
         asyncio.run(
-            agent_client.observe_browser_views(
-                agent_transport.StudioServerConnection(
+            browser_client.observe_browser_views(
+                browser_transport.StudioServerConnection(
                     "http://localhost:2718",
                     server_token="server-token",
                     browser_client="browser-client-1234",
@@ -246,12 +246,12 @@ def test_analysis_rejects_evidence_from_another_selected_browser(
     async def request(*_args: object, **_kwargs: object) -> dict[str, object]:
         return report.to_dict()
 
-    monkeypatch.setattr(agent_client, "request_json", request)
+    monkeypatch.setattr(browser_client, "request_json", request)
 
     with pytest.raises(ProtocolError, match="another browser"):
         asyncio.run(
-            agent_client.request_analysis(
-                agent_transport.StudioServerConnection(
+            browser_client.request_analysis(
+                browser_transport.StudioServerConnection(
                     "http://localhost:2718",
                     server_token="server-token",
                     browser_client="selected-browser",
@@ -298,12 +298,12 @@ def test_code_mode_analysis_rejects_evidence_from_another_session(
     async def request(*_args, **_kwargs):
         return report.to_dict()
 
-    monkeypatch.setattr(agent_client, "request_json", request)
+    monkeypatch.setattr(browser_client, "request_json", request)
 
     with pytest.raises(ProtocolError, match="another session"):
         asyncio.run(
-            agent_client.request_analysis(
-                agent_transport.StudioServerConnection(
+            browser_client.request_analysis(
+                browser_transport.StudioServerConnection(
                     "http://localhost:2718",
                     server_token="server-token",
                     session_id="s_123456",
