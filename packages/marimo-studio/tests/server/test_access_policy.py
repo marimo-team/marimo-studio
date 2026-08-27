@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from typing import Any, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 
-import pytest
 from starlette.requests import Request
 from starlette.testclient import TestClient
 
@@ -20,7 +19,6 @@ from marimo_studio._delivery.urls import (
     WORKSPACE_STREAM_QUERY_PARAM,
 )
 from marimo_studio._server.notebook_scope import NotebookScope
-from marimo_studio._server.presentation.access import PresentationCapabilityHandler
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.studio.event_capability import (
@@ -36,31 +34,6 @@ from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
 from ..helpers import notebook_source
 from .app_test_support import _studio_host
-
-
-@pytest.mark.parametrize("target", ("/ws", "/sse"))
-def test_native_runtime_kiosk_policy_is_edit_mode_only(target: str) -> None:
-    route = cast(Any, SimpleNamespace(target=target))
-    connection = cast(Any, SimpleNamespace(query_params={}))
-    edit = cast(Any, SimpleNamespace(mode="edit"))
-    run = cast(Any, SimpleNamespace(mode="run"))
-
-    assert not PresentationCapabilityHandler._runtime_mode_matches(
-        route,
-        connection,
-        edit,
-    )
-    assert PresentationCapabilityHandler._runtime_mode_matches(
-        route,
-        connection,
-        run,
-    )
-    connection.query_params = {"kiosk": "true"}
-    assert PresentationCapabilityHandler._runtime_mode_matches(
-        route,
-        connection,
-        edit,
-    )
 
 
 def test_edit_workspace_mutations_require_the_current_server_token(

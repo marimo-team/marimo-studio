@@ -39,7 +39,6 @@ from marimo_studio._views.api import ensure_view
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.revisions import PresentationSourceSnapshot
 from marimo_studio._workspace import load_studio
-from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import BuildProfile, ViewProject
 
@@ -89,6 +88,20 @@ class _LeaseCloser:
         self.closed = True
         if self.failure is not None:
             raise self.failure
+
+
+def _presentation_snapshot(view_name: str, revision: str) -> PresentationSnapshot:
+    return cast(
+        PresentationSnapshot,
+        SimpleNamespace(
+            view_name=view_name,
+            revision=revision,
+            artifact=SimpleNamespace(
+                profile="development",
+                artifact_revision=revision,
+            ),
+        ),
+    )
 
 
 def _artifact_route(
@@ -551,50 +564,46 @@ def test_presentation_close_releases_every_lease_after_one_fails(
     first = _LeaseCloser("first", calls, RuntimeError("first close failed"))
     second = _LeaseCloser("second", calls)
     presentation = NotebookPresentation(tmp_path / "analysis.py")
-    presentation._snapshot_leases = {
-        "dashboard": {
-            "first": cast(ArtifactLease, first),
-            "second": cast(ArtifactLease, second),
-        }
-    }
+    first_snapshot = _presentation_snapshot("dashboard", "first")
+    second_snapshot = _presentation_snapshot("dashboard", "second")
+    presentation._remember(first_snapshot, cast(ArtifactLease, first))
+    presentation._remember(second_snapshot, cast(ArtifactLease, second))
 
     with pytest.raises(RuntimeError, match="first close failed"):
         presentation.close()
 
+    assert presentation.snapshot_for_revision("dashboard", "first") is None
+    assert presentation.snapshot_for_revision("dashboard", "second") is None
     presentation.close()
     assert sorted(calls) == ["first", "second"]
     assert first.closed
     assert second.closed
-    assert presentation._snapshot_leases == {}
 
 
-def test_presentation_prune_releases_every_removed_view_lease(
-    tmp_path: Path,
+def test_presentation_snapshot_releases_every_removed_view_lease(
+    notebook_path: Path,
 ) -> None:
+    ensure_view(notebook_path)
     calls: list[str] = []
     first = _LeaseCloser("first", calls, RuntimeError("prune close failed"))
     second = _LeaseCloser("second", calls)
-    presentation = NotebookPresentation(tmp_path / "analysis.py")
-    presentation._snapshots = {
-        ("removed", "development"): cast(PresentationSnapshot, object())
-    }
-    presentation._snapshot_history = {"removed": {}}
-    presentation._snapshot_leases = {
-        "removed": {
-            "first": cast(ArtifactLease, first),
-            "second": cast(ArtifactLease, second),
-        }
-    }
-    studio = cast(StudioWorkspace, SimpleNamespace(views={}))
+    presentation = NotebookPresentation(notebook_path)
+    presentation._remember(
+        _presentation_snapshot("removed", "first"),
+        cast(ArtifactLease, first),
+    )
+    presentation._remember(
+        _presentation_snapshot("removed", "second"),
+        cast(ArtifactLease, second),
+    )
 
     with pytest.raises(RuntimeError, match="prune close failed"):
-        presentation._prune_snapshots(studio)
+        presentation.snapshot("dashboard")
 
-    presentation._prune_snapshots(studio)
+    assert presentation.snapshot_for_revision("removed", "first") is None
+    assert presentation.snapshot_for_revision("removed", "second") is None
+    presentation.close()
     assert sorted(calls) == ["first", "second"]
-    assert ("removed", "development") not in presentation._snapshots
-    assert "removed" not in presentation._snapshot_history
-    assert "removed" not in presentation._snapshot_leases
 
 
 def test_presentation_replacement_keeps_the_new_lease_when_old_close_fails(
@@ -603,28 +612,10 @@ def test_presentation_replacement_keeps_the_new_lease_when_old_close_fails(
     calls: list[str] = []
     old = _LeaseCloser("old", calls, RuntimeError("replacement close failed"))
     new = _LeaseCloser("new", calls)
-    old_snapshot = cast(
-        PresentationSnapshot,
-        SimpleNamespace(
-            view_name="dashboard",
-            revision="revision",
-            artifact=SimpleNamespace(profile="development"),
-        ),
-    )
-    new_snapshot = cast(
-        PresentationSnapshot,
-        SimpleNamespace(
-            view_name="dashboard",
-            revision="revision",
-            artifact=SimpleNamespace(profile="development"),
-        ),
-    )
+    old_snapshot = _presentation_snapshot("dashboard", "revision")
+    new_snapshot = _presentation_snapshot("dashboard", "revision")
     presentation = NotebookPresentation(tmp_path / "analysis.py")
-    presentation._snapshots = {("dashboard", "development"): old_snapshot}
-    presentation._snapshot_history = {"dashboard": {"revision": old_snapshot}}
-    presentation._snapshot_leases = {
-        "dashboard": {"revision": cast(ArtifactLease, old)}
-    }
+    presentation._remember(old_snapshot, cast(ArtifactLease, old))
 
     with pytest.raises(RuntimeError, match="replacement close failed"):
         presentation._remember(new_snapshot, cast(ArtifactLease, new))
@@ -632,9 +623,7 @@ def test_presentation_replacement_keeps_the_new_lease_when_old_close_fails(
     assert calls == ["old"]
     assert old.closed
     assert not new.closed
-    assert presentation._snapshots[("dashboard", "development")] is new_snapshot
-    assert presentation._snapshot_history["dashboard"]["revision"] is new_snapshot
-    assert presentation._snapshot_leases["dashboard"]["revision"] is new
+    assert presentation.snapshot_for_revision("dashboard", "revision") is new_snapshot
 
     presentation.close()
     assert calls == ["old", "new"]
@@ -645,18 +634,13 @@ def test_presentation_revisited_revision_becomes_most_recent() -> None:
     calls: list[str] = []
     presentation = NotebookPresentation(Path("analysis.py"))
     leases: dict[str, _LeaseCloser] = {}
+    snapshots: dict[str, PresentationSnapshot] = {}
 
     def remember(revision: str, lease_name: str | None = None) -> None:
         lease = _LeaseCloser(lease_name or revision, calls)
         leases[lease.name] = lease
-        snapshot = cast(
-            PresentationSnapshot,
-            SimpleNamespace(
-                view_name="dashboard",
-                revision=revision,
-                artifact=SimpleNamespace(profile="development"),
-            ),
-        )
+        snapshot = _presentation_snapshot("dashboard", revision)
+        snapshots[revision] = snapshot
         presentation._remember(snapshot, cast(ArtifactLease, lease))
 
     for index in range(8):
@@ -664,20 +648,37 @@ def test_presentation_revisited_revision_becomes_most_recent() -> None:
     remember("revision-0", "revision-0-revisited")
     remember("revision-8")
 
-    assert calls == ["revision-0", "revision-1"]
-    assert list(presentation._snapshot_history["dashboard"]) == [
+    assert leases["revision-0"].closed
+    assert leases["revision-1"].closed
+    assert presentation.snapshot_for_revision("dashboard", "revision-1") is None
+    for revision in (
+        "revision-0",
         "revision-2",
         "revision-3",
         "revision-4",
         "revision-5",
         "revision-6",
         "revision-7",
-        "revision-0",
         "revision-8",
-    ]
-    assert not leases["revision-0-revisited"].closed
+    ):
+        assert (
+            presentation.snapshot_for_revision("dashboard", revision)
+            is snapshots[revision]
+        )
+    for lease_name in (
+        "revision-0-revisited",
+        "revision-2",
+        "revision-3",
+        "revision-4",
+        "revision-5",
+        "revision-6",
+        "revision-7",
+        "revision-8",
+    ):
+        assert not leases[lease_name].closed
 
     presentation.close()
+    assert all(lease.closed for lease in leases.values())
 
 
 def test_presentation_source_snapshot_closes_every_lease_after_failure() -> None:

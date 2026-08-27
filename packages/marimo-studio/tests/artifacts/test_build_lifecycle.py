@@ -470,9 +470,6 @@ def test_prepared_cache_rechecks_source_before_reporting_success(
     state = read_build_state(project, "development")
     assert state.phase == "failed"
     assert [item.code for item in state.diagnostics] == ["project-changed-during-build"]
-    state = read_build_state(project, "development")
-    assert state.phase == "failed"
-    assert [item.code for item in state.diagnostics] == ["project-changed-during-build"]
 
 
 def test_cached_restore_confirms_source_inside_its_receipt_transaction(

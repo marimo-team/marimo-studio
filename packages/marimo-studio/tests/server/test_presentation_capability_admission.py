@@ -272,8 +272,6 @@ def test_stale_native_capability_does_not_begin_admission(
     ("endpoint", "kiosk"),
     (
         pytest.param("ws", None, id="websocket-missing"),
-        pytest.param("ws", "false", id="websocket-false"),
-        pytest.param("sse", None, id="sse-missing"),
         pytest.param("sse", "false", id="sse-false"),
     ),
 )

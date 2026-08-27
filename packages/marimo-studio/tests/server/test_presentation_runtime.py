@@ -510,7 +510,7 @@ mo.md(f"""
 ## Report
 """)
 '''
-    legacy = '''\
+    expanded = '''\
 mo.md(
     f"""
     ## Report
@@ -550,7 +550,7 @@ def _(mo):
     rows = (
         SimpleNamespace(code='inserted = "before"', id="live-inserted", name="_"),
         SimpleNamespace(code=static.cells[0].code, id="live-import", name="_"),
-        SimpleNamespace(code=legacy, id="live-report", name="_"),
+        SimpleNamespace(code=expanded, id="live-report", name="_"),
     )
     session = _live_test_session(rows)
     _session_manager(app).get_session_by_file_key = Mock(return_value=session)
