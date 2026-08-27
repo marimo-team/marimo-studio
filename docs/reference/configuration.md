@@ -1,70 +1,52 @@
 ---
 title: Notebook configuration
-description: Configure Studio views, runtimes, session refreshes, projected logs, and cell aliases.
+description: Configure a Studio notebook, its default view, runtimes, logs, and cell aliases.
 ---
 
 # Notebook configuration
 
-Studio reads configuration from the notebook's PEP 723 metadata or from a
-project `pyproject.toml`. Use `marimo-studio view add` to create the initial
-configuration and `marimo-studio bind` to manage cell aliases.
+Studio stores notebook settings in PEP 723 metadata or in a project
+`pyproject.toml`. Each view keeps one small `view.toml` beside its frontend
+source.
 
-::: info Configuration can precede view source
-Configuration defines a Studio workspace before view source exists. Opening a
-configured notebook in `marimo edit` presents an authenticated initializer when
-the view directory is empty. The initializer creates the configured `default`
-view and opens its authoring workspace.
-:::
+## Notebook metadata
 
-## Configure one notebook
+Creating the first view adds the package dependency and Studio table:
 
-`view add` stores notebook-local settings in the PEP 723 block:
-
-```python [analysis.py]
+```python
 # /// script
 # requires-python = ">=3.10"
-# dependencies = [
-#   "marimo-studio",
-# ]
+# dependencies = ["marimo-studio"]
 #
 # [tool.marimo-studio]
 # default = "dashboard"
-# runtime = "server"
-# runtimes = ["server", "wasm"]
-# preserve_session = false
-# show_cell_logs = false
-#
-# [tool.marimo-studio.cells]
-# summary = { ref = "cell:v1:<semantic-sha256>:<layout-sha256>:0" }
 # ///
 ```
 
-| Field              | Type     | Default     | Behavior                                                               |
-| ------------------ | -------- | ----------- | ---------------------------------------------------------------------- |
-| `default`          | String   | Required    | Select the view served at `/`                                          |
-| `runtime`          | String   | `"server"`  | Select the runtime when a view URL has no override                     |
-| `runtimes`         | String[] | `[runtime]` | Permit runtimes in run mode                                            |
-| `preserve_session` | Boolean  | `false`     | Reconnect a manual server-runtime refresh to its current kernel        |
-| `show_cell_logs`   | Boolean  | `true`      | Render cell standard output and standard error in projected cell hosts |
-| `cells`            | Table    | Empty       | Store aliases shared by every view                                     |
+| Field              | Default     | Behavior                                           |
+| ------------------ | ----------- | -------------------------------------------------- |
+| `default`          | Required    | Selects the view served at `/`                     |
+| `runtime`          | `"server"`  | Selects the runtime when a URL has no override     |
+| `runtimes`         | `[runtime]` | Permits runtimes in Studio and run mode            |
+| `preserve_session` | `false`     | Reconnects a Server refresh with a matching query  |
+| `show_cell_logs`   | `true`      | Includes stdout and stderr in complete-cell mounts |
+| `cells`            | Empty       | Stores optional aliases shared by every view       |
 
-`runtime` must appear in `runtimes`. Runtime IDs follow the same lowercase
-letters, numbers, and hyphens pattern as view names.
+`preserve_session` reuses a run-mode Server kernel when the canonical public
+notebook query matches the query that created it. Private Studio routing and
+transport keys do not affect the match. A different public query starts a fresh
+kernel and presentation.
 
-Set `show_cell_logs = false` when a projected page should exclude text written
-through `print`, Python logging, and warnings. Primary cell results, media,
-input prompts, and structured Marimo errors continue to render.
+Install frontend extensions through normal Python dependencies. For a
+notebook-local PEP 723 configuration, Studio adds the selected starter's
+requirement when it creates the view. Project dependencies follow the
+project's package workflow. Removing a view leaves dependencies unchanged.
 
-Set `preserve_session = true` when a manual refresh of a server-runtime page
-should return the browser to its current run-mode kernel. The serving Marimo
-process must still retain that session, and reconnecting requests must reach
-the same process.
+## Project configuration
 
-## Configure a project
+A managed project can use `pyproject.toml`:
 
-A managed project can place the same settings in `pyproject.toml`:
-
-```toml [pyproject.toml]
+```toml
 [project]
 name = "analysis"
 version = "0.1.0"
@@ -75,33 +57,32 @@ notebook = "analysis.py"
 default = "dashboard"
 runtime = "server"
 runtimes = ["server", "wasm"]
-preserve_session = false
-show_cell_logs = false
-
-[tool.marimo-studio.cells]
-summary = { ref = "cell:v1:<semantic-sha256>:<layout-sha256>:0" }
 ```
 
-`notebook` is required in project configuration and resolves relative to
-`pyproject.toml`. View files still live beside that notebook under
-`__marimo__/studio/`.
+`notebook` resolves relative to `pyproject.toml`.
 
-## Resolve a target
+## View manifest
 
-When a command receives a notebook path, Studio checks:
+Each view selects one installed frontend extension:
 
-1. PEP 723 metadata in that notebook.
-2. The nearest parent `pyproject.toml` whose `notebook` field resolves to it.
+```toml
+schema = 1
+provider = "marimo-studio/vanilla"
+```
 
-Notebook metadata wins when both sources identify the same notebook. A
-conflict reports both configured paths.
+The manifest stores explicit overrides:
 
-When a command receives a directory or no target, Studio looks for one
-configured notebook in that directory and for project configuration in its
-parent chain. Pass the notebook path when a directory contains more than one
-configured notebook.
+```toml
+schema = 1
+provider = "acme-views/report"
 
-## Locate view source
+[options]
+entrypoint = "web/report.html"
+```
+
+Studio passes explicit option values to provider inspection and build. The
+provider reports diagnostics for unsupported keys or values. Starter identity
+is creation-time information and is not stored in the project.
 
 Views for `analysis.py` live at:
 
@@ -109,39 +90,34 @@ Views for `analysis.py` live at:
 __marimo__/studio/analysis/<view-name>/
 ```
 
-Every immediate child directory with an `index.html` is a view. The directory
-name is also its run-mode route.
+A directory is a view when it has a valid `view.toml`. View names start with a
+lowercase letter and contain lowercase letters, numbers, or hyphens.
 
-Studio reports a configured notebook with zero views as `needs-view`. A
-workspace becomes `ready` when at least one view exists and `default` names one
-of those views.
+Commit `view.toml` and the frontend source beneath this directory. Generated
+`.artifacts/` directories and the workspace `.locks/` directory remain ignored.
 
-The default starter files are:
-
-```text
-index.html
-app.css
-```
-
-Add JavaScript modules, images, fonts, and nested asset directories beside
-them. Relative URLs resolve from the authored file that references them.
-
-## Manage cell aliases
-
-The `cells` table maps an alias to a stable cell reference. Create and update
-these entries through the CLI:
+The notebook stem selects the workspace directory. Rename a notebook and its
+authored workspace together:
 
 ```console
-uvx marimo-studio bind analysis.py --cell 12 --as summary
+mv analysis.py revenue.py
+mv __marimo__/studio/analysis __marimo__/studio/revenue
 ```
 
-Native Marimo cell names require no alias. During an active `marimo edit`
-session, a configured alias follows its cell as the cell moves or its Python
-meaning changes. Edits made while the notebook is closed resolve across
-formatting and comment changes. Reinspect and bind with `--overwrite` when an
-offline edit changes the cell's meaning or makes the match ambiguous. Deleting
-a cell removes its configured aliases when the notebook is saved.
+For project configuration, update `tool.marimo-studio.notebook` in the same
+change.
 
-[CLI reference](cli.md) defines command output and exit codes. [Run, export,
-and share](../guide/run-and-share.md) explains how runtime settings affect
-deployment.
+## Cell aliases
+
+Native Marimo cell names resolve directly. Bind an anonymous cell when it needs
+a stable target:
+
+```console
+marimo-studio bind analysis.py --cell 12 --as summary
+```
+
+Aliases are stored under `[tool.marimo-studio.cells]`. Use native cell names
+for new view-facing results when possible.
+
+[View projects](view-project.md) defines source and generated files.
+[Runtimes](runtimes.md) defines server and WebAssembly behavior.

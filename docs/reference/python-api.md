@@ -1,122 +1,14 @@
 ---
-title: Python API reference
-description: Inspect Marimo notebook structure, configure integrations, and create a run-mode ASGI application.
+title: Python API
+description: Create a run-mode application or inspect a saved Marimo notebook from Python.
 ---
 
-# Python API reference
+# Python API
 
-The public Python API inspects a notebook's static cell graph, exposes host
-integration policy, and creates one configured Marimo ASGI application.
+The root package exposes two operations and their result types. Use the
+[Agent API](agent-api.md) for notebook-bound view authoring.
 
-| Job                                                              | API                    |
-| ---------------------------------------------------------------- | ---------------------- |
-| Read cell names, definitions, dependencies, and source locations | `inspect_notebook`     |
-| Build one run-mode server application                            | `create_asgi_app`      |
-| Select runtime-bound projection hosts through Lens               | `LENS_TARGET_SELECTOR` |
-
-For a regular standalone process, use Marimo's CLI:
-
-```console
-uv run --with marimo-studio \
-  marimo run analysis.py \
-  --sandbox \
-  --headless
-```
-
-## `LENS_TARGET_SELECTOR`
-
-`LENS_TARGET_SELECTOR` is the CSS selector for runtime-bound cell, output, and
-value hosts. Pass it to Lens and compose authored page regions into the same
-selector when they should also receive feedback.
-
-```python
-from marimo_lens import Lens
-from marimo_studio import LENS_TARGET_SELECTOR
-
-lens = Lens(dom_selector=f"{LENS_TARGET_SELECTOR}, #app-shell > header")
-```
-
-Studio owns this selector and the producer metadata on matching hosts. Lens
-remains independent of Studio's custom elements and binding syntax.
-
-## `inspect_notebook`
-
-```python
-inspect_notebook(
-    path: str | pathlib.Path,
-    *,
-    include_code: bool = False,
-) -> NotebookSpec
-```
-
-Compiles the notebook graph and returns a `NotebookSpec`. It leaves cell bodies
-unevaluated.
-
-```python
-from marimo_studio import inspect_notebook
-
-notebook = inspect_notebook("analysis.py")
-for cell in notebook.cells:
-    print(cell.index, cell.name, cell.definitions)
-```
-
-Set `include_code=True` to include each complete cell body in `CellSpec.code`.
-The default leaves that field as `None`.
-
-Raises `ConfigurationError` when the path is missing, is not a Python
-notebook, or cannot be compiled by the installed Marimo version.
-
-## `NotebookSpec`
-
-```python
-@dataclass(frozen=True)
-class NotebookSpec:
-    path: pathlib.Path
-    cells: tuple[CellSpec, ...]
-    app_config: dict[str, Any]
-```
-
-Methods:
-
-| Method          | Result                                                                      |
-| --------------- | --------------------------------------------------------------------------- |
-| `by_ref()`      | Map each `CellRef` to its `CellSpec`                                        |
-| `named_cells()` | Map native cell names to their `CellSpec`                                   |
-| `to_dict()`     | JSON-compatible record with `schema`, `notebook`, `app_config`, and `cells` |
-
-## `CellSpec`
-
-Each cell record contains:
-
-| Field                       | Shape                                                             |
-| --------------------------- | ----------------------------------------------------------------- |
-| `index`                     | Zero-based notebook position                                      |
-| `name`                      | Native Marimo cell name or `None`                                 |
-| `ref`                       | Stable `CellRef` used by Studio aliases                           |
-| `runtime_id`                | Marimo cell ID for the inspected notebook                         |
-| `source`                    | `SourceSpan` with start and end line and column values            |
-| `preview`                   | Bounded source preview                                            |
-| `definitions`, `references` | Variable-name tuples                                              |
-| `upstream`, `downstream`    | Tuples of related `CellRef` values                                |
-| `config`                    | `CellConfigSpec` with column, disabled, and code-visibility state |
-| `has_output_expression`     | Whether the cell body ends with a displayed expression            |
-| `code`                      | Complete source when `include_code=True`, otherwise `None`        |
-
-`CellRef.parse(value)` accepts a `cell:v1:...` string or an existing `CellRef`.
-`str(ref)` returns the serialized reference.
-
-## `create_asgi_app` <Badge type="info" text="Pinned Marimo release" />
-
-```python
-create_asgi_app(
-    notebook: str | pathlib.Path,
-) -> ASGIApp
-```
-
-Loads the notebook's Studio definition and returns a run-mode Marimo ASGI
-application. The definition can precede authored view files. The default and
-named views use the same server process after the workspace is initialized.
-Each browser receives its regular isolated Marimo run session.
+## `create_asgi_app`
 
 ```python
 from marimo_studio import create_asgi_app
@@ -124,19 +16,18 @@ from marimo_studio import create_asgi_app
 app = create_asgi_app("analysis.py")
 ```
 
-The factory requires the exact Marimo release declared by the installed
-`marimo-studio` package.
+```python
+create_asgi_app(notebook: str | Path) -> ASGIApp
+```
 
-A definition with zero views still produces the ASGI application. Run-mode
-document requests return `409` with `workspace-not-initialized`, the configured
-default, and an edit-mode repair hint. Create the first view through a Marimo
-edit process or `marimo-studio view add` before serving traffic.
+Returns the Marimo run-mode ASGI application for one configured notebook. The
+application serves the default and named views through Studio's validated
+publication routes. Its ASGI lifespan opens the notebook's Studio adapters,
+then closes active notebook sessions and Studio-owned tasks during shutdown.
 
-Raises:
-
-- `ConfigurationError` when the notebook or Studio configuration is invalid.
-- `ProtocolError` when the installed Marimo source or packaged browser assets
-  differ from the tagged release.
+The notebook must be saved and configured. A configured notebook with no view
+returns a structured `409 workspace-not-initialized` response that names the
+default view to create.
 
 ### Environment-configured application
 
@@ -146,28 +37,48 @@ Raises:
 ```console
 MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
   uvicorn marimo_studio.asgi:app \
-  --host 0.0.0.0 \
+  --host 127.0.0.1 \
   --port 8000
 ```
 
-Install the notebook dependencies in the Uvicorn environment before starting
-the server.
+Install the notebook dependencies in the application-server environment.
 
-## Public exports
+## `inspect_notebook`
 
-`marimo_studio` exports:
+```python
+from marimo_studio import inspect_notebook
 
-```text
-ASGIApp
-CellConfigSpec
-CellRef
-CellSpec
-LENS_TARGET_SELECTOR
-NotebookSpec
-SourceSpan
-create_asgi_app
-inspect_notebook
+notebook = inspect_notebook("analysis.py", include_code=True)
 ```
 
-[Notebook configuration](configuration.md) defines how the application finds
-views and runtime settings.
+```python
+inspect_notebook(
+    path: str | Path,
+    *,
+    include_code: bool = False,
+) -> NotebookSpec
+```
+
+Compiles the saved notebook and returns its cell inventory, source spans,
+definitions, references, and dependency relationships. Cell bodies remain
+unevaluated.
+
+## Public records
+
+| Record           | Fields and methods                                                                 |
+| ---------------- | ---------------------------------------------------------------------------------- |
+| `ASGIApp`        | Async `scope`, `receive`, and `send` callable                                      |
+| `CellRef`        | `fingerprint`, `layout_fingerprint`, `occurrence`, `parse()`, and `str()`          |
+| `SourceSpan`     | `start_line`, `end_line`, `start_column`, and `end_column`                         |
+| `CellConfigSpec` | `column`, `disabled`, and `hide_code`                                              |
+| `CellSpec`       | Identity, source, code digest, preview, definitions, references, graph, and config |
+| `NotebookSpec`   | `path`, `cells`, `app_config`, `by_ref()`, `named_cells()`, and `to_dict()`        |
+
+`inspect_notebook(..., include_code=True)` includes `CellSpec.code`. The default
+keeps code out of each record while retaining its digest and preview.
+
+`LENS_TARGET_SELECTOR` identifies mounted Studio result hosts for tools that
+integrate with the rendered page.
+
+View-provider contracts live in `marimo_studio.view_providers` and are
+documented in the [Frontend extension API](provider-api.md).
