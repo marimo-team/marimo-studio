@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from marimo_studio._capabilities import ServerContext, SessionState
-from marimo_studio._server.live_clients import PeerTarget
+from marimo_studio._server.agent.clients import PeerTarget
 from marimo_studio._server.notebook_scope import NotebookScope
+from marimo_studio._server.ports import SessionState
+from marimo_studio._server.records import ServerContext
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.activation import ViewActivationResult
+from marimo_studio.agent._limits import VIEW_ACTIVATION_TIMEOUT
+from marimo_studio.agent._records import ViewActivationResult
 from marimo_studio.errors import AgentRequestError, ViewNotFoundError
 
-_ACTIVATION_TIMEOUT = 5.0
 _CLIENT_CONNECT_TIMEOUT = 1.0
 
 
@@ -118,22 +119,12 @@ async def _activate_connected_view(
     activation = await notebook_scope.agents.activate(target, view_name)
     await notebook_scope.agents.wait_for_activation(
         activation,
-        _ACTIVATION_TIMEOUT,
+        VIEW_ACTIVATION_TIMEOUT,
     )
     return ViewActivationResult(
         notebook=studio.notebook,
         view=view_name,
-        state="active",
         generation=activation.generation,
-        transition="in-place",
         session_id=session_id,
         client_id=target.client_id,
     )
-
-
-__all__ = [
-    "BrowserViewTarget",
-    "SessionViewTarget",
-    "ViewTarget",
-    "activate_studio_view",
-]

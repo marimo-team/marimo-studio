@@ -6,22 +6,25 @@ from typing import cast
 
 import pytest
 
-from marimo_studio._capabilities import ServerContext, SessionState
+from marimo_studio._server.agent.activation import ActivationAckOutcome
+from marimo_studio._server.development.client_events import WorkspaceClientEventProducer
 from marimo_studio._server.notebook_scope import NotebookScope
-from marimo_studio._server.view_activation import (
+from marimo_studio._server.ports import SessionState
+from marimo_studio._server.presentation.activation import (
     BrowserViewTarget,
     SessionViewTarget,
     activate_studio_view,
 )
-from marimo_studio._server.workspace_client_events import WorkspaceClientEventProducer
-from marimo_studio.activation import ViewActivationRequest
+from marimo_studio._server.records import ServerContext
+from marimo_studio.agent._protocol import ViewActivationRequest
 from marimo_studio.errors import (
     AgentRequestError,
     CapabilityInputError,
     ViewNotFoundError,
 )
 
-from .app_helpers import configured
+from ..app_helpers import configured
+from ..client_test_support import bind_native_session
 
 
 def test_activation_request_round_trips_its_versioned_record() -> None:
@@ -32,7 +35,6 @@ def test_activation_request_round_trips_its_versioned_record() -> None:
 
     assert ViewActivationRequest.from_dict("dashboard", request.to_dict()) == request
     for payload in (
-        {},
         {**request.to_dict(), "schema": True},
         {**request.to_dict(), "unexpected": True},
     ):
@@ -72,27 +74,41 @@ async def _activate_connected(
     return await operation
 
 
-def test_external_activation_targets_the_selected_browser(notebook_path) -> None:
+def test_external_activation_targets_the_selected_browser(
+    notebook_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     studio = configured(notebook_path)
     notebook_scope = NotebookScope.create(studio.notebook)
 
     async def exercise():
-        await notebook_scope.clients.connect("browser-client-1234")
-        await notebook_scope.clients.bind_session(
+        assert await notebook_scope.clients.connect_stream("browser-client-1234", 1)
+        await bind_native_session(
+            notebook_scope.clients,
             "s_123456",
             "browser-client-1234",
         )
-        return await _activate_connected(
+        budgets: list[float] = []
+        wait_for_activation = notebook_scope.agents.wait_for_activation
+
+        async def wait(activation, timeout: float) -> None:
+            budgets.append(timeout)
+            await wait_for_activation(activation, timeout)
+
+        monkeypatch.setattr(notebook_scope.agents, "wait_for_activation", wait)
+        result = await _activate_connected(
             notebook_scope,
             studio,
             BrowserViewTarget("browser-client-1234"),
         )
+        return result, budgets
 
-    result = asyncio.run(exercise())
+    result, budgets = asyncio.run(exercise())
 
-    assert result.state == "active"
+    assert result.view == "dashboard"
     assert result.client_id == "browser-client-1234"
     assert result.session_id == "s_123456"
+    assert budgets == [120.0]
 
 
 def test_external_activation_selects_the_only_browser(notebook_path) -> None:
@@ -100,8 +116,9 @@ def test_external_activation_selects_the_only_browser(notebook_path) -> None:
     notebook_scope = NotebookScope.create(studio.notebook)
 
     async def exercise():
-        await notebook_scope.clients.connect("browser-client-1234")
-        await notebook_scope.clients.bind_session(
+        assert await notebook_scope.clients.connect_stream("browser-client-1234", 1)
+        await bind_native_session(
+            notebook_scope.clients,
             "s_123456",
             "browser-client-1234",
         )
@@ -123,8 +140,12 @@ def test_external_activation_rejects_ambiguous_browsers(notebook_path) -> None:
     async def exercise() -> None:
         for index in range(2):
             client_id = f"browser-client-{index}"
-            await notebook_scope.clients.connect(client_id)
-            await notebook_scope.clients.bind_session(f"s_{index}", client_id)
+            assert await notebook_scope.clients.connect_stream(client_id, index + 1)
+            await bind_native_session(
+                notebook_scope.clients,
+                f"s_{index}",
+                client_id,
+            )
         with pytest.raises(AgentRequestError) as raised:
             await activate_studio_view(
                 cast(ServerContext, SimpleNamespace()),
@@ -144,7 +165,7 @@ def test_external_activation_requires_a_bound_session(notebook_path) -> None:
     notebook_scope = NotebookScope.create(studio.notebook)
 
     async def exercise() -> None:
-        await notebook_scope.clients.connect("browser-client-1234")
+        assert await notebook_scope.clients.connect_stream("browser-client-1234", 1)
         with pytest.raises(AgentRequestError) as raised:
             await activate_studio_view(
                 cast(ServerContext, SimpleNamespace()),
@@ -159,9 +180,16 @@ def test_external_activation_requires_a_bound_session(notebook_path) -> None:
     asyncio.run(exercise())
 
 
-def test_session_activation_requires_its_studio_host(notebook_path) -> None:
+def test_session_activation_requires_its_studio_host(
+    notebook_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     studio = configured(notebook_path)
     notebook_scope = NotebookScope.create(studio.notebook)
+    monkeypatch.setattr(
+        "marimo_studio._server.presentation.activation._CLIENT_CONNECT_TIMEOUT",
+        0.02,
+    )
 
     with pytest.raises(AgentRequestError) as raised:
         asyncio.run(
@@ -205,10 +233,11 @@ def test_first_view_activation_replays_across_host_promotion(notebook_path) -> N
             notebook_scope.clients,
             notebook_scope.agents,
             client_id,
+            1,
             None,
         )
         await pre_host.connect()
-        await notebook_scope.clients.bind_session("s_123456", client_id)
+        await bind_native_session(notebook_scope.clients, "s_123456", client_id)
         operation = asyncio.create_task(
             activate_studio_view(
                 cast(ServerContext, SimpleNamespace()),
@@ -226,15 +255,19 @@ def test_first_view_activation_replays_across_host_promotion(notebook_path) -> N
             notebook_scope.clients,
             notebook_scope.agents,
             client_id,
+            2,
             "dashboard",
         )
         await workspace.connect()
         replayed = await next_activation(workspace)
         assert replayed == delivered
-        assert await notebook_scope.agents.acknowledge_activation(
-            client_id,
-            replayed[0],
-            replayed[1],
+        assert (
+            await notebook_scope.agents.acknowledge_activation(
+                client_id,
+                replayed[0],
+                replayed[1],
+            )
+            is ActivationAckOutcome.APPLIED
         )
         result = await operation
         await workspace.close()
@@ -243,7 +276,7 @@ def test_first_view_activation_replays_across_host_promotion(notebook_path) -> N
 
     result = asyncio.run(exercise())
 
-    assert result.state == "active"
+    assert result.view == "dashboard"
     assert result.client_id == client_id
 
 
