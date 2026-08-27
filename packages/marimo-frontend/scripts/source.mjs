@@ -139,7 +139,12 @@ const remoteUrl = (path) => capture("git", ["remote", "get-url", "origin"], path
 
 export const prepareOwnedCheckout = async ({ path, repository, commit }) => {
   if ((await exists(join(path, ".git"))) && (await remoteUrl(path)) !== repository) {
-    await rm(path, { force: true, recursive: true });
+    await rm(path, {
+      force: true,
+      maxRetries: 10,
+      recursive: true,
+      retryDelay: 20,
+    });
   }
 
   if (!(await exists(join(path, ".git")))) {
