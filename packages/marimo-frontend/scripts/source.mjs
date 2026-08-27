@@ -33,8 +33,8 @@ const capture = async (command, args, cwd) => {
 const run = (command, args, cwd) =>
   new Promise((resolveRun, rejectRun) => {
     const child = spawn(command, args, { cwd, stdio: "inherit" });
-    child.on("error", rejectRun);
-    child.on("exit", (code, signal) => {
+    child.once("error", rejectRun);
+    child.once("close", (code, signal) => {
       if (code === 0) {
         resolveRun();
         return;
