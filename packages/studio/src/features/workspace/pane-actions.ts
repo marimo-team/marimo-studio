@@ -6,7 +6,7 @@ export const SURFACES: readonly Surface[] = surfaceSchema.options;
 
 export const SURFACE_LABELS = {
   notebook: "Notebook",
-  source: "HTML & CSS",
+  source: "Source",
   preview: "Preview",
 } satisfies Record<Surface, string>;
 

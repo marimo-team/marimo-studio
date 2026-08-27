@@ -5,31 +5,46 @@ import type { Rectangle } from "./model.ts";
 type TrustedFrameProps = Omit<IframeHTMLAttributes<HTMLIFrameElement>, "ref" | "title"> & {
   active?: boolean;
   frameRef: RefCallback<HTMLIFrameElement>;
+  interactive?: boolean;
   title: string;
 };
 
 export const TrustedFrame = ({
   active = true,
   frameRef,
+  interactive = active,
   title,
   ...attributes
 }: TrustedFrameProps) => (
   <>
-    {/* Studio reads Marimo state from these trusted same-origin documents. */}
+    {/* Editor frames share Marimo's origin. PreviewFrame supplies its sandbox. */}
     {/* react-doctor-disable-next-line react-doctor/iframe-missing-sandbox */}
     <iframe
       ref={frameRef}
       {...attributes}
       title={title}
       allow="clipboard-read; clipboard-write"
+      aria-busy={active && !interactive ? true : undefined}
       hidden={!active}
-      inert={!active}
+      inert={!active || !interactive}
     />
   </>
 );
 
-export const PreviewFrame = ({ runtime, ...props }: TrustedFrameProps & { runtime: string }) => (
-  <TrustedFrame {...props} data-preview-frame="" data-preview-runtime-frame={runtime} />
+export const PreviewFrame = ({
+  primary = true,
+  runtime,
+  view,
+  ...props
+}: TrustedFrameProps & { primary?: boolean; runtime: string; view?: string }) => (
+  <TrustedFrame
+    {...props}
+    data-preview-frame=""
+    data-preview-cache-runtime={runtime}
+    data-preview-runtime-frame={primary ? runtime : undefined}
+    data-preview-view-frame={view}
+    sandbox="allow-downloads allow-forms allow-modals allow-pointer-lock allow-popups allow-scripts"
+  />
 );
 
 export const PositionedEditorFrame = ({

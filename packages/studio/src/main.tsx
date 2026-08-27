@@ -27,6 +27,7 @@ const readJson = (selector: string): JsonValue => {
 const readBootstrap = () => parseStudioBootstrap(readJson("#marimo-studio-bootstrap"));
 
 const publishBootstrap = (bootstrap: ReturnType<typeof parseStudioBootstrap>): void => {
+  document.documentElement.dataset.marimoStudioState = "ready";
   let element = document.querySelector<HTMLScriptElement>("#marimo-studio-bootstrap");
   if (!element) {
     element = document.createElement("script");

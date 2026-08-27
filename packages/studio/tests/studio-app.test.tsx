@@ -1,8 +1,5 @@
-import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
-
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useLayoutEffect, useMemo } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { ViewRemote } from "../src/features/views/remote.ts";
@@ -13,39 +10,12 @@ import { RuntimeStatus } from "../src/features/navigation/RuntimeStatus.tsx";
 import { Toolbar } from "../src/features/navigation/Toolbar.tsx";
 import { PreviewDeck } from "../src/features/preview/deck.ts";
 import { previewStatus } from "../src/features/preview/status.ts";
-import { SourceController } from "../src/features/source-editor/controller.ts";
 import { ViewController } from "../src/features/views/controller.ts";
 import { LayoutController } from "../src/features/workspace/controller.ts";
 import { Divider } from "../src/features/workspace/Divider.tsx";
 import { computeLayout, defaultWorkspaceLayout } from "../src/features/workspace/model.ts";
-import { useWorkspace } from "../src/features/workspace/useWorkspace.ts";
-import { Workspace } from "../src/features/workspace/Workspace.tsx";
-
-const bootstrap: StudioBootstrap = {
-  schema: 1,
-  notebook: { name: "analysis.py" },
-  selectedView: "dashboard",
-  views: ["dashboard", "report"],
-  runtimes: [
-    { id: "server", label: "Server" },
-    { id: "wasm", label: "WebAssembly" },
-  ],
-  defaultRuntime: "server",
-  clientId: "browser-client-1234",
-  serverInstance: "server-instance",
-  urls: {
-    editor: "/?file=analysis.py",
-    agent: "/_marimo-studio",
-    events: "/_marimo-studio/dev/events",
-    query: "/_marimo-studio/query",
-    studioPrefix: "/studio/",
-    viewPrefix: "/",
-    viewSupportPrefix: "/_marimo-studio/views",
-    views: "/_marimo-studio/views",
-  },
-  workspaceId: "workspace",
-  serverToken: "token",
-};
+import { starter, unbuiltView, viewList } from "./fixtures.ts";
+import { deferred, studioBootstrap as bootstrap } from "./studio-test-support.ts";
 
 const brand = {
   marks: {
@@ -54,43 +24,45 @@ const brand = {
   },
 };
 
-const frameByTitle = (title: string): HTMLIFrameElement => {
-  const element = screen.getByTitle(title);
-  if (!(element instanceof HTMLIFrameElement)) {
-    throw new TypeError(`${title} is not an iframe`);
-  }
-  return element;
-};
+const sourceProject = (view: string) => ({
+  schema: 1 as const,
+  view,
+  provider: "test/source",
+  provider_options: {},
+  documents: [{ path: "src/App.tsx", language: "typescriptreact", access: "edit" }],
+  mounts: [],
+  diagnostics: [],
+  build: unbuiltView,
+  artifact: null,
+});
 
-const remote = (): ViewRemote => {
+const remote = (starters = [starter], defaultStarter = starter.id): ViewRemote => {
   let views = ["dashboard", "report"];
   return {
-    list: vi.fn(async () => ({
-      schema: 1 as const,
-      default_view: "dashboard",
-      views,
-    })),
-    create: vi.fn(async (name: string) => {
+    list: vi.fn(async () => viewList(views, views[0], starters, defaultStarter)),
+    create: vi.fn(async (name: string, _starter: string) => {
       views = [...views, name].sort();
-      return { schema: 1 as const, name };
+      return {
+        schema: 2 as const,
+        name,
+        provider: "marimo-studio/vanilla",
+        studio_url: `/studio/${name}/`,
+        view_url: `/${name}/`,
+      };
     }),
     remove: vi.fn(async (name: string) => {
       views = views.filter((view) => view !== name);
-      return {
-        schema: 1 as const,
-        name,
-        default_view: "dashboard",
-        views,
-      };
+      return { ...viewList(views, views[0], starters, defaultStarter), name };
     }),
   };
 };
 
-const controllers = () => {
+const controllers = (starters = [starter], defaultStarter = starter.id) => {
   const layout = new LayoutController("test-workspace", bootstrap.selectedView);
   const preview = new PreviewDeck({
     initialView: bootstrap.selectedView,
     initialRuntime: bootstrap.defaultRuntime,
+    initialNavigation: { query: "", hash: "" },
     runtimes: bootstrap.runtimes.map((runtime) => runtime.id),
     viewUrl: (view, runtime) => `/${view}/?runtime=${runtime}`,
     supportUrl: (view) => `/_marimo-studio/views/${view}`,
@@ -101,66 +73,14 @@ const controllers = () => {
   const views = new ViewController(
     bootstrap.selectedView,
     [...bootstrap.views],
-    remote(),
+    remote(starters, defaultStarter),
     vi.fn(async () => true),
     vi.fn(async () => true),
+    vi.fn(),
+    starters,
+    defaultStarter,
   );
-  const source = new SourceController(
-    (view) => `${bootstrap.urls.viewSupportPrefix}/${view}`,
-    bootstrap.serverToken,
-    bootstrap.selectedView,
-    "test-workspace",
-    () => layout.reveal("source"),
-  );
-  return { layout, preview, source, views };
-};
-
-const WorkspaceHarness = ({
-  frames,
-  layout,
-  preview,
-  source,
-  views,
-}: ReturnType<typeof controllers> & { frames: Map<string, HTMLIFrameElement> }) => {
-  const workspace = useWorkspace(layout, preview, views);
-  const editorHost = useMemo(() => {
-    const host = document.createElement("div");
-    const frame = document.createElement("iframe");
-    frame.title = "Marimo editor";
-    host.append(frame);
-    return { frame, host };
-  }, []);
-  const editor = editorHost.frame;
-  useLayoutEffect(() => {
-    document.body.append(editorHost.host);
-    frames.forEach((frame, runtime) => {
-      Object.defineProperty(frame, "src", {
-        configurable: true,
-        value: `/${bootstrap.selectedView}/?runtime=${runtime}`,
-        writable: true,
-      });
-    });
-    preview.attach(editor, frames);
-    return () => editorHost.host.remove();
-  }, [editor, editorHost.host, frames, preview]);
-  return (
-    <Workspace
-      bootstrap={{
-        ...bootstrap,
-        urls: { ...bootstrap.urls, editor: "about:blank" },
-      }}
-      editorFrame={editor}
-      frameRef={(runtime) => (element) => {
-        if (element) {
-          frames.set(runtime, element);
-        } else {
-          frames.delete(runtime);
-        }
-      }}
-      source={source}
-      workspace={workspace}
-    />
-  );
+  return { layout, preview, views };
 };
 
 describe("Studio shell", () => {
@@ -185,20 +105,18 @@ describe("Studio shell", () => {
       />,
     );
 
-    const status = screen.getByText("Live with 1 warning").closest(".studio-runtime-status");
-    expect(status).toHaveAttribute("data-state", "warning");
-    expect(status).toHaveAttribute(
-      "title",
+    const status = screen.getByTitle(
       "The projected value is stale. Wait for the notebook to finish running.",
     );
+    expect(status).toHaveTextContent("Live with 1 warning");
   });
 
-  it("restores persisted layout trees and source tab from the application namespace", () => {
-    const storagePrefix = `marimo-studio:workspace-layout:v1:${bootstrap.workspaceId}`;
+  it("restores persisted layout trees from the current application namespace", () => {
+    const storagePrefix = `marimo-studio:workspace-layout:v3:${bootstrap.workspaceId}`;
     const persisted = {
-      schema: 1,
+      schema: 2,
       mode: "workspace",
-      code: { type: "pane", id: "pane-source", surface: "source" },
+      source: { type: "pane", id: "pane-source", surface: "source" },
       workspace: {
         type: "split",
         id: "saved-workspace",
@@ -213,18 +131,342 @@ describe("Studio shell", () => {
       `${storagePrefix}:${bootstrap.selectedView}`,
       JSON.stringify(persisted),
     );
-    globalThis.localStorage.setItem(`${storagePrefix}:source:${bootstrap.selectedView}`, "app.css");
-
     const services = createStudioServices(bootstrap);
     const serverPreviewUrl = new URL(services.preview.getSnapshot().states.server.url);
 
-    expect(services.layout.getSnapshot().code).toEqual(persisted.code);
+    expect(services.layout.getSnapshot().source).toEqual(persisted.source);
     expect(services.layout.getSnapshot().workspace).toEqual(persisted.workspace);
-    expect(services.source.getSnapshot().active).toBe("app.css");
     expect(serverPreviewUrl.searchParams.get("marimo_studio_client")).toBe(bootstrap.clientId);
     expect(serverPreviewUrl.searchParams.get("marimo_studio_server")).toBe(
       bootstrap.serverInstance,
     );
+    services.dispose();
+  });
+
+  it("commits authored navigation after the current source is saved", async () => {
+    const services = createStudioServices(bootstrap);
+    vi.spyOn(services.source, "prepareViewChange").mockResolvedValue(true);
+    const selectSource = vi.spyOn(services.source, "selectView");
+    const synchronize = vi
+      .spyOn(services.preview, "synchronizeNavigationQuery")
+      .mockResolvedValue(true);
+    const stageView = vi.spyOn(services.preview, "stageView").mockReturnValue({
+      ready: Promise.resolve(true),
+      rollback: vi.fn(async () => {}),
+    });
+    const navigation = { query: "?region=apac", hash: "#app-shell" };
+
+    expect(await services.views.choose("report", "preserve", navigation)).toBe(true);
+    expect(synchronize).toHaveBeenCalledOnce();
+    expect(synchronize).toHaveBeenCalledWith("?region=apac");
+    expect(stageView).toHaveBeenCalledWith("report", navigation);
+    expect(selectSource).toHaveBeenCalledWith("report");
+    expect(globalThis.location.search).toContain("region=apac");
+    expect(globalThis.location.hash).toBe("#app-shell");
+    services.dispose();
+  });
+
+  it("switches the preview while incoming source inspection is pending", async () => {
+    const reportProject = deferred<Response>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+          globalThis.location.href,
+        );
+        if (url.pathname.endsWith("/dashboard/project")) {
+          return Response.json(sourceProject("dashboard"));
+        }
+        if (url.pathname.endsWith("/dashboard/source/src/App.tsx")) {
+          return new Response("source:dashboard", { headers: { ETag: '"revision:dashboard"' } });
+        }
+        if (url.pathname.endsWith("/report/project")) {
+          return await reportProject.promise;
+        }
+        if (url.pathname.endsWith("/report/source/src/App.tsx")) {
+          return new Response("source:report", { headers: { ETag: '"revision:report"' } });
+        }
+        throw new Error(`Unexpected Source request ${url}`);
+      }),
+    );
+    const services = createStudioServices(bootstrap);
+    await services.source.start();
+    services.layout.selectMode("preview");
+    const stageView = vi.spyOn(services.preview, "stageView").mockReturnValue({
+      ready: Promise.resolve(true),
+      rollback: vi.fn(async () => {}),
+    });
+
+    expect(await services.views.choose("report")).toBe(true);
+
+    expect(stageView).toHaveBeenCalledWith("report", undefined);
+    expect(services.views.getSnapshot().current).toBe("report");
+    expect(services.layout.getSnapshot().mode).toBe("preview");
+    expect(services.source.getSnapshot()).toMatchObject({
+      view: "report",
+      active: null,
+      documents: [],
+    });
+    reportProject.resolve(Response.json(sourceProject("report")));
+    await vi.waitFor(() =>
+      expect(services.source.getSnapshot()).toMatchObject({
+        view: "report",
+        active: "src/App.tsx",
+        documents: [{ path: "src/App.tsx", loaded: true }],
+      }),
+    );
+    services.dispose();
+  });
+
+  it("keeps the selected view active when incoming source inspection fails", async () => {
+    globalThis.history.replaceState({}, "", "/studio/dashboard/?region=emea#current-section");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+        if (url.pathname.endsWith("/dashboard/project")) {
+          return Response.json(sourceProject("dashboard"));
+        }
+        if (url.pathname.endsWith("/dashboard/source/src/App.tsx")) {
+          return new Response("source:dashboard", { headers: { ETag: '"revision:dashboard"' } });
+        }
+        if (url.pathname.endsWith("/report/project")) {
+          return Response.json({ message: "inspection failed" }, { status: 500 });
+        }
+        throw new Error(`Unexpected Source request ${url}`);
+      }),
+    );
+    const services = createStudioServices(bootstrap);
+    await services.source.start();
+    vi.spyOn(services.preview, "synchronizeNavigationQuery").mockResolvedValue(true);
+    const stageView = vi.spyOn(services.preview, "stageView").mockReturnValue({
+      ready: Promise.resolve(true),
+      rollback: vi.fn(async () => {}),
+    });
+
+    expect(
+      await services.views.choose("report", "preserve", {
+        query: "?region=apac",
+        hash: "#target-section",
+      }),
+    ).toBe(true);
+    expect(services.views.getSnapshot().current).toBe("report");
+    expect(stageView).toHaveBeenCalledOnce();
+    expect(globalThis.location.pathname).toBe("/studio/report/");
+    await vi.waitFor(() =>
+      expect(services.source.getSnapshot()).toMatchObject({
+        view: "report",
+        documents: [],
+        targetDiagnostic: { view: "report" },
+      }),
+    );
+    services.dispose();
+  });
+
+  it("keeps menu, preview, route, and real Source on the current view when query preparation fails", async () => {
+    globalThis.history.replaceState({}, "", "/studio/dashboard/?region=emea#current-section");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const source = input instanceof Request ? input.url : String(input);
+        const url = new URL(source, globalThis.location.href);
+        const match =
+          /\/_marimo-studio\/views\/(dashboard|report)\/(project|source\/src\/App\.tsx)$/.exec(
+            url.pathname,
+          );
+        if (!match) {
+          throw new Error(`Unexpected Source request ${url}`);
+        }
+        const [, view, resource] = match;
+        if (resource === "project") {
+          return Response.json({
+            schema: 1,
+            view,
+            provider: "test/source",
+            provider_options: {},
+            documents: [{ path: "src/App.tsx", language: "typescriptreact", access: "edit" }],
+            mounts: [],
+            diagnostics: [],
+            build: unbuiltView,
+            artifact: null,
+          });
+        }
+        return new Response(`source:${view}`, {
+          headers: { ETag: `"revision:${view}"` },
+        });
+      }),
+    );
+    const services = createStudioServices(bootstrap);
+    await services.source.start();
+    const sourceBefore = services.source.getSnapshot();
+    const previewBefore = services.preview.getSnapshot().states.server?.url;
+    const selectSource = vi.spyOn(services.source, "selectView");
+    vi.spyOn(services.preview, "synchronizeNavigationQuery").mockResolvedValue(false);
+    const stageView = vi.spyOn(services.preview, "stageView");
+
+    expect(
+      await services.views.choose("report", "preserve", {
+        query: "?region=apac",
+        hash: "#app-shell",
+      }),
+    ).toBe(false);
+    expect(selectSource).not.toHaveBeenCalled();
+    expect(stageView).not.toHaveBeenCalled();
+    expect(services.views.getSnapshot().current).toBe("dashboard");
+    expect(services.source.getSnapshot()).toEqual(sourceBefore);
+    expect(services.preview.getSnapshot().states.server?.url).toBe(previewBefore);
+    expect(globalThis.location.pathname).toBe("/studio/dashboard/");
+    expect(globalThis.location.search).toContain("region=emea");
+    expect(globalThis.location.hash).toBe("#current-section");
+    services.dispose();
+  });
+
+  it("preserves same-view query and hash when editor synchronization rejects navigation", async () => {
+    globalThis.history.replaceState({}, "", "/studio/dashboard/?region=emea#current-section");
+    const services = createStudioServices(bootstrap);
+    vi.spyOn(services.preview, "synchronizeNavigationQuery").mockResolvedValue(false);
+    const navigate = vi.spyOn(services.preview, "navigateWithinView");
+
+    expect(
+      await services.views.choose("dashboard", "preserve", {
+        query: "?region=apac",
+        hash: "#target",
+      }),
+    ).toBe(false);
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(globalThis.location.pathname).toBe("/studio/dashboard/");
+    expect(globalThis.location.search).toBe("?region=emea");
+    expect(globalThis.location.hash).toBe("#current-section");
+    services.dispose();
+  });
+
+  it("cancels pending view navigation before removing a non-current view", async () => {
+    globalThis.history.replaceState({}, "", "/studio/dashboard/?region=emea#current-section");
+    let removed = false;
+    const request = vi.fn<typeof globalThis.fetch>(async (input, init) => {
+      const url = new URL(
+        input instanceof Request ? input.url : String(input),
+        globalThis.location.href,
+      );
+      const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+      if (url.pathname === "/_marimo-studio/views") {
+        return Response.json(viewList(removed ? ["dashboard"] : ["dashboard", "report"]));
+      }
+      if (url.pathname === "/_marimo-studio/views/report" && method === "DELETE") {
+        removed = true;
+        return Response.json({ ...viewList(["dashboard"]), name: "report" });
+      }
+      const match =
+        /\/_marimo-studio\/views\/(dashboard|report)\/(project|source\/src\/App\.tsx)$/.exec(
+          url.pathname,
+        );
+      if (!match) {
+        throw new Error(`Unexpected request ${method} ${url}`);
+      }
+      const [, view, resource] = match;
+      if (resource === "project") {
+        return Response.json(sourceProject(view!));
+      }
+      return new Response("source:dashboard", {
+        headers: { ETag: '"revision:dashboard"' },
+      });
+    });
+    vi.stubGlobal("fetch", request);
+    const services = createStudioServices(bootstrap);
+    await services.views.refreshInventory();
+    await services.source.start();
+    const navigation = deferred<boolean>();
+    const synchronize = vi
+      .spyOn(services.preview, "synchronizeNavigationQuery")
+      .mockReturnValue(navigation.promise);
+    const before = {
+      source: services.source.getSnapshot(),
+      layout: services.layout.getSnapshot(),
+      preview: services.preview.getSnapshot(),
+      route: globalThis.location.href,
+    };
+
+    const choosing = services.views.choose("report", "build", { query: "?pending=1", hash: "" });
+    await vi.waitFor(() => expect(synchronize).toHaveBeenCalledWith("?pending=1"));
+    services.views.beginRemoval("report");
+    expect(await services.views.deleteSelected()).toBe(true);
+    navigation.resolve(true);
+    expect(await choosing).toBe(false);
+
+    expect(services.views.getSnapshot()).toMatchObject({
+      current: "dashboard",
+      views: ["dashboard"],
+    });
+    expect(services.source.getSnapshot()).toEqual(before.source);
+    expect(services.layout.getSnapshot()).toEqual(before.layout);
+    expect(services.preview.getSnapshot()).toEqual(before.preview);
+    expect(globalThis.location.href).toBe(before.route);
+    services.dispose();
+  });
+
+  it("loads authoring options without waiting for the workspace event stream", async () => {
+    class EventSourceWithoutReady {
+      addEventListener(): void {}
+      close(): void {}
+    }
+    vi.stubGlobal("EventSource", EventSourceWithoutReady);
+    const request = vi.fn(async () => Response.json(viewList(["dashboard", "report"])));
+    vi.stubGlobal("fetch", request);
+    const services = createStudioServices(bootstrap);
+    vi.spyOn(services.source, "start").mockResolvedValue();
+    const editor = document.createElement("iframe");
+    const frames = new Map(
+      bootstrap.runtimes.map((runtime) => [runtime.id, document.createElement("iframe")]),
+    );
+
+    await services.start(editor, frames);
+    await vi.waitFor(() =>
+      expect(services.views.getSnapshot().starterCatalog).toEqual({ phase: "ready" }),
+    );
+
+    expect(request).toHaveBeenCalledOnce();
+    expect(services.views.getSnapshot().starters).toEqual([starter]);
+    services.dispose();
+  });
+
+  it("reconciles the workspace stream only when an editor reload abandons a mutation", async () => {
+    const eventSources: Array<{ close: () => void }> = [];
+    class EventSourceStub {
+      constructor() {
+        eventSources.push(this);
+      }
+      addEventListener(): void {}
+      close(): void {}
+    }
+    vi.stubGlobal("EventSource", EventSourceStub);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json(viewList(["dashboard", "report"]))),
+    );
+    const services = createStudioServices(bootstrap);
+    vi.spyOn(services.source, "start").mockResolvedValue();
+    const reload = vi
+      .spyOn(services.preview, "editorDocumentReloaded")
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const buildStarted = vi.spyOn(services.preview, "presentationBuildStarted");
+    const editor = document.createElement("iframe");
+    const frames = new Map(
+      bootstrap.runtimes.map((runtime) => [runtime.id, document.createElement("iframe")]),
+    );
+    await services.start(editor, frames);
+    buildStarted.mockClear();
+
+    fireEvent.load(editor);
+    expect(eventSources).toHaveLength(1);
+    expect(buildStarted).not.toHaveBeenCalled();
+
+    fireEvent.load(editor);
+    expect(reload).toHaveBeenCalledTimes(2);
+    expect(eventSources).toHaveLength(2);
+    expect(buildStarted).toHaveBeenCalledWith("dashboard");
     services.dispose();
   });
 
@@ -265,7 +507,7 @@ describe("Studio shell", () => {
     services.dispose();
   });
 
-  it("keeps toolbar modes and preview runtimes synchronized", async () => {
+  it("keeps mode selection synchronized across primary and overflow navigation", async () => {
     const user = userEvent.setup();
     const previousLayout = new LayoutController("test-workspace", bootstrap.selectedView);
     previousLayout.selectMode("preview");
@@ -283,24 +525,26 @@ describe("Studio shell", () => {
       />,
     );
 
-    expect(screen.getAllByRole("button", { name: "Build" })[0]).toHaveAttribute(
+    expect(screen.getAllByRole("button", { name: "Develop" })[0]).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByLabelText("Server preview runtime")).toHaveTextContent("Server");
 
     await user.click(screen.getByLabelText("Workspace options"));
     let overflow = within(screen.getAllByRole("navigation", { name: "Studio mode" }).at(-1)!);
-    expect(overflow.getByRole("button", { name: "Build" })).toHaveAttribute("aria-pressed", "true");
-    await user.click(overflow.getByRole("button", { name: "HTML & CSS" }));
+    expect(overflow.getByRole("button", { name: "Develop" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await user.click(overflow.getByRole("button", { name: "Source" }));
 
     await user.click(screen.getByLabelText("Workspace options"));
     overflow = within(screen.getAllByRole("navigation", { name: "Studio mode" }).at(-1)!);
-    expect(overflow.getByRole("button", { name: "Build" })).toHaveAttribute(
+    expect(overflow.getByRole("button", { name: "Develop" })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
-    expect(overflow.getByRole("button", { name: "HTML & CSS" })).toHaveAttribute(
+    expect(overflow.getByRole("button", { name: "Source" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -312,74 +556,68 @@ describe("Studio shell", () => {
       "true",
     );
 
-    await user.click(screen.getByLabelText("Server preview runtime"));
-    const runtimeStatus = screen
-      .getByLabelText("Server preview runtime")
-      .closest("details")
-      ?.querySelector(".studio-runtime-status");
-    expect(runtimeStatus).toHaveTextContent("Connecting to server");
-    await user.click(screen.getAllByRole("button", { name: /WebAssembly.*Runs locally/ })[0]);
-    expect(screen.getByLabelText("WebAssembly preview runtime")).toBeVisible();
-
     layout.dispose();
     preview.dispose();
     views.dispose();
   });
 
-  it("creates a view from the view menu and selects it", async () => {
+  it("disables both runtime menus while a view selection owns the preview", async () => {
     const user = userEvent.setup();
-    const { layout, preview, views } = controllers();
-    render(
-      <Toolbar
-        bootstrap={bootstrap}
-        brand={brand}
-        compact={false}
-        compactSurfaces={["notebook", "preview"]}
-        preview={preview}
-        views={views}
-        layout={layout}
-      />,
-    );
-
-    await user.click(screen.getByLabelText("Select or manage a view"));
-    await user.click(screen.getByRole("button", { name: "+ New view" }));
-    await user.type(screen.getByRole("textbox", { name: "New view" }), "exploration");
-    await user.click(screen.getByRole("button", { name: "Create" }));
-
-    expect(screen.getByLabelText("Select or manage a view")).toHaveTextContent("exploration");
-    expect(screen.getByLabelText("Select or manage a view")).toHaveFocus();
-
-    layout.dispose();
-    preview.dispose();
-    views.dispose();
-  });
-
-  it("moves focus into view removal and restores its origin on cancel", async () => {
-    const user = userEvent.setup();
-    const { layout, preview, views } = controllers();
-    render(
-      <Toolbar
-        bootstrap={bootstrap}
-        brand={brand}
-        compact={false}
-        compactSurfaces={["notebook", "preview"]}
-        preview={preview}
-        views={views}
-        layout={layout}
-      />,
-    );
-
-    await user.click(screen.getByLabelText("Select or manage a view"));
-    const origin = screen.getByRole("button", { name: "Remove report view" });
-    await user.click(origin);
-    expect(screen.getByRole("button", { name: "Remove" })).toHaveFocus();
-
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    await act(async () => {
-      await new Promise<void>((resolve) => globalThis.requestAnimationFrame(() => resolve()));
+    const selection = deferred<boolean>();
+    const layout = new LayoutController("runtime-selection", bootstrap.selectedView);
+    const preview = new PreviewDeck({
+      initialView: bootstrap.selectedView,
+      initialRuntime: bootstrap.defaultRuntime,
+      initialNavigation: { query: "", hash: "" },
+      runtimes: bootstrap.runtimes.map((runtime) => runtime.id),
+      viewUrl: (view, runtime) => `/${view}/?runtime=${runtime}`,
+      supportUrl: (view) => `/_marimo-studio/views/${view}`,
+      syncQuery: vi.fn(),
+      syncEditorQuery: vi.fn(async () => "accepted" as const),
+      navigate: vi.fn(),
     });
-    expect(origin).toHaveFocus();
+    const views = new ViewController(
+      bootstrap.selectedView,
+      [...bootstrap.views],
+      remote(),
+      vi.fn(() => selection.promise),
+      vi.fn(async () => true),
+      vi.fn(),
+      [starter],
+      starter.id,
+    );
+    const switchRuntime = vi.spyOn(preview, "switchRuntime");
+    render(
+      <Toolbar
+        bootstrap={bootstrap}
+        brand={brand}
+        compact={false}
+        compactSurfaces={["notebook", "preview"]}
+        preview={preview}
+        views={views}
+        layout={layout}
+      />,
+    );
 
+    await user.click(screen.getByLabelText("Switch view: dashboard"));
+    await user.click(screen.getByRole("button", { name: "report" }));
+    await vi.waitFor(() => expect(views.getSnapshot().selecting).toBe("report"));
+
+    expect(screen.getByLabelText("Server preview runtime")).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    const runtimeOptions = screen.getAllByRole("button", {
+      name: /WebAssembly/,
+      hidden: true,
+    });
+    expect(runtimeOptions).toHaveLength(2);
+    runtimeOptions.forEach((option) => expect(option).toBeDisabled());
+    await user.click(runtimeOptions[0]!);
+    expect(switchRuntime).not.toHaveBeenCalled();
+
+    selection.resolve(false);
+    await vi.waitFor(() => expect(views.getSnapshot().selecting).toBeUndefined());
     layout.dispose();
     preview.dispose();
     views.dispose();
@@ -420,59 +658,6 @@ describe("Studio shell", () => {
     expect(onCommit).not.toHaveBeenCalled();
     expect(onCancel).toHaveBeenCalled();
     expect(onResize).toHaveBeenLastCalledWith(null);
-  });
-
-  it("keeps notebook and preview iframe identities across UI state changes", async () => {
-    const { layout, preview, source, views } = controllers();
-    const frames = new Map<string, HTMLIFrameElement>();
-    render(
-      <WorkspaceHarness
-        frames={frames}
-        preview={preview}
-        source={source}
-        views={views}
-        layout={layout}
-      />,
-    );
-
-    const notebook = frameByTitle("Marimo editor");
-    const server = frameByTitle("dashboard custom view using server");
-    const notebookWindow = notebook.contentWindow;
-    const serverWindow = server.contentWindow;
-    const wasm = frameByTitle("dashboard custom view using wasm");
-    for (const [runtime, frame] of [
-      ["server", server],
-      ["wasm", wasm],
-    ] as const) {
-      globalThis.dispatchEvent(
-        new MessageEvent("message", {
-          origin: globalThis.location.origin,
-          source: frame.contentWindow,
-          data: {
-            type: "marimo-studio:receiver-ready",
-            runtime,
-            view: "dashboard",
-          },
-        }),
-      );
-    }
-
-    act(() => layout.selectMode("notebook"));
-    act(() => preview.switchRuntime("wasm"));
-    await act(async () => await views.choose("report"));
-    act(() => preview.switchView("report"));
-
-    expect(screen.getByTitle("Marimo editor")).toBe(notebook);
-    expect(frames.get("server")).toBe(server);
-    expect(notebook.contentWindow).toBe(notebookWindow);
-    expect(server.contentWindow).toBe(serverWindow);
-    expect(server).toHaveAttribute("data-preview-frame");
-    expect(server).toHaveAttribute("data-preview-runtime-frame", "server");
-
-    layout.dispose();
-    preview.dispose();
-    source.dispose();
-    views.dispose();
   });
 
   it("keeps primary mode navigation when a compact workspace has one surface", () => {

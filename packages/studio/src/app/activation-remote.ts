@@ -1,3 +1,5 @@
+import { parseActivationAckResponse } from "@marimo-studio/protocol/development-events";
+import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 export type AcknowledgeViewActivation = (
@@ -6,8 +8,19 @@ export type AcknowledgeViewActivation = (
   signal: AbortSignal,
 ) => Promise<void>;
 
-const ATTEMPT_TIMEOUT_MS = 1_000;
+export class ViewActivationAcknowledgementError extends Error {
+  constructor(
+    readonly outcome: "rejected" | "uncertain",
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "ViewActivationAcknowledgementError";
+  }
+}
+
 const RETRY_DELAYS_MS = [100, 300] as const;
+const ATTEMPT_TIMEOUT_MS = 10_000;
 
 const wait = async (duration: number, signal: AbortSignal): Promise<void> => {
   signal.throwIfAborted();
@@ -26,31 +39,6 @@ const wait = async (duration: number, signal: AbortSignal): Promise<void> => {
   }
 };
 
-const retryableStatus = (status: number): boolean =>
-  status === 408 || status === 409 || status === 429 || status >= 500;
-
-const attemptSignal = (lifecycle: AbortSignal) => {
-  const controller = new AbortController();
-  const cancel = () => controller.abort(lifecycle.reason);
-  if (lifecycle.aborted) {
-    cancel();
-  } else {
-    lifecycle.addEventListener("abort", cancel, { once: true });
-  }
-  const timeout = setTimeout(
-    () =>
-      controller.abort(new DOMException("Activation acknowledgement timed out", "TimeoutError")),
-    ATTEMPT_TIMEOUT_MS,
-  );
-  return {
-    signal: controller.signal,
-    dispose() {
-      clearTimeout(timeout);
-      lifecycle.removeEventListener("abort", cancel);
-    },
-  };
-};
-
 const acknowledge = async (
   url: string,
   serverToken: string,
@@ -59,8 +47,15 @@ const acknowledge = async (
 ): Promise<void> => {
   for (let attempt = 0; ; attempt += 1) {
     signal.throwIfAborted();
-    const bounded = attemptSignal(signal);
+    const request = new AbortController();
+    const cancel = () => request.abort(signal.reason);
+    signal.addEventListener("abort", cancel, { once: true });
+    const timeout = setTimeout(
+      () => request.abort(new DOMException("Acknowledgement timed out", "TimeoutError")),
+      ATTEMPT_TIMEOUT_MS,
+    );
     let response: Response | undefined;
+    let outcome: ReturnType<typeof parseActivationAckResponse>;
     let failure: unknown;
     try {
       response = await fetch(url, {
@@ -70,14 +65,18 @@ const acknowledge = async (
           "Marimo-Server-Token": serverToken,
         },
         body,
-        signal: bounded.signal,
+        signal: request.signal,
       });
+      outcome = parseActivationAckResponse(jsonValueSchema.parse(await response.json()));
     } catch (error) {
       failure = error;
+      outcome = undefined;
     } finally {
-      bounded.dispose();
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", cancel);
     }
-    if (response?.ok) {
+    signal.throwIfAborted();
+    if (response?.ok && outcome?.outcome === "applied") {
       return;
     }
     const status = response?.status;
@@ -85,12 +84,16 @@ const acknowledge = async (
       status === undefined
         ? "View activation acknowledgement failed."
         : `View activation could not be acknowledged (${status})`;
-    if (status !== undefined && !retryableStatus(status)) {
-      throw new Error(message, { cause: failure });
+    if (outcome?.outcome === "rejected") {
+      throw new ViewActivationAcknowledgementError("rejected", message, {
+        cause: failure,
+      });
     }
     const retry = RETRY_DELAYS_MS[attempt];
     if (retry === undefined) {
-      throw new Error(message, { cause: failure });
+      throw new ViewActivationAcknowledgementError("uncertain", message, {
+        cause: failure,
+      });
     }
     await wait(retry, signal);
   }

@@ -54,7 +54,6 @@ const StudioWorkspace = ({
           views={services.views}
         />
         <Workspace
-          bootstrap={bootstrap}
           editorFrame={editorFrame}
           frameRef={services.frameRef}
           source={services.source}

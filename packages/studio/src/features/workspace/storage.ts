@@ -1,9 +1,9 @@
-import { codeLayout, defaultWorkspaceLayout, layoutForMode, visibleSurfaces } from "./model.ts";
+import { defaultWorkspaceLayout, layoutForMode, sourceLayout, visibleSurfaces } from "./model.ts";
 import { type LayoutNode, storedLayoutCodec, type StudioMode, type Surface } from "./schema.ts";
 
 export type LayoutState = {
   mode: StudioMode;
-  code: LayoutNode;
+  source: LayoutNode;
   workspace: LayoutNode;
   compact: Surface;
 };
@@ -11,7 +11,7 @@ export type LayoutState = {
 export type ActiveLayout = Pick<LayoutState, "mode" | "compact">;
 
 export const applyActiveMode = (saved: LayoutState, active: ActiveLayout): LayoutState => {
-  const visible = visibleSurfaces(layoutForMode(active.mode, saved.code, saved.workspace));
+  const visible = visibleSurfaces(layoutForMode(active.mode, saved.source, saved.workspace));
   let compact = active.compact;
   if (!visible.includes(compact)) {
     compact = visible.includes(saved.compact) ? saved.compact : visible[0];
@@ -20,8 +20,8 @@ export const applyActiveMode = (saved: LayoutState, active: ActiveLayout): Layou
 };
 
 const initialState = (): LayoutState => ({
-  mode: "split",
-  code: codeLayout(),
+  mode: "build",
+  source: sourceLayout(),
   workspace: defaultWorkspaceLayout(),
   compact: "notebook",
 });
@@ -38,18 +38,18 @@ export class LayoutStorage {
     if (!result.success) {
       return initialState();
     }
-    const { mode, code, workspace, compact } = result.data;
-    const visible = visibleSurfaces(layoutForMode(mode, code, workspace));
+    const { mode, source, workspace, compact } = result.data;
+    const visible = visibleSurfaces(layoutForMode(mode, source, workspace));
     return {
       mode,
-      code,
+      source,
       workspace,
       compact: compact && visible.includes(compact) ? compact : visible[0],
     };
   }
 
   write(view: string, state: LayoutState): void {
-    const stored = { schema: 1 as const, ...state };
+    const stored = { schema: 2 as const, ...state };
     globalThis.localStorage.setItem(this.key(view), storedLayoutCodec.encode(stored));
   }
 

@@ -3,7 +3,7 @@ import type { StudioMode } from "./schema.ts";
 
 import { assertNever } from "../../shared/assertNever.ts";
 import {
-  codeLayout,
+  sourceLayout,
   defaultWorkspaceLayout,
   equalizeLayout,
   layoutForMode,
@@ -28,8 +28,8 @@ type Listener = () => void;
 
 export class LayoutController {
   private view: string;
-  private mode: StudioMode = "split";
-  private code: LayoutNode = codeLayout();
+  private mode: StudioMode = "build";
+  private source: LayoutNode = sourceLayout();
   private workspace: LayoutNode = defaultWorkspaceLayout();
   private compact: Surface = "notebook";
   private arranging = false;
@@ -41,7 +41,7 @@ export class LayoutController {
   constructor(storagePrefix: string, initialView: string) {
     this.view = initialView;
     this.storage = new LayoutStorage(storagePrefix);
-    this.restore(initialView, { mode: "split", compact: "notebook" });
+    this.restore(initialView, { mode: "build", compact: "notebook" });
     this.updateSnapshot();
   }
 
@@ -58,13 +58,13 @@ export class LayoutController {
     this.view = view;
     if (landing === "authoring") {
       this.mode = "workspace";
-      this.code = codeLayout();
+      this.source = sourceLayout();
       this.workspace = newViewLayout();
       this.compact = "source";
       this.arranging = false;
-    } else if (landing === "split") {
+    } else if (landing === "build") {
       this.restore(view);
-      this.mode = "split";
+      this.mode = "build";
       this.compact = "notebook";
       this.arranging = false;
     } else {
@@ -82,7 +82,7 @@ export class LayoutController {
 
   reveal(surface: Surface): void {
     if (!visibleSurfaces(this.tree).includes(surface)) {
-      this.mode = surface === "source" ? "code" : surface;
+      this.mode = surface;
     }
     this.compact = surface;
     this.arranging = false;
@@ -110,8 +110,8 @@ export class LayoutController {
         this.ensureCompactSurface();
         break;
       case "equalize":
-        if (this.mode === "code") {
-          this.code = equalizeLayout(this.code);
+        if (this.mode === "source") {
+          this.source = equalizeLayout(this.source);
         } else {
           this.mode = "workspace";
           this.workspace = equalizeLayout(this.workspace);
@@ -171,7 +171,7 @@ export class LayoutController {
   }
 
   private get tree(): LayoutNode {
-    return this.transientTree ?? layoutForMode(this.mode, this.code, this.workspace);
+    return this.transientTree ?? layoutForMode(this.mode, this.source, this.workspace);
   }
 
   private commit(): void {
@@ -182,8 +182,8 @@ export class LayoutController {
   }
 
   private setTree(tree: LayoutNode): void {
-    if (this.mode === "code") {
-      this.code = tree;
+    if (this.mode === "source") {
+      this.source = tree;
       return;
     }
     if (this.mode !== "workspace") {
@@ -202,7 +202,7 @@ export class LayoutController {
   private persist(): void {
     this.storage.write(this.view, {
       mode: this.mode,
-      code: this.code,
+      source: this.source,
       workspace: this.workspace,
       compact: this.compact,
     });
@@ -212,7 +212,7 @@ export class LayoutController {
     const saved = this.storage.read(view);
     const state = active ? applyActiveMode(saved, active) : saved;
     this.mode = state.mode;
-    this.code = state.code;
+    this.source = state.source;
     this.workspace = state.workspace;
     this.compact = state.compact;
     this.arranging = false;
@@ -227,7 +227,7 @@ export class LayoutController {
   private updateSnapshot(): void {
     this.snapshot = {
       mode: this.mode,
-      code: this.code,
+      source: this.source,
       workspace: this.workspace,
       compact: this.compact,
       arranging: this.arranging,
