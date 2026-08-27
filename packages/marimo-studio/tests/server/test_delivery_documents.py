@@ -478,7 +478,7 @@ def test_run_mode_serves_the_configured_wasm_runtime_and_source(
     code = dashboard["runtime"]["data"]["code"]
     compile(code, "notebook.py", "exec")
     browser_source = notebook_path.with_name("browser.py")
-    browser_source.write_text(code, encoding="utf-8")
+    browser_source.write_bytes(code.encode("utf-8"))
     browser_metadata = read_notebook_metadata(browser_source)
     assert browser_metadata is not None
     assert set(browser_metadata) == {"requires-python", "dependencies"}

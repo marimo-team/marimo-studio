@@ -135,7 +135,7 @@ def test_manifest_repair_retains_a_recoverable_provider_identity(
             current.revision,
         )
 
-    assert manifest.read_text(encoding="utf-8") == current.content
+    assert manifest.read_bytes() == current.content.encode("utf-8")
 
 
 def test_manifest_write_commits_before_provider_diagnostics(
