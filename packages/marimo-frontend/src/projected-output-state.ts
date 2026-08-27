@@ -25,12 +25,14 @@ export const reconcileProjectedOutputState = (
   entries: UIElementEntries,
   resetVirtualFiles: (ownerCellId: string) => void,
   trackVirtualFiles: (message: VirtualFileMessage) => void,
+  prepareUiReset: (objectIds: readonly string[]) => void = () => {},
 ): void => {
   const ownerPrefix = `${output.ownerCellId}-`;
   if (output.resetUiObjectIds.some((objectId) => !objectId.startsWith(ownerPrefix))) {
     throw new Error("A projected output may reset only UI objects owned by its projection.");
   }
 
+  prepareUiReset(output.resetUiObjectIds);
   for (const objectId of output.resetUiObjectIds) {
     entries.delete(objectId);
   }

@@ -143,25 +143,45 @@ export const connectControlEndpoint = (
       if (updates.length === 0) {
         return;
       }
+      const accepted: ControlUpdate[] = [];
+      const created: string[] = [];
       applying = true;
       try {
         for (const update of updates) {
           if (!registry.has(update.objectId)) {
             registry.set(update.objectId, update.value);
+            created.push(update.objectId);
           }
+          if (!registry.has(update.objectId)) {
+            continue;
+          }
+          accepted.push(update);
+        }
+        if (accepted.length === 0) {
+          return;
+        }
+        try {
+          await sendControlValues({
+            objectIds: accepted.map(({ objectId }) => objectId),
+            values: accepted.map(({ value }) => value),
+          });
+        } catch (error) {
+          // SAFETY: Marimo exposes entries as a Map. ControlRegistry narrows it
+          // to read-only access outside this rollback boundary.
+          const entries = registry.entries as Map<string, UIElementEntry>;
+          created.forEach((objectId) => entries.delete(objectId));
+          throw error;
+        }
+        accepted.forEach((update) =>
           registry.broadcastMessage(
             update.objectId,
             { type: "marimo-ui-value-update", value: update.value },
             [],
-          );
-        }
+          ),
+        );
       } finally {
         applying = false;
       }
-      await sendControlValues({
-        objectIds: updates.map(({ objectId }) => objectId),
-        values: updates.map(({ value }) => value),
-      });
     },
     dispose() {
       Array.from(disposers).forEach((dispose) => dispose());
