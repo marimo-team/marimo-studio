@@ -175,7 +175,7 @@ def test_run_document_replay_requires_the_session_creation_query(
             {"empty": "", "tag": ["first", "second"]},
         ),
         "s_wrong1": _live_session_with_query(studio.notebook, {"region": "emea"}),
-        "s_legacy": _live_test_session(
+        "s_nometa": _live_test_session(
             (),
             initialization_id=str(studio.notebook),
             path=str(studio.notebook),
@@ -229,7 +229,7 @@ def test_run_document_replay_requires_the_session_creation_query(
             ],
         )
         mismatch = replay(client, "s_wrong1", [("region", "apac")])
-        missing_metadata = replay(client, "s_legacy", [])
+        missing_metadata = replay(client, "s_nometa", [])
         fabricated = replay(client, "s_absent", [])
 
     for session_id, (query, capability) in {
@@ -243,7 +243,7 @@ def test_run_document_replay_requires_the_session_creation_query(
 
     for requested, (query, capability) in {
         "s_wrong1": mismatch,
-        "s_legacy": missing_metadata,
+        "s_nometa": missing_metadata,
         "s_absent": fabricated,
     }.items():
         assert query["session_id"] != [requested]

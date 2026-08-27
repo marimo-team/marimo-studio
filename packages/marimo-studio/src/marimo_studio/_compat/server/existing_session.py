@@ -8,7 +8,6 @@ from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from functools import wraps
-from pathlib import Path
 from threading import Lock, RLock
 from typing import Any, cast
 from weakref import WeakKeyDictionary, ref
@@ -258,7 +257,6 @@ def _verify_native_admission(connector: SessionConnector) -> None:
             and session_matches_notebook(
                 existing,
                 file_key=admission.file_key,
-                notebook=Path(admission.notebook),
             )
         )
     if valid:

@@ -1,6 +1,5 @@
 """Protect synchronous Marimo session ownership classification."""
 
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -10,7 +9,7 @@ from marimo_studio._compat.server.session_state import (
 )
 
 
-def test_session_owner_short_circuits_before_legacy_path_resolution() -> None:
+def test_session_owner_uses_the_initialization_identity() -> None:
     class UnreadablePath:
         def __fspath__(self) -> str:
             raise AssertionError("established sessions must not resolve their path")
@@ -23,7 +22,6 @@ def test_session_owner_short_circuits_before_legacy_path_resolution() -> None:
     assert session_matches_notebook(
         cast(Any, session),
         file_key="notebook.py",
-        notebook=Path("/workspace/notebook.py"),
     )
 
 
