@@ -30,27 +30,6 @@ class ConfigurationError(MarimoStudioError):
     code = "configuration-error"
 
 
-class WorkspaceInitializationError(MarimoStudioError):
-    """A Studio definition needs its first authored view."""
-
-    code = "workspace-not-initialized"
-    status_code = 409
-    public_hint = "Open the notebook in edit mode and create its first view."
-
-    def __init__(self, default_view: str) -> None:
-        super().__init__(
-            f"Studio is configured and needs its first view {default_view!r}."
-        )
-        self.default_view = default_view
-
-    def diagnostic_details(self) -> dict[str, object]:
-        return {
-            "state": "needs-view",
-            "default_view": self.default_view,
-            "views": [],
-        }
-
-
 class NotebookSourceError(ConfigurationError):
     """Marimo cannot compile the current notebook source."""
 
@@ -61,11 +40,11 @@ class NotebookSourceError(ConfigurationError):
         return "Marimo cannot inspect the notebook while a cell contains invalid code."
 
 
-class TemplateError(ConfigurationError):
-    """A view template does not satisfy the presentation contract."""
+class ViewProjectError(ConfigurationError):
+    """A provider project or artifact violates the view contract."""
 
-    code = "template-error"
-    public_hint = "Fix the view template, then save it again."
+    code = "view-project-error"
+    public_hint = "Fix the provider diagnostic, then build the view again."
 
     def __init__(
         self,
@@ -80,10 +59,10 @@ class TemplateError(ConfigurationError):
         self.line = line
         self.column = column
 
-    def with_source(self, source: Path | str) -> TemplateError:
+    def with_source(self, source: Path | str) -> ViewProjectError:
         if self.source is not None:
             return self
-        return TemplateError(
+        return ViewProjectError(
             f"{source}: {self}",
             source=source,
             line=self.line,
@@ -113,12 +92,6 @@ class ProtocolError(ConfigurationError):
 
     code = "protocol-error"
     exit_code = 6
-
-
-class CompatibilityError(ProtocolError):
-    """The installed Marimo layout cannot provide a required capability."""
-
-    code = "marimo-layout-incompatible"
 
 
 class CapabilityInputError(MarimoStudioError):
@@ -182,14 +155,6 @@ class StaticExportError(ConfigurationError):
     code = "static-export-error"
 
 
-class RuntimeSyncError(MarimoStudioError):
-    """The browser session and inspected notebook have not synchronized."""
-
-    code = "runtime-sync-pending"
-    status_code = 409
-    transient = True
-
-
 class RuntimeSelectionError(MarimoStudioError):
     """A requested presentation runtime is unavailable."""
 
@@ -211,18 +176,44 @@ class SourceEncodingError(MarimoStudioError):
     status_code = 400
 
 
+class SourceValidationError(MarimoStudioError):
+    """Authored source content violates its document contract."""
+
+    code = "invalid-source-content"
+    status_code = 400
+
+
+class SourceTooLargeError(MarimoStudioError):
+    """An authored source document exceeds the supported file boundary."""
+
+    code = "source-too-large"
+    status_code = 413
+
+
 class SourceConflictError(MarimoStudioError):
     """An authored view file changed after the browser loaded it."""
 
     code = "source-conflict"
     status_code = 412
 
-    def __init__(self, name: str, revision: str) -> None:
+    def __init__(
+        self,
+        name: str,
+        revision: str | None,
+        *,
+        external_recovery: str | None = None,
+    ) -> None:
         super().__init__(f"{name} changed on disk.")
         self.revision = revision
+        self.external_recovery = external_recovery
 
     def diagnostic_details(self) -> dict[str, object]:
-        return {"revision": self.revision}
+        details: dict[str, object] = {}
+        if self.revision is not None:
+            details["revision"] = self.revision
+        if self.external_recovery is not None:
+            details["external_recovery"] = self.external_recovery
+        return details
 
 
 class ViewNotFoundError(MarimoStudioError):
@@ -241,6 +232,41 @@ class ViewNotFoundError(MarimoStudioError):
         return {"view": self.name, "available_views": list(self.available)}
 
 
+class ProviderNotFoundError(ConfigurationError):
+    """A requested view provider is not installed."""
+
+    code = "provider-not-found"
+    status_code = 404
+
+    def __init__(self, key: str, *, available: tuple[str, ...] = ()) -> None:
+        choices = f" Installed providers: {', '.join(available)}." if available else ""
+        super().__init__(f"View provider {key!r} is not installed.{choices}")
+        self.key = key
+        self.available = available
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {"provider": self.key, "available_providers": list(self.available)}
+
+
+class ViewExistsError(MarimoStudioError):
+    """A requested Studio view name already identifies a project."""
+
+    code = "view-exists"
+    status_code = 409
+
+    def __init__(self, name: str, *, missing_manifest: bool = False) -> None:
+        message = (
+            f"A view directory named {name!r} exists without required view.toml."
+            if missing_manifest
+            else f"A view named {name!r} already exists."
+        )
+        super().__init__(message)
+        self.name = name
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {"view": self.name}
+
+
 class LastViewError(MarimoStudioError):
     """A notebook must retain one Studio view."""
 
@@ -251,13 +277,26 @@ class LastViewError(MarimoStudioError):
         super().__init__("Keep at least one view.")
 
 
-class ViewDeletionError(MarimoStudioError):
-    """A removed view's authored files could not be fully deleted."""
-
-    code = "view-deletion-error"
-
-    def __init__(self) -> None:
-        super().__init__(
-            "The view was removed from Studio, but its files could not be "
-            "fully deleted."
-        )
+__all__ = [
+    "AgentRequestError",
+    "BindingError",
+    "CapabilityInputError",
+    "ConfigurationError",
+    "DependencyError",
+    "LastViewError",
+    "MarimoStudioError",
+    "NotebookSourceError",
+    "ProtocolError",
+    "ProviderNotFoundError",
+    "RuntimeSelectionError",
+    "RuntimeTimeoutError",
+    "SourceConflictError",
+    "SourceEncodingError",
+    "SourceNotFoundError",
+    "SourceTooLargeError",
+    "SourceValidationError",
+    "StaticExportError",
+    "ViewExistsError",
+    "ViewNotFoundError",
+    "ViewProjectError",
+]
