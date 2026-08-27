@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NGA collection overview</title>
+    <style>
+:root {
+  color-scheme: light;
+  --text-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --heading-font: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --monospace-font: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --background: #f1eee7;
+  --foreground: #24241f;
+  --card: #faf8f2;
+  --card-foreground: var(--foreground);
+  --muted: #e7e2d8;
+  --muted-foreground: #68675f;
+  --border: #c9c3b7;
+  --input: #aba397;
+  --primary: #8b3527;
+  --primary-foreground: #fffaf3;
+  --accent: #eee0d5;
+  --accent-foreground: #63241b;
+  --ring: var(--primary);
+  --link: #7c2e22;
+  --radius: 2px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  border-top: 4px solid var(--primary);
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--text-font);
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  border: 1px solid var(--foreground);
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 0.8rem 1rem;
+  text-transform: uppercase;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.overview-shell {
+  margin: 0 auto;
+  max-width: 88rem;
+  padding: 0 2rem 4rem;
+}
+
+.view-nav {
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 2rem;
+  min-height: 4rem;
+}
+
+.view-nav a {
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.view-nav a[aria-current="page"] {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.hero {
+  align-items: end;
+  border-bottom: 1px solid var(--foreground);
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: clamp(3rem, 8vw, 7rem) 0 3rem;
+}
+
+.hero h1,
+.section-heading h2 {
+  font-family: var(--heading-font);
+  font-weight: 500;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.hero h1 {
+  font-size: clamp(3.2rem, 8vw, 7.4rem);
+  letter-spacing: -0.055em;
+  line-height: 0.91;
+  max-width: 12ch;
+}
+
+.eyebrow {
+  color: var(--primary);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  margin: 0 0 1rem;
+  text-transform: uppercase;
+}
+
+.lede {
+  color: var(--muted-foreground);
+  font-family: var(--heading-font);
+  font-size: 1.25rem;
+  line-height: 1.55;
+  margin: 1.5rem 0 0;
+  max-width: 38rem;
+}
+
+.copy-status {
+  align-self: start;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  grid-column: 2;
+  margin: -1.4rem 0 0;
+  min-height: 1rem;
+  text-align: center;
+}
+
+.metrics {
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metrics article {
+  border-right: 1px solid var(--border);
+  padding: 2rem 1.5rem 2.2rem 0;
+}
+
+.metrics article + article {
+  padding-left: 1.5rem;
+}
+
+.metrics article:last-child {
+  border-right: 0;
+}
+
+.metrics span {
+  color: var(--muted-foreground);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  min-height: 2.4em;
+  text-transform: uppercase;
+}
+
+.metrics strong {
+  display: block;
+  font-family: var(--heading-font);
+  font-size: clamp(2.4rem, 5vw, 4.5rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  margin-top: 1rem;
+}
+
+.plot-section,
+.split-section {
+  border-bottom: 1px solid var(--border);
+  padding: 4rem 0;
+}
+
+.plot-section {
+  display: grid;
+  gap: 3rem;
+  grid-template-columns: minmax(15rem, 0.34fr) minmax(0, 1fr);
+}
+
+.section-heading h2 {
+  font-size: clamp(2rem, 4vw, 3.8rem);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.section-heading > p:last-child {
+  color: var(--muted-foreground);
+  line-height: 1.7;
+  max-width: 32rem;
+}
+
+.section-heading.compact h2 {
+  font-size: clamp(1.8rem, 3vw, 2.8rem);
+}
+
+.split-section {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.65fr);
+}
+
+.plot-card,
+.table-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 2rem;
+}
+
+marimo-cell,
+marimo-output {
+  --marimo-cell-font: var(--text-font);
+  --marimo-cell-heading-font: var(--heading-font);
+  --marimo-cell-monospace-font: var(--monospace-font);
+  --marimo-cell-background: transparent;
+  --marimo-cell-foreground: var(--foreground);
+  --marimo-cell-surface: var(--card);
+  --marimo-cell-muted: var(--muted);
+  --marimo-cell-muted-foreground: var(--muted-foreground);
+  --marimo-cell-border-color: var(--border);
+  --marimo-cell-accent: var(--primary);
+  --marimo-cell-accent-foreground: var(--primary-foreground);
+  --marimo-cell-radius: var(--radius);
+  display: block;
+  min-width: 0;
+}
+
+.plot-section marimo-cell {
+  --marimo-cell-skeleton-height: 24rem;
+}
+
+.table-card marimo-output {
+  --marimo-cell-skeleton-height: 28rem;
+  margin-top: 2rem;
+  overflow-x: auto;
+}
+
+footer {
+  align-items: center;
+  display: flex;
+  font-size: 0.78rem;
+  justify-content: space-between;
+  padding-top: 2rem;
+}
+
+footer p {
+  color: var(--muted-foreground);
+  margin: 0;
+}
+
+footer a {
+  font-weight: 750;
+  text-decoration: none;
+}
+
+@media (max-width: 850px) {
+  .overview-shell {
+    padding-inline: 1rem;
+  }
+
+  .hero,
+  .plot-section,
+  .split-section {
+    grid-template-columns: 1fr;
+  }
+
+  .copy-status {
+    grid-column: 1;
+    margin: -1rem 0 0;
+    text-align: left;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metrics article:nth-child(2) {
+    border-right: 0;
+  }
+
+  .metrics article:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 520px) {
+  .view-nav {
+    gap: 1.25rem;
+  }
+
+  .hero {
+    align-items: start;
+  }
+
+  .hero h1 {
+    font-size: 3.25rem;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics article,
+  .metrics article + article {
+    border-right: 0;
+    border-top: 1px solid var(--border);
+    padding: 1.4rem 0;
+  }
+
+  .metrics article:first-child {
+    border-top: 0;
+  }
+
+  footer {
+    align-items: start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+}
+    </style>
+  </head>
+  <body>
+    <main id="app-shell" class="overview-shell">
+      <nav class="view-nav" aria-label="NGA views">
+        <a href="../overview/" aria-current="page">Overview</a>
+        <a href="../gallery/">Gallery</a>
+        <a href="../story/">Story</a>
+      </nav>
+
+      <header class="hero">
+        <div>
+          <p class="eyebrow">National Gallery of Art · Open Access</p>
+          <h1>Reading a collection through its public images!</h1>
+          <p class="lede">
+            One Marimo analysis, arranged here as a compact collection brief.
+          </p>
+        </div>
+        <button id="copy-summary" type="button" disabled>Copy summary</button>
+        <span id="summary-data" hidden mo-value="studio_summary"></span>
+        <p id="copy-status" class="copy-status" aria-live="polite"></p>
+      </header>
+
+      <section class="metrics" aria-label="Collection measures">
+        <article>
+          <span>Artworks with published images</span>
+          <strong mo-value="studio_summary.artworks"></strong>
+        </article>
+        <article>
+          <span>Named artists</span>
+          <strong mo-value="studio_summary.artists"></strong>
+        </article>
+        <article>
+          <span>Public-domain artworks</span>
+          <strong mo-value="studio_summary.public_domain"></strong>
+        </article>
+        <article>
+          <span>Index drawings, 1935–1942</span>
+          <strong mo-value="studio_summary.index_drawings"></strong>
+        </article>
+      </section>
+
+      <section class="plot-section" aria-labelledby="classification-title">
+        <div class="section-heading">
+          <p class="eyebrow">Collection shape</p>
+          <h2 id="classification-title">Image rights vary by artwork type</h2>
+          <p>
+            Counts use one preferred published image per artwork, keeping the
+            comparison at object grain.
+          </p>
+        </div>
+        <marimo-cell name="classification_bar_chart"></marimo-cell>
+      </section>
+
+      <section class="split-section">
+        <article class="plot-card" aria-labelledby="artists-title">
+          <div class="section-heading compact">
+            <p class="eyebrow">Artists</p>
+            <h2 id="artists-title">The largest represented bodies of work</h2>
+          </div>
+          <marimo-cell name="artist_totals_chart"></marimo-cell>
+        </article>
+
+        <article class="table-card" aria-labelledby="table-title">
+          <div class="section-heading compact">
+            <p class="eyebrow">Source rows</p>
+            <h2 id="table-title">Top artist groups</h2>
+          </div>
+          <marimo-output value="artwork_totals_df"></marimo-output>
+        </article>
+      </section>
+
+      <section class="plot-section" aria-labelledby="timeline-title">
+        <div class="section-heading">
+          <p class="eyebrow">Recorded dates</p>
+          <h2 id="timeline-title">A twentieth-century drawing spike emerges</h2>
+          <p>
+            The public-domain distribution leads to the Index of American
+            Design, examined in the Story view.
+          </p>
+        </div>
+        <marimo-cell name="collection_timeline_chart"></marimo-cell>
+      </section>
+
+      <footer>
+        <p>NGA Open Data · CC0 · pinned source revision</p>
+        <a href="../gallery/">Browse the artwork gallery →</a>
+      </footer>
+    </main>
+    <script type="module">
+const source = document.querySelector("#summary-data");
+const button = document.querySelector("#copy-summary");
+const status = document.querySelector("#copy-status");
+
+const sync = () => {
+  button.disabled = source.marimoValue === undefined;
+};
+
+const summaryText = (summary) =>
+  [
+    "NGA collection overview",
+    `Artworks with published images: ${summary.artworks}`,
+    `Named artists: ${summary.artists}`,
+    `Public-domain artworks: ${summary.public_domain}`,
+    `Index drawings, 1935–1942: ${summary.index_drawings}`,
+    `Index artists: ${summary.index_artists}`,
+  ].join("\n");
+
+source.addEventListener("marimo-value-updated", sync);
+source.addEventListener("marimo-value-error", sync);
+
+button.addEventListener("click", async () => {
+  const summary = source.marimoValue;
+  if (summary === undefined) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(summaryText(summary));
+    status.textContent = "Summary copied";
+  } catch {
+    status.textContent = "Clipboard unavailable";
+  }
+});
+
+sync();
+    </script>
+  </body>
+</html>
