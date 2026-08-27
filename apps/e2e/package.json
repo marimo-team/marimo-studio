@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "check-browser": "node scripts/check-browser.mjs",
     "e2e": "playwright test",
+    "e2e:installed": "node scripts/run-installed-package.mjs",
     "e2e:providers": "playwright test --config playwright.providers.config.ts",
     "e2e:ui": "playwright test --ui",
     "install-browser": "playwright install --with-deps chromium",

@@ -95,38 +95,4 @@ for path in archives:
 digest_path.write_text(json.dumps(expected, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 
-package_version="$(uv run --frozen python - "${wheels[@]}" <<'PY'
-from email.parser import BytesParser
-from pathlib import Path
-from zipfile import ZipFile
-import sys
-
-versions = set()
-for value in sys.argv[1:]:
-    with ZipFile(Path(value)) as wheel:
-        metadata = next(name for name in wheel.namelist() if name.endswith(".dist-info/METADATA"))
-        versions.add(BytesParser().parsebytes(wheel.read(metadata))["Version"])
-if len(versions) != 1:
-    raise SystemExit(f"Built wheels disagree on version: {sorted(versions)}")
-print(versions.pop())
-PY
-)"
-
-uv run --no-project --isolated --no-cache \
-	--with "$direct_wheel" \
-	--with "agent-plugins==0.1.0" \
-	python scripts/verify-installed-package.py \
-	--expected-version "$package_version" \
-	--expected-plugin-digests "$plugin_digests"
-uv run --no-project --isolated --no-cache --no-sources-package marimo-studio \
-	--with "$direct_wheel" \
-	--with "$root/apps/e2e/fixtures-provider/provider" \
-	--with "ty==0.0.69" \
-	python scripts/verify-external-provider.py --typecheck
-uv run --no-project --isolated --no-cache \
-	--with "${direct_wheel}[deno]" \
-	--with "agent-plugins==0.1.0" \
-	python scripts/verify-installed-package.py \
-	--expected-version "$package_version" \
-	--expected-plugin-digests "$plugin_digests" \
-	--deno
+./scripts/verify-installed-wheel.sh "$root/dist"

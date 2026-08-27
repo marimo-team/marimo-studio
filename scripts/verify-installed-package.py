@@ -195,12 +195,12 @@ def _verify_browser_assets() -> None:
     workers = tuple((root / "assets").glob("*worker*.js"))
     if not chunks or not workers:
         raise AssertionError("Installed browser chunks or workers are missing")
-    legacy_katex = tuple(root.glob("assets/KaTeX_*.woff")) + tuple(
+    unsupported_katex = tuple(root.glob("assets/KaTeX_*.woff")) + tuple(
         root.glob("assets/KaTeX_*.ttf")
     )
     runtime_css = (root / "runtime.css").read_text(encoding="utf-8")
     if (
-        legacy_katex
+        unsupported_katex
         or 'format("woff")' in runtime_css
         or 'format("truetype")' in runtime_css
     ):
