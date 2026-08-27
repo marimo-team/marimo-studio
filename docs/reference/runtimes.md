@@ -1,12 +1,12 @@
 ---
 title: Runtime behavior
-description: Server, WebAssembly, preview, run-mode, and static-export execution contracts.
+description: Server, WebAssembly, preview, run-mode, and static-export execution contracts for published view artifacts.
 ---
 
 # Runtime behavior
 
-Studio presents the selected view through a server-backed Marimo kernel or a
-WebAssembly worker.
+Studio presents a published view artifact through a server-backed Marimo
+kernel or a WebAssembly worker.
 
 | Presentation         | Notebook execution                  | Session                                   |
 | -------------------- | ----------------------------------- | ----------------------------------------- |
@@ -16,20 +16,28 @@ WebAssembly worker.
 | WebAssembly run mode | Pyodide worker                      | Isolated per browser                      |
 | Static export        | Pyodide worker                      | Created when the exported page opens      |
 
-## Authoring runtime continuity
+## Presentation revision
 
-The Studio workspace keeps the native editor and each prepared preview
-runtime mounted while you switch among **Notebook**, **Build**, **Preview**,
-and **HTML & CSS**. Changing the workspace arrangement preserves the kernel,
-control state, widgets, and browser state owned by those runtimes.
+Each rendered view is bound to one saved notebook revision and one valid view
+build. Studio carries that identity through runtime requests so a response from
+an older view cannot update the current page. A browser refreshes when its
+revision is no longer available.
 
-CSS and script-free HTML saves update the authored page around the mounted
-runtime. An authored executable script or module change reloads the view
-document so its browser lifecycle starts from the new source.
+## Authoring continuity
+
+The Studio workspace keeps the native editor and prepared previews mounted
+while you switch among **Notebook**, **Develop**, **Preview**, and **Source**.
+Changing the workspace arrangement preserves the kernel, control state,
+widgets, and browser state owned by those runtimes.
+
+A Source save changes the view project. Studio inspects the provider inputs and
+builds or reuses a development artifact before publishing the next
+presentation. A build failure leaves the current published artifact available.
+`marimo-studio view build` returns the provider or artifact error for repair.
 
 Public query parameters remain aligned among the Studio route, native editor,
-and active preview. The notebook therefore observes the same query-driven
-state while you compare authoring surfaces and runtimes.
+and active preview. The notebook observes the same query-driven state while
+you compare authoring surfaces and runtimes.
 
 ## Server <Badge type="info" text="Python" />
 
@@ -38,15 +46,31 @@ local files, databases, credentials, server-side network access, native
 controls, and anywidgets.
 
 In edit mode, the preview joins the editor's Python session. In run mode, each
-browser receives an isolated Marimo kernel. Set `preserve_session = true` when
-a manual refresh should reconnect to the browser's current run-mode kernel and
-the serving process can retain that session.
+browser receives an isolated Marimo kernel. With `preserve_session = true`, a
+manual refresh reconnects when the canonical public notebook query matches the
+query that created the kernel. Private Studio routing and transport keys do not
+affect the match. A different public query starts a fresh kernel and
+presentation. The serving process must retain the session being reused.
+
+Mounted results resolve against the saved notebook before Studio reads a value,
+formats an output, or attaches a complete cell result. The kernel verifies the
+selected live session again immediately before execution.
 
 ## WebAssembly <Badge type="tip" text="Browser" />
 
 The WebAssembly runtime starts a separate notebook instance in a Pyodide
-worker. Notebook source, dependencies, public files, and data requested by the
-notebook must be available to the browser.
+worker. Notebook source, compatible dependencies, public files, and data
+requested by the notebook must be available to the browser.
+
+The worker loads the saved notebook and initializes Studio's mount bridge. The
+browser resolves each mounted target, then executes the required cells through
+Marimo's queue.
+Dynamic target changes schedule newly required cells. Unmounted or invalid
+targets do not start independent notebook branches, and view revisions retain
+the worker when the runtime instance is unchanged.
+
+Bracketed selector keys follow JSON string syntax in Server and WebAssembly
+runtimes.
 
 Studio synchronizes JSON-compatible values from matching native Marimo
 controls between prepared preview runtimes. Each runtime then evaluates its
@@ -57,11 +81,30 @@ needs cross-runtime synchronization.
 Anywidget state remains in the runtime that created its model. Python objects
 that cannot cross the JSON boundary remain in their originating runtime.
 
+## Projection lifecycle
+
+Literal hosts and provider-analyzed dynamic hosts use the same runtime
+resolution path. A
+host mount creates a projection instance. Changing `name`, `value`, or
+`mo-value` resolves a replacement target. Unmounting the host releases its
+instance and any final-owner runtime resources.
+
+Every request carries its presentation revision, mount ID, instance ID, and
+current target. Studio derives the result kind from the built declaration and
+checks its allowed targets. See [Notebook result mounts](projections.md) for
+the target and ownership contracts.
+
 ## Static export <Badge type="warning" text="Public source" />
 
-`marimo-studio export` writes one view, the notebook source, Studio browser
-assets, the notebook's `public/` directory, and generated static cell
-fragments. The exported page starts the notebook in a Pyodide worker.
+`marimo-studio export` builds or reuses the selected view's production
+artifact. The export copies its browser files, then adds notebook source,
+Studio browser assets, and the notebook's `public/` directory. The exported
+page loads the notebook graph in a Pyodide worker and executes the dependency
+closures requested by its mounted projection hosts. An independent branch with
+browser-incompatible code remains dormant until that branch is selected.
+`StaticExportResult.entrypoint` preserves the artifact's document path,
+including nested paths, and runtime URLs are computed relative to that
+document.
 
 ::: warning Review the public export boundary
 The notebook source is visible to site visitors. Its dependencies must install
