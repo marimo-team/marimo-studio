@@ -15,7 +15,10 @@ export default defineConfig({
   css: {
     postcss: marimo.postcss,
   },
-  plugins: [buildMetadata()],
+  plugins: [...marimo.plugins, buildMetadata()],
+  worker: {
+    plugins: () => marimo.workerPlugins,
+  },
   resolve: {
     alias: marimo.aliases,
   },
