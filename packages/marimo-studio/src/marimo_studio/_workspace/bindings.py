@@ -13,7 +13,7 @@ from marimo_studio._filesystem.io import (
     reject_mutable_symlinks,
 )
 from marimo_studio._notebook.ports import NotebookInspector
-from marimo_studio._notebook.records import CellRef
+from marimo_studio._notebook.records import CellRef, CellSelector, resolve_cell
 from marimo_studio._workspace.config import editable_studio_config
 from marimo_studio._workspace.metadata import (
     set_cell_bindings,
@@ -24,38 +24,28 @@ from marimo_studio._workspace.models import (
     BindingResult,
     StudioWorkspace,
 )
-from marimo_studio.errors import BindingError, CapabilityInputError, ConfigurationError
+from marimo_studio.errors import BindingError, ConfigurationError
 
 
 def bind_cell(
     studio: StudioWorkspace,
     alias: str,
-    cell_index: int,
+    cell_selector: CellSelector,
     *,
     inspect_notebook: NotebookInspector,
     dry_run: bool = False,
     overwrite: bool = False,
 ) -> BindingResult:
     """Bind a stable alias to a notebook cell."""
-    if (
-        not isinstance(cell_index, int)
-        or isinstance(cell_index, bool)
-        or cell_index < 0
-    ):
-        raise CapabilityInputError(
-            "invalid-binding-request",
-            "cell_index",
-            "cell_index must be a nonnegative integer",
-        )
     if not ALIAS_PATTERN.fullmatch(alias):
         raise ConfigurationError(f"Invalid cell alias: {alias}")
     notebook = inspect_notebook(studio.notebook)
-    try:
-        cell = notebook.cells[cell_index]
-    except IndexError as error:
-        raise BindingError(
-            f"Cell index {cell_index} is outside 0-{len(notebook.cells) - 1}"
-        ) from error
+    cell = resolve_cell(
+        notebook,
+        cell_selector,
+        error_code="invalid-binding-request",
+        field="cell",
+    )
     native = notebook.named_cells().get(alias)
     if native is not None and native.ref != cell.ref:
         raise BindingError(f"Alias {alias!r} conflicts with the named notebook cell")
@@ -63,7 +53,7 @@ def bind_cell(
     if previous_ref is not None and previous_ref != cell.ref and not overwrite:
         raise BindingError(
             f"Alias {alias!r} already points to {previous_ref}. "
-            "Pass --overwrite to replace it."
+            "Set overwrite to replace it."
         )
     result = BindingResult(
         alias=alias,

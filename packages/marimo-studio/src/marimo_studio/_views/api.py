@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from marimo_studio._notebook.inspection import inspect_notebook
+from marimo_studio._notebook.records import CellSelector
 from marimo_studio._views.create import ensure_view as _ensure_view
 from marimo_studio._views.records import Starter, ViewSetupResult
 from marimo_studio._views.remove import delete_view as _delete_view
@@ -41,7 +42,7 @@ class ViewRemovalResult:
 def bind_cell(
     studio: StudioWorkspace,
     alias: str,
-    cell_index: int,
+    cell_selector: CellSelector,
     *,
     dry_run: bool = False,
     overwrite: bool = False,
@@ -50,7 +51,7 @@ def bind_cell(
     return _bind_cell(
         studio,
         alias,
-        cell_index,
+        cell_selector,
         inspect_notebook=inspect_notebook,
         dry_run=dry_run,
         overwrite=overwrite,

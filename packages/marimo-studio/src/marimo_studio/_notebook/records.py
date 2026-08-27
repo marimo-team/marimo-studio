@@ -141,6 +141,38 @@ class NotebookSpec:
         }
 
 
+def resolve_cell(
+    notebook: NotebookSpec,
+    selector: CellSelector,
+    *,
+    error_code: str = "invalid-inspection-request",
+    field: str = "selectors",
+) -> CellSpec:
+    """Resolve one cell ref, name, or zero-based index."""
+    selected: CellSpec | None
+    if isinstance(selector, CellRef):
+        selected = notebook.by_ref().get(selector)
+    elif type(selector) is int:
+        selected = {cell.index: cell for cell in notebook.cells}.get(selector)
+    elif isinstance(selector, str):
+        if selector.startswith(CellRef.PREFIX):
+            try:
+                selected = notebook.by_ref().get(CellRef.parse(selector))
+            except ValueError:
+                selected = None
+        else:
+            selected = notebook.named_cells().get(selector)
+    else:
+        selected = None
+    if selected is None:
+        raise CapabilityInputError(
+            error_code,
+            field,
+            f"Unknown cell selector: {selector!r}",
+        )
+    return selected
+
+
 def select_cells(
     notebook: NotebookSpec,
     *,
@@ -165,33 +197,7 @@ def select_cells(
         )
     selected_refs: set[CellRef] | None = None
     if selectors:
-        by_ref = notebook.by_ref()
-        by_name = notebook.named_cells()
-        by_index = {cell.index: cell for cell in notebook.cells}
-        selected_refs = set()
-        for selector in selectors:
-            selected: CellSpec | None
-            if isinstance(selector, CellRef):
-                selected = by_ref.get(selector)
-            elif type(selector) is int:
-                selected = by_index.get(selector)
-            elif isinstance(selector, str):
-                if selector.startswith(CellRef.PREFIX):
-                    try:
-                        selected = by_ref.get(CellRef.parse(selector))
-                    except ValueError:
-                        selected = None
-                else:
-                    selected = by_name.get(selector)
-            else:
-                selected = None
-            if selected is None:
-                raise CapabilityInputError(
-                    "invalid-inspection-request",
-                    "selectors",
-                    f"Unknown cell selector: {selector!r}",
-                )
-            selected_refs.add(selected.ref)
+        selected_refs = {resolve_cell(notebook, selector).ref for selector in selectors}
     cells = tuple(
         cell
         for cell in notebook.cells
