@@ -134,7 +134,13 @@ def test_svelte_starter_types_projections_and_exposes_instructions(
     root, project = _project(tmp_path, svelte_provider, "svelte")
     (root / "src" / "App.svelte").write_text(
         """<script lang="ts">
-  import { observeMarimoValue } from "./lib/marimo-value.ts";
+  import {
+    getMarimoDataSource,
+    type MarimoTable,
+    observeMarimoValue,
+  } from "./lib/marimo-value.ts";
+
+  type Row = { id: string; label: string };
 
   let rowCount = $state(0);
 </script>
@@ -144,8 +150,9 @@ def test_svelte_starter_types_projections_and_exposes_instructions(
   mo-value="rows"
   use:observeMarimoValue={{
     selector: "rows",
-    onValue: (value: unknown[]) => {
-      rowCount = value.length;
+    onValue: (value: MarimoTable<Row>) => {
+      rowCount =
+        getMarimoDataSource(value)?.bytes.byteLength ?? value.toArray().length;
     },
   }}
 ></span>

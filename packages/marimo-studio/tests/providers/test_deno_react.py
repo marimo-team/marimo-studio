@@ -160,14 +160,23 @@ def test_react_starter_types_projections_and_exposes_guidance(
     (root / "src" / "App.tsx").write_text(
         """/// <reference path="./marimo-studio.d.ts" />
 
-import { useMarimoValue } from "./lib/use-marimo-value.ts";
+import {
+  getMarimoDataSource,
+  type MarimoTable,
+  useMarimoValue,
+} from "./lib/use-marimo-value.ts";
+
+type Row = { id: string; label: string };
 
 export const App = () => {
-  const { error, hostRef, value } = useMarimoValue<unknown[]>("rows");
+  const { error, hostRef, value } = useMarimoValue<MarimoTable<Row>>("rows");
+  const sourceBytes = getMarimoDataSource(value)?.bytes.byteLength;
   return (
     <main>
       <span ref={hostRef} hidden mo-value="rows" />
-      <output>{error ? "Unavailable" : value?.length ?? 0}</output>
+      <output>
+        {error ? "Unavailable" : value?.get(0)?.label ?? sourceBytes ?? 0}
+      </output>
       <marimo-cell name="summary" />
       <marimo-output value="rows" />
     </main>
