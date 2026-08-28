@@ -1,3 +1,5 @@
+/// <reference path="./marimo-studio.d.ts" />
+
 const NOTEBOOK_LABEL = __NOTEBOOK_LABEL__;
 const VIEW_HEADING = __VIEW_HEADING__;
 

@@ -79,6 +79,8 @@ _TEMPLATE_DOCUMENTS = tuple(
     PurePosixPath(path)
     for path in (
         "src/App.svelte",
+        "src/app.d.ts",
+        "src/lib/marimo-value.ts",
         "src/main.ts",
         "src/index.html",
         "src/style.css",
@@ -127,7 +129,10 @@ class DenoSvelteProvider:
     _starter = ProviderStarter(
         key=STARTER_KEY,
         title="Svelte",
-        summary="A Svelte application with an editable source tree.",
+        summary=(
+            "A typed Svelte application with Studio projection elements and a "
+            "live-value action."
+        ),
         documents=_TEMPLATE_DOCUMENTS,
     )
 

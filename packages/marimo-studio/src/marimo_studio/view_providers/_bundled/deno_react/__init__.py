@@ -69,6 +69,8 @@ _TEMPLATE_DOCUMENTS = tuple(
     PurePosixPath(path)
     for path in (
         "src/App.tsx",
+        "src/marimo-studio.d.ts",
+        "src/lib/use-marimo-value.ts",
         "src/main.tsx",
         "src/index.html",
         "src/style.css",
@@ -111,7 +113,10 @@ class DenoReactProvider:
     _starter = ProviderStarter(
         key=STARTER_KEY,
         title="React",
-        summary="A React application with an editable source tree.",
+        summary=(
+            "A typed React application with Studio projection elements and a "
+            "live-value hook."
+        ),
         documents=_TEMPLATE_DOCUMENTS,
     )
 

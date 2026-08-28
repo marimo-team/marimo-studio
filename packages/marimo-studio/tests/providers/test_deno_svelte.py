@@ -128,6 +128,49 @@ def test_svelte_projection_diagnostic_names_the_cell_attribute(
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
+def test_svelte_starter_types_projection_elements_and_live_values(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(tmp_path, svelte_provider, "svelte")
+    (root / "src" / "App.svelte").write_text(
+        """<script lang="ts">
+  import { observeMarimoValue } from "./lib/marimo-value.ts";
+
+  let rowCount = $state(0);
+</script>
+
+<span
+  hidden
+  mo-value="rows"
+  use:observeMarimoValue={{
+    selector: "rows",
+    onValue: (value: unknown[]) => {
+      rowCount = value.length;
+    },
+  }}
+></span>
+<output>{rowCount}</output>
+<marimo-cell name="summary"></marimo-cell>
+<marimo-output value="rows"></marimo-output>
+""",
+        encoding="utf-8",
+    )
+    inspection = _inspect(svelte_provider, project)
+    files = root / ".artifacts" / ".staging" / "typed-starter" / "files"
+    files.mkdir(parents=True)
+
+    report = _build(
+        svelte_provider,
+        provider_build_request(project, inspection, files),
+    )
+
+    assert report.document is not None
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
 def test_svelte_each_extracts_bounded_and_wildcard_mounts(
     tmp_path: Path,
 ) -> None:

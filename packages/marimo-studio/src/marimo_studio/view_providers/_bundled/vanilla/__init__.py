@@ -186,7 +186,10 @@ class VanillaProvider:
     _starter = ProviderStarter(
         key=STARTER_KEY,
         title="HTML document",
-        summary="A single editable HTML file with inline styles and scripts.",
+        summary=(
+            "One editable HTML file with Studio projection elements and an inline "
+            "live-value adapter."
+        ),
         documents=(PurePosixPath("index.html"),),
     )
 

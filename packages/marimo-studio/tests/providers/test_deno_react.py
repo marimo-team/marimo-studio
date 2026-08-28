@@ -153,6 +153,45 @@ def test_react_projection_diagnostics_name_the_authored_attributes(
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
+def test_react_starter_types_projection_elements_and_live_values(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(tmp_path, react_provider, "react")
+    (root / "src" / "App.tsx").write_text(
+        """/// <reference path="./marimo-studio.d.ts" />
+
+import { useMarimoValue } from "./lib/use-marimo-value.ts";
+
+export const App = () => {
+  const { error, hostRef, value } = useMarimoValue<unknown[]>("rows");
+  return (
+    <main>
+      <span ref={hostRef} hidden mo-value="rows" />
+      <output>{error ? "Unavailable" : value?.length ?? 0}</output>
+      <marimo-cell name="summary" />
+      <marimo-output value="rows" />
+    </main>
+  );
+};
+""",
+        encoding="utf-8",
+    )
+    inspection = _inspect(react_provider, project)
+    files = root / ".artifacts" / ".staging" / "typed-starter" / "files"
+    files.mkdir(parents=True)
+
+    report = _build(
+        react_provider,
+        provider_build_request(project, inspection, files),
+    )
+
+    assert report.document is not None
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
 def test_react_maps_extract_bounded_and_wildcard_mounts(
     tmp_path: Path,
 ) -> None:
