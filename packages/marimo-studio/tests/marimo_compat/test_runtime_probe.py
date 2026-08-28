@@ -20,6 +20,7 @@ from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.runtime_probe import probe_runtime
 
 from .values_test_support import (
+    _encoded_json,
     _native_output_context,
     _selector_specs,
 )
@@ -123,7 +124,9 @@ def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
                         dict[str, Any],
                         functions["read_values"](
                             {
-                                **probe_value_arguments(_selector_specs(owned)),
+                                **probe_value_arguments(
+                                    _selector_specs(owned), f"probe-{owned}"
+                                ),
                                 "max_value_bytes": 1_000,
                             }
                         ),
@@ -132,7 +135,9 @@ def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
                         dict[str, Any],
                         functions["read_values"](
                             {
-                                **probe_value_arguments(_selector_specs(foreign)),
+                                **probe_value_arguments(
+                                    _selector_specs(foreign), f"probe-{owned}"
+                                ),
                                 "max_value_bytes": 1_000,
                             }
                         ),
@@ -225,7 +230,8 @@ def test_probe_selector_leases_isolate_and_restore_concurrent_same_path_kernels(
         ("first", "second", first),
         ("second", "first", second),
     ):
-        assert values["values"] == {owned: 1 if owned == "first" else 2}
+        expected = 1 if owned == "first" else 2
+        assert values["values"] == {owned: _encoded_json(expected)}
         assert values["errors"] == {}
         assert cast(dict[str, Any], foreign_values["errors"])["*"]["code"] == (
             "projection-authorization-invalid"

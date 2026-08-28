@@ -32,27 +32,29 @@ def test_value_permissions_are_narrowed_by_view(notebook_path: Path) -> None:
         headers = {
             "Marimo-Session-Id": config["presentationSessionId"],
         }
+        allowed_projection = _projection_request(config, "value", "doubled")
         allowed = client.post(
             _view_support_url(config, "values"),
             headers=headers,
             json={
                 "revision": config["revision"],
-                "projections": [_projection_request(config, "value", "doubled")],
+                "projections": [allowed_projection],
+                "activeProjections": [allowed_projection],
             },
+        )
+        cross_view_projection = _projection_request(
+            config,
+            "value",
+            "x",
+            site_target="doubled",
         )
         cross_view = client.post(
             _view_support_url(config, "values"),
             headers=headers,
             json={
                 "revision": config["revision"],
-                "projections": [
-                    _projection_request(
-                        config,
-                        "value",
-                        "x",
-                        site_target="doubled",
-                    )
-                ],
+                "projections": [cross_view_projection],
+                "activeProjections": [cross_view_projection],
             },
         )
 
@@ -83,7 +85,11 @@ def test_value_requests_allow_repeated_instances_with_one_target(
             headers={
                 "Marimo-Session-Id": config["presentationSessionId"],
             },
-            json={"revision": config["revision"], "projections": projections},
+            json={
+                "revision": config["revision"],
+                "projections": projections,
+                "activeProjections": projections,
+            },
         )
 
     assert response.status_code == 409
@@ -203,7 +209,10 @@ def test_projection_http_rejects_padded_wildcard_targets(
             " doubled ",
             site_target="doubled",
         )
-        body: dict[str, object] = {"projections": [projection]}
+        body: dict[str, object] = {
+            "projections": [projection],
+            "activeProjections": [projection],
+        }
         if kind == "output":
             canonical = _projection_request(
                 config,
@@ -243,7 +252,11 @@ def test_projection_http_rejects_unpaired_utf16_surrogates(
                 "Marimo-Session-Id": config["presentationSessionId"],
             },
             content=json.dumps(
-                {"revision": config["revision"], "projections": [projection]},
+                {
+                    "revision": config["revision"],
+                    "projections": [projection],
+                    "activeProjections": [projection],
+                },
                 ensure_ascii=True,
             ).encode("utf-8"),
         )
@@ -290,9 +303,10 @@ def test_projection_resolves_session_once(
     with TestClient(app) as client:
         config = client.get("/_marimo-studio/views/dashboard/config").json()
         projection = _projection_request(config, kind, "doubled")
-        body: dict[str, object] = {"projections": [projection]}
-        if kind == "output":
-            body["activeProjections"] = [projection]
+        body: dict[str, object] = {
+            "projections": [projection],
+            "activeProjections": [projection],
+        }
         response = client.post(
             _view_support_url(config, endpoint),
             headers={
@@ -365,9 +379,10 @@ def test_projection_uses_live_runtime_ids_after_a_cell_is_inserted(
     with TestClient(create_asgi_app(studio.notebook)) as client:
         config = client.get("/_marimo-studio/views/dashboard/config").json()
         projection = _projection_request(config, kind, "doubled")
-        body: dict[str, object] = {"projections": [projection]}
-        if kind == "output":
-            body["activeProjections"] = [projection]
+        body: dict[str, object] = {
+            "projections": [projection],
+            "activeProjections": [projection],
+        }
         response = client.post(
             _view_support_url(config, endpoint),
             headers={"Marimo-Session-Id": config["presentationSessionId"]},
@@ -419,9 +434,10 @@ def test_projection_waits_for_the_live_session_binding(
             syncing_session,
         )
         projection = _projection_request(config, kind, "doubled")
-        body: dict[str, object] = {"projections": [projection]}
-        if kind == "output":
-            body["activeProjections"] = [projection]
+        body: dict[str, object] = {
+            "projections": [projection],
+            "activeProjections": [projection],
+        }
         response = client.post(
             _view_support_url(config, endpoint),
             headers={"Marimo-Session-Id": config["presentationSessionId"]},
@@ -468,9 +484,10 @@ def test_projection_retries_while_the_kernel_applies_the_current_binding(
     with TestClient(create_asgi_app(studio.notebook)) as client:
         config = client.get("/_marimo-studio/views/dashboard/config").json()
         projection = _projection_request(config, kind, "doubled")
-        body: dict[str, object] = {"projections": [projection]}
-        if kind == "output":
-            body["activeProjections"] = [projection]
+        body: dict[str, object] = {
+            "projections": [projection],
+            "activeProjections": [projection],
+        }
         response = client.post(
             _view_support_url(config, endpoint),
             headers={
@@ -502,21 +519,33 @@ def test_value_permissions_follow_the_browser_presentation_revision(
             headers={
                 "Marimo-Session-Id": first["presentationSessionId"],
             },
-            json={"revision": first["revision"], "projections": [projection]},
+            json={
+                "revision": first["revision"],
+                "projections": [projection],
+                "activeProjections": [projection],
+            },
         )
         removed = client.post(
             _view_support_url(current, "values"),
             headers={
                 "Marimo-Session-Id": current["presentationSessionId"],
             },
-            json={"revision": current["revision"], "projections": [projection]},
+            json={
+                "revision": current["revision"],
+                "projections": [projection],
+                "activeProjections": [projection],
+            },
         )
         unpublished = client.post(
             _view_support_url(current, "values"),
             headers={
                 "Marimo-Session-Id": current["presentationSessionId"],
             },
-            json={"revision": "unpublished", "projections": [projection]},
+            json={
+                "revision": "unpublished",
+                "projections": [projection],
+                "activeProjections": [projection],
+            },
         )
 
     assert first["revision"] != current["revision"]
@@ -556,7 +585,11 @@ def test_retained_value_revision_rejects_a_variable_moved_to_another_cell(
             headers={
                 "Marimo-Session-Id": retained["presentationSessionId"],
             },
-            json={"revision": retained["revision"], "projections": [projection]},
+            json={
+                "revision": retained["revision"],
+                "projections": [projection],
+                "activeProjections": [projection],
+            },
         )
 
     assert response.status_code == 409
@@ -599,7 +632,11 @@ def test_retained_value_revision_rejects_an_upstream_only_edit(
             headers={
                 "Marimo-Session-Id": retained["presentationSessionId"],
             },
-            json={"revision": retained["revision"], "projections": [projection]},
+            json={
+                "revision": retained["revision"],
+                "projections": [projection],
+                "activeProjections": [projection],
+            },
         )
 
     assert response.status_code == 409
@@ -643,7 +680,11 @@ def test_retained_value_revision_rejects_a_newly_resolved_reference(
             headers={
                 "Marimo-Session-Id": retained["presentationSessionId"],
             },
-            json={"revision": retained["revision"], "projections": [projection]},
+            json={
+                "revision": retained["revision"],
+                "projections": [projection],
+                "activeProjections": [projection],
+            },
         )
 
     assert response.status_code == 409

@@ -10,6 +10,7 @@ import {
   readServerValuesWithRetry,
   ValueRequestError,
 } from "../src/values/remote.ts";
+import { ARROW_FINGERPRINT, arrowBytes } from "./arrow-fixture.ts";
 import { projectionRequest, symbolicRuntimeFields } from "./runtime-fixtures.ts";
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
@@ -55,8 +56,18 @@ const config = {
   mode: "run",
 };
 
-const requestUrl = (input: RequestInfo | URL): string =>
-  input instanceof URL ? input.href : new Request(input).url;
+const requestUrl = (input: RequestInfo | URL): string => {
+  if (input instanceof Request) {
+    return input.url;
+  }
+  return new URL(input, globalThis.location.href).href;
+};
+
+const jsonValue = (value: string) => ({
+  codec: "json-v1" as const,
+  fingerprint: `sha256:${"0".repeat(64)}`,
+  value,
+});
 
 const installConfig = async () => {
   const originalFetch = globalThis.fetch;
@@ -82,22 +93,143 @@ test("value reads send exact selectors through the configured base URL", async (
       throw new TypeError("Expected a JSON request body");
     }
     body = parsedBody.data;
-    return Promise.resolve(Response.json({ values: { "context.label": "ready" }, errors: {} }));
+    return Promise.resolve(
+      Response.json({ values: { "context.label": jsonValue("ready") }, errors: {} }),
+    );
   };
   try {
     const result = await readServerValues({
       revision: "presentation-revision",
       projections: [projectionRequest("context.label", "value")],
+      activeProjections: [projectionRequest("context.label", "value")],
     });
-    assert.equal(Object.getPrototypeOf(result.values), null);
-    assert.equal(result.values["context.label"], "ready");
+    assert.deepEqual(result.values["context.label"], jsonValue("ready"));
     assert.deepEqual(url, "http://localhost:3000/proxy/app/_marimo-studio/views/dashboard/values");
     assert.deepEqual(headers.get("Marimo-Session-Id"), "s_view01");
     assert.equal(headers.get("Marimo-Server-Token"), null);
     assert.deepEqual(JSON.parse(body), {
       revision: "presentation-revision",
       projections: [projectionWireRequest(projectionRequest("context.label", "value"))],
+      activeProjections: [projectionWireRequest(projectionRequest("context.label", "value"))],
     });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("value reads resolve Arrow resources to Flechette tables", async () => {
+  await installConfig();
+  const bytes = arrowBytes();
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (input) => {
+    const url = requestUrl(input);
+    requests.push(url);
+    if (url.endsWith("/@file/frame.arrow")) {
+      return Promise.resolve(new Response(bytes.buffer));
+    }
+    return Promise.resolve(
+      Response.json({
+        values: {
+          frame: {
+            codec: "arrow-ipc-v1",
+            fingerprint: ARROW_FINGERPRINT,
+            dataUrl: "./@file/frame.arrow",
+            byteLength: bytes.byteLength,
+          },
+        },
+        errors: {},
+      }),
+    );
+  };
+  try {
+    const result = await readServerValues({
+      revision: "presentation-revision",
+      projections: [projectionRequest("frame", "value")],
+      activeProjections: [projectionRequest("frame", "value")],
+    });
+    const frame = result.values.frame;
+
+    assert.equal(frame?.codec, "arrow-ipc-v1");
+    assert.deepEqual(requests, [
+      "http://localhost:3000/proxy/app/_marimo-studio/views/dashboard/values",
+      "http://localhost:3000/proxy/app/@file/frame.arrow",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("value reads retry an Arrow resource that is not yet published", async () => {
+  await installConfig();
+  const bytes = arrowBytes();
+  const originalFetch = globalThis.fetch;
+  let reads = 0;
+  let resources = 0;
+  globalThis.fetch = (input) => {
+    const url = requestUrl(input);
+    if (url.endsWith("/@file/retry.arrow")) {
+      resources += 1;
+      return Promise.resolve(
+        resources === 1 ? new Response(null, { status: 404 }) : new Response(bytes.buffer),
+      );
+    }
+    reads += 1;
+    return Promise.resolve(
+      Response.json({
+        values: {
+          retryFrame: {
+            codec: "arrow-ipc-v1",
+            fingerprint: ARROW_FINGERPRINT,
+            dataUrl: "./@file/retry.arrow",
+            byteLength: bytes.byteLength,
+          },
+        },
+        errors: {},
+      }),
+    );
+  };
+  const projection = projectionRequest("retryFrame", "value");
+  try {
+    const result = await readServerValuesWithRetry({
+      revision: "presentation-revision",
+      projections: [projection],
+      activeProjections: [projection],
+    });
+
+    assert.equal(result.values.retryFrame?.codec, "arrow-ipc-v1");
+    assert.equal(reads, 2);
+    assert.equal(resources, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("value reads retry a transient request network failure", async () => {
+  await installConfig();
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = () => {
+    requests += 1;
+    return requests === 1
+      ? Promise.reject(new TypeError("connection reset"))
+      : Promise.resolve(
+          Response.json({
+            values: { networkRetry: jsonValue("ready") },
+            errors: {},
+          }),
+        );
+  };
+  const projection = projectionRequest("networkRetry", "value");
+  try {
+    const result = await readServerValuesWithRetry({
+      revision: "presentation-revision",
+      projections: [projection],
+      activeProjections: [projection],
+    });
+
+    assert.deepEqual(result.values.networkRetry, jsonValue("ready"));
+    assert.equal(requests, 2);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -126,6 +258,7 @@ test("terminal value failures do not retry", async () => {
         readServerValuesWithRetry({
           revision: "presentation-revision",
           projections: [projectionRequest("context.label", "value")],
+          activeProjections: [projectionRequest("context.label", "value")],
         }),
       (cause: unknown) => {
         assert.ok(cause instanceof ValueRequestError);
@@ -165,12 +298,14 @@ test("a stale live binding requests a presentation refresh", async () => {
       readServerValues({
         revision: "presentation-revision",
         projections: [projectionRequest("context.label", "value")],
+        activeProjections: [projectionRequest("context.label", "value")],
       }),
     );
     await assert.rejects(() =>
       readServerValues({
         revision: "presentation-revision",
         projections: [projectionRequest("context.label", "value")],
+        activeProjections: [projectionRequest("context.label", "value")],
       }),
     );
     assert.equal(refreshes, 1);

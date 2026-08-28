@@ -205,6 +205,10 @@ export const createMarimoViteIntegration = () => {
         find: "@marimo-team/react-slotz",
         replacement: join(modules, "@marimo-team", "react-slotz"),
       },
+      {
+        find: "@uwdata/flechette",
+        replacement: resolve(packageRoot, "node_modules", "@uwdata", "flechette"),
+      },
       // Marimo's exported store, hooks, and providers must share these module
       // instances with the presentation runtime that consumes them.
       {

@@ -2,7 +2,7 @@ import type { ValueReadError } from "@marimo-studio/protocol/value-read";
 
 import { z } from "zod";
 
-import type { RuntimeProjectionRequest as ProjectionRequest } from "../projections/resolution";
+import type { DecodedValue, MarimoValue } from "./codecs.ts";
 
 import { syncProjectionHostAttributes } from "../cells/host.ts";
 import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
@@ -13,6 +13,7 @@ import {
   createProjectionResolutionContext,
   type ProjectionResolutionContext,
   type ResolvedProjection,
+  type RuntimeProjectionRequest as ProjectionRequest,
   resolveHostProjection,
 } from "../projections/resolution.ts";
 import {
@@ -31,16 +32,14 @@ const textValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 const hosts = new Set<HTMLElement>();
 const renderedValues = new WeakMap<
   HTMLElement,
-  { readonly selector: string; readonly fingerprint: string }
+  { readonly codec: DecodedValue["codec"]; readonly selector: string; readonly fingerprint: string }
 >();
-interface ProjectedValue {
-  readonly fingerprint: string;
+type ProjectedValue = DecodedValue & {
   readonly text: string;
-  readonly value: JsonValue;
-}
+};
 
 const cachedValues = new Map<string, ProjectedValue>();
-const hostValues = new WeakMap<HTMLElement, JsonValue>();
+const hostValues = new WeakMap<HTMLElement, MarimoValue>();
 const preparedHosts = new WeakSet<HTMLElement>();
 const hostSelectors = new WeakMap<HTMLElement, string>();
 interface HostProjection {
@@ -60,12 +59,12 @@ let configurePending = false;
 let started = false;
 
 export interface MarimoValueHost extends HTMLElement {
-  readonly marimoValue: JsonValue | undefined;
+  readonly marimoValue: MarimoValue | undefined;
 }
 
 export interface MarimoValueUpdatedDetail {
   readonly selector: string;
-  readonly value: JsonValue;
+  readonly value: MarimoValue;
 }
 
 export interface MarimoValueErrorDetail {
@@ -117,8 +116,52 @@ const clearHostValue = (host: HTMLElement): void => {
   hostValues.delete(host);
 };
 
-const setHostValue = (host: HTMLElement, value: JsonValue): JsonValue => {
-  const snapshot = structuredClone(value);
+interface ValuePresentation {
+  readonly snapshot: (value: DecodedValue) => MarimoValue;
+  readonly text: (value: DecodedValue) => string;
+}
+
+const jsonText = (value: JsonValue): string => {
+  if (value === null) {
+    return "";
+  }
+  const textValue = textValueSchema.safeParse(value);
+  return textValue.success ? String(textValue.data) : JSON.stringify(value);
+};
+
+const valuePresentations = {
+  "json-v1": {
+    snapshot: (decoded) => {
+      if (decoded.codec !== "json-v1") {
+        throw new Error("JSON presentation received another value codec");
+      }
+      return structuredClone(decoded.value);
+    },
+    text: (decoded) => {
+      if (decoded.codec !== "json-v1") {
+        throw new Error("JSON presentation received another value codec");
+      }
+      return jsonText(decoded.value);
+    },
+  },
+  "arrow-ipc-v1": {
+    snapshot: (decoded) => {
+      if (decoded.codec !== "arrow-ipc-v1") {
+        throw new Error("Arrow presentation received another value codec");
+      }
+      return decoded.value;
+    },
+    text: (decoded) => {
+      if (decoded.codec !== "arrow-ipc-v1") {
+        throw new Error("Arrow presentation received another value codec");
+      }
+      return `${decoded.value.numRows} rows × ${decoded.value.numCols} columns`;
+    },
+  },
+} satisfies Record<DecodedValue["codec"], ValuePresentation>;
+
+const setHostValue = (host: HTMLElement, projection: ProjectedValue): MarimoValue => {
+  const snapshot = valuePresentations[projection.codec].snapshot(projection);
   hostValues.set(prepareHost(host), snapshot);
   return snapshot;
 };
@@ -332,17 +375,10 @@ const visit = (node: Node, callback: (host: HTMLElement) => void) => {
   node.querySelectorAll<HTMLElement>(ATTRIBUTE_SELECTOR).forEach(callback);
 };
 
-const projectValue = (value: JsonValue): ProjectedValue => {
-  const fingerprint = JSON.stringify(value);
-  if (value === null) {
-    return { fingerprint, text: "", value };
-  }
-  const textValue = textValueSchema.safeParse(value);
-  if (textValue.success) {
-    return { fingerprint, text: String(textValue.data), value };
-  }
-  return { fingerprint, text: fingerprint, value };
-};
+const projectValue = (decoded: DecodedValue): ProjectedValue => ({
+  ...decoded,
+  text: valuePresentations[decoded.codec].text(decoded),
+});
 
 const renderHost = (
   host: HTMLElement,
@@ -353,14 +389,23 @@ const renderHost = (
   clearHostDiagnostic(host);
   const rendered = renderedValues.get(host);
   const changed =
-    rendered?.selector !== selector || rendered.fingerprint !== projection.fingerprint;
-  const snapshot = setHostValue(host, projection.value);
+    rendered?.selector !== selector ||
+    rendered.codec !== projection.codec ||
+    rendered.fingerprint !== projection.fingerprint;
   if (!changed) {
+    if (projection.codec === "json-v1") {
+      setHostValue(host, projection);
+    }
     setState(host, phase);
     return;
   }
+  const snapshot = setHostValue(host, projection);
   host.textContent = projection.text;
-  renderedValues.set(host, { selector, fingerprint: projection.fingerprint });
+  renderedValues.set(host, {
+    codec: projection.codec,
+    selector,
+    fingerprint: projection.fingerprint,
+  });
   setState(host, "ready");
   const detail: MarimoValueUpdatedDetail = { selector, value: snapshot };
   host.dispatchEvent(
@@ -630,7 +675,7 @@ export const markValueError = (
   });
 };
 
-export const applyValues = (values: Record<string, JsonValue>, projectionRevision: string) => {
+export const applyValues = (values: Record<string, DecodedValue>, projectionRevision: string) => {
   if (projectionRevision !== cacheProjectionRevision) {
     return;
   }

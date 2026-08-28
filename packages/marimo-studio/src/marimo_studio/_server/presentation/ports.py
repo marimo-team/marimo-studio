@@ -56,6 +56,7 @@ class KernelProjectionHost(Protocol):
         session_id: str,
         revision: str,
         projections: tuple[ResolvedProjection, ...],
+        active_projections: tuple[ResolvedProjection, ...],
         *,
         consumer_id: str,
         runtime_cell_refs: Mapping[CellRef, str],

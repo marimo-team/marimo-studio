@@ -136,7 +136,11 @@ test("cancels one client's held old-view request without changing the peer view"
       }
       held = true;
       const response = await route.fetch();
-      lateMetric = valueReadResponseSchema.parse(await response.json()).values.metric;
+      const value = valueReadResponseSchema.parse(await response.json()).values.metric;
+      if (value?.codec !== "json-v1") {
+        throw new Error("Expected the metric value to use JSON encoding.");
+      }
+      lateMetric = value.value;
       heldRequestAbort = browserDiagnostics.expectHeldRequestAbort(request, requestCompleted);
       intercepted();
       await released;
@@ -273,7 +277,7 @@ test("cancels a held old-view request without changing current or cached view st
     }
     const response = await route.fetch();
     const value = valueReadResponseSchema.parse(await response.json()).values.slow_metric;
-    if (held || value !== 21) {
+    if (held || value?.codec !== "json-v1" || value.value !== 21) {
       await route.fulfill({ response });
       return;
     }

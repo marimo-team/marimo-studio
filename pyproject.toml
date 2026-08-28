@@ -2,7 +2,13 @@
 members = ["apps/e2e/fixtures-provider/provider", "packages/marimo-studio"]
 
 [dependency-groups]
-test = ["httpx2>=2.9", "polars>=1.42", "pytest>=9.1"]
+test = [
+    "httpx2>=2.9",
+    "pandas==2.3.3",
+    "polars>=1.42",
+    "pyarrow==25.0.0",
+    "pytest>=9.1",
+]
 test-deno = [{ include-group = "test" }, "deno==2.9.5"]
 dev = [
   { include-group = "test" },

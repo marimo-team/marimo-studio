@@ -46,13 +46,16 @@ const valueProjectionRequestAt = (
   targets: readonly string[],
   revision: string,
   identity = "stable",
-) =>
-  projectionRequest("values", {
+) => {
+  const projections = wireProjections(targets, identity);
+  return projectionRequest("values", {
     postData: JSON.stringify({
-      projections: wireProjections(targets, identity),
+      activeProjections: projections,
+      projections,
       revision,
     }),
   });
+};
 
 const valueProjectionRequest = (...targets: string[]) =>
   valueProjectionRequestAt(targets, "revision-a");

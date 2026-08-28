@@ -31,8 +31,10 @@ def install_browser_bridge(
     import dataclasses as _studio_dataclasses
     import gc as _studio_gc
     import hashlib as _studio_hashlib
+    import io as _studio_io
     import json as _studio_json
     import re as _studio_re
+    import sys as _studio_sys
     import time as _studio_time
     from collections.abc import Mapping as _StudioMapping
     from typing import Any as _StudioAny
@@ -45,19 +47,35 @@ def install_browser_bridge(
         broadcast_notification as _studio_broadcast_notification,
     )
     from marimo._output.formatting import try_format as _studio_try_format
+    from marimo._plugins.ui._impl.tables.utils import (
+        get_table_manager_or_none as _studio_get_table_manager,
+    )
     from marimo._runtime.cell_lifecycle_item import (
         CellLifecycleItem as _StudioCellLifecycleItem,
     )
     from marimo._runtime.context import get_context as _studio_get_context
     from marimo._runtime.functions import Function as _StudioFunction
+    from marimo._runtime.virtual_file import VirtualFile as _StudioVirtualFile
     from marimo._types.ids import CellId_t as _StudioCellId
 
     _studio_max_value_bytes = _studio_config_max_value_bytes
+    _studio_max_value_target_bytes = 4_096
+    _studio_max_value_transport_bytes = (
+        ((_studio_max_value_bytes + 2) // 3) * 4
+        + _studio_config_max_value_selector_count
+        * (
+            _studio_config_max_error_message_length
+            + 2 * _studio_max_value_target_bytes
+            + 512
+        )
+        + 4_096
+    )
 
     @_studio_dataclasses.dataclass
     class _StudioReadValuesArgs:
         revision: str
         projections: list
+        active_projections: list
         max_value_bytes: int = _studio_max_value_bytes
 
     @_studio_dataclasses.dataclass
@@ -101,6 +119,7 @@ def install_browser_bridge(
     _studio_identifier = _studio_re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
     _studio_index = _studio_re.compile(r"(?:0|[1-9][0-9]*)")
     _studio_json_decoder = _studio_json.JSONDecoder()
+    _studio_value_resources = {}
 
     def _studio_projection_bridge_ready(args):
         del args
@@ -148,7 +167,7 @@ def install_browser_bridge(
             ensure_ascii=False,
             separators=(",", ":"),
         )
-        if len(encoded.encode("utf-8")) <= _studio_config_max_value_bytes:
+        if len(encoded.encode("utf-8")) <= _studio_max_value_transport_bytes:
             return payload
         return {
             "values": {},
@@ -159,6 +178,158 @@ def install_browser_bridge(
                 )
             },
         }
+
+    def _studio_fingerprint(data):
+        return "sha256:" + _studio_hashlib.sha256(data).hexdigest()
+
+    def _studio_remove_value_resource(resource):
+        if not resource.url.startswith("data:"):
+            _studio_context.virtual_file_registry.remove(resource)
+
+    def _studio_release_value_resources():
+        for selector in tuple(_studio_value_resources):
+            _fingerprint_value, resource = _studio_value_resources[selector]
+            _studio_remove_value_resource(resource)
+            del _studio_value_resources[selector]
+
+    def _studio_reconcile_value_resources(active):
+        for selector in tuple(_studio_value_resources):
+            if selector not in active:
+                _studio_commit_value_resource(selector, None)
+
+    def _studio_commit_value_resource(selector, staged):
+        previous = _studio_value_resources.get(selector)
+        if staged is None:
+            if previous is not None:
+                _studio_remove_value_resource(previous[1])
+                del _studio_value_resources[selector]
+            return
+        fingerprint, resource, reused = staged
+        if previous is not None and previous[1] is not resource:
+            try:
+                _studio_remove_value_resource(previous[1])
+            except BaseException:
+                if not reused:
+                    _studio_remove_value_resource(resource)
+                raise
+        _studio_value_resources[selector] = (fingerprint, resource)
+
+    def _studio_write_arrow_stream(table, pyarrow):
+        output = _studio_io.BytesIO()
+        options = pyarrow.ipc.IpcWriteOptions(compression=None)
+        with pyarrow.ipc.new_stream(output, table.schema, options=options) as writer:
+            writer.write_table(table)
+        return output.getvalue()
+
+    def _studio_arrow_ipc(value):
+        manager = _studio_get_table_manager(value)
+        if manager is not None and manager.type in {"pandas", "polars"}:
+            if manager.get_num_rows(force=False) is None:
+                raise _StudioProjectionError(
+                    "arrow-materialization-required",
+                    "Materialize the dataframe before projecting it.",
+                )
+            try:
+                if manager.type == "polars":
+                    if any(dtype.is_object() for dtype in value.schema.values()):
+                        raise TypeError(
+                            "Polars Object columns cannot be serialized as Arrow IPC"
+                        )
+                    output = _studio_io.BytesIO()
+                    value.write_ipc_stream(output, compression="uncompressed")
+                    return output.getvalue()
+                import pyarrow as _studio_pyarrow
+
+                try:
+                    table = _studio_pyarrow.Table.from_pandas(value)
+                except Exception:
+                    source = _studio_pyarrow.ipc.open_file(
+                        _studio_io.BytesIO(manager.to_arrow_ipc())
+                    ).read_all()
+                    return _studio_write_arrow_stream(source, _studio_pyarrow)
+                return _studio_write_arrow_stream(table, _studio_pyarrow)
+            except (ImportError, ModuleNotFoundError) as error:
+                raise _StudioProjectionError(
+                    "arrow-codec-unavailable",
+                    f"PyArrow is required for Arrow IPC: {error}",
+                ) from error
+            except Exception as error:
+                raise _StudioProjectionError(
+                    "arrow-serialization-error",
+                    f"The dataframe could not be serialized as Arrow IPC: {error}",
+                ) from error
+        pyarrow = _studio_sys.modules.get("pyarrow")
+        if pyarrow is None:
+            return None
+        table_type = getattr(pyarrow, "Table", ())
+        batch_type = getattr(pyarrow, "RecordBatch", ())
+        if isinstance(value, batch_type):
+            value = pyarrow.Table.from_batches([value], schema=value.schema)
+        if not isinstance(value, table_type):
+            return None
+        return _studio_write_arrow_stream(value, pyarrow)
+
+    def _studio_encode_value(selector, value, limit):
+        try:
+            ipc = _studio_arrow_ipc(value)
+        except _StudioProjectionError:
+            raise
+        except Exception as error:
+            raise _StudioProjectionError(
+                "arrow-serialization-error",
+                f"Selector {selector!r} could not be serialized as Arrow IPC: {error}",
+            ) from error
+        if ipc is None:
+            try:
+                text = _studio_json.dumps(
+                    value,
+                    allow_nan=False,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+            except Exception as error:
+                raise _StudioProjectionError(
+                    "not-json-serializable",
+                    f"Selector {selector!r} cannot be serialized as JSON: {error}",
+                ) from error
+            data = text.encode("utf-8")
+            if len(data) > limit:
+                raise _StudioProjectionError(
+                    "value-too-large",
+                    f"Selector {selector!r} exceeds the {limit}-byte limit.",
+                )
+            return (
+                {
+                    "codec": "json-v1",
+                    "fingerprint": _studio_fingerprint(data),
+                    "value": _studio_json.loads(text),
+                },
+                len(data),
+                None,
+            )
+        if len(ipc) > limit:
+            raise _StudioProjectionError(
+                "value-too-large",
+                f"Selector {selector!r} exceeds the {limit}-byte limit.",
+            )
+        fingerprint = _studio_fingerprint(ipc)
+        current = _studio_value_resources.get(selector)
+        if current is not None and current[0] == fingerprint:
+            resource = current[1]
+            reused = True
+        else:
+            resource = _StudioVirtualFile.create_and_register(ipc, "arrow")
+            reused = False
+        return (
+            {
+                "codec": "arrow-ipc-v1",
+                "fingerprint": fingerprint,
+                "dataUrl": resource.url,
+                "byteLength": len(ipc),
+            },
+            len(ipc),
+            (fingerprint, resource, reused),
+        )
 
     def _studio_configure_projections(args):
         revision = args.revision
@@ -244,6 +415,7 @@ def install_browser_bridge(
                 "generation": generation,
                 "applied": True,
             }
+        _studio_release_value_resources()
         _studio_projection_authorization.update(
             generation=generation,
             revision=revision,
@@ -346,7 +518,7 @@ def install_browser_bridge(
                     "projection-unpaired-surrogate",
                     "Projection targets and instance IDs require well-formed Unicode.",
                 ) from error
-            if len(target.encode("utf-8")) > 4096:
+            if len(target.encode("utf-8")) > _studio_max_value_target_bytes:
                 raise ValueError("The projection target exceeds the byte limit.")
             site = _studio_projection_authorization["sites"].get(request["siteId"])
             if site is None or site["kind"] != kind:
@@ -384,6 +556,9 @@ def install_browser_bridge(
             specifications = _studio_projection_specs(
                 args.revision, args.projections, "value"
             )
+            active_specifications = _studio_projection_specs(
+                args.revision, args.active_projections, "value"
+            )
         except Exception as error:
             return _studio_payload(
                 values,
@@ -399,7 +574,11 @@ def install_browser_bridge(
                 },
             )
         selectors = tuple(specifications)
-        if len(selectors) > _studio_config_max_value_selector_count:
+        active = tuple(active_specifications)
+        if (
+            len(selectors) > _studio_config_max_value_selector_count
+            or len(active) > _studio_config_max_value_selector_count
+        ):
             return _studio_payload(
                 values,
                 {
@@ -412,45 +591,65 @@ def install_browser_bridge(
             )
         limit = max(1, min(args.max_value_bytes, _studio_config_max_value_bytes))
         total = 0
+        allowed_active = set(active)
+        _studio_reconcile_value_resources(allowed_active)
         with _studio_context._kernel.lock_globals():
             namespace = _studio_context.globals
             for selector in selectors:
+                if selector not in allowed_active:
+                    _studio_commit_value_resource(selector, None)
+                    errors[selector] = _studio_error(
+                        "inactive-selector",
+                        f"Selector {selector!r} is not mounted in the presentation.",
+                    )
+                    continue
+                if active_specifications[selector] != specifications[selector]:
+                    _studio_commit_value_resource(selector, None)
+                    errors[selector] = _studio_error(
+                        "invalid-selector-spec",
+                        f"Selector {selector!r} has conflicting active specs.",
+                    )
+                    continue
                 try:
                     value = _studio_resolve(specifications, namespace, selector)
                 except Exception as error:
+                    _studio_commit_value_resource(selector, None)
                     errors[selector] = _studio_error(
                         "value-path-unavailable",
                         f"Selector {selector!r} could not be resolved: {error}",
                     )
                     continue
                 try:
-                    encoded = _studio_json.dumps(
-                        value,
-                        allow_nan=False,
-                        ensure_ascii=False,
-                        separators=(",", ":"),
+                    encoded, size, resource = _studio_encode_value(
+                        selector, value, limit
                     )
-                except Exception as error:
+                except _StudioProjectionError as error:
+                    _studio_commit_value_resource(selector, None)
                     errors[selector] = _studio_error(
-                        "not-json-serializable",
-                        f"Selector {selector!r} cannot be serialized as JSON: {error}",
-                    )
-                    continue
-                size = len(encoded.encode("utf-8"))
-                if size > limit:
-                    errors[selector] = _studio_error(
-                        "value-too-large",
-                        f"Selector {selector!r} exceeds the {limit}-byte limit.",
+                        error.code,
+                        error,
                     )
                     continue
                 if total + size > _studio_config_max_value_bytes:
+                    if resource is not None and not resource[2]:
+                        _studio_remove_value_resource(resource[1])
                     errors[selector] = _studio_error(
                         "response-too-large",
                         "The value response exceeds the aggregate byte limit.",
                     )
+                    _studio_commit_value_resource(selector, None)
+                    continue
+                try:
+                    _studio_commit_value_resource(selector, resource)
+                except BaseException as error:
+                    _studio_commit_value_resource(selector, None)
+                    errors[selector] = _studio_error(
+                        "value-resource-error",
+                        f"Selector {selector!r} could not publish its value: {error}",
+                    )
                     continue
                 total += size
-                values[selector] = _studio_json.loads(encoded)
+                values[selector] = encoded
         return _studio_payload(values, errors)
 
     _studio_active_outputs: dict[str, set[str]] = {}
@@ -849,6 +1048,10 @@ def install_browser_bridge(
             del context, deletion
             if _studio_host_state["closed"]:
                 return True
+            try:
+                _studio_release_value_resources()
+            except BaseException:
+                return False
             active = (
                 (consumer_id, selector)
                 for consumer_id, selectors in tuple(_studio_active_outputs.items())

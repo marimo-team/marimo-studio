@@ -14,6 +14,7 @@ import { ValueRequestError } from "../../values/remote";
 import { applyValueReadResponse } from "../../values/response";
 import { retryProjectionRefresh } from "../retry-projection-refresh";
 import { useDeliveryTimeout } from "../use-delivery-timeout";
+import { useLatest } from "../use-latest";
 import { valueCellFailure, valueCellModel } from "./value-cell-model";
 
 const requestFailure = (cause: unknown): ValueReadError => ({
@@ -40,48 +41,64 @@ export const useRuntimeValue = ({
 }): void => {
   const deliveryTimedOut = useDeliveryTimeout(runtimeReady && cell === undefined, cell?.id);
   const model = valueCellModel(cell, runtimeReady, deliveryTimedOut);
+  const projectionIdentity = JSON.stringify(projections);
+  const selectorIdentity = JSON.stringify(selectors);
+  const projectionsRef = useLatest(projections);
+  const selectorsRef = useLatest(selectors);
 
   useLayoutEffect(() => {
-    setValueRuntimeCell(selectors, model.cellId, projectionRevision);
-    return () => setValueRuntimeCell(selectors, null, projectionRevision);
-  }, [model.cellId, projectionRevision, selectors]);
+    const currentSelectors = selectorsRef.current;
+    setValueRuntimeCell(currentSelectors, model.cellId, projectionRevision);
+    return () => setValueRuntimeCell(currentSelectors, null, projectionRevision);
+  }, [model.cellId, projectionRevision, selectorIdentity, selectorsRef]);
 
   useLayoutEffect(() => {
     if (model.phase === "loading" || model.phase === "stale") {
-      selectors.forEach((selector) => markValuePending(selector, projectionRevision));
+      selectorsRef.current.forEach((selector) => markValuePending(selector, projectionRevision));
       return;
     }
     const failure = model.failure;
     if (model.phase === "error" && failure) {
-      selectors.forEach((selector) =>
+      selectorsRef.current.forEach((selector) =>
         markValueError(selector, valueCellFailure(failure, selector), projectionRevision),
       );
     }
-  }, [model.failure, model.phase, projectionRevision, selectors]);
+  }, [model.failure, model.phase, projectionRevision, selectorIdentity, selectorsRef]);
 
   useEffect(() => {
     if (connectionState !== "OPEN" || model.phase !== "ready") {
       return;
     }
 
-    selectors.forEach((selector) => markValuePending(selector, projectionRevision));
+    const currentSelectors = selectorsRef.current;
+    const currentProjections = projectionsRef.current;
+    currentSelectors.forEach((selector) => markValuePending(selector, projectionRevision));
     const controller = new AbortController();
     let current = true;
     void retryProjectionRefresh(controller.signal, () =>
-      readValues({ revision: getRuntimeConfig().revision, projections }, controller.signal),
+      readValues(
+        {
+          revision: getRuntimeConfig().revision,
+          projections: currentProjections,
+          activeProjections: currentProjections,
+        },
+        controller.signal,
+      ),
     )
       .then((response) => {
         if (!current) {
           return;
         }
-        applyValueReadResponse(selectors, response, projectionRevision);
+        applyValueReadResponse(currentSelectors, response, projectionRevision);
       })
       .catch((cause: unknown) => {
         if (!current || (cause instanceof DOMException && cause.name === "AbortError")) {
           return;
         }
         const failure = requestFailure(cause);
-        selectors.forEach((selector) => markValueError(selector, failure, projectionRevision));
+        currentSelectors.forEach((selector) =>
+          markValueError(selector, failure, projectionRevision),
+        );
       });
     return () => {
       current = false;
@@ -92,9 +109,11 @@ export const useRuntimeValue = ({
     model.cellId,
     model.phase,
     model.version,
-    projections,
+    projectionIdentity,
     projectionRevision,
+    projectionsRef,
     readValues,
-    selectors,
+    selectorIdentity,
+    selectorsRef,
   ]);
 };

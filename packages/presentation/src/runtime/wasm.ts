@@ -80,7 +80,12 @@ const requestValues = async (
         invoke({
           namespace: WASM_PROJECTION_NAMESPACE,
           functionName: "read_values",
-          args: { ...request, max_value_bytes: 1_000_000 },
+          args: {
+            revision: request.revision,
+            projections: request.projections,
+            active_projections: request.activeProjections,
+            max_value_bytes: 1_000_000,
+          },
         }),
       signal,
     ),

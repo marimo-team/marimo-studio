@@ -50,6 +50,8 @@ def test_query_authorization_is_exact_and_filesystem_free(
         changed = {**arguments, field: replacement}
         assert not verify_query_authorization(SimpleNamespace(**changed), notebook)
 
-    value_authorization = authorized_value_arguments("revision", ())["authorization"]
+    value_authorization = authorized_value_arguments("revision", (), "preview")[
+        "authorization"
+    ]
     confused = {**arguments, "authorization": value_authorization}
     assert not verify_query_authorization(SimpleNamespace(**confused), notebook)

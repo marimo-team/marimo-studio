@@ -119,6 +119,7 @@ test("the package exposes capability facades", async () => {
 
   expect(new Set(Object.keys(manifest.exports))).toEqual(
     new Set([
+      "./arrow-table",
       "./build-metadata",
       "./cell-presentation",
       "./control-endpoint",

@@ -30,8 +30,10 @@ export const groupValueProjections = (
       runtimeCellId: projection.runtimeCellId,
       selectors: new Set<string>(),
     };
-    group.projections.push(request);
-    group.selectors.add(request.target);
+    if (!group.selectors.has(request.target)) {
+      group.projections.push(request);
+      group.selectors.add(request.target);
+    }
     groups.set(key, group);
   });
   return Array.from(groups, ([key, group]) => ({

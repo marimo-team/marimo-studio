@@ -10,10 +10,16 @@ import {
 } from "../src/values/wasm";
 import { projectionRequest, projectionRuntimeConfig } from "./runtime-fixtures";
 
+const jsonValue = (value: number) => ({
+  codec: "json-v1" as const,
+  fingerprint: `sha256:${String(value).repeat(64)}`,
+  value,
+});
+
 const response = (value: number): FunctionResult => ({
   found: true,
   status: { code: "ok", message: null },
-  return_value: { values: { total: value }, errors: {} },
+  return_value: { values: { total: jsonValue(value) }, errors: {} },
 });
 
 describe("WebAssembly value reads", () => {
@@ -52,17 +58,19 @@ describe("WebAssembly value reads", () => {
     )({
       revision: "presentation-revision",
       projections: [requestProjection],
+      activeProjections: [requestProjection],
     });
 
     await Promise.resolve();
     expect(request).not.toHaveBeenCalled();
     initialize();
 
-    await expect(reading).resolves.toEqual({ values: { total: 3 }, errors: {} });
+    await expect(reading).resolves.toEqual({ values: { total: jsonValue(3) }, errors: {} });
     expect(request).toHaveBeenCalledWith(
       {
         revision: "presentation-revision",
         projections: [projectionWireRequest(requestProjection)],
+        activeProjections: [projectionWireRequest(requestProjection)],
       },
       undefined,
     );
@@ -84,14 +92,15 @@ describe("WebAssembly value reads", () => {
     const valueRequest = {
       revision: "presentation-revision",
       projections: [requestProjection],
+      activeProjections: [requestProjection],
     };
     const first = reader(valueRequest);
     const second = reader(valueRequest);
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
 
     complete(response(1));
-    await expect(first).resolves.toEqual({ values: { total: 1 }, errors: {} });
-    await expect(second).resolves.toEqual({ values: { total: 2 }, errors: {} });
+    await expect(first).resolves.toEqual({ values: { total: jsonValue(1) }, errors: {} });
+    await expect(second).resolves.toEqual({ values: { total: jsonValue(2) }, errors: {} });
     expect(request).toHaveBeenCalledTimes(2);
   });
 
@@ -110,9 +119,14 @@ describe("WebAssembly value reads", () => {
     const first = reader({
       revision: "presentation-revision",
       projections: [firstProjection],
+      activeProjections: [firstProjection],
     });
     const stale = reader(
-      { revision: "presentation-revision", projections: [staleProjection] },
+      {
+        revision: "presentation-revision",
+        projections: [staleProjection],
+        activeProjections: [staleProjection],
+      },
       controller.signal,
     );
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
@@ -120,7 +134,7 @@ describe("WebAssembly value reads", () => {
 
     await expect(stale).rejects.toMatchObject({ name: "AbortError" });
     complete(response(1));
-    await expect(first).resolves.toEqual({ values: { total: 1 }, errors: {} });
+    await expect(first).resolves.toEqual({ values: { total: jsonValue(1) }, errors: {} });
     await Promise.resolve();
     expect(request).toHaveBeenCalledTimes(1);
   });

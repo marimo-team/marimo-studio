@@ -1,4 +1,4 @@
-"""Resolve permitted notebook selectors into bounded JSON values."""
+"""Resolve permitted notebook selectors into bounded browser values."""
 
 from __future__ import annotations
 
@@ -6,6 +6,10 @@ import json
 from collections.abc import Mapping
 
 from marimo_studio._compat.kernel_values.models import DEFAULT_MAX_VALUE_BYTES
+from marimo_studio._compat.kernel_values.representations import (
+    EncodedValue,
+    ValueEncoder,
+)
 from marimo_studio._projections.runtime_records import ValueReadError, ValueReadResult
 from marimo_studio._projections.values import (
     parse_value_reference,
@@ -46,87 +50,98 @@ def normalize_selector_spec(selector: str, value: object) -> SelectorSpec:
     return normalized
 
 
-def _encode_value(
-    selector: str,
-    value: object,
-    *,
-    max_value_bytes: int,
-) -> tuple[object | None, ValueReadError | None, int]:
-    try:
-        encoded = json.dumps(
-            value,
-            allow_nan=False,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
-    except (TypeError, ValueError, OverflowError, RecursionError) as error:
-        return (
-            None,
-            ValueReadError(
-                "not-json-serializable",
-                (
-                    f"Selector {selector!r} resolved to {type(value).__name__}, "
-                    f"which cannot be serialized as JSON: {error}"
-                ),
-            ),
-            0,
-        )
-    size = len(encoded.encode("utf-8"))
-    if size > max_value_bytes:
-        return (
-            None,
-            ValueReadError(
-                "value-too-large",
-                f"Selector {selector!r} exceeds the {max_value_bytes}-byte limit.",
-            ),
-            0,
-        )
-    return json.loads(encoded), None, size
-
-
 def _read_values(
     namespace: Mapping[str, object],
     specifications: Mapping[str, SelectorSpec],
+    active_specifications: Mapping[str, SelectorSpec] | None = None,
     *,
     max_value_bytes: int,
     max_response_bytes: int = DEFAULT_MAX_VALUE_BYTES,
+    consumer_id: str = "",
+    revision: str = "",
+    encoder: ValueEncoder | None = None,
 ) -> ValueReadResult:
+    owned_encoder = encoder is None
+    if encoder is None:
+        encoder = ValueEncoder()
+    active_selectors = set(
+        specifications if active_specifications is None else active_specifications
+    )
+    encoder.release_other_revisions(consumer_id, revision)
+    encoder.release_inactive(
+        consumer_id=consumer_id,
+        revision=revision,
+        active_selectors=active_selectors,
+    )
     values: dict[str, object] = {}
     errors: dict[str, ValueReadError] = {}
+    prepared: list[tuple[str, EncodedValue]] = []
     total = 0
+
+    def fail(selector: str, error: ValueReadError) -> None:
+        encoder.release_selector(
+            consumer_id=consumer_id,
+            revision=revision,
+            selector=selector,
+        )
+        errors[selector] = error
+
     for selector, specification in specifications.items():
+        if selector not in active_selectors:
+            fail(
+                selector,
+                ValueReadError(
+                    "inactive-selector",
+                    f"Selector {selector!r} is not mounted in the presentation.",
+                ),
+            )
+            continue
         reference = parse_value_reference(selector)
         assert specification[0] == reference.variable
         if reference.variable not in namespace:
-            errors[selector] = ValueReadError(
-                "missing-variable",
-                f"Variable {reference.variable!r} is not defined",
+            fail(
+                selector,
+                ValueReadError(
+                    "missing-variable",
+                    f"Variable {reference.variable!r} is not defined",
+                ),
             )
             continue
         try:
             value = resolve_value_reference(namespace, reference)
         except Exception as error:
-            errors[selector] = ValueReadError(
-                "value-path-unavailable",
-                f"Selector {selector!r} could not be resolved: {error}",
+            fail(
+                selector,
+                ValueReadError(
+                    "value-path-unavailable",
+                    f"Selector {selector!r} could not be resolved: {error}",
+                ),
             )
             continue
-        encoded, error, size = _encode_value(
-            selector,
+        encoded, error = encoder.prepare(
             value,
+            consumer_id=consumer_id,
+            revision=revision,
+            selector=selector,
             max_value_bytes=max_value_bytes,
         )
         if error is not None:
-            errors[selector] = error
+            fail(selector, error)
             continue
-        if total + size > max_response_bytes:
-            errors[selector] = ValueReadError(
-                "response-too-large",
-                "The value response exceeds the aggregate byte limit.",
+        assert encoded is not None
+        if total + encoded.byte_length > max_response_bytes:
+            encoder.discard(encoded)
+            fail(
+                selector,
+                ValueReadError(
+                    "response-too-large",
+                    "The value response exceeds the aggregate byte limit.",
+                ),
             )
             continue
-        total += size
-        values[selector] = encoded
+        total += encoded.byte_length
+        values[selector] = encoded.payload
+        prepared.append((selector, encoded))
     result = ValueReadResult(values, errors)
     payload = json.dumps(
         result.to_dict(),
@@ -135,7 +150,44 @@ def _read_values(
         separators=(",", ":"),
     )
     if len(payload.encode("utf-8")) <= max_response_bytes:
+        for index, (selector, encoded) in enumerate(prepared):
+            try:
+                if encoded.resource is None:
+                    encoder.release_selector(
+                        consumer_id=consumer_id,
+                        revision=revision,
+                        selector=selector,
+                    )
+                else:
+                    encoder.commit(encoded)
+            except BaseException as error:
+                cleanup_errors: list[BaseException] = []
+                for _pending_selector, pending in prepared[index:]:
+                    try:
+                        encoder.discard(pending)
+                    except BaseException as cleanup_error:
+                        cleanup_errors.append(cleanup_error)
+                if owned_encoder:
+                    try:
+                        encoder.close()
+                    except BaseException as cleanup_error:
+                        cleanup_errors.append(cleanup_error)
+                if cleanup_errors:
+                    raise cleanup_errors[0] from error
+                raise
+        if owned_encoder:
+            encoder.close()
         return result
+    for _selector, encoded in prepared:
+        encoder.discard(encoded)
+    for selector in specifications:
+        encoder.release_selector(
+            consumer_id=consumer_id,
+            revision=revision,
+            selector=selector,
+        )
+    if owned_encoder:
+        encoder.close()
     return ValueReadResult(
         {},
         {

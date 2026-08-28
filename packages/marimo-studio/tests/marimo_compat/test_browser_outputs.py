@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -21,6 +22,8 @@ from marimo_studio.view_providers import (
     MountDeclaration,
     SourceLocation,
 )
+
+from .values_test_support import _encoded_json
 
 _REVISION = "presentation-revision"
 _SITE_ID = "site:output:dynamic"
@@ -138,6 +141,7 @@ class _GeneratedContext:
         self._kernel = _Kernel()
         self.ui_prefix: str | None = None
         self.notifications: list[object] = []
+        self.virtual_files_supported = False
 
     @contextmanager
     def with_cell_id(self, cell_id: object) -> Iterator[None]:
@@ -254,6 +258,11 @@ def _call_bridge(
     name: str,
     payload: dict[str, object],
 ) -> dict[str, Any]:
+    if name == "read_values" and "active_projections" not in payload:
+        payload = {
+            **payload,
+            "active_projections": payload.get("projections", []),
+        }
     function = context.function_registry.get_function(WASM_PROJECTION_NAMESPACE, name)
     assert function is not None
     return cast(dict[str, Any], function(payload))
@@ -488,7 +497,7 @@ def test_late_timed_out_configuration_cannot_replace_a_newer_revision(
             "max_value_bytes": 1_000,
         },
     )
-    assert current == {"values": {"current": 42}, "errors": {}}
+    assert current == {"values": {"current": _encoded_json(42)}, "errors": {}}
 
 
 def test_generated_bridge_matches_server_selector_path_bounds(
@@ -581,7 +590,149 @@ def test_generated_bridge_uses_json_string_selector_grammar(
         },
     )
 
-    assert result == {"values": {target: value}, "errors": {}}
+    assert result == {
+        "values": {target: _encoded_json(value)},
+        "errors": {},
+    }
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected_code"),
+    [
+        ("lazy", "arrow-materialization-required"),
+        ("object", "arrow-serialization-error"),
+        ("pandas-no-pyarrow", "arrow-codec-unavailable"),
+    ],
+)
+def test_generated_bridge_reports_dataframe_conversion_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
+    expected_code: str,
+) -> None:
+    import polars as pl
+
+    context = _GeneratedContext()
+    if kind == "lazy":
+        context.globals["control"] = pl.DataFrame({"value": [1]}).lazy()
+    elif kind == "object":
+        context.globals["control"] = pl.DataFrame(
+            {"value": pl.Series("value", [object()], dtype=pl.Object)}
+        )
+    else:
+        import pandas as pd
+
+        context.globals["control"] = pd.DataFrame({"value": [1]})
+        monkeypatch.setitem(sys.modules, "pyarrow", None)
+    _install_generated_adapter(monkeypatch, context)
+
+    result = _call_bridge(
+        context,
+        "read_values",
+        {
+            "revision": _REVISION,
+            "projections": [
+                {
+                    "siteId": _VALUE_SITE_ID,
+                    "instanceId": f"projection-{kind}",
+                    "target": "control",
+                }
+            ],
+            "max_value_bytes": 10_000,
+        },
+    )
+
+    assert result["values"] == {}
+    assert result["errors"]["control"]["code"] == expected_code
+
+
+def test_generated_bridge_reports_inactive_value_selectors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _GeneratedContext()
+    context.globals["control"] = 42
+    _install_generated_adapter(monkeypatch, context)
+    request = {
+        "siteId": _VALUE_SITE_ID,
+        "instanceId": "projection-control",
+        "target": "control",
+    }
+
+    inactive = _call_bridge(
+        context,
+        "read_values",
+        {
+            "revision": _REVISION,
+            "projections": [request],
+            "active_projections": [],
+            "max_value_bytes": 1_000,
+        },
+    )
+    assert inactive["errors"]["control"]["code"] == "inactive-selector"
+
+
+def test_generated_bridge_allows_bounded_data_url_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import pyarrow as pa
+
+    context = _GeneratedContext()
+    context.globals["control"] = pa.table({"blob": [b"x" * 900_000]})
+    _install_generated_adapter(monkeypatch, context)
+
+    result = _call_bridge(
+        context,
+        "read_values",
+        {
+            "revision": _REVISION,
+            "projections": [
+                {
+                    "siteId": _VALUE_SITE_ID,
+                    "instanceId": "projection-near-limit",
+                    "target": "control",
+                }
+            ],
+            "max_value_bytes": 1_000_000,
+        },
+    )
+
+    payload = result["values"]["control"]
+    assert payload["codec"] == "arrow-ipc-v1"
+    assert 900_000 < payload["byteLength"] < 1_000_000
+    assert len(payload["dataUrl"].encode("utf-8")) > 1_000_000
+
+
+def test_generated_bridge_bounds_the_aggregate_value_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _GeneratedContext()
+    context.globals.update(first="x" * 600_000, second="y" * 600_000)
+    _install_generated_adapter(monkeypatch, context)
+    _configure_bridge(
+        context,
+        revision=_REVISION,
+        generation=2,
+        variables=["first", "second"],
+    )
+
+    result = _call_bridge(
+        context,
+        "read_values",
+        {
+            "revision": _REVISION,
+            "projections": [
+                {
+                    "siteId": _VALUE_SITE_ID,
+                    "instanceId": f"projection-{selector}",
+                    "target": selector,
+                }
+                for selector in ("first", "second")
+            ],
+            "max_value_bytes": 1_000_000,
+        },
+    )
+
+    assert set(result["values"]) == {"first"}
+    assert result["errors"]["second"]["code"] == "response-too-large"
 
 
 def test_generated_output_adapter_retries_release_after_cleanup_failure(

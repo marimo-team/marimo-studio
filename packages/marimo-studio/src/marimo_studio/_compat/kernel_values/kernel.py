@@ -20,7 +20,7 @@ from marimo_studio._compat.kernel_values.authorization import (
     ProjectionAuthorizationError,
     RuntimeCellBinding,
     verify_output_arguments,
-    verify_value_arguments,
+    verify_value_ownership_arguments,
 )
 from marimo_studio._compat.kernel_values.dependencies import (
     current_dependency_closure,
@@ -39,6 +39,7 @@ from marimo_studio._compat.kernel_values.outputs import KernelOutputRenderer
 from marimo_studio._compat.kernel_values.query_authorization import (
     verify_query_authorization,
 )
+from marimo_studio._compat.kernel_values.representations import ValueEncoder
 from marimo_studio._compat.kernel_values.selectors import (
     _read_values,
 )
@@ -234,6 +235,7 @@ class _KernelBridgeLifespan:
     def __init__(self) -> None:
         self._registry: Any | None = None
         self._output_renderer: KernelOutputRenderer | None = None
+        self._value_encoder: ValueEncoder | None = None
         self._query_generation = (-1, -1)
         self._query_operations: dict[str, tuple[str, tuple[int, int]]] = {}
         self._cached_cells = _CachedCellCompatibility()
@@ -260,6 +262,7 @@ class _KernelBridgeLifespan:
             output_renderer.close()
             raise
         self._output_renderer = output_renderer
+        self._value_encoder = ValueEncoder(context)
         return True
 
     async def __aenter__(self) -> None:
@@ -305,19 +308,24 @@ class _KernelBridgeLifespan:
         # definition created during the session.
         def read(args: ReadValuesArgs) -> dict[str, object]:
             try:
-                authorized = verify_value_arguments(
+                authorized, active_authorized = verify_value_ownership_arguments(
                     revision=args.revision,
                     projections=args.projections,
+                    active_projections=args.active_projections,
+                    consumer_id=args.consumer_id,
                     authorization=args.authorization,
                     probe_targets=(
                         inspection.selectors if inspection is not None else None
                     ),
                 )
-                specifications = (
-                    authorized.specifications
-                    if inspection is not None
-                    else _current_projection_specs(context, authorized)
-                )
+                if inspection is not None:
+                    specifications = authorized.specifications
+                    active_specifications = active_authorized.specifications
+                else:
+                    specifications = _current_projection_specs(context, authorized)
+                    active_specifications = _current_projection_specs(
+                        context, active_authorized
+                    )
             except ProjectionAuthorizationError as error:
                 stale_binding = str(error) == STALE_PROJECTION_BINDING_MESSAGE
                 return ValueReadResult(
@@ -334,6 +342,8 @@ class _KernelBridgeLifespan:
                     },
                 ).to_dict()
             if not self._activate(context, filename, inspection):
+                if self._value_encoder is not None:
+                    self._value_encoder.release_consumer(args.consumer_id)
                 return ValueReadResult(
                     values={},
                     errors={
@@ -342,16 +352,27 @@ class _KernelBridgeLifespan:
                             f"Selector {selector!r} is not present in a "
                             "configured view.",
                         )
-                        for selector in specifications
+                        for selector in dict.fromkeys(
+                            (*specifications, *active_specifications)
+                        )
                     },
                 ).to_dict()
             limit = max(1, min(args.max_value_bytes, DEFAULT_MAX_VALUE_BYTES))
+            value_encoder = self._value_encoder
+            assert value_encoder is not None
+            if not specifications and not active_specifications:
+                value_encoder.release_consumer(args.consumer_id)
+                return ValueReadResult(values={}, errors={}).to_dict()
             kernel = context._kernel
             with kernel.lock_globals():
                 result = _read_values(
                     kernel.globals,
                     specifications,
+                    active_specifications,
                     max_value_bytes=limit,
+                    consumer_id=args.consumer_id,
+                    revision=args.revision,
+                    encoder=value_encoder,
                 )
             return ValueReadResult(
                 result.values,
@@ -572,6 +593,13 @@ class _KernelBridgeLifespan:
 
     def _close(self) -> None:
         failure: BaseException | None = None
+        if self._value_encoder is not None:
+            try:
+                self._value_encoder.close()
+            except BaseException as error:
+                failure = error
+            else:
+                self._value_encoder = None
         if self._output_renderer is not None:
             try:
                 self._output_renderer.close()

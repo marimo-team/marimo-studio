@@ -72,8 +72,15 @@ test("view responses validate list, create, and delete envelopes", () => {
 });
 
 test("value responses validate errors before presentation consumes them", () => {
+  const fingerprint = `sha256:${"0".repeat(64)}`;
   const response = {
-    values: { "context.total": 42 },
+    values: {
+      "context.total": {
+        codec: "json-v1",
+        fingerprint,
+        value: 42,
+      },
+    },
     errors: {
       "context.missing": {
         code: "missing-key",
@@ -86,7 +93,7 @@ test("value responses validate errors before presentation consumes them", () => 
   const parsed = parseValueReadResponse(response);
   assert.equal(Object.getPrototypeOf(parsed.values), null);
   assert.equal(Object.getPrototypeOf(parsed.errors), null);
-  assert.equal(parsed.values["context.total"], 42);
+  assert.deepEqual(parsed.values["context.total"], response.values["context.total"]);
   assert.deepEqual(parsed.errors["context.missing"], response.errors["context.missing"]);
   assert.throws(() =>
     parseValueReadResponse({ values: {}, errors: { broken: { code: 42, message: "bad" } } }),
@@ -94,32 +101,95 @@ test("value responses validate errors before presentation consumes them", () => 
   assert.throws(() =>
     valueReadResponseSchema.parse({ values: { missing: undefined }, errors: {} }),
   );
+  assert.throws(() => valueReadResponseSchema.parse({ values: { total: 42 }, errors: {} }));
+  assert.throws(() =>
+    valueReadResponseSchema.parse({
+      values: {
+        total: { codec: "json-v1", fingerprint: "sha256:invalid", value: 42 },
+      },
+      errors: {},
+    }),
+  );
+  assert.throws(() =>
+    valueReadResponseSchema.parse({
+      values: {
+        table: {
+          codec: "arrow-ipc-v1",
+          fingerprint,
+          dataUrl: "/@file/table.arrow",
+          byteLength: 0,
+        },
+      },
+      errors: {},
+    }),
+  );
+  assert.throws(() =>
+    valueReadResponseSchema.parse({
+      values: {
+        table: {
+          codec: "unknown-v1",
+          fingerprint,
+          value: 42,
+        },
+      },
+      errors: {},
+    }),
+  );
 });
 
 test("value responses preserve prototype-named selectors as own records", () => {
   const selectors = ["__proto__", "constructor"];
   const parsed = parseValueReadResponse({
-    values: Object.fromEntries(selectors.map((selector, index) => [selector, index])),
+    values: Object.fromEntries(
+      selectors.map((selector, index) => [
+        selector,
+        {
+          codec: "json-v1",
+          fingerprint: `sha256:${String(index).repeat(64)}`,
+          value: index,
+        },
+      ]),
+    ),
     errors: {},
   });
 
   selectors.forEach((selector, index) => {
     assert.equal(Object.hasOwn(parsed.values, selector), true);
-    assert.equal(parsed.values[selector], index);
+    assert.equal(parsed.values[selector]?.codec, "json-v1");
+    assert.equal(parsed.values[selector]?.value, index);
   });
   const absent = parseValueReadResponse({ values: {}, errors: {} });
   selectors.forEach((selector) => assert.equal(Object.hasOwn(absent.values, selector), false));
 });
 
 test("value requests identify their presentation revision", () => {
+  const projection = projectionRequest("context.total");
   const request = {
     revision: "presentation-revision",
-    projections: [projectionRequest("context.total")],
+    projections: [projection],
+    activeProjections: [projection],
   };
 
   assert.deepEqual(valueReadRequestSchema.parse(request), request);
-  assert.throws(() => valueReadRequestSchema.parse({ projections: request.projections }));
-  assert.throws(() => valueReadRequestSchema.parse({ revision: "", projections: [] }));
+  assert.throws(() =>
+    valueReadRequestSchema.parse({
+      projections: request.projections,
+      activeProjections: request.activeProjections,
+    }),
+  );
+  assert.throws(() =>
+    valueReadRequestSchema.parse({
+      revision: "",
+      projections: [],
+      activeProjections: [],
+    }),
+  );
+  assert.throws(() =>
+    valueReadRequestSchema.parse({
+      ...request,
+      activeProjections: [],
+    }),
+  );
 });
 
 test.each([

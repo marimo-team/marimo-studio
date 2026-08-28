@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from hashlib import sha256
 from threading import Lock
 from types import MethodType
 from typing import Any, cast
@@ -25,6 +27,10 @@ from marimo_studio._compat.kernel_values.models import (
     FUNCTION_NAME,
     NAMESPACE,
     OUTPUT_FUNCTION_NAME,
+)
+from marimo_studio._compat.kernel_values.representations import (
+    ARROW_IPC_CODEC,
+    JSON_CODEC,
 )
 from marimo_studio._projections.runtime_records import (
     OutputRenderResult,
@@ -180,6 +186,7 @@ class _FunctionResultWaiter(EventAwareExtension):
 
 
 _CONSUMERS_WITH_OUTPUT_CLEANUP: WeakSet[object] = WeakSet()
+_CONSUMERS_WITH_VALUE_CLEANUP: WeakSet[object] = WeakSet()
 _CONSUMERS_WITH_WORK_CLEANUP: WeakSet[object] = WeakSet()
 _PENDING_SESSION_WORK: WeakKeyDictionary[object, WeakSet[_FunctionResultWaiter]] = (
     WeakKeyDictionary()
@@ -295,7 +302,51 @@ def _attach_output_cleanup(
     _CONSUMERS_WITH_OUTPUT_CLEANUP.add(consumer)
 
 
-def _parse_result(value: object) -> ValueReadResult:
+def _attach_value_cleanup(
+    session: Any,
+    consumer: Any,
+    consumer_id: str,
+    revision: str,
+) -> None:
+    if consumer in _CONSUMERS_WITH_VALUE_CLEANUP:
+        return
+    original = consumer.on_detach
+
+    def on_detach(current: Any) -> None:
+        try:
+            if session.room.get_consumer(current.consumer_id) is None:
+                from marimo._runtime.commands import InvokeFunctionCommand
+                from marimo._types.ids import RequestId
+
+                session.put_control_request(
+                    InvokeFunctionCommand(
+                        function_call_id=RequestId(uuid4().hex),
+                        namespace=NAMESPACE,
+                        function_name=FUNCTION_NAME,
+                        args={
+                            **authorized_value_arguments(revision, (), consumer_id),
+                            "max_value_bytes": DEFAULT_MAX_VALUE_BYTES,
+                        },
+                    ),
+                    from_consumer_id=None,
+                )
+        except Exception:
+            # Kernel shutdown releases the remaining virtual files.
+            pass
+        finally:
+            original()
+
+    consumer.on_detach = MethodType(on_detach, consumer)
+    _CONSUMERS_WITH_VALUE_CLEANUP.add(consumer)
+
+
+def _parse_result(
+    value: object,
+    *,
+    expected_selectors: frozenset[str] | None = None,
+    max_value_bytes: int = DEFAULT_MAX_VALUE_BYTES,
+) -> ValueReadResult:
+    limit = max(1, min(max_value_bytes, DEFAULT_MAX_VALUE_BYTES))
     if not isinstance(value, dict):
         raise ProjectionUnavailable(
             "invalid-value-response",
@@ -310,6 +361,84 @@ def _parse_result(value: object) -> ValueReadResult:
             "The kernel returned an invalid value response.",
             transient=False,
         )
+    try:
+        encoded_response = json.dumps(
+            value,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    except (TypeError, ValueError, OverflowError, RecursionError) as error:
+        raise ProjectionUnavailable(
+            "invalid-value-response",
+            "The kernel returned an invalid value response.",
+            transient=False,
+        ) from error
+    values: dict[str, object] = {}
+    total = 0
+    for selector, item in raw_values.items():
+        if not isinstance(selector, str) or not isinstance(item, dict):
+            raise ProjectionUnavailable(
+                "invalid-value-response",
+                "The kernel returned an invalid encoded value.",
+                transient=False,
+            )
+        codec = item.get("codec")
+        fingerprint = item.get("fingerprint")
+        valid_fingerprint = (
+            isinstance(fingerprint, str)
+            and fingerprint.startswith("sha256:")
+            and len(fingerprint) == 71
+            and all(character in "0123456789abcdef" for character in fingerprint[7:])
+        )
+        if codec == JSON_CODEC:
+            try:
+                encoded_json = json.dumps(
+                    item.get("value"),
+                    allow_nan=False,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            except (TypeError, ValueError, OverflowError, RecursionError):
+                valid_json = False
+            else:
+                valid_json = (
+                    fingerprint == f"sha256:{sha256(encoded_json).hexdigest()}"
+                    and len(encoded_json) <= limit
+                )
+                if valid_json:
+                    total += len(encoded_json)
+            valid = set(item) == {"codec", "fingerprint", "value"} and valid_json
+        elif codec == ARROW_IPC_CODEC:
+            data_url = item.get("dataUrl")
+            byte_length = item.get("byteLength")
+            if (
+                set(item) == {"codec", "fingerprint", "dataUrl", "byteLength"}
+                and isinstance(data_url, str)
+                and (data_url.startswith("data:") or data_url.startswith("./@file/"))
+                and not isinstance(byte_length, bool)
+                and isinstance(byte_length, int)
+                and 0 < byte_length <= limit
+            ):
+                valid = True
+                total += byte_length
+            else:
+                valid = False
+        else:
+            valid = False
+        if not valid or not valid_fingerprint:
+            raise ProjectionUnavailable(
+                "invalid-value-response",
+                "The kernel returned an invalid encoded value.",
+                transient=False,
+            )
+        if total > limit:
+            raise ProjectionUnavailable(
+                "invalid-value-response",
+                "The kernel value response exceeds its aggregate byte limit.",
+                transient=False,
+            )
+        values[selector] = item
     errors: dict[str, ValueReadError] = {}
     for selector, error in raw_errors.items():
         code = error.get("code") if isinstance(error, dict) else None
@@ -326,8 +455,30 @@ def _parse_result(value: object) -> ValueReadResult:
                 transient=False,
             )
         errors[selector] = ValueReadError(code, message)
+    if (
+        set(values).intersection(errors)
+        or ("*" in errors and values)
+        or (
+            expected_selectors is not None
+            and (
+                not set(values).issubset(expected_selectors)
+                or not set(errors).difference({"*"}).issubset(expected_selectors)
+            )
+        )
+    ):
+        raise ProjectionUnavailable(
+            "invalid-value-response",
+            "The kernel returned values outside the authorized request.",
+            transient=False,
+        )
+    if len(encoded_response) > limit:
+        raise ProjectionUnavailable(
+            "invalid-value-response",
+            "The kernel value response exceeds its byte limit.",
+            transient=False,
+        )
     return ValueReadResult(
-        values={str(selector): item for selector, item in raw_values.items()},
+        values=values,
         errors=errors,
     )
 
@@ -448,7 +599,7 @@ async def _invoke_session_function(
         operation,
     )
     pending: WeakSet[_FunctionResultWaiter] | None = None
-    if operation == "output" and hasattr(consumer, "on_detach"):
+    if operation in {"output", "value"} and hasattr(consumer, "on_detach"):
         _attach_session_work_cleanup(consumer)
         pending = _PENDING_SESSION_WORK.setdefault(consumer, WeakSet())
         pending.add(waiter)
@@ -504,22 +655,40 @@ async def read_session_values(
     session: Any,
     revision: str,
     projections: tuple[BoundProjection, ...],
+    active_projections: tuple[BoundProjection, ...] | None = None,
     *,
     consumer_id: str,
     timeout: float | None = 5.0,
     max_value_bytes: int = DEFAULT_MAX_VALUE_BYTES,
 ) -> ValueReadResult:
     """Read exact selectors through a Marimo session's command queue."""
+    from marimo._types.ids import ConsumerId
+
+    consumer = session.room.get_consumer(ConsumerId(consumer_id))
+    if consumer is not None and hasattr(consumer, "on_detach"):
+        _attach_value_cleanup(session, consumer, consumer_id, revision)
+    expected_selectors = frozenset(
+        projection.projection.request.target for projection in projections
+    )
     result = await _invoke_session_function(
         session,
         function_name=FUNCTION_NAME,
         args={
-            **authorized_value_arguments(revision, projections),
+            **authorized_value_arguments(
+                revision,
+                projections,
+                consumer_id,
+                active_projections,
+            ),
             "max_value_bytes": max_value_bytes,
         },
         consumer_id=consumer_id,
         timeout=timeout,
-        parser=_parse_result,
+        parser=lambda value: _parse_result(
+            value,
+            expected_selectors=expected_selectors,
+            max_value_bytes=max_value_bytes,
+        ),
         operation="value",
     )
     assert isinstance(result, ValueReadResult)
@@ -572,16 +741,21 @@ async def read_probe_values(
     max_value_bytes: int = DEFAULT_MAX_VALUE_BYTES,
 ) -> ValueReadResult:
     """Read selectors granted by one internal runtime probe lease."""
+    expected_selectors = frozenset(specifications)
     result = await _invoke_session_function(
         session,
         function_name=FUNCTION_NAME,
         args={
-            **probe_value_arguments(specifications),
+            **probe_value_arguments(specifications, consumer_id),
             "max_value_bytes": max_value_bytes,
         },
         consumer_id=consumer_id,
         timeout=timeout,
-        parser=_parse_result,
+        parser=lambda value: _parse_result(
+            value,
+            expected_selectors=expected_selectors,
+            max_value_bytes=max_value_bytes,
+        ),
         operation="value",
     )
     assert isinstance(result, ValueReadResult)

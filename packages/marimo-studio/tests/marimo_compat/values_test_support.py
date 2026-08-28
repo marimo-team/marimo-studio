@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from contextlib import contextmanager
+from hashlib import sha256
 from pathlib import PurePosixPath
 from typing import Any, Literal, cast
 
@@ -41,6 +43,20 @@ def _selector_spec(source: str):
 
 def _selector_specs(*sources: str):
     return {source: _selector_spec(source) for source in sources}
+
+
+def _encoded_json(value: object) -> dict[str, object]:
+    encoded = json.dumps(
+        value,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return {
+        "codec": "json-v1",
+        "fingerprint": f"sha256:{sha256(encoded).hexdigest()}",
+        "value": value,
+    }
 
 
 def _bound_projection(

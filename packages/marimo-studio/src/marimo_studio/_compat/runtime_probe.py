@@ -20,6 +20,7 @@ from marimo_studio._compat.kernel_values import (
     read_probe_values,
     render_probe_outputs,
 )
+from marimo_studio._compat.kernel_values.representations import inspection_value
 from marimo_studio._compat.runtime_requests import instantiate_notebook_request
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._projections.runtime_records import (
@@ -236,7 +237,18 @@ async def probe_runtime(
                 outputs=outputs,
                 errors=output_errors,
             )
-            return RuntimeProbe(cells=cells, values=values, outputs=output_result)
+            inspection_values = ValueReadResult(
+                values={
+                    selector: inspection_value(value)
+                    for selector, value in values.values.items()
+                },
+                errors=values.errors,
+            )
+            return RuntimeProbe(
+                cells=cells,
+                values=inspection_values,
+                outputs=output_result,
+            )
     finally:
         try:
             if session is not None:

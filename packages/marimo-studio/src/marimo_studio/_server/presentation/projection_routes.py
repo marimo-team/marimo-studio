@@ -56,20 +56,24 @@ async def values_response(
         return json_body_error_response(error)
     revision = body.get("revision") if isinstance(body, dict) else None
     projections_value = body.get("projections") if isinstance(body, dict) else None
+    active_value = body.get("activeProjections") if isinstance(body, dict) else None
     if (
         not isinstance(body, dict)
-        or set(body) != {"revision", "projections"}
+        or set(body) != {"revision", "projections", "activeProjections"}
         or not isinstance(revision, str)
         or not revision
         or not isinstance(projections_value, list)
         or len(projections_value) > MAX_ACTIVE_PROJECTION_INSTANCES
+        or not isinstance(active_value, list)
+        or len(active_value) > MAX_ACTIVE_PROJECTION_INSTANCES
     ):
         return JSONResponse(
             {
                 "error": "invalid-value-request",
                 "message": (
-                    "revision must be a non-empty string and projections must be "
-                    "an array within the active projection instance limit."
+                    "revision must be a non-empty string, and projections and "
+                    "activeProjections must be arrays within the active projection "
+                    "instance limit."
                 ),
             },
             status_code=400,
@@ -81,14 +85,21 @@ async def values_response(
     if snapshot is None:
         return _revision_unavailable()
     try:
-        requested = _resolve_requests(
-            snapshot,
-            projections_value,
-            kind="value",
-        )
+        requested = _resolve_requests(snapshot, projections_value, kind="value")
+        active = _resolve_requests(snapshot, active_value, kind="value")
     except ProjectionResolutionError as error:
         return _resolution_error(error)
-    if len({item.request.target for item in requested}) > MAX_UNIQUE_VALUE_TARGETS:
+    active_requests = {item.request for item in active}
+    if not all(item.request in active_requests for item in requested):
+        return JSONResponse(
+            {
+                "error": "invalid-value-request",
+                "message": "Every requested projection must also be active.",
+            },
+            status_code=400,
+            headers=NO_STORE,
+        )
+    if len({item.request.target for item in active}) > MAX_UNIQUE_VALUE_TARGETS:
         return JSONResponse(
             {
                 "error": "too-many-value-targets",
@@ -115,6 +126,7 @@ async def values_response(
             session_id,
             snapshot.revision,
             requested,
+            active,
             consumer_id=session_id,
             runtime_cell_refs=runtime_cell_refs,
         )

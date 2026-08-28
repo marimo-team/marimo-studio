@@ -26,6 +26,7 @@ from marimo_studio._server.presentation.query_state import query_fingerprint
 
 from .values_test_support import (
     _bound_projection,
+    _encoded_json,
     _native_output_context,
 )
 
@@ -354,7 +355,9 @@ def test_kernel_lifespan_activates_after_the_first_view_is_created(
                 dict[str, Any],
                 read(
                     {
-                        **authorized_value_arguments("revision-1", (projection,)),
+                        **authorized_value_arguments(
+                            "revision-1", (projection,), "preview-a"
+                        ),
                         "max_value_bytes": 1_000,
                     }
                 ),
@@ -386,12 +389,16 @@ default = "dashboard"
                 dict[str, Any],
                 read(
                     {
-                        **authorized_value_arguments("revision-1", (projection,)),
+                        **authorized_value_arguments(
+                            "revision-1", (projection,), "preview-a"
+                        ),
                         "max_value_bytes": 1_000,
                     }
                 ),
             )
-            assert after["values"] == {"summary.papers": 3_877}
+            assert after["values"] == {
+                "summary.papers": _encoded_json(3_877),
+            }
             assert cache_activations == [True]
             assert current._kernel.lock_count == 1
 
@@ -402,7 +409,9 @@ default = "dashboard"
                 dict[str, Any],
                 read(
                     {
-                        **authorized_value_arguments("revision-1", (projection,)),
+                        **authorized_value_arguments(
+                            "revision-1", (projection,), "preview-a"
+                        ),
                         "max_value_bytes": 1_000,
                     }
                 ),
@@ -410,7 +419,7 @@ default = "dashboard"
             assert stale["errors"]["*"]["code"] == "stale-projection-binding"
 
             forged_value = {
-                **authorized_value_arguments("revision-1", (projection,)),
+                **authorized_value_arguments("revision-1", (projection,), "preview-a"),
                 "authorization": "0" * 64,
                 "max_value_bytes": 1_000,
             }

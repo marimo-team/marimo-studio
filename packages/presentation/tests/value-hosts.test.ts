@@ -1,20 +1,24 @@
 import type { JsonValue } from "@marimo-studio/protocol/runtime-config";
 
-import { parseValueReadResponse, type ValueReadResponse } from "@marimo-studio/protocol/value-read";
+import { parseValueReadResponse } from "@marimo-studio/protocol/value-read";
 import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, test } from "vite-plus/test";
+import { afterEach, test, vi } from "vite-plus/test";
 import { z } from "zod";
 
+import type { DecodedValue, DecodedValueReadResponse, MarimoValue } from "../src/values/codecs.ts";
 import type { ValueReader } from "../src/values/reader.ts";
 
+import { indexCells } from "../src/cells/index.ts";
 import {
   commitRuntimeConfig,
   loadRuntimeConfig,
   type RuntimeConfig,
 } from "../src/runtime-config/index.ts";
 import { RuntimeValueCell } from "../src/runtime/values/RuntimeValueCell.tsx";
+import { RuntimeValues } from "../src/runtime/values/RuntimeValues.tsx";
+import { createValueDecoder, decodeValueReadResponse } from "../src/values/codecs.ts";
 import {
   applyValues,
   getValueHostProjections,
@@ -29,6 +33,7 @@ import {
   subscribeValueHostProjections,
 } from "../src/values/hosts.ts";
 import { applyValueReadResponse } from "../src/values/response.ts";
+import { ARROW_FINGERPRINT, arrowBytes } from "./arrow-fixture.ts";
 import { runtimeCellFixture } from "./runtime-cell-fixture.ts";
 import { projectionRequest, symbolicRuntimeFields } from "./runtime-fixtures.ts";
 
@@ -86,6 +91,17 @@ const projectionRevisionFor = (selectors: readonly string[]): string => {
     );
   return (hash >>> 0).toString(16).padStart(8, "0").repeat(8);
 };
+
+const jsonValue = (value: JsonValue): Extract<DecodedValue, { codec: "json-v1" }> => ({
+  codec: "json-v1",
+  fingerprint: `sha256:${projectionRevisionFor([JSON.stringify(value)])}`,
+  value,
+});
+
+const jsonValues = (values: Record<string, JsonValue>): Record<string, DecodedValue> =>
+  Object.fromEntries(
+    Object.entries(values).map(([selector, value]) => [selector, jsonValue(value)]),
+  );
 
 const configWithValues = (selectors: readonly string[], namespaceSite?: string): RuntimeConfig => ({
   ...baseConfig,
@@ -165,12 +181,12 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
   const updates: Array<{
     detail: MarimoValueUpdatedDetail;
     state: string | undefined;
-    value: JsonValue | undefined;
+    value: MarimoValue | undefined;
   }> = [];
   const errors: Array<{
     detail: MarimoValueErrorDetail;
     state: string | undefined;
-    value: JsonValue | undefined;
+    value: MarimoValue | undefined;
   }> = [];
   let bubbled: CustomEvent<MarimoValueUpdatedDetail> | undefined;
   let errorEvent: CustomEvent<MarimoValueErrorDetail> | undefined;
@@ -205,7 +221,7 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
   assert.equal(property?.get instanceof Function, true);
   assert.equal(property?.set, undefined);
   const report = { labels: ["North", "South"], total: 42 };
-  applyValues({ report }, config.projectionRevision);
+  applyValues(jsonValues({ report }), config.projectionRevision);
 
   assert.deepEqual(updates, [
     {
@@ -224,7 +240,7 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
   nullable.addEventListener("marimo-value-updated", (event) => {
     nullUpdate = event.detail;
   });
-  applyValues({ nullable: null }, config.projectionRevision);
+  applyValues(jsonValues({ nullable: null }), config.projectionRevision);
   assert.equal(nullable.marimoValue, null);
   assert.deepEqual(nullUpdate, { selector: "nullable", value: null });
 
@@ -234,7 +250,10 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
   assert.equal(first.getAttribute("aria-busy"), "true");
   assert.deepEqual(first.marimoValue, retained);
 
-  applyValues({ report: { labels: ["North", "South"], total: 42 } }, config.projectionRevision);
+  applyValues(
+    jsonValues({ report: { labels: ["North", "South"], total: 42 } }),
+    config.projectionRevision,
+  );
   assert.equal(updates.length, 1);
   assert.deepEqual(first.marimoValue, report);
   assert.equal(first.dataset.state, "ready");
@@ -270,6 +289,110 @@ test("value hosts expose isolated snapshots through their DOM lifecycle", async 
     ],
     ["missing-variable", "Variable 'report' is unavailable.", "Restore the notebook variable."],
   );
+});
+
+test("value hosts share one decoded Arrow table without cloning it", async () => {
+  const arrowConfig = configWithValues(["frame"]);
+  await installConfig(arrowConfig);
+  document.body.innerHTML = `
+    <span id="first" mo-value="frame" data-marimo-studio-site="site:value:frame"></span>
+    <span id="second" mo-value="frame" data-marimo-studio-site="site:value:frame"></span>
+  `;
+  startValueHosts();
+
+  const bytes = arrowBytes();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(bytes.buffer);
+  let response: DecodedValueReadResponse;
+  try {
+    const decode = createValueDecoder();
+    const encoded = {
+      values: {
+        frame: {
+          codec: "arrow-ipc-v1" as const,
+          fingerprint: ARROW_FINGERPRINT,
+          dataUrl: "/@file/frame.arrow",
+          byteLength: bytes.byteLength,
+        },
+      },
+      errors: {},
+    };
+    response = await decode(encoded, { activeSelectors: ["frame"] });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const first = document.querySelector<MarimoValueHost>("#first")!;
+  const second = document.querySelector<MarimoValueHost>("#second")!;
+  let firstUpdates = 0;
+  first.addEventListener("marimo-value-updated", () => firstUpdates++);
+  applyValueReadResponse(["frame"], response, arrowConfig.projectionRevision);
+  const projected = response.values.frame;
+  assert.equal(projected?.codec, "arrow-ipc-v1");
+  if (projected?.codec !== "arrow-ipc-v1") {
+    throw new Error("Expected an Arrow value");
+  }
+
+  assert.equal(first.marimoValue, second.marimoValue);
+  assert.equal(first.marimoValue, projected.value);
+  assert.equal(first.textContent, "2 rows × 2 columns");
+
+  applyValueReadResponse(["frame"], response, arrowConfig.projectionRevision);
+  assert.equal(first.marimoValue, projected.value);
+  assert.equal(firstUpdates, 1);
+});
+
+test("adding one producer host does not reread existing producer groups", async () => {
+  const valueConfig = configWithValues(["first", "second", "third"]);
+  await installConfig(valueConfig);
+  document.body.innerHTML = `
+    <span mo-value="first" data-marimo-studio-site="site:value:first"></span>
+    <span mo-value="second" data-marimo-studio-site="site:value:second"></span>
+    <div id="root"></div>
+  `;
+  startValueHosts();
+  root = createRoot(document.querySelector("#root")!);
+  const requested: string[] = [];
+  const readValues: ValueReader = async (request) => {
+    const selectors = request.projections.map((projection) => projection.target);
+    requested.push(...selectors);
+    return {
+      values: jsonValues(Object.fromEntries(selectors.map((selector) => [selector, selector]))),
+      errors: {},
+    };
+  };
+  const cells = indexCells(
+    ["first", "second", "third"].map((selector) =>
+      runtimeCellFixture({
+        id: `${selector}-cell`,
+        lastRunStartTimestamp: 1,
+      }),
+    ),
+  );
+  await act(async () => {
+    root?.render(
+      createElement(RuntimeValues, {
+        cells,
+        connectionState: "OPEN",
+        readValues,
+        runtimeReady: true,
+      }),
+    );
+    await Promise.resolve();
+  });
+  await vi.waitFor(() => assert.deepEqual(requested.slice().sort(), ["first", "second"]));
+
+  await act(async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      '<span mo-value="third" data-marimo-studio-site="site:value:third"></span>',
+    );
+    await Promise.resolve();
+  });
+  await vi.waitFor(() => assert.equal(requested.filter((value) => value === "third").length, 1));
+
+  assert.equal(requested.filter((value) => value === "first").length, 1);
+  assert.equal(requested.filter((value) => value === "second").length, 1);
 });
 
 test("runtime value cells own producer identity across host changes", async () => {
@@ -349,7 +472,7 @@ test("value reads keep their projection while advancing the next wire revision",
   const readValues = async (request: { revision: string }, signal?: AbortSignal) => {
     revisions.push(request.revision);
     signal?.addEventListener("abort", () => aborts++, { once: true });
-    return { values: { report: revisions.length }, errors: {} };
+    return { values: jsonValues({ report: revisions.length }), errors: {} };
   };
   const render = async (requestRevision: string, version: number) => {
     await act(async () => {
@@ -402,8 +525,8 @@ test("a replaced projection rejects a late value response that ignored abort", a
   const host = document.querySelector<MarimoValueHost>("[mo-value]")!;
   const selectors = ["report"];
   const projections = [projectionRequest("report", "value")];
-  let resolvePrevious!: (response: ValueReadResponse) => void;
-  const previousResponse = new Promise<ValueReadResponse>((resolve) => {
+  let resolvePrevious!: (response: DecodedValueReadResponse) => void;
+  const previousResponse = new Promise<DecodedValueReadResponse>((resolve) => {
     resolvePrevious = resolve;
   });
   let previousSignal: AbortSignal | undefined;
@@ -412,7 +535,7 @@ test("a replaced projection rejects a late value response that ignored abort", a
     return previousResponse;
   };
   const currentReader: ValueReader = async () => ({
-    values: { report: "current" },
+    values: jsonValues({ report: "current" }),
     errors: {},
   });
   const render = async (nextConfig: RuntimeConfig, version: number, readValues: ValueReader) => {
@@ -443,7 +566,7 @@ test("a replaced projection rejects a late value response that ignored abort", a
   assert.equal(host.marimoValue, "current");
 
   await act(async () => {
-    resolvePrevious({ values: { report: "stale" }, errors: {} });
+    resolvePrevious({ values: jsonValues({ report: "stale" }), errors: {} });
     await previousResponse;
     await Promise.resolve();
   });
@@ -460,7 +583,7 @@ test("value host ownership follows authored DOM reparenting", async () => {
   `;
   startValueHosts();
   const host = document.querySelector<MarimoValueHost>("[mo-value]")!;
-  applyValues({ report: { total: 42 } }, config.projectionRevision);
+  applyValues(jsonValues({ report: { total: 42 } }), config.projectionRevision);
   let projectionChanges = 0;
   const unsubscribe = subscribeValueHostProjections(() => projectionChanges++);
   let updates = 0;
@@ -492,7 +615,7 @@ test("value host ownership follows authored DOM reparenting", async () => {
   assert.equal(isMarimoValueHost(host), true);
   assert.equal(host.dataset.state, "connecting");
   assert.equal(getValueHostProjections().length, 1);
-  applyValues({ report: { total: 43 } }, config.projectionRevision);
+  applyValues(jsonValues({ report: { total: 43 } }), config.projectionRevision);
   assert.deepEqual(host.marimoValue, { total: 43 });
   assert.equal(updates, 1);
   unsubscribe();
@@ -530,7 +653,7 @@ test("dynamic value hosts follow their active selector", async () => {
     updates.push(structuredClone(event.detail));
   });
   source.addEventListener("marimo-value-error", () => errors++);
-  applyValues({ dynamic: report }, dynamicConfig.projectionRevision);
+  applyValues(jsonValues({ dynamic: report }), dynamicConfig.projectionRevision);
 
   const late = document.createElement("span");
   late.setAttribute("mo-value", "dynamic");
@@ -545,11 +668,11 @@ test("dynamic value hosts follow their active selector", async () => {
   assert.equal(source.marimoValue, undefined);
   assert.equal(source.textContent, "");
 
-  applyValues({ copy: report }, dynamicConfig.projectionRevision);
+  applyValues(jsonValues({ copy: report }), dynamicConfig.projectionRevision);
   assert.deepEqual(source.marimoValue, report);
   assert.deepEqual(updates.at(-1), { selector: "copy", value: report });
 
-  applyValues({ mirror: report }, dynamicConfig.projectionRevision);
+  applyValues(jsonValues({ mirror: report }), dynamicConfig.projectionRevision);
   const updatesBeforeBatch = updates.length;
   source.setAttribute("mo-value", "dynamic");
   source.setAttribute("mo-value", "mirror");
@@ -558,14 +681,14 @@ test("dynamic value hosts follow their active selector", async () => {
   assert.equal(source.marimoValue, undefined);
   assert.equal(source.dataset.state, "connecting");
 
-  applyValues({ mirror: report }, dynamicConfig.projectionRevision);
+  applyValues(jsonValues({ mirror: report }), dynamicConfig.projectionRevision);
   assert.equal(updates.length, updatesBeforeBatch + 1);
   assert.deepEqual(updates.at(-1), { selector: "mirror", value: report });
 
   source.removeAttribute("mo-value");
   await settleMutations();
   const updatesAfterRemoval = updates.length;
-  applyValues({ mirror: "new value" }, dynamicConfig.projectionRevision);
+  applyValues(jsonValues({ mirror: "new value" }), dynamicConfig.projectionRevision);
   assert.equal(errors, 0);
   assert.equal(updates.length, updatesAfterRemoval);
   assert.equal(source.textContent, "");
@@ -640,7 +763,7 @@ test("an empty dynamic value target recovers through the same host instance", as
   assert.equal(host.dataset.marimoDiagnosticCode, undefined);
   assert.equal(host.dataset.marimoProducerRef, "cell:v1:metric");
 
-  applyValues({ metric: 42 }, dynamicConfig.projectionRevision);
+  applyValues(jsonValues({ metric: 42 }), dynamicConfig.projectionRevision);
   assert.equal(host.dataset.state, "ready");
   assert.equal(host.textContent, "42");
 });
@@ -654,7 +777,7 @@ test("a projection replacement reconciles hosts against incoming symbols", async
   const previous = document.querySelector<MarimoValueHost>("#previous")!;
   let outgoingErrors = 0;
   previous.addEventListener("marimo-value-error", () => outgoingErrors++);
-  applyValues({ previous: "ready" }, previousConfig.projectionRevision);
+  applyValues(jsonValues({ previous: "ready" }), previousConfig.projectionRevision);
 
   const incomingConfig = {
     ...configWithValues(["incoming"]),
@@ -672,8 +795,8 @@ test("a projection replacement reconciles hosts against incoming symbols", async
   incoming.addEventListener("marimo-value-updated", (event) => {
     update = event.detail;
   });
-  applyValues({ previous: "stale" }, previousConfig.projectionRevision);
-  applyValues({ incoming: "ready" }, incomingConfig.projectionRevision);
+  applyValues(jsonValues({ previous: "stale" }), previousConfig.projectionRevision);
+  applyValues(jsonValues({ incoming: "ready" }), incomingConfig.projectionRevision);
   assert.equal(outgoingErrors, 0);
   assert.deepEqual(update, { selector: "incoming", value: "ready" });
 });
@@ -723,10 +846,14 @@ test("value hosts resolve prototype-named notebook symbols from own response rec
     .join("");
   startValueHosts();
 
-  const response = parseValueReadResponse({
-    values: Object.fromEntries(selectors.map((selector, index) => [selector, `value-${index}`])),
-    errors: {},
-  });
+  const response = await decodeValueReadResponse(
+    parseValueReadResponse({
+      values: Object.fromEntries(
+        selectors.map((selector, index) => [selector, jsonValue(`value-${index}`)]),
+      ),
+      errors: {},
+    }),
+  );
   applyValueReadResponse(selectors, response, prototypeConfig.projectionRevision);
 
   selectors.forEach((_, index) => {

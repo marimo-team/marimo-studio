@@ -156,6 +156,7 @@ def test_parent_authorization_key_is_stable_and_inherited_by_spawned_kernels() -
                 ),
             ),
         ),
+        "preview-a",
     )
     record = arguments["projections"][0]
     assert record["producer"] == str(_projection().producer)
@@ -179,6 +180,8 @@ arguments = json.load(sys.stdin)
 authorized = verify_value_arguments(
     revision=arguments["revision"],
     projections=arguments["projections"],
+    active_projections=arguments["active_projections"],
+    consumer_id=arguments["consumer_id"],
     authorization=arguments["authorization"],
 )
 json.dump(
@@ -209,6 +212,7 @@ def test_dependency_closure_is_covered_by_the_server_signature() -> None:
     arguments = authorized_value_arguments(
         "revision-1",
         (_bound_with_upstream(),),
+        "preview-a",
     )
     tampered = json.loads(json.dumps(arguments))
     tampered["projections"][0]["dependencyClosure"][0]["runtimeCellId"] = (
@@ -219,7 +223,44 @@ def test_dependency_closure_is_covered_by_the_server_signature() -> None:
         verify_value_arguments(
             revision=tampered["revision"],
             projections=tampered["projections"],
+            active_projections=tampered["active_projections"],
+            consumer_id=tampered["consumer_id"],
             authorization=tampered["authorization"],
+        )
+
+
+def test_value_consumer_is_covered_by_the_server_signature() -> None:
+    arguments = authorized_value_arguments(
+        "revision-1",
+        (_bound_with_upstream(),),
+        "preview-a",
+    )
+
+    with pytest.raises(ProjectionAuthorizationError, match="authorization"):
+        verify_value_arguments(
+            revision=arguments["revision"],
+            projections=arguments["projections"],
+            active_projections=arguments["active_projections"],
+            consumer_id="preview-b",
+            authorization=arguments["authorization"],
+        )
+
+
+def test_active_value_owners_are_covered_by_the_server_signature() -> None:
+    arguments = authorized_value_arguments(
+        "revision-1",
+        (_bound_with_upstream(),),
+        "preview-a",
+    )
+    arguments["active_projections"] = []
+
+    with pytest.raises(ProjectionAuthorizationError, match="authorization"):
+        verify_value_arguments(
+            revision=arguments["revision"],
+            projections=arguments["projections"],
+            active_projections=arguments["active_projections"],
+            consumer_id=arguments["consumer_id"],
+            authorization=arguments["authorization"],
         )
 
 
@@ -307,10 +348,12 @@ def test_kernel_accepts_a_server_authorized_edit_with_the_same_closure(
     graph = _Graph(cells, {"runtime-summary": {"runtime-upstream"}})
     context = SimpleNamespace(_kernel=SimpleNamespace(graph=graph))
     if kind == "value":
-        arguments = authorized_value_arguments("revision-1", (bound,))
+        arguments = authorized_value_arguments("revision-1", (bound,), "preview-a")
         authorized = verify_value_arguments(
             revision=arguments["revision"],
             projections=arguments["projections"],
+            active_projections=arguments["active_projections"],
+            consumer_id=arguments["consumer_id"],
             authorization=arguments["authorization"],
         )
     else:
@@ -374,10 +417,12 @@ def test_kernel_accepts_a_live_closure_after_graph_reinsertion(
         ),
     )
     if kind == "value":
-        arguments = authorized_value_arguments("revision-2", (rebound,))
+        arguments = authorized_value_arguments("revision-2", (rebound,), "preview-a")
         authorized = verify_value_arguments(
             revision=arguments["revision"],
             projections=arguments["projections"],
+            active_projections=arguments["active_projections"],
+            consumer_id=arguments["consumer_id"],
             authorization=arguments["authorization"],
         )
     else:
@@ -413,10 +458,12 @@ def test_kernel_rejects_a_new_producer_after_capability_binding(
     graph = _Graph(cells)
     context = SimpleNamespace(_kernel=SimpleNamespace(graph=graph))
     if kind == "value":
-        arguments = authorized_value_arguments("revision-1", (bound,))
+        arguments = authorized_value_arguments("revision-1", (bound,), "preview-a")
         authorized = verify_value_arguments(
             revision=arguments["revision"],
             projections=arguments["projections"],
+            active_projections=arguments["active_projections"],
+            consumer_id=arguments["consumer_id"],
             authorization=arguments["authorization"],
         )
     else:

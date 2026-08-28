@@ -57,6 +57,9 @@ catalogs:
     '@unocss/preset-wind4':
       specifier: 66.7.5
       version: 66.7.5
+    '@uwdata/flechette':
+      specifier: 2.5.0
+      version: 2.5.0
     css-tree:
       specifier: 3.2.1
       version: 3.2.1
@@ -208,6 +211,9 @@ importers:
       '@codemirror/state':
         specifier: 'catalog:'
         version: 6.7.1
+      '@uwdata/flechette':
+        specifier: 'catalog:'
+        version: 2.5.0
       jotai:
         specifier: 'catalog:'
         version: 2.20.2(@types/react@19.2.18)(react@19.2.8)
@@ -1278,6 +1284,9 @@ packages:
 
   '@unocss/rule-utils@66.7.5':
     resolution: {integrity: sha512-/AKHBRF6ZOexE3EDDv8ZEYh40P5e2Eha41IYUbE1wjigW7++ssmvimSTdufJzZvU5DGP++E3B3WEsFPprZMjAg==}
+
+  '@uwdata/flechette@2.5.0':
+    resolution: {integrity: sha512-NSB9xIPVsxpEcnEvtLfbvH/tEqZWiD4bfdz/yBUAUBEe0Z0C3zmA/Y4GOCsLZe4ChxiHaedFBZzVdUxQ+NVcMA==}
 
   '@vitejs/plugin-vue@6.0.8':
     resolution: {integrity: sha512-0ZjgOg7oO6farnNGup7yvoM/YXZV84OZxHAwtflItNa/6zzQyVb5LNxyea3FEKEX2XlagIKzrlH7wwxkKgtiew==}
@@ -3244,6 +3253,8 @@ snapshots:
     dependencies:
       '@unocss/core': 66.7.5
       magic-string: 0.30.21
+
+  '@uwdata/flechette@2.5.0': {}
 
   '@vitejs/plugin-vue@6.0.8(vite@8.2.0(@types/node@22.20.1)(jiti@2.7.0)(yaml@2.9.0))(vue@3.5.40(typescript@6.0.3))':
     dependencies:

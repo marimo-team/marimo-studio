@@ -150,6 +150,7 @@ def test_directory_support_routes_keep_notebook_identity(tmp_path: Path) -> None
             json={
                 "revision": config["revision"],
                 "projections": [projection],
+                "activeProjections": [projection],
             },
         )
         output_projection = _projection_request(config, "output", "doubled")

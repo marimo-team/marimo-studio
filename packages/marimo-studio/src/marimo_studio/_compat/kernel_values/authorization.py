@@ -164,13 +164,29 @@ def _signature(payload: dict[str, object]) -> str:
 def authorized_value_arguments(
     revision: str,
     projections: tuple[BoundProjection, ...],
+    consumer_id: str,
+    active_projections: tuple[BoundProjection, ...] | None = None,
 ) -> dict[str, object]:
     """Serialize one server-authorized value call for the kernel queue."""
     records = [_projection_record(projection) for projection in projections]
-    payload = _payload("value", revision, records)
+    active = [
+        _projection_record(projection)
+        for projection in (
+            projections if active_projections is None else active_projections
+        )
+    ]
+    payload = _payload(
+        "value",
+        revision,
+        records,
+        active_projections=active,
+        consumer_id=consumer_id,
+    )
     return {
         "revision": revision,
         "projections": records,
+        "active_projections": active,
+        "consumer_id": consumer_id,
         "authorization": _signature(payload),
     }
 
@@ -202,11 +218,18 @@ def authorized_output_arguments(
 
 def probe_value_arguments(
     specifications: Mapping[str, SelectorSpec],
+    consumer_id: str,
+    active_specifications: Mapping[str, SelectorSpec] | None = None,
 ) -> dict[str, object]:
     """Serialize selectors owned by an active internal probe lease."""
     return {
         "revision": "probe",
         "projections": _probe_records("value", specifications),
+        "active_projections": _probe_records(
+            "value",
+            specifications if active_specifications is None else active_specifications,
+        ),
+        "consumer_id": consumer_id,
         "authorization": "",
     }
 
@@ -358,17 +381,48 @@ def verify_value_arguments(
     *,
     revision: object,
     projections: object,
+    active_projections: object,
+    consumer_id: object,
     authorization: object,
     probe_targets: tuple[str, ...] | None = None,
 ) -> AuthorizedProjections:
     """Verify one value capability and return its canonical selectors."""
+    requested, _active = verify_value_ownership_arguments(
+        revision=revision,
+        projections=projections,
+        active_projections=active_projections,
+        consumer_id=consumer_id,
+        authorization=authorization,
+        probe_targets=probe_targets,
+    )
+    return requested
+
+
+def verify_value_ownership_arguments(
+    *,
+    revision: object,
+    projections: object,
+    active_projections: object,
+    consumer_id: object,
+    authorization: object,
+    probe_targets: tuple[str, ...] | None = None,
+) -> tuple[AuthorizedProjections, AuthorizedProjections]:
+    """Verify requested and active value capabilities."""
     specifications, bindings = _decode_records(projections, kind="value")
+    active, active_bindings = _decode_records(active_projections, kind="value")
     assert isinstance(projections, list)
+    assert isinstance(active_projections, list)
+    if not isinstance(consumer_id, str) or not consumer_id:
+        raise ProjectionAuthorizationError("The value consumer is invalid.")
     if revision == "probe" and authorization == "" and probe_targets is not None:
-        if set(specifications).issubset(probe_targets) and all(
-            binding is None for binding in bindings.values()
+        if (
+            set((*specifications, *active)).issubset(probe_targets)
+            and all(binding is None for binding in bindings.values())
+            and all(binding is None for binding in active_bindings.values())
         ):
-            return AuthorizedProjections(specifications, {})
+            return AuthorizedProjections(specifications, {}), AuthorizedProjections(
+                active, {}
+            )
         raise ProjectionAuthorizationError("A selector is outside the probe lease.")
     if (
         not isinstance(revision, str)
@@ -376,10 +430,18 @@ def verify_value_arguments(
         or not isinstance(authorization, str)
     ):
         raise ProjectionAuthorizationError("Projection authorization is invalid.")
-    payload = _payload("value", revision, list(projections))
+    payload = _payload(
+        "value",
+        revision,
+        list(projections),
+        active_projections=list(active_projections),
+        consumer_id=consumer_id,
+    )
     if not hmac.compare_digest(authorization, _signature(payload)):
         raise ProjectionAuthorizationError("Projection authorization is invalid.")
-    return _authorized_projections(specifications, bindings)
+    return _authorized_projections(specifications, bindings), _authorized_projections(
+        active, active_bindings
+    )
 
 
 def verify_output_arguments(

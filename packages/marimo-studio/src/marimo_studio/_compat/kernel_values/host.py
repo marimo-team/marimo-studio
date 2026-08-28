@@ -173,6 +173,7 @@ class PrivateKernelProjectionHost:
         session_id: str,
         revision: str,
         projections: tuple[ResolvedProjection, ...],
+        active_projections: tuple[ResolvedProjection, ...],
         *,
         consumer_id: str,
         runtime_cell_refs: Mapping[CellRef, str],
@@ -190,6 +191,7 @@ class PrivateKernelProjectionHost:
             session,
             revision,
             _bind_projections(state, projections, runtime_cell_refs),
+            _bind_projections(state, active_projections, runtime_cell_refs),
             consumer_id=consumer_id,
         )
 

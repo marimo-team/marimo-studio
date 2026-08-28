@@ -9,6 +9,7 @@ import { z } from "zod";
 import type { ValueReader } from "./reader";
 
 import { projectionWireRequest } from "../projections/identity";
+import { createValueDecoder, ValueDecodeError } from "./codecs";
 import { ValueRequestError } from "./remote";
 
 export const functionResultSchema = z.object({
@@ -75,6 +76,7 @@ const readWasmValues = async (
   const result = await request({
     ...valueRequest,
     projections: valueRequest.projections.map(projectionWireRequest),
+    activeProjections: valueRequest.activeProjections.map(projectionWireRequest),
   });
   if (!result.found) {
     throw new ValueRequestError(
@@ -123,6 +125,7 @@ export const createWasmValueReader = (
   request: FunctionRequest,
 ): ValueReader => {
   let queue: Promise<void> = Promise.resolve();
+  const decodeValues = createValueDecoder();
   return (valueRequest, signal) => {
     const operation = queue.then(async () => {
       throwIfWasmAborted(signal);
@@ -134,6 +137,18 @@ export const createWasmValueReader = (
       () => undefined,
       () => undefined,
     );
-    return waitForWasmCaller(operation, signal);
+    return waitForWasmCaller(operation, signal).then(async (response) => {
+      try {
+        return await decodeValues(response, {
+          activeSelectors: valueRequest.activeProjections.map((projection) => projection.target),
+          signal,
+        });
+      } catch (error) {
+        if (error instanceof ValueDecodeError && error.transient) {
+          throw new ValueRequestError(error.message, error.code, true);
+        }
+        throw error;
+      }
+    });
   };
 };

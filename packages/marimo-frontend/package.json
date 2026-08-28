@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./arrow-table": "./src/arrow-table.ts",
     "./build-metadata": "./scripts/metadata.mjs",
     "./cell-presentation": "./src/cell-presentation.tsx",
     "./control-endpoint": "./src/control-endpoint.ts",
@@ -20,6 +21,7 @@
   },
   "dependencies": {
     "@codemirror/state": "catalog:",
+    "@uwdata/flechette": "catalog:",
     "jotai": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

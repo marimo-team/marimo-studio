@@ -219,7 +219,7 @@ def render_inspection(result: InspectionResult) -> None:
                 echo(f"     error: {runtime_cell.errors[0]}")
     if runtime is not None:
         values = runtime.values
-        echo(f"\n{light_blue('JSON values')}")
+        echo(f"\n{light_blue('Values')}")
         for name, value in values.values.items():
             echo(f"  {name} = {_json_preview(value)}")
         if not values.values:

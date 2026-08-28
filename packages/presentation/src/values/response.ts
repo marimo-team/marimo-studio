@@ -1,11 +1,11 @@
-import type { ValueReadResponse } from "@marimo-studio/protocol/value-read";
+import type { DecodedValueReadResponse } from "./codecs.ts";
 
 import { ownRecordValue } from "../records.ts";
 import { applyValues, markValueError } from "./hosts.ts";
 
 export const applyValueReadResponse = (
   selectors: readonly string[],
-  response: ValueReadResponse,
+  response: DecodedValueReadResponse,
   revision: string,
 ): void => {
   applyValues(response.values, revision);

@@ -1,10 +1,11 @@
 """Connect approved presentation requests to a live Marimo kernel.
 
-Custom pages can read selected JSON values, render native Marimo output, and
-synchronize public query state with the notebook. Studio resolves the requested
-target and the cells needed to produce it before the request reaches the
-kernel. The kernel checks that those cells still match the live notebook, so a
-reconnect or source change cannot turn an old page into access to new state.
+Custom pages can read selected JSON values and Arrow tables, render native
+Marimo output, and synchronize public query state with the notebook. Studio
+resolves the requested target and the cells needed to produce it before the
+request reaches the kernel. The kernel checks that those cells still match the
+live notebook, so a reconnect or source change cannot turn an old page into
+access to new state.
 
 Runtime validation uses a separate temporary permission for the selectors it
 is checking. Both paths return the same bounded value and output records while

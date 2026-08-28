@@ -16,6 +16,8 @@ DEFAULT_MAX_VALUE_BYTES = 1_000_000
 class ReadValuesArgs:
     revision: str
     projections: list[object]
+    active_projections: list[object]
+    consumer_id: str
     authorization: str
     max_value_bytes: int = DEFAULT_MAX_VALUE_BYTES
 

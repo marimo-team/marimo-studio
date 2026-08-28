@@ -202,6 +202,13 @@ test("preserves native output state across HTML edits and replaces terminal fail
     count: 3,
     required: false,
   });
+  const refreshedOutputs = browserDiagnostics.expectRequestAbort({
+    origin: studioOrigin,
+    method: "POST",
+    path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/outputs$/,
+    count: 3,
+    required: false,
+  });
   await page.goto(studioEntryUrl);
   const server = await waitForPreview(page);
   await page.getByLabel("Python preview runtime").click();
@@ -286,6 +293,7 @@ test("preserves native output state across HTML edits and replaces terminal fail
   await expect(serverSummary.locator("h3")).toHaveText("Current total: 42");
   await expect(columns).toHaveAttribute("aria-expanded", "true");
   staleOutputs.recovered();
+  await recoverRequestAbort(refreshedOutputs);
 });
 
 test("preserves projected controls across refresh and owner removal", async ({ page }) => {
