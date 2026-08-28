@@ -40,6 +40,42 @@ agents.
 Use the supplied declaration and action as the integration contract. Keep
 page-specific value handling in the component that consumes it.
 
+## Add dependencies
+
+Run Deno's package manager from the view root. Use `--package-json` so Vite
+resolves application dependencies through `package.json` and the installed
+`node_modules` tree:
+
+```console
+deno add --package-json --frozen=false --save-exact \
+  npm:d3@7 \
+  npm:@observablehq/plot@0.6 \
+  npm:arquero@8 \
+  npm:hyparquet@1 \
+  jsr:@std/csv@1
+```
+
+Import the package names or explicit alias written to `package.json`:
+
+```ts
+import * as d3 from "d3";
+import * as Plot from "@observablehq/plot";
+import * as aq from "arquero";
+import { asyncBufferFromUrl, parquetReadObjects } from "hyparquet";
+import { parse as parseCsv } from "@std/csv";
+```
+
+Choose the packages the page actually needs. D3 and Observable Plot render
+visualizations, Arquero transforms tabular data, hyparquet reads remote Parquet,
+and `@std/csv` parses CSV through JSR. Deno also accepts registry package
+subpaths and explicit local aliases when a package's documentation calls for
+them.
+
+Keep `minimumDependencyAge` and the frozen lockfile policy intact. Commit
+`package.json` and `deno.lock` after adding or changing an application
+dependency. Use `--frozen=false` for that intentional update. Normal builds
+remain frozen.
+
 ## Work within the Svelte project
 
 - Use Svelte 5 runes such as `$state` and `$derived` for local browser state.

@@ -33,6 +33,36 @@ if (source) {
 }
 ```
 
+## Add dependencies
+
+Import browser-ready ESM modules at the top of the module script. Prefer a
+versioned URL for maintained project source:
+
+```js
+import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+```
+
+Choose the URL form that matches the dependency source:
+
+- Latest npm release for deliberate experiments:
+  `import * as d3 from "https://cdn.jsdelivr.net/npm/d3/+esm";`
+- Versioned npm package:
+  `import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";`
+- Concise statistical charts:
+  `import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6/+esm";`
+- Tabular transformation:
+  `import * as aq from "https://cdn.jsdelivr.net/npm/arquero@8/+esm";`
+- Modular charting from an exported package subpath:
+  `import * as echarts from "https://cdn.jsdelivr.net/npm/echarts@6/core/+esm";`
+- Browser-side Parquet reading:
+  `import { asyncBufferFromUrl, parquetReadObjects } from "https://cdn.jsdelivr.net/npm/hyparquet@1.29.1/+esm";`
+- CSV parsing from JSR through esm.sh:
+  `import { parse as parseCsv } from "https://esm.sh/jsr/@std/csv";`
+
+Remote modules require browser network access and a hosting content security
+policy that allows the selected CDN. Keep all dependency origins explicit and
+prefer versioned imports when the same source must rebuild consistently.
+
 ## Work within the HTML project
 
 - Keep document structure, styles, and browser behavior in `index.html`.
