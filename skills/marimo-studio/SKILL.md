@@ -76,16 +76,123 @@ if any(document.path.as_posix() == "AGENTS.md" for document in inspection.docume
     print(instructions.content)
 ```
 
-The Studio skill owns notebook boundaries, projection semantics, view
-lifecycle, and validation. The starter's `AGENTS.md` owns its opinionated
-frontend structure, supplied adapters, preferred libraries, and build-specific
+The Studio skill owns notebook boundaries, projection semantics, view lifecycle,
+and validation. The starter's `AGENTS.md` owns its opinionated frontend
+structure, supplied adapters, preferred libraries, and build-specific
 conventions. Read both before editing a starter project.
 
 Treat the generated `AGENTS.md` as durable project context. Update it as the
-conversation establishes the audience, analytical goal, concrete domain
-details, aesthetic direction, interaction priorities, framework or library
-preferences, and other decisions that should guide later agents. Keep transient
-task status and short-lived implementation notes out of it.
+conversation establishes the audience, analytical goal, concrete domain details,
+aesthetic direction, interaction priorities, framework or library preferences,
+and other decisions that should guide later agents. Keep transient task status
+and short-lived implementation notes out of it.
+
+## Author Python notebook analysis
+
+For dataset work, keep the notebook markdown-led and reactive. Build named
+dataframe results that a Studio view can present or consume.
+
+### Pair one explanation with one analytical cell
+
+Introduce each analytical question with a short markdown cell. Put one focused
+Python cell directly after it. The Python cell should derive one well-defined
+table, metric, model input, or visualization input from an upstream dataset.
+
+Each fenced block represents one notebook cell:
+
+```python
+mo.md("""
+## Revenue by segment
+
+Aggregate valid revenue rows so the page can compare segments directly.
+""")
+```
+
+```python
+segment_summary = (
+    orders.lazy()
+    .filter(pl.col("revenue").is_not_null())
+    .group_by("segment")
+    .agg(pl.sum("revenue").alias("revenue"))
+    .sort("revenue", descending=True)
+    .collect()
+)
+segment_summary
+```
+
+The assignment makes `segment_summary` available to downstream cells. The final
+expression renders the dataframe as this cell's output. Prefer Polars
+expressions for dataframe-native transformations. Use DuckDB when the operation
+is clearer as SQL, then materialize a dataframe at the same cell boundary:
+
+```python
+segment_summary_sql = duckdb.sql("""
+    SELECT segment, SUM(revenue) AS revenue
+    FROM orders
+    WHERE revenue IS NOT NULL
+    GROUP BY segment
+    ORDER BY revenue DESC
+""").pl()
+segment_summary_sql
+```
+
+### Keep the reactive dataflow legible
+
+- Load or receive the base dataset once, then derive named results downstream.
+- Give each cell one semantic responsibility and one principal result. Separate
+  filtering, aggregation, enrichment, modeling, and presentation inputs when
+  they answer different questions.
+- Prefer expression-based transformations over in-place mutation. Materialize a
+  Polars or DuckDB result when the cell establishes a reusable dataframe
+  boundary.
+- Use domain names such as `filtered_orders`, `segment_summary`, and
+  `retention_by_month`. Reserve underscore-prefixed values for cell-local
+  helpers.
+- Put the dataframe, chart, control, or other intended result in the final
+  expression. Keep diagnostic dumps and large unbounded previews out of the
+  analytical flow.
+- Keep the graph acyclic. Define each shared variable once and let downstream
+  cells react to it.
+
+### Parameterize dimensions with Marimo controls
+
+Create a control in one cell, display it as that cell's final expression, and
+read its `.value` from downstream transformation cells. Choose the control from
+the dimension's datatype and selection semantics:
+
+| Dimension                                 | Marimo control                                     |
+| ----------------------------------------- | -------------------------------------------------- |
+| One value from a small categorical domain | `mo.ui.dropdown`                                   |
+| Several categorical values                | `mo.ui.multiselect`                                |
+| Ordered numeric value or interval         | `mo.ui.slider` or `mo.ui.range_slider`             |
+| Exact numeric input                       | `mo.ui.number`                                     |
+| Date, datetime, or date interval          | `mo.ui.date`, `mo.ui.datetime`, `mo.ui.date_range` |
+| Boolean choice                            | `mo.ui.switch` or `mo.ui.checkbox`                 |
+
+Derive options, bounds, and defaults from the dataframe when practical. Keep the
+control label tied to the analytical dimension. For example, use one control
+cell and one dependent dataframe cell:
+
+```python
+segment = mo.ui.dropdown.from_series(orders["segment"], label="Segment")
+segment
+```
+
+```python
+selected_orders = (
+    orders
+    if segment.value is None
+    else orders.filter(pl.col("segment") == segment.value)
+)
+selected_orders
+```
+
+## Author Studio view files
+
+Edit only project-relative files whose access is `edit`. Use view files for page
+structure, wording, styles, and browser interaction.
+
+### Choose visual direction
 
 Choose visual direction in this order:
 
@@ -97,11 +204,109 @@ Choose visual direction in this order:
 
 Read the selected design source before visual authoring. Apply its visual
 character, tokens, typography, surfaces, component treatment, and motion
-guidance to the page instead of relying on a generic frontend style.
+guidance so the selected direction shapes the whole page.
 
-Edit project-relative files whose access is `edit`.
+### Keep view source maintainable
 
-## Save against the version you read
+Treat agent-authored page source as maintained application code. A person should
+be able to inspect it, understand its analytical flow, and change it from the
+source and project context alone.
+
+- Structure code as focused, composable components, functions, modules, or
+  actions with clear responsibilities.
+- Prefer declarative markup, derived values, and pure data transformations over
+  deeply nested control flow, scattered DOM mutation, or repeated plumbing.
+- Use domain-specific names and explicit intermediate values that expose data,
+  state, and interaction dependencies.
+- Keep imports, formatting, and file organization consistent across the project.
+  Run a compatible formatter after substantive edits whenever the environment
+  provides one.
+
+Use the formatter and configuration declared by the selected view project. When
+that project has no formatter and Python `uv` or `uvx` is available, run npm
+formatter CLIs through Deno without managing a separate Node.js installation:
+
+```console
+uvx deno x -y oxfmt .
+uvx deno x -y prettier --write .
+```
+
+`uvx deno` provisions the Deno executable through Python `uv`. `deno x -y`
+performs the same one-shot package-execution role as `npx -y`. Run the command
+from the view project root, pass the formatter's appropriate paths and config,
+review the resulting diff, and then build the view.
+
+### Add files when the starter needs more structure
+
+React and Svelte view projects can grow beyond the starter files. Put focused
+components, hooks, actions, utilities, and styles beneath `src/`, then import
+them from the existing application source. Provider inspection discovers
+supported text files beneath `src/` recursively. The next inspection exposes
+each discovered file as a source document, and the provider's existing build
+input scope includes it. Create UTF-8 text with a provider-supported extension
+and keep the path inside the view project.
+
+The HTML starter is a self-contained `index.html`. Keep its project-owned CSS
+and JavaScript inline. Create a React or Svelte view when clean factoring needs
+separate local files.
+
+`view.toml` stores the provider and provider options. Provider inspection owns
+source discovery. A new component or utility needs an import from the
+application, while the manifest remains unchanged. Unknown manifest fields are
+rejected.
+
+`view.write()` and `marimo-studio view write` conditionally replace documents
+already returned by `view.inspect()`. They do not create an absent path. Locate
+the exact project root before creating a file with the environment's file-edit
+tool:
+
+```python
+status = await workspace.status()
+project = next(item for item in status.views if item.name == "dashboard")
+print(project.path)
+```
+
+For a React view, a clean factoring pass might create
+`project.path / "src/lib/format-value.ts"`, import it from `src/App.tsx`, and
+then inspect the project again:
+
+```python
+inspection = await view.inspect()
+created = next(
+    document
+    for document in inspection.documents
+    if document.path.as_posix() == "src/lib/format-value.ts"
+)
+assert created.access == "edit"
+```
+
+Continue only after inspection returns the new path. Use `view.read()` and
+revision-aware `view.write()` for later edits, then build and validate the view.
+
+Edit `view.toml` only when an option supported by the selected provider
+genuinely changes. For example, after moving a Vanilla view's self-contained
+document to `pages/index.html`, parse and serialize TOML, preserve the selected
+provider, and save through the same revision-aware API:
+
+```python
+import tomlkit
+
+manifest = await view.read("view.toml")
+config = tomlkit.parse(manifest.content)
+options = config.get("options")
+if options is None:
+    options = tomlkit.table()
+    config["options"] = options
+options["entrypoint"] = "pages/index.html"
+
+await view.write(
+    "view.toml",
+    tomlkit.dumps(config),
+    expected_revision=manifest.revision,
+)
+```
+
+### Save against the version you read
 
 Read each affected file immediately before writing it:
 
@@ -119,7 +324,7 @@ await view.write(
 `SourceConflictError` means a person or another agent saved first. Read the file
 again, incorporate both changes, and save against the current revision.
 
-## Place notebook results on the page
+### Place notebook results on the page
 
 Choose the projection from the notebook evidence:
 
@@ -129,11 +334,10 @@ Choose the projection from the notebook evidence:
 | One Python object rendered by Marimo                          | `<marimo-output value="chart"></marimo-output>` |
 | JSON-compatible data consumed by browser code                 | Any element with `mo-value="metrics"`           |
 
-Read the selected cell's `name`, `definitions`, and
-`has_output_expression` before writing a projection. When
-`has_output_expression` is false, inspect its runtime output before using
-`<marimo-cell>`. Use `<marimo-output>` when the cell defines the intended object
-but does not display it.
+Read the selected cell's `name`, `definitions`, and `has_output_expression`
+before writing a projection. When `has_output_expression` is false, inspect its
+runtime output before using `<marimo-cell>`. Use `<marimo-output>` when the cell
+defines the intended object but does not display it.
 
 Use a complete cell when the notebook already presents the result:
 
@@ -164,9 +368,9 @@ attributes. Literal `name`, `value`, and `mo-value` selectors need no wildcard.
 Add `data-marimo-allow="*"` when runtime code intentionally selects a target
 that the provider cannot enumerate from source.
 
-Reconsider the projection kind before changing notebook code to make a page
-host render. Presentation requirements stay in the view when the notebook
-already defines the intended value.
+Reconsider the projection kind before changing notebook code to make a page host
+render. Presentation requirements stay in the view when the notebook already
+defines the intended value.
 
 ## Build, show, and verify
 
