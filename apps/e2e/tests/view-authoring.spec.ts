@@ -706,6 +706,19 @@ test("keeps a large view and starter catalog usable on mobile", async ({ page })
   await expect(page.getByRole("button", { name: "view-16", exact: true })).toBeAttached();
 
   await page.getByRole("button", { name: "New page" }).click();
+  const externalStarters = page.getByRole("group", {
+    name: "From marimo-studio-e2e-provider",
+    exact: true,
+  });
+  const bundledStarters = page.getByRole("group", {
+    name: "From marimo-studio",
+    exact: true,
+  });
+  await expect(externalStarters).toContainText("External report");
+  await expect(externalStarters).toContainText("E2E web project");
+  await expect(bundledStarters).toContainText("React");
+  await expect(bundledStarters).toContainText("Svelte");
+  await expect(bundledStarters).toContainText("HTML document");
   const input = page.getByLabel("New page");
   await expect(input).toBeFocused();
   await expect(input).toBeInViewport();

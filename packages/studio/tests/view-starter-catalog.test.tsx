@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vite-plus/test";
 
@@ -83,5 +83,62 @@ it("reveals selected starter files on demand and keeps recovery actions local", 
   await user.click(screen.getByText("Files created"));
   expect(details?.open).toBe(true);
   expect(details).toHaveTextContent("index.html");
+  controller.dispose();
+});
+
+it("keeps a single-distribution starter catalog flat", async () => {
+  const remote: ViewRemote = {
+    list: vi.fn(async () => viewList(["dashboard"])),
+    create: vi.fn(),
+    remove: vi.fn(),
+  };
+  const controller = new ViewController(
+    "dashboard",
+    ["dashboard"],
+    remote,
+    vi.fn(async () => true),
+    vi.fn(async () => true),
+    vi.fn(),
+    [starter],
+    starter.id,
+  );
+  const user = userEvent.setup();
+  const { container } = render(<ViewMenu controller={controller} />);
+
+  await user.click(screen.getByLabelText(/^Switch page:/));
+  await user.click(screen.getByRole("button", { name: "New page" }));
+
+  expect(container.querySelector(".studio-starter-group")).toBeNull();
+  expect(screen.queryByRole("group", { name: "From marimo-studio" })).not.toBeInTheDocument();
+  expect(screen.getByRole("radio", { name: /HTML/ })).toBeChecked();
+  controller.dispose();
+});
+
+it("groups starter choices by registering distribution", async () => {
+  const remote: ViewRemote = {
+    list: vi.fn(async () => viewList(["dashboard"])),
+    create: vi.fn(),
+    remove: vi.fn(),
+  };
+  const controller = new ViewController(
+    "dashboard",
+    ["dashboard"],
+    remote,
+    vi.fn(async () => true),
+    vi.fn(async () => true),
+    vi.fn(),
+    [componentStarter, starter],
+    starter.id,
+  );
+  const user = userEvent.setup();
+  render(<ViewMenu controller={controller} />);
+
+  await user.click(screen.getByLabelText(/^Switch page:/));
+  await user.click(screen.getByRole("button", { name: "New page" }));
+
+  const acme = screen.getByRole("group", { name: "From acme-views" });
+  const studio = screen.getByRole("group", { name: "From marimo-studio" });
+  expect(within(acme).getByRole("radio", { name: /Component project/ })).toBeInTheDocument();
+  expect(within(studio).getByRole("radio", { name: /HTML/ })).toBeChecked();
   controller.dispose();
 });

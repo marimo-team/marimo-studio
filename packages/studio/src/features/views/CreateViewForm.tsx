@@ -5,6 +5,7 @@ import type { StarterCatalogState } from "./catalog.ts";
 import type { ViewMessage } from "./controller.ts";
 
 import { StarterCatalogNotice } from "./StarterCatalogNotice.tsx";
+import { groupStartersByDistribution } from "./starters.ts";
 
 const MESSAGE_ROLES = {
   error: "alert",
@@ -14,6 +15,44 @@ const MESSAGE_ROLES = {
 const revealStarterOption = (input: HTMLInputElement): void => {
   const option = input.closest<HTMLElement>(".studio-starter-option");
   option?.scrollIntoView({ block: "nearest" });
+};
+
+const StarterOption = ({
+  candidate,
+  selected,
+  onSelect,
+}: {
+  candidate: Starter;
+  selected: boolean;
+  onSelect: (starter: string) => void;
+}) => {
+  const available = candidate.availability.available;
+  return (
+    <label
+      className="studio-starter-option"
+      data-selected={selected || undefined}
+      data-available={available || undefined}
+    >
+      <input
+        type="radio"
+        name="starter"
+        value={candidate.id}
+        checked={selected}
+        disabled={!available}
+        onChange={() => onSelect(candidate.id)}
+        onFocus={(event) => revealStarterOption(event.currentTarget)}
+      />
+      <span className="studio-starter-copy">
+        <strong>{candidate.title}</strong>
+        <span>{candidate.summary}</span>
+        {!available ? (
+          <small className="studio-starter-action">
+            {candidate.availability.action ?? candidate.availability.reason}
+          </small>
+        ) : null}
+      </span>
+    </label>
+  );
 };
 
 interface CreateViewFormProps {
@@ -48,6 +87,15 @@ export const CreateViewForm = ({
   onSubmit,
 }: CreateViewFormProps) => {
   const selected = starters.find((candidate) => candidate.id === starter);
+  const starterGroups = groupStartersByDistribution(starters);
+  const renderStarter = (candidate: Starter) => (
+    <StarterOption
+      key={candidate.id}
+      candidate={candidate}
+      selected={candidate.id === starter}
+      onSelect={onStarterChange}
+    />
+  );
   return (
     <form className="studio-new-view-form" aria-busy={busy} onSubmit={onSubmit}>
       <label htmlFor="studio-view-name">New page</label>
@@ -81,36 +129,16 @@ export const CreateViewForm = ({
           empty={starters.length === 0}
           onRetry={onRetryStarters}
         />
-        {starters.map((candidate) => {
-          const available = candidate.availability.available;
-          return (
-            <label
-              key={candidate.id}
-              className="studio-starter-option"
-              data-selected={candidate.id === starter || undefined}
-              data-available={available || undefined}
-            >
-              <input
-                type="radio"
-                name="starter"
-                value={candidate.id}
-                checked={candidate.id === starter}
-                disabled={!available}
-                onChange={() => onStarterChange(candidate.id)}
-                onFocus={(event) => revealStarterOption(event.currentTarget)}
-              />
-              <span className="studio-starter-copy">
-                <strong>{candidate.title}</strong>
-                <span>{candidate.summary}</span>
-                {!available ? (
-                  <small className="studio-starter-action">
-                    {candidate.availability.action ?? candidate.availability.reason}
-                  </small>
-                ) : null}
-              </span>
-            </label>
-          );
-        })}
+        {starterGroups.length > 1
+          ? starterGroups.map((group) => (
+              <fieldset key={group.distribution} className="studio-starter-group">
+                <legend>
+                  From <code>{group.distribution}</code>
+                </legend>
+                {group.starters.map(renderStarter)}
+              </fieldset>
+            ))
+          : starters.map(renderStarter)}
       </fieldset>
       {selected ? (
         <details className="studio-starter-details">
