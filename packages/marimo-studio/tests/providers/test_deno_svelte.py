@@ -128,7 +128,7 @@ def test_svelte_projection_diagnostic_names_the_cell_attribute(
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
-def test_svelte_starter_types_projection_elements_and_live_values(
+def test_svelte_starter_types_projections_and_exposes_instructions(
     tmp_path: Path,
 ) -> None:
     root, project = _project(tmp_path, svelte_provider, "svelte")
@@ -164,6 +164,12 @@ def test_svelte_starter_types_projection_elements_and_live_values(
         provider_build_request(project, inspection, files),
     )
 
+    instructions = next(
+        item
+        for item in inspection.editor_documents
+        if item.path.as_posix() == "AGENTS.md"
+    )
+    assert (instructions.language, instructions.access) == ("markdown", "edit")
     assert report.document is not None
 
 

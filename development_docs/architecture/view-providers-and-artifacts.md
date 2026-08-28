@@ -75,10 +75,11 @@ starter.
 - provider build fingerprint
 
 Conformance keeps Studio-owned `view.toml` outside `editor_documents` while it
-remains inside `input_scope`. Core enumerates that scope for revisions,
-snapshots, and watching. It validates path types, control namespaces, editor
-document membership, diagnostic shape, artifact-local projection IDs, and
-fingerprint presence.
+remains inside `input_scope`. Core watches both sets and enumerates
+`input_scope` for revisions and snapshots. Editor documents outside that scope
+remain exact provider-authorized source paths without affecting build identity.
+Conformance validates path types, control namespaces, document identity,
+diagnostic shape, artifact-local projection IDs, and fingerprint presence.
 
 The build fingerprint captures provider-owned semantics. Core combines it with
 distribution, version, provider key, and API version.

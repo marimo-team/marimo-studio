@@ -210,6 +210,44 @@ def test_provider_inspection_cache_stays_outside_the_view_project(
         )
 
 
+def test_editor_documents_can_stay_outside_build_inputs(tmp_path: Path) -> None:
+    provider = ProviderStub("example/html", "html")
+    provider.inspection = replace(
+        inspection(),
+        editor_documents=(
+            SourceDocument(PurePosixPath("index.html"), "html", "edit"),
+            SourceDocument(PurePosixPath("AGENTS.md"), "markdown", "edit"),
+        ),
+    )
+    registry = ProviderRegistry((candidate("html", provider),))
+    installed = registry.get(registry.ids[0])
+    root = tmp_path / "view"
+    root.mkdir()
+    project = ViewProject(
+        "dashboard",
+        root,
+        root / "view.toml",
+        installed.key,
+        {},
+    )
+    project.manifest.write_text("schema = 1\n", encoding="utf-8")
+    project.root.joinpath("index.html").write_text("<main></main>", encoding="utf-8")
+    project.root.joinpath("AGENTS.md").write_text(
+        "# Provider instructions\n", encoding="utf-8"
+    )
+
+    accepted = installed.inspect(inspection_request(project))
+
+    assert [document.path for document in accepted.editor_documents] == [
+        PurePosixPath("index.html"),
+        PurePosixPath("AGENTS.md"),
+    ]
+    assert project_input_paths(project, accepted) == (
+        PurePosixPath("index.html"),
+        PurePosixPath("view.toml"),
+    )
+
+
 def test_provider_diagnostics_accept_the_manifest_but_reject_undeclared_sources(
     tmp_path: Path,
 ) -> None:

@@ -108,9 +108,11 @@ directory collisions are rejected before Studio writes anything.
 - diagnostics
 - one provider build fingerprint
 
-Studio enumerates `input_scope` once and uses the resulting files for change
-watching, revisions, snapshots, and `BuildRequest.inputs`. Every editor
-document and `view.toml` must be covered by the scope. Keep generated
+Studio watches `editor_documents` and `input_scope`. It enumerates
+`input_scope` once and uses those files for revisions, snapshots, and
+`BuildRequest.inputs`. An editor document can remain outside that scope when
+editing it should not invalidate the browser artifact. Studio still confines
+reads and writes to the exact provider-authorized document path. Keep generated
 dependencies and provider caches outside declared recursive directories when
 they do not affect browser output. Provider caches belong beneath
 `request.cache_root`.

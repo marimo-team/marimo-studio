@@ -226,6 +226,7 @@ def test_view_create_dry_run_matches_the_live_document_catalog_without_writing(
     assert [Path(path).name for path in created_payload["documents"]] == [
         "view.toml",
         "index.html",
+        "AGENTS.md",
     ]
 
 

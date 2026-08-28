@@ -452,13 +452,6 @@ class ProviderConformance:
                 self.key,
                 "must include Studio-owned 'view.toml' in its input scope",
             )
-        missing_documents = tuple(path for path in document_paths if not covered(path))
-        if missing_documents:
-            missing = min(missing_documents)
-            raise _error(
-                self.key,
-                f"editor document {missing.as_posix()!r} is outside the input scope",
-            )
         document_set = set(document_paths)
         diagnostic_sources = {*document_set, manifest}
         diagnostic_bytes = 0

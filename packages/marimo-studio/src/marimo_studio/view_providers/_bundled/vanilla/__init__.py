@@ -54,6 +54,11 @@ STARTER_KEY = "default"
 _STARTER_TEMPLATE = (
     resources.files(__name__).joinpath("template").joinpath("index.html")
 )
+_STARTER_INSTRUCTIONS = (
+    resources.files(__name__).joinpath("template").joinpath("AGENTS.md")
+)
+_AGENT_INSTRUCTIONS_PATH = PurePosixPath("AGENTS.md")
+_OPTIONAL_DESIGN_PATH = PurePosixPath("DESIGN.md")
 
 
 def _site_id(path: PurePosixPath, kind: str, target: str, occurrence: int) -> str:
@@ -175,6 +180,19 @@ def _entry_document(
     return SourceDocument(entry, "html", "edit")
 
 
+def _guidance_documents(project: ViewProject) -> tuple[SourceDocument, ...]:
+    documents: list[SourceDocument] = []
+    for relative in (_AGENT_INSTRUCTIONS_PATH, _OPTIONAL_DESIGN_PATH):
+        path = project.root / relative
+        if not path.exists():
+            continue
+        reject_mutable_symlinks(project.root, {path})
+        if not path.is_file():
+            raise ConfigurationError(f"Vanilla guidance is unavailable: {relative}")
+        documents.append(SourceDocument(relative, "markdown", "edit"))
+    return tuple(documents)
+
+
 class VanillaProvider:
     """Inspect and build browser-native view projects."""
 
@@ -190,7 +208,7 @@ class VanillaProvider:
             "One editable HTML file with Studio projection elements and an inline "
             "live-value adapter."
         ),
-        documents=(PurePosixPath("index.html"),),
+        documents=(PurePosixPath("index.html"), _AGENT_INSTRUCTIONS_PATH),
     )
 
     def availability(self, project: ViewProject | None = None) -> ProviderAvailability:
@@ -214,7 +232,10 @@ class VanillaProvider:
             view=escape(name),
             heading=escape(name.replace("-", " ").title()),
         )
-        return {PurePosixPath("index.html"): document.encode()}
+        return {
+            PurePosixPath("index.html"): document.encode(),
+            _AGENT_INSTRUCTIONS_PATH: _STARTER_INSTRUCTIONS.read_bytes(),
+        }
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         project = request.project
@@ -242,6 +263,7 @@ class VanillaProvider:
         )
         try:
             entry_document = _entry_document(project, entry_path)
+            guidance_documents = _guidance_documents(project)
         except ConfigurationError as error:
             return ProjectInspection(
                 editor_documents=(),
@@ -304,7 +326,10 @@ class VanillaProvider:
                 ),
             )
         return ProjectInspection(
-            editor_documents=(entry_document,),
+            editor_documents=(
+                entry_document,
+                *guidance_documents,
+            ),
             input_scope=input_scope,
             mounts=sites,
             diagnostics=diagnostics,

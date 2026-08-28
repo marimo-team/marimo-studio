@@ -87,6 +87,28 @@ def test_catalog_reuses_unchanged_inspection_and_detects_direct_edits(
     assert provider.inspections == 2
 
 
+def test_catalog_watches_editor_documents_outside_build_inputs(
+    notebook_path: Path,
+) -> None:
+    studio = created_one_view(notebook_path)
+    project = studio.views["dashboard"]
+    producer = SourceChangeProducer(studio, project.name)
+    initial_input_id = producer.catalog()[2]
+    instructions = project.root / "AGENTS.md"
+
+    instructions.write_text(
+        instructions.read_text(encoding="utf-8") + "\nPrefer focused modules.\n",
+        encoding="utf-8",
+    )
+
+    change = producer.poll()
+    assert change is not None
+    assert change.kind == "project"
+    assert change.files[0]["path"] == "AGENTS.md"
+    assert cast(str, change.files[0]["revision"]).startswith("sha256:")
+    assert producer.catalog()[2] == initial_input_id
+
+
 def test_source_monitor_surfaces_provider_process_cleanup_failure(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,

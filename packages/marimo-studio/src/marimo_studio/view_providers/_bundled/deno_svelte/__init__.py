@@ -54,12 +54,15 @@ _INPUT_SCOPE = (
     ProjectInput(PurePosixPath("deno.lock"), "file"),
     ProjectInput(PurePosixPath("public"), "directory"),
 )
+_DOCUMENT_ROOTS = (PurePosixPath("AGENTS.md"), PurePosixPath("DESIGN.md"))
 _REQUIRED = (
     "view.toml",
     "package.json",
     "svelte.config.js",
 )
 _EDITOR_LANGUAGES = {
+    "AGENTS.md": "markdown",
+    "DESIGN.md": "markdown",
     "deno.json": "json",
     "deno.lock": "json",
     "package.json": "json",
@@ -78,6 +81,7 @@ _EDITOR_LANGUAGES = {
 _TEMPLATE_DOCUMENTS = tuple(
     PurePosixPath(path)
     for path in (
+        "AGENTS.md",
         "src/App.svelte",
         "src/app.d.ts",
         "src/lib/marimo-value.ts",
@@ -97,6 +101,7 @@ _PROJECT = ProviderProjectSpec(
     provider_id=PROVIDER_KEY,
     resource_package="marimo_studio.view_providers._bundled.deno_svelte",
     input_scope=_INPUT_SCOPE,
+    document_roots=_DOCUMENT_ROOTS,
     required_files=_REQUIRED,
     editor_languages=_EDITOR_LANGUAGES,
     read_only=frozenset({"deno.lock", "src/vite-env.d.ts"}),

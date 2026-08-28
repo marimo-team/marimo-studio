@@ -116,6 +116,7 @@ def test_view_inspection_matches_its_json_shape(notebook_path: Path) -> None:
     assert [item.path.as_posix() for item in result.documents] == [
         "view.toml",
         "index.html",
+        "AGENTS.md",
     ]
     assert result.publication is None
 

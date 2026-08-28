@@ -326,9 +326,10 @@ def test_vanilla_reports_malformed_resource_urls_as_project_diagnostics(
     assert "Invalid resource URL" in inspection.diagnostics[0].message
 
 
-def test_vanilla_exposes_and_builds_only_the_entry_document(tmp_path: Path) -> None:
+def test_vanilla_exposes_instructions_outside_the_build_inputs(tmp_path: Path) -> None:
     project = _project(tmp_path)
     (project.root / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+    (project.root / "DESIGN.md").write_text("# Page design\n", encoding="utf-8")
 
     inspection = provider.inspect(inspection_request(project))
     files = project.root / ".artifacts" / ".staging" / "single" / "files"
@@ -336,13 +337,15 @@ def test_vanilla_exposes_and_builds_only_the_entry_document(tmp_path: Path) -> N
     report = provider.build(provider_build_request(project, inspection, files))
 
     assert [item.path.as_posix() for item in inspection.editor_documents] == [
-        "index.html"
+        "index.html",
+        "AGENTS.md",
+        "DESIGN.md",
     ]
     assert [item.to_dict() for item in inspection.input_scope] == [
         {"path": "view.toml", "kind": "file"},
         {"path": "index.html", "kind": "file"},
     ]
-    assert report.document == inspection.editor_documents[0].path
+    assert report.document == PurePosixPath("index.html")
     assert [
         path.relative_to(files).as_posix()
         for path in files.rglob("*")

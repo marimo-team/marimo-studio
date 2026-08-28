@@ -70,7 +70,7 @@ class SourceChangeProducer:
 
     @property
     def watch_plan(self) -> ProjectWatchPlan:
-        """Return files and bounded directories from the provider input scope."""
+        """Return provider documents and bounded build-input directories."""
         files = {
             self._studio.notebook,
             self._studio.config_path,
@@ -248,7 +248,9 @@ class SourceChangeProducer:
             self._project = project
             provider = registry.get(project.provider)
             inspection = provider.inspect(inspection_request(project))
-            scope_files, roots = _validated_input_scope(project, inspection)
+            input_files, roots = _validated_input_scope(project, inspection)
+            document_files = _validated_document_files(project, inspection)
+            scope_files = tuple(dict.fromkeys((*input_files, *document_files)))
             excluded_roots = (artifact_root(project),)
             if (
                 observed_tree is not None
@@ -259,7 +261,7 @@ class SourceChangeProducer:
                 tree = observed_tree
             else:
                 tree = _tree_stamps((*scope_files, *roots), excluded_roots)
-            inputs = _input_paths_from_tree(project, scope_files, roots, tree)
+            inputs = _input_paths_from_tree(project, input_files, roots, tree)
             input_id = project_revision(
                 project,
                 inspection,
@@ -445,24 +447,48 @@ def _validated_input_scope(
         normalized = _scope_path(item.path, item.kind)
         if normalized.parts and normalized.parts[0].casefold() == ".artifacts":
             raise ConfigurationError("Provider input scope cannot include .artifacts")
-        candidate = root.joinpath(*normalized.parts)
-        current = root
-        for part in normalized.parts:
-            current = current / part
-            if current.is_symlink():
-                raise ConfigurationError(
-                    f"Provider input scope contains a symlink: {normalized}"
-                )
-        try:
-            candidate.resolve(strict=False).relative_to(root)
-        except ValueError as error:
-            raise ConfigurationError(
-                f"Provider input scope escapes the view project: {normalized}"
-            ) from error
+        candidate = _validated_project_path(root, normalized, "Provider input scope")
         selected = roots if item.kind == "directory" else files
         if candidate not in selected:
             selected.append(candidate)
     return tuple(files), tuple(roots)
+
+
+def _validated_document_files(
+    project: ViewProject,
+    inspection: ProjectInspection,
+) -> tuple[Path, ...]:
+    root = project.root.resolve()
+    return tuple(
+        dict.fromkeys(
+            _validated_project_path(
+                root,
+                _scope_path(document.path, "file"),
+                "Provider editor document",
+            )
+            for document in inspection.editor_documents
+        )
+    )
+
+
+def _validated_project_path(
+    root: Path,
+    relative: PurePosixPath,
+    label: str,
+) -> Path:
+    candidate = root.joinpath(*relative.parts)
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ConfigurationError(f"{label} contains a symlink: {relative}")
+    try:
+        candidate.resolve(strict=False).relative_to(root)
+    except ValueError as error:
+        raise ConfigurationError(
+            f"{label} escapes the view project: {relative}"
+        ) from error
+    return candidate
 
 
 def _input_paths_from_tree(
@@ -486,10 +512,19 @@ def _input_paths_from_tree(
     if symlink is not None:
         raise ConfigurationError(f"View project inputs contain a symlink: {symlink}")
     project_root = project.root.absolute()
+    selected_files = {path.absolute() for path in files}
+    selected_roots = tuple(path.absolute() for path in roots)
     inputs = {
         PurePosixPath(path.absolute().relative_to(project_root).as_posix())
         for (kind, path), _stamp in tree.items()
         if kind == "view"
+        and (
+            path.absolute() in selected_files
+            or any(
+                root == path.absolute() or root in path.absolute().parents
+                for root in selected_roots
+            )
+        )
     }
     return tuple(sorted(inputs, key=PurePosixPath.as_posix))
 

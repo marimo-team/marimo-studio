@@ -45,6 +45,7 @@ class ProviderProjectSpec:
     provider_id: str
     resource_package: str
     input_scope: tuple[ProjectInput, ...]
+    document_roots: tuple[PurePosixPath, ...]
     required_files: tuple[str, ...]
     editor_languages: Mapping[str, str]
     read_only: frozenset[str]
@@ -121,6 +122,7 @@ class ProviderProjectSpec:
             dict.fromkeys(
                 (
                     *(item.path.as_posix() for item in self.input_scope),
+                    *(path.as_posix() for path in self.document_roots),
                     *(path.as_posix() for path in configured_paths.values()),
                     *entrypoint_roots,
                 )

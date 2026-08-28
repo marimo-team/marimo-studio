@@ -58,6 +58,9 @@ view = await workspace.create_view(
 )
 ```
 
+Bundled starters create page source plus an editable, starter-specific
+`AGENTS.md`.
+
 Inspect the returned documents before editing:
 
 ```python
@@ -69,6 +72,37 @@ inspection = await view.inspect()
 for document in inspection.documents:
     print(document.path, document.language, document.access)
 ```
+
+Read `AGENTS.md` when the selected project exposes it:
+
+```python
+if any(document.path.as_posix() == "AGENTS.md" for document in inspection.documents):
+    instructions = await view.read("AGENTS.md")
+    print(instructions.content)
+```
+
+The Studio skill owns notebook boundaries, projection semantics, view
+lifecycle, and validation. The starter's `AGENTS.md` owns its opinionated
+frontend structure, supplied adapters, preferred libraries, and build-specific
+conventions. Read both before editing a starter project.
+
+Treat the generated `AGENTS.md` as durable project context. Update it as the
+conversation establishes the audience, analytical goal, concrete domain
+details, aesthetic direction, interaction priorities, framework or library
+preferences, and other decisions that should guide later agents. Keep transient
+task status and short-lived implementation notes out of it.
+
+Choose visual direction in this order:
+
+1. Follow the user's explicit style direction.
+2. Follow the starter project's `DESIGN.md` when it exists.
+3. Otherwise use the current
+   [Marimo design guide](https://raw.githubusercontent.com/marimo-team/marimo/refs/heads/main/DESIGN.md)
+   as the aesthetic reference.
+
+Read the selected design source before visual authoring. Apply its visual
+character, tokens, typography, surfaces, component treatment, and motion
+guidance to the view.
 
 Edit project-relative paths whose access is `edit`. Read and write through the
 revision-aware view API:
@@ -102,6 +136,10 @@ view = workspace.view("dashboard")
 publication = await view.build()
 print(publication.artifact_id)
 ```
+
+A failed build leaves the last successful view available. Repair the reported
+source issue and build again. Call `view.inspect()` after a failure and read the
+diagnostic `message`, `hint`, and source location before editing.
 
 ```python
 import marimo_studio.agent as studio
@@ -171,13 +209,52 @@ publishing credentials, private data paths, or server-dependent code.
 
 ## Work with notebook results
 
-View source can mount a complete cell, render one Python object through Marimo,
-or read a JSON-compatible value. Inspect the selected starter and existing
-source before adding hosts. Use ordinary source-language control flow for
-dynamic layouts.
+Choose the projection from notebook evidence:
 
-Use native Marimo cell names for durable view-facing results. A configured
-alias can name an existing anonymous cell.
+| Notebook result                                               | View source                                      |
+| ------------------------------------------------------------- | ------------------------------------------------ |
+| Complete displayed cell, including controls, logs, and errors | `<marimo-cell name="summary"></marimo-cell>`     |
+| One Python object rendered by Marimo                          | `<marimo-output value="chart"></marimo-output>` |
+| JSON-compatible data consumed by browser code                 | Any element with `mo-value="metrics"`            |
+
+Read the selected cell's `name`, `definitions`, and
+`has_output_expression` before writing a projection. When
+`has_output_expression` is false, inspect its runtime output before using
+`<marimo-cell>`. Use `<marimo-output>` when the cell defines the intended object
+but does not display it.
+
+Use a complete cell when the notebook already presents the result:
+
+```html
+<marimo-cell name="summary"></marimo-cell>
+```
+
+Use one rendered Python object when the view needs a specific result:
+
+```html
+<marimo-output value="chart"></marimo-output>
+```
+
+Use a JSON-compatible value when browser code will adapt it for the view:
+
+```html
+<strong mo-value="metrics.total"></strong>
+```
+
+When inspection returns a non-empty cell `name`, use that exact name directly in
+`<marimo-cell name="...">`. The native name is already a stable projection
+target and needs no binding or alias. Call `workspace.bind()` only when the
+complete cell is anonymous and needs a stable view-facing name.
+
+The alias returned by `workspace.bind()` becomes an accepted value for
+`<marimo-cell name="...">`. `alias` and `target` are not authored projection
+attributes. Literal `name`, `value`, and `mo-value` selectors need no wildcard.
+Add `data-marimo-allow="*"` when runtime code intentionally selects a target
+that the provider cannot enumerate from source.
+
+Reconsider the projection kind before changing notebook code to make a view
+host render. Presentation requirements stay in the view when the notebook
+already defines the intended value.
 
 Read [View authoring](references/view-authoring.md) for source documents,
 projection hosts, build behavior, and conflicts.

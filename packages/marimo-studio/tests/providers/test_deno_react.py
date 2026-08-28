@@ -153,7 +153,7 @@ def test_react_projection_diagnostics_name_the_authored_attributes(
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
-def test_react_starter_types_projection_elements_and_live_values(
+def test_react_starter_types_projections_and_exposes_guidance(
     tmp_path: Path,
 ) -> None:
     root, project = _project(tmp_path, react_provider, "react")
@@ -176,6 +176,7 @@ export const App = () => {
 """,
         encoding="utf-8",
     )
+    (root / "DESIGN.md").write_text("# Page design\n", encoding="utf-8")
     inspection = _inspect(react_provider, project)
     files = root / ".artifacts" / ".staging" / "typed-starter" / "files"
     files.mkdir(parents=True)
@@ -185,6 +186,15 @@ export const App = () => {
         provider_build_request(project, inspection, files),
     )
 
+    guidance = {
+        item.path.as_posix(): item
+        for item in inspection.editor_documents
+        if item.path.as_posix() in {"AGENTS.md", "DESIGN.md"}
+    }
+    assert {path: (item.language, item.access) for path, item in guidance.items()} == {
+        "AGENTS.md": ("markdown", "edit"),
+        "DESIGN.md": ("markdown", "edit"),
+    }
     assert report.document is not None
 
 

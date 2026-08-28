@@ -70,10 +70,6 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
 
     assert ".custom {}" in dashboard.read_text(encoding="utf-8")
     report = load_studio(notebook_path).views["report"].root
-    assert {path.name for path in report.iterdir()} == {
-        "index.html",
-        "view.toml",
-    }
     assert set(
         studio.view_root.joinpath(".gitignore").read_text(encoding="utf-8").splitlines()
     ) == {"/.locks/", "*/.artifacts/"}
@@ -225,13 +221,9 @@ def test_existing_view_inspection_runs_outside_mutation_locks(
         observed_inspection,
     )
 
-    result = prepare_view(notebook_path)
+    prepare_view(notebook_path)
 
     assert inspections == 1
-    assert result.documents == (
-        result.root / "view.toml",
-        result.root / "index.html",
-    )
 
 
 @pytest.mark.native_process
@@ -334,7 +326,7 @@ def test_view_discovery_rejects_a_symlinked_view_directory(
         load_studio(notebook_path)
 
 
-def test_new_view_exposes_one_editable_html_document_without_mounts(
+def test_new_view_exposes_page_and_starter_instructions_without_mounts(
     notebook_path: Path,
 ) -> None:
     notebook_path.write_text(
@@ -353,7 +345,10 @@ def test_new_view_exposes_one_editable_html_document_without_mounts(
     assert [
         (item.path.as_posix(), item.language, item.access)
         for item in inspection.editor_documents
-    ] == [("index.html", "html", "edit")]
+    ] == [
+        ("index.html", "html", "edit"),
+        ("AGENTS.md", "markdown", "edit"),
+    ]
     assert inspection.mounts == ()
     assert document is not None
     assert document["tool"]["marimo-studio"].get("cells", {}) == {}

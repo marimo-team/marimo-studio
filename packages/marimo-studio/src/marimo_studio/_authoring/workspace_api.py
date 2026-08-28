@@ -105,7 +105,11 @@ class Workspace:
         *,
         overwrite: bool = False,
     ) -> BindingResult:
-        """Give one notebook cell a stable symbolic target."""
+        """Give an anonymous notebook cell a stable symbolic target.
+
+        Native named cells are already valid ``marimo-cell`` targets and need
+        no binding.
+        """
         return await bind_cell(
             self.notebook,
             alias,
