@@ -19,6 +19,7 @@ from tempfile import TemporaryDirectory
 import agent_plugins
 import marimo_studio
 import marimo_studio.agent as studio_agent
+import marimo_studio.authoring as studio_authoring
 import tomlkit
 from marimo_studio._delivery.assets import runtime_assets_path
 
@@ -94,25 +95,32 @@ def _verify_public_imports(notebook: Path) -> None:
 from importlib import resources
 import marimo_studio
 import marimo_studio.agent
+import marimo_studio.authoring
 import marimo_studio.asgi
 import marimo_studio.errors
 import marimo_studio.view_providers
 import agent_plugins
 
 assert callable(marimo_studio.create_asgi_app)
-assert callable(marimo_studio.agent.open)
+assert callable(marimo_studio.agent.current_workspace)
+assert callable(marimo_studio.authoring.open_workspace)
+assert marimo_studio.agent.View is not marimo_studio.authoring.View
+assert marimo_studio.agent.Workspace is not marimo_studio.authoring.Workspace
+assert hasattr(marimo_studio.agent.View, "show")
+assert not hasattr(marimo_studio.authoring.View, "show")
 assert callable(marimo_studio.asgi.app)
 assert resources.files("marimo_studio").joinpath("py.typed").is_file()
 assert set(marimo_studio.__all__) == {
-    "LENS_TARGET_SELECTOR", "ASGIApp", "CellConfigSpec", "CellRef", "CellSpec",
-    "NotebookSpec", "SourceSpan", "create_asgi_app", "inspect_notebook",
+    "STUDIO_RESULT_SELECTOR", "ASGIApp", "NotebookSpec", "create_asgi_app",
+    "inspect_notebook",
 }
 assert set(marimo_studio.agent.__all__) == {
-    "AnalysisAction", "BindingResult", "CellSelector", "InspectionResult", "ProviderReport",
-    "Publication", "Starter", "StaticExportResult", "StudioDiagnostic", "StudioOverview",
-    "ValidationLevel", "ValidationReport", "View", "ViewActivationResult", "ViewDocument",
-    "ViewFreshness", "ViewInspection", "ViewOverview", "ViewRemovalResult", "Workspace",
-    "doctor", "open",
+    "ValidationIssue", "ValidationReport", "View", "ShowResult", "Workspace",
+    "current_workspace",
+}
+assert set(marimo_studio.authoring.__all__) == {
+    "ValidationIssue", "ValidationReport", "View", "ViewBuild", "Workspace", "doctor",
+    "open_workspace",
 }
 assert set(marimo_studio.view_providers.__all__) == {
     "PROVIDER_API_VERSION", "BuildProfile", "BuildRequest", "BuildResult",
@@ -161,8 +169,6 @@ def _verify_agent_plugin(expected_path: Path | None) -> None:
         "plugin.json",
         "skills/marimo-studio/SKILL.md",
         "skills/marimo-studio/agents/openai.yaml",
-        "skills/marimo-studio/references/validation-and-handoff.md",
-        "skills/marimo-studio/references/view-authoring.md",
     }
     if not required.issubset(actual):
         raise AssertionError(
@@ -251,8 +257,7 @@ def _validate_cli(notebook: Path, view: str) -> None:
             view,
             "--target",
             str(notebook),
-            "--format",
-            "json",
+            "--json",
         ],
         capture_output=True,
         text=True,
@@ -270,7 +275,7 @@ def _verify_views(*, deno: bool) -> None:
         with TemporaryDirectory() as directory:
             notebook = Path(directory) / "installed_check.py"
             notebook.write_text(_NOTEBOOK, encoding="utf-8")
-            workspace = studio_agent.open(notebook=notebook)
+            workspace = studio_authoring.open_workspace(notebook)
             catalog = {item.id: item for item in await workspace.starters()}
             expected = {
                 "marimo-studio/react:default",
@@ -303,9 +308,9 @@ def _verify_views(*, deno: bool) -> None:
                         f"Unexpected installed view manifest: {manifest}"
                     )
                 await vanilla.build()
-                if (await vanilla.inspect()).publication is None:
+                if (await vanilla.inspect()).build is None:
                     raise AssertionError(
-                        "Installed Vanilla build did not publish an artifact"
+                        "Installed Vanilla build did not produce a page"
                     )
                 _validate_cli(notebook, "dashboard")
                 return
@@ -324,9 +329,9 @@ def _verify_views(*, deno: bool) -> None:
                     starter=catalog[identity],
                 )
                 await view.build()
-                if (await view.inspect()).publication is None:
+                if (await view.inspect()).build is None:
                     raise AssertionError(
-                        f"Installed {identity} build did not publish an artifact"
+                        f"Installed {identity} build did not produce a page"
                     )
 
     asyncio.run(verify())
@@ -339,7 +344,11 @@ def main() -> None:
         raise AssertionError(
             f"Installed version {installed_version} does not match {args.expected_version}"
         )
-    if not callable(marimo_studio.create_asgi_app) or not callable(studio_agent.open):
+    if (
+        not callable(marimo_studio.create_asgi_app)
+        or not callable(studio_agent.current_workspace)
+        or not callable(studio_authoring.open_workspace)
+    ):
         raise TypeError("Installed Python APIs are unavailable")
     _verify_entry_points()
     _verify_agent_plugin(args.expected_plugin_digests)

@@ -11,7 +11,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import marimo_studio
-import marimo_studio.agent as studio
+import marimo_studio.authoring as studio_authoring
 
 _NOTEBOOK = """import marimo
 
@@ -51,7 +51,7 @@ async def verify() -> None:
     with TemporaryDirectory() as directory:
         notebook = Path(directory) / "external.py"
         notebook.write_text(_NOTEBOOK, encoding="utf-8")
-        workspace = studio.open(notebook=notebook)
+        workspace = studio_authoring.open_workspace(notebook)
         starters = {item.id: item for item in await workspace.starters()}
         if _STARTER not in starters or _WEB_STARTER not in starters:
             raise AssertionError(f"External starter is missing: {sorted(starters)}")
@@ -60,7 +60,7 @@ async def verify() -> None:
         inspection = await view.inspect()
         if inspection.provider != "marimo-studio-e2e-provider/report":
             raise AssertionError(f"Unexpected external provider: {inspection.provider}")
-        if inspection.publication is None:
+        if inspection.build is None:
             raise AssertionError("External provider did not publish an artifact")
         report_errors = tuple(
             diagnostic
@@ -77,7 +77,7 @@ async def verify() -> None:
         web_inspection = await web.inspect()
         if web_inspection.provider != "marimo-studio-e2e-provider/web":
             raise AssertionError(f"Unexpected web provider: {web_inspection.provider}")
-        if web_inspection.publication is None:
+        if web_inspection.build is None:
             raise AssertionError("External web provider did not publish an artifact")
         web_errors = tuple(
             diagnostic

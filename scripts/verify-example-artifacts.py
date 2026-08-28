@@ -64,8 +64,7 @@ def main() -> None:
                     str(notebook),
                     "--profile",
                     profile,
-                    "--format",
-                    "json",
+                    "--json",
                     cwd=repository,
                 )
         for view in views:

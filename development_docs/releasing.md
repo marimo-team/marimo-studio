@@ -208,8 +208,8 @@ Representative commands:
 
 ```console
 uvx marimo-studio --version
-uvx marimo-studio doctor --format json
-uvx marimo-studio starters --format json
+uvx marimo-studio doctor --json
+uvx marimo-studio starters --json
 ```
 
 Use an isolated `uv run --with "marimo-studio[deno]==X.Y.Z"` environment for
