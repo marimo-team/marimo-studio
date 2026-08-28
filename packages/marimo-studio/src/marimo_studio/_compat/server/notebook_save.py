@@ -212,10 +212,11 @@ class _ManagerTransforms(SessionEventListener):
                 for owned in self._owners.values()
                 for key, policy in owned.items()
             )
-        for (file_key, _notebook), policy in registrations:
+        for (file_key, notebook), policy in registrations:
             if session_matches_notebook(
                 session,
                 file_key=file_key,
+                notebook=notebook,
             ):
                 return policy
         return None

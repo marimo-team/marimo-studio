@@ -118,8 +118,8 @@ class _ManagerRelay(SessionEventListener):
                 for notebook in registered
             )
         return any(
-            session_matches_notebook(session, file_key=file_key)
-            for file_key, _notebook in notebooks
+            session_matches_notebook(session, file_key=file_key, notebook=notebook)
+            for file_key, notebook in notebooks
         )
 
     async def on_session_created(self, session: Session) -> None:

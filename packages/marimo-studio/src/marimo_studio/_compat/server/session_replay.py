@@ -37,9 +37,13 @@ def _reconnect_replacement(native_reconnect: Any) -> Any:
                 connector.params.file_key,
                 {},
             )
-            replay = bool(registrations) and session_matches_notebook(
-                session,
-                file_key=connector.params.file_key,
+            replay = any(
+                session_matches_notebook(
+                    session,
+                    file_key=connector.params.file_key,
+                    notebook=notebook,
+                )
+                for notebook in registrations.values()
             )
         if not requested or not replay:
             return native_reconnect(connector, session)

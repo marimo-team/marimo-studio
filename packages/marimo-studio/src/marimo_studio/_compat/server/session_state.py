@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import suppress
 from functools import partial
+from pathlib import Path
 from time import monotonic
 from typing import Literal
 from weakref import ReferenceType, WeakKeyDictionary, WeakSet
@@ -102,6 +104,7 @@ def current_session(context: ServerContext, session_id: str) -> Session | None:
         if session_matches_notebook(
             session,
             file_key=context.file_key,
+            notebook=context.notebook,
         )
         else None
     )
@@ -111,9 +114,15 @@ def session_matches_notebook(
     session: Session | None,
     *,
     file_key: str,
+    notebook: Path,
 ) -> bool:
     """Return whether a Marimo session belongs to the selected notebook."""
-    return session is not None and str(session.initialization_id) == file_key
+    if session is None:
+        return False
+    if str(session.initialization_id) == file_key:
+        return True
+    source = session.app_file_manager.path
+    return source is not None and Path(os.path.abspath(source)) == notebook
 
 
 def _has_notebook_session(context: ServerContext) -> bool:
@@ -253,6 +262,7 @@ class PrivateSessionState:
             if session_matches_notebook(
                 session,
                 file_key=context.file_key,
+                notebook=context.notebook,
             )
             else "foreign"
         )
