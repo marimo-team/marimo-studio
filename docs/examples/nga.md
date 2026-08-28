@@ -1,75 +1,36 @@
 ---
-title: NGA collection explorer
-description: Run one National Gallery of Art notebook through vanilla, React, and Svelte views.
+title: One collection, three audience pages
+description: Use one National Gallery of Art notebook for a collection brief, artwork browser, and editorial story.
 ---
 
-# NGA collection explorer
+# One collection, three audience pages
 
-`examples/nga.py` loads National Gallery of Art Open Data, joins artwork and
-artist records with Polars, and traces a spike in public-domain drawings to the
-Index of American Design. Native cell names give each Studio view symbolic
-access to the same notebook graph.
+`examples/nga.py` analyzes National Gallery of Art Open Data once. Three pages
+reuse its measures, plots, tables, and controls for different reading tasks.
 
-Install the repository dependencies and open the notebook in Studio:
+| Page     | Audience experience                                               | Frontend source   |
+| -------- | ----------------------------------------------------------------- | ----------------- |
+| Overview | Read collection measures, plots, and a detailed table             | One HTML file     |
+| Gallery  | Filter artwork cards and choose the active chart                  | React components  |
+| Story    | Follow an editorial narrative with repeated measures and chapters | Svelte components |
+
+## Open the example
 
 ```console
 make setup
 uv run --with polars --with pyobservablejs marimo edit examples/nga.py
 ```
 
-The first run downloads about 48 MB of compressed inputs from the example's
-pinned NGA Open Data revision. Later runs reuse the files from
-`$XDG_CACHE_HOME/marimo-studio/nga` or `~/.cache/marimo-studio/nga`.
+The first notebook run downloads about 48 MB of compressed input from a pinned
+National Gallery of Art Open Data revision. Later runs reuse the cached files.
 
-## Explore three views
+Choose **Develop**, then use the page menu to move among Overview, Gallery, and
+Story. The notebook session stays active while the wording, layout, and
+interaction change around its results.
 
-| View         | Authoring option | Source                                           | Experience                                                                         |
-| ------------ | ---------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| **Overview** | Vanilla HTML     | One HTML document with inline CSS and JavaScript | Read collection measures, plots, and a native rich-output table                    |
-| **Gallery**  | React            | React TSX, CSS, and Deno configuration           | Filter 72 artwork cards and switch the projected chart in place                    |
-| **Story**    | Svelte           | Svelte, TypeScript, CSS, and Vite configuration  | Follow an Index of American Design narrative with dynamic metric and chapter loops |
+## Compare how the pages use one result
 
-Use the view menu or the navigation inside each page to move among Overview,
-Gallery, and Story. The selected runtime and notebook session stay attached as
-the presentation changes.
-
-Run the default Overview view as an application:
-
-```console
-uv run --with polars --with pyobservablejs marimo run examples/nga.py
-```
-
-## Inspect the project contract
-
-Each view directory contains `view.toml` and authored source. Gallery and Story
-also contain their React or Svelte build configuration and dependency locks.
-Generated `.artifacts/` directories are ignored. The example check copies the
-project to a temporary directory and builds every view from source.
-
-Inspect the Svelte source catalog and mounts from the repository root:
-
-```console
-uv run marimo-studio view inspect story \
-  --target examples/nga.py \
-  --format json
-```
-
-Build a production artifact for the Overview view:
-
-```console
-uv run marimo-studio view build overview \
-  --target examples/nga.py \
-  --profile production
-```
-
-The Source workspace reads the ordered document catalog returned by the
-selected provider. It exposes the Vanilla HTML document, React components,
-Svelte components, configuration, and read-only dependency locks through one
-scrollable tab strip.
-
-## Follow dynamic projections
-
-The React Gallery view selects one named chart at runtime:
+The React Gallery changes the named chart shown in one location:
 
 ```tsx
 const activeChart = CHARTS[chartIndex];
@@ -77,7 +38,8 @@ const activeChart = CHARTS[chartIndex];
 return <marimo-cell name={activeChart.name} data-marimo-allow="*" />;
 ```
 
-The Svelte Story view mounts value and cell projections from iterable records:
+The Svelte Story repeats notebook measures and complete cells from constant
+records:
 
 ```svelte
 {#each metrics as metric}
@@ -89,9 +51,19 @@ The Svelte Story view mounts value and cell projections from iterable records:
 {/each}
 ```
 
-Studio records each mount declaration during the build. When a host mounts or
-its target changes, Studio resolves the target against the current notebook.
+Studio checks the possible names during the build and resolves the selected
+name against the current notebook when the page runs.
 
-Continue with [Choose an authoring option](../guide/authoring-options.md) for
-starters or [Notebook result mounts](../reference/projections.md) for targets,
-wildcard authorization, and lifecycle behavior.
+## Inspect the source
+
+Open Source to compare the one-file page, React components, and Svelte
+components. Each page remains ordinary frontend source beside `examples/nga.py`.
+
+Run the default Overview page as an application:
+
+```console
+uv run --with polars --with pyobservablejs marimo run examples/nga.py
+```
+
+Continue with [Use HTML, React, or Svelte](../guide/frontend-options.md) or
+[Place notebook results on a page](../guide/notebook-results.md).

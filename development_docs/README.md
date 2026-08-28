@@ -29,7 +29,7 @@ package that owns a policy or mutable resource.
 | Notebook symbols, mount declarations, mounted instances, or ownership      | [Symbolic projections](architecture/symbolic-projections.md)                   |
 | Marimo routes, sessions, saves, kernels, private APIs, or upgrades         | [Marimo integration](architecture/marimo-integration.md)                       |
 | Browser protocol, runtimes, Source, layout, or presentation lifecycle      | [Browser runtime and authoring](architecture/browser-runtime-and-authoring.md) |
-| Agents, CLI, analysis, export, E2E, docs, or packaging                     | [Agents and delivery](architecture/agents-and-delivery.md)                     |
+| Agents, CLI, validation, export, E2E, docs, or packaging                   | [Agents and delivery](architecture/agents-and-delivery.md)                     |
 
 Use [Frontend workspace](frontend.md) for package commands and browser source
 workflow. Use [Releasing](releasing.md) for versioning, publication, and

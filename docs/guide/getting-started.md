@@ -1,94 +1,71 @@
 ---
-title: Getting started
-description: Create, build, and validate a custom view for a saved Marimo notebook.
+title: Create your first page
+description: Create a web page from a saved marimo notebook and see notebook output update inside it.
 ---
 
-# Getting started
+# Create your first page
 
-Start with a saved Marimo notebook:
+Start with a saved marimo notebook named `analysis.py`. Create a page for its
+main audience:
 
 ```console
 uvx marimo-studio view create dashboard --target analysis.py
 ```
 
-The first view records Studio configuration, the selected provider
-requirement, and managed view metadata in the notebook's PEP 723 block. For a
-notebook owned by a Python project, add `marimo-studio` and any provider extra
-through that project's dependency workflow before creating the view.
-
-The default starter creates:
-
-```text
-__marimo__/studio/analysis/
-  .gitignore
-  dashboard/
-    view.toml
-    index.html
-```
-
-Open the notebook:
+Studio creates `index.html` beside the notebook and prints the command that
+opens the authoring workspace. Run it:
 
 ```console
 uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-Choose **Develop** to see notebook code, frontend source, and the rendered view
-together.
+Choose **Develop**. The workspace brings three parts of the result into one
+place:
 
-## Mount a notebook result
+- **Notebook** runs Python and owns the reactive computation.
+- **Source** controls the page structure, wording, styles, and browser behavior.
+- **Preview** shows the page your audience will use.
 
-Give a producing Marimo cell a name:
+Studio calls this named page a **view**. The first view is named `dashboard`.
+
+## Place a notebook result on the page
+
+Add a named result cell to the notebook:
 
 ```python
 @app.cell
-def summary_table(data):
-    table = data.group_by("category").len()
-    table
-    return (table,)
+def sales_summary():
+    import marimo as mo
+
+    message = mo.md("## Revenue is on target")
+    message
+    return (message,)
 ```
 
-Add the cell to `index.html` inside `#app-shell`:
+Open `index.html` in Source and place that complete cell inside `#app-shell`:
 
 ```html
-<marimo-cell name="summary_table"></marimo-cell>
+<main id="app-shell">
+  <marimo-cell name="sales_summary"></marimo-cell>
+</main>
 ```
 
-Build the view after editing:
+Save the file. Studio builds the page and Preview shows **Revenue is on
+target**. Future notebook runs update the result through marimo's reactive
+runtime.
 
-```console
-uvx marimo-studio view build dashboard --target analysis.py
-```
+If the source cannot build, Preview keeps the last successful page and Source
+shows the problem beside the affected file.
 
-The build publishes generated files beneath `.artifacts/`. If a later build
-fails, Source shows the diagnostic and the previous valid page stays available.
+## Run the page
 
-## Validate
-
-```console
-uvx marimo-studio validate dashboard --target analysis.py --level static
-uvx marimo-studio validate dashboard --target analysis.py --level runtime
-```
-
-Runtime validation starts the complete reactive notebook in an isolated
-process and can perform its configured file, network, database, and data
-access. Studio then checks the selected projected results.
-
-Browser validation uses the active Studio server and selected client:
-
-```console
-uvx marimo-studio validate dashboard --target analysis.py \
-  --level browser \
-  --server http://localhost:2718
-```
-
-## Run the view
+Start the notebook as an application:
 
 ```console
 uvx --with marimo-studio marimo run analysis.py --sandbox
 ```
 
-The default view is served at `/`. Named views have their own routes.
+The dashboard opens at `/`. A second named page receives its own route.
 
-[Frontend authoring](authoring-options.md) covers custom toolchains.
-[Notebook results](notebook-results.md) covers cells, outputs, values, and
-controls.
+Continue with [Create pages for different audiences](views.md) or [Place
+notebook results on a page](notebook-results.md).

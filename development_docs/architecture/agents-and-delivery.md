@@ -9,21 +9,21 @@ responsibilities.
 ## Agent API
 
 ```python
-import marimo_studio.agent as studio
+import marimo_studio.agent as studio_agent
 
-workspace = studio.open()
+workspace = studio_agent.current_workspace()
 view = await workspace.create_view(
     "dashboard",
     starter="marimo-studio/vanilla:default",
 )
 inspection = await view.inspect()
-artifact = await view.build()
-await view.activate()
+build = await view.build()
+await view.show()
 report = await view.validate(level="browser")
 ```
 
 `agent` exports the notebook-bound `Workspace` and `View` interfaces.
-`_authoring` owns their operations. `_browser_client` owns activation,
+`_authoring` owns their operations. `_browser_client` owns page selection,
 observation, protocol decoding, and bounded HTTP transport.
 
 Agents inspect the provider document catalog, then read and conditionally write
@@ -38,7 +38,7 @@ The CLI uses the same application services:
 status
 notebook inspect/bind
 starters
-view create/inspect/read/write/build/activate/export/remove
+view create/inspect/read/write/build/show/export/remove
 validate --level static|runtime|browser
 doctor
 ```
@@ -93,7 +93,7 @@ Validation is cumulative:
   checks the selected projected results.
 - Browser observes the active rendered presentation.
 
-An analysis action includes stage, severity, stable code, message, advice, and
+A validation issue includes stage, severity, stable code, message, advice, and
 available view, target, or source evidence. Browser facts are accepted only for
 the requested client, binding and runtime sessions, view, runtime, runtime
 instance, presentation revision, request ID, increasing sequence, and validated

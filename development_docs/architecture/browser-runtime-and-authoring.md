@@ -271,7 +271,7 @@ contents differ.
 
 Conflict actions are:
 
-- Use disk content and revision.
+- Use the saved content and revision.
 - Keep local content and save against the acknowledged remote revision.
 
 The Source controller keeps pending or conflicted buffers visible when a

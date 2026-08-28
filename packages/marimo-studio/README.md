@@ -1,23 +1,26 @@
-<p align="center"><strong>Tune your notebook for every audience.</strong></p>
+# Marimo Studio
 
-Marimo Studio turns one reactive, reproducible
-[marimo](https://marimo.io/) notebook into custom web views. Each view can use
-any frontend stack and toolchain while sharing the notebook's data,
-transformations, controls, and reactive execution.
+Marimo Studio turns one saved marimo notebook into focused web pages for
+different audiences. Notebook cells keep the data and computation. Page source
+controls the layout, wording, styles, and browser interaction.
 
-Install Studio and create a view:
+Create a page named `dashboard`, then open it beside the notebook:
 
 ```console
 uvx marimo-studio view create dashboard --target analysis.py
 uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-Choose **Develop** to work on notebook code, frontend source, and the rendered
-view in one session.
+Choose **Develop** to edit the notebook, page source, and rendered result in one
+session. Saving the source rebuilds the page automatically.
 
-Read the [Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/)
-for frontend authoring, notebook results, validation, export, and extension
-development.
+The installed Agent Skill gives coding agents the same workflow. An agent can
+inspect notebook cells and page source, make revision-safe edits, build the
+page, show it in Studio, and validate the rendered result.
+
+Marimo Studio 0.1.0 requires Python 3.10 or newer and Marimo 0.24.0. Read the
+[Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/) for
+frontend choices, notebook results, deployment, and API reference.
 
 ## License
 

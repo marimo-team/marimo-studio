@@ -1,17 +1,18 @@
 ---
-title: Notebook configuration
-description: Configure a Studio notebook, its default view, runtimes, logs, and cell aliases.
+title: Configuration
+description: Configure the notebook, default page, execution environments, aliases, page source, and generated files.
 ---
 
-# Notebook configuration
+# Configuration
 
-Studio stores notebook settings in PEP 723 metadata or in a project
-`pyproject.toml`. Each view keeps one small `view.toml` beside its frontend
-source.
+Studio reads settings from the notebook's PEP 723 block or from one project
+`pyproject.toml`. Keep one source of Studio settings for each notebook. When
+both files configure the same notebook, Studio reports both paths and asks you
+to choose one.
 
-## Notebook metadata
+## Notebook settings
 
-Creating the first view adds the package dependency and Studio table:
+Creating the first view can add these settings to a standalone notebook:
 
 ```python
 # /// script
@@ -23,28 +24,21 @@ Creating the first view adds the package dependency and Studio table:
 # ///
 ```
 
-| Field              | Default     | Behavior                                           |
-| ------------------ | ----------- | -------------------------------------------------- |
-| `default`          | Required    | Selects the view served at `/`                     |
-| `runtime`          | `"server"`  | Selects the runtime when a URL has no override     |
-| `runtimes`         | `[runtime]` | Permits runtimes in Studio and run mode            |
-| `preserve_session` | `false`     | Reconnects a Server refresh with a matching query  |
-| `show_cell_logs`   | `true`      | Includes stdout and stderr in complete-cell mounts |
-| `cells`            | Empty       | Stores optional aliases shared by every view       |
+| Field              | Default     | Behavior                                                            |
+| ------------------ | ----------- | ------------------------------------------------------------------- |
+| `default`          | Required    | Names the view served at `/`                                        |
+| `runtime`          | `"server"`  | Chooses where the notebook runs when the URL has no override        |
+| `runtimes`         | `[runtime]` | Lists the runtimes people may select                                |
+| `preserve_session` | `false`     | Reconnects a Python-backed refresh to its matching notebook session |
+| `show_cell_logs`   | `true`      | Includes stdout and stderr in complete-cell results                 |
+| `cells`            | Empty       | Stores aliases for existing anonymous cells                         |
 
-`preserve_session` reuses a run-mode Server kernel when the canonical public
-notebook query matches the query that created it. Private Studio routing and
-transport keys do not affect the match. A different public query starts a fresh
-kernel and presentation.
+`runtime` accepts `server` for Python execution and `wasm` for browser
+execution. The default runtime must also appear in `runtimes`.
 
-Install frontend extensions through normal Python dependencies. For a
-notebook-local PEP 723 configuration, Studio adds the selected starter's
-requirement when it creates the view. Project dependencies follow the
-project's package workflow. Removing a view leaves dependencies unchanged.
+## Project settings
 
-## Project configuration
-
-A managed project can use `pyproject.toml`:
+A Python project can keep the same settings in `pyproject.toml`:
 
 ```toml
 [project]
@@ -59,18 +53,30 @@ runtime = "server"
 runtimes = ["server", "wasm"]
 ```
 
-`notebook` resolves relative to `pyproject.toml`.
+`notebook` resolves relative to `pyproject.toml`. Add Studio and any frontend
+build dependencies through the project's package workflow.
 
-## View manifest
+## View settings and source
 
-Each view selects one installed frontend extension:
+Views for `analysis.py` live beside the notebook:
+
+```text
+__marimo__/studio/analysis/
+  .gitignore
+  dashboard/
+    view.toml
+    index.html
+```
+
+`view.toml` records the installed frontend integration that creates and builds
+the page:
 
 ```toml
 schema = 1
 provider = "marimo-studio/vanilla"
 ```
 
-The manifest stores explicit overrides:
+An integration can accept explicit page settings:
 
 ```toml
 schema = 1
@@ -80,44 +86,44 @@ provider = "acme-views/report"
 entrypoint = "web/report.html"
 ```
 
-Studio passes explicit option values to provider inspection and build. The
-provider reports diagnostics for unsupported keys or values. Starter identity
-is creation-time information and is not stored in the project.
+Studio writes `view.toml`. The selected integration validates `[options]` and
+reports unsupported values beside the file.
 
-Views for `analysis.py` live at:
+View names start with a lowercase letter and contain lowercase letters,
+numbers, or hyphens. A directory becomes a view when it contains a valid
+`view.toml`.
 
-```text
-__marimo__/studio/analysis/<view-name>/
+## Saved and generated files
+
+Commit `view.toml`, page source, frontend configuration, and dependency lock
+files. Studio writes replaceable build output beneath each view's `.artifacts/`
+directory and cross-process locks beneath the workspace `.locks/` directory.
+The workspace `.gitignore` excludes both generated paths.
+
+Delete one view's `.artifacts/` directory when its generated state needs a
+clean rebuild. The next build recreates it from saved source.
+
+## Cell aliases
+
+Native marimo cell names resolve directly. Give an existing anonymous cell a
+stable name when page source needs to reference it:
+
+```console
+marimo-studio notebook bind summary --target analysis.py --cell 12
 ```
 
-A directory is a view when it has a valid `view.toml`. View names start with a
-lowercase letter and contain lowercase letters, numbers, or hyphens.
+Studio stores aliases under `[tool.marimo-studio.cells]` and makes them
+available to every view.
 
-Commit `view.toml` and the frontend source beneath this directory. Generated
-`.artifacts/` directories and the workspace `.locks/` directory remain ignored.
+## Rename a notebook
 
-The notebook stem selects the workspace directory. Rename a notebook and its
-authored workspace together:
+The notebook filename determines its view directory. Rename both in the same
+change:
 
 ```console
 mv analysis.py revenue.py
 mv __marimo__/studio/analysis __marimo__/studio/revenue
 ```
 
-For project configuration, update `tool.marimo-studio.notebook` in the same
+For project settings, update `tool.marimo-studio.notebook` as part of that
 change.
-
-## Cell aliases
-
-Native Marimo cell names resolve directly. Bind an anonymous cell when it needs
-a stable target:
-
-```console
-marimo-studio notebook bind summary --target analysis.py --cell 12
-```
-
-Aliases are stored under `[tool.marimo-studio.cells]`. Use native cell names
-for new view-facing results when possible.
-
-[View projects](view-project.md) defines source and generated files.
-[Runtimes](runtimes.md) defines server and WebAssembly behavior.

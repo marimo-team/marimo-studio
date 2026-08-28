@@ -1,26 +1,36 @@
 ---
-title: Frontend extension API
-description: Register a starter, inspect project files, and build browser output through the compact provider protocol.
+title: Add support for another frontend
+description: Connect frontend source and its existing build command to Marimo Studio.
 ---
 
-# Frontend extension API
+# Add support for another frontend
 
-A frontend extension is a Python entry point that creates source files,
-inspects a view project, and builds browser files. Studio owns manifests,
-artifact publication, browser sessions, notebook execution, and agents.
+A team can keep an existing frontend project and build it inside Studio. A
+small Python integration tells Studio:
 
-Register one object:
+- which starting files it can create
+- which source files people can edit
+- which files affect the browser build
+- how to produce the page served to the audience
+
+Studio calls this integration a **view provider**. Studio continues to own
+notebook execution, safe source writes, build isolation, validation, the last
+successful page, browser sessions, and agent workflows.
+
+## Register the provider
+
+Publish one object through Python package metadata:
 
 ```toml
 [project.entry-points."marimo_studio.view_provider"]
 report = "acme_views:provider"
 ```
 
-The durable provider key is derived from the distribution and entry-point name.
-For distribution `acme-views` and entry point `report`, the key is
+Studio derives the installed key from the distribution and registration name.
+Distribution `acme-views` and registration `report` produce
 `acme-views/report`.
 
-## Protocol
+## Implement the protocol
 
 ```python
 class ViewProvider(Protocol):
@@ -44,107 +54,57 @@ class ViewProvider(Protocol):
     def build(self, request: BuildRequest) -> BuildResult: ...
 ```
 
-All methods are synchronous. Studio runs provider operations outside the
-server event loop. `InspectionRequest` and `BuildRequest` supply a supervised
-runner, cancellation owner, cache directory, and finite command budget.
-The `command_timeout` field is the aggregate budget for commands started through
-`request.runner`. Each command timeout is validated and clamped to the budget
-remaining. Studio bounds runner output and owns descendant cleanup. Provider
-Python runs synchronously outside the server event loop and must return promptly.
+Provider methods are synchronous. Studio runs them away from the server event
+loop and supplies cooperative cancellation plus a supervised command runner.
 
-## Provider information
+`ProviderInfo` contains the title and summary shown during page creation, plus
+`api_version`. Set `api_version` to `PROVIDER_API_VERSION`.
 
-`ProviderInfo` contains:
+## Create starting files
 
-- `title`
-- `summary`
-- `api_version`
+`ProviderStarter` describes one starting point with a provider-local key,
+title, summary, and required files. Studio qualifies the local key with the
+provider key. Local key `default` from `acme-views/report` becomes
+`acme-views/report:default`.
 
-Set `api_version` to the literal provider contract implemented by the package.
-Update it when the provider adopts a newer contract.
+`create()` returns the provider-owned files. Studio writes `view.toml` and the
+workspace ignore rules. Starting files cannot claim Studio control paths such
+as `view.toml`, `.artifacts/`, `.locks/`, or `.gitignore`.
 
-Provider API 4 uses phase-neutral operation names:
+## Inspect the current project
 
-| API 3                | API 4                     |
-| -------------------- | ------------------------- |
-| `BuildCancellation`  | `ProviderCancellation`    |
-| `BuildCommandResult` | `ProviderCommandResult`   |
-| `BuildRunner`        | `ProviderRunner`          |
-| `request.timeout`    | `request.command_timeout` |
+`inspect()` returns `ProjectInspection` with:
 
-The registry supplies provider identity, distribution, and installed version.
+- `editor_documents`, the ordered text files shown in Source
+- `input_scope`, the exact files and bounded directories that affect a build
+- notebook-result declarations found in the source
+- source-located diagnostics
+- `build_fingerprint`, which changes when provider build behavior changes
 
-The optional `[options]` table in `view.toml` reaches the provider as a detached
-JSON-compatible mapping in `ViewProject.options`. Provider inspection validates
-its accepted keys and values and returns source diagnostics for invalid input.
+Studio watches editor documents and the input scope. It uses the input scope for
+safe build snapshots and build identity. Include `view.toml` in the scope and
+keep it out of `editor_documents` because Studio owns that file.
 
-## Starters
+An editor document may stay outside `input_scope` when editing it should not
+invalidate or rebuild the frontend artifact. Studio still confines reads and
+writes to the exact path returned by provider inspection.
 
-`ProviderStarter` contains a provider-local key, title, summary, and the
-documents its creation result must contain. Studio qualifies that key with the
-provider identity. A `default` key from `acme-views/report` appears as
-`acme-views/report:default` in the Agent API, CLI, and browser catalog.
+Put provider caches beneath `request.cache_root`. Keep generated dependencies
+outside a recursive source directory when they do not affect browser output.
 
-`create()` returns provider-owned files. Studio writes `view.toml` and the
-workspace ignore rules.
+## Build browser files
 
-Starter files cannot claim:
+`BuildRequest` contains a read-only project snapshot, its accepted inspection,
+the exact input paths, build profile, staging directory, cache directory,
+cancellation owner, command budget, and supervised runner.
 
-- `view.toml`
-- `.artifacts/`
-- `.locks/`
-- `.gitignore`
+Run existing frontend commands through `request.runner.run()`. Use a working
+directory inside the snapshot, write the browser output beneath
+`request.staging_root`, and return the entry HTML document in `BuildResult`.
 
-Paths are normalized project-relative `PurePosixPath` values. File and
-directory collisions are rejected before Studio writes anything.
-
-## Inspection
-
-`ProjectInspection` returns:
-
-- `editor_documents`, the ordered files allowed in the user-facing Source editor
-- `input_scope`, containing exact files and bounded recursive directories
-- mount declarations with allowed targets or wildcard access
-- diagnostics
-- one provider build fingerprint
-
-Studio watches `editor_documents` and `input_scope`. It enumerates
-`input_scope` once and uses those files for revisions, snapshots, and
-`BuildRequest.inputs`. An editor document can remain outside that scope when
-editing it should not invalidate the browser artifact. Studio still confines
-reads and writes to the exact provider-authorized document path. Keep generated
-dependencies and provider caches outside declared recursive directories when
-they do not affect browser output. Provider caches belong beneath
-`request.cache_root`.
-
-Studio owns `view.toml`, which providers include in `input_scope` and keep
-outside `editor_documents`. Diagnostics use stable kebab-case codes and
-optional source locations.
-
-The build fingerprint identifies provider-owned analysis and build behavior.
-Studio combines it with the provider distribution, version, API version, and
-its instrumentation contract before computing build identity.
-
-## Build
-
-`BuildRequest` contains an immutable project snapshot, its accepted inspection,
-the exact snapshot inputs, profile, staging directory, cache directory, input
-revision, cancellation owner, aggregate command budget, and supervised command
-runner.
-`request.runner.run()` accepts a command, snapshot-contained working directory,
-timeout, and optional complete environment. Write browser files beneath
-`staging_root` and return the entry document in `BuildResult`.
-
-The returned entry document is UTF-8 HTML with one `head`, one `body`, and one
-`#app-shell`. Runtime tags and attributes such as `marimo-cell`,
-`marimo-output`, `mo-value`, and `data-marimo-studio-site` are reserved for the
-projection contract. Each declared mount in the built document carries the
-attribute returned by `mount_attribute(site.id)`. The attribute value must
-match the corresponding `MountDeclaration.id`.
-
-Providers build candidate files in `staging_root`. Studio validates path
-containment, symlinks, file budgets, reserved routes, and the complete
-candidate before publishing it atomically.
+The entry document needs one `head`, one `body`, and one `#app-shell`. Studio
+validates paths, symlinks, file limits, reserved routes, and the complete output
+before making the page available.
 
 ## Minimal provider
 
@@ -153,6 +113,7 @@ import shutil
 from pathlib import PurePosixPath
 
 from marimo_studio.view_providers import (
+    PROVIDER_API_VERSION,
     BuildResult,
     ProjectInput,
     ProjectInspection,
@@ -168,13 +129,13 @@ ENTRY = PurePosixPath("index.html")
 class ReportProvider:
     info = ProviderInfo(
         title="Report",
-        summary="Builds one HTML report.",
-        api_version=4,
+        summary="Creates one editable HTML report.",
+        api_version=PROVIDER_API_VERSION,
     )
     starter = ProviderStarter(
         key="default",
         title="Report",
-        summary="One editable HTML document.",
+        summary="Start from one HTML document.",
         documents=(ENTRY,),
     )
 
@@ -215,6 +176,13 @@ class ReportProvider:
 provider = ReportProvider()
 ```
 
-Run `marimo-studio doctor acme-views/report` after installation. Test
-one creation, one build, one failed build that retains the last publication,
-and one browser mount through the installed package.
+After installing the package, verify its registration and starting files:
+
+```console
+marimo-studio doctor acme-views/report
+marimo-studio starters
+```
+
+Test page creation, a successful build, a failed build that leaves the last
+successful page available, and one notebook result rendered through the
+installed package.

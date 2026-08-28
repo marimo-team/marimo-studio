@@ -1,73 +1,52 @@
 ---
-title: Work with several views
-description: Give each audience its own page while reusing one Marimo notebook.
+title: Create pages for different audiences
+description: Reuse one notebook across pages with different explanations, layouts, and interactions.
 ---
 
-# Work with several views
+# Create pages for different audiences
 
-One notebook can serve several named views. Each view has its own route,
-frontend source, interactions, and publication.
+A team dashboard and a public report can share the same notebook while
+presenting its results differently. Create one named page for each job:
 
 ```console
 marimo-studio view create dashboard --target analysis.py
 marimo-studio view create report --target analysis.py
 ```
 
-The notebook's `[tool.marimo-studio]` table records the default view. Each view
-directory records its provider in `view.toml`.
+Studio calls each named page a **view**. Both views read the same notebook
+results. Their HTML, styles, wording, and browser interactions remain separate.
 
-## Switch views
+## Switch pages while you work
 
-Use the view menu in Studio. Switching flushes pending source, prepares the
-target preview, then commits the selected view and Source session together.
-Rapid selections keep the newest request.
+Use the page menu in Studio to move between `dashboard` and `report`. Studio
+saves pending Source edits before changing the selected page. The notebook
+session stays active, so controls and computed results remain available.
 
-The selected notebook kernel stays active. Studio keeps a bounded prepared-frame
-cache for each runtime. Up to three recent Server views stay warm, while
-WebAssembly retains its selected view's worker frame. A warm Server switch
-reuses the existing notebook session.
+Each page builds independently. A failed report build leaves its last
+successful version available and does not change the dashboard.
 
-## Use different frontends
+## Choose the page at the main URL
 
-Each view can choose its own installed starter or extension for the audience:
-
-```console
-marimo-studio starters
-marimo-studio view create report --target analysis.py --starter STARTER
-```
-
-The notebook contract remains the same across views. A named cell, output, or
-value target has one analytical meaning even when each page lays it out
-differently.
-
-## Build one view
-
-```console
-marimo-studio view build report --target analysis.py
-```
-
-Builds are view-local. A failed report build does not replace its last valid
-page or affect another view.
-
-## Choose the default
-
-Set `default` in notebook metadata or project configuration:
+The default view opens at `/`. Set it in the notebook configuration:
 
 ```toml
 [tool.marimo-studio]
 default = "dashboard"
 ```
 
-The default view is served at `/`. Other views use named routes.
+Other views use their names as routes. A view named `report` opens at
+`/report/`.
 
-## Remove a view
+## Remove a page
 
 ```console
 marimo-studio view remove report --target analysis.py
 ```
 
-Removal deletes the view directory after confirmation. It leaves Python
-dependencies unchanged. A configured notebook keeps at least one view.
+Studio confirms before deleting the page and its source files. When you remove
+the default view, the confirmation names the view that will open at `/`
+afterward. A configured notebook always keeps at least one view.
 
-[Frontend authoring](authoring-options.md) covers custom source trees.
-[Notebook results](notebook-results.md) covers the shared notebook contract.
+Use [HTML, React, or Svelte](frontend-options.md) when the pages need different
+frontend structures. Use [notebook results](notebook-results.md) to keep their
+analytical meaning aligned.

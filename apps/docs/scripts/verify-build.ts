@@ -2,13 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  headIcons,
-  normalizeBasePath,
-  redirects,
-  siteRoutes,
-  withBasePath,
-} from "../.vitepress/routes.ts";
+import { headIcons, normalizeBasePath, siteRoutes, withBasePath } from "../.vitepress/routes.ts";
 
 const packageRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const distDir = resolve(process.argv[2] ?? join(packageRoot, ".vitepress", "dist"));
@@ -88,32 +82,11 @@ for (const route of siteRoutes) {
   check(renderedSite.includes(`href="${href}"`), `Missing base-aware navigation link: ${href}`);
 }
 
-for (const [source, target] of Object.entries(redirects)) {
-  const redirectPath = join(distDir, `${source}.html`);
-  if (!(await isFile(redirectPath))) {
-    failures.push(`Missing built redirect: /${source}`);
-    continue;
-  }
-  const redirect = await readFile(redirectPath, "utf8");
-  const href = withBasePath(basePath, target);
-  const expectedFragments = [
-    `content="0;url=${href}"`,
-    `rel="canonical" href="${href}"`,
-    `location.replace(${JSON.stringify(href)}+location.search+location.hash)`,
-  ];
-  check(
-    expectedFragments.every((fragment) => redirect.includes(fragment)),
-    `Redirect /${source} target mismatch. Expected ${href}.`,
-  );
-}
-
 if (failures.length > 0) {
   console.error(
     `Documentation build verification failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,
   );
   process.exitCode = 1;
 } else {
-  console.log(
-    `Verified ${siteRoutes.length} documentation routes and ${Object.keys(redirects).length} redirects.`,
-  );
+  console.log(`Verified ${siteRoutes.length} documentation routes.`);
 }

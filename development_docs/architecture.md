@@ -24,15 +24,16 @@ notebook configuration
 | `view_providers._host`    | Entry-point discovery, conformance, and isolated calls     |
 | `view_providers._bundled` | Starter files, source analysis, and candidate builds       |
 | `_artifacts`              | Snapshots, immutable revisions, leases, and profile state  |
-| `_validation`             | Static, runtime, and browser evidence plus repair actions  |
+| `_validation`             | Static, runtime, and browser evidence plus repair issues   |
 | `_delivery`               | Live and static runtime composition                        |
 | `_notebook`               | Saved notebook inspection and cell identity                |
 | `_projections`            | Notebook symbols, target resolution, values, and evidence  |
 | `_filesystem`             | Secure path operations and bounded tree traversal          |
 | `_processes`              | Supervision, cancellation, and output bounds               |
 | `_authoring`              | Shared workspace and view application operations           |
-| `_browser_client`         | Browser activation, observation, protocol, and transport   |
-| `agent`                   | Notebook-bound public interfaces                           |
+| `_browser_client`         | Browser selection, observation, protocol, and transport    |
+| `authoring`               | Saved-notebook public authoring interfaces                 |
+| `agent`                   | Current-code-mode public authoring interfaces              |
 | `_cli`                    | Command parsing, diagnostics, and result rendering         |
 | `_server`                 | HTTP policy, notebook scope, and development coordination  |
 | `_compat`                 | Private Marimo imports and reversible host integration     |

@@ -1,15 +1,11 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type HeadConfig, type Plugin, type UserConfig } from "vitepress";
 import llmstxt from "vitepress-plugin-llms";
 
 import {
-  exampleItems,
   guideItems,
   headIcons,
   normalizeBasePath,
-  redirects,
   referenceItems,
   routes,
   withBasePath,
@@ -18,30 +14,10 @@ import {
 const repository = "https://github.com/marimo-team/marimo-studio";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-studio/");
 const socialDescription =
-  "Create custom web views from one reactive Marimo notebook with any frontend toolchain.";
+  "Turn one reactive Marimo notebook into focused web pages for different audiences.";
 const basePath = normalizeBasePath(process.env.BASE_PATH);
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
 const publicPath = (path: string): string => withBasePath(basePath, path);
-const escapeAttribute = (value: string): string =>
-  value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
-const redirectDocument = (target: string): string => {
-  const href = publicPath(target);
-  const attribute = escapeAttribute(href);
-  const scriptTarget = JSON.stringify(href);
-  return [
-    '<!doctype html><html lang="en"><head><meta charset="utf-8">',
-    '<meta http-equiv="refresh" content="0;url=',
-    attribute,
-    '"><link rel="canonical" href="',
-    attribute,
-    '"><script>location.replace(',
-    scriptTarget,
-    "+location.search+location.hash)</script></head><body>",
-    '<a href="',
-    attribute,
-    '">Continue to the current documentation.</a></body></html>',
-  ].join("");
-};
 const canonicalUrl = (page: string): string => {
   const route = page
     .replace(/^\/+/, "")
@@ -61,15 +37,6 @@ const viteConfig: UserConfig["vite"] = {
 };
 export default defineConfig({
   base: basePath ? `${basePath}/` : "/",
-  async buildEnd(site) {
-    await Promise.all(
-      Object.entries(redirects).map(async ([source, target]) => {
-        const output = join(site.outDir, source + ".html");
-        await mkdir(dirname(output), { recursive: true });
-        await writeFile(output, redirectDocument(target), "utf8");
-      }),
-    );
-  },
   cleanUrls: true,
   description: socialDescription,
   head: [
@@ -123,61 +90,32 @@ export default defineConfig({
       light: "/brand/marimo-studio-lockup-horizontal-light.svg",
     },
     nav: [
-      { text: "Overview", link: routes.overview },
+      { text: "Get started", link: routes.guide.gettingStarted },
       {
-        text: "Guide",
+        text: "Guides",
         items: guideItems,
       },
-      { text: "Examples", link: routes.examples.index },
-      { text: "Reference", link: routes.reference.index },
+      { text: "Coding agents", link: routes.guide.codingAgents },
+      { text: "Example", link: routes.example },
+      { text: "Reference", items: referenceItems },
     ],
     outline: [2, 3],
     search: { provider: "local" },
     sidebar: {
-      [routes.guide.index]: [
+      [routes.guideRoot]: [
         {
-          text: "Guide",
-          collapsed: false,
-          items: guideItems,
-        },
-      ],
-      [routes.examples.index]: [
-        {
-          text: "Examples",
-          collapsed: false,
-          items: exampleItems,
-        },
-      ],
-      [routes.reference.index]: [
-        {
-          text: "Reference",
-          collapsed: false,
-          items: referenceItems,
-        },
-      ],
-      [routes.home]: [
-        {
-          text: "Introduction",
+          text: "Guides",
           collapsed: false,
           items: [
-            { text: "Marimo Studio", link: routes.home },
-            { text: "Overview", link: routes.overview },
-            { text: "Create your first view", link: routes.guide.gettingStarted },
+            ...guideItems,
+            { text: "Author with a coding agent", link: routes.guide.codingAgents },
           ],
         },
-        {
-          text: "Guide",
-          collapsed: true,
-          items: guideItems.filter((item) => item.link !== routes.guide.gettingStarted),
-        },
-        {
-          text: "Examples",
-          collapsed: true,
-          items: exampleItems,
-        },
+      ],
+      [routes.referenceRoot]: [
         {
           text: "Reference",
-          collapsed: true,
+          collapsed: false,
           items: referenceItems,
         },
       ],

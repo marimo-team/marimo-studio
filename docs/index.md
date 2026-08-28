@@ -1,103 +1,80 @@
 ---
 layout: home
-title: "Marimo Studio: One notebook, custom views for every audience"
+title: Marimo Studio
 titleTemplate: false
-description: Keep analytical context in one reactive Marimo notebook and author custom frontends with any toolchain.
+description: Turn one reactive Marimo notebook into focused web pages for different audiences.
 
 hero:
-  text: Tune your notebook for every audience.
-  tagline: Keep data, transformations, controls, and domain decisions in one reactive notebook. Give each audience its own focused web view.
+  text: Build focused pages from one notebook.
+  tagline: Keep data and computation in marimo. Shape the page each audience needs.
   image:
     light: /brand/marimo-studio-lockup-stacked-light.svg
     dark: /brand/marimo-studio-lockup-stacked-dark.svg
     alt: Marimo Studio
   actions:
     - theme: brand
-      text: Get started
+      text: Create your first page
       link: ./guide/getting-started
     - theme: alt
-      text: Explore NGA
+      text: See the NGA example
       link: ./examples/nga
     - theme: alt
-      text: How Studio works
-      link: ./overview
+      text: Author with an agent
+      link: ./guide/coding-agents
 
 features:
   - icon:
       src: /icons/gallery-vertical-end.svg
-      alt: Several custom views
+      alt: Several audience pages
       width: "24"
       height: "24"
-    title: One notebook, several views
-    details: Reuse one notebook graph across focused pages with their own routes, source, and interactions.
+    title: One notebook, several audiences
+    details: Reuse the same data, controls, and results across pages that explain and present them differently.
     link: ./guide/views
-    linkText: Create views
-  - icon:
-      src: /icons/code-xml.svg
-      alt: Custom frontend source
-      width: "24"
-      height: "24"
-    title: Use any frontend stack
-    details: Start with one HTML file or bring the source tree and build tools that fit the view.
-    link: ./guide/authoring-options
-    linkText: Author a frontend
-  - icon:
-      src: /icons/mouse-pointer-click.svg
-      alt: Interactive notebook results
-      width: "24"
-      height: "24"
-    title: Keep results interactive
-    details: Place complete cells, rendered Python objects, values, and controls inside custom layouts.
-    link: ./guide/notebook-results
-    linkText: Use notebook results
+    linkText: Create audience pages
   - icon:
       src: /icons/panels-top-left.svg
-      alt: Live authoring workspace
+      alt: Notebook, source, and preview
       width: "24"
       height: "24"
-    title: Develop beside the notebook
-    details: Move among Notebook, Develop, Preview, and Source while the live kernel stays active.
-    link: ./guide/live-authoring
-    linkText: Use the workspace
-  - icon:
-      src: /icons/cpu.svg
-      alt: Server and browser computation
-      width: "24"
-      height: "24"
-    title: Run where the audience needs it
-    details: Serve with Python, run a compatible notebook in the browser, or export a static site.
-    link: ./guide/run-and-share
-    linkText: Run and share
+    title: Edit beside the notebook
+    details: Work with Python, page source, and the rendered result while the notebook session stays active.
+    link: ./guide/work-in-studio
+    linkText: Work in Studio
   - icon:
       src: /icons/bot.svg
       alt: Coding agent
       width: "24"
       height: "24"
-    title: Author with an agent
-    details: Inspect source, build a view, activate a browser, and validate the rendered result through one notebook-bound API.
+    title: Let an agent verify the page
+    details: Agents inspect the same notebook and source, save safely, show the result, and validate the rendered page.
     link: ./guide/coding-agents
     linkText: Use the agent workflow
 ---
 
-## Keep analysis in the notebook
+## Create one page
 
-Marimo owns data access, transformations, controls, reactive execution,
-sessions, and output rendering. Each Studio view owns its page structure,
-styles, copy, and browser behavior.
+Start with a saved notebook such as `analysis.py`:
 
-`marimo edit` opens the notebook and view workspace. `marimo run` serves the
-published views through Marimo.
+```console
+uvx marimo-studio view create dashboard --target analysis.py
+uvx --with marimo-studio marimo edit analysis.py --sandbox
+```
 
-## Bring the frontend that fits
+The first command creates editable page source beside the notebook. The second
+opens Notebook, Source, and Preview together. Saving Source rebuilds Preview,
+while a failed build leaves the last successful page available.
 
-A view is ordinary source plus a small `view.toml`. The default starter creates
-one HTML file. Installed extensions can create any source tree and use an
-existing build tool.
+![Notebook, page source, and Preview together in Develop](/screenshots/studio-develop.png)
 
-[Frontend authoring](guide/authoring-options.md) covers starters, source
-ownership, and custom extensions.
+Studio calls each named page a **view**. Create another view when a different
+audience needs different wording, layout, or interaction from the same
+notebook.
 
-## Place notebook results in custom layouts
+## Keep the analytical model in marimo
+
+The notebook owns data access, transformations, controls, and reusable results.
+The page owns its structure, copy, styles, and browser behavior.
 
 ```html
 <marimo-cell name="summary"></marimo-cell>
@@ -105,16 +82,14 @@ ownership, and custom extensions.
 <strong mo-value="metrics.total"></strong>
 ```
 
-Controls and reactive updates continue to use the notebook runtime.
+[Place notebook results on a page](guide/notebook-results.md) explains these
+three forms through complete examples.
 
-[Notebook results](guide/notebook-results.md) covers targets, values, controls,
-and dynamic layouts.
+## Choose where the notebook runs
 
-## Publish without losing the last good page
+Use Python execution when the notebook needs local files, databases, server
+credentials, or packages unavailable in the browser. Use browser execution or
+static export when the notebook and its data can run in Pyodide.
 
-Studio builds from an immutable source snapshot, validates the browser files,
-and atomically publishes the result. A failed build leaves the previous page
-available while Source shows the new diagnostic.
-
-[Live authoring](guide/live-authoring.md) covers source conflicts, builds, view
-switching, and preview runtimes.
+[Run or publish a page](guide/run-and-share.md) keeps the code and data exposure
+rules beside each deployment command.

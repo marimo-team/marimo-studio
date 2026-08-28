@@ -1,50 +1,71 @@
 ---
-title: Author views with a coding agent
-description: Inspect a notebook, edit view source, build, activate, and validate the current page.
+title: Author with a coding agent
+description: Inspect notebook and page source, make a revision-safe edit, show the result, and validate the rendered page.
 ---
 
-# Author views with a coding agent
+# Author with a coding agent
 
-Open the saved notebook once per code-mode execution:
+Marimo Studio ships an Agent Skill and a Python API bound to the current
+code-mode notebook and Studio tab. The agent works with the same notebook,
+source files, builds, and Preview that a person sees.
 
-```python
-import marimo_studio.agent as studio
+The workflow has five visible actions:
 
-workspace = studio.open()
-inventory = await workspace.inspect_notebook()
-producer = inventory.notebook.named_cells()["summary"]
-notebook = await workspace.inspect_notebook(
-    include_code=True,
-    selectors=(producer.ref, *producer.upstream),
-)
-view = await workspace.create_view("dashboard")
+```text
+inspect -> edit -> build -> show -> verify
 ```
 
-The notebook owns data access, transformations, controls, and reusable results.
-The view owns its page structure, copy, styles, and browser interaction.
-
-## Inspect before editing
+Open the current workspace once in each code-mode execution:
 
 ```python
-import marimo_studio.agent as studio
+import marimo_studio.agent as studio_agent
 
-workspace = studio.open()
+workspace = studio_agent.current_workspace()
 view = workspace.view("dashboard")
+```
+
+The inspect, edit, and build snippets use these `workspace` and `view` handles
+within the same execution.
+
+## Inspect the notebook and page
+
+Read the notebook inventory before changing its analytical model:
+
+```python
+notebook = await workspace.inspect_notebook()
+print(notebook.notebook.named_cells())
+```
+
+When a requested change reaches into a result's computation, ask for that cell
+and every cell that produces its inputs:
+
+```python
+producer = await workspace.inspect_notebook(
+    selectors=("sales_summary",),
+    include_code=True,
+    context="upstream",
+)
+```
+
+Inspect the selected page to find the files Studio exposes for editing:
+
+```python
 inspection = await view.inspect()
 for document in inspection.documents:
     print(document.path, document.language, document.access)
 ```
 
-Read each affected document immediately before writing. Save through the
-revision-aware view API:
+Choose project-relative files whose access is `edit`.
+
+## Edit without overwriting a newer save
+
+Read the file immediately before writing it. Pass the source version returned
+by that read:
 
 ```python
-import marimo_studio.agent as studio
-
-workspace = studio.open()
-view = workspace.view("dashboard")
 document = await view.read("index.html")
-updated = document.content.replace("Current heading", "New heading")
+updated = document.content.replace("Current heading", "Quarterly revenue")
+
 await view.write(
     "index.html",
     updated,
@@ -52,95 +73,54 @@ await view.write(
 )
 ```
 
-Write project-relative paths whose access is `edit`. A concurrent save raises
-`SourceConflictError` and keeps the newer disk revision.
+If a person or another agent saved first, Studio raises `SourceConflictError`
+and preserves the newer file. Read it again, incorporate both changes, and save
+against the new revision.
 
-Use a native Marimo cell name for a durable view-facing result. An existing
-anonymous cell can receive an alias through `workspace.bind(alias, index)`.
-
-[Use notebook results](notebook-results.md) defines complete-cell, rendered
-object, and JSON-compatible value mounts.
-
-## Build the view
-
-Build after changing source:
+## Build the page
 
 ```python
-import marimo_studio.agent as studio
-
-workspace = studio.open()
-view = workspace.view("dashboard")
-publication = await view.build()
-print(publication.artifact_id)
+build = await view.build()
+print(build.revision)
 ```
 
-Studio validates the candidate before publishing it. A failed build leaves the
-last published page available. Repair diagnostics at their reported source
-locations, then build again.
+Studio validates the complete browser output before replacing Preview. A failed
+build keeps the last successful page available and reports source-located
+issues for repair.
 
-## Activate and exercise the page
+## Show the page in Studio
 
-Activate in a separate code-mode call so the browser can complete the
+Run this in the next code-mode execution so the Studio tab can complete the
 transition:
 
 ```python
-import marimo_studio.agent as studio
+import marimo_studio.agent as studio_agent
 
-workspace = studio.open()
-view = workspace.view("dashboard")
-activation = await view.activate()
+view = studio_agent.current_workspace().view("dashboard")
+await view.show()
 ```
 
-Exercise controls, navigation, conditional content, and dynamic mounts used by
-the view. When several Studio browsers are connected, the active code-mode
-session targets its attached client.
+Use the browser tool provided by the coding environment to exercise controls,
+navigation, conditional content, and dynamic results in that same Studio tab.
 
-## Validate the current presentation
+## Verify the rendered result
 
-Run focused validation after the page settles:
+Run browser validation after the page settles and its relevant interactions
+have been exercised:
 
 ```python
-import marimo_studio.agent as studio
+import marimo_studio.agent as studio_agent
 
-workspace = studio.open()
-report = await workspace.view("dashboard").validate(level="browser")
-
-for action in report.actions:
-    print(action.stage, action.code, action.advice)
+report = await studio_agent.current_workspace().view("dashboard").validate(level="browser")
+if not report.ok:
+    for issue in report.issues:
+        print(issue.message, issue.advice)
 ```
 
-The report combines saved source checks, isolated notebook execution, and
-browser evidence for the active presentation. Runtime validation starts the
-complete reactive notebook and can use its configured files, network,
-databases, and data. Studio then checks the selected projected results.
+A successful report belongs to the current saved source, runtime, Studio tab,
+and rendered page. Repair each reported issue, then repeat build, show,
+interaction, and validation.
 
-`report.actions` contains errors and warnings. Errors make `report.ok` false.
-Evaluate warnings against the requested workflow. For browser validation,
-`report.handoff_ready` confirms that the evidence belongs to one current
-presentation. Reinspect the named source, rebuild, reactivate when needed, and
-validate again.
-
-## Use the terminal workflow
-
-Use the CLI outside code mode:
-
-```console
-marimo-studio view create dashboard --target notebook.py --format json
-marimo-studio view inspect dashboard --target notebook.py --format json
-marimo-studio view build dashboard --target notebook.py --format json
-marimo-studio view activate dashboard \
-  --target notebook.py \
-  --server http://localhost:2718 \
-  --browser-client CLIENT_ID
-marimo-studio validate dashboard --target notebook.py \
-  --level browser \
-  --server http://localhost:2718 \
-  --browser-client CLIENT_ID
-```
-
-Activation and browser validation connect to a running Studio server. Supply
-`MARIMO_STUDIO_ACCESS_TOKEN` through the parent process or a secret manager.
-
-[Agent API reference](../reference/agent-api.md) lists exact method signatures.
-[Run, export, and share](run-and-share.md) covers Server, WebAssembly, and
-static delivery.
+Use [`marimo_studio.authoring`](../reference/python-api.md) for scripts that
+work with a saved notebook outside code mode. Use the [CLI
+reference](../reference/cli.md) for terminal automation.

@@ -4,53 +4,105 @@
   <a href="https://pypi.org/project/marimo-studio/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/marimo-studio.svg"></a>
 </p>
 
-<p align="center"><strong>Tune your notebook for every audience.</strong></p>
+# Marimo Studio
 
-Marimo Studio turns one reactive, reproducible
-[marimo](https://marimo.io/) notebook into custom web views for different
-audiences. The notebook owns data access, transformations, metrics, controls,
-and domain decisions. Each view gives an audience its own layout and
-interaction model.
+Marimo Studio turns one saved [marimo](https://marimo.io/) notebook into
+focused web pages for different audiences. The notebook keeps the data,
+computation, controls, and reusable results. Each page chooses how those results
+are arranged and how its audience interacts with them.
 
-## What you can do
+## Create your first page
 
-- **[Create several views](https://marimo-team.github.io/marimo-studio/guide/views).**
-  Give each audience its own route, structure, language, and interaction while
-  reusing one notebook.
-- **[Use any frontend stack](https://marimo-team.github.io/marimo-studio/guide/authoring-options).**
-  Use the source files and tooling that fit each view.
-- **[Keep results interactive](https://marimo-team.github.io/marimo-studio/guide/notebook-results).**
-  Place reactive notebook results inside custom layouts.
-- **[Build beside the notebook](https://marimo-team.github.io/marimo-studio/guide/live-authoring).**
-  Move between notebook, source, and preview while the kernel stays active.
-- **[Run and share](https://marimo-team.github.io/marimo-studio/guide/run-and-share).**
-  Serve views from Python, run them in the browser, or export them for static
-  hosting.
+Start with a saved notebook such as `analysis.py`:
 
-## Try Studio
+```console
+uvx marimo-studio view create dashboard --target analysis.py
+uvx --with marimo-studio marimo edit analysis.py --sandbox
+```
 
-From a repository checkout, open the National Gallery of Art notebook and its
-three views:
+The first command creates the page source beside the notebook. The second opens
+marimo with three connected surfaces:
+
+- **Notebook** for Python and reactive computation
+- **Source** for the page's HTML, styles, and browser code
+- **Preview** for the page your audience will use
+
+Choose **Develop** to see all three. Saving Source rebuilds Preview, while a
+failed build leaves the last successful page available.
+
+![Notebook, page source, and Preview together in Develop](apps/docs/public/screenshots/studio-develop.png)
+
+Studio calls each named page a **view**. Add another view when the same notebook
+needs a different layout, explanation, or interaction for another audience.
+
+## Choose how to build the page
+
+The default page keeps its HTML, styles, and browser code in one editable file.
+It is the shortest path for reports, dashboards, and focused tools.
+
+Choose React or Svelte when the page benefits from components and a larger
+frontend source tree. Install `marimo-studio[deno]` in that environment so
+Studio can build those files with the pinned Deno toolchain.
+
+Teams can connect another frontend build when an existing project should remain
+the source of the page. The [frontend integration
+reference](https://marimo-team.github.io/marimo-studio/reference/provider-api)
+defines the small Python contract that creates, inspects, and builds that
+source.
+
+## Place notebook results anywhere
+
+Page source can place a complete cell, one rendered Python object, or a
+JSON-compatible value:
+
+```html
+<marimo-cell name="summary"></marimo-cell>
+<marimo-output value="chart"></marimo-output>
+<strong mo-value="metrics.total"></strong>
+```
+
+Marimo continues to own reactive execution, controls, widgets, and rich output
+rendering. Studio controls where each result appears.
+
+## Author with a coding agent
+
+The package includes an Agent Skill and a code-mode Python API. A coding
+agent can inspect notebook cells and page source, make an edit without
+overwriting a newer save, build the page, show it in Studio, and verify the
+rendered result.
+
+Human and agent edits use the same source files and conflict protection. Read
+[Author with a coding
+agent](https://marimo-team.github.io/marimo-studio/guide/coding-agents) for the
+complete workflow.
+
+## Run or publish
+
+Use `marimo run` when the notebook needs Python packages, local files,
+databases, or server credentials. Browser execution and static export are
+available when the notebook and its data can run in Pyodide.
+
+Read [Run or publish a
+page](https://marimo-team.github.io/marimo-studio/guide/run-and-share) before
+choosing where the notebook will execute.
+
+## Explore the repository example
+
+The National Gallery of Art example uses one notebook to produce a collection
+brief, an artwork browser, and an editorial story:
 
 ```console
 make setup
 uv run --with polars --with pyobservablejs marimo edit examples/nga.py
 ```
 
-Choose **Develop** to work on the notebook and selected view together. Use the
-view menu to move among its three frontends.
+See the [Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/)
+for the guided workflow, the example, and exact API contracts.
 
-Run the same notebook as an application:
+## Compatibility
 
-```console
-uv run --with polars --with pyobservablejs marimo run examples/nga.py
-```
-
-## Documentation
-
-Read the [Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/)
-for setup, frontend authoring, notebook results, live editing, automation, and
-deployment.
+Marimo Studio 0.1.0 requires Python 3.10 or newer and Marimo 0.24.0. React and
+Svelte authoring use the optional Deno 2.9.5 dependency.
 
 ## License
 

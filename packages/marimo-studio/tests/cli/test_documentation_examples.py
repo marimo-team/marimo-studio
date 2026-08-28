@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import re
 import shlex
 from pathlib import Path
 from typing import cast
@@ -12,7 +13,9 @@ import click
 import marimo
 from click.testing import CliRunner
 
-import marimo_studio.agent as studio
+import marimo_studio
+import marimo_studio.agent as studio_agent
+import marimo_studio.authoring as studio_authoring
 from marimo_studio._artifacts.repository import validate_document
 from marimo_studio._cli import cli
 from marimo_studio._views.inspection import inspection_request
@@ -180,8 +183,11 @@ if __name__ == "__main__":
 
 def test_documented_result_cells_survive_marimo_parsing(tmp_path) -> None:
     examples = (
-        ("docs/guide/getting-started.md", "Give a producing Marimo cell a name:"),
-        ("docs/guide/notebook-results.md", "Prefer native Marimo cell names:"),
+        ("docs/guide/getting-started.md", "Add a named result cell to the notebook:"),
+        (
+            "docs/guide/notebook-results.md",
+            "Native marimo cell names are the most direct page targets:",
+        ),
     )
     for index, (path, heading) in enumerate(examples):
         document = _python_block(Path(path).read_text(encoding="utf-8"), heading)
@@ -189,7 +195,7 @@ def test_documented_result_cells_survive_marimo_parsing(tmp_path) -> None:
         notebook.write_text(_notebook_source(document), encoding="utf-8")
 
         result = asyncio.run(
-            studio.open(notebook=notebook).inspect_notebook(
+            studio_authoring.open_workspace(notebook).inspect_notebook(
                 include_code=True,
                 output_expressions=True,
             )
@@ -285,3 +291,45 @@ def test_documented_cli_workflows_parse_to_supported_commands() -> None:
 
     assert direct
     assert signatures
+
+
+def _cli_leaf_paths(
+    group: click.Group,
+    prefix: tuple[str, ...] = (),
+) -> set[tuple[str, ...]]:
+    paths: set[tuple[str, ...]] = set()
+    for name, command in group.commands.items():
+        path = (*prefix, name)
+        if isinstance(command, click.Group):
+            paths.update(_cli_leaf_paths(command, path))
+        else:
+            paths.add(path)
+    return paths
+
+
+def test_cli_reference_covers_every_public_command() -> None:
+    source = Path("docs/reference/cli.md").read_text(encoding="utf-8")
+    documented = {
+        tuple(match.split())
+        for match in re.findall(r"^## `marimo-studio ([^`]+)`$", source, re.MULTILINE)
+    }
+
+    assert documented == _cli_leaf_paths(cli)
+
+
+def _api_symbols(source: str, module: str) -> set[str]:
+    section = source.split(f"## `{module}`", 1)[1]
+    section = section.split("\n## `", 1)[0]
+    return set(re.findall(r"^### `([^`]+)`$", section, re.MULTILINE))
+
+
+def test_python_reference_covers_the_public_api() -> None:
+    source = Path("docs/reference/python-api.md").read_text(encoding="utf-8")
+    modules = {
+        "marimo_studio": marimo_studio,
+        "marimo_studio.authoring": studio_authoring,
+        "marimo_studio.agent": studio_agent,
+    }
+
+    for name, module in modules.items():
+        assert _api_symbols(source, name) == set(module.__all__)
