@@ -20,6 +20,10 @@ VIEW_PROVIDER_PRIVATE_LAYERS = (
     "marimo_studio.view_providers._host",
     "marimo_studio.view_providers._bundled",
 )
+PUBLIC_AUTHORING_FACADES = (
+    "marimo_studio.agent",
+    "marimo_studio.authoring",
+)
 FORBIDDEN_DEPENDENCIES = {
     "marimo_studio._workspace": (
         "marimo_studio._artifacts",
@@ -184,6 +188,14 @@ def violations() -> tuple[str, ...]:
             for dependency in sorted(graph[module]):
                 if any(_under(dependency, prefix) for prefix in forbidden):
                     failures.append(f"forbidden dependency: {module} -> {dependency}")
+    for module in sorted(
+        item
+        for item in graph
+        if not any(_under(item, facade) for facade in PUBLIC_AUTHORING_FACADES)
+    ):
+        for dependency in sorted(graph[module]):
+            if any(_under(dependency, facade) for facade in PUBLIC_AUTHORING_FACADES):
+                failures.append(f"forbidden dependency: {module} -> {dependency}")
     contract_modules = sorted(
         module
         for module in graph

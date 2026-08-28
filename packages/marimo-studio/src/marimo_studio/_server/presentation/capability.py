@@ -404,7 +404,7 @@ def _signature(
 ) -> str:
     message = "\0".join(
         (
-            "marimo-studio-presentation-v4",
+            "marimo-studio-presentation-v1",
             kind,
             context.file_key,
             context.mode,

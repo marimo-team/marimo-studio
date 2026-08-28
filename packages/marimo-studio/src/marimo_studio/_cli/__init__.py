@@ -2,8 +2,8 @@
 
 The command line covers notebook inspection, cell binding, provider and starter
 discovery, view creation and removal, source inspection, builds, validation,
-browser activation, and static export. Each command uses the same Studio
-services as the Python, agent, and browser entry points.
+showing a page in a connected browser, and static export. Each command uses the
+same Studio services as the Python, agent, and browser entry points.
 
 Human-facing commands produce readable terminal output and recovery guidance.
 Automation can request stable JSON results, JSON Lines diagnostics, and exit

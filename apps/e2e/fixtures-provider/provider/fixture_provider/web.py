@@ -52,7 +52,7 @@ class MultiFileProvider:
     info = ProviderInfo(
         title="E2E web project",
         summary="Builds one HTML entry and its declared browser assets.",
-        api_version=4,
+        api_version=1,
     )
     _starter = ProviderStarter(
         key="default",
@@ -103,7 +103,7 @@ class MultiFileProvider:
                         message=str(error),
                     ),
                 ),
-                build_fingerprint="e2e-web-v2",
+                build_fingerprint="e2e-web-v1",
             )
         documents = tuple(
             path for path in _DOCUMENTS if project.root.joinpath(*path.parts).is_file()
@@ -152,7 +152,7 @@ class MultiFileProvider:
             ),
             mounts=mounts,
             diagnostics=diagnostics,
-            build_fingerprint="e2e-web-v2",
+            build_fingerprint="e2e-web-v1",
         )
 
     def build(self, request: BuildRequest) -> BuildResult:

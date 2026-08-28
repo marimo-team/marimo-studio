@@ -373,7 +373,7 @@ def profile_state(
 
 def profile_state_dict(state: ArtifactProfileState) -> dict[str, object]:
     return {
-        "schema": 2,
+        "schema": 1,
         "profile": state.profile,
         "published": (
             {
@@ -404,7 +404,7 @@ def decode_profile_state(
     )
     if (
         type(data["schema"]) is not int
-        or data["schema"] != 2
+        or data["schema"] != 1
         or data["profile"] != expected_profile
     ):
         _invalid("Artifact profile identity is invalid")

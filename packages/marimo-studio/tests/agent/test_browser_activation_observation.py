@@ -243,20 +243,20 @@ def test_edit_workspace_requests_browser_observations(
     ]
 
 
-def test_activation_http_rejects_mixed_session_and_browser_selectors(
+def test_show_http_rejects_mixed_session_and_browser_selectors(
     notebook_path: Path,
 ) -> None:
     server = agent_edit_server(notebook_path)
 
     with TestClient(server.app) as client:
         mixed_activation = client.patch(
-            "/_marimo-studio/views/dashboard/activate",
+            "/_marimo-studio/views/dashboard/show",
             headers={**server.headers, "Marimo-Session-Id": "s_123456"},
             json={"schema": 1, "browser_client": "browser-client-1234"},
         )
 
     assert mixed_activation.status_code == 400
-    assert mixed_activation.json()["error"] == "invalid-activation-request"
+    assert mixed_activation.json()["error"] == "invalid-show-request"
     assert mixed_activation.json()["field"] == "browser_client"
 
 
@@ -265,9 +265,9 @@ def test_activation_http_rejects_mixed_session_and_browser_selectors(
     [
         pytest.param(
             "PATCH",
-            "/_marimo-studio/views/dashboard/activate",
+            "/_marimo-studio/views/dashboard/show",
             {},
-            "invalid-activation-request",
+            "invalid-show-request",
             "request",
             id="activation",
         ),

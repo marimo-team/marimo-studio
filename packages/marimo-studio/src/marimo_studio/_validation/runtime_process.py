@@ -247,10 +247,10 @@ def _source_revisions(
 
 def _source_changed_check(notebook: Path) -> CheckResult:
     return CheckResult(
-        "analysis-source-revision",
+        "validation-source-revision",
         "fail",
         "Studio sources changed before runtime validation completed.",
-        code="analysis-source-changed",
+        code="validation-source-changed",
         details={
             "source": {"path": str(notebook)},
             "hint": "Wait for the current edits to save, then rerun validation.",

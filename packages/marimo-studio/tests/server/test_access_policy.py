@@ -71,11 +71,11 @@ def test_edit_workspace_mutations_require_the_current_server_token(
             headers={"Marimo-Server-Token": "stale-token"},
         )
         missing_analysis = client.post(
-            "/_marimo-studio/analyze",
+            "/_marimo-studio/validate",
             json={"schema": 1, "view": "dashboard"},
         )
         invalid_activation = client.patch(
-            "/_marimo-studio/views/dashboard/activate",
+            "/_marimo-studio/views/dashboard/show",
             headers={"Marimo-Server-Token": "stale-token"},
             json={"schema": 1, "browser_client": None},
         )
@@ -126,7 +126,7 @@ def test_run_mode_keeps_studio_source_mutations_read_only(
             headers=headers,
         )
         analysis = client.post(
-            "/_marimo-studio/analyze",
+            "/_marimo-studio/validate",
             json={"schema": 1, "view": "dashboard"},
             headers=headers,
         )
@@ -143,7 +143,7 @@ def test_run_mode_keeps_studio_source_mutations_read_only(
             },
         )
         activation = client.patch(
-            "/_marimo-studio/views/dashboard/activate",
+            "/_marimo-studio/views/dashboard/show",
             headers=headers,
             json={"schema": 1, "browser_client": None},
         )

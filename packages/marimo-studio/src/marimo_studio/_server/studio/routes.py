@@ -130,7 +130,7 @@ async def create_view_response(
         return error_response(error)
     return JSONResponse(
         {
-            "schema": 2,
+            "schema": 1,
             "name": name,
         },
         status_code=201,

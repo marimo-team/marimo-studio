@@ -8,7 +8,7 @@ the presentation revisions being checked.
 Source identity is checked again after each later stage. A concurrent edit
 becomes an explicit stale-source result instead of mixing static evidence from
 one revision with runtime evidence from another. CLI and agent workflows share
-these check results, while browser analysis adds rendered observations on top.
+these check results, while browser validation adds rendered observations on top.
 """
 
 from __future__ import annotations
@@ -122,16 +122,16 @@ def source_revision_check(
     studio: StudioWorkspace,
     message: str,
     *,
-    code: Literal["analysis-source-changed", "analysis-source-unavailable"],
+    code: Literal["validation-source-changed", "validation-source-unavailable"],
 ) -> CheckResult:
     """Return the canonical source-coherence failure for every adapter."""
     hint = (
         "Restore the missing source, save it, then rerun validation."
-        if code == "analysis-source-unavailable"
+        if code == "validation-source-unavailable"
         else "Wait for the current edits to save, then rerun validation."
     )
     return CheckResult(
-        "analysis-source-revision",
+        "validation-source-revision",
         "fail",
         message,
         code=code,
@@ -170,7 +170,7 @@ def _prepare_validation(
                 source_revision_check(
                     studio,
                     f"Studio sources could not be captured: {source_error}",
-                    code="analysis-source-unavailable",
+                    code="validation-source-unavailable",
                 ),
             )
         )
@@ -180,7 +180,7 @@ def _prepare_validation(
                 source_revision_check(
                     studio,
                     "Studio sources changed during static validation.",
-                    code="analysis-source-changed",
+                    code="validation-source-changed",
                 ),
             )
         )
@@ -198,10 +198,10 @@ def _prepare_validation(
             static = static.extend(
                 (
                     CheckResult(
-                        "analysis-presentation-revision",
+                        "validation-page-revision",
                         "fail",
                         f"Studio presentations could not be captured: {error}",
-                        code="analysis-presentation-unavailable",
+                        code="validation-page-unavailable",
                         details={
                             "source": {"path": str(studio.notebook)},
                             "hint": (
@@ -278,13 +278,13 @@ async def verify_source_revisions(
         return source_revision_check(
             studio,
             f"Studio sources could not be captured after {phase}: {error}",
-            code="analysis-source-unavailable",
+            code="validation-source-unavailable",
         )
     if current != preparation.source_revisions:
         return source_revision_check(
             studio,
             f"Studio sources changed while {phase} was running.",
-            code="analysis-source-changed",
+            code="validation-source-changed",
         )
     return None
 

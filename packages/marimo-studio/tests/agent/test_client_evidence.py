@@ -8,8 +8,8 @@ import pytest
 
 import marimo_studio._browser_client.client as browser_client
 import marimo_studio._browser_client.transport as browser_transport
-from marimo_studio._validation.analysis import AnalysisRequest
-from marimo_studio._validation.evidence import AnalysisReport, BrowserObservation
+from marimo_studio._validation.evidence import BrowserObservation, ValidationEvidence
+from marimo_studio._validation.progressive import ValidationRequest
 from marimo_studio.errors import ProtocolError
 
 from ..helpers import ready_runtime_status
@@ -29,13 +29,13 @@ def test_http_errors_preserve_structured_details() -> None:
     }
 
 
-def test_analysis_transport_budget_covers_runtime_and_browser_deadlines(
+def test_validation_transport_budget_covers_runtime_and_browser_deadlines(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     notebook = tmp_path / "analysis.py"
     notebook.write_text("", encoding="utf-8")
-    report = AnalysisReport(
+    report = ValidationEvidence(
         notebook=notebook,
         views=("dashboard",),
         runtime="server",
@@ -45,7 +45,7 @@ def test_analysis_transport_budget_covers_runtime_and_browser_deadlines(
         runtime_skipped=None,
         browser_observations=(),
         browser_required=False,
-        actions=(),
+        issues=(),
     )
     captured: dict[str, object] = {}
 
@@ -56,13 +56,13 @@ def test_analysis_transport_budget_covers_runtime_and_browser_deadlines(
     monkeypatch.setattr(browser_client, "request_json", request)
 
     asyncio.run(
-        browser_client.request_analysis(
+        browser_client.request_browser_validation(
             browser_transport.StudioServerConnection(
                 "http://localhost:2718",
                 server_token="server-token",
             ),
             notebook,
-            AnalysisRequest(
+            ValidationRequest(
                 view="dashboard",
                 browser_timeout=20,
                 runtime_timeout=75,
@@ -78,12 +78,12 @@ def test_analysis_transport_budget_covers_runtime_and_browser_deadlines(
     assert cast(dict[str, object], body)["runtime_timeout"] == 75
 
 
-def test_analysis_rejects_a_browser_policy_downgrade(
+def test_validation_rejects_a_browser_policy_downgrade(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
-    report = AnalysisReport(
+    report = ValidationEvidence(
         notebook=notebook,
         views=("dashboard",),
         runtime="server",
@@ -93,7 +93,7 @@ def test_analysis_rejects_a_browser_policy_downgrade(
         runtime_skipped=None,
         browser_observations=(),
         browser_required=False,
-        actions=(),
+        issues=(),
     )
 
     async def request(*_args: object, **_kwargs: object) -> dict[str, object]:
@@ -101,15 +101,15 @@ def test_analysis_rejects_a_browser_policy_downgrade(
 
     monkeypatch.setattr(browser_client, "request_json", request)
 
-    with pytest.raises(ProtocolError, match="analysis response"):
+    with pytest.raises(ProtocolError, match="validation response"):
         asyncio.run(
-            browser_client.request_analysis(
+            browser_client.request_browser_validation(
                 browser_transport.StudioServerConnection(
                     "http://localhost:2718",
                     server_token="server-token",
                 ),
                 notebook,
-                AnalysisRequest(view="dashboard", require_browser=True),
+                ValidationRequest(view="dashboard", require_browser=True),
             )
         )
 
@@ -212,12 +212,12 @@ def test_observation_rejects_evidence_for_another_revision_or_runtime(
         )
 
 
-def test_analysis_rejects_evidence_from_another_selected_browser(
+def test_validation_rejects_evidence_from_another_selected_browser(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
-    report = AnalysisReport(
+    report = ValidationEvidence(
         notebook=notebook,
         views=("dashboard",),
         runtime="server",
@@ -240,7 +240,7 @@ def test_analysis_rejects_evidence_from_another_selected_browser(
             ),
         ),
         browser_required=True,
-        actions=(),
+        issues=(),
     )
 
     async def request(*_args: object, **_kwargs: object) -> dict[str, object]:
@@ -250,14 +250,14 @@ def test_analysis_rejects_evidence_from_another_selected_browser(
 
     with pytest.raises(ProtocolError, match="another browser"):
         asyncio.run(
-            browser_client.request_analysis(
+            browser_client.request_browser_validation(
                 browser_transport.StudioServerConnection(
                     "http://localhost:2718",
                     server_token="server-token",
                     browser_client="selected-browser",
                 ),
                 notebook,
-                AnalysisRequest(
+                ValidationRequest(
                     view="dashboard",
                     browser_client="selected-browser",
                 ),
@@ -270,7 +270,7 @@ def test_code_mode_analysis_rejects_evidence_from_another_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
-    report = AnalysisReport(
+    report = ValidationEvidence(
         notebook=notebook,
         views=("dashboard",),
         runtime="server",
@@ -292,7 +292,7 @@ def test_code_mode_analysis_rejects_evidence_from_another_session(
             ),
         ),
         browser_required=True,
-        actions=(),
+        issues=(),
     )
 
     async def request(*_args, **_kwargs):
@@ -302,13 +302,13 @@ def test_code_mode_analysis_rejects_evidence_from_another_session(
 
     with pytest.raises(ProtocolError, match="another session"):
         asyncio.run(
-            browser_client.request_analysis(
+            browser_client.request_browser_validation(
                 browser_transport.StudioServerConnection(
                     "http://localhost:2718",
                     server_token="server-token",
                     session_id="s_123456",
                 ),
                 notebook,
-                AnalysisRequest(view="dashboard"),
+                ValidationRequest(view="dashboard"),
             )
         )

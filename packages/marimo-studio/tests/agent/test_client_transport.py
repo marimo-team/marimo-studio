@@ -31,7 +31,7 @@ def test_cancelled_server_request_closes_its_exchange(
         task = asyncio.create_task(
             browser_transport.request_json(
                 browser_transport.StudioServerConnection("http://localhost:2718"),
-                "/_marimo-studio/analyze",
+                "/_marimo-studio/validate",
             )
         )
         assert await asyncio.to_thread(started.wait, 1)
@@ -79,7 +79,7 @@ def test_server_request_enforces_one_wall_clock_deadline(
         with pytest.raises(browser_transport.AgentRequestError) as raised:
             await browser_transport.request_json(
                 browser_transport.StudioServerConnection("http://localhost:2718"),
-                "/_marimo-studio/analyze",
+                "/_marimo-studio/validate",
                 timeout=0.02,
             )
         assert raised.value.code == "request-timeout"
@@ -110,7 +110,7 @@ def test_server_request_deadline_does_not_wait_for_worker_shutdown(
             asyncio.run(
                 browser_transport.request_json(
                     browser_transport.StudioServerConnection("http://localhost:2718"),
-                    "/_marimo-studio/analyze",
+                    "/_marimo-studio/validate",
                     timeout=0.02,
                 )
             )
@@ -155,7 +155,7 @@ def test_server_request_workers_are_bounded_and_capacity_recovers(
             asyncio.create_task(
                 browser_transport.request_json(
                     connection,
-                    "/_marimo-studio/analyze",
+                    "/_marimo-studio/validate",
                     timeout=1,
                 )
             )
@@ -165,7 +165,7 @@ def test_server_request_workers_are_bounded_and_capacity_recovers(
         with pytest.raises(browser_transport.AgentRequestError) as raised:
             await browser_transport.request_json(
                 connection,
-                "/_marimo-studio/analyze",
+                "/_marimo-studio/validate",
                 timeout=1,
             )
         assert raised.value.code == "request-capacity-exhausted"
@@ -176,7 +176,7 @@ def test_server_request_workers_are_bounded_and_capacity_recovers(
         assert (
             await browser_transport.request_json(
                 connection,
-                "/_marimo-studio/analyze",
+                "/_marimo-studio/validate",
                 timeout=1,
             )
             == {}
@@ -220,7 +220,7 @@ def test_transport_cancellation_does_not_block_the_event_loop(
         task = asyncio.create_task(
             browser_transport.request_json(
                 browser_transport.StudioServerConnection("http://localhost:2718"),
-                "/_marimo-studio/analyze",
+                "/_marimo-studio/validate",
             )
         )
         assert await asyncio.to_thread(requesting.wait, 1)
@@ -342,7 +342,7 @@ def test_cancelled_request_does_not_send_after_connection_finishes(
         task = asyncio.create_task(
             browser_transport.request_json(
                 browser_transport.StudioServerConnection("http://localhost:2718"),
-                "/_marimo-studio/analyze",
+                "/_marimo-studio/validate",
                 method="POST",
             )
         )

@@ -12,15 +12,16 @@ import marimo._code_mode as code_mode
 import pytest
 
 import marimo_studio.agent as studio_agent
+import marimo_studio.authoring as studio_authoring
 from marimo_studio._browser_client.transport import StudioServerConnection
 from marimo_studio._processes.cancellation import current_provider_cancellation
-from marimo_studio._validation.analysis import AnalysisRequest
 from marimo_studio._validation.evidence import (
-    AnalysisReport,
     BrowserObservation,
+    ValidationEvidence,
 )
+from marimo_studio._validation.progressive import ValidationRequest
 from marimo_studio._validation.results import CheckResult
-from marimo_studio.agent import CellSelector, InspectionResult, ViewActivationResult
+from marimo_studio.agent import ShowResult
 from marimo_studio.errors import (
     CapabilityInputError,
     ConfigurationError,
@@ -32,8 +33,8 @@ from marimo_studio.errors import (
 from ..helpers import ready_runtime_status
 
 
-def _workspace(notebook: Path) -> studio_agent.Workspace:
-    return studio_agent.open(notebook=notebook)
+def _workspace(notebook: Path) -> studio_authoring.Workspace:
+    return studio_authoring.open_workspace(notebook)
 
 
 def test_marimo_code_mode_loads_the_studio_workspace_api() -> None:
@@ -48,9 +49,14 @@ def test_marimo_code_mode_loads_the_studio_workspace_api() -> None:
         ("studio", "marimo_studio.agent")
     ]
     assert entry_points[0].load() is studio_agent
-    assert {"CellSelector", "InspectionResult"}.issubset(studio_agent.__all__)
-    assert CellSelector is not None
-    assert InspectionResult is not None
+    assert set(studio_agent.__all__) == {
+        "ValidationIssue",
+        "ValidationReport",
+        "View",
+        "ShowResult",
+        "Workspace",
+        "current_workspace",
+    }
 
 
 def test_agent_creation_and_binding_share_the_saved_notebook(
@@ -118,7 +124,7 @@ def test_view_inspection_matches_its_json_shape(notebook_path: Path) -> None:
         "index.html",
         "AGENTS.md",
     ]
-    assert result.publication is None
+    assert result.build is None
 
 
 def test_view_documents_use_revision_aware_source_operations(
@@ -160,7 +166,7 @@ def test_agent_repairs_a_malformed_view_manifest(notebook_path: Path) -> None:
     valid = manifest.read_text(encoding="utf-8")
     del workspace
     manifest.write_bytes(b"schema = [\n")
-    fresh_workspace = studio_agent.open(notebook=notebook_path)
+    fresh_workspace = studio_authoring.open_workspace(notebook_path)
     recovered = fresh_workspace.view("dashboard")
 
     async def exercise() -> None:
@@ -201,8 +207,8 @@ def test_validation_evidence_grows_by_level(notebook_path: Path) -> None:
         assert set(runtime.evidence) == {"static", "runtime"}
         assert static.ok
         assert runtime.ok
-        assert static.actions == ()
-        assert runtime.actions == ()
+        assert static.issues == ()
+        assert runtime.issues == ()
 
     asyncio.run(exercise())
 
@@ -236,8 +242,8 @@ def test_view_remove_returns_the_remaining_workspace(notebook_path: Path) -> Non
     assert result.views == ("dashboard",)
 
 
-def test_agent_doctor_returns_provider_diagnostics() -> None:
-    report = asyncio.run(studio_agent.doctor())
+def test_authoring_doctor_returns_provider_diagnostics() -> None:
+    report = asyncio.run(studio_authoring.doctor())
 
     assert report.providers
     assert report.to_dict()["schema"] == 1
@@ -411,7 +417,7 @@ def test_workspace_bind_cancellation_drains_atomic_commit_before_return(
         release.set()
 
 
-def test_open_uses_the_notebook_attached_to_code_mode(
+def test_current_workspace_uses_the_notebook_attached_to_code_mode(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -423,14 +429,20 @@ def test_open_uses_the_notebook_attached_to_code_mode(
         ),
     )
 
-    assert studio_agent.open().notebook == notebook_path.resolve()
-    assert studio_agent.open(notebook=notebook_path).notebook == notebook_path.resolve()
-    with pytest.raises(TypeError, match=r"agent\.open"):
+    current = studio_agent.current_workspace()
+    saved = studio_authoring.open_workspace(notebook_path)
+
+    assert current.notebook == saved.notebook == notebook_path.resolve()
+    assert isinstance(current, studio_agent.Workspace)
+    assert isinstance(current.view("dashboard"), studio_agent.View)
+    assert isinstance(saved, studio_authoring.Workspace)
+    assert isinstance(saved.view("dashboard"), studio_authoring.View)
+    with pytest.raises(TypeError, match=r"authoring\.open_workspace"):
         cast(Any, studio_agent.Workspace)(notebook_path)
-    with pytest.raises(TypeError, match="workspace returned"):
+    with pytest.raises(TypeError, match="authoring workspace"):
         cast(Any, studio_agent.View)(object(), "dashboard")
     with pytest.raises(ConfigurationError, match="Notebook does not exist"):
-        studio_agent.open(notebook=notebook_path.with_name("missing.py"))
+        studio_authoring.open_workspace(notebook_path.with_name("missing.py"))
 
 
 def test_workspace_validates_notebook_and_binding_inputs(notebook_path: Path) -> None:
@@ -460,12 +472,12 @@ def test_view_analysis_uses_the_attached_studio_server(
             connection=lambda: connection,
         ),
     )
-    workspace = studio_agent.open()
+    workspace = studio_agent.current_workspace()
     view = workspace.view("dashboard")
 
     async def analyze(_connection, notebook, request):
-        assert request == AnalysisRequest(view="dashboard")
-        return AnalysisReport(
+        assert request == ValidationRequest(view="dashboard")
+        return ValidationEvidence(
             notebook=notebook,
             views=("dashboard",),
             runtime="server",
@@ -488,15 +500,17 @@ def test_view_analysis_uses_the_attached_studio_server(
                 ),
             ),
             browser_required=True,
-            actions=(),
+            issues=(),
         )
 
-    monkeypatch.setattr("marimo_studio._authoring.validation.request_analysis", analyze)
+    monkeypatch.setattr(
+        "marimo_studio._authoring.validation.request_browser_validation", analyze
+    )
 
     report = asyncio.run(view.validate(level="browser"))
 
     assert report.level == "browser"
-    assert report.handoff_ready is True
+    assert report.ok is True
     assert report.evidence["browser"]
 
 
@@ -516,13 +530,13 @@ def test_view_analysis_requires_the_attached_server(
             connection=unavailable,
         ),
     )
-    view = studio_agent.open().view("dashboard")
+    view = studio_agent.current_workspace().view("dashboard")
 
     with pytest.raises(ProtocolError, match="Studio metadata is unavailable"):
         asyncio.run(view.validate(level="browser"))
 
 
-def test_view_activation_targets_the_attached_browser(
+def test_view_show_targets_the_attached_browser(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -538,10 +552,10 @@ def test_view_activation_targets_the_attached_browser(
             connection=lambda: connection,
         ),
     )
-    view = studio_agent.open().view("dashboard")
+    view = studio_agent.current_workspace().view("dashboard")
 
-    async def activate(studio, _connection, name):
-        return ViewActivationResult(
+    async def show(studio, _connection, name):
+        return ShowResult(
             notebook=studio.notebook,
             view=name,
             generation=2,
@@ -550,11 +564,11 @@ def test_view_activation_targets_the_attached_browser(
         )
 
     monkeypatch.setattr(
-        "marimo_studio._authoring.view.activate_browser_view",
-        activate,
+        "marimo_studio._authoring.view.show_browser_view",
+        show,
     )
 
-    result = asyncio.run(view.activate())
+    result = asyncio.run(view.show())
 
     assert result.view == "dashboard"
     assert result.generation == 2

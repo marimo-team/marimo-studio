@@ -7,7 +7,7 @@ import re
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from marimo_studio._browser_client.protocol import ViewActivationRequest
+from marimo_studio._browser_client.protocol import ViewShowRequest
 from marimo_studio._server.agent.activation import ActivationAckOutcome
 from marimo_studio._server.agent.browser import observe_views
 from marimo_studio._server.auth import (
@@ -35,8 +35,11 @@ from marimo_studio._server.request_lifecycle import (
     run_while_connected,
 )
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
-from marimo_studio._validation.analysis import AnalysisRequest, analyze_studio
 from marimo_studio._validation.evidence import BrowserObservation
+from marimo_studio._validation.progressive import (
+    ValidationRequest,
+    validate_progressively,
+)
 from marimo_studio._validation.runtime_process import check_runtime_studio_isolated
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import (
@@ -67,7 +70,7 @@ def agent_connection_response(
     )
 
 
-async def activate_view_response(
+async def show_view_response(
     request: Request,
     context: ServerContext,
     studio: StudioWorkspace,
@@ -88,15 +91,15 @@ async def activate_view_response(
     except JSONBodyError as error:
         return json_body_error_response(error)
     try:
-        activation_request = ViewActivationRequest.from_dict(
+        activation_request = ViewShowRequest.from_dict(
             view_name,
             body,
         )
         if session_id is not None and activation_request.browser_client is not None:
             raise CapabilityInputError(
-                "invalid-activation-request",
+                "invalid-show-request",
                 "browser_client",
-                "Session-bound activation cannot select another browser client",
+                "A session-bound show request cannot select another browser client",
             )
         target = (
             SessionViewTarget(session_id)
@@ -229,7 +232,7 @@ async def active_view_handoff_response(
     return Response(status_code=204 if suspended else 409, headers=NO_STORE)
 
 
-async def analyze_views_response(
+async def validate_views_response(
     request: Request,
     context: ServerContext,
     studio: StudioWorkspace,
@@ -237,7 +240,7 @@ async def analyze_views_response(
     sessions: SessionState,
     runtimes: RuntimeRegistry,
 ) -> Response:
-    """Analyze source, runtime, and fresh rendered browser evidence."""
+    """Validate source, runtime, and fresh rendered browser evidence."""
     if request.method != "POST":
         return Response(status_code=405)
     if not has_edit_access(request.scope):
@@ -249,7 +252,7 @@ async def analyze_views_response(
         return JSONResponse(
             {
                 "error": "unknown-session",
-                "message": "Analysis requires the active Marimo session.",
+                "message": "Browser validation requires the active Marimo session.",
             },
             status_code=409,
             headers=NO_STORE,
@@ -259,12 +262,12 @@ async def analyze_views_response(
     except JSONBodyError as error:
         return json_body_error_response(error)
     try:
-        analysis_request = AnalysisRequest.from_dict(body)
+        validation_request = ValidationRequest.from_dict(body)
     except CapabilityInputError as error:
         return error_response(error)
     if session_id is not None:
         try:
-            analysis_request.require_focused_view()
+            validation_request.require_focused_view()
         except CapabilityInputError as error:
             return error_response(error)
 
@@ -279,9 +282,9 @@ async def analyze_views_response(
             views,
             revisions,
             runtime=studio.default_runtime,
-            timeout=analysis_request.browser_timeout,
+            timeout=validation_request.browser_timeout,
             session_id=session_id,
-            client_id=analysis_request.browser_client,
+            client_id=validation_request.browser_client,
             allow_view_activation=session_id is None,
             sessions=sessions,
             runtimes=runtimes,
@@ -290,10 +293,12 @@ async def analyze_views_response(
     try:
         report = await run_while_connected(
             request,
-            analyze_studio(
+            validate_progressively(
                 studio,
-                analysis_request.options,
-                observe_browser=(observe if analysis_request.require_browser else None),
+                validation_request.options,
+                observe_browser=(
+                    observe if validation_request.require_browser else None
+                ),
                 runtime_checker=check_runtime_studio_isolated,
                 development=notebook_scope.development,
             ),

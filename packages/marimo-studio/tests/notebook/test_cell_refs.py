@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from marimo_studio import CellRef
+from marimo_studio._notebook.records import CellRef
 
 
 def test_cell_ref_round_trips_full_digest_and_occurrence() -> None:

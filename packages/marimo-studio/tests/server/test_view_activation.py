@@ -6,7 +6,7 @@ from typing import cast
 
 import pytest
 
-from marimo_studio._browser_client.protocol import ViewActivationRequest
+from marimo_studio._browser_client.protocol import ViewShowRequest
 from marimo_studio._server.agent.activation import ActivationAckOutcome
 from marimo_studio._server.development.client_events import WorkspaceClientEventProducer
 from marimo_studio._server.notebook_scope import NotebookScope
@@ -28,18 +28,18 @@ from ..client_test_support import bind_native_session
 
 
 def test_activation_request_round_trips_its_versioned_record() -> None:
-    request = ViewActivationRequest(
+    request = ViewShowRequest(
         "dashboard",
         browser_client="browser-client-1234",
     )
 
-    assert ViewActivationRequest.from_dict("dashboard", request.to_dict()) == request
+    assert ViewShowRequest.from_dict("dashboard", request.to_dict()) == request
     for payload in (
         {**request.to_dict(), "schema": True},
         {**request.to_dict(), "unexpected": True},
     ):
         with pytest.raises(CapabilityInputError) as raised:
-            ViewActivationRequest.from_dict("dashboard", payload)
+            ViewShowRequest.from_dict("dashboard", payload)
         assert raised.value.field == "request"
 
 

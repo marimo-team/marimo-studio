@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from marimo_studio._browser_client.limits import VIEW_ACTIVATION_TIMEOUT
-from marimo_studio._browser_client.records import ViewActivationResult
+from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._server.agent.clients import PeerTarget
 from marimo_studio._server.notebook_scope import NotebookScope
 from marimo_studio._server.ports import SessionState
@@ -36,7 +36,7 @@ async def activate_studio_view(
     sessions: SessionState,
     view_name: str,
     target: ViewTarget,
-) -> ViewActivationResult:
+) -> ShowResult:
     """Activate one view for a session or selected browser client."""
     if view_name not in studio.views:
         raise ViewNotFoundError(view_name, available=tuple(studio.views))
@@ -75,7 +75,7 @@ async def _activate_session_view(
     sessions: SessionState,
     view_name: str,
     session_id: str,
-) -> ViewActivationResult:
+) -> ShowResult:
     if not sessions.exists(context, session_id):
         raise AgentRequestError(
             "unknown-session",
@@ -115,13 +115,13 @@ async def _activate_connected_view(
     view_name: str,
     target: PeerTarget,
     session_id: str,
-) -> ViewActivationResult:
+) -> ShowResult:
     activation = await notebook_scope.agents.activate(target, view_name)
     await notebook_scope.agents.wait_for_activation(
         activation,
         VIEW_ACTIVATION_TIMEOUT,
     )
-    return ViewActivationResult(
+    return ShowResult(
         notebook=studio.notebook,
         view=view_name,
         generation=activation.generation,

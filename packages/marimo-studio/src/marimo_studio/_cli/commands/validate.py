@@ -15,8 +15,8 @@ from marimo_studio._authoring.validation import validate as validate_workspace
 from marimo_studio._browser_client.transport import studio_server_connection
 from marimo_studio._cli.diagnostics import (
     capture_runtime_stderr,
-    diagnostic_format_option,
     diagnostics,
+    json_option,
     run_in_environment,
 )
 from marimo_studio._cli.environment import should_reenter
@@ -24,7 +24,6 @@ from marimo_studio._cli.help import ColoredCommand
 from marimo_studio._cli.options import (
     browser_client_option,
     finite_timeout,
-    output_format_option,
     runtime_timeout_option,
     server_option,
     target_option,
@@ -58,8 +57,7 @@ from marimo_studio.errors import ProtocolError
     show_default=True,
 )
 @runtime_timeout_option
-@output_format_option
-@diagnostic_format_option
+@json_option
 def validate(
     view_name: str | None,
     target: Path | None,
@@ -68,9 +66,9 @@ def validate(
     browser_client: str | None,
     browser_timeout: float,
     runtime_timeout: float,
-    output_format: str,
+    json_output: bool,
 ) -> None:
-    """Validate every configured view or one selected view."""
+    """Validate every configured page or one selected page."""
     if browser_client is not None and server_url is None:
         raise click.BadParameter(
             "requires --server or MARIMO_STUDIO_SERVER_URL",
@@ -106,20 +104,17 @@ def validate(
             )
         )
     stream = diagnostics()
-    for action in report.actions:
+    for issue in report.issues:
         stream.emit(
-            code=action.code,
-            message=action.message,
-            severity=action.severity,
-            status="fail" if action.severity == "error" else "warn",
-            details=action.to_dict(),
+            code=issue.code,
+            message=issue.message,
+            severity=issue.severity,
+            status="fail" if issue.severity == "error" else "warn",
+            details=issue.to_dict(),
         )
-    if output_format == "json":
+    if json_output:
         echo_json(report.to_dict())
     else:
         render_validation(report)
-    if report.level == "browser":
-        if not report.handoff_ready:
-            raise click.exceptions.Exit(1)
-    elif not report.ok:
+    if not report.ok:
         raise click.exceptions.Exit(1)

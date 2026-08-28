@@ -115,14 +115,14 @@ def test_build_repairs_replaceable_generated_state(
     assert any(item.code == "artifact-state-repaired" for item in state.diagnostics)
 
 
-def test_provider_api_upgrade_rebuilds_generated_state_without_a_repair_warning(
+def test_provider_contract_mismatch_rebuilds_without_a_repair_warning(
     tmp_path: Path,
 ) -> None:
     project = _project(tmp_path)
     publish_artifact_lease(project, "development").close()
     pointer = _profile_path(project)
     state = _read_json(pointer)
-    state["published"]["provider"]["api_version"] = 1
+    state["published"]["provider"]["api_version"] = 2
     _write_json(pointer, state)
 
     stale = read_artifact_state(project, "development")

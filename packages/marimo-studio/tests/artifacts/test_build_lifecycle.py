@@ -86,7 +86,7 @@ def test_cache_hit_preserves_successful_build_evidence(
     first_lease.close()
     first_build = read_build_state(project, "development")
     receipt = _read_json(_profile_path(project))
-    assert receipt["schema"] == 2
+    assert receipt["schema"] == 1
     assert receipt["published"]["diagnostics"] == [warning.to_dict()]
     assert receipt["published"]["duration_ms"] == first_build.duration_ms
     receipt["build"].update(
@@ -221,6 +221,7 @@ def test_prepared_inspection_errors_block_provider_build_and_cached_reuse(
         code="provider-analysis-failed",
         severity="error",
         message="Provider analysis failed.",
+        hint="Repair the projection source.",
     )
     failed_inspection = replace(inspection, diagnostics=(failure,))
     input_id = project_revision(
@@ -239,7 +240,7 @@ def test_prepared_inspection_errors_block_provider_build_and_cached_reuse(
 
     monkeypatch.setattr(provider, "build", build)
 
-    with pytest.raises(ViewProjectError, match="Provider analysis failed"):
+    with pytest.raises(ViewProjectError, match="Provider analysis failed") as captured:
         publish_artifact_lease(
             project,
             "development",
@@ -247,6 +248,7 @@ def test_prepared_inspection_errors_block_provider_build_and_cached_reuse(
             input_id=input_id,
         )
 
+    assert captured.value.public_hint == "Repair the projection source."
     state = read_build_state(project, "development")
     assert builds == 0
     assert input_id == published.project_revision

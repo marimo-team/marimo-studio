@@ -42,8 +42,8 @@ STARTER_KEY = "default"
 REACT_VERSION = "19.2.4"
 REACT_DOM_VERSION = "19.2.4"
 TYPESCRIPT_VERSION = "6.0.3"
-PROJECTION_CONTRACT_VERSION = "jsx-projections-v5"
-BUILD_CONTRACT_VERSION = "deno-html-artifact-v5"
+PROJECTION_CONTRACT_VERSION = "jsx-projections-v2"
+BUILD_CONTRACT_VERSION = "deno-html-artifact-v1"
 _INPUT_SCOPE = (
     ProjectInput(PurePosixPath("src"), "directory"),
     ProjectInput(PurePosixPath("view.toml"), "file"),
@@ -113,7 +113,7 @@ class DenoReactProvider:
     info = ProviderInfo(
         title="React",
         summary="Builds a React project with the pinned Deno toolchain.",
-        api_version=4,
+        api_version=1,
     )
     _starter = ProviderStarter(
         key=STARTER_KEY,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from marimo_studio._projections.runtime_records import RuntimeProbe
 from marimo_studio.errors import CapabilityInputError
@@ -60,6 +60,7 @@ class CellRef:
 
 
 CellSelector = CellRef | str | int
+InspectionContext = Literal["selected", "upstream"]
 
 
 @dataclass(frozen=True)
@@ -178,6 +179,7 @@ def select_cells(
     *,
     selectors: Sequence[CellSelector] = (),
     output_expressions: bool = False,
+    context: InspectionContext = "selected",
     limit: int | None = None,
 ) -> tuple[CellSpec, ...]:
     """Select notebook cells for an inspection result."""
@@ -195,6 +197,12 @@ def select_cells(
             "selectors",
             "selectors must be a sequence of cell refs, names, or indices",
         )
+    if context not in {"selected", "upstream"}:
+        raise CapabilityInputError(
+            "invalid-inspection-request",
+            "context",
+            "context must be selected or upstream",
+        )
     selected_refs: set[CellRef] | None = None
     if selectors:
         selected_refs = {resolve_cell(notebook, selector).ref for selector in selectors}
@@ -204,7 +212,19 @@ def select_cells(
         if (selected_refs is None or cell.ref in selected_refs)
         and (not output_expressions or cell.has_output_expression)
     )
-    return cells if limit is None else cells[:limit]
+    cells = cells if limit is None else cells[:limit]
+    if context == "selected":
+        return cells
+    by_ref = notebook.by_ref()
+    included = {cell.ref for cell in cells}
+    pending = list(included)
+    while pending:
+        current = by_ref[pending.pop()]
+        for upstream in current.upstream:
+            if upstream not in included:
+                included.add(upstream)
+                pending.append(upstream)
+    return tuple(cell for cell in notebook.cells if cell.ref in included)
 
 
 @dataclass(frozen=True)

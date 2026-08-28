@@ -14,7 +14,7 @@ from marimo._types.encodable import Encodable
 import marimo_studio._browser_client.client as browser_client
 import marimo_studio._browser_client.transport as browser_transport
 from marimo_studio._browser_client.client import studio_server_connection
-from marimo_studio._browser_client.protocol import ViewActivationRequest
+from marimo_studio._browser_client.protocol import ViewShowRequest
 from marimo_studio._compat.code_mode import (
     STUDIO_NOTEBOOK_PATH_KEY,
     STUDIO_SESSION_ID_KEY,
@@ -196,7 +196,7 @@ def test_code_mode_request_negotiates_the_server_token(
                 "server_token": "server-token",
             }
         return {
-            "schema": 2,
+            "schema": 1,
             "notebook": str(notebook),
             "view": "dashboard",
             "generation": 1,
@@ -208,17 +208,17 @@ def test_code_mode_request_negotiates_the_server_token(
 
     with http_request_context(request):
         result = asyncio.run(
-            browser_client.request_view_activation(
+            browser_client.request_view_show(
                 code_mode_connection(),
                 notebook,
-                ViewActivationRequest("dashboard"),
+                ViewShowRequest("dashboard"),
             )
         )
 
     assert result.generation == 1
     assert [path for _, path, _timeout in requests] == [
         "/_marimo-studio/agent/connection",
-        "/_marimo-studio/views/dashboard/activate",
+        "/_marimo-studio/views/dashboard/show",
     ]
     assert requests[0][0].server_token == ""
     assert requests[1][0].server_token == "server-token"
@@ -241,13 +241,13 @@ def test_activation_rejects_mixed_selectors_before_token_negotiation(
 
     with pytest.raises(CapabilityInputError, match="cannot select another"):
         asyncio.run(
-            browser_client.request_view_activation(
+            browser_client.request_view_show(
                 browser_transport.StudioServerConnection(
                     "http://localhost:2718",
                     session_id="s_123456",
                 ),
                 notebook,
-                ViewActivationRequest(
+                ViewShowRequest(
                     "dashboard",
                     browser_client="browser-client-1234",
                 ),

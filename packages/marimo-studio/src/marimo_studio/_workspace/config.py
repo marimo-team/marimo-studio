@@ -134,6 +134,21 @@ def _project_for_notebook(
     return None
 
 
+def _configuration_for_notebook(
+    notebook: Path,
+) -> tuple[Path, Mapping[str, Any]] | None:
+    inline = notebook_config(notebook)
+    project = _project_for_notebook(notebook)
+    if inline is not None and project is not None:
+        raise ConfigurationError(
+            f"Studio configuration for {notebook.name} appears in both "
+            f"{notebook} and {project[0]}. Keep one configuration source."
+        )
+    if inline is not None:
+        return notebook, inline
+    return project
+
+
 def _notebook_configured_in(directory: Path) -> tuple[Path, Mapping[str, Any]] | None:
     configured: list[tuple[Path, Mapping[str, Any]]] = []
     for notebook in sorted(directory.glob("*.py")):
@@ -157,16 +172,19 @@ def _load_config(target: Path) -> tuple[Path, Mapping[str, Any]]:
         data = read_toml(target)
         config = _pyproject_config(data, target, required=True)
         assert config is not None
+        notebook = _project_notebook(target, config)
+        if notebook_config(notebook) is not None:
+            raise ConfigurationError(
+                f"Studio configuration for {notebook.name} appears in both "
+                f"{notebook} and {target}. Keep one configuration source."
+            )
         return target, config
     if target.is_file() and target.suffix == ".toml":
         raise ConfigurationError(f"Expected {PYPROJECT_NAME}, received {target}")
     if target.is_file():
-        inline = notebook_config(target)
-        if inline is not None:
-            return target, inline
-        project_config = _project_for_notebook(target)
-        if project_config is not None:
-            return project_config
+        configured = _configuration_for_notebook(target)
+        if configured is not None:
+            return configured
         raise ConfigurationError(
             f"No [tool.marimo-studio] configuration found for {target}. "
             "Run `marimo-studio view create dashboard "
@@ -182,7 +200,10 @@ def _load_config(target: Path) -> tuple[Path, Mapping[str, Any]]:
             return found
         project_notebook = _project_notebook(found[0], found[1])
         if project_notebook == inline[0]:
-            return inline
+            raise ConfigurationError(
+                f"Studio configuration for {inline[0].name} appears in both "
+                f"{inline[0]} and {found[0]}. Keep one configuration source."
+            )
         raise ConfigurationError(
             f"{start} contains notebook configuration for {inline[0].name} "
             f"and project configuration for {project_notebook.name}. "
@@ -318,23 +339,15 @@ def load_studio(target: str | Path | None = None) -> StudioWorkspace:
 def discover_studio(notebook: str | Path) -> StudioWorkspace | None:
     """Find a presentation configured for ``notebook``."""
     notebook_path = Path(notebook).expanduser().resolve()
-    if notebook_config(notebook_path) is not None:
-        return load_studio(notebook_path)
-    project_config = _project_for_notebook(notebook_path)
-    if project_config is not None:
-        return load_studio(project_config[0])
-    return None
+    configured = _configuration_for_notebook(notebook_path)
+    return load_studio(configured[0]) if configured is not None else None
 
 
 def discover_studio_definition(notebook: str | Path) -> StudioDefinition | None:
     """Find the Studio definition for a notebook."""
     notebook_path = Path(notebook).expanduser().resolve()
-    if notebook_config(notebook_path) is not None:
-        return load_studio_definition(notebook_path)
-    project_config = _project_for_notebook(notebook_path)
-    if project_config is not None:
-        return load_studio_definition(project_config[0])
-    return None
+    configured = _configuration_for_notebook(notebook_path)
+    return load_studio_definition(configured[0]) if configured is not None else None
 
 
 def editable_studio_config(document: Any) -> Any:

@@ -157,7 +157,7 @@ def analyze_sources(
         payload = json.loads(result.stdout)
     except json.JSONDecodeError:
         return _analysis_failure("Provider analyzer returned invalid JSON")
-    if not isinstance(payload, dict) or payload.get("schema") != 2:
+    if not isinstance(payload, dict) or payload.get("schema") != 1:
         return _analysis_failure("Provider analyzer returned an unsupported schema")
     try:
         diagnostics = tuple(

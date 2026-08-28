@@ -1,4 +1,4 @@
-"""Records returned by Studio browser activation."""
+"""Records returned after Studio shows a view in the browser."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
-class ViewActivationResult:
-    """The browser selected a view and its preview receiver accepted it."""
+class ShowResult:
+    """The connected Studio tab selected and rendered a view."""
 
     notebook: Path
     view: str
@@ -18,7 +18,7 @@ class ViewActivationResult:
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "schema": 2,
+            "schema": 1,
             "notebook": str(self.notebook),
             "view": self.view,
             "generation": self.generation,

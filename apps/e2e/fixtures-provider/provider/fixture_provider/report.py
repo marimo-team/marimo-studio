@@ -46,7 +46,7 @@ class ReportProvider:
     info = ProviderInfo(
         title="External report",
         summary="Copies one HTML report into a browser artifact.",
-        api_version=4,
+        api_version=1,
     )
     _starter = ProviderStarter(
         key="default",

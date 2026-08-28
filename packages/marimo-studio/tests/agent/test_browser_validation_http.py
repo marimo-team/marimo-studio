@@ -57,7 +57,7 @@ def test_edit_server_runs_the_agent_handoff_analysis(
 
     with TestClient(server.app) as client:
         analyzed = client.post(
-            "/_marimo-studio/analyze",
+            "/_marimo-studio/validate",
             headers=server.headers,
             json={
                 "schema": 1,
@@ -69,9 +69,9 @@ def test_edit_server_runs_the_agent_handoff_analysis(
         )
 
     assert analyzed.status_code == 200
-    assert analyzed.json()["handoff_ready"] is True
+    assert analyzed.json()["ok"] is True
     assert analyzed.json()["stages"]["browser"]["status"] == "ready"
-    assert analyzed.json()["actions"] == []
+    assert analyzed.json()["issues"] == []
     assert runtime_calls[0]["timeout"] == 75
 
 
@@ -124,12 +124,12 @@ def test_code_mode_analysis_requires_one_named_view(
 
     with TestClient(server.app) as client:
         unfocused = client.post(
-            "/_marimo-studio/analyze",
+            "/_marimo-studio/validate",
             headers=server.headers,
             json={"schema": 1, "browser_timeout": 0, "require_browser": True},
         )
         focused = client.post(
-            "/_marimo-studio/analyze",
+            "/_marimo-studio/validate",
             headers=server.headers,
             json={
                 "schema": 1,
@@ -140,9 +140,9 @@ def test_code_mode_analysis_requires_one_named_view(
         )
 
     assert unfocused.status_code == 400
-    assert unfocused.json()["error"] == "focused-analysis-required"
+    assert unfocused.json()["error"] == "focused-view-required"
     assert focused.status_code == 200
-    assert focused.json()["handoff_ready"] is True
+    assert focused.json()["ok"] is True
     assert observed == [
         {
             "runtime": "server",
@@ -161,13 +161,13 @@ def test_agent_analysis_rejects_noncanonical_request_records(
 
     with TestClient(server.app) as client:
         response = client.post(
-            "/_marimo-studio/analyze",
+            "/_marimo-studio/validate",
             headers=server.headers,
             json={"schema": 1, "view": "dashboard", "unexpected": True},
         )
 
     assert response.status_code == 400
-    assert response.json()["error"] == "invalid-analysis-request"
+    assert response.json()["error"] == "invalid-validation-request"
 
 
 @pytest.mark.parametrize(
@@ -186,11 +186,11 @@ def test_agent_analysis_rejects_an_out_of_range_timeout(
 
     with TestClient(server.app) as client:
         response = client.post(
-            "/_marimo-studio/analyze",
+            "/_marimo-studio/validate",
             headers=server.headers,
             json={"schema": 1, "view": "dashboard", field: value},
         )
 
     assert response.status_code == 400
-    assert response.json()["error"] == "invalid-analysis-request"
+    assert response.json()["error"] == "invalid-validation-request"
     assert response.json()["field"] == field

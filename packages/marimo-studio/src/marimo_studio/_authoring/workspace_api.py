@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, TypeVar
 
 from marimo_studio._authoring.validation import validate as validate_workspace
 from marimo_studio._authoring.view_api import View
@@ -18,13 +19,18 @@ from marimo_studio._authoring.workspace import inspect_notebook as inspect_opera
 from marimo_studio._authoring.workspace import starters as list_starters
 from marimo_studio._authoring.workspace import status as workspace_status
 from marimo_studio._browser_client.transport import StudioServerConnection
-from marimo_studio._notebook.records import CellSelector, InspectionResult
+from marimo_studio._notebook.records import (
+    CellSelector,
+    InspectionContext,
+    InspectionResult,
+)
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
-from marimo_studio._validation.limits import DEFAULT_BROWSER_TIMEOUT
-from marimo_studio._validation.records import ValidationLevel, ValidationReport
+from marimo_studio._validation.records import ValidationReport
 from marimo_studio._views.records import Starter, StudioOverview
 from marimo_studio._workspace.models import BindingResult
 from marimo_studio.errors import ConfigurationError
+
+_Workspace = TypeVar("_Workspace", bound="Workspace")
 
 
 @dataclass(frozen=True, init=False)
@@ -35,14 +41,17 @@ class Workspace:
     _connection_factory: Callable[[], StudioServerConnection] | None
 
     def __init__(self, *_args: object, **_kwargs: object) -> None:
-        raise TypeError("Use marimo_studio.agent.open() to create a workspace")
+        raise TypeError(
+            "Use marimo_studio.authoring.open_workspace() or "
+            "marimo_studio.agent.current_workspace()"
+        )
 
     @classmethod
     def _create(
-        cls,
+        cls: type[_Workspace],
         notebook: Path,
         connection_factory: Callable[[], StudioServerConnection] | None,
-    ) -> Workspace:
+    ) -> _Workspace:
         workspace = object.__new__(cls)
         object.__setattr__(workspace, "notebook", notebook)
         object.__setattr__(workspace, "_connection_factory", connection_factory)
@@ -64,6 +73,7 @@ class Workspace:
         include_code: bool = False,
         selectors: tuple[CellSelector, ...] = (),
         output_expressions: bool = False,
+        context: InspectionContext = "selected",
         limit: int | None = None,
         runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     ) -> InspectionResult:
@@ -74,6 +84,7 @@ class Workspace:
             include_code=include_code,
             selectors=selectors,
             output_expressions=output_expressions,
+            context=context,
             limit=limit,
             runtime_timeout=runtime_timeout,
         )
@@ -120,36 +131,25 @@ class Workspace:
     async def validate(
         self,
         *,
-        level: ValidationLevel = "static",
+        level: Literal["static", "runtime"] = "static",
         view: str | None = None,
-        browser_timeout: float = DEFAULT_BROWSER_TIMEOUT,
         runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     ) -> ValidationReport:
-        """Validate saved source, runtime execution, or browser evidence."""
+        """Validate saved source or isolated notebook execution."""
         return await validate_workspace(
             self.notebook,
             level=level,
             view=view,
-            connection=self._connection() if level == "browser" else None,
-            browser_timeout=browser_timeout,
             runtime_timeout=runtime_timeout,
         )
 
 
-def open_workspace(notebook: str | Path | None = None) -> Workspace:
-    """Open a saved notebook or bind to the active code-mode notebook."""
-    connection_factory: Callable[[], StudioServerConnection] | None = None
-    if notebook is None:
-        from marimo_studio._composition import create_code_mode_bridge
-
-        bridge = create_code_mode_bridge()
-        path = bridge.active_notebook()
-        connection_factory = bridge.connection
-    else:
-        path = Path(notebook).expanduser().resolve()
+def open_workspace(notebook: str | Path) -> Workspace:
+    """Open one saved notebook for authoring."""
+    path = Path(notebook).expanduser().resolve()
     if not path.is_file():
         raise ConfigurationError(f"Notebook does not exist: {path}")
-    return Workspace._create(path, connection_factory)
+    return Workspace._create(path, None)
 
 
 async def doctor(provider: str | None = None) -> ProviderReport:

@@ -8,7 +8,7 @@ import shlex
 import subprocess
 from typing import Any
 
-from marimo_studio._browser_client.records import ViewActivationResult
+from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._cli.diagnostics import diagnostics
 from marimo_studio._cli.print import echo, green, light_blue, red, yellow
 from marimo_studio._delivery.export import StaticExportResult
@@ -55,9 +55,15 @@ def render_view_setup(result: ViewSetupResult) -> None:
         echo(f"  {light_blue('create')} {path}")
     for path in result.updated:
         echo(f"  {light_blue('update')} {path}")
-    if not result.dry_run:
-        command = _shell_command(["marimo", "edit", str(result.notebook), "--sandbox"])
-        _echo_next_command("edit", command)
+    render_view_next_command(result)
+
+
+def render_view_next_command(result: ViewSetupResult) -> None:
+    """Show the next command after a completed view creation."""
+    if result.dry_run:
+        return
+    command = _shell_command(["marimo", "edit", str(result.notebook), "--sandbox"])
+    _echo_next_command("edit", command)
 
 
 def render_view_inspection(result: ViewInspection) -> None:
@@ -139,9 +145,9 @@ def render_view_removal(result: ViewRemovalResult) -> None:
     echo(f"  {light_blue('default')} {result.default_view}")
 
 
-def render_view_activation(result: ViewActivationResult) -> None:
-    """Write a completed browser view activation in human text."""
-    echo(f"{green('Activated')} view {result.view} in {result.client_id}")
+def render_view_show(result: ShowResult) -> None:
+    """Write a completed browser view selection in human text."""
+    echo(f"{green('Showing')} view {result.view} in {result.client_id}")
     echo(f"  {light_blue('session')} {result.session_id}")
 
 
@@ -255,8 +261,7 @@ def _render_check(record: object) -> None:
 
 def render_validation(report: ValidationReport) -> None:
     """Write progressive validation evidence in human text."""
-    ready = report.handoff_ready if report.level == "browser" else report.ok
-    state = green("READY") if ready else red("NEEDS REPAIR")
+    state = green("READY") if report.ok else red("NEEDS REPAIR")
     echo(f"{state} {report.notebook}")
     echo(f"  {light_blue('level')} {report.level}")
     if report.view is not None:
@@ -285,8 +290,8 @@ def render_validation(report: ValidationReport) -> None:
                 message = observation.get("message")
                 if isinstance(message, str) and message:
                     echo(f"     {message}")
-    if report.actions:
+    if report.issues:
         echo(f"\n{light_blue('Repair queue')}")
-        for action in report.actions:
-            target = f" [{action.view}]" if action.view else ""
-            echo(f"  {action.severity.upper()} {action.code}{target}: {action.advice}")
+        for issue in report.issues:
+            target = f" [{issue.view}]" if issue.view else ""
+            echo(f"  {issue.severity.upper()} {issue.code}{target}: {issue.advice}")

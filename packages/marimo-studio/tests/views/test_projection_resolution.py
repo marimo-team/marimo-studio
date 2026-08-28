@@ -118,7 +118,7 @@ def test_symbolic_resolution_ignores_an_invalid_unselected_view(
         ),
         (
             '<main id="app-shell"><marimo-output></marimo-output></main>',
-            "requires a value reference",
+            "requires a non-empty value",
         ),
         (
             '<main id="app-shell">'

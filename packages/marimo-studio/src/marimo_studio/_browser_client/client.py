@@ -8,13 +8,13 @@ from urllib.parse import quote
 
 from marimo_studio._browser_client.limits import VIEW_ACTIVATION_HTTP_TIMEOUT
 from marimo_studio._browser_client.protocol import (
-    ViewActivationRequest,
-    parse_activation_result,
-    parse_analysis_report,
+    ViewShowRequest,
     parse_connection_token,
     parse_observation_response,
+    parse_show_result,
+    parse_validation_evidence,
 )
-from marimo_studio._browser_client.records import ViewActivationResult
+from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._browser_client.transport import (
     StudioServerConnection,
     request_json,
@@ -24,70 +24,70 @@ from marimo_studio._browser_client.transport import (
 )
 from marimo_studio._delivery.urls import SUPPORT_PATH
 from marimo_studio._processes.limits import runtime_process_timeout
-from marimo_studio._validation.analysis import AnalysisReport, AnalysisRequest
-from marimo_studio._validation.evidence import BrowserObservation
+from marimo_studio._validation.evidence import BrowserObservation, ValidationEvidence
+from marimo_studio._validation.progressive import ValidationRequest
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import AgentRequestError, CapabilityInputError, ProtocolError
 
-_STATIC_ANALYSIS_BUDGET = 15.0
+_STATIC_VALIDATION_BUDGET = 15.0
 _TRANSPORT_GRACE = 5.0
 
 
-async def request_view_activation(
+async def request_view_show(
     connection: StudioServerConnection,
     notebook: Path,
-    request: ViewActivationRequest,
-) -> ViewActivationResult:
+    request: ViewShowRequest,
+) -> ShowResult:
     """Select one view in a session-bound or external Studio browser."""
     if connection.session_id and request.browser_client:
         raise CapabilityInputError(
-            "invalid-activation-request",
+            "invalid-show-request",
             "browser_client",
-            "Session-bound activation cannot select another browser client",
+            "A session-bound show request cannot select another browser client",
         )
     connection = await _authorized_connection(connection, notebook)
     payload = await request_json(
         connection,
-        f"{SUPPORT_PATH}/views/{quote(request.view, safe='')}/activate",
+        f"{SUPPORT_PATH}/views/{quote(request.view, safe='')}/show",
         method="PATCH",
         body=request.to_dict(),
         timeout=VIEW_ACTIVATION_HTTP_TIMEOUT,
     )
     _require_notebook(payload, notebook)
-    result = parse_activation_result(payload, notebook, request.view)
+    result = parse_show_result(payload, notebook, request.view)
     if connection.session_id and result.session_id != connection.session_id:
-        raise ProtocolError("The Studio activation response targets another session.")
+        raise ProtocolError("The Studio show response targets another session.")
     if request.browser_client and result.client_id != request.browser_client:
-        raise ProtocolError("The Studio activation response targets another browser.")
+        raise ProtocolError("The Studio show response targets another browser.")
     return result
 
 
-async def activate_view(
+async def show_view(
     studio: StudioWorkspace,
     connection: StudioServerConnection,
     name: str,
-) -> ViewActivationResult:
+) -> ShowResult:
     """Select a configured view in one connected Studio browser."""
-    return await request_view_activation(
+    return await request_view_show(
         connection,
         studio.notebook,
-        ViewActivationRequest(
+        ViewShowRequest(
             view=name,
             browser_client=connection.browser_client or None,
         ),
     )
 
 
-async def request_analysis(
+async def request_browser_validation(
     connection: StudioServerConnection,
     notebook: Path,
-    request: AnalysisRequest,
-) -> AnalysisReport:
-    """Run bounded Studio analysis through the active notebook server."""
+    request: ValidationRequest,
+) -> ValidationEvidence:
+    """Run bounded browser validation through the active notebook server."""
     if connection.browser_client:
         if request.browser_client not in {None, connection.browser_client}:
             raise CapabilityInputError(
-                "invalid-analysis-request",
+                "invalid-validation-request",
                 "browser_client",
                 "The request and connection select different browser clients",
             )
@@ -95,7 +95,7 @@ async def request_analysis(
     connection = await _authorized_connection(connection, notebook)
     payload = await request_json(
         connection,
-        f"{SUPPORT_PATH}/analyze",
+        f"{SUPPORT_PATH}/validate",
         method="POST",
         body=request.to_dict(),
         timeout=(
@@ -103,28 +103,28 @@ async def request_analysis(
                 request.browser_timeout,
                 runtime_process_timeout(request.runtime_timeout),
             )
-            + _STATIC_ANALYSIS_BUDGET
+            + _STATIC_VALIDATION_BUDGET
             + _TRANSPORT_GRACE
         ),
     )
     _require_notebook(payload, notebook)
-    report = parse_analysis_report(payload)
+    report = parse_validation_evidence(payload)
     if request.view is not None and report.views != (request.view,):
-        raise ProtocolError("The Studio analysis response is invalid.")
+        raise ProtocolError("The Studio validation response is invalid.")
     if report.browser_required != request.require_browser:
-        raise ProtocolError("The Studio analysis response is invalid.")
+        raise ProtocolError("The Studio validation response is invalid.")
     if connection.session_id and any(
         observation.session_id is not None
         and observation.session_id != connection.session_id
         for observation in report.browser_observations
     ):
-        raise ProtocolError("The Studio analysis response targets another session.")
+        raise ProtocolError("The Studio validation response targets another session.")
     if request.browser_client and any(
         observation.client_id is not None
         and observation.client_id != request.browser_client
         for observation in report.browser_observations
     ):
-        raise ProtocolError("The Studio analysis response targets another browser.")
+        raise ProtocolError("The Studio validation response targets another browser.")
     return report
 
 

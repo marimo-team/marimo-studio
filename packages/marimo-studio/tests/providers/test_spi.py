@@ -77,7 +77,7 @@ def test_provider_info_contains_only_discovery_contracts() -> None:
     info = ProviderInfo(
         title="Reports",
         summary="Builds report frontends.",
-        api_version=4,
+        api_version=1,
     )
 
     assert info.to_dict() == {
@@ -278,7 +278,7 @@ def test_provider_diagnostics_accept_the_manifest_but_reject_undeclared_sources(
 
     accepted = installed.inspect(inspection_request(project))
     assert [document.path for document in accepted.editor_documents] == [
-        PurePosixPath("index.html")
+        PurePosixPath("index.html"),
     ]
     staging = tmp_path / "staging"
     staging.mkdir()

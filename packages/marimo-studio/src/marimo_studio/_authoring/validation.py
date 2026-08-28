@@ -7,12 +7,15 @@ from pathlib import Path
 
 from marimo_studio._browser_client.client import (
     observe_browser_views,
-    request_analysis,
+    request_browser_validation,
 )
 from marimo_studio._browser_client.transport import StudioServerConnection
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
-from marimo_studio._validation.analysis import AnalysisRequest, analyze_studio
 from marimo_studio._validation.limits import DEFAULT_BROWSER_TIMEOUT
+from marimo_studio._validation.progressive import (
+    ValidationRequest,
+    validate_progressively,
+)
 from marimo_studio._validation.records import ValidationLevel, ValidationReport
 from marimo_studio._validation.runtime_process import check_runtime_studio_isolated
 from marimo_studio._validation.service import validate_studio
@@ -46,7 +49,7 @@ async def validate(
         ).report
     if connection is None:
         raise ProtocolError("Browser validation requires an attached Studio browser.")
-    request = AnalysisRequest(
+    request = ValidationRequest(
         view=view,
         browser_timeout=browser_timeout,
         runtime_timeout=runtime_timeout,
@@ -55,16 +58,16 @@ async def validate(
     )
     if connection.session_id:
         request.require_focused_view()
-        analysis = await request_analysis(connection, notebook, request)
+        evidence = await request_browser_validation(connection, notebook, request)
     else:
-        analysis = await _analyze_connected(studio, connection, request)
-    return ValidationReport.from_analysis(analysis)
+        evidence = await _validate_connected(studio, connection, request)
+    return ValidationReport.from_evidence(evidence)
 
 
-async def _analyze_connected(
+async def _validate_connected(
     studio: StudioWorkspace,
     connection: StudioServerConnection,
-    request: AnalysisRequest,
+    request: ValidationRequest,
 ):
     async def observe(
         _selected: object,
@@ -80,7 +83,7 @@ async def _analyze_connected(
             timeout=request.browser_timeout,
         )
 
-    return await analyze_studio(
+    return await validate_progressively(
         studio,
         request.options,
         observe_browser=observe,

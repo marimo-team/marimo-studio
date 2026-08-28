@@ -347,6 +347,25 @@ default = "dashboard"
     assert load_studio_definition(inline).notebook == inline
 
 
+def test_one_notebook_cannot_use_inline_and_project_configuration(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+    pyproject = notebook_path.parent / "pyproject.toml"
+    pyproject.write_text(
+        f'''\
+[tool.marimo-studio]
+notebook = "{notebook_path.name}"
+default = "dashboard"
+''',
+        encoding="utf-8",
+    )
+
+    for target in (notebook_path, pyproject, notebook_path.parent):
+        with pytest.raises(ConfigurationError, match="Keep one configuration source"):
+            load_studio_definition(target)
+
+
 def test_notebook_configuration_controls_presentation_options(
     notebook_path: Path,
 ) -> None:

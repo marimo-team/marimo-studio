@@ -7,8 +7,8 @@ import asyncio
 from marimo_studio._projections.resolved import ProjectionDiagnostic
 from marimo_studio._views.inspection import inspect_view_project, view_project_state
 from marimo_studio._views.records import (
-    Publication,
     StudioDiagnostic,
+    ViewBuild,
     ViewInspection,
 )
 from marimo_studio._workspace.models import StudioWorkspace
@@ -39,14 +39,12 @@ async def inspect_view(studio: StudioWorkspace, name: str) -> ViewInspection:
     )
     artifact = state.artifact
     published = state.publication
-    publication = (
-        Publication(
+    build = (
+        ViewBuild(
             view=project.name,
             profile=artifact.profile,
-            input_id=artifact.project_revision,
-            artifact_id=artifact.artifact_revision,
-            diagnostics=published.diagnostics,
-            duration_ms=published.duration_ms,
+            revision=artifact.artifact_revision,
+            issues=published.diagnostics,
         )
         if artifact is not None and published is not None
         else None
@@ -64,7 +62,7 @@ async def inspect_view(studio: StudioWorkspace, name: str) -> ViewInspection:
             if state.build.phase == "published"
             else state.build.phase
         ),
-        publication=publication,
+        build=build,
     )
 
 

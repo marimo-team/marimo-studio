@@ -15,13 +15,12 @@ from marimo_studio._authoring.workspace import (
 )
 from marimo_studio._cli.diagnostics import (
     capture_runtime_stderr,
-    diagnostic_format_option,
+    json_option,
     run_in_environment,
 )
 from marimo_studio._cli.environment import should_reenter
 from marimo_studio._cli.help import ColoredCommand, ColoredGroup
 from marimo_studio._cli.options import (
-    output_format_option,
     runtime_timeout_option,
     target_option,
 )
@@ -31,13 +30,13 @@ from marimo_studio._cli.targets import (
     resolve_environment_target,
     resolve_notebook,
 )
-from marimo_studio._notebook.records import CellSelector
+from marimo_studio._notebook.records import CellSelector, InspectionContext
 from marimo_studio.errors import ConfigurationError
 
 
 @click.group("notebook", cls=ColoredGroup)
 def notebook() -> None:
-    """Inspect saved cells and manage view-facing aliases."""
+    """Inspect saved cells and name results for pages."""
 
 
 @click.command("inspect", cls=ColoredCommand)
@@ -60,9 +59,15 @@ def notebook() -> None:
     multiple=True,
     help="Select a cell by ref, name, or zero-based index. Repeat to select more.",
 )
+@click.option(
+    "--context",
+    type=click.Choice(("selected", "upstream")),
+    default="selected",
+    show_default=True,
+    help="Include selected cells or their complete upstream context.",
+)
 @runtime_timeout_option
-@output_format_option
-@diagnostic_format_option
+@json_option
 def inspect(
     target: Path | None,
     include_code: bool,
@@ -70,8 +75,9 @@ def inspect(
     runtime: bool,
     limit: int | None,
     cell_selectors: tuple[str, ...],
+    context: InspectionContext,
     runtime_timeout: float,
-    output_format: str,
+    json_output: bool,
 ) -> None:
     """Inspect cells in a saved notebook."""
     notebook_path = resolve_notebook(target)
@@ -93,11 +99,12 @@ def inspect(
                 include_code=include_code,
                 selectors=selectors,
                 output_expressions=output_expressions,
+                context=context,
                 limit=limit,
                 runtime_timeout=runtime_timeout,
             )
         )
-    if output_format == "json":
+    if json_output:
         echo_json(result.to_dict())
         return
     render_inspection(result)
@@ -114,15 +121,14 @@ def inspect(
 )
 @click.option("--dry-run", is_flag=True, help="Report the binding without writing.")
 @click.option("--overwrite", is_flag=True, help="Replace an existing binding.")
-@output_format_option
-@diagnostic_format_option
+@json_option
 def bind(
     alias: str,
     target: Path | None,
     cell_selector: str,
     dry_run: bool,
     overwrite: bool,
-    output_format: str,
+    json_output: bool,
 ) -> None:
     """Bind an alias to one saved notebook cell."""
     selector: CellSelector = (
@@ -137,7 +143,7 @@ def bind(
             overwrite=overwrite,
         )
     )
-    if output_format == "json":
+    if json_output:
         echo_json(result.to_dict())
         return
     render_binding(result)

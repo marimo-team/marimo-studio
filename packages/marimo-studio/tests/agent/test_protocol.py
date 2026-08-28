@@ -10,16 +10,16 @@ import pytest
 
 from marimo_studio._browser_client.protocol import (
     decode_browser_observation,
-    parse_activation_result,
-    parse_analysis_report,
     parse_connection_token,
     parse_observation_response,
+    parse_show_result,
+    parse_validation_evidence,
 )
 from marimo_studio._validation.evidence import (
-    AnalysisReport,
     BrowserDiagnostic,
     BrowserObservation,
     RuntimeStatusReport,
+    ValidationEvidence,
 )
 from marimo_studio._validation.results import CheckResult
 from marimo_studio.errors import ProtocolError
@@ -59,15 +59,15 @@ def _empty_projection_evidence() -> dict[str, object]:
     return {"projectionInstances": []}
 
 
-def _ready_analysis_report(
+def _ready_validation_evidence(
     tmp_path: Path,
     *,
     runtime: str,
     session_id: str | None,
-) -> AnalysisReport:
+) -> ValidationEvidence:
     revision = "revision-1"
     view = "dashboard"
-    return AnalysisReport(
+    return ValidationEvidence(
         notebook=(tmp_path / "analysis.py").resolve(),
         views=(view,),
         runtime=runtime,
@@ -96,7 +96,7 @@ def _ready_analysis_report(
             ),
         ),
         browser_required=True,
-        actions=(),
+        issues=(),
         dynamic_browser_required=True,
     )
 
@@ -116,36 +116,36 @@ def test_connection_protocol_requires_the_target_notebook(tmp_path: Path) -> Non
         parse_connection_token({**payload, "schema": True}, notebook)
 
 
-def test_analysis_report_round_trips_through_the_agent_protocol(
+def test_validation_report_round_trips_through_the_agent_protocol(
     tmp_path: Path,
 ) -> None:
-    report = _ready_analysis_report(
+    report = _ready_validation_evidence(
         tmp_path,
         runtime="server",
         session_id="s_123456",
     )
 
-    parsed = parse_analysis_report(report.to_dict())
+    parsed = parse_validation_evidence(report.to_dict())
     assert parsed == report
     assert parsed.dynamic_browser_required is True
-    assert report.handoff_ready
+    assert report.ok
 
 
 def test_wasm_analysis_round_trip_accepts_coherent_null_runtime_session(
     tmp_path: Path,
 ) -> None:
-    report = _ready_analysis_report(
+    report = _ready_validation_evidence(
         tmp_path,
         runtime="wasm",
         session_id=None,
     )
-    parsed = parse_analysis_report(report.to_dict())
+    parsed = parse_validation_evidence(report.to_dict())
     observation = report.browser_observations[0]
     runtime_status = observation.runtime_status
     assert runtime_status is not None
 
     assert parsed == report
-    assert parsed.handoff_ready
+    assert parsed.ok
     assert not replace(
         report,
         browser_observations=(
@@ -165,12 +165,12 @@ def test_wasm_analysis_round_trip_accepts_coherent_null_runtime_session(
                 ),
             ),
         ),
-    ).handoff_ready
+    ).ok
 
 
-def test_analysis_report_requires_consistent_handoff_evidence(tmp_path: Path) -> None:
+def test_validation_report_requires_coherent_browser_evidence(tmp_path: Path) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
-    report = AnalysisReport(
+    report = ValidationEvidence(
         notebook=notebook,
         views=("dashboard",),
         runtime="server",
@@ -196,7 +196,7 @@ def test_analysis_report_requires_consistent_handoff_evidence(tmp_path: Path) ->
             ),
         ),
         browser_required=True,
-        actions=(),
+        issues=(),
     )
     failed_static = replace(
         report,
@@ -224,7 +224,7 @@ def test_analysis_report_requires_consistent_handoff_evidence(tmp_path: Path) ->
     runtime_status = report.browser_observations[0].runtime_status
     assert runtime_status is not None
 
-    def with_runtime_status(status: RuntimeStatusReport) -> AnalysisReport:
+    def with_runtime_status(status: RuntimeStatusReport) -> ValidationEvidence:
         return replace(
             report,
             browser_observations=(
@@ -247,18 +247,17 @@ def test_analysis_report_requires_consistent_handoff_evidence(tmp_path: Path) ->
     )
 
     assert failed_static.ok is False
-    assert failed_static.handoff_ready is False
+    assert failed_static.ok is False
     assert failed_static.to_dict()["summary"] == {
         "pass": 2,
         "warn": 0,
         "fail": 1,
     }
-    assert missing_runtime.handoff_ready is False
+    assert missing_runtime.ok is False
     assert browser_error.ok is False
-    assert browser_error.handoff_ready is False
+    assert browser_error.ok is False
     assert all(
-        with_runtime_status(status).handoff_ready is False
-        for status in mismatched_statuses
+        with_runtime_status(status).ok is False for status in mismatched_statuses
     )
     assert browser_error.to_dict()["summary"] == {
         "pass": 2,
@@ -279,14 +278,14 @@ def test_analysis_report_requires_consistent_handoff_evidence(tmp_path: Path) ->
     for invalid in (contradictory, empty_runtime, ready_with_error):
         with pytest.raises(
             ProtocolError,
-            match=r"analysis response|browser observation",
+            match=r"validation response|browser observation",
         ):
-            parse_analysis_report(invalid)
+            parse_validation_evidence(invalid)
 
 
-def test_analysis_protocol_rejects_unrecognized_fields(tmp_path: Path) -> None:
+def test_validation_protocol_rejects_unrecognized_fields(tmp_path: Path) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
-    payload = AnalysisReport(
+    payload = ValidationEvidence(
         notebook=notebook,
         views=("dashboard",),
         runtime="server",
@@ -296,36 +295,36 @@ def test_analysis_protocol_rejects_unrecognized_fields(tmp_path: Path) -> None:
         runtime_skipped=None,
         browser_observations=(),
         browser_required=False,
-        actions=(),
+        issues=(),
     ).to_dict()
     payload["unexpected"] = True
 
-    with pytest.raises(ProtocolError, match="analysis response"):
-        parse_analysis_report(payload)
+    with pytest.raises(ProtocolError, match="validation response"):
+        parse_validation_evidence(payload)
 
     payload.pop("unexpected")
     payload["schema"] = True
-    with pytest.raises(ProtocolError, match="analysis response"):
-        parse_analysis_report(payload)
+    with pytest.raises(ProtocolError, match="validation response"):
+        parse_validation_evidence(payload)
 
 
 @pytest.mark.parametrize(
     ("field", "value"),
     [
         ("ok", 1),
-        ("handoff_ready", 0),
+        ("ok", 0),
         ("summary", {"pass": True, "warn": 0, "fail": 0}),
         ("summary", {"pass": -1, "warn": 0, "fail": 0}),
         ("summary", {"pass": 1, "warn": 0}),
     ],
 )
-def test_analysis_protocol_rejects_noncanonical_summary_fields(
+def test_validation_protocol_rejects_noncanonical_summary_fields(
     tmp_path: Path,
     field: str,
     value: object,
 ) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
-    payload = AnalysisReport(
+    payload = ValidationEvidence(
         notebook=notebook,
         views=("dashboard",),
         runtime="server",
@@ -335,17 +334,17 @@ def test_analysis_protocol_rejects_noncanonical_summary_fields(
         runtime_skipped=None,
         browser_observations=(),
         browser_required=False,
-        actions=(),
+        issues=(),
     ).to_dict()
     payload[field] = value
 
-    with pytest.raises(ProtocolError, match="analysis response"):
-        parse_analysis_report(payload)
+    with pytest.raises(ProtocolError, match="validation response"):
+        parse_validation_evidence(payload)
 
 
-def _activation_payload(notebook: Path) -> dict[str, object]:
+def _show_payload(notebook: Path) -> dict[str, object]:
     return {
-        "schema": 2,
+        "schema": 1,
         "notebook": str(notebook),
         "view": "dashboard",
         "generation": 1,
@@ -354,10 +353,10 @@ def _activation_payload(notebook: Path) -> dict[str, object]:
     }
 
 
-def test_activation_protocol_accepts_identity_results(tmp_path: Path) -> None:
+def test_show_protocol_accepts_identity_results(tmp_path: Path) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
-    active = parse_activation_result(
-        _activation_payload(notebook),
+    active = parse_show_result(
+        _show_payload(notebook),
         notebook,
         "dashboard",
     )
@@ -372,15 +371,15 @@ def test_activation_protocol_accepts_identity_results(tmp_path: Path) -> None:
         {"unexpected": True},
     ],
 )
-def test_activation_protocol_rejects_invalid_results(
+def test_show_protocol_rejects_invalid_results(
     tmp_path: Path,
     patch: dict[str, object],
 ) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
-    payload = {**_activation_payload(notebook), **patch}
+    payload = {**_show_payload(notebook), **patch}
 
-    with pytest.raises(ProtocolError, match="activation response"):
-        parse_activation_result(payload, notebook, "dashboard")
+    with pytest.raises(ProtocolError, match="show response"):
+        parse_show_result(payload, notebook, "dashboard")
 
 
 def test_browser_protocol_requires_the_server_observation_challenge() -> None:

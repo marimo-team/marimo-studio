@@ -96,8 +96,7 @@ default = "dashboard"
             str(studio.notebook),
             "--level",
             "runtime",
-            "--format",
-            "json",
+            "--json",
         ],
         capture_result=True,
         diagnostic_stream=lambda output: lines.append(output.read()),
@@ -111,13 +110,12 @@ default = "dashboard"
     assert command[command.index("--project") + 1] == str(studio.root)
     assert "--frozen" in command
     assert command[command.index("--") + 1] == "marimo-studio"
-    assert command[-6:] == [
+    assert command[-5:] == [
         "validate",
         str(studio.notebook),
         "--level",
         "runtime",
-        "--format",
-        "json",
+        "--json",
     ]
     assert captured["package_requirement"] == "marimo-studio"
     assert captured["compose_project"] is True

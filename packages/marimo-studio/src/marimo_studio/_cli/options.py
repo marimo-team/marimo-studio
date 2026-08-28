@@ -22,14 +22,6 @@ def finite_timeout(
     return value
 
 
-output_format_option = click.option(
-    "--format",
-    "output_format",
-    type=click.Choice(("text", "json")),
-    default="text",
-    show_default=True,
-    help="Set the result format.",
-)
 runtime_timeout_option = click.option(
     "--runtime-timeout",
     type=click.FloatRange(min=0, max=MAX_RUNTIME_TIMEOUT),

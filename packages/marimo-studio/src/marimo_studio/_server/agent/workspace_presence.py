@@ -275,8 +275,10 @@ class WorkspacePresence:
         if len(connected) > 1:
             raise AgentRequestError(
                 "browser-client-ambiguous",
-                "More than one Studio browser is connected for this notebook.",
+                "More than one Studio browser is connected for this notebook. "
+                f"Connected clients: {', '.join(connected)}.",
                 status_code=409,
+                details={"browser_clients": connected},
             )
         target = self.target(connected[0])
         assert target is not None

@@ -157,6 +157,22 @@ def test_inspection_selects_exact_cells_by_ref_name_and_index(
     assert raised.value.field == "selectors"
 
 
+def test_inspection_includes_complete_upstream_context(
+    notebook_path: Path,
+) -> None:
+    spec = inspect_notebook(notebook_path)
+
+    selected = select_cells(
+        spec,
+        selectors=(1,),
+        output_expressions=True,
+        context="upstream",
+        limit=1,
+    )
+
+    assert selected == spec.cells
+
+
 def test_selected_inspection_attaches_code_only_to_result_cells(
     notebook_path: Path,
 ) -> None:

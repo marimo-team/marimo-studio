@@ -9,15 +9,15 @@ import click
 
 from marimo_studio._authoring.view import remove_view
 from marimo_studio._authoring.workspace import create_view
-from marimo_studio._cli.diagnostics import diagnostic_format_option, diagnostics
+from marimo_studio._cli.diagnostics import json_option
 from marimo_studio._cli.help import ColoredCommand
 from marimo_studio._cli.options import (
-    output_format_option,
     target_option,
     view_name_argument,
 )
 from marimo_studio._cli.output import (
     echo_json,
+    render_view_next_command,
     render_view_removal,
     render_view_setup,
 )
@@ -35,19 +35,18 @@ def _stdin_is_interactive() -> bool:
     "--starter",
     default=None,
     metavar="ID",
-    help="Create the view from an installed starter.",
+    help="Choose an installed starting point for the page.",
 )
 @click.option("--dry-run", is_flag=True, help="Report changes without writing.")
-@output_format_option
-@diagnostic_format_option
+@json_option
 def create(
     view_name: str,
     target: Path | None,
     starter: str | None,
     dry_run: bool,
-    output_format: str,
+    json_output: bool,
 ) -> None:
-    """Create one named view."""
+    """Create one named page."""
     result = asyncio.run(
         create_view(
             resolve_notebook(target),
@@ -56,8 +55,9 @@ def create(
             dry_run=dry_run,
         )
     )
-    if output_format == "json":
+    if json_output:
         echo_json(result.to_dict())
+        render_view_next_command(result)
         return
     render_view_setup(result)
 
@@ -65,21 +65,16 @@ def create(
 @click.command("remove", cls=ColoredCommand)
 @view_name_argument
 @target_option
-@click.option("--yes", is_flag=True, help="Remove the view without prompting.")
-@output_format_option
-@diagnostic_format_option
+@click.option("--yes", is_flag=True, help="Remove the page without prompting.")
+@json_option
 def remove(
     view_name: str,
     target: Path | None,
     yes: bool,
-    output_format: str,
+    json_output: bool,
 ) -> None:
-    """Remove one complete view project."""
-    if not yes and (
-        output_format == "json"
-        or diagnostics().format == "jsonl"
-        or not _stdin_is_interactive()
-    ):
+    """Remove one page and its source files."""
+    if not yes and (json_output or not _stdin_is_interactive()):
         raise click.UsageError(
             "Pass --yes for machine output or non-interactive input."
         )
@@ -90,7 +85,7 @@ def remove(
     ):
         raise click.exceptions.Exit(0)
     result = asyncio.run(remove_view(resolve_notebook(target), view_name))
-    if output_format == "json":
+    if json_output:
         echo_json(result.to_dict())
         return
     render_view_removal(result)

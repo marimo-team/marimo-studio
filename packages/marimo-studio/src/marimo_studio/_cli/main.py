@@ -15,7 +15,6 @@ from marimo_studio._cli.commands.view import view
 from marimo_studio._cli.diagnostics import (
     capture_command_output,
     diagnostics_from_argv,
-    machine_output_from_argv,
 )
 from marimo_studio._cli.help import ColoredGroup
 from marimo_studio._cli.output import echo_error
@@ -35,7 +34,7 @@ Examples:
 )
 @click.version_option(prog_name="marimo-studio", package_name="marimo-studio")
 def cli() -> None:
-    """Design custom views for Marimo notebooks."""
+    """Design custom pages for Marimo notebooks."""
 
 
 cli.add_command(doctor)
@@ -68,7 +67,7 @@ def _show_click_error(error: click.ClickException) -> None:
 def main() -> None:
     """Run the Marimo Studio console script."""
     diagnostics = diagnostics_from_argv(sys.argv[1:])
-    machine_result = machine_output_from_argv(sys.argv[1:])
+    machine_result = diagnostics.format == "jsonl"
     try:
         with capture_command_output(
             diagnostics,

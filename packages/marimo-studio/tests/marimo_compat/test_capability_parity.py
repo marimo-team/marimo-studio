@@ -12,26 +12,33 @@ from click.testing import CliRunner
 from starlette.testclient import TestClient
 
 import marimo_studio.agent as studio_agent
-from marimo_studio._browser_client.protocol import ViewActivationRequest
+import marimo_studio.authoring as studio_authoring
+from marimo_studio._browser_client.protocol import ViewShowRequest
 from marimo_studio._browser_client.transport import StudioServerConnection
 from marimo_studio._cli import cli, main
-from marimo_studio._validation.analysis import AnalysisOptions
-from marimo_studio._validation.evidence import AnalysisReport
+from marimo_studio._validation.evidence import ValidationEvidence
+from marimo_studio._validation.progressive import ValidationOptions
 from marimo_studio._validation.results import CheckResult
-from marimo_studio.agent import ViewActivationResult
+from marimo_studio.agent import ShowResult
 from marimo_studio.errors import AgentRequestError
 
 from ..app_helpers import edit_mode, marimo_app, session_manager
 
 
 def _workspace(notebook_path):
-    return studio_agent.open(notebook=notebook_path)
+    return studio_authoring.open_workspace(notebook_path)
 
 
 def _json_command(*args: str) -> dict[str, object]:
-    result = CliRunner().invoke(cli, [*args, "--format", "json"])
+    result = CliRunner().invoke(
+        cli,
+        [
+            *args,
+            "--json",
+        ],
+    )
     assert result.exit_code == 0, result.output
-    value = json.loads(result.output)
+    value = json.loads(result.stdout)
     assert isinstance(value, dict)
     return value
 
@@ -47,7 +54,7 @@ def test_status_adapters_follow_the_workspace_lifecycle(notebook_path) -> None:
         return command
 
     unconfigured = status()
-    assert unconfigured["schema"] == 2
+    assert unconfigured["schema"] == 1
     assert unconfigured["state"] == "unconfigured"
     assert unconfigured["views"] == []
     assert notebook_path.read_bytes() == original
@@ -72,6 +79,7 @@ def test_static_inspection_matches(notebook_path) -> None:
             include_code=True,
             selectors=(1,),
             output_expressions=True,
+            context="upstream",
             limit=1,
         )
     ).to_dict()
@@ -84,6 +92,8 @@ def test_static_inspection_matches(notebook_path) -> None:
         "--cell",
         "1",
         "--output-expressions",
+        "--context",
+        "upstream",
         "--limit",
         "1",
     )
@@ -105,7 +115,7 @@ def test_starter_catalog_adapters_match(notebook_path) -> None:
 
 
 def test_provider_doctor_adapters_match() -> None:
-    python = asyncio.run(studio_agent.doctor()).to_dict()
+    python = asyncio.run(studio_authoring.doctor()).to_dict()
     command = _json_command("doctor")
 
     assert command == python
@@ -142,18 +152,15 @@ def test_view_read_and_build_adapters_match(notebook_path) -> None:
     )
     assert command_document == {"schema": 1, **document.to_dict()}
 
-    publication = asyncio.run(view.build()).to_dict()
-    command_publication = _json_command(
+    build = asyncio.run(view.build()).to_dict()
+    command_build = _json_command(
         "view",
         "build",
         "dashboard",
         "--target",
         str(notebook_path),
     )
-    assert command_publication["view"] == publication["view"]
-    assert command_publication["profile"] == publication["profile"]
-    assert command_publication["input_id"] == publication["input_id"]
-    assert command_publication["artifact_id"] == publication["artifact_id"]
+    assert command_build == build
 
 
 def test_static_validation_matches(notebook_path) -> None:
@@ -171,13 +178,13 @@ def test_static_validation_matches(notebook_path) -> None:
     assert command == python
 
 
-def test_analysis_adapters_use_the_same_options(
+def test_validation_adapters_use_the_same_options(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace = _workspace(notebook_path)
     asyncio.run(workspace.create_view("dashboard"))
-    report = AnalysisReport(
+    report = ValidationEvidence(
         notebook=notebook_path.resolve(),
         views=("dashboard",),
         runtime="server",
@@ -187,21 +194,21 @@ def test_analysis_adapters_use_the_same_options(
         runtime_skipped=None,
         browser_observations=(),
         browser_required=False,
-        actions=(),
+        issues=(),
     )
     code_connection = StudioServerConnection(
         "http://localhost:2718",
         session_id="s_123456",
     )
     cli_connection = StudioServerConnection("http://localhost:2718")
-    python_options: list[AnalysisOptions] = []
-    cli_options: list[AnalysisOptions] = []
+    python_options: list[ValidationOptions] = []
+    cli_options: list[ValidationOptions] = []
 
-    async def request_analysis(_connection, _notebook, request):
+    async def request_browser_validation(_connection, _notebook, request):
         python_options.append(request.options)
         return report
 
-    async def analyze_studio(_workspace, options, **_kwargs):
+    async def validate_progressively(_workspace, options, **_kwargs):
         cli_options.append(options)
         return report
 
@@ -213,12 +220,12 @@ def test_analysis_adapters_use_the_same_options(
         ),
     )
     monkeypatch.setattr(
-        "marimo_studio._authoring.validation.request_analysis",
-        request_analysis,
+        "marimo_studio._authoring.validation.request_browser_validation",
+        request_browser_validation,
     )
     monkeypatch.setattr(
-        "marimo_studio._authoring.validation.analyze_studio",
-        analyze_studio,
+        "marimo_studio._authoring.validation.validate_progressively",
+        validate_progressively,
     )
     monkeypatch.setattr(
         "marimo_studio._cli.commands.validate.should_reenter",
@@ -231,9 +238,10 @@ def test_analysis_adapters_use_the_same_options(
     )
 
     python = asyncio.run(
-        studio_agent.open().validate(
+        studio_agent.current_workspace()
+        .view("dashboard")
+        .validate(
             level="browser",
-            view="dashboard",
             browser_timeout=20,
             runtime_timeout=75,
         )
@@ -257,7 +265,7 @@ def test_analysis_adapters_use_the_same_options(
         python_options
         == cli_options
         == [
-            AnalysisOptions(
+            ValidationOptions(
                 view="dashboard",
                 browser_timeout=20,
                 runtime_timeout=75,
@@ -268,13 +276,13 @@ def test_analysis_adapters_use_the_same_options(
     assert command == python
 
 
-def test_activation_adapters_return_the_same_result(
+def test_show_adapters_return_the_same_result(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace = _workspace(notebook_path)
     asyncio.run(workspace.create_view("dashboard"))
-    result = ViewActivationResult(
+    result = ShowResult(
         notebook=notebook_path.resolve(),
         view="dashboard",
         generation=3,
@@ -289,9 +297,9 @@ def test_activation_adapters_return_the_same_result(
         "http://localhost:2718",
         browser_client="browser-client-1234",
     )
-    requests: list[tuple[StudioServerConnection, ViewActivationRequest]] = []
+    requests: list[tuple[StudioServerConnection, ViewShowRequest]] = []
 
-    async def activate(connection, _notebook, request):
+    async def show(connection, _notebook, request):
         requests.append((connection, request))
         return result
 
@@ -303,18 +311,20 @@ def test_activation_adapters_return_the_same_result(
         ),
     )
     monkeypatch.setattr(
-        "marimo_studio._browser_client.client.request_view_activation",
-        activate,
+        "marimo_studio._browser_client.client.request_view_show",
+        show,
     )
     monkeypatch.setattr(
         "marimo_studio._cli.commands.view_delivery.studio_server_connection",
         lambda *_args, **_kwargs: cli_connection,
     )
 
-    python = asyncio.run(studio_agent.open().view("dashboard").activate()).to_dict()
+    python = asyncio.run(
+        studio_agent.current_workspace().view("dashboard").show()
+    ).to_dict()
     command = _json_command(
         "view",
-        "activate",
+        "show",
         "dashboard",
         "--target",
         str(notebook_path),
@@ -326,10 +336,10 @@ def test_activation_adapters_return_the_same_result(
 
     assert command == python == result.to_dict()
     assert requests == [
-        (code_connection, ViewActivationRequest("dashboard")),
+        (code_connection, ViewShowRequest("dashboard")),
         (
             cli_connection,
-            ViewActivationRequest(
+            ViewShowRequest(
                 "dashboard",
                 browser_client="browser-client-1234",
             ),
@@ -337,7 +347,7 @@ def test_activation_adapters_return_the_same_result(
     ]
 
 
-def test_activation_view_not_found_code_matches_python_http_and_cli(
+def test_show_view_not_found_code_matches_python_http_and_cli(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -379,14 +389,14 @@ def test_activation_view_not_found_code_matches_python_http_and_cli(
     )
 
     with pytest.raises(AgentRequestError) as python_error:
-        asyncio.run(studio_agent.open().view("missing").activate())
+        asyncio.run(studio_agent.current_workspace().view("missing").show())
 
     app = marimo_app(notebook_path)
     edit_mode(app)
     headers = {"Marimo-Server-Token": str(session_manager(app).skew_protection_token)}
     with TestClient(app) as client:
         http = client.patch(
-            "/_marimo-studio/views/missing/activate",
+            "/_marimo-studio/views/missing/show",
             headers=headers,
             json={"schema": 1, "browser_client": None},
         )
@@ -397,14 +407,13 @@ def test_activation_view_not_found_code_matches_python_http_and_cli(
         [
             "marimo-studio",
             "view",
-            "activate",
+            "show",
             "missing",
             "--target",
             str(notebook_path),
             "--server",
             "http://localhost:2718",
-            "--diagnostics",
-            "jsonl",
+            "--json",
         ],
     )
     with pytest.raises(SystemExit) as cli_exit:

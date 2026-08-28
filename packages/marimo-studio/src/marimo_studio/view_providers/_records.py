@@ -17,7 +17,7 @@ BuildProfile = Literal["development", "production"]
 DocumentAccess = Literal["edit", "read"]
 ProjectionKind = Literal["cell", "output", "value"]
 ProjectInputKind = Literal["file", "directory"]
-PROVIDER_API_VERSION = 4
+PROVIDER_API_VERSION = 1
 
 
 @dataclass(frozen=True)

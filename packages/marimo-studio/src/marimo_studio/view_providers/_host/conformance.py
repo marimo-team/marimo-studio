@@ -53,7 +53,7 @@ from marimo_studio.view_providers._validation import (
 _STARTER_KEY = re.compile(r"[a-z0-9](?:[a-z0-9._/-]*[a-z0-9])?")
 _PROFILES = frozenset({"development", "production"})
 _RESERVED_ROOTS = frozenset({".artifacts", ".gitignore", ".locks"})
-_BUILD_CONTRACT_VERSION = 2
+_BUILD_CONTRACT_VERSION = 1
 _MANIFEST_PATH = PurePosixPath("view.toml")
 _MAX_TEXT_BYTES = 64 * 1024
 _MAX_JSON_BYTES = 64 * 1024

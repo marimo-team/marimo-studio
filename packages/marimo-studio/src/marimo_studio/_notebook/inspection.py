@@ -17,6 +17,7 @@ from marimo_studio._notebook.records import (
     CellConfigSpec,
     CellSelector,
     CellSpec,
+    InspectionContext,
     InspectionResult,
     NotebookSpec,
     select_cells,
@@ -134,6 +135,7 @@ def inspect_notebook_result(
     include_code: bool = False,
     selectors: tuple[CellSelector, ...] = (),
     output_expressions: bool = False,
+    context: InspectionContext = "selected",
     limit: int | None = None,
 ) -> InspectionResult:
     """Return selected static notebook cells as one capability result."""
@@ -142,6 +144,7 @@ def inspect_notebook_result(
         notebook,
         selectors=selectors,
         output_expressions=output_expressions,
+        context=context,
         limit=limit,
     )
     if include_code:
@@ -158,6 +161,7 @@ async def inspect_runtime(
     include_code: bool = False,
     selectors: tuple[CellSelector, ...] = (),
     output_expressions: bool = False,
+    context: InspectionContext = "selected",
     limit: int | None = None,
     runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
 ) -> InspectionResult:
@@ -167,6 +171,7 @@ async def inspect_runtime(
         notebook,
         selectors=selectors,
         output_expressions=output_expressions,
+        context=context,
         limit=limit,
     )
     cells = _attach_selected_code(static, selected) if include_code else selected

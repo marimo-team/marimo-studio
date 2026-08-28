@@ -13,10 +13,10 @@ from starlette.testclient import TestClient
 
 import marimo_studio._authoring.validation as authoring_validation
 import marimo_studio._cli.commands.validate as validate_command
-import marimo_studio._validation.analysis as analysis_module
+import marimo_studio._validation.progressive as analysis_module
 import marimo_studio._validation.service as validation_service
 import marimo_studio._validation.static as checks_module
-import marimo_studio.agent as studio_agent
+import marimo_studio.authoring as studio_authoring
 from marimo_studio._cli import cli
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._server.agent import api as agent_api
@@ -116,11 +116,11 @@ def test_runtime_cleanup_failure_survives_browser_primary_failure(
     asyncio.run(exercise())
 
 
-def test_agent_runtime_validation_uses_the_supervised_process_boundary(
+def test_python_runtime_validation_uses_the_supervised_process_boundary(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    workspace = studio_agent.open(notebook=notebook_path)
+    workspace = studio_authoring.open_workspace(notebook_path)
     calls: list[tuple[str | None, dict[str, str] | None, float]] = []
 
     async def isolated(
@@ -167,7 +167,7 @@ def test_validation_rejects_source_mutation_between_static_and_runtime_stages(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    asyncio.run(studio_agent.open(notebook=notebook_path).create_view("dashboard"))
+    asyncio.run(studio_authoring.open_workspace(notebook_path).create_view("dashboard"))
     selected = load_studio(notebook_path)
     document = selected.view("dashboard").root / "index.html"
     native_check = validation_service.check_studio
@@ -210,11 +210,11 @@ def test_validation_rejects_source_mutation_between_static_and_runtime_stages(
 
     assert not runtime_called
     assert run.report.ok is False
-    assert run.static.checks[-1].code == "analysis-source-changed"
+    assert run.static.checks[-1].code == "validation-source-changed"
 
 
 def _validation_entry_reports(
-    workspace: studio_agent.Workspace,
+    workspace: studio_authoring.Workspace,
     monkeypatch: pytest.MonkeyPatch,
     checker: RuntimeChecker,
     *,
@@ -229,7 +229,7 @@ def _validation_entry_reports(
     monkeypatch.setattr(validate_command, "should_reenter", lambda *_args: False)
     monkeypatch.setattr(agent_api, "check_runtime_studio_isolated", checker)
 
-    agent_report = asyncio.run(
+    python_report = asyncio.run(
         workspace.validate(
             level="runtime",
             view="dashboard",
@@ -249,8 +249,7 @@ def _validation_entry_reports(
             "runtime",
             "--runtime-timeout",
             "7",
-            "--format",
-            "json",
+            "--json",
         ],
     )
     assert cli_result.exit_code == 1, cli_result.output
@@ -263,7 +262,7 @@ def _validation_entry_reports(
     headers = {"Marimo-Server-Token": str(session_manager(app).skew_protection_token)}
     with TestClient(app) as client:
         response = client.post(
-            "/_marimo-studio/analyze",
+            "/_marimo-studio/validate",
             headers=headers,
             json={
                 "schema": 1,
@@ -275,14 +274,14 @@ def _validation_entry_reports(
     if restore is not None:
         restore()
     assert response.status_code == 200
-    return agent_report, cli_report, response.json()
+    return python_report, cli_report, response.json()
 
 
-def test_runtime_failure_is_identical_through_agent_cli_and_server_analysis(
+def test_runtime_failure_is_identical_through_python_cli_and_server_validation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    workspace = studio_agent.open(notebook=notebook_path)
+    workspace = studio_authoring.open_workspace(notebook_path)
     asyncio.run(workspace.create_view("dashboard"))
     failure = CheckResult(
         "runtime",
@@ -309,15 +308,15 @@ def test_runtime_failure_is_identical_through_agent_cli_and_server_analysis(
         calls.append(expected_revisions)
         return (failure,)
 
-    agent_report, cli_report, server_report = _validation_entry_reports(
+    python_report, cli_report, server_report = _validation_entry_reports(
         workspace,
         monkeypatch,
         isolated,
     )
 
-    assert cli_report == agent_report
+    assert cli_report == python_report
     assert server_report["stages"]["runtime"]["checks"] == [failure.to_dict()]
-    assert server_report["actions"] == agent_report["actions"]
+    assert server_report["issues"] == python_report["issues"]
     assert len(calls) == 3
     assert all(
         revisions is not None and set(revisions) == {"dashboard"} for revisions in calls
@@ -329,24 +328,24 @@ def test_runtime_failure_is_identical_through_agent_cli_and_server_analysis(
     (
         (
             "changed",
-            "analysis-source-changed",
+            "validation-source-changed",
             "Wait for the current edits to save, then rerun validation.",
         ),
         (
             "unavailable",
-            "analysis-source-unavailable",
+            "validation-source-unavailable",
             "Restore the missing source, save it, then rerun validation.",
         ),
     ),
 )
-def test_source_revision_failures_match_agent_cli_and_server_analysis(
+def test_source_revision_failures_match_python_cli_and_server_validation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     outcome: str,
     code: str,
     advice: str,
 ) -> None:
-    workspace = studio_agent.open(notebook=notebook_path)
+    workspace = studio_authoring.open_workspace(notebook_path)
     asyncio.run(workspace.create_view("dashboard"))
     source = load_studio(notebook_path).view("dashboard").root / "index.html"
     original = source.read_text(encoding="utf-8")
@@ -373,16 +372,16 @@ def test_source_revision_failures_match_agent_cli_and_server_analysis(
         source.write_text(original, encoding="utf-8")
         notebook_path.write_text(notebook_source, encoding="utf-8")
 
-    agent_report, cli_report, server_report = _validation_entry_reports(
+    python_report, cli_report, server_report = _validation_entry_reports(
         workspace,
         monkeypatch,
         isolated,
         restore=restore,
     )
 
-    assert agent_report == cli_report
+    assert python_report == cli_report
     checks = (
-        agent_report["evidence"]["runtime"]["checks"],
+        python_report["evidence"]["runtime"]["checks"],
         cli_report["evidence"]["runtime"]["checks"],
         server_report["stages"]["runtime"]["checks"],
     )
@@ -390,20 +389,20 @@ def test_source_revision_failures_match_agent_cli_and_server_analysis(
         next(check for check in stage if check.get("code") == code) for stage in checks
     ]
     assert source_checks[0] == source_checks[1] == source_checks[2]
-    assert source_checks[0]["name"] == "analysis-source-revision"
-    source_actions = [
-        next(action for action in report["actions"] if action["code"] == code)
-        for report in (agent_report, cli_report, server_report)
+    assert source_checks[0]["name"] == "validation-source-revision"
+    source_issues = [
+        next(issue for issue in report["issues"] if issue["code"] == code)
+        for report in (python_report, cli_report, server_report)
     ]
-    assert source_actions[0] == source_actions[1] == source_actions[2]
-    assert source_actions[0]["advice"] == advice
+    assert source_issues[0] == source_issues[1] == source_issues[2]
+    assert source_issues[0]["advice"] == advice
 
 
-def test_invalid_static_source_matches_agent_cli_and_server_analysis(
+def test_invalid_static_source_matches_python_cli_and_server_validation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    workspace = studio_agent.open(notebook=notebook_path)
+    workspace = studio_authoring.open_workspace(notebook_path)
     asyncio.run(workspace.create_view("dashboard"))
     source = load_studio(notebook_path).view("dashboard").root / "index.html"
     original = source.read_text(encoding="utf-8")
@@ -443,7 +442,7 @@ def test_invalid_static_source_matches_agent_cli_and_server_analysis(
         source.write_text(original, encoding="utf-8")
 
     monkeypatch.setattr(validation_service, "check_studio", invalidate_after_static)
-    agent_report, cli_report, server_report = _validation_entry_reports(
+    python_report, cli_report, server_report = _validation_entry_reports(
         workspace,
         monkeypatch,
         runtime,
@@ -451,23 +450,25 @@ def test_invalid_static_source_matches_agent_cli_and_server_analysis(
     )
 
     assert runtime_calls == 0
-    assert agent_report == cli_report
+    assert python_report == cli_report
     checks = (
-        agent_report["evidence"]["static"]["checks"],
+        python_report["evidence"]["static"]["checks"],
         cli_report["evidence"]["static"]["checks"],
         server_report["stages"]["static"]["checks"],
     )
     source_checks = [
-        next(check for check in stage if check.get("code") == "analysis-source-changed")
+        next(
+            check for check in stage if check.get("code") == "validation-source-changed"
+        )
         for stage in checks
     ]
     assert source_checks[0] == source_checks[1] == source_checks[2]
-    source_actions = [
+    source_issues = [
         next(
-            action
-            for action in report["actions"]
-            if action["code"] == "analysis-source-changed"
+            issue
+            for issue in report["issues"]
+            if issue["code"] == "validation-source-changed"
         )
-        for report in (agent_report, cli_report, server_report)
+        for report in (python_report, cli_report, server_report)
     ]
-    assert source_actions[0] == source_actions[1] == source_actions[2]
+    assert source_issues[0] == source_issues[1] == source_issues[2]

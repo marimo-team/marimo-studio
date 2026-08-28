@@ -1,24 +1,24 @@
-"""Map validation evidence to one repair-action contract."""
+"""Map validation evidence to actionable issues."""
 
 from __future__ import annotations
 
 from typing import Literal, cast
 
 from marimo_studio._validation.evidence import (
-    AnalysisAction,
     BrowserObservation,
+    ValidationIssue,
 )
 from marimo_studio._validation.results import CheckResult
 
-CheckStage = Literal["analysis", "static", "runtime"]
+CheckStage = Literal["validation", "static", "runtime"]
 
 
-def check_action(
+def check_issue(
     stage: CheckStage,
     result: CheckResult,
     *,
     default_view: str | None,
-) -> AnalysisAction:
+) -> ValidationIssue:
     """Preserve one failed check's repair context."""
     details = result.details or {}
     view = details.get("view")
@@ -28,7 +28,7 @@ def check_action(
     target = details.get("target")
     source = details.get("source")
     hint = details.get("hint")
-    return AnalysisAction(
+    return ValidationIssue(
         stage=stage,
         severity="error" if result.status == "fail" else "warning",
         code=result.code or result.name,
@@ -44,36 +44,36 @@ def check_action(
     )
 
 
-def check_actions(
+def check_issues(
     checks: tuple[CheckResult, ...],
     stage: CheckStage,
     *,
     default_view: str | None,
-) -> tuple[AnalysisAction, ...]:
-    """Return actions for every failed or warning check."""
+) -> tuple[ValidationIssue, ...]:
+    """Return issues for every failed or warning check."""
     return tuple(
-        check_action(stage, result, default_view=default_view)
+        check_issue(stage, result, default_view=default_view)
         for result in checks
         if result.status != "pass"
     )
 
 
-def validation_actions(
+def validation_issues(
     static_checks: tuple[CheckResult, ...],
     runtime_checks: tuple[CheckResult, ...],
     observations: tuple[BrowserObservation, ...],
     *,
     browser_required: bool,
     default_view: str | None,
-) -> tuple[AnalysisAction, ...]:
-    """Return one ordered action list across every validation level."""
-    actions = [
-        *check_actions(static_checks, "static", default_view=default_view),
-        *check_actions(runtime_checks, "runtime", default_view=default_view),
+) -> tuple[ValidationIssue, ...]:
+    """Return one ordered issue list across every validation level."""
+    issues = [
+        *check_issues(static_checks, "static", default_view=default_view),
+        *check_issues(runtime_checks, "runtime", default_view=default_view),
     ]
     for observation in observations:
-        actions.extend(
-            AnalysisAction(
+        issues.extend(
+            ValidationIssue(
                 stage="browser",
                 severity=diagnostic.severity,
                 code=diagnostic.code,
@@ -93,8 +93,8 @@ def validation_actions(
                 diagnostic.severity == "error" for diagnostic in observation.diagnostics
             )
         ):
-            actions.append(
-                AnalysisAction(
+            issues.append(
+                ValidationIssue(
                     stage="browser",
                     severity="error",
                     code=observation.code or f"browser-{observation.state}",
@@ -107,7 +107,7 @@ def validation_actions(
                     view=observation.view,
                 )
             )
-    return tuple(actions)
+    return tuple(issues)
 
 
 def _string_keyed_mapping(value: object) -> dict[str, object] | None:
@@ -149,7 +149,7 @@ def _default_browser_advice(state: str, code: str | None = None) -> str:
         return "Wait for the Studio editor session to connect, then rerun validation."
     if code == "browser-view-not-active":
         return (
-            "Activate the view in one code-mode call, wait for it to render, "
+            "Show the view in one code-mode call, wait for it to render, "
             "then validate it in the next call."
         )
     if code == "browser-operation-in-progress":

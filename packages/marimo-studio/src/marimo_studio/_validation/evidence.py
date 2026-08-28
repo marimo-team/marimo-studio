@@ -270,14 +270,14 @@ class BrowserObservation:
         return value
 
 
-AnalysisStage: TypeAlias = Literal["analysis", "static", "runtime", "browser"]
+ValidationStage: TypeAlias = Literal["validation", "static", "runtime", "browser"]
 
 
 @dataclass(frozen=True)
-class AnalysisAction:
-    """One repair step derived from a failed or warning validation."""
+class ValidationIssue:
+    """One problem and repair step reported by validation."""
 
-    stage: AnalysisStage
+    stage: ValidationStage
     severity: Literal["warning", "error"]
     code: str
     message: str
@@ -304,7 +304,7 @@ class AnalysisAction:
 
 
 @dataclass(frozen=True)
-class AnalysisReport:
+class ValidationEvidence:
     """Static, runtime, and rendered-browser evidence for Studio views."""
 
     notebook: Path
@@ -316,17 +316,13 @@ class AnalysisReport:
     runtime_skipped: str | None
     browser_observations: tuple[BrowserObservation, ...]
     browser_required: bool
-    actions: tuple[AnalysisAction, ...]
+    issues: tuple[ValidationIssue, ...]
     dynamic_browser_required: bool = False
 
     @property
     def ok(self) -> bool:
-        return self._error_count() == 0
-
-    @property
-    def handoff_ready(self) -> bool:
         if (
-            not self.ok
+            self._error_count() > 0
             or not self.static_checks
             or not self.runtime_checks
             or self.runtime_skipped is not None
@@ -387,7 +383,6 @@ class AnalysisReport:
             "runtime": self.runtime,
             "revisions": self.revisions,
             "ok": self.ok,
-            "handoff_ready": self.handoff_ready,
             "summary": counts,
             "stages": {
                 "static": {
@@ -422,7 +417,7 @@ class AnalysisReport:
                     ],
                 },
             },
-            "actions": [action.to_dict() for action in self.actions],
+            "issues": [issue.to_dict() for issue in self.issues],
         }
 
     def _error_count(self) -> int:
@@ -437,8 +432,8 @@ class AnalysisReport:
             evidence += diagnostics
             if observation.state == "error" and diagnostics == 0:
                 evidence += 1
-        actions = sum(action.severity == "error" for action in self.actions)
-        return max(evidence, actions)
+        issues = sum(issue.severity == "error" for issue in self.issues)
+        return max(evidence, issues)
 
     def _warning_count(self) -> int:
         evidence = sum(
@@ -449,8 +444,8 @@ class AnalysisReport:
             for observation in self.browser_observations
             for diagnostic in observation.diagnostics
         )
-        actions = sum(action.severity == "warning" for action in self.actions)
-        return max(evidence, actions)
+        issues = sum(issue.severity == "warning" for issue in self.issues)
+        return max(evidence, issues)
 
 
 def _browser_status(

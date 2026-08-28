@@ -57,11 +57,10 @@ def test_source_revert_restores_freshness_without_erasing_the_failed_attempt(
     retained = json.loads(receipt_path.read_text(encoding="utf-8"))
 
     assert inspected.freshness == "current"
-    assert inspected.publication is not None
-    assert [item.code for item in inspected.publication.diagnostics] == [
-        "published-warning"
-    ]
-    assert inspected.publication.duration_ms == published_duration
+    assert inspected.build is not None
+    assert state.artifact is not None
+    assert [item.code for item in inspected.build.issues] == ["published-warning"]
+    assert inspected.build.revision == state.artifact.artifact_revision
     assert retained["build"]["phase"] == "failed"
     assert retained["build"]["project_revision"] == failed_revision
     assert retained["published"]["duration_ms"] == published_duration

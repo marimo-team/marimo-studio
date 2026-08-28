@@ -1,4 +1,4 @@
-"""Decode the structured Studio handoff report."""
+"""Decode progressive validation evidence from Studio."""
 
 from __future__ import annotations
 
@@ -6,21 +6,20 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from marimo_studio._browser_client.browser_protocol import parse_browser_observation
-from marimo_studio._validation.evidence import AnalysisAction, AnalysisReport
+from marimo_studio._validation.evidence import ValidationEvidence, ValidationIssue
 from marimo_studio._validation.results import CheckResult
 from marimo_studio.errors import ProtocolError
 
 
-def parse_analysis_report(payload: dict[str, Any]) -> AnalysisReport:
+def parse_validation_evidence(payload: dict[str, Any]) -> ValidationEvidence:
     notebook = payload.get("notebook")
     views = payload.get("views")
     runtime_id = payload.get("runtime")
     revisions = payload.get("revisions")
     ok = payload.get("ok")
-    handoff_ready = payload.get("handoff_ready")
     summary = payload.get("summary")
     stages = payload.get("stages")
-    actions = payload.get("actions")
+    issues = payload.get("issues")
     if (
         set(payload)
         != {
@@ -30,10 +29,9 @@ def parse_analysis_report(payload: dict[str, Any]) -> AnalysisReport:
             "runtime",
             "revisions",
             "ok",
-            "handoff_ready",
             "summary",
             "stages",
-            "actions",
+            "issues",
         }
         or type(payload.get("schema")) is not int
         or payload.get("schema") != 1
@@ -43,15 +41,14 @@ def parse_analysis_report(payload: dict[str, Any]) -> AnalysisReport:
         or not _nonempty(runtime_id)
         or not _string_mapping(revisions)
         or type(ok) is not bool
-        or type(handoff_ready) is not bool
         or not _summary_counts(summary)
         or not isinstance(stages, dict)
-        or not isinstance(actions, list)
+        or not isinstance(issues, list)
     ):
-        raise ProtocolError("The Studio analysis response is invalid.")
+        raise ProtocolError("The Studio validation response is invalid.")
     revision_map = cast(dict[str, str], revisions)
     if set(revision_map) != set(views):
-        raise ProtocolError("The Studio analysis response is invalid.")
+        raise ProtocolError("The Studio validation response is invalid.")
     static = stages.get("static")
     runtime = stages.get("runtime")
     browser = stages.get("browser")
@@ -69,8 +66,8 @@ def parse_analysis_report(payload: dict[str, Any]) -> AnalysisReport:
             and not isinstance(runtime.get("reason"), str)
         )
     ):
-        raise ProtocolError("The Studio analysis response is invalid.")
-    report = AnalysisReport(
+        raise ProtocolError("The Studio validation response is invalid.")
+    report = ValidationEvidence(
         notebook=Path(cast(str, notebook)).resolve(),
         views=tuple(cast(list[str], views)),
         runtime=cast(str, runtime_id),
@@ -82,17 +79,17 @@ def parse_analysis_report(payload: dict[str, Any]) -> AnalysisReport:
             parse_browser_observation(item) for item in browser["observations"]
         ),
         browser_required=browser["required"],
-        actions=tuple(_parse_action(item) for item in actions),
+        issues=tuple(_parse_issue(item) for item in issues),
         dynamic_browser_required=browser["required_for_dynamic_sites"],
     )
     if payload != report.to_dict():
-        raise ProtocolError("The Studio analysis response is invalid.")
+        raise ProtocolError("The Studio validation response is invalid.")
     return report
 
 
 def _parse_check(value: object) -> CheckResult:
     if not isinstance(value, dict):
-        raise ProtocolError("A Studio analysis check is invalid.")
+        raise ProtocolError("A Studio validation check is invalid.")
     name = value.get("name")
     status = value.get("status")
     message = value.get("message")
@@ -105,7 +102,7 @@ def _parse_check(value: object) -> CheckResult:
         or (code is not None and not isinstance(code, str))
         or (details is not None and not _string_keyed_mapping(details))
     ):
-        raise ProtocolError("A Studio analysis check is invalid.")
+        raise ProtocolError("A Studio validation check is invalid.")
     return CheckResult(
         name=name,
         status=cast(Literal["pass", "warn", "fail"], status),
@@ -115,9 +112,9 @@ def _parse_check(value: object) -> CheckResult:
     )
 
 
-def _parse_action(value: object) -> AnalysisAction:
+def _parse_issue(value: object) -> ValidationIssue:
     if not isinstance(value, dict):
-        raise ProtocolError("A Studio analysis action is invalid.")
+        raise ProtocolError("A Studio validation issue is invalid.")
     stage = value.get("stage")
     severity = value.get("severity")
     code = value.get("code")
@@ -127,7 +124,7 @@ def _parse_action(value: object) -> AnalysisAction:
     target = value.get("target")
     source = value.get("source")
     if (
-        stage not in {"analysis", "static", "runtime", "browser"}
+        stage not in {"validation", "static", "runtime", "browser"}
         or severity not in {"warning", "error"}
         or not isinstance(code, str)
         or not isinstance(message, str)
@@ -136,9 +133,9 @@ def _parse_action(value: object) -> AnalysisAction:
         or (target is not None and not isinstance(target, str))
         or (source is not None and not _string_keyed_mapping(source))
     ):
-        raise ProtocolError("A Studio analysis action is invalid.")
-    return AnalysisAction(
-        stage=cast(Literal["analysis", "static", "runtime", "browser"], stage),
+        raise ProtocolError("A Studio validation issue is invalid.")
+    return ValidationIssue(
+        stage=cast(Literal["validation", "static", "runtime", "browser"], stage),
         severity=cast(Literal["warning", "error"], severity),
         code=code,
         message=message,

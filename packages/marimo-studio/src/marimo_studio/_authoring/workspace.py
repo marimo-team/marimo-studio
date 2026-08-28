@@ -11,7 +11,11 @@ from marimo_studio._notebook.inspection import (
     inspect_notebook_result,
     inspect_runtime,
 )
-from marimo_studio._notebook.records import CellSelector, InspectionResult
+from marimo_studio._notebook.records import (
+    CellSelector,
+    InspectionContext,
+    InspectionResult,
+)
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._processes.provider_operation import run_provider_operation
 from marimo_studio._views.api import bind_cell as bind_cell_operation
@@ -51,6 +55,7 @@ async def inspect_notebook(
     include_code: bool = False,
     selectors: tuple[CellSelector, ...] = (),
     output_expressions: bool = False,
+    context: InspectionContext = "selected",
     limit: int | None = None,
     runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
 ) -> InspectionResult:
@@ -61,6 +66,7 @@ async def inspect_notebook(
             include_code=include_code,
             selectors=selectors,
             output_expressions=output_expressions,
+            context=context,
             limit=limit,
             runtime_timeout=runtime_timeout,
         )
@@ -70,6 +76,7 @@ async def inspect_notebook(
         include_code=include_code,
         selectors=selectors,
         output_expressions=output_expressions,
+        context=context,
         limit=limit,
     )
 

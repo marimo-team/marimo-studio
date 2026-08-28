@@ -6,7 +6,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-import marimo_studio.agent as studio_agent
+import marimo_studio.authoring as studio_authoring
 from marimo_studio._cli import cli
 
 from .export_test_support import configure_export_view
@@ -29,13 +29,12 @@ def test_export_command_reports_the_static_entrypoint(
             str(notebook_path),
             "--output",
             str(output),
-            "--format",
-            "json",
+            "--json",
         ],
     )
 
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
+    payload = json.loads(result.stdout)
     assert payload["schema"] == 1
     assert payload["view"] == "dashboard"
     assert payload["runtime"] == "wasm"
@@ -76,7 +75,7 @@ def test_agent_view_exports_the_same_static_bundle(
 ) -> None:
     configure_export_view(notebook_path)
     output = tmp_path / "agent-site"
-    view = studio_agent.open(notebook=notebook_path).view("dashboard")
+    view = studio_authoring.open_workspace(notebook_path).view("dashboard")
 
     result = asyncio.run(view.export(output))
 

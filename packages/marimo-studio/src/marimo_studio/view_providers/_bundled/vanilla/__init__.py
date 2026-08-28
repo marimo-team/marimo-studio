@@ -199,7 +199,7 @@ class VanillaProvider:
     info = ProviderInfo(
         title="Vanilla web",
         summary="Builds one HTML document with inline styles and scripts.",
-        api_version=4,
+        api_version=1,
     )
     _starter = ProviderStarter(
         key=STARTER_KEY,

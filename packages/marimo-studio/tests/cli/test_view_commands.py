@@ -15,7 +15,7 @@ from click.testing import CliRunner
 from marimo_studio._cli import cli
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
-from marimo_studio.agent import ViewActivationResult
+from marimo_studio.agent import ShowResult
 from marimo_studio.errors import (
     SourceConflictError,
     SourceEncodingError,
@@ -56,7 +56,13 @@ def test_provider_doctor_renders_finalized_registration_failures(
     )
 
     human = CliRunner().invoke(cli, ["doctor"])
-    result = CliRunner().invoke(cli, ["doctor", "--format", "json"])
+    result = CliRunner().invoke(
+        cli,
+        [
+            "doctor",
+            "--json",
+        ],
+    )
 
     assert human.exit_code == 0, human.output
     human_output = unstyle(human.output)
@@ -65,7 +71,7 @@ def test_provider_doctor_renders_finalized_registration_failures(
     assert "installed 1.0.0" in human_output
     assert result.exit_code == 0, result.output
     records = {
-        item["registration"]: item for item in json.loads(result.output)["providers"]
+        item["registration"]: item for item in json.loads(result.stdout)["providers"]
     }
     assert records["INVALID REGISTRATION"]["key"] is None
     assert records["INVALID REGISTRATION"]["loaded"] is False
@@ -99,11 +105,15 @@ def test_provider_doctor_keeps_the_derived_key_for_import_failure(
 
     result = CliRunner().invoke(
         cli,
-        ["doctor", "import-package/report", "--format", "json"],
+        [
+            "doctor",
+            "import-package/report",
+            "--json",
+        ],
     )
 
-    assert result.exit_code == 0, result.output
-    records = json.loads(result.output)["providers"]
+    assert result.exit_code == 1, result.output
+    records = json.loads(result.stdout)["providers"]
     assert {record["key"] for record in records} == {"import-package/report"}
     assert all(record["loaded"] is False for record in records)
     assert all("import failed" in record["error"] for record in records)
@@ -122,8 +132,7 @@ def test_view_create_bootstraps_lists_and_checks_named_views(
             "dashboard",
             "--target",
             str(notebook_path),
-            "--format",
-            "json",
+            "--json",
         ],
     )
     added = runner.invoke(
@@ -134,13 +143,17 @@ def test_view_create_bootstraps_lists_and_checks_named_views(
             "executive",
             "--target",
             str(notebook_path),
-            "--format",
-            "json",
+            "--json",
         ],
     )
     overview = runner.invoke(
         cli,
-        ["status", "--target", str(notebook_path), "--format", "json"],
+        [
+            "status",
+            "--target",
+            str(notebook_path),
+            "--json",
+        ],
     )
     checked = runner.invoke(
         cli,
@@ -149,8 +162,7 @@ def test_view_create_bootstraps_lists_and_checks_named_views(
             "executive",
             "--target",
             str(notebook_path),
-            "--format",
-            "json",
+            "--json",
         ],
     )
 
@@ -158,18 +170,18 @@ def test_view_create_bootstraps_lists_and_checks_named_views(
     assert added.exit_code == 0, added.output
     assert overview.exit_code == 0, overview.output
     assert checked.exit_code == 0, checked.output
-    assert json.loads(created.output)["view"] == "dashboard"
-    assert Path(json.loads(created.output)["root"]) == (
+    assert json.loads(created.stdout)["view"] == "dashboard"
+    assert Path(json.loads(created.stdout)["root"]) == (
         notebook_path.parent / "__marimo__" / "studio" / "analysis" / "dashboard"
     )
-    assert json.loads(added.output)["view"] == "executive"
-    overview_payload = json.loads(overview.output)
-    assert overview_payload["schema"] == 2
+    assert json.loads(added.stdout)["view"] == "executive"
+    overview_payload = json.loads(overview.stdout)
+    assert overview_payload["schema"] == 1
     assert [item["name"] for item in overview_payload["views"]] == [
         "dashboard",
         "executive",
     ]
-    payload = json.loads(checked.output)
+    payload = json.loads(checked.stdout)
     assert payload["ok"] is True
     assert payload["view"] == "executive"
     assert any(
@@ -193,16 +205,15 @@ def test_view_create_dry_run_matches_the_live_document_catalog_without_writing(
             "--target",
             str(notebook_path),
             "--dry-run",
-            "--format",
-            "json",
+            "--json",
         ],
     )
 
     assert preview.exit_code == 0, preview.output
-    preview_payload = json.loads(preview.output)
+    preview_payload = json.loads(preview.stdout)
     assert preview_payload["dry_run"] is True
     assert preview_payload["view"] == "dashboard"
-    assert preview_payload["schema"] == 2
+    assert preview_payload["schema"] == 1
     assert preview_payload["created"]
     assert notebook_path.read_bytes() == original
     assert not (notebook_path.parent / "__marimo__").exists()
@@ -215,13 +226,12 @@ def test_view_create_dry_run_matches_the_live_document_catalog_without_writing(
             "dashboard",
             "--target",
             str(notebook_path),
-            "--format",
-            "json",
+            "--json",
         ],
     )
 
     assert created.exit_code == 0, created.output
-    created_payload = json.loads(created.output)
+    created_payload = json.loads(created.stdout)
     assert preview_payload["documents"] == created_payload["documents"]
     assert [Path(path).name for path in created_payload["documents"]] == [
         "view.toml",
@@ -276,8 +286,7 @@ def test_human_output_uses_color_and_json_remains_machine_readable(
             "--target",
             str(notebook_path),
             "--dry-run",
-            "--format",
-            "json",
+            "--json",
         ],
         color=True,
     )
@@ -288,7 +297,7 @@ def test_human_output_uses_color_and_json_remains_machine_readable(
     assert "Would create view dashboard" in human_output
     assert human_output.count(f"update {notebook_path}") == 1
     assert "\x1b[" not in machine.output
-    assert json.loads(machine.output)["view"] == "dashboard"
+    assert json.loads(machine.stdout)["view"] == "dashboard"
 
 
 def test_starter_human_output_reports_unavailable_recovery_once(
@@ -380,8 +389,7 @@ def test_new_command_errors_emit_the_complete_diagnostic_command(
         "dashboard",
         "--target",
         str(tmp_path / "missing.py"),
-        "--diagnostics",
-        "jsonl",
+        "--json",
     )
 
     assert result.returncode == 3, result.stderr
@@ -421,8 +429,7 @@ def test_view_inspect_human_output_renders_the_provider_project_catalog(
             "dashboard",
             "--target",
             str(notebook_path),
-            "--format",
-            "json",
+            "--json",
         ],
     )
 
@@ -433,9 +440,9 @@ def test_view_inspect_human_output_renders_the_provider_project_catalog(
     assert "documents" in output
     assert "diagnostics" in output
     assert "index.html" in output
-    payload = json.loads(machine.output)
+    payload = json.loads(machine.stdout)
     assert payload["freshness"] == "unbuilt"
-    assert payload["publication"] is None
+    assert payload["build"] is None
 
 
 def test_view_read_and_write_share_revision_aware_source_contract(
@@ -452,13 +459,12 @@ def test_view_read_and_write_share_revision_aware_source_contract(
             "index.html",
             "--target",
             str(notebook_path),
-            "--format",
-            "json",
+            "--json",
         ],
     )
 
     assert loaded.exit_code == 0, loaded.output
-    document = json.loads(loaded.output)
+    document = json.loads(loaded.stdout)
     content = document["content"].replace("Dashboard", "CLI dashboard")
     written = runner.invoke(
         cli,
@@ -473,14 +479,13 @@ def test_view_read_and_write_share_revision_aware_source_contract(
             document["revision"],
             "--from",
             "-",
-            "--format",
-            "json",
+            "--json",
         ],
         input=content,
     )
 
     assert written.exit_code == 0, written.output
-    updated = json.loads(written.output)
+    updated = json.loads(written.stdout)
     assert updated["revision"] != document["revision"]
     assert "CLI dashboard" in updated["content"]
     stale = runner.invoke(
@@ -519,11 +524,10 @@ def test_view_write_bounds_and_decodes_replacement_source(
             "index.html",
             "--target",
             str(notebook_path),
-            "--format",
-            "json",
+            "--json",
         ],
     )
-    revision = json.loads(loaded.output)["revision"]
+    revision = json.loads(loaded.stdout)["revision"]
     monkeypatch.setattr("marimo_studio._cli.input.SOURCE_DOCUMENT_MAX_BYTES", 4)
     oversized = tmp_path / "oversized.html"
     oversized.write_bytes(b"12345")
@@ -559,8 +563,7 @@ def test_text_recovery_hints_respect_jsonl_diagnostics(
             "dashboard",
             "--target",
             str(notebook_path),
-            "--diagnostics",
-            "jsonl",
+            "--json",
         ],
     )
 
@@ -577,16 +580,16 @@ def test_text_recovery_hints_respect_jsonl_diagnostics(
     assert event["details"] == {"action": "edit"}
 
 
-def test_view_activate_returns_the_shared_result(
+def test_view_show_returns_the_shared_result(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     prepare_view(notebook_path)
 
-    async def activate(notebook, name, connection):
+    async def show(notebook, name, connection):
         assert notebook == notebook_path.resolve()
         assert name == "dashboard"
-        return ViewActivationResult(
+        return ShowResult(
             notebook=notebook,
             view=name,
             generation=2,
@@ -595,19 +598,18 @@ def test_view_activate_returns_the_shared_result(
         )
 
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.view_delivery.activate_view",
-        activate,
+        "marimo_studio._cli.commands.view_delivery.show_view",
+        show,
     )
     result = CliRunner().invoke(
         cli,
         [
             "view",
-            "activate",
+            "show",
             "dashboard",
             "--target",
             str(notebook_path),
-            "--format",
-            "json",
+            "--json",
         ],
         env={
             "MARIMO_STUDIO_SERVER_URL": "http://localhost:2718",
@@ -617,8 +619,8 @@ def test_view_activate_returns_the_shared_result(
     )
 
     assert result.exit_code == 0, result.output
-    assert json.loads(result.output) == {
-        "schema": 2,
+    assert json.loads(result.stdout) == {
+        "schema": 1,
         "notebook": str(notebook_path),
         "view": "dashboard",
         "generation": 2,
@@ -627,19 +629,19 @@ def test_view_activate_returns_the_shared_result(
     }
 
 
-def test_view_activate_requires_a_server(notebook_path: Path) -> None:
+def test_view_show_requires_a_server(notebook_path: Path) -> None:
     prepare_view(notebook_path)
 
     result = CliRunner().invoke(
         cli,
-        ["view", "activate", "dashboard", "--target", str(notebook_path)],
+        ["view", "show", "dashboard", "--target", str(notebook_path)],
     )
 
     assert result.exit_code == 2
     assert "--server" in result.output
 
 
-def test_view_activate_flags_override_connection_environment(
+def test_view_show_flags_override_connection_environment(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -662,7 +664,7 @@ def test_view_activate_flags_override_connection_environment(
         cli,
         [
             "view",
-            "activate",
+            "show",
             "dashboard",
             "--target",
             str(notebook_path),
@@ -703,11 +705,16 @@ default = "dashboard"
 
     result = CliRunner().invoke(
         cli,
-        ["view", "create", "dashboard", "--format", "json"],
+        [
+            "view",
+            "create",
+            "dashboard",
+            "--json",
+        ],
     )
 
     assert result.exit_code == 0, result.output
-    assert json.loads(result.output)["config"] == str(pyproject)
+    assert json.loads(result.stdout)["config"] == str(pyproject)
     assert load_studio(pyproject).default_view == "dashboard"
 
 
@@ -747,13 +754,12 @@ def test_cli_bind_updates_the_shared_cell_registry(
             str(notebook_path),
             "--cell",
             "1",
-            "--format",
-            "json",
+            "--json",
         ],
     )
 
     assert bound.exit_code == 0, bound.output
-    payload = json.loads(bound.output)
+    payload = json.loads(bound.stdout)
     assert payload["alias"] == "summary"
     assert set(payload["cell"]) == {
         "index",
@@ -774,12 +780,11 @@ def test_cli_bind_updates_the_shared_cell_registry(
             str(notebook_path),
             "--cell",
             payload["cell"]["ref"],
-            "--format",
-            "json",
+            "--json",
         ],
     )
     assert by_ref.exit_code == 0, by_ref.output
-    assert json.loads(by_ref.output)["cell"]["ref"] == payload["cell"]["ref"]
+    assert json.loads(by_ref.stdout)["cell"]["ref"] == payload["cell"]["ref"]
 
 
 def test_view_remove_preserves_source_when_confirmation_is_declined(
@@ -817,13 +822,12 @@ def test_view_remove_reports_the_updated_view_inventory(notebook_path: Path) -> 
             "--target",
             str(notebook_path),
             "--yes",
-            "--format",
-            "json",
+            "--json",
         ],
     )
 
     assert result.exit_code == 0, result.output
-    assert json.loads(result.output) == {
+    assert json.loads(result.stdout) == {
         "default_view": "executive",
         "notebook": str(notebook_path),
         "schema": 1,
@@ -833,15 +837,9 @@ def test_view_remove_reports_the_updated_view_inventory(notebook_path: Path) -> 
     assert not dashboard.exists()
 
 
-@pytest.mark.parametrize(
-    "machine_args",
-    (("--format", "json"), ("--diagnostics", "jsonl")),
-    ids=("result-json", "diagnostics-jsonl"),
-)
 def test_view_remove_requires_yes_for_machine_output(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    machine_args: tuple[str, ...],
 ) -> None:
     prepare_view(notebook_path)
     added = prepare_view(notebook_path, "executive")
@@ -858,7 +856,7 @@ def test_view_remove_requires_yes_for_machine_output(
             "executive",
             "--target",
             str(notebook_path),
-            *machine_args,
+            "--json",
         ],
     )
 
@@ -902,8 +900,7 @@ def test_cli_inspect_runtime_reports_mime_and_json_values(
         "--target",
         str(notebook_path),
         "--runtime",
-        "--format",
-        "json",
+        "--json",
     )
 
     assert result.returncode == 0, result.stderr
@@ -915,15 +912,9 @@ def test_cli_inspect_runtime_reports_mime_and_json_values(
 
 @pytest.mark.skipif(os.name == "nt", reason="The re-entry probe uses a POSIX shim")
 @pytest.mark.native_process
-@pytest.mark.parametrize(
-    "diagnostic_args",
-    [(), ("--diagnostics", "jsonl")],
-    ids=("text", "jsonl"),
-)
 def test_cli_runtime_inspection_preserves_json_across_environment_reentry(
     notebook_path: Path,
     runtime_assets: Path,
-    diagnostic_args: tuple[str, ...],
 ) -> None:
     root = notebook_path.parent
     (root / "pyproject.toml").write_text(
@@ -939,9 +930,7 @@ def test_cli_runtime_inspection_preserves_json_across_environment_reentry(
         "--target",
         str(notebook_path),
         "--runtime",
-        "--format",
-        "json",
-        *diagnostic_args,
+        "--json",
         bootstrapped=False,
         environment={"PATH": f"{root}{os.pathsep}{os.environ['PATH']}"},
     )
@@ -950,7 +939,6 @@ def test_cli_runtime_inspection_preserves_json_across_environment_reentry(
     assert json.loads(result.stdout)["runtime"]["values"] == {"doubled": 4, "x": 2}
     assert "forged_result" in result.stderr
     assert "forged-uv-error" in result.stderr
-    if diagnostic_args:
-        events = [json.loads(line) for line in result.stderr.splitlines()]
-        assert all(event["event"] == "diagnostic" for event in events)
-        assert all(event["code"] == "process-output" for event in events)
+    events = [json.loads(line) for line in result.stderr.splitlines()]
+    assert all(event["event"] == "diagnostic" for event in events)
+    assert all(event["code"] == "process-output" for event in events)

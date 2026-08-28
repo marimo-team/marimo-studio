@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from marimo_studio._validation.actions import check_actions
-from marimo_studio._validation.evidence import AnalysisAction, AnalysisReport
+from marimo_studio._validation.evidence import ValidationEvidence, ValidationIssue
+from marimo_studio._validation.issues import check_issues
 from marimo_studio._validation.results import CheckResult
 
 if TYPE_CHECKING:
@@ -25,9 +25,8 @@ class ValidationReport:
     view: str | None
     level: ValidationLevel
     ok: bool
-    actions: tuple[AnalysisAction, ...]
+    issues: tuple[ValidationIssue, ...]
     evidence: Mapping[str, object]
-    handoff_ready: bool = False
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -36,8 +35,7 @@ class ValidationReport:
             "view": self.view,
             "level": self.level,
             "ok": self.ok,
-            "handoff_ready": self.handoff_ready,
-            "actions": [action.to_dict() for action in self.actions],
+            "issues": [issue.to_dict() for issue in self.issues],
             "evidence": dict(self.evidence),
         }
 
@@ -52,28 +50,28 @@ class ValidationReport:
         evidence: dict[str, object] = {
             "static": {"checks": [item.to_dict() for item in static.checks]}
         }
-        actions = check_actions(
+        issues = check_issues(
             static.checks,
             "static",
             default_view=static.view,
         )
         if level == "runtime":
             evidence["runtime"] = {"checks": [item.to_dict() for item in runtime]}
-            actions = (
-                *actions,
-                *check_actions(runtime, "runtime", default_view=static.view),
+            issues = (
+                *issues,
+                *check_issues(runtime, "runtime", default_view=static.view),
             )
         return cls(
             notebook=static.notebook,
             view=static.view,
             level=level,
-            ok=not any(action.severity == "error" for action in actions),
-            actions=actions,
+            ok=not any(issue.severity == "error" for issue in issues),
+            issues=issues,
             evidence=evidence,
         )
 
     @classmethod
-    def from_analysis(cls, report: AnalysisReport) -> ValidationReport:
+    def from_evidence(cls, report: ValidationEvidence) -> ValidationReport:
         payload = report.to_dict()
         stages = payload["stages"]
         assert isinstance(stages, dict)
@@ -82,11 +80,10 @@ class ValidationReport:
             view=report.views[0] if len(report.views) == 1 else None,
             level="browser",
             ok=report.ok,
-            actions=report.actions,
+            issues=report.issues,
             evidence={
                 **stages,
                 "revisions": report.revisions.copy(),
                 "runtime_id": report.runtime,
             },
-            handoff_ready=report.handoff_ready,
         )

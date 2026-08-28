@@ -29,11 +29,11 @@ from marimo_studio._processes.ownership import (
 )
 from marimo_studio._processes.provider_operation import run_provider_operation
 from marimo_studio._server.agent.api import (
-    activate_view_response,
     activation_ack_response,
     active_view_handoff_response,
     agent_connection_response,
-    analyze_views_response,
+    show_view_response,
+    validate_views_response,
 )
 from marimo_studio._server.agent.browser import (
     browser_observation_response,
@@ -256,8 +256,8 @@ async def support_response(
     assert workspace is not None
     if support_path == "/agent/connection":
         return agent_connection_response(request, context, workspace)
-    if support_path == "/analyze":
-        return await analyze_views_response(
+    if support_path == "/validate":
+        return await validate_views_response(
             request,
             context,
             workspace,
@@ -448,8 +448,8 @@ async def _view_response(
             presentation,
             notebook_scope.development,
         )
-    if route == "activate":
-        return await activate_view_response(
+    if route == "show":
+        return await show_view_response(
             request,
             context,
             studio,

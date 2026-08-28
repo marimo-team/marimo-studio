@@ -6,9 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from marimo_studio._browser_client.analysis_protocol import (
-    parse_analysis_report as parse_analysis_report,
-)
 from marimo_studio._browser_client.browser_protocol import (
     decode_browser_observation as decode_browser_observation,
 )
@@ -18,13 +15,16 @@ from marimo_studio._browser_client.browser_protocol import (
 from marimo_studio._browser_client.browser_protocol import (
     parse_observation_response as parse_observation_response,
 )
-from marimo_studio._browser_client.records import ViewActivationResult
+from marimo_studio._browser_client.records import ShowResult
+from marimo_studio._browser_client.validation_protocol import (
+    parse_validation_evidence as parse_validation_evidence,
+)
 from marimo_studio.errors import CapabilityInputError, ProtocolError
 
 
 @dataclass(frozen=True)
-class ViewActivationRequest:
-    """Select a view and optional external browser client."""
+class ViewShowRequest:
+    """Show a view in one connected Studio tab."""
 
     view: str
     browser_client: str | None = None
@@ -32,7 +32,7 @@ class ViewActivationRequest:
     def __post_init__(self) -> None:
         if not isinstance(self.view, str) or not self.view:
             raise CapabilityInputError(
-                "invalid-activation-request",
+                "invalid-show-request",
                 "view",
                 "view must be a non-empty string",
             )
@@ -40,7 +40,7 @@ class ViewActivationRequest:
             not isinstance(self.browser_client, str) or not self.browser_client
         ):
             raise CapabilityInputError(
-                "invalid-activation-request",
+                "invalid-show-request",
                 "browser_client",
                 "browser_client must be a non-empty string or null",
             )
@@ -49,7 +49,7 @@ class ViewActivationRequest:
         return {"schema": 1, "browser_client": self.browser_client}
 
     @classmethod
-    def from_dict(cls, view: str, payload: object) -> ViewActivationRequest:
+    def from_dict(cls, view: str, payload: object) -> ViewShowRequest:
         schema = payload.get("schema") if isinstance(payload, dict) else None
         if (
             not isinstance(payload, dict)
@@ -59,9 +59,9 @@ class ViewActivationRequest:
             or schema != 1
         ):
             raise CapabilityInputError(
-                "invalid-activation-request",
+                "invalid-show-request",
                 "request",
-                "The activation request must contain schema and browser_client",
+                "The show request must contain schema and browser_client",
             )
         return cls(view=view, browser_client=payload.get("browser_client"))
 
@@ -78,11 +78,11 @@ def parse_connection_token(payload: dict[str, Any], notebook: Path) -> str:
     return cast(str, payload["server_token"])
 
 
-def parse_activation_result(
+def parse_show_result(
     payload: dict[str, Any],
     notebook: Path,
     view: str,
-) -> ViewActivationResult:
+) -> ShowResult:
     generation = payload.get("generation")
     client_id = payload.get("client_id")
     client_id_present = "client_id" in payload
@@ -101,7 +101,7 @@ def parse_activation_result(
         or not set(payload).issubset(required | optional)
         or not isinstance(schema, int)
         or isinstance(schema, bool)
-        or schema != 2
+        or schema != 1
         or payload.get("notebook") != str(notebook)
         or payload.get("view") != view
         or not _nonnegative_int(generation)
@@ -110,8 +110,8 @@ def parse_activation_result(
         or not client_id_present
         or not _nonempty(client_id)
     ):
-        raise ProtocolError("The Studio activation response is invalid.")
-    return ViewActivationResult(
+        raise ProtocolError("The Studio show response is invalid.")
+    return ShowResult(
         notebook=notebook,
         view=view,
         generation=cast(int, generation),

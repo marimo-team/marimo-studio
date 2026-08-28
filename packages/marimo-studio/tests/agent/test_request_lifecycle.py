@@ -110,7 +110,7 @@ def test_observation_disconnect_clears_the_browser_operation(
     assert pending == ()
 
 
-def test_analysis_disconnect_cancels_runtime_validation(
+def test_validation_disconnect_cancels_runtime_validation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -138,7 +138,7 @@ def test_analysis_disconnect_cancels_runtime_validation(
         started = asyncio.Event()
         cancelled = asyncio.Event()
         request, messages = _request(
-            "/_marimo-studio/analyze",
+            "/_marimo-studio/validate",
             {
                 "schema": 1,
                 "view": "dashboard",
@@ -147,7 +147,7 @@ def test_analysis_disconnect_cancels_runtime_validation(
             },
         )
         operation = asyncio.create_task(
-            agent_api.analyze_views_response(
+            agent_api.validate_views_response(
                 request,
                 context,
                 studio,
@@ -266,7 +266,7 @@ def test_observation_view_limit_applies_after_default_expansion(
     assert json.loads(bytes(response.body))["error"] == "too-many-browser-views"
 
 
-def test_activation_disconnect_clears_the_browser_operation(
+def test_show_disconnect_clears_the_browser_operation(
     notebook_path: Path,
 ) -> None:
     studio = configured(notebook_path)
@@ -301,13 +301,13 @@ def test_activation_disconnect_clears_the_browser_operation(
 
         cast(Any, notebook_scope.agents).activate = capture_activation
         request, messages = _request(
-            "/_marimo-studio/views/dashboard/activate",
+            "/_marimo-studio/views/dashboard/show",
             {"schema": 1, "browser_client": None},
             method="PATCH",
             session_id="s_123456",
         )
         operation = asyncio.create_task(
-            agent_api.activate_view_response(
+            agent_api.show_view_response(
                 request,
                 context,
                 studio,
@@ -334,7 +334,7 @@ def test_activation_disconnect_clears_the_browser_operation(
 
 
 @pytest.mark.native_process
-def test_analysis_disconnect_drains_the_provider_build_process_tree(
+def test_validation_disconnect_drains_the_provider_build_process_tree(
     notebook_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -353,7 +353,7 @@ def test_analysis_disconnect_drains_the_provider_build_process_tree(
 
     async def exercise() -> tuple[int, tuple[int, ...]]:
         request, messages = _request(
-            "/_marimo-studio/analyze",
+            "/_marimo-studio/validate",
             {
                 "schema": 1,
                 "view": "dashboard",
@@ -361,7 +361,7 @@ def test_analysis_disconnect_drains_the_provider_build_process_tree(
             },
         )
         operation = asyncio.create_task(
-            agent_api.analyze_views_response(
+            agent_api.validate_views_response(
                 request,
                 context,
                 studio,

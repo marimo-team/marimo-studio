@@ -226,27 +226,13 @@ def diagnostics_from_argv(args: list[str]) -> DiagnosticStream:
             if output is not None
         ),
     )
-    for index, argument in enumerate(args):
+    for argument in args:
         if argument == "--":
             break
-        if argument == "--diagnostics" and index + 1 < len(args):
-            stream.format = args[index + 1]
-        elif argument.startswith("--diagnostics="):
-            stream.format = argument.partition("=")[2]
-    if stream.format not in {"text", "jsonl"}:
-        stream.format = "text"
+        if argument == "--json":
+            stream.format = "jsonl"
+            break
     return stream
-
-
-def machine_output_from_argv(args: list[str]) -> bool:
-    for index, argument in enumerate(args):
-        if argument == "--":
-            break
-        if argument == "--format" and index + 1 < len(args):
-            return args[index + 1] == "json"
-        if argument.startswith("--format="):
-            return argument.partition("=")[2] == "json"
-    return False
 
 
 def diagnostics() -> DiagnosticStream:
@@ -254,27 +240,26 @@ def diagnostics() -> DiagnosticStream:
     return click.get_current_context().find_root().ensure_object(DiagnosticStream)
 
 
-def _configure_diagnostics(
+def _configure_json(
     context: click.Context,
     _parameter: click.Parameter,
-    value: str,
-) -> str:
+    value: bool,
+) -> bool:
     stream = context.find_root().ensure_object(DiagnosticStream)
-    stream.format = value
+    if value:
+        stream.format = "jsonl"
     command = context.command_path.removeprefix("cli ")
     stream.command = command.removeprefix("marimo-studio ")
     return value
 
 
-diagnostic_format_option = click.option(
-    "--diagnostics",
-    type=click.Choice(("text", "jsonl")),
-    default="text",
-    show_default=True,
-    expose_value=False,
+json_option = click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
     is_eager=True,
-    callback=_configure_diagnostics,
-    help="Set the stderr diagnostic format.",
+    callback=_configure_json,
+    help="Write JSON to stdout and JSON Lines diagnostics to stderr.",
 )
 
 
@@ -284,6 +269,14 @@ def capture_runtime_stderr() -> Iterator[None]:
     stream = diagnostics()
     if stream.format != "jsonl":
         yield
+        return
+    try:
+        sys.stderr.fileno()
+    except (AttributeError, OSError, ValueError):
+        captured = StringIO()
+        with redirect_stderr(captured):
+            yield
+        stream.relay_trusted_output(captured.getvalue())
         return
     with tempfile.TemporaryFile(
         mode="w+t",
@@ -433,7 +426,7 @@ def run_in_environment(target: EnvironmentTarget, args: list[str]) -> int:
     """Run the current CLI command in the notebook's uv environment."""
     stream = diagnostics()
     errors_before = stream.error_count
-    machine_result = machine_output_from_argv(args)
+    machine_result = stream.format == "jsonl"
     completed = run_in_notebook_environment(
         target,
         args,

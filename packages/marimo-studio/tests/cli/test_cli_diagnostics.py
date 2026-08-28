@@ -98,10 +98,7 @@ def test_failed_validation_reports_exit_status_and_error_diagnostic(
             str(notebook_path),
             "--level",
             "static",
-            "--format",
-            "json",
-            "--diagnostics",
-            "jsonl",
+            "--json",
         ],
     )
 
@@ -115,13 +112,13 @@ def test_failed_validation_reports_exit_status_and_error_diagnostic(
         for check in payload["evidence"]["static"]["checks"]
         if check["status"] == "fail"
     )
-    action = next(
-        action
-        for action in payload["actions"]
-        if action["code"] == "projection-cell-not-found"
+    issue = next(
+        issue
+        for issue in payload["issues"]
+        if issue["code"] == "projection-cell-not-found"
     )
     assert event["code"] == "projection-cell-not-found"
-    assert event["details"] == action
+    assert event["details"] == issue
     assert event["details"]["view"] == "dashboard"
     assert check["details"]["projection"] == "cell"
     assert check["details"]["target"] == "missing"
@@ -174,10 +171,7 @@ def test_validation_preserves_repair_diagnostics(
             "validate",
             "--target",
             str(notebook_path),
-            "--format",
-            "json",
-            "--diagnostics",
-            "jsonl",
+            "--json",
         ],
     )
 
@@ -201,7 +195,7 @@ def test_validation_preserves_repair_diagnostics(
     assert failed["details"]["source"]["path"] == str(expected_source)
     assert event["code"] == expected_code
     action = next(
-        action for action in payload["actions"] if action["code"] == expected_code
+        issue for issue in payload["issues"] if issue["code"] == expected_code
     )
     assert event["details"] == action
 
@@ -220,8 +214,7 @@ def test_main_structures_configuration_errors(
             "validate",
             "--target",
             str(missing),
-            "--diagnostics",
-            "jsonl",
+            "--json",
         ],
     )
 
@@ -289,10 +282,7 @@ def test_provider_stdout_cannot_corrupt_machine_output(
             "dashboard",
             "--target",
             str(notebook_path),
-            "--format",
-            "json",
-            "--diagnostics",
-            "jsonl",
+            "--json",
         ],
     )
 
@@ -301,8 +291,9 @@ def test_provider_stdout_cannot_corrupt_machine_output(
     output = capfd.readouterr()
     assert json.loads(output.out)["view"] == "dashboard"
     events = [json.loads(line) for line in output.err.splitlines()]
-    assert all(event["code"] == "process-output" for event in events)
-    relayed = "\n".join(event["message"] for event in events)
+    process_events = [event for event in events if event["code"] == "process-output"]
+    assert {event["code"] for event in events} == {"next-command", "process-output"}
+    relayed = "\n".join(event["message"] for event in process_events)
     assert "provider debug output" in relayed
     assert "native provider stdout" in relayed
     assert "native provider stderr" in relayed
@@ -326,7 +317,7 @@ def test_main_structures_live_agent_request_errors(
         )
 
     monkeypatch.setattr(
-        "marimo_studio._cli.commands.view_delivery.activate_view",
+        "marimo_studio._cli.commands.view_delivery.show_view",
         fail_activation,
     )
     monkeypatch.setattr(
@@ -335,14 +326,13 @@ def test_main_structures_live_agent_request_errors(
         [
             "marimo-studio",
             "view",
-            "activate",
+            "show",
             "dashboard",
             "--target",
             str(notebook_path),
             "--server",
             "http://localhost:2718",
-            "--diagnostics",
-            "jsonl",
+            "--json",
         ],
     )
 
@@ -353,7 +343,7 @@ def test_main_structures_live_agent_request_errors(
     event = json.loads(output.err)
     assert raised.value.code == 5
     assert output.out == ""
-    assert event["command"] == "view activate"
+    assert event["command"] == "view show"
     assert event["code"] == "browser-client-ambiguous"
     assert event["exit_code"] == 5
 
@@ -376,8 +366,7 @@ def test_main_preserves_view_not_found_details(
             "--target",
             str(notebook_path),
             "--yes",
-            "--diagnostics",
-            "jsonl",
+            "--json",
         ],
     )
 

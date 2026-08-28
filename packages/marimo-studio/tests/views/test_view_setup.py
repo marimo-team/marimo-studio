@@ -85,7 +85,7 @@ def test_repeated_and_dry_run_setup_report_file_changes(
     preview = prepare_view(notebook_path, dry_run=True)
 
     payload = created.to_dict()
-    assert payload["schema"] == 2
+    assert payload["schema"] == 1
     assert repeated.created == ()
     assert repeated.updated == ()
     assert preview.created == ()

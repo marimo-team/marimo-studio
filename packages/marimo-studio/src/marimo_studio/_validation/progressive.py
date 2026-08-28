@@ -1,4 +1,4 @@
-"""Build one agent-facing validation report for authored views."""
+"""Collect static, runtime, and browser evidence for authored views."""
 
 from __future__ import annotations
 
@@ -16,12 +16,12 @@ from marimo_studio._processes.provider_operation import (
     raise_process_cleanup,
     run_provider_operation,
 )
-from marimo_studio._validation.actions import check_action, validation_actions
 from marimo_studio._validation.evidence import (
-    AnalysisAction,
-    AnalysisReport,
     BrowserObservation,
+    ValidationEvidence,
+    ValidationIssue,
 )
+from marimo_studio._validation.issues import check_issue, validation_issues
 from marimo_studio._validation.limits import (
     DEFAULT_BROWSER_TIMEOUT,
     MAX_BROWSER_TIMEOUT,
@@ -52,7 +52,7 @@ BrowserObserver = Callable[
 
 
 @dataclass(frozen=True)
-class AnalysisOptions:
+class ValidationOptions:
     """Select views and evidence budgets for one validation."""
 
     view: str | None = None
@@ -63,7 +63,7 @@ class AnalysisOptions:
     def __post_init__(self) -> None:
         if self.view is not None and not isinstance(self.view, str):
             raise CapabilityInputError(
-                "invalid-analysis-request",
+                "invalid-validation-request",
                 "view",
                 "view must be a string or null",
             )
@@ -79,14 +79,14 @@ class AnalysisOptions:
         )
         if not isinstance(self.require_browser, bool):
             raise CapabilityInputError(
-                "invalid-analysis-request",
+                "invalid-validation-request",
                 "require_browser",
                 "require_browser must be a boolean",
             )
 
 
 @dataclass(frozen=True)
-class AnalysisRequest:
+class ValidationRequest:
     """Validation options plus an optional external browser selector."""
 
     view: str | None = None
@@ -101,14 +101,14 @@ class AnalysisRequest:
             not isinstance(self.browser_client, str) or not self.browser_client
         ):
             raise CapabilityInputError(
-                "invalid-analysis-request",
+                "invalid-validation-request",
                 "browser_client",
                 "browser_client must be a non-empty string or null",
             )
 
     @property
-    def options(self) -> AnalysisOptions:
-        return AnalysisOptions(
+    def options(self) -> ValidationOptions:
+        return ValidationOptions(
             view=self.view,
             browser_timeout=self.browser_timeout,
             runtime_timeout=self.runtime_timeout,
@@ -126,7 +126,7 @@ class AnalysisRequest:
         }
 
     @classmethod
-    def from_dict(cls, payload: object) -> AnalysisRequest:
+    def from_dict(cls, payload: object) -> ValidationRequest:
         schema = payload.get("schema") if isinstance(payload, dict) else None
         if (
             not isinstance(payload, dict)
@@ -144,7 +144,7 @@ class AnalysisRequest:
             )
         ):
             raise CapabilityInputError(
-                "invalid-analysis-request",
+                "invalid-validation-request",
                 "request",
                 "The validation request must use schema 1 and supported fields",
             )
@@ -159,10 +159,10 @@ class AnalysisRequest:
     def require_focused_view(self) -> None:
         if self.require_browser and self.view is None:
             raise CapabilityInputError(
-                "focused-analysis-required",
+                "focused-view-required",
                 "view",
                 "Code-mode browser validation requires one active view. "
-                "Activate it in one call, then validate it in the next call.",
+                "Show it in one call, then validate it in the next call.",
             )
 
 
@@ -174,27 +174,27 @@ def _validate_timeout(field: str, value: object, maximum: float) -> None:
         or not math.isfinite(value)
     ):
         raise CapabilityInputError(
-            "invalid-analysis-request",
+            "invalid-validation-request",
             field,
             f"{field} must be a finite number between 0 and {maximum:g} seconds",
         )
 
 
-async def analyze_studio(
+async def validate_progressively(
     studio: StudioWorkspace,
-    options: AnalysisOptions | None = None,
+    options: ValidationOptions | None = None,
     *,
     observe_browser: BrowserObserver | None = None,
     runtime_checker: RuntimeChecker | None = None,
     development: DevelopmentCoordinator | None = None,
-) -> AnalysisReport:
+) -> ValidationEvidence:
     """Validate selected views and return a repair-oriented report.
 
     Static validation always runs. Runtime validation runs after the static
     stage succeeds. Pass ``observe_browser`` to include readiness reported by
     rendered Studio pages.
     """
-    options = options or AnalysisOptions()
+    options = options or ValidationOptions()
     preparation = await prepare_validation(
         studio,
         view_name=options.view,
@@ -221,7 +221,7 @@ async def analyze_studio(
         )
         runtime_checks = runtime.checks
         runtime_skipped = runtime.skipped
-    actions = validation_actions(
+    issues = validation_issues(
         static_checks,
         runtime_checks,
         observations,
@@ -237,25 +237,25 @@ async def analyze_studio(
             phase="validation",
         )
         if source_check is not None and not any(
-            action.code == source_check.code for action in actions
+            issue.code == source_check.code for issue in issues
         ):
-            actions = (
-                *actions,
-                check_action(
-                    "analysis",
+            issues = (
+                *issues,
+                check_issue(
+                    "validation",
                     source_check,
                     default_view=views[0] if len(views) == 1 else None,
                 ),
             )
-    project_actions = await run_provider_operation(
+    project_issues = await run_provider_operation(
         partial(
-            _project_state_actions,
+            _project_state_issues,
             studio,
             views,
         )
     )
-    actions = (*actions, *project_actions)
-    return AnalysisReport(
+    issues = (*issues, *project_issues)
+    return ValidationEvidence(
         notebook=studio.notebook,
         views=views,
         runtime=studio.default_runtime,
@@ -265,21 +265,21 @@ async def analyze_studio(
         runtime_skipped=runtime_skipped,
         browser_observations=observations,
         browser_required=options.require_browser,
-        actions=actions,
+        issues=issues,
         dynamic_browser_required=preparation.dynamic_browser_required,
     )
 
 
-def _project_state_actions(
+def _project_state_issues(
     studio: StudioWorkspace,
     views: tuple[str, ...],
-) -> tuple[AnalysisAction, ...]:
+) -> tuple[ValidationIssue, ...]:
     from marimo_studio._views.inspection import (
         inspect_view_project_sync,
         view_project_state,
     )
 
-    actions: list[AnalysisAction] = []
+    issues: list[ValidationIssue] = []
     for name in views:
         project = studio.views[name]
         try:
@@ -287,11 +287,11 @@ def _project_state_actions(
             state = view_project_state(project, inspection)
         except (OSError, MarimoStudioError, UnicodeError, ValueError) as error:
             raise_process_cleanup(error)
-            actions.append(
-                AnalysisAction(
-                    stage="analysis",
+            issues.append(
+                ValidationIssue(
+                    stage="validation",
                     severity="error",
-                    code="analysis-project-unavailable",
+                    code="validation-project-unavailable",
                     message=f"View project {name!r} could not be inspected: {error}",
                     advice=(
                         "Restore the provider project, then build and validate "
@@ -303,11 +303,11 @@ def _project_state_actions(
             )
             continue
         if state.build.phase != "published":
-            actions.append(
-                AnalysisAction(
-                    stage="analysis",
+            issues.append(
+                ValidationIssue(
+                    stage="validation",
                     severity="error",
-                    code="analysis-project-stale",
+                    code="validation-project-stale",
                     message=(
                         f"View project {name!r} has no current published artifact."
                     ),
@@ -318,7 +318,7 @@ def _project_state_actions(
                     source={"path": str(project.manifest)},
                 )
             )
-    return tuple(actions)
+    return tuple(issues)
 
 
 async def _runtime_and_browser(

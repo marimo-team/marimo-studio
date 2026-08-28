@@ -400,4 +400,4 @@ for (const { path, source } of modules.values()) {
   visit(source);
 }
 
-console.log(JSON.stringify({ schema: 2, sites, diagnostics }));
+console.log(JSON.stringify({ schema: 1, sites, diagnostics }));

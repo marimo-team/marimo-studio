@@ -6,8 +6,8 @@ import asyncio
 from functools import partial
 from pathlib import Path, PurePosixPath
 
-from marimo_studio._browser_client.client import activate_view as activate_browser_view
-from marimo_studio._browser_client.records import ViewActivationResult
+from marimo_studio._browser_client.client import show_view as show_browser_view
+from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._browser_client.transport import StudioServerConnection
 from marimo_studio._delivery.export import StaticExportResult
 from marimo_studio._delivery.export import export_view as export_view_bundle
@@ -16,7 +16,7 @@ from marimo_studio._views.api import ViewRemovalResult
 from marimo_studio._views.api import remove_view as remove_view_operation
 from marimo_studio._views.build import build_view_project
 from marimo_studio._views.inspect import inspect_view as inspect_view_project
-from marimo_studio._views.records import Publication, ViewDocument, ViewInspection
+from marimo_studio._views.records import ViewBuild, ViewDocument, ViewInspection
 from marimo_studio._views.sources import (
     read_source,
     read_view_manifest,
@@ -77,7 +77,7 @@ async def write_document(
 
 
 async def inspect_view(notebook: Path, view: str) -> ViewInspection:
-    """Inspect source documents, diagnostics, and publication state."""
+    """Inspect source documents, diagnostics, and build state."""
     studio = await asyncio.to_thread(load_studio, notebook)
     return await inspect_view_project(studio, view)
 
@@ -87,24 +87,24 @@ async def build_view(
     view: str,
     *,
     profile: BuildProfile = "development",
-) -> Publication:
-    """Build and publish one view artifact."""
+) -> ViewBuild:
+    """Build the browser page for one view."""
     if profile not in {"development", "production"}:
         raise ValueError("profile must be development or production")
     studio = await asyncio.to_thread(load_studio, notebook)
     return await build_view_project(studio.view(view), profile=profile)
 
 
-async def activate_view(
+async def show_view(
     notebook: Path,
     view: str,
     connection: StudioServerConnection | None,
-) -> ViewActivationResult:
-    """Select one view in the browser bound to ``connection``."""
+) -> ShowResult:
+    """Show one view in the Studio tab bound to ``connection``."""
     if connection is None:
-        raise ProtocolError("Browser activation requires an attached Studio browser.")
+        raise ProtocolError("Showing a view requires an attached Studio browser.")
     studio = await asyncio.to_thread(load_studio, notebook)
-    return await activate_browser_view(studio, connection, view)
+    return await show_browser_view(studio, connection, view)
 
 
 async def export_view(

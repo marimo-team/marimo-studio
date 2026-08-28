@@ -6,56 +6,52 @@ from pathlib import Path
 import click
 
 import marimo_studio.agent as studio_agent
+import marimo_studio.authoring as studio_authoring
 from marimo_studio._cli import cli
 
-
-def test_cli_exposes_the_resource_first_authoring_contract() -> None:
-    assert set(cli.commands) == {
-        "doctor",
-        "notebook",
-        "starters",
-        "status",
-        "validate",
-        "view",
-    }
-    notebook = cli.commands["notebook"]
-    view = cli.commands["view"]
-    assert isinstance(notebook, click.Group)
-    assert isinstance(view, click.Group)
-    assert set(notebook.commands) == {"bind", "inspect"}
-    assert set(view.commands) == {
-        "activate",
-        "build",
-        "create",
-        "export",
-        "inspect",
-        "read",
-        "remove",
-        "write",
-    }
+PARITY = (
+    (studio_authoring, "doctor", ("doctor",)),
+    (studio_authoring.Workspace, "status", ("status",)),
+    (studio_authoring.Workspace, "inspect_notebook", ("notebook", "inspect")),
+    (studio_authoring.Workspace, "bind", ("notebook", "bind")),
+    (studio_authoring.Workspace, "starters", ("starters",)),
+    (studio_authoring.Workspace, "create_view", ("view", "create")),
+    (studio_authoring.Workspace, "validate", ("validate",)),
+    (studio_authoring.View, "inspect", ("view", "inspect")),
+    (studio_authoring.View, "read", ("view", "read")),
+    (studio_authoring.View, "write", ("view", "write")),
+    (studio_authoring.View, "build", ("view", "build")),
+    (studio_agent.View, "show", ("view", "show")),
+    (studio_authoring.View, "validate", ("validate",)),
+    (studio_authoring.View, "export", ("view", "export")),
+    (studio_authoring.View, "remove", ("view", "remove")),
+)
 
 
-def test_agent_handles_expose_the_same_authoring_capabilities() -> None:
-    assert {
-        "bind",
-        "create_view",
-        "inspect_notebook",
-        "starters",
-        "status",
-        "validate",
-        "view",
-    }.issubset(vars(studio_agent.Workspace))
-    assert {
-        "activate",
-        "build",
-        "export",
-        "inspect",
-        "read",
-        "remove",
-        "validate",
-        "write",
-    }.issubset(vars(studio_agent.View))
-    assert callable(studio_agent.doctor)
+def _leaf_paths(
+    group: click.Group, prefix: tuple[str, ...] = ()
+) -> set[tuple[str, ...]]:
+    paths: set[tuple[str, ...]] = set()
+    for name, command in group.commands.items():
+        path = (*prefix, name)
+        if isinstance(command, click.Group):
+            paths.update(_leaf_paths(command, path))
+        else:
+            paths.add(path)
+    return paths
+
+
+def test_python_and_cli_authoring_operations_stay_in_parity() -> None:
+    for owner, member, _path in PARITY:
+        assert callable(getattr(owner, member))
+    assert _leaf_paths(cli) == {path for _owner, _member, path in PARITY}
+
+
+def test_browser_operations_belong_to_the_live_agent_view() -> None:
+    assert studio_agent.View is not studio_authoring.View
+    assert studio_agent.Workspace is not studio_authoring.Workspace
+    assert not hasattr(studio_authoring.View, "show")
+    assert hasattr(studio_agent.View, "show")
 
 
 def test_agent_entrypoint_contains_imports_and_exports() -> None:

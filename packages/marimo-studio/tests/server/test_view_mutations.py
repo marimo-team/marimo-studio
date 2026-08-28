@@ -164,7 +164,7 @@ def test_definition_state_initializes_the_first_view_from_edit_mode(
     assert host["defaultView"] == "dashboard"
     assert created.status_code == 201
     created_payload = created.json()
-    assert created_payload == {"schema": 2, "name": "dashboard"}
+    assert created_payload == {"schema": 1, "name": "dashboard"}
     assert status_after.json() == {
         "schema": 1,
         "state": "ready",
@@ -282,7 +282,7 @@ def test_edit_workspace_creates_views_and_conditionally_updates_source(
     assert stale.json()["error"] == "source-conflict"
     assert stale.json()["revision"] == saved.headers["etag"].strip('"')
     assert created.status_code == 201
-    assert created.json() == {"schema": 2, "name": "operations"}
+    assert created.json() == {"schema": 1, "name": "operations"}
     assert (studio.view_root / "operations" / "view.toml").is_file()
     assert (studio.view_root / "operations" / "index.html").is_file()
     assert duplicate.status_code == 409

@@ -41,8 +41,8 @@ SVELTE_PLUGIN_VERSION = "7.3.0"
 SVELTE_CHECK_VERSION = "4.7.5"
 VITE_VERSION = "8.2.1"
 TYPESCRIPT_VERSION = "6.0.3"
-PROJECTION_CONTRACT_VERSION = "svelte-projections-v4"
-BUILD_CONTRACT_VERSION = "vite-svelte-artifact-v3"
+PROJECTION_CONTRACT_VERSION = "svelte-projections-v2"
+BUILD_CONTRACT_VERSION = "vite-svelte-artifact-v1"
 _INPUT_SCOPE = (
     ProjectInput(PurePosixPath("src"), "directory"),
     ProjectInput(PurePosixPath("view.toml"), "file"),
@@ -129,7 +129,7 @@ class DenoSvelteProvider:
     info = ProviderInfo(
         title="Svelte",
         summary="Builds a Svelte project with the pinned Deno toolchain.",
-        api_version=4,
+        api_version=1,
     )
     _starter = ProviderStarter(
         key=STARTER_KEY,

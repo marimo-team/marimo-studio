@@ -1,4 +1,4 @@
-"""Application records for view creation, inspection, and publication."""
+"""Application records for view creation, inspection, and builds."""
 
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ class ViewSetupResult:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema": 2,
+            "schema": 1,
             "notebook": str(self.notebook),
             "config": str(self.config_path),
             "view": self.name,
@@ -112,7 +112,7 @@ class StudioOverview:
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "schema": 2,
+            "schema": 1,
             "notebook": str(self.notebook),
             "state": self.state,
             "config": str(self.config_path) if self.config_path is not None else None,
@@ -150,25 +150,21 @@ class Starter:
 
 
 @dataclass(frozen=True)
-class Publication:
-    """Report one completed view build without exposing artifact storage."""
+class ViewBuild:
+    """Describe the browser page produced by one completed build."""
 
     view: str
     profile: BuildProfile
-    input_id: str
-    artifact_id: str
-    diagnostics: tuple[ProjectDiagnostic, ...]
-    duration_ms: int | None
+    revision: str
+    issues: tuple[ProjectDiagnostic, ...]
 
     def to_dict(self) -> dict[str, object]:
         return {
             "schema": 1,
             "view": self.view,
             "profile": self.profile,
-            "input_id": self.input_id,
-            "artifact_id": self.artifact_id,
-            "diagnostics": [item.to_dict() for item in self.diagnostics],
-            "duration_ms": self.duration_ms,
+            "revision": self.revision,
+            "issues": [item.to_dict() for item in self.issues],
         }
 
 
@@ -217,14 +213,14 @@ ViewFreshness = Literal["current", "stale", "unbuilt", "building", "failed"]
 
 @dataclass(frozen=True)
 class ViewInspection:
-    """Return source documents and current publication state for one view."""
+    """Return source documents and current build state for one view."""
 
     view: str
     provider: str
     documents: tuple[SourceDocument, ...]
     diagnostics: tuple[StudioDiagnostic, ...]
     freshness: ViewFreshness
-    publication: Publication | None
+    build: ViewBuild | None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -234,7 +230,5 @@ class ViewInspection:
             "documents": [item.to_dict() for item in self.documents],
             "diagnostics": [item.to_dict() for item in self.diagnostics],
             "freshness": self.freshness,
-            "publication": (
-                self.publication.to_dict() if self.publication is not None else None
-            ),
+            "build": self.build.to_dict() if self.build is not None else None,
         }

@@ -7,9 +7,10 @@ browser runtime that presents them.
 
 The notebook remains the source of data, computation, controls, and reactive
 behavior. Studio adds frontend view projects and browser delivery around that
-model. ``LENS_TARGET_SELECTOR`` lets browser tools locate mounted cells,
-outputs, and values inside a rendered view. View authoring and validation live
-in the notebook-bound ``marimo_studio.agent`` API.
+model. ``STUDIO_RESULT_SELECTOR`` lets browser tools locate mounted cells,
+outputs, and values inside a rendered view. ``marimo_studio.authoring`` opens a
+saved notebook. ``marimo_studio.agent.current_workspace()`` adds operations
+that use the current code-mode notebook and Studio tab.
 """
 
 from __future__ import annotations
@@ -17,15 +18,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from marimo_studio._delivery.records import ASGIApp
-from marimo_studio._notebook.records import (
-    CellConfigSpec,
-    CellRef,
-    CellSpec,
-    NotebookSpec,
-    SourceSpan,
-)
+from marimo_studio._notebook.records import NotebookSpec
 
-LENS_TARGET_SELECTOR = (
+STUDIO_RESULT_SELECTOR = (
     ":is(marimo-cell, marimo-output, [mo-value])[data-runtime-cell-id]"
 )
 
@@ -49,13 +44,9 @@ def inspect_notebook(
 
 
 __all__ = [
-    "LENS_TARGET_SELECTOR",
+    "STUDIO_RESULT_SELECTOR",
     "ASGIApp",
-    "CellConfigSpec",
-    "CellRef",
-    "CellSpec",
     "NotebookSpec",
-    "SourceSpan",
     "create_asgi_app",
     "inspect_notebook",
 ]

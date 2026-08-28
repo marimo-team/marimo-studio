@@ -665,4 +665,4 @@ for (const document of documents.values()) {
   visit(document.root, new Map());
 }
 
-console.log(JSON.stringify({ schema: 2, sites, diagnostics }));
+console.log(JSON.stringify({ schema: 1, sites, diagnostics }));

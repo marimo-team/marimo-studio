@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Literal, TypeVar
 
 from marimo_studio._authoring.ports import WorkspaceHandle
+from marimo_studio._authoring.validation import validate as validate_workspace
 from marimo_studio._authoring.view import (
-    activate_view,
     build_view,
     export_view,
     inspect_view,
@@ -15,14 +16,14 @@ from marimo_studio._authoring.view import (
     remove_view,
     write_document,
 )
-from marimo_studio._browser_client.records import ViewActivationResult
 from marimo_studio._delivery.export import StaticExportResult
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
-from marimo_studio._validation.limits import DEFAULT_BROWSER_TIMEOUT
-from marimo_studio._validation.records import ValidationLevel, ValidationReport
+from marimo_studio._validation.records import ValidationReport
 from marimo_studio._views.api import ViewRemovalResult
-from marimo_studio._views.records import Publication, ViewDocument, ViewInspection
+from marimo_studio._views.records import ViewBuild, ViewDocument, ViewInspection
 from marimo_studio.view_providers import BuildProfile
+
+_View = TypeVar("_View", bound="View")
 
 
 @dataclass(frozen=True, init=False)
@@ -33,19 +34,17 @@ class View:
     name: str
 
     def __init__(self, *_args: object, **_kwargs: object) -> None:
-        raise TypeError(
-            "Create views through a workspace returned by marimo_studio.agent.open()"
-        )
+        raise TypeError("Create views through a Studio authoring workspace")
 
     @classmethod
-    def _create(cls, workspace: WorkspaceHandle, name: str) -> View:
+    def _create(cls: type[_View], workspace: WorkspaceHandle, name: str) -> _View:
         view = object.__new__(cls)
         object.__setattr__(view, "workspace", workspace)
         object.__setattr__(view, "name", name)
         return view
 
     async def inspect(self) -> ViewInspection:
-        """Inspect source documents, diagnostics, and publication state."""
+        """Inspect source documents, diagnostics, and build state."""
         return await inspect_view(self.workspace.notebook, self.name)
 
     async def read(self, path: str | PurePosixPath) -> ViewDocument:
@@ -72,34 +71,25 @@ class View:
         self,
         *,
         profile: BuildProfile = "development",
-    ) -> Publication:
-        """Build and return detached publication metadata."""
+    ) -> ViewBuild:
+        """Build this view and return the resulting page revision."""
         return await build_view(
             self.workspace.notebook,
             self.name,
             profile=profile,
         )
 
-    async def activate(self) -> ViewActivationResult:
-        """Select this view in the attached Studio browser."""
-        return await activate_view(
-            self.workspace.notebook,
-            self.name,
-            self.workspace._connection(),
-        )
-
     async def validate(
         self,
         *,
-        level: ValidationLevel = "static",
-        browser_timeout: float = DEFAULT_BROWSER_TIMEOUT,
+        level: Literal["static", "runtime"] = "static",
         runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     ) -> ValidationReport:
-        """Validate this view at the selected evidence level."""
-        return await self.workspace.validate(
+        """Validate saved source or isolated notebook execution."""
+        return await validate_workspace(
+            self.workspace.notebook,
             level=level,
             view=self.name,
-            browser_timeout=browser_timeout,
             runtime_timeout=runtime_timeout,
         )
 

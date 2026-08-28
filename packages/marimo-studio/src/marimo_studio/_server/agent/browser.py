@@ -286,7 +286,7 @@ async def observe_views(
     if not allow_view_activation:
         if len(views) != 1:
             raise AgentRequestError(
-                "focused-analysis-required",
+                "focused-view-required",
                 "Code-mode browser validation accepts one active view at a time.",
                 status_code=400,
             )
@@ -327,7 +327,7 @@ async def observe_views(
         snapshot = await notebook_scope.presentation.snapshot_async(view)
         if snapshot.revision != revisions[view]:
             raise AgentRequestError(
-                "analysis-source-changed",
+                "validation-source-changed",
                 "Studio sources changed before browser validation began.",
                 status_code=409,
             )

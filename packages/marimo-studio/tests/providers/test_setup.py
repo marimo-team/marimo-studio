@@ -107,7 +107,7 @@ def test_creation_does_not_inspect_or_build_the_authored_project(
 
     assert result.root.joinpath("view.toml").is_file()
     assert result.root.joinpath("index.html").is_file()
-    assert result.to_dict()["schema"] == 2
+    assert result.to_dict()["schema"] == 1
     assert provider.build_calls == 0
 
 

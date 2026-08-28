@@ -568,7 +568,7 @@ def test_artifact_read_rejects_missing_and_extra_files(
     "mutate",
     (
         lambda state: state.update(schema=True),
-        lambda state: state.update(schema=1),
+        lambda state: state.update(schema=2),
         lambda state: state.update(extra="field"),
         lambda state: state["published"]["provider"].update(api_version=99),
         lambda state: state["published"]["provider"].update(

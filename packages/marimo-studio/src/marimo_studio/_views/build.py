@@ -54,7 +54,7 @@ from marimo_studio._processes.provider_runner import (
 )
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._views.inspection import inspection_request
-from marimo_studio._views.records import Publication
+from marimo_studio._views.records import ViewBuild
 from marimo_studio._workspace.mutation_lock import view_build_lock, view_mutation_lock
 from marimo_studio._workspace.project_manifest import load_view_project
 from marimo_studio.errors import ConfigurationError, ViewProjectError
@@ -632,7 +632,7 @@ async def build_view_project(
     project: ViewProject,
     *,
     profile: BuildProfile = "development",
-) -> Publication:
+) -> ViewBuild:
     """Build one view and return detached publication metadata."""
     lease = await run_provider_operation(
         partial(
@@ -647,11 +647,9 @@ async def build_view_project(
         from marimo_studio._artifacts.repository import read_artifact_state
 
         build = read_artifact_state(project, profile).build
-        return Publication(
+        return ViewBuild(
             view=project.name,
             profile=profile,
-            input_id=artifact.project_revision,
-            artifact_id=artifact.artifact_revision,
-            diagnostics=build.diagnostics,
-            duration_ms=build.duration_ms,
+            revision=artifact.artifact_revision,
+            issues=build.diagnostics,
         )

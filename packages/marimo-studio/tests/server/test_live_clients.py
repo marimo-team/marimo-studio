@@ -69,6 +69,9 @@ def test_browser_selection_uses_the_calling_session_and_rejects_ambiguity() -> N
         with pytest.raises(AgentRequestError) as raised:
             await clients.select_target()
         assert raised.value.code == "browser-client-ambiguous"
+        assert raised.value.diagnostic_details() == {
+            "browser_clients": ["browser-client-a", "browser-client-b"]
+        }
         with pytest.raises(AgentRequestError) as raised:
             await clients.select_target(session_id="s_654321")
         assert raised.value.code == "browser-client-unavailable"

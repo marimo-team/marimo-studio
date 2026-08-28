@@ -152,6 +152,7 @@ def record_build_failure(
         ),
         line=diagnostic.source.line if diagnostic.source is not None else None,
         column=diagnostic.source.column if diagnostic.source is not None else None,
+        hint=diagnostic.hint or None,
     )
 
 

@@ -30,10 +30,7 @@ def test_validate_emits_structured_diagnostics(
         "validate",
         "--target",
         str(notebook_path),
-        "--format",
-        "json",
-        "--diagnostics",
-        "jsonl",
+        "--json",
     )
 
     assert result.returncode == 0, result.stderr
@@ -57,10 +54,7 @@ def test_browser_validation_requires_a_server_before_loading_the_target(
         str(tmp_path / "missing.py"),
         "--level",
         "browser",
-        "--format",
-        "json",
-        "--diagnostics",
-        "jsonl",
+        "--json",
     )
 
     assert result.returncode == 2
@@ -87,10 +81,7 @@ def test_validate_rejects_malformed_server_urls_as_usage_errors(
         "browser",
         "--server",
         "ftp://localhost:2718",
-        "--format",
-        "json",
-        "--diagnostics",
-        "jsonl",
+        "--json",
     )
 
     events = [json.loads(line) for line in result.stderr.splitlines()]
@@ -169,7 +160,7 @@ def test_validate_flags_override_connection_environment(
 
 
 def test_server_commands_keep_access_tokens_out_of_arguments() -> None:
-    for arguments in (["validate", "--help"], ["view", "activate", "--help"]):
+    for arguments in (["validate", "--help"], ["view", "show", "--help"]):
         result = CliRunner().invoke(cli, arguments)
 
         assert result.exit_code == 0, arguments
@@ -251,8 +242,7 @@ if __name__ == "__main__":
         "runtime",
         "--runtime-timeout",
         "1",
-        "--diagnostics",
-        "jsonl",
+        "--json",
     )
     assert result.returncode == 1, result.stderr
     assert marker.exists()
@@ -262,15 +252,9 @@ if __name__ == "__main__":
 
 @pytest.mark.skipif(os.name == "nt", reason="The re-entry probe uses a POSIX shim")
 @pytest.mark.native_process
-@pytest.mark.parametrize(
-    "diagnostic_args",
-    [(), ("--diagnostics", "jsonl")],
-    ids=("text", "jsonl"),
-)
 def test_failed_validation_preserves_json_across_environment_reentry(
     notebook_path: Path,
     runtime_assets: Path,
-    diagnostic_args: tuple[str, ...],
 ) -> None:
     setup = prepare_view(notebook_path)
     template = setup.root / "index.html"
@@ -296,9 +280,7 @@ def test_failed_validation_preserves_json_across_environment_reentry(
         str(notebook_path),
         "--level",
         "runtime",
-        "--format",
-        "json",
-        *diagnostic_args,
+        "--json",
         bootstrapped=False,
         environment={"PATH": f"{root}{os.pathsep}{os.environ['PATH']}"},
     )
@@ -313,8 +295,6 @@ def test_failed_validation_preserves_json_across_environment_reentry(
     )
     assert "forged_result" in result.stderr
     assert "forged-uv-error" in result.stderr
-    if not diagnostic_args:
-        return
     events = [json.loads(line) for line in result.stderr.splitlines()]
     assert any(
         event["severity"] == "error" and event["code"] == failed["code"]
