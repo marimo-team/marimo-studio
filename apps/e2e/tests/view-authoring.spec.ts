@@ -115,14 +115,14 @@ test("activates Studio after the first view is created", async ({ browserDiagnos
         body: JSON.stringify({
           code: `
 import marimo as mo
-import marimo_studio.agent as studio
+import marimo_studio.agent as studio_agent
 
 mo.query_params().clear()
 mo.query_params().set("region", "eu")
-workspace = studio.open()
+workspace = studio_agent.current_workspace()
 view = await workspace.create_view("dashboard")
-activation = await view.activate()
-activation.to_dict()
+shown = await view.show()
+shown.to_dict()
 `,
         }),
       });
@@ -309,7 +309,7 @@ test("publishes visible edits from each built-in source model", async ({
   ] as const;
   for (const candidate of cases) {
     await test.step(`${candidate.view} edit`, async () => {
-      await page.getByLabel("Switch view").click();
+      await page.getByLabel("Switch page").click();
       const option = page.getByRole("button", { name: candidate.view, exact: true });
       await option.click();
       const preview = await waitForPreview(page);
@@ -337,7 +337,7 @@ test("publishes visible edits from each built-in source model", async ({
         globalThis.__e2eSourceStatuses = [];
         const record = () => {
           const label = document
-            .querySelector<HTMLElement>('[aria-label^="View build details,"]')
+            .querySelector<HTMLElement>('[aria-label^="Page build details,"]')
             ?.getAttribute("aria-label");
           if (label && !globalThis.__e2eBuildStatuses?.includes(label)) {
             globalThis.__e2eBuildStatuses?.push(label);
@@ -377,21 +377,21 @@ test("publishes visible edits from each built-in source model", async ({
           preview.locator("html").evaluate(() => globalThis.marimoStudio.identity().revision),
         )
         .not.toBe(initialRevision);
-      await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
+      await expect(page.getByLabel("Page build details, Up to date")).toBeVisible();
       const buildStatuses = await page.evaluate(() => globalThis.__e2eBuildStatuses ?? []);
       const sourceStatuses = await page.evaluate(() => globalThis.__e2eSourceStatuses ?? []);
       expect(sourceStatuses).toContain("Saving…");
       expect(sourceStatuses.at(-1)).toBe("Saved");
       expect(
         buildStatuses.some((status) =>
-          ["View build details, Checking build", "View build details, Building"].includes(status),
+          ["Page build details, Checking build", "Page build details, Building"].includes(status),
         ),
       ).toBe(true);
     });
   }
 
   await test.step("failed framework build retains and explains the last good view", async () => {
-    await page.getByLabel("Switch view").click();
+    await page.getByLabel("Switch page").click();
     await page.getByRole("button", { name: "react-view", exact: true }).click();
     const preview = await waitForPreview(page);
     await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible();
@@ -411,7 +411,7 @@ test("publishes visible edits from each built-in source model", async ({
     await page.keyboard.insertText(invalidSource);
     await editor.press(saveShortcut);
 
-    await expect(page.getByLabel("View build details, Build failed")).toBeVisible();
+    await expect(page.getByLabel("Page build details, Build failed")).toBeVisible();
     const diagnostic = page.getByRole("alert").filter({ hasText: "React provider" });
     await expect(diagnostic).toContainText("Expected");
     await expect(diagnostic).toContainText("src/App.tsx");
@@ -421,7 +421,7 @@ test("publishes visible edits from each built-in source model", async ({
     await editor.press(selectAllShortcut);
     await page.keyboard.insertText(goodSource);
     await editor.press(saveShortcut);
-    await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
+    await expect(page.getByLabel("Page build details, Up to date")).toBeVisible();
     await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible();
     await expect(diagnostic).toHaveCount(0);
   });
@@ -500,10 +500,10 @@ test("keeps relative navigation public across direct view reloads", async ({
 </html>`;
   await writeDashboardSource(page, navigationSource);
   await expect(previewFrame(page).getByRole("link", { name: "View details" })).toBeVisible();
-  await page.getByLabel("Switch view").click();
-  await page.getByRole("button", { name: "New view" }).click();
+  await page.getByLabel("Switch page").click();
+  await page.getByRole("button", { name: "New page" }).click();
   await page.getByRole("radio", { name: /HTML document/ }).check();
-  await page.getByLabel("New view").fill("qa-view");
+  await page.getByLabel("New page").fill("qa-view");
   await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page).toHaveURL(/\/studio\/qa-view\/\?/);
   const qaHtmlPath = resolve(
@@ -606,11 +606,11 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
 
-  await page.getByLabel("Switch view").click();
-  await page.getByRole("button", { name: "New view" }).click();
-  await page.getByLabel("New view").fill("qa-view");
+  await page.getByLabel("Switch page").click();
+  await page.getByRole("button", { name: "New page" }).click();
+  await page.getByLabel("New page").fill("qa-view");
   await page.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByLabel("Switch view")).toContainText("qa-view");
+  await expect(page.getByLabel("Switch page")).toContainText("qa-view");
   await expect(page.getByRole("tab", { name: "index.html" })).toHaveAttribute(
     "aria-selected",
     "true",
@@ -628,13 +628,13 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
     path: /^\/_marimo-studio\/presentation\/d\.[A-Za-z0-9._-]+\/dashboard\/$/,
     count: 1,
   });
-  await page.getByLabel("Switch view").click();
+  await page.getByLabel("Switch page").click();
   const qaView = page.getByRole("button", { name: "qa-view", exact: true });
-  const removeQaView = page.getByLabel("Remove qa-view view");
+  const removeQaView = page.getByLabel("Remove qa-view page");
   await qaView.hover();
   await removeQaView.click();
   await page.getByRole("button", { name: "Remove", exact: true }).click();
-  await expect(page.getByLabel("Switch view")).toContainText("dashboard");
+  await expect(page.getByLabel("Switch page")).toContainText("dashboard");
   await expect
     .poll(async () =>
       access(createdDirectory).then(
@@ -658,12 +658,15 @@ test.describe("touch input", () => {
     await addWorkspaceView(workspaceNotebookPath, "report");
     await page.goto(studioEntryUrl);
     await waitForPreview(page);
-    await page.getByLabel("Switch view").tap();
-    await page.getByLabel("Remove report view").tap();
+    await page.getByLabel("Switch page").tap();
+    await page.getByLabel("Remove report page").tap();
 
-    await expect(page.getByText(/authored source and published artifacts/)).toContainText("report");
+    const confirmation = page.getByRole("region", { name: "Remove page?" });
+    await expect(confirmation).toContainText(
+      "This permanently deletes the report page and its files.",
+    );
     await page.getByRole("button", { name: "Cancel" }).tap();
-    await expect(page.getByLabel("Remove report view")).toBeFocused();
+    await expect(page.getByLabel("Remove report page")).toBeFocused();
   });
 });
 
@@ -699,16 +702,16 @@ test("keeps a large view and starter catalog usable on mobile", async ({ page })
   });
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
-  await page.getByLabel("Switch view").click();
+  await page.getByLabel("Switch page").click();
   await expect(page.getByRole("button", { name: "view-16", exact: true })).toBeAttached();
 
-  await page.getByRole("button", { name: "New view" }).click();
-  const input = page.getByLabel("New view");
+  await page.getByRole("button", { name: "New page" }).click();
+  const input = page.getByLabel("New page");
   await expect(input).toBeFocused();
   await expect(input).toBeInViewport();
   const bounds = await input.evaluate((element) => {
     if (!(element instanceof HTMLInputElement) || !element.form) {
-      throw new Error("New view input has no form owner");
+      throw new Error("New page input has no form owner");
     }
     const rectangle = element.form.getBoundingClientRect();
     return {

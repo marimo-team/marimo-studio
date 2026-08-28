@@ -162,13 +162,13 @@ export class SourceSession {
     void this.sources.get(path)?.save();
   }
 
-  useDisk(): void {
+  useSavedVersion(): void {
     const path = this.active;
     if (!path) {
       return;
     }
     const source = this.sources.get(path);
-    source?.useDisk();
+    source?.useSavedVersion();
     if (!this.orphans.has(path) || source?.hasPendingChanges) {
       return;
     }
@@ -182,9 +182,9 @@ export class SourceSession {
     this.options.changed();
   }
 
-  keepLocal(): void {
+  overwriteSavedVersion(): void {
     if (this.active) {
-      void this.sources.get(this.active)?.keepLocal();
+      void this.sources.get(this.active)?.overwriteSavedVersion();
     }
   }
 

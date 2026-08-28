@@ -31,7 +31,7 @@ export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRem
   async list(signal) {
     const response = await fetch(viewsUrl, { cache: "no-store", signal });
     if (!response.ok) {
-      throw new Error(await errorMessage(response, "Could not load views"));
+      throw new Error(await errorMessage(response, "Could not load pages"));
     }
     return parseViewList(await responseJson(response));
   },
@@ -46,7 +46,7 @@ export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRem
       body: JSON.stringify({ name, starter }),
     });
     if (!response.ok) {
-      throw new Error(await errorMessage(response, "Could not create view"));
+      throw new Error(await errorMessage(response, "Could not create page"));
     }
     return parseCreatedView(await responseJson(response));
   },
@@ -60,7 +60,7 @@ export const createViewRemote = (viewsUrl: string, serverToken: string): ViewRem
       },
     );
     if (!response.ok) {
-      throw new Error(await errorMessage(response, "Could not remove view"));
+      throw new Error(await errorMessage(response, "Could not remove page"));
     }
     return parseDeletedView(await responseJson(response));
   },

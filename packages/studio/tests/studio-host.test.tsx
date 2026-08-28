@@ -29,9 +29,10 @@ const host: StudioHostBootstrap = {
 const ready: StudioBootstrap = {
   schema: 1,
   notebook: { name: "analysis.py" },
+  defaultView: "dashboard",
   selectedView: "dashboard",
   views: ["dashboard"],
-  runtimes: [{ id: "server", label: "Server" }],
+  runtimes: [{ id: "server", label: "Python" }],
   defaultRuntime: "server",
   clientId: host.clientId,
   serverInstance: host.serverInstance,
@@ -211,9 +212,9 @@ it("retries first-view authoring options after a transient inventory failure", a
   expect(editorFrame).toHaveAttribute("inert");
   expect(editorFrame).toHaveAttribute("aria-hidden", "true");
   expect(screen.getByRole("main")).toHaveFocus();
-  await user.click(screen.getByRole("button", { name: "Retry authoring options" }));
+  await user.click(screen.getByRole("button", { name: "Retry page choices" }));
 
-  expect(await screen.findByRole("combobox", { name: "Starter" })).toHaveValue(
+  expect(await screen.findByRole("combobox", { name: "Start with" })).toHaveValue(
     "marimo-studio/vanilla:default",
   );
   expect(screen.getByRole("button", { name: "Create dashboard" })).toBeEnabled();
@@ -249,10 +250,10 @@ it("shows first-view starter documents and unavailable recovery", async () => {
     />,
   );
 
-  expect(await screen.findByLabelText("Starter details")).toHaveTextContent(
-    "Starts with src/App.tsx, src/theme.css",
+  expect(await screen.findByLabelText("Starting options")).toHaveTextContent(
+    "Creates src/App.tsx, src/theme.css",
   );
-  expect(screen.getByLabelText("Starter details")).toHaveTextContent("Install Deno to use React.");
+  expect(screen.getByLabelText("Starting options")).toHaveTextContent("Install Deno to use React.");
   expect(screen.getByRole("button", { name: "Create dashboard" })).toBeDisabled();
 });
 
@@ -286,7 +287,7 @@ it("opens an already-created first view after a bootstrap retry", async () => {
         createdStarter = body.starter;
         return Response.json(
           {
-            schema: 2,
+            schema: 1,
             name: "dashboard",
           },
           { status: 201 },
@@ -327,7 +328,7 @@ it("opens an already-created first view after a bootstrap retry", async () => {
       brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
     />,
   );
-  expect(await screen.findByRole("combobox", { name: "Starter" })).toHaveValue(
+  expect(await screen.findByRole("combobox", { name: "Start with" })).toHaveValue(
     "marimo-studio/vanilla:default",
   );
   await user.click(await screen.findByRole("button", { name: "Create dashboard" }));
@@ -342,7 +343,7 @@ it("opens an already-created first view after a bootstrap retry", async () => {
     reload.mock.invocationCallOrder[0]!,
   );
   expect(screen.queryByLabelText("Studio workspace")).not.toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Create the first view" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Create the first page" })).toBeVisible();
 
   fireEvent.load(editorFrame);
   expect(await screen.findByLabelText("Studio workspace")).toBeVisible();

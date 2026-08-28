@@ -90,7 +90,7 @@ const browserEnvironment = (): SessionEnvironment => {
 
 const storagePrefix = (config: RuntimeConfig): string => {
   const runtime = serverSessionConfig(config);
-  return `marimo-studio:session:v2:server:${runtime?.fileKey ?? "unknown"}`;
+  return `marimo-studio:session:v1:server:${runtime?.fileKey ?? "unknown"}`;
 };
 
 const publicQueryIdentity = (url: URL): string => {

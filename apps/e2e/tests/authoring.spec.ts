@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { workspaceDirectory } from "../scripts/paths.mjs";
 import {
   changedObservationSourceSchema,
-  readBrowserAnalysis,
+  readBrowserValidation,
   readRequestedObservation,
   readStudioClientId,
   readViewRevision,
@@ -90,11 +90,11 @@ test("reuses a warm view artifact with current notebook changes", async ({
     count: 1,
     status: 204,
   });
-  await page.getByLabel("Switch view").click();
+  await page.getByLabel("Switch page").click();
   await page.getByRole("button", { name: "qa-view", exact: true }).click();
   await expect(preview.getByRole("heading", { name: "Qa View" })).toBeVisible();
   await expect(preview.locator("#qa-metric")).toHaveText("44");
-  await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
+  await expect(page.getByLabel("Page build details, Up to date")).toBeVisible();
 
   expect(await readWorkspaceFile(receiptPath)).toBe(warmedReceipt);
   await recoverRequestAbort(abandonedHandoff);
@@ -398,16 +398,16 @@ test("shows progress while an edited notebook cell runs", async ({ browserDiagno
   await cell.locator('button[data-testid="run-button"]:not(:disabled)').click();
   await expect(cell.locator("..")).toHaveAttribute("data-status", /queued|running/);
   await page.getByRole("button", { name: "Develop", exact: true }).click();
-  const runtimeTrigger = page.getByLabel("Server preview runtime");
+  const runtimeTrigger = page.getByLabel("Python preview runtime");
   await expect(runtimeTrigger.locator("..")).toHaveAttribute("data-state", "loading");
-  await expect(runtimeTrigger).toHaveAttribute("title", "Synchronizing preview");
+  await expect(runtimeTrigger).toContainText("Updating preview");
   await expect(cell.locator("..")).toHaveAttribute("data-status", "idle");
   await waitForPreview(page);
   await expect(preview.locator("#slow-value")).toHaveText("8");
   await expect.poll(() => readWorkspaceFile(workspaceNotebookPath)).toContain("slow_metric = 8");
   await recoverProjectionRefresh(slowRefresh, page);
   await expect(runtimeTrigger.locator("..")).toHaveAttribute("data-state", "ready");
-  await expect(runtimeTrigger).toHaveAttribute("title", "Live");
+  await expect(runtimeTrigger).toContainText("Live");
   replacedWorkspaceStream.recovered();
 });
 
@@ -416,7 +416,7 @@ test("keeps Source tabs and the editor reachable at narrow widths", async ({ pag
   await waitForPreview(page);
   await page.getByLabel("Workspace options").click();
   await page.getByRole("button", { name: "Source" }).click();
-  const tablist = page.getByRole("tablist", { name: "View source files" });
+  const tablist = page.getByRole("tablist", { name: "Page source files" });
   const tabs = page.getByRole("tab");
   expect(await tabs.count()).toBeGreaterThan(3);
   const first = tabs.first();
@@ -457,7 +457,7 @@ test("keeps Source tabs and the editor reachable at narrow widths", async ({ pag
   await expect(editor).toBeFocused();
 });
 
-test("activates an agent-requested view and records its rendered revision", async ({
+test("shows an agent-requested page and records its rendered revision", async ({
   browserDiagnostics,
   page,
 }) => {
@@ -488,7 +488,7 @@ test("activates an agent-requested view and records its rendered revision", asyn
     session_id: sessionId,
     view: "qa-view",
   });
-  await expect(page.getByLabel("Switch view")).toContainText("qa-view");
+  await expect(page.getByLabel("Switch page")).toContainText("qa-view");
   await expect(previewFrame(page).getByRole("heading", { name: "Qa View" })).toBeVisible();
   replacedEventStream.recovered();
   const abandonedObservation = browserDiagnostics.expectRequestAbort({
@@ -593,7 +593,7 @@ test("keeps a slow activation open until the selected view is acknowledged", asy
   );
   try {
     await retried;
-    await expect(page.getByLabel("Switch view")).toContainText("slow-activation");
+    await expect(page.getByLabel("Switch page")).toContainText("slow-activation");
     await expect(
       preview.getByRole("heading", { name: "Slow Activation", exact: true }),
     ).toBeVisible();
@@ -606,7 +606,7 @@ test("keeps a slow activation open until the selected view is acknowledged", asy
     generation: expect.any(Number),
     view: "slow-activation",
   });
-  await expect(page.getByLabel("Switch view")).toContainText("slow-activation");
+  await expect(page.getByLabel("Switch page")).toContainText("slow-activation");
   await expect(
     preview.getByRole("heading", { name: "Slow Activation", exact: true }),
   ).toBeVisible();
@@ -623,7 +623,7 @@ test("retains agent validation after the native editor reconnects", async ({
   const source = await page.locator("#marimo-studio-bootstrap").textContent();
   const clientId = readStudioClientId(source ?? "null");
   const analyze = async () => {
-    const response = await page.request.post("/_marimo-studio/analyze?file=notebook.py", {
+    const response = await page.request.post("/_marimo-studio/validate?file=notebook.py", {
       headers: { "Marimo-Server-Token": await studioServerToken(page) },
       data: {
         schema: 1,
@@ -634,7 +634,7 @@ test("retains agent validation after the native editor reconnects", async ({
       },
     });
     expect(response.ok()).toBe(true);
-    return readBrowserAnalysis(await response.text());
+    return readBrowserValidation(await response.text());
   };
   const abandonedObservations = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin,
@@ -644,10 +644,10 @@ test("retains agent validation after the native editor reconnects", async ({
     status: 204,
   });
   const initialReport = await analyze();
-  expect(initialReport.handoff_ready).toBe(true);
+  expect(initialReport.ok).toBe(true);
   const initialObservation = initialReport.stages.browser.observations[0];
   if (!initialObservation) {
-    throw new Error("Initial browser analysis did not return an observation");
+    throw new Error("Initial browser validation did not return an observation");
   }
   expect(initialObservation).toMatchObject({
     client_id: clientId,
@@ -674,7 +674,7 @@ test("retains agent validation after the native editor reconnects", async ({
         const report = await analyze();
         const observation = report.stages.browser.observations[0];
         reconnectedObservation =
-          report.handoff_ready &&
+          report.ok &&
           observation !== undefined &&
           observation.session_id === initialObservation.session_id
             ? observation

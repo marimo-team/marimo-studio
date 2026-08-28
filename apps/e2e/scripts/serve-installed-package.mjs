@@ -156,8 +156,7 @@ try {
       notebookPath,
       "--starter",
       "marimo-studio/vanilla:default",
-      "--format",
-      "json",
+      "--json",
     ],
     { cwd: workspaceDirectory, env: environment, stdio: "inherit" },
   );
@@ -168,7 +167,7 @@ try {
   await preparation.run(
     "build installed Vanilla view",
     studio,
-    ["view", "build", "dashboard", "--target", notebookPath, "--format", "json"],
+    ["view", "build", "dashboard", "--target", notebookPath, "--json"],
     { cwd: workspaceDirectory, env: environment, stdio: "inherit" },
   );
   preparation.requireActive();

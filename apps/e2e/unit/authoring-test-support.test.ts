@@ -1,10 +1,10 @@
 import { expect, test } from "vite-plus/test";
 
-import { readBrowserAnalysis } from "../tests/authoring-test-support.ts";
+import { readBrowserValidation } from "../tests/authoring-test-support.ts";
 
 const report = (state: "not-observed" | "stale") =>
   JSON.stringify({
-    handoff_ready: false,
+    ok: false,
     stages: {
       browser: {
         observations: [
@@ -18,9 +18,11 @@ const report = (state: "not-observed" | "stale") =>
     },
   });
 
-test("accepts public nonterminal browser analysis states", () => {
-  expect(readBrowserAnalysis(report("not-observed")).stages.browser.observations[0]?.state).toBe(
+test("accepts public nonterminal browser validation states", () => {
+  expect(readBrowserValidation(report("not-observed")).stages.browser.observations[0]?.state).toBe(
     "not-observed",
   );
-  expect(readBrowserAnalysis(report("stale")).stages.browser.observations[0]?.state).toBe("stale");
+  expect(readBrowserValidation(report("stale")).stages.browser.observations[0]?.state).toBe(
+    "stale",
+  );
 });

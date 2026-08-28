@@ -34,6 +34,7 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
         confirmRef={model.refs.confirmRemoval}
         error={model.snapshot.removeError}
         label={model.removeLabel}
+        replacementDefault={model.replacementDefault}
         view={model.snapshot.removing}
         onCancel={model.actions.cancelRemoval}
         onRemove={model.actions.remove}
@@ -42,9 +43,15 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
   };
   const viewList = (
     <>
-      <strong className="studio-menu-heading">Switch view</strong>
-      <div className="studio-view-list" role="group" aria-label="Views">
+      <strong className="studio-menu-heading">Switch page</strong>
+      <div className="studio-view-list" role="group" aria-label="Pages">
         {model.rows.map((view) => {
+          let accessibleName = view.name;
+          if (view.selecting) {
+            accessibleName = `${view.name}, loading`;
+          } else if (view.default) {
+            accessibleName = `${view.name}, default`;
+          }
           return (
             <div
               key={view.name}
@@ -56,7 +63,7 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
                 className="studio-menu-item studio-view-option"
                 aria-current={view.current ? "page" : undefined}
                 aria-busy={view.selecting || undefined}
-                aria-label={view.selecting ? `${view.name}, loading` : undefined}
+                aria-label={accessibleName}
                 onClick={() => model.actions.choose(view.name)}
               >
                 {view.selecting ? (
@@ -65,14 +72,15 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
                   <CheckIcon className="studio-menu-check" strokeWidth={2} aria-hidden="true" />
                 )}
                 <span>{view.name}</span>
+                {view.default ? <small className="studio-view-default">Default</small> : null}
               </button>
               {model.canRemove ? (
                 <button
                   type="button"
                   className="studio-view-remove"
                   data-view-remove={view.name}
-                  aria-label={`Remove ${view.name} view`}
-                  title={`Remove ${view.name} view`}
+                  aria-label={`Remove ${view.name} page`}
+                  title={`Remove ${view.name} page`}
                   disabled={model.snapshot.deleting}
                   onClick={() => model.actions.beginRemoval(view.name)}
                 >
@@ -91,7 +99,7 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
           onClick={model.actions.beginCreate}
         >
           <PlusIcon className="studio-menu-item-icon" strokeWidth={1.75} aria-hidden="true" />
-          <span>New view</span>
+          <span>New page</span>
         </button>
       </div>
     </>
@@ -115,7 +123,7 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
         <summary
           ref={model.refs.trigger}
           className="studio-control studio-menu-trigger"
-          aria-label={`Switch view: ${model.snapshot.current}`}
+          aria-label={`Switch page: ${model.snapshot.current}`}
           aria-disabled={model.snapshot.creating || model.snapshot.deleting}
           onClick={(event) => {
             if (model.snapshot.creating || model.snapshot.deleting) {

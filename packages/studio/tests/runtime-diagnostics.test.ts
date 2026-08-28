@@ -91,9 +91,9 @@ it("describes a degraded runtime without flattening its diagnostics", () => {
       diagnostics: [warning],
     }),
   ).toEqual({
+    diagnostics: [warning],
     message: "Live with 1 warning",
     state: "warning",
-    title: "The projected value is stale. Wait for the notebook to finish running.",
   });
 });
 

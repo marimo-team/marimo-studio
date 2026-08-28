@@ -692,7 +692,7 @@ it("disposes an unresponsive active reader before acknowledging the editor", asy
   await vi.waitFor(() => expect(acknowledgement.postMessage).toHaveBeenCalledOnce());
 
   expect(frameElement.src).toBe("about:blank");
-  expect(deck.getSnapshot().states.server?.status.message).toBe("Synchronizing preview");
+  expect(deck.getSnapshot().states.server?.status.message).toBe("Updating preview");
   deck.notebookMutationTransactionFailed(9);
   expect(deck.getSnapshot().states.server?.status.message).toBe("Needs repair");
   deck.presentationBuildStarted("dashboard", 9);

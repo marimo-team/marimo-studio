@@ -26,7 +26,7 @@ test("view responses validate list, create, and delete envelopes", () => {
     starters: [componentStarter, starter],
   };
   const created: CreatedView = {
-    schema: 2,
+    schema: 1,
     name: "report",
   };
   const deleted = {
@@ -50,7 +50,7 @@ test("view responses validate list, create, and delete envelopes", () => {
   assert.throws(() =>
     parseViewList({ ...views, views: [{ ...views.views[0], name: "Bad View" }] }),
   );
-  assert.throws(() => parseCreatedView({ schema: 1, name: 42 }));
+  assert.throws(() => parseCreatedView({ schema: 2, name: 42 }));
   assert.throws(() => parseCreatedView({ ...created, unexpected: true }));
   assert.throws(() => parseDeletedView(views));
   assert.throws(() => parseDeletedView({ ...deleted, default_view: "" }));

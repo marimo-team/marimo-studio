@@ -89,8 +89,8 @@ export const collaborativeStudioEntryUrl = `${e2eNetwork.main.collaboration.orig
 export const staticExportUrl = `${e2eNetwork.main.exported.origin}/src/index.html`;
 
 const workspaceCheckSchema = z.object({ ok: z.boolean() });
-const workspaceActivationSchema = z.object({
-  schema: z.literal(2),
+const workspaceShowSchema = z.object({
+  schema: z.literal(1),
   notebook: z.string(),
   view: z.string(),
   generation: z.number().int().positive(),
@@ -186,30 +186,23 @@ export const addCollaborativeView = (name: string) =>
 export const activateWorkspaceView = async (view: string, browserClient?: string) => {
   const args = [
     "view",
-    "activate",
+    "show",
     view,
     "--target",
     workspaceNotebookPath,
     "--server",
     `${studioOrigin}?file=notebook.py`,
-    "--format",
-    "json",
+    "--json",
   ];
   if (browserClient) {
     args.push("--browser-client", browserClient);
   }
   const { stdout } = await runStudioCli(args);
-  return workspaceActivationSchema.parse(JSON.parse(stdout));
+  return workspaceShowSchema.parse(JSON.parse(stdout));
 };
 
 export const checkWorkspace = async (): Promise<boolean> => {
-  const { stdout } = await runStudioCli([
-    "validate",
-    "--target",
-    workspaceNotebookPath,
-    "--format",
-    "json",
-  ]);
+  const { stdout } = await runStudioCli(["validate", "--target", workspaceNotebookPath, "--json"]);
   return workspaceCheckSchema.parse(JSON.parse(stdout)).ok;
 };
 

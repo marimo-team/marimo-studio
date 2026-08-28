@@ -66,8 +66,9 @@ test.afterAll(async () => {
 
 const selectView = async (page: Page, view: string, heading: string): Promise<ViewTiming> => {
   const started = performance.now();
-  await page.getByLabel("Switch view").click();
-  await page.getByRole("button", { name: view, exact: true }).click();
+  await page.getByLabel("Switch page").click();
+  const accessibleName = view === "dashboard" ? "dashboard, default" : view;
+  await page.getByRole("button", { name: accessibleName, exact: true }).click();
   await expect(
     previewFrame(page).getByRole("heading", { name: heading, exact: true }),
   ).toBeVisible();

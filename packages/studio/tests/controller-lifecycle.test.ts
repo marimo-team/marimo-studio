@@ -126,7 +126,7 @@ describe("feature controller lifecycle", () => {
     const remote: ViewRemote = {
       list: vi.fn(async () => viewList(["dashboard", "report"])),
       create: vi.fn(async (name: string, _starter: string) => ({
-        schema: 2 as const,
+        schema: 1 as const,
         name,
       })),
       remove: vi.fn(),
@@ -190,7 +190,7 @@ describe("feature controller lifecycle", () => {
       {
         list: vi.fn(async () => viewList(["dashboard", "report"])),
         create: vi.fn(async (name: string, _starter: string) => ({
-          schema: 2 as const,
+          schema: 1 as const,
           name,
         })),
         remove: vi.fn(),
@@ -293,7 +293,7 @@ describe("feature controller lifecycle", () => {
         .mockImplementationOnce(() => listing.promise)
         .mockResolvedValue(canonical),
       create: vi.fn(async (name: string, _starter: string) => ({
-        schema: 2 as const,
+        schema: 1 as const,
         name,
       })),
       remove: vi.fn(),
@@ -365,7 +365,7 @@ describe("feature controller lifecycle", () => {
 
     await expect(ensuring).resolves.toBe(true);
     await expect(deleting).resolves.toBe(true);
-    expect(select).toHaveBeenCalledWith("report", "build");
+    expect(select).toHaveBeenCalledWith("report", "develop");
     expect(settle).toHaveBeenCalledWith("report");
     expect(remove).toHaveBeenCalledWith("dashboard");
     expect(controller.getSnapshot()).toMatchObject({
@@ -565,7 +565,7 @@ describe("feature controller lifecycle", () => {
     expect(remote.remove).not.toHaveBeenCalled();
     expect(controller.getSnapshot().current).toBe("dashboard");
     expect(controller.getSnapshot().removeError).toBe(
-      "Select another view before removing this one.",
+      "Select another page before removing this one.",
     );
     controller.dispose();
   });
@@ -619,7 +619,7 @@ describe("feature controller lifecycle", () => {
     expect(await controller.deleteSelected()).toBe(true);
 
     expect(select).toHaveBeenCalledTimes(1);
-    expect(select.mock.calls[0]?.slice(0, 2)).toEqual(["executive", "build"]);
+    expect(select.mock.calls[0]?.slice(0, 2)).toEqual(["executive", "develop"]);
     expect(controller.getSnapshot().current).toBe("executive");
     controller.dispose();
   });

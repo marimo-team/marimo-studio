@@ -74,21 +74,21 @@
     min-width: 17rem;
   }
 
-  .studio:is([data-mode="build"], [data-mode="source"], [data-mode="workspace"]):has(
+  .studio:is([data-mode="develop"], [data-mode="source"], [data-mode="workspace"]):has(
       .studio-compact-tabs:not([hidden])
     )
     .studio-primary-modes {
     display: none;
   }
 
-  .studio:is([data-mode="build"], [data-mode="source"], [data-mode="workspace"])
+  .studio:is([data-mode="develop"], [data-mode="source"], [data-mode="workspace"])
     .studio-compact-tabs:not([hidden]) {
     grid-column: 1 / -1;
     grid-row: 2;
     justify-self: stretch;
   }
 
-  .studio:is([data-mode="build"], [data-mode="source"], [data-mode="workspace"])
+  .studio:is([data-mode="develop"], [data-mode="source"], [data-mode="workspace"])
     .studio-compact-tabs:not([hidden])
     button {
     flex: 1;

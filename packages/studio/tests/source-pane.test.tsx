@@ -1,7 +1,7 @@
 import type { SourceDocumentPath } from "@marimo-studio/protocol/source-documents";
 import type { ProjectDiagnostic, ViewProject } from "@marimo-studio/protocol/view-project";
 
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EditorView } from "@uiw/react-codemirror";
 import { expect, it, vi } from "vite-plus/test";
@@ -194,7 +194,7 @@ it("keeps provider diagnostics visible when no source documents are exposed", as
   expect(screen.getByRole("status", { name: "Source document status" })).toHaveTextContent(
     "No source documents",
   );
-  expect(screen.getByText("This view has no source files to edit.")).toBeVisible();
+  expect(screen.getByText("This page has no source files to edit.")).toBeVisible();
   expect(screen.getByRole("alert")).toHaveTextContent(diagnostic.message);
   controller.dispose();
 });
@@ -248,7 +248,7 @@ it("shows an HTTP conflict recovery path in the Source pane", async () => {
   controller.save(path);
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Previous disk content is preserved at /workspace/.App.tsx.external-recovery.",
+    "The previous saved version is preserved at /workspace/.App.tsx.external-recovery.",
   );
   controller.dispose();
 });
@@ -442,7 +442,7 @@ it("shows the active document diagnostic and marks each tab with its highest sev
   controller.dispose();
 });
 
-it("keeps project evidence behind the build status disclosure", async () => {
+it("keeps actionable build status behind the disclosure", async () => {
   const build = {
     ...unbuiltView,
     phase: "stale" as const,
@@ -475,22 +475,19 @@ it("keeps project evidence behind the build status disclosure", async () => {
 
   const user = userEvent.setup();
   render(<SourcePane controller={controller} visible />);
-  const projectDetails = screen.getByLabelText("View project details");
-  const trigger = screen.getByLabelText("View build details, Build needed");
-  expect(projectDetails).not.toBeVisible();
+  const buildStatus = screen.getByRole("region", { name: "Page build status" });
+  const trigger = screen.getByLabelText("Page build details, Build needed");
+  expect(buildStatus).not.toBeVisible();
   await user.click(trigger);
-  expect(projectDetails).toBeVisible();
-  expect(projectDetails).toHaveTextContent("marimo-studio/svelte");
-  expect(projectDetails).toHaveTextContent("project-cu");
-  expect(projectDetails).toHaveTextContent("artifact-p");
-  expect(projectDetails).toHaveTextContent("Source is newer than the published view.");
-  expect(projectDetails).toHaveTextContent("Rebuild the current source.");
-  expect(projectDetails).toHaveTextContent("Save the source, then rebuild.");
-  expect(within(projectDetails).getByTitle("sha256:project-current")).toBeVisible();
-  expect(within(projectDetails).getByTitle("sha256:artifact-published")).toBeVisible();
+  expect(buildStatus).toBeVisible();
+  expect(buildStatus).toHaveTextContent(
+    "Saved source has changed. Build the page to update Preview.",
+  );
+  expect(buildStatus).toHaveTextContent("Rebuild the current source.");
+  expect(buildStatus).toHaveTextContent("Save the source, then rebuild.");
   await user.keyboard("{Escape}");
   await vi.waitFor(() => expect(trigger).toHaveFocus());
-  expect(projectDetails).not.toBeVisible();
+  expect(buildStatus).not.toBeVisible();
   controller.dispose();
 });
 
@@ -512,15 +509,15 @@ it("explains when build freshness is unavailable", async () => {
       artifact={artifact}
       build={build}
       inspection={{ phase: "unavailable", message: "Inspection unavailable" }}
-      provider="marimo-studio/svelte"
     />,
   );
-  const trigger = screen.getByLabelText("View build details, Build status unavailable");
+  const trigger = screen.getByLabelText("Page build details, Build status unavailable");
   expect(trigger).toBeVisible();
 
   await user.click(trigger);
-  expect(screen.getByLabelText("View project details")).toHaveTextContent("Inspection unavailable");
-  expect(screen.getByLabelText("View project details")).toHaveTextContent("Last checked revision");
+  expect(screen.getByRole("region", { name: "Page build status" })).toHaveTextContent(
+    "Inspection unavailable",
+  );
 });
 
 it("describes an inactive source conflict from its tab", async () => {

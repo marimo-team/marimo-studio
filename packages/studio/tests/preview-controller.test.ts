@@ -185,7 +185,7 @@ it("accepts sessionless WASM readiness from the rendered view", () => {
 
   expect(report).toHaveBeenLastCalledWith(
     expect.objectContaining({
-      status: { message: "Live", state: "ready", title: "" },
+      status: { diagnostics: [], message: "Live", state: "ready" },
     }),
   );
   wasm.dispose();

@@ -27,7 +27,7 @@ test("the latest view request is the only transition committed", async () => {
     cancel() {},
   });
 
-  const first = transition.select("operations", "build");
+  const first = transition.select("operations", "develop");
   const second = transition.select("executive", "preserve");
   loads.get("executive")!.resolve(true);
   assert.deepEqual(await second, true);
@@ -55,12 +55,12 @@ test("choosing the current view cancels a pending transition", async () => {
   });
 
   const switching = transition.select("operations", "preserve");
-  assert.deepEqual(await transition.select("dashboard", "build"), true);
+  assert.deepEqual(await transition.select("dashboard", "develop"), true);
   pending.resolve(true);
 
   assert.deepEqual(await switching, false);
   assert.deepEqual(cancellations, 1);
-  assert.deepEqual(committed, [["dashboard", "build", false]]);
+  assert.deepEqual(committed, [["dashboard", "develop", false]]);
 });
 
 test("commits navigation intent only after target preparation succeeds", async () => {
@@ -145,7 +145,7 @@ test("an aborted transition settles before late preparation can commit", async (
   });
 
   const owner = new AbortController();
-  const selecting = transition.select("report", "build", undefined, owner.signal);
+  const selecting = transition.select("report", "develop", undefined, owner.signal);
   owner.abort();
 
   assert.equal(await selecting, false);
@@ -169,9 +169,9 @@ test("a failed staged view can be retried from the previous selection", async ()
     cancel: vi.fn(),
   });
 
-  assert.equal(await transition.select("report", "build"), false);
+  assert.equal(await transition.select("report", "develop"), false);
   ready = true;
-  assert.equal(await transition.select("report", "build"), true);
+  assert.equal(await transition.select("report", "develop"), true);
 
   assert.deepEqual(changed, [true, true]);
   assert.equal(rollback.mock.calls.length, 1);

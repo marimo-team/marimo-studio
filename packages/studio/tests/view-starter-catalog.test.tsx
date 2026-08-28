@@ -29,13 +29,13 @@ it("recovers the starter catalog after a failed Create refresh", async () => {
   const user = userEvent.setup();
   render(<ViewMenu controller={controller} />);
 
-  await user.click(screen.getByLabelText(/^Switch view:/));
-  await user.click(screen.getByRole("button", { name: "New view" }));
+  await user.click(screen.getByLabelText(/^Switch page:/));
+  await user.click(screen.getByRole("button", { name: "New page" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Authoring options are temporarily unavailable.",
   );
-  await user.click(screen.getByRole("button", { name: "Retry authoring options" }));
+  await user.click(screen.getByRole("button", { name: "Retry page choices" }));
 
   expect(await screen.findByRole("radio", { name: /HTML/ })).toBeChecked();
   expect(controller.getSnapshot().starterCatalog).toEqual({ phase: "ready" });
@@ -73,8 +73,8 @@ it("reveals selected starter files on demand and keeps recovery actions local", 
   const user = userEvent.setup();
   render(<ViewMenu controller={controller} />);
 
-  await user.click(screen.getByLabelText(/^Switch view:/));
-  await user.click(screen.getByRole("button", { name: "New view" }));
+  await user.click(screen.getByLabelText(/^Switch page:/));
+  await user.click(screen.getByRole("button", { name: "New page" }));
 
   const react = screen.getByRole("radio", { name: /Component project/ }).closest("label");
   expect(react).toHaveTextContent("Install Deno to use React.");

@@ -35,7 +35,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
 
   await page.goto(`${baseUrl}/?access_token=${accessToken}`);
   await expect(page).toHaveURL(`${baseUrl}/`);
-  await expect(page.getByRole("heading", { name: "Create the first view" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create the first page" })).toBeVisible();
   await expect(page.locator('iframe[title="Marimo editor"]')).toHaveAttribute("inert", "");
   await expect(page.locator('iframe[title="Marimo editor"]')).toHaveAttribute(
     "aria-hidden",
@@ -80,10 +80,12 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     views: [],
   });
 
-  await page.getByLabel("Starter", { exact: true }).selectOption("marimo-studio/vanilla:default");
+  await page
+    .getByLabel("Start with", { exact: true })
+    .selectOption("marimo-studio/vanilla:default");
   await page.getByRole("button", { name: "Create dashboard" }).click();
   await expect(page).toHaveURL(`${baseUrl}/studio/dashboard/`);
-  await expect(page.getByLabel("Switch view")).toContainText("dashboard");
+  await expect(page.getByLabel("Switch page")).toContainText("dashboard");
 
   const after = await page.evaluate(async (url) => {
     const response = await fetch(url);

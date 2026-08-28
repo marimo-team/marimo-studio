@@ -288,7 +288,7 @@ it("keeps a restored orphan read-only when the provider restores read access", a
       state: { phase: "conflict", conflict: { kind: "read-only" } },
     }),
   );
-  source.keepLocal();
+  source.overwriteSavedVersion();
   await Promise.resolve();
   expect(remote.writes).toEqual([]);
   source.dispose();
@@ -622,7 +622,7 @@ it("blocks a transition on an edit-to-read conflict until the author discards it
   );
   expect(await source.prepareViewChange()).toBe(false);
   expect(remote.writes).toEqual([]);
-  source.useDisk();
+  source.useSavedVersion();
   expect(await source.prepareViewChange()).toBe(true);
   expect(source.hasPendingChanges).toBe(false);
   source.dispose();
@@ -779,7 +779,7 @@ it.each([
   expect(remote.writes).toEqual([]);
   expect(await source.prepareViewChange()).toBe(false);
 
-  source.useDisk();
+  source.useSavedVersion();
 
   expect(source.getSnapshot().documents.map(({ path }) => path)).toEqual(
     nextDocuments.map(({ path }) => path),

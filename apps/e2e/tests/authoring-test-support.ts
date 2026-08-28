@@ -37,10 +37,10 @@ export const requestedObservationsSchema = z.object({
     .min(1),
 });
 export const changedObservationSourceSchema = z.object({
-  error: z.literal("analysis-source-changed"),
+  error: z.literal("validation-source-changed"),
 });
-export const browserAnalysisSchema = z.object({
-  handoff_ready: z.boolean(),
+export const browserValidationSchema = z.object({
+  ok: z.boolean(),
   stages: z.object({
     browser: z.object({
       observations: z
@@ -78,6 +78,6 @@ export const readStudioEditorSessionId = (source: string): string => {
   return sessionId;
 };
 
-export const readBrowserAnalysis = (source: string) => {
-  return browserAnalysisSchema.parse(JSON.parse(source));
+export const readBrowserValidation = (source: string) => {
+  return browserValidationSchema.parse(JSON.parse(source));
 };

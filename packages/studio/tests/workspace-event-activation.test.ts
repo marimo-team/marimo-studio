@@ -31,7 +31,7 @@ it("selects and then acknowledges an agent activation", async () => {
   expect(model.ensureAvailable).toHaveBeenCalledWith("report", expect.any(AbortSignal));
   expect(model.choose).toHaveBeenCalledWith(
     "report",
-    "build",
+    "develop",
     undefined,
     expect.any(AbortSignal),
     "agent",
@@ -53,7 +53,7 @@ it("refreshes an already active view before acknowledging its activation", async
   );
   expect(model.choose).toHaveBeenCalledWith(
     "dashboard",
-    "build",
+    "develop",
     undefined,
     expect.any(AbortSignal),
     "agent",
@@ -214,7 +214,7 @@ it("lets the newest activation generation own selection and acknowledgement", as
   expect(model.choose).toHaveBeenCalledTimes(1);
   expect(model.choose).toHaveBeenCalledWith(
     "analysis",
-    "build",
+    "develop",
     undefined,
     expect.any(AbortSignal),
     "agent",
@@ -272,7 +272,7 @@ it("cancels an older selection before a newer unavailable activation settles", a
   await vi.waitFor(() =>
     expect(choose).toHaveBeenCalledWith(
       "report",
-      "build",
+      "develop",
       undefined,
       expect.any(AbortSignal),
       "agent",

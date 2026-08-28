@@ -5,15 +5,20 @@ import type { SourceConflict as Conflict } from "./remote.ts";
 interface SourceConflictProps {
   conflict: Conflict;
   name: string;
-  onKeepLocal: () => void;
-  onUseDisk: () => void;
+  onOverwriteSavedVersion: () => void;
+  onUseSavedVersion: () => void;
 }
 
-export const SourceConflict = ({ conflict, name, onKeepLocal, onUseDisk }: SourceConflictProps) => {
+export const SourceConflict = ({
+  conflict,
+  name,
+  onOverwriteSavedVersion,
+  onUseSavedVersion,
+}: SourceConflictProps) => {
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const discardOnly = conflict.kind !== "revision";
   const message = {
-    orphan: `${name} is no longer part of this view.`,
+    orphan: `${name} is no longer part of this page.`,
     "read-only": `${name} became read-only while you were editing.`,
     revision: `${name} changed on disk while you were editing.`,
   }[conflict.kind];
@@ -23,7 +28,7 @@ export const SourceConflict = ({ conflict, name, onKeepLocal, onUseDisk }: Sourc
         <span>{message}</span>
         {conflict.externalRecovery ? (
           <span>
-            Previous disk content is preserved at <code>{conflict.externalRecovery}</code>.
+            The previous saved version is preserved at <code>{conflict.externalRecovery}</code>.
           </span>
         ) : null}
         <div>
@@ -35,12 +40,12 @@ export const SourceConflict = ({ conflict, name, onKeepLocal, onUseDisk }: Sourc
           >
             Compare
           </button>
-          <button type="button" onClick={onUseDisk}>
-            {discardOnly ? "Discard edits" : "Use disk"}
+          <button type="button" onClick={onUseSavedVersion}>
+            {discardOnly ? "Discard edits" : "Use saved version"}
           </button>
           {discardOnly ? null : (
-            <button type="button" onClick={onKeepLocal}>
-              Keep mine
+            <button type="button" onClick={onOverwriteSavedVersion}>
+              Overwrite saved version with my edits
             </button>
           )}
         </div>
@@ -53,7 +58,7 @@ export const SourceConflict = ({ conflict, name, onKeepLocal, onUseDisk }: Sourc
             <pre>{conflict.local}</pre>
           </section>
           <section>
-            <strong>{conflict.kind === "orphan" ? "Last on disk" : "On disk"}</strong>
+            <strong>{conflict.kind === "orphan" ? "Last saved version" : "Saved version"}</strong>
             <pre>{conflict.remote.content}</pre>
           </section>
         </div>

@@ -3,7 +3,6 @@ import type { StudioRuntime } from "@marimo-studio/protocol/studio-bootstrap";
 import type { PreviewStatus } from "../preview/status.ts";
 
 import { MenuChevron } from "../../shared/ui/icons.tsx";
-import { runtimeStatusTitle } from "./model.ts";
 import { RuntimeOptions } from "./RuntimeOptions.tsx";
 import { RuntimeStatus } from "./RuntimeStatus.tsx";
 
@@ -32,7 +31,6 @@ export const RuntimeMenu = ({
       className="studio-control studio-menu-trigger studio-runtime-trigger"
       aria-label={`${current.label} preview runtime`}
       aria-disabled={disabled || undefined}
-      title={runtimeStatusTitle(status)}
       onClick={(event) => {
         if (disabled) {
           event.preventDefault();
@@ -45,7 +43,7 @@ export const RuntimeMenu = ({
       <MenuChevron />
     </summary>
     <div className="studio-menu-popover studio-runtime-popover">
-      <strong className="studio-menu-heading">Preview runtime</strong>
+      <strong className="studio-menu-heading">Run notebook with</strong>
       <RuntimeStatus status={status} />
       <RuntimeOptions
         current={current.id}

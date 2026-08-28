@@ -13,7 +13,7 @@ import { previewStatus } from "../src/features/preview/status.ts";
 import { ViewController } from "../src/features/views/controller.ts";
 import { LayoutController } from "../src/features/workspace/controller.ts";
 import { Divider } from "../src/features/workspace/Divider.tsx";
-import { computeLayout, defaultWorkspaceLayout } from "../src/features/workspace/model.ts";
+import { computeLayout, developLayout } from "../src/features/workspace/model.ts";
 import { starter, unbuiltView, viewList } from "./fixtures.ts";
 import { deferred, studioBootstrap as bootstrap } from "./studio-test-support.ts";
 
@@ -43,7 +43,7 @@ const remote = (starters = [starter], defaultStarter = starter.id): ViewRemote =
     create: vi.fn(async (name: string, _starter: string) => {
       views = [...views, name].sort();
       return {
-        schema: 2 as const,
+        schema: 1 as const,
         name,
       };
     }),
@@ -96,22 +96,25 @@ describe("Studio shell", () => {
               scope: "projection",
               projection: "value",
               target: "summary.total",
+              source: { path: "dashboard.html", line: 12, column: 4 },
             },
           ],
         })}
       />,
     );
 
-    const status = screen.getByTitle(
-      "The projected value is stale. Wait for the notebook to finish running.",
-    );
+    const status = screen.getByRole("status");
     expect(status).toHaveTextContent("Live with 1 warning");
+    expect(status).toHaveTextContent("The projected value is stale.");
+    expect(status).toHaveTextContent("summary.total");
+    expect(status).toHaveTextContent("dashboard.html:12:4");
+    expect(status).toHaveTextContent("Wait for the notebook to finish running.");
   });
 
   it("restores persisted layout trees from the current application namespace", () => {
-    const storagePrefix = `marimo-studio:workspace-layout:v3:${bootstrap.workspaceId}`;
+    const storagePrefix = `marimo-studio:workspace-layout:v1:${bootstrap.workspaceId}`;
     const persisted = {
-      schema: 2,
+      schema: 1,
       mode: "workspace",
       source: { type: "pane", id: "pane-source", surface: "source" },
       workspace: {
@@ -385,7 +388,7 @@ describe("Studio shell", () => {
       route: globalThis.location.href,
     };
 
-    const choosing = services.views.choose("report", "build", { query: "?pending=1", hash: "" });
+    const choosing = services.views.choose("report", "develop", { query: "?pending=1", hash: "" });
     await vi.waitFor(() => expect(synchronize).toHaveBeenCalledWith("?pending=1"));
     services.views.beginRemoval("report");
     expect(await services.views.deleteSelected()).toBe(true);
@@ -596,16 +599,16 @@ describe("Studio shell", () => {
       />,
     );
 
-    await user.click(screen.getByLabelText("Switch view: dashboard"));
+    await user.click(screen.getByLabelText("Switch page: dashboard"));
     await user.click(screen.getByRole("button", { name: "report" }));
     await vi.waitFor(() => expect(views.getSnapshot().selecting).toBe("report"));
 
-    expect(screen.getByLabelText("Server preview runtime")).toHaveAttribute(
+    expect(screen.getByLabelText("Python preview runtime")).toHaveAttribute(
       "aria-disabled",
       "true",
     );
     const runtimeOptions = screen.getAllByRole("button", {
-      name: /WebAssembly/,
+      name: /Browser/,
       hidden: true,
     });
     expect(runtimeOptions).toHaveLength(2);
@@ -621,7 +624,7 @@ describe("Studio shell", () => {
   });
 
   it("restores the committed split when pointer capture is cancelled", () => {
-    const tree = defaultWorkspaceLayout();
+    const tree = developLayout();
     const divider = computeLayout(tree, { left: 0, top: 0, width: 1005, height: 800 }).dividers[0];
     const workspace = document.createElement("main");
     workspace.getBoundingClientRect = () => new DOMRect(0, 0, 1005, 800);

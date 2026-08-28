@@ -41,7 +41,7 @@ export const createStudioServices = (
   initialActivation?: ActiveViewRequest,
 ): StudioServices => {
   const routes = new StudioRoutes(bootstrap);
-  const storagePrefix = `marimo-studio:workspace-layout:v3:${bootstrap.workspaceId}`;
+  const storagePrefix = `marimo-studio:workspace-layout:v1:${bootstrap.workspaceId}`;
   const runtimeIds = bootstrap.runtimes.map((runtime) => runtime.id);
   const layout = new LayoutController(storagePrefix, bootstrap.selectedView);
   const source = new SourceController(
@@ -138,6 +138,7 @@ export const createStudioServices = (
     "",
     (view) => preview.prepareViewDeletion(view),
     (view) => preview.releaseView(view),
+    bootstrap.defaultView,
   );
   const workspaceEvents = new WorkspaceEventCoordinator({
     eventsUrl: routes.endpoint(bootstrap.urls.events),

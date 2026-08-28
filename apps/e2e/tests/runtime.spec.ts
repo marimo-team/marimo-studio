@@ -56,8 +56,8 @@ test("starts the notebook automatically and initializes WebAssembly on demand", 
   await expect(preview.locator('strong[mo-value="metric"]')).toHaveText("42");
   await expect
     .poll(() => page.evaluate(() => globalThis.__e2ePreviewStatuses ?? []))
-    .toContain("Connecting to server");
-  await expect(page.getByLabel("Server preview runtime")).toContainText("Live");
+    .toContain("Connecting to Python");
+  await expect(page.getByLabel("Python preview runtime")).toContainText("Live");
   for (const surface of ["Notebook", "Source", "Preview"]) {
     await expect(page.getByRole("region", { name: surface })).toBeVisible();
   }
@@ -65,8 +65,8 @@ test("starts the notebook automatically and initializes WebAssembly on demand", 
   const wasmFrame = page.locator('iframe[data-preview-runtime-frame="wasm"]');
 
   await expect(wasmFrame).toHaveAttribute("src", "about:blank");
-  await page.getByLabel("Server preview runtime").click();
-  await page.getByRole("button", { name: /WebAssembly/ }).click();
+  await page.getByLabel("Python preview runtime").click();
+  await page.getByRole("button", { name: /Browser/ }).click();
   const wasm = await waitForPreview(page, "wasm");
   await expectPreviewInteractive(page, "wasm");
 
@@ -171,6 +171,7 @@ test("explains a degraded runtime diagnostic in the runtime menu", async ({ page
               scope: "projection",
               projection: "value",
               target: "metric",
+              source: { path: "dashboard.html", line: 12, column: 4 },
             },
           ],
         },
@@ -178,19 +179,16 @@ test("explains a degraded runtime diagnostic in the runtime menu", async ({ page
     );
   }, DOCUMENT_LIFECYCLE_QUERY_PARAM);
 
-  const trigger = page.getByLabel("Server preview runtime");
-  await expect(trigger).toHaveAttribute(
-    "title",
-    "Live with 1 warning: The projected value is stale. Wait for the notebook to finish running.",
-  );
+  const trigger = page.getByLabel("Python preview runtime");
+  await expect(trigger).toContainText("Live with 1 warning");
   await trigger.click();
   const status = trigger.locator("..").getByRole("status", { name: "Preview runtime status" });
   await expect(status).toBeVisible();
-  await expect(status).toHaveText("Live with 1 warning");
-  await expect(status).toHaveAttribute(
-    "title",
-    "The projected value is stale. Wait for the notebook to finish running.",
-  );
+  await expect(status).toContainText("Live with 1 warning");
+  await expect(status).toContainText("The projected value is stale.");
+  await expect(status).toContainText("metric");
+  await expect(status).toContainText("dashboard.html:12:4");
+  await expect(status).toContainText("Wait for the notebook to finish running.");
 });
 
 test("preserves native output state across HTML edits and replaces terminal failures", async ({
@@ -206,8 +204,8 @@ test("preserves native output state across HTML edits and replaces terminal fail
   });
   await page.goto(studioEntryUrl);
   const server = await waitForPreview(page);
-  await page.getByLabel("Server preview runtime").click();
-  await page.getByRole("button", { name: /WebAssembly/ }).click();
+  await page.getByLabel("Python preview runtime").click();
+  await page.getByRole("button", { name: /Browser/ }).click();
   const wasm = await waitForPreview(page, "wasm");
   const runtimeMarker = "projected-output-runtime";
   await wasm.locator("html").evaluate((_html, marker) => {
@@ -232,8 +230,8 @@ test("preserves native output state across HTML edits and replaces terminal fail
   await expect(wasmLongOutput).toContainText("Long selector ready");
   await wasmColumns.click();
   await expect(wasmColumns).toHaveAttribute("aria-expanded", "true");
-  await page.getByLabel("WebAssembly preview runtime").click();
-  await page.getByRole("button", { name: /Server/ }).click();
+  await page.getByLabel("Browser preview runtime").click();
+  await page.getByRole("button", { name: /Python/ }).click();
   await columns.click();
   await expect(columns).toHaveAttribute("aria-expanded", "true");
 
@@ -242,8 +240,8 @@ test("preserves native output state across HTML edits and replaces terminal fail
   await writeDashboardSource(page, layoutEdit);
   await expect(server.getByRole("heading", { name: "Edited layout" })).toBeVisible();
   await expect(columns).toHaveAttribute("aria-expanded", "true");
-  await page.getByLabel("Server preview runtime").click();
-  await page.getByRole("button", { name: /WebAssembly/ }).click();
+  await page.getByLabel("Python preview runtime").click();
+  await page.getByRole("button", { name: /Browser/ }).click();
   await expect(wasm.getByRole("heading", { name: "Edited layout" })).toBeVisible();
   await expect(wasmColumns).toHaveAttribute("aria-expanded", "true");
 
@@ -257,8 +255,8 @@ test("preserves native output state across HTML edits and replaces terminal fail
   await expect(wasmSummary).not.toContainText("Current total");
   await expect(wasmSummary).toContainText("does not resolve in this notebook");
   await expectWasmRuntimePreserved();
-  await page.getByLabel("WebAssembly preview runtime").click();
-  await page.getByRole("button", { name: /Server/ }).click();
+  await page.getByLabel("Browser preview runtime").click();
+  await page.getByRole("button", { name: /Python/ }).click();
   await expect(serverSummary).toHaveAttribute("data-state", "error");
   await expect(serverSummary).toHaveAttribute(
     "data-marimo-diagnostic-code",
@@ -267,8 +265,8 @@ test("preserves native output state across HTML edits and replaces terminal fail
   await expect(serverSummary).not.toContainText("Current total");
   await expect(serverSummary).toContainText("does not resolve in this notebook");
 
-  await page.getByLabel("Server preview runtime").click();
-  await page.getByRole("button", { name: /WebAssembly/ }).click();
+  await page.getByLabel("Python preview runtime").click();
+  await page.getByRole("button", { name: /Browser/ }).click();
   await waitForPreview(page, "wasm");
   const unavailableRevision = await wasm
     .locator("html")
@@ -282,8 +280,8 @@ test("preserves native output state across HTML edits and replaces terminal fail
   await expect(wasmSummary.locator("h3")).toHaveText("Current total: 42");
   await expect(wasmColumns).toHaveAttribute("aria-expanded", "true");
   await expectWasmRuntimePreserved();
-  await page.getByLabel("WebAssembly preview runtime").click();
-  await page.getByRole("button", { name: /Server/ }).click();
+  await page.getByLabel("Browser preview runtime").click();
+  await page.getByRole("button", { name: /Python/ }).click();
   await expect(serverSummary).toHaveAttribute("data-state", "ready");
   await expect(serverSummary.locator("h3")).toHaveText("Current total: 42");
   await expect(columns).toHaveAttribute("aria-expanded", "true");
@@ -301,8 +299,8 @@ test("preserves projected controls across refresh and owner removal", async ({ p
   await expect(serverMixed).toHaveCount(2);
   await expect(serverSharedOwner).toHaveAttribute("data-state", "ready");
 
-  await page.getByLabel("Server preview runtime").click();
-  await page.getByRole("button", { name: /WebAssembly/ }).click();
+  await page.getByLabel("Python preview runtime").click();
+  await page.getByRole("button", { name: /Browser/ }).click();
   const wasm = await waitForPreview(page, "wasm");
   await expectPreviewInteractive(page, "wasm");
   const wasmFresh = wasm.locator("#fresh-control").getByRole("slider");
@@ -311,8 +309,8 @@ test("preserves projected controls across refresh and owner removal", async ({ p
   await expect(wasmFresh).toHaveAttribute("aria-valuenow", "2", { timeout: 45_000 });
   await expect(wasmMixed).toHaveCount(2);
   await expect(wasmSharedOwner).toHaveAttribute("data-state", "ready");
-  await page.getByLabel("WebAssembly preview runtime").click();
-  await page.getByRole("button", { name: /Server/ }).click();
+  await page.getByLabel("Browser preview runtime").click();
+  await page.getByRole("button", { name: /Python/ }).click();
   await expectPreviewInteractive(page, "server");
 
   await serverMixed.nth(1).press("End");
@@ -325,8 +323,8 @@ test("preserves projected controls across refresh and owner removal", async ({ p
   await expect(serverMixed.nth(0)).toHaveAttribute("aria-valuenow", "1");
   await expect(serverMixed.nth(1)).toHaveAttribute("aria-valuenow", "3");
 
-  await page.getByLabel("Server preview runtime").click();
-  await page.getByRole("button", { name: /WebAssembly/ }).click();
+  await page.getByLabel("Python preview runtime").click();
+  await page.getByRole("button", { name: /Browser/ }).click();
   await expectPreviewInteractive(page, "wasm");
   await expect(wasmFresh).toHaveAttribute("aria-valuenow", "1");
   await expect(wasmMixed.nth(0)).toHaveAttribute("aria-valuenow", "1");
@@ -339,8 +337,8 @@ test("preserves projected controls across refresh and owner removal", async ({ p
   await expect(wasmMixed.nth(0)).toHaveAttribute("aria-valuenow", "3");
   await expect(wasmMixed.nth(1)).toHaveAttribute("aria-valuenow", "3");
 
-  await page.getByLabel("WebAssembly preview runtime").click();
-  await page.getByRole("button", { name: /Server/ }).click();
+  await page.getByLabel("Browser preview runtime").click();
+  await page.getByRole("button", { name: /Python/ }).click();
   await expectPreviewInteractive(page, "server");
   await expect(serverFresh).toHaveAttribute("aria-valuenow", "3");
   await expect(serverMixed.nth(0)).toHaveAttribute("aria-valuenow", "3");
@@ -355,8 +353,8 @@ test("preserves projected controls across refresh and owner removal", async ({ p
 
   for (const [index, preview] of [server, wasm].entries()) {
     if (index > 0) {
-      await page.getByLabel("Server preview runtime").click();
-      await page.getByRole("button", { name: /WebAssembly/ }).click();
+      await page.getByLabel("Python preview runtime").click();
+      await page.getByRole("button", { name: /Browser/ }).click();
     }
     await expectPreviewInteractive(page, index === 0 ? "server" : "wasm");
     const owner = preview.locator("#shared-control-owner");
@@ -387,8 +385,8 @@ test("preserves runtime state while modes and controls change", async ({ page })
   await serverWidget.click();
   await expect(serverWidget).toHaveText(`Widget count: ${serverWidgetCount + 1}`);
 
-  await page.getByLabel("Server preview runtime").click();
-  await page.getByRole("button", { name: /WebAssembly/ }).click();
+  await page.getByLabel("Python preview runtime").click();
+  await page.getByRole("button", { name: /Browser/ }).click();
   const wasm = await waitForPreview(page, "wasm");
   const wasmWidget = wasm.getByRole("button", { name: /Widget count:/ });
   await expect(wasmWidget).toHaveText(/^Widget count: \d+$/);
@@ -407,8 +405,8 @@ test("preserves runtime state while modes and controls change", async ({ page })
   expect(serverElement).not.toBeNull();
   expect(wasmElement).not.toBeNull();
 
-  await page.getByLabel("WebAssembly preview runtime").click();
-  await page.getByRole("button", { name: /Server/ }).click();
+  await page.getByLabel("Browser preview runtime").click();
+  await page.getByRole("button", { name: /Python/ }).click();
   for (const mode of ["Notebook", "Preview", "Develop", "Notebook", "Develop"]) {
     await page.getByRole("button", { name: mode, exact: true }).click();
   }

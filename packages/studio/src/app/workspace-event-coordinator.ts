@@ -403,7 +403,7 @@ export class WorkspaceEventCoordinator {
       const alreadyActive = this.options.views.getSnapshot().current === view;
       if (
         !(await abortable(
-          this.options.views.choose(view, "build", undefined, signal, "agent"),
+          this.options.views.choose(view, "develop", undefined, signal, "agent"),
           signal,
         ))
       ) {

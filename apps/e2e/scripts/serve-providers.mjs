@@ -168,8 +168,7 @@ const prepare = async () => {
     externalProviderNotebookPath,
     "--starter",
     "marimo-studio-e2e-provider/report:default",
-    "--format",
-    "json",
+    "--json",
   ]);
   for (const [view, output] of [
     ["gallery", providerGalleryStaticDirectory],

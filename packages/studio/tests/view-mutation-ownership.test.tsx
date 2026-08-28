@@ -37,14 +37,15 @@ it("keeps creation and removal directly available in the switcher", async () => 
   const user = userEvent.setup();
   render(<ViewMenu controller={controller} />);
 
-  expect(screen.getByLabelText("Switch view: dashboard")).toHaveTextContent("dashboard");
-  await user.click(screen.getByLabelText(/^Switch view:/));
-  expect(screen.getByRole("button", { name: "New view" })).toBeVisible();
-  expect(screen.getByLabelText("Remove report view")).toBeInTheDocument();
-  screen.getByRole("button", { name: "New view" }).focus();
+  expect(screen.getByLabelText("Switch page: dashboard")).toHaveTextContent("dashboard");
+  await user.click(screen.getByLabelText(/^Switch page:/));
+  expect(screen.getByRole("button", { name: "dashboard, default" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "New page" })).toBeVisible();
+  expect(screen.getByLabelText("Remove report page")).toBeInTheDocument();
+  screen.getByRole("button", { name: "New page" }).focus();
   await user.keyboard("{Escape}");
-  expect(screen.getByLabelText(/^Switch view:/)).toHaveFocus();
-  expect(screen.getByLabelText(/^Switch view:/).closest("details")?.open).toBe(false);
+  expect(screen.getByLabelText(/^Switch page:/)).toHaveFocus();
+  expect(screen.getByLabelText(/^Switch page:/).closest("details")?.open).toBe(false);
   controller.dispose();
 });
 
@@ -67,21 +68,21 @@ it("closes immediately while a selected view loads and can reopen on its pending
   );
   const user = userEvent.setup();
   render(<ViewMenu controller={controller} />);
-  const menu = screen.getByLabelText(/^Switch view:/).closest("details");
+  const menu = screen.getByLabelText(/^Switch page:/).closest("details");
   expect(menu).not.toBeNull();
 
-  await user.click(screen.getByLabelText(/^Switch view:/));
+  await user.click(screen.getByLabelText(/^Switch page:/));
   await user.click(screen.getByRole("button", { name: "report" }));
 
   expect(menu?.open).toBe(false);
   expect(controller.getSnapshot().selecting).toBe("report");
-  await user.click(screen.getByLabelText(/^Switch view:/));
+  await user.click(screen.getByLabelText(/^Switch page:/));
   expect(screen.getByRole("button", { name: "report, loading" })).toHaveAttribute(
     "aria-busy",
     "true",
   );
   selected.resolve(true);
-  await vi.waitFor(() => expect(screen.getByLabelText("Switch view: report")).toBeVisible());
+  await vi.waitFor(() => expect(screen.getByLabelText("Switch page: report")).toBeVisible());
   expect(menu?.open).toBe(true);
   expect(controller.getSnapshot().selecting).toBeUndefined();
   controller.dispose();
@@ -114,9 +115,9 @@ it.each([
     );
     const user = userEvent.setup();
     render(<ViewMenu controller={controller} />);
-    const menu = screen.getByLabelText(/^Switch view:/).closest("details");
+    const menu = screen.getByLabelText(/^Switch page:/).closest("details");
 
-    await user.click(screen.getByLabelText(/^Switch view:/));
+    await user.click(screen.getByLabelText(/^Switch page:/));
     await user.click(screen.getByRole("button", { name: "report" }));
 
     expect(menu?.open).toBe(false);
@@ -148,14 +149,14 @@ it("keeps a newer create panel open when an earlier view selection settles", asy
   const user = userEvent.setup();
   render(<ViewMenu controller={controller} />);
 
-  await user.click(screen.getByLabelText(/^Switch view:/));
+  await user.click(screen.getByLabelText(/^Switch page:/));
   await user.click(screen.getByRole("button", { name: "report" }));
-  await user.click(screen.getByLabelText(/^Switch view:/));
-  await user.click(screen.getByRole("button", { name: "New view" }));
+  await user.click(screen.getByLabelText(/^Switch page:/));
+  await user.click(screen.getByRole("button", { name: "New page" }));
   selected.resolve(true);
 
-  await vi.waitFor(() => expect(screen.getByLabelText("New view")).toBeVisible());
-  expect(screen.getByLabelText(/^Switch view:/).closest("details")?.open).toBe(true);
+  await vi.waitFor(() => expect(screen.getByLabelText("New page")).toBeVisible());
+  expect(screen.getByLabelText(/^Switch page:/).closest("details")?.open).toBe(true);
   expect(cancelSelection).toHaveBeenCalledTimes(1);
   controller.dispose();
 });
@@ -181,14 +182,14 @@ it("keeps direct removal open when an earlier view selection settles", async () 
   const user = userEvent.setup();
   render(<ViewMenu controller={controller} />);
 
-  await user.click(screen.getByLabelText(/^Switch view:/));
+  await user.click(screen.getByLabelText(/^Switch page:/));
   await user.click(screen.getByRole("button", { name: "report" }));
-  await user.click(screen.getByLabelText(/^Switch view:/));
-  await user.click(screen.getByLabelText("Remove report view"));
+  await user.click(screen.getByLabelText(/^Switch page:/));
+  await user.click(screen.getByLabelText("Remove report page"));
   selected.resolve(true);
 
   await vi.waitFor(() => expect(screen.getByRole("button", { name: "Remove" })).toBeVisible());
-  expect(screen.getByText(/authored source and published artifacts/)).toHaveTextContent("report");
+  expect(screen.getByText(/permanently deletes/)).toHaveTextContent("report");
   expect(cancelSelection).toHaveBeenCalledTimes(1);
   controller.dispose();
 });
@@ -214,22 +215,22 @@ it.each(["success", "failure"] as const)(
     );
     const user = userEvent.setup();
     render(<ViewMenu controller={controller} />);
-    const menu = screen.getByLabelText(/^Switch view:/).closest("details");
+    const menu = screen.getByLabelText(/^Switch page:/).closest("details");
     expect(menu).not.toBeNull();
-    await user.click(screen.getByLabelText(/^Switch view:/));
-    await user.click(screen.getByRole("button", { name: "New view" }));
-    await user.type(screen.getByLabelText("New view"), "created");
+    await user.click(screen.getByLabelText(/^Switch page:/));
+    await user.click(screen.getByRole("button", { name: "New page" }));
+    await user.type(screen.getByLabelText("New page"), "created");
     await user.click(screen.getByRole("button", { name: "Create" }));
     expect(await screen.findByRole("button", { name: "Creating…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
-    expect(screen.getByLabelText(/^Switch view:/)).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByLabelText(/^Switch page:/)).toHaveAttribute("aria-disabled", "true");
 
-    await user.click(screen.getByLabelText(/^Switch view:/));
+    await user.click(screen.getByLabelText(/^Switch page:/));
     expect(menu?.open).toBe(true);
 
     if (outcome === "success") {
       created.resolve({
-        schema: 2,
+        schema: 1,
         name: "created",
       });
       await vi.waitFor(() => expect(menu?.open).toBe(false));
@@ -264,17 +265,17 @@ it.each(["success", "failure"] as const)(
     );
     const user = userEvent.setup();
     render(<ViewMenu controller={controller} />);
-    const menu = screen.getByLabelText(/^Switch view:/).closest("details");
+    const menu = screen.getByLabelText(/^Switch page:/).closest("details");
     expect(menu).not.toBeNull();
-    await user.click(screen.getByLabelText(/^Switch view:/));
-    await user.click(screen.getByLabelText("Remove report view"));
-    expect(screen.getByText(/authored source and published artifacts/)).toHaveTextContent("report");
+    await user.click(screen.getByLabelText(/^Switch page:/));
+    await user.click(screen.getByLabelText("Remove report page"));
+    expect(screen.getByText(/permanently deletes/)).toHaveTextContent("report");
     await user.click(screen.getByRole("button", { name: "Remove" }));
     expect(await screen.findByRole("button", { name: "Removing…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
-    expect(screen.getByLabelText(/^Switch view:/)).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByLabelText(/^Switch page:/)).toHaveAttribute("aria-disabled", "true");
 
-    await user.click(screen.getByLabelText(/^Switch view:/));
+    await user.click(screen.getByLabelText(/^Switch page:/));
     expect(menu?.open).toBe(true);
 
     if (outcome === "success") {

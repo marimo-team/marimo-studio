@@ -66,7 +66,7 @@ test("keeps two tabs isolated inside one notebook scope", async ({ browserDiagno
 
     const token = await studioServerToken(page);
     const ambiguous = await page.request.patch(
-      "/_marimo-studio/views/report/activate?file=notebook.py",
+      "/_marimo-studio/views/report/show?file=notebook.py",
       {
         data: { schema: 1, browser_client: null },
         headers: { "Marimo-Server-Token": token },
@@ -76,7 +76,7 @@ test("keeps two tabs isolated inside one notebook scope", async ({ browserDiagno
     expect(await ambiguous.json()).toMatchObject({ error: "browser-client-ambiguous" });
 
     const activate = async (view: string, client: string) =>
-      page.request.patch(`/_marimo-studio/views/${view}/activate?file=notebook.py`, {
+      page.request.patch(`/_marimo-studio/views/${view}/show?file=notebook.py`, {
         data: { schema: 1, browser_client: client },
         headers: { "Marimo-Server-Token": token },
       });
@@ -87,12 +87,12 @@ test("keeps two tabs isolated inside one notebook scope", async ({ browserDiagno
       count: 1,
     });
     expect((await activate("report", secondClient)).status()).toBe(200);
-    await expect(second.getByLabel("Switch view")).toContainText("report");
+    await expect(second.getByLabel("Switch page")).toContainText("report");
     await expect(secondPreview.getByRole("heading", { name: "Report" })).toBeVisible();
-    await expect(page.getByLabel("Switch view")).toContainText("dashboard");
+    await expect(page.getByLabel("Switch page")).toContainText("dashboard");
 
     expect((await activate("dashboard", secondClient)).status()).toBe(200);
-    await expect(second.getByLabel("Switch view")).toContainText("dashboard");
+    await expect(second.getByLabel("Switch page")).toContainText("dashboard");
     const original = await readWorkspaceFile(dashboardHtmlPath);
     const published = original.replace("Studio browser fixture", "Published to both tabs");
     await writeViewSource(page, "dashboard", "src/index.html", published);
@@ -142,7 +142,7 @@ test("keeps two tabs isolated inside one notebook scope", async ({ browserDiagno
     await expect
       .poll(async () => {
         const response = await page.request.patch(
-          "/_marimo-studio/views/report/activate?file=notebook.py",
+          "/_marimo-studio/views/report/show?file=notebook.py",
           {
             data: { schema: 1, browser_client: null },
             headers: { "Marimo-Server-Token": token },
@@ -151,7 +151,7 @@ test("keeps two tabs isolated inside one notebook scope", async ({ browserDiagno
         return response.status();
       })
       .toBe(200);
-    await expect(page.getByLabel("Switch view")).toContainText("report");
+    await expect(page.getByLabel("Switch page")).toContainText("report");
     await expect(firstPreview.getByRole("heading", { name: "Report" })).toBeVisible();
     await waitForPreview(page);
     replacedEventStreams.recovered();
@@ -257,7 +257,7 @@ test("shares publication and recovery across two Studio sessions", async ({
       await expect.poll(() => readWorkspaceFile(collaborativeDashboardHtmlPath)).toBe(firstSave);
 
       await expect(second.getByRole("alert")).toContainText("changed on disk");
-      await second.getByRole("button", { name: "Use disk" }).click();
+      await second.getByRole("button", { name: "Use saved version" }).click();
       await expect(secondEditor).toContainText("Saved by first client");
       await expect(
         firstPreview.getByRole("heading", { name: "Saved by first client" }),
@@ -286,7 +286,7 @@ test("shares publication and recovery across two Studio sessions", async ({
       await Promise.all([waitForPreview(page), waitForPreview(second)]);
 
       await expect(second.getByRole("alert")).toContainText("changed on disk");
-      await second.getByRole("button", { name: "Keep mine" }).click();
+      await second.getByRole("button", { name: "Overwrite saved version with my edits" }).click();
       await expect.poll(() => readWorkspaceFile(collaborativeDashboardHtmlPath)).toBe(secondWins);
 
       await expect(

@@ -118,7 +118,7 @@ it("restores a ready presentation when a failed transaction retries unchanged", 
         {
           code: "notebook-sync-failed",
           message: "Notebook change could not be synchronized.",
-          hint: "Retry the edit to update this view.",
+          hint: "Retry the edit to update this page.",
         },
       ],
     },

@@ -12,7 +12,7 @@ it.each([
     remote: "disk lock",
     revision: "r2",
     message: "deno.lock became read-only while you were editing.",
-    diskLabel: "On disk",
+    diskLabel: "Saved version",
   },
   {
     kind: "orphan" as const,
@@ -20,8 +20,8 @@ it.each([
     local: "local app",
     remote: "last disk app",
     revision: "r1",
-    message: "src/App.tsx is no longer part of this view.",
-    diskLabel: "Last on disk",
+    message: "src/App.tsx is no longer part of this page.",
+    diskLabel: "Last saved version",
   },
 ])("shows discard recovery for a $kind conflict", async (scenario) => {
   const user = userEvent.setup();
@@ -34,13 +34,12 @@ it.each([
         local: scenario.local,
         remote: { content: scenario.remote, revision: scenario.revision },
       }}
-      onKeepLocal={vi.fn()}
-      onUseDisk={discard}
+      onOverwriteSavedVersion={vi.fn()}
+      onUseSavedVersion={discard}
     />,
   );
 
   expect(screen.getByRole("alert")).toHaveTextContent(scenario.message);
-  expect(screen.queryByRole("button", { name: "Keep mine" })).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Compare" }));
   expect(screen.getByText(scenario.local)).toBeVisible();
   expect(screen.getByText(scenario.remote)).toBeVisible();
@@ -49,7 +48,10 @@ it.each([
   expect(discard).toHaveBeenCalledOnce();
 });
 
-it("shows the preserved source path for a revision conflict", () => {
+it("names both revision-conflict consequences", async () => {
+  const user = userEvent.setup();
+  const useSavedVersion = vi.fn();
+  const overwriteSavedVersion = vi.fn();
   render(
     <SourceConflict
       name="src/App.tsx"
@@ -59,12 +61,16 @@ it("shows the preserved source path for a revision conflict", () => {
         remote: { content: "disk app", revision: "r2" },
         externalRecovery: "/workspace/.App.tsx.external-recovery",
       }}
-      onKeepLocal={vi.fn()}
-      onUseDisk={vi.fn()}
+      onOverwriteSavedVersion={overwriteSavedVersion}
+      onUseSavedVersion={useSavedVersion}
     />,
   );
 
   expect(screen.getByRole("alert")).toHaveTextContent(
-    "Previous disk content is preserved at /workspace/.App.tsx.external-recovery.",
+    "The previous saved version is preserved at /workspace/.App.tsx.external-recovery.",
   );
+  await user.click(screen.getByRole("button", { name: "Use saved version" }));
+  await user.click(screen.getByRole("button", { name: "Overwrite saved version with my edits" }));
+  expect(useSavedVersion).toHaveBeenCalledOnce();
+  expect(overwriteSavedVersion).toHaveBeenCalledOnce();
 });

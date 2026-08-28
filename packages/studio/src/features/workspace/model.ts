@@ -80,9 +80,7 @@ const threeSurfaceLayout = (): LayoutNode =>
     split("source-preview", "y", pane("source"), pane("preview")),
   );
 
-export const defaultWorkspaceLayout = (): LayoutNode => threeSurfaceLayout();
-
-export const newViewLayout = (): LayoutNode => threeSurfaceLayout();
+export const developLayout = (): LayoutNode => threeSurfaceLayout();
 
 export const layoutForMode = (
   mode: StudioMode,
@@ -90,8 +88,8 @@ export const layoutForMode = (
   workspace: LayoutNode,
 ): LayoutNode => {
   switch (mode) {
-    case "build":
-      return defaultWorkspaceLayout();
+    case "develop":
+      return developLayout();
     case "notebook":
       return notebookLayout();
     case "preview":

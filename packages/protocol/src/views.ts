@@ -58,7 +58,7 @@ export const viewListSchema = z
   .superRefine(uniqueInventory);
 export const createdViewSchema = z
   .object({
-    schema: z.literal(2),
+    schema: z.literal(1),
     name: viewNameSchema,
   })
   .strict();

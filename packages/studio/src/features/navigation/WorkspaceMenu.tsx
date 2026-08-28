@@ -63,7 +63,7 @@ export const WorkspaceMenu = ({
     </summary>
     <div className="studio-menu-popover studio-workspace-popover">
       <div className="studio-overflow-preview" hidden={!previewVisible}>
-        <strong className="studio-menu-heading">Preview runtime</strong>
+        <strong className="studio-menu-heading">Run notebook with</strong>
         <RuntimeStatus status={status} />
         <RuntimeOptions
           current={runtime.id}

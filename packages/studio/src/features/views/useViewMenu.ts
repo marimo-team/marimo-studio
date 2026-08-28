@@ -35,6 +35,7 @@ interface ViewMenuRefs {
 
 interface ViewMenuRow {
   current: boolean;
+  default: boolean;
   name: string;
   removing: boolean;
   selecting: boolean;
@@ -51,6 +52,7 @@ export interface ViewMenuModel {
   panel: ViewMenuPanel;
   refs: ViewMenuRefs;
   removeLabel: string;
+  replacementDefault?: string;
   rows: readonly ViewMenuRow[];
   snapshot: ViewSnapshot;
 }
@@ -260,6 +262,7 @@ export const useViewMenu = (controller: ViewController): ViewMenuModel => {
   );
   const rows = snapshot.views.map((view) => ({
     current: view === snapshot.current,
+    default: view === snapshot.defaultView,
     name: view,
     removing: view === snapshot.removing,
     selecting: view === snapshot.selecting,
@@ -275,6 +278,10 @@ export const useViewMenu = (controller: ViewController): ViewMenuModel => {
     panel: panelFor(creating, snapshot.removing),
     createLabel: MUTATION_LABELS.create[snapshot.creating ? "busy" : "idle"],
     removeLabel: MUTATION_LABELS.remove[snapshot.deleting ? "busy" : "idle"],
+    replacementDefault:
+      snapshot.removing === snapshot.defaultView
+        ? snapshot.views.find((view) => view !== snapshot.removing)
+        : undefined,
     rows,
     refs: { confirmRemoval, input, menu, newView, popover, trigger },
     actions: {

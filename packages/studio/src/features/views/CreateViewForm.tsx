@@ -50,7 +50,7 @@ export const CreateViewForm = ({
   const selected = starters.find((candidate) => candidate.id === starter);
   return (
     <form className="studio-new-view-form" aria-busy={busy} onSubmit={onSubmit}>
-      <label htmlFor="studio-view-name">New view</label>
+      <label htmlFor="studio-view-name">New page</label>
       <input
         ref={inputRef}
         id="studio-view-name"

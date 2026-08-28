@@ -157,14 +157,14 @@ test("cancels one client's held old-view request without changing the peer view"
       throw new Error("The held dashboard value request was not captured.");
     }
     const activation = await page.request.patch(
-      `${origin}/_marimo-studio/views/report/activate?file=notebook.py`,
+      `${origin}/_marimo-studio/views/report/show?file=notebook.py`,
       {
         data: { schema: 1, browser_client: firstClient },
         headers: { "Marimo-Server-Token": await studioServerToken(page) },
       },
     );
     expect(activation.status()).toBe(200);
-    await expect(page.getByLabel("Switch view")).toContainText("report");
+    await expect(page.getByLabel("Switch page")).toContainText("report");
     await expect(firstPreview.getByRole("heading", { name: "Report" })).toBeVisible();
     const reportMetric = firstPreview.locator('[mo-value="metric"]');
     await expect(reportMetric).toHaveText(String(lateMetric));
@@ -180,7 +180,7 @@ test("cancels one client's held old-view request without changing the peer view"
 
     await expect(firstPreview.getByRole("heading", { name: "Report" })).toBeVisible();
     await expect(reportMetric).toHaveText("21");
-    await expect(second.getByLabel("Switch view")).toContainText("dashboard");
+    await expect(second.getByLabel("Switch page")).toContainText("dashboard");
     expect(String(lateMetric)).not.toBe(peerMetric);
     await expect(secondMetric).toHaveText(peerMetric ?? "");
     await expect(secondPreview.locator("html")).toHaveAttribute(
@@ -228,22 +228,22 @@ test("cancels a held old-view request without changing current or cached view st
     required: false,
     status: 204,
   });
-  await page.getByLabel("Switch view").click();
+  await page.getByLabel("Switch page").click();
   await page.getByRole("button", { name: "slow-report", exact: true }).click();
-  await expect(page.getByLabel("Switch view")).toContainText("slow-report");
+  await expect(page.getByLabel("Switch page")).toContainText("slow-report");
   const preview = await waitForPreview(page);
   await expect(
     preview.getByRole("heading", { name: "Slow kernel report", exact: true }),
   ).toBeVisible();
-  await page.getByLabel("Switch view").click();
+  await page.getByLabel("Switch page").click();
   await page.getByRole("button", { name: "next-report", exact: true }).click();
-  await expect(page.getByLabel("Switch view")).toContainText("next-report");
+  await expect(page.getByLabel("Switch page")).toContainText("next-report");
   await expect(
     preview.getByRole("heading", { name: "Next kernel report", exact: true }),
   ).toBeVisible();
-  await page.getByLabel("Switch view").click();
+  await page.getByLabel("Switch page").click();
   await page.getByRole("button", { name: "slow-report", exact: true }).click();
-  await expect(page.getByLabel("Switch view")).toContainText("slow-report");
+  await expect(page.getByLabel("Switch page")).toContainText("slow-report");
   await expect(
     preview.getByRole("heading", { name: "Slow kernel report", exact: true }),
   ).toBeVisible();
@@ -295,9 +295,9 @@ test("cancels a held old-view request without changing current or cached view st
     throw new Error("The held live value request was not captured.");
   }
 
-  await page.getByLabel("Switch view").click();
+  await page.getByLabel("Switch page").click();
   await page.getByRole("button", { name: "next-report", exact: true }).click();
-  await expect(page.getByLabel("Switch view")).toContainText("next-report");
+  await expect(page.getByLabel("Switch page")).toContainText("next-report");
   await expect(
     preview.getByRole("heading", { name: "Next kernel report", exact: true }),
   ).toBeVisible();
@@ -322,9 +322,9 @@ test("cancels a held old-view request without changing current or cached view st
     preview.getByRole("heading", { name: "Next kernel report", exact: true }),
   ).toBeVisible();
   await expect(preview.locator('[mo-value="slow_metric"]')).toHaveText("7");
-  await page.getByLabel("Switch view").click();
+  await page.getByLabel("Switch page").click();
   await page.getByRole("button", { name: "slow-report", exact: true }).click();
-  await expect(page.getByLabel("Switch view")).toContainText("slow-report");
+  await expect(page.getByLabel("Switch page")).toContainText("slow-report");
   await expect(
     preview.getByRole("heading", { name: "Slow kernel report", exact: true }),
   ).toBeVisible();

@@ -46,19 +46,19 @@ test("refreshes a projected cached view after the view catalog changes", async (
     status: 204,
   });
 
-  await page.getByLabel("Switch view").click();
-  await page.getByRole("button", { name: "New view" }).click();
+  await page.getByLabel("Switch page").click();
+  await page.getByRole("button", { name: "New page" }).click();
   await page.getByRole("radio", { name: /HTML document/ }).check();
-  await page.getByLabel("New view").fill("catalog-view");
+  await page.getByLabel("New page").fill("catalog-view");
   await page.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByLabel("Switch view")).toContainText("catalog-view");
+  await expect(page.getByLabel("Switch page")).toContainText("catalog-view");
   await expect(
     (await waitForPreview(page)).getByRole("heading", { name: "Catalog View" }),
   ).toBeVisible();
 
-  await page.getByLabel("Switch view").click();
-  await page.getByRole("button", { name: "dashboard", exact: true }).click();
-  await expect(page.getByLabel("Switch view")).toContainText("dashboard");
+  await page.getByLabel("Switch page").click();
+  await page.getByRole("button", { name: "dashboard, default", exact: true }).click();
+  await expect(page.getByLabel("Switch page")).toContainText("dashboard");
 
   const refreshedDashboard = await waitForPreview(page);
   const refreshedTable = refreshedDashboard.locator('marimo-output[value="rich_table"]');

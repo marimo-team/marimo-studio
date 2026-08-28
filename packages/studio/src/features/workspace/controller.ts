@@ -3,12 +3,11 @@ import type { StudioMode } from "./schema.ts";
 
 import { assertNever } from "../../shared/assertNever.ts";
 import {
+  developLayout,
   sourceLayout,
-  defaultWorkspaceLayout,
   equalizeLayout,
   layoutForMode,
   type LayoutNode,
-  newViewLayout,
   type Surface,
   visibleSurfaces,
 } from "./model.ts";
@@ -28,9 +27,9 @@ type Listener = () => void;
 
 export class LayoutController {
   private view: string;
-  private mode: StudioMode = "build";
+  private mode: StudioMode = "develop";
   private source: LayoutNode = sourceLayout();
-  private workspace: LayoutNode = defaultWorkspaceLayout();
+  private workspace: LayoutNode = developLayout();
   private compact: Surface = "notebook";
   private arranging = false;
   private transientTree: LayoutNode | undefined;
@@ -41,7 +40,7 @@ export class LayoutController {
   constructor(storagePrefix: string, initialView: string) {
     this.view = initialView;
     this.storage = new LayoutStorage(storagePrefix);
-    this.restore(initialView, { mode: "build", compact: "notebook" });
+    this.restore(initialView, { mode: "develop", compact: "notebook" });
     this.updateSnapshot();
   }
 
@@ -59,12 +58,12 @@ export class LayoutController {
     if (landing === "authoring") {
       this.mode = "workspace";
       this.source = sourceLayout();
-      this.workspace = newViewLayout();
+      this.workspace = developLayout();
       this.compact = "source";
       this.arranging = false;
-    } else if (landing === "build") {
+    } else if (landing === "develop") {
       this.restore(view);
-      this.mode = "build";
+      this.mode = "develop";
       this.compact = "notebook";
       this.arranging = false;
     } else {
@@ -119,7 +118,7 @@ export class LayoutController {
         break;
       case "reset":
         this.mode = "workspace";
-        this.workspace = defaultWorkspaceLayout();
+        this.workspace = developLayout();
         this.compact = "notebook";
         this.arranging = false;
         break;

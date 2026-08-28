@@ -1,4 +1,3 @@
-import type { PreviewStatus } from "../preview/status.ts";
 import type { LayoutController } from "../workspace/controller.ts";
 import type { StudioMode, Surface } from "../workspace/schema.ts";
 
@@ -9,7 +8,7 @@ export interface ModeItem {
 
 export const PRIMARY_MODES: readonly ModeItem[] = [
   { label: "Notebook", mode: "notebook" },
-  { label: "Develop", mode: "build" },
+  { label: "Develop", mode: "develop" },
   { label: "Preview", mode: "preview" },
 ];
 
@@ -35,15 +34,15 @@ export const WORKSPACE_ACTION_GROUPS: readonly (readonly {
 ];
 
 const GROUPED_MODES = {
-  build: "build",
+  develop: "develop",
   notebook: "notebook",
   preview: "preview",
-  source: "build",
-  workspace: "build",
+  source: "develop",
+  workspace: "develop",
 } as const satisfies Readonly<Record<StudioMode, ModeItem["mode"] | undefined>>;
 
 const EXACT_MODES = {
-  build: "build",
+  develop: "develop",
   notebook: "notebook",
   preview: "preview",
   source: "source",
@@ -53,19 +52,12 @@ const EXACT_MODES = {
 export const runtimeDescription = (runtime: string): string => {
   switch (runtime) {
     case "server":
-      return "Uses the notebook kernel";
+      return "Use this editor's Python session for local files, databases, and secrets.";
     case "wasm":
-      return "Runs locally in your browser";
+      return "Run a separate notebook in the browser. The browser receives its source.";
     default:
       return "Custom preview runtime";
   }
-};
-
-export const runtimeStatusTitle = (status: PreviewStatus): string => {
-  if (!status.title) {
-    return status.message;
-  }
-  return `${status.message}: ${status.title}`;
 };
 
 export const selectedMode = (active: StudioMode, grouped: boolean): ModeItem["mode"] | undefined =>

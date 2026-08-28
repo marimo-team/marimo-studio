@@ -38,7 +38,7 @@ def test_edit_mode_offers_the_configured_preview_runtimes(notebook_path: Path) -
 
     assert unavailable.status_code == 400
     assert _studio_bootstrap(server_workspace.text)["runtimes"] == [
-        {"id": "server", "label": "Server"},
+        {"id": "server", "label": "Python"},
     ]
 
     def enable_wasm(config: MutableMapping[str, object]) -> None:
@@ -59,8 +59,8 @@ def test_edit_mode_offers_the_configured_preview_runtimes(notebook_path: Path) -
     assert bootstrap["selectedView"] == "dashboard"
     assert bootstrap["views"] == ["dashboard", "executive"]
     assert bootstrap["runtimes"] == [
-        {"id": "server", "label": "Server"},
-        {"id": "wasm", "label": "WebAssembly"},
+        {"id": "server", "label": "Python"},
+        {"id": "wasm", "label": "Browser"},
     ]
     assert bootstrap["urls"]["query"] == "/_marimo-studio/query"
 

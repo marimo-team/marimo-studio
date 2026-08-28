@@ -166,7 +166,7 @@ test("an access change preserves dirty edits as a discardable read-only conflict
     local: "local draft",
     remote: { content: "newer disk", revision: "r3" },
   });
-  source.useDisk();
+  source.useSavedVersion();
   assert.equal(source.hasPendingChanges, false);
   assert.equal(await source.save(), true);
   assert.equal(result.documents.at(-1), "newer disk");
@@ -419,14 +419,14 @@ test("source conflicts accept explicit disk and local resolutions", async () => 
     local: "local edit",
     remote: { content: "agent edit", revision: "r2" },
   });
-  source.useDisk();
+  source.useSavedVersion();
   assert.deepEqual(result.documents.at(-1), "agent edit");
 
   source.edit("second local edit");
   remote.source = { content: "second agent edit", revision: "r3" };
   await source.externalChange("r3");
 
-  const saved = await source.keepLocal();
+  const saved = await source.overwriteSavedVersion();
 
   assert.deepEqual(saved, true);
   assert.deepEqual(remote.source.content, "second local edit");
@@ -444,7 +444,7 @@ test("a disposed local resolution cannot start another write", async () => {
   remote.reads[0].resolve({ content: "disk edit", revision: "r2" });
   await conflicting;
 
-  const resolution = source.keepLocal();
+  const resolution = source.overwriteSavedVersion();
   source.dispose();
   remote.writes[0].resolve("r3");
 
@@ -465,7 +465,7 @@ test("local conflict resolution waits for the failed write to settle", async () 
       result.observer.state(state);
       if (state.phase === "conflict") {
         remote.conflict = false;
-        resolution = source.keepLocal();
+        resolution = source.overwriteSavedVersion();
       }
     },
   };

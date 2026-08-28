@@ -290,7 +290,7 @@ it("keeps the prior document warm after creation and evicts it at the cache boun
     {
       list: vi.fn(async () => viewList(["dashboard", "report"])),
       create: vi.fn(async (name: string, _starter: string) => ({
-        schema: 2 as const,
+        schema: 1 as const,
         name,
       })),
       remove: vi.fn(),

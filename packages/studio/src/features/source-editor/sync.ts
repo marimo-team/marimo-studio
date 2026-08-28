@@ -353,7 +353,7 @@ export class SyncedSource {
     }
   }
 
-  useDisk(): void {
+  useSavedVersion(): void {
     if (this.disposed || !this.conflict) {
       return;
     }
@@ -361,7 +361,7 @@ export class SyncedSource {
     this.emit("saved");
   }
 
-  async keepLocal(): Promise<boolean> {
+  async overwriteSavedVersion(): Promise<boolean> {
     if (this.disposed || this.access === "read") {
       return false;
     }

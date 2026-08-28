@@ -87,6 +87,7 @@ def studio_bootstrap_payload(
     return {
         "schema": 1,
         "notebook": {"name": config.notebook.name},
+        "defaultView": config.default_view,
         "selectedView": selected,
         "views": list(config.views),
         "runtimes": [

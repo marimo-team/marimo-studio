@@ -3,11 +3,12 @@ import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 export const studioBootstrap: StudioBootstrap = {
   schema: 1,
   notebook: { name: "analysis.py" },
+  defaultView: "dashboard",
   selectedView: "dashboard",
   views: ["dashboard", "report"],
   runtimes: [
-    { id: "server", label: "Server" },
-    { id: "wasm", label: "WebAssembly" },
+    { id: "server", label: "Python" },
+    { id: "wasm", label: "Browser" },
   ],
   defaultRuntime: "server",
   clientId: "browser-client-1234",

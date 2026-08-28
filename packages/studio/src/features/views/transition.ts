@@ -1,6 +1,6 @@
 import type { ViewNavigationIntent } from "@marimo-studio/protocol/preview-messages";
 
-export type ViewLanding = "build" | "preserve" | "authoring";
+export type ViewLanding = "develop" | "preserve" | "authoring";
 export type ViewSelectionOwner = "browser" | "agent";
 
 export interface StagedViewTransition {

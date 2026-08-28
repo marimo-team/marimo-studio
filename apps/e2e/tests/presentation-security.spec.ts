@@ -156,7 +156,7 @@ test("rejects an untrusted authored workspace stream before client state changes
     "stream retained",
     { timeout: 65_000 },
   );
-  await expect(page.getByLabel("Switch view")).toContainText("dashboard");
+  await expect(page.getByLabel("Switch page")).toContainText("dashboard");
   refused.recovered();
   closed.recovered();
 });

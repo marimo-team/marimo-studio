@@ -15,6 +15,7 @@ export interface ViewMessage {
 
 export interface ViewSnapshot {
   current: string;
+  defaultView: string;
   views: readonly string[];
   selecting?: string;
   starters: readonly Starter[];
@@ -60,9 +61,11 @@ export class ViewController {
     initialDefaultStarter = "",
     private readonly settleView: (view: string) => Promise<boolean> = async () => true,
     private readonly releaseView: (view: string) => void = () => {},
+    initialDefaultView = initialView,
   ) {
     this.snapshot = {
       current: initialView,
+      defaultView: initialDefaultView,
       views: initialViews,
       starters: initialStarters,
       defaultStarter: initialDefaultStarter,
@@ -109,7 +112,7 @@ export class ViewController {
       if (!selected && !signal?.aborted && this.isCurrentMutation(generation)) {
         this.update({
           selectionMessage: {
-            text: `Could not open ${view}. The previous view remains active. Check Source and runtime status, then retry.`,
+            text: `Could not open ${view}. The previous page remains active. Check Source and runtime status, then retry.`,
             state: "error",
           },
         });
@@ -119,7 +122,7 @@ export class ViewController {
       if (!signal?.aborted && this.isCurrentMutation(generation)) {
         this.update({
           selectionMessage: {
-            text: `${errorMessage(cause)} The previous view remains active.`,
+            text: `${errorMessage(cause)} The previous page remains active.`,
             state: "error",
           },
         });
@@ -183,7 +186,7 @@ export class ViewController {
     if (!selected || !selected.availability.available) {
       this.update({
         createMessage: {
-          text: selected?.availability.action ?? "Select an available view starter.",
+          text: selected?.availability.action ?? "Choose an available starting option.",
           state: "error",
         },
       });
@@ -198,7 +201,7 @@ export class ViewController {
       if (!prepared) {
         this.update({
           createMessage: {
-            text: "Resolve the current source before creating a view.",
+            text: "Resolve the current source before creating a page.",
             state: "error",
           },
         });
@@ -216,7 +219,7 @@ export class ViewController {
       }
       this.update({
         createMessage: {
-          text: "View created. Resolve the current source, then select it from Views.",
+          text: "Page created. Resolve the current source, then select it from Pages.",
           state: "warning",
         },
       });
@@ -265,7 +268,7 @@ export class ViewController {
         return false;
       }
       if (!prepared) {
-        this.update({ removeError: "Resolve the current source before removing this view." });
+        this.update({ removeError: "Resolve the current source before removing this page." });
         return false;
       }
       if (name === this.snapshot.current) {
@@ -278,7 +281,7 @@ export class ViewController {
             removeError:
               this.snapshot.starterCatalog.phase === "error"
                 ? this.snapshot.starterCatalog.message
-                : "Could not load available views.",
+                : "Could not load available pages.",
           });
           return false;
         }
@@ -289,10 +292,10 @@ export class ViewController {
             : names.find((view) => view !== name);
         if (
           !successor ||
-          !(await this.selectWithinMutation(successor, "build", undefined, generation))
+          !(await this.selectWithinMutation(successor, "develop", undefined, generation))
         ) {
           if (this.isCurrentMutation(generation)) {
-            this.update({ removeError: "Select another view before removing this one." });
+            this.update({ removeError: "Select another page before removing this one." });
           }
           return false;
         }
@@ -302,7 +305,7 @@ export class ViewController {
         }
         if (!settled) {
           if (this.isCurrentMutation(generation)) {
-            this.update({ removeError: "Wait for the selected view to finish loading." });
+            this.update({ removeError: "Wait for the selected page to finish loading." });
           }
           return false;
         }
@@ -316,9 +319,9 @@ export class ViewController {
       this.acceptInventory(removed);
       if (!remaining.includes(this.snapshot.current)) {
         if (
-          !(await this.selectWithinMutation(removed.default_view, "build", undefined, generation))
+          !(await this.selectWithinMutation(removed.default_view, "develop", undefined, generation))
         ) {
-          this.update({ removeError: "Select an available view to continue." });
+          this.update({ removeError: "Select an available page to continue." });
           return false;
         }
       }
@@ -473,6 +476,7 @@ export class ViewController {
     const views = inventory.views.map((view) => view.name);
     this.update({
       views,
+      defaultView: inventory.default_view,
       starters: inventory.starters,
       defaultStarter: inventory.default_starter,
       starterCatalog: { phase: "ready" },

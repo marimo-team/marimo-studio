@@ -1,4 +1,4 @@
-import { defaultWorkspaceLayout, layoutForMode, sourceLayout, visibleSurfaces } from "./model.ts";
+import { developLayout, layoutForMode, sourceLayout, visibleSurfaces } from "./model.ts";
 import { type LayoutNode, storedLayoutCodec, type StudioMode, type Surface } from "./schema.ts";
 
 export type LayoutState = {
@@ -20,9 +20,9 @@ export const applyActiveMode = (saved: LayoutState, active: ActiveLayout): Layou
 };
 
 const initialState = (): LayoutState => ({
-  mode: "build",
+  mode: "develop",
   source: sourceLayout(),
-  workspace: defaultWorkspaceLayout(),
+  workspace: developLayout(),
   compact: "notebook",
 });
 
@@ -49,7 +49,7 @@ export class LayoutStorage {
   }
 
   write(view: string, state: LayoutState): void {
-    const stored = { schema: 2 as const, ...state };
+    const stored = { schema: 1 as const, ...state };
     globalThis.localStorage.setItem(this.key(view), storedLayoutCodec.encode(stored));
   }
 

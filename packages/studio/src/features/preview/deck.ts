@@ -147,13 +147,13 @@ export class PreviewDeck {
         this.notebookMutationFailed({
           code: "notebook-save-failed",
           message: "Notebook save failed.",
-          hint: "Retry the save to update this view.",
+          hint: "Retry the save to update this page.",
         }),
       transactionFailed: () =>
         this.notebookMutationFailed({
           code: "notebook-sync-failed",
           message: "Notebook change could not be synchronized.",
-          hint: "Retry the edit to update this view.",
+          hint: "Retry the edit to update this page.",
         }),
     });
     this.viewSwitch = { view: this.view, runtime: this.runtime };

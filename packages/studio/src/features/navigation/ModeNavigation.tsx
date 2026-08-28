@@ -12,7 +12,7 @@ import { closeParentMenu } from "./menu.ts";
 import { OVERFLOW_MODES, PRIMARY_MODES, selectedMode } from "./model.ts";
 
 const MODE_ICONS = {
-  build: PanelsTopLeftIcon,
+  develop: PanelsTopLeftIcon,
   notebook: NotebookTabsIcon,
   preview: EyeIcon,
   source: Code2Icon,

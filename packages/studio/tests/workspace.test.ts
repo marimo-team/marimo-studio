@@ -3,11 +3,10 @@ import { test } from "vite-plus/test";
 
 import {
   computeLayout,
-  defaultWorkspaceLayout,
+  developLayout,
   equalizeLayout,
   layoutForMode,
   needsCompactLayout,
-  newViewLayout,
   parseLayout,
   splitSurface,
   sourceLayout,
@@ -24,7 +23,7 @@ test("Develop shows notebook, source, and preview", () => {
     width: 1205,
     height: 805,
   };
-  const layout = computeLayout(defaultWorkspaceLayout(), bounds);
+  const layout = computeLayout(developLayout(), bounds);
   const notebook = layout.panes.get("notebook")!;
   const source = layout.panes.get("source")!;
   const preview = layout.panes.get("preview")!;
@@ -42,9 +41,9 @@ test("Develop shows notebook, source, and preview", () => {
 
 test("task modes resolve to their surface layouts", () => {
   const source = sourceLayout();
-  const workspace = defaultWorkspaceLayout();
+  const workspace = developLayout();
 
-  assert.deepEqual(visibleSurfaces(layoutForMode("build", source, workspace)), [
+  assert.deepEqual(visibleSurfaces(layoutForMode("develop", source, workspace)), [
     "notebook",
     "source",
     "preview",
@@ -63,7 +62,7 @@ test("task modes resolve to their surface layouts", () => {
 });
 
 test("compact mode follows the minimum size of the visible layout", () => {
-  const tree = newViewLayout();
+  const tree = developLayout();
 
   assert.equal(needsCompactLayout(tree, { left: 0, top: 0, width: 1200, height: 800 }), false);
   assert.equal(needsCompactLayout(tree, { left: 0, top: 0, width: 604, height: 800 }), true);
@@ -71,7 +70,7 @@ test("compact mode follows the minimum size of the visible layout", () => {
 });
 
 test("nested ratios update and equalize independently", () => {
-  const tree = defaultWorkspaceLayout();
+  const tree = developLayout();
   const changed = updateRatio(updateRatio(tree, "notebook-authoring", 0.6), "source-preview", 0.3);
   const equalized = equalizeLayout(changed);
 
@@ -84,7 +83,7 @@ test("nested ratios update and equalize independently", () => {
 });
 
 test("swapping panes exchanges their surfaces", () => {
-  assert.deepEqual(visibleSurfaces(swapSurfaces(defaultWorkspaceLayout(), "notebook", "preview")), [
+  assert.deepEqual(visibleSurfaces(swapSurfaces(developLayout(), "notebook", "preview")), [
     "preview",
     "source",
     "notebook",
@@ -93,15 +92,12 @@ test("swapping panes exchanges their surfaces", () => {
 
 test("a pane can be placed on any side of its target", () => {
   const place = (placement: "left" | "right" | "above" | "below") => {
-    const panes = computeLayout(
-      splitSurface(defaultWorkspaceLayout(), "preview", "source", placement),
-      {
-        left: 0,
-        top: 0,
-        width: 1205,
-        height: 805,
-      },
-    ).panes;
+    const panes = computeLayout(splitSurface(developLayout(), "preview", "source", placement), {
+      left: 0,
+      top: 0,
+      width: 1205,
+      height: 805,
+    }).panes;
     return {
       source: panes.get("source")!,
       preview: panes.get("preview")!,
@@ -126,7 +122,7 @@ test("a pane can be placed on any side of its target", () => {
 });
 
 test("saved layouts validate shape, ratios, and unique surfaces", () => {
-  const saved = updateRatio(defaultWorkspaceLayout(), "notebook-preview", 0.6);
+  const saved = updateRatio(developLayout(), "notebook-preview", 0.6);
   const serialized = JSON.stringify(saved);
 
   assert.deepEqual(parseLayout(serialized), saved);
@@ -172,7 +168,7 @@ test("workspace storage round-trips valid state and recovers invalid data", () =
   const state = {
     mode: "workspace" as const,
     source: sourceLayout(),
-    workspace: newViewLayout(),
+    workspace: developLayout(),
     compact: "preview" as const,
   };
 
@@ -182,25 +178,25 @@ test("workspace storage round-trips valid state and recovers invalid data", () =
   globalThis.localStorage.setItem(
     "studio-workspace:dashboard",
     JSON.stringify({
-      schema: 2,
+      schema: 1,
       mode: "notebook",
       source: sourceLayout(),
-      workspace: defaultWorkspaceLayout(),
+      workspace: developLayout(),
       compact: "source",
     }),
   );
   assert.deepEqual(storage.read("dashboard"), {
     mode: "notebook",
     source: sourceLayout(),
-    workspace: defaultWorkspaceLayout(),
+    workspace: developLayout(),
     compact: "notebook",
   });
 
   globalThis.localStorage.setItem("studio-workspace:dashboard", "invalid");
   assert.deepEqual(storage.read("dashboard"), {
-    mode: "build",
+    mode: "develop",
     source: sourceLayout(),
-    workspace: defaultWorkspaceLayout(),
+    workspace: developLayout(),
     compact: "notebook",
   });
 
@@ -210,21 +206,21 @@ test("workspace storage round-trips valid state and recovers invalid data", () =
       schema: 99,
       mode: "source",
       source: sourceLayout(),
-      workspace: defaultWorkspaceLayout(),
+      workspace: developLayout(),
       compact: "source",
     }),
   );
   assert.deepEqual(storage.read("dashboard"), {
-    mode: "build",
+    mode: "develop",
     source: sourceLayout(),
-    workspace: defaultWorkspaceLayout(),
+    workspace: developLayout(),
     compact: "notebook",
   });
 });
 
 test("link navigation keeps the active mode and the target view split trees", () => {
   const source = updateRatio(sourceLayout(), "source-preview", 0.65);
-  const workspace = updateRatio(newViewLayout(), "notebook-authoring", 0.4);
+  const workspace = updateRatio(developLayout(), "notebook-authoring", 0.4);
   const target = {
     mode: "notebook" as const,
     source,

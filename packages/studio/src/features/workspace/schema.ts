@@ -20,7 +20,7 @@ const jsonCodec = <T extends z.core.$ZodType>(schema: T) =>
 
 export const surfaceSchema = z.enum(["notebook", "source", "preview"]);
 export const axisSchema = z.enum(["x", "y"]);
-export const studioModeSchema = z.enum(["build", "notebook", "preview", "source", "workspace"]);
+export const studioModeSchema = z.enum(["develop", "notebook", "preview", "source", "workspace"]);
 
 export type Surface = z.infer<typeof surfaceSchema>;
 export type Axis = z.infer<typeof axisSchema>;
@@ -86,7 +86,7 @@ export const layoutNodeSchema = recursiveLayoutNodeSchema.refine(hasUniqueNodes,
 });
 
 export const storedLayoutSchema = z.object({
-  schema: z.literal(2),
+  schema: z.literal(1),
   mode: studioModeSchema,
   source: layoutNodeSchema,
   workspace: layoutNodeSchema,

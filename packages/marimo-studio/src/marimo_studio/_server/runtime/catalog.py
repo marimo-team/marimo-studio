@@ -89,7 +89,7 @@ def _static_dependency_closures(
 
 class ServerRuntime:
     id = "server"
-    label = "Server"
+    label = "Python"
 
     def __init__(self, sessions: SessionState) -> None:
         self._sessions = sessions
@@ -172,7 +172,7 @@ class ServerRuntime:
 
 class WasmRuntime:
     id = "wasm"
-    label = "WebAssembly"
+    label = "Browser"
 
     def __init__(self, browser: BrowserRuntimeProjector) -> None:
         self._browser = browser

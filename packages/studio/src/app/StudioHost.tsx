@@ -355,7 +355,7 @@ export const StudioHost = ({
     try {
       if (!createdView && selectedStarter?.availability.available !== true) {
         throw new Error(
-          selectedStarter?.availability.action ?? "Select an available view starter.",
+          selectedStarter?.availability.action ?? "Choose an available starting option.",
         );
       }
       const view = createdView ?? (await views.create(host.defaultView, starter)).name;
@@ -388,10 +388,10 @@ export const StudioHost = ({
     >
       <div className="studio-initialization-card">
         <span className="studio-initialization-eyebrow">Marimo Studio</span>
-        <h1>Create the first view</h1>
+        <h1>Create the first page</h1>
         <p>
-          This notebook is configured for Studio. Create <code>{host.defaultView}</code> to open the
-          authoring workspace.
+          Create <code>{host.defaultView}</code> to open the notebook, page source, and preview
+          together.
         </p>
         <form onSubmit={(event) => void createFirstView(event)}>
           <StarterCatalogNotice
@@ -399,7 +399,7 @@ export const StudioHost = ({
             empty={catalogSnapshot.starters.length === 0}
             onRetry={() => void catalog.ensure()}
           />
-          <label htmlFor="studio-initial-starter">Starter</label>
+          <label htmlFor="studio-initial-starter">Start with</label>
           <select
             id="studio-initial-starter"
             value={starter}
@@ -418,7 +418,7 @@ export const StudioHost = ({
             ))}
           </select>
           {catalogSnapshot.starters.length > 0 ? (
-            <div className="studio-initial-starter-plans" aria-label="Starter details">
+            <div className="studio-initial-starter-plans" aria-label="Starting options">
               {catalogSnapshot.starters.map((candidate) => (
                 <section key={candidate.id} data-selected={candidate.id === starter || undefined}>
                   <strong>{candidate.title}</strong>

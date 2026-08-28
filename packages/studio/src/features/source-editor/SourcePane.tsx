@@ -29,7 +29,7 @@ const sourceTabDescription = (
   if (conflict) {
     descriptions.push(
       {
-        orphan: "Conflict: removed from this view with unsaved edits",
+        orphan: "Conflict: removed from this page with unsaved edits",
         "read-only": "Conflict: became read-only while you were editing",
         revision: "Conflict: changed on disk while you were editing",
       }[conflict.kind],
@@ -58,7 +58,7 @@ export const SourcePane = ({ controller, visible }: SourcePaneProps) => {
   const build = model.snapshot.build;
   const artifact = model.snapshot.artifact;
   let sourceStatus = "No source documents";
-  let emptySource = "This view has no source files to edit.";
+  let emptySource = "This page has no source files to edit.";
   if (model.snapshot.phase === "loading") {
     sourceStatus = "Loading source documents";
     emptySource = "Loading source documents";
@@ -71,7 +71,7 @@ export const SourcePane = ({ controller, visible }: SourcePaneProps) => {
     <>
       <header className="studio-pane-header studio-source-header">
         <div className="studio-source-header-row">
-          <div className="studio-source-tabs" role="tablist" aria-label="View source files">
+          <div className="studio-source-tabs" role="tablist" aria-label="Page source files">
             {model.snapshot.documents.map((document, index) => {
               const selected = model.snapshot.active === document.path;
               const documentDiagnostic = highestSeverityDiagnostic(diagnostics, document.path);
@@ -144,7 +144,6 @@ export const SourcePane = ({ controller, visible }: SourcePaneProps) => {
                 build={build}
                 diagnostic={projectDiagnostic}
                 inspection={model.snapshot.inspection}
-                provider={model.snapshot.provider}
               />
             ) : null}
           </div>
@@ -190,8 +189,8 @@ export const SourcePane = ({ controller, visible }: SourcePaneProps) => {
           key={`${model.snapshot.view}:${active.path}`}
           conflict={conflict}
           name={active.path}
-          onUseDisk={() => controller.useDisk()}
-          onKeepLocal={() => controller.keepLocal()}
+          onUseSavedVersion={() => controller.useSavedVersion()}
+          onOverwriteSavedVersion={() => controller.overwriteSavedVersion()}
         />
       ) : null}
 

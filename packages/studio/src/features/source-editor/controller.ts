@@ -200,12 +200,12 @@ export class SourceController {
     this.session?.save(path);
   }
 
-  useDisk(): void {
-    this.session?.useDisk();
+  useSavedVersion(): void {
+    this.session?.useSavedVersion();
   }
 
-  keepLocal(): void {
-    this.session?.keepLocal();
+  overwriteSavedVersion(): void {
+    this.session?.overwriteSavedVersion();
   }
 
   focusSource(): void {
