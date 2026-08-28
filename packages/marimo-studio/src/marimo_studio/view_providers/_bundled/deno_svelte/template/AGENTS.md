@@ -20,9 +20,14 @@ agents.
 
 ```svelte
 <script lang="ts">
-  import { observeMarimoValue } from "./lib/marimo-value.ts";
+  import {
+    type MarimoTable,
+    observeMarimoValue,
+  } from "./lib/marimo-value.ts";
 
-  let rows = $state<unknown[]>([]);
+  type Row = { id: string; label: string };
+
+  let rows = $state<MarimoTable<Row>>();
 </script>
 
 <span
@@ -30,15 +35,25 @@ agents.
   mo-value="rows"
   use:observeMarimoValue={{
     selector: "rows",
-    onValue: (value: unknown[]) => {
+    onValue: (value: MarimoTable<Row>) => {
       rows = value;
     },
   }}
 ></span>
+
+<output>{rows?.numRows ?? 0}</output>
 ```
 
 Use the supplied declaration and action as the integration contract. Keep
 page-specific value handling in the component that consumes it.
+
+Eager dataframes arrive as a shared `MarimoTable` backed by Flechette. Use
+[https://github.com/uwdata/flechette](https://github.com/uwdata/flechette) as
+the table API reference. Keep data columnar with `getChild()`, `select()`, and
+`toColumns()`. Call `toArray()` when a component needs row objects.
+
+Treat the table as immutable. `getMarimoDataSource(table)` returns its codec,
+fingerprint, and shared Arrow IPC bytes. Copy the bytes before mutating them.
 
 ## Add dependencies
 
@@ -51,7 +66,6 @@ deno add --package-json --frozen=false --save-exact \
   npm:d3@7 \
   npm:@observablehq/plot@0.6 \
   npm:arquero@8 \
-  npm:hyparquet@1 \
   jsr:@std/csv@1
 ```
 
@@ -61,15 +75,13 @@ Import the package names or explicit alias written to `package.json`:
 import * as d3 from "d3";
 import * as Plot from "@observablehq/plot";
 import * as aq from "arquero";
-import { asyncBufferFromUrl, parquetReadObjects } from "hyparquet";
 import { parse as parseCsv } from "@std/csv";
 ```
 
 Choose the packages the page actually needs. D3 and Observable Plot render
-visualizations, Arquero transforms tabular data, hyparquet reads remote Parquet,
-and `@std/csv` parses CSV through JSR. Deno also accepts registry package
-subpaths and explicit local aliases when a package's documentation calls for
-them.
+visualizations, Arquero transforms tabular data, and `@std/csv` parses CSV
+through JSR. Deno also accepts registry package subpaths and explicit local
+aliases when a package's documentation calls for them.
 
 Keep `minimumDependencyAge` and the frozen lockfile policy intact. Commit
 `package.json` and `deno.lock` after adding or changing an application

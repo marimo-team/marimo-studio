@@ -14,7 +14,7 @@ agents.
 ## Use the supplied Studio integration
 
 `index.html` defines `observeMarimoValue` inside its module script. Use it when
-page JavaScript consumes a JSON-compatible notebook value. Keep the
+page JavaScript consumes a notebook value or eager dataframe. Keep the
 corresponding `mo-value` host in authored HTML so Studio can inspect and
 authorize its selector.
 
@@ -32,6 +32,12 @@ if (source) {
   window.addEventListener("pagehide", stop, { once: true });
 }
 ```
+
+Eager dataframes arrive as a shared Flechette `Table`. Use
+[https://github.com/uwdata/flechette](https://github.com/uwdata/flechette) as
+the table API reference. Treat the table as immutable. Keep data columnar with
+`getChild()`, `select()`, and `toColumns()`. Call `toArray()` when browser code
+needs row objects.
 
 ## Add dependencies
 
@@ -54,8 +60,6 @@ Choose the URL form that matches the dependency source:
   `import * as aq from "https://cdn.jsdelivr.net/npm/arquero@8/+esm";`
 - Modular charting from an exported package subpath:
   `import * as echarts from "https://cdn.jsdelivr.net/npm/echarts@6/core/+esm";`
-- Browser-side Parquet reading:
-  `import { asyncBufferFromUrl, parquetReadObjects } from "https://cdn.jsdelivr.net/npm/hyparquet@1.29.1/+esm";`
 - CSV parsing from JSR through esm.sh:
   `import { parse as parseCsv } from "https://esm.sh/jsr/@std/csv";`
 

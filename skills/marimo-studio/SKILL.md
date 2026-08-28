@@ -328,11 +328,11 @@ again, incorporate both changes, and save against the current revision.
 
 Choose the projection from the notebook evidence:
 
-| Notebook result                                               | Page source                                     |
-| ------------------------------------------------------------- | ----------------------------------------------- |
-| Complete displayed cell, including controls, logs, and errors | `<marimo-cell name="summary"></marimo-cell>`    |
-| One Python object rendered by Marimo                          | `<marimo-output value="chart"></marimo-output>` |
-| JSON-compatible data consumed by browser code                 | Any element with `mo-value="metrics"`           |
+| Notebook result                                                     | Page source                                     |
+| ------------------------------------------------------------------- | ----------------------------------------------- |
+| Complete displayed cell, including controls, logs, and errors       | `<marimo-cell name="summary"></marimo-cell>`    |
+| One Python object rendered by Marimo                                | `<marimo-output value="chart"></marimo-output>` |
+| JSON-compatible data or an eager dataframe consumed by browser code | Any element with `mo-value="metrics"`           |
 
 Read the selected cell's `name`, `definitions`, and `has_output_expression`
 before writing a projection. When `has_output_expression` is false, inspect its
@@ -351,11 +351,35 @@ Use one rendered Python object when the page needs a specific result:
 <marimo-output value="chart"></marimo-output>
 ```
 
-Use a JSON-compatible value when browser code will adapt it for this page:
+Use a value projection when browser code will adapt it for this page:
 
 ```html
 <strong mo-value="metrics.total"></strong>
 ```
+
+`mo-value` exposes the current value as `host.marimoValue` and publishes later
+values through `marimo-value-updated`. JSON-compatible Python values become
+their corresponding browser values. An eager dataframe that the active Python
+environment can write as Arrow IPC becomes a shared
+[Flechette `Table`](https://github.com/uwdata/flechette). Treat the table as
+immutable. Its primary API is `numRows`, `numCols`, `names`, `schema`,
+`get(index)`, `getChild(name)`, `select(names)`, and `toColumns()`. Call
+`toArray()` when a consumer requires row objects.
+
+React and Svelte starter helpers export `getMarimoDataSource(table)`. It returns
+the table's codec, fingerprint, and shared Arrow IPC bytes under
+`MARIMO_DATA_SOURCE = Symbol.for("marimo-studio.data-source")`. Treat those
+bytes as immutable, or copy them before mutating them.
+
+React starters export `MarimoTable` with `useMarimoValue`. Svelte starters
+export the same table contract with `observeMarimoValue`. Keep the explicit
+`mo-value` host in authored source so provider inspection can authorize the
+selector.
+
+Materialize lazy or remote dataframe queries in the notebook before projecting
+them. Pandas may require PyArrow. WebAssembly notebooks need browser-compatible
+dataframe and Arrow writer packages, and the encoded value must fit Studio's
+value byte limit.
 
 When inspection returns a non-empty cell `name`, use that exact name directly in
 `<marimo-cell name="...">`. The native name is already a stable projection

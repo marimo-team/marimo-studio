@@ -1,6 +1,6 @@
 ---
 title: Place notebook results on a page
-description: Add complete cells, rendered Python objects, and JSON-compatible values to page source.
+description: Add complete cells, rendered Python objects, and browser values to page source.
 ---
 
 # Place notebook results on a page
@@ -36,18 +36,81 @@ You can select a nested item or attribute:
 Use this form when the page needs one object rather than the complete producing
 cell.
 
-## Read a JSON-compatible value
+## Read a value in browser code
 
 ```html
 <strong mo-value="metrics.total"></strong>
 ```
 
-Studio writes the selected text, number, boolean, array, object, or null value
-into the element. Page JavaScript can also read the value and respond to later
-updates.
+Studio writes a selected JSON-compatible text, number, boolean, array, object,
+or null value into the element. Page JavaScript can read the current value from
+`host.marimoValue` and listen for later updates.
 
 Use this form when browser code will format, filter, group, or otherwise adapt
 the value for one page.
+
+### Read a dataframe as a table
+
+An eager dataframe reaches browser code as a shared
+[Flechette `Table`](https://github.com/uwdata/flechette). Studio encodes the
+dataframe as Arrow IPC and decodes it once before assigning the table to
+`host.marimoValue` and `event.detail.value`. Treat the shared table as
+immutable.
+
+```html
+<span id="orders-data" hidden mo-value="orders"></span>
+<output id="order-count"></output>
+
+<script type="module">
+  const host = document.querySelector("#orders-data");
+  const count = document.querySelector("#order-count");
+
+  const render = (table) => {
+    count.value = `${table.numRows} orders`;
+  };
+
+  host.addEventListener("marimo-value-updated", (event) => {
+    render(event.detail.value);
+  });
+
+  if (host.marimoValue !== undefined) {
+    render(host.marimoValue);
+  }
+</script>
+```
+
+The table keeps Arrow data in columnar form. Its core accessors cover the common
+browser paths:
+
+- `numRows`, `numCols`, `names`, and `schema` describe the table.
+- `get(index)` reads one row. Iteration scans row objects.
+- `getChild(name)` reads one column.
+- `select(names)` returns a table with selected columns.
+- `toColumns()` extracts arrays by column.
+- `toArray()` materializes an array of row objects.
+
+Keep the table columnar while filtering columns or passing data to a
+column-oriented library. Materialize rows at the consumer boundary:
+
+```js
+const chartRows = table.select(["region", "revenue"]).toArray();
+```
+
+React and Svelte starter helpers export `getMarimoDataSource(table)`. It returns
+the table's codec, fingerprint, and shared Arrow IPC bytes. Treat the bytes as
+immutable, or copy them before mutating them. The descriptor is stored under
+`MARIMO_DATA_SOURCE = Symbol.for("marimo-studio.data-source")`.
+
+Automatic table projection applies to eager dataframe values that the active
+Python environment can write as Arrow IPC. Pandas dataframes may require
+PyArrow. Materialize lazy or remote dataframe queries in the notebook before
+selecting them with `mo-value`.
+
+WebAssembly notebooks must include browser-compatible dataframe and Arrow writer
+packages. Their encoded values remain subject to Studio's value byte limit.
+
+React starters export `MarimoTable` with `useMarimoValue`. Svelte starters
+export the same table contract with `observeMarimoValue`.
 
 ## Name a result
 
@@ -113,5 +176,5 @@ Runtime validation can perform the notebook's configured file, network,
 database, and data access.
 
 Studio bounds one rendered page to 512 active result elements, including 256
-unique cell names, 100 rendered objects, and 100 JSON-compatible values. A page
-that exceeds a limit receives a diagnostic at the first affected element.
+unique cell names, 100 rendered objects, and 100 value projections. A page that
+exceeds a limit receives a diagnostic at the first affected element.
