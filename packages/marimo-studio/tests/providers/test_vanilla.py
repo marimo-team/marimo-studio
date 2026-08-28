@@ -84,6 +84,44 @@ def test_vanilla_rejects_duplicate_projection_and_shell_attributes(
     assert "Duplicate HTML attribute" in inspection.diagnostics[0].message
 
 
+def test_vanilla_projection_diagnostics_name_the_authored_attributes(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    cases = (
+        (
+            '<marimo-cell target="summary"></marimo-cell>',
+            "<marimo-cell> requires a non-empty name.",
+        ),
+        (
+            '<marimo-output name="summary"></marimo-output>',
+            "<marimo-output> requires a non-empty value.",
+        ),
+        ("<span mo-value></span>", "mo-value requires a non-empty selector."),
+    )
+
+    for projection, message in cases:
+        (project.root / "index.html").write_text(
+            f"""<!doctype html>
+<html>
+  <body>
+    <main id="app-shell">
+      {projection}
+    </main>
+  </body>
+</html>
+""",
+            encoding="utf-8",
+        )
+
+        diagnostic = provider.inspect(inspection_request(project)).diagnostics[0]
+
+        assert diagnostic.message == message
+        assert 'Use <marimo-cell name="...">' in diagnostic.hint
+        assert diagnostic.source is not None
+        assert diagnostic.source.line == 5
+
+
 def test_vanilla_instruments_exact_parser_sites(tmp_path: Path) -> None:
     project = _project(tmp_path)
     source = project.root / "index.html"

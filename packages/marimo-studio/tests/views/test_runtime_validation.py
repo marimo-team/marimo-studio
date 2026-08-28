@@ -14,6 +14,7 @@ from marimo_studio._projections.runtime_records import (
     OutputRenderResult,
     RenderedOutput,
     RuntimeCell,
+    RuntimeOutput,
     RuntimeProbe,
     ValueReadError,
     ValueReadResult,
@@ -73,7 +74,13 @@ def test_runtime_check_scopes_values_to_the_selected_view(
             cells={
                 bound.cell.runtime_id: RuntimeCell(
                     status="idle",
-                    outputs=(),
+                    outputs=(
+                        RuntimeOutput(
+                            channel="output",
+                            mimetype="text/plain",
+                            empty=True,
+                        ),
+                    ),
                     errors=(),
                 )
             },
@@ -121,6 +128,9 @@ def test_runtime_check_scopes_values_to_the_selected_view(
     }
     failures = {result.name: result for result in results if result.status == "fail"}
     assert failures["runtime-cell:result"].code == "projected-cell-empty"
+    assert failures["runtime-cell:result"].message == (
+        "Projected cell produced no visible runtime output"
+    )
     assert failures["runtime-cell:result"].details == {
         "projection": "cell",
         "target": "result",
@@ -129,7 +139,11 @@ def test_runtime_check_scopes_values_to_the_selected_view(
             "line": current.source.start_line,
             "column": 1,
         },
-        "hint": "Return a display value from the cell or remove its projection.",
+        "hint": (
+            'Use <marimo-output value="doubled"> to render the defined Python '
+            "object. Keep <marimo-cell> when the complete cell displays the "
+            "intended result."
+        ),
         "view": "dashboard",
     }
     assert failures["runtime-value:doubled.missing"].code == ("value-path-unavailable")

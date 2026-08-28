@@ -226,29 +226,27 @@ def _cell_results(
                 )
             )
             continue
-        if not runtime_cell.outputs:
+        visible_outputs = tuple(
+            output for output in runtime_cell.outputs if not output.empty
+        )
+        if not visible_outputs:
             results.append(
                 CheckResult(
                     name,
                     "fail",
-                    "Projected cell produced no runtime output",
+                    "Projected cell produced no visible runtime output",
                     code="projected-cell-empty",
                     details=_cell_details(
                         studio,
                         target,
                         cell,
-                        "Return a display value from the cell or remove its "
-                        "projection.",
+                        _empty_cell_hint(cell),
                         views,
                     ),
                 )
             )
             continue
-        mimes = ", ".join(
-            dict.fromkeys(
-                output.mimetype for output in runtime_cell.outputs if not output.empty
-            )
-        )
+        mimes = ", ".join(dict.fromkeys(output.mimetype for output in visible_outputs))
         results.append(
             CheckResult(
                 name,
@@ -257,6 +255,25 @@ def _cell_results(
             )
         )
     return results
+
+
+def _empty_cell_hint(cell: CellSpec) -> str:
+    definitions = tuple(name for name in cell.definitions if not name.startswith("_"))
+    if len(definitions) == 1:
+        return (
+            f'Use <marimo-output value="{definitions[0]}"> to render the defined '
+            "Python object. Keep <marimo-cell> when the complete cell displays the "
+            "intended result."
+        )
+    if definitions:
+        return (
+            'Use <marimo-output value="..."> to render one of the cell\'s defined '
+            "Python objects. Keep <marimo-cell> when the complete cell displays the "
+            "intended result."
+        )
+    return (
+        "Make the complete cell display the intended result or remove its projection."
+    )
 
 
 def _value_results(

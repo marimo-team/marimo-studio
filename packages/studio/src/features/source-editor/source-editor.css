@@ -220,6 +220,13 @@
   padding: 0.5rem;
 }
 
+.studio-source-details-popover .studio-source-project-diagnostic small {
+  color: inherit;
+  display: block;
+  font-size: 0.68rem;
+  margin-block-start: 0.2rem;
+}
+
 .studio-source-diagnostic {
   align-items: baseline;
   background: var(--studio-warning-soft);

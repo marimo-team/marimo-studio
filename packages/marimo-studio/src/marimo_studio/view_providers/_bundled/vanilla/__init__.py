@@ -279,8 +279,15 @@ class VanillaProvider:
                 ),
             )
         except (ConfigurationError, OSError, UnicodeError, ValueError) as error:
+            line = error.line if isinstance(error, ViewProjectError) else None
+            column = error.column if isinstance(error, ViewProjectError) else None
+            hint = (
+                error.public_hint
+                if isinstance(error, ViewProjectError)
+                else "Restore the HTML entry document and build the view again."
+            )
             source = (
-                SourceLocation(entry_path, 1, 1)
+                SourceLocation(entry_path, line or 1, column or 1)
                 if entry_document.path == entry_path
                 else None
             )
@@ -289,7 +296,7 @@ class VanillaProvider:
                     code="entry-document-invalid",
                     severity="error",
                     message=str(error),
-                    hint="Restore the HTML entry document and build the view again.",
+                    hint=hint,
                     source=source,
                 ),
             )

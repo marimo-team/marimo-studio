@@ -485,6 +485,7 @@ it("keeps project evidence behind the build status disclosure", async () => {
   expect(projectDetails).toHaveTextContent("artifact-p");
   expect(projectDetails).toHaveTextContent("Source is newer than the published view.");
   expect(projectDetails).toHaveTextContent("Rebuild the current source.");
+  expect(projectDetails).toHaveTextContent("Save the source, then rebuild.");
   expect(within(projectDetails).getByTitle("sha256:project-current")).toBeVisible();
   expect(within(projectDetails).getByTitle("sha256:artifact-published")).toBeVisible();
   await user.keyboard("{Escape}");

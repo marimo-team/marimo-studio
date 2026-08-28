@@ -104,6 +104,55 @@ def test_react_inspection_tracks_literal_site_identity_and_kind(
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
+def test_react_projection_diagnostics_name_the_authored_attributes(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(tmp_path, react_provider, "react")
+    (root / "src" / "App.tsx").write_text(
+        """export const App = () => (
+  <main>
+    <marimo-cell target="controls"></marimo-cell>
+    <marimo-output name="summary"></marimo-output>
+    <span mo-value></span>
+  </main>
+);
+""",
+        encoding="utf-8",
+    )
+
+    diagnostics = _inspect(react_provider, project).diagnostics
+
+    assert [
+        (
+            item.code,
+            item.message,
+            item.source.line if item.source is not None else None,
+        )
+        for item in diagnostics
+    ] == [
+        (
+            "projection-target-missing",
+            "<marimo-cell> requires a non-empty name.",
+            3,
+        ),
+        (
+            "projection-target-missing",
+            "<marimo-output> requires a non-empty value.",
+            4,
+        ),
+        (
+            "projection-target-missing",
+            "mo-value requires a non-empty selector.",
+            5,
+        ),
+    ]
+    assert all('Use <marimo-cell name="...">' in item.hint for item in diagnostics)
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
 def test_react_maps_extract_bounded_and_wildcard_mounts(
     tmp_path: Path,
 ) -> None:
@@ -160,9 +209,15 @@ export const App = () => (
         source.read_text(encoding="utf-8").replace(' data-marimo-allow="*"', ""),
         encoding="utf-8",
     )
-    assert "projection-target-unbounded" in {
-        item.code for item in _inspect(react_provider, project).diagnostics
-    }
+    diagnostic = next(
+        item
+        for item in _inspect(react_provider, project).diagnostics
+        if item.code == "projection-target-unbounded"
+    )
+    assert diagnostic.message == (
+        "Studio cannot determine every possible <marimo-cell> name."
+    )
+    assert 'Add data-marimo-allow="*"' in diagnostic.hint
 
 
 @pytest.mark.parametrize(

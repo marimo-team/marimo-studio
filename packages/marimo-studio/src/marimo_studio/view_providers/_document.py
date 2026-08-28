@@ -13,6 +13,12 @@ from marimo_studio.view_providers._css_resources import css_resource_urls
 from marimo_studio.view_providers._mounts import MOUNT_ATTRIBUTE
 from marimo_studio.view_providers._targets import parse_value_target
 
+_PROJECTION_USAGE_HINT = (
+    'Use <marimo-cell name="..."> for a complete cell display, '
+    '<marimo-output value="..."> for one Python object, or mo-value="..." '
+    "when browser code needs JSON-compatible data."
+)
+
 _VOID_ELEMENTS = {
     "area",
     "base",
@@ -373,18 +379,20 @@ class HTMLDocumentParser(HTMLParser):
             alias = attributes.get("name")
             if alias is None or not alias.strip():
                 raise ViewProjectError(
-                    "Every <marimo-cell> requires a non-empty name",
+                    "<marimo-cell> requires a non-empty name.",
                     line=line,
                     column=column + 1,
+                    hint=_PROJECTION_USAGE_HINT,
                 )
             declarations.append(("cell", alias.strip()))
         if "mo-value" in attributes:
             source = attributes["mo-value"]
             if source is None:
                 raise ViewProjectError(
-                    "Every mo-value attribute requires a reference",
+                    "mo-value requires a non-empty selector.",
                     line=line,
                     column=column + 1,
+                    hint=_PROJECTION_USAGE_HINT,
                 )
             try:
                 reference = parse_value_target(source)
@@ -399,9 +407,10 @@ class HTMLDocumentParser(HTMLParser):
             source = attributes.get("value")
             if source is None:
                 raise ViewProjectError(
-                    "Every <marimo-output> requires a value reference",
+                    "<marimo-output> requires a non-empty value.",
                     line=line,
                     column=column + 1,
+                    hint=_PROJECTION_USAGE_HINT,
                 )
             try:
                 reference = parse_value_target(source)
@@ -414,9 +423,10 @@ class HTMLDocumentParser(HTMLParser):
             declarations.append(("output", reference.source))
         if len(declarations) > 1:
             raise ViewProjectError(
-                "One element cannot declare several projection kinds",
+                "One element cannot declare more than one projection kind.",
                 line=line,
                 column=column + 1,
+                hint=_PROJECTION_USAGE_HINT,
             )
         if declarations:
             kind, target = declarations[0]

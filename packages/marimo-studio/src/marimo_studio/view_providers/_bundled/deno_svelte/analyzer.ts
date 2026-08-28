@@ -13,6 +13,14 @@ import {
   stringValue,
   targetsFromResult,
 } from "../_deno/analyzers/static-values.ts";
+import {
+  projectionAttributeDuplicate,
+  projectionAttributeMissing,
+  projectionKindConflict,
+  projectionTargetUnbounded,
+  projectionUsageHint,
+  projectionWildcardInvalid,
+} from "../_deno/analyzers/projection-diagnostics.ts";
 import { TypeScriptModules } from "../_deno/analyzers/typescript-modules.ts";
 import { evaluateTypeScript } from "../_deno/analyzers/typescript-values.ts";
 
@@ -23,6 +31,7 @@ type Diagnostic = {
   readonly path?: string;
   readonly line?: number;
   readonly column?: number;
+  readonly hint?: string;
 };
 
 type Site = {
@@ -454,10 +463,11 @@ const reportTarget = (
     wildcardAttributes.length > 1 ||
     (wildcardAttributes.length === 1 && !allowsWildcard)
   ) {
+    const diagnostic = projectionWildcardInvalid();
     diagnostics.push({
       code: "projection-wildcard-invalid",
       severity: "error",
-      message: 'data-marimo-allow must be the literal "*"',
+      ...diagnostic,
       path: document.path,
       ...point,
     });
@@ -465,10 +475,11 @@ const reportTarget = (
   }
   const matches = attributes(node, attributeName);
   if (matches.length > 1) {
+    const diagnostic = projectionAttributeDuplicate(kind);
     diagnostics.push({
       code: "projection-target-duplicate",
       severity: "error",
-      message: `${kind} projection declares ${attributeName} more than once`,
+      ...diagnostic,
       path: document.path,
       ...point,
     });
@@ -481,10 +492,11 @@ const reportTarget = (
   );
   if (targetAttribute === undefined && spreadCanProvideTarget) {
     if (!allowsWildcard) {
+      const diagnostic = projectionTargetUnbounded(kind);
       diagnostics.push({
         code: "projection-target-unbounded",
         severity: "error",
-        message: 'Unbounded projection targets require data-marimo-allow="*"',
+        ...diagnostic,
         path: document.path,
         ...point,
       });
@@ -500,10 +512,11 @@ const reportTarget = (
     return;
   }
   if (targetAttribute === undefined || targetAttribute.value === true) {
+    const diagnostic = projectionAttributeMissing(kind);
     diagnostics.push({
       code: "projection-target-missing",
       severity: "error",
-      message: `${kind} projection requires an explicit target attribute`,
+      ...diagnostic,
       path: document.path,
       ...point,
     });
@@ -515,10 +528,11 @@ const reportTarget = (
     .some((item) => item.type === "SpreadAttribute");
   const literalTarget = overridden ? null : literal(targetAttribute);
   if (literalTarget === "") {
+    const diagnostic = projectionAttributeMissing(kind);
     diagnostics.push({
       code: "projection-target-empty",
       severity: "error",
-      message: `${kind} projection target must not be empty`,
+      ...diagnostic,
       path: document.path,
       ...point,
     });
@@ -537,6 +551,7 @@ const reportTarget = (
         code: result.code,
         severity: "error",
         message: result.message,
+        hint: projectionUsageHint(),
         path: document.path,
         ...point,
       });
@@ -544,10 +559,11 @@ const reportTarget = (
     }
     if ("status" in result) {
       if (!allowsWildcard) {
+        const diagnostic = projectionTargetUnbounded(kind);
         diagnostics.push({
           code: "projection-target-unbounded",
           severity: "error",
-          message: 'Unbounded projection targets require data-marimo-allow="*"',
+          ...diagnostic,
           path: document.path,
           ...point,
         });
@@ -586,10 +602,13 @@ const inspectElement = (
       ...point,
     });
   } else if (isProjectionElement && valueAttribute !== undefined) {
+    const diagnostic = projectionKindConflict(
+      tag as "marimo-cell" | "marimo-output",
+    );
     diagnostics.push({
       code: "projection-kind-conflict",
       severity: "error",
-      message: "One element cannot own two projection kinds",
+      ...diagnostic,
       path: document.path,
       ...point,
     });

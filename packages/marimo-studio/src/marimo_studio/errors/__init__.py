@@ -64,11 +64,14 @@ class ViewProjectError(ConfigurationError):
         source: Path | str | None = None,
         line: int | None = None,
         column: int | None = None,
+        hint: str | None = None,
     ) -> None:
         super().__init__(message)
         self.source = source
         self.line = line
         self.column = column
+        if hint is not None:
+            self.public_hint = hint
 
     def with_source(self, source: Path | str) -> ViewProjectError:
         if self.source is not None:
@@ -78,6 +81,7 @@ class ViewProjectError(ConfigurationError):
             source=source,
             line=self.line,
             column=self.column,
+            hint=self.public_hint,
         )
 
     def diagnostic_details(self) -> dict[str, object]:

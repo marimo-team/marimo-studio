@@ -129,12 +129,9 @@ export const SourceProjectDetails = ({
             </div>
           </dl>
           {diagnostic ? (
-            <p
-              className="studio-source-project-diagnostic"
-              data-severity={diagnostic.severity}
-              title={diagnostic.hint}
-            >
-              {diagnostic.message}
+            <p className="studio-source-project-diagnostic" data-severity={diagnostic.severity}>
+              <span>{diagnostic.message}</span>
+              {diagnostic.hint ? <small>{diagnostic.hint}</small> : null}
             </p>
           ) : null}
         </div>

@@ -105,6 +105,29 @@ def test_svelte_inspection_tracks_literal_site_identity_and_kind(
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
+def test_svelte_projection_diagnostic_names_the_cell_attribute(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(tmp_path, svelte_provider, "svelte")
+    (root / "src" / "App.svelte").write_text(
+        """<main>
+  <marimo-cell target="controls"></marimo-cell>
+</main>
+""",
+        encoding="utf-8",
+    )
+
+    diagnostic = _inspect(svelte_provider, project).diagnostics[0]
+
+    assert diagnostic.code == "projection-target-missing"
+    assert diagnostic.message == "<marimo-cell> requires a non-empty name."
+    assert 'Use <marimo-cell name="...">' in diagnostic.hint
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
 def test_svelte_each_extracts_bounded_and_wildcard_mounts(
     tmp_path: Path,
 ) -> None:
@@ -168,9 +191,15 @@ def test_svelte_each_extracts_bounded_and_wildcard_mounts(
         source.read_text(encoding="utf-8").replace(' data-marimo-allow="*"', ""),
         encoding="utf-8",
     )
-    assert "projection-target-unbounded" in {
-        item.code for item in _inspect(svelte_provider, project).diagnostics
-    }
+    diagnostic = next(
+        item
+        for item in _inspect(svelte_provider, project).diagnostics
+        if item.code == "projection-target-unbounded"
+    )
+    assert diagnostic.message == (
+        "Studio cannot determine every possible <marimo-cell> name."
+    )
+    assert 'Add data-marimo-allow="*"' in diagnostic.hint
 
 
 @pytest.mark.skipif(
