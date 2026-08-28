@@ -149,6 +149,37 @@ starting points. Pass a provider key to select one registration.
 
 ## `marimo_studio.agent`
 
+### `agent_plugin`
+
+```python
+import marimo_studio.agent as studio_agent
+
+resources = studio_agent.agent_plugin()
+```
+
+```text
+agent_plugin() -> agent_plugins.Plugin
+```
+
+Returns the Agent Plugin installed with the current Studio version. The plugin
+contains the packaged skills and resources selected by the distribution build.
+Raises `AgentPluginError` when the installed distribution has no usable plugin.
+
+### `agent_skill`
+
+```python
+skill = studio_agent.agent_skill()
+print(skill.body)
+```
+
+```text
+agent_skill() -> agent_plugins.Skill
+```
+
+Returns Studio's packaged `marimo-studio` skill. The dynamic module help points
+to the same skill and its installed `SKILL.md`. Raises `AgentPluginError` when
+the packaged plugin does not contain that skill.
+
 ### `current_workspace`
 
 ```python

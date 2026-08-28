@@ -116,7 +116,7 @@ assert set(marimo_studio.__all__) == {
 }
 assert set(marimo_studio.agent.__all__) == {
     "ValidationIssue", "ValidationReport", "View", "ShowResult", "Workspace",
-    "current_workspace",
+    "agent_plugin", "agent_skill", "current_workspace",
 }
 assert set(marimo_studio.authoring.__all__) == {
     "ValidationIssue", "ValidationReport", "View", "ViewBuild", "Workspace", "doctor",
@@ -186,10 +186,15 @@ def _verify_agent_plugin(expected_path: Path | None) -> None:
         raise AssertionError(
             f"Agent Plugin discovery returned {plugin.manifest.name!r}"
         )
-    if {skill.path.name for skill in plugin.skills} != {"marimo-studio"}:
+    skill = studio_agent.agent_skill()
+    if studio_agent.agent_plugin() != plugin or skill not in plugin.skills:
+        raise AssertionError("Studio agent discovery returned another Agent Plugin")
+    if {item.path.name for item in plugin.skills} != {"marimo-studio"}:
         raise AssertionError(
             "Agent Plugin discovery returned an unexpected skill catalog"
         )
+    if str(skill / "SKILL.md") not in (studio_agent.__doc__ or ""):
+        raise AssertionError("Studio agent help omits its installed Agent Skill")
 
 
 def _verify_browser_assets() -> None:

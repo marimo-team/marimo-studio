@@ -1193,6 +1193,7 @@ name = "marimo-studio"
 version = "0.1.0"
 source = { editable = "packages/marimo-studio" }
 dependencies = [
+    { name = "agent-plugins" },
     { name = "click" },
     { name = "htpy" },
     { name = "marimo" },
@@ -1210,6 +1211,7 @@ deno = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agent-plugins", specifier = "==0.1.0" },
     { name = "click", specifier = ">=8.2" },
     { name = "deno", marker = "extra == 'deno'", specifier = "==2.9.5" },
     { name = "htpy", specifier = ">=26.5.1,<27" },

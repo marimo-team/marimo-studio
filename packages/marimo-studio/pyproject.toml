@@ -8,6 +8,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }]
 requires-python = ">=3.10"
 dependencies = [
+  "agent-plugins==0.1.0",
   "click>=8.2",
   "htpy>=26.5.1,<27",
   "marimo==0.24.0",

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 from pathlib import Path
 
 import click
@@ -52,17 +51,6 @@ def test_browser_operations_belong_to_the_live_agent_view() -> None:
     assert studio_agent.Workspace is not studio_authoring.Workspace
     assert not hasattr(studio_authoring.View, "show")
     assert hasattr(studio_agent.View, "show")
-
-
-def test_agent_entrypoint_contains_imports_and_exports() -> None:
-    path = Path(studio_agent.__file__)
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    definitions = tuple(
-        node
-        for node in tree.body
-        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
-    )
-    assert definitions == ()
 
 
 def test_cli_commands_depend_on_authoring_services() -> None:

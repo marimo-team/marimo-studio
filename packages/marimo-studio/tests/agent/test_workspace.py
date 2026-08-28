@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import pydoc
 import threading
 from contextvars import ContextVar
 from importlib.metadata import distribution
@@ -8,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+import agent_plugins
 import marimo._code_mode as code_mode
 import pytest
 
@@ -55,8 +57,34 @@ def test_marimo_code_mode_loads_the_studio_workspace_api() -> None:
         "View",
         "ShowResult",
         "Workspace",
+        "agent_plugin",
+        "agent_skill",
         "current_workspace",
     }
+
+
+def test_agent_plugin_exposes_the_packaged_studio_skill() -> None:
+    plugin = studio_agent.agent_plugin()
+    skill = studio_agent.agent_skill()
+
+    assert plugin.manifest.name == "marimo-studio"
+    assert skill in plugin.skills
+    assert skill.path.name == "marimo-studio"
+    assert (skill / "SKILL.md").is_file()
+    assert (skill / "agents" / "openai.yaml").is_file()
+    assert skill.frontmatter.splitlines()[0] == "name: marimo-studio"
+    assert isinstance(skill, agent_plugins.Skill)
+
+
+def test_agent_module_help_points_to_the_packaged_studio_skill() -> None:
+    plugin = studio_agent.agent_plugin()
+    skill = studio_agent.agent_skill()
+    rendered = pydoc.render_doc(studio_agent)
+
+    assert str(plugin.path) in rendered
+    assert str(skill / "SKILL.md") in rendered
+    assert "resources = studio_agent.agent_plugin()" in rendered
+    assert "skill = studio_agent.agent_skill()" in rendered
 
 
 def test_agent_creation_and_binding_share_the_saved_notebook(
