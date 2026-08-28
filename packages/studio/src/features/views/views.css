@@ -204,6 +204,7 @@
 
 .studio-new-view-form,
 .studio-remove-view-confirm {
+  color: var(--studio-foreground);
   display: grid;
   gap: 0.45rem;
   min-width: 0;
