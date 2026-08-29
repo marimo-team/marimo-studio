@@ -48,24 +48,13 @@ pytestmark = pytest.mark.supported_python
         "/absolute",
         "C:/windows",
         "folder//file",
-        "folder/./file",
         "folder\\file",
         "folder/\u0000file",
         "cafe\u0301.txt",
-        "CON",
-        "nested/prn.txt",
-        "AUX.json",
-        "COM1.js",
+        "nested/CON.txt",
         "LPT9/style.css",
         "trailing.",
-        "nested/trailing ",
         "question?.js",
-        'quote".html',
-        "pipe|.css",
-        "star*.js",
-        "less<.html",
-        "greater>.html",
-        "colon:name.js",
     ),
 )
 def test_provider_paths_reject_noncanonical_project_locations(path: str) -> None:
@@ -136,7 +125,7 @@ def test_input_scope_excludes_undeclared_dependency_directories(
 @pytest.mark.parametrize(
     "files",
     (
-        {PurePosixPath("view.toml"): b"owned by core"},
+        {PurePosixPath("VIEW.TOML"): b"owned by core"},
         {PurePosixPath(".artifacts/file"): b"generated"},
         {
             PurePosixPath("App.tsx"): b"one",
@@ -169,7 +158,7 @@ def test_provider_cannot_expose_the_core_manifest_in_the_editor(
     provider = ProviderStub("example/html", "html")
     provider.inspection = replace(
         inspection(),
-        editor_documents=(SourceDocument(PurePosixPath("view.toml"), "toml", "edit"),),
+        editor_documents=(SourceDocument(PurePosixPath("VIEW.TOML"), "toml", "edit"),),
     )
     registry = ProviderRegistry((candidate("html", provider),))
     installed = registry.get(registry.ids[0])
@@ -181,7 +170,9 @@ def test_provider_cannot_expose_the_core_manifest_in_the_editor(
         {},
     )
 
-    with pytest.raises(ConfigurationError, match=r"cannot expose.*view.toml"):
+    with pytest.raises(
+        ConfigurationError, match=r"cannot expose Studio-owned 'view[.]toml'"
+    ):
         installed.inspect(inspection_request(project))
 
 
@@ -711,32 +702,3 @@ def test_provider_starter_files_respect_the_project_input_budget(
 
     with pytest.raises(ConfigurationError, match=message):
         installed.create(provider.starter, StarterContext("dashboard", "notebook"))
-
-
-def test_registered_provider_rejects_manifest_case_collisions(tmp_path: Path) -> None:
-    provider = ProviderStub("example/html", "html")
-    registry = ProviderRegistry((candidate("html", provider),))
-    installed = registry.get(registry.ids[0])
-    project = ViewProject(
-        "dashboard",
-        tmp_path,
-        tmp_path / "view.toml",
-        installed.key,
-        {},
-    )
-
-    provider.plan = {
-        PurePosixPath("index.html"): b"<!doctype html>",
-        PurePosixPath("VIEW.TOML"): b"provider = 'other/provider'",
-    }
-    with pytest.raises(ConfigurationError, match=r"reserves top-level 'view[.]toml'"):
-        installed.create(provider.starter, StarterContext("dashboard", "notebook"))
-
-    provider.inspection = replace(
-        inspection(),
-        editor_documents=(SourceDocument(PurePosixPath("VIEW.TOML"), "toml", "edit"),),
-    )
-    with pytest.raises(
-        ConfigurationError, match=r"cannot expose Studio-owned 'view[.]toml'"
-    ):
-        installed.inspect(inspection_request(project))

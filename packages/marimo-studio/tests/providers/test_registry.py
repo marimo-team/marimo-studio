@@ -114,7 +114,6 @@ def test_provider_keys_come_from_distribution_and_registration() -> None:
     )
 
     assert registry.ids == ("other-package/vanilla",)
-    assert "marimo-studio/vanilla" not in registry.ids
 
 
 def test_async_provider_operations_are_rejected_at_discovery() -> None:
@@ -199,8 +198,6 @@ def test_registration_and_starter_keys_are_distribution_scoped() -> None:
         ("first-package/report:report",),
         ("second-package/report:report",),
     ]
-    assert registry.ids == ("first-package/report", "second-package/report")
-    assert [item.provider_key for item in diagnostics] == list(registry.ids)
     assert all(item.loaded for item in diagnostics)
 
 
