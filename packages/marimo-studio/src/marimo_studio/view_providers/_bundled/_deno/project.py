@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import html
-import json
 import shutil
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -25,7 +23,6 @@ from marimo_studio.view_providers import (
     ProviderAvailability,
     ProviderCancellation,
     ProviderCommandResult,
-    StarterContext,
     ViewProject,
 )
 from marimo_studio.view_providers._bundled import _deno
@@ -43,7 +40,7 @@ class ProviderProjectSpec:
     """Define one provider's durable file and analyzer contract."""
 
     provider_id: str
-    resource_package: str
+    analyzer_package: str
     input_scope: tuple[ProjectInput, ...]
     document_roots: tuple[PurePosixPath, ...]
     required_files: tuple[str, ...]
@@ -52,7 +49,6 @@ class ProviderProjectSpec:
     option_paths: Mapping[str, str]
     analyzer_suffixes: frozenset[str]
     lockfile: str
-    template_documents: tuple[PurePosixPath, ...]
     build_fingerprint: str
 
     def source_paths(self, inspection: ProjectInspection) -> tuple[PurePosixPath, ...]:
@@ -75,7 +71,7 @@ class ProviderProjectSpec:
         return analyze_sources(
             project,
             self.provider_id,
-            self.resource_package,
+            self.analyzer_package,
             self.source_paths(inspection),
             lockfile,
             execution,
@@ -226,29 +222,6 @@ class ProviderProjectSpec:
             diagnostics=tuple(diagnostics),
             build_fingerprint=self.build_fingerprint,
         )
-
-
-def starter_files(
-    spec: ProviderProjectSpec,
-    context: StarterContext,
-) -> Mapping[PurePosixPath, bytes]:
-    """Render one provider starter with notebook-aware labels."""
-    view_name = context.view_name
-    notebook_name = context.notebook_name
-    replacements = {
-        "__DOCUMENT_TITLE__": html.escape(
-            f"{notebook_name} · {view_name.replace('-', ' ').title()}"
-        ),
-        "__NOTEBOOK_LABEL__": json.dumps(notebook_name),
-        "__VIEW_HEADING__": json.dumps(view_name.replace("-", " ").title()),
-    }
-    provider_files = _deno.template_files(spec.resource_package, replacements)
-    missing = [path for path in spec.template_documents if path not in provider_files]
-    if missing:
-        raise ValueError(
-            f"Starter package {spec.resource_package!r} is missing {missing[0]}"
-        )
-    return dict(sorted(provider_files.items(), key=lambda item: item[0].as_posix()))
 
 
 def copy_public_assets(

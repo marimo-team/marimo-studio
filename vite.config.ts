@@ -14,7 +14,7 @@ const generated = [
 const providerToolSources = [
   "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/**/analyzer.ts",
   "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/**/analyzers/**",
-  "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/**/template/**",
+  "packages/marimo-studio/src/marimo_studio/view_providers/_bundled/**/starters/**",
 ];
 
 const ignored = [...generated, ...providerToolSources, ...antiSlopIgnorePatterns];

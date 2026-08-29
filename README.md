@@ -41,8 +41,9 @@ The default page keeps its HTML, styles, and browser code in one editable file.
 It is the shortest path for reports, dashboards, and focused tools.
 
 Choose React or Svelte when the page benefits from components and a larger
-frontend source tree. Install `marimo-studio[deno]` in that environment so
-Studio can build those files with the pinned Deno toolchain.
+frontend source tree. Use the `marimo-studio/react:reveal` starter for a React
+slide deck. Install `marimo-studio[deno]` in that environment so Studio can
+build those files with the pinned Deno toolchain.
 
 Teams can connect another frontend build when an existing project should remain
 the source of the page. The [frontend integration
@@ -101,8 +102,8 @@ for the guided workflow, the example, and exact API contracts.
 
 ## Compatibility
 
-Marimo Studio 0.1.0 requires Python 3.10 or newer and Marimo 0.24.0. React and
-Svelte authoring use the optional Deno 2.9.5 dependency.
+Marimo Studio 0.1.0 requires Python 3.10 or newer and Marimo 0.24.0. React,
+Reveal.js, and Svelte authoring use the optional Deno 2.9.5 dependency.
 
 ## License
 

@@ -16,10 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-from html import escape
-from importlib import resources
 from pathlib import PurePosixPath
-from string import Template
 
 from marimo_studio._filesystem.io import reject_mutable_symlinks
 from marimo_studio.errors import ConfigurationError, ViewProjectError
@@ -41,6 +38,10 @@ from marimo_studio.view_providers import (
     ViewProject,
     mount_attribute,
 )
+from marimo_studio.view_providers._bundled._starters import (
+    starter_catalog,
+    starter_files,
+)
 from marimo_studio.view_providers._document import (
     HTMLDocumentParser,
     HTMLLocalResourceError,
@@ -50,15 +51,20 @@ from marimo_studio.view_providers._document import (
 from marimo_studio.view_providers._validation import validate_relative_path
 
 PROVIDER_KEY = "marimo-studio/vanilla"
-STARTER_KEY = "default"
-_STARTER_TEMPLATE = (
-    resources.files(__name__).joinpath("template").joinpath("index.html")
-)
-_STARTER_INSTRUCTIONS = (
-    resources.files(__name__).joinpath("template").joinpath("AGENTS.md")
-)
 _AGENT_INSTRUCTIONS_PATH = PurePosixPath("AGENTS.md")
 _OPTIONAL_DESIGN_PATH = PurePosixPath("DESIGN.md")
+_DEFAULT_DOCUMENTS = (PurePosixPath("index.html"), _AGENT_INSTRUCTIONS_PATH)
+_STARTERS = starter_catalog(
+    ProviderStarter(
+        key="default",
+        title="HTML document",
+        summary=(
+            "One editable HTML file with Studio projection elements and an inline "
+            "live-value adapter."
+        ),
+        documents=_DEFAULT_DOCUMENTS,
+    )
+)
 
 
 def _site_id(path: PurePosixPath, kind: str, target: str, occurrence: int) -> str:
@@ -201,41 +207,20 @@ class VanillaProvider:
         summary="Builds one HTML document with inline styles and scripts.",
         api_version=1,
     )
-    _starter = ProviderStarter(
-        key=STARTER_KEY,
-        title="HTML document",
-        summary=(
-            "One editable HTML file with Studio projection elements and an inline "
-            "live-value adapter."
-        ),
-        documents=(PurePosixPath("index.html"), _AGENT_INSTRUCTIONS_PATH),
-    )
 
     def availability(self, project: ViewProject | None = None) -> ProviderAvailability:
         del project
         return ProviderAvailability(True)
 
     def starters(self) -> tuple[ProviderStarter, ...]:
-        return (self._starter,)
+        return tuple(_STARTERS.values())
 
     def create(
         self,
         starter: ProviderStarter,
         context: StarterContext,
     ) -> dict[PurePosixPath, bytes]:
-        if starter.key != STARTER_KEY:
-            raise ValueError(f"Unknown vanilla starter {starter.key!r}")
-        name = context.view_name
-        notebook = context.notebook_name
-        document = Template(_STARTER_TEMPLATE.read_text(encoding="utf-8")).substitute(
-            notebook=escape(notebook),
-            view=escape(name),
-            heading=escape(name.replace("-", " ").title()),
-        )
-        return {
-            PurePosixPath("index.html"): document.encode(),
-            _AGENT_INSTRUCTIONS_PATH: _STARTER_INSTRUCTIONS.read_bytes(),
-        }
+        return starter_files(__name__, _STARTERS, starter, context)
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         project = request.project

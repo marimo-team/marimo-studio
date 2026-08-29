@@ -65,5 +65,5 @@ Run the default Overview page as an application:
 uv run --with polars --with pyobservablejs marimo run examples/nga.py
 ```
 
-Continue with [Use HTML, React, or Svelte](../guide/frontend-options.md) or
+Continue with [Choose a frontend starter](../guide/frontend-options.md) or
 [Place notebook results on a page](../guide/notebook-results.md).

@@ -25,7 +25,7 @@ package that owns a policy or mutable resource.
 | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | Workspace configuration, `view.toml`, or project transactions              | [Product and workspace](architecture/product-and-workspace.md)                 |
 | View creation, source documents, inspection, builds, removal, or revisions | [Product and workspace](architecture/product-and-workspace.md)                 |
-| Provider descriptors, templates, inspection, builds, or artifact storage   | [View providers and artifacts](architecture/view-providers-and-artifacts.md)   |
+| Provider descriptors, starters, inspection, builds, or artifact storage    | [View providers and artifacts](architecture/view-providers-and-artifacts.md)   |
 | Notebook symbols, mount declarations, mounted instances, or ownership      | [Symbolic projections](architecture/symbolic-projections.md)                   |
 | Marimo routes, sessions, saves, kernels, private APIs, or upgrades         | [Marimo integration](architecture/marimo-integration.md)                       |
 | Browser protocol, runtimes, Source, layout, or presentation lifecycle      | [Browser runtime and authoring](architecture/browser-runtime-and-authoring.md) |
@@ -51,7 +51,7 @@ formatting, linting, TypeScript checks, tests, builds, and task execution.
 
 Deno-backed providers use the exact executable supplied by the Python package
 extra. Their frontend dependency versions and lockfiles belong to the view
-project or packaged template that consumes them.
+project or packaged starter that consumes them.
 
 ## Work in one owning slice
 
@@ -159,7 +159,7 @@ Add the matching boundary checks:
 | Change                                                                            | Additional check                                             |
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | Browser package, protocol, runtime, or Marimo frontend adapter                    | `make build`                                                 |
-| Provider entry point, template resource, or Deno build                            | Provider contract tests and `make package`                   |
+| Provider entry point, starter resource, or Deno build                             | Provider contract tests and `make package`                   |
 | Session, frame, source, projection, control, query, view, or responsive lifecycle | `make e2e`                                                   |
 | Generated browser assets or distribution contents                                 | `make package`                                               |
 | Public documentation                                                              | `make docs-build` and rendered desktop and narrow inspection |

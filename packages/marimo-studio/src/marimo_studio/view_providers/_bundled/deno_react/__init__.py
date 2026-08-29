@@ -28,8 +28,9 @@ from marimo_studio.view_providers import (
     ViewProject,
 )
 from marimo_studio.view_providers._bundled import _deno
-from marimo_studio.view_providers._bundled._deno.project import (
-    ProviderProjectSpec,
+from marimo_studio.view_providers._bundled._deno.project import ProviderProjectSpec
+from marimo_studio.view_providers._bundled._starters import (
+    starter_catalog,
     starter_files,
 )
 from marimo_studio.view_providers._bundled.deno_react.build import (
@@ -38,7 +39,6 @@ from marimo_studio.view_providers._bundled.deno_react.build import (
 )
 
 PROVIDER_KEY = "marimo-studio/react"
-STARTER_KEY = "default"
 REACT_VERSION = "19.2.4"
 REACT_DOM_VERSION = "19.2.4"
 TYPESCRIPT_VERSION = "6.0.3"
@@ -68,23 +68,50 @@ _EDITOR_LANGUAGES = {
     ".ts": "typescript",
     ".tsx": "typescriptreact",
 }
-_TEMPLATE_DOCUMENTS = tuple(
-    PurePosixPath(path)
-    for path in (
-        "AGENTS.md",
-        "src/App.tsx",
-        "src/marimo-studio.d.ts",
-        "src/lib/use-marimo-value.ts",
-        "src/main.tsx",
-        "src/index.html",
-        "src/style.css",
-        "deno.json",
-        "deno.lock",
-    )
+_SUPPORT_DOCUMENTS = (
+    PurePosixPath("src/marimo-studio.d.ts"),
+    PurePosixPath("src/lib/use-marimo-value.ts"),
+)
+_DEFAULT_DOCUMENTS = (
+    PurePosixPath("AGENTS.md"),
+    PurePosixPath("src/App.tsx"),
+    *_SUPPORT_DOCUMENTS,
+    PurePosixPath("src/main.tsx"),
+    PurePosixPath("src/index.html"),
+    PurePosixPath("src/style.css"),
+    PurePosixPath("deno.json"),
+    PurePosixPath("deno.lock"),
+)
+_REVEAL_DOCUMENTS = (
+    PurePosixPath("AGENTS.md"),
+    PurePosixPath("src/App.tsx"),
+    *_SUPPORT_DOCUMENTS,
+    PurePosixPath("src/main.tsx"),
+    PurePosixPath("src/index.html"),
+    PurePosixPath("src/style.css"),
+    PurePosixPath("deno.json"),
+    PurePosixPath("deno.lock"),
+)
+_STARTERS = starter_catalog(
+    ProviderStarter(
+        key="default",
+        title="React",
+        summary=(
+            "A typed React application with Studio projection elements and a "
+            "live-value hook."
+        ),
+        documents=_DEFAULT_DOCUMENTS,
+    ),
+    ProviderStarter(
+        key="reveal",
+        title="Reveal.js slides",
+        summary="A React slide deck with Reveal.js and Studio notebook projections.",
+        documents=_REVEAL_DOCUMENTS,
+    ),
 )
 _PROJECT = ProviderProjectSpec(
     provider_id=PROVIDER_KEY,
-    resource_package="marimo_studio.view_providers._bundled.deno_react",
+    analyzer_package="marimo_studio.view_providers._bundled.deno_react",
     input_scope=_INPUT_SCOPE,
     document_roots=_DOCUMENT_ROOTS,
     required_files=_REQUIRED,
@@ -98,7 +125,6 @@ _PROJECT = ProviderProjectSpec(
     },
     analyzer_suffixes=frozenset({".js", ".jsx", ".mjs", ".ts", ".tsx"}),
     lockfile="deno.lock",
-    template_documents=_TEMPLATE_DOCUMENTS,
     build_fingerprint=(
         f"{_deno.DENO_VERSION}:{REACT_VERSION}:{REACT_DOM_VERSION}:"
         f"{TYPESCRIPT_VERSION}:{PROJECTION_CONTRACT_VERSION}:"
@@ -115,31 +141,20 @@ class DenoReactProvider:
         summary="Builds a React project with the pinned Deno toolchain.",
         api_version=1,
     )
-    _starter = ProviderStarter(
-        key=STARTER_KEY,
-        title="React",
-        summary=(
-            "A typed React application with Studio projection elements and a "
-            "live-value hook."
-        ),
-        documents=_TEMPLATE_DOCUMENTS,
-    )
 
     def availability(self, project: ViewProject | None = None) -> ProviderAvailability:
         del project
         return _deno.deno_availability()
 
     def starters(self) -> tuple[ProviderStarter, ...]:
-        return (self._starter,)
+        return tuple(_STARTERS.values())
 
     def create(
         self,
         starter: ProviderStarter,
         context: StarterContext,
     ) -> dict[PurePosixPath, bytes]:
-        if starter.key != STARTER_KEY:
-            raise ValueError(f"Unknown React starter {starter.key!r}")
-        return dict(starter_files(_PROJECT, context))
+        return starter_files(__name__, _STARTERS, starter, context)
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         project = request.project

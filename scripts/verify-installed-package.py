@@ -284,6 +284,7 @@ def _verify_views(*, deno: bool) -> None:
             catalog = {item.id: item for item in await workspace.starters()}
             expected = {
                 "marimo-studio/react:default",
+                "marimo-studio/react:reveal",
                 "marimo-studio/svelte:default",
                 "marimo-studio/vanilla:default",
             }
@@ -321,6 +322,7 @@ def _verify_views(*, deno: bool) -> None:
                 return
             for view_name, identity in (
                 ("react", "marimo-studio/react:default"),
+                ("slides", "marimo-studio/react:reveal"),
                 ("svelte", "marimo-studio/svelte:default"),
             ):
                 availability = catalog[identity].availability

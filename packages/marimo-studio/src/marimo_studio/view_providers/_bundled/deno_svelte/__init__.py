@@ -28,14 +28,14 @@ from marimo_studio.view_providers import (
     ViewProject,
 )
 from marimo_studio.view_providers._bundled import _deno
-from marimo_studio.view_providers._bundled._deno.project import (
-    ProviderProjectSpec,
+from marimo_studio.view_providers._bundled._deno.project import ProviderProjectSpec
+from marimo_studio.view_providers._bundled._starters import (
+    starter_catalog,
     starter_files,
 )
 from marimo_studio.view_providers._bundled.deno_svelte.build import build_svelte
 
 PROVIDER_KEY = "marimo-studio/svelte"
-STARTER_KEY = "default"
 SVELTE_VERSION = "5.56.9"
 SVELTE_PLUGIN_VERSION = "7.3.0"
 SVELTE_CHECK_VERSION = "4.7.5"
@@ -78,28 +78,40 @@ _EDITOR_LANGUAGES = {
     ".svg": "xml",
     ".ts": "typescript",
 }
-_TEMPLATE_DOCUMENTS = tuple(
-    PurePosixPath(path)
-    for path in (
-        "AGENTS.md",
-        "src/App.svelte",
-        "src/app.d.ts",
-        "src/lib/marimo-value.ts",
-        "src/main.ts",
-        "src/index.html",
-        "src/style.css",
-        "src/vite-env.d.ts",
-        "package.json",
-        "deno.json",
-        "vite.config.ts",
-        "svelte.config.js",
-        "tsconfig.json",
-        "deno.lock",
+_STUDIO_SUPPORT_DOCUMENTS = (
+    PurePosixPath("src/app.d.ts"),
+    PurePosixPath("src/lib/marimo-value.ts"),
+)
+_VITE_ENV_DOCUMENT = PurePosixPath("src/vite-env.d.ts")
+_DEFAULT_DOCUMENTS = (
+    PurePosixPath("AGENTS.md"),
+    PurePosixPath("src/App.svelte"),
+    *_STUDIO_SUPPORT_DOCUMENTS,
+    PurePosixPath("src/main.ts"),
+    PurePosixPath("src/index.html"),
+    PurePosixPath("src/style.css"),
+    _VITE_ENV_DOCUMENT,
+    PurePosixPath("package.json"),
+    PurePosixPath("deno.json"),
+    PurePosixPath("vite.config.ts"),
+    PurePosixPath("svelte.config.js"),
+    PurePosixPath("tsconfig.json"),
+    PurePosixPath("deno.lock"),
+)
+_STARTERS = starter_catalog(
+    ProviderStarter(
+        key="default",
+        title="Svelte",
+        summary=(
+            "A typed Svelte application with Studio projection elements and a "
+            "live-value action."
+        ),
+        documents=_DEFAULT_DOCUMENTS,
     )
 )
 _PROJECT = ProviderProjectSpec(
     provider_id=PROVIDER_KEY,
-    resource_package="marimo_studio.view_providers._bundled.deno_svelte",
+    analyzer_package="marimo_studio.view_providers._bundled.deno_svelte",
     input_scope=_INPUT_SCOPE,
     document_roots=_DOCUMENT_ROOTS,
     required_files=_REQUIRED,
@@ -114,7 +126,6 @@ _PROJECT = ProviderProjectSpec(
     },
     analyzer_suffixes=frozenset({".js", ".mjs", ".ts", ".svelte"}),
     lockfile="deno.lock",
-    template_documents=_TEMPLATE_DOCUMENTS,
     build_fingerprint=(
         f"{_deno.DENO_VERSION}:{SVELTE_VERSION}:{SVELTE_PLUGIN_VERSION}:"
         f"{SVELTE_CHECK_VERSION}:{VITE_VERSION}:{TYPESCRIPT_VERSION}:"
@@ -131,31 +142,20 @@ class DenoSvelteProvider:
         summary="Builds a Svelte project with the pinned Deno toolchain.",
         api_version=1,
     )
-    _starter = ProviderStarter(
-        key=STARTER_KEY,
-        title="Svelte",
-        summary=(
-            "A typed Svelte application with Studio projection elements and a "
-            "live-value action."
-        ),
-        documents=_TEMPLATE_DOCUMENTS,
-    )
 
     def availability(self, project: ViewProject | None = None) -> ProviderAvailability:
         del project
         return _deno.deno_availability()
 
     def starters(self) -> tuple[ProviderStarter, ...]:
-        return (self._starter,)
+        return tuple(_STARTERS.values())
 
     def create(
         self,
         starter: ProviderStarter,
         context: StarterContext,
     ) -> dict[PurePosixPath, bytes]:
-        if starter.key != STARTER_KEY:
-            raise ValueError(f"Unknown Svelte starter {starter.key!r}")
-        return dict(starter_files(_PROJECT, context))
+        return starter_files(__name__, _STARTERS, starter, context)
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         return _PROJECT.inspect(request, self.availability(request.project))

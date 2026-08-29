@@ -101,6 +101,7 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
     assert len(starter_ids) == len(set(starter_ids))
     assert {
         "marimo-studio/react:default",
+        "marimo-studio/react:reveal",
         "marimo-studio/svelte:default",
         "marimo-studio/vanilla:default",
     }.issubset(starter_ids)

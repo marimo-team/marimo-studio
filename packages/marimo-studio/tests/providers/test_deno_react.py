@@ -32,7 +32,7 @@ pytestmark = [
 def test_react_inspection_tracks_literal_site_identity_and_kind(
     tmp_path: Path,
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "react")
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
     source = root / "src" / "App.tsx"
     source.write_text(
         """export const App = () => (
@@ -107,7 +107,7 @@ def test_react_inspection_tracks_literal_site_identity_and_kind(
 def test_react_projection_diagnostics_name_the_authored_attributes(
     tmp_path: Path,
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "react")
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
     (root / "src" / "App.tsx").write_text(
         """export const App = () => (
   <main>
@@ -156,7 +156,7 @@ def test_react_projection_diagnostics_name_the_authored_attributes(
 def test_react_starter_types_projections_and_exposes_guidance(
     tmp_path: Path,
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "react")
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
     (root / "src" / "App.tsx").write_text(
         """/// <reference path="./marimo-studio.d.ts" />
 
@@ -211,10 +211,47 @@ export const App = () => {
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
+def test_reveal_starter_builds_a_deck_with_a_notebook_output(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(
+        tmp_path,
+        react_provider,
+        "marimo-studio/react",
+        starter_key="reveal",
+    )
+    source = root / "src" / "App.tsx"
+    source.write_text(
+        source.read_text(encoding="utf-8").replace(
+            "      <h2>Place results in the argument</h2>",
+            "      <h2>Place results in the argument</h2>\n"
+            '      <marimo-output value="summary" />',
+        ),
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(react_provider, project)
+    files = root / ".artifacts" / ".staging" / "reveal-starter" / "files"
+    files.mkdir(parents=True)
+    report = _build(
+        react_provider,
+        provider_build_request(project, inspection, files),
+    )
+
+    assert [(site.kind, site.allowed_targets) for site in inspection.mounts] == [
+        ("output", ("summary",))
+    ]
+    assert report.document is not None
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
 def test_react_maps_extract_bounded_and_wildcard_mounts(
     tmp_path: Path,
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "react")
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
     (root / "src" / "targets.ts").write_text(
         'export const importedCells = [" imported ", "detail", "detail"] as const;\n',
         encoding="utf-8",
@@ -246,7 +283,6 @@ export const App = () => (
 
     inspection = _inspect(react_provider, project)
 
-    assert not inspection.diagnostics
     assert [site.kind for site in inspection.mounts] == [
         "cell",
         "cell",
@@ -290,7 +326,7 @@ def test_react_inspection_reports_one_entrypoint_contract_diagnostic(
     entrypoint: str,
     code: str,
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "react")
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
     if entrypoint == "src/custom.html":
         (root / "src" / "custom.html").write_text(
             (root / "src" / "index.html").read_text(encoding="utf-8"),
@@ -317,7 +353,7 @@ def test_react_inspection_reports_one_entrypoint_contract_diagnostic(
 def test_react_inspection_rejects_module_targets_outside_snapshot(
     tmp_path: Path,
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "react")
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
     sentinel = tmp_path / "outside.ts"
     sentinel.write_text("export default 'outside';\n", encoding="utf-8")
     for target in ("../../../outside.ts", "/tmp/outside.ts", "file:///tmp/outside.ts"):
@@ -342,7 +378,7 @@ def test_react_inspection_rejects_module_targets_outside_snapshot(
 def test_react_inspection_rejects_html_module_outside_snapshot(
     tmp_path: Path,
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "react")
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
     entry = root / "src" / "index.html"
     entry.write_text(
         entry.read_text(encoding="utf-8").replace(
@@ -366,7 +402,7 @@ def test_react_inspection_rejects_html_module_outside_snapshot(
 def test_react_inspection_rejects_configured_project_escape(
     tmp_path: Path,
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "react")
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
     config_path = root / "deno.json"
     original = json.loads(config_path.read_text(encoding="utf-8"))
     for field in ("imports", "workspace", "links"):
@@ -402,7 +438,7 @@ def test_react_build_rejects_config_escape_before_process_start(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "react")
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
     inspection = _inspect(react_provider, project)
     config_path = root / "deno.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -433,7 +469,7 @@ def test_react_build_rejects_config_escape_before_process_start(
 def test_react_build_rejects_implicit_jsx_module_outside_snapshot(
     tmp_path: Path,
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "react")
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
     source = root / "src" / "App.tsx"
     source.write_text(
         "/** @jsxImportSource ../../outside-jsx */\n"

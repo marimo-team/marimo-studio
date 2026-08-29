@@ -16,9 +16,6 @@ from marimo_studio.view_providers._bundled._deno.files import (
 from marimo_studio.view_providers._bundled._deno.files import (
     project_inventory as project_inventory,
 )
-from marimo_studio.view_providers._bundled._deno.files import (
-    template_files as template_files,
-)
 from marimo_studio.view_providers._bundled._deno.runtime import (
     DENO_VERSION as DENO_VERSION,
 )

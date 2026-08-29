@@ -152,8 +152,11 @@ def test_provider_inspection_selects_cache_without_mutating_the_project(
 
 
 @pytest.mark.parametrize(
-    ("provider", "starter"),
-    ((react_provider, "react"), (svelte_provider, "svelte")),
+    ("provider", "provider_id"),
+    (
+        (react_provider, "marimo-studio/react"),
+        (svelte_provider, "marimo-studio/svelte"),
+    ),
 )
 @pytest.mark.skipif(
     not _deno.deno_availability().available,
@@ -162,9 +165,9 @@ def test_provider_inspection_selects_cache_without_mutating_the_project(
 def test_framework_inspection_preserves_the_project_tree(
     tmp_path: Path,
     provider: Any,
-    starter: str,
+    provider_id: str,
 ) -> None:
-    root, project = provider_project(tmp_path, provider, starter)
+    root, project = provider_project(tmp_path, provider, provider_id)
     before = _project_tree(root)
 
     inspection = inspect_view_project_sync(project)

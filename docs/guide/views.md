@@ -47,6 +47,6 @@ Studio confirms before deleting the page and its source files. When you remove
 the default view, the confirmation names the view that will open at `/`
 afterward. A configured notebook always keeps at least one view.
 
-Use [HTML, React, or Svelte](frontend-options.md) when the pages need different
+Use [frontend starters](frontend-options.md) when the pages need different
 frontend structures. Use [notebook results](notebook-results.md) to keep their
 analytical meaning aligned.

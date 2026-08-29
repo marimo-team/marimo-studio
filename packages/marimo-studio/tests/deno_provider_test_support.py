@@ -23,7 +23,6 @@ from marimo_studio.view_providers import (
 def write_plan(
     root: Path,
     files: Mapping[PurePosixPath, bytes],
-    provider: ViewProvider,
     provider_key: str,
 ) -> None:
     for relative, content in files.items():
@@ -39,15 +38,19 @@ def write_plan(
 def project(
     tmp_path: Path,
     provider: ViewProvider,
-    starter_id: str,
+    provider_id: str,
+    *,
+    starter_key: str = "default",
 ) -> tuple[Path, ViewProject]:
-    starter_key = starter_id.rsplit(":", 1)[-1].rsplit("/", 1)[-1]
-    root = tmp_path / starter_key
+    starter = next(item for item in provider.starters() if item.key == starter_key)
+    provider_name = provider_id.rsplit("/", 1)[-1]
+    suffix = "" if starter_key == "default" else f"-{starter_key}"
+    root = tmp_path / f"{provider_name}{suffix}"
     files = provider.create(
-        provider.starters()[0],
+        starter,
         StarterContext("research-view", "nga"),
     )
-    write_plan(root, files, provider, f"marimo-studio/{starter_key}")
+    write_plan(root, files, provider_id)
     return root, load_view_project(root)
 
 

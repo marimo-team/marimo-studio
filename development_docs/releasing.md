@@ -29,7 +29,8 @@ Define release-affecting version policy in its owning manifest or lockfile:
 - uv range from `[tool.uv].required-version` in the root `pyproject.toml`
 - Marimo Python requirement
 - Deno Python distribution and executable
-- React and React DOM template imports
+- React and React DOM starter imports
+- `@revealjs/react` and Reveal.js starter imports
 - Svelte compiler
 - Official Svelte Vite plugin
 - Vite, TypeScript, and source analyzers
@@ -105,8 +106,9 @@ The package gate also enforces these release budgets:
 
 `scripts/verify-pypi.sh` polls for the exact package version with a minimal
 probe. After the version appears, it runs the complete base check and Deno
-check once. The Deno check creates and builds the React and Svelte starters
-with the published package.
+check once. The Deno check creates and builds the React application starter,
+Reveal.js slide deck starter, and Svelte application starter with the published
+package.
 
 Both scripts use isolated, uncached environments while retaining the
 repository dependency-age policy.

@@ -94,15 +94,22 @@ view_providers/
   __init__.py      public provider API
   _host/           discovery, conformance, and isolated operations
   _bundled/
-    vanilla/        provider, template
+    _starters.py  bundled starter catalog and resource assembly
+    vanilla/      provider, starters
     _deno/         shared process, inventory, and analyzer support
-    deno_react/    provider, build, analyzer, template
-    deno_svelte/   provider, build, analyzer, template
+    deno_react/   provider, build, analyzer, starters
+    deno_svelte/  provider, build, analyzer, starters
 ```
 
 Framework-specific parsing and diagnostics stay inside the matching
 bundled provider. Shared Deno execution, source copying, instrumentation edits,
 and public asset handling stay under `_bundled/_deno`.
+
+Each bundled provider declares an immutable `_STARTERS` catalog. The catalog
+key selects `starters/<key>`. Provider-wide files under `starters/_shared` join
+the selected tree, and an overlapping output path rejects creation. This keeps
+starter composition separate from the provider's continuing inspection and
+build contract.
 
 ## Build lifecycle
 

@@ -1,9 +1,9 @@
 ---
-title: Use HTML, React, or Svelte
+title: Choose a frontend starter
 description: Choose page source that matches the interaction and maintenance needs of the audience experience.
 ---
 
-# Use HTML, React, or Svelte
+# Choose a frontend starter
 
 Choose the lightest frontend that makes the page comfortable to build and
 maintain. Every choice can place the same notebook results and remains editable
@@ -36,6 +36,22 @@ uvx --from 'marimo-studio[deno]' marimo-studio view create dashboard \
 Studio creates TSX, CSS, and Deno configuration. The optional Deno dependency
 builds the frontend without adding Node package management to the notebook
 environment.
+
+## Present a Reveal.js slide deck
+
+Choose Reveal.js when the audience should move through an ordered presentation
+with slide navigation, fragments, and notebook results placed beside the claim
+they support.
+
+```console
+uvx --from 'marimo-studio[deno]' marimo-studio view create slides \
+  --target analysis.py \
+  --starter marimo-studio/react:reveal
+```
+
+Studio creates a React deck with `@revealjs/react`, Reveal's structural CSS, a
+local visual theme, and frozen Deno dependencies. Add selected notebook cells,
+outputs, or values inside `Slide` components.
 
 ## Use Svelte for concise components
 

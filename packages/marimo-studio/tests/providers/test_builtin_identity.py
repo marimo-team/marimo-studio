@@ -32,15 +32,6 @@ def test_built_in_registration_labels_resolve_canonical_provider_ids() -> None:
         "marimo-studio/vanilla",
     }
     assert {
-        f"{provider.key}:{starter.key}"
-        for provider, starter in registry.starter_records()
-        if provider.distribution == "marimo-studio"
-    } == {
-        "marimo-studio/react:default",
-        "marimo-studio/svelte:default",
-        "marimo-studio/vanilla:default",
-    }
-    assert {
         provider.key: provider.requirement
         for provider, _starter in registry.starter_records()
         if provider.distribution == "marimo-studio"

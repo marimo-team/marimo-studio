@@ -4,12 +4,7 @@ from __future__ import annotations
 
 import shutil
 from collections.abc import Mapping
-from importlib import resources
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from importlib.resources.abc import Traversable
 
 from marimo_studio._artifacts.limits import PROJECT_INPUT_BUDGET
 from marimo_studio._filesystem.tree import bounded_regular_files
@@ -20,10 +15,6 @@ from marimo_studio.view_providers import (
     ProviderCancellation,
     SourceDocument,
     ViewProject,
-)
-
-_TEMPLATE_EXCLUDES = frozenset(
-    {".artifacts", ".deno", ".vite", "dist", "node_modules", "__pycache__"}
 )
 
 
@@ -141,28 +132,3 @@ def _copy_project_inputs(
         shutil.copy2(source, target)
     if cancellation is not None and cancellation.cancelled:
         raise ProviderCommandError("Deno source staging was cancelled")
-
-
-def template_files(
-    package: str,
-    replacements: Mapping[str, str],
-) -> dict[PurePosixPath, bytes]:
-    """Render one packaged text template tree."""
-    root = resources.files(package).joinpath("template")
-    files: dict[PurePosixPath, bytes] = {}
-
-    def visit(node: Traversable, prefix: PurePosixPath) -> None:
-        for child in sorted(node.iterdir(), key=lambda item: item.name):
-            if child.name in _TEMPLATE_EXCLUDES:
-                continue
-            relative = prefix / child.name
-            if child.is_dir():
-                visit(child, relative)
-                continue
-            content = child.read_text(encoding="utf-8")
-            for marker, value in replacements.items():
-                content = content.replace(marker, value)
-            files[relative] = content.encode()
-
-    visit(root, PurePosixPath())
-    return files
