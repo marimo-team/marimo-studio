@@ -31,21 +31,40 @@ from .values_test_support import (
 )
 
 
-def test_untitled_notebook_allows_repeated_kernel_instantiation(
+def test_untitled_kernel_activates_after_rename(
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from marimo._runtime import context as runtime_context
     from marimo._runtime.context import kernel_context as kernel_context_module
     from marimo._utils.lifespans import Lifespans
 
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+
+    class Registry:
+        def __init__(self) -> None:
+            self.registered: list[str] = []
+            self.deleted: list[str] = []
+
+        def register(self, namespace: str, _function: object) -> None:
+            self.registered.append(namespace)
+
+        def delete(self, namespace: str) -> None:
+            self.deleted.append(namespace)
+
     class Kernel:
         _lifespan: Any = None
+        app_metadata = SimpleNamespace(filename=None)
 
     class Context:
         filename = None
+        function_registry = Registry()
+        query_params: dict[str, str]
         _kernel = Kernel()
 
     context = Context()
+    context.query_params = {}
     monkeypatch.setattr(runtime_context, "get_context", lambda: context)
     monkeypatch.setattr(kernel_context_module, "KernelRuntimeContext", Context)
 
@@ -53,12 +72,19 @@ def test_untitled_notebook_allows_repeated_kernel_instantiation(
         aggregate = Lifespans([kernel_values_module.kernel_lifespan])(None)
         context._kernel._lifespan = aggregate
         await aggregate.__aenter__()
-        try:
-            await context._kernel._lifespan.__aenter__()
-        finally:
-            await context._kernel._lifespan.__aexit__(None, None, None)
+        await context._kernel._lifespan.__aenter__()
+        assert context.function_registry.registered == []
+        context._kernel.app_metadata.filename = str(notebook)
+        await context._kernel._lifespan.__aenter__()
+        registered = [*context.function_registry.registered]
+        assert registered
+        await context._kernel._lifespan.__aenter__()
+        assert context.function_registry.registered == registered
+        await context._kernel._lifespan.__aexit__(None, None, None)
 
     asyncio.run(exercise())
+
+    assert context.function_registry.deleted == ["_marimo_studio"]
 
 
 def test_kernel_reinstantiation_preserves_marimos_full_lifespan_chain() -> None:

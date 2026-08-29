@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -136,6 +137,29 @@ async def _server_location(
             )
         ),
     )
+
+
+async def _server_session_location(
+    request: Request | WebSocket,
+    session_id: str,
+) -> ServerLocation | None:
+    app = request.scope.get("app")
+    state = getattr(app, "state", None)
+    manager = getattr(state, "session_manager", None)
+    if manager is None:
+        return None
+    from marimo._types.ids import SessionId
+
+    session = manager.get_session(SessionId(session_id))
+    path = getattr(getattr(session, "app_file_manager", None), "path", None)
+    if not isinstance(path, str) or not path:
+        return None
+    file_key = path
+    directory = manager.workspace.directory
+    if directory is not None:
+        with suppress(ValueError):
+            file_key = Path(path).relative_to(Path(directory)).as_posix()
+    return await _server_location(request, file_key)
 
 
 def location_handle(location: ServerLocation) -> _LocationHandle:
@@ -289,6 +313,13 @@ class PrivateServerGateway:
         selected_file: str | None = None,
     ) -> ServerLocation | None:
         return await _server_location(request, selected_file)
+
+    async def session_location(
+        self,
+        request: Request | WebSocket,
+        session_id: str,
+    ) -> ServerLocation | None:
+        return await _server_session_location(request, session_id)
 
     def context(self, location: ServerLocation) -> ServerContext:
         return _server_context(location)

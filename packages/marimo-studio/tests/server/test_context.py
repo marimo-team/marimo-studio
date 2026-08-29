@@ -90,6 +90,9 @@ def test_directory_request_resolves_notebook_without_mutating_server_config(
     first.write_text(notebook_source(tmp_path / "first-output"), encoding="utf-8")
     second.write_text(notebook_source(tmp_path / "second-output"), encoding="utf-8")
     state, config_manager = _server(tmp_path)
+    state.session_manager.get_session = lambda _session_id: SimpleNamespace(
+        app_file_manager=SimpleNamespace(path=str(second))
+    )
     first_request = _request(state, "first.py")
     second_request = _request(state, "nested/second.py")
 
@@ -104,6 +107,14 @@ def test_directory_request_resolves_notebook_without_mutating_server_config(
     assert second_location is not None
     assert second_location.notebook == second.resolve()
     assert second_location.routing_query == (("file", "nested/second.py"),)
+    session_location = asyncio.run(
+        gateway.session_location(
+            _request(state, ""),
+            "s_123456",
+        )
+    )
+    assert session_location is not None
+    assert session_location.file_key == "nested/second.py"
 
 
 def test_gateway_location_and_context_resolve_off_the_event_loop(

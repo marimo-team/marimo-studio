@@ -284,6 +284,20 @@ def studio_document(
                         if bootstrap is not None
                         else ()
                     ),
+                    script[
+                        Markup(
+                            """
+                            const studioUrl = new URL(globalThis.location.href);
+                            studioUrl.searchParams.delete("session_id");
+                            studioUrl.searchParams.delete("marimo_studio_resume");
+                            globalThis.history.replaceState(
+                              globalThis.history.state,
+                              "",
+                              studioUrl,
+                            );
+                            """
+                        )
+                    ],
                     noscript[
                         node_list(
                             "Studio requires JavaScript. ",

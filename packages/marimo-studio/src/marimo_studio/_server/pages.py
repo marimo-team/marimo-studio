@@ -321,7 +321,7 @@ def studio_response(
             headers=DOCUMENT_HEADERS,
         )
     client_id = secrets.token_urlsafe(18)
-    native_session_id = session_ids.allocate(context, sessions)
+    native_session_id = _editor_session_id(request, context, sessions, session_ids)
     return HTMLResponse(
         studio_document(
             studio.notebook,
@@ -355,7 +355,7 @@ def initialization_response(
     if request.method not in {"GET", "HEAD"}:
         return Response(status_code=405)
     client_id = secrets.token_urlsafe(18)
-    native_session_id = session_ids.allocate(context, sessions)
+    native_session_id = _editor_session_id(request, context, sessions, session_ids)
     return HTMLResponse(
         studio_document(
             definition.notebook,
@@ -388,7 +388,7 @@ def unconfigured_response(
     if request.method not in {"GET", "HEAD"}:
         return Response(status_code=405)
     client_id = secrets.token_urlsafe(18)
-    native_session_id = session_ids.allocate(context, sessions)
+    native_session_id = _editor_session_id(request, context, sessions, session_ids)
     return HTMLResponse(
         studio_document(
             notebook,
@@ -404,6 +404,27 @@ def unconfigured_response(
         ),
         headers=DOCUMENT_HEADERS,
     )
+
+
+def _editor_session_id(
+    request: Request,
+    context: ServerContext,
+    sessions: SessionState,
+    session_ids: SessionIdAllocator,
+) -> str:
+    requested = request.query_params.get("session_id")
+    if (
+        request.query_params.get(DOCUMENT_REPLAY_QUERY_PARAM) == "1"
+        and requested is not None
+        and sessions.exists(context, requested)
+        and sessions.matches_creation_query(
+            context,
+            requested,
+            request.query_params.multi_items(),
+        )
+    ):
+        return requested
+    return session_ids.allocate(context, sessions)
 
 
 def error_response(

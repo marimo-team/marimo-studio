@@ -11,7 +11,7 @@ from typing import Literal
 
 from starlette.requests import HTTPConnection, Request
 from starlette.responses import JSONResponse, RedirectResponse
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from starlette.websockets import WebSocket
 
 from marimo_studio._browser_client.ports import CodeModeBridge
@@ -50,6 +50,7 @@ from marimo_studio._workspace import discover_studio
 from marimo_studio.errors import MarimoStudioError
 
 _CODE_MODE_ROUTES = {"/api/ai/chat", "/api/kernel/execute"}
+_SAVE_ROUTE = "/api/kernel/save"
 _DOCUMENT_TRANSACTION_MAX_BYTES = 64 * 1024 * 1024
 EditorBindingResult = Literal["absent", "bound", "invalid"]
 
@@ -236,6 +237,34 @@ async def delegate_editor_request(
         delegated_scope = code_mode.attach_session(scope, location.notebook)
         await app(delegated_scope, receive, send)
         return True
+    if (
+        scope["type"] == "http"
+        and mode == "edit"
+        and relative.rstrip("/") == _SAVE_ROUTE
+    ):
+        request = Request(scope, receive)
+        if STUDIO_CLIENT_QUERY_PARAM in request.query_params:
+            return False
+        session_id = request.headers.get("Marimo-Session-Id")
+        location = await server.location(request)
+        status: int | None = None
+
+        async def track_response(message: Message) -> None:
+            nonlocal status
+            if message.get("type") == "http.response.start":
+                value = message.get("status")
+                status = value if isinstance(value, int) else None
+            await send(message)
+
+        await app(scope, receive, track_response)
+        if status is not None and 200 <= status < 300 and session_id is not None:
+            if location is None:
+                location = await server.session_location(request, session_id)
+            if location is not None and await asyncio.to_thread(
+                location.notebook.is_file
+            ):
+                sessions.request_studio_reload(server.context(location), session_id)
+        return True
     return False
 
 
@@ -286,9 +315,8 @@ async def _bind_editor_session(
         return EditorBinding("invalid")
     if owner.state == "current":
         identity = sessions.editor_identity(context, session_id)
-        if (
-            identity is None
-            or identity.client_id != client_id
+        if identity is not None and (
+            identity.client_id != client_id
             or not hmac.compare_digest(identity.capability, capability)
         ):
             return EditorBinding("invalid")

@@ -14,6 +14,10 @@ from typing import Literal
 from weakref import ReferenceType, WeakKeyDictionary, WeakSet
 from weakref import ref as weakref_ref
 
+from marimo._messaging.notification import (
+    QueryParamsSetNotification,
+    ReloadNotification,
+)
 from marimo._session.session import Session
 from marimo._session.types import KernelState
 
@@ -21,6 +25,7 @@ from marimo_studio._compat.kernel_values.session import read_session_values
 from marimo_studio._compat.runtime_requests import instantiate_notebook_request
 from marimo_studio._compat.server.gateway import context_handle
 from marimo_studio._delivery.urls import (
+    DOCUMENT_REPLAY_QUERY_PARAM,
     EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
     PRIVATE_QUERY_KEYS,
     STUDIO_CLIENT_QUERY_PARAM,
@@ -232,6 +237,26 @@ class PrivateSessionState:
 
     def exists(self, context: ServerContext, session_id: str) -> bool:
         return current_session(context, session_id) is not None
+
+    def request_studio_reload(
+        self,
+        context: ServerContext,
+        session_id: str,
+    ) -> bool:
+        """Reload a newly named notebook through its Studio-owned document."""
+        session = current_session(context, session_id)
+        if session is None or not str(session.initialization_id).startswith("__new__"):
+            return False
+        session.notify(
+            QueryParamsSetNotification("session_id", session_id),
+            from_consumer_id=None,
+        )
+        session.notify(
+            QueryParamsSetNotification(DOCUMENT_REPLAY_QUERY_PARAM, "1"),
+            from_consumer_id=None,
+        )
+        session.notify(ReloadNotification(), from_consumer_id=None)
+        return True
 
     def matches_creation_query(
         self,

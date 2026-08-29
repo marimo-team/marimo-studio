@@ -57,6 +57,12 @@ class ServerGateway(Protocol):
         selected_file: str | None = None,
     ) -> ServerLocation | None: ...
 
+    async def session_location(
+        self,
+        request: Request | WebSocket,
+        session_id: str,
+    ) -> ServerLocation | None: ...
+
     def context(self, location: ServerLocation) -> ServerContext: ...
 
     def relative_path(self, scope: Scope, base_url: str) -> str | None: ...
@@ -100,6 +106,12 @@ class SessionState(Protocol):
     def is_session_id(self, value: object) -> bool: ...
 
     def exists(self, context: ServerContext, session_id: str) -> bool: ...
+
+    def request_studio_reload(
+        self,
+        context: ServerContext,
+        session_id: str,
+    ) -> bool: ...
 
     def matches_creation_query(
         self,

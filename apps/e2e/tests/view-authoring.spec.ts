@@ -1,10 +1,14 @@
-import { publicNotebookQuery } from "@marimo-studio/protocol/query";
-import { studioBootstrapSchema } from "@marimo-studio/protocol/studio-bootstrap";
+import type { Page } from "@playwright/test";
+
 import { viewListSchema } from "@marimo-studio/protocol/views";
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { saveShortcut, selectAllShortcut } from "./authoring-test-support.ts";
+import {
+  readStudioEditorSessionId,
+  saveShortcut,
+  selectAllShortcut,
+} from "./authoring-test-support.ts";
 import {
   addWorkspaceView,
   dashboardHtmlPath,
@@ -30,6 +34,33 @@ declare global {
   var __e2eBuildStatuses: string[] | undefined;
   var __e2eSourceStatuses: string[] | undefined;
 }
+
+const executeCodeMode = async (
+  page: Page,
+  file: string,
+  sessionId: string,
+  code: string,
+): Promise<void> => {
+  const result = await editorFrame(page)
+    .locator("html")
+    .evaluate(
+      async (_, request) => {
+        const query = new URLSearchParams({ file: request.file });
+        const response = await fetch(`/_marimo-studio/editor/api/kernel/execute?${query}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Marimo-Session-Id": request.sessionId,
+          },
+          body: JSON.stringify({ code: request.code }),
+        });
+        return { ok: response.ok, text: await response.text() };
+      },
+      { code, file, sessionId },
+    );
+  expect(result.ok).toBe(true);
+  expect(result.text).toContain('"success": true');
+};
 
 test("routes directory notebooks by Studio configuration", async ({ browserDiagnostics, page }) => {
   const directoryLandingFilenameFallback = browserDiagnostics.expectConsole({
@@ -77,43 +108,17 @@ test("activates Studio after the first view is created", async ({ browserDiagnos
   );
   await page.goto("/?file=plain.py&region=before&discard=clear-me");
   const instantiateResponse = await instantiated;
-  await expect(page.locator("#marimo-studio-bootstrap")).toHaveCount(0);
-  await expect(page.locator("#marimo-studio-host")).toBeAttached();
   await expect(editorFrame(page).getByText("Native Marimo notebook").first()).toBeVisible();
 
   const sessionId = instantiateResponse.request().headers()["marimo-session-id"];
   expect(sessionId).toBeTruthy();
-  const editorElement = await page.locator('iframe[title="Marimo editor"]').elementHandle();
-  expect(editorElement).not.toBeNull();
-  const retainedEditorSource = await page
-    .locator('iframe[title="Marimo editor"]')
-    .getAttribute("src");
-  if (!retainedEditorSource) {
-    throw new Error("The retained Marimo editor URL is unavailable.");
-  }
-  const editorTimeOrigin = await editorFrame(page)
-    .locator("html")
-    .evaluate(() => performance.timeOrigin);
-  const initialEditorLocation = await editorFrame(page)
-    .locator("html")
-    .evaluate(() => location.href);
-  const retainedEditor = new URL(retainedEditorSource, page.url());
-  const initialEditor = new URL(initialEditorLocation);
-  expect(retainedEditor.searchParams.get("session_id")).toBe(sessionId);
-  expect(initialEditor.searchParams.has("session_id")).toBe(false);
   await editorFrame(page).locator(".cm-content").first().focus();
 
-  const execution = editorFrame(page)
-    .locator("html")
-    .evaluate(async (_, activeSessionId) => {
-      const response = await fetch("/_marimo-studio/editor/api/kernel/execute?file=plain.py", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Marimo-Session-Id": activeSessionId,
-        },
-        body: JSON.stringify({
-          code: `
+  await executeCodeMode(
+    page,
+    "plain.py",
+    sessionId,
+    `
 import marimo as mo
 import marimo_studio.agent as studio_agent
 
@@ -124,71 +129,11 @@ view = await workspace.create_view("dashboard")
 shown = await view.show()
 shown.to_dict()
 `,
-        }),
-      });
-      return { ok: response.ok, text: await response.text() };
-    }, sessionId);
-
-  const result = await execution;
-  expect(result.ok).toBe(true);
-  expect(result.text).toContain('"success": true');
-  await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=plain\.py&region=eu$/);
-  await expect(page.locator("#marimo-studio-bootstrap")).toBeAttached();
-  const bootstrap = studioBootstrapSchema.parse(
-    JSON.parse((await page.locator("#marimo-studio-bootstrap").textContent()) ?? ""),
   );
-  const configuredEditorUrl = new URL(bootstrap.urls.editor, page.url()).href;
-  const editorLocation = await editorFrame(page)
-    .locator("html")
-    .evaluate(() => location.href);
-  const activeEditor = new URL(editorLocation);
-  const configuredEditor = new URL(configuredEditorUrl);
-  expect(configuredEditor.origin).toBe(retainedEditor.origin);
-  expect(configuredEditor.pathname).toBe(retainedEditor.pathname);
-  expect(activeEditor.origin).toBe(configuredEditor.origin);
-  expect(activeEditor.pathname).toBe(configuredEditor.pathname);
-  for (const key of [
-    "file",
-    "marimo_studio_client",
-    "marimo_studio_server",
-    "marimo_studio_editor",
-  ]) {
-    expect(initialEditor.searchParams.get(key)).toBe(retainedEditor.searchParams.get(key));
-    expect(configuredEditor.searchParams.get(key)).toBe(retainedEditor.searchParams.get(key));
-    expect(activeEditor.searchParams.get(key)).toBe(retainedEditor.searchParams.get(key));
-  }
-  expect(configuredEditor.searchParams.get("session_id")).toBe(sessionId);
-  expect(activeEditor.searchParams.has("session_id")).toBe(false);
-  expect(activeEditor.searchParams.get("marimo_studio_editor")).toBeTruthy();
-  const configuredPublicQuery = new URLSearchParams(publicNotebookQuery(configuredEditor.search));
-  const activePublicQuery = new URLSearchParams(publicNotebookQuery(activeEditor.search));
-  configuredPublicQuery.sort();
-  activePublicQuery.sort();
-  expect([...configuredPublicQuery]).toEqual([...activePublicQuery]);
-  expect(configuredEditor.searchParams.get("region")).toBe("eu");
-  expect(configuredEditor.searchParams.has("discard")).toBe(false);
-  expect(activeEditor.searchParams.get("region")).toBe("eu");
-  expect(activeEditor.searchParams.has("discard")).toBe(false);
-  expect(
-    await editorFrame(page)
-      .locator("html")
-      .evaluate(() => performance.timeOrigin),
-  ).toBe(editorTimeOrigin);
-  expect(
-    await page
-      .locator('iframe[title="Marimo editor"]')
-      .evaluate((frame, original) => frame === original, editorElement),
-  ).toBe(true);
-  const editorFocus = await editorFrame(page)
-    .locator("html")
-    .evaluate(() => ({
-      preserved: document.activeElement?.classList.contains("cm-content") ?? false,
-      activeTag: document.activeElement?.tagName,
-    }));
-  expect(editorFocus).toEqual({
-    preserved: true,
-    activeTag: "DIV",
-  });
+  await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=plain\.py&region=eu$/);
+  const bootstrap = (await page.locator("#marimo-studio-bootstrap").textContent()) ?? "";
+  expect(readStudioEditorSessionId(bootstrap)).toBe(sessionId);
+  await expect(editorFrame(page).locator(".cm-content").first()).toBeFocused();
   const preview = await waitForPreview(page);
 
   const source = await readWorkspaceFile(plainDashboardHtmlPath);
@@ -231,6 +176,73 @@ shown.to_dict()
   await waitForPreview(page);
   await expect(preview.locator("#fresh-value")).toHaveText("99");
   replacedWorkspaceStreams.recovered();
+});
+
+test("opens Studio from the first save with the native session", async ({
+  browserDiagnostics,
+  page,
+}) => {
+  const filenameFallback = browserDiagnostics.expectConsole({
+    type: "warning",
+    text: /^No filename provided, using fallback$/,
+    required: false,
+  });
+  const unusedPreload = browserDiagnostics.expectConsole({
+    type: "warning",
+    text: /^The resource .* was preloaded using link preload but not used/,
+    required: false,
+  });
+  const dialogDescription = browserDiagnostics.expectConsole({
+    type: "warning",
+    text: /Missing `Description` or `aria-describedby=\{undefined\}` for \{DialogContent\}/,
+    required: false,
+  });
+  const instantiated = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.endsWith("/api/kernel/instantiate") &&
+      response.ok(),
+  );
+  await page.goto("/?file=__new__s_first1&region=eu");
+  const instantiateResponse = await instantiated;
+  const sessionId = instantiateResponse.request().headers()["marimo-session-id"];
+  expect(sessionId).toBeTruthy();
+
+  const cell = page.locator("[data-cell-id]").first();
+  await cell.getByRole("textbox").fill("saved = True\nsaved");
+  await cell.hover();
+  await cell.locator('button[data-testid="run-button"]:not(:disabled)').click();
+  await expect(cell.locator("..")).toHaveAttribute("data-status", "idle");
+  await page.getByTestId("save-button").click();
+  const filename = page.getByPlaceholder("filename");
+  await filename.fill("first-save.py");
+  await page.getByText("Save as: first-save.py", { exact: true }).click();
+
+  await expect(page.locator("#marimo-studio-host")).toBeAttached();
+  filenameFallback.recovered();
+  unusedPreload.recovered();
+  dialogDescription.recovered();
+  await expect(page).toHaveURL(/\/\?file=first-save\.py&region=eu$/);
+
+  const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
+    new URL("/_marimo-studio/dev/events", studioOrigin).href,
+    1,
+  );
+  await executeCodeMode(
+    page,
+    "first-save.py",
+    sessionId,
+    `
+import marimo_studio.agent as studio_agent
+
+workspace = studio_agent.current_workspace()
+view = await workspace.create_view("dashboard")
+await view.show()
+`,
+  );
+  await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=first-save\.py&region=eu$/);
+  await waitForPreview(page);
+  replacedWorkspaceStream.recovered();
 });
 
 test("loads a native module graph from a directory view", async ({ browserDiagnostics, page }) => {

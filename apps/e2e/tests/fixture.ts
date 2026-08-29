@@ -120,6 +120,7 @@ export const restoreWorkspace = async () => {
   await removeTree(resolve(workspaceDirectory, "__marimo__/studio/notebook"));
   await copyFixtureFile("notebook.py");
   await copyFixtureFile("plain.py");
+  await rm(resolve(workspaceDirectory, "first-save.py"), { force: true });
   await copyFixtureFile("__marimo__/studio/notebook/dashboard/view.toml");
   await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/index.html");
   await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/app.css");

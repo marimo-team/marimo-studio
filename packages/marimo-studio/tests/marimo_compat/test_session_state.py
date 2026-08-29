@@ -4,7 +4,15 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+import pytest
+from marimo._messaging.notification import (
+    QueryParamsSetNotification,
+    ReloadNotification,
+)
+
+import marimo_studio._compat.server.session_state as session_state_module
 from marimo_studio._compat.server.session_state import (
+    PrivateSessionState,
     session_creation_query_matches,
     session_matches_notebook,
 )
@@ -69,3 +77,34 @@ def test_app_host_session_exposes_its_creation_query() -> None:
         [("session_id", "s_other1"), ("region", "emea")],
     )
     assert not session_creation_query_matches(session, [("region", "apac")])
+
+
+def test_first_save_requests_session_resume_before_reload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notifications: list[object] = []
+
+    def notify(operation: object, from_consumer_id: object) -> None:
+        assert from_consumer_id is None
+        notifications.append(operation)
+
+    session = SimpleNamespace(
+        initialization_id="__new__s_123456",
+        notify=notify,
+    )
+    monkeypatch.setattr(
+        session_state_module,
+        "current_session",
+        lambda _context, _session_id: session,
+    )
+    assert PrivateSessionState().request_studio_reload(
+        cast(Any, object()),
+        "s_123456",
+    )
+
+    first, second, third = notifications
+    assert isinstance(first, QueryParamsSetNotification)
+    assert (first.key, first.value) == ("session_id", "s_123456")
+    assert isinstance(second, QueryParamsSetNotification)
+    assert (second.key, second.value) == ("marimo_studio_resume", "1")
+    assert isinstance(third, ReloadNotification)

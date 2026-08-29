@@ -142,8 +142,13 @@ class _CachedCellCompatibility:
 class _EnteredKernelLifespan:
     """Keep an entered Marimo lifespan available for its eventual teardown."""
 
-    def __init__(self, lifespan: AbstractAsyncContextManager[None]) -> None:
+    def __init__(
+        self,
+        lifespan: AbstractAsyncContextManager[None],
+        resume: Callable[[], None] | None = None,
+    ) -> None:
         self._lifespan = lifespan
+        self._resume = resume
         self._failure: BaseException | None = None
         self._closed = False
 
@@ -159,6 +164,8 @@ class _EnteredKernelLifespan:
             ) from self._failure
         if self._closed:
             raise RuntimeError("The Marimo kernel lifespan has already exited.")
+        if self._resume is not None:
+            self._resume()
         return None
 
     async def __aexit__(
@@ -177,7 +184,10 @@ class _EnteredKernelLifespan:
             raise
 
 
-def _guard_entered_lifespan(context: Any) -> _EnteredKernelLifespan | None:
+def _guard_entered_lifespan(
+    context: Any,
+    resume: Callable[[], None] | None = None,
+) -> _EnteredKernelLifespan | None:
     kernel = context._kernel
     lifespan = getattr(kernel, "_lifespan", None)
     if lifespan is None:
@@ -188,8 +198,8 @@ def _guard_entered_lifespan(context: Any) -> _EnteredKernelLifespan | None:
     # Marimo queues an instantiation request before each code-mode scratchpad
     # run. Its graph guard follows the lifespan entry, so an initialized kernel
     # otherwise tries to re-enter the same async context manager. Preserve the
-    # entered manager for teardown while treating later entries as idempotent.
-    guarded = _EnteredKernelLifespan(lifespan)
+    # entered manager for teardown while letting Studio retry after a first save.
+    guarded = _EnteredKernelLifespan(lifespan, resume)
     kernel._lifespan = guarded
     return guarded
 
@@ -266,6 +276,9 @@ class _KernelBridgeLifespan:
         return True
 
     async def __aenter__(self) -> None:
+        self._resume()
+
+    def _resume(self) -> None:
         from marimo._runtime.context import get_context
         from marimo._runtime.context.kernel_context import KernelRuntimeContext
         from marimo._runtime.functions import Function
@@ -274,11 +287,21 @@ class _KernelBridgeLifespan:
         context = get_context()
         if not isinstance(context, KernelRuntimeContext):
             return
-        self._entered_lifespan = _guard_entered_lifespan(context)
-        if context.filename is None:
+        self._entered_lifespan = _guard_entered_lifespan(context, self._resume)
+        raw_filename = context.filename or getattr(
+            getattr(context._kernel, "app_metadata", None),
+            "filename",
+            None,
+        )
+        if raw_filename is None:
             return
         try:
-            self._enter(context, Function, CellId_t)
+            self._enter(
+                context,
+                Function,
+                CellId_t,
+                filename=Path(raw_filename).resolve(),
+            )
         except BaseException as error:
             if self._entered_lifespan is not None:
                 self._entered_lifespan.fail(error)
@@ -293,6 +316,8 @@ class _KernelBridgeLifespan:
         context: Any,
         function_type: Any,
         cell_id_type: Any,
+        *,
+        filename: Path | None = None,
     ) -> None:
         from marimo._messaging.notification import (
             QueryParamsDeleteNotification,
@@ -300,8 +325,11 @@ class _KernelBridgeLifespan:
         )
         from marimo._messaging.notification_utils import broadcast_notification
 
-        filename = Path(context.filename).resolve()
+        filename = filename or Path(context.filename).resolve()
         inspection = _claim_probe_selector_lease(context, filename)
+        if self._registry is not None:
+            self._activate(context, filename, inspection)
+            return
         self._activate(context, filename, inspection)
 
         # Keep the functions registered while the renderer waits for a Studio
