@@ -67,7 +67,7 @@ The gates provide different evidence:
 
 | Gate              | Release contract                                                                                                                      |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `make check`      | Formatting, static analysis, package tests, frontend tests, provider checks, and `examples/nga.py` pass                               |
+| `make check`      | Formatting, static analysis, package tests, frontend tests, and provider checks pass                                                  |
 | `make e2e`        | Provider builds, native editor, Source, artifact preview, kernel, worker, dynamic projections, and view switching compose in Chromium |
 | `make docs-build` | Public navigation, examples, and reference pages build                                                                                |
 | `make package`    | Browser assets, distributions, provider entry points, starters, optional extras, and installed commands verify                        |
@@ -112,28 +112,6 @@ package.
 
 Both scripts use isolated, uncached environments while retaining the
 repository dependency-age policy.
-
-## Validate the repository example
-
-`examples/nga.py` is the release example. Its `overview`, `gallery`, and
-`story` views exercise vanilla, React, and Svelte through one notebook graph.
-Overview is the single-document Vanilla baseline. Its CSS and JavaScript are
-inline in `index.html`.
-
-Release validation should:
-
-1. Run Marimo notebook checks.
-2. Inspect every view project.
-3. Build development and production artifacts for each provider.
-4. Run static and isolated runtime checks.
-5. Exercise Server and WebAssembly previews.
-6. Validate dynamic React and Svelte targets.
-7. Confirm Source tabs at desktop and narrow widths.
-
-`scripts/verify-example-artifacts.py` copies the example to a temporary
-directory, builds development and production output for every view, and checks
-the resulting files through the artifact API. The source tree contains no
-generated `.artifacts/` state.
 
 ## Validate the pinned Marimo release
 

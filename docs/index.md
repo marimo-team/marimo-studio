@@ -16,9 +16,6 @@ hero:
       text: Create your first page
       link: ./guide/getting-started
     - theme: alt
-      text: See the NGA example
-      link: ./examples/nga
-    - theme: alt
       text: Author with an agent
       link: ./guide/coding-agents
 

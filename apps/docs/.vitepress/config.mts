@@ -96,7 +96,6 @@ export default defineConfig({
         items: guideItems,
       },
       { text: "Coding agents", link: routes.guide.codingAgents },
-      { text: "Example", link: routes.example },
       { text: "Reference", items: referenceItems },
     ],
     outline: [2, 3],

@@ -334,7 +334,7 @@ A Marimo upgrade changes one compatibility unit:
 5. Prepare the exact frontend source.
 6. Rebuild browser assets and verify build metadata.
 7. Run Python, frontend, Server, WebAssembly, export, and package gates.
-8. Exercise the NGA vanilla, React, and Svelte views in a live browser.
+8. Exercise bundled Vanilla, React, and Svelte views in a live browser.
 
 Use a clean local Marimo checkout at the configured commit with:
 
@@ -352,7 +352,7 @@ Add tests at the narrowest owner and at the live seam:
 
 | Contract                      | Focused evidence                | Live evidence                                          |
 | ----------------------------- | ------------------------------- | ------------------------------------------------------ |
-| Static notebook graph         | Adapter and symbol graph tests  | Named targets resolve in the NGA notebook              |
+| Static notebook graph         | Adapter and symbol graph tests  | Named targets resolve in the provider runtime fixture  |
 | Semantic-to-runtime mapping   | Cell-ref matching tests         | Session reconnect and WebAssembly mount                |
 | Kernel values and outputs     | Port and adapter tests          | Native controls, tables, plots, widgets, and downloads |
 | Session attachment and replay | Lifecycle tests                 | Run-mode reconnect and preview reload                  |

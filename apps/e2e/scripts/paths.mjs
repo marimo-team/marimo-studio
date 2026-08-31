@@ -22,9 +22,9 @@ export const createE2EPaths = (root, portOffset = 0) => {
     configDirectory: resolve(resultRoot, "xdg-config"),
     workspaceDirectory,
     notebookProcessRegistryDirectory: resolve(workspaceDirectory, ".notebook-processes"),
-    providerWorkspaceDirectory: resolve(providerWorkspaceRoot, "nga-provider"),
-    providerStaticRoot: resolve(providerWorkspaceRoot, "nga-provider-static"),
-    providerConfigDirectory: resolve(providerWorkspaceRoot, "nga-provider-xdg-config"),
+    providerWorkspaceDirectory: resolve(providerWorkspaceRoot, "provider-runtime"),
+    providerStaticRoot: resolve(providerWorkspaceRoot, "provider-runtime-static"),
+    providerConfigDirectory: resolve(providerWorkspaceRoot, "provider-runtime-xdg-config"),
     hostedWorkspaceDirectory: resolve(providerWorkspaceRoot, "hosted"),
     mainPlaywrightOutputDirectory:
       portOffset === 0 ? resultRoot : resolve(resultRoot, "playwright-main"),
@@ -52,8 +52,11 @@ export const lazyNotebookPath = resolve(workspaceDirectory, "lazy.py");
 export const staticExportDirectory = resolve(workspaceDirectory, "lazy-static");
 export const noDisplayStaticExportDirectory = resolve(staticExportDirectory, "no-display");
 export const providerWorkspaceDirectory = mutable.providerWorkspaceDirectory;
-export const providerNotebookFixturePath = resolve(appDirectory, "fixtures-provider/nga.py");
-export const providerNotebookPath = resolve(providerWorkspaceDirectory, "nga.py");
+export const providerNotebookFixturePath = resolve(
+  appDirectory,
+  "fixtures-provider/projections.py",
+);
+export const providerNotebookPath = resolve(providerWorkspaceDirectory, "projections.py");
 export const externalProviderPackage = resolve(appDirectory, "fixtures-provider/provider");
 export const externalProviderNotebookFixture = resolve(
   appDirectory,

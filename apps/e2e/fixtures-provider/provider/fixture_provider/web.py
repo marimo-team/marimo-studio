@@ -19,6 +19,7 @@ from marimo_studio.view_providers import (
     SourceDocument,
     SourceLocation,
     StarterContext,
+    StarterPlan,
     ViewProject,
 )
 
@@ -72,20 +73,25 @@ class MultiFileProvider:
         self,
         starter: ProviderStarter,
         context: StarterContext,
-    ) -> dict[PurePosixPath, bytes]:
+    ) -> StarterPlan:
         if starter != self._starter:
             raise ValueError(f"Unknown starter {starter.key!r}")
         del context
-        return {
-            _ENTRY: (
-                b'<!doctype html><html><head><link rel="stylesheet" href="app.css">'
-                b'</head><body><main id="app-shell"></main>'
-                b'<script type="module" src="scripts/app.js"></script></body></html>'
-            ),
-            PurePosixPath("src/app.css"): b"body { margin: 0; }\n",
-            PurePosixPath("src/scripts/app.js"): b'import "./message.js";\n',
-            PurePosixPath("src/scripts/message.js"): b"export const ready = true;\n",
-        }
+        return StarterPlan(
+            files={
+                _ENTRY: (
+                    b'<!doctype html><html><head><link rel="stylesheet" href="app.css">'
+                    b'</head><body><main id="app-shell"></main>'
+                    b'<script type="module" src="scripts/app.js"></script></body></html>'
+                ),
+                PurePosixPath("src/app.css"): b"body { margin: 0; }\n",
+                PurePosixPath("src/scripts/app.js"): b'import "./message.js";\n',
+                PurePosixPath(
+                    "src/scripts/message.js"
+                ): b"export const ready = true;\n",
+            },
+            cell_targets=(),
+        )
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         project = request.project

@@ -15,7 +15,7 @@ DENO_PROVIDER_LINT_SOURCES := $(shell find $(DENO_PROVIDER_ROOTS) -type f \( -na
 
 .PHONY: help setup format lint typecheck python-test frontend-test test check build
 .PHONY: e2e e2e-ui docs-build docs-serve package
-.PHONY: _anti-slop-check _architecture-check _provider-sources-check _examples-check
+.PHONY: _anti-slop-check _architecture-check _provider-sources-check
 .PHONY: _prepare-frontend _frontend-ready _browser-install _browser-ready
 
 help: ## List development targets.
@@ -66,10 +66,7 @@ frontend-test: _frontend-ready ## Run JavaScript and TypeScript tests.
 
 test: python-test frontend-test ## Run Python and frontend tests.
 
-_examples-check:
-	$(UV) run python scripts/verify-example-artifacts.py
-
-check: lint typecheck test _examples-check ## Run the local quality gates.
+check: lint typecheck test ## Run the local quality gates.
 
 build: ## Build browser assets into the Python package.
 	$(VP) run --filter @marimo-studio/browser build

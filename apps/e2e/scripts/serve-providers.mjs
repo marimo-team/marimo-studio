@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, rm } from "node:fs/promises";
 
-import { cleanupNgaProviderEnvironment } from "./cleanup-nga-provider.mjs";
+import { cleanupProviderEnvironment } from "./cleanup-provider-runtime.mjs";
 import { e2eNetwork } from "./network.mjs";
 import {
   externalProviderNotebookPath,
@@ -13,9 +13,9 @@ import {
 } from "./paths.mjs";
 import { PreparationProcessOwner } from "./preparation-process.mjs";
 import {
-  clearNgaProviderGeneratedState,
-  prepareNgaProviderWorkspace,
-} from "./prepare-nga-provider.mjs";
+  clearProviderGeneratedState,
+  prepareProviderWorkspace,
+} from "./prepare-provider-runtime.mjs";
 import { stopProcessGroup } from "./process-group.mjs";
 import { captureProcessOutput, stopNotebookProcess, waitForServer } from "./server-process.mjs";
 
@@ -149,12 +149,33 @@ const run = async (label, args) => {
 
 const prepare = async () => {
   preparation.requireActive();
-  await prepareNgaProviderWorkspace();
+  await prepareProviderWorkspace();
   preparation.requireActive();
   await rm(providerConfigDirectory, { force: true, recursive: true });
   preparation.requireActive();
   await mkdir(providerConfigDirectory, { recursive: true });
 
+  for (const [view, starter] of [
+    ["overview", "marimo-studio/vanilla:default"],
+    ["gallery", "marimo-studio/react:default"],
+    ["story", "marimo-studio/svelte:default"],
+  ]) {
+    await run(`create ${view} provider view`, [
+      "run",
+      "--frozen",
+      "--group",
+      "e2e",
+      "marimo-studio",
+      "view",
+      "create",
+      view,
+      "--target",
+      providerNotebookPath,
+      "--starter",
+      starter,
+      "--json",
+    ]);
+  }
   await run("create external provider view", [
     "run",
     "--frozen",
@@ -191,7 +212,7 @@ const prepare = async () => {
     ]);
   }
   preparation.requireActive();
-  await clearNgaProviderGeneratedState();
+  await clearProviderGeneratedState();
 };
 
 process.on("SIGINT", () => stop("SIGINT"));
@@ -292,5 +313,5 @@ try {
 }
 
 await Promise.allSettled(shutdowns);
-await cleanupNgaProviderEnvironment();
+await cleanupProviderEnvironment();
 process.exitCode = exitCode;

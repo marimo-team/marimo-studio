@@ -10,7 +10,6 @@ export const routes = {
     codingAgents: "/guide/coding-agents",
     runAndShare: "/guide/run-and-share",
   },
-  example: "/examples/nga",
   referenceRoot: "/reference/",
   reference: {
     cli: "/reference/cli",
@@ -40,7 +39,6 @@ export const siteRoutes = [
   routes.home,
   ...guideItems.map(({ link }) => link),
   routes.guide.codingAgents,
-  routes.example,
   ...referenceItems.map(({ link }) => link),
 ];
 

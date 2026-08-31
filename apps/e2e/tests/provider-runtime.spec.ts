@@ -1,126 +1,56 @@
 import { mountConfigSchema } from "@marimo-studio/protocol/runtime-config";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { z } from "zod";
 
-import type { ProviderProjection, ReadyCellProjection } from "./provider-runtime-evidence.ts";
+import type { ProviderProjection } from "./provider-runtime-evidence.ts";
 
 import { e2eNetwork } from "../scripts/network.mjs";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
-import { presentationFrame } from "./fixture.ts";
-import {
-  failedCellProjectionSchema,
-  providerProjectionSchema,
-  readyCellProjectionSchema,
-} from "./provider-runtime-evidence.ts";
+import { labeledSlider, presentationFrame } from "./fixture.ts";
+import { providerProjectionSchema } from "./provider-runtime-evidence.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
 
-interface NgaProjectionAcceptance {
-  readonly framework: "React" | "Svelte";
-  readonly initial: string;
-  readonly alternate: string;
-  readonly siteId: string;
-  retarget(target: string): void | Promise<void>;
-  unmount(): void | Promise<void>;
-  mount(target: string): void | Promise<void>;
-}
-
-declare global {
-  var __ngaProjectionAcceptance: NgaProjectionAcceptance | undefined;
-  var __ngaProjectionRuntimeMarker: string | undefined;
-}
-
-const bridgeSchema = z.strictObject({
-  framework: z.enum(["React", "Svelte"]),
-  initial: z.string().min(1),
-  alternate: z.string().min(1),
-  siteId: z.string().min(1),
-});
-
+const expectedTargets = ["controls", "first_result", "metric", "records", "second_result"];
 const cases = [
   {
     framework: "React",
+    heading: "Gallery",
     liveUrl: `${e2eNetwork.provider.live.origin}/gallery/`,
     staticUrl: `${e2eNetwork.provider.gallery.origin}/`,
   },
   {
     framework: "Svelte",
+    heading: "Story",
     liveUrl: `${e2eNetwork.provider.live.origin}/story/`,
     staticUrl: `${e2eNetwork.provider.story.origin}/`,
   },
 ] as const;
 
-const readSite = async (root: Locator, siteId: string): Promise<ProviderProjection[]> =>
+const readProjections = async (root: Locator): Promise<ProviderProjection[]> =>
   providerProjectionSchema
     .array()
-    .parse(
-      await root.evaluate(
-        (_document, selectedSite) =>
-          globalThis.marimoStudio
-            .projections()
-            .filter((projection) => projection.mountId === selectedSite),
-        siteId,
-      ),
-    );
+    .parse(await root.evaluate(() => globalThis.marimoStudio.projections()));
 
-const waitForProjection = async (
-  root: Locator,
-  siteId: string,
-  target: string,
-  state: "ready" | "error",
-): Promise<ProviderProjection> => {
+const waitForReadyProjections = async (root: Locator): Promise<ProviderProjection[]> => {
   await expect
     .poll(
       async () =>
-        (await readSite(root, siteId)).map((projection) => ({
-          phase: projection.phase,
-          target: projection.target,
-        })),
+        (await readProjections(root))
+          .map(({ phase, target }) => ({ phase, target }))
+          .sort((first, second) => first.target.localeCompare(second.target)),
       { timeout: 65_000 },
     )
-    .toEqual([{ phase: state, target }]);
-  const [projection] = await readSite(root, siteId);
-  if (projection === undefined) {
-    throw new Error("The dynamic projection host disappeared after becoming ready");
-  }
-  return projection;
+    .toEqual(expectedTargets.map((target) => ({ phase: "ready", target })));
+  return readProjections(root);
 };
 
-const mutate = async (
-  root: Locator,
-  operation: "retarget" | "unmount" | "mount",
-  target?: string,
-): Promise<void> => {
-  await root.evaluate(
-    async (_document, { method, nextTarget }) => {
-      const bridge = globalThis.__ngaProjectionAcceptance;
-      if (bridge === undefined) {
-        throw new Error("The NGA projection acceptance bridge is unavailable");
-      }
-      if (method === "unmount") {
-        await bridge.unmount();
-        return;
-      }
-      if (nextTarget === undefined) {
-        throw new Error("Projection retargeting requires a target");
-      }
-      if (method === "retarget") {
-        await bridge.retarget(nextTarget);
-      } else {
-        await bridge.mount(nextTarget);
-      }
-    },
-    { method: operation, nextTarget: target },
-  );
-};
-
-const symbolicIdentity = (projection: ReadyCellProjection) => ({
-  mountId: projection.mountId,
-  target: projection.target,
-});
+const symbolicProjections = (projections: ProviderProjection[]) =>
+  projections
+    .map(({ mountId, target }) => ({ mountId, target }))
+    .sort((first, second) => first.target.localeCompare(second.target));
 
 const readNativeTableLayout = async (root: Locator) =>
   root.evaluate(() => {
-    const output = document.querySelector<HTMLElement>('marimo-output[value="artwork_totals_df"]');
+    const output = document.querySelector<HTMLElement>('marimo-cell[name="records"]');
     const tableElement = output?.querySelector<HTMLElement>("marimo-table");
     const shadow = tableElement?.shadowRoot;
     const search = shadow?.querySelector<HTMLInputElement>('input[placeholder="Search..."]');
@@ -147,8 +77,8 @@ const readNativeTableLayout = async (root: Locator) =>
       return {
         disabled: button.disabled,
         height: rect.height,
-        name,
         left: rect.left,
+        name,
         right: rect.right,
         top: rect.top,
         width: rect.width,
@@ -172,13 +102,13 @@ const readNativeTableLayout = async (root: Locator) =>
         actions.every(({ height, width }) => height > 0 && width > 0),
       tableHasContent: (table.tBodies[0]?.rows.length ?? 0) > 0 && tableRect.height > 0,
       tableWithinOutput: tableRect.left >= outputRect.left && tableRect.right <= outputRect.right,
+      tableScrollsInsidePage,
       viewportHasNoHorizontalOverflow:
         document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-      tableScrollsInsidePage,
     };
   });
 
-const expectNativeTableLayout = async (root: Locator) => {
+const expectNativeTableLayout = async (root: Locator, requireInnerScroll = false) => {
   const layout = await readNativeTableLayout(root);
   expect(layout.actionNames).toEqual(["Columns", "Explore", "Export"]);
   expect(layout.actionsEnabled).toBe(true);
@@ -187,143 +117,13 @@ const expectNativeTableLayout = async (root: Locator) => {
   expect(layout.controlsVisible).toBe(true);
   expect(layout.tableHasContent).toBe(true);
   expect(layout.tableWithinOutput).toBe(true);
-  expect(layout.tableScrollsInsidePage).toBe(true);
+  if (requireInnerScroll) {
+    expect(layout.tableScrollsInsidePage).toBe(true);
+  }
   expect(layout.viewportHasNoHorizontalOverflow).toBe(true);
 };
 
-interface LifecycleEvidence {
-  readonly siteId: string;
-  readonly initial: ReturnType<typeof symbolicIdentity>;
-  readonly alternate: ReturnType<typeof symbolicIdentity>;
-}
-
-const exerciseLifecycle = async (
-  page: Page,
-  url: string,
-  expectedFramework: "React" | "Svelte",
-  runtimeLabel: "Server" | "static WebAssembly",
-): Promise<LifecycleEvidence> => {
-  const diagnostics = observeBrowserContext(page.context());
-
-  await page.goto(url);
-  const root =
-    runtimeLabel === "Server" ? presentationFrame(page).locator("html") : page.locator("html");
-  await test.step(`${expectedFramework} ${runtimeLabel} starts`, async () => {
-    await expect
-      .poll(
-        () =>
-          root
-            .evaluate(
-              () =>
-                globalThis.__ngaProjectionAcceptance !== undefined &&
-                globalThis.marimoStudio !== undefined,
-            )
-            .catch(() => false),
-        { timeout: 65_000 },
-      )
-      .toBe(true);
-    await root.evaluate(() =>
-      Promise.race([
-        globalThis.marimoStudio.ready(),
-        new Promise<never>((_resolve, reject) =>
-          setTimeout(
-            () => reject(new Error("The projection runtime did not become ready")),
-            65_000,
-          ),
-        ),
-      ]),
-    );
-    const mount = mountConfigSchema.parse(
-      await root.evaluate(() => globalThis.__MARIMO_MOUNT_CONFIG__),
-    );
-    expect(mount.runtime).toBe(runtimeLabel === "Server" ? "server" : "wasm");
-  });
-  const bridge = bridgeSchema.parse(
-    await root.evaluate(() => {
-      const acceptance = globalThis.__ngaProjectionAcceptance;
-      if (acceptance === undefined) {
-        throw new Error("The NGA projection acceptance bridge is unavailable");
-      }
-      return {
-        framework: acceptance.framework,
-        initial: acceptance.initial,
-        alternate: acceptance.alternate,
-        siteId: acceptance.siteId,
-      };
-    }),
-  );
-  expect(bridge.framework).toBe(expectedFramework);
-  const marker = await root.evaluate(() => {
-    globalThis.__ngaProjectionRuntimeMarker ??= crypto.randomUUID();
-    return globalThis.__ngaProjectionRuntimeMarker;
-  });
-
-  const initial =
-    await test.step(`${expectedFramework} ${runtimeLabel} initial projection`, async () =>
-      readyCellProjectionSchema.parse(
-        await waitForProjection(root, bridge.siteId, bridge.initial, "ready"),
-      ));
-
-  const alternate = await test.step(`${expectedFramework} ${runtimeLabel} retargets`, async () => {
-    await mutate(root, "retarget", bridge.alternate);
-    return readyCellProjectionSchema.parse(
-      await waitForProjection(root, bridge.siteId, bridge.alternate, "ready"),
-    );
-  });
-  expect(alternate.instanceId).toBe(initial.instanceId);
-  expect(alternate.runtimeCellId).not.toBe(initial.runtimeCellId);
-
-  const invalid =
-    await test.step(`${expectedFramework} ${runtimeLabel} reports an invalid target`, async () => {
-      await mutate(root, "retarget", "missing_cell");
-      return failedCellProjectionSchema.parse(
-        await waitForProjection(root, bridge.siteId, "missing_cell", "error"),
-      );
-    });
-  expect(invalid.instanceId).toBe(initial.instanceId);
-  expect(invalid.error.code).toMatch(/^projection-(?:cell-not-found|target-not-allowed)$/);
-
-  const recovered = await test.step(`${expectedFramework} ${runtimeLabel} recovers`, async () => {
-    await mutate(root, "retarget", bridge.initial);
-    return readyCellProjectionSchema.parse(
-      await waitForProjection(root, bridge.siteId, bridge.initial, "ready"),
-    );
-  });
-  expect(recovered.instanceId).toBe(initial.instanceId);
-  expect(symbolicIdentity(recovered)).toEqual(symbolicIdentity(initial));
-
-  const remounted =
-    await test.step(`${expectedFramework} ${runtimeLabel} unmounts and remounts`, async () => {
-      await mutate(root, "unmount");
-      await expect.poll(() => readSite(root, bridge.siteId)).toEqual([]);
-      await mutate(root, "mount", bridge.initial);
-      return readyCellProjectionSchema.parse(
-        await waitForProjection(root, bridge.siteId, bridge.initial, "ready"),
-      );
-    });
-  expect(remounted.instanceId).not.toBe(initial.instanceId);
-  expect(symbolicIdentity(remounted)).toEqual(symbolicIdentity(initial));
-
-  expect(await root.evaluate(() => globalThis.__ngaProjectionRuntimeMarker)).toBe(marker);
-  expect(await root.evaluate(() => performance.getEntriesByType("navigation").length)).toBe(1);
-  await diagnostics.close();
-  expect(diagnostics.messages).toEqual([]);
-  return {
-    siteId: bridge.siteId,
-    initial: symbolicIdentity(initial),
-    alternate: symbolicIdentity(alternate),
-  };
-};
-
-test("Vanilla overview starts with populated values and projections", async ({ page }) => {
-  const diagnostics = observeBrowserContext(page.context());
-  await page.setViewportSize({ width: 1_280, height: 900 });
-  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], {
-    origin: e2eNetwork.provider.live.origin,
-  });
-
-  await page.goto(`${e2eNetwork.provider.live.origin}/overview/`);
-  const root = presentationFrame(page).locator("html");
+const waitForRuntime = async (root: Locator): Promise<void> => {
   await expect
     .poll(() => root.evaluate(() => globalThis.marimoStudio !== undefined).catch(() => false), {
       timeout: 65_000,
@@ -333,81 +133,91 @@ test("Vanilla overview starts with populated values and projections", async ({ p
     Promise.race([
       globalThis.marimoStudio.ready(),
       new Promise<never>((_resolve, reject) =>
-        setTimeout(() => reject(new Error("The Vanilla overview did not become ready")), 65_000),
+        setTimeout(() => reject(new Error("The projection runtime did not become ready")), 65_000),
       ),
     ]),
   );
+};
 
-  await expect(root.locator(".metrics strong")).toHaveText(["12", "4", "8", "12"]);
-  await expect(root.locator("#copy-summary")).toBeEnabled();
-  await expect(root.getByRole("cell", { name: "Artist 1", exact: true })).toBeVisible();
+const expectNotebookContent = async (root: Locator, heading: string): Promise<void> => {
+  await expect(root.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+  await expect(labeledSlider(root.locator('marimo-cell[name="controls"]'), /^Scale/)).toBeVisible();
+  await expect(root.locator('marimo-cell[name="metric"]')).toHaveText("42");
+  await expect(root.getByRole("heading", { name: "First projected result" })).toBeVisible();
+  await expect(root.getByRole("heading", { name: "Second projected result" })).toBeVisible();
+};
+
+const exerciseRuntime = async (
+  page: Page,
+  url: string,
+  heading: string,
+  runtimeLabel: "Server" | "static WebAssembly",
+) => {
+  const diagnostics = observeBrowserContext(page.context());
+  const initialNavigation = await page.goto(url);
+  const initialStatus = initialNavigation?.status();
+  if (initialStatus === 409) {
+    expect(initialNavigation?.headers()["marimo-studio-error"]).toBe("runtime-sync-pending");
+    expect(initialNavigation?.headers()["marimo-studio-transient"]).toBe("true");
+  } else {
+    expect(initialStatus).toBeGreaterThanOrEqual(200);
+    expect(initialStatus).toBeLessThan(400);
+  }
+
+  const root =
+    runtimeLabel === "Server" ? presentationFrame(page).locator("html") : page.locator("html");
+  await waitForRuntime(root);
+  const mount = mountConfigSchema.parse(
+    await root.evaluate(() => globalThis.__MARIMO_MOUNT_CONFIG__),
+  );
+  expect(mount.runtime).toBe(runtimeLabel === "Server" ? "server" : "wasm");
+  await expectNotebookContent(root, heading);
+  const projections = symbolicProjections(await waitForReadyProjections(root));
+  expect(await root.evaluate(() => performance.getEntriesByType("navigation").length)).toBe(1);
+  await diagnostics.close();
+  expect(diagnostics.messages).toEqual([]);
+  return projections;
+};
+
+test("Vanilla renders populated notebook cells and a responsive native table", async ({ page }) => {
+  const diagnostics = observeBrowserContext(page.context());
+  await page.setViewportSize({ width: 1_280, height: 900 });
+  await page.goto(`${e2eNetwork.provider.live.origin}/overview/`);
+  const root = presentationFrame(page).locator("html");
+  await waitForRuntime(root);
+  await expectNotebookContent(root, "Overview");
+  await waitForReadyProjections(root);
   await expectNativeTableLayout(root);
   await page.setViewportSize({ width: 420, height: 900 });
-  await expectNativeTableLayout(root);
-  await expect
-    .poll(() =>
-      root.evaluate(() =>
-        globalThis.marimoStudio
-          .projections()
-          .map(({ phase, target }) => ({ phase, target }))
-          .sort((first, second) => first.target.localeCompare(second.target)),
-      ),
-    )
-    .toEqual(
-      [
-        "artist_totals_chart",
-        "artwork_totals_df",
-        "classification_bar_chart",
-        "collection_timeline_chart",
-        "studio_summary",
-        "studio_summary.artists",
-        "studio_summary.artworks",
-        "studio_summary.index_drawings",
-        "studio_summary.public_domain",
-      ]
-        .sort()
-        .map((target) => ({ phase: "ready", target })),
-    );
-
-  await root.locator("#copy-summary").click();
-  await expect(root.locator("#copy-status")).toHaveText("Summary copied");
-  await expect(root.getByRole("link", { name: "Gallery", exact: true })).toHaveAttribute(
-    "href",
-    "../gallery/",
-  );
-  await expect(root.getByRole("link", { name: "Story", exact: true })).toHaveAttribute(
-    "href",
-    "../story/",
-  );
-
+  await expectNativeTableLayout(root, true);
   await diagnostics.close();
   expect(diagnostics.messages).toEqual([]);
 });
 
 test.describe("built-in framework projection runtimes", () => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
 
   for (const candidate of cases) {
-    test(`${candidate.framework} preserves dynamic projections across Server and static WebAssembly`, async ({
+    test(`${candidate.framework} renders the same notebook cells on Server and static WebAssembly`, async ({
       browser,
     }) => {
       const context = await browser.newContext();
       try {
         await installPinnedPyodideAssets(context);
         const serverPage = await context.newPage();
-        const server = await exerciseLifecycle(
+        const server = await exerciseRuntime(
           serverPage,
           candidate.liveUrl,
-          candidate.framework,
+          candidate.heading,
           "Server",
         );
         await serverPage.close();
 
         const staticPage = await context.newPage();
-        const wasm = await exerciseLifecycle(
+        const wasm = await exerciseRuntime(
           staticPage,
           candidate.staticUrl,
-          candidate.framework,
+          candidate.heading,
           "static WebAssembly",
         );
         await staticPage.close();

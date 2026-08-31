@@ -18,6 +18,7 @@ from marimo_studio.view_providers import (
     SourceDocument,
     SourceLocation,
     StarterContext,
+    StarterPlan,
     ViewProject,
     mount_attribute,
 )
@@ -66,7 +67,7 @@ class ReportProvider:
         self,
         starter: ProviderStarter,
         context: StarterContext,
-    ) -> dict[PurePosixPath, bytes]:
+    ) -> StarterPlan:
         if starter != self._starter:
             raise ValueError(f"Unknown starter {starter.key!r}")
         document = f"""<!doctype html>
@@ -80,7 +81,10 @@ class ReportProvider:
   </body>
 </html>
 """
-        return {_ENTRY: document.encode(), _BUILDER: _BUILDER_SOURCE}
+        return StarterPlan(
+            files={_ENTRY: document.encode(), _BUILDER: _BUILDER_SOURCE},
+            cell_targets=(),
+        )
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         project = request.project

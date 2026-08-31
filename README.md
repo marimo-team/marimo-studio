@@ -90,18 +90,8 @@ Read [Run or publish a
 page](https://marimo-team.github.io/marimo-studio/guide/run-and-share) before
 choosing where the notebook will execute.
 
-## Explore the repository example
-
-The National Gallery of Art example uses one notebook to produce a collection
-brief, an artwork browser, and an editorial story:
-
-```console
-make setup
-uv run --with polars --with pyobservablejs marimo edit examples/nga.py
-```
-
 See the [Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/)
-for the guided workflow, the example, and exact API contracts.
+for guided workflows and exact API contracts.
 
 ## Compatibility
 
