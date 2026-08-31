@@ -11,6 +11,22 @@ export interface BrowserRequestOwner {
   readonly id: number;
 }
 
+export interface OwnedRequestAbort<Request extends object, Owner extends object> {
+  readonly owner: Owner;
+  readonly request: Request;
+  readonly start: number | undefined;
+}
+
+export const requestAbortsRetiredByDocument = <Operation extends OwnedRequestAbort<object, object>>(
+  pending: Iterable<Operation>,
+  owner: Operation["owner"],
+  documentStart: number,
+): Operation[] =>
+  [...pending].filter(
+    (operation) =>
+      operation.owner === owner && operation.start !== undefined && operation.start < documentStart,
+  );
+
 export class BrowserRequestOwners<Source extends object> {
   private readonly owners = new WeakMap<Source, BrowserRequestOwner>();
   private nextOwnerId = 0;
@@ -111,13 +127,71 @@ interface RecoveryGeneration {
   generation: number;
   inFlight: Set<BrowserRequestIdentity>;
   pendingAborts: number[];
+  retainPendingAborts: boolean;
   successCredits: number[];
+}
+
+interface ReadRecoveryIdentity {
+  identity: string;
+  retainPendingAborts: boolean;
 }
 
 const IDEMPOTENT_READ_METHODS = new Set(["GET", "HEAD"]);
 
 export const isIdempotentReadRequest = (request: BrowserRequestIdentity): boolean =>
   IDEMPOTENT_READ_METHODS.has(request.method());
+
+const idempotentReadRecoveryIdentity = (request: BrowserRequestIdentity): ReadRecoveryIdentity => {
+  if (request.method() !== "GET" || request.resourceType() !== "document") {
+    return {
+      identity: browserRequestIdentity(request),
+      retainPendingAborts: false,
+    };
+  }
+  const url = new URL(request.url());
+  const presentation = /^(.*\/_marimo-studio\/presentation\/)[^/]+(\/[^/]+\/$)/.exec(url.pathname);
+  if (presentation === null && !url.searchParams.has("marimo_studio_renewal")) {
+    return {
+      identity: browserRequestIdentity(request),
+      retainPendingAborts: false,
+    };
+  }
+  const presentationPrefix = "/_marimo-studio/presentation/";
+  const routePath =
+    presentation === null
+      ? url.pathname
+      : `${presentation[1]!.slice(0, -presentationPrefix.length)}${presentation[2]!}`;
+  return {
+    identity: [
+      request.method(),
+      url.origin,
+      routePath,
+      request.resourceType(),
+      url.searchParams.get("file") ?? "",
+      url.searchParams.get("runtime") ?? "",
+      request.postData() ?? "",
+    ].join("\u0000"),
+    retainPendingAborts: true,
+  };
+};
+
+export const abortedResponseCompleted = (
+  request: BrowserRequestIdentity,
+  status: number | undefined,
+  requestFinished = false,
+): boolean =>
+  isIdempotentReadRequest(request) &&
+  status !== undefined &&
+  (request.method() === "HEAD"
+    ? status < 400
+    : [204, 205, 304].includes(status) ||
+      (requestFinished &&
+        ((request.resourceType() === "document" && status >= 200 && status < 300) ||
+          (request.resourceType() === "fetch" &&
+            status === 202 &&
+            /\/_marimo-studio\/presentation\/[^/]+\/[^/]+\/$/.test(
+              new URL(request.url()).pathname,
+            )))));
 
 export class IdempotentReadRecovery {
   private readonly operations = new WeakMap<BrowserRequestIdentity, RequestOperation>();
@@ -136,13 +210,15 @@ export class IdempotentReadRecovery {
     if (current !== undefined) {
       return current.start;
     }
-    const identity = `${owner.id}\u0000${browserRequestIdentity(request)}`;
+    const recovery = idempotentReadRecoveryIdentity(request);
+    const identity = `${owner.id}\u0000${recovery.identity}`;
     let generation = this.generations.get(identity);
     if (generation === undefined) {
       generation = {
         generation: ++this.nextGeneration,
         inFlight: new Set(),
         pendingAborts: [],
+        retainPendingAborts: recovery.retainPendingAborts,
         successCredits: [],
       };
       this.generations.set(identity, generation);
@@ -206,6 +282,11 @@ export class IdempotentReadRecovery {
     if (abort >= 0) {
       generation.pendingAborts.splice(abort, 1);
     }
+    this.closeIfIdle(operation.identity, generation);
+  }
+
+  dispose(): void {
+    this.generations.clear();
   }
 
   private beginTerminal(
@@ -228,7 +309,11 @@ export class IdempotentReadRecovery {
   }
 
   private closeIfIdle(identity: string, generation: RecoveryGeneration): void {
-    if (generation.inFlight.size === 0 && this.generations.get(identity) === generation) {
+    if (
+      generation.inFlight.size === 0 &&
+      (!generation.retainPendingAborts || generation.pendingAborts.length === 0) &&
+      this.generations.get(identity) === generation
+    ) {
       this.generations.delete(identity);
     }
   }
@@ -387,18 +472,22 @@ export class WorkspaceEventStreamReplacementWindow {
 
   recover(): boolean {
     this.accepting = false;
-    if (
-      this.invalidGeneration ||
-      this.invalidOwnerRetirement ||
-      this.pendingAborts.length > 0 ||
-      this.replacements !== this.expectedReplacements ||
-      !this.hasExactSurvivors()
-    ) {
+    if (!this.readyToRecover()) {
       this.invalidRecovery = true;
       return false;
     }
     this.isRecovered = true;
     return true;
+  }
+
+  readyToRecover(): boolean {
+    return !(
+      this.invalidGeneration ||
+      this.invalidOwnerRetirement ||
+      this.pendingAborts.length > 0 ||
+      this.replacements !== this.expectedReplacements ||
+      !this.hasExactSurvivors()
+    );
   }
 
   diagnostics(): string[] {

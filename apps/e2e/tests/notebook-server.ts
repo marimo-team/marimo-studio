@@ -22,6 +22,7 @@ interface NotebookServerOptions {
   port: number;
   authentication: readonly string[];
   extensions?: "native" | "studio";
+  registryDirectory?: string;
 }
 
 interface NotebookServerTimeoutOptions {
@@ -30,7 +31,7 @@ interface NotebookServerTimeoutOptions {
 
 const notebookRegistrations = new WeakMap<
   ChildProcess,
-  { ownerNonce: string; processGroupId: number }
+  { directory: string; ownerNonce: string; processGroupId: number }
 >();
 
 export interface NotebookServer {
@@ -50,6 +51,7 @@ export const startNotebookServer = ({
   port,
   authentication,
   extensions = "studio",
+  registryDirectory = notebookProcessRegistryDirectory,
 }: NotebookServerOptions): NotebookServer => {
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
@@ -83,7 +85,7 @@ export const startNotebookServer = ({
       String(port),
     ],
     cwd: repositoryDirectory,
-    directory: notebookProcessRegistryDirectory,
+    directory: registryDirectory,
     env: environment,
     port,
   });
@@ -92,7 +94,11 @@ export const startNotebookServer = ({
   const ready = registration.ready.catch((error) => {
     throw new Error(`Notebook process registration failed: ${String(error)}\n${output()}`);
   });
-  notebookRegistrations.set(child, { ownerNonce, processGroupId });
+  notebookRegistrations.set(child, {
+    directory: registryDirectory,
+    ownerNonce,
+    processGroupId,
+  });
   const passwordOption = authentication.indexOf("--token-password");
   return {
     authToken: passwordOption >= 0 ? authentication[passwordOption + 1] : undefined,
@@ -139,7 +145,9 @@ export const stopNotebookServer = async (
         (server.process.exitCode === null && server.process.signalCode === null)) === false
     ) {
       const registration = notebookRegistrations.get(server.process);
-      if (registration) unregisterNotebookProcess(registration);
+      if (registration) {
+        unregisterNotebookProcess(registration, { directory: registration.directory });
+      }
     }
   }
 };

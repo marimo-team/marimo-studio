@@ -101,6 +101,12 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   const preview = await waitForPreview(page);
   const replacement = await readFile(hostedViewFixturePath, "utf8");
   const serverToken = await studioServerToken(page);
+  const supersededConfigRead = browserDiagnostics.expectActiveRequestAbort({
+    origin: hostedOrigin,
+    method: "GET",
+    path: /^\/hosted\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/config$/,
+    count: 1,
+  });
   const abandonedSourceWrite = browserDiagnostics.expectRequestAbort({
     origin: hostedOrigin,
     method: "PUT",
@@ -162,6 +168,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   await waitForPreview(page);
   await expect(preview.getByRole("heading", { name: "Hosted mount lifecycle" })).toBeVisible();
   await expect(value).toHaveText("63");
+  await recoverRequestAbort(supersededConfigRead);
   await recoverRequestAbort(abandonedSourceWrite);
   replacedWorkspaceStream.recovered();
 });

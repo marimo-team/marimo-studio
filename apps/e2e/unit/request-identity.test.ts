@@ -2,11 +2,13 @@ import { expect, test } from "vite-plus/test";
 
 import {
   BrowserRequestOwners,
+  abortedResponseCompleted,
   browserRequestIdentity,
   ExactRequestAbortWitness,
   IdempotentReadRecovery,
   WorkspaceEventStreamReplacementWindow,
   isIdempotentReadRequest,
+  requestAbortsRetiredByDocument,
 } from "../tests/request-identity.ts";
 
 interface RequestOptions {
@@ -40,6 +42,18 @@ const workspaceEventRequest = (
       `http://127.0.0.1:4321/_marimo-studio/dev/events?marimo_studio_connection=${generation}&marimo_studio_view=dashboard`,
   });
 
+const presentationDocument = (revision: string, view = "dashboard", lifecycle = 1) =>
+  request({
+    resourceType: "document",
+    url: `http://127.0.0.1:4321/_marimo-studio/presentation/${revision}/${view}/?file=notebook.py&marimo_studio_lifecycle=${lifecycle}&session_id=session-${lifecycle}`,
+  });
+
+const directRenewalDocument = (renewal: string, lifecycle: number) =>
+  request({
+    resourceType: "document",
+    url: `http://127.0.0.1:4321/dashboard/?file=notebook.py&marimo_studio_renewal=${renewal}&marimo_studio_lifecycle=${lifecycle}&session_id=session-${lifecycle}`,
+  });
+
 test("reuses one browser request owner for each source", () => {
   const owners = new BrowserRequestOwners<object>();
   const frame = {};
@@ -49,6 +63,30 @@ test("reuses one browser request owner for each source", () => {
 test("keeps browser request owners isolated by source", () => {
   const owners = new BrowserRequestOwners<object>();
   expect(owners.ownerFor({})).not.toBe(owners.ownerFor({}));
+});
+
+test("a completed document retires only earlier aborts from its frame owner", () => {
+  const owner = { id: 1 };
+  const otherOwner = { id: 2 };
+  const retiredDocument = request();
+  const retiredAsset = request();
+  const laterFailure = request();
+  const otherFrameFailure = request();
+  const missingStart = request();
+
+  expect(
+    requestAbortsRetiredByDocument(
+      [
+        { owner, request: retiredDocument, start: 1 },
+        { owner, request: retiredAsset, start: 2 },
+        { owner, request: laterFailure, start: 4 },
+        { owner: otherOwner, request: otherFrameFailure, start: 1 },
+        { owner, request: missingStart, start: undefined },
+      ],
+      owner,
+      3,
+    ).map(({ request: retired }) => retired),
+  ).toEqual([retiredDocument, retiredAsset]);
 });
 
 test("accepts one future abort from the exact held request after completion", async () => {
@@ -103,6 +141,34 @@ test("binds abort recovery to the complete browser operation identity", () => {
   expect(browserRequestIdentity(request({ resourceType: "eventsource" }))).not.toBe(original);
 });
 
+test("requires body completion before accepting an aborted document response", () => {
+  expect(abortedResponseCompleted(request({ resourceType: "document" }), 200)).toBe(false);
+  expect(abortedResponseCompleted(request({ resourceType: "document" }), 200, true)).toBe(true);
+  expect(abortedResponseCompleted(request({ resourceType: "document" }), 500)).toBe(false);
+  expect(abortedResponseCompleted(request(), 200)).toBe(false);
+  expect(abortedResponseCompleted(request(), 204)).toBe(true);
+  expect(abortedResponseCompleted(request({ method: "HEAD" }), 304)).toBe(true);
+  expect(abortedResponseCompleted(request({ method: "POST", resourceType: "document" }), 200)).toBe(
+    false,
+  );
+});
+
+test("accepts completed presentation readiness probes only at their 202 boundary", () => {
+  const probe = request({
+    resourceType: "fetch",
+    url: "http://127.0.0.1:4321/_marimo-studio/presentation/d.revision/dashboard/?file=notebook.py",
+  });
+  expect(abortedResponseCompleted(probe, 202)).toBe(false);
+  expect(abortedResponseCompleted(probe, 202, true)).toBe(true);
+  expect(abortedResponseCompleted(probe, 200)).toBe(false);
+  expect(
+    abortedResponseCompleted(
+      request({ resourceType: "fetch", url: "http://127.0.0.1:4321/other-poll" }),
+      202,
+    ),
+  ).toBe(false);
+});
+
 test("concurrent success before abort event order recovers one abort", () => {
   const recovery = new IdempotentReadRecovery();
   const frame = { id: 1 };
@@ -123,6 +189,68 @@ test("concurrent abort before success event order recovers one abort", () => {
   recovery.recordStart(retry, frame);
   expect(recovery.recordAbort(aborted)).toBe(false);
   expect(recovery.recordSuccess(retry)).toBe(abortStart);
+});
+
+test("a concurrent presentation revision recovers one abort in the same frame", () => {
+  const recovery = new IdempotentReadRecovery();
+  const owner = { id: 1 };
+  const aborted = presentationDocument("d.first", "dashboard", 1);
+  const successor = presentationDocument("d.second", "dashboard", 2);
+  recovery.recordStart(aborted, owner);
+  recovery.recordStart(successor, owner);
+
+  expect(recovery.recordSuccess(successor)).toBeUndefined();
+  expect(recovery.recordAbort(aborted)).toBe(true);
+});
+
+test("presentation recovery stays bound to its view and frame owner", () => {
+  const recovery = new IdempotentReadRecovery();
+  const aborted = presentationDocument("d.first", "dashboard", 1);
+  const otherView = presentationDocument("d.second", "report", 2);
+  const otherOwner = presentationDocument("d.third", "dashboard", 3);
+  recovery.recordStart(aborted, { id: 1 });
+  recovery.recordStart(otherView, { id: 1 });
+  recovery.recordStart(otherOwner, { id: 2 });
+
+  expect(recovery.recordSuccess(otherView)).toBeUndefined();
+  expect(recovery.recordSuccess(otherOwner)).toBeUndefined();
+  expect(recovery.recordAbort(aborted)).toBe(false);
+});
+
+test("a later presentation successor recovers an earlier abort", () => {
+  const recovery = new IdempotentReadRecovery();
+  const owner = { id: 1 };
+  const aborted = presentationDocument("d.first", "dashboard", 1);
+  const abortStart = recovery.recordStart(aborted, owner);
+  expect(recovery.recordAbort(aborted)).toBe(false);
+
+  const successor = presentationDocument("d.second", "dashboard", 2);
+  recovery.recordStart(successor, owner);
+  expect(recovery.recordSuccess(successor)).toBe(abortStart);
+});
+
+test("a direct renewal document recovers through its later successor", () => {
+  const recovery = new IdempotentReadRecovery();
+  const owner = { id: 1 };
+  const aborted = directRenewalDocument("d.first", 1);
+  const abortStart = recovery.recordStart(aborted, owner);
+  expect(recovery.recordAbort(aborted)).toBe(false);
+
+  const successor = directRenewalDocument("d.second", 2);
+  recovery.recordStart(successor, owner);
+  expect(recovery.recordSuccess(successor)).toBe(abortStart);
+});
+
+test("a direct renewal succeeds an aborted revision document", () => {
+  const recovery = new IdempotentReadRecovery();
+  const owner = { id: 1 };
+  const aborted = presentationDocument("d.first", "dashboard", 1);
+  const abortStart = recovery.recordStart(aborted, owner);
+  expect(recovery.recordAbort(aborted)).toBe(false);
+
+  const successor = directRenewalDocument("d.second", 2);
+  recovery.recordStart(successor, owner);
+  expect(recovery.recordSuccess(successor)).toBe(abortStart);
 });
 
 test("a completed generation cannot recover a later sequential abort", () => {
@@ -282,6 +410,7 @@ test.each([
     replacement.recordResponse(current, 200);
   }
 
+  expect(replacement.readyToRecover()).toBe(true);
   expect(replacement.recover()).toBe(true);
   expect(replacement.diagnostics()).toEqual([]);
 });

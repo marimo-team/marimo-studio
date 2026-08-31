@@ -384,7 +384,17 @@ test("preserves projected controls across refresh and owner removal", async ({ p
   }
 });
 
-test("preserves runtime state while modes and controls change", async ({ page }) => {
+test("preserves runtime state while modes and controls change", async ({
+  browserDiagnostics,
+  page,
+}) => {
+  const supersededDocuments = browserDiagnostics.expectRequestAbort({
+    origin: studioOrigin,
+    method: "GET",
+    path: /^\/(?:_marimo-studio\/presentation\/[^/]+\/)?dashboard\/$/,
+    count: 2,
+    required: false,
+  });
   await page.goto(studioEntryUrl);
   const server = await waitForPreview(page);
   const serverWidget = server.getByRole("button", { name: /Widget count:/ });
@@ -444,6 +454,7 @@ test("preserves runtime state while modes and controls change", async ({ page })
   await expect(wasm.locator("button").filter({ hasText: /Widget count:/ })).toHaveText(
     `Widget count: ${wasmWidgetCount + 1}`,
   );
+  await recoverRequestAbort(supersededDocuments);
 });
 
 test("keeps native output ownership isolated between server preview consumers", async ({

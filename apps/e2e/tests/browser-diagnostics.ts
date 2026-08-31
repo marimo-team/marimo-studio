@@ -26,7 +26,8 @@ import {
   ExactRequestAbortWitness,
   IdempotentReadRecovery,
   WorkspaceEventStreamReplacementWindow,
-  isIdempotentReadRequest,
+  abortedResponseCompleted,
+  requestAbortsRetiredByDocument,
   type BrowserRequestOwner,
 } from "./request-identity.ts";
 import { ResponseTransitionWindow } from "./response-transition.ts";
@@ -52,7 +53,10 @@ export interface BrowserDiagnostics {
   expectActiveRequestAbort(expectation: BrowserActiveRequestAbortExpectation): RequestAbortCapture;
   expectRequestAbort(expectation: BrowserRequestAbortExpectation): RequestAbortCapture;
   expectRequestFailure(expectation: BrowserRequestFailureExpectation): BrowserResponseRecovery;
-  expectWorkspaceEventStreamReplacement(eventsUrl: string, count?: number): BrowserResponseRecovery;
+  expectWorkspaceEventStreamReplacement(
+    eventsUrl: string,
+    count?: number,
+  ): WorkspaceEventStreamCapture;
 }
 
 export interface BrowserDiagnosticsScope extends BrowserDiagnostics {
@@ -75,6 +79,10 @@ export const expectSupersededRenewalConfig = (
 
 export interface BrowserResponseRecovery {
   recovered(): void;
+}
+
+export interface WorkspaceEventStreamCapture extends BrowserResponseRecovery {
+  ready(): boolean;
 }
 
 export interface ProjectionRefreshCapture {
@@ -226,6 +234,7 @@ const observePageDiagnostics = (
   const responseTransitions = new Set<ResponseTransitionWindow<Request, BrowserRequestOwner>>();
   const responseStatuses = new WeakMap<Request, number>();
   const responseErrors = new WeakMap<Request, string | undefined>();
+  const finishedRequests = new WeakSet<Request>();
   const requestOwner = (request: Request) => {
     const serviceWorker = request.serviceWorker();
     if (serviceWorker !== null) {
@@ -360,11 +369,7 @@ const observePageDiagnostics = (
         .response()
         .then((response) => {
           const status = response?.status();
-          const completedWithoutBody =
-            isIdempotentReadRequest(request) &&
-            status !== undefined &&
-            (request.method() === "HEAD" ? status < 400 : [204, 205, 304].includes(status));
-          if (completedWithoutBody) {
+          if (abortedResponseCompleted(request, status, finishedRequests.has(request))) {
             pendingRequestAborts.delete(pendingAbort);
             requestRecovery.discardAbort(request);
           }
@@ -378,6 +383,7 @@ const observePageDiagnostics = (
     messages.push(`request failed: ${request.url()} (${failure})`);
   };
   const onRequestFinished = (request: Request) => {
+    finishedRequests.add(request);
     activeRequests.delete(request);
     responseTransitions.forEach((window) => window.recordTerminal(request));
     expectedRequestAborts.forEach((window) => window.recordTerminal(request));
@@ -397,14 +403,19 @@ const observePageDiagnostics = (
       return;
     }
     const recoveredStart = requestRecovery.recordSuccess(request);
-    if (recoveredStart === undefined) {
-      return;
+    if (recoveredStart !== undefined) {
+      const recovered = Array.from(pendingRequestAborts).find(
+        (item) => item.start === recoveredStart,
+      );
+      if (recovered !== undefined) {
+        pendingRequestAborts.delete(recovered);
+      }
     }
-    const recovered = Array.from(pendingRequestAborts).find(
-      (item) => item.start === recoveredStart,
-    );
-    if (recovered !== undefined) {
-      pendingRequestAborts.delete(recovered);
+    if (request.resourceType() === "document") {
+      for (const retired of requestAbortsRetiredByDocument(pendingRequestAborts, owner, start)) {
+        pendingRequestAborts.delete(retired);
+        requestRecovery.discardAbort(retired.request);
+      }
     }
   };
   const onResponse = (response: Response) => {
@@ -587,6 +598,7 @@ const observePageDiagnostics = (
         requestRecovery.recordFailure(request);
       });
       activeRequests.clear();
+      requestRecovery.dispose();
       projectionReadWindows.forEach((window) => window.dispose());
       frameRetirementsByOwner.clear();
       pageRetirementCleanups.forEach((stop) => stop());
@@ -747,6 +759,7 @@ export const observeBrowserContext = (context: BrowserContext): BrowserDiagnosti
       workspaceEventStreamReplacements.add(replacement);
       pages.forEach((page) => page.captureWorkspaceEventStream(replacement));
       return {
+        ready: () => replacement.readyToRecover(),
         recovered: () => {
           replacement.recover();
         },

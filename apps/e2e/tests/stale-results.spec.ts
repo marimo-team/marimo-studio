@@ -18,6 +18,7 @@ import {
   studioServerToken,
   test,
   waitForPreview,
+  waitForViewPreview,
   workspaceCreatedViewHtmlPath,
   workspaceNotebookPath,
   writeWorkspaceFile,
@@ -232,25 +233,26 @@ test("cancels a held old-view request without changing current or cached view st
     required: false,
     status: 204,
   });
-  await page.getByLabel("Switch page").click();
-  await page.getByRole("button", { name: "slow-report", exact: true }).click();
-  await expect(page.getByLabel("Switch page")).toContainText("slow-report");
+  const selectView = async (view: string, heading: string): Promise<void> => {
+    const committed = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        response.status() === 204 &&
+        response.request().method() === "POST" &&
+        /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/.test(url.pathname)
+      );
+    });
+    await page.getByLabel("Switch page").click();
+    await page.getByRole("button", { name: view, exact: true }).click();
+    await committed;
+    await expect(page.getByLabel("Switch page")).toContainText(view);
+    const selected = await waitForViewPreview(page, view);
+    await expect(selected.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+  };
+  await selectView("slow-report", "Slow kernel report");
   const preview = await waitForPreview(page);
-  await expect(
-    preview.getByRole("heading", { name: "Slow kernel report", exact: true }),
-  ).toBeVisible();
-  await page.getByLabel("Switch page").click();
-  await page.getByRole("button", { name: "next-report", exact: true }).click();
-  await expect(page.getByLabel("Switch page")).toContainText("next-report");
-  await expect(
-    preview.getByRole("heading", { name: "Next kernel report", exact: true }),
-  ).toBeVisible();
-  await page.getByLabel("Switch page").click();
-  await page.getByRole("button", { name: "slow-report", exact: true }).click();
-  await expect(page.getByLabel("Switch page")).toContainText("slow-report");
-  await expect(
-    preview.getByRole("heading", { name: "Slow kernel report", exact: true }),
-  ).toBeVisible();
+  await selectView("next-report", "Next kernel report");
+  await selectView("slow-report", "Slow kernel report");
   await page.getByRole("button", { name: "Preview", exact: true }).click();
   await preview.locator("html").evaluate(() => {
     globalThis.__studioPreviewWindowMarker = "slow-report-window";
@@ -299,12 +301,7 @@ test("cancels a held old-view request without changing current or cached view st
     throw new Error("The held live value request was not captured.");
   }
 
-  await page.getByLabel("Switch page").click();
-  await page.getByRole("button", { name: "next-report", exact: true }).click();
-  await expect(page.getByLabel("Switch page")).toContainText("next-report");
-  await expect(
-    preview.getByRole("heading", { name: "Next kernel report", exact: true }),
-  ).toBeVisible();
+  await selectView("next-report", "Next kernel report");
   await expect(page.getByRole("button", { name: "Preview", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -326,12 +323,7 @@ test("cancels a held old-view request without changing current or cached view st
     preview.getByRole("heading", { name: "Next kernel report", exact: true }),
   ).toBeVisible();
   await expect(preview.locator('[mo-value="slow_metric"]')).toHaveText("7");
-  await page.getByLabel("Switch page").click();
-  await page.getByRole("button", { name: "slow-report", exact: true }).click();
-  await expect(page.getByLabel("Switch page")).toContainText("slow-report");
-  await expect(
-    preview.getByRole("heading", { name: "Slow kernel report", exact: true }),
-  ).toBeVisible();
+  await selectView("slow-report", "Slow kernel report");
   await expect
     .poll(() => preview.locator("html").evaluate(() => globalThis.__studioPreviewWindowMarker))
     .toBe("slow-report-window");

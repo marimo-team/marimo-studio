@@ -136,7 +136,7 @@ export const stopNotebookProcess = async (
   let stopped = false;
   if (shutdown === "studio") {
     try {
-      await requestStudioShutdown(serverUrl, authToken, Math.min(timeout, 5_000));
+      await requestStudioShutdown(serverUrl, authToken, timeout);
       stopped = await waitForStop({ child, port, processGroupId }, timeout);
     } catch (error) {
       shutdownError = error;

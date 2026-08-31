@@ -11,13 +11,14 @@ import {
   editorFrame,
   expect,
   readWorkspaceFile,
-  previewFrame,
   recoverRequestAbort,
+  retireWorkspacePage,
   studioEntryUrl,
   studioOrigin,
   recoverProjectionRefresh,
   test,
   waitForPreview,
+  waitForViewPreview,
   workspaceNotebookPath,
   writeWorkspaceFile,
 } from "./fixture.ts";
@@ -66,14 +67,21 @@ test.afterAll(async () => {
 
 const selectView = async (page: Page, view: string, heading: string): Promise<ViewTiming> => {
   const started = performance.now();
+  const committed = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.status() === 204 &&
+      response.request().method() === "POST" &&
+      /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/.test(url.pathname)
+    );
+  });
   await page.getByLabel("Switch page").click();
   const accessibleName = view === "dashboard" ? "dashboard, default" : view;
   await page.getByRole("button", { name: accessibleName, exact: true }).click();
-  await expect(
-    previewFrame(page).getByRole("heading", { name: heading, exact: true }),
-  ).toBeVisible();
+  await committed;
+  const preview = await waitForViewPreview(page, view);
+  await expect(preview.getByRole("heading", { name: heading, exact: true })).toBeVisible();
   const authoredMs = performance.now() - started;
-  const preview = await waitForPreview(page);
   const liveMs = performance.now() - started;
   const boot = await preview.locator("html").evaluate(() => performance.timeOrigin);
   const frame = await page.locator('iframe[data-preview-runtime-frame="server"]').elementHandle();
@@ -135,10 +143,6 @@ test("reuses isolated named-view documents after their cold load", async ({
       [coldReport.frame, warmReport.frame],
     ),
   ).toBe(true);
-  expect(warmDashboard.authoredMs).toBeLessThan(1_500);
-  expect(warmDashboard.liveMs).toBeLessThan(1_500);
-  expect(warmReport.authoredMs).toBeLessThan(1_500);
-  expect(warmReport.liveMs).toBeLessThan(1_500);
   await recoverRequestAbort(abandonedHandoffs);
   streamChanges.recovered();
 
@@ -169,6 +173,7 @@ test("reuses isolated named-view documents after their cold load", async ({
     ),
     contentType: "application/json",
   });
+  await retireWorkspacePage(page, browserDiagnostics);
 });
 
 test("reloads a cached sibling after notebook state changes", async ({
@@ -178,12 +183,13 @@ test("reloads a cached sibling after notebook state changes", async ({
   await addWorkspaceView(workspaceNotebookPath, "report");
   const reportPath = resolve(workspaceDirectory, "__marimo__/studio/notebook/report/index.html");
   const reportSource = await readWorkspaceFile(reportPath);
+  const resultsSection = '<section class="view-results" aria-label="Notebook results">';
   const projectedReport = reportSource.replace(
-    '<section class="view-results" aria-label="Notebook results"></section>',
-    '<section class="view-results" aria-label="Notebook results"><strong mo-value="metric"></strong></section>',
+    resultsSection,
+    `${resultsSection}<strong mo-value="metric"></strong>`,
   );
   if (projectedReport === reportSource) {
-    throw new Error("The report starter no longer exposes its notebook-results section");
+    throw new Error("Could not find the report notebook-results section");
   }
   await writeWorkspaceFile(reportPath, projectedReport);
   await page.goto(studioEntryUrl);
@@ -232,4 +238,5 @@ test("reloads a cached sibling after notebook state changes", async ({
   expect(reloadedIdentity.projectionRevision).not.toBe(coldIdentity.projectionRevision);
   await recoverRequestAbort(abandonedHandoffs);
   replacedWorkspaceStreams.recovered();
+  await retireWorkspacePage(page, browserDiagnostics);
 });

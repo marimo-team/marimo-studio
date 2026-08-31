@@ -31,6 +31,7 @@ test("keeps the configured WebAssembly default implicit across wrapper reload", 
   browserDiagnostics,
   page,
 }) => {
+  test.setTimeout(360_000);
   const source = await readWorkspaceFile(workspaceNotebookPath);
   await writeWorkspaceFile(
     workspaceNotebookPath,

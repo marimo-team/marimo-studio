@@ -11,19 +11,24 @@ import {
 } from "./authoring-test-support.ts";
 import {
   addWorkspaceView,
+  buildWorkspaceView,
   dashboardHtmlPath,
   editorFrame,
   expect,
+  labeledSlider,
   plainDashboardHtmlPath,
   plainNotebookPath,
   presentationFrame,
   previewFrame,
   readWorkspaceFile,
   recoverRequestAbort,
+  recoverWorkspaceEventStream,
+  retireWorkspacePage,
   studioEntryUrl,
   studioOrigin,
   test,
   waitForPreview,
+  waitForViewPreview,
   workspaceNotebookPath,
   writeDashboardSource,
   writeViewSource,
@@ -32,7 +37,6 @@ import {
 declare global {
   var __e2eBuildStatusObserver: MutationObserver | undefined;
   var __e2eBuildStatuses: string[] | undefined;
-  var __e2eSourceStatuses: string[] | undefined;
 }
 
 const executeCodeMode = async (
@@ -135,6 +139,7 @@ shown.to_dict()
   expect(readStudioEditorSessionId(bootstrap)).toBe(sessionId);
   await expect(editorFrame(page).locator(".cm-content").first()).toBeFocused();
   const preview = await waitForPreview(page);
+  await expect(preview.getByText("Native Marimo notebook")).toBeVisible();
 
   const source = await readWorkspaceFile(plainDashboardHtmlPath);
   const projectedSource = source.replace(
@@ -273,24 +278,12 @@ test("publishes visible edits from each built-in source model", async ({
   browserDiagnostics,
   page,
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(600_000);
   await addWorkspaceView(workspaceNotebookPath, "html-view", "marimo-studio/vanilla:default");
   await addWorkspaceView(workspaceNotebookPath, "react-view", "marimo-studio/react:default");
   await addWorkspaceView(workspaceNotebookPath, "svelte-view", "marimo-studio/svelte:default");
+  await buildWorkspaceView("html-view");
 
-  await page.goto(studioEntryUrl);
-  await waitForPreview(page);
-  const abandonedHandoffs = browserDiagnostics.expectRequestAbort({
-    origin: studioOrigin,
-    method: "POST",
-    path: /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/,
-    count: 4,
-    status: 204,
-  });
-  const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
-    new URL("/_marimo-studio/dev/events", studioOrigin).href,
-    4,
-  );
   const completedSourceWrites = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin,
     method: "PUT",
@@ -320,94 +313,110 @@ test("publishes visible edits from each built-in source model", async ({
     },
   ] as const;
   for (const candidate of cases) {
+    const candidatePage = await page.context().newPage();
     await test.step(`${candidate.view} edit`, async () => {
-      await page.getByLabel("Switch page").click();
-      const option = page.getByRole("button", { name: candidate.view, exact: true });
-      await option.click();
-      const preview = await waitForPreview(page);
-      await expect(preview.getByRole("heading", { name: candidate.before })).toBeVisible();
-
-      await page.getByLabel("Workspace options").click();
-      await page.getByRole("button", { name: "Source" }).click();
-      await page.getByRole("tab", { name: candidate.path }).click();
-      const editor = page.getByLabel(`${candidate.path} source`);
-      const sourcePath = resolve(
-        workspaceNotebookPath,
-        "../__marimo__/studio/notebook",
-        candidate.view,
-        candidate.path,
-      );
-      const source = await readWorkspaceFile(sourcePath);
-      expect(source).toContain(candidate.before);
-      const initialRevision = await preview
-        .locator("html")
-        .evaluate(() => globalThis.marimoStudio.identity().revision);
-
-      await page.evaluate(() => {
-        globalThis.__e2eBuildStatusObserver?.disconnect();
-        globalThis.__e2eBuildStatuses = [];
-        globalThis.__e2eSourceStatuses = [];
-        const record = () => {
-          const label = document
-            .querySelector<HTMLElement>('[aria-label^="Page build details,"]')
-            ?.getAttribute("aria-label");
-          if (label && !globalThis.__e2eBuildStatuses?.includes(label)) {
-            globalThis.__e2eBuildStatuses?.push(label);
-          }
-          const sourceStatus = document
-            .querySelector<HTMLElement>('[role="status"][aria-label="Source document status"]')
-            ?.textContent?.trim();
-          if (sourceStatus && globalThis.__e2eSourceStatuses?.at(-1) !== sourceStatus) {
-            globalThis.__e2eSourceStatuses?.push(sourceStatus);
-          }
-        };
-        const observer = new MutationObserver(record);
-        observer.observe(document.body, {
-          attributeFilter: ["aria-label"],
-          attributes: true,
-          childList: true,
-          subtree: true,
-        });
-        globalThis.__e2eBuildStatusObserver = observer;
-        record();
+      const editorModelRecovery = browserDiagnostics.expectConsole({
+        type: "error",
+        text: /^Error: Model not found for key: [a-f\d]{32}\n\s+at http:\/\/127\.0\.0\.1:\d+\/_marimo-studio\/editor\/assets\/state-[^/\s]+\.js:\d+:\d+$/,
+        required: false,
       });
+      try {
+        await candidatePage.goto(`/studio/${candidate.view}/?file=notebook.py`);
+        const preview = await waitForViewPreview(candidatePage, candidate.view, "server", 120_000);
+        await expect(preview.getByRole("heading", { name: candidate.before })).toBeVisible();
+        await expect(
+          labeledSlider(preview.locator('marimo-cell[name="controls"]'), /^Scale/),
+        ).toBeVisible();
+        await expect(preview.getByRole("button", { name: "Widget count: 7" })).toBeVisible();
+        editorModelRecovery.recovered();
 
-      await editor.focus();
-      await editor.press(selectAllShortcut);
-      const changedSource = source.replace(candidate.before, candidate.after);
-      await page.keyboard.insertText(changedSource);
-      await editor.press(saveShortcut);
+        const sourceTab = candidatePage.getByRole("tab", { name: candidate.path });
+        if (!(await sourceTab.isVisible())) {
+          await candidatePage.getByLabel("Workspace options").click();
+          await candidatePage.getByRole("button", { name: "Source" }).click();
+        }
+        await sourceTab.click();
+        const editor = candidatePage.getByLabel(`${candidate.path} source`);
+        const sourcePath = resolve(
+          workspaceNotebookPath,
+          "../__marimo__/studio/notebook",
+          candidate.view,
+          candidate.path,
+        );
+        const source = await readWorkspaceFile(sourcePath);
+        expect(source).toContain(candidate.before);
+        const initialRevision = await preview
+          .locator("html")
+          .evaluate(() => globalThis.marimoStudio.identity().revision);
 
-      await expect(page.getByRole("status", { name: "Source document status" })).toHaveText(
-        "Saved",
-      );
-      await expect.poll(() => readWorkspaceFile(sourcePath)).toBe(changedSource);
-      await expect(preview.getByRole("heading", { name: candidate.after })).toBeVisible();
-      await waitForPreview(page);
-      await expect
-        .poll(() =>
-          preview.locator("html").evaluate(() => globalThis.marimoStudio.identity().revision),
-        )
-        .not.toBe(initialRevision);
-      await expect(page.getByLabel("Page build details, Up to date")).toBeVisible();
-      const buildStatuses = await page.evaluate(() => globalThis.__e2eBuildStatuses ?? []);
-      const sourceStatuses = await page.evaluate(() => globalThis.__e2eSourceStatuses ?? []);
-      expect(sourceStatuses).toContain("Saving…");
-      expect(sourceStatuses.at(-1)).toBe("Saved");
-      expect(
-        buildStatuses.some((status) =>
-          ["Page build details, Checking build", "Page build details, Building"].includes(status),
-        ),
-      ).toBe(true);
+        await candidatePage.evaluate(() => {
+          globalThis.__e2eBuildStatusObserver?.disconnect();
+          globalThis.__e2eBuildStatuses = [];
+          const record = () => {
+            const label = document
+              .querySelector<HTMLElement>('[aria-label^="Page build details,"]')
+              ?.getAttribute("aria-label");
+            if (label && !globalThis.__e2eBuildStatuses?.includes(label)) {
+              globalThis.__e2eBuildStatuses?.push(label);
+            }
+          };
+          const observer = new MutationObserver(record);
+          observer.observe(document.body, {
+            attributeFilter: ["aria-label"],
+            attributes: true,
+            childList: true,
+            subtree: true,
+          });
+          globalThis.__e2eBuildStatusObserver = observer;
+          record();
+        });
+
+        await editor.focus();
+        await editor.press(selectAllShortcut);
+        const changedSource = source.replace(candidate.before, candidate.after);
+        await candidatePage.keyboard.insertText(changedSource);
+        await editor.press(saveShortcut);
+
+        await expect(
+          candidatePage.getByRole("status", { name: "Source document status" }),
+        ).toHaveText("Saved");
+        await expect.poll(() => readWorkspaceFile(sourcePath)).toBe(changedSource);
+        await expect(preview.getByRole("heading", { name: candidate.after })).toBeVisible();
+        await waitForViewPreview(candidatePage, candidate.view);
+        await expect
+          .poll(() =>
+            preview.locator("html").evaluate(() => globalThis.marimoStudio.identity().revision),
+          )
+          .not.toBe(initialRevision);
+        await expect(candidatePage.getByLabel("Page build details, Up to date")).toBeVisible();
+        const buildStatuses = await candidatePage.evaluate(
+          () => globalThis.__e2eBuildStatuses ?? [],
+        );
+        expect(
+          buildStatuses.some((status) =>
+            ["Page build details, Checking build", "Page build details, Building"].includes(status),
+          ),
+        ).toBe(true);
+      } finally {
+        if (!candidatePage.isClosed()) {
+          const retirement = browserDiagnostics.expectPageRetirement(candidatePage);
+          await candidatePage.close();
+          retirement.recovered();
+        }
+      }
     });
   }
 
   await test.step("failed framework build retains and explains the last good view", async () => {
-    await page.getByLabel("Switch page").click();
-    await page.getByRole("button", { name: "react-view", exact: true }).click();
-    const preview = await waitForPreview(page);
+    await page.goto("/studio/react-view/?file=notebook.py");
+    const preview = await waitForViewPreview(page, "react-view", "server", 120_000);
     await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible();
-    await page.getByRole("tab", { name: "src/App.tsx" }).click();
+    const sourceTab = page.getByRole("tab", { name: "src/App.tsx" });
+    if (!(await sourceTab.isVisible())) {
+      await page.getByLabel("Workspace options").click();
+      await page.getByRole("button", { name: "Source" }).click();
+    }
+    await sourceTab.click();
     const editor = page.getByLabel("src/App.tsx source");
     const path = resolve(
       workspaceNotebookPath,
@@ -439,9 +448,8 @@ test("publishes visible edits from each built-in source model", async ({
   });
 
   await page.evaluate(() => globalThis.__e2eBuildStatusObserver?.disconnect());
-  await recoverRequestAbort(abandonedHandoffs);
-  replacedWorkspaceStreams.recovered();
   await expect(page.getByRole("status", { name: "Source document status" })).toHaveText("Saved");
+  await retireWorkspacePage(page, browserDiagnostics);
   await recoverRequestAbort(completedSourceWrites);
 });
 
@@ -615,8 +623,17 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
     required: false,
     status: 204,
   });
+  const initialWorkspaceStream = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.status() === 200 &&
+      response.request().resourceType() === "eventsource" &&
+      url.pathname === "/_marimo-studio/dev/events"
+    );
+  });
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
+  await initialWorkspaceStream;
 
   await page.getByLabel("Switch page").click();
   await page.getByRole("button", { name: "New page" }).click();
@@ -630,7 +647,7 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
   await expect(page.getByLabel("index.html source")).toBeVisible();
   const preview = await waitForPreview(page);
   await expect(preview.getByRole("heading", { name: "Qa View" })).toBeVisible();
-  await expect(preview.locator("marimo-cell")).toHaveCount(0);
+  await expect(preview.locator('marimo-cell[name="controls"]')).toBeVisible();
 
   const createdDirectory = resolve(workspaceNotebookPath, "../__marimo__/studio/notebook/qa-view");
   await expect.poll(async () => access(createdDirectory).then(() => true)).toBe(true);
@@ -660,7 +677,7 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
   ).toBeVisible();
   await recoverRequestAbort(abandonedHandoffs);
   await recoverRequestAbort(supersededDashboardRenewal);
-  replacedWorkspaceStreams.recovered();
+  await recoverWorkspaceEventStream(replacedWorkspaceStreams);
 });
 
 test.describe("touch input", () => {

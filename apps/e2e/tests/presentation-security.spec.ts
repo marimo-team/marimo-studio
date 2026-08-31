@@ -331,6 +331,13 @@ test("repairs an opaque preview through its scoped event stream", async ({
   });
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
+  const supersededDocument = browserDiagnostics.expectRequestAbort({
+    origin: studioOrigin,
+    method: "GET",
+    path: /^\/(?:_marimo-studio\/presentation\/[^/]+\/)?dashboard\/$/,
+    count: 1,
+    required: false,
+  });
   const closedRepairStream = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin,
     method: "GET",
@@ -391,6 +398,7 @@ test("repairs an opaque preview through its scoped event stream", async ({
     expect(repairedProject.status()).toBe(200);
     failedDocument.recovered();
     await recoverResponseTransition(projectRepair);
+    await recoverRequestAbort(supersededDocument);
     await recoverRequestAbort(closedRepairStream);
   } finally {
     await writeWorkspaceFile(dashboardManifestPath, manifest);

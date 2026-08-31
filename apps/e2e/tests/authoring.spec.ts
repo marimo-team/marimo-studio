@@ -539,7 +539,14 @@ test("shows an agent-requested page and records its rendered revision", async ({
   const firstObservation = first;
   expect(firstObservation.view).toBe("qa-view");
   expect(firstObservation.diagnostics).toEqual([]);
-  expect(firstObservation.projection_instances).toEqual([]);
+  expect(
+    firstObservation.projection_instances.map(({ phase, target }) => ({ phase, target })),
+  ).toEqual([
+    { phase: "ready", target: "controls" },
+    { phase: "ready", target: "metric" },
+    { phase: "ready", target: "slow_metric" },
+    { phase: "ready", target: "counter_widget" },
+  ]);
   await recoverRequestAbort(abandonedObservation);
 });
 

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { requestStudioShutdown } from "../scripts/graceful-shutdown.mjs";
 import { unregisterNotebookProcess } from "../scripts/notebook-process-registry.mjs";
-import { fixtureDirectory, notebookProcessRegistryDirectory } from "../scripts/paths.mjs";
+import { fixtureDirectory } from "../scripts/paths.mjs";
 import { processGroupIsRunning, stopProcessGroup } from "../scripts/process-group.mjs";
 import { startRegisteredNotebookProcess } from "../scripts/registered-notebook-process.mjs";
 import {
@@ -67,6 +67,9 @@ const responds = async (port: number): Promise<boolean> => {
     return false;
   }
 };
+
+const notebookProcessRecords = (directory: string) =>
+  existsSync(directory) ? readdirSync(directory).filter((name) => name.endsWith(".json")) : [];
 
 test("rejects Python resource tracker semaphore leaks", () => {
   expect(() =>
@@ -364,6 +367,7 @@ test("stops a native authenticated Marimo run server without Studio bootstrap", 
   const root = mkdtempSync(resolve(tmpdir(), "marimo-studio-run-wrapper-"));
   try {
     const workspace = resolve(root, "workspace");
+    const registryDirectory = resolve(root, "registry");
     mkdirSync(workspace);
     cpSync(resolve(fixtureDirectory, "plain.py"), resolve(workspace, "plain.py"));
     const port = await availablePort();
@@ -372,6 +376,7 @@ test("stops a native authenticated Marimo run server without Studio bootstrap", 
       command: "run",
       extensions: "native",
       port,
+      registryDirectory,
       target: resolve(workspace, "plain.py"),
     });
     let stopped = false;
@@ -399,7 +404,7 @@ test("stops a native authenticated Marimo run server without Studio bootstrap", 
       expect.soft(cleanupFailure).toBeUndefined();
       expectProcessTreeRootStopped(server.process, server.processGroupId);
       expect(await notebookServerPortIsOpen(port)).toBe(false);
-      expect(existsSync(notebookProcessRegistryDirectory)).toBe(false);
+      expect(notebookProcessRecords(registryDirectory)).toEqual([]);
     }
   } finally {
     rmSync(root, { force: true, recursive: true });

@@ -1,3 +1,5 @@
+import type { FrameLocator, Page } from "@playwright/test";
+
 import { e2eNetwork } from "../scripts/network.mjs";
 import { collaborativeNotebookPath } from "../scripts/paths.mjs";
 import {
@@ -32,6 +34,39 @@ import {
   stopNotebookServer,
   waitForNotebookServer,
 } from "./notebook-server.ts";
+
+const holdDashboardSourceWrites = async (page: Page): Promise<() => Promise<void>> => {
+  const sourceRoute = /\/_marimo-studio\/views\/dashboard\/source\/src\/index\.html(?:\?|$)/;
+  let release!: () => void;
+  let claimed = false;
+  const committed = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const handler: Parameters<Page["route"]>[1] = async (route) => {
+    if (route.request().method() !== "PUT" || claimed) {
+      await route.fallback();
+      return;
+    }
+    claimed = true;
+    await committed;
+    await route.continue();
+  };
+  await page.route(sourceRoute, handler);
+  return async () => {
+    release();
+  };
+};
+
+const expectSharedHeading = async (
+  first: FrameLocator,
+  second: FrameLocator,
+  heading: string,
+): Promise<void> => {
+  await Promise.all([
+    expect(first.getByRole("heading", { name: heading })).toBeVisible({ timeout: 65_000 }),
+    expect(second.getByRole("heading", { name: heading })).toBeVisible({ timeout: 65_000 }),
+  ]);
+};
 
 test("keeps two tabs isolated inside one notebook scope", async ({ browserDiagnostics, page }) => {
   const replacedEventStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
@@ -170,6 +205,7 @@ test("shares publication and recovery across two Studio sessions", async ({
   collaborativeWorkspace: _collaborativeWorkspace,
   page,
 }, testInfo) => {
+  test.setTimeout(180_000);
   await addCollaborativeView("report");
   const firstServer = startNotebookServer({
     command: "edit",
@@ -247,6 +283,7 @@ test("shares publication and recovery across two Studio sessions", async ({
       const original = await readWorkspaceFile(collaborativeDashboardHtmlPath);
       const firstSave = original.replace("Studio browser fixture", "Saved by first client");
       const discarded = original.replace("Studio browser fixture", "Discarded second edit");
+      const releaseDiscardedSave = await holdDashboardSourceWrites(second);
       await secondEditor.click();
       await secondEditor.press(selectAllShortcut);
       await second.keyboard.insertText(discarded);
@@ -255,20 +292,17 @@ test("shares publication and recovery across two Studio sessions", async ({
       await page.keyboard.insertText(firstSave);
       await firstEditor.press(saveShortcut);
       await expect.poll(() => readWorkspaceFile(collaborativeDashboardHtmlPath)).toBe(firstSave);
+      await releaseDiscardedSave();
 
       await expect(second.getByRole("alert")).toContainText("changed on disk");
       await second.getByRole("button", { name: "Use saved version" }).click();
       await expect(secondEditor).toContainText("Saved by first client");
-      await expect(
-        firstPreview.getByRole("heading", { name: "Saved by first client" }),
-      ).toBeVisible();
-      await expect(
-        secondPreview.getByRole("heading", { name: "Saved by first client" }),
-      ).toBeVisible();
+      await expectSharedHeading(firstPreview, secondPreview, "Saved by first client");
       await Promise.all([waitForPreview(page), waitForPreview(second)]);
 
       const secondWins = firstSave.replace("Saved by first client", "Saved by second client");
       const competing = firstSave.replace("Saved by first client", "Competing first edit");
+      const releaseSecondSave = await holdDashboardSourceWrites(second);
       await secondEditor.click();
       await secondEditor.press(selectAllShortcut);
       await second.keyboard.insertText(secondWins);
@@ -277,24 +311,15 @@ test("shares publication and recovery across two Studio sessions", async ({
       await page.keyboard.insertText(competing);
       await firstEditor.press(saveShortcut);
       await expect.poll(() => readWorkspaceFile(collaborativeDashboardHtmlPath)).toBe(competing);
-      await expect(
-        firstPreview.getByRole("heading", { name: "Competing first edit" }),
-      ).toBeVisible();
-      await expect(
-        secondPreview.getByRole("heading", { name: "Competing first edit" }),
-      ).toBeVisible();
+      await releaseSecondSave();
+      await expectSharedHeading(firstPreview, secondPreview, "Competing first edit");
       await Promise.all([waitForPreview(page), waitForPreview(second)]);
 
       await expect(second.getByRole("alert")).toContainText("changed on disk");
       await second.getByRole("button", { name: "Overwrite saved version with my edits" }).click();
       await expect.poll(() => readWorkspaceFile(collaborativeDashboardHtmlPath)).toBe(secondWins);
 
-      await expect(
-        firstPreview.getByRole("heading", { name: "Saved by second client" }),
-      ).toBeVisible();
-      await expect(
-        secondPreview.getByRole("heading", { name: "Saved by second client" }),
-      ).toBeVisible();
+      await expectSharedHeading(firstPreview, secondPreview, "Saved by second client");
       await Promise.all([waitForPreview(page), waitForPreview(second)]);
       sourceConflicts.recovered();
       const invalid = secondWins.replace("</body>", "");
@@ -307,12 +332,7 @@ test("shares publication and recovery across two Studio sessions", async ({
           return (await response.json()).build?.phase;
         })
         .toBe("stale");
-      await expect(
-        firstPreview.getByRole("heading", { name: "Saved by second client" }),
-      ).toBeVisible();
-      await expect(
-        secondPreview.getByRole("heading", { name: "Saved by second client" }),
-      ).toBeVisible();
+      await expectSharedHeading(firstPreview, secondPreview, "Saved by second client");
 
       const repaired = secondWins.replace("Saved by second client", "Repaired publication");
       await writeWorkspaceFile(collaborativeDashboardHtmlPath, repaired);
@@ -325,12 +345,7 @@ test("shares publication and recovery across two Studio sessions", async ({
           return (await response.json()).build?.phase;
         })
         .toBe("published");
-      await expect(
-        firstPreview.getByRole("heading", { name: "Repaired publication" }),
-      ).toBeVisible();
-      await expect(
-        secondPreview.getByRole("heading", { name: "Repaired publication" }),
-      ).toBeVisible();
+      await expectSharedHeading(firstPreview, secondPreview, "Repaired publication");
       await Promise.all([waitForPreview(page), waitForPreview(second)]);
       await expect(firstEditor).toContainText("Repaired publication");
       await expect(secondEditor).toContainText("Repaired publication");

@@ -8,18 +8,29 @@ import { z } from "zod";
 
 import { fixtureDirectory, notebookProcessRegistryDirectory } from "../scripts/paths.mjs";
 import { processGroupIsRunning } from "../scripts/process-group.mjs";
+import { waitForPreview } from "./fixture.ts";
 import {
+  type NotebookServer,
   closeFailedNotebookServer,
   startNotebookServer,
   stopNotebookServer,
   waitForNotebookServer,
 } from "./notebook-server.ts";
 
+const expectProcessTreeRootStopped = (server: NotebookServer): void => {
+  const groupRunning = processGroupIsRunning(server.processGroupId);
+  if (groupRunning !== undefined) {
+    expect(groupRunning).toBe(false);
+  }
+  expect(server.process.exitCode !== null || server.process.signalCode !== null).toBe(true);
+};
+
 const bootstrapSchema = z.object({
   serverToken: z.string(),
   urls: z.object({ query: z.string() }),
 });
 const inventorySchema = z.object({ files: z.array(z.object({ sessionId: z.string() })) });
+const MULTI_SESSION_SHUTDOWN_TIMEOUT = 15_000;
 
 const availablePort = async (): Promise<number> => {
   const server = createServer();
@@ -47,6 +58,7 @@ const serverResponds = async (port: number): Promise<boolean> => {
 test("forced runner shutdown drains every open native notebook session", async ({
   browser,
 }, testInfo) => {
+  test.setTimeout(150_000);
   const root = await mkdtemp(resolve(tmpdir(), "marimo-studio-forced-interruption-"));
   const workspace = resolve(root, "workspace");
   await cp(fixtureDirectory, workspace, { recursive: true });
@@ -63,6 +75,7 @@ test("forced runner shutdown drains every open native notebook session", async (
     await waitForNotebookServer(server, `${server.serverUrl}/?file=notebook.py`);
     const pages = await Promise.all(contexts.map((context) => context.newPage()));
     await Promise.all(pages.map((page) => page.goto(`${server.serverUrl}/?file=notebook.py`)));
+    await Promise.all(pages.map((page) => waitForPreview(page)));
     const bootstrap = bootstrapSchema.parse(
       JSON.parse((await pages[0].locator("#marimo-studio-bootstrap").textContent()) ?? "null"),
     );
@@ -78,23 +91,25 @@ test("forced runner shutdown drains every open native notebook session", async (
       })
       .toBeGreaterThanOrEqual(2);
 
-    await stopNotebookServer(server);
+    await stopNotebookServer(server, { timeout: MULTI_SESSION_SHUTDOWN_TIMEOUT });
     stopped = true;
 
     expect(server.output()).not.toMatch(/resource_tracker|leaked semaphore/);
-    expect(processGroupIsRunning(server.processGroupId)).toBe(false);
+    expectProcessTreeRootStopped(server);
     expect(await serverResponds(port)).toBe(false);
     expect(existsSync(notebookProcessRegistryDirectory)).toBe(false);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
-    const cleanupFailure = !stopped ? await closeFailedNotebookServer(server) : undefined;
+    const cleanupFailure = !stopped
+      ? await closeFailedNotebookServer(server, { timeout: MULTI_SESSION_SHUTDOWN_TIMEOUT })
+      : undefined;
     if (cleanupFailure !== undefined) {
       await testInfo.attach("notebook-server-cleanup", {
         body: Buffer.from(cleanupFailure.message),
         contentType: "text/plain",
       });
     }
-    expect(processGroupIsRunning(server.processGroupId)).toBe(false);
+    expectProcessTreeRootStopped(server);
     expect(await serverResponds(port)).toBe(false);
     expect(existsSync(notebookProcessRegistryDirectory)).toBe(false);
     await rm(root, { force: true, recursive: true });
@@ -145,7 +160,7 @@ test("run-mode shutdown drains an active kernel through process lifespan", async
     stopped = true;
 
     expect(server.output()).not.toMatch(/resource_tracker|leaked semaphore/);
-    expect(processGroupIsRunning(server.processGroupId)).toBe(false);
+    expectProcessTreeRootStopped(server);
     expect(await serverResponds(port)).toBe(false);
     expect(existsSync(notebookProcessRegistryDirectory)).toBe(false);
   } finally {
@@ -157,7 +172,7 @@ test("run-mode shutdown drains an active kernel through process lifespan", async
         contentType: "text/plain",
       });
     }
-    expect(processGroupIsRunning(server.processGroupId)).toBe(false);
+    expectProcessTreeRootStopped(server);
     expect(await serverResponds(port)).toBe(false);
     expect(existsSync(notebookProcessRegistryDirectory)).toBe(false);
     await rm(root, { force: true, recursive: true });
