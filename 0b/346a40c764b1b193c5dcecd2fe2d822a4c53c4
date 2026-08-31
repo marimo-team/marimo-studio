@@ -1,0 +1,49 @@
+apps/e2e/tests/forced-interruption.spec.ts
+  ai_agent 11,13,20-27,33,61,78,94,98,103-105,112,163,175
+apps/e2e/tests/presentation-security.spec.ts
+  ai_agent 334-340,401
+apps/e2e/fixtures/no-display.py
+  ai_agent 1-39
+apps/e2e/unit/notebook-server.test.ts
+  ai_agent 2,12,71-73,370,379,407
+apps/e2e/unit/request-identity.test.ts
+  ai_agent 5,11,45-56,68-91,144-171,194-255,413
+apps/e2e/tests/hosted-mount.spec.ts
+  ai_agent 104-109,171
+apps/e2e/scripts/paths.mjs
+  ai_agent 50,53
+apps/e2e/tests/collaboration.spec.ts
+  ai_agent 1-2,38-70,208,286,295,300,305,314-315,322,335,348
+apps/e2e/tests/view-authoring.spec.ts
+  ai_agent 14,18,25-26,31,142,281,285,316,318-321,323-372,374-406,411-412,414-419,452,626-633,636,650,680
+apps/e2e/tests/runtime.spec.ts
+  ai_agent 387-397,457
+apps/e2e/tests/authoring.spec.ts
+  ai_agent 542-549
+apps/e2e/tests/request-identity.ts
+  ai_agent 14-29,130,134-138,144-195,213-214,221,285-289,312-316,475,483-490
+apps/e2e/tests/browser-diagnostics.ts
+  ai_agent 29-30,56-59,84-87,237,372,386,406-412,414-418,601,762
+apps/e2e/tests/history.spec.ts
+  ai_agent 34
+apps/e2e/tests/reveal-starter.spec.ts
+  ai_agent 3,5,15,18-19,22,24,26-36,41-58
+apps/e2e/tests/starter-edge-cases.spec.ts
+  ai_agent 1-265
+apps/e2e/scripts/server-process.mjs
+  ai_agent 139
+apps/e2e/tests/view-cache-performance.spec.ts
+  ai_agent 15,21,70-77,81-83,176,186,188-189,192,241
+apps/e2e/tests/stale-results.spec.ts
+  ai_agent 21,236-252,254-255,304,326
+apps/e2e/tests/fixture.ts
+  ai_agent 1-9,25-26,37,57,92-93,104,117,136,138-139,191-195,242-245,261,264-265,269-283,353-359,363,379-382,385,387,443-480,482-484,489-491,514-558,584-600,609,611,618
+apps/e2e/tests/notebook-server.ts
+  ai_agent 25,34,54,88,97-101,148-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0b346a40c764b1b193c5dcecd2fe2d822a4c53c4",
+  "prompts": {}
+}
