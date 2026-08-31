@@ -32,7 +32,7 @@ connected to the notebook's data, computation, controls, and results.
     <td align="center">
       <a href="https://marimo-team.github.io/marimo-studio/examples/athletes/notebook/index.html"><strong>Notebook</strong></a><br>
       <a href="https://github.com/marimo-team/marimo"><code>Marimo</code></a> · <a href="https://github.com/python/cpython"><code>Python</code></a> · <a href="https://github.com/pola-rs/polars"><code>Polars</code></a><br>
-      Reproducible Python analysis with the shared roster, measures, and controls.<br><br>
+      The notebook keeps the data, calculations, and controls used by every view.<br><br>
       <a href="https://marimo-team.github.io/marimo-studio/examples/athletes/notebook/index.html">
         <img src="apps/docs/public/screenshots/athletes-notebook.png" alt="Marimo notebook showing the athlete data transformation and table" width="100%">
       </a>
@@ -45,15 +45,15 @@ connected to the notebook's data, computation, controls, and results.
     <td width="33%" valign="top">
       <a href="https://marimo-team.github.io/marimo-studio/examples/athletes/overview/index.html"><strong>Report</strong></a><br>
       <a href="https://github.com/whatwg/html"><code>Vanilla HTML</code></a><br>
-      A publication-style summary for scanning headline measures.<br><br>
+      A report that summarizes the main numbers.<br><br>
       <a href="https://marimo-team.github.io/marimo-studio/examples/athletes/overview/index.html">
-        <img src="apps/docs/public/screenshots/athletes-overview.png" alt="Athlete report with headline roster and medal measures" width="100%">
+        <img src="apps/docs/public/screenshots/athletes-overview.png" alt="Athlete report showing totals for athletes, countries, sports, and medalists" width="100%">
       </a>
     </td>
     <td width="33%" valign="top">
       <a href="https://marimo-team.github.io/marimo-studio/examples/athletes/explorer/index.html"><strong>Explorer</strong></a><br>
       <a href="https://github.com/sveltejs/svelte"><code>Svelte</code></a> · <a href="https://github.com/uwdata/mosaic"><code>Mosaic</code></a><br>
-      A linked interface for filtering and comparing the full roster.<br><br>
+      An interactive view for filtering and comparing athletes.<br><br>
       <a href="https://marimo-team.github.io/marimo-studio/examples/athletes/explorer/index.html">
         <img src="apps/docs/public/screenshots/athletes-explorer.png" alt="Athlete explorer with filters and a height and weight scatterplot" width="100%">
       </a>
@@ -61,9 +61,9 @@ connected to the notebook's data, computation, controls, and results.
     <td width="33%" valign="top">
       <a href="https://marimo-team.github.io/marimo-studio/examples/athletes/field/index.html"><strong>Field briefing</strong></a><br>
       <a href="https://github.com/whatwg/html"><code>Vanilla HTML</code></a> · <a href="https://github.com/shower/shower"><code>Shower</code></a> · <a href="https://github.com/mrdoob/three.js"><code>Three.js</code></a><br>
-      An interactive visual story for presenting scale and composition.<br><br>
+      An interactive presentation of the athletes across sports.<br><br>
       <a href="https://marimo-team.github.io/marimo-studio/examples/athletes/field/index.html">
-        <img src="apps/docs/public/screenshots/athletes-field.png" alt="Athlete field briefing showing the Olympic roster as a point sphere" width="100%">
+        <img src="apps/docs/public/screenshots/athletes-field.png" alt="Athlete field briefing showing Olympic athletes as points on a sphere" width="100%">
       </a>
     </td>
   </tr>
