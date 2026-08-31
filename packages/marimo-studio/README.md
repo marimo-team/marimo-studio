@@ -1,5 +1,7 @@
 # Marimo Studio
 
+**One notebook. A studio for every view.**
+
 Marimo Studio keeps one reproducible marimo notebook as the analytical model
 and lets you build a purpose-built web view for each job. The notebook keeps
 data access, transformations, controls, and reusable results together as one

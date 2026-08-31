@@ -6,7 +6,7 @@
 
 # Marimo Studio
 
-**Keep the analysis. Build the right view for the job.**
+**One notebook. A studio for every view.**
 
 Marimo Studio keeps one reproducible [marimo](https://marimo.io/) notebook as
 the analytical model and lets you build a purpose-built web view for each job.

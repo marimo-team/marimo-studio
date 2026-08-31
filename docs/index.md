@@ -5,7 +5,7 @@ titleTemplate: false
 description: Keep one reproducible notebook as the analytical model and build a purpose-built web view for each job.
 
 hero:
-  text: Keep the analysis. Build the right view for the job.
+  text: One notebook. A studio for every view.
   tagline: Marimo Studio keeps Python computation in a reactive notebook while each view uses modern frontend tools for a different job.
   image:
     light: /brand/marimo-studio-lockup-stacked-light.svg
