@@ -1,48 +1,53 @@
 ---
-title: Create your first page
-description: Create a web page from a saved marimo notebook and see notebook output update inside it.
+title: Create your first view
+description: Create a web view from a saved Marimo notebook and place one reactive result inside it.
 ---
 
-# Create your first page
+# Create your first view
 
-Start with a saved marimo notebook named `analysis.py`. Create a page for its
-main audience:
+Start with a saved Marimo notebook such as `analysis.py`. Create a view for one
+job the analysis needs to support:
 
 ```console
 uvx marimo-studio view create dashboard --target analysis.py
 ```
 
-Studio creates `index.html` beside the notebook and prints the command that
-opens the authoring workspace. Run it:
+Studio writes the view beside the notebook:
+
+```text
+analysis.py
+__marimo__/studio/analysis/
+  .gitignore
+  dashboard/
+    view.toml
+    index.html
+```
+
+The default starter keeps the complete frontend in `index.html`. Open the
+authoring workspace:
 
 ```console
 uvx --with marimo-studio marimo edit analysis.py --sandbox
 ```
 
-Choose **Develop**. The workspace brings three parts of the result into one
-place:
+Choose **Develop** to work with the notebook, view source, and rendered preview
+in one session.
 
-- **Notebook** runs Python and owns the reactive computation.
-- **Source** controls the page structure, wording, styles, and browser behavior.
-- **Preview** shows the page your audience will use.
+## Place one result
 
-Studio calls this named page a **view**. The first view is named `dashboard`.
-
-## Place a notebook result on the page
-
-Add a named result cell to the notebook:
+Give the producing notebook cell a semantic name:
 
 ```python
 @app.cell
 def sales_summary():
     import marimo as mo
 
-    message = mo.md("## Revenue is on target")
-    message
-    return (message,)
+    summary = mo.md("## Revenue is on target")
+    summary
+    return (summary,)
 ```
 
-Open `index.html` in Source and place that complete cell inside `#app-shell`:
+Place that complete cell inside `#app-shell` in the view:
 
 ```html
 <main id="app-shell">
@@ -50,14 +55,11 @@ Open `index.html` in Source and place that complete cell inside `#app-shell`:
 </main>
 ```
 
-Save the file. Studio builds the page and Preview shows **Revenue is on
-target**. Future notebook runs update the result through marimo's reactive
-runtime.
+Save `index.html`. Preview renders **Revenue is on target**. A later notebook
+run updates the page through Marimo reactivity. A failed frontend build keeps
+the last successful preview available and reports the source problem.
 
-If the source cannot build, Preview keeps the last successful page and Source
-shows the problem beside the affected file.
-
-## Run the page
+## Run the view
 
 Start the notebook as an application:
 
@@ -65,7 +67,8 @@ Start the notebook as an application:
 uvx --with marimo-studio marimo run analysis.py --sandbox
 ```
 
-The dashboard opens at `/`. A second named page receives its own route.
+The default view opens at `/`. Each additional view uses its name as a route.
 
-Continue with [Create pages for different audiences](views.md) or [Place
-notebook results on a page](notebook-results.md).
+The [Rio athletes example](../examples/athletes.md) develops the same contract
+into three finished views. Continue with [complete cells, rendered objects, and
+browser values](notebook-results.md) when the page needs more than one result.

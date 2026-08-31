@@ -11,7 +11,7 @@ small Python integration tells Studio:
 - which starting files it can create
 - which source files people can edit
 - which files affect the browser build
-- how to produce the page served to the audience
+- how to produce the browser page Studio serves
 
 Studio calls this integration a **view provider**. Studio continues to own
 notebook execution, safe source writes, build isolation, validation, the last

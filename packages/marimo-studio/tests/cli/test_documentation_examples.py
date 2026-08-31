@@ -184,10 +184,13 @@ if __name__ == "__main__":
 
 def test_documented_result_cells_survive_marimo_parsing(tmp_path) -> None:
     examples = (
-        ("docs/guide/getting-started.md", "Add a named result cell to the notebook:"),
+        (
+            "docs/guide/getting-started.md",
+            "Give the producing notebook cell a semantic name:",
+        ),
         (
             "docs/guide/notebook-results.md",
-            "Native marimo cell names are the most direct page targets:",
+            "A semantic native cell name is the most direct target:",
         ),
     )
     for index, (path, heading) in enumerate(examples):

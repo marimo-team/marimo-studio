@@ -1,72 +1,57 @@
 ---
-title: Place notebook results on a page
-description: Add complete cells, rendered Python objects, and browser values to page source.
+title: Place notebook results in a view
+description: Use complete cells, rendered Python objects, and browser values in custom frontend source.
 ---
 
-# Place notebook results on a page
+# Place notebook results in a view
 
-Keep data access and computation in the notebook. Page source chooses which
-results the audience sees and where they appear.
-
-## Place a complete cell
+The athlete report uses all three projection forms in one document:
 
 ```html
-<marimo-cell name="summary"></marimo-cell>
+<marimo-cell name="sport_control"></marimo-cell>
+
+<strong mo-value="athlete_summary.athletes"></strong>
+
+<marimo-output value="top_sports"></marimo-output>
 ```
 
-The page receives the cell's displayed output, controls, and standard streams.
-Marimo continues to run its reactive dependencies.
+Changing the sport control reruns its dependent notebook cell. Studio updates
+the scalar total and rendered Polars table without rebuilding the frontend.
 
-Use a complete cell when the notebook already presents the result the way the
-page needs it.
+## Choose the projection form
 
-## Render one Python object
+| Notebook result     | View source                       | Use it when                                                                 |
+| ------------------- | --------------------------------- | --------------------------------------------------------------------------- |
+| Complete cell       | `<marimo-cell name="summary">`    | The view needs the cell output, controls, logs, or errors                   |
+| One rendered object | `<marimo-output value="chart">`   | Marimo should render one Python object with its native rich-output system   |
+| Browser value       | `<span mo-value="metrics.total">` | JavaScript will format or pass a JSON-compatible value to a browser library |
 
-```html
-<marimo-output value="chart"></marimo-output>
+Object and value selectors can read attributes, dictionary keys, and list
+items:
+
+```text
+metrics.total
+results["overview"]
+rows[0].label
 ```
 
-Marimo renders `chart` with the same rich-output system used by the notebook.
-You can select a nested item or attribute:
+Calls, operators, slices, and private attributes are outside the selector
+syntax.
+
+## React to a browser value
+
+Register the update listener before reading the current value:
 
 ```html
-<marimo-output value='results["overview"]'></marimo-output>
-```
-
-Use this form when the page needs one object rather than the complete producing
-cell.
-
-## Read a value in browser code
-
-```html
-<strong mo-value="metrics.total"></strong>
-```
-
-Studio writes a selected JSON-compatible text, number, boolean, array, object,
-or null value into the element. Page JavaScript can read the current value from
-`host.marimoValue` and listen for later updates.
-
-Use this form when browser code will format, filter, group, or otherwise adapt
-the value for one page.
-
-### Read a dataframe as a table
-
-An eager dataframe reaches browser code as a shared
-[Flechette `Table`](https://github.com/uwdata/flechette). Studio encodes the
-dataframe as Arrow IPC and decodes it once before assigning the table to
-`host.marimoValue` and `event.detail.value`. Treat the shared table as
-immutable.
-
-```html
-<span id="orders-data" hidden mo-value="orders"></span>
-<output id="order-count"></output>
+<span id="summary-data" hidden mo-value="summary"></span>
+<output id="summary-total"></output>
 
 <script type="module">
-  const host = document.querySelector("#orders-data");
-  const count = document.querySelector("#order-count");
+  const host = document.querySelector("#summary-data");
+  const output = document.querySelector("#summary-total");
 
-  const render = (table) => {
-    count.value = `${table.numRows} orders`;
+  const render = (value) => {
+    output.value = value.total.toLocaleString();
   };
 
   host.addEventListener("marimo-value-updated", (event) => {
@@ -79,42 +64,37 @@ immutable.
 </script>
 ```
 
-The table keeps Arrow data in columnar form. Its core accessors cover the common
-browser paths:
+`undefined` means the value has not arrived or cannot currently be read. JSON
+`null` remains a valid value. Listen for `marimo-value-error` when the view
+needs a local recovery state.
 
-- `numRows`, `numCols`, `names`, and `schema` describe the table.
-- `get(index)` reads one row. Iteration scans row objects.
-- `getChild(name)` reads one column.
-- `select(names)` returns a table with selected columns.
-- `toColumns()` extracts arrays by column.
-- `toArray()` materializes an array of row objects.
+React starters provide `useMarimoValue`. Svelte starters provide
+`observeMarimoValue`.
 
-Keep the table columnar while filtering columns or passing data to a
-column-oriented library. Materialize rows at the consumer boundary:
+## Pass a dataframe to JavaScript
+
+An eager dataframe reaches browser code as a shared Flechette `Table`. Studio
+encodes the dataframe as Arrow IPC and decodes it before assigning
+`host.marimoValue` and `event.detail.value`.
 
 ```js
 const chartRows = table.select(["region", "revenue"]).toArray();
 ```
 
-React and Svelte starter helpers export `getMarimoDataSource(table)`. It returns
-the table's codec, fingerprint, and shared Arrow IPC bytes. Treat the bytes as
-immutable, or copy them before mutating them. The descriptor is stored under
-`MARIMO_DATA_SOURCE = Symbol.for("marimo-studio.data-source")`.
+Keep the table columnar while selecting columns or passing data to a
+column-oriented library. Materialize row objects at the consumer boundary.
 
-Automatic table projection applies to eager dataframe values that the active
-Python environment can write as Arrow IPC. Pandas dataframes may require
-PyArrow. Materialize lazy or remote dataframe queries in the notebook before
-selecting them with `mo-value`.
+The athlete explorer reads `athlete_facts` as Arrow IPC, then inserts a copy
+into DuckDB-WASM for Mosaic queries. The occupancy views pass projected tables
+to ECharts and Recharts.
 
-WebAssembly notebooks must include browser-compatible dataframe and Arrow writer
-packages. Their encoded values remain subject to Studio's value byte limit.
-
-React starters export `MarimoTable` with `useMarimoValue`. Svelte starters
-export the same table contract with `observeMarimoValue`.
+WebAssembly notebooks must include browser-compatible dataframe and Arrow
+writer packages. Materialize lazy or remote queries in the notebook before
+projecting them.
 
 ## Name a result
 
-Native marimo cell names are the most direct page targets:
+A semantic native cell name is the most direct target:
 
 ```python
 @app.cell
@@ -124,42 +104,16 @@ def summary(data):
     return (result,)
 ```
 
-An existing anonymous cell can receive a stable alias:
+Give an existing anonymous cell a stable alias when renaming it is not
+appropriate:
 
 ```console
 marimo-studio notebook bind summary --target analysis.py --cell 12
 ```
 
-The alias belongs to the notebook and is available to every page.
-View creation assigns an alias when a starter places an anonymous cell in its
-generated source.
+The alias belongs to the notebook and is available to every view.
 
-## Select nested values
-
-Object and value references begin with a notebook variable. Dot and bracket
-selection can then reach nested data:
-
-```text
-metrics.total
-results["overview"]
-rows[0].label
-```
-
-Calls, operators, slices, and private attributes are outside this reference
-syntax. Studio reports the source location when a reference is malformed,
-missing, or ambiguous.
-
-## Change the selected result in browser code
-
-React and Svelte pages can choose a result from a constant list or record. The
-build records those possible names, then Studio checks the chosen name against
-the current notebook before rendering it.
-
-A page can also move an existing result element. The control, widget, or output
-keeps its owner while the element moves. A second complete-cell or rendered-
-object element for the same result reports a duplicate diagnostic.
-
-## Validate the page references
+## Validate projections
 
 Check source and notebook names without running the notebook:
 
@@ -167,16 +121,13 @@ Check source and notebook names without running the notebook:
 marimo-studio validate dashboard --target analysis.py
 ```
 
-Add `--level runtime` when validation should execute the complete notebook and
-inspect the selected results:
+Execute the notebook and inspect selected results with runtime validation:
 
 ```console
-marimo-studio validate dashboard --target analysis.py --level runtime
+marimo-studio validate dashboard \
+  --target analysis.py \
+  --level runtime
 ```
 
 Runtime validation can perform the notebook's configured file, network,
 database, and data access.
-
-Studio bounds one rendered page to 512 active result elements, including 256
-unique cell names, 100 rendered objects, and 100 value projections. A page that
-exceeds a limit receives a diagnostic at the first affected element.

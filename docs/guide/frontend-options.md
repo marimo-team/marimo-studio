@@ -1,93 +1,81 @@
 ---
-title: Choose a frontend starter
-description: Choose page source that matches the interaction and maintenance needs of the audience experience.
+title: Choose a frontend
+description: Match each view to the smallest frontend and browser library that supports its task.
 ---
 
-# Choose a frontend starter
+# Choose a frontend
 
-Choose the lightest frontend that makes the page comfortable to build and
-maintain. Every choice can place the same notebook results and remains editable
-in Studio.
+Start with one HTML file. Move to React or Svelte when component structure and
+browser interaction make that source easier to maintain.
 
-## Keep a focused page in one HTML file
+Every frontend uses the same `marimo-cell`, `marimo-output`, and `mo-value`
+projection contract.
 
-Choose HTML when the work is mainly layout, wording, styles, and a small amount
-of browser interaction. The base installation creates one `index.html` with
-inline CSS and JavaScript. Its results section contains the notebook's enabled
-cells in document order:
+## Vanilla HTML
+
+Choose the default starter for reports, small tools, and pages whose source fits
+comfortably in one document:
 
 ```console
-marimo-studio view create dashboard --target analysis.py
+marimo-studio view create report --target analysis.py
 ```
 
-This keeps reports, dashboards, and small tools close to the content they
-present. No separate frontend build environment is required.
+The generated `index.html` contains inline CSS and JavaScript. Import a browser
+library from a trusted ECMAScript module URL when one focused dependency serves
+the view. The athlete report uses browser APIs, the athlete field briefing adds
+Shower and Three.js, and the earthquake story imports Observable Plot.
 
-## Use React for a component application
+## React
 
-Choose React when the page has reusable components, complex local interaction,
-or an existing React codebase that the team already maintains.
+Choose React for component applications and existing React teams:
 
 ```console
-uvx --from 'marimo-studio[deno]' marimo-studio view create dashboard \
+uvx --from 'marimo-studio[deno]' marimo-studio view create operations \
   --target analysis.py \
   --starter marimo-studio/react:default
 ```
 
-Studio creates TSX, CSS, and Deno configuration. The first component maps
-enabled cells that display output or literal Markdown into an editable results
-section. The optional Deno dependency builds the frontend without adding Node
-package management to the notebook environment.
+Studio creates TSX, CSS, Deno configuration, and a frozen dependency lock. Add
+exact npm imports to `deno.json`. The earthquake operations view uses MapLibre,
+and the occupancy model review uses Recharts.
 
-## Present a Reveal.js slide deck
+## React with Reveal.js
 
-Choose Reveal.js when the audience should move through an ordered presentation
-with slide navigation, fragments, and notebook results placed beside the claim
-they support.
+Choose the Reveal starter for ordered presentations:
 
 ```console
-uvx --from 'marimo-studio[deno]' marimo-studio view create slides \
+uvx --from 'marimo-studio[deno]' marimo-studio view create briefing \
   --target analysis.py \
   --starter marimo-studio/react:reveal
 ```
 
-Studio creates a React deck with `@revealjs/react`, Reveal's structural CSS, a
-local visual theme, and frozen Deno dependencies. The opening slide uses the
-Marimo app title or first level-one Markdown heading. Each enabled cell that
-displays output or literal Markdown receives an editable `Slide` in document
-order.
+The starter supplies Reveal.js structure, navigation, fragments, overview, and
+speaker-ready slide semantics. Notebook controls and dependent results can live
+inside a slide, as the earthquake briefing demonstrates.
 
-## Use Svelte for concise components
+## Svelte
 
-Choose Svelte when the page benefits from components and reactive browser state
-with less component boilerplate.
+Choose Svelte for component views built around concise reactive browser state:
 
 ```console
-uvx --from 'marimo-studio[deno]' marimo-studio view create story \
+uvx --from 'marimo-studio[deno]' marimo-studio view create explorer \
   --target analysis.py \
   --starter marimo-studio/svelte:default
 ```
 
-Studio creates Svelte, TypeScript, CSS, Vite, and Deno configuration. The first
-component iterates over enabled cells that display output or literal Markdown.
-The page reads later notebook results through the same HTML elements and
-attributes used by the one-file page.
+Studio creates Svelte, TypeScript, CSS, Vite, Deno configuration, and a frozen
+dependency lock. The athlete explorer adds Mosaic, vgplot, and DuckDB-WASM. The
+occupancy monitor adds ECharts.
 
-## Inspect the available starting points
+## Inspect installed starters
 
 ```console
 marimo-studio starters
 ```
 
-The command shows the installed choices, the files each one creates, and any
-setup needed before it can build. Its stable identifier is accepted by
-`view create --starter`.
+The command lists each stable starter ID, generated files, provider, and setup
+action.
 
-## Connect another frontend build
-
-An existing frontend project can remain the source of the page. A small Python
-integration tells Studio which files people can edit and how to build the
-browser output. Studio calls this integration a **view provider**.
-
-Read [Add support for another frontend](../reference/provider-api.md) when a
-team needs that extension point.
+A team can preserve another frontend project by implementing a
+[view provider](../reference/provider-api.md). The provider declares editable
+source, build inputs, and the command that produces the browser artifact.

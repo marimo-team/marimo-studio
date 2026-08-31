@@ -66,5 +66,4 @@ The runtime menu answers where the notebook runs:
 Switching the runtime keeps the page source fixed while changing where notebook
 code and controls execute.
 
-Use [Run or publish a page](run-and-share.md) before exposing either runtime to
-an audience.
+Use [Run or publish a view](run-and-share.md) before sharing either runtime.

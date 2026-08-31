@@ -1,5 +1,14 @@
 export const routes = {
   home: "/",
+  whatIsStudio: "/what-is-studio",
+  whyStudio: "/why-studio",
+  examplesRoot: "/examples/",
+  examples: {
+    index: "/examples/",
+    athletes: "/examples/athletes",
+    earthquakes: "/examples/earthquakes",
+    occupancy: "/examples/occupancy",
+  },
   guideRoot: "/guide/",
   guide: {
     gettingStarted: "/guide/getting-started",
@@ -12,6 +21,7 @@ export const routes = {
   },
   referenceRoot: "/reference/",
   reference: {
+    index: "/reference/",
     cli: "/reference/cli",
     configuration: "/reference/configuration",
     pythonApi: "/reference/python-api",
@@ -19,16 +29,30 @@ export const routes = {
   },
 } as const;
 
+export const exampleItems = [
+  { text: "Examples", link: routes.examples.index },
+  { text: "Rio 2016 athletes", link: routes.examples.athletes },
+  { text: "Earthquake watch", link: routes.examples.earthquakes },
+  { text: "Building occupancy", link: routes.examples.occupancy },
+];
+
+export const introductionItems = [
+  { text: "What is Studio?", link: routes.whatIsStudio },
+  { text: "Why Studio?", link: routes.whyStudio },
+  { text: "Get started", link: routes.guide.gettingStarted },
+];
+
 export const guideItems = [
-  { text: "Create your first page", link: routes.guide.gettingStarted },
-  { text: "Create pages for different audiences", link: routes.guide.views },
-  { text: "Place notebook results on a page", link: routes.guide.notebookResults },
+  { text: "One notebook, many views", link: routes.guide.views },
+  { text: "Place notebook results in a view", link: routes.guide.notebookResults },
   { text: "Edit and preview in Studio", link: routes.guide.workInStudio },
-  { text: "Use HTML, React, or Svelte", link: routes.guide.frontendOptions },
-  { text: "Run or publish a page", link: routes.guide.runAndShare },
+  { text: "Choose a frontend", link: routes.guide.frontendOptions },
+  { text: "Author with a coding agent", link: routes.guide.codingAgents },
+  { text: "Run or publish a view", link: routes.guide.runAndShare },
 ];
 
 export const referenceItems = [
+  { text: "Overview", link: routes.reference.index },
   { text: "CLI", link: routes.reference.cli },
   { text: "Python API", link: routes.reference.pythonApi },
   { text: "Configuration", link: routes.reference.configuration },
@@ -37,8 +61,9 @@ export const referenceItems = [
 
 export const siteRoutes = [
   routes.home,
+  ...introductionItems.map(({ link }) => link),
+  ...exampleItems.map(({ link }) => link),
   ...guideItems.map(({ link }) => link),
-  routes.guide.codingAgents,
   ...referenceItems.map(({ link }) => link),
 ];
 

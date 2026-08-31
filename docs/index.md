@@ -2,91 +2,74 @@
 layout: home
 title: Marimo Studio
 titleTemplate: false
-description: Turn one reactive Marimo notebook into focused web pages for different audiences.
+description: Keep one reproducible notebook as the analytical model and build a purpose-built web view for each job.
 
 hero:
-  text: Build focused pages from one notebook.
-  tagline: Keep data and computation in marimo. Shape the page each audience needs.
+  text: Keep the analysis. Build the right view for the job.
+  tagline: Marimo Studio keeps Python computation in a reactive notebook while each view uses modern frontend tools for a different job.
   image:
     light: /brand/marimo-studio-lockup-stacked-light.svg
     dark: /brand/marimo-studio-lockup-stacked-dark.svg
     alt: Marimo Studio
   actions:
     - theme: brand
-      text: Create your first page
+      text: What is Studio?
+      link: ./what-is-studio
+    - theme: alt
+      text: Get started
       link: ./guide/getting-started
     - theme: alt
-      text: Author with an agent
-      link: ./guide/coding-agents
+      text: Examples
+      link: ./examples/
 
 features:
   - icon:
-      src: /icons/gallery-vertical-end.svg
-      alt: Several audience pages
-      width: "24"
-      height: "24"
-    title: One notebook, several audiences
-    details: Reuse the same data, controls, and results across pages that explain and present them differently.
-    link: ./guide/views
-    linkText: Create audience pages
-  - icon:
       src: /icons/panels-top-left.svg
-      alt: Notebook, source, and preview
+      alt: Reactive notebook
       width: "24"
       height: "24"
-    title: Edit beside the notebook
-    details: Work with Python, page source, and the rendered result while the notebook session stays active.
-    link: ./guide/work-in-studio
-    linkText: Work in Studio
+    title: Reproducible analysis
+    details: The notebook keeps data access, transformations, controls, and reusable results together as one reactive Python program.
+    link: ./why-studio
+    linkText: Why Studio?
+  - icon:
+      src: /icons/gallery-vertical-end.svg
+      alt: Custom web views
+      width: "24"
+      height: "24"
+    title: Purpose-built views
+    details: Each named view owns its frontend source, layout, and interaction while drawing from notebook cells, outputs, and values.
+    link: ./guide/frontend-options
+    linkText: Choose a frontend
   - icon:
       src: /icons/bot.svg
       alt: Coding agent
       width: "24"
       height: "24"
-    title: Let an agent verify the page
-    details: Agents inspect the same notebook and source, save safely, show the result, and validate the rendered page.
+    title: Agent-native authoring
+    details: People and agents inspect the same notebook and view source, make revision-safe edits, build, preview, and validate the rendered result.
     link: ./guide/coding-agents
-    linkText: Use the agent workflow
+    linkText: Author with an agent
+  - icon:
+      src: /icons/cpu.svg
+      alt: Python and WebAssembly runtimes
+      width: "24"
+      height: "24"
+    title: Pluggable Runtimes
+    details: Keep view source fixed while the notebook runs on a Python server, in a browser worker, or as a static export.
+    link: ./guide/run-and-share
+    linkText: Run or publish
 ---
 
-## Create one page
+## The same analysis, three distinct views
 
-Start with a saved notebook such as `analysis.py`:
+A publication report, a linked explorer, and a Three.js briefing all draw from
+the Rio athlete notebook.
 
-```console
-uvx marimo-studio view create dashboard --target analysis.py
-uvx --with marimo-studio marimo edit analysis.py --sandbox
-```
+<StudioExample family="athletes" />
 
-The first command creates editable page source beside the notebook. The second
-opens Notebook, Source, and Preview together. Saving Source rebuilds Preview,
-while a failed build leaves the last successful page available.
+Each view is an independent frontend project connected to the notebook's data,
+computation, controls, and results.
 
-![Notebook, page source, and Preview together in Develop](/screenshots/studio-develop.png)
-
-Studio calls each named page a **view**. Create another view when a different
-audience needs different wording, layout, or interaction from the same
-notebook.
-
-## Keep the analytical model in marimo
-
-The notebook owns data access, transformations, controls, and reusable results.
-The page owns its structure, copy, styles, and browser behavior.
-
-```html
-<marimo-cell name="summary"></marimo-cell>
-<marimo-output value="chart"></marimo-output>
-<strong mo-value="metrics.total"></strong>
-```
-
-[Place notebook results on a page](guide/notebook-results.md) explains these
-three forms through complete examples.
-
-## Choose where the notebook runs
-
-Use Python execution when the notebook needs local files, databases, server
-credentials, or packages unavailable in the browser. Use browser execution or
-static export when the notebook and its data can run in Pyodide.
-
-[Run or publish a page](guide/run-and-share.md) keeps the code and data exposure
-rules beside each deployment command.
+[Explore all examples](examples/index.md) or [create your first
+view](guide/getting-started.md).

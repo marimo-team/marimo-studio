@@ -3,8 +3,10 @@ import { defineConfig, type HeadConfig, type Plugin, type UserConfig } from "vit
 import llmstxt from "vitepress-plugin-llms";
 
 import {
+  exampleItems,
   guideItems,
   headIcons,
+  introductionItems,
   normalizeBasePath,
   referenceItems,
   routes,
@@ -14,7 +16,7 @@ import {
 const repository = "https://github.com/marimo-team/marimo-studio";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-studio/");
 const socialDescription =
-  "Turn one reactive Marimo notebook into focused web pages for different audiences.";
+  "Keep one reproducible marimo notebook as the analytical model and build a purpose-built web view for each job.";
 const basePath = normalizeBasePath(process.env.BASE_PATH);
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
 const publicPath = (path: string): string => withBasePath(basePath, path);
@@ -90,25 +92,36 @@ export default defineConfig({
       light: "/brand/marimo-studio-lockup-horizontal-light.svg",
     },
     nav: [
-      { text: "Get started", link: routes.guide.gettingStarted },
+      { text: "Overview", link: routes.whatIsStudio },
       {
-        text: "Guides",
+        text: "Guide",
         items: guideItems,
       },
-      { text: "Coding agents", link: routes.guide.codingAgents },
-      { text: "Reference", items: referenceItems },
+      { text: "Examples", link: routes.examples.index },
+      { text: "Reference", link: routes.reference.index },
     ],
     outline: [2, 3],
     search: { provider: "local" },
     sidebar: {
-      [routes.guideRoot]: [
+      [routes.home]: [
         {
-          text: "Guides",
+          text: "Introduction",
           collapsed: false,
-          items: [
-            ...guideItems,
-            { text: "Author with a coding agent", link: routes.guide.codingAgents },
-          ],
+          items: introductionItems,
+        },
+        {
+          text: "Guide",
+          collapsed: false,
+          items: guideItems,
+        },
+        { text: "Examples", link: routes.examples.index },
+        { text: "Reference", link: routes.reference.index },
+      ],
+      [routes.examplesRoot]: [
+        {
+          text: "Examples",
+          collapsed: false,
+          items: exampleItems,
         },
       ],
       [routes.referenceRoot]: [
