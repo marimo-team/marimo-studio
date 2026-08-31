@@ -131,6 +131,8 @@ marimo-studio notebook bind summary --target analysis.py --cell 12
 ```
 
 The alias belongs to the notebook and is available to every page.
+View creation assigns an alias when a starter places an anonymous cell in its
+generated source.
 
 ## Select nested values
 

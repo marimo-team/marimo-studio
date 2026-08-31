@@ -13,6 +13,11 @@ agents.
 
 ## Use the supplied Studio integration
 
+`index.html` starts with one `<marimo-cell>` host for each enabled notebook cell
+that displays an output or literal Markdown. Keep, reorder, group, or replace
+those hosts as the page design develops. Their generated names remain stable
+Studio targets for the notebook cells.
+
 `index.html` defines `observeMarimoValue` inside its module script. Use it when
 page JavaScript consumes a notebook value or eager dataframe. Keep the
 corresponding `mo-value` host in authored HTML so Studio can inspect and

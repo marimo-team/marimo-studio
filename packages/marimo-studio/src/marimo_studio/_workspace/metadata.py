@@ -274,9 +274,11 @@ def configured_notebook_source(
     default_view: str,
     provider_requirements: Iterable[str] = (),
     cell_bindings: Mapping[str, CellRef] | None = None,
+    *,
+    source: str | None = None,
 ) -> str:
     """Return notebook source with the package dependency and view configuration."""
-    source = read_text(path)
+    source = read_text(path) if source is None else source
     document = _document(source, path) or tomlkit.document()
     package_python = _package_python_requirement()
     current_python = document.get("requires-python")

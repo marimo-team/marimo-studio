@@ -12,8 +12,13 @@ from typing import Literal, cast
 from marimo_studio._filesystem.budgets import PROJECT_INPUT_BUDGET, FileBudgetTracker
 from marimo_studio.view_providers import (
     BuildResult,
+    CellConfigSpec,
+    CellKind,
+    CellRef,
+    CellSpec,
     JsonValue,
     MountDeclaration,
+    NotebookSpec,
     ProjectDiagnostic,
     ProjectInput,
     ProjectInspection,
@@ -22,7 +27,10 @@ from marimo_studio.view_providers import (
     ProviderStarter,
     SourceDocument,
     SourceLocation,
+    SourceSpan,
+    StarterCellTarget,
     StarterContext,
+    StarterPlan,
     ViewProject,
 )
 
@@ -107,19 +115,48 @@ def starters_from_payload(value: object) -> tuple[ProviderStarter, ...]:
     return tuple(starter_from_payload(item) for item in _items(value))
 
 
-def starter_context_payload(value: StarterContext) -> dict[str, str]:
-    return {"view_name": value.view_name, "notebook_name": value.notebook_name}
+def starter_context_payload(value: StarterContext) -> dict[str, object]:
+    return {
+        "view_name": value.view_name,
+        "notebook_name": value.notebook_name,
+        "notebook": value.notebook.to_dict(),
+        "cell_targets": [
+            value.cell_targets[cell.ref].to_dict()
+            for cell in value.notebook.cells
+            if cell.kind == "cell"
+        ],
+    }
 
 
 def starter_context_from_payload(value: object) -> StarterContext:
-    data = _record(value, {"view_name", "notebook_name"}, "starter context")
+    data = _record(
+        value,
+        {"view_name", "notebook_name", "notebook", "cell_targets"},
+        "starter context",
+    )
+    notebook = _notebook(data["notebook"])
+    cell_targets = tuple(
+        _starter_cell_target(item) for item in _items(data["cell_targets"])
+    )
     return StarterContext(
         _text(data["view_name"], "starter view name"),
         _text(data["notebook_name"], "starter notebook name"),
+        notebook,
+        {target.cell: target for target in cell_targets},
     )
 
 
-def created_files_payload(
+def starter_plan_payload(
+    plan: StarterPlan,
+    transfer_root: Path,
+) -> dict[str, object]:
+    return {
+        **_files_payload(plan.files, transfer_root),
+        "cell_targets": [target.to_dict() for target in plan.cell_targets],
+    }
+
+
+def _files_payload(
     files: Mapping[PurePosixPath, bytes],
     transfer_root: Path,
 ) -> dict[str, object]:
@@ -154,7 +191,20 @@ def created_files_payload(
     return {"files": records}
 
 
-def created_files_from_payload(
+def starter_plan_from_payload(
+    value: object,
+    transfer_root: Path,
+) -> StarterPlan:
+    data = _record(value, {"files", "cell_targets"}, "provider starter plan")
+    return StarterPlan(
+        files=_files_from_payload({"files": data["files"]}, transfer_root),
+        cell_targets=tuple(
+            _starter_cell_target(item) for item in _items(data["cell_targets"])
+        ),
+    )
+
+
+def _files_from_payload(
     value: object,
     transfer_root: Path,
 ) -> Mapping[PurePosixPath, bytes]:
@@ -187,6 +237,138 @@ def created_files_from_payload(
             raise ValueError("Provider starter file paths must be unique")
         files[path] = payload
     return files
+
+
+def _notebook(value: object) -> NotebookSpec:
+    data = _record(
+        value,
+        {"schema", "notebook", "revision", "app_config", "cells"},
+        "starter notebook",
+    )
+    if data["schema"] != 1:
+        raise ValueError("Starter notebook schema is unsupported")
+    app_config = data["app_config"]
+    if not isinstance(app_config, dict):
+        raise ValueError("Starter notebook app config must be an object")
+    return NotebookSpec(
+        path=Path(_text(data["notebook"], "starter notebook path")),
+        revision=_text(data["revision"], "starter notebook revision"),
+        cells=tuple(_cell_spec(item) for item in _items(data["cells"])),
+        app_config=cast(dict[str, object], app_config),
+    )
+
+
+def _cell_spec(value: object) -> CellSpec:
+    data = _record(
+        value,
+        {
+            "ref",
+            "runtime_id",
+            "index",
+            "kind",
+            "name",
+            "source",
+            "code_sha256",
+            "preview",
+            "definitions",
+            "references",
+            "upstream",
+            "downstream",
+            "config",
+            "has_output_expression",
+            "displays_output",
+            "markdown",
+            "code",
+        },
+        "starter notebook cell",
+    )
+    index = data["index"]
+    has_output_expression = data["has_output_expression"]
+    displays_output = data["displays_output"]
+    if (
+        type(index) is not int
+        or type(has_output_expression) is not bool
+        or type(displays_output) is not bool
+    ):
+        raise ValueError("Starter notebook cell scalars are invalid")
+    return CellSpec(
+        ref=CellRef.parse(_text(data["ref"], "starter notebook cell ref")),
+        runtime_id=_text(data["runtime_id"], "starter notebook runtime cell ID"),
+        index=index,
+        kind=cast(CellKind, _text(data["kind"], "starter notebook cell kind")),
+        name=_optional_text(data["name"], "starter notebook cell name"),
+        source=_source_span(data["source"]),
+        code_sha256=_text(data["code_sha256"], "starter notebook cell digest"),
+        preview=_text(data["preview"], "starter notebook cell preview", empty=True),
+        definitions=tuple(
+            _text(item, "starter notebook cell definition")
+            for item in _items(data["definitions"])
+        ),
+        references=tuple(
+            _text(item, "starter notebook cell reference")
+            for item in _items(data["references"])
+        ),
+        upstream=tuple(
+            CellRef.parse(_text(item, "starter notebook upstream cell"))
+            for item in _items(data["upstream"])
+        ),
+        downstream=tuple(
+            CellRef.parse(_text(item, "starter notebook downstream cell"))
+            for item in _items(data["downstream"])
+        ),
+        config=_cell_config(data["config"]),
+        has_output_expression=has_output_expression,
+        displays_output=displays_output,
+        markdown=_optional_text(
+            data["markdown"],
+            "starter notebook cell markdown",
+            empty=True,
+        ),
+        code=_text(data["code"], "starter notebook cell code", empty=True),
+    )
+
+
+def _source_span(value: object) -> SourceSpan:
+    data = _record(
+        value,
+        {"start_line", "end_line", "start_column", "end_column"},
+        "starter notebook source span",
+    )
+    coordinates = tuple(data[field] for field in data)
+    if any(type(coordinate) is not int for coordinate in coordinates):
+        raise ValueError("Starter notebook source span coordinates must be integers")
+    return SourceSpan(
+        start_line=cast(int, data["start_line"]),
+        end_line=cast(int, data["end_line"]),
+        start_column=cast(int, data["start_column"]),
+        end_column=cast(int, data["end_column"]),
+    )
+
+
+def _cell_config(value: object) -> CellConfigSpec:
+    data = _record(
+        value,
+        {"column", "disabled", "hide_code"},
+        "starter notebook cell config",
+    )
+    column = data["column"]
+    if column is not None and type(column) is not int:
+        raise ValueError("Starter notebook cell column must be an integer or null")
+    if type(data["disabled"]) is not bool or type(data["hide_code"]) is not bool:
+        raise ValueError("Starter notebook cell config flags must be booleans")
+    return CellConfigSpec(
+        column=column,
+        disabled=data["disabled"],
+        hide_code=data["hide_code"],
+    )
+
+
+def _starter_cell_target(value: object) -> StarterCellTarget:
+    data = _record(value, {"cell", "target"}, "starter cell target")
+    return StarterCellTarget(
+        cell=CellRef.parse(_text(data["cell"], "starter target cell")),
+        target=_text(data["target"], "starter cell target"),
+    )
 
 
 def inspection_payload(inspection: ProjectInspection) -> dict[str, object]:
@@ -339,8 +521,8 @@ def _items(value: object) -> list[object]:
     return cast(list[object], value)
 
 
-def _optional_text(value: object, label: str) -> str | None:
-    return None if value is None else _text(value, label)
+def _optional_text(value: object, label: str, *, empty: bool = False) -> str | None:
+    return None if value is None else _text(value, label, empty=empty)
 
 
 def _text(value: object, label: str, *, empty: bool = False) -> str:

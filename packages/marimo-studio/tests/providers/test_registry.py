@@ -17,7 +17,6 @@ from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
     PROVIDER_API_VERSION,
     ProviderAvailability,
-    StarterContext,
     ViewProject,
 )
 from marimo_studio.view_providers._host.registry import (
@@ -32,6 +31,7 @@ from ..provider_test_support import (
     candidate,
     inspection,
     provider_build_request,
+    provider_starter_context,
 )
 
 
@@ -328,7 +328,7 @@ def test_provider_project_operations_surface_process_cleanup_failure(
     setattr(cast(Any, provider), operation, fail)
     with pytest.raises(ProcessCleanupError, match="project process survived"):
         if operation == "create":
-            installed.create(provider.starter, StarterContext("dashboard", "analysis"))
+            installed.create(provider.starter, provider_starter_context(tmp_path))
         elif operation == "inspect":
             installed.inspect(inspection_request(project))
         else:

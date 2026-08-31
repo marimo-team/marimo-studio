@@ -14,23 +14,33 @@ without changing files.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from contextlib import ExitStack, nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
+from tempfile import TemporaryDirectory
 
 from marimo_studio._artifacts.inputs import (
     ProjectInputState,
     project_input_state,
     project_revision_snapshot,
 )
-from marimo_studio._filesystem.io import read_text, reject_mutable_symlinks
+from marimo_studio._filesystem.io import (
+    read_file_snapshot_with_identity,
+    reject_mutable_symlinks,
+)
+from marimo_studio._filesystem.secure import FileIdentity
 from marimo_studio._notebook.ports import NotebookInspector
+from marimo_studio._notebook.records import NotebookSpec
 from marimo_studio._views.catalog import resolve_starter
 from marimo_studio._views.inspection import (
     inspect_view_project_sync,
 )
 from marimo_studio._views.records import Starter, ViewSetupResult
+from marimo_studio._views.starter_context import (
+    starter_bindings,
+    starter_context,
+)
+from marimo_studio._workspace.bindings import cell_bindings_source
 from marimo_studio._workspace.config import (
     canonical_view_root,
     discover_studio_definition,
@@ -39,6 +49,7 @@ from marimo_studio._workspace.config import (
     validate_view_name,
 )
 from marimo_studio._workspace.metadata import configured_notebook_source
+from marimo_studio._workspace.models import StudioDefinition
 from marimo_studio._workspace.mutation_lock import (
     view_mutation_lock,
     workspace_catalog_lock,
@@ -49,19 +60,13 @@ from marimo_studio.errors import ConfigurationError, ViewExistsError
 from marimo_studio.view_providers import (
     ProjectInspection,
     ProviderStarter,
-    StarterContext,
+    StarterPlan,
     ViewProject,
     ViewProvider,
 )
 from marimo_studio.view_providers._host import provider_registry
 from marimo_studio.view_providers._host.package_policy import DEFAULT_STARTER_ID
 
-SetupPlan = tuple[
-    Starter,
-    ViewProvider,
-    ProviderStarter,
-    dict[str, Mapping[PurePosixPath, bytes]],
-]
 _WORKSPACE_IGNORE_RULES = ("/.locks/", "*/.artifacts/")
 
 
@@ -70,6 +75,25 @@ class _PreparedExistingView:
     project: ViewProject
     inspection: ProjectInspection
     input_state: ProjectInputState
+
+
+@dataclass(frozen=True)
+class _SavedNotebook:
+    notebook: NotebookSpec
+    source: str
+    identity: FileIdentity
+
+
+@dataclass(frozen=True)
+class _PreparedStarter:
+    starter: Starter
+    provider: ViewProvider
+    provider_starter: ProviderStarter
+    observed_studio: StudioDefinition | None
+    observed_config_identity: FileIdentity | None
+    observed_notebook: NotebookSpec
+    planned_notebook: NotebookSpec
+    plans: dict[str, StarterPlan]
 
 
 def _prepare_existing_view(project: ViewProject) -> _PreparedExistingView:
@@ -83,14 +107,101 @@ def _prepare_existing_view(project: ViewProject) -> _PreparedExistingView:
     return _PreparedExistingView(project, inspection, snapshot.state)
 
 
-def _workspace_ignore_source(path: Path) -> str:
-    source = read_text(path) if path.is_file() else ""
+def _workspace_ignore_source(source: str) -> str:
     present = {line.strip() for line in source.splitlines()}
     missing = tuple(rule for rule in _WORKSPACE_IGNORE_RULES if rule not in present)
     if not missing:
         return source
     prefix = source if not source or source.endswith("\n") else f"{source}\n"
     return prefix + "".join(f"{rule}\n" for rule in missing)
+
+
+def _text_snapshot(
+    path: Path,
+    *,
+    root: Path | None = None,
+) -> tuple[str, FileIdentity]:
+    payload, _mode, identity = read_file_snapshot_with_identity(path, root=root)
+    try:
+        return payload.decode("utf-8"), identity
+    except UnicodeDecodeError as error:
+        raise ConfigurationError(f"Workspace file is not UTF-8 text: {path}") from error
+
+
+def _optional_text_snapshot(
+    path: Path,
+    *,
+    root: Path | None = None,
+) -> tuple[str, FileIdentity | None]:
+    try:
+        return _text_snapshot(path, root=root)
+    except FileNotFoundError:
+        return "", None
+
+
+def _studio_snapshot(
+    notebook: Path,
+) -> tuple[StudioDefinition | None, str | None, FileIdentity | None]:
+    initial = discover_studio_definition(notebook)
+    if initial is None:
+        if discover_studio_definition(notebook) is not None:
+            raise ConfigurationError(
+                "Studio configuration changed during discovery. "
+                "Run the operation again."
+            )
+        return None, None, None
+    _source, identity = _text_snapshot(initial.config_path, root=initial.root)
+    confirmed = discover_studio_definition(notebook)
+    if confirmed != initial:
+        raise ConfigurationError(
+            "Studio configuration changed during discovery. Run the operation again."
+        )
+    confirmed_source, confirmed_identity = _text_snapshot(
+        initial.config_path,
+        root=initial.root,
+    )
+    if confirmed_identity != identity:
+        raise ConfigurationError(
+            "Studio configuration changed during discovery. Run the operation again."
+        )
+    return confirmed, confirmed_source, confirmed_identity
+
+
+def _require_notebook_config_identity(
+    studio: StudioDefinition | None,
+    config_identity: FileIdentity | None,
+    notebook: _SavedNotebook,
+) -> None:
+    if (
+        studio is not None
+        and studio.uses_notebook_config
+        and config_identity != notebook.identity
+    ):
+        raise ConfigurationError(
+            "The notebook changed while Studio read its configuration. "
+            "Run the operation again."
+        )
+
+
+def _saved_notebook(
+    path: Path,
+    inspect_notebook: NotebookInspector,
+) -> _SavedNotebook:
+    source, identity = _text_snapshot(path)
+    notebook = _notebook_from_source(path, source, inspect_notebook)
+    return _SavedNotebook(notebook, source, identity)
+
+
+def _notebook_from_source(
+    path: Path,
+    source: str,
+    inspect_notebook: NotebookInspector,
+) -> NotebookSpec:
+    with TemporaryDirectory(prefix="marimo-studio-starter-") as directory:
+        staged = Path(directory) / path.name
+        staged.write_bytes(source.encode("utf-8"))
+        notebook = inspect_notebook(staged, include_code=True)
+    return replace(notebook, path=path)
 
 
 def _select_starter(
@@ -118,6 +229,119 @@ def _workspace_provider_requirements(
     registry = provider_registry()
     return tuple(
         registry.get(provider_id).requirement for provider_id in sorted(provider_ids)
+    )
+
+
+def _provider_plans(
+    provider: ViewProvider,
+    starter: ProviderStarter,
+    notebook: NotebookSpec,
+    studio: StudioDefinition | None,
+    view_names: tuple[str, ...],
+) -> dict[str, StarterPlan]:
+    return {
+        view_name: provider.create(
+            starter,
+            starter_context(notebook, studio, view_name),
+        )
+        for view_name in view_names
+    }
+
+
+def _prepare_starter(
+    notebook_path: Path,
+    saved: _SavedNotebook,
+    studio: StudioDefinition | None,
+    config_identity: FileIdentity | None,
+    view_root: Path,
+    default_view: str,
+    view_names: tuple[str, ...],
+    starter: Starter,
+    provider: ViewProvider,
+    provider_starter: ProviderStarter,
+    inspect_notebook: NotebookInspector,
+) -> _PreparedStarter:
+    initial = _provider_plans(
+        provider,
+        provider_starter,
+        saved.notebook,
+        studio,
+        view_names,
+    )
+    if studio is not None and not studio.uses_notebook_config:
+        return _PreparedStarter(
+            starter,
+            provider,
+            provider_starter,
+            studio,
+            config_identity,
+            saved.notebook,
+            saved.notebook,
+            initial,
+        )
+
+    bindings = starter_bindings(saved.notebook, studio, initial.values())
+    configured = configured_notebook_source(
+        notebook_path,
+        default_view,
+        _workspace_provider_requirements(view_root, starter),
+        bindings,
+        source=saved.source,
+    )
+    if configured == saved.source:
+        return _PreparedStarter(
+            starter,
+            provider,
+            provider_starter,
+            studio,
+            config_identity,
+            saved.notebook,
+            saved.notebook,
+            initial,
+        )
+
+    planned_notebook = _notebook_from_source(
+        notebook_path,
+        configured,
+        inspect_notebook,
+    )
+    planned = _provider_plans(
+        provider,
+        provider_starter,
+        planned_notebook,
+        studio,
+        view_names,
+    )
+    if any(
+        planned[view_name].cell_targets != initial[view_name].cell_targets
+        for view_name in view_names
+    ):
+        raise ConfigurationError(
+            "Starter cell selection changed after notebook configuration was "
+            "planned. Run the operation again."
+        )
+    final_bindings = starter_bindings(planned_notebook, studio, planned.values())
+    final_source = configured_notebook_source(
+        notebook_path,
+        default_view,
+        _workspace_provider_requirements(view_root, starter),
+        final_bindings,
+        source=saved.source,
+    )
+    if final_source != configured:
+        raise ConfigurationError(
+            "Starter configuration changed after provider planning. "
+            "Run the operation again."
+        )
+    return _PreparedStarter(
+        starter,
+        provider,
+        provider_starter,
+        studio,
+        config_identity,
+        saved.notebook,
+        planned_notebook,
+        planned,
     )
 
 
@@ -150,7 +374,7 @@ def _prepare_view_locked(
     starter: str | Starter | None = None,
     inspect_notebook: NotebookInspector,
     dry_run: bool = False,
-    preplanned: SetupPlan | None = None,
+    preplanned: _PreparedStarter | None = None,
     prepared_existing: _PreparedExistingView | None = None,
 ) -> ViewSetupResult:
     """Configure a notebook when needed and create a named view."""
@@ -159,7 +383,9 @@ def _prepare_view_locked(
         raise ConfigurationError(f"Notebook does not exist: {notebook_path}")
     if notebook_path.suffix != ".py":
         raise ConfigurationError(f"Expected a Python Marimo notebook: {notebook_path}")
-    studio = discover_studio_definition(notebook_path)
+    saved_notebook = _saved_notebook(notebook_path, inspect_notebook)
+    studio, config_source, config_identity = _studio_snapshot(notebook_path)
+    _require_notebook_config_identity(studio, config_identity, saved_notebook)
     selected = name or (studio.default_view if studio is not None else "dashboard")
     validate_view_name(selected)
     default_view = studio.default_view if studio is not None else selected
@@ -173,13 +399,64 @@ def _prepare_view_locked(
         for view_name in view_names
         if not (view_root / view_name / "view.toml").is_file()
     )
-    plans: dict[str, Mapping[PurePosixPath, bytes]] = {}
+    plans: dict[str, StarterPlan] = {}
+    notebook_snapshot: NotebookSpec | None = None
     provider_starter: ProviderStarter | None
     if new_views:
         if preplanned is None:
+            if not dry_run:
+                raise ConfigurationError(
+                    "The view catalog changed before starter planning completed. "
+                    "Run the operation again."
+                )
             selected_starter, provider, provider_starter = _select_starter(starter)
+            prepared = _prepare_starter(
+                notebook_path,
+                saved_notebook,
+                studio,
+                config_identity,
+                view_root,
+                default_view,
+                new_views,
+                selected_starter,
+                provider,
+                provider_starter,
+                inspect_notebook,
+            )
         else:
-            selected_starter, provider, provider_starter, plans = preplanned
+            prepared = preplanned
+            current_revision = saved_notebook.notebook.revision
+            if current_revision not in {
+                prepared.observed_notebook.revision,
+                prepared.planned_notebook.revision,
+            }:
+                raise ConfigurationError(
+                    "The notebook changed while starter files were prepared. "
+                    "Run the operation again."
+                )
+            studio_matches = (
+                studio == prepared.observed_studio
+                and config_identity == prepared.observed_config_identity
+            )
+            expected_notebook_transition = (
+                (
+                    prepared.observed_studio is None
+                    or prepared.observed_studio.uses_notebook_config
+                )
+                and studio is not None
+                and studio.uses_notebook_config
+                and current_revision == prepared.planned_notebook.revision
+            )
+            if not studio_matches and not expected_notebook_transition:
+                raise ConfigurationError(
+                    "Studio configuration changed while starter files were "
+                    "prepared. Run the operation again."
+                )
+        selected_starter = prepared.starter
+        provider = prepared.provider
+        provider_starter = prepared.provider_starter
+        plans = prepared.plans
+        notebook_snapshot = prepared.planned_notebook
     else:
         selected_starter = None
         provider = None
@@ -191,62 +468,129 @@ def _prepare_view_locked(
             selected_starter,
         )
 
+    if any(view_name not in plans for view_name in new_views):
+        raise ConfigurationError(
+            "The view catalog changed while starter files were prepared. "
+            "Run the operation again."
+        )
+    bindings = (
+        starter_bindings(
+            notebook_snapshot,
+            studio,
+            (plans[view_name] for view_name in new_views),
+        )
+        if notebook_snapshot is not None
+        else {}
+    )
     writes: dict[Path, str | bytes] = {}
+    configuration_write: tuple[Path, str] | None = None
+    manifests: dict[Path, str] = {}
+    expected: dict[Path, FileIdentity | None] = {}
     if studio is None or studio.uses_notebook_config:
+        notebook_source = saved_notebook.source
+        notebook_identity = saved_notebook.identity
+        expected[notebook_path] = notebook_identity
         configured = configured_notebook_source(
             notebook_path,
             default_view,
             provider_requirements,
-            {},
+            bindings,
+            source=notebook_source,
         )
-        if configured != read_text(notebook_path):
-            writes[notebook_path] = configured
+        if notebook_snapshot is not None:
+            assert saved_notebook is not None
+            prospective = (
+                saved_notebook.notebook
+                if configured == notebook_source
+                else _notebook_from_source(
+                    notebook_path,
+                    configured,
+                    inspect_notebook,
+                )
+            )
+            if prospective.revision != notebook_snapshot.revision:
+                raise ConfigurationError(
+                    "Notebook configuration changed while starter files were "
+                    "prepared. Run the operation again."
+                )
+        if configured != notebook_source:
+            configuration_write = (notebook_path, configured)
         config_path = notebook_path
         transaction_root = notebook_path.parent
     else:
         config_path = studio.config_path
         transaction_root = studio.root
+        if notebook_snapshot is not None:
+            notebook_identity = saved_notebook.identity
+            expected[notebook_path] = notebook_identity
+        assert config_source is not None
+        assert config_identity is not None
+        current_config = config_source
+        expected[config_path] = config_identity
+        configured = cell_bindings_source(
+            studio,
+            bindings,
+            source=current_config,
+        )
+        if configured != current_config:
+            configuration_write = (config_path, configured)
 
     workspace_ignore = view_root / ".gitignore"
-    ignore_source = _workspace_ignore_source(workspace_ignore)
-    if not workspace_ignore.is_file() or ignore_source != read_text(workspace_ignore):
+    current_ignore, ignore_identity = _optional_text_snapshot(workspace_ignore)
+    expected[workspace_ignore] = ignore_identity
+    ignore_source = _workspace_ignore_source(current_ignore)
+    if ignore_source != current_ignore:
         writes[workspace_ignore] = ignore_source
 
     planned_documents: dict[str, tuple[Path, ...]] = {}
+    claimed_directories: dict[Path, tuple[PurePosixPath, ...]] = {}
     for view_name in new_views:
         assert selected_starter is not None
         assert provider is not None
         assert provider_starter is not None
         plan = plans.get(view_name)
         if plan is None:
-            if not dry_run:
-                raise ConfigurationError(
-                    "The view catalog changed while starter files were prepared. "
-                    "Run the operation again."
-                )
-            plan = provider.create(
-                provider_starter,
-                StarterContext(view_name, notebook_path.stem),
+            raise ConfigurationError(
+                "The view catalog changed while starter files were prepared. "
+                "Run the operation again."
             )
         project_root = view_root / view_name
+        claimed_directories[project_root] = (
+            PurePosixPath("view.toml"),
+            *plan.files.keys(),
+        )
         planned_documents[view_name] = (
             project_root / "view.toml",
             *(project_root / relative for relative in selected_starter.documents),
         )
-        writes[project_root / "view.toml"] = encode_view_manifest(
-            selected_starter.provider
-        )
-        for relative, payload in plan.items():
+        manifest = project_root / "view.toml"
+        expected[manifest] = None
+        for relative, payload in plan.files.items():
             path = project_root / relative
-            if not path.exists():
-                writes[path] = payload
+            expected[path] = None
+            writes[path] = payload
+        manifests[manifest] = encode_view_manifest(selected_starter.provider)
+
+    if studio is None:
+        writes.update(manifests)
+        if configuration_write is not None:
+            writes[configuration_write[0]] = configuration_write[1]
+    else:
+        if configuration_write is not None:
+            writes[configuration_write[0]] = configuration_write[1]
+        writes.update(manifests)
 
     created = tuple(sorted(path for path in writes if not path.exists()))
     updated = tuple(sorted(path for path in writes if path.exists()))
     workspace = None
     if not dry_run:
         transaction = (
-            write_file_transaction(transaction_root, writes)
+            write_file_transaction(
+                transaction_root,
+                writes,
+                expected=expected,
+                claimed_directories=claimed_directories,
+            )
             if writes
             else nullcontext()
         )
@@ -278,8 +622,8 @@ def _prepare_view_locked(
                     for item in prepared_existing.inspection.editor_documents
                 ),
             )
-        elif preplanned is not None and selected in preplanned[3]:
-            planned_starter = preplanned[0]
+        elif preplanned is not None and selected in preplanned.plans:
+            planned_starter = preplanned.starter
             if project.provider != planned_starter.provider:
                 raise ConfigurationError(
                     "The selected view changed while starter files were prepared. "
@@ -330,8 +674,9 @@ def prepare_view(
         raise ConfigurationError(f"Notebook does not exist: {notebook_path}")
     if notebook_path.suffix != ".py":
         raise ConfigurationError(f"Expected a Python Marimo notebook: {notebook_path}")
-    inspect_notebook(notebook_path)
-    studio = discover_studio_definition(notebook_path)
+    saved_notebook = _saved_notebook(notebook_path, inspect_notebook)
+    studio, config_source, config_identity = _studio_snapshot(notebook_path)
+    _require_notebook_config_identity(studio, config_identity, saved_notebook)
     selected = name or (studio.default_view if studio is not None else "dashboard")
     validate_view_name(selected)
     if (
@@ -358,28 +703,48 @@ def prepare_view(
         for view_name in view_names
         if not (view_root / view_name / "view.toml").is_file()
     )
-    preplanned: SetupPlan | None = None
+    preplanned: _PreparedStarter | None = None
     prepared_existing: _PreparedExistingView | None = None
     pending_starter: Starter | None = None
+    plans: dict[str, StarterPlan] = {}
     if missing:
         pending_starter, provider, provider_starter = _select_starter(starter)
-        plans = {
-            view_name: provider.create(
-                provider_starter,
-                StarterContext(view_name, notebook_path.stem),
-            )
-            for view_name in missing
-        }
-        preplanned = (pending_starter, provider, provider_starter, plans)
+        preplanned = _prepare_starter(
+            notebook_path,
+            saved_notebook,
+            studio,
+            config_identity,
+            view_root,
+            default_view,
+            missing,
+            pending_starter,
+            provider,
+            provider_starter,
+            inspect_notebook,
+        )
+        plans = preplanned.plans
     current_views = discover_views(view_root)
     if selected in current_views and selected not in missing:
         prepared_existing = _prepare_existing_view(current_views[selected])
     if studio is None or studio.uses_notebook_config:
+        bindings = (
+            starter_bindings(saved_notebook.notebook, studio, plans.values())
+            if missing
+            else {}
+        )
         configured_notebook_source(
             notebook_path,
             default_view,
             _workspace_provider_requirements(view_root, pending_starter),
-            {},
+            bindings,
+            source=saved_notebook.source,
+        )
+    elif missing:
+        assert config_source is not None
+        cell_bindings_source(
+            studio,
+            starter_bindings(saved_notebook.notebook, studio, plans.values()),
+            source=config_source,
         )
     with workspace_catalog_lock(view_root):
         locked_studio = discover_studio_definition(notebook_path)

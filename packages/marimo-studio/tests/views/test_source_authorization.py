@@ -31,6 +31,7 @@ from marimo_studio.view_providers import (
     ProviderStarter,
     SourceDocument,
     StarterContext,
+    StarterPlan,
     ViewProject,
 )
 from marimo_studio.view_providers._bundled.vanilla import provider as vanilla_provider
@@ -65,12 +66,15 @@ class _InputAccessProvider:
         self,
         starter: ProviderStarter,
         context: StarterContext,
-    ) -> dict[PurePosixPath, bytes]:
-        files = vanilla_provider.create(
+    ) -> StarterPlan:
+        plan = vanilla_provider.create(
             vanilla_provider.starters()[0],
             context,
         )
-        return {**files, _POLICY: b"edit\n"}
+        return StarterPlan(
+            files={**plan.files, _POLICY: b"edit\n"},
+            cell_targets=plan.cell_targets,
+        )
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         project = request.project

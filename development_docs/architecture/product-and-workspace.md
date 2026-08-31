@@ -45,19 +45,34 @@ browser identity.
 Call `Workspace.view(name)` to operate an existing project.
 
 Creation validates the notebook and starter before writing. Under the workspace
-catalog lock, one file transaction writes in this order:
+catalog lock, one file transaction claims and pins each new view directory,
+writes its provider files, and keeps the project undiscoverable until
+`view.toml` publishes the complete project. The workspace `.gitignore` receives
+any missing generated-state rules in the same transaction.
 
-- notebook-local PEP 723 metadata and provider requirements when needed
-- the existing workspace `.gitignore` with missing generated-state rules
-- `view.toml`
-- provider starter files in their declared order
+The first view is complete before notebook-local PEP 723 metadata declares the
+workspace. Existing workspaces receive required configuration before the new
+`view.toml` becomes discoverable. Readers therefore observe the prior workspace
+or the complete new catalog.
+
+The transaction carries the file identities read during planning and expected
+absence for new paths. Conditional replacement rejects concurrent notebook,
+configuration, or project-file changes before the catalog commits. A failed
+condition restores files already written by the transaction and preserves the
+concurrent edit.
+
+Each new view directory is claimed while absent and held through a stable
+directory owner. Every child write uses that owner. The root incarnation and
+complete file catalog are verified before and after workspace materialization,
+so creation cannot adopt a replacement directory or unknown files from a
+competing writer.
 
 The created view starts in `unbuilt` state. Inspection and build are explicit
 operations after the transaction commits.
 
-Providers cannot write core control paths. Creation validates normalized paths,
-binary payloads, case collisions, and file-directory overlap before the
-transaction starts.
+Providers cannot write core control paths or cell bindings. Creation validates
+normalized paths, binary payloads, selected starter targets, case collisions,
+and file-directory overlap before the transaction starts.
 
 ## Source documents
 

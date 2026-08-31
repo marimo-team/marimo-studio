@@ -37,9 +37,10 @@ if not any(item.name == "dashboard" for item in status.views):
     view = await workspace.create_view("dashboard")
 ```
 
-The default creation path produces one editable HTML page and starter-specific
-agent instructions. Inspect installed starting points only when the user asks
-for a particular frontend.
+The default creation path produces one editable HTML page populated with
+enabled cells that display output or literal Markdown and starter-specific agent
+instructions. Inspect installed starting points only when the user asks for a
+particular frontend.
 
 ## Inspect before editing
 

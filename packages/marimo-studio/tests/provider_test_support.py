@@ -27,7 +27,9 @@ from marimo_studio.view_providers import (
     ProviderInfo,
     ProviderStarter,
     SourceDocument,
+    StarterCellTarget,
     StarterContext,
+    StarterPlan,
     ViewProject,
 )
 from marimo_studio.view_providers._bundled.vanilla import provider as vanilla_provider
@@ -36,6 +38,31 @@ from marimo_studio.view_providers._host.registry import (
     ProviderRegistry,
     provider_key,
 )
+
+
+def provider_starter_context(
+    root: Path,
+    *,
+    view_name: str = "dashboard",
+    notebook_name: str = "analysis",
+) -> StarterContext:
+    """Return a complete starter context from a saved test notebook."""
+    from marimo_studio import inspect_notebook
+    from marimo_studio._views.starter_context import starter_context
+
+    from .helpers import notebook_source
+
+    notebook = root / f"{notebook_name}.py"
+    if not notebook.is_file():
+        notebook.write_text(
+            notebook_source(root / "cell-executed"),
+            encoding="utf-8",
+        )
+    return starter_context(
+        inspect_notebook(notebook, include_code=True),
+        None,
+        view_name,
+    )
 
 
 def provider_build_request(
@@ -96,6 +123,7 @@ class ProviderStub:
         self.create_error: Exception | None = None
         self.inspection_error: Exception | None = None
         self.plan: Mapping[PurePosixPath, bytes] | None = None
+        self.plan_cell_targets: tuple[StarterCellTarget, ...] = ()
         self.inspection: ProjectInspection | None = None
         self.report: BuildResult | None = None
         self.build_calls = 0
@@ -127,14 +155,16 @@ class ProviderStub:
         self,
         starter: ProviderStarter,
         context: StarterContext,
-    ) -> Mapping[PurePosixPath, bytes]:
+    ) -> StarterPlan:
         del starter, context
         self.plan_calls += 1
         if self.create_error is not None:
             raise self.create_error
-        return self.plan or {
-            PurePosixPath("index.html"): b"<!doctype html><html></html>"
-        }
+        return StarterPlan(
+            files=self.plan
+            or {PurePosixPath("index.html"): b"<!doctype html><html></html>"},
+            cell_targets=self.plan_cell_targets,
+        )
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         del request

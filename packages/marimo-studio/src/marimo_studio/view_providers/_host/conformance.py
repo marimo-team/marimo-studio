@@ -31,6 +31,8 @@ from marimo_studio.view_providers import (
     BuildProfile,
     BuildRequest,
     BuildResult,
+    CellRef,
+    CellSpec,
     InspectionRequest,
     JsonValue,
     ProjectDiagnostic,
@@ -41,9 +43,16 @@ from marimo_studio.view_providers import (
     ProviderInfo,
     ProviderStarter,
     SourceDocument,
+    StarterCellTarget,
+    StarterContext,
+    StarterPlan,
     ViewProject,
 )
 from marimo_studio.view_providers._host.records import ProviderProvenance
+from marimo_studio.view_providers._targets import (
+    MAX_CELL_TARGETS,
+    validate_projection_target,
+)
 from marimo_studio.view_providers._validation import (
     validate_mount_declaration,
     validate_project_diagnostic,
@@ -61,6 +70,10 @@ _MAX_JSON_DEPTH = 32
 _MAX_JSON_NODES = 4_096
 _MAX_OPTIONS = 256
 _MAX_STARTERS = 256
+_MAX_STARTER_CELLS = 4_096
+_MAX_STARTER_SOURCE_BYTES = PROJECT_INPUT_BUDGET.max_file_bytes
+_MAX_STARTER_METADATA_RECORDS = 1_000_000
+_MAX_STARTER_CONTEXT_BYTES = 96 * 1024 * 1024
 _MAX_DOCUMENTS = 256
 _MAX_INPUT_SCOPE = PROJECT_INPUT_BUDGET.max_files
 _MAX_MOUNTS = 512
@@ -340,12 +353,208 @@ class ProviderConformance:
         )
         return cast(dict[str, JsonValue], normalized)
 
-    def validate_created_files(
+    def validate_starter_context(self, value: object) -> StarterContext:
+        if not isinstance(value, StarterContext):
+            raise _error(self.key, "requires a StarterContext record")
+        _text(value.view_name, self.key, "starter view name")
+        _text(value.notebook_name, self.key, "starter notebook name")
+        notebook = value.notebook
+        if not isinstance(notebook.path, Path) or not isinstance(
+            notebook.revision, str
+        ):
+            raise _error(self.key, "requires a saved starter notebook")
+        if len(notebook.revision) != 64 or any(
+            character not in "0123456789abcdef" for character in notebook.revision
+        ):
+            raise _error(self.key, "requires a SHA-256 starter notebook revision")
+        cells = _tuple(
+            notebook.cells,
+            self.key,
+            "starter notebook cells",
+            maximum=_MAX_STARTER_CELLS,
+        )
+        refs: list[CellRef] = []
+        runtime_ids: list[str] = []
+        source_bytes = 0
+        metadata_records = 0
+        context_bytes = sum(
+            len(value.encode("utf-8"))
+            for value in (
+                value.view_name,
+                value.notebook_name,
+                str(notebook.path),
+                notebook.revision,
+            )
+        )
+        for index, item in enumerate(cells):
+            if not isinstance(item, CellSpec) or item.index != index:
+                raise _error(self.key, "requires ordered CellSpec records")
+            if item.kind not in {"cell", "setup", "function", "class", "unparsable"}:
+                raise _error(
+                    self.key,
+                    "requires recognized starter notebook cell kinds",
+                )
+            if item.code is None or not isinstance(item.code, str):
+                raise _error(self.key, "requires starter notebook cell code")
+            if (
+                type(item.has_output_expression) is not bool
+                or type(item.displays_output) is not bool
+            ):
+                raise _error(
+                    self.key,
+                    "requires starter notebook display flags to be booleans",
+                )
+            source_bytes += len(item.code.encode("utf-8"))
+            context_bytes += 256 + sum(
+                len(text.encode("utf-8"))
+                for text in (
+                    item.runtime_id,
+                    item.name or "",
+                    item.preview,
+                    item.markdown or "",
+                    item.code,
+                )
+            )
+            context_bytes += sum(
+                len(text.encode("utf-8")) for text in item.definitions
+            ) + sum(len(text.encode("utf-8")) for text in item.references)
+            context_bytes += sum(
+                len(str(ref).encode("utf-8")) for ref in item.upstream
+            ) + sum(len(str(ref).encode("utf-8")) for ref in item.downstream)
+            if source_bytes > _MAX_STARTER_SOURCE_BYTES:
+                raise _error(
+                    self.key,
+                    "requires starter notebook source to fit within the file budget",
+                )
+            digest = hashlib.sha256(item.code.encode("utf-8")).hexdigest()
+            if digest != item.code_sha256:
+                raise _error(self.key, "requires current starter notebook cell digests")
+            if item.name is not None:
+                _text(item.name, self.key, "starter notebook cell name")
+            if item.markdown is not None and not isinstance(item.markdown, str):
+                raise _error(self.key, "requires text starter notebook markdown")
+            refs.append(item.ref)
+            runtime_ids.append(item.runtime_id)
+            metadata_records += (
+                len(item.definitions)
+                + len(item.references)
+                + len(item.upstream)
+                + len(item.downstream)
+            )
+            if metadata_records > _MAX_STARTER_METADATA_RECORDS:
+                raise _error(
+                    self.key,
+                    "limits starter notebook graph and symbol metadata to "
+                    f"{_MAX_STARTER_METADATA_RECORDS} records",
+                )
+        _unique(tuple(refs), self.key, "starter notebook cell refs")
+        _unique(tuple(runtime_ids), self.key, "starter notebook runtime cell IDs")
+        available_refs = set(refs)
+        for item in cast(tuple[CellSpec, ...], cells):
+            if not set(item.upstream).issubset(available_refs) or not set(
+                item.downstream
+            ).issubset(available_refs):
+                raise _error(self.key, "requires contained starter notebook edges")
+        app_config = _json_value(
+            notebook.app_config,
+            self.key,
+            "starter notebook app config",
+        )
+        if not isinstance(app_config, dict):
+            raise _error(self.key, "requires a starter notebook app config object")
+        context_bytes += len(
+            json.dumps(
+                app_config,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        if not isinstance(value.cell_targets, Mapping):
+            raise _error(self.key, "requires starter cell targets to be a mapping")
+        ordinary_refs = {
+            item.ref
+            for item in cast(tuple[CellSpec, ...], cells)
+            if item.kind == "cell"
+        }
+        if set(value.cell_targets) != ordinary_refs:
+            raise _error(self.key, "requires one target for every notebook cell")
+        targets: dict[CellRef, StarterCellTarget] = {}
+        names: list[str] = []
+        for ref, item in value.cell_targets.items():
+            if (
+                not isinstance(ref, CellRef)
+                or not isinstance(item, StarterCellTarget)
+                or item.cell != ref
+            ):
+                raise _error(self.key, "requires StarterCellTarget records")
+            try:
+                target = validate_projection_target("cell", item.target)
+            except ValueError as error:
+                raise _error(
+                    self.key,
+                    f"declares invalid starter cell target: {error}",
+                ) from error
+            targets[ref] = StarterCellTarget(ref, target)
+            names.append(target)
+            context_bytes += len(str(ref).encode("utf-8")) + len(target.encode("utf-8"))
+        _unique(tuple(names), self.key, "starter cell target names")
+        if context_bytes > _MAX_STARTER_CONTEXT_BYTES:
+            raise _error(
+                self.key,
+                "limits encoded starter notebook context to "
+                f"{_MAX_STARTER_CONTEXT_BYTES} bytes",
+            )
+        normalized_notebook = replace(
+            notebook,
+            cells=cast(tuple[CellSpec, ...], cells),
+            app_config=cast(dict[str, object], app_config),
+        )
+        return StarterContext(
+            view_name=value.view_name,
+            notebook_name=value.notebook_name,
+            notebook=normalized_notebook,
+            cell_targets=MappingProxyType(targets),
+        )
+
+    def validate_starter_plan(
+        self,
+        starter: ProviderStarter,
+        context: StarterContext,
+        value: object,
+    ) -> StarterPlan:
+        self.validate_starters((starter,))
+        if not isinstance(value, StarterPlan):
+            raise _error(self.key, "requires a StarterPlan record")
+        files = self._validate_starter_files(starter, value.files)
+        targets = _tuple(
+            value.cell_targets,
+            self.key,
+            "starter plan cell targets",
+            maximum=MAX_CELL_TARGETS,
+        )
+        selected: list[StarterCellTarget] = []
+        for item in targets:
+            if not isinstance(item, StarterCellTarget):
+                raise _error(self.key, "requires StarterCellTarget records in its plan")
+            if context.cell_targets.get(item.cell) != item:
+                raise _error(
+                    self.key,
+                    f"returned undeclared cell target {item.target!r}",
+                )
+            selected.append(item)
+        _unique(tuple(selected), self.key, "starter plan cell targets")
+        _unique(
+            tuple(item.target for item in selected),
+            self.key,
+            "starter plan cell target names",
+        )
+        return StarterPlan(files=files, cell_targets=tuple(selected))
+
+    def _validate_starter_files(
         self,
         starter: ProviderStarter,
         value: object,
     ) -> Mapping[PurePosixPath, bytes]:
-        self.validate_starters((starter,))
         if not isinstance(value, Mapping) or not value:
             raise _error(self.key, "requires starter files")
         tracker = FileBudgetTracker(PROJECT_INPUT_BUDGET, "Provider starter")

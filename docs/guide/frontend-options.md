@@ -13,7 +13,8 @@ in Studio.
 
 Choose HTML when the work is mainly layout, wording, styles, and a small amount
 of browser interaction. The base installation creates one `index.html` with
-inline CSS and JavaScript:
+inline CSS and JavaScript. Its results section contains the notebook's enabled
+cells in document order:
 
 ```console
 marimo-studio view create dashboard --target analysis.py
@@ -33,9 +34,10 @@ uvx --from 'marimo-studio[deno]' marimo-studio view create dashboard \
   --starter marimo-studio/react:default
 ```
 
-Studio creates TSX, CSS, and Deno configuration. The optional Deno dependency
-builds the frontend without adding Node package management to the notebook
-environment.
+Studio creates TSX, CSS, and Deno configuration. The first component maps
+enabled cells that display output or literal Markdown into an editable results
+section. The optional Deno dependency builds the frontend without adding Node
+package management to the notebook environment.
 
 ## Present a Reveal.js slide deck
 
@@ -50,8 +52,10 @@ uvx --from 'marimo-studio[deno]' marimo-studio view create slides \
 ```
 
 Studio creates a React deck with `@revealjs/react`, Reveal's structural CSS, a
-local visual theme, and frozen Deno dependencies. Add selected notebook cells,
-outputs, or values inside `Slide` components.
+local visual theme, and frozen Deno dependencies. The opening slide uses the
+Marimo app title or first level-one Markdown heading. Each enabled cell that
+displays output or literal Markdown receives an editable `Slide` in document
+order.
 
 ## Use Svelte for concise components
 
@@ -64,9 +68,10 @@ uvx --from 'marimo-studio[deno]' marimo-studio view create story \
   --starter marimo-studio/svelte:default
 ```
 
-Studio creates Svelte, TypeScript, CSS, Vite, and Deno configuration. The page
-still reads notebook results through the same HTML elements and attributes used
-by the one-file page.
+Studio creates Svelte, TypeScript, CSS, Vite, and Deno configuration. The first
+component iterates over enabled cells that display output or literal Markdown.
+The page reads later notebook results through the same HTML elements and
+attributes used by the one-file page.
 
 ## Inspect the available starting points
 

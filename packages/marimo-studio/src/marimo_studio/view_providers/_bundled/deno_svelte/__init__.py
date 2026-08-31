@@ -25,15 +25,19 @@ from marimo_studio.view_providers import (
     ProviderInfo,
     ProviderStarter,
     StarterContext,
+    StarterPlan,
     ViewProject,
 )
 from marimo_studio.view_providers._bundled import _deno
 from marimo_studio.view_providers._bundled._deno.project import ProviderProjectSpec
 from marimo_studio.view_providers._bundled._starters import (
-    starter_catalog,
-    starter_files,
+    create_starter,
+    provider_starters,
 )
 from marimo_studio.view_providers._bundled.deno_svelte.build import build_svelte
+from marimo_studio.view_providers._bundled.deno_svelte.starters import (
+    catalog as _STARTERS,
+)
 
 PROVIDER_KEY = "marimo-studio/svelte"
 SVELTE_VERSION = "5.56.9"
@@ -78,37 +82,6 @@ _EDITOR_LANGUAGES = {
     ".svg": "xml",
     ".ts": "typescript",
 }
-_STUDIO_SUPPORT_DOCUMENTS = (
-    PurePosixPath("src/app.d.ts"),
-    PurePosixPath("src/lib/marimo-value.ts"),
-)
-_VITE_ENV_DOCUMENT = PurePosixPath("src/vite-env.d.ts")
-_DEFAULT_DOCUMENTS = (
-    PurePosixPath("AGENTS.md"),
-    PurePosixPath("src/App.svelte"),
-    *_STUDIO_SUPPORT_DOCUMENTS,
-    PurePosixPath("src/main.ts"),
-    PurePosixPath("src/index.html"),
-    PurePosixPath("src/style.css"),
-    _VITE_ENV_DOCUMENT,
-    PurePosixPath("package.json"),
-    PurePosixPath("deno.json"),
-    PurePosixPath("vite.config.ts"),
-    PurePosixPath("svelte.config.js"),
-    PurePosixPath("tsconfig.json"),
-    PurePosixPath("deno.lock"),
-)
-_STARTERS = starter_catalog(
-    ProviderStarter(
-        key="default",
-        title="Svelte",
-        summary=(
-            "A typed Svelte application with Studio projection elements and a "
-            "live-value action."
-        ),
-        documents=_DEFAULT_DOCUMENTS,
-    )
-)
 _PROJECT = ProviderProjectSpec(
     provider_id=PROVIDER_KEY,
     analyzer_package="marimo_studio.view_providers._bundled.deno_svelte",
@@ -148,14 +121,14 @@ class DenoSvelteProvider:
         return _deno.deno_availability()
 
     def starters(self) -> tuple[ProviderStarter, ...]:
-        return tuple(_STARTERS.values())
+        return provider_starters(_STARTERS)
 
     def create(
         self,
         starter: ProviderStarter,
         context: StarterContext,
-    ) -> dict[PurePosixPath, bytes]:
-        return starter_files(__name__, _STARTERS, starter, context)
+    ) -> StarterPlan:
+        return create_starter(_STARTERS, starter, context)
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         return _PROJECT.inspect(request, self.availability(request.project))

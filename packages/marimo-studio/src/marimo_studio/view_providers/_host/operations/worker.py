@@ -24,13 +24,13 @@ from marimo_studio.view_providers._host.conformance import ProviderConformance
 from .codec import (
     availability_payload,
     build_result_payload,
-    created_files_payload,
     inspection_from_payload,
     inspection_payload,
     project_from_payload,
     provider_info_payload,
     starter_context_from_payload,
     starter_from_payload,
+    starter_plan_payload,
     starters_payload,
 )
 
@@ -121,14 +121,18 @@ def _invoke(payload: object, transfer_root: Path) -> object:
         starter = conformance.validate_starters(
             (starter_from_payload(data["starter"]),)
         )[0]
-        files = conformance.validate_created_files(
+        context = conformance.validate_starter_context(
+            starter_context_from_payload(data["context"])
+        )
+        plan = conformance.validate_starter_plan(
             starter,
+            context,
             implementation.create(
                 starter,
-                starter_context_from_payload(data["context"]),
+                context,
             ),
         )
-        return created_files_payload(files, transfer_root)
+        return starter_plan_payload(plan, transfer_root)
     if operation == "inspect":
         return inspection_payload(_inspect(implementation, conformance, request_data))
     if operation == "build":

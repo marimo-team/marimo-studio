@@ -16,6 +16,10 @@ Preserve decisions that should guide later agents.
 children. Keep one audience claim or decision per slide. Use React components
 for repeated layouts and local interaction.
 
+`NOTEBOOK_SLIDES` starts with one record for each enabled cell that displays an
+output or literal Markdown. A Markdown heading supplies its slide label. Keep,
+reorder, group, or replace those records as the presentation argument develops.
+
 Pass Reveal configuration through `Deck.config`. Register plugins through
 `Deck.plugins` when the deck first mounts. Keep the plugin array stable because
 Reveal initializes plugins once for each deck instance.

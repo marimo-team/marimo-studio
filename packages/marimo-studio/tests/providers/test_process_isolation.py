@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import signal
 import subprocess
@@ -16,10 +17,11 @@ from typing import Any
 
 import pytest
 
+import marimo_studio.view_providers._host.operations.process as process_module
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.errors import ViewProjectError
+from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
     BuildResult,
     JsonValue,
@@ -28,6 +30,7 @@ from marimo_studio.view_providers import (
     ProviderInfo,
     ProviderStarter,
     StarterContext,
+    StarterPlan,
     ViewProject,
 )
 from marimo_studio.view_providers._host.registry import (
@@ -38,6 +41,7 @@ from marimo_studio.view_providers._host.registry import (
 from ..provider_test_support import (
     ProviderStub,
     inspection,
+    provider_starter_context,
 )
 
 pytestmark = pytest.mark.native_process
@@ -195,6 +199,29 @@ class _CatalogProvider(ProviderStub):
         return super().create(starter, context)
 
 
+class _ContextProvider(ProviderStub):
+    def create(
+        self,
+        starter: ProviderStarter,
+        context: StarterContext,
+    ) -> StarterPlan:
+        del starter
+        payload = json.dumps(
+            {
+                "notebook": context.notebook.to_dict(),
+                "targets": [
+                    target.to_dict() for target in context.cell_targets.values()
+                ],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        ).encode()
+        return StarterPlan(
+            files={PurePosixPath("index.html"): payload},
+            cell_targets=tuple(context.cell_targets.values()),
+        )
+
+
 class _BlockingDescriptionProvider:
     def __init__(self) -> None:
         self._provider = ProviderStub(
@@ -238,6 +265,7 @@ create_tree_provider = _CreateProcessTreeProvider(
 )
 delayed_provider = _DelayedProvider("test-process/delayed", "default")
 catalog_provider = _CatalogProvider("test-process/catalog", "default")
+context_provider = _ContextProvider("test-process/context", "default")
 blocking_description_provider = _BlockingDescriptionProvider()
 catalog_provider.plan = {
     PurePosixPath("index.html"): b"<!doctype html>\x00<html></html>"
@@ -270,6 +298,82 @@ def _registry(
         isolate_operations=True,
         extension_timeout=timeout,
     )
+
+
+def test_create_process_round_trips_notebook_context_and_targets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import marimo
+
+    from marimo_studio import inspect_notebook
+    from marimo_studio._views.starter_context import starter_context
+
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
+    notebook = tmp_path / "café.py"
+    notebook.write_text(
+        f'''\
+import marimo
+
+__generated_with = "{marimo.__version__}"
+app = marimo.App(app_title="Résumé")
+
+with app.setup:
+    import math
+
+@app.cell
+def _():
+    import marimo as mo
+    return (mo,)
+
+@app.cell
+def introduction(mo):
+    mo.md("# Résumé")
+    return
+
+if __name__ == "__main__":
+    app.run()
+''',
+        encoding="utf-8",
+    )
+    context = starter_context(
+        inspect_notebook(notebook, include_code=True),
+        None,
+        "report",
+    )
+    installed = _registry("context", "context_provider").get("test-process/context")
+
+    plan = installed.create(installed.starters()[0], context)
+
+    payload = json.loads(plan.files[PurePosixPath("index.html")])
+    assert payload == {
+        "notebook": context.notebook.to_dict(),
+        "targets": [target.to_dict() for target in context.cell_targets.values()],
+    }
+    assert plan.cell_targets == tuple(context.cell_targets.values())
+
+
+def test_create_process_rejects_oversized_request_before_worker_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
+    installed = _registry("context", "context_provider").get("test-process/context")
+    starter = installed.starters()[0]
+    context = provider_starter_context(tmp_path)
+
+    def reject_worker_start(*_args, **_kwargs):
+        pytest.fail("provider worker started")
+
+    monkeypatch.setattr(process_module, "_REQUEST_LIMIT", 1)
+    monkeypatch.setattr(
+        process_module.ProcessSupervisor,
+        "run",
+        reject_worker_start,
+    )
+
+    with pytest.raises(ConfigurationError, match="request exceeds"):
+        installed.create(starter, context)
 
 
 def _project(tmp_path: Path, provider: str, **options: JsonValue) -> ViewProject:

@@ -27,7 +27,7 @@ class ViewProvider(Protocol):
 
     def availability(self, project=None) -> ProviderAvailability: ...
     def starters(self) -> tuple[ProviderStarter, ...]: ...
-    def create(self, starter, context) -> Mapping[PurePosixPath, bytes]: ...
+    def create(self, starter, context) -> StarterPlan: ...
     def inspect(self, request) -> ProjectInspection: ...
     def build(self, request) -> BuildResult: ...
 ```
@@ -60,9 +60,17 @@ document plan are shown to people and agents. Studio qualifies the local key
 as `provider:key` in its public catalogs. Independent providers can use the
 same local key.
 
-`create()` returns provider-owned files. Studio writes `view.toml`. Package
-composition selects `marimo-studio/vanilla:default` when callers omit a
-starter.
+`create()` receives a detached `NotebookSpec` with complete saved cell source
+and one `StarterCellTarget` for every ordinary cell. It returns provider-owned
+files plus the targets embedded in that source. Package composition selects
+`marimo-studio/vanilla:default` when callers omit a starter.
+
+Core validates the plan against the exact observed notebook revision. For
+notebook-local configuration, a provisional plan identifies aliases and an
+accepted plan renders from the prospective committed notebook. Both plans must
+select the same cell targets. Native cell names require no configuration
+change. Selected proposed targets become cell aliases in the notebook or
+project configuration.
 
 ## Inspection
 
@@ -94,22 +102,25 @@ view_providers/
   __init__.py      public provider API
   _host/           discovery, conformance, and isolated operations
   _bundled/
-    _starters.py  bundled starter catalog and resource assembly
-    vanilla/      provider, starters
+    _starters.py  bundled starter records, selection, and resource assembly
+    vanilla/      provider and vertical starter packages
     _deno/         shared process, inventory, and analyzer support
-    deno_react/   provider, build, analyzer, starters
-    deno_svelte/  provider, build, analyzer, starters
+    deno_react/   provider, build, analyzer, and vertical starter packages
+    deno_svelte/  provider, build, analyzer, and vertical starter packages
 ```
 
 Framework-specific parsing and diagnostics stay inside the matching
 bundled provider. Shared Deno execution, source copying, instrumentation edits,
 and public asset handling stay under `_bundled/_deno`.
 
-Each bundled provider declares an immutable `_STARTERS` catalog. The catalog
-key selects `starters/<key>`. Provider-wide files under `starters/_shared` join
-the selected tree, and an overlapping output path rejects creation. This keeps
-starter composition separate from the provider's continuing inspection and
-build contract.
+Each bundled provider composes an immutable catalog in `starters/__init__.py`.
+Every `starters/<key>/` package owns one `ProviderStarter`, its renderer, and a
+colocated `files/` tree. Adding a starter creates that package and adds one
+catalog import. Starter packages never import sibling starters.
+
+Framework declarations and runtime adapters live in each leaf that uses them.
+The generic catalog invokes the selected leaf and assembles its `files/` tree
+while the provider retains ownership of inspection and build behavior.
 
 ## Build lifecycle
 

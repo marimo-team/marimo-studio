@@ -17,11 +17,12 @@ from marimo_studio._notebook.records import CellRef, CellSelector, resolve_cell
 from marimo_studio._workspace.config import editable_studio_config
 from marimo_studio._workspace.metadata import (
     set_cell_bindings,
-    update_notebook_config,
+    updated_notebook_config_source,
 )
 from marimo_studio._workspace.models import (
     ALIAS_PATTERN,
     BindingResult,
+    StudioDefinition,
     StudioWorkspace,
 )
 from marimo_studio.errors import BindingError, ConfigurationError
@@ -75,21 +76,38 @@ def _write_cell_bindings(
     remove: Iterable[str] = (),
 ) -> None:
     """Persist cell bindings through the workspace configuration owner."""
-    removed = tuple(remove)
+    source = cell_bindings_source(studio, bindings, remove=remove)
     if studio.uses_notebook_config:
         reject_mutable_symlinks(studio.notebook.parent, {studio.notebook})
-
-        def update(config: MutableMapping[str, Any]) -> None:
-            set_cell_bindings(config, bindings, remove=removed)
-
-        update_notebook_config(studio.notebook, update)
+        atomic_write_text(studio.notebook, source, root=studio.notebook.parent)
     else:
         reject_mutable_symlinks(studio.root, {studio.config_path})
-        document = tomlkit.parse(read_text(studio.config_path, root=studio.root))
-        config = editable_studio_config(document)
-        set_cell_bindings(config, bindings, remove=removed)
         atomic_write_text(
             studio.config_path,
-            tomlkit.dumps(document),
+            source,
             root=studio.root,
         )
+
+
+def cell_bindings_source(
+    studio: StudioDefinition,
+    bindings: Mapping[str, CellRef],
+    *,
+    remove: Iterable[str] = (),
+    source: str | None = None,
+) -> str:
+    """Return the configured source after applying cell bindings."""
+    removed = tuple(remove)
+
+    def update(config: MutableMapping[str, Any]) -> None:
+        set_cell_bindings(config, bindings, remove=removed)
+
+    if studio.uses_notebook_config:
+        current = read_text(studio.notebook) if source is None else source
+        return updated_notebook_config_source(studio.notebook, current, update)
+    current = (
+        read_text(studio.config_path, root=studio.root) if source is None else source
+    )
+    document = tomlkit.parse(current)
+    update(editable_studio_config(document))
+    return tomlkit.dumps(document)

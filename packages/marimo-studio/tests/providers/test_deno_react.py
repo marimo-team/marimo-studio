@@ -17,6 +17,7 @@ from marimo_studio.view_providers._host import provider_registry
 from ..deno_provider_test_support import build_provider as _build
 from ..deno_provider_test_support import inspect_provider as _inspect
 from ..deno_provider_test_support import project as _project
+from ..helpers import no_display_notebook_source
 from ..provider_test_support import provider_build_request
 
 pytestmark = [
@@ -98,6 +99,86 @@ def test_react_inspection_tracks_literal_site_identity_and_kind(
 
     assert [item.code for item in conflict.diagnostics] == ["projection-kind-conflict"]
     assert conflict.mounts == ()
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
+def test_react_default_starter_declares_notebook_cell_targets(
+    tmp_path: Path,
+) -> None:
+    _root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+
+    inspection = _inspect(react_provider, project)
+
+    assert [(site.kind, site.allowed_targets) for site in inspection.mounts] == [
+        ("cell", ("cell-2",)),
+    ]
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
+def test_react_keeps_mutated_static_domains_fail_closed(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+    (root / "src" / "App.tsx").write_text(
+        """const cells: string[] = [];
+cells.push("secret");
+
+export const App = () => (
+  <main>
+    {cells.map((name) => (
+      <marimo-cell key={name} name={name} data-marimo-studio-site="forged" />
+    ))}
+  </main>
+);
+""",
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(react_provider, project)
+
+    assert [item.code for item in inspection.diagnostics] == [
+        "projection-site-reserved"
+    ]
+    assert inspection.mounts == ()
+
+
+@pytest.mark.parametrize("starter_key", ("default", "reveal"))
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
+def test_react_starters_build_without_display_cells(
+    tmp_path: Path,
+    starter_key: str,
+) -> None:
+    tmp_path.joinpath("analysis.py").write_text(
+        no_display_notebook_source(),
+        encoding="utf-8",
+    )
+    root, project = _project(
+        tmp_path,
+        react_provider,
+        "marimo-studio/react",
+        starter_key=starter_key,
+    )
+    inspection = _inspect(react_provider, project)
+    files = root / ".artifacts" / ".staging" / "zero-display" / "files"
+    files.mkdir(parents=True)
+
+    report = _build(
+        react_provider,
+        provider_build_request(project, inspection, files),
+    )
+
+    assert inspection.diagnostics == ()
+    assert inspection.mounts == ()
+    assert report.document is not None
 
 
 @pytest.mark.skipif(
@@ -211,7 +292,7 @@ export const App = () => {
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
-def test_reveal_starter_builds_a_deck_with_a_notebook_output(
+def test_reveal_starter_builds_a_deck_from_notebook_cells(
     tmp_path: Path,
 ) -> None:
     root, project = _project(
@@ -220,16 +301,6 @@ def test_reveal_starter_builds_a_deck_with_a_notebook_output(
         "marimo-studio/react",
         starter_key="reveal",
     )
-    source = root / "src" / "App.tsx"
-    source.write_text(
-        source.read_text(encoding="utf-8").replace(
-            "      <h2>Place results in the argument</h2>",
-            "      <h2>Place results in the argument</h2>\n"
-            '      <marimo-output value="summary" />',
-        ),
-        encoding="utf-8",
-    )
-
     inspection = _inspect(react_provider, project)
     files = root / ".artifacts" / ".staging" / "reveal-starter" / "files"
     files.mkdir(parents=True)
@@ -239,7 +310,7 @@ def test_reveal_starter_builds_a_deck_with_a_notebook_output(
     )
 
     assert [(site.kind, site.allowed_targets) for site in inspection.mounts] == [
-        ("output", ("summary",))
+        ("cell", ("cell-2",)),
     ]
     assert report.document is not None
 

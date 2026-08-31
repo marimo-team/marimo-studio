@@ -64,34 +64,9 @@ body {
   text-transform: uppercase;
 }
 
-.deck-lede {
-  max-width: 28ch;
-  color: #4f554d;
-  font-size: 0.9em;
-  line-height: 1.5;
-}
-
-.result-frame {
-  max-width: 26em;
-  padding: 1.2em 1.35em;
-  border: 1px solid #aebbad;
-  border-radius: 0.3em;
-  background: #fbfaf6;
-}
-
-.result-frame p {
-  margin-top: 0;
-}
-
-.result-frame code {
-  color: #244a35;
-  font-size: 0.62em;
-}
-
-.claim-list {
-  display: grid;
-  gap: 0.65em;
-  max-width: 20em;
+marimo-cell {
+  display: block;
+  min-width: 0;
 }
 
 .reveal.studio-deck .controls,

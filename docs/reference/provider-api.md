@@ -47,7 +47,7 @@ class ViewProvider(Protocol):
         self,
         starter: ProviderStarter,
         context: StarterContext,
-    ) -> Mapping[PurePosixPath, bytes]: ...
+    ) -> StarterPlan: ...
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection: ...
 
@@ -67,9 +67,62 @@ title, summary, and required files. Studio qualifies the local key with the
 provider key. Local key `default` from `acme-views/report` becomes
 `acme-views/report:default`.
 
-`create()` returns the provider-owned files. Studio writes `view.toml` and the
-workspace ignore rules. Starting files cannot claim Studio control paths such
-as `view.toml`, `.artifacts/`, `.locks/`, or `.gitignore`.
+`StarterContext.notebook` is a detached `NotebookSpec` for a saved notebook
+revision. Its ordered cells include source, kind, name, literal Markdown,
+configuration, definitions, references, and dependency edges. The revision
+changes when any provider-visible field changes. Static inspection compiles
+this metadata and leaves cell bodies unexecuted.
+
+`StarterContext.cell_targets` maps each ordinary cell to a
+`StarterCellTarget`. The target uses a native cell name, an existing Studio
+alias, or a collision-free alias proposed for an anonymous cell. Generated
+source uses `target.target` and returns the records it consumed through
+`StarterPlan.cell_targets`:
+
+```python
+import html
+from pathlib import PurePosixPath
+
+from marimo_studio.view_providers import StarterPlan
+
+ENTRY = PurePosixPath("index.html")
+
+
+def create(starter, context):
+    selected = tuple(
+        context.cell_targets[cell.ref]
+        for cell in context.notebook.cells
+        if cell.kind == "cell" and not cell.config.disabled
+        if cell.displays_output
+    )
+    cells = "\n".join(
+        f'<marimo-cell name="{html.escape(item.target, quote=True)}"></marimo-cell>'
+        for item in selected
+    )
+    document = f'<main id="app-shell">{cells}</main>'
+    return StarterPlan(
+        files={ENTRY: document.encode()},
+        cell_targets=selected,
+    )
+```
+
+Studio validates `StarterPlan.cell_targets` against the supplied context, then
+commits required aliases with the project files. A notebook change or alias
+conflict before commit rejects the complete creation transaction. The
+provider's `inspect()` implementation reports mount sites and their allowed
+target sets after the project exists.
+
+Studio may call `create()` twice when notebook-local configuration changes
+source locations. The accepted call receives the prospective committed
+notebook. Return the same selected `cell_targets` for both calls.
+
+`create()` receives saved notebook code. Install a provider when its package is
+trusted with that source. Runtime values and cell outputs reach the generated
+page through Studio projections when the view runs.
+
+`StarterPlan.files` contains provider-owned files. Studio writes `view.toml`
+and the workspace ignore rules. Starting files cannot claim Studio control
+paths such as `view.toml`, `.artifacts/`, `.locks/`, or `.gitignore`.
 
 ## Inspect the current project
 
@@ -109,6 +162,7 @@ before making the page available.
 ## Minimal provider
 
 ```python
+import html
 import shutil
 from pathlib import PurePosixPath
 
@@ -121,6 +175,7 @@ from marimo_studio.view_providers import (
     ProviderInfo,
     ProviderStarter,
     SourceDocument,
+    StarterPlan,
 )
 
 ENTRY = PurePosixPath("index.html")
@@ -146,14 +201,16 @@ class ReportProvider:
         return (self.starter,)
 
     def create(self, starter, context):
-        return {
-            ENTRY: b'''<!doctype html>
+        title = context.notebook.app_config.get("app_title")
+        if not isinstance(title, str) or not title.strip():
+            title = context.notebook_name.replace("-", " ").title()
+        document = f'''<!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"><title>Report</title></head>
+  <head><meta charset="utf-8"><title>{html.escape(title)}</title></head>
   <body><main id="app-shell"></main></body>
 </html>
 '''
-        }
+        return StarterPlan(files={ENTRY: document.encode()}, cell_targets=())
 
     def inspect(self, request):
         manifest = PurePosixPath("view.toml")

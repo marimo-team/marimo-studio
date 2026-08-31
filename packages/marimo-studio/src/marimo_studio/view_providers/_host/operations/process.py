@@ -7,9 +7,9 @@ import math
 import os
 import stat
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TypeVar, cast
 
@@ -24,23 +24,25 @@ from marimo_studio.view_providers import (
     ProviderInfo,
     ProviderStarter,
     StarterContext,
+    StarterPlan,
     ViewProject,
 )
 
 from .codec import (
     availability_from_payload,
     build_result_from_payload,
-    created_files_from_payload,
     inspection_from_payload,
     inspection_payload,
     project_payload,
     provider_info_from_payload,
     starter_context_payload,
     starter_payload,
+    starter_plan_from_payload,
     starters_from_payload,
 )
 
 _RESULT_LIMIT = 16 * 1024 * 1024
+_REQUEST_LIMIT = 128 * 1024 * 1024
 _PROVIDER_OPERATION_OVERHEAD = 10.0
 DEFAULT_PROVIDER_EXTENSION_TIMEOUT = 10.0
 _Decoded = TypeVar("_Decoded")
@@ -189,7 +191,7 @@ def create_in_provider_process(
     context: StarterContext,
     cancellation: ProviderCancellation,
     timeout: float = DEFAULT_PROVIDER_EXTENSION_TIMEOUT,
-) -> Mapping[PurePosixPath, bytes]:
+) -> StarterPlan:
     value = _run_provider_process(
         {
             "schema": 1,
@@ -202,9 +204,9 @@ def create_in_provider_process(
         },
         cancellation,
         timeout,
-        decoder=created_files_from_payload,
+        decoder=starter_plan_from_payload,
     )
-    return cast(Mapping[PurePosixPath, bytes], value)
+    return cast(StarterPlan, value)
 
 
 def _operation_timeout(command_timeout: float) -> float:
@@ -214,6 +216,24 @@ def _operation_timeout(command_timeout: float) -> float:
             "Provider command timeout leaves no room for operation cleanup"
         )
     return timeout
+
+
+def _write_request(path: Path, payload: dict[str, object]) -> None:
+    encoder = json.JSONEncoder(
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    total = 0
+    with path.open("wb") as stream:
+        for chunk in encoder.iterencode(payload):
+            encoded = chunk.encode("utf-8")
+            total += len(encoded)
+            if total > _REQUEST_LIMIT:
+                raise ProviderOperationError(
+                    "Provider operation request exceeds the "
+                    f"{_REQUEST_LIMIT}-byte limit"
+                )
+            stream.write(encoded)
 
 
 def _run_provider_process(
@@ -232,10 +252,7 @@ def _run_provider_process(
             root = Path(directory)
             request_path = root / "request.json"
             response_path = root / "response.json"
-            request_path.write_text(
-                json.dumps(payload, ensure_ascii=True, separators=(",", ":")),
-                encoding="utf-8",
-            )
+            _write_request(request_path, payload)
             try:
                 completed = supervisor.run(
                     [

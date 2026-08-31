@@ -21,7 +21,6 @@ from marimo_studio.view_providers import (
     ProviderInfo,
     SourceDocument,
     SourceLocation,
-    StarterContext,
     ViewProject,
 )
 from marimo_studio.view_providers._host import conformance as conformance_module
@@ -35,6 +34,7 @@ from ..provider_test_support import (
     candidate,
     inspection,
     provider_build_request,
+    provider_starter_context,
 )
 
 pytestmark = pytest.mark.supported_python
@@ -139,6 +139,7 @@ def test_input_scope_excludes_undeclared_dependency_directories(
 )
 def test_starter_files_cannot_claim_core_or_ambiguous_paths(
     files: dict[PurePosixPath, bytes],
+    tmp_path: Path,
 ) -> None:
     provider = ProviderStub("example/html", "html")
     provider.plan = files
@@ -148,8 +149,47 @@ def test_starter_files_cannot_claim_core_or_ambiguous_paths(
     with pytest.raises(ConfigurationError, match=r"reserves|colliding|overlapping"):
         installed.create(
             provider.starter,
-            StarterContext("dashboard", "notebook"),
+            provider_starter_context(tmp_path),
         )
+
+
+def test_starter_plan_uses_targets_from_its_notebook_context(
+    tmp_path: Path,
+) -> None:
+    provider = ProviderStub("example/html", "html")
+    context = provider_starter_context(tmp_path)
+    target = next(iter(context.cell_targets.values()))
+    provider.plan_cell_targets = (replace(target, target="another-cell"),)
+    registry = ProviderRegistry((candidate("html", provider),))
+
+    with pytest.raises(ConfigurationError, match="undeclared cell target"):
+        registry.get(registry.ids[0]).create(provider.starter, context)
+
+
+def test_starter_context_limits_aggregate_graph_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = ProviderStub("example/html", "html")
+    context = provider_starter_context(tmp_path)
+    registry = ProviderRegistry((candidate("html", provider),))
+    monkeypatch.setattr(conformance_module, "_MAX_STARTER_METADATA_RECORDS", 0)
+
+    with pytest.raises(ConfigurationError, match="graph and symbol metadata"):
+        registry.get(registry.ids[0]).create(provider.starter, context)
+
+
+def test_starter_context_limits_encoded_size_before_transport(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = ProviderStub("example/html", "html")
+    context = provider_starter_context(tmp_path)
+    registry = ProviderRegistry((candidate("html", provider),))
+    monkeypatch.setattr(conformance_module, "_MAX_STARTER_CONTEXT_BYTES", 1)
+
+    with pytest.raises(ConfigurationError, match="encoded starter notebook context"):
+        registry.get(registry.ids[0]).create(provider.starter, context)
 
 
 def test_provider_cannot_expose_the_core_manifest_in_the_editor(
@@ -693,6 +733,7 @@ def test_provider_starter_files_respect_the_project_input_budget(
     budget: FileBudget,
     files: dict[PurePosixPath, bytes],
     message: str,
+    tmp_path: Path,
 ) -> None:
     provider = ProviderStub("example/html", "html")
     provider.plan = files
@@ -701,4 +742,4 @@ def test_provider_starter_files_respect_the_project_input_budget(
     installed = registry.get(registry.ids[0])
 
     with pytest.raises(ConfigurationError, match=message):
-        installed.create(provider.starter, StarterContext("dashboard", "notebook"))
+        installed.create(provider.starter, provider_starter_context(tmp_path))

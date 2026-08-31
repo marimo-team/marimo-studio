@@ -25,17 +25,21 @@ from marimo_studio.view_providers import (
     ProviderInfo,
     ProviderStarter,
     StarterContext,
+    StarterPlan,
     ViewProject,
 )
 from marimo_studio.view_providers._bundled import _deno
 from marimo_studio.view_providers._bundled._deno.project import ProviderProjectSpec
 from marimo_studio.view_providers._bundled._starters import (
-    starter_catalog,
-    starter_files,
+    create_starter,
+    provider_starters,
 )
 from marimo_studio.view_providers._bundled.deno_react.build import (
     build_react,
     react_project_diagnostics,
+)
+from marimo_studio.view_providers._bundled.deno_react.starters import (
+    catalog as _STARTERS,
 )
 
 PROVIDER_KEY = "marimo-studio/react"
@@ -68,47 +72,6 @@ _EDITOR_LANGUAGES = {
     ".ts": "typescript",
     ".tsx": "typescriptreact",
 }
-_SUPPORT_DOCUMENTS = (
-    PurePosixPath("src/marimo-studio.d.ts"),
-    PurePosixPath("src/lib/use-marimo-value.ts"),
-)
-_DEFAULT_DOCUMENTS = (
-    PurePosixPath("AGENTS.md"),
-    PurePosixPath("src/App.tsx"),
-    *_SUPPORT_DOCUMENTS,
-    PurePosixPath("src/main.tsx"),
-    PurePosixPath("src/index.html"),
-    PurePosixPath("src/style.css"),
-    PurePosixPath("deno.json"),
-    PurePosixPath("deno.lock"),
-)
-_REVEAL_DOCUMENTS = (
-    PurePosixPath("AGENTS.md"),
-    PurePosixPath("src/App.tsx"),
-    *_SUPPORT_DOCUMENTS,
-    PurePosixPath("src/main.tsx"),
-    PurePosixPath("src/index.html"),
-    PurePosixPath("src/style.css"),
-    PurePosixPath("deno.json"),
-    PurePosixPath("deno.lock"),
-)
-_STARTERS = starter_catalog(
-    ProviderStarter(
-        key="default",
-        title="React",
-        summary=(
-            "A typed React application with Studio projection elements and a "
-            "live-value hook."
-        ),
-        documents=_DEFAULT_DOCUMENTS,
-    ),
-    ProviderStarter(
-        key="reveal",
-        title="Reveal.js slides",
-        summary="A React slide deck with Reveal.js and Studio notebook projections.",
-        documents=_REVEAL_DOCUMENTS,
-    ),
-)
 _PROJECT = ProviderProjectSpec(
     provider_id=PROVIDER_KEY,
     analyzer_package="marimo_studio.view_providers._bundled.deno_react",
@@ -147,14 +110,14 @@ class DenoReactProvider:
         return _deno.deno_availability()
 
     def starters(self) -> tuple[ProviderStarter, ...]:
-        return tuple(_STARTERS.values())
+        return provider_starters(_STARTERS)
 
     def create(
         self,
         starter: ProviderStarter,
         context: StarterContext,
-    ) -> dict[PurePosixPath, bytes]:
-        return starter_files(__name__, _STARTERS, starter, context)
+    ) -> StarterPlan:
+        return create_starter(_STARTERS, starter, context)
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         project = request.project

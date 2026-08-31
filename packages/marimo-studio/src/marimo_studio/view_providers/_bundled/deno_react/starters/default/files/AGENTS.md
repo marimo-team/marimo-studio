@@ -13,6 +13,10 @@ agents.
 
 ## Use the supplied Studio integration
 
+`NOTEBOOK_CELLS` in `src/App.tsx` starts with each enabled notebook cell that
+displays an output or literal Markdown, in document order. Keep, reorder, group,
+or replace those targets as the component design develops.
+
 - `src/marimo-studio.d.ts` types the Studio custom elements and attributes for
   React. Keep the reference at the top of `src/App.tsx`. Extend application
   types in a separate declaration when the page introduces its own elements.

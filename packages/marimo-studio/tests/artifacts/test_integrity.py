@@ -43,6 +43,7 @@ from marimo_studio.view_providers import (
     ProviderAvailability,
     ProviderStarter,
     StarterContext,
+    StarterPlan,
     ViewProject,
 )
 from marimo_studio.view_providers._bundled.vanilla import provider as vanilla_provider
@@ -120,7 +121,7 @@ class _ExternalVanillaProvider:
         self,
         starter: ProviderStarter,
         context: StarterContext,
-    ) -> dict[PurePosixPath, bytes]:
+    ) -> StarterPlan:
         raise ValueError((starter.key, context))
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:

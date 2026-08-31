@@ -13,6 +13,10 @@ agents.
 
 ## Use the supplied Studio integration
 
+`notebookCells` in `src/App.svelte` starts with each enabled notebook cell that
+displays an output or literal Markdown, in document order. Keep, reorder, group,
+or replace those targets as the component design develops.
+
 - `src/app.d.ts` adds Studio attributes to Svelte's element types.
 - `src/lib/marimo-value.ts` supplies the `observeMarimoValue` action. Attach it
   to an explicit `mo-value` host so Studio can inspect and authorize the

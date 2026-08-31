@@ -8,6 +8,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Any
 
+import marimo
 import pytest
 from click.testing import CliRunner
 
@@ -18,6 +19,29 @@ from marimo_studio.errors import AgentRequestError
 from marimo_studio.view_providers._host import provider_registry
 
 from ..helpers import replace_app_shell
+
+
+def _display_notebook_source(cell_count: int) -> str:
+    cells = "\n\n".join(
+        f"""\
+@app.cell
+def cell_{index}():
+    "Cell {index}"
+    return
+"""
+        for index in range(cell_count)
+    )
+    return f'''\
+import marimo
+
+__generated_with = "{marimo.__version__}"
+app = marimo.App()
+
+{cells}
+
+if __name__ == "__main__":
+    app.run()
+'''
 
 
 def test_structured_diagnostics_group_multiline_process_output(
@@ -228,6 +252,43 @@ def test_main_structures_configuration_errors(
     assert event["code"] == "configuration-error"
     assert event["severity"] == "error"
     assert event["exit_code"] == 3
+
+
+def test_view_create_recovers_after_the_starter_target_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    notebook = tmp_path / "large.py"
+    source = _display_notebook_source(257)
+    notebook.write_text(source, encoding="utf-8")
+    argv = [
+        "marimo-studio",
+        "view",
+        "create",
+        "dashboard",
+        "--target",
+        str(notebook),
+        "--json",
+    ]
+    monkeypatch.setattr(sys, "argv", argv)
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    rejected = capsys.readouterr()
+    event = json.loads(rejected.err)
+    assert raised.value.code == 3
+    assert event["code"] == "configuration-error"
+    assert "limits starter plan cell targets to 256 records" in event["message"]
+    assert notebook.read_text(encoding="utf-8") == source
+    assert not tmp_path.joinpath("__marimo__").exists()
+
+    notebook.write_text(_display_notebook_source(1), encoding="utf-8")
+    main()
+
+    accepted = capsys.readouterr()
+    assert json.loads(accepted.out)["view"] == "dashboard"
 
 
 @pytest.mark.native_process

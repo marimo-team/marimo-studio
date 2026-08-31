@@ -113,7 +113,8 @@ marimo-studio notebook bind summary --target analysis.py --cell 12
 ```
 
 Studio stores aliases under `[tool.marimo-studio.cells]` and makes them
-available to every view.
+available to every view. View creation adds collision-free aliases for
+anonymous cells placed by the selected starter.
 
 ## Rename a notebook
 

@@ -38,12 +38,15 @@ needs a different layout, explanation, or interaction for another audience.
 ## Choose how to build the page
 
 The default page keeps its HTML, styles, and browser code in one editable file.
-It is the shortest path for reports, dashboards, and focused tools.
+It starts with enabled cells that display output or literal Markdown in document
+order, which gives reports, dashboards, and focused tools an editable first page
+immediately.
 
 Choose React or Svelte when the page benefits from components and a larger
 frontend source tree. Use the `marimo-studio/react:reveal` starter for a React
-slide deck. Install `marimo-studio[deno]` in that environment so Studio can
-build those files with the pinned Deno toolchain.
+slide deck with one initial slide per enabled display cell. Install
+`marimo-studio[deno]` in that environment so Studio can build those files with
+the pinned Deno toolchain.
 
 Teams can connect another frontend build when an existing project should remain
 the source of the page. The [frontend integration

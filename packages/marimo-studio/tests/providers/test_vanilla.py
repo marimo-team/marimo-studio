@@ -11,10 +11,11 @@ from marimo_studio._workspace.project_manifest import (
     encode_view_manifest,
     load_view_project,
 )
-from marimo_studio.view_providers import StarterContext, ViewProject
+from marimo_studio.view_providers import ViewProject
 from marimo_studio.view_providers._bundled.vanilla import provider
 
-from ..provider_test_support import provider_build_request
+from ..helpers import no_display_notebook_source
+from ..provider_test_support import provider_build_request, provider_starter_context
 
 
 def _write_files(root: Path, files: dict[PurePosixPath, bytes]) -> ViewProject:
@@ -30,11 +31,15 @@ def _write_files(root: Path, files: dict[PurePosixPath, bytes]) -> ViewProject:
 
 
 def _project(tmp_path: Path) -> ViewProject:
-    files = provider.create(
+    plan = provider.create(
         provider.starters()[0],
-        StarterContext("overview", "nga"),
+        provider_starter_context(
+            tmp_path,
+            view_name="overview",
+            notebook_name="analysis",
+        ),
     )
-    return _write_files(tmp_path / "overview", dict(files))
+    return _write_files(tmp_path / "overview", dict(plan.files))
 
 
 class _ProjectionTags(HTMLParser):
@@ -52,6 +57,33 @@ class _ProjectionTags(HTMLParser):
             self.tags.append((tag, attributes))
 
     handle_startendtag = handle_starttag
+
+
+def test_vanilla_starter_exposes_its_generated_notebook_cell(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+
+    inspection = provider.inspect(inspection_request(project))
+
+    assert [(site.kind, site.allowed_targets) for site in inspection.mounts] == [
+        ("cell", ("cell-2",)),
+    ]
+
+
+def test_vanilla_starter_builds_without_display_cells(tmp_path: Path) -> None:
+    tmp_path.joinpath("analysis.py").write_text(
+        no_display_notebook_source(),
+        encoding="utf-8",
+    )
+    project = _project(tmp_path)
+    inspection = provider.inspect(inspection_request(project))
+    files = project.root / ".artifacts" / ".staging" / "zero-display" / "files"
+    files.mkdir(parents=True)
+
+    report = provider.build(provider_build_request(project, inspection, files))
+
+    assert inspection.diagnostics == ()
+    assert inspection.mounts == ()
+    assert report.document is not None
 
 
 @pytest.mark.parametrize(

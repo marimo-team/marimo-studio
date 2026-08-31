@@ -16,6 +16,8 @@
   </header>
 
   {#if resultsVisible}
-    <section class="results" aria-label="Notebook results"></section>
+    <section class="results" aria-label="Notebook results">
+      __NOTEBOOK_CELL_HOSTS_SVELTE__
+    </section>
   {/if}
 </div>

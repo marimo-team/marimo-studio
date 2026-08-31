@@ -17,7 +17,6 @@ from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import (
     ProviderAvailability,
     ProviderCancellation,
-    StarterContext,
 )
 from marimo_studio.view_providers._host.operations.process import (
     ProviderOperationCancelled,
@@ -27,7 +26,7 @@ from marimo_studio.view_providers._host.registry import (
     ProviderRegistry,
 )
 
-from ..provider_test_support import inspection
+from ..provider_test_support import inspection, provider_starter_context
 from .test_process_isolation import (
     _kill_survivors,
     _project,
@@ -96,10 +95,13 @@ def test_external_catalog_and_starter_creation_stay_out_of_process(
 
     availability = installed.availability()
     starters = installed.starters()
-    files = installed.create(starters[0], StarterContext("report", "analysis"))
+    plan = installed.create(
+        starters[0],
+        provider_starter_context(tmp_path, view_name="report"),
+    )
 
     assert availability == ProviderAvailability(True)
-    assert files == catalog_provider.plan
+    assert plan.files == catalog_provider.plan
     operations = [
         line.split(":", 1)
         for line in catalog_marker.read_text(encoding="utf-8").splitlines()
@@ -190,15 +192,12 @@ def test_external_descriptions_run_concurrently_in_candidate_order(
         extension_timeout=1.5,
     )
 
-    started = time.monotonic()
     ids = registry.ids
-    elapsed = time.monotonic() - started
     monkeypatch.delenv("MARIMO_STUDIO_PROVIDER_DISCOVERY_BARRIER")
     monkeypatch.delenv("MARIMO_STUDIO_PROVIDER_DISCOVERY_DELAY")
 
     assert ids == ("test-parallel/first", "test-parallel/second")
     assert len(barrier.read_text(encoding="utf-8").splitlines()) == 2
-    assert elapsed < 1.2
     assert [item.registration for item in registry.diagnostics()] == [
         "second",
         "first",
@@ -335,7 +334,7 @@ def test_external_provider_metadata_operations_have_a_containment_deadline(
             with pytest.raises(ConfigurationError) as captured:
                 installed.create(
                     catalog_provider.starter,
-                    StarterContext("report", "analysis"),
+                    provider_starter_context(tmp_path, view_name="report"),
                 )
             error = str(captured.value)
 

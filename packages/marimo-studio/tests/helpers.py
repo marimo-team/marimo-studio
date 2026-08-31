@@ -73,6 +73,38 @@ def empty_notebook_source() -> str:
     )
 
 
+def no_display_notebook_source() -> str:
+    return (
+        "import marimo\n"
+        "\n"
+        f'__generated_with = "{marimo.__version__}"\n'
+        'app = marimo.App(app_title="No display results")\n'
+        "\n"
+        "\n"
+        "@app.cell\n"
+        "def producer():\n"
+        "    value = 1\n"
+        "    return (value,)\n"
+        "\n"
+        "\n"
+        "@app.cell\n"
+        "def consumer(value):\n"
+        "    hidden = value * 2\n"
+        "    hidden;\n"
+        "    return (hidden,)\n"
+        "\n"
+        "\n"
+        "@app.cell(disabled=True)\n"
+        "def disabled_output():\n"
+        '    "Disabled output"\n'
+        "    return\n"
+        "\n"
+        "\n"
+        'if __name__ == "__main__":\n'
+        "    app.run()\n"
+    )
+
+
 def notebook_source(marker: Path, *, dependencies: tuple[str, ...] = ()) -> str:
     metadata = ""
     if dependencies:

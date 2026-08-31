@@ -22,7 +22,6 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from contextvars import Context, copy_context
 from dataclasses import dataclass
 from importlib.metadata import EntryPoint, entry_points
-from pathlib import PurePosixPath
 from threading import Lock, RLock
 from typing import cast
 
@@ -50,6 +49,7 @@ from marimo_studio.view_providers import (
     ProviderInfo,
     ProviderStarter,
     StarterContext,
+    StarterPlan,
     ViewProject,
     ViewProvider,
 )
@@ -233,10 +233,11 @@ class _RegisteredProvider:
         self,
         starter: ProviderStarter,
         context: StarterContext,
-    ) -> Mapping[PurePosixPath, bytes]:
+    ) -> StarterPlan:
         self._conformance.validate_starters((starter,))
+        context = self._conformance.validate_starter_context(context)
         try:
-            files = (
+            plan = (
                 create_in_provider_process(
                     self._process,
                     starter,
@@ -256,7 +257,7 @@ class _RegisteredProvider:
                 f"View provider {self.key!r} could not create starter "
                 f"{starter.key!r}: {type(error).__name__}: {error}"
             ) from error
-        return self._conformance.validate_created_files(starter, files)
+        return self._conformance.validate_starter_plan(starter, context, plan)
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         request = self._conformance.validate_inspection_request(request)

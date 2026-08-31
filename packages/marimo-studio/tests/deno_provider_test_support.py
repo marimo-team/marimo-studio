@@ -14,10 +14,11 @@ from marimo_studio.view_providers import (
     BuildRequest,
     BuildResult,
     ProjectInspection,
-    StarterContext,
     ViewProject,
     ViewProvider,
 )
+
+from .provider_test_support import provider_starter_context
 
 
 def write_plan(
@@ -46,11 +47,15 @@ def project(
     provider_name = provider_id.rsplit("/", 1)[-1]
     suffix = "" if starter_key == "default" else f"-{starter_key}"
     root = tmp_path / f"{provider_name}{suffix}"
-    files = provider.create(
+    plan = provider.create(
         starter,
-        StarterContext("research-view", "nga"),
+        provider_starter_context(
+            tmp_path,
+            view_name="research-view",
+            notebook_name="analysis",
+        ),
     )
-    write_plan(root, files, provider_id)
+    write_plan(root, plan.files, provider_id)
     return root, load_view_project(root)
 
 

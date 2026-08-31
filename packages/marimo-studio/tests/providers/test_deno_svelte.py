@@ -17,6 +17,7 @@ from marimo_studio.view_providers._host import provider_registry
 from ..deno_provider_test_support import build_provider as _build
 from ..deno_provider_test_support import inspect_provider as _inspect
 from ..deno_provider_test_support import project as _project
+from ..helpers import no_display_notebook_source
 from ..provider_test_support import provider_build_request
 
 pytestmark = [
@@ -99,6 +100,77 @@ def test_svelte_inspection_tracks_literal_site_identity_and_kind(
 
     assert [item.code for item in conflict.diagnostics] == ["projection-kind-conflict"]
     assert conflict.mounts == ()
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
+def test_svelte_default_starter_declares_notebook_cell_targets(
+    tmp_path: Path,
+) -> None:
+    _root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
+
+    inspection = _inspect(svelte_provider, project)
+
+    assert [(site.kind, site.allowed_targets) for site in inspection.mounts] == [
+        ("cell", ("cell-2",)),
+    ]
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
+def test_svelte_keeps_mutated_static_domains_fail_closed(
+    tmp_path: Path,
+) -> None:
+    root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
+    (root / "src" / "App.svelte").write_text(
+        """<script lang="ts">
+  const cells = ["summary"];
+  cells.pop();
+</script>
+
+{#each cells as name}
+  <p>{name}</p>
+{:else}
+  <marimo-cell name="fallback" data-marimo-studio-site="forged"></marimo-cell>
+{/each}
+""",
+        encoding="utf-8",
+    )
+
+    inspection = _inspect(svelte_provider, project)
+
+    assert [item.code for item in inspection.diagnostics] == [
+        "projection-site-reserved"
+    ]
+    assert inspection.mounts == ()
+
+
+@pytest.mark.skipif(
+    not _deno.deno_availability().available,
+    reason="marimo-studio[deno] is unavailable",
+)
+def test_svelte_starter_builds_without_display_cells(tmp_path: Path) -> None:
+    tmp_path.joinpath("analysis.py").write_text(
+        no_display_notebook_source(),
+        encoding="utf-8",
+    )
+    root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
+    inspection = _inspect(svelte_provider, project)
+    files = root / ".artifacts" / ".staging" / "zero-display" / "files"
+    files.mkdir(parents=True)
+
+    report = _build(
+        svelte_provider,
+        provider_build_request(project, inspection, files),
+    )
+
+    assert inspection.diagnostics == ()
+    assert inspection.mounts == ()
+    assert report.document is not None
 
 
 @pytest.mark.skipif(

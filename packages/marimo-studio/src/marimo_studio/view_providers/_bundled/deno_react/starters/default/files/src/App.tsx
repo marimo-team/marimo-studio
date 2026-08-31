@@ -9,6 +9,8 @@ export const App = () => (
       <p>{NOTEBOOK_LABEL}</p>
       <h1>{VIEW_HEADING}</h1>
     </header>
-    <section className="results" aria-label="Notebook results" />
+    <section className="results" aria-label="Notebook results">
+      __NOTEBOOK_CELL_HOSTS_TSX__
+    </section>
   </div>
 );

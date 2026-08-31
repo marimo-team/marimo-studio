@@ -5,7 +5,7 @@ import re
 import shutil
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from threading import Barrier
 
 import marimo
@@ -14,7 +14,8 @@ import pytest
 import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._views.create as create_module
 import marimo_studio._workspace.transactions as workspace_transactions
-from marimo_studio._views.api import prepare_view
+from marimo_studio import inspect_notebook
+from marimo_studio._views.api import create_view, prepare_view
 from marimo_studio._views.inspection import inspect_view_project_sync
 from marimo_studio._views.remove import delete_view
 from marimo_studio._views.resolve import resolve_studio
@@ -24,8 +25,13 @@ from marimo_studio._workspace.metadata import (
     read_notebook_metadata,
 )
 from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
-from marimo_studio.errors import ConfigurationError, NotebookSourceError
+from marimo_studio.errors import (
+    ConfigurationError,
+    NotebookSourceError,
+    ViewExistsError,
+)
 from marimo_studio.errors._internal import WorkspaceInitializationError
+from marimo_studio.view_providers import StarterPlan
 from marimo_studio.view_providers._bundled.vanilla import provider as vanilla_provider
 
 from ..helpers import empty_notebook_source
@@ -56,8 +62,9 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
     assert "marimo-studio" in document["dependencies"]
     assert notebook_path.read_text(encoding="utf-8").endswith(original)
     assert re.search(r"<h1[^>]*>\s*Dashboard\s*</h1>", document_source)
-    assert document["tool"]["marimo-studio"].get("cells", {}) == {}
-    assert resolve_studio(studio).aliases == {}
+    assert set(document["tool"]["marimo-studio"]["cells"]) == {"cell-2"}
+    assert set(resolve_studio(studio).aliases) == {"cell-2"}
+    assert '<marimo-cell name="cell-2"></marimo-cell>' in document_source
     dashboard = studio.views["dashboard"].root / "index.html"
     dashboard.write_text(
         dashboard.read_text(encoding="utf-8").replace(
@@ -75,6 +82,41 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
     ) == {"/.locks/", "*/.artifacts/"}
     assert report.joinpath("index.html").is_file()
     assert not report.joinpath(".artifacts").exists()
+
+
+def test_first_view_publishes_a_complete_workspace_to_readers(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    replace_file = secure_files.SecureDirectory.replace_file_if_identity
+    observed: list[StudioWorkspace] = []
+
+    def observe_configuration_publication(
+        filesystem: secure_files.SecureDirectory,
+        path: Path,
+        content: bytes,
+        expected: secure_files.FileIdentity,
+    ) -> secure_files.FileIdentity:
+        committed = replace_file(filesystem, path, content, expected)
+        if path == notebook_path:
+            observed.append(load_studio(notebook_path))
+        return committed
+
+    monkeypatch.setattr(
+        secure_files.SecureDirectory,
+        "replace_file_if_identity",
+        observe_configuration_publication,
+    )
+
+    prepared = prepare_view(notebook_path)
+
+    assert prepared.workspace is not None
+    assert observed
+    assert all(tuple(workspace.views) == ("dashboard",) for workspace in observed)
+    assert all(
+        workspace.views["dashboard"].root.joinpath("index.html").is_file()
+        for workspace in observed
+    )
 
 
 def test_repeated_and_dry_run_setup_report_file_changes(
@@ -109,6 +151,57 @@ def test_concurrent_view_setup_serializes_the_same_view_name(
     assert {result.provider for result in results} == {"marimo-studio/vanilla"}
     studio = load_studio(notebook_path)
     assert tuple(studio.views) == ("dashboard",)
+
+
+def test_different_starters_racing_for_one_name_publish_one_complete_project(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path, "dashboard")
+    start = Barrier(2)
+
+    def create(starter: str) -> tuple[str, str | None]:
+        start.wait()
+        try:
+            result = create_view(
+                notebook_path,
+                "contested",
+                starter=starter,
+            )
+        except ViewExistsError:
+            return "conflict", None
+        return "created", result.provider
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = tuple(
+            executor.map(
+                create,
+                (
+                    "marimo-studio/react:default",
+                    "marimo-studio/svelte:default",
+                ),
+            )
+        )
+
+    assert sorted(status for status, _provider in results) == [
+        "conflict",
+        "created",
+    ]
+    winner = next(provider for status, provider in results if status == "created")
+    studio = load_studio(notebook_path)
+    project = studio.views["contested"]
+    inspection = inspect_view_project_sync(project)
+    assert project.provider == winner
+    assert project.manifest.is_file()
+    assert all(
+        project.root.joinpath(*item.path.parts).is_file()
+        for item in inspection.editor_documents
+    )
+    expected_entry = (
+        "src/App.tsx" if winner == "marimo-studio/react" else "src/App.svelte"
+    )
+    assert expected_entry in {
+        item.path.as_posix() for item in inspection.editor_documents
+    }
 
 
 def test_concurrent_first_view_threads_create_one_coherent_catalog(
@@ -167,11 +260,232 @@ default = "dashboard"
 
     monkeypatch.setattr(vanilla_provider, "create", change_catalog_after_planning)
 
-    with pytest.raises(ConfigurationError, match="catalog changed"):
+    with pytest.raises(ConfigurationError, match="configuration changed"):
         prepare_view(notebook_path, "report")
 
     assert calls == 2
     assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
+
+
+def test_notebook_change_after_starter_planning_rejects_the_transaction(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create = vanilla_provider.create
+
+    def change_notebook_after_planning(starter, context):
+        plan = create(starter, context)
+        notebook_path.write_text(
+            notebook_path.read_text(encoding="utf-8").replace(
+                "doubled = x * 2",
+                "doubled = x * 3",
+            ),
+            encoding="utf-8",
+        )
+        return plan
+
+    monkeypatch.setattr(
+        vanilla_provider,
+        "create",
+        change_notebook_after_planning,
+    )
+
+    with pytest.raises(ConfigurationError, match="notebook changed"):
+        prepare_view(notebook_path)
+
+    assert "doubled = x * 3" in notebook_path.read_text(encoding="utf-8")
+    assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
+
+
+def test_starter_uses_committed_notebook_source_locations(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create = vanilla_provider.create
+
+    def record_source_line(starter, context):
+        plan = create(starter, context)
+        source_line = str(context.notebook.cells[1].source.start_line).encode()
+        return StarterPlan(
+            files={
+                **plan.files,
+                PurePosixPath("source-line.txt"): source_line,
+            },
+            cell_targets=plan.cell_targets,
+        )
+
+    monkeypatch.setattr(vanilla_provider, "create", record_source_line)
+
+    result = prepare_view(notebook_path)
+    generated_line = int(result.root.joinpath("source-line.txt").read_text())
+    committed_line = inspect_notebook(notebook_path).cells[1].source.start_line
+
+    assert generated_line == committed_line
+
+
+def test_notebook_edit_before_transaction_is_preserved(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transaction = workspace_transactions.write_file_transaction
+
+    @contextmanager
+    def edit_before_transaction(
+        root,
+        writes,
+        *,
+        expected=None,
+        claimed_directories=None,
+    ):
+        notebook_path.write_text(
+            notebook_path.read_text(encoding="utf-8").replace(
+                "doubled = x * 2",
+                "doubled = x * 3",
+            ),
+            encoding="utf-8",
+        )
+        with transaction(
+            root,
+            writes,
+            expected=expected,
+            claimed_directories=claimed_directories,
+        ):
+            yield
+
+    monkeypatch.setattr(
+        create_module,
+        "write_file_transaction",
+        edit_before_transaction,
+    )
+
+    with pytest.raises(ConfigurationError, match="changed"):
+        prepare_view(notebook_path)
+
+    assert "doubled = x * 3" in notebook_path.read_text(encoding="utf-8")
+    assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
+
+
+def test_project_config_edit_before_transaction_is_preserved(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pyproject = notebook_path.parent / "pyproject.toml"
+    pyproject.write_text(
+        f'''\
+[tool.marimo-studio]
+notebook = "{notebook_path.name}"
+default = "dashboard"
+''',
+        encoding="utf-8",
+    )
+    transaction = workspace_transactions.write_file_transaction
+
+    @contextmanager
+    def edit_before_transaction(
+        root,
+        writes,
+        *,
+        expected=None,
+        claimed_directories=None,
+    ):
+        pyproject.write_text(
+            pyproject.read_text(encoding="utf-8") + "# concurrent edit\n",
+            encoding="utf-8",
+        )
+        with transaction(
+            root,
+            writes,
+            expected=expected,
+            claimed_directories=claimed_directories,
+        ):
+            yield
+
+    monkeypatch.setattr(
+        create_module,
+        "write_file_transaction",
+        edit_before_transaction,
+    )
+
+    with pytest.raises(ConfigurationError, match="changed"):
+        prepare_view(notebook_path)
+
+    assert pyproject.read_text(encoding="utf-8").endswith("# concurrent edit\n")
+    assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
+
+
+def test_project_alias_removed_during_starter_planning_stays_removed(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cell = inspect_notebook(notebook_path).cells[1]
+    pyproject = notebook_path.parent / "pyproject.toml"
+    alias = f'summary = {{ ref = "{cell.ref}" }}\n'
+    pyproject.write_text(
+        f'''\
+[tool.marimo-studio]
+notebook = "{notebook_path.name}"
+default = "dashboard"
+
+[tool.marimo-studio.cells]
+{alias}''',
+        encoding="utf-8",
+    )
+    create = vanilla_provider.create
+
+    def remove_alias_after_planning(starter, context):
+        plan = create(starter, context)
+        pyproject.write_text(
+            pyproject.read_text(encoding="utf-8").replace(alias, ""),
+            encoding="utf-8",
+        )
+        return plan
+
+    monkeypatch.setattr(vanilla_provider, "create", remove_alias_after_planning)
+
+    with pytest.raises(ConfigurationError, match="Studio configuration changed"):
+        prepare_view(notebook_path)
+
+    assert "summary" not in pyproject.read_text(encoding="utf-8")
+    assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
+
+
+def test_view_directory_created_before_transaction_is_preserved(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transaction = workspace_transactions.write_file_transaction
+    project_root = canonical_view_root(notebook_path) / "dashboard"
+    sentinel = project_root / "public" / "sentinel.js"
+
+    @contextmanager
+    def occupy_view_directory(
+        root,
+        writes,
+        *,
+        expected=None,
+        claimed_directories=None,
+    ):
+        sentinel.parent.mkdir(parents=True)
+        sentinel.write_text("concurrent", encoding="utf-8")
+        with transaction(
+            root,
+            writes,
+            expected=expected,
+            claimed_directories=claimed_directories,
+        ):
+            yield
+
+    monkeypatch.setattr(
+        create_module,
+        "write_file_transaction",
+        occupy_view_directory,
+    )
+
+    with pytest.raises(ConfigurationError, match="directory changed"):
+        prepare_view(notebook_path)
+
+    assert sentinel.read_text(encoding="utf-8") == "concurrent"
+    assert not (project_root / "view.toml").exists()
 
 
 def test_existing_view_inspection_runs_outside_mutation_locks(
@@ -326,7 +640,7 @@ def test_view_discovery_rejects_a_symlinked_view_directory(
         load_studio(notebook_path)
 
 
-def test_new_view_exposes_page_and_starter_instructions_without_mounts(
+def test_new_view_exposes_page_instructions_and_notebook_cells(
     notebook_path: Path,
 ) -> None:
     notebook_path.write_text(
@@ -340,7 +654,6 @@ def test_new_view_exposes_page_and_starter_instructions_without_mounts(
 
     result = prepare_view(notebook_path)
     inspection = inspect_view_project_sync(load_studio(notebook_path).view(result.name))
-    document = read_notebook_metadata(notebook_path)
 
     assert [
         (item.path.as_posix(), item.language, item.access)
@@ -349,9 +662,9 @@ def test_new_view_exposes_page_and_starter_instructions_without_mounts(
         ("index.html", "html", "edit"),
         ("AGENTS.md", "markdown", "edit"),
     ]
-    assert inspection.mounts == ()
-    assert document is not None
-    assert document["tool"]["marimo-studio"].get("cells", {}) == {}
+    assert [(mount.kind, mount.allowed_targets) for mount in inspection.mounts] == [
+        ("cell", ("cell-2",)),
+    ]
 
 
 def test_zero_cell_notebook_rejects_non_notebook_source(
@@ -417,41 +730,18 @@ def test_repeated_setup_preserves_crlf_metadata(tmp_path: Path) -> None:
     assert read_notebook_metadata(notebook) is not None
 
 
-def test_setup_rolls_back_notebook_and_view_files_after_write_failure(
+def test_setup_rolls_back_notebook_and_view_when_workspace_load_fails(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     original = notebook_path.read_bytes()
-    write = workspace_transactions.atomic_write_bytes
-    calls = 0
 
-    def fail_second_write(
-        path: Path,
-        content: bytes,
-        *,
-        root: Path | None = None,
-        filesystem: secure_files.SecureDirectory | None = None,
-        mode: int | None = None,
-    ) -> secure_files.FileIdentity:
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise OSError("simulated write failure")
-        return write(
-            path,
-            content,
-            root=root,
-            filesystem=filesystem,
-            mode=mode,
-        )
+    def fail_workspace_load(_target: Path) -> StudioWorkspace:
+        raise OSError("simulated workspace load failure")
 
-    monkeypatch.setattr(
-        workspace_transactions,
-        "atomic_write_bytes",
-        fail_second_write,
-    )
+    monkeypatch.setattr(create_module, "load_studio", fail_workspace_load)
 
-    with pytest.raises(OSError, match="simulated write failure"):
+    with pytest.raises(OSError, match="simulated workspace load failure"):
         prepare_view(notebook_path)
 
     assert notebook_path.read_bytes() == original
@@ -507,8 +797,8 @@ default = "executive"
     assert studio.config_path == pyproject
     assert studio.default_view == "executive"
     assert set(studio.views) == {"executive"}
-    assert studio.cells == {}
-    assert resolve_studio(studio).aliases == {}
+    assert set(studio.cells) == {"cell-2"}
+    assert set(resolve_studio(studio).aliases) == {"cell-2"}
     assert studio.view_root == notebook_dir / "__marimo__" / "studio" / notebook.stem
     assert notebook.read_bytes() == original
 

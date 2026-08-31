@@ -23,13 +23,14 @@ from marimo_studio._workspace.project_manifest import (
     encode_view_manifest,
     load_view_project,
 )
-from marimo_studio.view_providers import (
-    StarterContext,
-    ViewProvider,
-)
+from marimo_studio.view_providers import ViewProvider
 from marimo_studio.view_providers._host.registry import ProviderRegistry
 
-from ..provider_test_support import candidate, provider_build_request
+from ..provider_test_support import (
+    candidate,
+    provider_build_request,
+    provider_starter_context,
+)
 
 
 def _documentation_paths() -> tuple[Path, ...]:
@@ -219,10 +220,11 @@ def test_documented_provider_builds_a_complete_html_artifact(tmp_path) -> None:
     root = tmp_path / "report"
     root.mkdir()
     starter = installed.starters()[0]
-    for relative, payload in installed.create(
+    plan = installed.create(
         starter,
-        StarterContext("report", "analysis"),
-    ).items():
+        provider_starter_context(tmp_path, view_name="report"),
+    )
+    for relative, payload in plan.files.items():
         path = root.joinpath(*relative.parts)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(payload)

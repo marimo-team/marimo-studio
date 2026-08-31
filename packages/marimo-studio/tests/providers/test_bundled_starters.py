@@ -4,19 +4,28 @@ import importlib
 import sys
 from pathlib import Path, PurePosixPath
 
+import marimo
 import pytest
 
-from marimo_studio.view_providers import ProviderStarter, StarterContext
+from marimo_studio import inspect_notebook
+from marimo_studio._views.starter_context import starter_context
+from marimo_studio.view_providers import ProviderStarter
 from marimo_studio.view_providers._bundled._starters import (
+    BundledStarter,
+    StarterRendering,
+    create_starter,
     starter_catalog,
-    starter_files,
+    starter_cells,
 )
+from marimo_studio.view_providers._bundled.deno_react import provider as react_provider
+
+from ..provider_test_support import provider_starter_context
 
 
 def _fixture_package(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    files: dict[str, str],
+    files: dict[str, str | bytes],
 ) -> str:
     package = tmp_path / "bundled_starter_fixture"
     package.mkdir()
@@ -24,11 +33,16 @@ def _fixture_package(
     for relative, content in files.items():
         path = package / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        if isinstance(content, bytes):
+            path.write_bytes(content)
+        else:
+            path.write_text(content, encoding="utf-8")
     monkeypatch.syspath_prepend(str(tmp_path))
-    sys.modules.pop(package.name, None)
+    for module in tuple(sys.modules):
+        if module == package.name or module.startswith(f"{package.name}."):
+            sys.modules.pop(module)
     importlib.invalidate_caches()
-    return package.name
+    return f"{package.name}.default"
 
 
 def _starter() -> ProviderStarter:
@@ -40,7 +54,7 @@ def _starter() -> ProviderStarter:
     )
 
 
-def test_bundled_starter_rejects_overlapping_shared_files(
+def test_bundled_starter_reads_resources_from_its_leaf_package(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -48,16 +62,146 @@ def test_bundled_starter_rejects_overlapping_shared_files(
         tmp_path,
         monkeypatch,
         {
-            "starters/_shared/index.html": "shared",
-            "starters/default/index.html": "default",
+            "other/files/ignored.txt": "ignored",
+            "default/__init__.py": "",
+            "default/files/index.html": "default",
         },
     )
-    starter = _starter()
+    info = _starter()
+    starter = BundledStarter(
+        info=info,
+        package=package,
+        render=lambda _context: StarterRendering({}, ()),
+    )
 
-    with pytest.raises(ValueError, match=r"defines 'index\.html' more than once"):
-        starter_files(
-            package,
-            starter_catalog(starter),
-            starter,
-            StarterContext("dashboard", "analysis"),
-        )
+    plan = create_starter(
+        starter_catalog(starter),
+        info,
+        provider_starter_context(tmp_path),
+    )
+
+    assert plan.files == {PurePosixPath("index.html"): b"default"}
+
+
+def test_bundled_starter_preserves_binary_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image = b"\x89PNG\r\n\x1a\n\xff"
+    package = _fixture_package(
+        tmp_path,
+        monkeypatch,
+        {
+            "default/__init__.py": "",
+            "default/files/index.html": '<main id="app-shell"></main>',
+            "default/files/public/mark.png": image,
+        },
+    )
+    info = _starter()
+    starter = BundledStarter(
+        info=info,
+        package=package,
+        render=lambda _context: StarterRendering({}, ()),
+    )
+
+    plan = create_starter(
+        starter_catalog(starter),
+        info,
+        provider_starter_context(tmp_path),
+    )
+
+    assert plan.files[PurePosixPath("public/mark.png")] == image
+
+
+def test_reveal_starter_uses_markdown_title_and_notebook_cells(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "research_notes.py"
+    notebook.write_text(
+        f'''\
+import marimo
+
+__generated_with = "{marimo.__version__}"
+app = marimo.App()
+
+@app.cell
+def _():
+    import marimo as mo
+    return (mo,)
+
+@app.cell
+def introduction(mo):
+    mo.md(r"""
+    ````
+    # Fenced example
+    ```
+    ````
+
+    # **Evidence** C#
+
+    Current results.
+    """)
+    return
+
+if __name__ == "__main__":
+    app.run()
+''',
+        encoding="utf-8",
+    )
+    context = starter_context(
+        inspect_notebook(notebook, include_code=True),
+        None,
+        "slides",
+    )
+    starter = next(item for item in react_provider.starters() if item.key == "reveal")
+
+    plan = react_provider.create(starter, context)
+
+    source = plan.files[PurePosixPath("src/App.tsx")].decode()
+    assert 'const NOTEBOOK_TITLE = "Evidence C#";' in source
+    assert [target.target for target in plan.cell_targets] == ["introduction"]
+    assert "<marimo-cell name={target} />" in source
+
+
+def test_starter_cells_exclude_the_transitive_disabled_closure(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "disabled.py"
+    notebook.write_text(
+        f'''\
+import marimo
+
+__generated_with = "{marimo.__version__}"
+app = marimo.App()
+
+@app.cell(disabled=True)
+def producer():
+    value = 1
+    value
+    return (value,)
+
+@app.cell
+def dependent(value):
+    doubled = value * 2
+    doubled
+    return (doubled,)
+
+@app.cell
+def independent():
+    "ready"
+    return
+
+if __name__ == "__main__":
+    app.run()
+''',
+        encoding="utf-8",
+    )
+    context = starter_context(
+        inspect_notebook(notebook, include_code=True),
+        None,
+        "dashboard",
+    )
+
+    assert [target.target for _cell, target in starter_cells(context)] == [
+        "independent"
+    ]

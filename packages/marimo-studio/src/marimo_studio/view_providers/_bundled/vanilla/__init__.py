@@ -35,12 +35,16 @@ from marimo_studio.view_providers import (
     SourceDocument,
     SourceLocation,
     StarterContext,
+    StarterPlan,
     ViewProject,
     mount_attribute,
 )
 from marimo_studio.view_providers._bundled._starters import (
-    starter_catalog,
-    starter_files,
+    create_starter,
+    provider_starters,
+)
+from marimo_studio.view_providers._bundled.vanilla.starters import (
+    catalog as _STARTERS,
 )
 from marimo_studio.view_providers._document import (
     HTMLDocumentParser,
@@ -53,18 +57,6 @@ from marimo_studio.view_providers._validation import validate_relative_path
 PROVIDER_KEY = "marimo-studio/vanilla"
 _AGENT_INSTRUCTIONS_PATH = PurePosixPath("AGENTS.md")
 _OPTIONAL_DESIGN_PATH = PurePosixPath("DESIGN.md")
-_DEFAULT_DOCUMENTS = (PurePosixPath("index.html"), _AGENT_INSTRUCTIONS_PATH)
-_STARTERS = starter_catalog(
-    ProviderStarter(
-        key="default",
-        title="HTML document",
-        summary=(
-            "One editable HTML file with Studio projection elements and an inline "
-            "live-value adapter."
-        ),
-        documents=_DEFAULT_DOCUMENTS,
-    )
-)
 
 
 def _site_id(path: PurePosixPath, kind: str, target: str, occurrence: int) -> str:
@@ -213,14 +205,14 @@ class VanillaProvider:
         return ProviderAvailability(True)
 
     def starters(self) -> tuple[ProviderStarter, ...]:
-        return tuple(_STARTERS.values())
+        return provider_starters(_STARTERS)
 
     def create(
         self,
         starter: ProviderStarter,
         context: StarterContext,
-    ) -> dict[PurePosixPath, bytes]:
-        return starter_files(__name__, _STARTERS, starter, context)
+    ) -> StarterPlan:
+        return create_starter(_STARTERS, starter, context)
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection:
         project = request.project

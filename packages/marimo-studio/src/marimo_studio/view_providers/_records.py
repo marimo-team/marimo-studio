@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Literal, Protocol
 
+from marimo_studio._notebook.records import CellRef, NotebookSpec
 from marimo_studio.view_providers._operation import (
     ProviderCancellation,
     ProviderRunner,
@@ -174,9 +175,32 @@ class ProjectInspection:
 
 
 @dataclass(frozen=True)
+class StarterCellTarget:
+    """Name one saved notebook cell in generated provider source."""
+
+    cell: CellRef
+    target: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {"cell": str(self.cell), "target": self.target}
+
+
+@dataclass(frozen=True)
 class StarterContext:
+    """Describe the saved notebook revision used to create a view project."""
+
     view_name: str
     notebook_name: str
+    notebook: NotebookSpec
+    cell_targets: Mapping[CellRef, StarterCellTarget]
+
+
+@dataclass(frozen=True)
+class StarterPlan:
+    """Return generated project files and the cell targets they contain."""
+
+    files: Mapping[PurePosixPath, bytes]
+    cell_targets: tuple[StarterCellTarget, ...]
 
 
 @dataclass(frozen=True)
@@ -222,7 +246,7 @@ class ViewProvider(Protocol):
         self,
         starter: ProviderStarter,
         context: StarterContext,
-    ) -> Mapping[PurePosixPath, bytes]: ...
+    ) -> StarterPlan: ...
 
     def inspect(self, request: InspectionRequest) -> ProjectInspection: ...
 
