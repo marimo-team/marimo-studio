@@ -1,0 +1,15 @@
+{
+  "name": "marimo-studio-svelte-view",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "echarts": "6.0.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "7.3.0",
+    "svelte": "5.56.9",
+    "svelte-check": "4.7.5",
+    "typescript": "6.0.3",
+    "vite": "8.2.1"
+  }
+}
