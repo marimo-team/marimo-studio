@@ -61,6 +61,7 @@ class CellRef:
 
 CellSelector = CellRef | str | int
 InspectionContext = Literal["selected", "upstream"]
+CellKind = Literal["cell", "setup", "function", "class", "unparsable"]
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,7 @@ class CellSpec:
     ref: CellRef
     runtime_id: str
     index: int
+    kind: CellKind
     name: str | None
     source: SourceSpan
     code_sha256: str
@@ -107,23 +109,38 @@ class CellSpec:
     downstream: tuple[CellRef, ...]
     config: CellConfigSpec
     has_output_expression: bool
+    displays_output: bool
+    markdown: str | None
     code: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        value = asdict(self)
-        value["ref"] = str(self.ref)
-        value["definitions"] = list(self.definitions)
-        value["references"] = list(self.references)
-        value["upstream"] = [str(ref) for ref in self.upstream]
-        value["downstream"] = [str(ref) for ref in self.downstream]
-        if self.code is None:
-            value.pop("code")
+        value: dict[str, Any] = {
+            "ref": str(self.ref),
+            "runtime_id": self.runtime_id,
+            "index": self.index,
+            "kind": self.kind,
+            "name": self.name,
+            "source": asdict(self.source),
+            "code_sha256": self.code_sha256,
+            "preview": self.preview,
+            "definitions": list(self.definitions),
+            "references": list(self.references),
+            "upstream": [str(ref) for ref in self.upstream],
+            "downstream": [str(ref) for ref in self.downstream],
+            "config": asdict(self.config),
+            "has_output_expression": self.has_output_expression,
+            "displays_output": self.displays_output,
+            "markdown": self.markdown,
+        }
+        if self.code is not None:
+            value["code"] = self.code
         return value
 
 
 @dataclass(frozen=True)
 class NotebookSpec:
     path: Path
+    revision: str
     cells: tuple[CellSpec, ...]
     app_config: dict[str, Any]
 
@@ -137,6 +154,7 @@ class NotebookSpec:
         return {
             "schema": 1,
             "notebook": str(self.path),
+            "revision": self.revision,
             "app_config": self.app_config,
             "cells": [cell.to_dict() for cell in self.cells],
         }

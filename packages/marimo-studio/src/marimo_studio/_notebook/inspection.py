@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import ast
 import hashlib
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -30,12 +30,18 @@ _PREVIEW_CHARS = 600
 _RUNTIME_VALUE_BYTES = 64 * 1024
 
 
-def _has_output_expression(code: str) -> bool:
-    try:
-        body = ast.parse(code).body
-    except SyntaxError:
-        return False
-    return bool(body and isinstance(body[-1], ast.Expr))
+def _revision(static: StaticNotebook, cells: tuple[CellSpec, ...]) -> str:
+    payload = {
+        "app_config": static.app_config,
+        "cells": [cell.to_dict() for cell in cells],
+    }
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _preview(code: str) -> str:
@@ -84,6 +90,7 @@ def _notebook_snapshot(path: str | Path) -> tuple[NotebookSpec, StaticNotebook]:
             ref=refs[index],
             runtime_id=cell.runtime_id,
             index=index,
+            kind=cell.kind,
             name=cell.name if cell.name != "_" else None,
             source=cell.source,
             code_sha256=source_digests[index],
@@ -105,7 +112,9 @@ def _notebook_snapshot(path: str | Path) -> tuple[NotebookSpec, StaticNotebook]:
                 disabled=cell.disabled,
                 hide_code=cell.hide_code,
             ),
-            has_output_expression=_has_output_expression(cell.code),
+            has_output_expression=cell.has_output_expression,
+            displays_output=cell.displays_output,
+            markdown=cell.markdown,
             code=None,
         )
         for index, cell in enumerate(static.cells)
@@ -122,6 +131,7 @@ def _notebook_snapshot(path: str | Path) -> tuple[NotebookSpec, StaticNotebook]:
     return (
         NotebookSpec(
             path=notebook_path,
+            revision=_revision(static, cells),
             cells=cells,
             app_config=static.app_config,
         ),

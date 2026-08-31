@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from marimo_studio._notebook.records import NotebookSpec, SourceSpan
+from marimo_studio._notebook.records import CellKind, NotebookSpec, SourceSpan
 from marimo_studio._projections.runtime_records import RuntimeProbe
 
 
@@ -40,6 +40,10 @@ class StaticCell:
     runtime_id: str
     code: str
     name: str
+    kind: CellKind
+    markdown: str | None
+    has_output_expression: bool
+    displays_output: bool
     definitions: tuple[str, ...]
     references: tuple[str, ...]
     parents: tuple[str, ...]
