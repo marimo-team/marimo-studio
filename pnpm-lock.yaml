@@ -21,6 +21,9 @@ catalogs:
     '@codemirror/state':
       specifier: 6.7.1
       version: 6.7.1
+    '@iconify/vue':
+      specifier: 5.0.1
+      version: 5.0.1
     '@oxlint/plugins':
       specifier: 1.76.0
       version: 1.76.0
@@ -175,6 +178,9 @@ importers:
 
   apps/docs:
     devDependencies:
+      '@iconify/vue':
+        specifier: 'catalog:'
+        version: 5.0.1(vue@3.5.40(typescript@6.0.3))
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1
@@ -544,6 +550,11 @@ packages:
 
   '@iconify/types@2.0.0':
     resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
+
+  '@iconify/vue@5.0.1':
+    resolution: {integrity: sha512-aumwwooJlFJ5H5qYWB6ZTAyM0C8hpfcSVLB9/a3qnH1GGvIJ+FEbpEs4s/HfErYe/M5qZeLjwmESR5fFm3lXEw==}
+    peerDependencies:
+      vue: '>=3.0.0'
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
@@ -2756,6 +2767,11 @@ snapshots:
       '@iconify/types': 2.0.0
 
   '@iconify/types@2.0.0': {}
+
+  '@iconify/vue@5.0.1(vue@3.5.40(typescript@6.0.3))':
+    dependencies:
+      '@iconify/types': 2.0.0
+      vue: 3.5.40(typescript@6.0.3)
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 

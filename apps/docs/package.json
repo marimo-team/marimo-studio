@@ -11,6 +11,7 @@
     "verify": "node scripts/verify-build.ts"
   },
   "devDependencies": {
+    "@iconify/vue": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitepress": "catalog:",

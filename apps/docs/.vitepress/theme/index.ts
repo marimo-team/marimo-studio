@@ -1,5 +1,13 @@
+import type { Theme } from "vitepress";
+
 import DefaultTheme from "vitepress/theme";
 
+import StudioExample from "./components/StudioExample.vue";
 import "./custom.css";
 
-export default DefaultTheme;
+export default {
+  extends: DefaultTheme,
+  enhanceApp({ app }) {
+    app.component("StudioExample", StudioExample);
+  },
+} satisfies Theme;

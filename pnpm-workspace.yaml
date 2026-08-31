@@ -45,6 +45,7 @@ catalog:
   oxlint-tsgolint: 7.0.2001
   "@codemirror/lang-javascript": 6.2.5
   "@codemirror/language": 6.12.4
+  "@iconify/vue": 5.0.1
 
 overrides:
   nanoid: 3.3.18
