@@ -1,0 +1,15 @@
+packages/marimo-studio/src/marimo_studio/_processes/supervisor.py
+  ai_agent 126-127,129,685,694-701,704-708
+packages/marimo-studio/tests/marimo_compat/test_process_supervisor.py
+  ai_agent 15,84-113
+packages/marimo-studio/src/marimo_studio/_server/development/watcher.py
+  ai_agent 7-8,31-89,91-100,115,126,159-162,174-176,179-181,191-207,224,228,237,239-251,354-355,372,374-381
+packages/marimo-studio/tests/server/test_project_watcher.py
+  ai_agent 6-7,10,28-131,186,191-438
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "68da77118ff9e00edfbe383a4a71b56d365c4a85",
+  "prompts": {}
+}
