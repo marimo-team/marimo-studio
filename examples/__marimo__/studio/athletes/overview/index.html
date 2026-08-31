@@ -5,328 +5,624 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Rio 2016 athlete report</title>
     <style>
-      :root {
-        color-scheme: light;
-        --ink: #0a0a0a;
-        --paper: #f2efe7;
-        --surface: #fffef9;
-        --muted: #686862;
-        --line: #bebbb1;
-        --volt: #dfff35;
-        --display-font: "Helvetica Neue", "Arial Narrow", sans-serif;
-        --text-font: "Avenir Next", Avenir, ui-sans-serif, sans-serif;
-        --monospace-font: "SFMono-Regular", Consolas, monospace;
-      }
+    :root {
+      color-scheme: light;
+      --ink: #0a0a0a;
+      --paper: #f2efe7;
+      --surface: #fffef9;
+      --muted: #686862;
+      --line: #bebbb1;
+      --volt: #dfff35;
+      --display-font: "Helvetica Neue", "Arial Narrow", sans-serif;
+      --text-font: "Avenir Next", Avenir, ui-sans-serif, sans-serif;
+      --monospace-font: "SFMono-Regular", Consolas, monospace;
+    }
 
-      * {
-        box-sizing: border-box;
-      }
+    * {
+      box-sizing: border-box;
+    }
 
-      body {
-        margin: 0;
-        background: var(--paper);
-        color: var(--ink);
-        font-family: var(--text-font);
-      }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--text-font);
+    }
 
-      a {
-        color: inherit;
-      }
+    a {
+      color: inherit;
+    }
 
-      #app-shell {
-        width: min(90rem, 100%);
-        margin: 0 auto;
-        overflow: hidden;
-      }
+    #app-shell {
+      width: min(90rem, 100%);
+      margin: 0 auto;
+      overflow: hidden;
+    }
 
-      nav {
-        display: flex;
-        justify-content: space-between;
-        padding: 1rem clamp(1rem, 4vw, 4rem);
-        border-bottom: 1px solid #363636;
-        background: var(--ink);
-        color: #fff;
-        font-size: 0.68rem;
-        font-weight: 850;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-      }
+    nav {
+      display: flex;
+      justify-content: space-between;
+      padding: 1rem clamp(1rem, 4vw, 4rem);
+      border-bottom: 1px solid #363636;
+      background: var(--ink);
+      color: #fff;
+      font-size: 0.68rem;
+      font-weight: 850;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
 
-      nav div {
-        display: flex;
-        gap: 1.5rem;
-      }
+    nav div {
+      display: flex;
+      gap: 1.5rem;
+    }
 
-      nav a {
-        text-decoration: none;
-      }
+    nav a {
+      text-decoration: none;
+    }
 
-      nav a[aria-current="page"] {
-        color: var(--volt);
+    nav a[aria-current="page"] {
+      color: var(--volt);
+    }
+
+    .hero {
+      position: relative;
+      display: grid;
+      min-height: min(46rem, 76vh);
+      grid-template-columns: minmax(0, 1fr) minmax(17rem, 0.38fr);
+      gap: 3rem;
+      align-items: end;
+      padding: clamp(3rem, 8vw, 7rem) clamp(1rem, 4vw, 4rem) 3rem;
+      overflow: hidden;
+      background: var(--ink);
+      color: #fff;
+    }
+
+    .hero::after {
+      position: absolute;
+      top: 7%;
+      right: 24%;
+      width: clamp(1.2rem, 2vw, 2.2rem);
+      height: 110%;
+      background: var(--volt);
+      content: "";
+      transform: rotate(18deg);
+      transform-origin: top;
+    }
+
+    .hero-copy,
+    .hero-note {
+      position: relative;
+      z-index: 1;
+    }
+
+    .eyebrow {
+      margin: 0 0 1rem;
+      color: var(--volt);
+      font-size: 0.7rem;
+      font-weight: 900;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 8ch;
+      margin: 0;
+      font-family: var(--display-font);
+      font-size: clamp(4rem, 12vw, 11rem);
+      font-stretch: condensed;
+      font-style: italic;
+      font-weight: 950;
+      letter-spacing: -0.075em;
+      line-height: 0.77;
+      text-transform: uppercase;
+    }
+
+    .hero-note {
+      padding-bottom: 0.65rem;
+    }
+
+    .hero-note strong {
+      display: block;
+      max-width: 11ch;
+      font-family: var(--display-font);
+      font-size: clamp(2rem, 4vw, 4rem);
+      font-style: italic;
+      font-weight: 900;
+      letter-spacing: -0.05em;
+      line-height: 0.92;
+      text-transform: uppercase;
+    }
+
+    .hero-note p {
+      max-width: 28rem;
+      margin: 1.5rem 0 0;
+      color: #b9b9b3;
+      font-size: 0.92rem;
+      line-height: 1.65;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      background: var(--volt);
+    }
+
+    .metric {
+      min-width: 0;
+      padding: 1.6rem clamp(1rem, 3vw, 2.5rem) 1.8rem;
+      border-right: 2px solid var(--ink);
+    }
+
+    .metric:last-child {
+      border-right: 0;
+    }
+
+    .metric span,
+    .metric strong {
+      display: block;
+    }
+
+    .metric span {
+      min-height: 2.2em;
+      font-size: 0.64rem;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .metric strong {
+      margin-top: 0.55rem;
+      font-family: var(--display-font);
+      font-size: clamp(3rem, 6vw, 6rem);
+      font-style: italic;
+      font-weight: 950;
+      letter-spacing: -0.07em;
+      line-height: 0.9;
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: minmax(18rem, 0.34fr) minmax(0, 0.66fr);
+      gap: clamp(2rem, 6vw, 6rem);
+      padding: clamp(4rem, 8vw, 7rem) clamp(1rem, 4vw, 4rem);
+    }
+
+    .section-mark {
+      display: inline-block;
+      margin-bottom: 1.2rem;
+      padding: 0.3rem 0.5rem;
+      background: var(--ink);
+      color: var(--volt);
+      font-size: 0.62rem;
+      font-weight: 900;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+      transform: skew(-8deg);
+    }
+
+    .controls h2,
+    .table-panel h2,
+    .ranking-panel h2 {
+      margin: 0;
+      font-family: var(--display-font);
+      font-size: clamp(2.6rem, 5vw, 5rem);
+      font-style: italic;
+      font-weight: 950;
+      letter-spacing: -0.065em;
+      line-height: 0.86;
+      text-transform: uppercase;
+    }
+
+    .controls > p {
+      max-width: 30rem;
+      margin: 1.5rem 0 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .control-frame {
+      margin-top: 2rem;
+      padding: 1.25rem;
+      border: 2px solid var(--ink);
+      background: var(--surface);
+      box-shadow: 0.7rem 0.7rem 0 var(--volt);
+    }
+
+    .table-panel {
+      min-width: 0;
+      padding: clamp(1.2rem, 3vw, 2.2rem);
+      border: 2px solid var(--ink);
+      background: var(--surface);
+    }
+
+    .roster-panel {
+      align-self: start;
+    }
+
+    .roster-heading {
+      display: flex;
+      gap: 2rem;
+      align-items: end;
+      justify-content: space-between;
+    }
+
+    .roster-heading p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+      text-align: right;
+    }
+
+    .roster-heading strong,
+    .roster-heading span {
+      display: block;
+    }
+
+    .ranking-panel {
+      grid-column: 1 / -1;
+      min-width: 0;
+      padding: clamp(1.5rem, 4vw, 3rem);
+      border-top: 0.4rem solid var(--volt);
+      background: var(--ink);
+      color: #fff;
+    }
+
+    .ranking-heading {
+      display: flex;
+      gap: 2rem;
+      align-items: end;
+      justify-content: space-between;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid #343434;
+    }
+
+    .ranking-panel .section-mark {
+      background: var(--volt);
+      color: var(--ink);
+    }
+
+    .ranking-panel h2 {
+      color: #fff;
+    }
+
+    .ranking-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.25rem;
+      color: #b9b9b3;
+      font-family: var(--monospace-font);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+    }
+
+    .ranking-legend span {
+      display: inline-flex;
+      gap: 0.45rem;
+      align-items: center;
+    }
+
+    .ranking-legend i {
+      width: 1.5rem;
+      height: 0.3rem;
+      background: #fff;
+    }
+
+    .ranking-legend .medalist-key {
+      height: 0.18rem;
+      background: var(--volt);
+    }
+
+    .sports-chart {
+      min-height: 28rem;
+      padding-top: 1.5rem;
+    }
+
+    .sports-chart ol {
+      display: grid;
+      gap: 0.9rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .sports-chart li {
+      display: grid;
+      min-width: 0;
+      grid-template-columns: 2.4rem minmax(8rem, 0.28fr) minmax(0, 1fr) auto;
+      gap: 0.75rem 1rem;
+      align-items: center;
+    }
+
+    .sport-rank,
+    .sport-values {
+      font-family: var(--monospace-font);
+    }
+
+    .sport-rank {
+      color: #73736f;
+      font-size: 0.68rem;
+    }
+
+    .sport-name {
+      overflow: hidden;
+      font-family: var(--display-font);
+      font-size: clamp(1.25rem, 2.2vw, 2rem);
+      font-style: italic;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .sport-bars {
+      position: relative;
+      height: 1.15rem;
+      border-left: 1px solid #73736f;
+    }
+
+    .sport-field-bar {
+      position: absolute;
+      top: 0.16rem;
+      left: 0;
+      display: flex;
+      height: 0.78rem;
+      background: #fff;
+      transform-origin: left;
+    }
+
+    .sport-medalist-bar {
+      height: 100%;
+      margin-left: auto;
+      background: var(--volt);
+    }
+
+    .sport-values {
+      min-width: 9.5rem;
+      color: #b9b9b3;
+      font-size: 0.68rem;
+      line-height: 1.45;
+      text-align: right;
+    }
+
+    .sport-values span {
+      display: block;
+    }
+
+    .sport-values strong {
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .chart-loader,
+    .chart-message {
+      display: grid;
+      min-height: 24rem;
+      gap: 1rem;
+      place-content: center;
+      place-items: center;
+      color: #b9b9b3;
+      font-family: var(--monospace-font);
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .chart-loader span {
+      display: grid;
+      width: 7rem;
+      gap: 0.4rem;
+    }
+
+    .chart-loader i {
+      display: block;
+      height: 0.3rem;
+      background: #fff;
+      transform-origin: left;
+      animation: athlete-chart-pulse 1.25s ease-in-out infinite;
+    }
+
+    .chart-loader i:nth-child(2) {
+      width: 68%;
+      background: var(--volt);
+      animation-delay: 140ms;
+    }
+
+    @keyframes athlete-chart-pulse {
+      0%,
+      100% {
+        opacity: 0.24;
+        transform: scaleX(0.38);
+      }
+      50% {
+        opacity: 0.95;
+        transform: scaleX(1);
+      }
+    }
+
+    marimo-cell,
+    marimo-output {
+      --marimo-cell-font: var(--text-font);
+      --marimo-cell-heading-font: var(--display-font);
+      --marimo-cell-monospace-font: var(--monospace-font);
+      --marimo-cell-background: transparent;
+      --marimo-cell-foreground: var(--ink);
+      --marimo-cell-surface: var(--surface);
+      --marimo-cell-muted: #eceae2;
+      --marimo-cell-muted-foreground: var(--muted);
+      --marimo-cell-border-color: #c9c7bf;
+      --marimo-cell-accent: #2e2e2e;
+      --marimo-cell-radius: 0;
+      display: block;
+    }
+
+    marimo-output {
+      margin-top: 2rem;
+      overflow-x: auto;
+    }
+
+    .metrics [mo-value] {
+      --marimo-value-skeleton-color: var(--ink);
+      --marimo-value-skeleton-radius: 0;
+      --marimo-value-skeleton-width: 2.5ch;
+    }
+
+    .roster-heading [mo-value] {
+      --marimo-value-skeleton-color: var(--ink);
+      --marimo-value-skeleton-radius: 0;
+      --marimo-value-skeleton-width: 9ch;
+    }
+
+    .control-frame marimo-cell {
+      --marimo-cell-skeleton-height: 4rem;
+    }
+
+    marimo-output[value="selected_roster"] {
+      --marimo-cell-skeleton-height: 28rem;
+    }
+
+    :where([mo-value]):is(:not([data-state]), [data-state="connecting"], [data-state="loading"]):empty::before,
+    :where(marimo-cell, marimo-output):is(:not(:defined), [data-state="connecting"], [data-state="loading"]):empty::before {
+      animation: athlete-report-pulse 1.25s ease-in-out infinite;
+    }
+
+    @keyframes athlete-report-pulse {
+      0%,
+      100% {
+        opacity: 0.28;
+      }
+      50% {
+        opacity: 0.82;
+      }
+    }
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1.5rem clamp(1rem, 4vw, 4rem);
+      background: var(--ink);
+      color: #aaa9a2;
+      font-size: 0.72rem;
+    }
+
+    footer strong {
+      color: var(--volt);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 56rem) {
+      .hero,
+      .content {
+        grid-template-columns: 1fr;
       }
 
       .hero {
-        position: relative;
-        display: grid;
-        min-height: min(46rem, 76vh);
-        grid-template-columns: minmax(0, 1fr) minmax(17rem, 0.38fr);
+        min-height: 42rem;
         gap: 3rem;
-        align-items: end;
-        padding: clamp(3rem, 8vw, 7rem) clamp(1rem, 4vw, 4rem) 3rem;
-        overflow: hidden;
-        background: var(--ink);
-        color: #fff;
       }
 
       .hero::after {
-        position: absolute;
-        top: 7%;
-        right: 24%;
-        width: clamp(1.2rem, 2vw, 2.2rem);
-        height: 110%;
-        background: var(--volt);
-        content: "";
-        transform: rotate(18deg);
-        transform-origin: top;
-      }
-
-      .hero-copy,
-      .hero-note {
-        position: relative;
-        z-index: 1;
-      }
-
-      .eyebrow {
-        margin: 0 0 1rem;
-        color: var(--volt);
-        font-size: 0.7rem;
-        font-weight: 900;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-      }
-
-      h1 {
-        max-width: 8ch;
-        margin: 0;
-        font-family: var(--display-font);
-        font-size: clamp(4rem, 12vw, 11rem);
-        font-stretch: condensed;
-        font-style: italic;
-        font-weight: 950;
-        letter-spacing: -0.075em;
-        line-height: 0.77;
-        text-transform: uppercase;
-      }
-
-      .hero-note {
-        padding-bottom: 0.65rem;
-      }
-
-      .hero-note strong {
-        display: block;
-        max-width: 11ch;
-        font-family: var(--display-font);
-        font-size: clamp(2rem, 4vw, 4rem);
-        font-style: italic;
-        font-weight: 900;
-        letter-spacing: -0.05em;
-        line-height: 0.92;
-        text-transform: uppercase;
-      }
-
-      .hero-note p {
-        max-width: 28rem;
-        margin: 1.5rem 0 0;
-        color: #b9b9b3;
-        font-size: 0.92rem;
-        line-height: 1.65;
+        right: 10%;
+        opacity: 0.35;
       }
 
       .metrics {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        background: var(--volt);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
-      .metric {
-        min-width: 0;
-        padding: 1.6rem clamp(1rem, 3vw, 2.5rem) 1.8rem;
-        border-right: 2px solid var(--ink);
-      }
-
-      .metric:last-child {
+      .metric:nth-child(2) {
         border-right: 0;
       }
 
-      .metric span,
-      .metric strong {
-        display: block;
+      .metric:nth-child(n + 3) {
+        border-top: 2px solid var(--ink);
       }
 
-      .metric span {
-        min-height: 2.2em;
-        font-size: 0.64rem;
-        font-weight: 900;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
+      .roster-heading {
+        align-items: start;
+        flex-direction: column;
+        gap: 1rem;
       }
 
-      .metric strong {
-        margin-top: 0.55rem;
-        font-family: var(--display-font);
-        font-size: clamp(3rem, 6vw, 6rem);
-        font-style: italic;
-        font-weight: 950;
-        letter-spacing: -0.07em;
-        line-height: 0.9;
+      .roster-heading p {
+        text-align: left;
       }
 
-      .content {
-        display: grid;
-        grid-template-columns: minmax(18rem, 0.34fr) minmax(0, 0.66fr);
-        gap: clamp(2rem, 6vw, 6rem);
-        padding: clamp(4rem, 8vw, 7rem) clamp(1rem, 4vw, 4rem);
+      .ranking-heading {
+        align-items: start;
+        flex-direction: column;
       }
 
-      .section-mark {
-        display: inline-block;
-        margin-bottom: 1.2rem;
-        padding: 0.3rem 0.5rem;
-        background: var(--ink);
-        color: var(--volt);
-        font-size: 0.62rem;
-        font-weight: 900;
-        letter-spacing: 0.13em;
-        text-transform: uppercase;
-        transform: skew(-8deg);
+      .sports-chart li {
+        grid-template-columns: 2rem minmax(0, 1fr) auto;
       }
 
-      .controls h2,
-      .table-panel h2 {
-        margin: 0;
-        font-family: var(--display-font);
-        font-size: clamp(2.6rem, 5vw, 5rem);
-        font-style: italic;
-        font-weight: 950;
-        letter-spacing: -0.065em;
-        line-height: 0.86;
-        text-transform: uppercase;
+      .sport-bars {
+        grid-column: 2 / -1;
+      }
+    }
+
+    @media (max-width: 40rem) {
+      .sports-chart li {
+        grid-template-columns: 1.8rem minmax(0, 1fr);
       }
 
-      .controls > p {
-        max-width: 30rem;
-        margin: 1.5rem 0 0;
-        color: var(--muted);
-        line-height: 1.7;
-      }
-
-      .control-frame {
-        margin-top: 2rem;
-        padding: 1.25rem;
-        border: 2px solid var(--ink);
-        background: var(--surface);
-        box-shadow: 0.7rem 0.7rem 0 var(--volt);
-      }
-
-      .table-panel {
+      .sport-values {
+        display: flex;
         min-width: 0;
-        padding: clamp(1.2rem, 3vw, 2.2rem);
-        border: 2px solid var(--ink);
-        background: var(--surface);
+        grid-column: 2;
+        flex-wrap: wrap;
+        gap: 0.25rem 0.9rem;
+        text-align: left;
       }
 
-      marimo-cell,
-      marimo-output {
-        --marimo-cell-font: var(--text-font);
-        --marimo-cell-heading-font: var(--display-font);
-        --marimo-cell-monospace-font: var(--monospace-font);
-        --marimo-cell-background: transparent;
-        --marimo-cell-foreground: var(--ink);
-        --marimo-cell-surface: var(--surface);
-        --marimo-cell-muted: #eceae2;
-        --marimo-cell-muted-foreground: var(--muted);
-        --marimo-cell-border-color: #c9c7bf;
-        --marimo-cell-accent: #2e2e2e;
-        --marimo-cell-radius: 0;
-        display: block;
+      .sport-bars {
+        grid-column: 2;
+      }
+    }
+
+    @media (max-width: 460px) {
+      nav {
+        align-items: start;
+        flex-direction: column;
+        gap: 0.7rem;
       }
 
-      marimo-output {
-        margin-top: 2rem;
-        overflow-x: auto;
+      .metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .metric,
+      .metric:nth-child(2) {
+        border-top: 0;
+        border-right: 0;
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .metric:last-child {
+        border-bottom: 0;
       }
 
       footer {
-        display: flex;
-        justify-content: space-between;
-        gap: 1rem;
-        padding: 1.5rem clamp(1rem, 4vw, 4rem);
-        background: var(--ink);
-        color: #aaa9a2;
-        font-size: 0.72rem;
+        flex-direction: column;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      :where([mo-value], marimo-cell, marimo-output)::before {
+        animation: none !important;
+        opacity: 0.58;
       }
 
-      footer strong {
-        color: var(--volt);
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
+      .chart-loader i {
+        animation: none;
+        opacity: 0.58;
+        transform: none;
       }
-
-      @media (max-width: 780px) {
-        .hero,
-        .content {
-          grid-template-columns: 1fr;
-        }
-
-        .hero {
-          min-height: 42rem;
-          gap: 3rem;
-        }
-
-        .hero::after {
-          right: 10%;
-          opacity: 0.35;
-        }
-
-        .metrics {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .metric:nth-child(2) {
-          border-right: 0;
-        }
-
-        .metric:nth-child(n + 3) {
-          border-top: 2px solid var(--ink);
-        }
-      }
-
-      @media (max-width: 460px) {
-        nav {
-          align-items: start;
-          flex-direction: column;
-          gap: 0.7rem;
-        }
-
-        .metrics {
-          grid-template-columns: 1fr;
-        }
-
-        .metric,
-        .metric:nth-child(2) {
-          border-top: 0;
-          border-right: 0;
-          border-bottom: 2px solid var(--ink);
-        }
-
-        .metric:last-child {
-          border-bottom: 0;
-        }
-
-        footer {
-          flex-direction: column;
-        }
-      }
+    }
     </style>
   </head>
   <body>
@@ -334,8 +630,9 @@
       <nav aria-label="Athlete views">
         <span>Rio 2016 / Athlete report</span>
         <div>
-          <a href="../overview/" aria-current="page">01 Overview</a>
-          <a href="../explorer/">02 Explorer</a>
+          <a href="../overview/index.html" aria-current="page">01 Overview</a>
+          <a href="../explorer/index.html">02 Explorer</a>
+          <a href="../field/index.html">03 Field</a>
         </div>
       </nav>
 
@@ -376,18 +673,56 @@
           <span class="section-mark">Sport filter</span>
           <h2>Filter the field.</h2>
           <p>
-            Choose a sport to update the headline totals and participation
-            ranking.
+            Choose a sport to update the headline totals and athlete roster.
           </p>
           <div class="control-frame">
             <marimo-cell name="sport_control"></marimo-cell>
           </div>
         </div>
 
-        <article class="table-panel" aria-labelledby="sports-title">
-          <span class="section-mark">Participation ranking</span>
-          <h2 id="sports-title">Biggest fields.</h2>
-          <marimo-output value="top_sports"></marimo-output>
+        <article
+          class="table-panel roster-panel"
+          aria-labelledby="roster-title"
+        >
+          <span class="section-mark">Selected roster</span>
+          <div class="roster-heading">
+            <h2 id="roster-title">Athletes in view.</h2>
+            <p>
+              <strong mo-value="athlete_summary.selection"></strong>
+              <span>Medal leaders first.</span>
+            </p>
+          </div>
+          <marimo-output value="selected_roster"></marimo-output>
+        </article>
+
+        <article class="ranking-panel" aria-labelledby="sports-title">
+          <div class="ranking-heading">
+            <div>
+              <span class="section-mark">Games-wide ranking</span>
+              <h2 id="sports-title">Biggest fields.</h2>
+            </div>
+            <div class="ranking-legend" aria-label="Chart legend">
+              <span><i></i>Athletes</span>
+              <span><i class="medalist-key"></i>Medalists</span>
+            </div>
+          </div>
+          <div
+            class="sports-chart"
+            id="sports-chart"
+            data-state="loading"
+            aria-busy="true"
+          >
+            <div class="chart-loader" role="status">
+              <span aria-hidden="true"><i></i><i></i></span>
+              Preparing participation ranking
+            </div>
+          </div>
+          <span
+            id="top-sports-data"
+            hidden
+            aria-hidden="true"
+            mo-value="top_sports"
+          ></span>
         </article>
       </section>
 
@@ -403,5 +738,104 @@
         </span>
       </footer>
     </main>
+    <script>
+    const sportsSource = document.querySelector("#top-sports-data");
+    const sportsChart = document.querySelector("#sports-chart");
+    const countFormat = new Intl.NumberFormat("en-US");
+    const chartNode = (tag, className, text) => {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    const chartMessage = (text, role) => {
+      const message = chartNode("p", "chart-message", text);
+      if (role) message.setAttribute("role", role);
+      sportsChart.dataset.state = role === "alert" ? "error" : "empty";
+      sportsChart.removeAttribute("aria-busy");
+      sportsChart.replaceChildren(message);
+    };
+    const renderSportsChart = (value) => {
+      const rows = typeof value?.toArray === "function"
+        ? value.toArray()
+        : Array.isArray(value)
+        ? value
+        : [];
+      const sports = rows
+        .map((row) => ({
+          athletes: Number(row.athletes) || 0,
+          medalists: Number(row.medalists) || 0,
+          sport: String(row.sport),
+        }))
+        .filter((row) => row.athletes > 0)
+        .sort((a, b) => b.athletes - a.athletes);
+      if (!sports.length) {
+        chartMessage("No participation data is available.");
+        return;
+      }
+
+      const maximum = sports[0].athletes;
+      const list = chartNode("ol");
+      list.setAttribute(
+        "aria-label",
+        "Ten largest sports by athlete participation",
+      );
+      sports.forEach((sport, index) => {
+        const item = chartNode("li");
+        item.setAttribute(
+          "aria-label",
+          `${sport.sport}: ${countFormat.format(sport.athletes)} athletes, ${
+            countFormat.format(sport.medalists)
+          } medalists`,
+        );
+        const rank = chartNode(
+          "span",
+          "sport-rank",
+          String(index + 1).padStart(2, "0"),
+        );
+        const name = chartNode("span", "sport-name", sport.sport);
+        const bars = chartNode("span", "sport-bars");
+        bars.setAttribute("aria-hidden", "true");
+        const fieldBar = chartNode("i", "sport-field-bar");
+        const medalistBar = chartNode("i", "sport-medalist-bar");
+        fieldBar.style.width = `${(sport.athletes / maximum) * 100}%`;
+        medalistBar.style.width = `${(sport.medalists / sport.athletes) * 100}%`;
+        fieldBar.append(medalistBar);
+        bars.append(fieldBar);
+
+        const values = chartNode("span", "sport-values");
+        const athleteValue = chartNode("span");
+        const athleteCount = chartNode(
+          "strong",
+          "",
+          countFormat.format(sport.athletes),
+        );
+        athleteValue.append(athleteCount, " athletes");
+        const medalValue = chartNode("span");
+        const medalCount = chartNode(
+          "strong",
+          "",
+          countFormat.format(sport.medalists),
+        );
+        medalValue.append(medalCount, " medalists");
+        values.append(athleteValue, medalValue);
+        item.append(rank, name, bars, values);
+        list.append(item);
+      });
+
+      sportsChart.dataset.state = "ready";
+      sportsChart.removeAttribute("aria-busy");
+      sportsChart.replaceChildren(list);
+    };
+    sportsSource.addEventListener("marimo-value-updated", (event) => {
+      renderSportsChart(event.detail.value);
+    });
+    sportsSource.addEventListener("marimo-value-error", () => {
+      chartMessage("Participation data could not be loaded.", "alert");
+    });
+    if (sportsSource.marimoValue !== undefined) {
+      renderSportsChart(sportsSource.marimoValue);
+    }
+    </script>
   </body>
 </html>

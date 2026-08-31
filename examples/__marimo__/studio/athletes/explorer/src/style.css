@@ -271,6 +271,89 @@ h1 {
   color: var(--muted);
 }
 
+.status-loading {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  border-left-color: var(--signal);
+}
+
+.status-pulse {
+  display: inline-flex;
+  gap: 0.18rem;
+  align-items: end;
+  height: 0.9rem;
+}
+
+.status-pulse i {
+  width: 0.2rem;
+  height: 100%;
+  background: var(--signal);
+  transform-origin: bottom;
+  animation: athlete-explorer-bar-pulse 1.05s ease-in-out infinite;
+}
+
+.status-pulse i:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.status-pulse i:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.page:is([data-load-state="waiting"], [data-load-state="loading"]) .score strong {
+  position: relative;
+  min-height: 1em;
+  color: transparent;
+}
+
+.page:is([data-load-state="waiting"], [data-load-state="loading"]) .score strong::before {
+  position: absolute;
+  top: 0.12em;
+  left: 0;
+  width: 2.3ch;
+  height: 0.68em;
+  background: var(--ink);
+  content: "";
+  transform-origin: left;
+  animation: athlete-explorer-rule-pulse 1.25s ease-in-out infinite;
+}
+
+.page:is([data-load-state="waiting"], [data-load-state="loading"]) :is(.mosaic-controls, .mosaic-host, .mosaic-table):empty::before {
+  display: block;
+  width: min(12rem, 45%);
+  height: 0.35rem;
+  margin: 1.25rem auto;
+  background: var(--line);
+  content: "";
+  transform-origin: left;
+  animation: athlete-explorer-rule-pulse 1.25s ease-in-out infinite;
+}
+
+@keyframes athlete-explorer-bar-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scaleY(0.35);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes athlete-explorer-rule-pulse {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: scaleX(0.42);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scaleX(1);
+  }
+}
+
 .status-error {
   border-left-color: var(--signal);
   color: #a23800;
@@ -327,6 +410,7 @@ h1 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.5rem;
+  align-items: start;
 }
 
 .mosaic-table {
@@ -469,5 +553,13 @@ code {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+
+  .status-pulse i,
+  .score strong::before,
+  :is(.mosaic-controls, .mosaic-host, .mosaic-table)::before {
+    animation: none !important;
+    opacity: 0.58;
+    transform: none;
   }
 }

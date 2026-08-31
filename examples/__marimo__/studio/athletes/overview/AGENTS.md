@@ -10,18 +10,18 @@ Build an entry-level Rio 2016 roster summary for readers learning Studio's
 projection primitives. Use one self-contained HTML document with inline CSS and
 JavaScript. Follow `DESIGN.md` and preserve the Nike Performance Index
 composition. Keep the page compact and dependency-free. Place the native
-`sport_control` cell beside scalar values and Marimo's rendered `top_sports`
-dataframe.
+`sport_control` cell beside Marimo's rendered `selected_roster` dataframe.
+Project `top_sports` into the inline JavaScript chart.
 
 ## Use the supplied Studio integration
 
-`index.html` mounts `sport_control`, renders `top_sports`, and projects four
-paths from `athlete_summary`. Keep those selectors aligned with the notebook
-when the report evolves.
+`index.html` mounts `sport_control`, renders `selected_roster`, and projects
+`top_sports` plus five paths from `athlete_summary`. Keep those selectors
+aligned with the notebook when the report evolves.
 
-This entry-level view uses declarative projection hosts and inline CSS. Keep
-that direct contract intact. The sibling Explorer demonstrates programmatic
-Arrow-table consumption and framework dependencies.
+This entry-level view uses declarative projection hosts, browser-native
+JavaScript, and inline CSS. Keep that direct contract intact. The sibling
+Explorer adds a framework and browser query engine for linked exploration.
 
 ## Work within the HTML project
 

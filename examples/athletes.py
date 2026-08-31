@@ -130,6 +130,28 @@ def participation(athletes, pl, sport):
         "sports": selected_athletes["sport"].n_unique(),
         "medalists": selected_athletes.filter(pl.col("medal_awards") > 0).height,
     }
+    selected_roster = (
+        selected_athletes.sort(["medal_awards", "name"], descending=[True, False])
+        .select(
+            "name",
+            "nationality",
+            "sport",
+            "sex",
+            "age",
+            "height",
+            "weight",
+            "gold",
+            "silver",
+            "bronze",
+            "medal_awards",
+        )
+        .with_columns(
+            pl.col("age").cast(pl.Float64).round(1),
+            pl.col("height").cast(pl.Float64).round(2),
+            pl.col("weight").cast(pl.Float64).round(1),
+        )
+        .head(20)
+    )
     top_sports = (
         athletes.group_by("sport")
         .agg(
@@ -139,8 +161,8 @@ def participation(athletes, pl, sport):
         .sort("athletes", descending=True)
         .head(10)
     )
-    top_sports
-    return athlete_summary, top_sports
+    selected_roster
+    return (athlete_summary,)
 
 
 @app.cell(hide_code=True)
@@ -156,6 +178,45 @@ def profile_context(mo):
 
 @app.cell
 def analytical_tables(athletes, pl):
+    _summary = athletes.select(
+        pl.len().alias("athletes"),
+        pl.col("nationality").n_unique().alias("nationalities"),
+        pl.col("sport").n_unique().alias("sports"),
+        (pl.col("sex").cast(pl.String) == "female").sum().alias("women"),
+        (pl.col("sex").cast(pl.String) == "male").sum().alias("men"),
+        (pl.col("medal_awards") > 0).sum().alias("medalists"),
+        pl.col("medal_awards").sum().alias("medal_awards"),
+        (pl.col("medal_awards") > 1).sum().alias("multi_medalists"),
+        pl.col("age").cast(pl.Float64).median().round(1).alias("median_age"),
+        pl.col("height").cast(pl.Float64).median().round(2).alias("median_height"),
+        pl.col("weight").median().round(0).cast(pl.Int64).alias("median_weight"),
+        (
+            (pl.col("height").fill_null(0) > 0)
+            & (pl.col("weight").fill_null(0) > 0)
+            & (pl.col("age").fill_null(0) > 0)
+        )
+        .sum()
+        .alias("profile_count"),
+    ).row(0, named=True)
+    _largest_sport = (
+        athletes.group_by("sport")
+        .len()
+        .sort("len", "sport", descending=[True, False])
+        .row(0, named=True)
+    )
+    games_summary = {
+        **_summary,
+        "largest_sport": str(_largest_sport["sport"]),
+        "largest_count": _largest_sport["len"],
+        "medalist_share_percent": round(
+            _summary["medalists"] / _summary["athletes"] * 100,
+            1,
+        ),
+        "profile_share_percent": round(
+            _summary["profile_count"] / _summary["athletes"] * 100,
+            1,
+        ),
+    }
     sport_profiles = (
         athletes.group_by("sport", "sex")
         .agg(
@@ -181,7 +242,7 @@ def analytical_tables(athletes, pl):
         "medal_awards",
     )
     sport_profiles.head(12)
-    return athlete_facts, sport_profiles
+    return
 
 
 @app.cell
@@ -198,18 +259,16 @@ def data_quality(athletes, pl):
 
 @app.cell(hide_code=True)
 def conclusion(athlete_summary, mo, quality):
-    mo.md(
-        f"""
-        ## Reading the roster
+    mo.md(f"""
+    ## Reading the roster
 
-        **{athlete_summary["selection"]}** contains
-        **{athlete_summary["athletes"]:,} athletes** from
-        **{athlete_summary["nationalities"]} nationalities**. The source omits
-        height for **{quality["missing_height"]:,}** athletes and weight for
-        **{quality["missing_weight"]:,}**, so body-profile comparisons retain
-        their observed sample sizes.
-        """
-    )
+    **{athlete_summary["selection"]}** contains
+    **{athlete_summary["athletes"]:,} athletes** from
+    **{athlete_summary["nationalities"]} nationalities**. The source omits
+    height for **{quality["missing_height"]:,}** athletes and weight for
+    **{quality["missing_weight"]:,}**, so body-profile comparisons retain
+    their observed sample sizes.
+    """)
     return
 
 

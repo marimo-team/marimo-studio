@@ -147,26 +147,48 @@ export const createAthleteExplorer = async ({
   mosaic.clear();
   mosaic.databaseConnector(connector);
 
-  const filters = vg.Selection.crossfilter();
+  const category = vg.Selection.intersect();
+  const sport = vg.Selection.intersect();
+  const body = vg.Selection.intersect();
+  const age = vg.Selection.intersect();
+  const filters = vg.Selection.crossfilter({
+    include: [category, sport, body, age],
+  });
+  const sportContext = vg.Selection.crossfilter({
+    include: [category, body, age],
+  });
+  const sportClicks = vg.Selection.single({ empty: true });
+  const sportControl = vg.menu({
+    label: "Sport",
+    from: TABLE_NAME,
+    column: "sport",
+    as: sport,
+  });
+  const sportSelect = sportControl.querySelector("select");
+  sportClicks.addEventListener("value", (value) => {
+    const point = Array.isArray(value) ? value.at(-1) : undefined;
+    const clicked = Array.isArray(point) ? point[0] : undefined;
+    if (typeof clicked !== "string" || !sportSelect) return;
+
+    const next = sportSelect.value === clicked ? "" : clicked;
+    sportClicks.reset();
+    sportSelect.value = next;
+    sportSelect.dispatchEvent(new Event("input", { bubbles: true }));
+  });
   const controls = [
-    vg.menu({
-      label: "Sport",
-      from: TABLE_NAME,
-      column: "sport",
-      as: filters,
-    }),
+    sportControl,
     vg.menu({
       label: "Sex",
       from: TABLE_NAME,
       column: "sex",
-      as: filters,
+      as: category,
     }),
     vg.search({
       label: "Athlete name",
       from: TABLE_NAME,
       column: "name",
       type: "contains",
-      as: filters,
+      as: category,
     }),
   ];
   hosts.controls.replaceChildren(...controls);
@@ -185,9 +207,15 @@ export const createAthleteExplorer = async ({
           tip: true,
         }),
         vg.intervalXY({
-          as: filters,
-          brush: { fill: "transparent", stroke: "#fc5200", strokeWidth: 1.5 },
+          as: body,
+          brush: {
+            fill: "#fc5200",
+            fillOpacity: 0.12,
+            stroke: "#fc5200",
+            strokeWidth: 1.5,
+          },
         }),
+        vg.highlight({ by: body, opacity: 0.08 }),
         vg.xyDomain(vg.Fixed),
         vg.colorDomain(["female", "male"]),
         vg.colorRange(["#fc5200", "#39434d"]),
@@ -216,7 +244,7 @@ export const createAthleteExplorer = async ({
           tip: true,
         }),
         vg.intervalX({
-          as: filters,
+          as: age,
           brush: { fill: "#fc5200", fillOpacity: 0.12, stroke: "#fc5200" },
         }),
         vg.xDomain(vg.Fixed),
@@ -235,24 +263,29 @@ export const createAthleteExplorer = async ({
   hosts.sports.replaceChildren(
     describePlot(
       vg.plot(
-        vg.barX(vg.from(TABLE_NAME, { filterBy: filters }), {
+        vg.barX(vg.from(TABLE_NAME, { filterBy: sportContext }), {
           x: vg.count(),
           y: "sport",
           fill: "#fc5200",
           fillOpacity: 0.82,
-          sort: { y: "-x", limit: 10 },
+          sort: { y: "-x" },
           tip: true,
         }),
-        vg.toggleY({ as: filters }),
+        vg.toggleY({ as: sportClicks }),
+        vg.highlight({
+          by: sport,
+          fill: "#a8aaa8",
+          fillOpacity: 0.28,
+        }),
         vg.xLabel("Athletes"),
         vg.yLabel(null),
         vg.xGrid(true),
         vg.width(430),
-        vg.height(300),
-        vg.margins({ top: 12, right: 16, bottom: 44, left: 112 }),
+        vg.height(520),
+        vg.margins({ top: 12, right: 16, bottom: 44, left: 130 }),
       ),
-      "Largest sports by athlete count",
-      "Select a bar to filter the other views to one sport.",
+      "Athletes by sport",
+      "Select a bar to filter the other views. Other sports remain visible for comparison.",
     ),
   );
 
@@ -317,7 +350,13 @@ export const createAthleteExplorer = async ({
 
   let destroyed = false;
   return {
-    reset: () => filters.reset(),
+    reset: () => {
+      category.reset();
+      sport.reset();
+      body.reset();
+      age.reset();
+      sportClicks.reset();
+    },
     destroy: () => {
       if (destroyed) return;
       destroyed = true;

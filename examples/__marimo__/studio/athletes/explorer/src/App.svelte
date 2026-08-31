@@ -13,7 +13,6 @@ import {
 } from "./lib/marimo-value.ts";
 
 type LoadState = "waiting" | "loading" | "ready" | "error";
-
 let athleteFacts = $state<MarimoTable<AthleteRow>>();
 let loadState = $state<LoadState>("waiting");
 let errorMessage = $state("");
@@ -121,10 +120,11 @@ $effect(() => {
 });
 </script>
 
-<div class="page">
+<div class="page" data-load-state={loadState}>
   <nav aria-label="Athlete views">
-    <a href="../overview/">Overview</a>
-    <a href="../explorer/" aria-current="page">Explorer</a>
+    <a href="../overview/index.html">Overview</a>
+    <a href="../explorer/index.html" aria-current="page">Explorer</a>
+    <a href="../field/index.html">Field</a>
   </nav>
 
   <header class="hero">
@@ -183,7 +183,10 @@ $effect(() => {
 
     <main class="analysis" aria-label="Athlete analysis">
       {#if loadState === "waiting" || loadState === "loading"}
-        <p class="status" role="status">Loading athlete roster…</p>
+        <p class="status status-loading" role="status">
+          <span class="status-pulse" aria-hidden="true"><i></i><i></i><i></i></span>
+          Loading athlete roster…
+        </p>
       {:else if loadState === "error"}
         <p class="status status-error" role="alert">{errorMessage}</p>
       {/if}
@@ -215,7 +218,7 @@ $effect(() => {
           <div class="panel-heading compact">
             <div>
               <p class="eyebrow">Participation</p>
-              <h2 id="sports-title">Largest sports</h2>
+              <h2 id="sports-title">Athletes by sport</h2>
             </div>
             <p>Select a bar.</p>
           </div>

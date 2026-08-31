@@ -71,7 +71,8 @@ notebook projections for the first time, so the page should feel immediate and
 confident before it feels analytical.
 
 Keep the existing composition and visual character. The memorable move is the
-black hero breaking into the volt metric strip, followed by a quiet paper report.
+black hero breaking into the volt metric strip, followed by a quiet paper
+report.
 
 ## Colors
 
@@ -88,8 +89,9 @@ context. Labels remain uppercase, compact, and widely tracked.
 ## Layout
 
 The hero spans the viewport width and uses an asymmetric two-column grid. The
-metric strip forms a hard horizontal break. The control and native output share
-a two-column report band on desktop and stack in reading order on narrow screens.
+metric strip forms a hard horizontal break. The control and selected roster
+share a two-column report band on wide screens and stack before the table
+becomes cramped. The Games-wide ranking spans the report beneath them.
 
 ## Elevation & Depth
 
@@ -99,14 +101,16 @@ offset.
 
 ## Shapes
 
-Use square corners for every report surface, control frame, and table panel.
-The diagonal hero mark supplies motion while the component geometry stays rigid.
+Use square corners for every report surface, control frame, and table panel. The
+diagonal hero mark supplies motion while the component geometry stays rigid.
 
 ## Components
 
 The native Marimo control sits in a white framed block with a volt offset. The
-native table sits in a bordered paper panel. Metrics use oversized italic
-numerals with small uppercase labels.
+selected roster stays in a bordered paper panel. Browser-native JavaScript
+renders the Games-wide ranking as white participation bars with volt medalist
+segments on black. Metrics use oversized italic numerals with small uppercase
+labels.
 
 ## Do's and Don'ts
 
