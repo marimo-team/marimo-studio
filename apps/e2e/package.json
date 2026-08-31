@@ -8,6 +8,8 @@
     "e2e": "playwright test",
     "e2e:installed": "node scripts/run-installed-package.mjs",
     "e2e:providers": "playwright test --config playwright.providers.config.ts",
+    "e2e:windows": "playwright test tests/forced-interruption.spec.ts tests/view-authoring.spec.ts tests/view-cache-performance.spec.ts --grep \"forced runner shutdown|run-mode shutdown|publishes visible edits from each built-in source model|creates a view and removes its files|keeps view removal directly available without hover|reloads a cached sibling after notebook state changes\"",
+    "e2e:windows:providers": "playwright test --config playwright.providers.config.ts provider-runtime.spec.ts",
     "e2e:ui": "playwright test --ui",
     "install-browser": "playwright install --with-deps chromium",
     "serve": "node scripts/serve.mjs",
