@@ -15,9 +15,16 @@ class SecureFileError(OSError):
 class ConditionalWriteError(SecureFileError):
     """Report a failed conditional write and any preserved recovery file."""
 
-    def __init__(self, message: str, *, recovery: Path | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        recovery: Path | None = None,
+        committed: FileIdentity | None = None,
+    ) -> None:
         super().__init__(message)
         self.recovery = recovery
+        self.committed = committed
 
 
 @dataclass(frozen=True)

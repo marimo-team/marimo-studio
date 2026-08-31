@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import stat
 from pathlib import Path
@@ -17,13 +18,12 @@ from marimo_studio.errors import ConfigurationError
 _WORKSPACE_FILE_MAX_BYTES = 64 * 1024 * 1024
 
 
-def read_file_snapshot(
+def _read_file_snapshot(
     path: Path,
     *,
     root: Path | None = None,
     filesystem: SecureDirectory | None = None,
-) -> tuple[bytes, int]:
-    """Read stable bytes and mode through one contained file descriptor."""
+) -> tuple[bytes, int, os.stat_result]:
     try:
         descriptor = (
             filesystem.open_file(path)
@@ -37,6 +37,8 @@ def read_file_snapshot(
     try:
         with os.fdopen(descriptor, "rb") as stream:
             before = os.fstat(stream.fileno())
+            if not stat.S_ISREG(before.st_mode):
+                raise ConfigurationError(f"Workspace path is not a file: {path}")
             if before.st_size > _WORKSPACE_FILE_MAX_BYTES:
                 raise ConfigurationError(
                     "Workspace file exceeds the "
@@ -51,12 +53,56 @@ def read_file_snapshot(
     except OSError as error:
         raise ConfigurationError(f"Could not read workspace file: {path}") from error
     if (
-        before.st_size != after.st_size
+        before.st_dev != after.st_dev
+        or before.st_ino != after.st_ino
+        or before.st_mode != after.st_mode
+        or before.st_size != after.st_size
         or before.st_mtime_ns != after.st_mtime_ns
         or before.st_ctime_ns != after.st_ctime_ns
     ):
         raise ConfigurationError(f"Workspace file changed while it was read: {path}")
-    return payload, stat.S_IMODE(before.st_mode)
+    return payload, stat.S_IMODE(before.st_mode), before
+
+
+def read_file_snapshot(
+    path: Path,
+    *,
+    root: Path | None = None,
+    filesystem: SecureDirectory | None = None,
+) -> tuple[bytes, int]:
+    """Read stable bytes and mode through one contained file descriptor."""
+    payload, mode, _state = _read_file_snapshot(
+        path,
+        root=root,
+        filesystem=filesystem,
+    )
+    return payload, mode
+
+
+def read_file_snapshot_with_identity(
+    path: Path,
+    *,
+    root: Path | None = None,
+    filesystem: SecureDirectory | None = None,
+) -> tuple[bytes, int, FileIdentity]:
+    """Read stable bytes, mode, and content identity from one descriptor."""
+    payload, mode, state = _read_file_snapshot(
+        path,
+        root=root,
+        filesystem=filesystem,
+    )
+    return (
+        payload,
+        mode,
+        FileIdentity(
+            state.st_dev,
+            state.st_ino,
+            state.st_mode,
+            state.st_size,
+            hashlib.sha256(payload).digest(),
+            False,
+        ),
+    )
 
 
 def read_bytes(path: Path, *, root: Path | None = None) -> bytes:

@@ -12,6 +12,7 @@ from contextlib import suppress
 from pathlib import Path
 
 from marimo_studio._filesystem._secure_types import (
+    ConditionalWriteError,
     FileIdentity,
     ParentHandle,
     SecureFileError,
@@ -312,6 +313,13 @@ def write_file_if_absent_at(
                         content,
                         mode,
                     )
+                except ConditionalWriteError as fallback_error:
+                    temporary_exists = False
+                    raise ConditionalWriteError(
+                        "Rollback snapshot was preserved after a failed commit",
+                        recovery=path.with_name(temporary_name),
+                        committed=fallback_error.committed,
+                    ) from fallback_error
                 except Exception as fallback_error:
                     temporary_exists = False
                     raise SecureFileError(
@@ -324,7 +332,15 @@ def write_file_if_absent_at(
                     "Rollback snapshot was preserved at "
                     f"{path.with_name(temporary_name)}"
                 ) from error
-        os.unlink(temporary, dir_fd=parent.descriptor)
+        try:
+            os.unlink(temporary, dir_fd=parent.descriptor)
+        except OSError as cleanup_error:
+            temporary_exists = False
+            raise ConditionalWriteError(
+                "The temporary file is preserved after the commit",
+                recovery=path.with_name(temporary_name),
+                committed=identity,
+            ) from cleanup_error
         temporary_exists = False
         if parent.descriptor is not None:
             with suppress(OSError):
@@ -349,23 +365,53 @@ def _write_direct_if_absent_at(
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     descriptor = os.open(target, flags, mode, dir_fd=parent.descriptor)
-    with os.fdopen(descriptor, "wb") as stream:
-        stream.write(content)
-        stream.flush()
+    try:
+        initial_state = os.fstat(descriptor)
+    except BaseException:
+        os.close(descriptor)
+        with suppress(OSError):
+            os.unlink(target, dir_fd=parent.descriptor)
+        raise
+    written = 0
+    current_mode = initial_state.st_mode
+    try:
+        view = memoryview(content)
+        while view:
+            count = os.write(descriptor, view)
+            if not count:
+                raise SecureFileError(f"Could not write contained file: {path}")
+            written += count
+            view = view[count:]
         if hasattr(os, "fchmod"):
-            os.fchmod(stream.fileno(), mode)
+            os.fchmod(descriptor, mode)
         else:
             os.chmod(parent.path / path.name, mode)
-        os.fsync(stream.fileno())
-        state = os.fstat(stream.fileno())
-    return FileIdentity(
-        state.st_dev,
-        state.st_ino,
-        state.st_mode,
-        state.st_size,
-        hashlib.sha256(content).digest(),
-        False,
-    )
+        current_mode = os.fstat(descriptor).st_mode
+        os.fsync(descriptor)
+        state = os.fstat(descriptor)
+        return FileIdentity(
+            state.st_dev,
+            state.st_ino,
+            state.st_mode,
+            state.st_size,
+            hashlib.sha256(content).digest(),
+            False,
+        )
+    except BaseException as error:
+        committed = FileIdentity(
+            initial_state.st_dev,
+            initial_state.st_ino,
+            current_mode,
+            written,
+            hashlib.sha256(content[:written]).digest(),
+            False,
+        )
+        raise ConditionalWriteError(
+            "A contained file was created before its write failed",
+            committed=committed,
+        ) from error
+    finally:
+        os.close(descriptor)
 
 
 def atomic_write_at(

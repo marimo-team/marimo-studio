@@ -51,6 +51,7 @@ from marimo_studio._filesystem._secure_tree import (
     regular_file_sizes as _regular_file_sizes,
 )
 from marimo_studio._filesystem._secure_types import (
+    ConditionalWriteError,
     FileIdentity,
     SecureFileError,
 )
@@ -193,24 +194,33 @@ class SecureDirectory:
         finally:
             os.close(descriptor)
 
-    def ensure_attached(self) -> None:
-        """Require the held directory to remain at its original path."""
+    def ensure_attached(self, expected: FileIdentity | None = None) -> None:
+        """Require the held directory incarnation to remain at its path."""
         if self._owner.descriptor is None:
             handle = _windows_directory_handle(self.root)
             _close_windows_handle(handle)
-            return
-        held = os.fstat(self._owner.descriptor)
-        try:
             current = self.root.stat(follow_symlinks=False)
-        except OSError as error:
-            raise SecureFileError(
-                f"Secure directory moved during the transaction: {self.root}"
-            ) from error
-        if (
+            held = current
+        else:
+            held = os.fstat(self._owner.descriptor)
+            try:
+                current = self.root.stat(follow_symlinks=False)
+            except OSError as error:
+                raise SecureFileError(
+                    f"Secure directory moved during the transaction: {self.root}"
+                ) from error
+        expected_matches = expected is None or (
+            expected.directory
+            and held.st_dev == expected.device
+            and held.st_ino == expected.inode
+            and held.st_mode == expected.mode
+        )
+        if not expected_matches or (
             stat.S_ISLNK(current.st_mode)
             or not stat.S_ISDIR(current.st_mode)
             or current.st_dev != held.st_dev
             or current.st_ino != held.st_ino
+            or current.st_mode != held.st_mode
         ):
             raise SecureFileError(
                 f"Secure directory moved during the transaction: {self.root}"
@@ -455,20 +465,35 @@ class SecureDirectory:
         _root, _selected_path, relative = _contained(self.root, path)
         return self._ensure_components(path, relative.parts)
 
-    def create_directory(self, path: Path, mode: int = 0o700) -> None:
-        """Create one absent contained directory through its stable parent."""
+    def create_directory(self, path: Path, mode: int = 0o700) -> FileIdentity:
+        """Publish one empty directory while its destination remains absent."""
         with self._parent(path) as parent:
-            target: str | Path = path.name if parent.descriptor is not None else path
-            os.mkdir(target, mode, dir_fd=parent.descriptor)
-            state = os.stat(
-                target,
-                dir_fd=parent.descriptor,
-                follow_symlinks=False,
+            temporary_name = f".{path.name}.{secrets.token_hex(8)}.claim"
+            temporary = path.with_name(temporary_name)
+            target: str | Path = (
+                temporary_name if parent.descriptor is not None else temporary
             )
-            if stat.S_ISLNK(state.st_mode) or not stat.S_ISDIR(state.st_mode):
-                raise SecureFileError(
-                    f"Contained path is not a stable directory: {path}"
+            temporary_exists = False
+            try:
+                os.mkdir(target, mode, dir_fd=parent.descriptor)
+                temporary_exists = True
+                state = os.stat(
+                    target,
+                    dir_fd=parent.descriptor,
+                    follow_symlinks=False,
                 )
+                if stat.S_ISLNK(state.st_mode) or not stat.S_ISDIR(state.st_mode):
+                    raise SecureFileError(
+                        f"Contained path is not a stable directory: {path}"
+                    )
+                identity = _directory_identity(state)
+                rename_if_absent(parent, temporary, parent, path)
+                temporary_exists = False
+                return identity
+            finally:
+                if temporary_exists:
+                    with suppress(OSError):
+                        os.rmdir(target, dir_fd=parent.descriptor)
 
     def children(self) -> tuple[Path, ...]:
         """List direct children through the stable root owner."""
@@ -577,9 +602,16 @@ class SecureDirectory:
                 )
                 if actual == expected:
                     return path.with_name(quarantine_name)
-            raise SecureFileError(
-                "Contained directory changed before rollback and was preserved at "
-                f"{path.with_name(quarantine_name)}"
+            recovery = path.with_name(quarantine_name)
+            try:
+                rename_if_absent(parent, recovery, parent, path)
+            except OSError as restore_error:
+                raise ConditionalWriteError(
+                    "Contained directory changed before rollback and was preserved",
+                    recovery=recovery,
+                ) from restore_error
+            raise ConditionalWriteError(
+                "Contained directory changed before rollback and was restored"
             )
 
     def restore_file_if_absent(
@@ -588,6 +620,16 @@ class SecureDirectory:
         content: bytes,
         mode: int,
     ) -> FileIdentity:
+        with self._parent(path) as parent:
+            return _write_file_if_absent_at(parent, path, content, mode)
+
+    def write_file_if_absent(
+        self,
+        path: Path,
+        content: bytes,
+        mode: int = 0o600,
+    ) -> FileIdentity:
+        """Write one complete file when its leaf remains absent."""
         with self._parent(path) as parent:
             return _write_file_if_absent_at(parent, path, content, mode)
 

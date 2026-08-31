@@ -5,14 +5,19 @@ from __future__ import annotations
 import errno
 import os
 import stat
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
 import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._workspace.transactions as workspace_transactions
 from marimo_studio._filesystem import _secure_operations as secure_operations
-from marimo_studio._filesystem._secure_types import ParentHandle
+from marimo_studio._filesystem._secure_types import (
+    ConditionalWriteError,
+    ParentHandle,
+    SecureFileError,
+)
+from marimo_studio._filesystem.io import read_file_snapshot_with_identity
 from marimo_studio.errors import ConfigurationError
 
 
@@ -117,6 +122,469 @@ def test_file_transaction_restores_content_and_mode_after_rollback(
 
     assert target.read_bytes() == b"original\n"
     assert stat.S_IMODE(target.stat().st_mode) == 0o751
+
+
+def test_file_transaction_rejects_a_changed_read_identity(tmp_path: Path) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    target = root / "source.txt"
+    target.write_bytes(b"observed")
+    _content, _mode, identity = read_file_snapshot_with_identity(target, root=root)
+    target.write_bytes(b"concurrent")
+
+    with (
+        pytest.raises(ConfigurationError, match="changed"),
+        workspace_transactions.write_file_transaction(
+            root,
+            {target: b"planned"},
+            expected={target: identity},
+        ),
+    ):
+        pass
+
+    assert target.read_bytes() == b"concurrent"
+
+
+def test_file_transaction_preserves_a_new_file_at_an_expected_absence(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    target = root / "source.txt"
+    target.write_bytes(b"concurrent")
+
+    with (
+        pytest.raises(ConfigurationError, match="changed"),
+        workspace_transactions.write_file_transaction(
+            root,
+            {target: b"planned"},
+            expected={target: None},
+        ),
+    ):
+        pass
+
+    assert target.read_bytes() == b"concurrent"
+
+
+def test_file_transaction_rolls_back_after_replacement_cleanup_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    target = root / "source.txt"
+    target.write_bytes(b"observed")
+    _content, _mode, identity = read_file_snapshot_with_identity(target, root=root)
+    unlink = secure_files.SecureDirectory.unlink
+    failed = False
+
+    def fail_claim_cleanup(
+        filesystem: secure_files.SecureDirectory,
+        path: Path,
+    ) -> None:
+        nonlocal failed
+        if not failed and path.name.startswith(".source.txt.rollback-"):
+            failed = True
+            raise OSError("claim cleanup failed")
+        unlink(filesystem, path)
+
+    monkeypatch.setattr(
+        secure_files.SecureDirectory,
+        "unlink",
+        fail_claim_cleanup,
+    )
+
+    with (
+        pytest.raises(ConditionalWriteError) as captured,
+        workspace_transactions.write_file_transaction(
+            root,
+            {target: b"planned"},
+            expected={target: identity},
+        ),
+    ):
+        pass
+
+    assert target.read_bytes() == b"observed"
+    assert captured.value.recovery is not None
+    assert captured.value.recovery.read_bytes() == b"observed"
+
+
+def test_file_transaction_removes_created_file_after_temp_cleanup_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    target = root / "created.txt"
+    unlink = secure_operations.os.unlink
+    failed = False
+
+    def fail_temp_cleanup(
+        path: os.PathLike[str] | str,
+        *,
+        dir_fd: int | None = None,
+    ) -> None:
+        nonlocal failed
+        if not failed and ".created.txt.restore-" in str(path):
+            failed = True
+            raise OSError("temporary cleanup failed")
+        unlink(path, dir_fd=dir_fd)
+
+    monkeypatch.setattr(secure_operations.os, "unlink", fail_temp_cleanup)
+
+    with (
+        pytest.raises(ConditionalWriteError) as captured,
+        workspace_transactions.write_file_transaction(
+            root,
+            {target: b"planned"},
+            expected={target: None},
+        ),
+    ):
+        pass
+
+    assert not target.exists()
+    assert captured.value.recovery is not None
+    assert captured.value.recovery.read_bytes() == b"planned"
+
+
+def test_file_transaction_rolls_back_a_replacement_after_identity_read_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "workspace"
+    view = root / "views" / "dashboard"
+    view.parent.mkdir(parents=True)
+    config = root / "config.toml"
+    config.write_bytes(b"original")
+    _content, _mode, config_identity = read_file_snapshot_with_identity(
+        config,
+        root=root,
+    )
+    file_identity = secure_files.SecureDirectory.file_identity
+    failed = False
+
+    def fail_committed_identity(
+        filesystem: secure_files.SecureDirectory,
+        path: Path,
+    ) -> secure_files.FileIdentity:
+        nonlocal failed
+        if path == config and not failed:
+            failed = True
+            raise PermissionError("identity unavailable")
+        return file_identity(filesystem, path)
+
+    monkeypatch.setattr(
+        secure_files.SecureDirectory,
+        "file_identity",
+        fail_committed_identity,
+    )
+
+    with (
+        pytest.raises(ConditionalWriteError) as captured,
+        workspace_transactions.write_file_transaction(
+            root,
+            {
+                view / "index.html": b"<main>ready</main>",
+                view / "view.toml": b'provider = "fixture"\n',
+                config: b"configured",
+            },
+            expected={
+                view / "index.html": None,
+                view / "view.toml": None,
+                config: config_identity,
+            },
+            claimed_directories={
+                view: (
+                    PurePosixPath("view.toml"),
+                    PurePosixPath("index.html"),
+                )
+            },
+        ),
+    ):
+        pass
+
+    assert failed
+    assert config.read_bytes() == b"original"
+    assert not view.exists()
+    assert captured.value.recovery is not None
+    assert captured.value.recovery.read_bytes() == b"original"
+
+
+def test_file_transaction_preserves_the_prior_source_after_publication_race(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "workspace"
+    view = root / "views" / "dashboard"
+    view.parent.mkdir(parents=True)
+    config = root / "config.toml"
+    config.write_bytes(b"original")
+    _content, _mode, config_identity = read_file_snapshot_with_identity(
+        config,
+        root=root,
+    )
+    rename = secure_files.SecureDirectory.rename_if_absent
+    raced = False
+
+    def publish_external_destination(
+        filesystem: secure_files.SecureDirectory,
+        source: Path,
+        destination: Path,
+    ) -> None:
+        nonlocal raced
+        if destination == config and source.name.endswith(".cas") and not raced:
+            raced = True
+            destination.write_bytes(b"external")
+        rename(filesystem, source, destination)
+
+    monkeypatch.setattr(
+        secure_files.SecureDirectory,
+        "rename_if_absent",
+        publish_external_destination,
+    )
+
+    with (
+        pytest.raises(ConditionalWriteError) as captured,
+        workspace_transactions.write_file_transaction(
+            root,
+            {
+                view / "index.html": b"<main>ready</main>",
+                view / "view.toml": b'provider = "fixture"\n',
+                config: b"configured",
+            },
+            expected={
+                view / "index.html": None,
+                view / "view.toml": None,
+                config: config_identity,
+            },
+            claimed_directories={
+                view: (
+                    PurePosixPath("view.toml"),
+                    PurePosixPath("index.html"),
+                )
+            },
+        ),
+    ):
+        pass
+
+    assert raced
+    assert config.read_bytes() == b"external"
+    assert not view.exists()
+    assert captured.value.recovery is not None
+    assert captured.value.recovery.read_bytes() == b"original"
+
+
+def test_file_transaction_rejects_a_replaced_directory_claim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "workspace"
+    view = root / "views" / "dashboard"
+    view.parent.mkdir(parents=True)
+    displaced = view.parent / "displaced-dashboard"
+    create_directory = secure_files.SecureDirectory.create_directory
+    swapped = False
+
+    def swap_claim(
+        filesystem: secure_files.SecureDirectory,
+        path: Path,
+        mode: int = 0o700,
+    ) -> secure_files.FileIdentity:
+        nonlocal swapped
+        identity = create_directory(filesystem, path, mode)
+        if path == view and not swapped:
+            swapped = True
+            path.rename(displaced)
+            path.mkdir()
+            path.joinpath("external.txt").write_text("external", encoding="utf-8")
+        return identity
+
+    monkeypatch.setattr(
+        secure_files.SecureDirectory,
+        "create_directory",
+        swap_claim,
+    )
+
+    with (
+        pytest.raises(SecureFileError, match="moved"),
+        workspace_transactions.write_file_transaction(
+            root,
+            {
+                view / "index.html": b"<main>ready</main>",
+                view / "view.toml": b'provider = "fixture"\n',
+            },
+            expected={
+                view / "index.html": None,
+                view / "view.toml": None,
+            },
+            claimed_directories={
+                view: (
+                    PurePosixPath("view.toml"),
+                    PurePosixPath("index.html"),
+                )
+            },
+        ),
+    ):
+        pass
+
+    assert swapped
+    assert view.joinpath("external.txt").read_text(encoding="utf-8") == "external"
+    assert not view.joinpath("view.toml").exists()
+    assert not view.joinpath("index.html").exists()
+    assert displaced.is_dir()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows pins open directory paths")
+def test_file_transaction_rejects_a_claim_swapped_during_final_identity_check(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "workspace"
+    view = root / "views" / "dashboard"
+    view.parent.mkdir(parents=True)
+    manifest = view / "view.toml"
+    displaced = view.parent / "displaced-dashboard"
+    file_identity = secure_files.SecureDirectory.file_identity
+    identity_reads = 0
+    swapped = False
+
+    def swap_after_final_identity(
+        filesystem: secure_files.SecureDirectory,
+        path: Path,
+    ) -> secure_files.FileIdentity:
+        nonlocal identity_reads, swapped
+        identity = file_identity(filesystem, path)
+        if filesystem.root == view and path == manifest:
+            identity_reads += 1
+            if identity_reads == 2:
+                swapped = True
+                view.rename(displaced)
+                view.mkdir()
+                view.joinpath("external.txt").write_text(
+                    "external",
+                    encoding="utf-8",
+                )
+        return identity
+
+    monkeypatch.setattr(
+        secure_files.SecureDirectory,
+        "file_identity",
+        swap_after_final_identity,
+    )
+
+    with (
+        pytest.raises(SecureFileError, match="moved"),
+        workspace_transactions.write_file_transaction(
+            root,
+            {manifest: b'provider = "fixture"\n'},
+            expected={manifest: None},
+            claimed_directories={
+                view: (PurePosixPath("view.toml"),),
+            },
+        ),
+    ):
+        pass
+
+    assert swapped
+    assert view.joinpath("external.txt").read_text(encoding="utf-8") == "external"
+    assert not view.joinpath("view.toml").exists()
+    assert not displaced.joinpath("view.toml").exists()
+
+
+@pytest.mark.native_process
+@pytest.mark.skipif(os.name != "nt", reason="Windows owns directory sharing behavior")
+def test_file_transaction_removes_a_claimed_root_on_windows_rollback(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "workspace"
+    view = root / "views" / "dashboard"
+    view.parent.mkdir(parents=True)
+
+    with (
+        pytest.raises(RuntimeError, match="abort"),
+        workspace_transactions.write_file_transaction(
+            root,
+            {view / "view.toml": b'provider = "fixture"\n'},
+            expected={view / "view.toml": None},
+            claimed_directories={
+                view: (PurePosixPath("view.toml"),),
+            },
+        ),
+    ):
+        raise RuntimeError("abort")
+
+    assert not view.exists()
+
+
+def test_file_transaction_cleans_a_directory_claim_after_validation_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "workspace"
+    view = root / "views" / "dashboard"
+    view.parent.mkdir(parents=True)
+
+    def fail_identity(_state: os.stat_result) -> secure_files.FileIdentity:
+        raise PermissionError("identity unavailable")
+
+    monkeypatch.setattr(secure_files, "_directory_identity", fail_identity)
+
+    with (
+        pytest.raises(PermissionError, match="identity unavailable"),
+        workspace_transactions.write_file_transaction(
+            root,
+            {view / "view.toml": b'provider = "fixture"\n'},
+            expected={view / "view.toml": None},
+            claimed_directories={
+                view: (PurePosixPath("view.toml"),),
+            },
+        ),
+    ):
+        pass
+
+    assert not view.exists()
+    assert not tuple(view.parent.glob(".dashboard.*.claim"))
+
+
+def test_file_transaction_removes_a_partial_direct_absent_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    target = root / "created.txt"
+    fsync = secure_operations.os.fsync
+    calls = 0
+    failed = False
+
+    def reject_hard_link(*_args: object, **_kwargs: object) -> None:
+        raise OSError(errno.EPERM, "hard links unavailable")
+
+    def fail_direct_fsync(descriptor: int) -> None:
+        nonlocal calls, failed
+        calls += 1
+        if calls == 2 and not failed:
+            failed = True
+            raise OSError("direct fsync failed")
+        fsync(descriptor)
+
+    monkeypatch.setattr(secure_operations.os, "link", reject_hard_link)
+    monkeypatch.setattr(secure_operations.os, "fsync", fail_direct_fsync)
+
+    with (
+        pytest.raises(ConditionalWriteError) as captured,
+        workspace_transactions.write_file_transaction(
+            root,
+            {target: b"planned"},
+            expected={target: None},
+        ),
+    ):
+        pass
+
+    assert failed
+    assert not target.exists()
+    assert captured.value.recovery is not None
+    assert captured.value.recovery.read_bytes() == b"planned"
 
 
 @pytest.mark.skipif(
@@ -279,9 +747,7 @@ def test_file_transaction_preserves_directory_replaced_before_removal(
     ):
         raise RuntimeError("abort")
 
-    quarantines = tuple(outer.glob(".created.rollback-*"))
-    assert len(quarantines) == 1
-    assert (quarantines[0] / "external.txt").read_bytes() == b"external"
+    assert (directory / "external.txt").read_bytes() == b"external"
     assert "created" in " ".join(getattr(captured.value, "__notes__", ()))
 
 

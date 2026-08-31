@@ -191,7 +191,7 @@ def test_source_commit_preserves_the_file_mode(notebook_path: Path) -> None:
     assert stat.S_IMODE(path.stat().st_mode) == 0o664
 
 
-def test_source_commit_cleans_its_claim_after_identity_failure(
+def test_source_commit_preserves_recovery_after_identity_failure(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -228,9 +228,12 @@ def test_source_commit_cleans_its_claim_after_identity_failure(
         )
 
     assert failed
-    assert error.value.external_recovery is None
+    assert error.value.external_recovery is not None
+    assert (
+        Path(error.value.external_recovery).read_text(encoding="utf-8")
+        == current.content
+    )
     assert path.read_text(encoding="utf-8") == replacement
-    assert not tuple(path.parent.glob(f".{path.name}.rollback-*"))
     assert not tuple(path.parent.glob(f".{path.name}.*.cas"))
 
 

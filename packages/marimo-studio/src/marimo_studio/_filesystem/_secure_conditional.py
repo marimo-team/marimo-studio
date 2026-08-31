@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import errno
+import hashlib
 import os
 import secrets
 import stat
@@ -46,14 +47,11 @@ def _finalize_failed_replacement(
 ) -> None:
     try:
         filesystem.rename_if_absent(claimed, path)
-    except FileExistsError:
-        try:
-            filesystem.unlink(claimed)
-        except OSError as cleanup_error:
-            raise ConditionalWriteError(
-                "The previous source is preserved after a failed commit",
-                recovery=claimed,
-            ) from cleanup_error
+    except FileExistsError as restore_error:
+        raise ConditionalWriteError(
+            "The previous source is preserved after a failed commit",
+            recovery=claimed,
+        ) from restore_error
     except OSError as restore_error:
         raise ConditionalWriteError(
             "The previous source is preserved after a failed commit",
@@ -81,6 +79,15 @@ def replace_file_if_identity(
         if hasattr(os, "fchmod"):
             os.fchmod(descriptor, stat.S_IMODE(expected.mode))
         os.fsync(descriptor)
+        state = os.fstat(descriptor)
+        replacement_identity = FileIdentity(
+            state.st_dev,
+            state.st_ino,
+            state.st_mode,
+            state.st_size,
+            hashlib.sha256(content).digest(),
+            False,
+        )
         os.close(descriptor)
         descriptor = -1
         claimed = filesystem.quarantine_if_identity(path, expected)
@@ -92,15 +99,25 @@ def replace_file_if_identity(
             raise
         try:
             identity = filesystem.file_identity(path)
-        except BaseException:
-            _finalize_failed_replacement(filesystem, claimed, path)
-            raise
+        except BaseException as identity_error:
+            raise ConditionalWriteError(
+                "The previous source is preserved after the commit",
+                recovery=claimed,
+                committed=replacement_identity,
+            ) from identity_error
+        if identity != replacement_identity:
+            raise ConditionalWriteError(
+                "The previous source is preserved after the commit",
+                recovery=claimed,
+                committed=replacement_identity,
+            )
         try:
             filesystem.unlink(claimed)
         except OSError as cleanup_error:
             raise ConditionalWriteError(
                 "The previous source is preserved after the commit",
                 recovery=claimed,
+                committed=identity,
             ) from cleanup_error
         return identity
     finally:
