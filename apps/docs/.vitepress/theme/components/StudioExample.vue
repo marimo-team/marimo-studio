@@ -26,7 +26,6 @@ const example = documentationExampleFamilies.find(({ slug }) => slug === props.f
 if (!example) {
   throw new Error(`Unknown documentation example family: ${props.family}`);
 }
-const viewCountLabel = `${example.views.length} ${example.views.length === 1 ? "view" : "views"}`;
 
 const notebookTab = {
   key: "notebook",
@@ -94,7 +93,6 @@ const markLoaded = (): void => {
   <figure class="studio-example">
     <header class="studio-example__header">
       <div class="studio-example__heading">
-        <span class="studio-example__eyebrow"> 1 notebook · {{ viewCountLabel }} </span>
         <h3>{{ example.title }}</h3>
       </div>
       <a
@@ -226,20 +224,9 @@ const markLoaded = (): void => {
   min-width: 0;
 }
 
-.studio-example__eyebrow,
 .studio-example__current,
 figcaption {
   font-family: var(--vp-font-family-mono);
-}
-
-.studio-example__eyebrow {
-  display: block;
-  margin-bottom: 0.45rem;
-  color: var(--studio-example-accent);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
 }
 
 .studio-example h3 {

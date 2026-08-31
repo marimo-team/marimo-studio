@@ -313,7 +313,6 @@ body {
   color: var(--vp-c-text-1);
 }
 
-.studio-example-catalog span,
 .studio-example-catalog small {
   font-family: var(--vp-font-family-mono);
 }
@@ -340,16 +339,8 @@ body {
   }
 }
 
-.studio-example-catalog span {
-  color: var(--vp-c-brand-1);
-  font-size: 0.68rem;
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .studio-example-catalog strong {
-  margin-top: 0.8rem;
+  margin-top: 0;
   font-family: var(--studio-font-family-heading);
   font-size: 1.2rem;
   letter-spacing: -0.02em;
