@@ -9,6 +9,7 @@ import {
   integer,
 } from "../briefing-data.ts";
 import { ActivityBars, Metric } from "./BriefingPrimitives.tsx";
+import { EventGlobe, MagnitudeLadder, ScopeGauge } from "./BriefingVisuals.tsx";
 
 const autoAnimate = {
   autoAnimate: true,
@@ -28,12 +29,37 @@ export const CoverSlide = ({ model }: { model: BriefingModel }) => (
       <p className="deck-kicker">
         USGS · Global M2.5+ · {formatPeriod(model.weekly)}
       </p>
-      <div className="cover-title">
-        <h1>Weekly seismic situation update</h1>
-        <p className="deck-lede">
-          Global activity, felt reports, tsunami flags, and events for the next
-          duty team.
-        </p>
+      <div className="cover-body">
+        <div className="cover-title">
+          <h1>Weekly seismic situation update</h1>
+          <p className="deck-lede">
+            Global activity, felt reports, tsunami flags, and events for the
+            next duty team.
+          </p>
+        </div>
+        <div className="cover-visual">
+          <EventGlobe events={model.strongest} />
+          <dl className="cover-readout" aria-label="Weekly briefing summary">
+            <div>
+              <dt>Events reviewed</dt>
+              <dd>
+                {model.weekly
+                  ? integer.format(model.weekly.qualified_events)
+                  : "…"}
+              </dd>
+            </div>
+            <div>
+              <dt>Largest event</dt>
+              <dd>M{model.weekly?.maximum_magnitude.toFixed(1) ?? "…"}</dd>
+            </div>
+            <div>
+              <dt>Felt reports</dt>
+              <dd>
+                {model.weekly ? integer.format(model.weekly.felt_reports) : "…"}
+              </dd>
+            </div>
+          </dl>
+        </div>
       </div>
       <footer className="cover-meta">
         <span>Duty handover</span>
@@ -72,7 +98,7 @@ export const ExecutiveSlide = ({ model }: { model: BriefingModel }) => (
               : "…"}
           />
           <Metric
-            label="reported magnitude"
+            label="M2.5+ events"
             value={model.weekly
               ? integer.format(model.weekly.qualified_events)
               : "…"}
@@ -124,7 +150,15 @@ export const TempoSlide = ({ model }: { model: BriefingModel }) => (
           {model.peakActivity
             ? `Volume peaked on ${formatDay(model.peakActivity.day)} with ${
               integer.format(model.peakActivity.events)
-            } recorded events.`
+            } recorded events. Daily magnitude reached M${
+              model.maximumDailyMagnitude.toFixed(1)
+            } on ${
+              formatDay(
+                model.activity.find((row) =>
+                  row.maximum_magnitude === model.maximumDailyMagnitude
+                )?.day ?? model.peakActivity.day,
+              )
+            }.`
             : "Daily activity is loading."}
         </p>
       </header>
@@ -164,7 +198,26 @@ export const OperatingPictureSlide = (
       <div className="operating-frame">
         <div className="control-block">
           <span className="frame-label">Review filters</span>
-          <marimo-cell name="event_controls" />
+          <div className="control-layout">
+            <marimo-cell name="event_controls" />
+            <aside className="baseline-card">
+              <span>Full-week baseline</span>
+              <strong>
+                {model.weekly
+                  ? `${
+                    integer.format(model.weekly.source_events)
+                  } source events`
+                  : "Weekly record loading"}
+              </strong>
+              <p>
+                {model.weekly
+                  ? `${
+                    integer.format(model.weekly.qualified_events)
+                  } met the published threshold · ${model.weekly.tsunami_flags} tsunami flags`
+                  : "Loading threshold and impact totals"}
+              </p>
+            </aside>
+          </div>
         </div>
 
         <div
@@ -202,6 +255,26 @@ export const OperatingPictureSlide = (
               value={model.summary?.tsunami_flags ?? "…"}
             />
           </div>
+          <div className="scope-row" aria-label="Selected scope comparison">
+            <ScopeGauge
+              selected={model.summary?.events ?? 0}
+              total={model.weekly?.source_events ?? 0}
+            />
+            <span>
+              <strong>
+                {model.summary && model.weekly
+                  ? integer.format(
+                    model.weekly.source_events - model.summary.events,
+                  )
+                  : "…"}
+              </strong>
+              events outside the cut
+            </span>
+            <span>
+              <strong>{model.summary?.tsunami_flags ?? "…"}</strong>
+              tsunami flags retained
+            </span>
+          </div>
         </div>
       </div>
 
@@ -237,13 +310,29 @@ export const WatchlistSlide = ({ model }: { model: BriefingModel }) => (
             M {model.primaryEvent?.magnitude.toFixed(1) ?? "…"}
           </strong>
           <h3>{model.primaryEvent?.place ?? "Loading event record"}</h3>
-          <p>
-            {model.primaryEvent
-              ? `${formatTime(model.primaryEvent.time)} · ${
-                feltLabel(model.primaryEvent.felt)
-              }`
-              : "Waiting for event details"}
-          </p>
+          <dl className="watch-facts">
+            <div>
+              <dt>Recorded</dt>
+              <dd>
+                {model.primaryEvent
+                  ? formatTime(model.primaryEvent.time)
+                  : "Loading"}
+              </dd>
+            </div>
+            <div>
+              <dt>Impact signal</dt>
+              <dd>
+                {model.primaryEvent
+                  ? feltLabel(model.primaryEvent.felt)
+                  : "Loading"}
+              </dd>
+            </div>
+            <div>
+              <dt>Watch position</dt>
+              <dd>01 of {model.strongest.length || "…"}</dd>
+            </div>
+          </dl>
+          <MagnitudeLadder events={model.strongest} />
           {model.primaryEvent?.tsunami
             ? <span className="event-alert">Tsunami flag</span>
             : null}
@@ -258,7 +347,7 @@ export const WatchlistSlide = ({ model }: { model: BriefingModel }) => (
               <strong>M {event.magnitude.toFixed(1)}</strong>
               <span className="watch-place">{event.place}</span>
               <small>
-                {feltLabel(event.felt)}
+                {formatTime(event.time)} · {feltLabel(event.felt)}
                 {event.tsunami ? " · Tsunami flag" : ""}
               </small>
             </li>
@@ -273,7 +362,7 @@ export const WatchlistSlide = ({ model }: { model: BriefingModel }) => (
   </Slide>
 );
 
-export const HandoffSlide = () => (
+export const HandoffSlide = ({ model }: { model: BriefingModel }) => (
   <Slide>
     <div className="briefing-slide handoff-slide">
       <header className="slide-header">
@@ -286,19 +375,55 @@ export const HandoffSlide = () => (
       <div className="handoff-layout">
         <div className="conclusion-card">
           <marimo-cell name="conclusion" />
+          <div className="handoff-watch">
+            <span className="frame-label">Lead watch</span>
+            <strong>
+              {model.primaryEvent
+                ? `M${model.primaryEvent.magnitude.toFixed(1)} · ${
+                  concisePlace(model.primaryEvent.place)
+                }`
+                : "Lead event loading"}
+            </strong>
+            <p>
+              {model.primaryEvent
+                ? `${formatTime(model.primaryEvent.time)} · ${
+                  feltLabel(model.primaryEvent.felt)
+                }`
+                : "Waiting for event details"}
+            </p>
+          </div>
+          <div className="handoff-metrics">
+            <Metric
+              label="events in cut"
+              value={model.summary ? integer.format(model.summary.events) : "…"}
+            />
+            <Metric
+              label="maximum magnitude"
+              value={model.summary?.maximum_magnitude.toFixed(1) ?? "…"}
+            />
+            <Metric
+              label="tsunami flags"
+              value={model.summary?.tsunami_flags ?? "…"}
+            />
+          </div>
         </div>
         <div className="handoff-actions">
           <article>
+            <strong className="action-index" aria-hidden="true">01</strong>
             <span>Monitor</span>
             <p>
-              Review updates for the largest event and nearby sequence.
+              Review updates for {model.primaryEvent
+                ? concisePlace(model.primaryEvent.place)
+                : "the lead event"} and nearby activity.
             </p>
           </article>
           <article>
+            <strong className="action-index" aria-hidden="true">02</strong>
             <span>Escalate</span>
             <p>Any new tsunami flag or sharp rise in felt reports.</p>
           </article>
           <article>
+            <strong className="action-index" aria-hidden="true">03</strong>
             <span>Follow-up</span>
             <p>Operations for event follow-up. Story for broader context.</p>
           </article>

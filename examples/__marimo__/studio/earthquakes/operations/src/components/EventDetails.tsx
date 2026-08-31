@@ -7,12 +7,14 @@ import {
 
 interface PriorityEventsProps {
   events: readonly EarthquakeEvent[];
+  loading: boolean;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }
 
 export const PriorityEvents = ({
   events,
+  loading,
   selectedId,
   onSelect,
 }: PriorityEventsProps) => (
@@ -24,7 +26,18 @@ export const PriorityEvents = ({
       <p className="eyebrow">Ranked by magnitude</p>
       <h2 id="priority-title">Priority events</h2>
     </div>
-    {events.length > 0
+    {loading
+      ? (
+        <div className="event-list-loader" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+          <i />
+          <i />
+          <i />
+        </div>
+      )
+      : events.length > 0
       ? (
         <ol className="event-list">
           {events.map((event) => (
@@ -48,9 +61,10 @@ export const PriorityEvents = ({
 
 interface EventDetailsProps {
   event: EarthquakeEvent | null;
+  loading: boolean;
 }
 
-export const EventDetails = ({ event }: EventDetailsProps) => (
+export const EventDetails = ({ event, loading }: EventDetailsProps) => (
   <aside
     className="detail-panel"
     aria-labelledby="detail-title"
@@ -59,12 +73,23 @@ export const EventDetails = ({ event }: EventDetailsProps) => (
     <div className="section-heading">
       <p className="eyebrow">Selected event</p>
       <h2 id="detail-title">
-        {event
+        {loading
+          ? "Loading event"
+          : event
           ? `Magnitude ${formatMagnitude(event.magnitude)}`
           : "No selection"}
       </h2>
     </div>
-    {event
+    {loading
+      ? (
+        <div className="detail-loader" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+          <i />
+        </div>
+      )
+      : event
       ? (
         <>
           <p className="event-place">{event.place}</p>

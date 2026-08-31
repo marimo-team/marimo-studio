@@ -70,6 +70,11 @@ export const App = () => {
     weeklyProjection.error ||
     activityProjection.error ||
     eventsProjection.error;
+  const loading = !projectionError &&
+    (summaryProjection.value === undefined ||
+      weeklyProjection.value === undefined ||
+      activityProjection.value === undefined ||
+      eventsProjection.value === undefined);
 
   return (
     <>
@@ -103,6 +108,19 @@ export const App = () => {
       />
 
       <main className="deck-shell">
+        {loading
+          ? (
+            <div className="briefing-loader" role="status">
+              <span className="briefing-loader-sheet" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+                <i />
+              </span>
+              Preparing weekly briefing
+            </div>
+          )
+          : null}
         {projectionError
           ? (
             <p className="deck-error" role="alert">
@@ -117,7 +135,7 @@ export const App = () => {
           <TempoSlide model={model} />
           <OperatingPictureSlide model={model} />
           <WatchlistSlide model={model} />
-          <HandoffSlide />
+          <HandoffSlide model={model} />
         </Deck>
       </main>
     </>

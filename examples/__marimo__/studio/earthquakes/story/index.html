@@ -11,274 +11,354 @@
     />
     <title>Earthquake Watch · one week in motion</title>
     <style>
-      :root {
-        color-scheme: light;
-        --paper: #efefec;
-        --ink: #171716;
-        --muted: #64615b;
-        --line: #aaa69f;
-        --magma: #f25533;
-        --sulfur: #dc8c46;
-        --panel: #f8f7f2;
-        --atlas: #26351b;
-        --atlas-elevated: #334722;
-        --atlas-text: #f5f1e8;
-        --atlas-muted: #bdc7b6;
-        --text-font: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
-        --heading-font: "Source Serif 4", Georgia, serif;
-        --monospace-font:
-          "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    :root {
+      color-scheme: light;
+      --paper: #efefec;
+      --ink: #171716;
+      --muted: #64615b;
+      --line: #aaa69f;
+      --magma: #f25533;
+      --sulfur: #dc8c46;
+      --panel: #f8f7f2;
+      --atlas: #26351b;
+      --atlas-elevated: #334722;
+      --atlas-text: #f5f1e8;
+      --atlas-muted: #bdc7b6;
+      --text-font: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+      --heading-font: "Source Serif 4", Georgia, serif;
+      --monospace-font:
+        "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--text-font);
+    }
+    a {
+      color: inherit;
+    }
+    #app-shell {
+      width: min(92rem, calc(100% - 2rem));
+      margin: 0 auto;
+    }
+    nav {
+      position: relative;
+      z-index: 4;
+      display: flex;
+      gap: 1.2rem;
+      padding: 1.2rem 0;
+      border-bottom: 1px solid var(--line);
+      font-family: var(--monospace-font);
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+    nav a {
+      text-decoration: none;
+    }
+    nav a:hover,
+    nav a:focus-visible {
+      text-decoration: underline;
+      text-underline-offset: 0.25em;
+    }
+    nav a[aria-current="page"] {
+      color: var(--magma);
+    }
+    .hero {
+      min-height: 78vh;
+      display: grid;
+      align-content: center;
+      grid-template-columns: minmax(0, 1fr) minmax(16rem, 28rem);
+      gap: 3rem;
+      border-bottom: 2px solid var(--ink);
+    }
+    .eyebrow {
+      margin: 0 0 0.75rem;
+      color: var(--magma);
+      font-family: var(--monospace-font);
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    h1,
+    h2 {
+      font-family: var(--heading-font);
+      font-weight: 500;
+    }
+    h1 {
+      max-width: 10ch;
+      margin: 0;
+      font-size: clamp(4rem, 10vw, 8rem);
+      line-height: 0.88;
+      letter-spacing: -0.065em;
+    }
+    .hero-copy {
+      align-self: end;
+      padding-bottom: 1rem;
+      color: var(--muted);
+      font-family: var(--heading-font);
+      font-size: 1.3rem;
+      line-height: 1.55;
+    }
+    .story {
+      display: grid;
+      grid-template-columns: minmax(16rem, 0.36fr) minmax(0, 0.64fr);
+      gap: clamp(2rem, 6vw, 6rem);
+      padding: 5rem 0 8rem;
+    }
+    .steps {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .step {
+      min-height: 78vh;
+      display: grid;
+      align-content: center;
+      padding-left: clamp(1rem, 2vw, 1.5rem);
+      border-left: 2px solid transparent;
+      transition: border-color 180ms ease;
+    }
+    .step[data-active="true"] {
+      border-color: var(--magma);
+    }
+    .step-number {
+      color: var(--magma);
+      font-family: var(--monospace-font);
+      font-size: 0.72rem;
+    }
+    .step h2 {
+      margin: 0.6rem 0 1rem;
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      line-height: 1;
+    }
+    .step p {
+      max-width: 32rem;
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.7;
+    }
+    .visual {
+      grid-column: 2;
+      grid-row: 1;
+      position: sticky;
+      top: 1rem;
+      z-index: 1;
+      height: calc(100vh - 2rem);
+      min-height: 34rem;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      align-items: center;
+      padding: clamp(1rem, 3vw, 2.5rem);
+      border: 1px solid var(--ink);
+      background: var(--atlas);
+      color: var(--atlas-text);
+    }
+    .visual-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: baseline;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--atlas-elevated);
+    }
+    .visual-header strong {
+      font-family: var(--heading-font);
+      font-size: 1.4rem;
+      font-weight: 500;
+    }
+    .visual-header span,
+    #status {
+      color: var(--atlas-muted);
+      font-family: var(--monospace-font);
+      font-size: 0.78rem;
+    }
+    #plot {
+      position: relative;
+      min-width: 0;
+      min-height: 20rem;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    #plot > * {
+      max-width: 100%;
+      height: auto;
+    }
+    #plot > .plot-chart {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 1;
+      transition: opacity 480ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+    #plot > .plot-chart[data-entering="true"],
+    #plot > .plot-chart[data-leaving="true"] {
+      opacity: 0;
+    }
+    #plot > .plot-chart[data-leaving="true"] {
+      pointer-events: none;
+    }
+    .atlas-loader {
+      position: relative;
+      display: grid;
+      width: 5rem;
+      height: 5rem;
+      place-items: center;
+    }
+    .atlas-loader i {
+      position: absolute;
+      border: 1px solid var(--sulfur);
+      border-radius: 50%;
+      animation: earthquake-story-pulse 1.5s ease-in-out infinite;
+    }
+    .atlas-loader i:nth-child(1) {
+      width: 1rem;
+      height: 1rem;
+    }
+    .atlas-loader i:nth-child(2) {
+      width: 2.8rem;
+      height: 2.8rem;
+      animation-delay: 160ms;
+    }
+    .atlas-loader i:nth-child(3) {
+      width: 4.6rem;
+      height: 4.6rem;
+      animation-delay: 320ms;
+    }
+    .visual[data-state="error"] .atlas-loader i {
+      animation: none;
+      opacity: 0.25;
+    }
+    .visual-footer {
+      min-height: 1.3rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.5rem 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--atlas-elevated);
+    }
+    .visual-footer a {
+      color: var(--atlas-text);
+      font-size: 0.78rem;
+      text-underline-offset: 0.2em;
+    }
+    .source-note {
+      padding: 3rem 0 4rem;
+      border-top: 1px solid var(--line);
+    }
+    .source-note marimo-cell {
+      --marimo-cell-skeleton-height: 7rem;
+      --marimo-cell-skeleton-color: rgb(242 85 51 / 16%);
+      --marimo-cell-font: var(--text-font);
+      --marimo-cell-heading-font: var(--heading-font);
+      --marimo-cell-monospace-font: var(--monospace-font);
+      --marimo-cell-background: transparent;
+      --marimo-cell-foreground: var(--ink);
+      --marimo-cell-surface: var(--panel);
+      --marimo-cell-muted: #e3ddd2;
+      --marimo-cell-muted-foreground: var(--muted);
+      --marimo-cell-border-color: var(--line);
+      --marimo-cell-accent: var(--magma);
+      --marimo-cell-radius: 0;
+    }
+    .source-note marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]):empty::before {
+      animation: earthquake-story-cell-pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes earthquake-story-pulse {
+      0%,
+      100% {
+        opacity: 0.18;
+        transform: scale(0.78);
       }
-      * {
-        box-sizing: border-box;
+      50% {
+        opacity: 0.9;
+        transform: scale(1);
       }
-      html {
-        scroll-behavior: smooth;
+    }
+    @keyframes earthquake-story-cell-pulse {
+      0%,
+      100% {
+        opacity: 0.3;
       }
-      body {
-        margin: 0;
-        background: var(--paper);
-        color: var(--ink);
-        font-family: var(--text-font);
+      50% {
+        opacity: 0.85;
       }
-      a {
-        color: inherit;
-      }
-      #app-shell {
-        width: min(92rem, calc(100% - 2rem));
-        margin: 0 auto;
-      }
-      nav {
-        position: relative;
-        z-index: 4;
-        display: flex;
-        gap: 1.2rem;
-        padding: 1.2rem 0;
-        border-bottom: 1px solid var(--line);
-        font-family: var(--monospace-font);
-        font-size: 0.7rem;
-        font-weight: 600;
-        letter-spacing: 0.09em;
-        text-transform: uppercase;
-      }
-      nav a {
-        text-decoration: none;
-      }
-      nav a:hover,
-      nav a:focus-visible {
-        text-decoration: underline;
-        text-underline-offset: 0.25em;
-      }
-      nav a[aria-current="page"] {
-        color: var(--magma);
-      }
+    }
+    @media (max-width: 800px) {
       .hero {
-        min-height: 78vh;
-        display: grid;
-        align-content: center;
-        grid-template-columns: minmax(0, 1fr) minmax(16rem, 28rem);
-        gap: 3rem;
-        border-bottom: 2px solid var(--ink);
-      }
-      .eyebrow {
-        margin: 0 0 0.75rem;
-        color: var(--magma);
-        font-family: var(--monospace-font);
-        font-size: 0.7rem;
-        font-weight: 600;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-      h1,
-      h2 {
-        font-family: var(--heading-font);
-        font-weight: 500;
-      }
-      h1 {
-        max-width: 10ch;
-        margin: 0;
-        font-size: clamp(4rem, 10vw, 8rem);
-        line-height: 0.88;
-        letter-spacing: -0.065em;
-      }
-      .hero-copy {
-        align-self: end;
-        padding-bottom: 1rem;
-        color: var(--muted);
-        font-family: var(--heading-font);
-        font-size: 1.3rem;
-        line-height: 1.55;
+        grid-template-columns: 1fr;
+        padding: 5rem 0;
       }
       .story {
-        display: grid;
-        grid-template-columns: minmax(16rem, 0.36fr) minmax(0, 0.64fr);
-        gap: clamp(2rem, 6vw, 6rem);
-        padding: 5rem 0 8rem;
-      }
-      .steps {
-        grid-column: 1;
-        grid-row: 1;
-      }
-      .step {
-        min-height: 78vh;
-        display: grid;
-        align-content: center;
-        padding-left: clamp(1rem, 2vw, 1.5rem);
-        border-left: 2px solid transparent;
-        transition: border-color 180ms ease;
-      }
-      .step[data-active="true"] {
-        border-color: var(--magma);
-      }
-      .step-number {
-        color: var(--magma);
-        font-family: var(--monospace-font);
-        font-size: 0.72rem;
-      }
-      .step h2 {
-        margin: 0.6rem 0 1rem;
-        font-size: clamp(2rem, 4vw, 3.5rem);
-        line-height: 1;
-      }
-      .step p {
-        max-width: 32rem;
-        color: var(--muted);
-        font-size: 1rem;
-        line-height: 1.7;
+        --mobile-visual-height: clamp(18rem, 52vh, 30rem);
+        display: block;
+        padding: 3rem 0 5rem;
       }
       .visual {
-        grid-column: 2;
-        grid-row: 1;
-        position: sticky;
-        top: 1rem;
-        z-index: 1;
-        height: calc(100vh - 2rem);
-        min-height: 34rem;
-        display: grid;
-        grid-template-rows: auto minmax(0, 1fr) auto;
-        align-items: center;
-        padding: clamp(1rem, 3vw, 2.5rem);
-        border: 1px solid var(--ink);
-        background: var(--atlas);
-        color: var(--atlas-text);
+        top: 0;
+        height: var(--mobile-visual-height);
+        min-height: 0;
+        padding: 1rem;
       }
-      .visual-header {
-        display: flex;
-        justify-content: space-between;
-        gap: 1rem;
-        align-items: baseline;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid var(--atlas-elevated);
+      .steps {
+        position: relative;
+        margin-top: calc(0px - var(--mobile-visual-height));
       }
-      .visual-header strong {
-        font-family: var(--heading-font);
-        font-size: 1.4rem;
-        font-weight: 500;
+      .step {
+        min-height: 88vh;
+        display: block;
+        padding: calc(var(--mobile-visual-height) + 1.5rem) 0 1.5rem;
+        border: 0;
       }
-      .visual-header span,
-      #status {
-        color: var(--atlas-muted);
-        font-family: var(--monospace-font);
-        font-size: 0.78rem;
+      .step-copy {
+        width: 100%;
+        padding: 1.1rem;
+        border-top: 2px solid transparent;
+        background: rgb(239 239 236 / 96%);
       }
-      #plot {
-        min-width: 0;
-        min-height: 20rem;
-        display: grid;
-        place-items: center;
-        overflow: hidden;
+      .step[data-active="true"] .step-copy {
+        border-color: var(--magma);
       }
-      #plot > * {
-        max-width: 100%;
-        height: auto;
+      .step h2 {
+        font-size: clamp(2rem, 10vw, 3rem);
       }
-      .visual-footer {
-        min-height: 1.3rem;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 0.5rem 1rem;
-        padding-top: 1rem;
-        border-top: 1px solid var(--atlas-elevated);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
       }
-      .visual-footer a {
-        color: var(--atlas-text);
-        font-size: 0.78rem;
-        text-underline-offset: 0.2em;
+      .step {
+        transition: none;
       }
-      .source-note {
-        padding: 3rem 0 4rem;
-        border-top: 1px solid var(--line);
+      #plot > .plot-chart {
+        transition: none;
       }
-      .source-note marimo-cell {
-        --marimo-cell-font: var(--text-font);
-        --marimo-cell-heading-font: var(--heading-font);
-        --marimo-cell-monospace-font: var(--monospace-font);
-        --marimo-cell-background: transparent;
-        --marimo-cell-foreground: var(--ink);
-        --marimo-cell-surface: var(--panel);
-        --marimo-cell-muted: #e3ddd2;
-        --marimo-cell-muted-foreground: var(--muted);
-        --marimo-cell-border-color: var(--line);
-        --marimo-cell-accent: var(--magma);
-        --marimo-cell-radius: 0;
+      .atlas-loader i,
+      .source-note marimo-cell::before {
+        animation: none !important;
+        opacity: 0.55;
       }
-      @media (max-width: 800px) {
-        .hero {
-          grid-template-columns: 1fr;
-          padding: 5rem 0;
-        }
-        .story {
-          --mobile-visual-height: clamp(18rem, 52vh, 30rem);
-          display: block;
-          padding: 3rem 0 5rem;
-        }
-        .visual {
-          top: 0;
-          height: var(--mobile-visual-height);
-          min-height: 0;
-          padding: 1rem;
-        }
-        .steps {
-          position: relative;
-          margin-top: calc(0px - var(--mobile-visual-height));
-        }
-        .step {
-          min-height: 88vh;
-          display: block;
-          padding: calc(var(--mobile-visual-height) + 1.5rem) 0 1.5rem;
-          border: 0;
-        }
-        .step-copy {
-          width: 100%;
-          padding: 1.1rem;
-          border-top: 2px solid transparent;
-          background: rgb(239 239 236 / 96%);
-        }
-        .step[data-active="true"] .step-copy {
-          border-color: var(--magma);
-        }
-        .step h2 {
-          font-size: clamp(2rem, 10vw, 3rem);
-        }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        html {
-          scroll-behavior: auto;
-        }
-        .step {
-          transition: none;
-        }
-      }
+    }
     </style>
   </head>
   <body>
     <main id="app-shell">
       <nav aria-label="Earthquake views">
-        <a href="../story/" aria-current="page">Story</a
-        ><a href="../operations/">Operations</a
-        ><a href="../briefing/">Briefing</a>
+        <a href="../story/index.html" aria-current="page">Story</a
+        ><a href="../operations/index.html">Operations</a
+        ><a href="../briefing/index.html">Briefing</a>
       </nav>
       <header class="hero">
         <div>
@@ -291,12 +371,20 @@
         </p>
       </header>
       <section class="story" aria-label="Earthquake story">
-        <figure class="visual" aria-labelledby="visual-title">
+        <figure
+          class="visual"
+          aria-labelledby="visual-title"
+          data-state="loading"
+        >
           <figcaption class="visual-header">
             <strong id="visual-title">Weekly event map</strong
             ><span id="event-count">Loading weekly events</span>
           </figcaption>
-          <div id="plot"></div>
+          <div id="plot">
+            <span class="atlas-loader" aria-hidden="true">
+              <i></i><i></i><i></i>
+            </span>
+          </div>
           <div class="visual-footer">
             <div id="status" role="status">Loading weekly events.</div>
             <a
@@ -361,179 +449,303 @@
       </section>
       <span id="events-data" aria-hidden="true" hidden mo-value="events"></span>
       <script type="module">
-        import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm";
+      import * as Plot from "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.17/+esm";
 
-        const source = document.querySelector("#events-data");
-        const plotRoot = document.querySelector("#plot");
-        const count = document.querySelector("#event-count");
-        const status = document.querySelector("#status");
-        const sourceLink = document.querySelector("#source-link");
-        const steps = [...document.querySelectorAll(".step")];
-        let rows = [];
-        let loaded = false;
-        let activeStep = 0;
-        let renderFrame;
-        const filters = [
-          (row) => row,
-          (row) => row.magnitude >= 5,
-          (row) => Number(row.felt ?? 0) > 0,
-          (row) => row.tsunami === true,
-        ];
+      const source = document.querySelector("#events-data");
+      const plotRoot = document.querySelector("#plot");
+      const visual = document.querySelector(".visual");
+      const count = document.querySelector("#event-count");
+      const status = document.querySelector("#status");
+      const sourceLink = document.querySelector("#source-link");
+      const steps = [...document.querySelectorAll(".step")];
+      let rows = [];
+      let loaded = false;
+      let activeStep = 0;
+      let renderFrame;
+      let transitionFrame;
+      let transitionTimer;
+      let currentChart;
+      let renderedStep = -1;
+      let renderedWidth = 0;
+      let renderedHeight = 0;
+      let dataRevision = 0;
+      let renderedRevision = -1;
+      const reducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      );
+      const filters = [
+        (row) => row,
+        (row) => row.magnitude >= 5,
+        (row) => Number(row.felt ?? 0) > 0,
+        (row) => row.tsunami === true,
+      ];
 
-        const eventLabel = (row) =>
-          `M ${Number(row.magnitude).toFixed(1)} · ${row.place}`;
-        const eventCountLabel = (value) =>
-          `${value} ${value === 1 ? "event" : "events"}`;
-        const sourceUrl = (row) => {
-          try {
-            const url = new URL(row.url);
-            return url.protocol === "https:" &&
+      const eventLabel = (row) =>
+        `M ${Number(row.magnitude).toFixed(1)} · ${row.place}`;
+      const eventTooltip = (row) => {
+        const feltReports = Number(row.felt ?? 0);
+        return [
+          eventLabel(row),
+          `${feltReports.toLocaleString()} felt ${
+            feltReports === 1 ? "report" : "reports"
+          }`,
+          `USGS status: ${row.status}`,
+          row.tsunami ? "Tsunami flag" : undefined,
+        ].filter(Boolean).join("\n");
+      };
+      const eventCountLabel = (value) =>
+        `${value} ${value === 1 ? "event" : "events"}`;
+      const sourceUrl = (row) => {
+        try {
+          const url = new URL(row.url);
+          return url.protocol === "https:" &&
               url.hostname === "earthquake.usgs.gov"
-              ? url.href
-              : undefined;
-          } catch {
-            return undefined;
-          }
-        };
+            ? url.href
+            : undefined;
+        } catch {
+          return undefined;
+        }
+      };
 
-        const render = () => {
-          renderFrame = undefined;
-          if (
-            !loaded ||
-            plotRoot.clientWidth <= 0 ||
-            plotRoot.clientHeight <= 0
-          ) {
-            return;
+      const mountChart = (chart, animate) => {
+        chart.classList.add("plot-chart");
+        const previous = currentChart;
+        currentChart = chart;
+
+        if (
+          previous === undefined ||
+          !animate ||
+          reducedMotion.matches
+        ) {
+          if (transitionFrame !== undefined) {
+            cancelAnimationFrame(transitionFrame);
+            transitionFrame = undefined;
           }
-          const visible = rows.filter(filters[activeStep]);
-          const maximumMagnitude = Math.max(
-            5,
-            ...rows.map((row) => Number(row.magnitude) || 0),
-          );
-          const chart = Plot.plot({
-            width: Math.floor(plotRoot.clientWidth),
-            height: Math.floor(plotRoot.clientHeight),
-            margin: 12,
-            projection: "equal-earth",
-            style: {
-              background: "transparent",
-              color: "#f5f1e8",
-              fontFamily: '"IBM Plex Sans", sans-serif',
-            },
-            ariaLabel: "Map of earthquakes in the weekly USGS feed",
-            ariaDescription: `${eventCountLabel(visible.length)} shown for ${
-              steps[activeStep].querySelector("h2").textContent
-            }. Circle area represents magnitude.`,
-            r: { domain: [2.5, maximumMagnitude], range: [3, 18] },
-            marks: [
-              Plot.sphere({ stroke: "#7f936f", strokeWidth: 0.7 }),
-              Plot.graticule({ stroke: "#526348", strokeOpacity: 0.7 }),
-              Plot.dot(visible, {
+          if (transitionTimer !== undefined) {
+            clearTimeout(transitionTimer);
+            transitionTimer = undefined;
+          }
+          plotRoot.replaceChildren(chart);
+          return;
+        }
+
+        for (const stale of plotRoot.querySelectorAll(".plot-chart")) {
+          if (stale !== previous) stale.remove();
+        }
+        previous.removeAttribute("data-entering");
+        previous.dataset.leaving = "true";
+        chart.dataset.entering = "true";
+        plotRoot.append(chart);
+        chart.getBoundingClientRect();
+
+        transitionFrame = requestAnimationFrame(() => {
+          transitionFrame = undefined;
+          if (currentChart === chart) chart.removeAttribute("data-entering");
+        });
+        transitionTimer = window.setTimeout(() => {
+          transitionTimer = undefined;
+          if (currentChart !== previous) previous.remove();
+        }, 560);
+      };
+
+      const render = () => {
+        renderFrame = undefined;
+        if (
+          !loaded ||
+          plotRoot.clientWidth <= 0 ||
+          plotRoot.clientHeight <= 0
+        ) {
+          return;
+        }
+        const width = Math.floor(plotRoot.clientWidth);
+        const height = Math.floor(plotRoot.clientHeight);
+        if (
+          currentChart !== undefined &&
+          renderedStep === activeStep &&
+          renderedWidth === width &&
+          renderedHeight === height &&
+          renderedRevision === dataRevision
+        ) {
+          return;
+        }
+        const visible = rows.filter(filters[activeStep]);
+        const maximumMagnitude = Math.max(
+          5,
+          ...rows.map((row) => Number(row.magnitude) || 0),
+        );
+        const chart = Plot.plot({
+          width,
+          height,
+          margin: 12,
+          projection: "equal-earth",
+          style: {
+            background: "transparent",
+            color: "#171716",
+            cursor: "crosshair",
+            fontFamily: '"IBM Plex Sans", sans-serif',
+          },
+          ariaLabel: "Map of earthquakes in the weekly USGS feed",
+          ariaDescription: `${eventCountLabel(visible.length)} shown for ${
+            steps[activeStep].querySelector("h2").textContent
+          }. Circle area represents magnitude.`,
+          r: { domain: [2.5, maximumMagnitude], range: [3, 18] },
+          marks: [
+            Plot.sphere({ stroke: "#7f936f", strokeWidth: 0.7 }),
+            Plot.graticule({ stroke: "#526348", strokeOpacity: 0.7 }),
+            Plot.dot(visible, {
+              x: "longitude",
+              y: "latitude",
+              r: "magnitude",
+              fill: activeStep === 3 ? "#dc8c46" : "#f25533",
+              fillOpacity: 0.66,
+              stroke: "#f5f1e8",
+              strokeOpacity: 0.55,
+              strokeWidth: 0.5,
+              ariaLabel: eventLabel,
+            }),
+            Plot.dot(
+              visible,
+              Plot.pointer({
                 x: "longitude",
                 y: "latitude",
                 r: "magnitude",
-                fill: activeStep === 3 ? "#dc8c46" : "#f25533",
-                fillOpacity: 0.66,
+                fill: "none",
                 stroke: "#f5f1e8",
-                strokeOpacity: 0.55,
-                strokeWidth: 0.5,
-                title: eventLabel,
+                strokeWidth: 1.8,
+                maxRadius: 42,
               }),
-            ],
-          });
-          plotRoot.replaceChildren(chart);
-          count.textContent = `${visible.length} of ${rows.length} events`;
-          status.textContent = visible.length
-            ? `${eventCountLabel(visible.length)} shown.`
-            : "No events match this step.";
-          const strongest = visible.reduce(
-            (current, row) =>
-              current === undefined || row.magnitude > current.magnitude
-                ? row
-                : current,
-            undefined,
-          );
-          const strongestUrl =
-            strongest === undefined ? undefined : sourceUrl(strongest);
-          if (strongestUrl !== undefined) {
-            sourceLink.hidden = false;
-            sourceLink.href = strongestUrl;
-            sourceLink.textContent = `Open strongest event on USGS: ${eventLabel(
-              strongest,
-            )}`;
-          } else {
-            sourceLink.hidden = true;
-            sourceLink.removeAttribute("href");
-            sourceLink.textContent = "";
-          }
-        };
-
-        const scheduleRender = () => {
-          if (renderFrame !== undefined) cancelAnimationFrame(renderFrame);
-          renderFrame = requestAnimationFrame(render);
-        };
-
-        const observeMarimoValue = (host, { onValue, onError = () => {} }) => {
-          const sync = (event) => onValue(event.detail.value);
-          const fail = (event) => onError(event.detail);
-          host.addEventListener("marimo-value-updated", sync);
-          host.addEventListener("marimo-value-error", fail);
-          if (host.marimoValue !== undefined) onValue(host.marimoValue);
-          return () => {
-            host.removeEventListener("marimo-value-updated", sync);
-            host.removeEventListener("marimo-value-error", fail);
-          };
-        };
-
-        const stopValue = observeMarimoValue(source, {
-          onValue: (value) => {
-            rows = value.toArray();
-            loaded = true;
-            scheduleRender();
-          },
-          onError: () => {
-            count.textContent = "Data unavailable";
-            status.textContent = "Weekly event data is unavailable.";
-          },
+            ),
+            Plot.tip(
+              visible,
+              Plot.pointer({
+                x: "longitude",
+                y: "latitude",
+                title: eventTooltip,
+                maxRadius: 42,
+                fill: "#f8f7f2",
+                stroke: "#171716",
+                strokeWidth: 0.8,
+                fontFamily: '"IBM Plex Mono", monospace',
+                fontSize: 11,
+                lineHeight: 1.25,
+                lineWidth: 30,
+                pathFilter: null,
+              }),
+            ),
+          ],
         });
-
-        const activateNearestStep = () => {
-          const viewportCenter = window.innerHeight / 2;
-          const nearest = steps.reduce((current, step) => {
-            const bounds = step.getBoundingClientRect();
-            const distance = Math.abs(
-              bounds.top + bounds.height / 2 - viewportCenter,
-            );
-            return current === undefined || distance < current.distance
-              ? { step, distance }
-              : current;
-          }, undefined);
-          activeStep = Number(nearest.step.dataset.step);
-          steps.forEach((step, index) => {
-            step.dataset.active = String(index === activeStep);
-            if (index === activeStep) {
-              step.setAttribute("aria-current", "step");
-            } else step.removeAttribute("aria-current");
-          });
-          scheduleRender();
-        };
-        const observer = new IntersectionObserver(activateNearestStep, {
-          rootMargin: "-45% 0px -45% 0px",
-        });
-        steps.forEach((step) => observer.observe(step));
-        activateNearestStep();
-        const resizeObserver = new ResizeObserver(scheduleRender);
-        resizeObserver.observe(plotRoot);
-        window.addEventListener(
-          "pagehide",
-          () => {
-            stopValue();
-            observer.disconnect();
-            resizeObserver.disconnect();
-            if (renderFrame !== undefined) cancelAnimationFrame(renderFrame);
-          },
-          { once: true },
+        const animate = currentChart !== undefined &&
+          renderedStep !== activeStep &&
+          renderedWidth === width &&
+          renderedHeight === height &&
+          renderedRevision === dataRevision;
+        mountChart(chart, animate);
+        renderedStep = activeStep;
+        renderedWidth = width;
+        renderedHeight = height;
+        renderedRevision = dataRevision;
+        count.textContent = `${visible.length} of ${rows.length} events`;
+        status.textContent = visible.length
+          ? `${eventCountLabel(visible.length)} shown. Point or tap for details.`
+          : "No events match this step.";
+        const strongest = visible.reduce(
+          (current, row) =>
+            current === undefined || row.magnitude > current.magnitude
+              ? row
+              : current,
+          undefined,
         );
+        const strongestUrl = strongest === undefined
+          ? undefined
+          : sourceUrl(strongest);
+        if (strongestUrl !== undefined) {
+          sourceLink.hidden = false;
+          sourceLink.href = strongestUrl;
+          sourceLink.textContent = `Open strongest event on USGS: ${
+            eventLabel(
+              strongest,
+            )
+          }`;
+        } else {
+          sourceLink.hidden = true;
+          sourceLink.removeAttribute("href");
+          sourceLink.textContent = "";
+        }
+      };
+
+      const scheduleRender = () => {
+        if (renderFrame !== undefined) cancelAnimationFrame(renderFrame);
+        renderFrame = requestAnimationFrame(render);
+      };
+
+      const observeMarimoValue = (host, { onValue, onError = () => {} }) => {
+        const sync = (event) => onValue(event.detail.value);
+        const fail = (event) => onError(event.detail);
+        host.addEventListener("marimo-value-updated", sync);
+        host.addEventListener("marimo-value-error", fail);
+        if (host.marimoValue !== undefined) onValue(host.marimoValue);
+        return () => {
+          host.removeEventListener("marimo-value-updated", sync);
+          host.removeEventListener("marimo-value-error", fail);
+        };
+      };
+
+      const stopValue = observeMarimoValue(source, {
+        onValue: (value) => {
+          rows = value.toArray();
+          dataRevision += 1;
+          loaded = true;
+          visual.dataset.state = "ready";
+          scheduleRender();
+        },
+        onError: () => {
+          visual.dataset.state = "error";
+          count.textContent = "Data unavailable";
+          status.textContent = "Weekly event data is unavailable.";
+        },
+      });
+
+      const activateNearestStep = () => {
+        const viewportCenter = window.innerHeight / 2;
+        const nearest = steps.reduce((current, step) => {
+          const bounds = step.getBoundingClientRect();
+          const distance = Math.abs(
+            bounds.top + bounds.height / 2 - viewportCenter,
+          );
+          return current === undefined || distance < current.distance
+            ? { step, distance }
+            : current;
+        }, undefined);
+        activeStep = Number(nearest.step.dataset.step);
+        steps.forEach((step, index) => {
+          step.dataset.active = String(index === activeStep);
+          if (index === activeStep) {
+            step.setAttribute("aria-current", "step");
+          } else step.removeAttribute("aria-current");
+        });
+        scheduleRender();
+      };
+      const observer = new IntersectionObserver(activateNearestStep, {
+        rootMargin: "-45% 0px -45% 0px",
+      });
+      steps.forEach((step) => observer.observe(step));
+      activateNearestStep();
+      const resizeObserver = new ResizeObserver(scheduleRender);
+      resizeObserver.observe(plotRoot);
+      window.addEventListener(
+        "pagehide",
+        () => {
+          stopValue();
+          observer.disconnect();
+          resizeObserver.disconnect();
+          if (renderFrame !== undefined) cancelAnimationFrame(renderFrame);
+          if (transitionFrame !== undefined) {
+            cancelAnimationFrame(transitionFrame);
+          }
+          if (transitionTimer !== undefined) clearTimeout(transitionTimer);
+        },
+        { once: true },
+      );
       </script>
     </main>
   </body>

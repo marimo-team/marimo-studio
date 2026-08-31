@@ -13,12 +13,14 @@ import { type EarthquakeEvent, formatMagnitude } from "../operations-data.ts";
 
 interface EventMapProps {
   events: readonly EarthquakeEvent[];
+  loading: boolean;
   selectedEvent: EarthquakeEvent | null;
   onSelect: (id: string | null) => void;
 }
 
 export const EventMap = ({
   events,
+  loading,
   selectedEvent,
   onSelect,
 }: EventMapProps) => {
@@ -139,7 +141,18 @@ export const EventMap = ({
             : null}
         </MapView>
 
-        {events.length === 0
+        {loading
+          ? (
+            <div className="map-loader" role="status">
+              <span className="map-loader-signal" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+              Preparing epicenter map
+            </div>
+          )
+          : events.length === 0
           ? (
             <div className="map-empty">
               No epicenters match the current filter.

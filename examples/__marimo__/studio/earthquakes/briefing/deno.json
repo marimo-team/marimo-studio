@@ -14,6 +14,9 @@
   },
   "imports": {
     "@revealjs/react": "npm:@revealjs/react@0.2.1",
+    "d3-geo": "npm:d3-geo@3.1.1",
+    "d3-scale": "npm:d3-scale@4.0.2",
+    "d3-shape": "npm:d3-shape@3.2.0",
     "react": "npm:react@19.2.4",
     "react/jsx-runtime": "npm:react@19.2.4/jsx-runtime",
     "react-dom/client": "npm:react-dom@19.2.4/client",

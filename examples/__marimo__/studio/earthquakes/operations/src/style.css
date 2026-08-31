@@ -120,6 +120,11 @@ h2 {
   border-radius: 50%;
 }
 
+.filter-status.is-loading > span {
+  background: var(--teal);
+  animation: operations-signal-pulse 1.1s ease-in-out infinite;
+}
+
 .data-status {
   position: absolute;
   width: 1px;
@@ -171,6 +176,10 @@ h2 {
   line-height: 1;
 }
 
+.operations-shell[aria-busy="true"] .metric-strip strong {
+  animation: operations-copy-pulse 1.25s ease-in-out infinite;
+}
+
 .error-banner {
   margin-bottom: 1rem;
   padding: 0.8rem 1rem;
@@ -201,6 +210,12 @@ h2 {
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
+}
+
+.notebook-controls marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]):empty::before {
+  --marimo-cell-skeleton-color: rgb(0 122 252 / 22%);
+  --marimo-cell-skeleton-height: 4.5rem;
+  animation: operations-copy-pulse 1.25s ease-in-out infinite;
 }
 
 .operations-workspace {
@@ -247,6 +262,32 @@ h2 {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.event-list-loader,
+.detail-loader {
+  display: grid;
+  gap: 0.65rem;
+  padding-top: 0.5rem;
+}
+
+.event-list-loader i,
+.detail-loader i {
+  display: block;
+  height: 0.55rem;
+  background: var(--basalt-700);
+  transform-origin: left;
+  animation: operations-rule-pulse 1.3s ease-in-out infinite;
+}
+
+.event-list-loader i:nth-child(odd),
+.detail-loader i:nth-child(odd) {
+  width: 72%;
+}
+
+.event-list-loader i:nth-child(even),
+.detail-loader i:nth-child(even) {
+  width: 92%;
 }
 
 .event-list li {
@@ -379,6 +420,101 @@ h2 {
   position: relative;
   min-width: 0;
   min-height: 25rem;
+}
+
+.map-loader {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  display: grid;
+  gap: 1rem;
+  place-content: center;
+  place-items: center;
+  background: rgb(14 16 18 / 86%);
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.map-loader-signal {
+  position: relative;
+  display: grid;
+  width: 4.5rem;
+  height: 4.5rem;
+  place-items: center;
+}
+
+.map-loader-signal i {
+  position: absolute;
+  border: 1px solid var(--teal);
+  border-radius: 50%;
+  animation: operations-radar-pulse 1.45s ease-in-out infinite;
+}
+
+.map-loader-signal i:nth-child(1) {
+  width: 0.7rem;
+  height: 0.7rem;
+  background: var(--teal);
+}
+
+.map-loader-signal i:nth-child(2) {
+  width: 2.4rem;
+  height: 2.4rem;
+  animation-delay: 140ms;
+}
+
+.map-loader-signal i:nth-child(3) {
+  width: 4.2rem;
+  height: 4.2rem;
+  animation-delay: 280ms;
+}
+
+@keyframes operations-signal-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.72);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes operations-copy-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes operations-rule-pulse {
+  0%,
+  100% {
+    opacity: 0.24;
+    transform: scaleX(0.45);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes operations-radar-pulse {
+  0%,
+  100% {
+    opacity: 0.18;
+    transform: scale(0.78);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
 }
 
 .map-stage .maplibregl-map {
@@ -652,5 +788,6 @@ marimo-output {
   *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+    animation: none !important;
   }
 }

@@ -111,11 +111,13 @@ pill geometry so the slide grid remains sharp and editorial.
 
 ## Components
 
-Metrics sit in an equal grid with oversized numerals. The activity chart uses
-blue bars and a clay peak marker. Reveal Auto-Animate expands the compact
-executive rhythm into the detailed daily chart using stable data identities.
-Event rows align magnitude, place, and consequence as three columns. Reveal
-controls and slide numbers remain small and restrained.
+Metrics sit in an equal grid with oversized numerals. D3 draws the global
+epicenter map, maximum-magnitude trace, review-scope ring, and watchlist
+magnitude scale as inline SVG. The activity chart uses blue bars and a clay
+peak marker. Reveal Auto-Animate expands the compact executive rhythm into the
+detailed daily chart using stable data identities. Event rows align magnitude,
+place, and consequence as three columns. Reveal controls and slide numbers
+remain small and restrained.
 
 ## Do's and Don'ts
 

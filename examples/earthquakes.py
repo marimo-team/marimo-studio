@@ -147,7 +147,7 @@ def situation(events, minimum_magnitude, pl, review_status):
         "status": review_status.value,
     }
     filtered_events.head(10)
-    return event_summary, filtered_events
+    return (event_summary,)
 
 
 @app.cell(hide_code=True)
@@ -188,41 +188,47 @@ def analytical_tables(events, pl):
     )
     strongest_events = (
         events.sort("magnitude", "significance", descending=True)
-        .select("id", "place", "time", "magnitude", "felt", "tsunami", "url")
+        .select(
+            "id",
+            "place",
+            "time",
+            "magnitude",
+            "felt",
+            "tsunami",
+            "longitude",
+            "latitude",
+            "url",
+        )
         .head(12)
     )
     daily_activity
-    return daily_activity, strongest_events, weekly_summary
+    return
 
 
 @app.cell(hide_code=True)
 def weekly_conclusion(events, mo, source_metadata):
-    mo.md(
-        f"""
-        ## Weekly context
+    mo.md(f"""
+    ## Weekly context
 
-        The weekly feed contains **{source_metadata["count"]} USGS events** with
-        a maximum magnitude of **{events["magnitude"].max():.1f}**. Each event
-        retains its USGS record for follow-up.
-        """
-    )
+    The weekly feed contains **{source_metadata["count"]} USGS events** with
+    a maximum magnitude of **{events["magnitude"].max():.1f}**. Each event
+    retains its USGS record for follow-up.
+    """)
     return
 
 
 @app.cell(hide_code=True)
 def conclusion(event_summary, mo):
-    mo.md(
-        f"""
-        ## Current watch position
+    mo.md(f"""
+    ## Current watch position
 
-        The **M{event_summary["minimum_magnitude"]:.1f}+ ·
-        {event_summary["status"].lower()}** review cut retains
-        **{event_summary["events"]} events**. Its largest event is
-        **M{event_summary["maximum_magnitude"]:.1f}**, with
-        **{event_summary["felt_reports"]:,} felt reports** and
-        **{event_summary["tsunami_flags"]} tsunami flags** in the selected set.
-        """
-    )
+    The **M{event_summary["minimum_magnitude"]:.1f}+ ·
+    {event_summary["status"].lower()}** review cut retains
+    **{event_summary["events"]} events**. Its largest event is
+    **M{event_summary["maximum_magnitude"]:.1f}**, with
+    **{event_summary["felt_reports"]:,} felt reports** and
+    **{event_summary["tsunami_flags"]} tsunami flags** in the selected set.
+    """)
     return
 
 

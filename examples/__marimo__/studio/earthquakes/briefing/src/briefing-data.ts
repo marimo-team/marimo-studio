@@ -28,6 +28,8 @@ export type DailyActivity = {
 export type StrongEvent = {
   felt: number | null;
   id: string;
+  latitude: number;
+  longitude: number;
   magnitude: number;
   place: string;
   time: TemporalValue;

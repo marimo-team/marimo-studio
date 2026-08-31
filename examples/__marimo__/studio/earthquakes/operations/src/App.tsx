@@ -47,7 +47,8 @@ export const App = () => {
       priorityEvents[0] ??
       null);
   const hasError = eventsError || summaryError;
-  const isLoading = filteredEvents === undefined && !hasError;
+  const isLoading =
+    (filteredEvents === undefined || eventSummary === undefined) && !hasError;
   const statusText = hasError
     ? "Event data unavailable"
     : isLoading
@@ -75,7 +76,10 @@ export const App = () => {
             <p className="eyebrow">USGS weekly feed · Global M2.5+</p>
             <h1>Earthquake operations</h1>
           </div>
-          <div className="filter-status" aria-label="Active event filter">
+          <div
+            className={`filter-status${isLoading ? " is-loading" : ""}`}
+            aria-label="Active event filter"
+          >
             <span aria-hidden="true" />
             {eventSummary
               ? `M${
@@ -127,6 +131,7 @@ export const App = () => {
           <aside className="control-rail" aria-label="Priority events">
             <PriorityEvents
               events={priorityEvents}
+              loading={isLoading}
               selectedId={selectedEvent?.id ?? null}
               onSelect={setSelectedId}
             />
@@ -134,10 +139,11 @@ export const App = () => {
 
           <EventMap
             events={events}
+            loading={isLoading}
             selectedEvent={selectedEvent}
             onSelect={setSelectedId}
           />
-          <EventDetails event={selectedEvent} />
+          <EventDetails event={selectedEvent} loading={isLoading} />
         </div>
 
         <footer className="operations-footer">
