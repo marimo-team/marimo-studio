@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rio 2016 athlete report</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #0a0a0a;
+        --paper: #f2efe7;
+        --surface: #fffef9;
+        --muted: #686862;
+        --line: #bebbb1;
+        --volt: #dfff35;
+        --display-font: "Helvetica Neue", "Arial Narrow", sans-serif;
+        --text-font: "Avenir Next", Avenir, ui-sans-serif, sans-serif;
+        --monospace-font: "SFMono-Regular", Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--text-font);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      #app-shell {
+        width: min(90rem, 100%);
+        margin: 0 auto;
+        overflow: hidden;
+      }
+
+      nav {
+        display: flex;
+        justify-content: space-between;
+        padding: 1rem clamp(1rem, 4vw, 4rem);
+        border-bottom: 1px solid #363636;
+        background: var(--ink);
+        color: #fff;
+        font-size: 0.68rem;
+        font-weight: 850;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      nav div {
+        display: flex;
+        gap: 1.5rem;
+      }
+
+      nav a {
+        text-decoration: none;
+      }
+
+      nav a[aria-current="page"] {
+        color: var(--volt);
+      }
+
+      .hero {
+        position: relative;
+        display: grid;
+        min-height: min(46rem, 76vh);
+        grid-template-columns: minmax(0, 1fr) minmax(17rem, 0.38fr);
+        gap: 3rem;
+        align-items: end;
+        padding: clamp(3rem, 8vw, 7rem) clamp(1rem, 4vw, 4rem) 3rem;
+        overflow: hidden;
+        background: var(--ink);
+        color: #fff;
+      }
+
+      .hero::after {
+        position: absolute;
+        top: 7%;
+        right: 24%;
+        width: clamp(1.2rem, 2vw, 2.2rem);
+        height: 110%;
+        background: var(--volt);
+        content: "";
+        transform: rotate(18deg);
+        transform-origin: top;
+      }
+
+      .hero-copy,
+      .hero-note {
+        position: relative;
+        z-index: 1;
+      }
+
+      .eyebrow {
+        margin: 0 0 1rem;
+        color: var(--volt);
+        font-size: 0.7rem;
+        font-weight: 900;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 8ch;
+        margin: 0;
+        font-family: var(--display-font);
+        font-size: clamp(4rem, 12vw, 11rem);
+        font-stretch: condensed;
+        font-style: italic;
+        font-weight: 950;
+        letter-spacing: -0.075em;
+        line-height: 0.77;
+        text-transform: uppercase;
+      }
+
+      .hero-note {
+        padding-bottom: 0.65rem;
+      }
+
+      .hero-note strong {
+        display: block;
+        max-width: 11ch;
+        font-family: var(--display-font);
+        font-size: clamp(2rem, 4vw, 4rem);
+        font-style: italic;
+        font-weight: 900;
+        letter-spacing: -0.05em;
+        line-height: 0.92;
+        text-transform: uppercase;
+      }
+
+      .hero-note p {
+        max-width: 28rem;
+        margin: 1.5rem 0 0;
+        color: #b9b9b3;
+        font-size: 0.92rem;
+        line-height: 1.65;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        background: var(--volt);
+      }
+
+      .metric {
+        min-width: 0;
+        padding: 1.6rem clamp(1rem, 3vw, 2.5rem) 1.8rem;
+        border-right: 2px solid var(--ink);
+      }
+
+      .metric:last-child {
+        border-right: 0;
+      }
+
+      .metric span,
+      .metric strong {
+        display: block;
+      }
+
+      .metric span {
+        min-height: 2.2em;
+        font-size: 0.64rem;
+        font-weight: 900;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .metric strong {
+        margin-top: 0.55rem;
+        font-family: var(--display-font);
+        font-size: clamp(3rem, 6vw, 6rem);
+        font-style: italic;
+        font-weight: 950;
+        letter-spacing: -0.07em;
+        line-height: 0.9;
+      }
+
+      .content {
+        display: grid;
+        grid-template-columns: minmax(18rem, 0.34fr) minmax(0, 0.66fr);
+        gap: clamp(2rem, 6vw, 6rem);
+        padding: clamp(4rem, 8vw, 7rem) clamp(1rem, 4vw, 4rem);
+      }
+
+      .section-mark {
+        display: inline-block;
+        margin-bottom: 1.2rem;
+        padding: 0.3rem 0.5rem;
+        background: var(--ink);
+        color: var(--volt);
+        font-size: 0.62rem;
+        font-weight: 900;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+        transform: skew(-8deg);
+      }
+
+      .controls h2,
+      .table-panel h2 {
+        margin: 0;
+        font-family: var(--display-font);
+        font-size: clamp(2.6rem, 5vw, 5rem);
+        font-style: italic;
+        font-weight: 950;
+        letter-spacing: -0.065em;
+        line-height: 0.86;
+        text-transform: uppercase;
+      }
+
+      .controls > p {
+        max-width: 30rem;
+        margin: 1.5rem 0 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .control-frame {
+        margin-top: 2rem;
+        padding: 1.25rem;
+        border: 2px solid var(--ink);
+        background: var(--surface);
+        box-shadow: 0.7rem 0.7rem 0 var(--volt);
+      }
+
+      .table-panel {
+        min-width: 0;
+        padding: clamp(1.2rem, 3vw, 2.2rem);
+        border: 2px solid var(--ink);
+        background: var(--surface);
+      }
+
+      marimo-cell,
+      marimo-output {
+        --marimo-cell-font: var(--text-font);
+        --marimo-cell-heading-font: var(--display-font);
+        --marimo-cell-monospace-font: var(--monospace-font);
+        --marimo-cell-background: transparent;
+        --marimo-cell-foreground: var(--ink);
+        --marimo-cell-surface: var(--surface);
+        --marimo-cell-muted: #eceae2;
+        --marimo-cell-muted-foreground: var(--muted);
+        --marimo-cell-border-color: #c9c7bf;
+        --marimo-cell-accent: #2e2e2e;
+        --marimo-cell-radius: 0;
+        display: block;
+      }
+
+      marimo-output {
+        margin-top: 2rem;
+        overflow-x: auto;
+      }
+
+      footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.5rem clamp(1rem, 4vw, 4rem);
+        background: var(--ink);
+        color: #aaa9a2;
+        font-size: 0.72rem;
+      }
+
+      footer strong {
+        color: var(--volt);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      @media (max-width: 780px) {
+        .hero,
+        .content {
+          grid-template-columns: 1fr;
+        }
+
+        .hero {
+          min-height: 42rem;
+          gap: 3rem;
+        }
+
+        .hero::after {
+          right: 10%;
+          opacity: 0.35;
+        }
+
+        .metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .metric:nth-child(2) {
+          border-right: 0;
+        }
+
+        .metric:nth-child(n + 3) {
+          border-top: 2px solid var(--ink);
+        }
+      }
+
+      @media (max-width: 460px) {
+        nav {
+          align-items: start;
+          flex-direction: column;
+          gap: 0.7rem;
+        }
+
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+
+        .metric,
+        .metric:nth-child(2) {
+          border-top: 0;
+          border-right: 0;
+          border-bottom: 2px solid var(--ink);
+        }
+
+        .metric:last-child {
+          border-bottom: 0;
+        }
+
+        footer {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app-shell">
+      <nav aria-label="Athlete views">
+        <span>Rio 2016 / Athlete report</span>
+        <div>
+          <a href="../overview/" aria-current="page">01 Overview</a>
+          <a href="../explorer/">02 Explorer</a>
+        </div>
+      </nav>
+
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Rio de Janeiro // 2016</p>
+          <h1>The athlete index.</h1>
+        </div>
+        <div class="hero-note">
+          <strong>11,538 athletes. 28 sports.</strong>
+          <p>
+            Athletics had the largest field, followed by aquatics and football.
+          </p>
+        </div>
+      </header>
+
+      <section class="metrics" aria-label="Selected athlete measures">
+        <article class="metric">
+          <span>Athletes</span>
+          <strong mo-value="athlete_summary.athletes"></strong>
+        </article>
+        <article class="metric">
+          <span>Nationalities</span>
+          <strong mo-value="athlete_summary.nationalities"></strong>
+        </article>
+        <article class="metric">
+          <span>Sports</span>
+          <strong mo-value="athlete_summary.sports"></strong>
+        </article>
+        <article class="metric">
+          <span>Medalists</span>
+          <strong mo-value="athlete_summary.medalists"></strong>
+        </article>
+      </section>
+
+      <section class="content">
+        <div class="controls">
+          <span class="section-mark">Sport filter</span>
+          <h2>Filter the field.</h2>
+          <p>
+            Choose a sport to update the headline totals and participation
+            ranking.
+          </p>
+          <div class="control-frame">
+            <marimo-cell name="sport_control"></marimo-cell>
+          </div>
+        </div>
+
+        <article class="table-panel" aria-labelledby="sports-title">
+          <span class="section-mark">Participation ranking</span>
+          <h2 id="sports-title">Biggest fields.</h2>
+          <marimo-output value="top_sports"></marimo-output>
+        </article>
+      </section>
+
+      <footer>
+        <strong>11,538 ways to compete</strong>
+        <span>
+          Source:
+          <a href="https://datahub.io/core/rio2016">Rio 2016 athlete data</a>
+          ·
+          <a href="https://opendatacommons.org/licenses/pddl/1-0/"
+            >ODC-PDDL 1.0</a
+          >
+        </span>
+      </footer>
+    </main>
+  </body>
+</html>
