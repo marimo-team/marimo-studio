@@ -80,7 +80,7 @@ export const ErrorEvidence = ({
         </tbody>
       </table>
       {rows.length === 0
-        ? <p className="empty-state">Waiting for error cases…</p>
+        ? <p className="empty-state">No sampled errors at this threshold.</p>
         : null}
     </div>
   </section>

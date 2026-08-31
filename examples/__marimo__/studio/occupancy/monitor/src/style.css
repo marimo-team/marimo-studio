@@ -114,6 +114,10 @@ h1 {
   outline-offset: 1px;
 }
 
+.is-loading .status-dot {
+  animation: occupancy-status-pulse 1.2s ease-in-out infinite;
+}
+
 .control-bar {
   display: flex;
   gap: 2rem;
@@ -183,6 +187,11 @@ h1 {
   color: var(--anomaly);
 }
 
+.is-loading .metrics strong,
+.is-loading .metrics small {
+  animation: occupancy-copy-pulse 1.3s ease-in-out infinite;
+}
+
 .chart-panel {
   position: relative;
   margin-top: 1rem;
@@ -232,6 +241,35 @@ h1 {
   font-size: 0.88rem;
 }
 
+.chart-state-loading {
+  gap: 1rem;
+  align-content: center;
+}
+
+.monitor-loader {
+  display: inline-flex;
+  gap: 0.28rem;
+  align-items: end;
+  height: 2rem;
+}
+
+.monitor-loader i {
+  width: 0.32rem;
+  height: 100%;
+  border-radius: 999px 999px 0 0;
+  background: var(--forest);
+  transform-origin: bottom;
+  animation: occupancy-stem-pulse 1.15s ease-in-out infinite;
+}
+
+.monitor-loader i:nth-child(2) {
+  animation-delay: 130ms;
+}
+
+.monitor-loader i:nth-child(3) {
+  animation-delay: 260ms;
+}
+
 .summary-error {
   margin-top: 1rem;
   padding: 0.75rem 1rem;
@@ -268,6 +306,46 @@ marimo-cell {
   --marimo-cell-foreground: var(--forest);
   --marimo-cell-accent: var(--forest);
   --marimo-cell-radius: 16px;
+}
+
+marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]):empty::before {
+  --marimo-cell-skeleton-color: rgb(28 58 19 / 15%);
+  --marimo-cell-skeleton-height: 4rem;
+  animation: occupancy-copy-pulse 1.3s ease-in-out infinite;
+}
+
+@keyframes occupancy-status-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.72);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes occupancy-copy-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.86;
+  }
+}
+
+@keyframes occupancy-stem-pulse {
+  0%,
+  100% {
+    opacity: 0.24;
+    transform: scaleY(0.35);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scaleY(1);
+  }
 }
 
 @media (max-width: 48rem) {
@@ -316,5 +394,15 @@ marimo-cell {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+
+  .status-dot,
+  .metrics strong,
+  .metrics small,
+  .monitor-loader i,
+  marimo-cell::before {
+    animation: none !important;
+    opacity: 0.62;
+    transform: none;
   }
 }

@@ -71,10 +71,10 @@ export const App = () => {
   const errors = useMarimoValue<MarimoTable<ErrorCase>>("error_cases");
   const curve = metrics.value?.toArray() ?? [];
   const errorRows = errors.value?.toArray() ?? [];
-  const loading = metrics.value === undefined ||
-    summary.value === undefined ||
-    errors.value === undefined;
   const unavailable = metrics.error || summary.error || errors.error;
+  const loading = !unavailable && (metrics.value === undefined ||
+    summary.value === undefined ||
+    errors.value === undefined);
 
   return (
     <>
@@ -98,6 +98,19 @@ export const App = () => {
       />
 
       <main className="review" aria-busy={loading}>
+        {loading
+          ? (
+            <div className="review-loader" role="status">
+              <span className="review-loader-sheet" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+                <i />
+              </span>
+              Preparing model evidence
+            </div>
+          )
+          : null}
         <header className="review-header">
           <div>
             <p className="eyebrow">Building occupancy · Training review</p>

@@ -45,6 +45,58 @@ select {
   background: var(--paper);
 }
 
+.review-loader {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  gap: 1rem;
+  place-content: center;
+  place-items: center;
+  background: var(--canvas);
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.review-loader-sheet {
+  display: grid;
+  width: min(18rem, calc(100vw - 3rem));
+  gap: 0.6rem;
+  padding: 1.25rem;
+  border-top: 4px solid var(--ink);
+  background: var(--paper);
+}
+
+.review-loader-sheet i {
+  display: block;
+  height: 0.45rem;
+  background: var(--moss);
+  transform-origin: left;
+  animation: model-ledger-pulse 1.35s ease-in-out infinite;
+}
+
+.review-loader-sheet i:nth-child(1) {
+  width: 42%;
+}
+
+.review-loader-sheet i:nth-child(2) {
+  width: 100%;
+  animation-delay: 100ms;
+}
+
+.review-loader-sheet i:nth-child(3) {
+  width: 82%;
+  animation-delay: 200ms;
+}
+
+.review-loader-sheet i:nth-child(4) {
+  width: 64%;
+  animation-delay: 300ms;
+}
+
 .review-header {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(16rem, 0.7fr);
@@ -128,6 +180,33 @@ marimo-cell {
   --marimo-cell-heading-font: var(--display-font);
   --marimo-cell-monospace-font: var(--mono-font);
   --marimo-cell-radius: 8px;
+}
+
+marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]):empty::before {
+  --marimo-cell-skeleton-color: rgb(75 118 84 / 18%);
+  animation: model-copy-pulse 1.35s ease-in-out infinite;
+}
+
+@keyframes model-ledger-pulse {
+  0%,
+  100% {
+    opacity: 0.24;
+    transform: scaleX(0.42);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes model-copy-pulse {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+  50% {
+    opacity: 0.82;
+  }
 }
 
 .metric-grid {
@@ -371,6 +450,14 @@ marimo-cell {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .review-loader-sheet i,
+  marimo-cell::before {
+    animation: none !important;
+    opacity: 0.58;
+  }
+}
+
 @media print {
   @page {
     size: A4 landscape;
@@ -385,6 +472,10 @@ marimo-cell {
     width: 100%;
     margin: 0;
     padding: 0;
+  }
+
+  .review-loader {
+    display: none;
   }
 
   .review-header,

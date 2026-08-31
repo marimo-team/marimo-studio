@@ -118,6 +118,6 @@ export const ThresholdCurve = ({
           </LineChart>
         </ResponsiveContainer>
       )
-      : <p className="empty-state">Waiting for threshold metrics…</p>}
+      : <p className="empty-state">No threshold metrics are available.</p>}
   </div>
 );

@@ -46,6 +46,9 @@ let summary = $state<OccupancySummary | undefined>();
 let latest = $state<SensorRow | undefined>();
 let seriesError = $state(false);
 let summaryError = $state(false);
+let loading = $derived(
+  !seriesError && !summaryError && (series === undefined || summary === undefined),
+);
 
 const formatNumber = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 1,
@@ -235,7 +238,7 @@ onMount(() => {
   }}
 ></span>
 
-<main class="monitor-shell">
+<main class="monitor-shell" class:is-loading={loading} aria-busy={loading}>
   <header class="monitor-header">
     <div>
       <p class="eyebrow">Facilities · Room 01</p>
@@ -294,7 +297,11 @@ onMount(() => {
       <span>Anomaly candidates</span>
       <strong>{summary ? formatInteger.format(summary.anomalies) : "…"}</strong>
       <small>
-        {summary?.anomalies ? "Marked on the trend" : "No candidates detected"}
+        {summary
+          ? summary.anomalies
+            ? "Marked on the trend"
+            : "No candidates detected"
+          : "Reviewing signal"}
       </small>
     </article>
   </section>
@@ -316,7 +323,10 @@ onMount(() => {
     {#if seriesError}
       <p class="chart-state" role="alert">Sensor history is unavailable.</p>
     {:else if series === undefined}
-      <p class="chart-state" aria-live="polite">Loading sensor history…</p>
+      <p class="chart-state chart-state-loading" aria-live="polite">
+        <span class="monitor-loader" aria-hidden="true"><i></i><i></i><i></i></span>
+        Loading sensor history…
+      </p>
     {/if}
   </section>
 
