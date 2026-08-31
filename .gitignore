@@ -15,6 +15,7 @@ packages/marimo-frontend/.cache/
 node_modules/
 apps/docs/.vitepress/cache/
 apps/docs/.vitepress/dist/
+apps/docs/public/examples/
 packages/*/dist/
 pnpm-debug.log*
 apps/e2e/.workspace/
