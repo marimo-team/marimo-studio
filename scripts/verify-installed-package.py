@@ -93,6 +93,8 @@ def _verify_entry_points() -> None:
 def _verify_public_imports(notebook: Path) -> None:
     program = """
 from importlib import resources
+from dataclasses import fields
+from inspect import signature
 import marimo_studio
 import marimo_studio.agent
 import marimo_studio.authoring
@@ -124,11 +126,13 @@ assert set(marimo_studio.authoring.__all__) == {
 }
 assert set(marimo_studio.view_providers.__all__) == {
     "PROVIDER_API_VERSION", "BuildProfile", "BuildRequest", "BuildResult",
-    "DocumentAccess", "InspectionRequest", "JsonValue", "MountDeclaration", "ProjectDiagnostic",
+    "CellConfigSpec", "CellKind", "CellRef", "CellSpec", "DocumentAccess",
+    "InspectionRequest", "JsonValue", "MountDeclaration", "NotebookSpec", "ProjectDiagnostic",
     "ProjectInput", "ProjectInputKind", "ProjectInspection", "ProjectionKind",
     "ProviderAvailability", "ProviderCancellation", "ProviderCommandResult",
     "ProviderInfo", "ProviderRunner", "ProviderStarter", "SourceDocument",
-    "SourceLocation", "StarterContext", "ViewProject", "ViewProvider",
+    "SourceLocation", "SourceSpan", "StarterCellTarget", "StarterContext",
+    "StarterPlan", "ViewProject", "ViewProvider",
     "mount_attribute",
 }
 assert set(marimo_studio.errors.__all__) == {
@@ -139,6 +143,30 @@ assert set(marimo_studio.errors.__all__) == {
     "SourceValidationError", "StaticExportError", "ViewExistsError", "ViewNotFoundError",
     "ViewProjectError",
 }
+providers = marimo_studio.view_providers
+assert tuple(signature(providers.ViewProvider.create).parameters) == (
+    "self", "starter", "context",
+)
+assert tuple(field.name for field in fields(providers.StarterCellTarget)) == (
+    "cell", "target",
+)
+assert tuple(field.name for field in fields(providers.StarterContext)) == (
+    "view_name", "notebook_name", "notebook", "cell_targets",
+)
+assert tuple(field.name for field in fields(providers.StarterPlan)) == (
+    "files", "cell_targets",
+)
+assert tuple(field.name for field in fields(providers.CellConfigSpec)) == (
+    "column", "disabled", "hide_code",
+)
+assert tuple(field.name for field in fields(providers.CellSpec)) == (
+    "ref", "runtime_id", "index", "kind", "name", "source", "code_sha256",
+    "preview", "definitions", "references", "upstream", "downstream", "config",
+    "has_output_expression", "displays_output", "markdown", "code",
+)
+assert tuple(field.name for field in fields(providers.NotebookSpec)) == (
+    "path", "revision", "cells", "app_config",
+)
 """
     completed = subprocess.run(
         [sys.executable, "-c", program],

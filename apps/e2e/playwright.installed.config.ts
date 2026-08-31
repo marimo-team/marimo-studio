@@ -3,10 +3,10 @@ import { resolve } from "node:path";
 
 import { e2eBrowserUse } from "./scripts/browser.mjs";
 import { installedPackageNetwork } from "./scripts/installed-package-network.mjs";
-import { appDirectory } from "./scripts/paths.mjs";
 
 const installedWheel = process.env.MARIMO_STUDIO_E2E_WHEEL;
-if (!installedWheel) {
+const outputRoot = process.env.MARIMO_STUDIO_E2E_INSTALLED_OUTPUT_ROOT;
+if (!installedWheel || !outputRoot) {
   throw new Error("Run the installed-wheel acceptance through pnpm e2e:installed");
 }
 
@@ -25,12 +25,12 @@ export default defineConfig({
           "html",
           {
             open: "never",
-            outputFolder: resolve(appDirectory, "playwright-report-installed"),
+            outputFolder: resolve(outputRoot, "report"),
           },
         ],
       ]
     : "list",
-  outputDir: resolve(appDirectory, "test-results/installed-playwright"),
+  outputDir: resolve(outputRoot, "playwright"),
   expect: { timeout: 65_000 },
   use: {
     baseURL: installedPackageNetwork.origin,

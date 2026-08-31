@@ -1,11 +1,15 @@
-import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { appDirectory, repositoryDirectory } from "./paths.mjs";
 import { PreparationCancelled, PreparationProcessOwner } from "./preparation-process.mjs";
 
 const wheelPattern = /^marimo_studio-.*\.whl$/;
+const playwrightCli = fileURLToPath(import.meta.resolve("@playwright/test/cli"));
+const installedReportDirectory = resolve(appDirectory, "playwright-report-installed");
+const installedResultsDirectory = resolve(appDirectory, "test-results", "installed-playwright");
 const signalExitCodes = Object.freeze({
   SIGHUP: 129,
   SIGINT: 130,
@@ -28,6 +32,22 @@ let exitCode = 0;
 let stopping = false;
 let temporaryRoot;
 
+const removeStableArtifacts = () =>
+  Promise.all(
+    [installedReportDirectory, installedResultsDirectory].map((path) =>
+      rm(path, { force: true, recursive: true }),
+    ),
+  );
+
+const preserveFailureArtifact = async (source, destination) => {
+  try {
+    await mkdir(resolve(destination, ".."), { recursive: true });
+    await cp(source, destination, { force: true, recursive: true });
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+};
+
 const stop = (signal) => {
   if (stopping) return;
   stopping = true;
@@ -45,6 +65,7 @@ for (const [signal, handler] of signalHandlers) {
 }
 
 try {
+  await removeStableArtifacts();
   temporaryRoot = await mkdtemp(resolve(tmpdir(), "marimo-studio-installed-wheel-e2e-"));
   const wheelDirectory = resolve(temporaryRoot, "wheel");
   await mkdir(wheelDirectory);
@@ -58,11 +79,15 @@ try {
   const wheel = await builtWheel(wheelDirectory);
   await preparation.run(
     "run installed-wheel Playwright acceptance",
-    "playwright",
-    ["test", "--config", "playwright.installed.config.ts"],
+    process.execPath,
+    [playwrightCli, "test", "--config", "playwright.installed.config.ts"],
     {
       cwd: appDirectory,
-      env: { ...process.env, MARIMO_STUDIO_E2E_WHEEL: wheel },
+      env: {
+        ...process.env,
+        MARIMO_STUDIO_E2E_INSTALLED_OUTPUT_ROOT: temporaryRoot,
+        MARIMO_STUDIO_E2E_WHEEL: wheel,
+      },
       stdio: "inherit",
     },
   );
@@ -79,6 +104,17 @@ try {
     exitCode = 1;
   }
   if (temporaryRoot) {
+    if (exitCode !== 0) {
+      try {
+        await Promise.all([
+          preserveFailureArtifact(resolve(temporaryRoot, "report"), installedReportDirectory),
+          preserveFailureArtifact(resolve(temporaryRoot, "playwright"), installedResultsDirectory),
+        ]);
+      } catch (error) {
+        console.error(error);
+        exitCode = 1;
+      }
+    }
     try {
       await rm(temporaryRoot, {
         force: true,
