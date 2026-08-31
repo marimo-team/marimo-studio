@@ -110,6 +110,7 @@ body {
   font-weight: 600;
   letter-spacing: -0.035em;
   line-height: 1.12;
+  text-wrap: balance;
 }
 
 .VPHomeHero .tagline {
@@ -372,6 +373,11 @@ body {
 }
 
 @media (max-width: 959px) {
+  .VPHomeHero .main {
+    margin-right: auto;
+    margin-left: auto;
+  }
+
   .studio-runtime-flow,
   .studio-example-catalog {
     grid-template-columns: repeat(2, minmax(0, 1fr));
