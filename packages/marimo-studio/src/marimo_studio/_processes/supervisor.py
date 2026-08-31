@@ -123,8 +123,10 @@ class _ProcessExitObserver:
             return True
         if self._queue is not None:
             self._exited = bool(self._queue.control(None, 1, 0))
+            if not self._exited:
+                self._exited = _process_exited_without_reaping(self._process)
             return self._exited
-        self._exited = _process_exited_with_waitid(self._process)
+        self._exited = _process_exited_without_reaping(self._process)
         return self._exited
 
     def close(self) -> None:
@@ -680,7 +682,7 @@ def _wait_for_exit(process: subprocess.Popen[bytes], timeout: float) -> bool:
     return True
 
 
-def _process_exited_with_waitid(process: subprocess.Popen[bytes]) -> bool:
+def _process_exited_without_reaping(process: subprocess.Popen[bytes]) -> bool:
     if os.name != "posix":
         return process.poll() is not None
     waitid = getattr(os, "waitid", None)
@@ -689,12 +691,21 @@ def _process_exited_with_waitid(process: subprocess.Popen[bytes]) -> bool:
         | getattr(os, "WNOHANG", 0)
         | getattr(os, "WNOWAIT", 0)
     )
-    if waitid is None or not wait_options:
+    if waitid is not None and wait_options:
+        try:
+            return waitid(os.P_PID, process.pid, wait_options) is not None
+        except ChildProcessError:
+            return process.returncode is not None
+    try:
+        import psutil
+    except ImportError:
         return False
     try:
-        return waitid(os.P_PID, process.pid, wait_options) is not None
-    except ChildProcessError:
-        return process.returncode is not None
+        return psutil.Process(process.pid).status() == psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return True
+    except psutil.Error:
+        return False
 
 
 def _wait_for_process_group_exit(

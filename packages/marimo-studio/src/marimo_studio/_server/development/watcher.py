@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import queue
+import time
 from pathlib import Path
 from threading import Event, Lock
 from typing import Any
@@ -26,7 +28,76 @@ _SHARED_WATCHDOG_LOCK = Lock()
 _SHARED_WATCHDOG: _WatchdogRegistry | None = None
 
 
+def _prepare_windows_emitter_stop(emitter: Any) -> None:
+    if os.name != "nt" or not emitter.is_alive():
+        return
+    native_id = emitter.native_id
+    if not isinstance(native_id, int) or native_id <= 0:
+        return
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = vars(ctypes)["WinDLL"]("kernel32", use_last_error=True)
+    open_thread = kernel32.OpenThread
+    open_thread.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    open_thread.restype = wintypes.HANDLE
+    cancel_synchronous_io = kernel32.CancelSynchronousIo
+    cancel_synchronous_io.argtypes = (wintypes.HANDLE,)
+    cancel_synchronous_io.restype = wintypes.BOOL
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = (wintypes.HANDLE,)
+    close_handle.restype = wintypes.BOOL
+
+    # Watchdog closes the directory handle from this owner thread. Cancel the
+    # synchronous ReadDirectoryChangesW call in its emitter thread first.
+    emitter.stopped_event.set()
+    thread = open_thread(0x0001, False, native_id)
+    if thread:
+        try:
+            deadline = time.monotonic() + _WATCHDOG_JOIN_TIMEOUT
+            while emitter.is_alive() and time.monotonic() < deadline:
+                cancel_synchronous_io(thread)
+                emitter.join(timeout=0.05)
+        finally:
+            close_handle(thread)
+    if emitter.is_alive():
+        raise ProcessCleanupError(
+            f"Watchdog emitter did not stop within {_WATCHDOG_JOIN_TIMEOUT:g} seconds"
+        )
+
+
+def _prepare_watchdog_emitter_stop(emitter: Any) -> None:
+    if os.name == "nt":
+        _prepare_windows_emitter_stop(emitter)
+        return
+    emitter.stop()
+    try:
+        emitter.join(timeout=_WATCHDOG_JOIN_TIMEOUT)
+    except RuntimeError:
+        return
+    if emitter.is_alive():
+        raise ProcessCleanupError(
+            f"Watchdog emitter did not stop within {_WATCHDOG_JOIN_TIMEOUT:g} seconds"
+        )
+
+
+def _prepare_watchdog_observer_stop(observer: Any, watch: Any | None = None) -> None:
+    for emitter in tuple(getattr(observer, "emitters", ())):
+        if watch is None or emitter.watch == watch:
+            _prepare_watchdog_emitter_stop(emitter)
+
+
 def _stop_watchdog_observer(observer: Any) -> None:
+    _prepare_watchdog_observer_stop(observer)
+    events = getattr(observer, "event_queue", None)
+    if events is not None:
+        while True:
+            try:
+                events.get_nowait()
+            except queue.Empty:
+                break
+            else:
+                events.task_done()
     for _attempt in range(2):
         observer.stop()
         observer.join(timeout=_WATCHDOG_JOIN_TIMEOUT)
@@ -41,6 +112,7 @@ class _WatchdogEntry:
     def __init__(self, watch: Any, handler: Any) -> None:
         self.watch = watch
         self.handlers = {handler}
+        self.retiring = False
 
 
 class _WatchdogRegistry:
@@ -51,6 +123,7 @@ class _WatchdogRegistry:
         self._entries: dict[tuple[Path, bool], _WatchdogEntry] = {}
         self._lock = Lock()
         self._cleanup_pending = False
+        self._pending_removals: list[tuple[Path, bool, Any]] = []
         self._started = False
 
     def start(self) -> None:
@@ -83,6 +156,10 @@ class _WatchdogRegistry:
                 )
                 self._entries[key] = _WatchdogEntry(watch, handler)
                 return path, recursive, handler
+            if entry.retiring:
+                raise ProcessCleanupError(
+                    f"Watchdog registration for {path} is still retiring"
+                )
             self._observer.add_handler_for_watch(handler, entry.watch)
             entry.handlers.add(handler)
             return path, recursive, handler
@@ -94,11 +171,14 @@ class _WatchdogRegistry:
             entry = self._entries.get(key)
             if entry is None or handler not in entry.handlers:
                 return not self._entries
-            self._observer.remove_handler_for_watch(handler, entry.watch)
-            entry.handlers.remove(handler)
-            if not entry.handlers:
+            if len(entry.handlers) == 1:
+                entry.retiring = True
+                _prepare_watchdog_observer_stop(self._observer, entry.watch)
                 self._observer.unschedule(entry.watch)
                 self._entries.pop(key)
+            else:
+                self._observer.remove_handler_for_watch(handler, entry.watch)
+                entry.handlers.remove(handler)
             return not self._entries
 
     @property
@@ -108,7 +188,23 @@ class _WatchdogRegistry:
 
     @property
     def cleanup_pending(self) -> bool:
-        return self._cleanup_pending
+        return self._cleanup_pending or bool(self._pending_removals)
+
+    def retain_removals(
+        self,
+        registrations: list[tuple[Path, bool, Any]],
+    ) -> None:
+        self._pending_removals.extend(registrations)
+
+    def retry_cleanup(self) -> None:
+        if self._cleanup_pending:
+            self.close()
+        while self._pending_removals:
+            registration = self._pending_removals[0]
+            self.remove(registration)
+            self._pending_removals.pop(0)
+        if self.empty and self._started:
+            self.close()
 
     def close(self) -> None:
         try:
@@ -125,26 +221,34 @@ class _SharedWatchdogOwner:
         self,
         registrations: list[tuple[Path, bool, Any]],
         active: Event | None = None,
+        retain_registry_on_failure: bool = False,
     ) -> None:
         self._registrations = registrations
         self._active = active
+        self._retain_registry_on_failure = retain_registry_on_failure
 
     def stop(self) -> None:
         global _SHARED_WATCHDOG
         if self._active is not None:
             self._active.clear()
-        registrations = self._registrations
-        self._registrations = []
         with _SHARED_WATCHDOG_LOCK:
             registry = _SHARED_WATCHDOG
             if registry is None:
+                self._registrations = []
                 return
-            for registration in registrations:
-                registry.remove(registration)
-            if registry.empty:
-                registry.close()
-                if _SHARED_WATCHDOG is registry:
-                    _SHARED_WATCHDOG = None
+            try:
+                while self._registrations:
+                    registration = self._registrations[0]
+                    registry.remove(registration)
+                    self._registrations.pop(0)
+                if registry.empty:
+                    registry.close()
+                    if _SHARED_WATCHDOG is registry:
+                        _SHARED_WATCHDOG = None
+            except BaseException:
+                if self._retain_registry_on_failure and _SHARED_WATCHDOG is registry:
+                    registry.retain_removals(list(self._registrations))
+                raise
 
     def join(self) -> None:
         return
@@ -247,8 +351,8 @@ def _watchdog_owner(
         with _SHARED_WATCHDOG_LOCK:
             if _SHARED_WATCHDOG is not None and _SHARED_WATCHDOG.cleanup_pending:
                 retained = _SHARED_WATCHDOG
-                retained.close()
-                if _SHARED_WATCHDOG is retained:
+                retained.retry_cleanup()
+                if retained.empty and _SHARED_WATCHDOG is retained:
                     _SHARED_WATCHDOG = None
             if _SHARED_WATCHDOG is None:
                 registry = _WatchdogRegistry(Observer())
@@ -265,9 +369,16 @@ def _watchdog_owner(
                 registrations.append(registry.add(root, True, handler))
             for root in sorted(shallow, key=str):
                 registrations.append(registry.add(root, False, handler))
-    except BaseException:
+    except BaseException as setup_error:
         if registry_ready:
-            _SharedWatchdogOwner(registrations, active).stop()
+            try:
+                _SharedWatchdogOwner(
+                    registrations,
+                    active,
+                    retain_registry_on_failure=True,
+                ).stop()
+            except BaseException as cleanup_error:
+                raise cleanup_error from setup_error
         raise
     return _SharedWatchdogOwner(registrations, active)
 

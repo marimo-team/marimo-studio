@@ -12,6 +12,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
@@ -78,6 +79,38 @@ def test_process_supervisor_drains_output_after_worker_exit() -> None:
     assert result.returncode == 0
     assert not result.output_too_large
     assert result.stdout == b"x" * 1_000_000
+
+
+@_POSIX_ONLY
+def test_exit_observer_confirms_a_fast_exit_after_a_missed_queue_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import psutil
+
+    process = cast(
+        subprocess.Popen[bytes],
+        SimpleNamespace(pid=42, returncode=None),
+    )
+
+    class Queue:
+        @staticmethod
+        def control(*_args: object) -> list[object]:
+            return []
+
+    observer = object.__new__(process_supervisor._ProcessExitObserver)
+    observer._process = process
+    observer._exited = False
+    observer._queue = Queue()
+    monkeypatch.setattr(process_supervisor.os, "waitid", None, raising=False)
+    monkeypatch.setattr(
+        psutil,
+        "Process",
+        lambda pid: SimpleNamespace(
+            status=lambda: psutil.STATUS_ZOMBIE if pid == process.pid else "running"
+        ),
+    )
+
+    assert observer.exited()
 
 
 def test_process_supervisor_cancellation_terminates_the_worker(

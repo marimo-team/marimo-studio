@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import queue
 import threading
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -20,6 +23,110 @@ def test_watchdog_events_ignore_read_only_file_activity() -> None:
     assert file_watcher._watchdog_event_is_mutation("moved")
     assert not file_watcher._watchdog_event_is_mutation("opened")
     assert not file_watcher._watchdog_event_is_mutation("closed_no_write")
+
+
+def test_native_observer_discards_retired_events_before_stop() -> None:
+    class Observer:
+        def __init__(self) -> None:
+            self.event_queue: queue.Queue[object] = queue.Queue()
+            self.alive = True
+            self.stopped_with_pending_events = False
+
+        def stop(self) -> None:
+            self.stopped_with_pending_events = not self.event_queue.empty()
+            self.alive = False
+
+        def join(self, timeout: float | None = None) -> None:
+            return
+
+        def is_alive(self) -> bool:
+            return self.alive
+
+    observer = Observer()
+    for event in range(100):
+        observer.event_queue.put(event)
+
+    file_watcher._stop_watchdog_observer(observer)
+
+    assert not observer.stopped_with_pending_events
+    assert observer.event_queue.empty()
+    assert observer.event_queue.unfinished_tasks == 0
+
+
+def test_observer_stops_event_producers_before_draining_the_queue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Emitter:
+        def __init__(self, events: queue.Queue[object]) -> None:
+            self.events = events
+            self.alive = True
+            self.watch = object()
+
+        def stop(self) -> None:
+            self.events.put("terminal")
+            self.alive = False
+
+        def join(self, timeout: float | None = None) -> None:
+            return
+
+        def is_alive(self) -> bool:
+            return self.alive
+
+    class Observer:
+        def __init__(self) -> None:
+            self.event_queue: queue.Queue[object] = queue.Queue()
+            self.emitter = Emitter(self.event_queue)
+            self.emitters = {self.emitter}
+            self.alive = True
+
+        def stop(self) -> None:
+            assert not self.emitter.is_alive()
+            assert self.event_queue.empty()
+            self.alive = False
+
+        def join(self, timeout: float | None = None) -> None:
+            return
+
+        def is_alive(self) -> bool:
+            return self.alive
+
+    observer = Observer()
+    observer.event_queue.put("pending")
+
+    def stop_emitter(emitter: Emitter) -> None:
+        emitter.stop()
+        emitter.join()
+
+    monkeypatch.setattr(
+        file_watcher,
+        "_prepare_watchdog_emitter_stop",
+        stop_emitter,
+    )
+
+    file_watcher._stop_watchdog_observer(observer)
+
+    assert observer.event_queue.unfinished_tasks == 0
+
+
+@pytest.mark.native_process
+@pytest.mark.skipif(os.name != "nt", reason="Windows native watcher lifecycle")
+def test_windows_native_watcher_repeatedly_releases_synchronous_reads(
+    tmp_path: Path,
+) -> None:
+    async def exercise() -> None:
+        async def callback(_path: Path) -> None:
+            return
+
+        for index in range(80):
+            root = tmp_path / str(index)
+            root.mkdir()
+            source = root / "source.txt"
+            source.write_text("ready", encoding="utf-8")
+            watcher = file_watcher.PrivateProjectWatcher()
+            await watcher.replace(ProjectWatchPlan((source,), ()), callback)
+            await watcher.close()
+
+    asyncio.run(exercise())
 
 
 def test_native_watcher_shares_one_exact_path_between_project_owners(
@@ -76,9 +183,259 @@ def test_native_watcher_shares_one_exact_path_between_project_owners(
     assert registry.remove(first) is False
     assert registry.remove(second) is True
     registry.close()
-    assert observer.removed == 2
+    assert observer.removed == 1
     assert observer.unscheduled == 1
     assert observer.stopped
+
+
+def test_emitter_stop_failure_retains_registration_for_retry_and_reacquisition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source.txt"
+    source.write_text("source", encoding="utf-8")
+
+    class Emitter:
+        def __init__(self, watch: object, *, blocked: bool) -> None:
+            self.watch = watch
+            self.blocked = blocked
+            self.alive = True
+
+        def is_alive(self) -> bool:
+            return self.alive
+
+    class Observer:
+        def __init__(self, *, blocked: bool) -> None:
+            self.watch = object()
+            self.emitter = Emitter(self.watch, blocked=blocked)
+            self.emitters: set[Emitter] = set()
+            self.event_queue: queue.Queue[object] = queue.Queue()
+            self.handler: Any | None = None
+            self.alive = False
+            self.unscheduled = 0
+
+        def start(self) -> None:
+            self.alive = True
+
+        def schedule(
+            self,
+            _handler: object,
+            _path: str,
+            *,
+            recursive: bool,
+        ) -> object:
+            assert not recursive
+            self.handler = _handler
+            self.emitters.add(self.emitter)
+            return self.watch
+
+        def unschedule(self, watch: object) -> None:
+            assert watch is self.watch
+            assert not self.emitter.is_alive()
+            self.emitters.remove(self.emitter)
+            self.unscheduled += 1
+
+        def stop(self) -> None:
+            self.alive = False
+
+        def join(self, timeout: float | None = None) -> None:
+            return
+
+        def is_alive(self) -> bool:
+            return self.alive
+
+    first = Observer(blocked=True)
+    replacement = Observer(blocked=False)
+    observers = iter((first, replacement))
+
+    def prepare(emitter: Emitter) -> None:
+        if emitter.blocked:
+            raise ProcessCleanupError("injected emitter stop failure")
+        emitter.alive = False
+
+    monkeypatch.setattr(file_watcher, "Observer", lambda: next(observers))
+    monkeypatch.setattr(file_watcher, "_prepare_watchdog_emitter_stop", prepare)
+    monkeypatch.setattr(file_watcher, "_SHARED_WATCHDOG", None)
+    plan = ProjectWatchPlan((source,), ())
+
+    async def exercise() -> None:
+        owner = file_watcher._watchdog_owner(
+            plan,
+            asyncio.get_running_loop(),
+            lambda _path: None,
+        )
+        assert owner is not None
+        with pytest.raises(ProcessCleanupError, match="injected emitter stop failure"):
+            owner.stop()
+        assert first.unscheduled == 0
+        assert file_watcher._SHARED_WATCHDOG is not None
+
+        with pytest.raises(ProcessCleanupError, match="still retiring"):
+            file_watcher._watchdog_owner(
+                plan,
+                asyncio.get_running_loop(),
+                lambda _path: None,
+            )
+
+        first.emitter.blocked = False
+        owner.stop()
+        assert first.unscheduled == 1
+        assert file_watcher._SHARED_WATCHDOG is None
+
+        delivered = asyncio.Event()
+        next_owner = file_watcher._watchdog_owner(
+            plan,
+            asyncio.get_running_loop(),
+            lambda _path: delivered.set(),
+        )
+        assert next_owner is not None
+        assert replacement.handler is not None
+
+        class Mutation:
+            event_type = "modified"
+            src_path = str(source)
+            dest_path = None
+
+        replacement.handler.on_any_event(Mutation())
+        await asyncio.wait_for(delivered.wait(), timeout=1)
+        next_owner.stop()
+        assert replacement.unscheduled == 1
+        assert file_watcher._SHARED_WATCHDOG is None
+
+    asyncio.run(exercise())
+
+
+def test_partial_registration_rollback_preserves_an_unrelated_live_owner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    survivor_root = tmp_path / "survivor"
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    survivor_root.mkdir()
+    first_root.mkdir()
+    second_root.mkdir()
+    survivor_source = survivor_root / "source.txt"
+    first_source = first_root / "source.txt"
+    second_source = second_root / "source.txt"
+    survivor_source.write_text("survivor", encoding="utf-8")
+    first_source.write_text("first", encoding="utf-8")
+    second_source.write_text("second", encoding="utf-8")
+
+    class Emitter:
+        def __init__(self, observer: Observer, watch: object) -> None:
+            self.observer = observer
+            self.watch = watch
+            self.alive = True
+
+        def is_alive(self) -> bool:
+            return self.alive
+
+    class Observer:
+        def __init__(self) -> None:
+            self.blocked = True
+            self.emitters: set[Emitter] = set()
+            self.event_queue: queue.Queue[object] = queue.Queue()
+            self.handlers: dict[str, Any] = {}
+            self.alive = False
+            self.schedules = 0
+            self.stopped = False
+
+        def start(self) -> None:
+            self.alive = True
+
+        def schedule(
+            self,
+            _handler: object,
+            _path: str,
+            *,
+            recursive: bool,
+        ) -> object:
+            assert not recursive
+            self.schedules += 1
+            if self.schedules == 3:
+                raise OSError("injected second registration failure")
+            watch = object()
+            self.emitters.add(Emitter(self, watch))
+            self.handlers[_path] = _handler
+            return watch
+
+        def unschedule(self, watch: object) -> None:
+            emitter = next(
+                candidate for candidate in self.emitters if candidate.watch is watch
+            )
+            assert not emitter.is_alive()
+            self.emitters.remove(emitter)
+
+        def stop(self) -> None:
+            self.alive = False
+            self.stopped = True
+
+        def join(self, timeout: float | None = None) -> None:
+            return
+
+        def is_alive(self) -> bool:
+            return self.alive
+
+    retained = Observer()
+
+    def prepare(emitter: Emitter) -> None:
+        if emitter.observer.blocked:
+            raise ProcessCleanupError("injected rollback cleanup failure")
+        emitter.alive = False
+
+    monkeypatch.setattr(file_watcher, "Observer", lambda: retained)
+    monkeypatch.setattr(file_watcher, "_prepare_watchdog_emitter_stop", prepare)
+    monkeypatch.setattr(file_watcher, "_SHARED_WATCHDOG", None)
+    plan = ProjectWatchPlan((first_source, second_source), ())
+
+    async def exercise() -> None:
+        delivered = asyncio.Event()
+        survivor = file_watcher._watchdog_owner(
+            ProjectWatchPlan((survivor_source,), ()),
+            asyncio.get_running_loop(),
+            lambda _path: delivered.set(),
+        )
+        assert survivor is not None
+
+        with pytest.raises(
+            ProcessCleanupError,
+            match="injected rollback cleanup failure",
+        ) as captured:
+            file_watcher._watchdog_owner(
+                plan,
+                asyncio.get_running_loop(),
+                lambda _path: None,
+            )
+        assert isinstance(captured.value.__cause__, OSError)
+        assert str(captured.value.__cause__) == "injected second registration failure"
+        assert file_watcher._SHARED_WATCHDOG is not None
+        assert file_watcher._SHARED_WATCHDOG.cleanup_pending
+
+        retained.blocked = False
+        owner = file_watcher._watchdog_owner(
+            plan,
+            asyncio.get_running_loop(),
+            lambda _path: None,
+        )
+        assert owner is not None
+        assert not retained.stopped
+        assert retained.schedules == 5
+
+        class Mutation:
+            event_type = "modified"
+            src_path = str(survivor_source)
+            dest_path = None
+
+        retained.handlers[str(survivor_root.absolute())].on_any_event(Mutation())
+        await asyncio.wait_for(delivered.wait(), timeout=1)
+        owner.stop()
+        assert not retained.stopped
+        survivor.stop()
+        assert retained.stopped
+        assert file_watcher._SHARED_WATCHDOG is None
+
+    asyncio.run(exercise())
 
 
 def test_recursive_registration_failure_keeps_the_shallow_watch(
