@@ -335,6 +335,7 @@ def _run_build(
         f"--allow-read={_permission_paths(work, output)}",
         f"--allow-write={output}",
         "--allow-env",
+        "--allow-sys=uid",
         f"--allow-ffi={_permission_paths(*bindings)}",
         "--no-prompt",
         f"--config={paths.config.as_posix()}",
