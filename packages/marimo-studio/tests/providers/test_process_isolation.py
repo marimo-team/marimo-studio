@@ -176,8 +176,9 @@ class _CatalogProvider(ProviderStub):
     def _record(operation: str) -> None:
         marker = os.environ.get("MARIMO_STUDIO_PROVIDER_CATALOG_MARKER")
         if marker:
-            with Path(marker).open("a", encoding="utf-8") as stream:
-                stream.write(f"{operation}:{os.getpid()}\n")
+            root = Path(marker)
+            root.mkdir(parents=True, exist_ok=True)
+            root.joinpath(f"{operation}-{os.getpid()}-{time.time_ns()}").touch()
 
     @staticmethod
     def _block(operation: str) -> None:

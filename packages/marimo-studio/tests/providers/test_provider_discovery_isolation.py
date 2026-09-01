@@ -68,6 +68,16 @@ def _import_pids(marker: Path) -> tuple[int, ...]:
     return tuple(int(item.name.split("-", 1)[0]) for item in marker.iterdir())
 
 
+def _catalog_operations(marker: Path) -> tuple[tuple[str, int], ...]:
+    if not marker.is_dir():
+        return ()
+    operations: list[tuple[str, int]] = []
+    for item in marker.iterdir():
+        operation, pid, _nonce = item.name.split("-", 2)
+        operations.append((operation, int(pid)))
+    return tuple(operations)
+
+
 def test_provider_python_work_does_not_consume_the_command_budget(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -102,19 +112,16 @@ def test_external_catalog_and_starter_creation_stay_out_of_process(
 
     assert availability == ProviderAvailability(True)
     assert plan.files == catalog_provider.plan
-    operations = [
-        line.split(":", 1)
-        for line in catalog_marker.read_text(encoding="utf-8").splitlines()
-    ]
-    assert [operation for operation, _pid in operations] == [
+    operations = _catalog_operations(catalog_marker)
+    assert sorted(operation for operation, _pid in operations) == [
         "availability",
-        "starters",
         "create",
+        "starters",
     ]
     worker_pids = _import_pids(import_marker)
     assert len(worker_pids) == 4
     assert os.getpid() not in worker_pids
-    assert all(int(pid) != os.getpid() for _operation, pid in operations)
+    assert all(pid != os.getpid() for _operation, pid in operations)
     _wait_until_dead(worker_pids)
 
 
@@ -279,14 +286,17 @@ def test_cancelled_parallel_catalog_probes_drain_every_provider_process(
         deadline = asyncio.get_running_loop().time() + _PROCESS_START_TIMEOUT
         selected: tuple[int, ...] = ()
         while asyncio.get_running_loop().time() < deadline:
-            if marker.is_file():
-                selected = tuple(
-                    int(line.split(":", 1)[1])
-                    for line in marker.read_text(encoding="utf-8").splitlines()
-                    if line.startswith(f"{operation}:")
+            selected = tuple(
+                sorted(
+                    {
+                        pid
+                        for recorded_operation, pid in _catalog_operations(marker)
+                        if recorded_operation == operation
+                    }
                 )
-                if len(selected) == 2:
-                    break
+            )
+            if len(selected) == 2:
+                break
             await asyncio.sleep(0.01)
         assert len(selected) == 2
         inventory.cancel()
@@ -298,7 +308,12 @@ def test_cancelled_parallel_catalog_probes_drain_every_provider_process(
     try:
         pids = asyncio.run(exercise())
     finally:
-        _kill_survivors(pids)
+        recorded = tuple(
+            pid
+            for recorded_operation, pid in _catalog_operations(marker)
+            if recorded_operation == operation
+        )
+        _kill_survivors(tuple(set((*pids, *recorded))))
 
 
 @pytest.mark.parametrize(

@@ -207,6 +207,8 @@ def test_concurrent_view_setup_serializes_the_same_view_name(
     assert tuple(studio.views) == ("dashboard",)
 
 
+@pytest.mark.deno
+@pytest.mark.usefixtures("shared_deno_test_cache")
 def test_different_starters_racing_for_one_name_publish_one_complete_project(
     notebook_path: Path,
 ) -> None:
