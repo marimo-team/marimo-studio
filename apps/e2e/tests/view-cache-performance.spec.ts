@@ -13,6 +13,7 @@ import {
   expectEditorModelReplayRecovery,
   readWorkspaceFile,
   recoverRequestAbort,
+  recoverResponseTransition,
   retireWorkspacePage,
   studioEntryUrl,
   studioOrigin,
@@ -214,6 +215,14 @@ test("reloads a cached sibling after notebook state changes", async ({
   await expect(report.locator('[mo-value="metric"]')).toHaveText("42");
   const coldIdentity = await runtimeIdentity(page);
 
+  const dashboardProjectRefresh = browserDiagnostics.expectResponseTransition(page, {
+    origin: studioOrigin,
+    method: "GET",
+    path: /^\/_marimo-studio\/views\/dashboard\/project$/,
+    failureStatus: 500,
+    failureError: "configuration-error",
+    successStatus: 200,
+  });
   await selectView(page, "dashboard", "Studio browser fixture");
   const dashboardIdentity = await runtimeIdentity(page);
   const dashboardRefresh = await captureProjectionRefresh(page, browserDiagnostics);
@@ -221,11 +230,12 @@ test("reloads a cached sibling after notebook state changes", async ({
     page,
     'metric = scale.value * 22\nresponsive_value = "responsive" * 80\nmetric',
   );
+  await expect.poll(() => readWorkspaceFile(workspaceNotebookPath)).toContain("scale.value * 22");
+  dashboardProjectRefresh.seal();
   await expect((await waitForPreview(page)).locator('[mo-value="metric"]')).toHaveText("44");
   await expect
     .poll(async () => (await runtimeIdentity(page)).projectionRevision)
     .not.toBe(dashboardIdentity.projectionRevision);
-  await expect.poll(() => readWorkspaceFile(workspaceNotebookPath)).toContain("scale.value * 22");
   await expect.poll(() => cold.frame.getAttribute("src")).toBe("about:blank");
   await recoverProjectionRefresh(dashboardRefresh, page);
 
@@ -239,6 +249,13 @@ test("reloads a cached sibling after notebook state changes", async ({
   expect(reloaded.boot).not.toBe(cold.boot);
   expect(reloadedIdentity.revision).not.toBe(coldIdentity.revision);
   expect(reloadedIdentity.projectionRevision).not.toBe(coldIdentity.projectionRevision);
+  const dashboardProjectStatus = await page.evaluate(async () => {
+    const response = await fetch("/_marimo-studio/views/dashboard/project?file=notebook.py");
+    await response.text();
+    return response.status;
+  });
+  expect(dashboardProjectStatus).toBe(200);
+  await recoverResponseTransition(dashboardProjectRefresh);
   await recoverRequestAbort(abandonedHandoffs);
   replacedWorkspaceStreams.recovered();
   await retireWorkspacePage(page, browserDiagnostics);
