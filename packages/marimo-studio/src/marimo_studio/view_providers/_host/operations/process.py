@@ -44,6 +44,7 @@ from .codec import (
 _RESULT_LIMIT = 16 * 1024 * 1024
 _REQUEST_LIMIT = 128 * 1024 * 1024
 _PROVIDER_OPERATION_OVERHEAD = 10.0
+_PROJECTION_AUTHORIZATION_ENV = "_MARIMO_STUDIO_PROJECTION_AUTHORIZATION_KEY"
 DEFAULT_PROVIDER_EXTENSION_TIMEOUT = 10.0
 _Decoded = TypeVar("_Decoded")
 
@@ -218,6 +219,12 @@ def _operation_timeout(command_timeout: float) -> float:
     return timeout
 
 
+def _provider_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    environment.pop(_PROJECTION_AUTHORIZATION_ENV, None)
+    return environment
+
+
 def _write_request(path: Path, payload: dict[str, object]) -> None:
     encoder = json.JSONEncoder(
         ensure_ascii=False,
@@ -263,7 +270,7 @@ def _run_provider_process(
                         str(response_path),
                     ],
                     timeout,
-                    env=os.environ.copy(),
+                    env=_provider_environment(),
                 )
             except (OSError, ProcessCleanupError) as error:
                 if cancellation.cancelled:

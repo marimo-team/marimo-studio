@@ -27,6 +27,7 @@ from marimo_studio.view_providers import (
     BuildResult,
     JsonValue,
     ProjectInspection,
+    ProviderAvailability,
     ProviderCancellation,
     ProviderInfo,
     ProviderStarter,
@@ -221,6 +222,19 @@ class _ContextProvider(ProviderStub):
         )
 
 
+class _EnvironmentProvider(ProviderStub):
+    def availability(
+        self,
+        project: ViewProject | None = None,
+    ) -> ProviderAvailability:
+        del project
+        key_visible = "_MARIMO_STUDIO_PROJECTION_AUTHORIZATION_KEY" in os.environ
+        marker_visible = (
+            os.environ.get("MARIMO_STUDIO_PROVIDER_ENV_MARKER") == "visible"
+        )
+        return ProviderAvailability(not key_visible and marker_visible)
+
+
 class _BlockingDescriptionProvider:
     def __init__(self) -> None:
         self._provider = ProviderStub(
@@ -265,6 +279,7 @@ create_tree_provider = _CreateProcessTreeProvider(
 delayed_provider = _DelayedProvider("test-process/delayed", "default")
 catalog_provider = _CatalogProvider("test-process/catalog", "default")
 context_provider = _ContextProvider("test-process/context", "default")
+environment_provider = _EnvironmentProvider("test-process/environment", "default")
 blocking_description_provider = _BlockingDescriptionProvider()
 catalog_provider.plan = {
     PurePosixPath("index.html"): b"<!doctype html>\x00<html></html>"
@@ -297,6 +312,22 @@ def _registry(
         isolate_operations=True,
         extension_timeout=timeout,
     )
+
+
+def test_isolated_provider_environment_excludes_projection_authorization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
+    monkeypatch.setenv(
+        "_MARIMO_STUDIO_PROJECTION_AUTHORIZATION_KEY",
+        "provider-must-not-inherit-this",
+    )
+    monkeypatch.setenv("MARIMO_STUDIO_PROVIDER_ENV_MARKER", "visible")
+    installed = _registry("environment", "environment_provider").get(
+        "test-process/environment"
+    )
+
+    assert installed.availability().available
 
 
 def test_create_process_round_trips_notebook_context_and_targets(
