@@ -11,6 +11,7 @@ from .values_test_support import (
     _native_output_context,
     _OutputContext,
     _resource_element_class,
+    assert_native_resources_released,
 )
 
 
@@ -115,9 +116,7 @@ def test_output_renderer_deletes_function_bearing_native_resources(
                     max_output_bytes=10_000,
                 )
 
-            assert context.cell_lifecycle_registry.registry == {}
-            assert context.virtual_file_registry.registry == {}
-            assert context.function_registry.namespaces == {}
+            assert_native_resources_released(context)
     finally:
         if gc_was_enabled:
             gc.enable()
@@ -235,8 +234,7 @@ def test_output_renderer_preserves_cached_resources_across_consumers(
                 consumer_id="preview-d",
                 max_output_bytes=10_000,
             )
-            assert context.cell_lifecycle_registry.registry == {}
-            assert context.virtual_file_registry.registry == {}
+            assert_native_resources_released(context)
     finally:
         context.virtual_file_registry.shutdown()
 
@@ -320,10 +318,7 @@ def test_output_renderer_preserves_cached_ui_elements_across_selectors(
                 consumer_id="preview-a",
                 max_output_bytes=10_000,
             )
-            assert context.cell_lifecycle_registry.registry == {}
-            assert context.virtual_file_registry.registry == {}
-            assert context.function_registry.namespaces == {}
-            assert context.ui_element_registry._objects == {}
+            assert_native_resources_released(context)
     finally:
         value.element = None
         gc.collect()
@@ -399,9 +394,7 @@ def test_output_renderer_preserves_notebook_ui_owner_until_source_release(
                 consumer_id="preview-b",
                 max_output_bytes=10_000,
             )
-            assert context.ui_element_registry._objects == {}
-            assert context.ui_element_registry._constructing_cells == {}
-            assert context.function_registry.namespaces == {}
+            assert_native_resources_released(context)
     finally:
         source.clear()
         gc.collect()

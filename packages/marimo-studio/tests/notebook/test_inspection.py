@@ -50,6 +50,20 @@ if __name__ == "__main__":
     )
 
 
+def _inspect_with_symbolic_budget(
+    notebook: Path,
+    budget: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Any:
+    loader: Any = inspection_module.create_static_notebook_loader()
+    monkeypatch.setitem(
+        loader.__globals__,
+        "_POSSIBLE_OUTPUT_WORK_BUDGET",
+        budget,
+    )
+    return inspect_notebook(notebook).cells[0]
+
+
 def test_inspection_accepts_a_canonical_empty_notebook(tmp_path: Path) -> None:
     notebook = tmp_path / "empty.py"
     notebook.write_text(empty_notebook_source(), encoding="utf-8")
@@ -203,6 +217,431 @@ if __name__ == "__main__":
 
 
 def test_inspection_reports_possible_marimo_output_paths(tmp_path: Path) -> None:
+    # Each case exercises a distinct symbolic execution decision. Equivalent
+    # spellings and repeated control-flow shapes belong to the parser suites.
+    cases = (
+        ("visible-expression", 'mo.md("shown")\nreturn', False, True),
+        ("semicolon-suppressed-expression", 'mo.md("hidden");\nreturn', False, False),
+        (
+            "marimo-sql",
+            'result = mo.sql("SELECT 1")\nreturn (result,)',
+            False,
+            True,
+        ),
+        (
+            "marimo-sql-output-disabled",
+            'result = mo.sql("SELECT 1", output=False)\nreturn (result,)',
+            False,
+            False,
+        ),
+        (
+            "output-append",
+            'mo.output.append("shown")\nvalue = 1\nreturn (value,)',
+            False,
+            True,
+        ),
+        (
+            "output-replace",
+            'mo.output.replace("shown")\nvalue = 1\nreturn (value,)',
+            False,
+            True,
+        ),
+        (
+            "output-replace-at-index",
+            'mo.output.replace_at_index("shown", 0)\nvalue = 1\nreturn (value,)',
+            False,
+            True,
+        ),
+        (
+            "unused-callback",
+            'def emit():\n    mo.output.append("hidden")\nreturn (emit,)',
+            False,
+            False,
+        ),
+        (
+            "invoked-callback",
+            (
+                "def emit():\n"
+                '    mo.output.append("shown")\n'
+                "emit()\n"
+                "value = 1\n"
+                "return (emit, value)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "lazy-generator",
+            (
+                'events = (mo.output.append("hidden") for _ in range(1))\n'
+                "return (events,)"
+            ),
+            False,
+            False,
+        ),
+        (
+            "consumed-generator",
+            (
+                'events = (mo.output.append("shown") for _ in range(1))\n'
+                "values = tuple(events)\n"
+                "return (events, values)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "for-consumed-generator",
+            (
+                'events = (mo.output.append("shown") for _ in range(1))\n'
+                "for event in events:\n"
+                "    value = event\n"
+                "return (events, value)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "iter-next-consumed-generator",
+            (
+                'events = (mo.output.append("shown") for _ in range(1))\n'
+                "iterator = iter(events)\n"
+                "value = next(iterator)\n"
+                "return (events, iterator, value)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "consumed-named-generator",
+            (
+                "def events():\n"
+                '    yield mo.output.append("shown")\n'
+                "values = tuple(events())\n"
+                "return (events, values)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "immediate-lambda",
+            '(lambda: mo.output.append("shown"))()\nreturn',
+            False,
+            True,
+        ),
+        (
+            "lazy-lambda-generator",
+            (
+                "events = (lambda: "
+                '(mo.output.append("hidden") for _ in range(1)))()\n'
+                "return (events,)"
+            ),
+            False,
+            False,
+        ),
+        (
+            "consumed-lambda-generator",
+            (
+                "events = (lambda: "
+                '(mo.output.append("shown") for _ in range(1)))()\n'
+                "values = tuple(events)\n"
+                "return (events, values)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "captured-default",
+            (
+                "def emit():\n"
+                '    mo.output.append("shown")\n'
+                "def invoke(callback=emit):\n"
+                "    callback()\n"
+                "emit = lambda: None\n"
+                "invoke()\n"
+                "return (emit, invoke)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "unreachable-after-return",
+            (
+                "def events():\n"
+                "    return ()\n"
+                '    return (mo.output.append("hidden") for _ in range(1))\n'
+                "values = tuple(events())\n"
+                "return (events, values)"
+            ),
+            False,
+            False,
+        ),
+        (
+            "exhaustive-match-return",
+            (
+                "def events():\n"
+                "    match 1:\n"
+                "        case _:\n"
+                "            return ()\n"
+                '    return (mo.output.append("hidden") for _ in range(1))\n'
+                "values = tuple(events())\n"
+                "return (events, values)"
+            ),
+            False,
+            False,
+        ),
+        (
+            "finally-overrides-deferred-return",
+            (
+                "def finally_events():\n"
+                "    try:\n"
+                '        return (mo.output.append("hidden") for _ in range(1))\n'
+                "    finally:\n"
+                "        return ()\n"
+                "finally_source = finally_events()\n"
+                "finally_values = tuple(finally_source)\n"
+                "return (finally_events, finally_source, finally_values)"
+            ),
+            False,
+            False,
+        ),
+        (
+            "loop-control",
+            ('for _ in range(1):\n    break\n    mo.output.append("hidden")\nreturn'),
+            False,
+            False,
+        ),
+        (
+            "branch-binding",
+            (
+                "def run(flag):\n"
+                "    def emit():\n"
+                '        mo.output.append("shown")\n'
+                "    def quiet():\n"
+                "        return\n"
+                "    if flag:\n"
+                "        emit = quiet\n"
+                "        return\n"
+                "    emit()\n"
+                "run(False)\n"
+                "value = 1\n"
+                "return (run, value)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "match-binding",
+            (
+                "def emit():\n"
+                '    mo.output.append("shown")\n'
+                "match 0:\n"
+                "    case 1 as emit:\n"
+                "        pass\n"
+                "    case _:\n"
+                "        emit()\n"
+                "value = 1\n"
+                "return (emit, value)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "try-handler-binding",
+            (
+                "def emit():\n"
+                '    mo.output.append("shown")\n'
+                "def quiet():\n"
+                "    return\n"
+                "callback = quiet\n"
+                "try:\n"
+                "    callback = emit\n"
+                "    raise RuntimeError\n"
+                "except RuntimeError:\n"
+                "    callback()\n"
+                "value = 1\n"
+                "return (callback, emit, quiet, value)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "finally-binding",
+            (
+                "def emit():\n"
+                '    mo.output.append("shown")\n'
+                "def run():\n"
+                "    try:\n"
+                "        return ()\n"
+                "    finally:\n"
+                "        emit()\n"
+                "run()\n"
+                "value = 1\n"
+                "return (emit, run, value)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "shadowed-marimo",
+            (
+                "class Output:\n"
+                "    def append(self, value):\n"
+                "        return value\n"
+                "class FakeMarimo:\n"
+                "    output = Output()\n"
+                "def invoke(mo):\n"
+                '    mo.output.append("hidden")\n'
+                "invoke(FakeMarimo())\n"
+                "value = 1\n"
+                "return (FakeMarimo, Output, invoke, value)"
+            ),
+            False,
+            False,
+        ),
+        (
+            "operation-alias",
+            (
+                "append = mo.output.append\n"
+                'append("shown")\n'
+                "value = 1\n"
+                "return (append, value)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "imported-operation",
+            (
+                "from marimo import output\n"
+                'output.append("shown")\n'
+                "value = 1\n"
+                "return (output, value)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "consumed-enumerate",
+            (
+                'events = (mo.output.append("shown") for _ in range(1))\n'
+                "values = tuple(enumerate(events))\n"
+                "return (events, values)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "consumed-map",
+            'values = tuple(map(mo.output.append, ["shown"]))\nreturn (values,)',
+            False,
+            True,
+        ),
+        (
+            "consumed-filter",
+            'values = tuple(filter(mo.output.append, ["shown"]))\nreturn (values,)',
+            False,
+            True,
+        ),
+        (
+            "consumed-zip-secondary-source",
+            (
+                'events = (mo.output.append("shown") for _ in range(1))\n'
+                "values = tuple(zip([1], events))\n"
+                "return (events, values)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "zero-iteration-rebinding",
+            (
+                'events = (mo.output.append("shown") for _ in range(1))\n'
+                "for _ in ():\n"
+                "    events = ()\n"
+                "values = tuple(events)\n"
+                "return (events, values)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "zero-iteration-while-rebinding",
+            (
+                'events = (mo.output.append("shown") for _ in range(1))\n'
+                "while False:\n"
+                "    events = ()\n"
+                "values = tuple(events)\n"
+                "return (events, values)"
+            ),
+            False,
+            True,
+        ),
+        (
+            "unawaited-async-generator",
+            (
+                "async def events():\n"
+                '    mo.output.append("hidden")\n'
+                "    yield 1\n"
+                "value = anext(events())\n"
+                "return (events, value)"
+            ),
+            False,
+            False,
+        ),
+        (
+            "shadowed-anext",
+            (
+                "async def shadowed_events():\n"
+                '    mo.output.append("hidden")\n'
+                "    yield 1\n"
+                "async def anext(iterator):\n"
+                "    return iterator\n"
+                "shadowed_iterator = shadowed_events()\n"
+                "shadowed_value = await anext(shadowed_iterator)\n"
+                "return (anext, shadowed_events, shadowed_iterator, shadowed_value)"
+            ),
+            True,
+            False,
+        ),
+        (
+            "awaited-async-generator",
+            (
+                "async def events():\n"
+                '    mo.output.append("shown")\n'
+                "    yield 1\n"
+                "value = await anext(events())\n"
+                "return (events, value)"
+            ),
+            True,
+            True,
+        ),
+    )
+
+    def isolated_cell_body(
+        index: int,
+        name: str,
+        body: str,
+        async_cell: bool,
+    ) -> str:
+        if index < 2 or name in {
+            "finally-overrides-deferred-return",
+            "shadowed-anext",
+        }:
+            return body
+        declaration = "async def" if async_cell else "def"
+        await_call = "await " if async_cell else ""
+        return (
+            f"{declaration} case_{index}():\n"
+            f"{indent(body, '    ')}\n"
+            f"result_{index} = {await_call}case_{index}()\n"
+            "return"
+        )
+
+    rendered_cells = "\n\n".join(
+        f"@app.cell\n{'async def' if async_cell else 'def'} _(mo):\n"
+        f"{indent(isolated_cell_body(index, name, body, async_cell), '    ')}"
+        for index, (name, body, async_cell, _expected) in enumerate(cases)
+    )
     notebook = tmp_path / "display.py"
     notebook.write_text(
         f'''\
@@ -211,796 +650,22 @@ import marimo
 __generated_with = "{marimo.__version__}"
 app = marimo.App()
 
-@app.cell
-def _(mo):
-    shown = mo.md("shown")
-    shown
-    return
+{rendered_cells}
 
-@app.cell
-def _(mo):
-    hidden = mo.md("hidden")
-    hidden;
-    return
-
-@app.cell
-def _(mo):
-    result = mo.sql("SELECT 1")
-    return (result,)
-
-@app.cell
-def _(mo):
-    quiet = mo.sql("SELECT 1", output=False)
-    return (quiet,)
-
-@app.cell
-def _(duckdb):
-    relation = duckdb.sql("SELECT 1")
-    return (relation,)
-
-@app.cell
-def _(duckdb):
-    cursor = duckdb.execute("SELECT 1")
-    return (cursor,)
-
-@app.cell
-def _(mo):
-    keyword_query = mo.sql(query="SELECT 1")
-    return (keyword_query,)
-
-@app.cell
-def _(mo):
-    if True:
-        mo.output.append("shown")
-    return
-
-@app.cell
-def _(mo):
-    def unused():
-        mo.sql(query="SELECT 1")
-        mo.output.replace("hidden")
-    return (unused,)
-
-@app.cell
-def _(mo):
-    def emit():
-        mo.output.append("shown")
-    emit()
-    value = 1
-    return (value,)
-
-@app.cell
-def _(mo):
-    events = (mo.output.append(str(i)) for i in range(3))
-    return (events,)
-
-@app.cell
-def _(mo):
-    def shadowed_emit():
-        mo.output.append("hidden")
-    def invoke(shadowed_emit):
-        shadowed_emit()
-    invoke(lambda: None)
-    shadowed_value = 1
-    return (shadowed_value,)
-
-@app.cell
-def _(mo):
-    for consumed_index in (mo.output.append(str(i)) for i in range(1)):
-        pass
-    consumed_value = 1
-    return (consumed_index, consumed_value)
-
-@app.cell
-def _(mo):
-    stored_events = (mo.output.append(str(i)) for i in range(1))
-    stored_values = tuple(stored_events)
-    return (stored_events, stored_values)
-
-@app.cell
-def _(mo):
-    def generate_events():
-        for i in range(1):
-            yield mo.output.append(str(i))
-    generated_events = generate_events()
-    generated_values = tuple(generated_events)
-    return (generate_events, generated_events, generated_values)
-
-@app.cell
-def _(mo):
-    def captured_emit():
-        mo.output.append("shown")
-        yield 1
-    def captured_quiet():
-        yield 1
-    captured_source = captured_emit()
-    captured_events = (value for value in captured_source)
-    captured_source = captured_quiet()
-    captured_values = tuple(captured_events)
-    return (
-        captured_emit,
-        captured_events,
-        captured_quiet,
-        captured_source,
-        captured_values,
-    )
-
-@app.cell
-def _(mo):
-    next_events = (mo.output.append("shown") for _ in range(1))
-    next_value = next(next_events)
-    return (next_events, next_value)
-
-@app.cell
-def _(mo):
-    iter_events = (mo.output.append("shown") for _ in range(1))
-    iter_iterator = iter(iter_events)
-    iter_value = next(iter_iterator)
-    return (iter_events, iter_iterator, iter_value)
-
-@app.cell
-def _(mo):
-    def default_emit():
-        mo.output.append("shown")
-    def invoke_default(callback=default_emit):
-        callback()
-    invoke_default()
-    default_value = 1
-    return (default_emit, default_value, invoke_default)
-
-@app.cell
-def _(mo):
-    def captured_default_emit():
-        mo.output.append("shown")
-    def captured_default_quiet():
-        return
-    def invoke_captured_default(callback=captured_default_emit):
-        callback()
-    captured_default_emit = captured_default_quiet
-    invoke_captured_default()
-    captured_default_value = 1
-    return (
-        captured_default_emit,
-        captured_default_quiet,
-        captured_default_value,
-        invoke_captured_default,
-    )
-
-@app.cell
-def _(mo):
-    (lambda: mo.output.append("shown"))()
-    invoked_lambda_value = 1
-    return (invoked_lambda_value,)
-
-@app.cell
-def _(mo):
-    lazy_lambda_events = (
-        lambda: (mo.output.append("hidden") for _ in range(1))
-    )()
-    lazy_lambda_value = 1
-    return (lazy_lambda_events, lazy_lambda_value)
-
-@app.cell
-def _(mo):
-    consumed_lambda_events = (
-        lambda: (mo.output.append("shown") for _ in range(1))
-    )()
-    consumed_lambda_values = tuple(consumed_lambda_events)
-    return (consumed_lambda_events, consumed_lambda_values)
-
-@app.cell
-def _(mo):
-    def make_lazy_events():
-        return (mo.output.append("hidden") for _ in range(1))
-    named_lazy_events = make_lazy_events()
-    return (make_lazy_events, named_lazy_events)
-
-@app.cell
-def _(mo):
-    def make_consumed_events():
-        return (mo.output.append("shown") for _ in range(1))
-    named_consumed_events = make_consumed_events()
-    named_consumed_values = tuple(named_consumed_events)
-    return (make_consumed_events, named_consumed_events, named_consumed_values)
-
-@app.cell
-def _(mo):
-    def make_unreachable_events():
-        return ()
-        return (mo.output.append("hidden") for _ in range(1))
-    unreachable_events = make_unreachable_events()
-    unreachable_values = tuple(unreachable_events)
-    return (make_unreachable_events, unreachable_events, unreachable_values)
-
-@app.cell
-def _(mo):
-    def make_try_events():
-        try:
-            return ()
-            return (mo.output.append("hidden") for _ in range(1))
-        finally:
-            pass
-    try_events = make_try_events()
-    try_values = tuple(try_events)
-    return (make_try_events, try_events, try_values)
-
-@app.cell
-def _(mo):
-    def make_try_else_events():
-        try:
-            return ()
-        except Exception:
-            return ()
-        else:
-            return (mo.output.append("hidden") for _ in range(1))
-    try_else_events = make_try_else_events()
-    try_else_values = tuple(try_else_events)
-    return (make_try_else_events, try_else_events, try_else_values)
-
-@app.cell
-def _(mo):
-    def make_post_try_events():
-        try:
-            return ()
-        finally:
-            pass
-        return (mo.output.append("hidden") for _ in range(1))
-    post_try_events = make_post_try_events()
-    post_try_values = tuple(post_try_events)
-    return (make_post_try_events, post_try_events, post_try_values)
-
-@app.cell
-def _(mo):
-    def make_overridden_try_events():
-        try:
-            return (mo.output.append("hidden") for _ in range(1))
-        finally:
-            return ()
-    overridden_try_events = make_overridden_try_events()
-    overridden_try_values = tuple(overridden_try_events)
-    return (make_overridden_try_events, overridden_try_events, overridden_try_values)
-
-@app.cell
-def _(mo):
-    for break_index in range(1):
-        break
-        mo.output.append("hidden")
-    for continue_index in range(1):
-        continue
-        mo.output.append("hidden")
-    loop_control_value = 1
-    return (break_index, continue_index, loop_control_value)
-
-@app.cell
-def _(mo):
-    for try_break_index in range(1):
-        try:
-            break
-        finally:
-            pass
-        mo.output.append("hidden")
-    for try_continue_index in range(1):
-        try:
-            continue
-        finally:
-            pass
-        mo.output.append("hidden")
-    try_loop_control_value = 1
-    return (try_break_index, try_continue_index, try_loop_control_value)
-
-@app.cell
-def _(mo):
-    def make_match_events():
-        match 1:
-            case _:
-                return ()
-        return (mo.output.append("hidden") for _ in range(1))
-    match_events = make_match_events()
-    match_values = tuple(match_events)
-    return (make_match_events, match_events, match_values)
-
-@app.cell
-def _(mo):
-    for match_break_index in range(1):
-        match 1:
-            case _:
-                break
-        mo.output.append("hidden")
-    for match_continue_index in range(1):
-        match 1:
-            case _:
-                continue
-        mo.output.append("hidden")
-    match_loop_control_value = 1
-    return (match_break_index, match_continue_index, match_loop_control_value)
-
-@app.cell
-def _(mo):
-    def match_emit():
-        mo.output.append("shown")
-    match 0:
-        case 1 as match_emit:
-            pass
-        case _:
-            match_emit()
-    match_scope_value = 1
-    return (match_emit, match_scope_value)
-
-@app.cell
-def _(mo):
-    def run_branch(flag):
-        def branch_emit():
-            mo.output.append("shown")
-        def branch_quiet():
-            return
-        if flag:
-            branch_emit = branch_quiet
-            return
-        branch_emit()
-    run_branch(False)
-    branch_scope_value = 1
-    return (branch_scope_value, run_branch)
-
-@app.cell
-def _(mo):
-    def consume_if_events(flag):
-        if flag:
-            if_events = (mo.output.append("shown-a") for _ in range(1))
-        else:
-            if_events = (mo.output.append("shown-b") for _ in range(1))
-        return tuple(if_events)
-    if_event_values = consume_if_events(True)
-    return (consume_if_events, if_event_values)
-
-@app.cell
-def _(mo):
-    def consume_match_events(flag):
-        match flag:
-            case 0:
-                matched_events = (mo.output.append("shown-a") for _ in range(1))
-            case _:
-                matched_events = (mo.output.append("shown-b") for _ in range(1))
-        return tuple(matched_events)
-    matched_event_values = consume_match_events(0)
-    return (consume_match_events, matched_event_values)
-
-@app.cell
-def _(mo):
-    def consume_mixed_if_events(flag):
-        if flag:
-            mixed_if_events = (mo.output.append("shown") for _ in range(1))
-        else:
-            mixed_if_events = ()
-        return tuple(mixed_if_events)
-    mixed_if_values = consume_mixed_if_events(True)
-    return (consume_mixed_if_events, mixed_if_values)
-
-@app.cell
-def _(mo):
-    def consume_partial_match_events(flag):
-        match flag:
-            case 0:
-                partial_match_events = (
-                    mo.output.append("shown") for _ in range(1)
-                )
-        return tuple(partial_match_events)
-    partial_match_values = consume_partial_match_events(0)
-    return (consume_partial_match_events, partial_match_values)
-
-@app.cell
-def _(mo):
-    zero_for_events = (mo.output.append("shown") for _ in range(1))
-    for _ in ():
-        zero_for_events = ()
-    zero_for_values = tuple(zero_for_events)
-    return (zero_for_events, zero_for_values)
-
-@app.cell
-def _(mo):
-    zero_while_events = (mo.output.append("shown") for _ in range(1))
-    while False:
-        zero_while_events = ()
-    zero_while_values = tuple(zero_while_events)
-    return (zero_while_events, zero_while_values)
-
-@app.cell
-def _(mo):
-    def try_scope_emit():
-        mo.output.append("shown")
-    def try_scope_quiet():
-        return
-    try:
-        pass
-    except Exception:
-        try_scope_emit = try_scope_quiet
-    try_scope_emit()
-    try_scope_value = 1
-    return (try_scope_emit, try_scope_quiet, try_scope_value)
-
-@app.cell
-def _(mo):
-    def finally_emit():
-        mo.output.append("shown")
-    def run_finally_binding():
-        try:
-            finally_callback = finally_emit
-            return ()
-        finally:
-            finally_callback()
-    run_finally_binding()
-    finally_binding_value = 1
-    return (finally_binding_value, finally_emit, run_finally_binding)
-
-@app.cell
-def _(mo):
-    def handler_snapshot_emit():
-        mo.output.append("shown")
-    def handler_snapshot_quiet():
-        return
-    def handler_snapshot_fail():
-        raise RuntimeError
-    def run_handler_snapshot():
-        handler_snapshot_callback = handler_snapshot_quiet
-        try:
-            handler_snapshot_callback = handler_snapshot_emit
-            handler_snapshot_fail()
-            handler_snapshot_callback = handler_snapshot_quiet
-        except RuntimeError:
-            handler_snapshot_callback()
-    run_handler_snapshot()
-    handler_snapshot_value = 1
-    return (
-        handler_snapshot_emit,
-        handler_snapshot_fail,
-        handler_snapshot_quiet,
-        handler_snapshot_value,
-        run_handler_snapshot,
-    )
-
-@app.cell
-def _(mo):
-    def nested_handler_emit():
-        mo.output.append("shown")
-    def nested_handler_quiet():
-        return
-    def nested_handler_fail():
-        raise RuntimeError
-    def run_nested_handler():
-        nested_handler_callback = nested_handler_quiet
-        try:
-            if True:
-                nested_handler_callback = nested_handler_emit
-                nested_handler_fail()
-                nested_handler_callback = nested_handler_quiet
-        except RuntimeError:
-            nested_handler_callback()
-    run_nested_handler()
-    nested_handler_value = 1
-    return (
-        nested_handler_emit,
-        nested_handler_fail,
-        nested_handler_quiet,
-        nested_handler_value,
-        run_nested_handler,
-    )
-
-@app.cell
-def _(mo):
-    class FakeOutput:
-        @staticmethod
-        def append(value):
-            return value
-    class FakeMarimo:
-        output = FakeOutput()
-    def invoke_fake(mo):
-        mo.output.append("hidden")
-    invoke_fake(FakeMarimo())
-    fake_marimo_value = 1
-    return (FakeMarimo, FakeOutput, fake_marimo_value, invoke_fake)
-
-@app.cell
-def _(mo):
-    def invoke_real(real_marimo):
-        real_marimo.output.append("shown")
-    invoke_real(mo)
-    real_marimo_value = 1
-    return (invoke_real, real_marimo_value)
-
-@app.cell
-def _(mo):
-    append_alias = mo.output.append
-    append_alias("shown")
-    append_alias_value = 1
-    return (append_alias, append_alias_value)
-
-@app.cell
-def _(mo):
-    sql_alias = mo.sql
-    sql_alias_result = sql_alias("SELECT 1")
-    return (sql_alias, sql_alias_result)
-
-@app.cell
-def _(mo):
-    quiet_sql_alias = mo.sql
-    quiet_sql_result = quiet_sql_alias("SELECT 1", output=False)
-    return (quiet_sql_alias, quiet_sql_result)
-
-@app.cell
-def _(mo):
-    append_namespace = mo.output
-    append_namespace.append("shown")
-    append_namespace_value = 1
-    return (append_namespace, append_namespace_value)
-
-@app.cell
-def _(mo):
-    replace_namespace = mo.output
-    replace_namespace.replace("shown")
-    replace_namespace_value = 1
-    return (replace_namespace, replace_namespace_value)
-
-@app.cell
-def _(mo):
-    indexed_namespace = mo.output
-    indexed_namespace.replace_at_index("shown", 0)
-    indexed_namespace_value = 1
-    return (indexed_namespace, indexed_namespace_value)
-
-@app.cell
-def _(mo):
-    from marimo import output
-    output.append("shown")
-    direct_output_value = 1
-    return (direct_output_value, output)
-
-@app.cell
-def _(mo):
-    from marimo import sql
-    direct_sql_result = sql("SELECT 1")
-    return (direct_sql_result, sql)
-
-@app.cell
-def _(mo):
-    from marimo import output as imported_output
-    imported_output.append("shown")
-    imported_output_value = 1
-    return (imported_output, imported_output_value)
-
-@app.cell
-def _(mo):
-    from marimo import sql as imported_sql
-    imported_sql_result = imported_sql("SELECT 1")
-    return (imported_sql, imported_sql_result)
-
-@app.cell
-async def _(mo):
-    async def awaited_events():
-        mo.output.append("shown")
-        yield 1
-    awaited_iterator = awaited_events()
-    awaited_value = await anext(awaited_iterator)
-    return (awaited_events, awaited_iterator, awaited_value)
-
-@app.cell
-def _(mo):
-    async def unawaited_events():
-        mo.output.append("hidden")
-        yield 1
-    unawaited_iterator = unawaited_events()
-    unawaited_value = anext(unawaited_iterator)
-    return (unawaited_events, unawaited_iterator, unawaited_value)
-
-@app.cell
-async def _(mo):
-    async def shadowed_anext_events():
-        mo.output.append("hidden")
-        yield 1
-    async def anext(iterator):
-        return iterator
-    shadowed_anext_iterator = shadowed_anext_events()
-    shadowed_anext_value = await anext(shadowed_anext_iterator)
-    return (
-        anext,
-        shadowed_anext_events,
-        shadowed_anext_iterator,
-        shadowed_anext_value,
-    )
-
-@app.cell
-def _(mo):
-    enumerated_events = (mo.output.append("shown") for _ in range(1))
-    stored_enumerate = enumerate(enumerated_events)
-    stored_enumerate_values = tuple(stored_enumerate)
-    return (enumerated_events, stored_enumerate, stored_enumerate_values)
-
-@app.cell
-def _(mo):
-    inline_enumerate_values = tuple(
-        enumerate(mo.output.append("shown") for _ in range(1))
-    )
-    return (inline_enumerate_values,)
-
-@app.cell
-def _(mo):
-    lazy_enumerate_events = (mo.output.append("hidden") for _ in range(1))
-    lazy_enumerate = enumerate(lazy_enumerate_events, start=1)
-    return (lazy_enumerate, lazy_enumerate_events)
-
-@app.cell
-def _(mo):
-    stored_map = map(mo.output.append, ["shown"])
-    stored_map_values = tuple(stored_map)
-    return (stored_map, stored_map_values)
-
-@app.cell
-def _(mo):
-    inline_map_values = tuple(map(mo.output.append, ["shown"]))
-    return (inline_map_values,)
-
-@app.cell
-def _(mo):
-    lazy_map = map(mo.output.append, ["hidden"])
-    lazy_map_value = 1
-    return (lazy_map, lazy_map_value)
-
-@app.cell
-def _(mo):
-    def local_map_callback(value):
-        mo.output.append(value)
-    local_map = map(local_map_callback, ["shown"])
-    local_map_values = tuple(local_map)
-    return (local_map, local_map_callback, local_map_values)
-
-@app.cell
-def _(mo):
-    stored_filter = filter(mo.output.append, ["shown"])
-    stored_filter_values = tuple(stored_filter)
-    return (stored_filter, stored_filter_values)
-
-@app.cell
-def _(mo):
-    inline_filter_values = tuple(filter(mo.output.append, ["shown"]))
-    return (inline_filter_values,)
-
-@app.cell
-def _(mo):
-    lazy_filter = filter(mo.output.append, ["hidden"])
-    lazy_filter_value = 1
-    return (lazy_filter, lazy_filter_value)
-
-@app.cell
-def _(mo):
-    none_filter_values = tuple(filter(None, [1]))
-    none_filter_value = 1
-    return (none_filter_value, none_filter_values)
-
-@app.cell
-def _(mo):
-    def local_filter_callback(value):
-        mo.output.append(value)
-        return True
-    local_filter = filter(local_filter_callback, ["shown"])
-    local_filter_values = tuple(local_filter)
-    return (local_filter, local_filter_callback, local_filter_values)
-
-@app.cell
-def _(mo):
-    stored_zip_events = (mo.output.append("shown") for _ in range(1))
-    stored_zip = zip(stored_zip_events, [1])
-    stored_zip_values = tuple(stored_zip)
-    return (stored_zip, stored_zip_events, stored_zip_values)
-
-@app.cell
-def _(mo):
-    inline_zip_values = tuple(
-        zip((mo.output.append("shown") for _ in range(1)), [1])
-    )
-    return (inline_zip_values,)
-
-@app.cell
-def _(mo):
-    lazy_zip_events = (mo.output.append("hidden") for _ in range(1))
-    lazy_zip = zip(lazy_zip_events, [1])
-    return (lazy_zip, lazy_zip_events)
-
-@app.cell
-def _(mo):
-    second_zip_events = (mo.output.append("shown") for _ in range(1))
-    multi_zip_values = tuple(zip([1], second_zip_events))
-    return (multi_zip_values, second_zip_events)
-
-@app.cell
-def _(mo):
-    strict_zip_events = (mo.output.append("shown") for _ in range(1))
-    strict_zip_values = tuple(zip(strict_zip_events, [1], strict=True))
-    return (strict_zip_events, strict_zip_values)
+if __name__ == "__main__":
+    app.run()
 ''',
         encoding="utf-8",
     )
-
     cells = inspect_notebook(notebook).cells
+    assert len(cells) == len(cases)
 
-    assert [cell.has_output_expression for cell in cells] == [True] + [False] * 77
-    assert [cell.may_display_output for cell in cells] == [
-        True,
-        False,
-        True,
-        False,
-        False,
-        False,
-        True,
-        True,
-        False,
-        True,
-        False,
-        False,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        False,
-        True,
-        False,
-        True,
-        False,
-        False,
-        False,
-        False,
-        False,
-        False,
-        False,
-        False,
-        False,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        False,
-        True,
-        True,
-        True,
-        False,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        True,
-        False,
-        False,
-        True,
-        True,
-        False,
-        True,
-        True,
-        False,
-        True,
-        True,
-        True,
-        False,
-        False,
-        True,
-        True,
-        True,
-        False,
-        True,
-        True,
-    ]
+    for (name, _body, _async_cell, expected), cell in zip(
+        cases,
+        cells,
+        strict=True,
+    ):
+        assert cell.may_display_output is expected, name
 
 
 def test_inspection_conservatively_falls_back_at_the_symbolic_budget(
@@ -1012,10 +677,7 @@ def test_inspection_conservatively_falls_back_at_the_symbolic_budget(
         notebook,
         "value = 1\nreturn (value,)",
     )
-    loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1)
-
-    cell = inspect_notebook(notebook).cells[0]
+    cell = _inspect_with_symbolic_budget(notebook, 1, monkeypatch)
 
     assert not cell.has_output_expression
     assert cell.may_display_output
@@ -1035,10 +697,7 @@ def test_inspection_charges_repeated_wide_call_scopes(
         f"def wide_scope():\n    return\n{unreachable}\n\n"
         f"{repeated_calls}\nvalue = 1\nreturn (value,)",
     )
-    loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_500)
-
-    cell = inspect_notebook(notebook).cells[0]
+    cell = _inspect_with_symbolic_budget(notebook, 1_500, monkeypatch)
 
     assert cell.may_display_output
 
@@ -1055,10 +714,7 @@ def test_inspection_charges_scope_copies_before_branch_allocation(
         f"{bindings}\nmatch 0:\n{cases}\n    case _:\n        pass\n"
         "value = 1\nreturn (value,)",
     )
-    loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 500)
-
-    cell = inspect_notebook(notebook).cells[0]
+    cell = _inspect_with_symbolic_budget(notebook, 500, monkeypatch)
 
     assert cell.may_display_output
 
@@ -1082,10 +738,7 @@ def test_inspection_charges_repeated_alternative_scans(
         f"        selected_callback = alternative_15\n{repeated_calls}\n"
         "value = 1\nreturn (value,)",
     )
-    loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_500)
-
-    cell = inspect_notebook(notebook).cells[0]
+    cell = _inspect_with_symbolic_budget(notebook, 1_500, monkeypatch)
 
     assert cell.may_display_output
 
@@ -1103,10 +756,7 @@ def test_inspection_charges_deep_scope_lookups(
         notebook,
         "\n\n".join(functions) + "\n\ndepth_20()\nvalue = 1\nreturn (value,)",
     )
-    loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_000)
-
-    cell = inspect_notebook(notebook).cells[0]
+    cell = _inspect_with_symbolic_budget(notebook, 1_000, monkeypatch)
 
     assert cell.may_display_output
 
@@ -1125,10 +775,7 @@ def test_inspection_charges_control_flow_summaries(
         f"def control_chain():\n{indent(control_flow, '    ')}\n\n"
         f"{repeated_calls}\nvalue = 1\nreturn (value,)",
     )
-    loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_000)
-
-    cell = inspect_notebook(notebook).cells[0]
+    cell = _inspect_with_symbolic_budget(notebook, 1_000, monkeypatch)
 
     assert cell.may_display_output
 
@@ -1154,10 +801,7 @@ def test_inspection_charges_cross_scope_try_collectors(
         notebook,
         "\n\n".join(functions) + "\n\ntry_depth_15()\nvalue = 1\nreturn (value,)",
     )
-    loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_500)
-
-    cell = inspect_notebook(notebook).cells[0]
+    cell = _inspect_with_symbolic_budget(notebook, 1_500, monkeypatch)
 
     assert cell.may_display_output
 
@@ -1178,10 +822,7 @@ def test_inspection_stops_after_a_wide_sql_output_call(
         "    )\n\n"
         f"{repeated_calls}\nvalue = 1\nreturn (value,)",
     )
-    loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_000)
-
-    cell = inspect_notebook(notebook).cells[0]
+    cell = _inspect_with_symbolic_budget(notebook, 1_000, monkeypatch)
 
     assert cell.may_display_output
 
@@ -1201,10 +842,7 @@ def test_inspection_charges_wide_deferred_adapters(
         f"{repeated_consumers}\nvalue = 1\n"
         "return (quiet_map_callback, value, wide_map)",
     )
-    loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_000)
-
-    cell = inspect_notebook(notebook).cells[0]
+    cell = _inspect_with_symbolic_budget(notebook, 1_000, monkeypatch)
 
     assert cell.may_display_output
 

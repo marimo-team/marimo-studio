@@ -7,6 +7,8 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from marimo._messaging.notification import ConsumerCapabilities
+from marimo._types.ids import ConsumerId
 
 import marimo_studio._compat.kernel_values.query as kernel_query_module
 import marimo_studio._compat.kernel_values.session as kernel_session_module
@@ -32,6 +34,22 @@ from .values_test_support import (
     _bound_projection,
     _encoded_json,
 )
+
+
+class _EditorRoom:
+    def __init__(self, consumer: object, consumer_id: str) -> None:
+        self.consumer = consumer
+        self.consumer_id = ConsumerId(consumer_id)
+        self.connected = True
+
+    def get_consumer(self, consumer_id: ConsumerId) -> object | None:
+        if self.connected and consumer_id == self.consumer_id:
+            return self.consumer
+        return None
+
+    def get_capabilities(self, current: object) -> ConsumerCapabilities:
+        assert current is self.consumer
+        return ConsumerCapabilities.EDITOR
 
 
 def test_kernel_value_result_parser_requires_tagged_descriptors() -> None:
@@ -373,24 +391,12 @@ def test_kernel_value_read_rejects_a_viewer_before_dispatch() -> None:
 
 
 def test_output_timeout_is_terminal_after_one_kernel_dispatch() -> None:
-    from marimo._messaging.notification import ConsumerCapabilities
-    from marimo._types.ids import ConsumerId
-
     consumer = object()
 
-    class Room:
-        @staticmethod
-        def get_consumer(consumer_id: ConsumerId) -> object | None:
-            return consumer if consumer_id == ConsumerId("editor") else None
-
-        @staticmethod
-        def get_capabilities(current: object) -> ConsumerCapabilities:
-            assert current is consumer
-            return ConsumerCapabilities.EDITOR
-
     class Session:
-        room = Room()
-        dispatched = 0
+        def __init__(self) -> None:
+            self.room = _EditorRoom(consumer, "editor")
+            self.dispatched = 0
 
         @staticmethod
         @contextmanager
@@ -421,25 +427,11 @@ def test_output_timeout_is_terminal_after_one_kernel_dispatch() -> None:
 def test_timed_out_projection_calls_cannot_grow_the_session_backlog(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from marimo._messaging.notification import ConsumerCapabilities
-    from marimo._types.ids import ConsumerId
-
     consumer = object()
 
-    class Room:
-        @staticmethod
-        def get_consumer(consumer_id: ConsumerId) -> object | None:
-            return consumer if consumer_id == ConsumerId("editor") else None
-
-        @staticmethod
-        def get_capabilities(current: object) -> ConsumerCapabilities:
-            assert current is consumer
-            return ConsumerCapabilities.EDITOR
-
     class Session:
-        room = Room()
-
         def __init__(self) -> None:
+            self.room = _EditorRoom(consumer, "editor")
             self.dispatched = 0
 
         @staticmethod
@@ -485,25 +477,11 @@ def test_timed_out_projection_calls_cannot_grow_the_session_backlog(
 def test_cancelled_projection_calls_retain_session_backlog_ownership(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from marimo._messaging.notification import ConsumerCapabilities
-    from marimo._types.ids import ConsumerId
-
     consumer = object()
 
-    class Room:
-        @staticmethod
-        def get_consumer(consumer_id: ConsumerId) -> object | None:
-            return consumer if consumer_id == ConsumerId("editor") else None
-
-        @staticmethod
-        def get_capabilities(current: object) -> ConsumerCapabilities:
-            assert current is consumer
-            return ConsumerCapabilities.EDITOR
-
     class Session:
-        room = Room()
-
         def __init__(self) -> None:
+            self.room = _EditorRoom(consumer, "editor")
             self.dispatched = asyncio.Event()
             self.requests = 0
             self.waiters: list[_FunctionResultWaiter] = []
@@ -554,9 +532,6 @@ def test_cancelled_projection_calls_retain_session_backlog_ownership(
 def test_disconnected_projection_calls_retain_backlog_ownership(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from marimo._messaging.notification import ConsumerCapabilities
-    from marimo._types.ids import ConsumerId
-
     class Consumer:
         consumer_id = ConsumerId("preview-backlog")
 
@@ -565,25 +540,9 @@ def test_disconnected_projection_calls_retain_backlog_ownership(
 
     consumer = Consumer()
 
-    class Room:
-        connected = True
-
-        def get_consumer(self, consumer_id: ConsumerId) -> object | None:
-            return (
-                consumer
-                if self.connected and consumer_id == consumer.consumer_id
-                else None
-            )
-
-        @staticmethod
-        def get_capabilities(current: object) -> ConsumerCapabilities:
-            assert current is consumer
-            return ConsumerCapabilities.EDITOR
-
     class Session:
-        room = Room()
-
         def __init__(self) -> None:
+            self.room = _EditorRoom(consumer, str(consumer.consumer_id))
             self.dispatched = asyncio.Event()
             self.requests = 0
 
@@ -635,9 +594,7 @@ def test_disconnected_projection_calls_retain_backlog_ownership(
 
 
 def test_output_consumer_detach_finishes_read_and_releases_owners() -> None:
-    from marimo._messaging.notification import ConsumerCapabilities
     from marimo._runtime.commands import InvokeFunctionCommand
-    from marimo._types.ids import ConsumerId
 
     class Consumer:
         consumer_id = ConsumerId("preview-a")
@@ -650,23 +607,9 @@ def test_output_consumer_detach_finishes_read_and_releases_owners() -> None:
 
     consumer = Consumer()
 
-    class Room:
-        connected = True
-
-        def get_consumer(self, consumer_id: ConsumerId) -> object | None:
-            if self.connected and consumer_id == consumer.consumer_id:
-                return consumer
-            return None
-
-        @staticmethod
-        def get_capabilities(current: object) -> ConsumerCapabilities:
-            assert current is consumer
-            return ConsumerCapabilities.EDITOR
-
     class Session:
-        room = Room()
-
         def __init__(self) -> None:
+            self.room = _EditorRoom(consumer, str(consumer.consumer_id))
             self.requests: list[tuple[object, object]] = []
             self.dispatched: asyncio.Event | None = None
 
@@ -719,9 +662,7 @@ def test_output_consumer_detach_finishes_read_and_releases_owners() -> None:
 def test_output_detach_queues_cleanup_when_projection_quota_is_saturated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from marimo._messaging.notification import ConsumerCapabilities
     from marimo._runtime.commands import InvokeFunctionCommand
-    from marimo._types.ids import ConsumerId
 
     class Consumer:
         consumer_id = ConsumerId("preview-saturated")
@@ -731,25 +672,9 @@ def test_output_detach_queues_cleanup_when_projection_quota_is_saturated(
 
     consumer = Consumer()
 
-    class Room:
-        connected = True
-
-        def get_consumer(self, consumer_id: ConsumerId) -> object | None:
-            return (
-                consumer
-                if self.connected and consumer_id == consumer.consumer_id
-                else None
-            )
-
-        @staticmethod
-        def get_capabilities(current: object) -> ConsumerCapabilities:
-            assert current is consumer
-            return ConsumerCapabilities.EDITOR
-
     class Session:
-        room = Room()
-
         def __init__(self) -> None:
+            self.room = _EditorRoom(consumer, str(consumer.consumer_id))
             self.dispatched = asyncio.Event()
             self.requests: list[object] = []
             self.waiters: list[_FunctionResultWaiter] = []
@@ -797,9 +722,7 @@ def test_output_detach_queues_cleanup_when_projection_quota_is_saturated(
 
 
 def test_value_detach_cancels_the_read_and_queues_resource_cleanup() -> None:
-    from marimo._messaging.notification import ConsumerCapabilities
     from marimo._runtime.commands import InvokeFunctionCommand
-    from marimo._types.ids import ConsumerId
 
     class Consumer:
         consumer_id = ConsumerId("preview-value")
@@ -812,25 +735,9 @@ def test_value_detach_cancels_the_read_and_queues_resource_cleanup() -> None:
 
     consumer = Consumer()
 
-    class Room:
-        connected = True
-
-        def get_consumer(self, consumer_id: ConsumerId) -> object | None:
-            return (
-                consumer
-                if self.connected and consumer_id == consumer.consumer_id
-                else None
-            )
-
-        @staticmethod
-        def get_capabilities(current: object) -> ConsumerCapabilities:
-            assert current is consumer
-            return ConsumerCapabilities.EDITOR
-
     class Session:
-        room = Room()
-
         def __init__(self) -> None:
+            self.room = _EditorRoom(consumer, str(consumer.consumer_id))
             self.dispatched = asyncio.Event()
             self.requests: list[tuple[object, object]] = []
 
@@ -881,26 +788,13 @@ def test_value_detach_cancels_the_read_and_queues_resource_cleanup() -> None:
 
 
 def test_session_detach_finishes_value_read_without_a_timeout() -> None:
-    from marimo._messaging.notification import ConsumerCapabilities
     from marimo._session.events import SessionEventBus
-    from marimo._types.ids import ConsumerId
 
     consumer = object()
 
-    class Room:
-        @staticmethod
-        def get_consumer(consumer_id: ConsumerId) -> object | None:
-            return consumer if consumer_id == ConsumerId("editor") else None
-
-        @staticmethod
-        def get_capabilities(current: object) -> ConsumerCapabilities:
-            assert current is consumer
-            return ConsumerCapabilities.EDITOR
-
     class Session:
-        room = Room()
-
         def __init__(self) -> None:
+            self.room = _EditorRoom(consumer, "editor")
             self.dispatched: asyncio.Event | None = None
             self.extension: Any | None = None
             self.event_bus = SessionEventBus()

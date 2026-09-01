@@ -9,7 +9,6 @@ import pytest
 
 from marimo_studio._notebook.inspection import inspect_notebook
 from marimo_studio._projections.resolution import (
-    PROJECTION_UNPAIRED_SURROGATE_CODE,
     ProjectionRequest,
     ProjectionResolutionError,
     projection_policy,
@@ -148,7 +147,7 @@ def test_selector_bounds_are_published_as_projection_policy(
     notebook_path: Path,
 ) -> None:
     maximum = "x" + ".a" * MAX_VALUE_PATH_STEPS
-    assert len(parse_value_reference(maximum).path) == MAX_VALUE_PATH_STEPS
+    assert len(parse_value_reference(maximum).path) == 64
     with pytest.raises(ValueError, match="path steps"):
         parse_value_reference(maximum + ".a")
     with pytest.raises(ValueError, match="byte limit"):
@@ -182,8 +181,8 @@ def test_selector_bounds_are_published_as_projection_policy(
         "maxUniqueCellTargets": 256,
         "maxUniqueOutputTargets": 100,
         "maxUniqueValueTargets": 100,
-        "maxTargetBytes": MAX_VALUE_REFERENCE_BYTES,
-        "maxPathSteps": MAX_VALUE_PATH_STEPS,
+        "maxTargetBytes": 4_096,
+        "maxPathSteps": 64,
         "maxInstanceIdBytes": 256,
     }
 
@@ -244,7 +243,7 @@ def test_projection_identifiers_reject_unpaired_utf16_surrogates(
             target=value if field == "target" else "summary",
         )
 
-    assert captured.value.code == PROJECTION_UNPAIRED_SURROGATE_CODE
+    assert captured.value.code == "projection-unpaired-surrogate"
 
 
 def test_projection_identifiers_normalize_valid_utf16_surrogate_pairs() -> None:
@@ -277,4 +276,4 @@ def test_projection_selectors_reject_escaped_unpaired_surrogates(
     with pytest.raises(ProjectionResolutionError) as captured:
         resolve_projection(graph, (site,), _request(site, target))
 
-    assert captured.value.code == PROJECTION_UNPAIRED_SURROGATE_CODE
+    assert captured.value.code == "projection-unpaired-surrogate"

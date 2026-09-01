@@ -172,6 +172,14 @@ def _native_output_context() -> Any:
     return context
 
 
+def assert_native_resources_released(context: Any) -> None:
+    assert context.cell_lifecycle_registry.registry == {}
+    assert context.virtual_file_registry.registry == {}
+    assert context.function_registry.namespaces == {}
+    assert context.ui_element_registry._objects == {}
+    assert context.ui_element_registry._constructing_cells == {}
+
+
 def _resource_element_class() -> type[Any]:
     from dataclasses import dataclass
 

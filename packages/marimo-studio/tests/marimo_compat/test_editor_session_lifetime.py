@@ -10,7 +10,7 @@ import pytest
 from marimo._server.api.endpoints.ws.session_handler import SessionHandler
 from marimo._server.api.endpoints.ws.sse_handler import SSESessionHandler
 from marimo._server.api.endpoints.ws_endpoint import WebSocketHandler
-from marimo._session.model import SessionMode
+from marimo._session.model import ConnectionState, SessionMode
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 
 import marimo_studio._compat.server.editor_session_lifetimes as lifetime_module
@@ -37,6 +37,66 @@ def _own_admission(
     assert owner is not None
     admission.lifetime_owner = owner
     return owner
+
+
+class _Session:
+    def __init__(
+        self,
+        *,
+        ttl_seconds: int = 0,
+        state: ConnectionState = ConnectionState.OPEN,
+        disconnect_closes: bool = True,
+    ) -> None:
+        self.ttl_seconds = ttl_seconds
+        self.state = state
+        self.disconnect_closes = disconnect_closes
+
+    def disconnect_consumer(self, _consumer: object) -> None:
+        if self.disconnect_closes:
+            self.state = ConnectionState.CLOSED
+
+    def connection_state(self) -> ConnectionState:
+        return self.state
+
+
+class _SessionManager:
+    mode = SessionMode.EDIT
+    ttl_seconds: int | None = None
+
+    def __init__(self, session: _Session) -> None:
+        self.session: _Session | None = session
+
+    def get_session(self, session_id: object) -> _Session | None:
+        return self.session if str(session_id) == "s_native" else None
+
+    def close_session(self, session_id: object) -> None:
+        if str(session_id) == "s_native":
+            self.session = None
+
+
+def _accepted_admission(
+    adapter: PrivateExistingSessionAttachment,
+    manager: _SessionManager,
+    session: _Session,
+    on_close: Any,
+) -> NativeSessionAdmission:
+    admission = NativeSessionAdmission(
+        expected_claim=session,
+        file_key="notebook.py",
+        mode="current",
+        notebook="notebook.py",
+        runtime_session_id="s_native",
+        on_close=on_close,
+    )
+    _own_admission(adapter, manager, admission)
+    existing_session_module._settle_native_admission(
+        admission,
+        accepted=True,
+        native_claim=session,
+        manager=manager,
+        session_id="s_native",
+    )
+    return admission
 
 
 def test_websocket_safe_close_is_terminal_after_client_disconnect() -> None:
@@ -90,54 +150,16 @@ def test_websocket_safe_close_settles_a_transport_disconnect_race() -> None:
 def test_studio_editor_session_ttl_closes_only_the_disconnected_claim(
     handler_type: type[WebSocketHandler] | type[SSESessionHandler],
 ) -> None:
-    from marimo._session.model import ConnectionState
-
-    class Session:
-        ttl_seconds = 0
-
-        def __init__(self) -> None:
-            self.state = ConnectionState.OPEN
-
-        def disconnect_consumer(self, _consumer: object) -> None:
-            self.state = ConnectionState.CLOSED
-
-        def connection_state(self) -> ConnectionState:
-            return self.state
-
-    class Manager:
-        mode = SessionMode.EDIT
-        ttl_seconds = None
-
-        def __init__(self, session: Session) -> None:
-            self.session: Session | None = session
-
-        def get_session(self, session_id: object) -> Session | None:
-            return self.session if str(session_id) == "s_native" else None
-
-        def close_session(self, session_id: object) -> None:
-            if str(session_id) == "s_native":
-                self.session = None
-
     async def exercise() -> None:
-        session = Session()
-        manager = Manager(session)
+        session = _Session()
+        manager = _SessionManager(session)
         _adapter, handle = _open(cast(Any, manager))
         closed = asyncio.Event()
-        admission = NativeSessionAdmission(
-            expected_claim=session,
-            file_key="notebook.py",
-            mode="current",
-            notebook="notebook.py",
-            runtime_session_id="s_native",
-            on_close=closed.set,
-        )
-        _own_admission(_adapter, manager, admission)
-        existing_session_module._settle_native_admission(
-            admission,
-            accepted=True,
-            native_claim=session,
-            manager=manager,
-            session_id="s_native",
+        admission = _accepted_admission(
+            _adapter,
+            manager,
+            session,
+            closed.set,
         )
         handler = cast(
             Any,
@@ -175,52 +197,15 @@ def test_studio_editor_session_ttl_closes_only_the_disconnected_claim(
 
 
 def test_studio_editor_session_ttl_is_cancelled_by_reconnect() -> None:
-    from marimo._session.model import ConnectionState
-
-    class Session:
-        ttl_seconds = 0
-
-        def __init__(self) -> None:
-            self.state = ConnectionState.OPEN
-
-        def disconnect_consumer(self, _consumer: object) -> None:
-            self.state = ConnectionState.CLOSED
-
-        def connection_state(self) -> ConnectionState:
-            return self.state
-
-    class Manager:
-        mode = SessionMode.EDIT
-        ttl_seconds = None
-
-        def __init__(self, session: Session) -> None:
-            self.session: Session | None = session
-
-        def get_session(self, _session_id: object) -> Session | None:
-            return self.session
-
-        def close_session(self, _session_id: object) -> None:
-            self.session = None
-
     async def exercise() -> None:
-        session = Session()
-        manager = Manager(session)
+        session = _Session()
+        manager = _SessionManager(session)
         _adapter, handle = _open(cast(Any, manager))
-        admission = NativeSessionAdmission(
-            expected_claim=session,
-            file_key="notebook.py",
-            mode="current",
-            notebook="notebook.py",
-            runtime_session_id="s_native",
-            on_close=lambda: None,
-        )
-        _own_admission(_adapter, manager, admission)
-        existing_session_module._settle_native_admission(
-            admission,
-            accepted=True,
-            native_claim=session,
-            manager=manager,
-            session_id="s_native",
+        admission = _accepted_admission(
+            _adapter,
+            manager,
+            session,
+            lambda: None,
         )
         handler = cast(
             Any,
@@ -259,50 +244,20 @@ def test_studio_editor_session_ttl_is_cancelled_by_reconnect() -> None:
 
 
 def test_configured_native_session_ttl_remains_the_only_close_owner() -> None:
-    from marimo._session.model import ConnectionState
-
-    class Session:
-        ttl_seconds = 60
-
-        def disconnect_consumer(self, _consumer: object) -> None:
-            return None
-
-        @staticmethod
-        def connection_state() -> ConnectionState:
-            return ConnectionState.CLOSED
-
-    class Manager:
-        mode = SessionMode.EDIT
-        ttl_seconds = 30
-
-        def __init__(self, session: Session) -> None:
-            self.session: Session | None = session
-
-        def get_session(self, _session_id: object) -> Session | None:
-            return self.session
-
-        def close_session(self, _session_id: object) -> None:
-            self.session = None
-
     async def exercise() -> None:
-        session = Session()
-        manager = Manager(session)
-        admission = NativeSessionAdmission(
-            expected_claim=session,
-            file_key="notebook.py",
-            mode="current",
-            notebook="notebook.py",
-            runtime_session_id="s_native",
-            on_close=lambda: None,
+        session = _Session(
+            ttl_seconds=60,
+            state=ConnectionState.CLOSED,
+            disconnect_closes=False,
         )
+        manager = _SessionManager(session)
+        manager.ttl_seconds = 30
         _adapter, handle = _open(cast(Any, manager))
-        _own_admission(_adapter, manager, admission)
-        existing_session_module._settle_native_admission(
-            admission,
-            accepted=True,
-            native_claim=session,
-            manager=manager,
-            session_id="s_native",
+        admission = _accepted_admission(
+            _adapter,
+            manager,
+            session,
+            lambda: None,
         )
         handler = cast(
             Any,
@@ -333,53 +288,16 @@ def test_configured_native_session_ttl_remains_the_only_close_owner() -> None:
 
 
 def test_studio_editor_session_ttl_survives_disconnect_cleanup_failure() -> None:
-    from marimo._session.model import ConnectionState
-
-    class Session:
-        ttl_seconds = 0
-
-        def __init__(self) -> None:
-            self.state = ConnectionState.OPEN
-
-        def disconnect_consumer(self, _consumer: object) -> None:
-            self.state = ConnectionState.CLOSED
-
-        def connection_state(self) -> ConnectionState:
-            return self.state
-
-    class Manager:
-        mode = SessionMode.EDIT
-        ttl_seconds = None
-
-        def __init__(self, session: Session) -> None:
-            self.session: Session | None = session
-
-        def get_session(self, _session_id: object) -> Session | None:
-            return self.session
-
-        def close_session(self, _session_id: object) -> None:
-            self.session = None
-
     async def exercise() -> None:
-        session = Session()
-        manager = Manager(session)
+        session = _Session()
+        manager = _SessionManager(session)
         closed = asyncio.Event()
-        admission = NativeSessionAdmission(
-            expected_claim=session,
-            file_key="notebook.py",
-            mode="current",
-            notebook="notebook.py",
-            runtime_session_id="s_native",
-            on_close=closed.set,
-        )
         _adapter, handle = _open(cast(Any, manager))
-        _own_admission(_adapter, manager, admission)
-        existing_session_module._settle_native_admission(
-            admission,
-            accepted=True,
-            native_claim=session,
-            manager=manager,
-            session_id="s_native",
+        admission = _accepted_admission(
+            _adapter,
+            manager,
+            session,
+            closed.set,
         )
         handler = cast(
             Any,

@@ -91,6 +91,37 @@ def _bound_with_upstream(
     )
 
 
+def _verify_bound_projection(
+    kind: Literal["value", "output"],
+    bound: BoundProjection,
+    *,
+    revision: str,
+) -> Any:
+    if kind == "value":
+        arguments = authorized_value_arguments(revision, (bound,), "preview-a")
+        return verify_value_arguments(
+            revision=arguments["revision"],
+            projections=arguments["projections"],
+            active_projections=arguments["active_projections"],
+            consumer_id=arguments["consumer_id"],
+            authorization=arguments["authorization"],
+        )
+    arguments = authorized_output_arguments(
+        revision,
+        (bound,),
+        (bound,),
+        "preview-a",
+    )
+    authorized, _active = verify_output_arguments(
+        revision=arguments["revision"],
+        projections=arguments["projections"],
+        active_projections=arguments["active_projections"],
+        consumer_id=arguments["consumer_id"],
+        authorization=arguments["authorization"],
+    )
+    return authorized
+
+
 def _projection_with_unresolved_reference(
     kind: Literal["cell", "value", "output"],
 ) -> tuple[ResolvedProjection, str]:
@@ -347,29 +378,7 @@ def test_kernel_accepts_a_server_authorized_edit_with_the_same_closure(
     }
     graph = _Graph(cells, {"runtime-summary": {"runtime-upstream"}})
     context = SimpleNamespace(_kernel=SimpleNamespace(graph=graph))
-    if kind == "value":
-        arguments = authorized_value_arguments("revision-1", (bound,), "preview-a")
-        authorized = verify_value_arguments(
-            revision=arguments["revision"],
-            projections=arguments["projections"],
-            active_projections=arguments["active_projections"],
-            consumer_id=arguments["consumer_id"],
-            authorization=arguments["authorization"],
-        )
-    else:
-        arguments = authorized_output_arguments(
-            "revision-1",
-            (bound,),
-            (bound,),
-            "preview-a",
-        )
-        authorized, _active = verify_output_arguments(
-            revision=arguments["revision"],
-            projections=arguments["projections"],
-            active_projections=arguments["active_projections"],
-            consumer_id=arguments["consumer_id"],
-            authorization=arguments["authorization"],
-        )
+    authorized = _verify_bound_projection(kind, bound, revision="revision-1")
 
     assert _current_projection_specs(context, authorized)["summary.total"][0] == (
         "summary"
@@ -416,29 +425,7 @@ def test_kernel_accepts_a_live_closure_after_graph_reinsertion(
             by_runtime_id["runtime-summary"],
         ),
     )
-    if kind == "value":
-        arguments = authorized_value_arguments("revision-2", (rebound,), "preview-a")
-        authorized = verify_value_arguments(
-            revision=arguments["revision"],
-            projections=arguments["projections"],
-            active_projections=arguments["active_projections"],
-            consumer_id=arguments["consumer_id"],
-            authorization=arguments["authorization"],
-        )
-    else:
-        arguments = authorized_output_arguments(
-            "revision-2",
-            (rebound,),
-            (rebound,),
-            "preview-a",
-        )
-        authorized, _active = verify_output_arguments(
-            revision=arguments["revision"],
-            projections=arguments["projections"],
-            active_projections=arguments["active_projections"],
-            consumer_id=arguments["consumer_id"],
-            authorization=arguments["authorization"],
-        )
+    authorized = _verify_bound_projection(kind, rebound, revision="revision-2")
 
     assert _current_projection_specs(context, authorized)["summary.total"][0] == (
         "summary"
@@ -457,29 +444,7 @@ def test_kernel_rejects_a_new_producer_after_capability_binding(
     cells = {"runtime-summary": SimpleNamespace(code=producer_code, defs={"summary"})}
     graph = _Graph(cells)
     context = SimpleNamespace(_kernel=SimpleNamespace(graph=graph))
-    if kind == "value":
-        arguments = authorized_value_arguments("revision-1", (bound,), "preview-a")
-        authorized = verify_value_arguments(
-            revision=arguments["revision"],
-            projections=arguments["projections"],
-            active_projections=arguments["active_projections"],
-            consumer_id=arguments["consumer_id"],
-            authorization=arguments["authorization"],
-        )
-    else:
-        arguments = authorized_output_arguments(
-            "revision-1",
-            (bound,),
-            (bound,),
-            "preview-a",
-        )
-        authorized, _active = verify_output_arguments(
-            revision=arguments["revision"],
-            projections=arguments["projections"],
-            active_projections=arguments["active_projections"],
-            consumer_id=arguments["consumer_id"],
-            authorization=arguments["authorization"],
-        )
+    authorized = _verify_bound_projection(kind, bound, revision="revision-1")
 
     assert _current_projection_specs(context, authorized)["summary"][0] == "summary"
     cells["runtime-missing"] = SimpleNamespace(

@@ -43,22 +43,6 @@ def test_value_reference_preserves_attribute_and_item_selection() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("source", "expected"),
-    [
-        (r'context["a\/b"]', "a/b"),
-        (r'context["\ud83d\ude00"]', "😀"),
-    ],
-)
-def test_value_reference_uses_json_string_escape_semantics(
-    source: str,
-    expected: str,
-) -> None:
-    reference = parse_value_reference(source)
-
-    assert reference.path == (ValuePathStep("item", expected),)
-
-
 def test_kernel_value_reads_use_json_string_escape_semantics() -> None:
     selectors = (r'context["a\/b"]', r'context["\ud83d\ude00"]')
     result = _read_values(
@@ -234,25 +218,25 @@ def test_kernel_projection_encodes_mixed_values_independently() -> None:
     }
 
 
-@pytest.mark.parametrize("kind", ["table", "record-batch"])
-def test_kernel_projection_encodes_pyarrow_tables_and_batches(kind: str) -> None:
+def test_kernel_projection_encodes_pyarrow_tables_and_batches() -> None:
     import pyarrow as pa
 
     table = pa.table({"name": ["Ada", "Grace"], "score": [3, None]})
-    value = table if kind == "table" else table.to_batches()[0]
+    values = {"table": table, "record_batch": table.to_batches()[0]}
     result = _read_values(
-        {"frame": value},
-        {"frame": _selector_spec("frame")},
+        values,
+        {name: _selector_spec(name) for name in values},
         max_value_bytes=10_000,
     )
 
-    payload = cast(dict[str, object], result.values["frame"])
-    ipc = base64.b64decode(cast(str, payload["dataUrl"]).partition(",")[2])
-    assert payload["codec"] == "arrow-ipc-v1"
-    assert pa.ipc.open_stream(io.BytesIO(ipc)).read_all().to_pydict() == {
-        "name": ["Ada", "Grace"],
-        "score": [3, None],
-    }
+    for name in values:
+        payload = cast(dict[str, object], result.values[name])
+        ipc = base64.b64decode(cast(str, payload["dataUrl"]).partition(",")[2])
+        assert payload["codec"] == "arrow-ipc-v1"
+        assert pa.ipc.open_stream(io.BytesIO(ipc)).read_all().to_pydict() == {
+            "name": ["Ada", "Grace"],
+            "score": [3, None],
+        }
 
 
 def test_kernel_projection_encodes_pandas_dataframe_types() -> None:

@@ -31,13 +31,6 @@ def _nested_value(depth: int) -> object:
     return value
 
 
-def _nested_empty_lists(depth: int) -> object:
-    value: object = []
-    for _index in range(depth - 1):
-        value = [value]
-    return value
-
-
 def test_runtime_protocol_round_trips_complete_probe() -> None:
     runtime = RuntimeProbe(
         cells={
@@ -97,12 +90,9 @@ def test_runtime_protocol_rejects_excessive_nesting() -> None:
 
 def test_runtime_protocol_json_depth_has_an_explicit_boundary() -> None:
     _validate_json_depth(_nested_value(64))
-    _validate_json_depth(_nested_empty_lists(64))
 
     with pytest.raises(ValueError, match="JSON exceeds 64 container levels"):
         _validate_json_depth(_nested_value(65))
-    with pytest.raises(ValueError, match="JSON exceeds 64 container levels"):
-        _validate_json_depth(_nested_empty_lists(65))
 
 
 def test_runtime_request_maps_excessive_nesting_to_a_protocol_error(

@@ -91,7 +91,7 @@ def test_process_group_cleanup_fails_when_forced_termination_leaves_owners(
     with pytest.raises(OSError, match="remained alive"):
         process_supervisor._terminate_owned_processes(process)
 
-    assert signals == [signal.SIGTERM, process_supervisor._FORCED_SIGNAL]
+    assert signals == [signal.SIGTERM, signal.SIGKILL]
     assert leader_kills == 1
 
 

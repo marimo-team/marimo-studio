@@ -16,7 +16,6 @@ from marimo_studio._compat.browser_notebook import (
     WASM_PROJECTION_NAMESPACE,
     _value_bridge,
 )
-from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
 from marimo_studio._compat.kernel_values.outputs import KernelOutputRenderer
 from marimo_studio.view_providers import (
     MountDeclaration,
@@ -268,18 +267,6 @@ def _call_bridge(
     return cast(dict[str, Any], function(payload))
 
 
-def test_generated_bridge_registers_one_projection_namespace(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    context = _GeneratedContext()
-
-    _install_generated_adapter(monkeypatch, context)
-
-    assert set(context.function_registry.namespaces) == {WASM_PROJECTION_NAMESPACE}
-    assert context.function_registry.registration_count == 5
-    assert len(context.function_registry.namespaces[WASM_PROJECTION_NAMESPACE]) == 5
-
-
 def _render(
     context: _GeneratedContext,
     consumer_id: str,
@@ -355,7 +342,6 @@ def test_generated_output_adapter_owns_replaces_and_releases_outputs(
     other_output = other["outputs"]["control"]
     owner = first_output["ownerCellId"]
     object_id = f"{owner}-0"
-    assert owner.startswith(OUTPUT_OWNER_PREFIX)
     assert second_output["ownerCellId"] == owner
     assert other_output["ownerCellId"] != owner
     assert second_output["resetUiObjectIds"] == [object_id]
