@@ -108,6 +108,34 @@ def test_observer_stops_event_producers_before_draining_the_queue(
     assert observer.event_queue.unfinished_tasks == 0
 
 
+def test_bounded_observer_rechecks_stop_without_a_queue_wakeup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observer = file_watcher._bound_watchdog_dispatch(file_watcher.Observer())
+    blocked = threading.Event()
+    get = observer.event_queue.get
+
+    def observed_get(
+        block: bool = True,
+        timeout: float | None = None,
+    ) -> object:
+        blocked.set()
+        return get(block=block, timeout=timeout)
+
+    monkeypatch.setattr(file_watcher, "_WATCHDOG_DISPATCH_TIMEOUT", 0.01)
+    monkeypatch.setattr(observer.event_queue, "get", observed_get)
+    observer.start()
+    try:
+        assert blocked.wait(timeout=1)
+        observer.stopped_event.set()
+        observer.join(timeout=1)
+        assert not observer.is_alive()
+    finally:
+        if observer.is_alive():
+            observer.stop()
+            observer.join(timeout=1)
+
+
 @pytest.mark.native_process
 @pytest.mark.skipif(os.name != "nt", reason="Windows native watcher lifecycle")
 def test_windows_native_watcher_repeatedly_releases_synchronous_reads(
@@ -253,7 +281,7 @@ def test_emitter_stop_failure_retains_registration_for_retry_and_reacquisition(
             raise ProcessCleanupError("injected emitter stop failure")
         emitter.alive = False
 
-    monkeypatch.setattr(file_watcher, "Observer", lambda: next(observers))
+    monkeypatch.setattr(file_watcher, "_new_watchdog_observer", lambda: next(observers))
     monkeypatch.setattr(file_watcher, "_prepare_watchdog_emitter_stop", prepare)
     monkeypatch.setattr(file_watcher, "_SHARED_WATCHDOG", None)
     plan = ProjectWatchPlan((source,), ())
@@ -384,7 +412,7 @@ def test_partial_registration_rollback_preserves_an_unrelated_live_owner(
             raise ProcessCleanupError("injected rollback cleanup failure")
         emitter.alive = False
 
-    monkeypatch.setattr(file_watcher, "Observer", lambda: retained)
+    monkeypatch.setattr(file_watcher, "_new_watchdog_observer", lambda: retained)
     monkeypatch.setattr(file_watcher, "_prepare_watchdog_emitter_stop", prepare)
     monkeypatch.setattr(file_watcher, "_SHARED_WATCHDOG", None)
     plan = ProjectWatchPlan((first_source, second_source), ())
@@ -518,7 +546,7 @@ def test_first_registration_failure_closes_the_shared_observer(
 
     observer = Observer()
     monkeypatch.setattr(file_watcher, "FileSystemEventHandler", Handler)
-    monkeypatch.setattr(file_watcher, "Observer", lambda: observer)
+    monkeypatch.setattr(file_watcher, "_new_watchdog_observer", lambda: observer)
     monkeypatch.setattr(file_watcher, "_SHARED_WATCHDOG", None)
     root = tmp_path / "view"
     root.mkdir()
@@ -594,7 +622,7 @@ def test_start_failure_retains_timed_out_observer_for_next_acquisition(
     failed = Observer(fail_start=True, hung=True)
     replacement = Observer(fail_start=False, hung=False)
     observers = iter((failed, replacement))
-    monkeypatch.setattr(file_watcher, "Observer", lambda: next(observers))
+    monkeypatch.setattr(file_watcher, "_new_watchdog_observer", lambda: next(observers))
     monkeypatch.setattr(file_watcher, "_SHARED_WATCHDOG", None)
     monkeypatch.setattr(file_watcher, "_WATCHDOG_JOIN_TIMEOUT", 0.125)
     plan = ProjectWatchPlan((source,), ())
@@ -682,7 +710,7 @@ def test_project_watcher_surfaces_bounded_native_teardown_and_retries(
             return self.alive
 
     observer = Observer()
-    monkeypatch.setattr(file_watcher, "Observer", lambda: observer)
+    monkeypatch.setattr(file_watcher, "_new_watchdog_observer", lambda: observer)
     monkeypatch.setattr(file_watcher, "_SHARED_WATCHDOG", None)
     monkeypatch.setattr(file_watcher, "_COALESCE_SECONDS", 0)
     monkeypatch.setattr(file_watcher, "_WATCHDOG_JOIN_TIMEOUT", 0.125)

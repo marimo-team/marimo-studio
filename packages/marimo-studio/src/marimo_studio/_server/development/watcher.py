@@ -23,9 +23,32 @@ from marimo_studio._server.development.ports import FileChangeCallback, ProjectW
 
 _COALESCE_SECONDS = 0.05
 _WATCHDOG_JOIN_TIMEOUT = 2.0
+_WATCHDOG_DISPATCH_TIMEOUT = 0.25
 _MUTATION_EVENTS = frozenset({"closed", "created", "deleted", "modified", "moved"})
 _SHARED_WATCHDOG_LOCK = Lock()
 _SHARED_WATCHDOG: _WatchdogRegistry | None = None
+
+
+def _bound_watchdog_dispatch(observer: Any) -> Any:
+    events: Any = observer.event_queue
+    get = events.get
+
+    def bounded_get(
+        block: bool = True,
+        timeout: float | None = None,
+    ) -> Any:
+        selected = _WATCHDOG_DISPATCH_TIMEOUT if block and timeout is None else timeout
+        return get(block=block, timeout=selected)
+
+    # Windows can lose the wakeup for Watchdog's queued stop sentinel. A
+    # bounded read lets the dispatcher observe its stop flag directly.
+    events.get = bounded_get
+    return observer
+
+
+def _new_watchdog_observer() -> Any:
+    observer = Observer()
+    return _bound_watchdog_dispatch(observer) if os.name == "nt" else observer
 
 
 def _prepare_windows_emitter_stop(emitter: Any) -> None:
@@ -355,7 +378,7 @@ def _watchdog_owner(
                 if retained.empty and _SHARED_WATCHDOG is retained:
                     _SHARED_WATCHDOG = None
             if _SHARED_WATCHDOG is None:
-                registry = _WatchdogRegistry(Observer())
+                registry = _WatchdogRegistry(_new_watchdog_observer())
                 _SHARED_WATCHDOG = registry
                 try:
                     registry.start()
