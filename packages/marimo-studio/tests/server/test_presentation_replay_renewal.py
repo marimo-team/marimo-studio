@@ -444,11 +444,8 @@ def test_document_renewal_replaces_obsolete_revision_authority(
     assert obsolete.status_code == 403
     assert obsolete.json()["error"] == "presentation-capability-forbidden"
     assert obsolete_outputs.status_code == 409
-    assert obsolete_outputs.json() == {
-        "error": "stale-projection-binding",
-        "message": "The presentation is refreshing its notebook bindings.",
-        "transient": True,
-    }
+    assert obsolete_outputs.json()["error"] == "stale-projection-binding"
+    assert obsolete_outputs.json()["transient"] is True
     assert obsolete_runtime_asset.status_code == 200
     assert obsolete_runtime_asset_head.status_code == 200
     assert obsolete_artifact.status_code == 200

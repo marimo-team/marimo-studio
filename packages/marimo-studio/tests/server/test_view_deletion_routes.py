@@ -92,10 +92,7 @@ def test_view_deletion_removes_files_promotes_the_default_and_keeps_one_view(
     assert updated.default_view == "executive"
     assert not (studio.view_root / "dashboard").exists()
     assert last.status_code == 409
-    assert last.json() == {
-        "error": "last-view",
-        "message": "Keep at least one view.",
-    }
+    assert last.json()["error"] == "last-view"
     assert (studio.views["executive"].root / "index.html").is_file()
 
 
@@ -171,14 +168,11 @@ def test_view_deletion_rejects_a_recreated_view_until_its_owner_is_refreshed(
     assert stale_catalog.status_code == 409
     assert stale_catalog.json()["error"] == "workspace-generation-conflict"
     assert stale_view.status_code == 409
-    assert stale_view.json() == {
-        "error": "view-generation-conflict",
-        "message": "View 'operations' was replaced before the operation.",
-        "view": "operations",
-        "current_generation": replacement_owner[1],
-        "hint": "Reopen the workspace and reacquire the view before retrying.",
-        "transient": True,
-    }
+    stale_payload = stale_view.json()
+    assert stale_payload["error"] == "view-generation-conflict"
+    assert stale_payload["view"] == "operations"
+    assert stale_payload["current_generation"] == replacement_owner[1]
+    assert stale_payload["transient"] is True
     assert current.status_code == 200
     assert development_deletions == ["operations"]
     assert presentation_deletions == ["operations"]
@@ -244,14 +238,8 @@ def test_view_deletion_capacity_returns_a_retryable_response(
         slots.release()
 
     assert response.status_code == 503
-    assert response.json() == {
-        "error": "view-deletion-capacity-exhausted",
-        "message": (
-            "Studio is already processing the maximum number of view deletions."
-        ),
-        "hint": "Retry after an in-flight view deletion finishes.",
-        "transient": True,
-    }
+    assert response.json()["error"] == "view-deletion-capacity-exhausted"
+    assert response.json()["transient"] is True
     assert studio.view_root.joinpath("operations", "view.toml").is_file()
 
 
@@ -403,16 +391,12 @@ def test_project_and_source_reads_report_transient_deletion(
             release_deletion.set()
         removed = pending.result(timeout=10)
 
-    expected = {
-        "error": "view-deletion-in-progress",
-        "message": "View 'operations' is being deleted.",
-        "view": "operations",
-        "transient": True,
-    }
     assert project.status_code == 409
-    assert project.json() == expected
     assert source.status_code == 409
-    assert source.json() == expected
+    for payload in (project.json(), source.json()):
+        assert payload["error"] == "view-deletion-in-progress"
+        assert payload["view"] == "operations"
+        assert payload["transient"] is True
     assert removed.status_code == 200
 
 

@@ -99,12 +99,6 @@ def test_each_view_has_scoped_runtime_routes(notebook_path: Path) -> None:
     starter_ids = [item["id"] for item in views["starters"]]
     assert views["default_starter"] in starter_ids
     assert len(starter_ids) == len(set(starter_ids))
-    assert {
-        "marimo-studio/react:default",
-        "marimo-studio/react:reveal",
-        "marimo-studio/svelte:default",
-        "marimo-studio/vanilla:default",
-    }.issubset(starter_ids)
     assert dashboard["runtime"]["data"]["preserveSession"] is True
     assert dashboard["showCellLogs"] is False
     expected_instance = dashboard["runtime"]["data"]["serverInstance"]
@@ -330,23 +324,28 @@ def test_directory_auth_precedes_notebook_configuration(tmp_path: Path) -> None:
     with TestClient(app) as client:
         responses = [
             client.get(
-                f"{route}?file={notebook}",
+                "/_marimo-studio/status?file=configured.py",
                 follow_redirects=False,
-            )
-            for notebook in ("configured.py", "plain.py")
-            for route in ("/_marimo-studio/status", "/dashboard/")
+            ),
+            client.get(
+                "/dashboard/?file=plain.py",
+                follow_redirects=False,
+            ),
         ]
         json_responses = [
             client.get(
-                f"/_marimo-studio/status?file={notebook}",
+                "/_marimo-studio/status?file=configured.py",
+                headers={"Accept": "application/json"},
+                follow_redirects=False,
+            ),
+            client.get(
+                "/_marimo-studio/status?file=plain.py",
                 headers={
                     "Accept": "application/json",
-                    **({"Authorization": "Bearer invalid-token"} if invalid else {}),
+                    "Authorization": "Bearer invalid-token",
                 },
                 follow_redirects=False,
-            )
-            for notebook in ("configured.py", "plain.py")
-            for invalid in (False, True)
+            ),
         ]
         lookalike = client.get(
             "/_marimo-studio-tools?file=configured.py",

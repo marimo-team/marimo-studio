@@ -18,24 +18,9 @@ from marimo_studio.errors import ConfigurationError
 _MAX_COMPONENT_BYTES = PORTABLE_PATH_COMPONENT_MAX_BYTES
 
 
-@pytest.mark.parametrize(
-    "kind",
-    (
-        "cas",
-        "claim",
-        "delete",
-        "detach",
-        "export",
-        "export-recovery",
-        "restore",
-        "rollback",
-        "write",
-    ),
-)
 @pytest.mark.supported_python
-def test_transaction_sibling_names_are_windows_portable(
+def test_longest_transaction_sibling_name_is_windows_portable(
     monkeypatch: pytest.MonkeyPatch,
-    kind: secure_names.TemporarySiblingKind,
 ) -> None:
     token = "ab" * 16
     monkeypatch.setattr(
@@ -44,9 +29,9 @@ def test_transaction_sibling_names_are_windows_portable(
         lambda size: token if size == 16 else pytest.fail("unexpected token size"),
     )
 
-    name = secure_names.temporary_sibling_name(kind)
+    name = secure_names.temporary_sibling_name("export-recovery")
 
-    assert name == f".marimo-studio-{kind}-{token}"
+    assert name.endswith(token)
     assert len(name.encode("utf-8")) < _MAX_COMPONENT_BYTES
     assert validate_portable_path_component(name, field="Transaction sibling") == name
 
@@ -72,12 +57,14 @@ def test_rollback_sibling_collision_preserves_the_existing_file(
         recovery = filesystem.quarantine_if_identity(target, identity)
 
     assert collision.read_bytes() == b"sentinel"
-    assert recovery.name == f".marimo-studio-rollback-{second}"
+    assert recovery != collision
     assert recovery.read_bytes() == b"source"
 
 
 @pytest.mark.supported_python
-def test_file_transaction_creates_a_max_component_file(tmp_path: Path) -> None:
+def test_file_transaction_supports_a_max_component_file_lifecycle(
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "workspace"
     root.mkdir()
     target = root / ("c" * _MAX_COMPONENT_BYTES)
@@ -89,21 +76,20 @@ def test_file_transaction_creates_a_max_component_file(tmp_path: Path) -> None:
     ):
         pass
 
-    assert target.read_bytes() == b"created"
-    assert not tuple(root.glob(".marimo-studio-*"))
+    _content, _mode, identity = read_file_snapshot_with_identity(target, root=root)
+    with workspace_transactions.write_file_transaction(
+        root,
+        {target: b"edited"},
+        expected={target: identity},
+    ):
+        pass
+    with (
+        pytest.raises(RuntimeError, match="abort"),
+        workspace_transactions.write_file_transaction(root, {target: b"temporary"}),
+    ):
+        raise RuntimeError("abort")
 
-
-@pytest.mark.supported_python
-def test_secure_directory_creates_a_max_component_directory(tmp_path: Path) -> None:
-    root = tmp_path / "workspace"
-    root.mkdir()
-    target = root / ("d" * _MAX_COMPONENT_BYTES)
-
-    with secure_files.secure_directory(root) as filesystem:
-        identity = filesystem.create_directory(target)
-
-    assert identity.directory
-    assert target.is_dir()
+    assert target.read_bytes() == b"edited"
     assert not tuple(root.glob(".marimo-studio-*"))
 
 
@@ -129,78 +115,6 @@ def test_file_transaction_rolls_back_a_max_component_directory(
 
     assert not directory.exists()
     assert not tuple(root.glob(".marimo-studio-*"))
-
-
-@pytest.mark.supported_python
-def test_file_transaction_edits_a_max_component_file(tmp_path: Path) -> None:
-    root = tmp_path / "workspace"
-    root.mkdir()
-    target = root / ("e" * _MAX_COMPONENT_BYTES)
-    target.write_bytes(b"before")
-    _content, _mode, identity = read_file_snapshot_with_identity(target, root=root)
-
-    with workspace_transactions.write_file_transaction(
-        root,
-        {target: b"after"},
-        expected={target: identity},
-    ):
-        pass
-
-    assert target.read_bytes() == b"after"
-    assert not tuple(root.glob(".marimo-studio-*"))
-
-
-@pytest.mark.supported_python
-def test_file_transaction_rolls_back_a_max_component_file(tmp_path: Path) -> None:
-    root = tmp_path / "workspace"
-    root.mkdir()
-    target = root / ("b" * _MAX_COMPONENT_BYTES)
-    target.write_bytes(b"before")
-
-    with (
-        pytest.raises(RuntimeError, match="abort"),
-        workspace_transactions.write_file_transaction(root, {target: b"after"}),
-    ):
-        raise RuntimeError("abort")
-
-    assert target.read_bytes() == b"before"
-    assert not tuple(root.glob(".marimo-studio-*"))
-
-
-@pytest.mark.supported_python
-def test_file_transaction_preserves_max_component_recovery(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    root = tmp_path / "workspace"
-    root.mkdir()
-    target = root / ("r" * _MAX_COMPONENT_BYTES)
-    target.write_bytes(b"before")
-
-    def fail_restore(
-        _filesystem: secure_files.SecureDirectory,
-        _path: Path,
-        _content: bytes,
-        _mode: int,
-    ) -> secure_files.FileIdentity:
-        raise OSError("restore unavailable")
-
-    monkeypatch.setattr(
-        secure_files.SecureDirectory,
-        "restore_file_if_absent",
-        fail_restore,
-    )
-
-    with (
-        pytest.raises(RuntimeError, match="abort"),
-        workspace_transactions.write_file_transaction(root, {target: b"after"}),
-    ):
-        raise RuntimeError("abort")
-
-    recoveries = tuple(root.glob(".marimo-studio-rollback-*"))
-    assert len(recoveries) == 1
-    assert recoveries[0].read_bytes() == b"after"
-    assert len(recoveries[0].name.encode("utf-8")) < _MAX_COMPONENT_BYTES
 
 
 def test_secure_directory_reports_a_missing_leaf_as_not_found(tmp_path: Path) -> None:

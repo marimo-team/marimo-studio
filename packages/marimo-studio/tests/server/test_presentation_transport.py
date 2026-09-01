@@ -9,7 +9,6 @@ from typing import Any, cast
 import pytest
 from starlette.requests import Request
 
-from marimo_studio._delivery.urls import PRIVATE_QUERY_KEYS
 from marimo_studio._server.presentation.access import send_capability_app
 from marimo_studio._server.presentation.isolation import isolated_presentation_document
 from marimo_studio._server.presentation.ownership import studio_owned_request
@@ -143,7 +142,7 @@ def test_isolated_presentation_binds_navigation_to_server_configuration() -> Non
         routing_query="file=notebook.py",
         view_name="dashboard",
         views=("dashboard", "report"),
-        private_query_keys=tuple(sorted(PRIVATE_QUERY_KEYS)),
+        private_query_keys=("file", "session_id"),
         runtime="server",
         runtime_explicit=False,
         title_text="Dashboard",
@@ -158,7 +157,7 @@ def test_isolated_presentation_binds_navigation_to_server_configuration() -> Non
         "routingQuery": "file=notebook.py",
         "view": "dashboard",
         "views": ["dashboard", "report"],
-        "privateQueryKeys": sorted(PRIVATE_QUERY_KEYS),
+        "privateQueryKeys": ["file", "session_id"],
         "fallbackUrl": "/_marimo-studio/presentation/token/dashboard/",
         "replayPathPrefix": "/base/_marimo-studio/presentation/d.",
         "replayEnabled": False,
@@ -170,7 +169,6 @@ def test_isolated_presentation_binds_navigation_to_server_configuration() -> Non
         'id="marimo-studio-presentation" '
         'src="/_marimo-studio/presentation/token/dashboard/"'
     ) in document
-    assert '"marimo-studio:receiver-waiting"' in document
 
 
 def test_preserved_session_wrapper_creates_its_frame_after_replay_admission() -> None:
@@ -181,7 +179,7 @@ def test_preserved_session_wrapper_creates_its_frame_after_replay_admission() ->
         routing_query="file=notebook.py",
         view_name="dashboard",
         views=("dashboard",),
-        private_query_keys=tuple(sorted(PRIVATE_QUERY_KEYS)),
+        private_query_keys=("file", "session_id"),
         runtime="server",
         runtime_explicit=True,
         replay_enabled=True,

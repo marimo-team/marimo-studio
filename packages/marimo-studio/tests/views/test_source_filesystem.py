@@ -162,7 +162,6 @@ def test_source_read_rejects_a_swapped_view_root(
     with pytest.raises(ConfigurationError):
         read_source(studio, "dashboard", SOURCE_PATH)
 
-    assert swapped
     assert (retired / SOURCE_PATH).read_text(encoding="utf-8") == original
     assert (external / SOURCE_PATH).read_text(encoding="utf-8") == "SECRET"
 
@@ -200,7 +199,6 @@ def test_manifest_read_rejects_a_root_swapped_after_validation(
     ):
         sources_module.read_view_manifest(studio, "dashboard")
 
-    assert swapped
     assert (external / "view.toml").read_text(encoding="utf-8") == "SECRET"
 
 

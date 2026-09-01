@@ -318,7 +318,7 @@ def test_preview_consumers_attach_to_the_exact_editor_session() -> None:
         handle.close()
 
 
-def test_popout_reuses_the_editor_session_for_its_creation_query() -> None:
+def test_preview_reuses_the_editor_session_for_owned_queries() -> None:
     manager = _Manager()
     target = _Session(query={"region": "emea"})
     manager.sessions = {"s_target": target}
@@ -326,7 +326,7 @@ def test_popout_reuses_the_editor_session_for_its_creation_query() -> None:
     try:
         assert adapter.attach(_context(manager), "s_view01", "s_target")
 
-        assert _connect_preview(
+        creation_query = _connect_preview(
             manager,
             "s_view01",
             {
@@ -334,7 +334,16 @@ def test_popout_reuses_the_editor_session_for_its_creation_query() -> None:
                 "file": "forged.py",
                 "access_token": "secret",
             },
-        ) == (target, ConnectionType.KIOSK)
+        )
+        studio_owned = _connect_preview(
+            manager,
+            "s_view01",
+            {"region": "apac"},
+            studio_owned=True,
+        )
+
+        assert creation_query == (target, ConnectionType.KIOSK)
+        assert studio_owned == (target, ConnectionType.KIOSK)
     finally:
         handle.close()
 
@@ -375,24 +384,6 @@ def test_reloaded_popout_without_client_marker_keeps_query_correctness() -> None
 
         assert session is not target
         assert connection is ConnectionType.NEW
-    finally:
-        handle.close()
-
-
-def test_studio_owned_preview_keeps_the_editor_query_lane() -> None:
-    manager = _Manager()
-    target = _Session(query={"region": "emea"})
-    manager.sessions = {"s_target": target}
-    adapter, handle = _open(manager)
-    try:
-        assert adapter.attach(_context(manager), "s_view01", "s_target")
-
-        assert _connect_preview(
-            manager,
-            "s_view01",
-            {"region": "apac"},
-            studio_owned=True,
-        ) == (target, ConnectionType.KIOSK)
     finally:
         handle.close()
 

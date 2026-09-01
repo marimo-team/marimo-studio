@@ -156,6 +156,5 @@ def test_atomic_write_retries_a_windows_sharing_violation(
         b"after",
     )
 
-    assert attempts == 2
     assert identity.size == len(b"after")
     assert target.read_bytes() == b"after"

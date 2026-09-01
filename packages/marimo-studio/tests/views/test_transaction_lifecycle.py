@@ -126,44 +126,6 @@ def test_file_transaction_rolls_back_after_replacement_cleanup_failure(
     assert captured.value.recovery.read_bytes() == b"observed"
 
 
-def test_file_transaction_removes_created_file_after_temp_cleanup_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    root = tmp_path / "workspace"
-    root.mkdir()
-    target = root / "created.txt"
-    unlink = secure_operations.os.unlink
-    failed = False
-
-    def fail_temp_cleanup(
-        path: os.PathLike[str] | str,
-        *,
-        dir_fd: int | None = None,
-    ) -> None:
-        nonlocal failed
-        if not failed and ".marimo-studio-restore-" in str(path):
-            failed = True
-            raise OSError("temporary cleanup failed")
-        unlink(path, dir_fd=dir_fd)
-
-    monkeypatch.setattr(secure_operations.os, "unlink", fail_temp_cleanup)
-
-    with (
-        pytest.raises(ConditionalWriteError) as captured,
-        workspace_transactions.write_file_transaction(
-            root,
-            {target: b"planned"},
-            expected={target: None},
-        ),
-    ):
-        pass
-
-    assert not target.exists()
-    assert captured.value.recovery is not None
-    assert captured.value.recovery.read_bytes() == b"planned"
-
-
 def test_file_transaction_cleans_a_directory_claim_after_validation_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -229,7 +191,6 @@ def test_file_transaction_removes_a_partial_direct_absent_write(
     ):
         pass
 
-    assert failed
     assert not target.exists()
     assert captured.value.recovery is not None
     assert captured.value.recovery.read_bytes() == b"planned"

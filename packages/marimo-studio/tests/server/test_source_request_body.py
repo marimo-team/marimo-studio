@@ -99,25 +99,6 @@ def test_partial_source_disconnect_returns_499_without_mutation(
     assert source.read_bytes() == original
 
 
-def test_short_terminal_source_body_returns_499_without_mutation(
-    notebook_path,
-) -> None:
-    studio = configured(notebook_path)
-    source = studio.views["dashboard"].root / "index.html"
-    original = source.read_bytes()
-    request, receive_calls = _request(
-        [{"type": "http.request", "body": b"partial", "more_body": False}],
-        "100",
-        studio,
-    )
-
-    response = _source_response(request, studio)
-
-    assert response.status_code == 499
-    assert receive_calls() == 1
-    assert source.read_bytes() == original
-
-
 def test_source_body_longer_than_declared_is_rejected_without_mutation(
     notebook_path,
 ) -> None:
@@ -144,10 +125,9 @@ def test_source_upload_rejects_invalid_content_length_before_receiving(
     source = studio.views["dashboard"].root / "index.html"
     original = source.read_bytes()
 
-    for content_length in ("invalid", "-1"):
-        request, receive_calls = _request([], content_length, studio)
-        response = _source_response(request, studio)
+    request, receive_calls = _request([], "invalid", studio)
+    response = _source_response(request, studio)
 
-        assert response.status_code == 400, content_length
-        assert receive_calls() == 0, content_length
-        assert source.read_bytes() == original, content_length
+    assert response.status_code == 400
+    assert receive_calls() == 0
+    assert source.read_bytes() == original

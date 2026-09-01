@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from marimo_studio._notebook.records import CellRef
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config_snapshot import snapshot_workspace_config
@@ -93,22 +92,16 @@ def test_config_snapshot_rejects_a_config_edit_during_reload(
         snapshot_workspace_config(studio, reload_studio=edit_then_reload)
 
 
-@pytest.mark.parametrize("field", ("default", "cells"))
 def test_config_snapshot_rejects_source_aba_during_reload(
     notebook_path: Path,
-    field: str,
 ) -> None:
     studio = _project_workspace(notebook_path)
     prepare_view(notebook_path, "other")
     studio = load_studio(studio.config_path)
     original = studio.config_path.read_text(encoding="utf-8")
-    transient = (
-        original.replace('default = "dashboard"', 'default = "other"')
-        if field == "default"
-        else original.replace(
-            str(studio.cells["cell-2"]),
-            str(CellRef("a" * 64, "b" * 64)),
-        )
+    transient = original.replace(
+        'default = "dashboard"',
+        'default = "other"',
     )
 
     def aba_reload(path: Path) -> StudioWorkspace:

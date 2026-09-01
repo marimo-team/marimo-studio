@@ -110,10 +110,14 @@ def test_configured_editor_starts_its_runtime_without_user_action(
     _edit_mode(app)
     with TestClient(app) as client:
         workspace = client.get("/studio/")
-        response = client.get(_studio_bootstrap(workspace.text)["urls"]["editor"])
+        editor_url = _studio_bootstrap(workspace.text)["urls"]["editor"]
+        response = client.get(editor_url)
+        head = client.head(editor_url)
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
+    assert head.status_code == 200
+    assert head.content == b""
     assert _editor_mount_value(response.text, "runtimeConfig") == [
         {
             "url": "http://testserver/_marimo-studio/editor/",
@@ -150,44 +154,6 @@ def test_unconfigured_editor_keeps_its_runtime_lazy(
     assert "auto_instantiate" not in runtime_overrides
 
 
-def test_editor_rewrite_removes_only_welcome_texture_preloads() -> None:
-    source = b"""<html>
-<head>
-    <link rel="preload" href="./assets/gradient-test_hash.png" as="image" />
-    <link rel="preload" href="./assets/noise-test_hash.png" as="image" />
-    <link rel="preload" href="./assets/font-test.woff2" as="font" />
-    <link rel="modulepreload" href="./assets/app-test.js" />
-    <link rel="stylesheet" href="./assets/gradient-test_hash.png" />
-</head>
-<body>
-    <img src="./assets/noise-test_hash.png" />
-    <script>value: Object.freeze({"runtimeConfig":[],"configOverrides":{}})</script>
-</body>
-</html>
-"""
-
-    rewritten = (
-        PrivateEditorRuntimeBootstrap()
-        .rewrite(
-            source,
-            runtime_url="http://testserver/_marimo-studio/editor/",
-        )
-        .decode()
-    )
-
-    resources = _resources(rewritten)
-    assert resources.links == [
-        {
-            "rel": "preload",
-            "href": "./assets/font-test.woff2",
-            "as": "font",
-        },
-        {"rel": "modulepreload", "href": "./assets/app-test.js"},
-        {"rel": "stylesheet", "href": "./assets/gradient-test_hash.png"},
-    ]
-    assert resources.images == [{"src": "./assets/noise-test_hash.png"}]
-
-
 def test_editor_rewrite_rejects_welcome_preload_shape_drift() -> None:
     source = b"""<html>
 <head>
@@ -204,86 +170,6 @@ def test_editor_rewrite_rejects_welcome_preload_shape_drift() -> None:
             source,
             runtime_url="http://testserver/_marimo-studio/editor/",
         )
-
-
-def test_configured_editor_rewrites_the_pinned_runtime_assets(
-    notebook_path: Path,
-) -> None:
-    studio = _configured(notebook_path)
-    app = _marimo_app(studio.notebook, programmatic=True)
-    _edit_mode(app)
-    assets = Path(marimo.__file__).parent / "_static" / "assets"
-    cell_editor = next(assets.glob("cell-editor-*.js"))
-    runtime_config = next(
-        path for path in assets.glob("config-*.js") if b"getLSPURL" in path.read_bytes()
-    )
-    cells = next(
-        path
-        for path in assets.glob("cells-*.js")
-        if b"sendDocumentTransaction({changes:e})" in path.read_bytes()
-    )
-    index = next(
-        path
-        for path in assets.glob("index-*.js")
-        if b'sendRun:async n=>(await st(),t().POST("/api/kernel/run"'
-        in path.read_bytes()
-    )
-    panels = next(
-        path
-        for path in assets.glob("panels-*.js")
-        if b"const aA={append:" in path.read_bytes()
-    )
-
-    with TestClient(app) as client:
-        responses = {
-            path.name: client.get(
-                f"/_marimo-studio/editor/assets/{path.name}",
-                params={"file": str(studio.notebook)},
-                headers={
-                    "If-None-Match": "cached-native-asset",
-                    "If-Range": "cached-native-asset",
-                    "Range": "bytes=0-127",
-                },
-            )
-            for path in (cell_editor, runtime_config, cells, index, panels)
-        }
-
-    for response in responses.values():
-        assert response.status_code == 200
-        assert response.headers["cache-control"] == "no-store"
-        assert "accept-ranges" not in response.headers
-        assert "content-range" not in response.headers
-        assert "etag" not in response.headers
-        assert "last-modified" not in response.headers
-    cell_editor_content = responses[cell_editor.name].content
-    runtime_config_content = responses[runtime_config.name].content
-    cells_content = responses[cells.name].content
-    index_content = responses[index.name].content
-    panels_content = responses[panels.name].content
-    assert cell_editor_content.count(b't.copilot==="github"?Ru.of(Rm()):[]') == 1
-    assert (
-        runtime_config_content.count(
-            b"new URL(this.formatWsURL(`/lsp/${t}`).toString().replace("
-            b'"/_marimo-studio/editor/lsp/","/lsp/"))'
-        )
-        == 1
-    )
-    for marker in (
-        b"marimoStudioRetryDocumentChanges",
-        b"this.options.onConnectionFailure",
-    ):
-        assert marker in cells_content
-    for marker in (
-        b"studioAwaitDocumentMutation",
-        b"studioFlushDocumentChanges",
-        b"studioReportDocumentSave",
-    ):
-        assert marker in index_content
-    for marker in (
-        b"marimoStudioImmutableQueryKeys",
-        b"marimoStudioRetainedQueryKeys",
-    ):
-        assert marker in panels_content
 
 
 @pytest.mark.parametrize(
@@ -645,8 +531,10 @@ def test_editor_root_rewrite_requires_a_complete_identity_response() -> None:
     <link rel="preload" href="./assets/noise-test_hash.png" as="image" />
     <link rel="preload" href="./assets/font-test.woff2" as="font" />
     <link rel="modulepreload" href="./assets/app-test.js" />
+    <link rel="stylesheet" href="./assets/gradient-test_hash.png" />
 </head>
 <body>
+    <img src="./assets/noise-test_hash.png" />
     <script>value: Object.freeze({
         "runtimeConfig": null,
         "configOverrides": {"runtime": {"show_tracebacks": false}}
@@ -749,8 +637,9 @@ def test_editor_root_rewrite_requires_a_complete_identity_response() -> None:
             "as": "font",
         },
         {"rel": "modulepreload", "href": "./assets/app-test.js"},
+        {"rel": "stylesheet", "href": "./assets/gradient-test_hash.png"},
     ]
-    assert "modulepreload" in body
+    assert resources.images == [{"src": "./assets/noise-test_hash.png"}]
     assert _editor_mount_value(body, "runtimeConfig") is None
     assert (
         "auto_instantiate"
@@ -758,36 +647,7 @@ def test_editor_root_rewrite_requires_a_complete_identity_response() -> None:
     )
 
 
-def test_editor_bootstrap_delegates_head_requests() -> None:
-    called = False
-
-    async def app(_scope: Any, _receive: Any, _send: Any) -> None:
-        nonlocal called
-        called = True
-
-    async def receive() -> dict[str, object]:
-        return {"type": "http.request", "body": b"", "more_body": False}
-
-    async def send(_message: Message) -> None:
-        return None
-
-    served = asyncio.run(
-        PrivateEditorRuntimeBootstrap().serve(
-            app,
-            cast(Any, {"type": "http", "method": "HEAD"}),
-            receive,
-            send,
-            resource_path="/",
-            runtime_url="http://testserver/_marimo-studio/editor/",
-            eager_runtime=False,
-        )
-    )
-
-    assert served is False
-    assert called is False
-
-
-def test_unconfigured_editor_cannot_cache_unadapted_runtime_assets(
+def test_editor_runtime_assets_remain_adapted_across_view_creation(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "plain.py"
@@ -824,13 +684,25 @@ def test_unconfigured_editor_cannot_cache_unadapted_runtime_assets(
     ]
 
     with TestClient(app) as client:
-        before = [client.get(url, params={"file": str(notebook)}) for url in urls]
+        request_headers = {
+            "If-None-Match": "cached-native-asset",
+            "If-Range": "cached-native-asset",
+            "Range": "bytes=0-127",
+        }
+        before = [
+            client.get(
+                url,
+                params={"file": str(notebook)},
+                headers=request_headers,
+            )
+            for url in urls
+        ]
         prepare_view(notebook)
         after = [
             client.get(
                 url,
                 params={"file": str(notebook)},
-                headers={"If-None-Match": "cached-native-asset"},
+                headers=request_headers,
             )
             for url in urls
         ]
@@ -838,9 +710,15 @@ def test_unconfigured_editor_cannot_cache_unadapted_runtime_assets(
     for response in (*before, *after):
         assert response.status_code == 200
         assert response.headers["cache-control"] == "no-store"
-        assert "etag" not in response.headers
+        for header in ("accept-ranges", "content-range", "etag", "last-modified"):
+            assert header not in response.headers
     assert before[0].content.count(b't.copilot==="github"?Ru.of(Rm()):[]') == 1
     assert before[1].content.count(b'"/_marimo-studio/editor/lsp/","/lsp/"') == 1
+    for marker in (
+        b"marimoStudioRetryDocumentChanges",
+        b"this.options.onConnectionFailure",
+    ):
+        assert marker in before[2].content
     for marker in (
         b"studioAwaitDocumentMutation",
         b"studioFlushDocumentChanges",

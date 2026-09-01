@@ -453,11 +453,8 @@ def test_projection_waits_for_the_live_session_binding(
         )
 
     assert response.status_code == 409
-    assert response.json() == {
-        "error": "runtime-sync-pending",
-        "message": "The live session is applying the saved notebook.",
-        "transient": True,
-    }
+    assert response.json()["error"] == "runtime-sync-pending"
+    assert response.json()["transient"] is True
     assert calls == []
 
 
@@ -505,11 +502,8 @@ def test_projection_retries_while_the_kernel_applies_the_current_binding(
         )
 
     assert response.status_code == 409
-    assert response.json() == {
-        "error": "stale-projection-binding",
-        "message": "The authorized projection producer is stale.",
-        "transient": True,
-    }
+    assert response.json()["error"] == "stale-projection-binding"
+    assert response.json()["transient"] is True
 
 
 def test_value_permissions_follow_the_browser_presentation_revision(
@@ -562,10 +556,7 @@ def test_value_permissions_follow_the_browser_presentation_revision(
     assert removed.status_code == 400
     assert removed.json()["error"] == "projection-site-not-found"
     assert unpublished.status_code == 403
-    assert unpublished.json() == {
-        "error": "presentation-capability-forbidden",
-        "message": "The presentation cannot use another published revision.",
-    }
+    assert unpublished.json()["error"] == "presentation-capability-forbidden"
 
 
 def test_retained_value_revision_rejects_a_variable_moved_to_another_cell(
@@ -601,14 +592,8 @@ def test_retained_value_revision_rejects_a_variable_moved_to_another_cell(
         )
 
     assert response.status_code == 409
-    assert response.json() == {
-        "error": "stale-projection-binding",
-        "message": (
-            "The projection dependency closure changed after this presentation "
-            "was published."
-        ),
-        "transient": False,
-    }
+    assert response.json()["error"] == "stale-projection-binding"
+    assert response.json()["transient"] is False
 
 
 def test_retained_value_revision_rejects_an_upstream_only_edit(

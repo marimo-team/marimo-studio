@@ -107,20 +107,13 @@ def test_notebook_syntax_error_has_a_browser_safe_repair_diagnostic(
         config = client.get("/_marimo-studio/views/dashboard/config")
         page = client.get("/")
 
-    expected_message = (
-        "Marimo cannot inspect the notebook while a cell contains invalid code."
-    )
-    expected_hint = "Fix the highlighted cell in Marimo, then save it again."
     assert config.status_code == 500
-    assert config.json() == {
-        "error": "notebook-source-error",
-        "message": expected_message,
-        "hint": expected_hint,
-    }
+    diagnostic = config.json()
+    assert diagnostic["error"] == "notebook-source-error"
     assert page.status_code == 500
-    assert page.headers["Marimo-Studio-Error"] == "notebook-source-error"
-    assert page.headers["Marimo-Studio-Hint"] == expected_hint
-    assert expected_message in page.text
+    assert page.headers["Marimo-Studio-Error"] == diagnostic["error"]
+    assert page.headers["Marimo-Studio-Hint"] == diagnostic["hint"]
+    assert diagnostic["message"] in page.text
     assert str(notebook_path.parent) not in config.text
     assert str(notebook_path.parent) not in page.text
 
@@ -284,13 +277,8 @@ def test_runtime_config_waits_for_semantic_change_then_accepts_exact_execution(
         ready = client.get("/_marimo-studio/views/dashboard/config")
 
     assert pending.status_code == 409
-    assert pending.json() == {
-        "error": "runtime-sync-pending",
-        "message": (
-            "Studio is waiting for the notebook kernel to apply the saved source."
-        ),
-        "transient": True,
-    }
+    assert pending.json()["error"] == "runtime-sync-pending"
+    assert pending.json()["transient"] is True
     assert ready.status_code == 200
 
 

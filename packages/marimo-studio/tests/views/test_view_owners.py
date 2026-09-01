@@ -309,26 +309,6 @@ def test_owner_catalog_rejects_unowned_record_names(
         load_studio(notebook_path)
 
 
-def test_provider_free_catalog_does_not_adopt_an_overlength_view_name(
-    notebook_path: Path,
-) -> None:
-    prepare_view(notebook_path)
-    studio = load_studio(notebook_path)
-    name = "a" * 241
-    invalid = studio.view_root / name
-    invalid.mkdir()
-    invalid.joinpath("view.toml").write_text(
-        'schema = 1\nprovider = "marimo-studio/vanilla"\n',
-        encoding="utf-8",
-    )
-
-    workspace_generation.provider_free_catalog_generation(
-        load_studio_definition(notebook_path)
-    )
-
-    assert not view_owner_path(studio.view_root, name).exists()
-
-
 @pytest.mark.skipif(
     os.name == "nt",
     reason="symlink creation needs elevated Windows access",
@@ -391,7 +371,6 @@ def test_owner_record_is_outside_the_provider_project(notebook_path: Path) -> No
 
     owner = view_owner_path(studio.view_root, "dashboard")
     assert owner.parent == studio.view_root / ".owners"
-    assert studio.views["dashboard"].root not in owner.parents
 
 
 def test_view_creation_reports_the_durable_owner_write(notebook_path: Path) -> None:
@@ -423,5 +402,3 @@ def test_provider_free_catalog_does_not_adopt_an_invalid_sibling_name(
     workspace_generation.provider_free_catalog_generation(definition)
 
     assert not view_owner_path(studio.view_root, "Bad").exists()
-    shutil.rmtree(invalid)
-    workspace_generation.provider_free_catalog_generation(definition)

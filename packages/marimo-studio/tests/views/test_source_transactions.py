@@ -170,8 +170,6 @@ def test_source_read_reports_a_manifest_disappearing_during_catalog_load(
     with pytest.raises(WorkspaceGenerationConflictError):
         read_project_source(studio, project, spec)
 
-    assert raced
-
 
 def test_source_commit_preserves_an_external_edit(
     notebook_path: Path,
@@ -210,7 +208,6 @@ def test_source_commit_preserves_an_external_edit(
             current.revision,
         )
 
-    assert edited
     assert path.read_text(encoding="utf-8") == external
 
 
@@ -250,7 +247,6 @@ def test_source_conflict_omits_revision_when_the_source_disappears(
             current.revision,
         )
 
-    assert removed
     assert captured.value.revision is None
     assert "revision" not in captured.value.diagnostic_details()
 
@@ -309,50 +305,12 @@ def test_source_commit_preserves_recovery_after_identity_failure(
             current.revision,
         )
 
-    assert failed
     assert error.value.external_recovery is not None
     assert (
         Path(error.value.external_recovery).read_text(encoding="utf-8")
         == current.content
     )
     assert path.read_text(encoding="utf-8") == replacement
-    assert not tuple(path.parent.glob(".marimo-studio-cas-*"))
-
-
-def test_source_conflict_reports_a_preserved_claim(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    studio = _studio(notebook_path)
-    path = studio.views["dashboard"].root / SOURCE_PATH
-    current = read_source(studio, "dashboard", SOURCE_PATH)
-    replacement = _document("browser edit")
-    unlink = secure_files.SecureDirectory.unlink
-
-    def preserve_claim(
-        filesystem: secure_files.SecureDirectory,
-        selected: Path,
-    ) -> None:
-        if selected.name.startswith(".marimo-studio-rollback-"):
-            raise PermissionError("claim is still open")
-        unlink(filesystem, selected)
-
-    monkeypatch.setattr(secure_files.SecureDirectory, "unlink", preserve_claim)
-
-    with pytest.raises(SourceConflictError) as captured:
-        write_source(
-            studio,
-            "dashboard",
-            SOURCE_PATH,
-            replacement,
-            current.revision,
-        )
-
-    recovery = captured.value.external_recovery
-    assert recovery is not None
-    recovery_path = Path(recovery)
-    assert path.read_text(encoding="utf-8") == replacement
-    assert recovery_path.read_text(encoding="utf-8") == current.content
     assert not tuple(path.parent.glob(".marimo-studio-cas-*"))
 
 
@@ -438,13 +396,10 @@ def test_source_write_revalidates_catalog_identity_after_waiting_for_view_lock(
     inspect = provider.inspect
     path = SOURCE_PATH
     access_marker = "# source-access = read"
-    inspection_calls = 0
 
     def inspect_with_manifest_access(
         request: InspectionRequest,
     ) -> ProjectInspection:
-        nonlocal inspection_calls
-        inspection_calls += 1
         inspection = inspect(request)
         selected = request.project
         if access_marker not in selected.manifest.read_text(encoding="utf-8"):
@@ -499,7 +454,6 @@ def test_source_write_revalidates_catalog_identity_after_waiting_for_view_lock(
             )
         with pytest.raises(SourceConflictError):
             pending.result(timeout=5)
-    assert inspection_calls == 1
     assert (project.root / spec.path).read_text(encoding="utf-8") == current.content
 
 

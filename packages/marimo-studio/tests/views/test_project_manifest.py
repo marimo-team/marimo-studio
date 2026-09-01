@@ -29,14 +29,21 @@ def test_manifest_load_preserves_an_unavailable_provider_identity(
 provider = "third-party/missing"
 
 [options]
-framework_option = "preserved"
+settings = [true, 7, 1.25, "label"]
+
+[options.nested]
+enabled = false
+thresholds = [0, 0.5]
 """,
     )
 
     project = load_view_project(root)
 
     assert project.provider == "third-party/missing"
-    assert project.options == {"framework_option": "preserved"}
+    assert project.options == {
+        "settings": [True, 7, 1.25, "label"],
+        "nested": {"enabled": False, "thresholds": [0, 0.5]},
+    }
 
 
 @pytest.mark.skipif(
@@ -70,27 +77,6 @@ def test_manifest_load_keeps_lexical_identity_after_a_root_swap(
     assert project.manifest == (root / "view.toml").absolute()
     assert root.absolute() not in request.cache_root.parents
     assert not (external / ".artifacts").exists()
-
-
-def test_manifest_preserves_nested_json_options(tmp_path: Path) -> None:
-    root = _manifest(
-        tmp_path,
-        """schema = 1
-provider = "third-party/json"
-
-[options]
-settings = [true, 7, 1.25, "label"]
-
-[options.nested]
-enabled = false
-thresholds = [0, 0.5]
-""",
-    )
-
-    assert load_view_project(root).options == {
-        "settings": [True, 7, 1.25, "label"],
-        "nested": {"enabled": False, "thresholds": [0, 0.5]},
-    }
 
 
 @pytest.mark.parametrize(

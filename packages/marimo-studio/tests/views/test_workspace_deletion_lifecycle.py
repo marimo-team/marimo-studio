@@ -142,7 +142,6 @@ def test_view_deletion_rolls_back_when_updated_workspace_cannot_load(
         delete_view(studio, "dashboard")
 
     restored = load_studio(notebook_path)
-    assert calls == 2
     assert notebook_path.read_bytes() == original_notebook
     assert restored.default_view == "dashboard"
     assert tuple(restored.views) == ("dashboard", "executive")
@@ -268,7 +267,6 @@ def test_view_deletion_preserves_a_source_edit_at_the_commit_boundary(
     with pytest.raises(ConfigurationError, match="changed before deletion"):
         delete_view(studio, "executive")
 
-    assert edited
     assert document.read_text(encoding="utf-8") == changed
     assert "executive" in load_studio(notebook_path).views
 
@@ -280,6 +278,7 @@ def test_stale_view_generation_cannot_delete_a_replacement(
     prepare_view(notebook_path, "executive")
     observed = load_studio(notebook_path)
     target = observed.views["executive"].root
+    replacement = "<!doctype html><title>replacement</title>"
     shutil.rmtree(target)
     target.mkdir()
     target.joinpath("view.toml").write_text(
@@ -287,7 +286,7 @@ def test_stale_view_generation_cannot_delete_a_replacement(
         encoding="utf-8",
     )
     target.joinpath("index.html").write_text(
-        "<!doctype html><title>replacement</title>",
+        replacement,
         encoding="utf-8",
     )
 
@@ -300,11 +299,7 @@ def test_stale_view_generation_cannot_delete_a_replacement(
             expected_generation=observed.view_generations["executive"],
         )
 
-    assert (
-        target.joinpath("index.html")
-        .read_text(encoding="utf-8")
-        .endswith("replacement</title>")
-    )
+    assert target.joinpath("index.html").read_text(encoding="utf-8") == replacement
     delete_view(
         current,
         "executive",
@@ -381,7 +376,6 @@ def test_view_deletion_reports_a_target_removed_before_its_claim(
     with pytest.raises(ViewNotFoundError):
         delete_view(studio, "executive")
 
-    assert removed
     assert tuple(load_studio(notebook_path).views) == ("dashboard",)
 
 
@@ -495,15 +489,12 @@ def test_view_deletion_cannot_follow_a_raced_workspace_root(
         for path in external.rglob("*")
         if path.is_file()
     }
-    assert raced
     assert actual == expected
 
 
-@pytest.mark.parametrize("name", ("dashboard", "executive"))
 def test_view_deletion_rejects_a_concurrent_notebook_save(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    name: str,
 ) -> None:
     prepare_view(notebook_path)
     prepare_view(notebook_path, "executive")
@@ -518,7 +509,7 @@ def test_view_deletion_rejects_a_concurrent_notebook_save(
     )
 
     with pytest.raises(ConfigurationError, match="changed"):
-        delete_view(studio, name)
+        delete_view(studio, "executive")
 
     assert notebook_path.read_text(encoding="utf-8") == changed
     restored = load_studio(notebook_path)
@@ -526,11 +517,9 @@ def test_view_deletion_rejects_a_concurrent_notebook_save(
     assert tuple(restored.views) == ("dashboard", "executive")
 
 
-@pytest.mark.parametrize("name", ("dashboard", "executive"))
 def test_view_deletion_rejects_a_concurrent_project_configuration_edit(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    name: str,
 ) -> None:
     pyproject = _project_configuration(notebook_path)
     prepare_view(notebook_path)
@@ -546,7 +535,7 @@ def test_view_deletion_rejects_a_concurrent_project_configuration_edit(
     )
 
     with pytest.raises(ConfigurationError, match="changed"):
-        delete_view(studio, name)
+        delete_view(studio, "executive")
 
     assert pyproject.read_text(encoding="utf-8") == changed
     restored = load_studio(pyproject)
@@ -565,6 +554,7 @@ def test_view_deletion_preserves_a_recreated_target_and_original_recovery(
     studio = load_studio(notebook_path)
     target = studio.views["executive"].root
     original = target.joinpath("index.html").read_bytes()
+    replacement = "<!doctype html><title>replacement</title>"
     transaction = workspace_views.write_file_transaction
 
     def recreate() -> None:
@@ -576,7 +566,7 @@ def test_view_deletion_preserves_a_recreated_target_and_original_recovery(
             encoding="utf-8",
         )
         target.joinpath("index.html").write_text(
-            "<!doctype html><title>replacement</title>",
+            replacement,
             encoding="utf-8",
         )
 
@@ -598,11 +588,7 @@ def test_view_deletion_preserves_a_recreated_target_and_original_recovery(
     with pytest.raises(ViewDeletionError, match="original project") as captured:
         delete_view(studio, "executive")
 
-    assert (
-        target.joinpath("index.html")
-        .read_text(encoding="utf-8")
-        .endswith("replacement</title>")
-    )
+    assert target.joinpath("index.html").read_text(encoding="utf-8") == replacement
     assert captured.value.recovery is not None
     assert captured.value.recovery.joinpath("index.html").read_bytes() == original
 

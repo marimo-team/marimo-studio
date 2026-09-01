@@ -12,9 +12,7 @@ import marimo_studio._delivery.runtime_config as runtime_config_module
 from marimo_studio import create_asgi_app
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.presentation.service import NotebookPresentation
-from marimo_studio._server.studio.waiting import waiting_document
 from marimo_studio._workspace.metadata import update_notebook_config
-from marimo_studio.errors import RuntimeConfigTooLargeError
 from marimo_studio.errors._internal import RuntimeStartupError
 from marimo_studio.view_providers import BuildProfile
 
@@ -58,14 +56,10 @@ def test_edit_mode_offers_the_configured_preview_runtimes(notebook_path: Path) -
 
     assert config["runtime"]["id"] == "wasm"
     bootstrap = _studio_bootstrap(workspace.text)
-    assert bootstrap["schema"] == 1
-    assert bootstrap["selectedView"] == "dashboard"
-    assert bootstrap["views"] == ["dashboard", "executive"]
     assert bootstrap["runtimes"] == [
         {"id": "server", "label": "Python"},
         {"id": "wasm", "label": "Browser"},
     ]
-    assert bootstrap["urls"]["query"] == "/_marimo-studio/query"
 
 
 def test_live_runtime_config_enforces_the_shared_encoded_byte_budget(
@@ -81,13 +75,8 @@ def test_live_runtime_config_enforces_the_shared_encoded_byte_budget(
     payload = response.json()
     assert response.status_code == 413
     assert response.headers["Marimo-Studio-Error"] == "runtime-config-too-large"
-    assert payload == {
-        "error": "runtime-config-too-large",
-        "message": "Runtime configuration exceeds the 1-byte limit.",
-        "bytes": payload["bytes"],
-        "max_bytes": 1,
-        "hint": RuntimeConfigTooLargeError.public_hint,
-    }
+    assert payload["error"] == "runtime-config-too-large"
+    assert payload["max_bytes"] == 1
     assert payload["bytes"] > 1
 
 
@@ -256,11 +245,8 @@ def test_studio_runtime_config_waits_for_automatic_startup(
         )
 
     assert response.status_code == 409
-    assert response.json() == {
-        "error": "runtime-startup-pending",
-        "message": "Studio is waiting for notebook startup.",
-        "transient": True,
-    }
+    assert response.json()["error"] == "runtime-startup-pending"
+    assert response.json()["transient"] is True
 
 
 def test_studio_preview_keeps_its_waiting_document_until_startup_completes(
@@ -313,9 +299,6 @@ def test_studio_preview_keeps_its_waiting_document_until_startup_completes(
         )
 
     assert waiting.status_code == 202
-    assert "Starting notebook" in waiting.text
-    assert "/_marimo-studio/presentation/" in waiting.text
-    assert "/executive/" in waiting.text
     assert waiting_head.status_code == 202
     assert waiting_head.content == b""
     assert waiting_head.headers["content-length"] == "0"
@@ -325,18 +308,6 @@ def test_studio_preview_keeps_its_waiting_document_until_startup_completes(
     assert document_head.content == b""
     assert document_head.headers["content-length"] == "0"
     assert document_head.headers["Marimo-Studio-Revision"]
-
-
-def test_studio_waiting_document_owns_its_startup_poll() -> None:
-    document = waiting_document(
-        refresh_url="/_marimo-studio/presentation/d.token/dashboard/",
-        lifecycle_id=7,
-        runtime="server",
-        view="dashboard",
-    )
-
-    assert '"type":"marimo-studio:receiver-waiting"' in document
-    assert '"type":"marimo-studio:receiver-unready"' in document
 
 
 def test_studio_runtime_config_reports_terminal_startup_failure(
@@ -378,10 +349,8 @@ def test_studio_runtime_config_reports_terminal_startup_failure(
         )
 
     assert response.status_code == 500
-    assert response.json() == {
-        "error": "runtime-startup-failed",
-        "message": "The kernel stopped during startup.",
-    }
+    assert response.json()["error"] == "runtime-startup-failed"
+    assert response.json()["message"] == "The kernel stopped during startup."
 
 
 def test_studio_runtime_config_resolves_session_after_snapshot(

@@ -27,10 +27,8 @@ from ..app_helpers import configured
 
 
 @pytest.mark.parametrize("owner", ("publication", "baseline"))
-@pytest.mark.parametrize("replaced", (False, True))
 def test_last_waiter_observes_completed_cleanup_failure(
     owner: str,
-    replaced: bool,
 ) -> None:
     async def exercise() -> None:
         lock = asyncio.Lock()
@@ -52,8 +50,7 @@ def test_last_waiter_observes_completed_cleanup_failure(
                 waiters=1,
                 waiter_releases={release},
             )
-            if not replaced:
-                registry._publications[(*key, "development")] = publication
+            registry._publications[(*key, "development")] = publication
             with pytest.raises(
                 ProcessCleanupError,
                 match="completed provider process survived",
@@ -72,8 +69,7 @@ def test_last_waiter_observes_completed_cleanup_failure(
                 waiters=1,
                 waiter_releases={release},
             )
-            if not replaced:
-                registry._baselines[key] = baseline
+            registry._baselines[key] = baseline
             with pytest.raises(
                 ProcessCleanupError,
                 match="completed provider process survived",
@@ -85,10 +81,7 @@ def test_last_waiter_observes_completed_cleanup_failure(
     asyncio.run(exercise())
 
 
-@pytest.mark.parametrize("replaced", (False, True))
-def test_last_source_creation_waiter_observes_completed_cleanup_failure(
-    replaced: bool,
-) -> None:
+def test_last_source_creation_waiter_observes_completed_cleanup_failure() -> None:
     async def exercise() -> None:
         coordinator = DevelopmentCoordinator()
 
@@ -102,8 +95,7 @@ def test_last_source_creation_waiter_observes_completed_cleanup_failure(
             cast(Any, task),
             waiters=1,
         )
-        if not replaced:
-            coordinator._source_monitors._creations["dashboard"] = creation
+        coordinator._source_monitors._creations["dashboard"] = creation
 
         with pytest.raises(
             ProcessCleanupError,

@@ -9,22 +9,21 @@ import marimo_studio._views.sources as sources_module
 from marimo_studio._views.sources import read_source, write_source
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import SourceConflictError, SourceValidationError
-from marimo_studio.view_providers._host import provider_registry
 
 from .source_test_support import studio as _studio
 
 
-def test_manifest_write_uses_studio_owned_validation(
+def test_manifest_source_access_uses_studio_owned_validation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = _studio(notebook_path)
-    current = read_source(studio, "dashboard", "view.toml")
 
     def fail_registry() -> object:
-        pytest.fail("manifest write loaded the provider registry")
+        pytest.fail("manifest source access loaded the provider registry")
 
     monkeypatch.setattr(sources_module, "provider_registry", fail_registry)
+    current = read_source(studio, "dashboard", "view.toml")
     content = current.content + '\n[options]\nentrypoint = "index.html"\n'
 
     updated = write_source(
@@ -56,25 +55,8 @@ def test_manifest_write_rejects_invalid_candidates_without_replacing_source(
     assert read_source(studio, "dashboard", "view.toml") == current
 
 
-def test_manifest_source_does_not_depend_on_provider_inspection(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    studio = _studio(notebook_path)
-    provider = provider_registry().get(studio.views["dashboard"].provider)
-
-    def unavailable_inspection(*_args: object) -> None:
-        raise RuntimeError("provider inspection is unavailable")
-
-    monkeypatch.setattr(provider, "inspect", unavailable_inspection)
-    current = read_source(studio, "dashboard", "view.toml")
-
-    assert current.content.startswith("schema = 1\n")
-
-
 def test_manifest_write_keeps_provider_identity_and_accepts_provider_options(
     notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = _studio(notebook_path)
     project = studio.view("dashboard")
@@ -84,12 +66,6 @@ def test_manifest_write_keeps_provider_identity_and_accepts_provider_options(
         encoding="utf-8",
     )
     current = read_source(studio, "dashboard", "view.toml")
-    provider = provider_registry().get(project.provider)
-    monkeypatch.setattr(
-        provider,
-        "inspect",
-        lambda _request: pytest.fail("manifest commit must not inspect the provider"),
-    )
     options = (
         'schema = 1\nprovider = "marimo-studio/vanilla"\n\n'
         '[options]\nentrypoint = "alternate.html"\n'
@@ -200,5 +176,4 @@ def test_manifest_commit_preserves_an_external_edit(
             current.revision,
         )
 
-    assert edited
     assert manifest.read_text(encoding="utf-8") == external

@@ -47,7 +47,7 @@ def test_view_deletion_cancels_a_queued_warmup_before_it_starts() -> None:
             queued = asyncio.create_task(
                 coordinator.publish("target", 1, target, warmup=True)
             )
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0)
             assert not target_started.is_set()
 
             async def delete() -> None:

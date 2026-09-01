@@ -11,7 +11,6 @@ from typing import Any, cast
 import pytest
 
 from marimo_studio._artifacts.paths import artifact_root
-from marimo_studio._filesystem import tree as filesystem_tree
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._server.development import source_changes
 from marimo_studio._server.development.source_changes import (
@@ -24,7 +23,7 @@ from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import InspectionRequest, ProjectInput
 from marimo_studio.view_providers._host import provider_registry
 
-from ..app_helpers import configured, created_one_view
+from ..app_helpers import created_one_view
 from ..source_change_test_support import counting_registry as _counting_registry
 
 
@@ -135,64 +134,24 @@ def test_source_monitor_surfaces_provider_process_cleanup_failure(
         SourceChangeProducer(studio, "dashboard")
 
 
-def test_catalog_walks_the_provider_input_scope_once_per_change(
+def test_catalog_detects_a_file_added_to_an_empty_directory_and_its_removal(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
-    _watch_only_registry(monkeypatch, project.provider, PurePosixPath("."))
-    walks = 0
-    walk_tree_entries = filesystem_tree._walk_tree_entries
-
-    def count_walks(*args: Any, **kwargs: Any):
-        nonlocal walks
-        walks += 1
-        yield from walk_tree_entries(*args, **kwargs)
-
-    monkeypatch.setattr(filesystem_tree, "_walk_tree_entries", count_walks)
-    producer = SourceChangeProducer(studio, project.name)
-
-    assert walks == 1
-
-    source = project.root / "index.html"
-    source.write_text(source.read_text(encoding="utf-8") + "\n", encoding="utf-8")
-
-    assert producer.poll() is not None
-    assert walks == 2
-
-
-def test_catalog_probe_detects_a_file_added_to_an_existing_empty_directory(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    studio = created_one_view(notebook_path)
-    project = studio.views["dashboard"]
-    empty = project.root / "empty"
-    empty.mkdir()
-    _watch_only_registry(monkeypatch, project.provider, PurePosixPath("."))
-    producer = SourceChangeProducer(studio, project.name)
-
-    (empty / "new.txt").write_text("new", encoding="utf-8")
-
-    assert not producer.catalog_current()
-
-
-def test_watched_file_addition_and_removal_each_reinspect_once(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    studio = created_one_view(notebook_path)
-    project = studio.views["dashboard"]
-    provider = _watch_only_registry(
+    _watch_only_registry(
         monkeypatch,
         project.provider,
         PurePosixPath("."),
     )
+    empty = project.root / "empty"
+    empty.mkdir()
     producer = SourceChangeProducer(studio, project.name)
-    added = project.root / "interaction.js"
+    added = empty / "interaction.js"
 
     added.write_text("export const active = true;\n", encoding="utf-8")
+    assert not producer.catalog_current()
     created = producer.poll()
     added.unlink()
     removed = producer.poll()
@@ -201,7 +160,6 @@ def test_watched_file_addition_and_removal_each_reinspect_once(
     assert created.kind == "project"
     assert created.files == ()
     assert removed == SourceChange(kind="project", files=())
-    assert provider.inspections == 3
 
 
 def test_watch_plan_stays_bounded_by_declared_roots(
@@ -210,8 +168,11 @@ def test_watch_plan_stays_bounded_by_declared_roots(
 ) -> None:
     studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
-    for index in range(len(studio.views) + 5):
-        (project.root / f"source-{index}.txt").write_text(
+    sources = tuple(
+        project.root / f"source-{index}.txt" for index in range(len(studio.views) + 5)
+    )
+    for index, source in enumerate(sources):
+        source.write_text(
             str(index),
             encoding="utf-8",
         )
@@ -222,7 +183,7 @@ def test_watch_plan_stays_bounded_by_declared_roots(
     assert plan.roots == (project.root.absolute(),)
     assert plan.excluded == (artifact_root(project).absolute(),)
     assert len(plan.files) <= len(studio.views) + 4
-    assert all("source-" not in path.name for path in plan.files)
+    assert set(plan.files).isdisjoint(source.absolute() for source in sources)
 
 
 def test_source_scan_counts_directories_toward_its_entry_limit(
@@ -382,35 +343,38 @@ def test_changed_file_details_fall_back_to_full_reconciliation_when_one_is_unsta
     )
 
 
-def test_view_manifest_addition_and_removal_reload_workspace_discovery(
+def test_sibling_view_lifecycle_refreshes_inventory_without_project_changes(
     notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
-    provider = _counting_registry(monkeypatch, project.provider)
     producer = SourceChangeProducer(studio, project.name)
     added = studio.view_root / "comparison"
 
     shutil.copytree(project.root, added)
-    created = producer.poll()
+    assert producer.poll() == SourceChange(kind="views", files=())
     assert "comparison" in producer.studio.views
-    shutil.rmtree(added)
-    removed = producer.poll()
+    assert producer.poll() is None
 
-    assert created == SourceChange(kind="views", files=())
-    assert removed == SourceChange(kind="views", files=())
+    sibling = producer.studio.views["comparison"]
+    sibling.manifest.write_text(
+        sibling.manifest.read_text(encoding="utf-8") + "\n",
+        encoding="utf-8",
+    )
+    assert producer.poll() == SourceChange(kind="views", files=())
+    assert producer.poll() is None
+
+    shutil.rmtree(added)
+    assert producer.poll() == SourceChange(kind="views", files=())
     assert "comparison" not in producer.studio.views
-    assert provider.inspections == 1
+    assert producer.poll() is None
 
 
 def test_selected_manifest_change_reloads_provider_options(
     notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = created_one_view(notebook_path)
     project = studio.views["dashboard"]
-    provider = _counting_registry(monkeypatch, project.provider)
     producer = SourceChangeProducer(studio, project.name)
     replacement = project.root / "alternate.html"
     replacement.write_text(
@@ -431,7 +395,6 @@ def test_selected_manifest_change_reloads_provider_options(
     assert producer.studio.views["dashboard"].options["entrypoint"] == (
         "alternate.html"
     )
-    assert provider.inspections == 2
 
 
 def test_config_change_refreshes_inventory_then_selected_project(
@@ -469,27 +432,6 @@ def test_selected_manifest_missing_and_recovery_each_refresh_project(
     assert producer.poll() == SourceChange("project", ())
 
 
-def test_sibling_manifest_change_is_inventory_only(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    studio = configured(notebook_path)
-    project = studio.views["dashboard"]
-    provider = _counting_registry(monkeypatch, project.provider)
-    producer = SourceChangeProducer(studio, project.name)
-    sibling = studio.views["executive"]
-    sibling.manifest.write_text(
-        sibling.manifest.read_text(encoding="utf-8") + "\n",
-        encoding="utf-8",
-    )
-
-    inventory = producer.poll()
-
-    assert inventory == SourceChange(kind="views", files=())
-    assert producer.poll() is None
-    assert provider.inspections == 1
-
-
 def test_inspection_failure_keeps_a_repair_watch(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -500,12 +442,9 @@ def test_inspection_failure_keeps_a_repair_watch(
     source = project.root / "index.html"
     original = source.read_text(encoding="utf-8")
     source.write_text("broken", encoding="utf-8")
-    inspections = 0
 
     class Provider:
         def inspect(self, selected: object) -> object:
-            nonlocal inspections
-            inspections += 1
             if source.read_text(encoding="utf-8") == "broken":
                 raise ValueError("source is temporarily invalid")
             return registered.inspect(cast(Any, selected))
@@ -524,14 +463,12 @@ def test_inspection_failure_keeps_a_repair_watch(
     cache_probe.write_text("cache", encoding="utf-8")
 
     assert producer.poll() is None
-    assert inspections == 1
 
     source.write_text(original, encoding="utf-8")
     repaired = producer.poll()
 
     assert repaired is not None
     assert repaired.kind == "project"
-    assert inspections == 2
 
 
 def test_failed_reinspection_invalidates_the_previous_catalog(

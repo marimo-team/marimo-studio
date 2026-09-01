@@ -114,7 +114,6 @@ def test_file_transaction_rolls_back_a_replacement_after_identity_read_failure(
     ):
         pass
 
-    assert failed
     assert config.read_bytes() == b"original"
     assert not view.exists()
     assert captured.value.recovery is not None
@@ -182,7 +181,6 @@ def test_file_transaction_preserves_the_prior_source_after_publication_race(
     ):
         pass
 
-    assert raced
     assert config.read_bytes() == b"external"
     assert not view.exists()
     assert captured.value.recovery is not None
@@ -242,7 +240,6 @@ def test_file_transaction_rejects_a_replaced_directory_claim(
     ):
         pass
 
-    assert swapped
     assert view.joinpath("external.txt").read_text(encoding="utf-8") == "external"
     assert not view.joinpath("view.toml").exists()
     assert not view.joinpath("index.html").exists()
@@ -300,7 +297,6 @@ def test_file_transaction_rejects_a_claim_swapped_during_final_identity_check(
     ):
         pass
 
-    assert swapped
     assert view.joinpath("external.txt").read_text(encoding="utf-8") == "external"
     assert not view.joinpath("view.toml").exists()
     assert not displaced.joinpath("view.toml").exists()

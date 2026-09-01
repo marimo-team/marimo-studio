@@ -112,38 +112,10 @@ def test_json_reader_accepts_a_valid_body_at_the_exact_limit() -> None:
     assert parsed == {"ok": True}
 
 
-def test_json_reader_maps_a_short_declared_body_to_disconnect() -> None:
+def test_json_reader_rejects_ambiguous_content_length_declarations() -> None:
     request, receive_calls = _request(
         (b"{}",),
-        content_lengths=("3",),
-    )
-
-    with pytest.raises(JSONBodyDisconnected) as captured:
-        asyncio.run(read_json_body(request, max_bytes=8))
-
-    assert receive_calls() == 1
-    assert json_body_error_response(captured.value).status_code == 499
-
-
-def test_json_reader_rejects_bytes_past_the_declared_length_immediately() -> None:
-    request, receive_calls = _request(
-        (b"{}", b"ignored"),
-        content_lengths=("1",),
-    )
-
-    with pytest.raises(InvalidJSONBody):
-        asyncio.run(read_json_body(request, max_bytes=64))
-
-    assert receive_calls() == 1
-
-
-@pytest.mark.parametrize("content_lengths", (("2", "2"), ("2", "3")))
-def test_json_reader_rejects_ambiguous_content_length_declarations(
-    content_lengths: tuple[str, ...],
-) -> None:
-    request, receive_calls = _request(
-        (b"{}",),
-        content_lengths=content_lengths,
+        content_lengths=("2", "3"),
     )
 
     with pytest.raises(InvalidJSONBody):

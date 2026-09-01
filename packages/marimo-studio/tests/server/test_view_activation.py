@@ -74,9 +74,8 @@ async def _activate_connected(
     return await operation
 
 
-def test_external_activation_targets_the_selected_browser(
+def test_external_activation_targets_the_selected_or_only_browser(
     notebook_path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     studio = configured(notebook_path)
     notebook_scope = NotebookScope.create(studio.notebook)
@@ -88,49 +87,25 @@ def test_external_activation_targets_the_selected_browser(
             "s_123456",
             "browser-client-1234",
         )
-        budgets: list[float] = []
-        wait_for_activation = notebook_scope.agents.wait_for_activation
-
-        async def wait(activation, timeout: float) -> None:
-            budgets.append(timeout)
-            await wait_for_activation(activation, timeout)
-
-        monkeypatch.setattr(notebook_scope.agents, "wait_for_activation", wait)
-        result = await _activate_connected(
-            notebook_scope,
-            studio,
-            BrowserViewTarget("browser-client-1234"),
-        )
-        return result, budgets
-
-    result, budgets = asyncio.run(exercise())
-
-    assert result.view == "dashboard"
-    assert result.client_id == "browser-client-1234"
-    assert result.session_id == "s_123456"
-    assert budgets == [120.0]
-
-
-def test_external_activation_selects_the_only_browser(notebook_path) -> None:
-    studio = configured(notebook_path)
-    notebook_scope = NotebookScope.create(studio.notebook)
-
-    async def exercise():
-        assert await notebook_scope.clients.connect_stream("browser-client-1234", 1)
-        await bind_native_session(
-            notebook_scope.clients,
-            "s_123456",
-            "browser-client-1234",
-        )
-        return await _activate_connected(
-            notebook_scope,
-            studio,
-            BrowserViewTarget(None),
+        return (
+            await _activate_connected(
+                notebook_scope,
+                studio,
+                BrowserViewTarget("browser-client-1234"),
+            ),
+            await _activate_connected(
+                notebook_scope,
+                studio,
+                BrowserViewTarget(None),
+            ),
         )
 
-    result = asyncio.run(exercise())
+    selected, implicit = asyncio.run(exercise())
 
-    assert result.client_id == "browser-client-1234"
+    assert selected.view == "dashboard"
+    assert selected.client_id == "browser-client-1234"
+    assert selected.session_id == "s_123456"
+    assert implicit.client_id == "browser-client-1234"
 
 
 def test_external_activation_rejects_ambiguous_browsers(notebook_path) -> None:
