@@ -102,6 +102,25 @@ def test_provider_doctor_keeps_the_derived_key_for_import_failure(
     assert all("import failed" in record["error"] for record in records)
 
 
+def test_provider_doctor_renders_recovery_after_availability_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = ProviderStub("example/report", "default")
+    provider.availability_error = RuntimeError("availability failed")
+    registry = ProviderRegistry((candidate("report", provider),))
+    monkeypatch.setattr(
+        "marimo_studio._authoring.workspace.provider_registry",
+        lambda: registry,
+    )
+
+    result = CliRunner().invoke(cli, ["doctor"])
+
+    assert result.exit_code == 0, result.output
+    output = unstyle(result.output)
+    assert "reason RuntimeError: availability failed" in output
+    assert "recover Repair or remove the provider registration." in output
+
+
 def test_starter_human_output_reports_unavailable_recovery_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

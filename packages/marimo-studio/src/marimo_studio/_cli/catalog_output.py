@@ -25,24 +25,34 @@ def _recovery(availability: ProviderAvailability) -> None:
         echo(f"  {light_blue('recover')} {availability.action}", err=True)
 
 
-def render_provider(record: Mapping[str, object]) -> None:
-    """Write one compact provider diagnostic record."""
-    key = str(record.get("key") or record["registration"])
-    if not record.get("loaded"):
-        echo(f"{yellow('unavailable')} {key}")
-        _provider_identity(record)
-        if error := record.get("error"):
-            echo(f"  {light_blue('error')} {error}", err=True)
-        return
+def _availability(record: Mapping[str, object]) -> ProviderAvailability | None:
     raw = record.get("availability")
+    if raw is None:
+        return None
     if not isinstance(raw, dict):
         raise TypeError("Provider diagnostic lacks availability")
-    availability = ProviderAvailability(
+    return ProviderAvailability(
         available=bool(raw.get("available")),
         version=raw.get("version") or None,
         reason=raw.get("reason") or None,
         action=raw.get("action") or None,
     )
+
+
+def render_provider(record: Mapping[str, object]) -> None:
+    """Write one compact provider diagnostic record."""
+    key = str(record.get("key") or record["registration"])
+    availability = _availability(record)
+    if not record.get("loaded"):
+        echo(f"{yellow('unavailable')} {key}")
+        _provider_identity(record)
+        if error := record.get("error"):
+            echo(f"  {light_blue('error')} {error}", err=True)
+        if availability is not None:
+            _recovery(availability)
+        return
+    if availability is None:
+        raise TypeError("Provider diagnostic lacks availability")
     echo(f"{_status(availability)} {key}")
     _provider_identity(record)
     if summary := record.get("summary"):

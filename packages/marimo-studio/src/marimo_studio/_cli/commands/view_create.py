@@ -11,7 +11,10 @@ import click
 from marimo_studio._authoring.view import remove_view
 from marimo_studio._authoring.workspace import create_view
 from marimo_studio._cli.diagnostics import json_option, run_in_environment
-from marimo_studio._cli.environment import provider_bootstrap_required
+from marimo_studio._cli.environment import (
+    include_provider_ids,
+    provider_bootstrap_required,
+)
 from marimo_studio._cli.help import ColoredCommand
 from marimo_studio._cli.options import (
     target_option,
@@ -28,6 +31,18 @@ from marimo_studio._cli.targets import resolve_environment_target, resolve_noteb
 
 def _stdin_is_interactive() -> bool:
     return click.get_text_stream("stdin").isatty()
+
+
+def _starter_provider_id(starter: str | None) -> str | None:
+    if starter is None:
+        return None
+    provider_id, separator, local_key = starter.rpartition(":")
+    distribution, provider_separator, registration = provider_id.partition("/")
+    if not (
+        separator and local_key and distribution and provider_separator and registration
+    ):
+        return None
+    return provider_id
 
 
 @click.command("create", cls=ColoredCommand)
@@ -57,6 +72,9 @@ def create(
     """
     notebook = resolve_notebook(target)
     environment = resolve_environment_target(target, notebook)
+    provider_id = _starter_provider_id(starter)
+    if provider_id is not None:
+        environment = include_provider_ids(environment, (provider_id,))
     if provider_bootstrap_required(environment):
         raise click.exceptions.Exit(run_in_environment(environment, sys.argv[1:]))
     result = asyncio.run(

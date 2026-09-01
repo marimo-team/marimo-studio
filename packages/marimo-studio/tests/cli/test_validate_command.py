@@ -75,6 +75,7 @@ def test_validate_rejects_malformed_server_urls_as_usage_errors(
     result = _run_cli(
         runtime_assets,
         "validate",
+        "dashboard",
         "--target",
         str(notebook_path),
         "--level",
@@ -84,17 +85,12 @@ def test_validate_rejects_malformed_server_urls_as_usage_errors(
         "--json",
     )
 
-    events = [json.loads(line) for line in result.stderr.splitlines()]
     assert result.returncode == 2
     assert result.stdout == ""
-    assert len(events) == 1
-    assert events[0]["schema"] == 1
-    assert events[0]["event"] == "diagnostic"
-    assert events[0]["command"] == "validate"
-    assert events[0]["severity"] == "error"
-    assert events[0]["code"] == "usage-error"
-    assert events[0]["exit_code"] == 2
-    assert "--server" in events[0]["message"]
+    event = json.loads(result.stderr)
+    assert event["code"] == "usage-error"
+    assert event["exit_code"] == 2
+    assert "--server" in event["message"]
 
 
 def test_validate_rejects_browser_selection_without_a_server() -> None:
@@ -106,6 +102,41 @@ def test_validate_rejects_browser_selection_without_a_server() -> None:
     assert result.exit_code == 2
     assert "--browser-client" in result.output
     assert "--server" in result.output
+
+
+def test_browser_validation_requires_a_named_view_before_connecting(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path)
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.validate.provider_bootstrap_required",
+        lambda _target: False,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.validate.should_reenter",
+        lambda *_args: False,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.validate.studio_server_connection",
+        lambda *_args, **_kwargs: pytest.fail("browser connection was constructed"),
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "validate",
+            "--target",
+            str(notebook_path),
+            "--level",
+            "browser",
+            "--server",
+            "http://localhost:2718",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert "VIEW" in result.output
 
 
 def test_validate_flags_override_connection_environment(
@@ -135,6 +166,7 @@ def test_validate_flags_override_connection_environment(
         cli,
         [
             "validate",
+            "dashboard",
             "--target",
             str(notebook_path),
             "--level",

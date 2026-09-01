@@ -1,10 +1,17 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["marimo-studio[deno]"]
+# dependencies = [
+#     "marimo-studio[deno]",
+#     "marimo-studio-e2e-provider==1.0.0"
+# ]
+#
+# [tool.uv.sources]
+# marimo-studio-e2e-provider = { path = "../../../fixtures-provider/provider" }
 #
 # [tool.marimo-studio]
 # default = "overview"
 # preserve_session = false
+# provider_dependencies = ["marimo-studio-e2e-provider==1.0.0"]
 # show_cell_logs = false
 #
 # [tool.marimo-studio.cells]

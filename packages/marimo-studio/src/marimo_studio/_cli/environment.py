@@ -74,6 +74,28 @@ class _BootstrapEnvironment:
     uses_declared_source: bool
 
 
+@dataclass(frozen=True)
+class _ProviderEnvironmentTarget:
+    root: Path
+    notebook: Path
+    provider_ids: tuple[str, ...]
+
+
+def include_provider_ids(
+    target: EnvironmentTarget,
+    provider_ids: tuple[str, ...],
+) -> EnvironmentTarget:
+    """Include providers selected before they are saved to the workspace."""
+    existing = (
+        target.provider_ids if isinstance(target, _ProviderEnvironmentTarget) else ()
+    )
+    return _ProviderEnvironmentTarget(
+        root=target.root,
+        notebook=target.notebook,
+        provider_ids=tuple(sorted({*existing, *provider_ids})),
+    )
+
+
 def _project_metadata(root: Path) -> dict[str, object] | None:
     pyproject = root / "pyproject.toml"
     try:
@@ -553,16 +575,19 @@ def environment_command(
 
 
 def _target_provider_ids(target: EnvironmentTarget) -> tuple[str, ...]:
+    selected = (
+        target.provider_ids if isinstance(target, _ProviderEnvironmentTarget) else ()
+    )
     if isinstance(target, StudioWorkspace):
-        return tuple(sorted({view.provider for view in target.views.values()}))
+        configured = tuple(view.provider for view in target.views.values())
+        return tuple(sorted({*configured, *selected}))
     definition = discover_studio_definition(target.notebook)
     if definition is None:
-        return ()
-    return tuple(
-        sorted(
-            {view.provider for view in discover_views(definition.view_root).values()}
-        )
+        return selected
+    configured = tuple(
+        view.provider for view in discover_views(definition.view_root).values()
     )
+    return tuple(sorted({*configured, *selected}))
 
 
 def run_in_notebook_environment(

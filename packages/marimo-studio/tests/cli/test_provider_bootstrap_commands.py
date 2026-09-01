@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
+from packaging.requirements import Requirement
 
+import marimo_studio._cli.environment as environment_module
 from marimo_studio._cli import cli
 from marimo_studio._cli.targets import NotebookTarget
 from marimo_studio._views.api import prepare_view
@@ -135,3 +137,54 @@ def test_first_vanilla_view_create_uses_the_base_studio_environment(
     assert json.loads(result.stdout)["launch_requirements"] == [
         f"marimo-studio=={version('marimo-studio')}"
     ]
+
+
+def test_first_external_view_create_bootstraps_the_selected_starter_distribution(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook_path.write_text(
+        """\
+# /// script
+# dependencies = ["example-suite==1.0.0"]
+# ///
+
+"""
+        + notebook_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    installed_requirement_satisfies = (
+        environment_module._installed_requirement_satisfies
+    )
+
+    def requirement_is_installed(value: str) -> bool:
+        if Requirement(value).name == "example-suite":
+            return False
+        return installed_requirement_satisfies(value)
+
+    captured: list[object] = []
+    monkeypatch.setattr(
+        environment_module,
+        "_installed_requirement_satisfies",
+        requirement_is_installed,
+    )
+    monkeypatch.setattr(
+        "marimo_studio._cli.commands.view_create.run_in_environment",
+        lambda target, _args: captured.append(target) or 19,
+    )
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "create",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--starter",
+            "example-suite/report:default",
+        ],
+    )
+
+    assert result.exit_code == 19, result.output
+    assert len(captured) == 1

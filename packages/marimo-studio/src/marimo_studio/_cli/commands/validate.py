@@ -89,6 +89,11 @@ def validate(
             "browser validation requires --server or MARIMO_STUDIO_SERVER_URL",
             param_hint="--server",
         )
+    if level == "browser" and view_name is None:
+        raise click.BadParameter(
+            "browser validation requires a named view",
+            param_hint="VIEW",
+        )
     notebook = resolve_notebook(target)
     environment = resolve_environment_target(target, notebook)
     if provider_bootstrap_required(environment):
