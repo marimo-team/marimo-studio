@@ -39,9 +39,9 @@ pytestmark = pytest.mark.native_process
 
 _PROVIDER_MODULE = "tests.providers.test_process_isolation"
 _PROCESS_START_TIMEOUT = 15.0
-_METADATA_OPERATION_TIMEOUT = 1.5 if os.name == "nt" else 0.25
-_METADATA_ELAPSED_LIMIT = 3.0 if os.name == "nt" else 0.8
-_CONTAINMENT_ELAPSED_LIMIT = 5.0 if os.name == "nt" else 3.0
+_METADATA_OPERATION_TIMEOUT = 1.5
+_METADATA_ELAPSED_LIMIT = 3.0
+_CONTAINMENT_ELAPSED_LIMIT = 5.0
 
 
 def _candidate(

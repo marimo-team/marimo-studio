@@ -15,6 +15,8 @@ from marimo_studio._cli.environment import (
 )
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
+from marimo_studio.view_providers import ProviderAvailability
+from marimo_studio.view_providers._bundled import _deno
 from marimo_studio.view_providers._bundled.deno_react import (
     provider as react_provider,
 )
@@ -133,6 +135,11 @@ def test_project_config_reentry_carries_every_provider_distribution(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        _deno,
+        "deno_availability",
+        lambda: ProviderAvailability(True),
+    )
     (notebook_path.parent / "pyproject.toml").write_text(
         f"""\
 [project]

@@ -14,6 +14,8 @@ from marimo_studio._compat.environment import inline_environment_flags
 from marimo_studio._views.api import prepare_view
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import ConfigurationError, DependencyError
+from marimo_studio.view_providers import ProviderAvailability
+from marimo_studio.view_providers._bundled import _deno
 from marimo_studio.view_providers._bundled.deno_react import (
     provider as react_provider,
 )
@@ -44,6 +46,11 @@ def test_fresh_reentry_installs_react_svelte_and_external_provider_requirements(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        _deno,
+        "deno_availability",
+        lambda: ProviderAvailability(True),
+    )
     package = notebook_path.parent / "example-suite"
     (package / "src" / "example_suite").mkdir(parents=True)
     (package / "pyproject.toml").write_text(
@@ -143,8 +150,7 @@ build-backend = "uv_build"
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == (
-        f"{version('marimo-studio')}:{version('deno')}:1.0.0:"
-        "external-provider:React:Svelte"
+        f"{version('marimo-studio')}:2.9.5:1.0.0:external-provider:React:Svelte"
     )
     assert "--isolated" in command
     assert "--no-project" in command
