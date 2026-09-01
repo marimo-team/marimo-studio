@@ -113,6 +113,11 @@ test("relative authored links resolve from the current public view", () => {
     current: false,
     documentUrl: "https://example.test/proxy/token/expert/?file=analysis.py&region=eu",
   });
+  assert.deepEqual(relativeSelection("../expert/index.html"), {
+    view: "expert",
+    current: false,
+    documentUrl: "https://example.test/proxy/token/expert/?file=analysis.py&region=eu",
+  });
   assert.equal(relativeSelection("./assets/report.csv"), undefined);
 });
 

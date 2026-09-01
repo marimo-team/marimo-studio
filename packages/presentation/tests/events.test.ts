@@ -185,7 +185,7 @@ test("static documents leave fragments, queries, and sibling links to the browse
   );
   const direct = vi.fn();
   const dispose = bindViewNavigation(direct, false);
-  const links = ["#details", "?region=apac", "../summary/"];
+  const links = ["#details", "?region=apac", "../summary/index.html"];
   const intercepted: boolean[] = [];
   const preventBrowserNavigation = (event: MouseEvent) => {
     intercepted.push(event.defaultPrevented);
@@ -220,18 +220,18 @@ test("direct wrapper navigation commits in the child before pushing public histo
   const direct = vi.fn().mockResolvedValue(true);
   const dispose = bindViewNavigation(direct, true);
   const anchor = document.createElement("a");
-  anchor.href = "/proxy/app/report/?region=emea#details";
+  anchor.setAttribute("href", "../report/index.html?region=emea#details");
   document.body.append(anchor);
 
-  anchor.dispatchEvent(
-    new MouseEvent("click", {
-      bubbles: true,
-      button: 0,
-      cancelable: true,
-    }),
-  );
+  const click = new MouseEvent("click", {
+    bubbles: true,
+    button: 0,
+    cancelable: true,
+  });
+  anchor.dispatchEvent(click);
   await vi.waitFor(() => expect(postMessage).toHaveBeenCalledOnce());
 
+  expect(click.defaultPrevented).toBe(true);
   expect(direct).toHaveBeenCalledWith({
     documentUrl: "http://localhost:3000/proxy/app/report/?region=emea&runtime=server#details",
     view: "report",

@@ -512,7 +512,7 @@ test("keeps relative navigation public across direct view reloads", async ({
         <nav>
           <a href="#details">View details</a>
           <a href="?region=us">Use US region</a>
-          <a href="../qa-view/?region=apac#app-shell">Open QA view</a>
+          <a href="../qa-view/index.html?region=apac#app-shell">Open QA view</a>
         </nav>
         <section id="details">Quarterly details</section>
     </main>

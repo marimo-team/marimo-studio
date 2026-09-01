@@ -60,7 +60,11 @@ export const viewNavigationForUrl = ({
   const directView = views.find((name) => {
     const publicView = new URL(`${encodeURIComponent(name)}/`, publicRoot);
     const authoredView = new URL(`${encodeURIComponent(name)}/`, documentRoot);
-    return [publicView, authoredView].some((viewUrl) => candidate.pathname === viewUrl.pathname);
+    return [publicView, authoredView].some(
+      (viewUrl) =>
+        candidate.pathname === viewUrl.pathname ||
+        candidate.pathname === `${viewUrl.pathname}index.html`,
+    );
   });
   if (!directView) {
     return undefined;
