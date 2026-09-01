@@ -103,6 +103,16 @@ export const formatPeriod = (summary?: WeeklySummary) => {
   if (Number.isNaN(start.valueOf()) || Number.isNaN(end.valueOf())) {
     return "Seven-day record";
   }
+  if (start.getUTCFullYear() !== end.getUTCFullYear()) {
+    return `${monthDay.format(start)}, ${yearOnly.format(start)}–${
+      monthDay.format(end)
+    }, ${yearOnly.format(end)}`;
+  }
+  if (start.getUTCMonth() !== end.getUTCMonth()) {
+    return `${monthDay.format(start)}–${monthDay.format(end)}, ${
+      yearOnly.format(end)
+    }`;
+  }
   return `${monthDay.format(start)}–${dayOnly.format(end)}, ${
     yearOnly.format(end)
   }`;

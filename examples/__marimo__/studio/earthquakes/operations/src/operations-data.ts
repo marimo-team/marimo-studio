@@ -49,7 +49,7 @@ export const formatEventTime = (value: EarthquakeEvent["time"]): string => {
   const parsed = value instanceof Date ? value : new Date(milliseconds);
   return Number.isNaN(parsed.valueOf())
     ? String(value)
-    : TIME_FORMAT.format(parsed);
+    : `${TIME_FORMAT.format(parsed)} UTC`;
 };
 
 export const rankEvents = (

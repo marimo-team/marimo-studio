@@ -53,7 +53,7 @@ spacing:
 components:
   slide:
     backgroundColor: "{colors.canvas}"
-    textColor: "{colors.primary}"
+    textColor: "{colors.on-surface}"
     typography: "{typography.body}"
     rounded: "{rounded.control}"
     padding: 64px

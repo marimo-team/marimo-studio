@@ -20,10 +20,12 @@ weekly rhythm, operating picture, priority watchlist, and duty handover.
 `src/components/BriefingPrimitives.tsx` owns repeated metrics and rhythm bars.
 `src/briefing-data.ts` owns projected value types and pure display formatting.
 
-`src/App.tsx` mounts `event_controls` and `conclusion`, then observes
-`weekly_summary`, `event_summary`, `daily_activity`, and
-`strongest_events`. Place the selected `event_summary` metrics immediately
-after `event_controls` so the active review cut is visible on the same slide.
+`src/App.tsx` mounts the `mo-value` hosts for `weekly_summary`,
+`event_summary`, `daily_activity`, and `strongest_events`.
+`src/components/BriefingSlides.tsx` mounts `event_controls` and `conclusion` in
+the slides that render them. Place the selected `event_summary` metrics
+immediately after `event_controls` so the active review cut is visible on the
+same slide.
 
 Use Reveal Auto-Animate between the executive assessment and weekly rhythm
 slides. Give the pair the same `autoAnimateId`, then keep stable `data-id`
