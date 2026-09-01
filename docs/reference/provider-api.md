@@ -197,6 +197,9 @@ from pathlib import PurePosixPath
 
 from marimo_studio.view_providers import (
     MountDeclaration,
+    ProjectInput,
+    ProjectInspection,
+    SourceDocument,
     SourceLocation,
     mount_attribute,
 )
@@ -209,16 +212,17 @@ SUMMARY_SITE = MountDeclaration(
     allowed_targets=("summary",),
 )
 
-return ProjectInspection(
-    editor_documents=(SourceDocument(ENTRY, "html", "edit"),),
-    input_scope=(
-        ProjectInput(ENTRY, "file"),
-        ProjectInput(PurePosixPath("view.toml"), "file"),
-    ),
-    mounts=(SUMMARY_SITE,),
-    diagnostics=(),
-    build_fingerprint="report-v1",
-)
+def inspect(self, request):
+    return ProjectInspection(
+        editor_documents=(SourceDocument(ENTRY, "html", "edit"),),
+        input_scope=(
+            ProjectInput(ENTRY, "file"),
+            ProjectInput(PurePosixPath("view.toml"), "file"),
+        ),
+        mounts=(SUMMARY_SITE,),
+        diagnostics=(),
+        build_fingerprint="report-v1",
+    )
 ```
 
 `source` points to the projection declaration in an editor document. Line and
