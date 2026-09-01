@@ -180,6 +180,74 @@ outside a recursive source directory when they do not affect browser output.
 inputs, mounts, and diagnostics. Keep reusable downloaded or generated data in
 `request.cache_root`.
 
+### Declare projection sites
+
+`ProjectInspection.mounts` connects a projection element in editable source to
+the corresponding element in the built artifact. For this one-line
+`index.html`:
+
+```html
+<marimo-cell name="summary"></marimo-cell>
+```
+
+return one deterministic mount from `inspect()`:
+
+```python
+from pathlib import PurePosixPath
+
+from marimo_studio.view_providers import (
+    MountDeclaration,
+    SourceLocation,
+    mount_attribute,
+)
+
+ENTRY = PurePosixPath("index.html")
+SUMMARY_SITE = MountDeclaration(
+    id="report-summary",
+    kind="cell",
+    source=SourceLocation(ENTRY, line=1, column=1),
+    allowed_targets=("summary",),
+)
+
+return ProjectInspection(
+    editor_documents=(SourceDocument(ENTRY, "html", "edit"),),
+    input_scope=(
+        ProjectInput(ENTRY, "file"),
+        ProjectInput(PurePosixPath("view.toml"), "file"),
+    ),
+    mounts=(SUMMARY_SITE,),
+    diagnostics=(),
+    build_fingerprint="report-v1",
+)
+```
+
+`source` points to the projection declaration in an editor document. Line and
+column numbers are one-based. The mount ID must be unique within the inspection
+and remain stable for the same source site.
+
+During `build()`, read the accepted site from `request.inspection.mounts` and
+add its canonical attribute to the corresponding projection element:
+
+```python
+site = request.inspection.mounts[0]
+attribute_name, attribute_value = mount_attribute(site.id)
+```
+
+For `SUMMARY_SITE`, the built artifact contains:
+
+```html
+<marimo-cell name="summary" data-marimo-studio-site="report-summary"></marimo-cell>
+```
+
+Add the attribute to the staged artifact and keep it out of editable source.
+Studio reserves `data-marimo-studio-site` for artifact instrumentation.
+
+The mount `kind` must match its projection element: `cell` for `marimo-cell`,
+`output` for `marimo-output`, and `value` for an element with `mo-value`.
+`allowed_targets=("summary",)` authorizes that exact notebook result. Use
+`None` when source chooses targets dynamically. It permits any valid target for
+that projection kind.
+
 ## Build browser files
 
 `BuildRequest` contains a read-only project snapshot, its accepted inspection,
@@ -221,6 +289,10 @@ candidate browser files beneath `request.staging_root`, keep reusable state
 beneath `request.cache_root`, and leave durable workspace publication to Studio.
 
 ## Minimal provider
+
+`ReportProvider` focuses on registration, source discovery, and artifact
+publication. Add the projection-site contract when its page contains
+`marimo-cell`, `marimo-output`, or `mo-value` hosts.
 
 ```python
 import html
