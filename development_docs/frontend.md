@@ -1,8 +1,10 @@
 # Frontend workspace
 
-The pnpm workspace builds the presentation document and the Studio authoring
-workspace. Work in the package that owns the behavior, then cross boundaries
-through protocol records, the runtime SPI, or an injected feature port.
+The [pnpm](https://pnpm.io/) JavaScript package workspace builds the
+presentation document and the Studio authoring workspace. Work in the package
+that owns the behavior, then cross boundaries through protocol records, the
+runtime service provider interface (SPI) that runtime implementations satisfy,
+or an injected feature port.
 
 Read [Browser runtime and
 authoring](architecture/browser-runtime-and-authoring.md) for the lifecycle map
@@ -13,16 +15,19 @@ cross-package responsibility.
 
 ## Choose the owning package
 
-| Package                    | Owns                                                                                    | Typical change                                                                        |
-| -------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `packages/protocol`        | Zod schemas and inferred browser and server records                                     | Add a project document, artifact, symbol, site, instance, or event field              |
-| `packages/runtime`         | Runtime registration, mount, update, query, control, and disposal SPI                   | Add a lifecycle capability shared by Server and WebAssembly                           |
-| `packages/presentation`    | Artifact document, revision transaction, projections, styles, navigation, and readiness | Change document publication or projection-host behavior                               |
-| `packages/studio`          | Notebook, Source, Preview, views, and workspace controllers                             | Change tabs, source editing, view switching, layout, or frame coordination            |
-| `packages/marimo-frontend` | Named adapters around unstable Marimo frontend modules                                  | Change native rendering, embedded runtime, controls, sessions, or theme integration   |
-| `apps/browser`             | Final runtime and workspace composition                                                 | Register a runtime or inject a browser adapter                                        |
-| `apps/e2e`                 | Live Marimo and Chromium acceptance                                                     | Prove behavior across provider build, filesystem, editor, kernel, worker, and preview |
-| `apps/docs`                | VitePress delivery                                                                      | Change site navigation, theme, metadata, search, or docs build behavior               |
+| Package                    | Owns                                                                                       | Typical change                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `packages/protocol`        | [Zod](https://zod.dev/) runtime-validation schemas and inferred browser and server records | Add a project document, artifact, symbol, site, instance, or event field              |
+| `packages/runtime`         | Runtime registry plus mount, update, query, and disposal session interface                 | Add a lifecycle capability shared by Server and WebAssembly                           |
+| `packages/presentation`    | Artifact document, revision transaction, projections, styles, navigation, and readiness    | Change document publication or projection-host behavior                               |
+| `packages/studio`          | Notebook, Source, Preview, views, and workspace controllers                                | Change tabs, source editing, view switching, layout, or frame coordination            |
+| `packages/marimo-frontend` | Named adapters around unstable Marimo frontend modules                                     | Change native rendering, embedded runtime, controls, sessions, or theme integration   |
+| `apps/browser`             | Final runtime and workspace composition                                                    | Register a runtime or inject a browser adapter                                        |
+| `apps/e2e`                 | Live Marimo and Chromium acceptance                                                        | Prove behavior across provider build, filesystem, editor, kernel, worker, and preview |
+| `apps/docs`                | VitePress delivery                                                                         | Change site navigation, theme, metadata, search, or docs build behavior               |
+
+Read [Documentation delivery](documentation.md) before changing `apps/docs`,
+public route inventory, example exports, or rendered verification.
 
 ## Install and run focused checks
 
@@ -64,7 +69,8 @@ responsive layout:
 make e2e
 ```
 
-Use `make e2e-ui` to inspect the Playwright flow interactively.
+Use `make e2e-ui` to inspect the
+[Playwright](https://playwright.dev/) browser-automation flow interactively.
 
 ## Preserve package direction
 
@@ -151,14 +157,14 @@ Test a presentation change at three levels when applicable:
 The Source feature renders the provider's `SourceDocumentSpec` catalog. It
 contains one editor and one horizontally scrollable tab strip.
 
-| Module             | Responsibility                                                                     |
-| ------------------ | ---------------------------------------------------------------------------------- |
-| `controller.ts`    | Project catalog, per-view session, active path, buffers, transitions, and disposal |
-| `sync.ts`          | One document revision, autosave, external reconciliation, and conflict lifecycle   |
-| `remote.ts`        | Project, source read, and conditional source write HTTP calls                      |
-| `tabs.ts`          | Keyboard selection model                                                           |
-| `SourcePane.tsx`   | Tabs, status, conflict controls, and editor projection                             |
-| `SourceEditor.tsx` | CodeMirror, language extensions, read-only state, focus, and save shortcut         |
+| Module             | Responsibility                                                                                                    |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `controller.ts`    | Project catalog, per-view session, active path, buffers, transitions, and disposal                                |
+| `sync.ts`          | One document revision, autosave, external reconciliation, and conflict lifecycle                                  |
+| `remote.ts`        | Project, source read, and conditional source write HTTP calls                                                     |
+| `tabs.ts`          | Keyboard selection model                                                                                          |
+| `SourcePane.tsx`   | Tabs, status, conflict controls, and editor projection                                                            |
+| `SourceEditor.tsx` | [CodeMirror](https://codemirror.net/) code editor, language extensions, read-only state, focus, and save shortcut |
 
 Provider order is the tab order. The controller retains dirty documents if a
 new inspection drops their path, which keeps unsaved work recoverable.
@@ -267,15 +273,24 @@ The output contains `runtime.js`, `dev-reload.js`, `studio.js`, their CSS,
 shared chunks, worker assets, and `build-meta.json`. Build metadata records the
 Marimo version and release commit.
 
-Studio targets evergreen browsers with WOFF2 font support. The build keeps one
-WOFF2 source for each KaTeX font face.
+Studio targets evergreen browsers with
+[WOFF2](https://www.w3.org/TR/WOFF2/) compressed web-font support. The build
+keeps one WOFF2 source for each [KaTeX](https://katex.org/) mathematical
+typesetting font face.
 
 The generated browser directory and prepared Marimo checkout remain
 untracked. Change workspace source, rebuild, then use `make package` when
 distribution contents are part of the contract.
 
-`make package` enforces 400 browser files, 24 MiB of browser assets, 600 KiB of
-direct runtime and Studio assets, and 120 KiB for their combined gzip payload.
+`make package` enforces 400 browser files and 24 MiB of browser assets. It also
+checks these static-import graphs:
+
+| Graph                                 |       Raw |      Gzip |
+| ------------------------------------- | --------: | --------: |
+| Each browser entry                    |   850 KiB |   225 KiB |
+| Server or WebAssembly runtime startup | 6,500 KiB | 2,200 KiB |
+| Studio Source startup                 | 1,300 KiB |   375 KiB |
+
 These bounds keep accidental editor, language, diagram, SQL, plotting, AI, and
 worker imports visible at the release boundary.
 

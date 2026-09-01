@@ -174,13 +174,11 @@ view source should never depend on a transient runtime ID.
 - Process-bound server token
 - Opaque server handle
 
-`PresentationMiddleware` checks routing and authentication, delegates native
-Marimo paths, and handles Studio landing, document, artifact, support, source,
-activation, and agent routes.
-
-Marimo remains responsible for native editor, WebSocket, virtual file, and
-session routes. Studio route matching must bail out cleanly when a request
-belongs to Marimo.
+`PresentationMiddleware` consumes those records and delegates native Marimo
+paths before dispatching Studio work. Read [Server routing and
+security](server-routing-and-security.md) for route recognition, workspace
+lifecycle, authentication, presentation capabilities, iframe isolation, and
+native-session admission.
 
 ## Notebook-scoped services
 
@@ -295,6 +293,17 @@ anonymous cells and explicit product naming.
 Keep save transformation scoped to the attached notebook session. Session
 detach or adapter shutdown closes its policy handle.
 
+The editor bridge treats a successful first save as a session handoff from the
+temporary `__new__*` file key to the saved notebook. It requests Studio reload
+through that exact native session after the saved path exists. Read [Product
+and workspace](product-and-workspace.md#first-save) for the complete lifecycle.
+
+Notebook document transactions pause active presentations before durable
+mutation, then settle after the matching save and presentation build. The
+Preview owner coordinates that barrier. Marimo remains the durable notebook
+writer. Read [Product and workspace](product-and-workspace.md#notebook-mutation-admission)
+for the mutation state machine.
+
 ## Controls, query, and peer state
 
 Controls are Marimo runtime resources projected into a view. Their state stays
@@ -309,7 +318,9 @@ authorized control state between consumers of one session.
 
 `_PrivateAdapterLifecycle` opens server integrations as one ordered group. A
 partial startup closes handles already opened. ASGI shutdown closes notebook
-scopes before process-wide adapters.
+scopes before the application-owned adapter group. The process-wide
+presentation-authorization patch is installed by the Marimo entry point and
+closes through `atexit` when the Python process exits.
 
 Use explicit lifecycle verbs:
 

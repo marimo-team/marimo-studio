@@ -13,7 +13,8 @@ A release contains one coordinated compatibility unit:
 - `marimo_studio.view_provider` entry points
 - Vanilla, React, and Svelte provider implementations
 - Provider analyzers and project starters
-- Provider guides and the Marimo Studio Agent Plugin
+- Provider guides and the Marimo Studio
+  [Agent Plugin](https://github.com/peter-gy/agent-plugins)
 - Optional Deno dependency metadata
 - Generated Studio, presentation, runtime, and WebAssembly browser assets
 - Browser dependency inventory and third-party license texts
@@ -55,8 +56,21 @@ release. Set the same Studio pin in
 `apps/e2e/fixtures-provider/provider/pyproject.toml`, then commit both manifests
 and `uv.lock`. Commit `pnpm-lock.yaml` when JavaScript dependency inputs
 changed. Commit view-project lockfiles when a packaged starter changes its
-frontend dependencies. Write the public release summary in
-`.github/release-notes/vX.Y.Z.md`.
+frontend dependencies.
+
+Update the versioned public communication surfaces as one change:
+
+- Root `README.md`
+- `packages/marimo-studio/README.md`
+- Installation and compatibility commands under `docs/`
+- Provider examples under `docs/`
+- `skills/marimo-studio/SKILL.md`
+- `.github/release-notes/vX.Y.Z.md`
+
+Search the tracked public sources for the previous version before committing.
+Keep version claims, supported Marimo release, provider extras, and example
+commands aligned. [Documentation delivery](documentation.md#version-parity)
+owns the complete parity contract.
 
 Run the release gates from the repository root:
 

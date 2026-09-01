@@ -46,6 +46,10 @@ doctor
 JSON data uses stdout. Progress and diagnostics use stderr. Validation failure,
 configuration failure, and live connection failure have distinct exit codes.
 
+Read [Provider environments](provider-environments.md) for CLI re-entry and
+[Errors and diagnostics](errors-and-diagnostics.md) for exit codes, JSON Lines,
+HTTP translation, browser diagnostics, and validation issues.
+
 ## Browser clients
 
 The server assigns each Studio browser a client identity and a native editor
@@ -104,6 +108,10 @@ projection instances.
 `create_asgi_app()` composes Studio middleware with Marimo's application. Run
 mode serves the default and named views, runtime configuration, projections,
 controls, and immutable artifact files.
+
+Read [Server routing and security](server-routing-and-security.md) for route
+ownership, authentication, capabilities, iframe isolation, and session
+admission.
 
 The returned application owns the mounted notebook from ASGI startup through
 shutdown. Shutdown closes the notebook's native sessions and Studio scopes

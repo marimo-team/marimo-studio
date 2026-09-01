@@ -6,14 +6,15 @@ artifact with a selected runtime. The Studio workspace arranges Notebook,
 Source, and Preview surfaces around those documents.
 
 See the [canonical ownership map](../architecture.md#ownership) for package
-responsibilities.
+responsibilities and [Identities and state](identities-and-state.md) for
+revision, generation, session, and readiness terms.
 
 ## Package ownership
 
 | Package                    | Owns                                                                                    |
 | -------------------------- | --------------------------------------------------------------------------------------- |
 | `packages/protocol`        | Zod schemas and inferred transport records                                              |
-| `packages/runtime`         | Runtime registration, mount, update, control, query, and disposal SPI                   |
+| `packages/runtime`         | Runtime registration plus mount, update, query, and disposal session interface          |
 | `packages/presentation`    | Artifact document, revision transaction, projections, styles, navigation, and readiness |
 | `packages/studio`          | Notebook, Source, Preview, view inventory, and workspace controllers                    |
 | `packages/marimo-frontend` | Named adapters around unstable Marimo frontend modules                                  |
@@ -137,20 +138,53 @@ Host adapters participate in:
 Read [Symbolic projections](symbolic-projections.md) for authorization,
 resolution, duplicate ownership, quotas, and evidence.
 
+## Protocol ownership
+
+`packages/protocol` owns serialization. Each lane has one producer and one
+consumer boundary:
+
+| Lane               | Records                                                                           | Owner transition                                     |
+| ------------------ | --------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Server bootstrap   | `StudioBootstrap`, `RuntimeConfig`, `MountConfig`                                 | Python delivery to the presentation document         |
+| View project       | `ViewProject`, `SourceDocument`, `ViewBuildState`                                 | Python Source services to Studio controllers         |
+| Development events | Project, build, presentation, views, session, activation, and observation records | Server event coordinator to Studio features          |
+| Preview messages   | Revision, readiness, navigation, query, diagnostic, and observation messages      | Presentation document and Preview controller         |
+| Frame bridge       | Control, query, resize, and acknowledgement records                               | Studio workspace and the selected presentation frame |
+| Projection reads   | Value and output requests and responses                                           | Presentation hosts and revision-bound server routes  |
+| Browser evidence   | `BrowserObservation` and `RuntimeStatusReport`                                    | Presentation observer to agent coordination          |
+
+Zod schemas parse browser input at the receiving boundary. Python producers
+emit schema 1 records with the same field meanings. Add malformed, stale, and
+oversized cases when a field controls mutation, resource ownership,
+authorization, or evidence.
+
+Runtime configuration and projection reads are separate lanes. Committing a
+runtime configuration selects the current projection revision. Each value or
+output read still carries that projection identity and can receive a transient
+stale-binding response.
+
 ## Runtime SPI
 
-`packages/runtime` defines one runtime lifecycle shared by Server and
+`packages/runtime` defines the small lifecycle shared by Server and
 WebAssembly:
 
 ```text
-register
-  -> mount
-  -> configure
-  -> attach projection instances
-  -> synchronize controls and query
-  -> update presentation
+register runtime ID
+  -> mount RuntimeContext and runtime data
+  -> update complete RuntimeConfig
+  -> update public query
   -> dispose
 ```
+
+`PresentationRuntime.mount()` returns a `RuntimeSession` with `id`, optional
+native `sessionId`, `update()`, `updateQuery()`, and `dispose()`. `update()`
+returns `applied` or `reload`. A later mount cancels and disposes an earlier
+mount that resolves out of order.
+
+Presentation owns projection host connection, control synchronization, frame
+bridging, navigation, readiness, and document transactions. Runtime
+implementations can compose those presentation services behind their session
+handle, but those services are not part of the runtime interface.
 
 ### Server
 
@@ -173,9 +207,10 @@ The worker instance and executed cells survive artifact and site revisions
 whose runtime instance remains unchanged. Independent notebook branches stay
 dormant until a mounted target resolves to them.
 
-Runtime providers return one `RuntimeProjection` with instance identity,
+Python runtime providers return one runtime projection with instance identity,
 runtime data, and semantic cell bindings. The browser commits runtime
-configuration before attaching projection hosts.
+configuration before connecting projection hosts and mounting the selected
+runtime session.
 
 ## Studio workspace model
 
@@ -264,6 +299,11 @@ load with ETag
   -> PUT with If-Match
   -> commit new ETag
 ```
+
+An [ETag](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/ETag)
+identifies one saved revision. The
+[`If-Match`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/If-Match)
+request condition commits a write when that revision is still current.
 
 An external change triggers a read. Clean buffers accept disk content. Dirty
 buffers compare local and remote content and enter conflict state when the

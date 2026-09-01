@@ -21,19 +21,43 @@ for its complexity.
 Use the [canonical ownership map](architecture.md#ownership) to select the
 package that owns a policy or mutable resource.
 
-| Change area                                                                | Architecture map                                                               |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Workspace configuration, `view.toml`, or project transactions              | [Product and workspace](architecture/product-and-workspace.md)                 |
-| View creation, source documents, inspection, builds, removal, or revisions | [Product and workspace](architecture/product-and-workspace.md)                 |
-| Provider descriptors, starters, inspection, builds, or artifact storage    | [View providers and artifacts](architecture/view-providers-and-artifacts.md)   |
-| Notebook symbols, mount declarations, mounted instances, or ownership      | [Symbolic projections](architecture/symbolic-projections.md)                   |
-| Marimo routes, sessions, saves, kernels, private APIs, or upgrades         | [Marimo integration](architecture/marimo-integration.md)                       |
-| Browser protocol, runtimes, Source, layout, or presentation lifecycle      | [Browser runtime and authoring](architecture/browser-runtime-and-authoring.md) |
-| Agents, CLI, validation, export, E2E, docs, or packaging                   | [Agents and delivery](architecture/agents-and-delivery.md)                     |
+| Change area                                                                 | Architecture map                                                               |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Workspace configuration, `view.toml`, or project transactions               | [Product and workspace](architecture/product-and-workspace.md)                 |
+| Revisions, generations, sessions, readiness, or mutation admission          | [Identities and state](architecture/identities-and-state.md)                   |
+| View creation, source documents, inspection, builds, removal, or revisions  | [Product and workspace](architecture/product-and-workspace.md)                 |
+| Provider descriptors, starters, inspection, builds, or artifact storage     | [View providers and artifacts](architecture/view-providers-and-artifacts.md)   |
+| Target Python selection, provider dependencies, or CLI environment re-entry | [Provider environments](architecture/provider-environments.md)                 |
+| Notebook symbols, mount declarations, mounted instances, or ownership       | [Symbolic projections](architecture/symbolic-projections.md)                   |
+| Marimo routes, sessions, saves, kernels, private APIs, or upgrades          | [Marimo integration](architecture/marimo-integration.md)                       |
+| Server routing, authentication, capabilities, or browser isolation          | [Server routing and security](architecture/server-routing-and-security.md)     |
+| Browser protocol, runtimes, Source, layout, or presentation lifecycle       | [Browser runtime and authoring](architecture/browser-runtime-and-authoring.md) |
+| Error codes, HTTP translation, CLI diagnostics, or validation issues        | [Errors and diagnostics](architecture/errors-and-diagnostics.md)               |
+| Agents, CLI validation, export, E2E, or packaging                           | [Agents and delivery](architecture/agents-and-delivery.md)                     |
 
 Use [Frontend workspace](frontend.md) for package commands and browser source
-workflow. Use [Releasing](releasing.md) for versioning, publication, and
-recovery.
+workflow. Use [Documentation delivery](documentation.md) for VitePress, public
+examples, and rendered validation. Use [Releasing](releasing.md) for
+versioning, publication, and recovery.
+
+## External foundations
+
+These upstream systems define contracts that Studio integrates:
+
+| Foundation                                                                                                                                                            | Role in Studio                                                                               |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [Marimo](https://docs.marimo.io/)                                                                                                                                     | Reactive notebook execution, sessions, native rendering, authentication, and the editor host |
+| [Marimo code mode](https://docs.marimo.io/guides/editor_features/tools/#code-mode)                                                                                    | Coding-agent execution inside the live notebook kernel                                       |
+| [Agent Skills](https://agentskills.io/) and [Agent Plugins](https://github.com/peter-gy/agent-plugins)                                                                | Portable agent instructions and their packaged resources                                     |
+| [uv](https://docs.astral.sh/uv/) and [PEP 723](https://peps.python.org/pep-0723/)                                                                                     | Python environment selection and dependencies stored in a script                             |
+| [Deno](https://docs.deno.com/)                                                                                                                                        | Pinned JavaScript and TypeScript toolchain for bundled framework providers                   |
+| [ASGI](https://asgi.readthedocs.io/en/latest/)                                                                                                                        | Interface between Studio's asynchronous Python application and a server                      |
+| [WebAssembly](https://webassembly.org/) and [Pyodide](https://pyodide.org/)                                                                                           | Browser-side notebook execution                                                              |
+| [Arrow IPC](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc) and [Flechette](https://github.com/uwdata/flechette) | Columnar dataframe transfer from Python to browser code                                      |
+| [VitePress](https://vitepress.dev/)                                                                                                                                   | Public documentation site generator                                                          |
+
+The architecture pages name the exact adapter, owner, and lifecycle boundary
+for each integration.
 
 ## Install the workspace
 
@@ -43,11 +67,13 @@ Install the locked Python and JavaScript environments:
 make setup
 ```
 
-`make setup` installs the Python and pnpm workspaces, prepares the pinned Marimo
+`make setup` installs the Python and [pnpm](https://pnpm.io/) JavaScript
+workspaces, prepares the pinned Marimo
 frontend source, builds Studio's browser assets, and installs Chromium for
 browser acceptance tests. Python tooling runs through `uv`. Browser and
-documentation tooling runs through the pnpm workspace, where Vite Plus owns
-formatting, linting, TypeScript checks, tests, builds, and task execution.
+documentation tooling runs through the pnpm workspace, where
+[Vite Plus](https://viteplus.dev/guide) owns formatting, linting, TypeScript
+checks, tests, builds, and task execution.
 
 Deno-backed providers use the exact executable supplied by the Python package
 extra. Their frontend dependency versions and lockfiles belong to the view
@@ -165,8 +191,9 @@ Add the matching boundary checks:
 | Public documentation                                                              | `make docs-build` and rendered desktop and narrow inspection |
 
 `make test` runs the complete Python profile for the current platform and the
-frontend package tests. `make check` adds formatting, linting, type checks,
-and example builds. Live browser acceptance remains the evidence for
+frontend package tests. `make check` adds formatting, linting, architecture,
+provider-source, and type checks. `make docs-build` owns public example exports
+and VitePress verification. Live browser acceptance remains the evidence for
 cross-document behavior.
 
 `make typecheck` runs ty, Pyrefly, basedpyright, and the TypeScript checks.
@@ -214,13 +241,13 @@ suite proves a cold publication path.
 
 Update the surface that owns the reader's question:
 
-| Reader                                      | Source                                                         |
-| ------------------------------------------- | -------------------------------------------------------------- |
-| Product user completing a task              | `docs/guide/`                                                  |
-| User looking up an exact contract           | `docs/reference/`                                              |
-| Contributor changing ownership or lifecycle | `development_docs/architecture/`                               |
-| Contributor running a package workflow      | `development_docs/README.md`, `frontend.md`, or `releasing.md` |
-| Coding agent following the authoring loop   | `skills/marimo-studio/` and the public agent guide             |
+| Reader                                      | Source                                                                             |
+| ------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Product user completing a task              | `docs/guide/`                                                                      |
+| User looking up an exact contract           | `docs/reference/`                                                                  |
+| Contributor changing ownership or lifecycle | `development_docs/architecture/`                                                   |
+| Contributor running a package workflow      | `development_docs/README.md`, `frontend.md`, `documentation.md`, or `releasing.md` |
+| Coding agent following the authoring loop   | `skills/marimo-studio/` and the public agent guide                                 |
 
 Public docs explain the capability and user consequence. Development docs
 explain owners, invariants, lifecycle, and validation.

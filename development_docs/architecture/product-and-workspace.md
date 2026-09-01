@@ -4,7 +4,8 @@ The notebook is the analytical model. A view is one named frontend project
 that consumes that model.
 
 See the [canonical ownership map](../architecture.md#ownership) for package
-responsibilities.
+responsibilities and [Identities and state](identities-and-state.md) for the
+generation and revision contract.
 
 ## Workspace configuration
 
@@ -20,6 +21,42 @@ __marimo__/studio/<notebook-stem>/<view-name>/
 
 The workspace writes one `.gitignore` for `.locks/` and every view's
 `.artifacts/`.
+
+## Workspace lifecycle
+
+The server resolves one saved notebook into an explicit lifecycle state:
+
+```text
+unconfigured
+  -> configured and needs first view
+  -> ready
+```
+
+Configuration or project failures enter `invalid` from any discovery step. The
+edit application keeps a repair surface available for incomplete states. Run
+mode requires a ready workspace before it serves a named view.
+
+An unconfigured notebook opens the first-view application. The create request
+plans the starter against the saved notebook, commits the complete view
+project, writes configuration, then reloads Studio from the resulting ready
+workspace. A configuration that already names a default view but has no
+discoverable `view.toml` enters `needs-view` and uses the same create path.
+
+The Studio host treats a bootstrap response as a snapshot. If another client
+creates the first view before the request commits, the host refreshes lifecycle
+state and opens the existing ready workspace.
+
+## First save
+
+An untitled Marimo editor begins with a temporary `__new__*` file key and one
+native session. After `/api/kernel/save` succeeds, the editor bridge resolves
+the saved notebook from that exact session and asks Marimo to reload Studio
+integration for the new path.
+
+The handoff reuses the native session after the saved notebook, session owner,
+and public query still match. A file-key change preserves that session owner.
+The browser stays on the native editor until a first view is created, then
+transitions into the Studio route with the same session binding.
 
 ## View manifest
 
@@ -90,18 +127,51 @@ Providers cannot write core control paths or cell bindings. Creation validates
 normalized paths, binary payloads, selected starter targets, case collisions,
 and file-directory overlap before the transaction starts.
 
-## Source documents
+## Source catalog and documents
 
 `_views` owns source document access and mutation policy. `_workspace` owns the
 manifest and transaction primitives used by that policy.
 
 Provider inspection returns ordered documents with `edit` or `read` access.
-Source reads use the shared development catalog and one file ETag. Source writes
-hold the view mutation lock, revalidate document access, compare `If-Match`,
-preserve the file mode, and replace through a same-directory temporary file.
+The browser Source catalog contains those provider documents and keeps
+`view.toml` outside the catalog. The saved-workspace `View.inspect()` API
+prepends Studio's editable `view.toml` record to its result. When provider
+loading or inspection fails, the lifecycle support route still exposes
+`view.toml` directly. Manifest reads and writes use provider-free workspace and
+view owner records.
+
+Editing `view.toml` can change explicit provider options. It cannot change the
+provider key for an existing view. Create another view to select another
+provider.
+
+Every source read returns UTF-8 content and a document revision. CLI JSON reads
+also return catalog and view generations. Browser Source reads pair the document
+revision with owner generations from the project payload. Source writes hold
+the catalog and view mutation locks, revalidate document access and owner
+generations, compare `If-Match`, preserve the file mode, and replace through a
+same-directory temporary file. Provider documents also retain the inspected
+input state so a concurrent authorization or build-input change rejects the
+save and restores the previous bytes.
 
 The browser owns unsaved recovery content. A losing writer receives the current
 revision and keeps its buffer.
+
+## Notebook mutation admission
+
+The native editor asks each active Preview owner to pause before a notebook
+document transaction commits. The Preview sends a revision-bound refresh
+barrier to its presentation document, waits for an acknowledgement, then admits
+the editor mutation generation.
+
+One mutation settles after the editor reports that the transaction applied and
+the matching presentation build completes. An unchanged transaction can settle
+through the barrier owner. A failed save or transaction keeps Preview fenced
+and reports a runtime diagnostic until a later authoritative save and build
+reconcile it.
+
+A newer save can subsume earlier completion messages. Reloading the native
+editor starts a fresh mutation-generation namespace, clears pending owners,
+marks cached views stale, and resets active Preview admission.
 
 ## Development state
 
@@ -144,6 +214,9 @@ Protect these contracts:
 
 - one-file starter creation
 - conflicting ETag writes from two clients
+- provider-independent `view.toml` repair
+- first save preserving the native editor session
+- notebook mutation pause, save, build, failure, and reload ordering
 - failed build retaining the last publication
 - same provider and explicit options producing one input identity
 - deletion preserving the remaining default

@@ -59,18 +59,24 @@ Authorization checks:
 4. The target resolves to one notebook producer.
 5. The live kernel capability covers the current dependency closure.
 
-Kernel capabilities are HMAC-bound to notebook, session, target, producer,
-selector, and closure. Browser requests cannot widen them.
+Kernel capabilities use an [HMAC](https://www.rfc-editor.org/rfc/rfc2104), a
+keyed message digest, to bind notebook, session, target, producer, selector,
+and closure. Browser requests cannot widen them.
 
 ## Runtime mounts
 
 One host store tracks declaration ID, instance ID, target, phase, and runtime
 cell ID. Small type-specific adapters own complete cells, rendered outputs, and
-JSON values.
+browser values. Value descriptors carry JSON-compatible values directly or
+[Arrow IPC](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc)
+with a [Flechette](https://github.com/uwdata/flechette) data-source owner. Arrow
+IPC is the columnar transfer format. Flechette owns the decoded browser table.
 
 DOM mutation processing batches additions and removals. Moving an existing host
-does not release its owner. Retargeting keeps the instance owner while replacing
-its selected runtime result. Final removal releases the owner.
+preserves the instance and its resource owners. Retargeting preserves the DOM
+instance ID, releases resource ownership for the prior target, and acquires the
+selected runtime result for the new target. Final removal releases the remaining
+owners.
 
 ## Server and browser worker parity
 
