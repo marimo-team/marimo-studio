@@ -120,15 +120,16 @@ class _ProcessExitObserver:
         self._process = process
         self._exited = False
         self._queue: Any | None = None
-        if os.name != "posix" or not hasattr(select, "kqueue"):
+        select_api = cast(Any, select)
+        if os.name != "posix" or not hasattr(select_api, "kqueue"):
             return
-        queue = select.kqueue()
+        queue = select_api.kqueue()
         try:
-            event = select.kevent(
+            event = select_api.kevent(
                 process.pid,
-                filter=select.KQ_FILTER_PROC,
-                flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
-                fflags=select.KQ_NOTE_EXIT,
+                filter=select_api.KQ_FILTER_PROC,
+                flags=select_api.KQ_EV_ADD | select_api.KQ_EV_ONESHOT,
+                fflags=select_api.KQ_NOTE_EXIT,
             )
             queue.control([event], 0, 0)
         except OSError:
