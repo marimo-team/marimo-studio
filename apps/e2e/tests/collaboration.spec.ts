@@ -39,8 +39,12 @@ const holdDashboardSourceWrites = async (page: Page): Promise<() => Promise<void
   const sourceRoute = /\/_marimo-studio\/views\/dashboard\/source\/src\/index\.html(?:\?|$)/;
   let release!: () => void;
   let claimed = false;
+  let finish!: () => void;
   const committed = new Promise<void>((resolve) => {
     release = resolve;
+  });
+  const finished = new Promise<void>((resolve) => {
+    finish = resolve;
   });
   const handler: Parameters<Page["route"]>[1] = async (route) => {
     if (route.request().method() !== "PUT" || claimed) {
@@ -48,12 +52,19 @@ const holdDashboardSourceWrites = async (page: Page): Promise<() => Promise<void
       return;
     }
     claimed = true;
-    await committed;
-    await route.continue();
+    try {
+      await committed;
+      await route.continue();
+    } finally {
+      finish();
+    }
   };
   await page.route(sourceRoute, handler);
   return async () => {
+    await expect.poll(() => claimed, { timeout: 65_000 }).toBe(true);
     release();
+    await finished;
+    await page.unroute(sourceRoute, handler);
   };
 };
 
