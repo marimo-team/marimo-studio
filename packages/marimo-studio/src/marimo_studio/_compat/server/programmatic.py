@@ -17,9 +17,12 @@ from time import monotonic
 from types import ModuleType
 from typing import Any, Protocol, cast
 
+from marimo._runtime import patches as marimo_patches
+from marimo._server.session_manager import SessionManager
 from starlette.middleware import Middleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from marimo_studio._compat.patch import CompositeCloseHandle, ReversiblePatch
 from marimo_studio._compat.server.gateway import (
     config_manager_at_notebook,
     effective_base_url,
@@ -48,18 +51,80 @@ class _MainModuleOwnership:
 
     def __init__(self) -> None:
         self._lock = Lock()
-        self._owners: set[object] = set()
+        self._owners: dict[object, frozenset[str]] = {}
+        self._manager_owners: dict[int, object] = {}
+        self._patch_handles: dict[object, CompositeCloseHandle] = {}
         self._host: ModuleType | object = _MISSING_MAIN
-        self._kernel_candidates: set[ModuleType] = set()
+        self._kernel_candidates: dict[ModuleType, Thread] = {}
+        self._owned_kernel_threads: set[Thread] = set()
+        self._owner_kernel_threads: dict[object, set[Thread]] = {}
         self._pending: dict[object, tuple[Thread, ...]] = {}
         self._terminals: dict[object, Event] = {}
         self._reapers: dict[object, Thread] = {}
+        self._failed_releases: set[object] = set()
         self._deferred_error: BaseException | None = None
+        self._patch_generation: object | None = None
+        self._main_patch = ReversiblePatch(
+            "programmatic-main-module",
+            marimo_patches,
+            "patch_sys_module",
+            self._patch_replacement,
+        )
+        self._session_close_patch = ReversiblePatch(
+            "programmatic-session-close",
+            SessionManager,
+            "close_session",
+            self._session_close_replacement,
+        )
 
-    def open(self) -> object:
+    def _patch_replacement(
+        self,
+        native: Callable[[ModuleType], None],
+    ) -> Callable[[ModuleType], None]:
+        generation = object()
+        self._patch_generation = generation
+
+        def patch(module: ModuleType) -> None:
+            with self._lock:
+                if self._patch_generation is not generation:
+                    return
+                native(module)
+                path = getattr(module, "__file__", None)
+                if not isinstance(path, str):
+                    return
+                if any(path in paths for paths in self._owners.values()):
+                    self._kernel_candidates[module] = current_thread()
+
+        return patch
+
+    def _session_close_replacement(
+        self,
+        native: Callable[[SessionManager, Any], bool],
+    ) -> Callable[[SessionManager, Any], bool]:
+        def close(manager: SessionManager, session_id: Any) -> bool:
+            with self._lock:
+                token = self._manager_owners.get(id(manager))
+                if token in self._owners:
+                    session = manager.sessions.get(session_id)
+                    if session is not None:
+                        self._claim_kernel_threads_locked(
+                            token,
+                            _kernel_threads((session,)),
+                        )
+            return native(manager, session_id)
+
+        return close
+
+    def open(
+        self,
+        notebook_paths: frozenset[str],
+        session_managers: tuple[SessionManager, ...] = (),
+        kernel_threads: set[Thread] | None = None,
+    ) -> object:
         token = object()
         with self._lock:
             self._reap_settled_locked()
+            self._retry_failed_releases_locked()
             if self._deferred_error is not None:
                 raise ProcessCleanupError(
                     "Deferred programmatic kernel cleanup failed"
@@ -71,60 +136,96 @@ class _MainModuleOwnership:
             if not self._owners:
                 self._host = sys.modules.get("__main__", _MISSING_MAIN)
                 self._kernel_candidates.clear()
-            self._owners.add(token)
+                self._owned_kernel_threads.clear()
+            session_patch = self._session_close_patch.open()
+            try:
+                main_patch = self._main_patch.open()
+            except BaseException:
+                session_patch.close()
+                raise
+            self._owners[token] = notebook_paths
+            self._owner_kernel_threads[token] = (
+                set() if kernel_threads is None else kernel_threads
+            )
+            self._patch_handles[token] = CompositeCloseHandle(
+                (main_patch, session_patch)
+            )
+            for manager in session_managers:
+                self._manager_owners[id(manager)] = token
         return token
 
-    def observe_kernel_module(self, notebook_paths: frozenset[str]) -> None:
-        current = sys.modules.get("__main__")
-        if not isinstance(current, ModuleType):
-            return
-        current_file = getattr(current, "__file__", None)
-        if not isinstance(current_file, str) or current_file not in notebook_paths:
-            return
-        with self._lock:
-            if self._owners and current is not self._host:
-                self._kernel_candidates.add(current)
-
     def defer(self, token: object, threads: tuple[Thread, ...]) -> Event:
-        terminal = Event()
         with self._lock:
             if token not in self._owners:
+                terminal = Event()
                 terminal.set()
                 return terminal
-            existing = self._terminals.get(token)
-            if existing is not None:
-                return existing
-            self._pending[token] = threads
-            self._terminals[token] = terminal
-            if all(not thread.is_alive() for thread in threads):
-                self._pending.pop(token, None)
-                self._terminals.pop(token, None)
-                try:
-                    self._release_locked(token)
-                finally:
-                    terminal.set()
-                return terminal
-            reaper = Thread(
-                target=self._reap,
-                args=(token,),
-                name="marimo-studio-programmatic-kernel-reaper",
-                daemon=True,
-            )
-            self._reapers[token] = reaper
-            try:
-                reaper.start()
-            except BaseException:
-                self._reapers.pop(token, None)
-                self._reap_settled_locked()
-                raise
-        return terminal
+            self._claim_kernel_threads_locked(token, threads)
+            return self._defer_locked(token)
 
-    def close(self, token: object) -> None:
+    def close(self, token: object, threads: tuple[Thread, ...] = ()) -> None:
         with self._lock:
             self._reap_settled_locked()
             if token in self._pending:
                 return
-            self._release_locked(token)
+            self._claim_kernel_threads_locked(token, threads)
+            if any(
+                thread.is_alive()
+                for thread in self._owner_kernel_threads.get(token, ())
+            ):
+                self._defer_locked(token)
+                return
+            try:
+                self._release_locked(token)
+            except BaseException:
+                if token in self._owners:
+                    self._failed_releases.add(token)
+                raise
+
+    def _claim_kernel_threads_locked(
+        self,
+        token: object,
+        threads: tuple[Thread, ...],
+    ) -> None:
+        if token not in self._owners:
+            return
+        self._owned_kernel_threads.update(threads)
+        self._owner_kernel_threads[token].update(threads)
+
+    def _defer_locked(self, token: object) -> Event:
+        existing = self._terminals.get(token)
+        if existing is not None:
+            return existing
+        terminal = Event()
+        threads = tuple(self._owner_kernel_threads[token])
+        self._pending[token] = threads
+        self._terminals[token] = terminal
+        if all(not thread.is_alive() for thread in threads):
+            self._settle_pending_locked(token)
+            return terminal
+        reaper = Thread(
+            target=self._reap,
+            args=(token,),
+            name="marimo-studio-programmatic-kernel-reaper",
+            daemon=True,
+        )
+        self._reapers[token] = reaper
+        try:
+            reaper.start()
+        except BaseException as start_error:
+            self._reapers.pop(token, None)
+            self._pending.pop(token, None)
+            self._terminals.pop(token, None)
+            try:
+                self._release_locked(token)
+            except BaseException as cleanup_error:
+                if token in self._owners:
+                    self._failed_releases.add(token)
+                raise start_error from cleanup_error
+            finally:
+                terminal.set()
+            raise
+        return terminal
 
     def _reap(self, token: object) -> None:
         with self._lock:
@@ -160,34 +261,70 @@ class _MainModuleOwnership:
             self._settle_pending_locked(token)
 
     def _settle_pending_locked(self, token: object) -> None:
-        terminal = self._terminals.pop(token, None)
-        self._pending.pop(token, None)
-        self._reapers.pop(token, None)
+        terminal = self._terminals.get(token)
         try:
             self._release_locked(token)
         except BaseException as error:
-            self._deferred_error = error
+            self._deferred_error = error if token in self._owners else None
             raise
+        else:
+            self._pending.pop(token, None)
+            self._terminals.pop(token, None)
+            self._reapers.pop(token, None)
+            self._deferred_error = None
         finally:
             if terminal is not None:
                 terminal.set()
+
+    def _retry_failed_releases_locked(self) -> None:
+        for token in tuple(self._failed_releases):
+            if any(
+                thread.is_alive()
+                for thread in self._owner_kernel_threads.get(token, ())
+            ):
+                raise ProcessCleanupError(
+                    "A programmatic Marimo kernel is still shutting down"
+                )
+            self._release_locked(token)
+            self._failed_releases.discard(token)
 
     def _release_locked(self, token: object) -> None:
         if token not in self._owners:
             return
         if len(self._owners) > 1:
-            self._owners.remove(token)
+            self._patch_handles[token].close()
+            self._patch_handles.pop(token)
+            self._owners.pop(token)
+            self._owner_kernel_threads.pop(token, None)
+            self._remove_manager_owners_locked(token)
+            self._failed_releases.discard(token)
             return
 
         current = sys.modules.get("__main__", _MISSING_MAIN)
         host = self._host
-        allowed = current is host or current in self._kernel_candidates
-        self._owners.remove(token)
+        publisher = (
+            self._kernel_candidates.get(current)
+            if isinstance(current, ModuleType)
+            else None
+        )
+        allowed = current is host or publisher in self._owned_kernel_threads
+        self._patch_handles[token].close()
+        self._patch_generation = None
+        self._patch_handles.pop(token)
+        self._owners.pop(token)
+        self._owner_kernel_threads.pop(token, None)
+        self._remove_manager_owners_locked(token)
         self._host = _MISSING_MAIN
         self._kernel_candidates.clear()
+        self._owned_kernel_threads.clear()
+        self._owner_kernel_threads.clear()
+        self._patch_handles.clear()
+        self._manager_owners.clear()
         self._pending.clear()
         self._terminals.clear()
         self._reapers.clear()
+        self._failed_releases.clear()
+        self._deferred_error = None
         if not allowed:
             raise ProtocolError(
                 "Another runtime replaced the host main module during shutdown"
@@ -196,6 +333,15 @@ class _MainModuleOwnership:
             sys.modules.pop("__main__", None)
         else:
             sys.modules["__main__"] = cast(ModuleType, host)
+
+    def _remove_manager_owners_locked(self, token: object) -> None:
+        owned = tuple(
+            identity
+            for identity, manager_owner in self._manager_owners.items()
+            if manager_owner is token
+        )
+        for identity in owned:
+            self._manager_owners.pop(identity, None)
 
 
 _MAIN_MODULES = _MainModuleOwnership()
@@ -209,16 +355,6 @@ def _kernel_threads(sessions: tuple[Any, ...]) -> tuple[Thread, ...]:
         if isinstance(task, Thread):
             threads.setdefault(id(task), task)
     return tuple(threads.values())
-
-
-def _session_notebook_paths(sessions: tuple[Any, ...]) -> frozenset[str]:
-    paths: set[str] = set()
-    for session in sessions:
-        file_manager = getattr(session, "app_file_manager", None)
-        path = getattr(file_manager, "path", None)
-        if isinstance(path, str):
-            paths.add(path)
-    return frozenset(paths)
 
 
 def _join_kernel_threads(threads: tuple[Thread, ...]) -> None:
@@ -239,11 +375,13 @@ def _join_kernel_threads(threads: tuple[Thread, ...]) -> None:
 class _ProgrammaticApp:
     def __init__(
         self,
+        notebook: Path,
         app: ASGIApp,
         state: Any,
         configured_base_url: str,
         presentation: _PresentationApplication,
     ) -> None:
+        self.notebook = notebook
         self.app = app
         self.state = state
         self.configured_base_url = configured_base_url
@@ -267,8 +405,6 @@ class _ProgrammaticApp:
             sessions = tuple(manager.sessions.values())
             threads = set(_kernel_threads(sessions))
             owned_kernel_threads.update(threads)
-            if threads:
-                _MAIN_MODULES.observe_kernel_module(_session_notebook_paths(sessions))
             first_failure: BaseException | None = None
             retry_failure: BaseException | None = None
             try:
@@ -372,6 +508,7 @@ class _ProgrammaticMiddleware:
         state._marimo_studio_configured_notebook = self.notebook
         presentation = _presentation_middleware(app, self.adapter_factory)
         return _ProgrammaticApp(
+            self.notebook,
             app,
             state,
             str(getattr(state, "base_url", "")),
@@ -433,8 +570,12 @@ class _ProgrammaticLifespans:
 
     @asynccontextmanager
     async def _manager(self, app: Any) -> AsyncIterator[Any]:
-        main_owner = _MAIN_MODULES.open()
         owned_kernel_threads: set[Thread] = set()
+        main_owner = _MAIN_MODULES.open(
+            frozenset(str(mounted.notebook) for mounted in self._mounted),
+            tuple(mounted.state.session_manager for mounted in self._mounted),
+            owned_kernel_threads,
+        )
         primary_failure: BaseException | None = None
         try:
             try:
@@ -449,15 +590,35 @@ class _ProgrammaticLifespans:
                 primary_failure = error
         finally:
             threads = tuple(owned_kernel_threads)
+            cancellation: asyncio.CancelledError | None = None
+            try:
+                if threads:
+                    _result, cancellation = await settle_ownership(
+                        asyncio.to_thread(_join_kernel_threads, threads)
+                    )
+            except BaseException as cleanup_failure:
+                try:
+                    if any(thread.is_alive() for thread in threads):
+                        _MAIN_MODULES.defer(main_owner, threads)
+                    else:
+                        _MAIN_MODULES.close(main_owner, threads)
+                except BaseException as ownership_failure:
+                    if primary_failure is not None:
+                        raise primary_failure from ownership_failure
+                    raise cleanup_failure from ownership_failure
+                if primary_failure is not None:
+                    raise primary_failure from cleanup_failure
+                raise
             try:
                 if any(thread.is_alive() for thread in threads):
                     _MAIN_MODULES.defer(main_owner, threads)
                 else:
-                    _MAIN_MODULES.close(main_owner)
+                    _MAIN_MODULES.close(main_owner, threads)
             except BaseException as cleanup_failure:
                 if primary_failure is not None:
                     raise primary_failure from cleanup_failure
                 raise
+            propagate_cancellation(cancellation)
         if primary_failure is not None:
             raise primary_failure
 

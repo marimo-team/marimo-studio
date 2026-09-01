@@ -109,6 +109,23 @@ _SYMBOLS = {
             ),
             "993c2270c70d67b7527e82e1064793e13e36caa894617ebcc46df7ad1778dd45",
         ),
+        SymbolContract(
+            "marimo._server.session_manager",
+            "SessionManager.close_session",
+            _parameters(
+                ("self", "POSITIONAL_OR_KEYWORD", False),
+                ("session_id", "POSITIONAL_OR_KEYWORD", False),
+            ),
+            "5d674124e696138fa8e7e1bcad672fdb8d1b7a36c79deef704ccee43d6019d6a",
+        ),
+    ),
+    "programmatic-main-module": (
+        SymbolContract(
+            "marimo._runtime.patches",
+            "patch_sys_module",
+            _parameters(("module", "POSITIONAL_OR_KEYWORD", False)),
+            "494ba13930024d0711ae04ff917d72107b695969c40e1778b177df6787d33be4",
+        ),
     ),
     "session-query-metadata": (
         _source_contract(
