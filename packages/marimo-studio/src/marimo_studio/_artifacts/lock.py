@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import os
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
@@ -19,18 +20,18 @@ def acquire_file_lock(descriptor: int, *, blocking: bool) -> bool:
     if os.name == "nt":
         import msvcrt
 
-        os.lseek(descriptor, 0, os.SEEK_SET)
-        try:
-            msvcrt.locking(
-                descriptor,
-                msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK,
-                1,
-            )
-        except OSError:
-            if not blocking:
-                return False
-            raise
-        return True
+        mode = msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK
+        while True:
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            try:
+                msvcrt.locking(descriptor, mode, 1)
+            except OSError as error:
+                if not blocking:
+                    return False
+                if error.errno != errno.EDEADLK:
+                    raise
+            else:
+                return True
 
     import fcntl
 
