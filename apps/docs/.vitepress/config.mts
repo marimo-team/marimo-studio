@@ -17,7 +17,7 @@ import {
 const repository = "https://github.com/marimo-team/marimo-studio";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-studio/");
 const socialDescription =
-  "Keep one reproducible marimo notebook as the analytical model and build a purpose-built web view for each job.";
+  "Build multiple custom web views from one marimo notebook with modern web tools and coding agents.";
 const basePath = normalizeBasePath(process.env.BASE_PATH);
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
 const publicPath = (path: string): string => withBasePath(basePath, path);
