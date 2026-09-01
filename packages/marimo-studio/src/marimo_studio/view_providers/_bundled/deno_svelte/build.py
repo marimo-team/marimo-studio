@@ -190,6 +190,13 @@ def _permission_paths(*paths: Path) -> str:
     return ",".join(str(path.resolve()) for path in paths)
 
 
+def _build_read_paths(work: Path, output: Path) -> tuple[Path, ...]:
+    ldd = Path("/usr/bin/ldd")
+    if ldd.is_file():
+        return (work, output, ldd)
+    return (work, output)
+
+
 def _native_bindings(work: Path, profile: str) -> tuple[Path, ...]:
     dependency_root = (work / "node_modules" / ".deno").resolve()
     selected: list[Path] = []
@@ -332,10 +339,10 @@ def _run_build(
         "--cached-only",
         "--no-remote",
         "--deny-import",
-        f"--allow-read={_permission_paths(work, output)}",
+        f"--allow-read={_permission_paths(*_build_read_paths(work, output))}",
         f"--allow-write={output}",
         "--allow-env",
-        "--allow-sys=uid",
+        "--allow-sys=uid,osRelease",
         f"--allow-ffi={_permission_paths(*bindings)}",
         "--no-prompt",
         f"--config={paths.config.as_posix()}",
