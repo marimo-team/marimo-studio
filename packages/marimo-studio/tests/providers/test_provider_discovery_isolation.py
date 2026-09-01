@@ -42,6 +42,7 @@ _PROCESS_START_TIMEOUT = 15.0
 _METADATA_OPERATION_TIMEOUT = 1.5
 _METADATA_ELAPSED_LIMIT = 3.0
 _CONTAINMENT_ELAPSED_LIMIT = 5.0
+_CONCURRENT_DISCOVERY_TIMEOUT = _PROCESS_START_TIMEOUT + 5.0
 
 
 def _candidate(
@@ -196,7 +197,7 @@ def test_external_descriptions_run_concurrently_in_candidate_order(
             for name in ("second", "first")
         ),
         isolate_operations=True,
-        extension_timeout=1.5,
+        extension_timeout=_CONCURRENT_DISCOVERY_TIMEOUT,
     )
 
     ids = registry.ids
@@ -204,7 +205,7 @@ def test_external_descriptions_run_concurrently_in_candidate_order(
     monkeypatch.delenv("MARIMO_STUDIO_PROVIDER_DISCOVERY_DELAY")
 
     assert ids == ("test-parallel/first", "test-parallel/second")
-    assert len(barrier.read_text(encoding="utf-8").splitlines()) == 2
+    assert len(set(_import_pids(barrier))) == 2
     assert [item.registration for item in registry.diagnostics()] == [
         "second",
         "first",

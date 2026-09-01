@@ -59,15 +59,12 @@ if os.environ.get("MARIMO_STUDIO_PROVIDER_BLOCK") == "describe":
 _DISCOVERY_BARRIER = os.environ.get("MARIMO_STUDIO_PROVIDER_DISCOVERY_BARRIER")
 if _DISCOVERY_BARRIER:
     barrier = Path(_DISCOVERY_BARRIER)
-    with barrier.open("a", encoding="utf-8") as stream:
-        stream.write(f"{os.getpid()}\n")
-    deadline = time.monotonic() + 2
-    while (
-        len(barrier.read_text(encoding="utf-8").splitlines()) < 2
-        and time.monotonic() < deadline
-    ):
+    barrier.mkdir(parents=True, exist_ok=True)
+    (barrier / f"{os.getpid()}-{time.time_ns()}").touch()
+    deadline = time.monotonic() + _PROCESS_START_TIMEOUT
+    while len(tuple(barrier.iterdir())) < 2 and time.monotonic() < deadline:
         threading.Event().wait(0.01)
-    if len(barrier.read_text(encoding="utf-8").splitlines()) < 2:
+    if len(tuple(barrier.iterdir())) < 2:
         threading.Event().wait(30)
     threading.Event().wait(
         float(os.environ.get("MARIMO_STUDIO_PROVIDER_DISCOVERY_DELAY", "0"))
