@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -193,7 +193,7 @@ def test_svelte_locates_a_missing_projection_target_in_authored_source(
 
     assert diagnostic.code == "projection-target-missing"
     assert diagnostic.source is not None
-    assert diagnostic.source.path == Path("src/App.svelte")
+    assert diagnostic.source.path == PurePosixPath("src/App.svelte")
 
 
 @pytest.mark.skipif(
@@ -268,7 +268,7 @@ def test_svelte_each_extracts_bounded_and_wildcard_mounts(
         if item.code == "projection-target-unbounded"
     )
     assert diagnostic.source is not None
-    assert diagnostic.source.path == Path("src/App.svelte")
+    assert diagnostic.source.path == PurePosixPath("src/App.svelte")
 
 
 @pytest.mark.skipif(

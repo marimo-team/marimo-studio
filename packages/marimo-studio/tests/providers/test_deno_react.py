@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -211,9 +211,9 @@ def test_react_projection_diagnostics_locate_authored_sources(
         )
         for item in diagnostics
     ] == [
-        ("projection-target-missing", Path("src/App.tsx"), 3),
-        ("projection-target-missing", Path("src/App.tsx"), 4),
-        ("projection-target-missing", Path("src/App.tsx"), 5),
+        ("projection-target-missing", PurePosixPath("src/App.tsx"), 3),
+        ("projection-target-missing", PurePosixPath("src/App.tsx"), 4),
+        ("projection-target-missing", PurePosixPath("src/App.tsx"), 5),
     ]
 
 
@@ -367,7 +367,7 @@ export const App = () => (
         if item.code == "projection-target-unbounded"
     )
     assert diagnostic.source is not None
-    assert diagnostic.source.path == Path("src/App.tsx")
+    assert diagnostic.source.path == PurePosixPath("src/App.tsx")
 
 
 @pytest.mark.parametrize(
