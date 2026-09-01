@@ -1,1 +1,1 @@
-apps/browser/license-texts/*.txt text eol=lf
+apps/browser/license-texts/*.txt text eol=lf whitespace=-blank-at-eof
