@@ -109,7 +109,7 @@ const markLoaded = (): void => {
     </header>
 
     <div class="studio-example__switcher">
-      <span class="studio-example__current" aria-label="Technologies used">
+      <span class="studio-example__current" role="group" aria-label="Technologies used">
         <template v-for="(technology, index) in selected.technologies" :key="technology.name">
           <span v-if="index > 0" class="studio-example__technology-separator" aria-hidden="true">
             ·
@@ -402,6 +402,10 @@ figcaption {
 
 .studio-example__source-prefix {
   gap: 0.3rem;
+}
+
+.studio-example__source-label {
+  color: var(--vp-c-text-2);
 }
 
 .studio-example__view-sources {
