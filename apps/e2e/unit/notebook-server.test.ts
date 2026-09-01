@@ -28,6 +28,7 @@ import {
 } from "../tests/notebook-server.ts";
 
 const boundAddressSchema = z.object({ port: z.number().int().positive() });
+const FIXTURE_PROCESS_STOP_TIMEOUT = 1_000;
 const FIXTURE_SERVER_START_TIMEOUT = 5_000;
 const PROBE_TIMEOUT = 500;
 const NATIVE_SERVER_START_TIMEOUT = 15_000;
@@ -256,7 +257,7 @@ test("reports bootstrap failure after containing the registered notebook process
           processGroupId: registration.processGroupId,
           serverUrl: `http://127.0.0.1:${port}`,
         },
-        { shutdown: "studio", timeout: 100 },
+        { shutdown: "studio", timeout: FIXTURE_PROCESS_STOP_TIMEOUT },
       ),
     ).rejects.toThrow("Marimo bootstrap returned 503");
 
@@ -537,7 +538,7 @@ test("forces shutdown when the graceful endpoint leaves the server alive", async
         port,
         serverUrl: "http://127.0.0.1:" + port,
       },
-      { shutdown: "studio", timeout: 100 },
+      { shutdown: "studio", timeout: FIXTURE_PROCESS_STOP_TIMEOUT },
     );
     expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
     expect(await notebookServerPortIsOpen(port)).toBe(false);
@@ -579,7 +580,7 @@ test("reports a session drain failure after forcing the server process closed", 
           port,
           serverUrl: "http://127.0.0.1:" + port,
         },
-        { shutdown: "studio", timeout: 100 },
+        { shutdown: "studio", timeout: FIXTURE_PROCESS_STOP_TIMEOUT },
       ),
     ).rejects.toThrow("Marimo session inventory returned 503");
     expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
@@ -613,7 +614,7 @@ test("forces a signal-resistant static server to exit", async () => {
         port,
         serverUrl: "http://127.0.0.1:" + port,
       },
-      { shutdown: "process", timeout: 100 },
+      { shutdown: "process", timeout: FIXTURE_PROCESS_STOP_TIMEOUT },
     );
     expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
     expect(await notebookServerPortIsOpen(port)).toBe(false);
