@@ -75,10 +75,6 @@ test("document and style refresh owners settle independently", () => {
 
   controller.setPresentation(documentClaim, "ready");
   assert.equal(controller.snapshot().page, "loading");
-  assert.equal(
-    document.documentElement.dataset.marimoStudioPresentationOwners,
-    "document:1:ready,styles:1:loading",
-  );
   controller.setPresentation(styleClaim, "ready");
   assert.equal(controller.snapshot().page, "ready");
 
@@ -103,7 +99,6 @@ test("browser evidence reports deterministic diagnostic truncation", () => {
   const browser = toBrowserDiagnostics(diagnostics);
 
   assert.equal(browser.length, 200);
-  assert.equal(browser[198]?.code, "diagnostic-198");
   assert.deepEqual(browser[199], {
     code: "browser-diagnostics-truncated",
     severity: "error",

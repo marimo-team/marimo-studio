@@ -20,7 +20,7 @@ test("projection readiness covers cell, output, and value hosts", () => {
   document.querySelector<HTMLElement>("marimo-output")!.dataset.state = "loading";
   document.querySelector<HTMLElement>("[mo-value]")!.dataset.state = "error";
 
-  assert.deepEqual(runtime.states(), ["ready", "loading", "error"]);
+  assert.deepEqual(new Set(runtime.states()), new Set(["ready", "loading", "error"]));
   runtime.disconnect();
 });
 
@@ -43,23 +43,25 @@ test("committing a shell swap moves retained hosts into the incoming tree", () =
   const liveCell = document.querySelector<HTMLElement>("marimo-cell")!;
   const liveOutput = document.querySelector<HTMLElement>("marimo-output")!;
   const liveValue = document.querySelector<HTMLElement>("[mo-value]")!;
+  const liveCellOutput = liveCell.firstElementChild;
+  const liveOutputRenderer = liveOutput.firstElementChild;
   const next = new DOMParser().parseFromString(
     `<main id="app-shell">
       <marimo-cell
         id="marimo-studio-cell-summary"
         name="summary"
-        class="updated-cell"
+        aria-label="Updated summary"
         data-hx-preserve
       ></marimo-cell>
       <marimo-output
         id="marimo-studio-output-report"
         value="report"
-        class="updated"
+        aria-label="Updated report"
         data-hx-preserve
       ></marimo-output>
       <strong
         mo-value="metric"
-        class="updated-value"
+        aria-label="Updated metric"
         data-marimo-studio-site="site-value"
       ></strong>
     </main>`,
@@ -80,11 +82,11 @@ test("committing a shell swap moves retained hosts into the incoming tree", () =
   assert.equal(document.getElementById("marimo-studio-cell-summary"), liveCell);
   assert.equal(document.getElementById("marimo-studio-output-report"), liveOutput);
   assert.equal(document.getElementById("marimo-studio-value-site-value"), liveValue);
-  assert.equal(liveCell.className, "updated-cell");
-  assert.equal(liveOutput.className, "updated");
-  assert.equal(liveValue.className, "updated-value");
-  assert.equal(liveCell.textContent, "Rendered cell");
-  assert.equal(liveOutput.textContent, "Rendered report");
+  assert.equal(liveCell.getAttribute("aria-label"), "Updated summary");
+  assert.equal(liveOutput.getAttribute("aria-label"), "Updated report");
+  assert.equal(liveValue.getAttribute("aria-label"), "Updated metric");
+  assert.equal(liveCell.firstElementChild, liveCellOutput);
+  assert.equal(liveOutput.firstElementChild, liveOutputRenderer);
   assert.equal(liveValue.textContent, "42");
 });
 

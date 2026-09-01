@@ -58,4 +58,6 @@ test("a direct wrapper shows its waiting diagnostic", () => {
   showDiagnostic(diagnostic, "waiting");
   const host = document.querySelector<HTMLElement>("[data-marimo-studio-diagnostic]")!;
   expect(host.hidden).toBe(false);
+  expect(host.getAttribute("role")).toBe("status");
+  expect(host.textContent).toBe(diagnostic.message);
 });

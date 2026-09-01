@@ -53,6 +53,8 @@ test("a direct wrapper shows its runtime waiting status", () => {
 
   const host = document.querySelector<HTMLElement>("[data-marimo-studio-runtime-diagnostic]")!;
   expect(host.hidden).toBe(false);
+  expect(host.getAttribute("role")).toBe("status");
+  expect(host.textContent).toBe("The runtime is starting.");
 });
 
 test("runtime errors publish the rendered session identity", () => {

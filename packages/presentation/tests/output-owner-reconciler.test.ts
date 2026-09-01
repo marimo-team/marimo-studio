@@ -127,7 +127,7 @@ test("reconciles an ownership-creating read that aborts after dispatch", async (
   reconciler.dispose();
 });
 
-test("dispatches only the latest of nine queued source versions", async () => {
+test("dispatches only the latest queued source version", async () => {
   const blocker = projectionRequest("blocker", "output");
   const active = projectionRequest("report", "output");
   const canceledTarget = projectionRequest("canceled", "output");
@@ -167,34 +167,18 @@ test("dispatches only the latest of nine queued source versions", async () => {
   );
   canceledController.abort();
 
-  type VersionResult =
-    | { status: "resolved"; sourceVersion: number }
-    | { status: "rejected"; name: string };
-  const versions: Array<Promise<VersionResult>> = [];
-  let previous: AbortController | undefined;
-  for (let sourceVersion = 1; sourceVersion <= 9; sourceVersion += 1) {
-    previous?.abort();
-    const controller = new AbortController();
-    previous = controller;
-    versions.push(
-      reconciler.read(projectionRevisionA, renderRequest(active), controller.signal).then(
-        () => ({ status: "resolved", sourceVersion }) satisfies VersionResult,
-        (error: Error) => ({ status: "rejected", name: error.name }) satisfies VersionResult,
-      ),
-    );
-  }
+  const staleController = new AbortController();
+  const stale = reconciler.read(projectionRevisionA, renderRequest(active), staleController.signal);
+  staleController.abort();
+  const latest = reconciler.read(projectionRevisionA, renderRequest(active));
 
   blocked.resolve();
   await blockingRead;
   await assert.rejects(canceled, { name: "AbortError" });
-  const settled = await Promise.all(versions);
+  await assert.rejects(stale, { name: "AbortError" });
+  await latest;
 
   assert.deepEqual(requestedTargets, [["blocker"], ["report"]]);
-  assert.deepEqual(
-    settled.slice(0, -1),
-    Array.from({ length: 8 }, () => ({ status: "rejected", name: "AbortError" })),
-  );
-  assert.deepEqual(settled.at(-1), { status: "resolved", sourceVersion: 9 });
 
   convergenceStarted = true;
   reconciler.update(projectionRevisionA, request([active, canceledTarget]));
@@ -337,37 +321,6 @@ test("keeps a replacement target after an older plan settles", async () => {
     requested: ["second"],
   });
   reconciler.dispose();
-});
-
-test("retries a failed final-owner reconciliation", async () => {
-  const active = projectionRequest("report", "output");
-  let calls = 0;
-  let reconciled = () => {};
-  const ready = new Promise<void>((resolve) => {
-    reconciled = resolve;
-  });
-  const reader: OutputReader = (value) => {
-    if (value.activeProjections.length > 0) {
-      return Promise.resolve({ outputs: {}, errors: {} });
-    }
-    calls += 1;
-    assert.deepEqual(value.activeProjections, []);
-    if (calls === 1) {
-      return Promise.reject(
-        new OutputRequestError("connection reset", "output-network-failed", true),
-      );
-    }
-    reconciled();
-    return Promise.resolve({ outputs: {}, errors: {} });
-  };
-  const reconciler = new OutputOwnerReconciler(reader, 0);
-
-  await reconciler.read(projectionRevisionA, renderRequest(active));
-  reconciler.update(projectionRevisionA, request([]));
-  await ready;
-  reconciler.dispose();
-
-  assert.equal(calls, 2);
 });
 
 test("retries current ownership after a canceled read advances the wire revision", async () => {

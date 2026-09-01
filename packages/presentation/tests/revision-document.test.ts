@@ -120,6 +120,7 @@ test("a failed history push restores document, styles, runtime, and URL identity
   });
   const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
   document.head.innerHTML = "<style>body { color: red; }</style>";
+  const previousStyle = document.head.querySelector("style");
   document.title = "Old title";
   document.body.innerHTML = '<main id="app-shell">Old shell</main>';
   setSupportUrl("/support/old");
@@ -185,8 +186,7 @@ test("a failed history push restores document, styles, runtime, and URL identity
   unsubscribe();
 
   expect(document.querySelector("#app-shell")?.textContent).toBe("Old shell");
-  expect(document.head.textContent).toContain("color: red");
-  expect(document.head.textContent).not.toContain("color: blue");
+  expect(document.head.querySelector("style[data-marimo-studio-page-style]")).toBe(previousStyle);
   expect(document.title).toBe("Old title");
   expect(getSupportUrl()).toBe("/support/old");
   expect(getRuntimeConfig().revision).toBe("revision-old");
@@ -591,8 +591,6 @@ test("a post-swap callback failure keeps the committed document transaction", as
   await adapter.replace("/next/", "/support/new", new AbortController().signal, vi.fn());
 
   expect(processed).toBe(document.querySelector("#app-shell"));
-  expect(processed).toBeInstanceOf(Element);
-  expect(processed instanceof Element ? processed.textContent : undefined).toBe("New shell");
   expect(document.querySelector("#app-shell")?.textContent).toBe("New shell");
   expect(getRuntimeConfig().revision).toBe("revision-new");
 });

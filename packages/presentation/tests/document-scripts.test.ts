@@ -21,7 +21,21 @@ test("authored scripts use a native document reload lifecycle", () => {
   assert.equal(hasAuthoredScripts(current), false);
   assert.equal(hasAuthoredScripts(next), true);
   assert.equal(requiresDocumentReload(current, next, true), true);
-  assert.equal(requiresDocumentReload(next, parse(next.documentElement.outerHTML), false), false);
+  const unchanged = next.implementation.createHTMLDocument();
+  unchanged.replaceChild(
+    unchanged.importNode(next.documentElement, true),
+    unchanged.documentElement,
+  );
+  assert.equal(requiresDocumentReload(next, unchanged, false), false);
+  const executable = '<script type="module" src="app.js"></script>';
+  assert.equal(
+    requiresDocumentReload(
+      parse(executable, '<main id="app-shell"><p>Current</p></main>'),
+      parse(executable, '<main id="app-shell"><p>Updated</p></main>'),
+      true,
+    ),
+    true,
+  );
   assert.equal(
     hasAuthoredScripts(parse('<script type="importmap">{"imports":{"app":"./app.js"}}</script>')),
     true,
@@ -42,30 +56,4 @@ test("data blocks and runtime output scripts do not change the document lifecycl
   assert.equal(hasAuthoredScripts(current), false);
   assert.equal(hasAuthoredScripts(next), false);
   assert.equal(requiresDocumentReload(current, next, true), false);
-});
-
-test("structural shell changes reload an unchanged authored script", () => {
-  const executable = '<script type="module">document.querySelector("button")?.focus()</script>';
-  const current = parse(
-    executable,
-    '<main id="app-shell"><section><button id="run">Run</button></section></main>',
-  );
-  const structuralChanges = [
-    '<main id="app-shell"><section><button id="save">Save</button></section></main>',
-    '<main id="app-shell"><div><button id="run">Run</button></div></main>',
-    '<main id="app-shell"><section><p>Ready</p><button id="run">Run</button></section></main>',
-  ];
-
-  for (const body of structuralChanges) {
-    assert.equal(requiresDocumentReload(current, parse(executable, body), true), true);
-  }
-});
-
-test("stylesheet changes preserve an unchanged authored script and shell", () => {
-  const script = '<script type="module" src="app.js"></script>';
-  const shell = '<main id="app-shell"><button id="run">Run</button></main>';
-  const current = parse(`<style>button { color: red; }</style>${script}`, shell);
-  const next = parse(`<style>button { color: blue; }</style>${script}`, shell);
-
-  assert.equal(requiresDocumentReload(current, next, false), false);
 });

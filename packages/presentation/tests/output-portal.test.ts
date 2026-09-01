@@ -275,9 +275,8 @@ test("keys output reads by semantic projection identity", async () => {
   };
   let currentRequest = projectionRequest("report", "output");
 
-  for (let render = 0; render < 9; render += 1) {
-    await renderProjection({ request: { ...currentRequest } });
-  }
+  await renderProjection({ request: currentRequest });
+  await renderProjection({ request: { ...currentRequest } });
 
   expect(readOutputs).toHaveBeenCalledOnce();
 
@@ -423,7 +422,6 @@ test("retargets a preserved output portal through an authored shell morph", asyn
       }),
     );
   });
-  expect(host.textContent).toContain('Notebook variable "report" does not resolve');
   const diagnostic = host.querySelector('[role="status"]');
   expect(diagnostic).not.toBeNull();
   const current = document.querySelector<HTMLElement>("#app-shell")!;

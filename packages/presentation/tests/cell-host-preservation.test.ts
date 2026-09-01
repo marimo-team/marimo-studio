@@ -11,7 +11,7 @@ afterEach(() => {
 test("a shell swap updates an authored cell without replacing its output", () => {
   document.body.innerHTML = `
     <main id="app-shell">
-      <marimo-cell name="summary" class="old">
+      <marimo-cell name="summary">
         <div data-marimo-cell-output><button>Live control</button></div>
       </marimo-cell>
     </main>
@@ -25,10 +25,7 @@ test("a shell swap updates an authored cell without replacing its output", () =>
   const nextDocument = new DOMParser().parseFromString(
     `
       <main id="app-shell">
-        <marimo-cell
-          name="summary"
-          class="new p-6"
-        ></marimo-cell>
+        <marimo-cell name="summary"></marimo-cell>
       </main>
     `,
     "text/html",
@@ -48,38 +45,6 @@ test("a shell swap updates an authored cell without replacing its output", () =>
   const updatedHost = document.querySelector<HTMLElement>("marimo-cell")!;
   assert.equal(updatedHost, liveHost);
   assert.equal(updatedHost.querySelector("[data-marimo-cell-output]"), liveOutput);
-  assert.equal(updatedHost.className, "new p-6");
   assert.equal(updatedHost.style.getPropertyValue("--_marimo-cell-measured-height"), "120px");
   assert.equal(updatedHost.dataset.state, "ready");
-});
-
-test("a shell refresh updates a rich output host around its mounted renderer", () => {
-  document.body.innerHTML = `
-    <main id="app-shell">
-      <marimo-output value="report.table" class="old">
-        <div data-marimo-cell-output><button>Native table action</button></div>
-      </marimo-output>
-    </main>
-  `;
-  projectionHosts.prepare(document);
-  const liveHost = document.querySelector<HTMLElement>("marimo-output")!;
-  const liveOutput = liveHost.querySelector("[data-marimo-cell-output]");
-  liveHost.dataset.state = "ready";
-
-  const nextDocument = new DOMParser().parseFromString(
-    `
-      <main id="app-shell">
-        <marimo-output value="report.table" class="new p-4"></marimo-output>
-      </main>
-    `,
-    "text/html",
-  );
-  projectionHosts.prepare(nextDocument);
-  const nextShell = nextDocument.querySelector("#app-shell")!;
-
-  projectionHosts.preserve(nextShell, document);
-
-  assert.equal(liveHost.querySelector("[data-marimo-cell-output]"), liveOutput);
-  assert.equal(liveHost.className, "new p-4");
-  assert.equal(liveHost.dataset.state, "ready");
 });

@@ -37,6 +37,11 @@ const mountedConfig = (kind: Extract<ProjectionKind, "cell" | "output">): Runtim
           producer: "cell:v1:second",
           dependencyClosure: ["cell:v1:second"],
         },
+        third: {
+          status: "ready",
+          producer: "cell:v1:third",
+          dependencyClosure: ["cell:v1:third"],
+        },
       },
       variables: {
         first: {
@@ -48,6 +53,11 @@ const mountedConfig = (kind: Extract<ProjectionKind, "cell" | "output">): Runtim
           status: "ready",
           producer: "cell:v1:second",
           dependencyClosure: ["cell:v1:second"],
+        },
+        third: {
+          status: "ready",
+          producer: "cell:v1:third",
+          dependencyClosure: ["cell:v1:third"],
         },
       },
     },
@@ -63,6 +73,7 @@ const mountedConfig = (kind: Extract<ProjectionKind, "cell" | "output">): Runtim
       cellRefs: {
         "cell:v1:first": "first-cell",
         "cell:v1:second": "second-cell",
+        "cell:v1:third": "third-cell",
       },
     },
   });
@@ -75,6 +86,7 @@ const data: WasmRuntimeData = {
     { id: "bootstrap-cell", code: "register_bridge()" },
     { id: "first-cell", code: "first = 1" },
     { id: "second-cell", code: "second = 2" },
+    { id: "third-cell", code: "third = 3" },
   ],
   bootstrapCellId: "bootstrap-cell",
 };
@@ -87,10 +99,7 @@ const appendHost = (kind: Extract<ProjectionKind, "cell" | "output">, target: st
   return host;
 };
 
-const exerciseQueuedProjection = async (
-  kind: Extract<ProjectionKind, "cell" | "output">,
-  reconnect: boolean,
-) => {
+const exerciseQueuedProjections = async (kind: Extract<ProjectionKind, "cell" | "output">) => {
   const config = mountedConfig(kind);
   let finishFirst = () => {};
   const firstExecution = new Promise<void>((resolve) => {
@@ -106,11 +115,10 @@ const exerciseQueuedProjection = async (
     appendHost(kind, "first");
     await vi.waitFor(() => expect(executeCells).toHaveBeenCalledOnce());
 
-    const second = appendHost(kind, "second");
-    second.remove();
-    if (reconnect) {
-      document.body.append(second);
-    }
+    appendHost(kind, "second").remove();
+    const third = appendHost(kind, "third");
+    third.remove();
+    document.body.append(third);
     await Promise.resolve();
 
     finishFirst();
@@ -122,17 +130,11 @@ const exerciseQueuedProjection = async (
 };
 
 for (const kind of ["cell", "output"] as const) {
-  test(`drops a queued ${kind} closure after its final disconnect`, async () => {
-    const executeCells = await exerciseQueuedProjection(kind, false);
-
-    expect(executeCells).toHaveBeenCalledOnce();
-    expect(executeCells).toHaveBeenCalledWith([{ id: "first-cell", code: "first = 1" }]);
-  });
-
-  test(`keeps a queued ${kind} closure when the host reconnects`, async () => {
-    const executeCells = await exerciseQueuedProjection(kind, true);
+  test(`drops disconnected and keeps reconnected ${kind} closures`, async () => {
+    const executeCells = await exerciseQueuedProjections(kind);
 
     expect(executeCells).toHaveBeenCalledTimes(2);
-    expect(executeCells).toHaveBeenLastCalledWith([{ id: "second-cell", code: "second = 2" }]);
+    expect(executeCells).toHaveBeenNthCalledWith(1, [{ id: "first-cell", code: "first = 1" }]);
+    expect(executeCells).toHaveBeenLastCalledWith([{ id: "third-cell", code: "third = 3" }]);
   });
 }
