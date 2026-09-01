@@ -12,6 +12,7 @@ import marimo_studio._delivery.runtime_config as runtime_config_module
 from marimo_studio import create_asgi_app
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.presentation.service import NotebookPresentation
+from marimo_studio._server.studio.waiting import waiting_document
 from marimo_studio._workspace.metadata import update_notebook_config
 from marimo_studio.errors import RuntimeConfigTooLargeError
 from marimo_studio.errors._internal import RuntimeStartupError
@@ -324,6 +325,18 @@ def test_studio_preview_keeps_its_waiting_document_until_startup_completes(
     assert document_head.content == b""
     assert document_head.headers["content-length"] == "0"
     assert document_head.headers["Marimo-Studio-Revision"]
+
+
+def test_studio_waiting_document_owns_its_startup_poll() -> None:
+    document = waiting_document(
+        refresh_url="/_marimo-studio/presentation/d.token/dashboard/",
+        lifecycle_id=7,
+        runtime="server",
+        view="dashboard",
+    )
+
+    assert '"type":"marimo-studio:receiver-waiting"' in document
+    assert '"type":"marimo-studio:receiver-unready"' in document
 
 
 def test_studio_runtime_config_reports_terminal_startup_failure(

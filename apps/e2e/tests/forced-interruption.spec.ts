@@ -78,19 +78,13 @@ test("forced runner shutdown drains every open native notebook session", async (
   try {
     await waitForNotebookServer(server, `${server.serverUrl}/?file=notebook.py`);
     const pages = await Promise.all(contexts.map((context) => context.newPage()));
-    await Promise.all(
-      pages.map((page) =>
-        page.goto(`${server.serverUrl}/?file=notebook.py`, {
-          timeout: 60_000,
-          waitUntil: "domcontentloaded",
-        }),
-      ),
-    );
-    await Promise.all(
-      pages.map((page) =>
-        waitForViewPreview(page, "dashboard", "server", MULTI_SESSION_PREVIEW_TIMEOUT),
-      ),
-    );
+    for (const page of pages) {
+      await page.goto(`${server.serverUrl}/?file=notebook.py`, {
+        timeout: 60_000,
+        waitUntil: "domcontentloaded",
+      });
+      await waitForViewPreview(page, "dashboard", "server", MULTI_SESSION_PREVIEW_TIMEOUT);
+    }
     const bootstrap = bootstrapSchema.parse(
       JSON.parse((await pages[0].locator("#marimo-studio-bootstrap").textContent()) ?? "null"),
     );

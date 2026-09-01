@@ -191,6 +191,54 @@ it("accepts sessionless WASM readiness from the rendered view", () => {
   wasm.dispose();
 });
 
+it.each(["load-first", "message-first"] as const)(
+  "lets a self-polling waiting document own slow startup when %s",
+  async (order) => {
+    vi.useFakeTimers();
+    const editor = frame("complete");
+    const preview = frame("complete");
+    const server = controller(
+      "server",
+      editor,
+      preview,
+      (view, runtime) => `/${view}?runtime=${runtime}`,
+    );
+    const source = preview.src;
+
+    const loaded = () => preview.dispatchEvent(new Event("load"));
+    const waiting = () =>
+      dispatchPreviewMessage(null, {
+        type: "marimo-studio:receiver-waiting",
+        runtime: "server",
+        lifecycleId: 1,
+        view: "dashboard",
+      });
+    if (order === "load-first") {
+      loaded();
+      waiting();
+    } else {
+      waiting();
+      loaded();
+    }
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(preview.src).toBe(source);
+    expect(preview.dataset.previewLifecycleId).toBe("1");
+
+    dispatchPreviewMessage(null, {
+      type: "marimo-studio:receiver-unready",
+      runtime: "server",
+      lifecycleId: 1,
+      view: "dashboard",
+    });
+    preview.dispatchEvent(new Event("load"));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(Number(preview.dataset.previewLifecycleId)).toBeGreaterThan(1);
+    expect(preview.src).not.toBe(source);
+    server.dispose();
+  },
+);
+
 it("starts WASM control synchronization from an active rendered-view session", async () => {
   const fetch = vi.fn<typeof globalThis.fetch>();
   fetch.mockResolvedValueOnce(Response.json(runtimeConfig("server")));

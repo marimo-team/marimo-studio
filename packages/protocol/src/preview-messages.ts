@@ -111,6 +111,12 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     view: viewNameSchema.optional(),
   }),
   z.strictObject({
+    type: z.literal("marimo-studio:receiver-waiting"),
+    ...runtimeField,
+    ...documentLifecycleField,
+    view: viewNameSchema.optional(),
+  }),
+  z.strictObject({
     type: z.literal("marimo-studio:switch-view"),
     ...runtimeField,
     view: viewNameSchema,
@@ -264,6 +270,10 @@ export type ReceiverUnreadyMessage = Extract<
   PreviewMessage,
   { type: "marimo-studio:receiver-unready" }
 >;
+export type ReceiverWaitingMessage = Extract<
+  PreviewMessage,
+  { type: "marimo-studio:receiver-waiting" }
+>;
 export type SwitchViewMessage = Extract<PreviewMessage, { type: "marimo-studio:switch-view" }>;
 export type PresentationChangeMessage = Extract<
   PreviewMessage,
@@ -307,6 +317,7 @@ export type PresentationToStudioMessage =
   | QueryChangeMessage
   | ReceiverReadyMessage
   | ReceiverUnreadyMessage
+  | ReceiverWaitingMessage
   | ViewPreviewMessage;
 export type PresentationToWrapperMessage = ReplayDocumentMessage;
 export type StudioToPresentationMessage =

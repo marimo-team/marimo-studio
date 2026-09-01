@@ -20,6 +20,25 @@ def waiting_document(
 ) -> str:
     """Return a stable loading surface that polls for the notebook session."""
     refresh = json.dumps(refresh_url).replace("<", "\\u003c")
+    receiver = (
+        {
+            "runtime": runtime,
+            "lifecycleId": lifecycle_id,
+            "view": view,
+        }
+        if lifecycle_id is not None and view
+        else None
+    )
+
+    def signal(message_type: str) -> str:
+        if receiver is None:
+            return ""
+        payload = json.dumps(
+            {"type": message_type, **receiver},
+            separators=(",", ":"),
+        ).replace("<", "\\u003c")
+        return f"parent.postMessage({payload}, '*');"
+
     node = html(
         lang="en",
         data_marimo_studio_preview_state="waiting",
@@ -91,23 +110,7 @@ def waiting_document(
                     ],
                     script[
                         Markup(
-                            (
-                                (
-                                    "parent.postMessage("
-                                    + json.dumps(
-                                        {
-                                            "type": "marimo-studio:receiver-unready",
-                                            "runtime": runtime,
-                                            "lifecycleId": lifecycle_id,
-                                            "view": view,
-                                        },
-                                        separators=(",", ":"),
-                                    ).replace("<", "\\u003c")
-                                    + ", '*');"
-                                )
-                                if lifecycle_id is not None and view
-                                else ""
-                            )
+                            signal("marimo-studio:receiver-waiting")
                             + """
                             const refreshUrl = """
                             + refresh
@@ -119,6 +122,9 @@ def waiting_document(
                                   cache: "no-store",
                                 });
                                 if (response.status !== 202) {
+                                  """
+                            + signal("marimo-studio:receiver-unready")
+                            + """
                                   location.replace(refreshUrl);
                                   return;
                                 }

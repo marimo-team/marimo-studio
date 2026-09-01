@@ -170,6 +170,7 @@ def test_isolated_presentation_binds_navigation_to_server_configuration() -> Non
         'id="marimo-studio-presentation" '
         'src="/_marimo-studio/presentation/token/dashboard/"'
     ) in document
+    assert '"marimo-studio:receiver-waiting"' in document
 
 
 def test_preserved_session_wrapper_creates_its_frame_after_replay_admission() -> None:

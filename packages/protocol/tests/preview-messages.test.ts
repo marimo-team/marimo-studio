@@ -144,6 +144,12 @@ test("preview messages decode every supported discriminant", () => {
       view: "dashboard",
     },
     {
+      type: "marimo-studio:receiver-waiting",
+      runtime: "server",
+      lifecycleId: 7,
+      view: "dashboard",
+    },
+    {
       type: "marimo-studio:view-ready",
       runtime: "wasm",
       lifecycleId: 7,

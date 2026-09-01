@@ -93,6 +93,7 @@ export class PreviewController {
   private navigation: ViewNavigationIntent;
   private pendingViewSwitch: PendingViewSwitch | undefined;
   private activeLifecycleId: number;
+  private waitingLifecycleId: number | undefined;
   private activeOwner = true;
   private readonly mutationBarriers = new Set<PendingMutationBarrier>();
   private readonly runtimeDiagnostics: RuntimeDiagnostics;
@@ -619,6 +620,7 @@ export class PreviewController {
         this.previewQueryChanged(message.query);
         return;
       case "marimo-studio:receiver-unready":
+        this.waitingLifecycleId = undefined;
         this.controlDiagnostic = undefined;
         this.failMutationBarriers(
           new DOMException("The presentation receiver disconnected.", "AbortError"),
@@ -626,7 +628,12 @@ export class PreviewController {
         );
         this.admission.receiverUnready();
         return;
+      case "marimo-studio:receiver-waiting":
+        this.waitingLifecycleId = message.lifecycleId;
+        this.cancelRetry();
+        return;
       case "marimo-studio:receiver-ready":
+        this.waitingLifecycleId = undefined;
         this.controlDiagnostic = undefined;
         this.cancelRetry();
         this.retrySchedule.reset();
@@ -797,7 +804,12 @@ export class PreviewController {
   }
 
   private loaded(): void {
-    if (!this.activeOwner || this.admission.receiverPresent || this.preview.src === "about:blank") {
+    if (
+      !this.activeOwner ||
+      this.admission.receiverPresent ||
+      this.waitingLifecycleId === this.activeLifecycleId ||
+      this.preview.src === "about:blank"
+    ) {
       return;
     }
     this.scheduleRetry(10_000);
@@ -932,6 +944,7 @@ export class PreviewController {
 
   private setActiveLifecycle(lifecycleId: number): void {
     this.activeLifecycleId = lifecycleId;
+    this.waitingLifecycleId = undefined;
     this.preview.dataset.previewLifecycleId = String(lifecycleId);
   }
 
