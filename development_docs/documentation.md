@@ -14,7 +14,7 @@ examples, and site configuration into the
 | `apps/docs/.vitepress/config.mts`            | VitePress behavior, metadata, local search, theme, and base path              |
 | `apps/docs/examples.ts`                      | Documentation example families, technologies, labels, and exported paths      |
 | `apps/docs/scripts/build-examples.ts`        | Notebook and view export transaction                                          |
-| `apps/docs/scripts/source-integrity.test.ts` | Navigation coverage, local links, and heading fragments                       |
+| `apps/docs/scripts/source-integrity.test.ts` | Page metadata, release pins, route inventory, and heading fragments           |
 | `apps/docs/scripts/verify-build.ts`          | Built routes, assets, base paths, examples, and sibling links                 |
 | `apps/docs/public/`                          | Authored brand, icon, and screenshot assets plus generated examples           |
 | `development_docs/`                          | Contributor decisions, ownership, lifecycle, validation, and release workflow |
@@ -91,13 +91,15 @@ Run `make docs-examples` when iterating on exported example inputs. Run
 
 Source tests require:
 
+- Every Markdown page has a title and description.
 - Every Markdown page has one route.
-- Route paths are unique.
-- Local Markdown targets exist.
+- Public release pins match the package version.
 - Heading fragments resolve.
 
 Final build verification requires:
 
+- Local Markdown targets exist.
+- Route paths are unique.
 - Every route produced its expected HTML file.
 - Navigation links use the configured base path.
 - Generated scripts, styles, icons, and authored assets stay under that base.

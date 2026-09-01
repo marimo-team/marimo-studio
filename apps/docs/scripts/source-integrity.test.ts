@@ -2,12 +2,26 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vite-plus/test";
+import { createMarkdownRenderer } from "vitepress";
 
 import { siteRoutes } from "../.vitepress/routes.ts";
 
 const packageRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const repositoryRoot = resolve(packageRoot, "../..");
 const docsRoot = resolve(packageRoot, "../../docs");
+const markdownRenderer = createMarkdownRenderer(docsRoot);
+const releasePins = (source: string): string[] =>
+  Array.from(
+    source.matchAll(/marimo-studio(?:\[deno\])?==([0-9]+\.[0-9]+\.[0-9]+)/g),
+    (match) => match[1] ?? "",
+  );
+
+interface PageEnvironment {
+  frontmatter?: {
+    title?: string;
+    description?: string;
+  };
+}
 
 const markdownFiles = (directory: string): string[] =>
   readdirSync(directory)
@@ -31,24 +45,6 @@ const routeForFile = (file: string): string => {
   return `/${source.slice(0, -".md".length)}`;
 };
 
-const withoutCodeFences = (source: string): string => source.replaceAll(/```[\s\S]*?```/g, "");
-
-const slugify = (heading: string): string =>
-  heading
-    .normalize("NFKD")
-    .replaceAll(/[`'"<>]/g, "")
-    .replaceAll(/[^\p{Letter}\p{Number}]+/gu, "-")
-    .replaceAll(/-{2,}/g, "-")
-    .replaceAll(/^-+|-+$/g, "")
-    .toLowerCase();
-
-const anchors = (file: string): Set<string> =>
-  new Set(
-    Array.from(withoutCodeFences(readFileSync(file, "utf8")).matchAll(/^#{1,6}\s+(.+?)\s*$/gm)).map(
-      (match) => slugify(match[1] ?? ""),
-    ),
-  );
-
 const resolveTarget = (sourceFile: string, href: string): string | undefined => {
   const pathname = decodeURIComponent(href.split("#")[0]?.split("?")[0] ?? "");
   if (!pathname) {
@@ -64,15 +60,18 @@ const resolveTarget = (sourceFile: string, href: string): string | undefined => 
 describe("documentation source integrity", () => {
   const files = markdownFiles(docsRoot);
 
-  it("gives every public page a title and description", () => {
+  it("gives every public page a title and description", async () => {
+    const markdown = await markdownRenderer;
     const failures = files.flatMap((file) => {
       const source = readFileSync(file, "utf8");
       const name = relative(docsRoot, file);
+      const environment: PageEnvironment = {};
+      markdown.parse(source, environment);
       const missing: string[] = [];
-      if (!source.startsWith("---\n") || !/^title:\s+\S/m.test(source)) {
+      if (!environment.frontmatter?.title?.trim()) {
         missing.push(`${name}: missing frontmatter title`);
       }
-      if (!/^description:\s+\S/m.test(source)) {
+      if (!environment.frontmatter?.description?.trim()) {
         missing.push(`${name}: missing frontmatter description`);
       }
       return missing;
@@ -80,7 +79,7 @@ describe("documentation source integrity", () => {
     expect(failures).toEqual([]);
   });
 
-  it("keeps current release pins aligned across public surfaces", () => {
+  it("keeps required installation pins present and every public pin current", () => {
     const manifest = readFileSync(
       join(repositoryRoot, "packages", "marimo-studio", "pyproject.toml"),
       "utf8",
@@ -94,15 +93,29 @@ describe("documentation source integrity", () => {
       join(repositoryRoot, "skills", "marimo-studio", "SKILL.md"),
       ...files,
     ];
+    const required = [
+      join(repositoryRoot, "README.md"),
+      join(repositoryRoot, "packages", "marimo-studio", "README.md"),
+      join(repositoryRoot, "skills", "marimo-studio", "SKILL.md"),
+      join(docsRoot, "guide", "getting-started.md"),
+      join(docsRoot, "reference", "compatibility.md"),
+      join(docsRoot, "reference", "configuration.md"),
+    ];
+    const versions = new Map(
+      surfaces.map((file) => [file, releasePins(readFileSync(file, "utf8"))]),
+    );
+    expect(
+      required
+        .filter((file) => versions.get(file)?.length === 0)
+        .map((file) => relative(repositoryRoot, file)),
+    ).toEqual([]);
+
     const failures: string[] = [];
     for (const file of surfaces) {
-      const source = readFileSync(file, "utf8");
-      for (const match of source.matchAll(
-        /marimo-studio(?:\[deno\])?==([0-9]+\.[0-9]+\.[0-9]+)/g,
-      )) {
-        if (match[1] !== currentVersion) {
+      for (const version of versions.get(file) ?? []) {
+        if (version !== currentVersion) {
           failures.push(
-            `${relative(repositoryRoot, file)}: expected ${currentVersion}, found ${match[1]}`,
+            `${relative(repositoryRoot, file)}: expected ${currentVersion}, found ${version}`,
           );
         }
       }
@@ -114,24 +127,45 @@ describe("documentation source integrity", () => {
     expect(new Set(siteRoutes)).toEqual(new Set(files.map(routeForFile)));
   });
 
-  it("resolves every local Markdown link and heading fragment", () => {
+  it("resolves local heading fragments", async () => {
+    const markdown = await markdownRenderer;
+    const pageAnchors = new Map(
+      files.map((file) => [
+        file,
+        new Set(
+          markdown
+            .parse(readFileSync(file, "utf8"), {})
+            .filter((token) => token.type === "heading_open")
+            .map((token) => token.attrGet("id"))
+            .filter((anchor): anchor is string => anchor !== null),
+        ),
+      ]),
+    );
     const failures: string[] = [];
     for (const sourceFile of files) {
-      const source = withoutCodeFences(readFileSync(sourceFile, "utf8"));
-      for (const match of source.matchAll(/!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
-        const href = match[1] ?? "";
+      const tokens = markdown.parse(readFileSync(sourceFile, "utf8"), {});
+      const links = tokens
+        .flatMap((token) => token.children ?? [])
+        .filter(
+          (token) => token.type === "link_open" && token.attrGet("class") !== "header-anchor",
+        );
+      for (const link of links) {
+        const href = link.attrGet("href") ?? "";
+        if (!href.includes("#")) {
+          continue;
+        }
         if (/^(?:[a-z]+:|\/\/)/i.test(href)) {
           continue;
         }
         const target = resolveTarget(sourceFile, href);
-        const sourceName = relative(docsRoot, sourceFile);
-        if (!target) {
-          failures.push(`${sourceName}: missing target ${href}`);
+        if (!target?.endsWith(".md")) {
           continue;
         }
-        const fragment = href.split("#")[1]?.split("?")[0];
-        if (fragment && target.endsWith(".md") && !anchors(target).has(fragment)) {
-          failures.push(`${sourceName}: missing heading #${fragment} in ${href}`);
+        const fragment = decodeURIComponent(href.split("#")[1]?.split("?")[0] ?? "");
+        if (!pageAnchors.get(target)?.has(fragment)) {
+          failures.push(
+            `${relative(docsRoot, sourceFile)}: missing heading #${fragment} in ${href}`,
+          );
         }
       }
     }

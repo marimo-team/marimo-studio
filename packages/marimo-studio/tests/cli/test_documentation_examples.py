@@ -43,18 +43,13 @@ def _documentation_paths() -> tuple[Path, ...]:
     return tuple(sorted(path for path in paths if path.is_file()))
 
 
-def _python_block(document: str, heading: str) -> str:
-    section = document.split(heading, 1)[1]
-    return section.split("```python\n", 1)[1].split("\n```", 1)[0]
-
-
-def _python_blocks(document: str) -> tuple[str, ...]:
-    sections = document.split("```python\n")[1:]
+def _fenced_blocks(document: str, language: str) -> tuple[str, ...]:
+    sections = document.split(f"```{language}\n")[1:]
     return tuple(section.split("\n```", 1)[0] for section in sections)
 
 
-def _is_api_signature(block: str) -> bool:
-    return "->" in block and not block.lstrip().startswith(("def ", "async def "))
+def _python_block(document: str, heading: str) -> str:
+    return _fenced_blocks(document.split(heading, 1)[1], "python")[0]
 
 
 def _studio_cli_arguments(arguments: tuple[str, ...]) -> tuple[str, ...] | None:
@@ -69,8 +64,7 @@ def _studio_cli_arguments(arguments: tuple[str, ...]) -> tuple[str, ...] | None:
 
 def _console_commands(document: str) -> tuple[tuple[str, ...], ...]:
     commands: list[tuple[str, ...]] = []
-    for section in document.split("```console\n")[1:]:
-        block = section.split("\n```", 1)[0]
+    for block in _fenced_blocks(document, "console"):
         pending = ""
         for raw_line in block.splitlines():
             line = raw_line.strip()
@@ -87,22 +81,11 @@ def _console_commands(document: str) -> tuple[tuple[str, ...], ...]:
     return tuple(commands)
 
 
-def _cli_signatures(document: str) -> tuple[tuple[str, ...], ...]:
-    signatures: list[tuple[str, ...]] = []
-    for section in document.split("```text\n")[1:]:
-        block = section.split("\n```", 1)[0]
-        for line in block.splitlines():
-            arguments = tuple(shlex.split(line))
-            if arguments and arguments[0] == "marimo-studio":
-                signatures.append(arguments[1:])
-    return tuple(signatures)
-
-
-def _parse_click_command(
+def _validate_click_path(
     command: click.Command,
     arguments: list[str],
     parent: click.Context | None = None,
-) -> click.Context:
+) -> None:
     name = "marimo-studio" if parent is None else command.name or "marimo-studio"
     if isinstance(command, click.Group):
         context = command.make_context(
@@ -113,45 +96,22 @@ def _parse_click_command(
         )
         _name, child, remaining = command.resolve_command(context, arguments)
         assert child is not None
-        return _parse_click_command(child, remaining, context)
-    context = command.make_context(name, arguments, parent=parent)
-    assert context.args == []
-    return context
+        _validate_click_path(
+            child,
+            remaining,
+            parent=context,
+        )
+    else:
+        context = command.make_context(name, arguments, parent=parent)
+        assert context.args == []
 
 
-def _resolve_click_path(
-    command: click.Command,
-    arguments: list[str],
-    parent: click.Context | None = None,
-) -> str:
-    name = "marimo-studio" if parent is None else command.name or "marimo-studio"
-    if not isinstance(command, click.Group):
-        return f"{parent.command_path} {command.name}" if parent is not None else name
-    context = command.make_context(
-        name,
-        arguments,
-        parent=parent,
-        resilient_parsing=True,
-    )
-    _name, child, remaining = command.resolve_command(context, arguments)
-    assert child is not None
-    if isinstance(child, click.Group):
-        return _resolve_click_path(child, remaining, context)
-    return f"{context.command_path} {child.name}"
-
-
-def _is_cli_signature(arguments: tuple[str, ...]) -> bool:
-    return any(
-        any(marker in argument for marker in ("[", "]", "|")) for argument in arguments
-    )
-
-
-def _parse_documented_command(arguments: tuple[str, ...]) -> str:
+def _parse_documented_command(arguments: tuple[str, ...]) -> None:
     if arguments == ("--version",):
         result = CliRunner().invoke(cli, list(arguments))
         assert result.exit_code == 0, result.output
-        return "marimo-studio"
-    return _parse_click_command(cli, list(arguments)).command_path
+        return
+    _validate_click_path(cli, list(arguments))
 
 
 def _notebook_source(cell: str) -> str:
@@ -193,19 +153,22 @@ def test_documented_result_cells_survive_marimo_parsing(tmp_path) -> None:
             "## Place a complete cell",
         ),
     )
-    for index, (path, heading) in enumerate(examples):
-        document = _python_block(Path(path).read_text(encoding="utf-8"), heading)
-        notebook = tmp_path / f"documented-cell-{index}.py"
-        notebook.write_text(_notebook_source(document), encoding="utf-8")
+    cells = tuple(
+        _python_block(Path(path).read_text(encoding="utf-8"), heading)
+        for path, heading in examples
+    )
+    notebook = tmp_path / "documented-cells.py"
+    notebook.write_text(_notebook_source("\n\n".join(cells)), encoding="utf-8")
 
-        result = asyncio.run(
-            studio_authoring.open_workspace(notebook).inspect_notebook(
-                include_code=True,
-                output_expressions=True,
-            )
+    result = asyncio.run(
+        studio_authoring.open_workspace(notebook).inspect_notebook(
+            include_code=True,
+            output_expressions=True,
         )
+    )
 
-        assert any(cell.name is not None and cell.code for cell in result.cells)
+    assert len(result.cells) == len(cells)
+    assert all(cell.name is not None and cell.code for cell in result.cells)
 
 
 def test_documented_provider_builds_a_complete_html_artifact(tmp_path) -> None:
@@ -250,17 +213,13 @@ def test_documented_provider_builds_a_complete_html_artifact(tmp_path) -> None:
     )
 
     assert result.document is not None
-    document = staging.joinpath(*result.document.parts).read_text(encoding="utf-8")
-    assert document
     validate_document(staging, result.document)
 
 
 def test_every_standalone_python_block_compiles() -> None:
     compiled = 0
     for path in _documentation_paths():
-        for block in _python_blocks(path.read_text(encoding="utf-8")):
-            if _is_api_signature(block):
-                continue
+        for block in _fenced_blocks(path.read_text(encoding="utf-8"), "python"):
             compile(
                 block,
                 str(path),
@@ -273,29 +232,14 @@ def test_every_standalone_python_block_compiles() -> None:
 
 def test_documented_cli_workflows_parse_to_supported_commands() -> None:
     commands: set[tuple[str, ...]] = set()
-    signatures: set[tuple[str, ...]] = set()
     for path in _documentation_paths():
         document = path.read_text(encoding="utf-8")
         commands.update(_console_commands(document))
-        signatures.update(_cli_signatures(document))
 
-    direct = commands - {
-        arguments for arguments in commands if _is_cli_signature(arguments)
-    }
-    for arguments in direct:
+    for arguments in commands:
         _parse_documented_command(arguments)
-    for arguments in signatures:
-        _resolve_click_path(
-            cli,
-            [
-                argument
-                for argument in arguments
-                if not any(marker in argument for marker in ("[", "]", "|"))
-            ],
-        )
 
-    assert direct
-    assert signatures
+    assert commands
 
 
 def _cli_leaf_paths(
