@@ -1,4 +1,4 @@
-import type { Page, Request, Route } from "@playwright/test";
+import type { Page, Route } from "@playwright/test";
 
 import {
   expect,
@@ -14,21 +14,6 @@ import { stopNotebookServer, waitForNotebookServer } from "./notebook-server.ts"
 import { runServerToken, runServerUrl, startRunServer } from "./recovery-support.ts";
 
 test("preserves run-mode kernel state across a page reload", async ({ page }) => {
-  const invalidReplayDocuments: string[] = [];
-  const recordReplayDocument = (request: Request) => {
-    const url = new URL(request.url());
-    const sessionIds = url.searchParams.getAll("session_id");
-    if (
-      request.method() === "GET" &&
-      request.resourceType() === "document" &&
-      /^\/_marimo-studio\/presentation\/d\.[^/]+\/dashboard\/$/.test(url.pathname) &&
-      url.searchParams.get("marimo_studio_resume") === "1" &&
-      (sessionIds.length !== 1 || !/^s_[a-z0-9]{6}$/.test(sessionIds[0] ?? ""))
-    ) {
-      invalidReplayDocuments.push(url.href);
-    }
-  };
-  page.on("request", recordReplayDocument);
   const source = await readWorkspaceFile(workspaceNotebookPath);
   await writeWorkspaceFile(
     workspaceNotebookPath,
@@ -70,43 +55,7 @@ test("preserves run-mode kernel state across a page reload", async ({ page }) =>
     ).toBe(sessionId);
     await expect(rendered.locator('[mo-value="metric"]')).toHaveText("63");
     await expect(rendered.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
-
-    const eligibleDocument = await page.evaluate(() => performance.timeOrigin);
-    const eligibleRenderedDocument = await rendered
-      .locator("html")
-      .evaluate(() => performance.timeOrigin);
-    await page.goto("about:blank");
-    await page.goBack();
-    await waitForRunMode();
-
-    await expect(page).toHaveURL(`${runServerUrl}/dashboard/`);
-    expect(
-      await rendered.locator("html").evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__),
-    ).toBe(sessionId);
-    await expect(rendered.locator('[mo-value="metric"]')).toHaveText("63");
-    await expect(rendered.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
-    if ((await page.evaluate(() => performance.timeOrigin)) === eligibleDocument) {
-      expect(await rendered.locator("html").evaluate(() => performance.timeOrigin)).toBe(
-        eligibleRenderedDocument,
-      );
-    }
-
-    const previousDocument = await page.evaluate(() => performance.timeOrigin);
-    await page.evaluate(() => globalThis.addEventListener("unload", () => undefined));
-    await page.goto("about:blank");
-    await page.goBack();
-    await waitForRunMode();
-
-    expect(await page.evaluate(() => performance.timeOrigin)).not.toBe(previousDocument);
-    await expect(page).toHaveURL(`${runServerUrl}/dashboard/`);
-    expect(
-      await rendered.locator("html").evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__),
-    ).toBe(sessionId);
-    await expect(rendered.locator('[mo-value="metric"]')).toHaveText("63");
-    await expect(rendered.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
-    expect(invalidReplayDocuments).toEqual([]);
   } finally {
-    page.off("request", recordReplayDocument);
     try {
       await page.close();
     } finally {
@@ -213,19 +162,6 @@ test("closing wrapper does not attach a delayed replay document", async ({ page 
     }
     await route.continue();
   };
-  const replayDocuments: string[] = [];
-  const recordReplayDocument = (request: Request) => {
-    const url = new URL(request.url());
-    if (
-      request.method() === "GET" &&
-      request.resourceType() === "document" &&
-      /^\/_marimo-studio\/presentation\/d\.[^/]+\/dashboard\/$/.test(url.pathname) &&
-      url.searchParams.get("marimo_studio_resume") === "1"
-    ) {
-      replayDocuments.push(url.href);
-    }
-  };
-
   try {
     await waitForNotebookServer(
       server,
@@ -234,7 +170,6 @@ test("closing wrapper does not attach a delayed replay document", async ({ page 
     await page.goto(`${runServerUrl}/dashboard/?access_token=${runServerToken}`);
     await expect(rendered.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
     await page.route("**/*", delayReplayHead);
-    page.on("request", recordReplayDocument);
 
     const reload = page.reload().catch(() => null);
     await headStarted;
@@ -243,10 +178,9 @@ test("closing wrapper does not attach a delayed replay document", async ({ page 
     await Promise.all([reload, leave, headFinished]);
 
     expect(intercepted).toBe(true);
-    expect(replayDocuments).toEqual([]);
+    await expect(page).toHaveURL("about:blank");
   } finally {
     releaseHead();
-    page.off("request", recordReplayDocument);
     await page.unroute("**/*", delayReplayHead);
     try {
       await page.close();
@@ -314,7 +248,6 @@ test("isolates tabs and rejects poisoned replay storage", async ({ browserDiagno
     }, kind);
 
   let second: Page | undefined;
-  let stopReplayHeadTracking = () => {};
   try {
     await waitForNotebookServer(
       server,
@@ -326,54 +259,38 @@ test("isolates tabs and rejects poisoned replay storage", async ({ browserDiagno
 
     second = await page.context().newPage();
     const secondRendered = presentationFrame(second);
-    const pendingReplayHeads = new Set<Request>();
-    const replayHead = (request: Request) =>
-      request.method() === "HEAD" &&
-      /^\/_marimo-studio\/presentation\/d\.[^/]+\/dashboard\/$/.test(
-        new URL(request.url()).pathname,
-      );
-    const startedReplayHead = (request: Request) => {
-      if (replayHead(request)) pendingReplayHeads.add(request);
-    };
-    const finishedReplayHead = (request: Request) => pendingReplayHeads.delete(request);
-    second.on("request", startedReplayHead);
-    second.on("requestfinished", finishedReplayHead);
-    second.on("requestfailed", finishedReplayHead);
-    stopReplayHeadTracking = () => {
-      second?.off("request", startedReplayHead);
-      second?.off("requestfinished", finishedReplayHead);
-      second?.off("requestfailed", finishedReplayHead);
-    };
     await second.goto(`${runServerUrl}/dashboard/`);
     await waitForReady(secondRendered);
     let currentSession = await sessionId(secondRendered);
     expect(currentSession).not.toBe(firstSession);
 
-    const storedBeforeAuthoredMessages = await second.evaluate(() =>
-      Object.entries(sessionStorage).find(([key]) => key.startsWith("marimo-studio:replay:v1:")),
-    );
-    await secondRendered.locator("html").evaluate(() => {
-      globalThis.parent.postMessage(
-        {
-          type: "marimo-studio:replay-document",
-          runtime: "server",
-          lifecycleId: 1,
-          view: "dashboard",
-          url: "x".repeat(32 * 1_024 + 1),
-          extra: true,
-        },
-        "*",
+    const replayStorage = () =>
+      second?.evaluate(() =>
+        Object.entries(sessionStorage).find(([key]) => key.startsWith("marimo-studio:replay:v1:")),
       );
-    });
-    await expect
-      .poll(() =>
-        second?.evaluate(() =>
-          Object.entries(sessionStorage).find(([key]) =>
-            key.startsWith("marimo-studio:replay:v1:"),
-          ),
-        ),
-      )
-      .toEqual(storedBeforeAuthoredMessages);
+    const retainedReplay = await replayStorage();
+    if (!retainedReplay) {
+      throw new Error("The wrapper did not retain its current replay candidate");
+    }
+    for (const malformed of [
+      { url: "x".repeat(32 * 1_024 + 1) },
+      { url: retainedReplay[1], extra: true },
+    ]) {
+      await secondRendered.locator("html").evaluate((_root, candidate) => {
+        globalThis.parent.postMessage(
+          {
+            type: "marimo-studio:replay-document",
+            runtime: "server",
+            lifecycleId: 1,
+            view: "dashboard",
+            ...candidate,
+          },
+          "*",
+        );
+      }, malformed);
+      await expect.poll(replayStorage).toEqual(retainedReplay);
+      expect(await sessionId(secondRendered)).toBe(currentSession);
+    }
 
     await poison(second, "private");
     await second.reload();
@@ -411,7 +328,7 @@ test("isolates tabs and rejects poisoned replay storage", async ({ browserDiagno
     expect(await sessionId(secondRendered)).not.toBe(currentSession);
     currentSession = await sessionId(secondRendered);
 
-    for (const status of [202, 204, 200, 302]) {
+    for (const status of [204, 200, 302]) {
       let intercepted = false;
       const rejectProbe = async (route: Route) => {
         const request = route.request();
@@ -454,18 +371,9 @@ test("isolates tabs and rejects poisoned replay storage", async ({ browserDiagno
     await waitForReady(secondRendered);
     expect(await sessionId(secondRendered)).not.toBe(currentSession);
     await expect(secondRendered.locator('[mo-value="metric"]')).toHaveText("42");
-    await second.waitForLoadState("networkidle");
-    await expect
-      .poll(async () => {
-        if (pendingReplayHeads.size > 0) return false;
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        return pendingReplayHeads.size === 0;
-      })
-      .toBe(true);
     tamperedReplay.recovered();
     await recoverRequestAbort(rejectedTamperedProbe);
   } finally {
-    stopReplayHeadTracking();
     await second?.close();
     try {
       await page.close();

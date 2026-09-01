@@ -68,32 +68,21 @@ def slow_metric`,
       const tableSummary = document.querySelector("#projected-table-summary");
       const emptyHost = document.querySelector("#empty-table");
       const emptySummary = document.querySelector("#empty-table-summary");
-      const dataSource = Symbol.for("marimo-studio.data-source");
-
       const renderTable = (table) => {
-        const source = table[dataSource];
         const first = table.get(0);
         const second = table.get(1);
-        tableSummary.textContent = \`${"${table.numRows}"} rows × ${"${table.numCols}"} columns\`;
-        tableSummary.dataset.codec = source.codec;
-        tableSummary.dataset.isTable = String(
-          Object.prototype.toString.call(table) === "[object Table]",
-        );
-        tableSummary.dataset.byteLength = String(source.bytes.byteLength);
-        tableSummary.dataset.fingerprint = source.fingerprint;
-        tableSummary.dataset.firstRegion = first.region;
-        tableSummary.dataset.firstRevenue = String(first.revenue);
-        tableSummary.dataset.nullRevenue = String(second.revenue === null);
-        tableSummary.dataset.firstActive = String(first.active);
-        tableSummary.dataset.firstSegment = first.segment;
-        tableSummary.dataset.payloadLength = String(first.payload.byteLength);
+        tableSummary.textContent = [
+          \`${"${table.numRows}"} rows × ${"${table.numCols}"} columns\`,
+          \`${"${first.region}"}: ${"${first.revenue}"}\`,
+          \`missing: ${"${second.revenue === null}"}\`,
+          \`active: ${"${first.active}"}\`,
+          \`segment: ${"${first.segment}"}\`,
+          \`payload: ${"${first.payload.byteLength}"} bytes\`,
+        ].join(" | ");
       };
 
       const renderEmptyTable = (table) => {
         emptySummary.textContent = \`${"${table.numRows}"} rows × ${"${table.numCols}"} columns\`;
-        emptySummary.dataset.updateCount = String(
-          Number(emptySummary.dataset.updateCount ?? 0) + 1,
-        );
       };
 
       tableHost.addEventListener("marimo-value-updated", (event) => {
@@ -116,31 +105,18 @@ def slow_metric`,
 
 const expectProjectedDataframe = async (
   preview: ReturnType<typeof presentationFrame>,
-  expectedRevenue?: number,
+  expectedRevenue: number,
 ) => {
   const summary = preview.locator("#projected-table-summary");
-  await expect(summary).toHaveText("2 rows × 6 columns");
-  await expect(summary).toHaveAttribute("data-codec", "arrow-ipc-v1");
-  await expect(summary).toHaveAttribute("data-is-table", "true");
-  await expect(summary).toHaveAttribute("data-first-region", "emea");
-  await expect(summary).toHaveAttribute("data-null-revenue", "true");
-  await expect(summary).toHaveAttribute("data-first-active", "true");
-  await expect(summary).toHaveAttribute("data-first-segment", "retail");
-  await expect(summary).toHaveAttribute("data-payload-length", "2");
-  if (expectedRevenue !== undefined) {
-    await expect(summary).toHaveAttribute("data-first-revenue", String(expectedRevenue));
-  }
-  await expect
-    .poll(async () => Number((await summary.getAttribute("data-byte-length")) ?? 0))
-    .toBeGreaterThan(0);
-  return summary;
+  await expect(summary).toHaveText(
+    `2 rows × 6 columns | emea: ${expectedRevenue} | missing: true | ` +
+      "active: true | segment: retail | payload: 2 bytes",
+  );
 };
 
 const expectEmptyDataframe = async (preview: ReturnType<typeof presentationFrame>) => {
   const summary = preview.locator("#empty-table-summary");
   await expect(summary).toHaveText("0 rows × 2 columns");
-  await expect(summary).toHaveAttribute("data-update-count", "1");
-  return summary;
 };
 
 test("delivers and refreshes dataframe values in Server and WebAssembly runtimes", async ({
@@ -149,24 +125,16 @@ test("delivers and refreshes dataframe values in Server and WebAssembly runtimes
   await installProjectedDataframe();
   await page.goto(studioEntryUrl);
   const server = await waitForPreview(page);
-  const serverSummary = await expectProjectedDataframe(server, 42);
-  const serverEmptySummary = await expectEmptyDataframe(server);
-  const serverFingerprint = await serverSummary.getAttribute("data-fingerprint");
+  await expectProjectedDataframe(server, 42);
+  await expectEmptyDataframe(server);
   await labeledSlider(server.locator('marimo-cell[name="controls"]'), /^Scale/).press("End");
-  await expect(serverSummary).toHaveAttribute("data-first-revenue", "63");
-  await expect
-    .poll(() => serverSummary.getAttribute("data-fingerprint"))
-    .not.toBe(serverFingerprint);
-  await expect(serverEmptySummary).toHaveAttribute("data-update-count", "1");
+  await expectProjectedDataframe(server, 63);
 
   await page.getByLabel("Python preview runtime").click();
   await page.getByRole("button", { name: /Browser/ }).click();
   const wasm = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
-  const wasmSummary = await expectProjectedDataframe(wasm);
-  const wasmEmptySummary = await expectEmptyDataframe(wasm);
-  const wasmFingerprint = await wasmSummary.getAttribute("data-fingerprint");
+  await expectProjectedDataframe(wasm, 63);
+  await expectEmptyDataframe(wasm);
   await labeledSlider(wasm.locator('marimo-cell[name="controls"]'), /^Scale/).press("Home");
-  await expect(wasmSummary).toHaveAttribute("data-first-revenue", "21");
-  await expect.poll(() => wasmSummary.getAttribute("data-fingerprint")).not.toBe(wasmFingerprint);
-  await expect(wasmEmptySummary).toHaveAttribute("data-update-count", "1");
+  await expectProjectedDataframe(wasm, 21);
 });

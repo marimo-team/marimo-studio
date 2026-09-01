@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+
 import { studioBootstrapSchema } from "@marimo-studio/protocol/studio-bootstrap";
 import { z } from "zod";
 
@@ -65,12 +67,19 @@ export const readRequestedObservation = (source: string) => {
   return requestedObservationsSchema.parse(JSON.parse(source)).observations[0];
 };
 
-export const readStudioClientId = (source: string): string => {
-  return studioBootstrapSchema.parse(JSON.parse(source)).clientId;
+export const readStudioBootstrap = async (page: Page) => {
+  const source = await page.locator("#marimo-studio-bootstrap").textContent();
+  if (!source) {
+    throw new Error("Studio bootstrap is unavailable");
+  }
+  return studioBootstrapSchema.parse(JSON.parse(source));
 };
 
-export const readStudioEditorSessionId = (source: string): string => {
-  const editorUrl = studioBootstrapSchema.parse(JSON.parse(source)).urls.editor;
+export const studioClientId = async (page: Page): Promise<string> =>
+  (await readStudioBootstrap(page)).clientId;
+
+export const studioEditorSessionId = async (page: Page): Promise<string> => {
+  const editorUrl = (await readStudioBootstrap(page)).urls.editor;
   const sessionId = new URL(editorUrl, "http://studio.invalid").searchParams.get("session_id");
   if (!sessionId) {
     throw new Error("Studio bootstrap editor URL is missing its session ID");

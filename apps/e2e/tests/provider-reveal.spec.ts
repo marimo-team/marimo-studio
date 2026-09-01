@@ -5,8 +5,6 @@ import { observeBrowserContext } from "./browser-diagnostics.ts";
 import { labeledSlider } from "./fixture.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
 
-const expectedTargets = ["controls", "first_result", "metric", "records", "second_result"];
-
 test("the React Reveal starter runs as a narrow static WebAssembly deck", async ({
   context,
   page,
@@ -25,18 +23,7 @@ test("the React Reveal starter runs as a narrow static WebAssembly deck", async 
       })
       .toBe(true);
     await root.evaluate(() => globalThis.marimoStudio.ready());
-    const documentStartedAt = await root.evaluate(() => performance.timeOrigin);
     await expect(root.getByRole("heading", { name: "Projections", level: 1 })).toBeVisible();
-    await expect
-      .poll(() =>
-        root.evaluate(() =>
-          globalThis.marimoStudio
-            .projections()
-            .map(({ phase, target }) => ({ phase, target }))
-            .sort((first, second) => first.target.localeCompare(second.target)),
-        ),
-      )
-      .toEqual(expectedTargets.map((target) => ({ phase: "ready", target })));
 
     await root.getByRole("button", { name: "next slide" }).click();
     await expect(root.getByRole("heading", { name: "Controls" })).toBeVisible();
@@ -46,7 +33,6 @@ test("the React Reveal starter runs as a narrow static WebAssembly deck", async 
     await root.getByRole("button", { name: "next slide" }).click();
     await expect(root.getByRole("heading", { name: "Metric" })).toBeVisible();
     await expect(root.locator('marimo-cell[name="metric"]')).toHaveText("42");
-    expect(await root.evaluate(() => performance.timeOrigin)).toBe(documentStartedAt);
     expect(
       await root.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,

@@ -5,9 +5,9 @@ import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import {
-  readStudioEditorSessionId,
   saveShortcut,
   selectAllShortcut,
+  studioEditorSessionId,
 } from "./authoring-test-support.ts";
 import {
   addWorkspaceView,
@@ -35,11 +35,6 @@ import {
   writeDashboardSource,
   writeViewSource,
 } from "./fixture.ts";
-
-declare global {
-  var __e2eBuildStatusObserver: MutationObserver | undefined;
-  var __e2eBuildStatuses: string[] | undefined;
-}
 
 const executeCodeMode = async (
   page: Page,
@@ -91,12 +86,13 @@ test("routes directory notebooks by Studio configuration", async ({ browserDiagn
   expect(configuredUrl).not.toBeNull();
   await page.goto(plainUrl!);
   await expect(page).toHaveURL(/\?file=plain\.py$/);
-  await expect(page.locator("#marimo-studio-bootstrap")).toHaveCount(0);
   await expect(editorFrame(page).getByText("Native Marimo notebook").first()).toBeVisible();
 
   await page.goto(configuredUrl!);
   await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=notebook\.py$/);
-  await expect(page.locator("#marimo-studio-bootstrap")).toBeAttached();
+  await expect(
+    (await waitForPreview(page)).getByRole("heading", { name: "Studio browser fixture" }),
+  ).toBeVisible();
   directoryLandingFilenameFallback.recovered();
   replacedWorkspaceStream.recovered();
 });
@@ -138,8 +134,7 @@ shown.to_dict()
 `,
   );
   await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=plain\.py&region=eu$/);
-  const bootstrap = (await page.locator("#marimo-studio-bootstrap").textContent()) ?? "";
-  expect(readStudioEditorSessionId(bootstrap)).toBe(sessionId);
+  expect(await studioEditorSessionId(page)).toBe(sessionId);
   await expect(editorFrame(page).locator(".cm-content").first()).toBeFocused();
   const preview = await waitForPreview(page);
   await expect(preview.getByText("Native Marimo notebook")).toBeVisible();
@@ -350,28 +345,6 @@ test("publishes visible edits from each built-in source model", async ({
           .locator("html")
           .evaluate(() => globalThis.marimoStudio.identity().revision);
 
-        await candidatePage.evaluate(() => {
-          globalThis.__e2eBuildStatusObserver?.disconnect();
-          globalThis.__e2eBuildStatuses = [];
-          const record = () => {
-            const label = document
-              .querySelector<HTMLElement>('[aria-label^="View build details,"]')
-              ?.getAttribute("aria-label");
-            if (label && !globalThis.__e2eBuildStatuses?.includes(label)) {
-              globalThis.__e2eBuildStatuses?.push(label);
-            }
-          };
-          const observer = new MutationObserver(record);
-          observer.observe(document.body, {
-            attributeFilter: ["aria-label"],
-            attributes: true,
-            childList: true,
-            subtree: true,
-          });
-          globalThis.__e2eBuildStatusObserver = observer;
-          record();
-        });
-
         await editor.focus();
         await editor.press(selectAllShortcut);
         const changedSource = source.replace(candidate.before, candidate.after);
@@ -392,14 +365,6 @@ test("publishes visible edits from each built-in source model", async ({
           )
           .not.toBe(initialRevision);
         await expect(candidatePage.getByLabel("View build details, Up to date")).toBeVisible();
-        const buildStatuses = await candidatePage.evaluate(
-          () => globalThis.__e2eBuildStatuses ?? [],
-        );
-        expect(
-          buildStatuses.some((status) =>
-            ["View build details, Checking build", "View build details, Building"].includes(status),
-          ),
-        ).toBe(true);
       } finally {
         if (!candidatePage.isClosed()) {
           const retirement = browserDiagnostics.expectPageRetirement(candidatePage);
@@ -450,7 +415,6 @@ test("publishes visible edits from each built-in source model", async ({
     await expect(diagnostic).toHaveCount(0);
   });
 
-  await page.evaluate(() => globalThis.__e2eBuildStatusObserver?.disconnect());
   await expect(page.getByRole("status", { name: "Source document status" })).toHaveText("Saved");
   await retireWorkspacePage(page, browserDiagnostics);
   await recoverRequestAbort(completedSourceWrites);

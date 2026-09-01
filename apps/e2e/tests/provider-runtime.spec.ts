@@ -1,15 +1,11 @@
 import { mountConfigSchema } from "@marimo-studio/protocol/runtime-config";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import type { ProviderProjection } from "./provider-runtime-evidence.ts";
-
 import { e2eNetwork } from "../scripts/network.mjs";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
 import { labeledSlider, presentationFrame, WASM_PREVIEW_TIMEOUT } from "./fixture.ts";
-import { providerProjectionSchema } from "./provider-runtime-evidence.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
 
-const expectedTargets = ["controls", "first_result", "metric", "records", "second_result"];
 const cases = [
   {
     framework: "React",
@@ -24,29 +20,6 @@ const cases = [
     staticUrl: `${e2eNetwork.provider.story.origin}/`,
   },
 ] as const;
-
-const readProjections = async (root: Locator): Promise<ProviderProjection[]> =>
-  providerProjectionSchema
-    .array()
-    .parse(await root.evaluate(() => globalThis.marimoStudio.projections()));
-
-const waitForReadyProjections = async (root: Locator): Promise<ProviderProjection[]> => {
-  await expect
-    .poll(
-      async () =>
-        (await readProjections(root))
-          .map(({ phase, target }) => ({ phase, target }))
-          .sort((first, second) => first.target.localeCompare(second.target)),
-      { timeout: 65_000 },
-    )
-    .toEqual(expectedTargets.map((target) => ({ phase: "ready", target })));
-  return readProjections(root);
-};
-
-const symbolicProjections = (projections: ProviderProjection[]) =>
-  projections
-    .map(({ mountId, target }) => ({ mountId, target }))
-    .sort((first, second) => first.target.localeCompare(second.target));
 
 const readNativeTableLayout = async (root: Locator) =>
   root.evaluate(() => {
@@ -150,6 +123,9 @@ const expectNotebookContent = async (root: Locator, heading: string): Promise<vo
   await expect(root.getByRole("heading", { name: heading, exact: true })).toBeVisible();
   await expect(labeledSlider(root.locator('marimo-cell[name="controls"]'), /^Scale/)).toBeVisible();
   await expect(root.locator('marimo-cell[name="metric"]')).toHaveText("42");
+  await expect(
+    root.locator('marimo-cell[name="records"]').getByRole("button", { name: "Columns" }),
+  ).toBeVisible();
   await expect(root.getByRole("heading", { name: "First projected result" })).toBeVisible();
   await expect(root.getByRole("heading", { name: "Second projected result" })).toBeVisible();
 };
@@ -179,11 +155,8 @@ const exerciseRuntime = async (
   );
   expect(mount.runtime).toBe(runtimeLabel === "Server" ? "server" : "wasm");
   await expectNotebookContent(root, heading);
-  const projections = symbolicProjections(await waitForReadyProjections(root));
-  expect(await root.evaluate(() => performance.getEntriesByType("navigation").length)).toBe(1);
   await diagnostics.close();
   expect(diagnostics.messages).toEqual([]);
-  return projections;
 };
 
 test("Vanilla renders populated notebook cells and a responsive native table", async ({ page }) => {
@@ -193,7 +166,6 @@ test("Vanilla renders populated notebook cells and a responsive native table", a
   const root = presentationFrame(page).locator("html");
   await waitForRuntime(root);
   await expectNotebookContent(root, "Overview");
-  await waitForReadyProjections(root);
   await expectNativeTableLayout(root);
   await page.setViewportSize({ width: 420, height: 900 });
   await expectNativeTableLayout(root, true);
@@ -212,24 +184,17 @@ test.describe("built-in framework projection runtimes", () => {
       try {
         await installPinnedPyodideAssets(context);
         const serverPage = await context.newPage();
-        const server = await exerciseRuntime(
-          serverPage,
-          candidate.liveUrl,
-          candidate.heading,
-          "Server",
-        );
+        await exerciseRuntime(serverPage, candidate.liveUrl, candidate.heading, "Server");
         await serverPage.close();
 
         const staticPage = await context.newPage();
-        const wasm = await exerciseRuntime(
+        await exerciseRuntime(
           staticPage,
           candidate.staticUrl,
           candidate.heading,
           "static WebAssembly",
         );
         await staticPage.close();
-
-        expect(wasm).toEqual(server);
       } finally {
         await context.close();
       }

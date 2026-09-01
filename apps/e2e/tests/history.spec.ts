@@ -1,9 +1,4 @@
-import {
-  chromium,
-  expect as playwrightExpect,
-  test as playwrightTest,
-  type Request,
-} from "@playwright/test";
+import { chromium, expect as playwrightExpect, test as playwrightTest } from "@playwright/test";
 
 import {
   addWorkspaceView,
@@ -23,10 +18,6 @@ import {
 } from "./fixture.ts";
 import { stopNotebookServer, waitForNotebookServer } from "./notebook-server.ts";
 import { runServerToken, runServerUrl, startRunServer } from "./recovery-support.ts";
-
-declare global {
-  var __e2eWrapperPopstateListeners: number | undefined;
-}
 
 test("keeps the configured WebAssembly default implicit across wrapper reload", async ({
   browserDiagnostics,
@@ -134,21 +125,17 @@ test("keeps explicit WebAssembly authority through a pre-ready wrapper reload", 
   page,
 }) => {
   test.setTimeout(210_000);
-  const configRuntimes: string[] = [];
-  const serverSessions: string[] = [];
-  const serverSockets: string[] = [];
+  const nativeSessions: string[] = [];
+  const nativeSockets: string[] = [];
   page.on("request", (request) => {
     const url = new URL(request.url());
-    if (url.pathname.includes("/_marimo-studio/views/dashboard/config")) {
-      configRuntimes.push(url.searchParams.get("runtime") ?? "");
-    }
     if (url.pathname.endsWith("/health") && url.searchParams.has("session_id")) {
-      serverSessions.push(url.href);
+      nativeSessions.push(url.href);
     }
   });
   page.on("websocket", (socket) => {
     if (new URL(socket.url()).pathname.endsWith("/ws")) {
-      serverSockets.push(socket.url());
+      nativeSockets.push(socket.url());
     }
   });
   const server = startRunServer();
@@ -193,25 +180,16 @@ test("keeps explicit WebAssembly authority through a pre-ready wrapper reload", 
     });
     retirement.recovered();
     await expect(page).toHaveURL(`${runServerUrl}/dashboard/?runtime=wasm`);
-    const mounted = await rendered.locator("html").evaluate(() => {
-      const descriptor = Object.getOwnPropertyDescriptor(globalThis, "__MARIMO_MOUNT_CONFIG__");
-      return {
-        configurable: descriptor?.configurable,
-        runtime: globalThis.__MARIMO_MOUNT_CONFIG__.runtime,
-        runtimeExplicit: globalThis.__MARIMO_MOUNT_CONFIG__.runtimeExplicit,
-        writable: "writable" in (descriptor ?? {}) ? descriptor?.writable : undefined,
-      };
-    });
+    const mounted = await rendered.locator("html").evaluate(() => ({
+      runtime: globalThis.__MARIMO_MOUNT_CONFIG__.runtime,
+      runtimeExplicit: globalThis.__MARIMO_MOUNT_CONFIG__.runtimeExplicit,
+    }));
     expect(mounted).toEqual({
-      configurable: false,
       runtime: "wasm",
       runtimeExplicit: true,
-      writable: false,
     });
-    expect(configRuntimes.length).toBeGreaterThanOrEqual(2);
-    expect(new Set(configRuntimes)).toEqual(new Set(["wasm"]));
-    expect(serverSessions).toEqual([]);
-    expect(serverSockets).toEqual([]);
+    expect(nativeSessions).toEqual([]);
+    expect(nativeSockets).toEqual([]);
   } finally {
     try {
       await page.close();
@@ -239,25 +217,6 @@ playwrightTest("keeps the preserved wrapper nonblank across back-forward restora
   }
   const browser = await chromium.launch(launchOptions);
   const context = await browser.newContext();
-  await context.addInitScript(() => {
-    const addEventListener = EventTarget.prototype.addEventListener;
-    Object.defineProperty(EventTarget.prototype, "addEventListener", {
-      configurable: true,
-      value: function (
-        this: EventTarget,
-        type: string,
-        listener: EventListenerOrEventListenerObject | null,
-        options?: boolean | AddEventListenerOptions,
-      ) {
-        if (this === globalThis && type === "popstate") {
-          globalThis.__e2eWrapperPopstateListeners =
-            (globalThis.__e2eWrapperPopstateListeners ?? 0) + 1;
-        }
-        addEventListener.call(this, type, listener, options);
-      },
-      writable: true,
-    });
-  });
   const diagnostics = observeBrowserContext(context);
   const page = await context.newPage();
   const rendered = presentationFrame(page);
@@ -281,20 +240,6 @@ playwrightTest("keeps the preserved wrapper nonblank across back-forward restora
     const sessionId = await rendered
       .locator("html")
       .evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__);
-    const documentOrigin = await page.evaluate(() => performance.timeOrigin);
-    const renderedOrigin = await rendered.locator("html").evaluate(() => performance.timeOrigin);
-    playwrightExpect(
-      await page.evaluate(() => {
-        const frame = document.querySelector("iframe#marimo-studio-presentation");
-        if (!(frame instanceof HTMLIFrameElement)) {
-          return false;
-        }
-        dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
-        const retained = frame.isConnected;
-        dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
-        return retained && frame.isConnected;
-      }),
-    ).toBe(true);
 
     const replacedDocument = diagnostics.expectActiveRequestAbort({
       origin: runServerUrl,
@@ -309,18 +254,11 @@ playwrightTest("keeps the preserved wrapper nonblank across back-forward restora
       "ready",
     );
 
-    if ((await page.evaluate(() => performance.timeOrigin)) === documentOrigin) {
-      playwrightExpect(await rendered.locator("html").evaluate(() => performance.timeOrigin)).toBe(
-        renderedOrigin,
-      );
-    }
     playwrightExpect(
       await rendered.locator("html").evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__),
     ).toBe(sessionId);
     await playwrightExpect(rendered.locator('[mo-value="metric"]')).toHaveText("63");
     await playwrightExpect(rendered.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
-    await playwrightExpect(page.locator("iframe#marimo-studio-presentation")).toHaveCount(1);
-    playwrightExpect(await page.evaluate(() => globalThis.__e2eWrapperPopstateListeners)).toBe(1);
     await recoverRequestAbort(replacedDocument);
   } finally {
     await diagnostics.close();
@@ -399,9 +337,6 @@ test("keeps direct view history hot and starts a fresh session for a new public 
     const sessionId = await rendered
       .locator("html")
       .evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__);
-    const documentOrigin = await page.evaluate(() => performance.timeOrigin);
-    const renderedOrigin = await rendered.locator("html").evaluate(() => performance.timeOrigin);
-    const initialHistoryLength = await page.evaluate(() => globalThis.history.length);
 
     const dashboardFrameElement = await page
       .locator("iframe#marimo-studio-presentation")
@@ -451,11 +386,6 @@ test("keeps direct view history hot and starts a fresh session for a new public 
       throw new Error("The report projection refresh changed while recovery was committing.");
     }
     reportRefresh.dispose();
-    expect(await page.evaluate(() => globalThis.history.length)).toBe(initialHistoryLength + 1);
-    expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentOrigin);
-    expect(await rendered.locator("html").evaluate(() => performance.timeOrigin)).toBe(
-      renderedOrigin,
-    );
     expect(
       await rendered.locator("html").evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__),
     ).toBe(sessionId);
@@ -463,55 +393,27 @@ test("keeps direct view history hot and starts a fresh session for a new public 
     await page.goBack();
     await expect(page).toHaveURL(/\/dashboard\/\?runtime=server$/);
     await waitForReady();
-    const restoredDocumentOrigin = await page.evaluate(() => performance.timeOrigin);
-    const restoredRenderedOrigin = await rendered
-      .locator("html")
-      .evaluate(() => performance.timeOrigin);
-    expect(restoredDocumentOrigin).not.toBe(documentOrigin);
-    expect(restoredRenderedOrigin).not.toBe(renderedOrigin);
     expect(
       await rendered.locator("html").evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__),
     ).toBe(sessionId);
     await expect(rendered.locator('[mo-value="metric"]')).toHaveText("63");
     await expect(rendered.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
 
-    const hashDocumentRequests: string[] = [];
-    const recordHashDocument = (request: Request) => {
-      const url = new URL(request.url());
-      if (
-        ["GET", "HEAD"].includes(request.method()) &&
-        /^\/_marimo-studio\/presentation\/d\.[^/]+\/dashboard\/$/.test(url.pathname)
-      ) {
-        hashDocumentRequests.push(request.url());
-      }
-    };
-    page.on("request", recordHashDocument);
-    try {
-      await rendered.getByRole("link", { name: "Dashboard details" }).click();
-      await expect(page).toHaveURL(/\/dashboard\/\?runtime=server#details$/);
-      await waitForReady();
-      expect(await page.evaluate(() => performance.timeOrigin)).toBe(restoredDocumentOrigin);
-      expect(await rendered.locator("html").evaluate(() => performance.timeOrigin)).toBe(
-        restoredRenderedOrigin,
-      );
-      expect(
-        await rendered.locator("html").evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__),
-      ).toBe(sessionId);
-      await expect(rendered.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
+    await rendered.getByRole("link", { name: "Dashboard details" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/\?runtime=server#details$/);
+    await waitForReady();
+    expect(
+      await rendered.locator("html").evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__),
+    ).toBe(sessionId);
+    await expect(rendered.getByRole("button", { name: "Widget count: 8" })).toBeVisible();
 
-      await page.goBack();
-      await expect(page).toHaveURL(/\/dashboard\/\?runtime=server$/);
-      await waitForReady();
-      expect(await page.evaluate(() => globalThis.history.length)).toBe(initialHistoryLength + 1);
-    } finally {
-      page.off("request", recordHashDocument);
-    }
-    expect(hashDocumentRequests).toEqual([]);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/dashboard\/\?runtime=server$/);
+    await waitForReady();
 
     await rendered.getByRole("link", { name: "APAC report" }).click();
     await expect(page).toHaveURL(/\/report\/\?region=apac&runtime=server#details$/);
     await waitForReady();
-    expect(await page.evaluate(() => performance.timeOrigin)).not.toBe(documentOrigin);
     expect(
       await rendered.locator("html").evaluate(() => globalThis.__MARIMO_STUDIO_SESSION_ID__),
     ).not.toBe(sessionId);

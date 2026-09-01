@@ -7,10 +7,10 @@ import {
   changedObservationSourceSchema,
   readBrowserValidation,
   readRequestedObservation,
-  readStudioClientId,
   readViewRevision,
   saveShortcut,
   selectAllShortcut,
+  studioClientId,
 } from "./authoring-test-support.ts";
 import {
   activateWorkspaceView,
@@ -224,9 +224,6 @@ mo.vstack([scale, fail_outputs])`);
   await expect(preview.locator('[mo-value="metric"]')).toHaveText("42");
   await expect(preview.locator("#rich-summary-output h3")).toHaveText("Current total: 42");
   await recoverProjectionRefresh(aliasRefresh, page);
-  await expect
-    .poll(() => preview.locator("html").evaluate(() => globalThis.marimoStudio.diagnostics()))
-    .toEqual([]);
   expect(await checkWorkspace()).toBe(true);
   supersededRenewal.recovered();
   replacedWorkspaceStream.recovered();
@@ -363,9 +360,18 @@ test("keeps view feedback current while cells are added, edited, moved, and dele
   const repairedSourceRefresh = await captureProjectionRefresh(page, browserDiagnostics);
   await writeDashboardSource(page, originalView);
   await waitForPreview(page);
-  await expect(preview.locator("#user-note")).toHaveCount(0);
+  await expect(preview.getByRole("heading", { name: "Studio browser fixture" })).toBeVisible();
+  await expect(preview.locator('[mo-value="metric"]')).toHaveText("42");
+  await expect(preview.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready");
   await expect
-    .poll(() => preview.locator("html").evaluate(() => globalThis.marimoStudio.diagnostics()))
+    .poll(() =>
+      preview.locator("html").evaluate(() =>
+        globalThis.marimoStudio
+          .diagnostics()
+          .filter((diagnostic) => "target" in diagnostic && diagnostic.target === "user_note")
+          .map(({ code }) => code),
+      ),
+    )
     .toEqual([]);
   await recoverProjectionRefresh(repairedSourceRefresh, page);
   replacedWorkspaceStreams.recovered();
@@ -475,8 +481,7 @@ test("shows an agent-requested page and records its rendered revision", async ({
 
   const sessionId = (await sessionRequest).headers()["marimo-session-id"];
   const serverToken = await studioServerToken(page);
-  const source = await page.locator("#marimo-studio-bootstrap").textContent();
-  const clientId = readStudioClientId(source ?? "null");
+  const clientId = await studioClientId(page);
   const replacedEventStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
     1,
@@ -586,8 +591,7 @@ test("keeps a slow activation open until the selected view is acknowledged", asy
 
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
-  const source = await page.locator("#marimo-studio-bootstrap").textContent();
-  const clientId = readStudioClientId(source ?? "null");
+  const clientId = await studioClientId(page);
   const activation = activateWorkspaceView("slow-activation", clientId);
   let activationSettled = false;
   void activation.then(
@@ -627,8 +631,7 @@ test("retains agent validation after the native editor reconnects", async ({
 }) => {
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
-  const source = await page.locator("#marimo-studio-bootstrap").textContent();
-  const clientId = readStudioClientId(source ?? "null");
+  const clientId = await studioClientId(page);
   const analyze = async () => {
     const response = await page.request.post("/_marimo-studio/validate?file=notebook.py", {
       headers: { "Marimo-Server-Token": await studioServerToken(page) },

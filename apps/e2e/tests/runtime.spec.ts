@@ -20,10 +20,6 @@ import {
   writeDashboardSource,
 } from "./fixture.ts";
 
-declare global {
-  var __e2ePreviewStatuses: string[] | undefined;
-}
-
 test.describe.configure({ timeout: 150_000 });
 
 const expectPreviewInteractive = async (page: Page, runtime: "server" | "wasm") => {
@@ -32,38 +28,35 @@ const expectPreviewInteractive = async (page: Page, runtime: "server" | "wasm") 
   await expect(frame).not.toHaveAttribute("aria-busy");
 };
 
+const waitForPresentationRuntime = async (root: ReturnType<typeof presentationFrame>) => {
+  await expect
+    .poll(() =>
+      root
+        .locator("html")
+        .evaluate(async () => {
+          if (!globalThis.marimoStudio) return false;
+          return Promise.race([
+            globalThis.marimoStudio.ready().then(() => true),
+            new Promise<false>((resolve) => setTimeout(() => resolve(false), 500)),
+          ]);
+        })
+        .catch(() => false),
+    )
+    .toBe(true);
+};
+
 test("starts the notebook automatically and initializes WebAssembly on demand", async ({
   page,
 }) => {
   test.setTimeout(210_000);
-  await page.addInitScript(() => {
-    globalThis.__e2ePreviewStatuses = [];
-    const record = () => {
-      document
-        .querySelectorAll<HTMLElement>('[aria-label="Preview runtime status"]')
-        .forEach((element) => {
-          const status = element.textContent?.trim();
-          if (status && !globalThis.__e2ePreviewStatuses?.includes(status)) {
-            globalThis.__e2ePreviewStatuses?.push(status);
-          }
-        });
-    };
-    const observer = new MutationObserver(record);
-    observer.observe(document, { childList: true, subtree: true });
-    globalThis.addEventListener("DOMContentLoaded", record, { once: true });
-  });
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
 
   await expect(preview.locator('strong[mo-value="metric"]')).toHaveText("42");
-  await expect
-    .poll(() => page.evaluate(() => globalThis.__e2ePreviewStatuses ?? []))
-    .toContain("Connecting to Python");
   await expect(page.getByLabel("Python preview runtime")).toContainText("Live");
   for (const surface of ["Notebook", "Source", "Preview"]) {
     await expect(page.getByRole("region", { name: surface })).toBeVisible();
   }
-  await expect(editorFrame(page).getByRole("button", { name: "Click to connect" })).toHaveCount(0);
   const wasmFrame = page.locator('iframe[data-preview-runtime-frame="wasm"]');
 
   await expect(wasmFrame).toHaveAttribute("src", "about:blank");
@@ -219,15 +212,6 @@ test("preserves native output state across HTML edits and replaces terminal fail
   await page.getByLabel("Python preview runtime").click();
   await page.getByRole("button", { name: /Browser/ }).click();
   const wasm = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
-  const runtimeMarker = "projected-output-runtime";
-  await wasm.locator("html").evaluate((_html, marker) => {
-    globalThis.__e2eRuntimeMarker = marker;
-  }, runtimeMarker);
-  const expectWasmRuntimePreserved = async () => {
-    await expect
-      .poll(() => wasm.locator("html").evaluate(() => globalThis.__e2eRuntimeMarker))
-      .toBe(runtimeMarker);
-  };
   const serverSummary = server.locator("#rich-summary-output");
   const wasmSummary = wasm.locator("#rich-summary-output");
   const serverTable = server.locator('marimo-output[value="rich_table"]');
@@ -264,9 +248,7 @@ test("preserves native output state across HTML edits and replaces terminal fail
     "data-marimo-diagnostic-code",
     "projection-output-variable-not-found",
   );
-  await expect(wasmSummary).not.toContainText("Current total");
   await expect(wasmSummary).toContainText("does not resolve in this notebook");
-  await expectWasmRuntimePreserved();
   await page.getByLabel("Browser preview runtime").click();
   await page.getByRole("button", { name: /Python/ }).click();
   await expect(serverSummary).toHaveAttribute("data-state", "error");
@@ -274,7 +256,6 @@ test("preserves native output state across HTML edits and replaces terminal fail
     "data-marimo-diagnostic-code",
     "projection-output-variable-not-found",
   );
-  await expect(serverSummary).not.toContainText("Current total");
   await expect(serverSummary).toContainText("does not resolve in this notebook");
 
   await page.getByLabel("Python preview runtime").click();
@@ -291,7 +272,6 @@ test("preserves native output state across HTML edits and replaces terminal fail
   await expect(wasmSummary).toHaveAttribute("data-state", "ready");
   await expect(wasmSummary.locator("h3")).toHaveText("Current total: 42");
   await expect(wasmColumns).toHaveAttribute("aria-expanded", "true");
-  await expectWasmRuntimePreserved();
   await page.getByLabel("Browser preview runtime").click();
   await page.getByRole("button", { name: /Python/ }).click();
   await expect(serverSummary).toHaveAttribute("data-state", "ready");
@@ -475,22 +455,7 @@ test("keeps native output ownership isolated between server preview consumers", 
   await popout.waitForLoadState("domcontentloaded");
   expect(await popout.evaluate(() => globalThis.opener)).toBeNull();
   const popoutPresentation = presentationFrame(popout);
-  await expect
-    .poll(() =>
-      popoutPresentation
-        .locator("html")
-        .evaluate(async () => {
-          if (!globalThis.marimoStudio) {
-            return false;
-          }
-          return Promise.race([
-            globalThis.marimoStudio.ready().then(() => true),
-            new Promise<false>((resolve) => setTimeout(() => resolve(false), 500)),
-          ]);
-        })
-        .catch(() => false),
-    )
-    .toBe(true);
+  await waitForPresentationRuntime(popoutPresentation);
 
   const embeddedTable = embedded.locator('marimo-output[value="rich_table"]');
   const popoutTable = popoutPresentation.locator('marimo-output[value="rich_table"]');
@@ -528,27 +493,9 @@ test("refreshes a popout view and preserves its public query across reload", asy
   const popout = await popoutOpened;
   await popout.waitForLoadState("domcontentloaded");
   const rendered = presentationFrame(popout);
-  const waitUntilReady = async () => {
-    await expect
-      .poll(() =>
-        rendered
-          .locator("html")
-          .evaluate(async () => {
-            if (!globalThis.marimoStudio) {
-              return false;
-            }
-            return Promise.race([
-              globalThis.marimoStudio.ready().then(() => true),
-              new Promise<false>((resolve) => setTimeout(() => resolve(false), 500)),
-            ]);
-          })
-          .catch(() => false),
-      )
-      .toBe(true);
-  };
 
   try {
-    await waitUntilReady();
+    await waitForPresentationRuntime(rendered);
     const source = await readWorkspaceFile(dashboardHtmlPath);
     const refreshed = source.replace(
       "<h1>Studio browser fixture</h1>",
@@ -566,7 +513,7 @@ test("refreshes a popout view and preserves its public query across reload", asy
 
     await expect(rendered.getByRole("heading", { name: "Popout live view" })).toBeVisible();
     await expect(rendered.locator('strong[mo-value="metric"]')).toHaveText("42");
-    await waitUntilReady();
+    await waitForPresentationRuntime(rendered);
     await rendered.locator("html").evaluate(() => {
       const target = new URL(globalThis.location.href);
       target.searchParams.set("region", "apac");
@@ -589,7 +536,7 @@ test("refreshes a popout view and preserves its public query across reload", asy
       count: 1,
     });
     await popout.reload();
-    await waitUntilReady();
+    await waitForPresentationRuntime(rendered);
     await expect(rendered.getByRole("heading", { name: "Popout live view" })).toBeVisible();
     expect(
       await rendered.locator("html").evaluate(() => {

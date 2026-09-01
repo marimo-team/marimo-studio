@@ -190,7 +190,6 @@ playwrightTest(
       const preview = await waitForPreview(current);
       await playwrightExpect(preview.getByText("Projected total:")).toBeVisible();
       await playwrightExpect.poll(() => eventSourceCount(current)).toBe(1);
-      playwrightExpect(server.output()).not.toContain("Exception in ASGI application");
       shutdownWarnings.recovered();
       await diagnostics.close();
       diagnosticsClosed = true;

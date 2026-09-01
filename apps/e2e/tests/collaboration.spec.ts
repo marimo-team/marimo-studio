@@ -3,10 +3,10 @@ import type { FrameLocator, Page } from "@playwright/test";
 import { e2eNetwork } from "../scripts/network.mjs";
 import { collaborativeNotebookPath } from "../scripts/paths.mjs";
 import {
-  readStudioClientId,
-  readStudioEditorSessionId,
   saveShortcut,
   selectAllShortcut,
+  studioClientId,
+  studioEditorSessionId,
 } from "./authoring-test-support.ts";
 import {
   addCollaborativeView,
@@ -92,12 +92,10 @@ test("keeps two tabs isolated inside one notebook scope", async ({ browserDiagno
   try {
     await second.goto(studioEntryUrl);
     const secondPreview = await waitForPreview(second);
-    const firstBootstrap = await page.locator("#marimo-studio-bootstrap").textContent();
-    const secondBootstrap = await second.locator("#marimo-studio-bootstrap").textContent();
-    const firstClient = readStudioClientId(firstBootstrap ?? "null");
-    const secondClient = readStudioClientId(secondBootstrap ?? "null");
-    const firstEditorSession = readStudioEditorSessionId(firstBootstrap ?? "null");
-    const secondEditorSession = readStudioEditorSessionId(secondBootstrap ?? "null");
+    const firstClient = await studioClientId(page);
+    const secondClient = await studioClientId(second);
+    const firstEditorSession = await studioEditorSessionId(page);
+    const secondEditorSession = await studioEditorSessionId(second);
     const firstFrame = page.locator('iframe[data-preview-runtime-frame="server"]');
     const secondFrame = second.locator('iframe[data-preview-runtime-frame="server"]');
     const initialFirstPreviewSession = await firstFrame.getAttribute("data-session-id");

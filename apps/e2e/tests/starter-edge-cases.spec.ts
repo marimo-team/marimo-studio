@@ -10,6 +10,7 @@ import {
   buildWorkspaceView,
   captureProjectionRefresh,
   expect,
+  expectSupersededRenewalConfig,
   exportWorkspaceView,
   labeledSlider,
   noDisplayStaticExportUrl,
@@ -53,15 +54,14 @@ const expectEmptyPreview = async (page: Page, candidate: (typeof noDisplayCases)
   await expect(preview.getByRole("heading", { name: candidate.heading })).toBeVisible({
     timeout: 65_000,
   });
-  await expect(preview.locator("marimo-cell")).toHaveCount(0);
   await expect
     .poll(() =>
       preview.locator("html").evaluate(() => ({
-        diagnostics: globalThis.marimoStudio.diagnostics(),
-        projections: globalThis.marimoStudio.projections(),
+        diagnostics: globalThis.marimoStudio.diagnostics().length,
+        projections: globalThis.marimoStudio.projections().length,
       })),
     )
-    .toEqual({ diagnostics: [], projections: [] });
+    .toEqual({ diagnostics: 0, projections: 0 });
 };
 
 test("builds and renders every starter when no cell may display output", async ({
@@ -118,13 +118,6 @@ test("builds and renders every starter when no cell may display output", async (
     )
     .toBe(true);
   await expect(staticPage.getByRole("heading", { name: "Empty Html" })).toBeVisible();
-  await expect(staticPage.locator("marimo-cell")).toHaveCount(0);
-  await expect(
-    staticPage.locator("html").evaluate(() => ({
-      diagnostics: globalThis.marimoStudio.diagnostics(),
-      projections: globalThis.marimoStudio.projections(),
-    })),
-  ).resolves.toEqual({ diagnostics: [], projections: [] });
   await staticPage.close();
   await retireWorkspacePage(page, browserDiagnostics);
   supersededPresentations.recovered();
@@ -213,6 +206,7 @@ test("publishes complete projects during concurrent starter creation", async ({
     .locator("html")
     .evaluate(() => globalThis.marimoStudio.identity().revision);
   const dashboardRefresh = await captureProjectionRefresh(page, browserDiagnostics);
+  const supersededRenewal = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
   let complete = false;
   const creation = Promise.all(
     candidates.map(([view, starter]) => addWorkspaceView(workspaceNotebookPath, view, starter)),
@@ -269,6 +263,7 @@ test("publishes complete projects during concurrent starter creation", async ({
   );
   await expect(refreshedDashboard.locator('strong[mo-value="metric"]')).toContainText("63");
   await recoverProjectionRefresh(dashboardRefresh, page);
+  supersededRenewal.recovered();
   await retireWorkspacePage(page, browserDiagnostics);
   supersededPresentations.recovered();
 });

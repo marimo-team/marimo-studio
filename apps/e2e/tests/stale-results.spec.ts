@@ -2,7 +2,7 @@ import { valueReadResponseSchema } from "@marimo-studio/protocol/value-read";
 
 import { e2eNetwork } from "../scripts/network.mjs";
 import { collaborativeWorkspaceDirectory } from "../scripts/paths.mjs";
-import { readStudioClientId } from "./authoring-test-support.ts";
+import { studioClientId } from "./authoring-test-support.ts";
 import {
   addCollaborativeView,
   addWorkspaceView,
@@ -97,8 +97,7 @@ test("cancels one client's held old-view request without changing the peer view"
     await second.goto(secondEntry);
     const firstPreview = await waitForPreview(page);
     const secondPreview = await waitForPreview(second);
-    const firstBootstrap = await page.locator("#marimo-studio-bootstrap").textContent();
-    const firstClient = readStudioClientId(firstBootstrap ?? "null");
+    const firstClient = await studioClientId(page);
     const firstSession = await page
       .locator('iframe[data-preview-runtime-frame="server"]')
       .getAttribute("data-session-id");

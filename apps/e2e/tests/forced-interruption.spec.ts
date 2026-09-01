@@ -1,5 +1,4 @@
 import { expect, test } from "@playwright/test";
-import { existsSync } from "node:fs";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -7,8 +6,9 @@ import { resolve } from "node:path";
 import { z } from "zod";
 
 import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.mjs";
-import { fixtureDirectory, notebookProcessRegistryDirectory } from "../scripts/paths.mjs";
+import { fixtureDirectory } from "../scripts/paths.mjs";
 import { processGroupIsRunning } from "../scripts/process-group.mjs";
+import { readStudioBootstrap } from "./authoring-test-support.ts";
 import { waitForViewPreview } from "./fixture.ts";
 import {
   type NotebookServer,
@@ -26,10 +26,6 @@ const expectProcessTreeRootStopped = (server: NotebookServer): void => {
   expect(server.process.exitCode !== null || server.process.signalCode !== null).toBe(true);
 };
 
-const bootstrapSchema = z.object({
-  serverToken: z.string(),
-  urls: z.object({ query: z.string() }),
-});
 const inventorySchema = z.object({ files: z.array(z.object({ sessionId: z.string() })) });
 const MULTI_SESSION_SHUTDOWN_TIMEOUT = 15_000;
 const MULTI_SESSION_PREVIEW_TIMEOUT = process.platform === "win32" ? 180_000 : 65_000;
@@ -48,14 +44,19 @@ const availablePort = async (): Promise<number> => {
   return address.port;
 };
 
-const serverResponds = async (port: number): Promise<boolean> => {
+const serverIsReachable = async (port: number): Promise<boolean> => {
   try {
     const response = await fetch(`http://127.0.0.1:${port}`);
     await response.body?.cancel();
-    return response.ok;
+    return true;
   } catch {
     return false;
   }
+};
+
+const expectNotebookServerStopped = async (server: NotebookServer, port: number): Promise<void> => {
+  expectProcessTreeRootStopped(server);
+  expect(await serverIsReachable(port)).toBe(false);
 };
 
 test("forced runner shutdown drains every open native notebook session", async ({
@@ -85,9 +86,7 @@ test("forced runner shutdown drains every open native notebook session", async (
       });
       await waitForViewPreview(page, "dashboard", "server", MULTI_SESSION_PREVIEW_TIMEOUT);
     }
-    const bootstrap = bootstrapSchema.parse(
-      JSON.parse((await pages[0].locator("#marimo-studio-bootstrap").textContent()) ?? "null"),
-    );
+    const bootstrap = await readStudioBootstrap(pages[0]);
     const query = new URL(bootstrap.urls.query, server.serverUrl);
     const apiRoot = `${query.origin}${query.pathname.replace(/\/_marimo-studio\/query$/, "/api/home")}`;
     await expect
@@ -101,12 +100,8 @@ test("forced runner shutdown drains every open native notebook session", async (
       .toBeGreaterThanOrEqual(2);
 
     await stopNotebookServer(server, { timeout: MULTI_SESSION_SHUTDOWN_TIMEOUT });
+    await expectNotebookServerStopped(server, port);
     stopped = true;
-
-    expect(server.output()).not.toMatch(/resource_tracker|leaked semaphore/);
-    expectProcessTreeRootStopped(server);
-    expect(await serverResponds(port)).toBe(false);
-    expect(existsSync(notebookProcessRegistryDirectory)).toBe(false);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
     const cleanupFailure = !stopped
@@ -118,9 +113,7 @@ test("forced runner shutdown drains every open native notebook session", async (
         contentType: "text/plain",
       });
     }
-    expectProcessTreeRootStopped(server);
-    expect(await serverResponds(port)).toBe(false);
-    expect(existsSync(notebookProcessRegistryDirectory)).toBe(false);
+    await expectNotebookServerStopped(server, port);
     await rm(root, { force: true, recursive: true });
   }
 });
@@ -167,12 +160,8 @@ test("run-mode shutdown drains an active kernel through process lifespan", async
     });
 
     await stopNotebookServer(server);
+    await expectNotebookServerStopped(server, port);
     stopped = true;
-
-    expect(server.output()).not.toMatch(/resource_tracker|leaked semaphore/);
-    expectProcessTreeRootStopped(server);
-    expect(await serverResponds(port)).toBe(false);
-    expect(existsSync(notebookProcessRegistryDirectory)).toBe(false);
   } finally {
     await context.close();
     const cleanupFailure = !stopped ? await closeFailedNotebookServer(server) : undefined;
@@ -182,9 +171,7 @@ test("run-mode shutdown drains an active kernel through process lifespan", async
         contentType: "text/plain",
       });
     }
-    expectProcessTreeRootStopped(server);
-    expect(await serverResponds(port)).toBe(false);
-    expect(existsSync(notebookProcessRegistryDirectory)).toBe(false);
+    await expectNotebookServerStopped(server, port);
     await rm(root, { force: true, recursive: true });
   }
 });

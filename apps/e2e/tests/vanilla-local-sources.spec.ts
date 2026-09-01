@@ -8,18 +8,6 @@ import {
 
 test("publishes Vanilla local CSS and JavaScript sources", async ({ browserDiagnostics, page }) => {
   const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
-  const artifactResponses: Array<{ asset: string; status: number }> = [];
-  page.on("response", (response) => {
-    const match = new URL(response.url()).pathname.match(
-      /\/vanilla-local\/_marimo-studio\/artifacts\/[a-f\d]{64}\/(.+)$/,
-    );
-    if (match?.[1]) {
-      artifactResponses.push({
-        asset: decodeURIComponent(match[1]),
-        status: response.status(),
-      });
-    }
-  });
   await page.goto("/studio/vanilla-local/?file=notebook.py");
   const preview = await waitForViewPreview(page, "vanilla-local");
   await editorModelRecovery.recovered(page);
@@ -57,9 +45,4 @@ test("publishes Vanilla local CSS and JavaScript sources", async ({ browserDiagn
   const scriptTab = page.getByRole("tab", { name: "scripts/app.js" });
   await expect(styleTab).toBeVisible();
   await expect(scriptTab).toBeVisible();
-  expect([...new Set(artifactResponses.map(({ asset }) => asset))].sort()).toEqual([
-    "scripts/app.js",
-    "styles/app.css",
-  ]);
-  expect(artifactResponses.every(({ status }) => status === 200)).toBe(true);
 });

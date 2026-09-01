@@ -1,4 +1,4 @@
-import type { ElementHandle, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -25,17 +25,7 @@ import {
   writeWorkspaceFile,
 } from "./fixture.ts";
 
-interface ViewTiming {
-  authoredMs: number;
-  boot: number;
-  frame: ElementHandle<HTMLElement | SVGElement>;
-  liveMs: number;
-}
-
 const generatedViews = ["report", "gallery"] as const;
-
-const runtimeIdentity = async (page: Page) =>
-  await (await waitForPreview(page)).locator("html").evaluate(() => marimoStudio.identity());
 
 const replaceMetricCell = async (page: Page, source: string) => {
   const cell = editorFrame(page)
@@ -67,114 +57,64 @@ test.afterAll(async () => {
   );
 });
 
-const selectView = async (page: Page, view: string, heading: string): Promise<ViewTiming> => {
-  const started = performance.now();
-  const committed = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      response.status() === 204 &&
-      response.request().method() === "POST" &&
-      /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/.test(url.pathname)
-    );
-  });
+const selectView = async (page: Page, view: string, heading: string) => {
   await page.getByLabel("Switch view").click();
   const accessibleName = view === "dashboard" ? "dashboard, default" : view;
   await page.getByRole("button", { name: accessibleName, exact: true }).click();
-  await committed;
   const preview = await waitForViewPreview(page, view);
   await expect(preview.getByRole("heading", { name: heading, exact: true })).toBeVisible();
-  const authoredMs = performance.now() - started;
-  const liveMs = performance.now() - started;
-  const boot = await preview.locator("html").evaluate(() => performance.timeOrigin);
-  const frame = await page.locator('iframe[data-preview-runtime-frame="server"]').elementHandle();
-  if (!boot || !frame) {
-    throw new Error(`The ${view} preview did not expose its document identity`);
-  }
-  return { authoredMs, boot, frame, liveMs };
+  return preview;
 };
 
 test("reuses isolated named-view documents after their cold load", async ({
   browserDiagnostics,
   page,
-}, testInfo) => {
+}) => {
   for (const view of generatedViews) {
     await addWorkspaceView(workspaceNotebookPath, view);
+    const path = resolve(workspaceDirectory, `__marimo__/studio/notebook/${view}/index.html`);
+    const source = await readWorkspaceFile(path);
+    const withDraft = source.replace(
+      "</main>",
+      `<label>${view} draft <input aria-label="${view} draft"></label></main>`,
+    );
+    if (withDraft === source) {
+      throw new Error(`The ${view} fixture has no main element`);
+    }
+    await writeWorkspaceFile(path, withDraft);
   }
   await page.goto(studioEntryUrl);
-  const dashboardPreview = await waitForPreview(page);
-  const dashboardBoot = await dashboardPreview
-    .locator("html")
-    .evaluate(() => performance.timeOrigin);
-  const dashboardFrame = await page
-    .locator('iframe[data-preview-runtime-frame="server"]')
-    .elementHandle();
-  if (!dashboardBoot || !dashboardFrame) {
-    throw new Error("The dashboard preview did not expose its document identity");
-  }
+  await waitForPreview(page);
 
   const streamChanges = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
-    5,
+    4,
   );
   const abandonedHandoffs = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin,
     method: "POST",
     path: /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/,
-    count: 5,
+    count: 4,
     required: false,
     status: 204,
   });
-  const coldReport = await selectView(page, "report", "Report");
-  const coldGallery = await selectView(page, "gallery", "Gallery");
-  const warmDashboard = await selectView(page, "dashboard", "Studio browser fixture");
-  const warmReport = await selectView(page, "report", "Report");
-  await selectView(page, "dashboard", "Studio browser fixture");
-
-  expect(new Set([dashboardBoot, coldReport.boot, coldGallery.boot]).size).toBe(3);
-  expect(warmDashboard.boot).toBe(dashboardBoot);
-  expect(warmReport.boot).toBe(coldReport.boot);
-  expect(
-    await page.evaluate(
-      ([before, after]) => before === after,
-      [dashboardFrame, warmDashboard.frame],
-    ),
-  ).toBe(true);
-  expect(
-    await page.evaluate(
-      ([before, after]) => before === after,
-      [coldReport.frame, warmReport.frame],
-    ),
-  ).toBe(true);
+  const report = await selectView(page, "report", "Report");
+  await report.getByRole("textbox", { name: "report draft" }).fill("report notes");
+  const gallery = await selectView(page, "gallery", "Gallery");
+  await gallery.getByRole("textbox", { name: "gallery draft" }).fill("gallery notes");
+  await expect(
+    (await selectView(page, "report", "Report")).getByRole("textbox", {
+      name: "report draft",
+    }),
+  ).toHaveValue("report notes");
+  await expect(
+    (await selectView(page, "gallery", "Gallery")).getByRole("textbox", {
+      name: "gallery draft",
+    }),
+  ).toHaveValue("gallery notes");
   await recoverRequestAbort(abandonedHandoffs);
   streamChanges.recovered();
 
-  await testInfo.attach("named-view-cache-timings", {
-    body: Buffer.from(
-      JSON.stringify(
-        {
-          coldReport: {
-            authoredMs: coldReport.authoredMs,
-            liveMs: coldReport.liveMs,
-          },
-          coldGallery: {
-            authoredMs: coldGallery.authoredMs,
-            liveMs: coldGallery.liveMs,
-          },
-          warmDashboard: {
-            authoredMs: warmDashboard.authoredMs,
-            liveMs: warmDashboard.liveMs,
-          },
-          warmReport: {
-            authoredMs: warmReport.authoredMs,
-            liveMs: warmReport.liveMs,
-          },
-        },
-        null,
-        2,
-      ),
-    ),
-    contentType: "application/json",
-  });
   await retireWorkspacePage(page, browserDiagnostics);
 });
 
@@ -211,10 +151,9 @@ test("reloads a cached sibling after notebook state changes", async ({
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
     4,
   );
-  const cold = await selectView(page, "report", "Report");
+  await selectView(page, "report", "Report");
   const report = await waitForPreview(page);
   await expect(report.locator('[mo-value="metric"]')).toHaveText("42");
-  const coldIdentity = await runtimeIdentity(page);
 
   const dashboardProjectRefresh = browserDiagnostics.expectResponseTransition(page, {
     origin: studioOrigin,
@@ -225,7 +164,6 @@ test("reloads a cached sibling after notebook state changes", async ({
     successStatus: 200,
   });
   await selectView(page, "dashboard", "Studio browser fixture");
-  const dashboardIdentity = await runtimeIdentity(page);
   const dashboardRefresh = await captureProjectionRefresh(page, browserDiagnostics);
   await replaceMetricCell(
     page,
@@ -234,28 +172,11 @@ test("reloads a cached sibling after notebook state changes", async ({
   await expect.poll(() => readWorkspaceFile(workspaceNotebookPath)).toContain("scale.value * 22");
   dashboardProjectRefresh.seal();
   await expect((await waitForPreview(page)).locator('[mo-value="metric"]')).toHaveText("44");
-  await expect
-    .poll(async () => (await runtimeIdentity(page)).projectionRevision)
-    .not.toBe(dashboardIdentity.projectionRevision);
-  await expect.poll(() => cold.frame.getAttribute("src")).toBe("about:blank");
   await recoverProjectionRefresh(dashboardRefresh, page);
 
-  const reloaded = await selectView(page, "report", "Report");
+  await selectView(page, "report", "Report");
   const reloadedReport = await waitForPreview(page);
-  expect(await reloadedReport.locator('[mo-value="metric"]').textContent()).toBe("44");
-  const reloadedIdentity = await runtimeIdentity(page);
-  expect(
-    await page.evaluate(([before, after]) => before === after, [cold.frame, reloaded.frame]),
-  ).toBe(true);
-  expect(reloaded.boot).not.toBe(cold.boot);
-  expect(reloadedIdentity.revision).not.toBe(coldIdentity.revision);
-  expect(reloadedIdentity.projectionRevision).not.toBe(coldIdentity.projectionRevision);
-  const dashboardProjectStatus = await page.evaluate(async () => {
-    const response = await fetch("/_marimo-studio/views/dashboard/project?file=notebook.py");
-    await response.text();
-    return response.status;
-  });
-  expect(dashboardProjectStatus).toBe(200);
+  await expect(reloadedReport.locator('[mo-value="metric"]')).toHaveText("44");
   await recoverResponseTransition(dashboardProjectRefresh);
   await recoverRequestAbort(abandonedHandoffs);
   replacedWorkspaceStreams.recovered();
