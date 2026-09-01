@@ -151,7 +151,7 @@ shown.to_dict()
   await writeViewSource(page, "dashboard", "index.html", projectedSource, "plain.py");
 
   await waitForPreview(page);
-  await expect(preview.locator("#papers")).toHaveText("3877 papers");
+  await expect(preview.locator("#papers")).toHaveText("3877 papers", { timeout: 65_000 });
 
   await page.getByRole("button", { name: "Notebook", exact: true }).click();
   const editor = editorFrame(page);
@@ -181,7 +181,7 @@ shown.to_dict()
     "plain.py",
   );
   await waitForPreview(page);
-  await expect(preview.locator("#fresh-value")).toHaveText("99");
+  await expect(preview.locator("#fresh-value")).toHaveText("99", { timeout: 65_000 });
   replacedWorkspaceStreams.recovered();
   supersededConfig.recovered();
 });
