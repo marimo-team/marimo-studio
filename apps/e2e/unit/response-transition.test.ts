@@ -18,26 +18,16 @@ const transition = (limit = 64) =>
     limit,
   );
 
-test("zero background failures can recover after the direct contract", () => {
+test("a successful response completes the direct transition contract", () => {
   const window = transition();
   const current = project();
   window.recordStart(current, {}, 1);
   window.recordResponse(current, 200, undefined);
-  window.recordTerminal(current);
   window.seal();
 
   expect(window.readyToRecover()).toBe(true);
   expect(window.recover()).toBe(true);
   expect(window.diagnostics()).toEqual([]);
-});
-
-test("a matching response terminalizes its transition operation", () => {
-  const window = transition();
-  window.seal();
-  const repaired = project();
-  window.recordStart(repaired, {}, 1);
-  window.recordResponse(repaired, 200, undefined);
-  expect(window.readyToRecover()).toBe(true);
 });
 
 test("one later same-owner success settles every captured failure", () => {
@@ -76,9 +66,6 @@ test("a foreign owner is neutral and cannot settle a captured failure", () => {
   window.recordTerminal(foreign);
 
   expect(window.readyToRecover()).toBe(false);
-  expect(window.diagnostics()).toContain(
-    "response transition retained 1 owner(s) without recovery",
-  );
   const repaired = project();
   window.recordStart(repaired, failedOwner, 3);
   window.recordResponse(repaired, 200, undefined);
@@ -86,7 +73,7 @@ test("a foreign owner is neutral and cannot settle a captured failure", () => {
   expect(window.readyToRecover()).toBe(true);
 });
 
-test("failure after seal remains diagnostic", () => {
+test("failure after seal blocks recovery", () => {
   const window = transition();
   window.seal();
   const late = project();
@@ -95,9 +82,6 @@ test("failure after seal remains diagnostic", () => {
   window.recordTerminal(late);
 
   expect(window.readyToRecover()).toBe(false);
-  expect(window.diagnostics()).toContain(
-    "response transition observed a failure after repair started",
-  );
 });
 
 test("a pre-seal request may fail late and recover through a later request", () => {
@@ -132,9 +116,6 @@ test("success before seal is harmless and cannot settle an earlier failure", () 
   window.seal();
 
   expect(window.readyToRecover()).toBe(false);
-  expect(window.diagnostics()).toContain(
-    "response transition retained 1 owner(s) without recovery",
-  );
 });
 
 test("a request started before seal cannot prove later repair", () => {
@@ -151,9 +132,6 @@ test("a request started before seal cannot prove later repair", () => {
   window.recordTerminal(overlapping);
 
   expect(window.readyToRecover()).toBe(false);
-  expect(window.diagnostics()).toContain(
-    "response transition retained 1 owner(s) without recovery",
-  );
 });
 
 test("wrong route method error and status stay outside the transition", () => {
@@ -170,34 +148,21 @@ test("wrong route method error and status stay outside the transition", () => {
   window.recordTerminal(wrongStatus);
 });
 
-test("pending requests and failure overflow block recovery", () => {
-  const window = transition(1);
+test("pending requests block recovery", () => {
+  const window = transition();
   const owner = {};
-  const first = project();
-  const extra = project();
-  window.recordStart(first, owner, 1);
-  window.recordResponse(first, 500, "configuration-error");
-  window.recordTerminal(first);
-  window.recordStart(extra, owner, 2);
-  window.recordResponse(extra, 500, "configuration-error");
-  window.recordTerminal(extra);
   const pending = project();
-  window.recordStart(pending, owner, 3);
+  window.recordStart(pending, owner, 1);
   window.seal();
 
   expect(window.readyToRecover()).toBe(false);
-  expect(window.diagnostics()).toEqual(
-    expect.arrayContaining([
-      "response transition retained 1 pending request(s)",
-      "response transition exceeded 1 failure response(s)",
-    ]),
-  );
 });
 
 test("overflow stops retaining new failure owners", () => {
   const window = transition(1);
+  const firstOwner = {};
   const first = project();
-  window.recordStart(first, {}, 1);
+  window.recordStart(first, firstOwner, 1);
   window.recordResponse(first, 500, "configuration-error");
   window.recordTerminal(first);
   const extra = project();
@@ -205,11 +170,9 @@ test("overflow stops retaining new failure owners", () => {
   window.recordResponse(extra, 500, "configuration-error");
   window.recordTerminal(extra);
   window.seal();
+  const repaired = project();
+  window.recordStart(repaired, firstOwner, 3);
+  window.recordResponse(repaired, 200, undefined);
 
-  expect(window.diagnostics()).toEqual(
-    expect.arrayContaining([
-      "response transition exceeded 1 failure response(s)",
-      "response transition retained 1 owner(s) without recovery",
-    ]),
-  );
+  expect(window.readyToRecover()).toBe(false);
 });

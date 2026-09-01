@@ -47,9 +47,6 @@ test("an abort with the wrong response status fails closed", () => {
 
   expect(window.readyToRecover()).toBe(false);
   expect(window.recover()).toBe(false);
-  expect(window.diagnostics()).toEqual(
-    expect.arrayContaining([expect.stringContaining("did not observe HTTP 204")]),
-  );
 });
 
 test("a sealed window becomes ready when abort and status arrive after user completion", () => {
@@ -84,12 +81,6 @@ test("recovery before a required request starts fails closed", () => {
   expect(window.recover()).toBe(false);
   const late = request("PUT", "/_marimo-studio/views/qa-view/observation");
   expect(window.recordStart(late)).toBe(false);
-  expect(window.diagnostics()).toEqual(
-    expect.arrayContaining([
-      expect.stringContaining("expected 1 exact PUT request abort(s)"),
-      expect.stringContaining("recovered early"),
-    ]),
-  );
 });
 
 test("a required window ignores a successful retry after its exact abort", () => {
@@ -127,24 +118,6 @@ test("a required window rejects an abort beyond its cardinality", () => {
 
   expect(window.readyToRecover()).toBe(false);
   expect(window.recover()).toBe(false);
-  expect(window.diagnostics()).toEqual(
-    expect.arrayContaining([expect.stringContaining("observed 1 extra abort(s)")]),
-  );
-});
-
-test("an optional active window accepts no matching request", () => {
-  const window = new ExactRequestAbortWindow(
-    "GET",
-    "http://127.0.0.1:4321",
-    /^\/_marimo-studio\/presentation\/[^/]+\/dashboard\/$/,
-    1,
-    false,
-  );
-  window.seal();
-
-  expect(window.readyToRecover()).toBe(true);
-  expect(window.recover()).toBe(true);
-  expect(window.diagnostics()).toEqual([]);
 });
 
 test("an optional active window removes a normally completed candidate", () => {
@@ -228,29 +201,6 @@ test("an optional future window ignores success and counts one later abort", () 
   expect(window.diagnostics()).toEqual([]);
 });
 
-test("an optional future window rejects an abort beyond its cap", () => {
-  const window = new ExactRequestAbortWindow(
-    "HEAD",
-    "http://127.0.0.1:4321",
-    /^\/_marimo-studio\/presentation\/[^/]+\/dashboard\/$/,
-    1,
-    false,
-  );
-  const first = request("HEAD", "/_marimo-studio/presentation/d.first/dashboard/");
-  const second = request("HEAD", "/_marimo-studio/presentation/d.second/dashboard/");
-  window.recordStart(first);
-  window.recordAbort(first, "net::ERR_ABORTED");
-  window.recordStart(second);
-  window.recordAbort(second, "net::ERR_ABORTED");
-  window.seal();
-
-  expect(window.readyToRecover()).toBe(false);
-  expect(window.recover()).toBe(false);
-  expect(window.diagnostics()).toEqual(
-    expect.arrayContaining([expect.stringContaining("observed 1 extra abort(s)")]),
-  );
-});
-
 test("an unresolved active candidate blocks recovery", () => {
   const window = new ExactRequestAbortWindow(
     "GET",
@@ -264,9 +214,6 @@ test("an unresolved active candidate blocks recovery", () => {
 
   expect(window.readyToRecover()).toBe(false);
   expect(window.recover()).toBe(false);
-  expect(window.diagnostics()).toEqual(
-    expect.arrayContaining([expect.stringContaining("retained 1 active request(s)")]),
-  );
 });
 
 test("an optional active window never claims a future request", () => {

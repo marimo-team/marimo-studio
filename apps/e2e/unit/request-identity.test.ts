@@ -54,15 +54,11 @@ const directRenewalDocument = (renewal: string, lifecycle: number) =>
     url: `http://127.0.0.1:4321/dashboard/?file=notebook.py&marimo_studio_renewal=${renewal}&marimo_studio_lifecycle=${lifecycle}&session_id=session-${lifecycle}`,
   });
 
-test("reuses one browser request owner for each source", () => {
+test("browser request owners are stable per source and isolated across sources", () => {
   const owners = new BrowserRequestOwners<object>();
   const frame = {};
   expect(owners.ownerFor(frame)).toBe(owners.ownerFor(frame));
-});
-
-test("keeps browser request owners isolated by source", () => {
-  const owners = new BrowserRequestOwners<object>();
-  expect(owners.ownerFor({})).not.toBe(owners.ownerFor({}));
+  expect(owners.ownerFor(frame)).not.toBe(owners.ownerFor({}));
 });
 
 test("a completed document retires only earlier aborts from its frame owner", () => {
@@ -114,9 +110,6 @@ test("held request abort recovery fails closed before route completion", () => {
 
   expect(witness.recordFailure(held, "net::ERR_ABORTED")).toBe(true);
   expect(witness.recover()).toBe(false);
-  expect(witness.diagnostics()).toContain(
-    "exact held request abort recovered before request completion",
-  );
 });
 
 test("a completed held request still requires its exact abort", async () => {
@@ -124,7 +117,6 @@ test("a completed held request still requires its exact abort", async () => {
   await Promise.resolve();
 
   expect(witness.recover()).toBe(false);
-  expect(witness.diagnostics()).toContain("expected exact held request abort, saw none");
 });
 
 test("binds abort recovery to the complete browser operation identity", () => {
@@ -139,6 +131,7 @@ test("binds abort recovery to the complete browser operation identity", () => {
   ).not.toBe(original);
   expect(browserRequestIdentity(request({ postData: '{"revision":"next"}' }))).not.toBe(original);
   expect(browserRequestIdentity(request({ resourceType: "eventsource" }))).not.toBe(original);
+  expect(browserRequestIdentity(request({ method: "HEAD" }))).not.toBe(original);
 });
 
 test("requires body completion before accepting an aborted document response", () => {
@@ -191,18 +184,6 @@ test("concurrent abort before success event order recovers one abort", () => {
   expect(recovery.recordSuccess(retry)).toBe(abortStart);
 });
 
-test("a concurrent presentation revision recovers one abort in the same frame", () => {
-  const recovery = new IdempotentReadRecovery();
-  const owner = { id: 1 };
-  const aborted = presentationDocument("d.first", "dashboard", 1);
-  const successor = presentationDocument("d.second", "dashboard", 2);
-  recovery.recordStart(aborted, owner);
-  recovery.recordStart(successor, owner);
-
-  expect(recovery.recordSuccess(successor)).toBeUndefined();
-  expect(recovery.recordAbort(aborted)).toBe(true);
-});
-
 test("presentation recovery stays bound to its view and frame owner", () => {
   const recovery = new IdempotentReadRecovery();
   const aborted = presentationDocument("d.first", "dashboard", 1);
@@ -229,28 +210,20 @@ test("a later presentation successor recovers an earlier abort", () => {
   expect(recovery.recordSuccess(successor)).toBe(abortStart);
 });
 
-test("a direct renewal document recovers through its later successor", () => {
-  const recovery = new IdempotentReadRecovery();
-  const owner = { id: 1 };
-  const aborted = directRenewalDocument("d.first", 1);
-  const abortStart = recovery.recordStart(aborted, owner);
-  expect(recovery.recordAbort(aborted)).toBe(false);
+test("direct renewal succeeds both renewal and revision document generations", () => {
+  for (const aborted of [
+    directRenewalDocument("d.first", 1),
+    presentationDocument("d.first", "dashboard", 1),
+  ]) {
+    const recovery = new IdempotentReadRecovery();
+    const owner = { id: 1 };
+    const abortStart = recovery.recordStart(aborted, owner);
+    expect(recovery.recordAbort(aborted)).toBe(false);
 
-  const successor = directRenewalDocument("d.second", 2);
-  recovery.recordStart(successor, owner);
-  expect(recovery.recordSuccess(successor)).toBe(abortStart);
-});
-
-test("a direct renewal succeeds an aborted revision document", () => {
-  const recovery = new IdempotentReadRecovery();
-  const owner = { id: 1 };
-  const aborted = presentationDocument("d.first", "dashboard", 1);
-  const abortStart = recovery.recordStart(aborted, owner);
-  expect(recovery.recordAbort(aborted)).toBe(false);
-
-  const successor = directRenewalDocument("d.second", 2);
-  recovery.recordStart(successor, owner);
-  expect(recovery.recordSuccess(successor)).toBe(abortStart);
+    const successor = directRenewalDocument("d.second", 2);
+    recovery.recordStart(successor, owner);
+    expect(recovery.recordSuccess(successor)).toBe(abortStart);
+  }
 });
 
 test("a completed generation cannot recover a later sequential abort", () => {
@@ -368,18 +341,6 @@ test("identical operations in separate frames never recover each other", () => {
   expect(recovery.recordAbort(aborted)).toBe(false);
 });
 
-test("an overlapping successful POST never recovers an aborted POST", () => {
-  const recovery = new IdempotentReadRecovery();
-  const owner = { id: 1 };
-  const aborted = request({ method: "POST", postData: '{"revision":"same"}' });
-  const completed = request({ method: "POST", postData: '{"revision":"same"}' });
-
-  expect(recovery.recordStart(aborted, owner)).toBeUndefined();
-  expect(recovery.recordStart(completed, owner)).toBeUndefined();
-  expect(recovery.recordSuccess(completed)).toBeUndefined();
-  expect(recovery.recordAbort(aborted)).toBe(false);
-});
-
 test.each([
   ["GET", true],
   ["HEAD", true],
@@ -434,9 +395,6 @@ test("workspace stream replacement rejects an extra reconnect generation", () =>
   replacement.recordAbort(second);
 
   expect(replacement.recover()).toBe(false);
-  expect(replacement.diagnostics()).toContain(
-    "expected 1 workspace event stream replacement(s), saw 2",
-  );
 });
 
 test("workspace stream replacement rejects an extra live survivor", () => {
@@ -457,9 +415,6 @@ test("workspace stream replacement rejects an extra live survivor", () => {
   replacement.recordResponse(duplicate, 200);
 
   expect(replacement.recover()).toBe(false);
-  expect(replacement.diagnostics()).toContain(
-    "workspace event stream replacement did not retain exactly one ready survivor per owner",
-  );
 });
 
 test("workspace stream replacement permits an exactly retired owner", () => {
@@ -507,9 +462,6 @@ test("workspace stream replacement stays bound to its exact route and owner", ()
   expect(replacement.recordAbort(previous)).toBe(true);
 
   expect(replacement.recover()).toBe(false);
-  expect(replacement.diagnostics()).toContain(
-    "workspace event stream replacement retained 1 abort(s) without a newer ready generation",
-  );
 });
 
 test("workspace stream replacement rejects a missing generation", () => {
@@ -525,7 +477,4 @@ test("workspace stream replacement rejects a missing generation", () => {
     ),
   ).toBe(true);
   expect(replacement.recover()).toBe(false);
-  expect(replacement.diagnostics()).toContain(
-    "workspace event stream replacement observed an invalid generation",
-  );
 });

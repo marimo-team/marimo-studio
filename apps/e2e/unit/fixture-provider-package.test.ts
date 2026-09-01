@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
 
 import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.mjs";
+import { externalProviderPackage } from "../scripts/paths.mjs";
 
 test("copies the fixture provider into an arbitrary workspace", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "marimo-studio-fixture-provider-"));
@@ -14,8 +15,9 @@ test("copies the fixture provider into an arbitrary workspace", async () => {
     await writeFile(resolve(destination, "stale.py"), "stale");
     await copyFixtureProviderPackage(workspace);
 
-    const manifest = await readFile(resolve(destination, "pyproject.toml"), "utf8");
-    expect(manifest).toContain('name = "marimo-studio-e2e-provider"');
+    const sourceManifest = await readFile(resolve(externalProviderPackage, "pyproject.toml"));
+    const copiedManifest = await readFile(resolve(destination, "pyproject.toml"));
+    expect(copiedManifest).toEqual(sourceManifest);
     await expect(readFile(resolve(destination, "stale.py"), "utf8")).rejects.toThrow();
   } finally {
     await rm(root, { force: true, recursive: true });

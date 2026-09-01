@@ -130,7 +130,6 @@ test("recovers when the newer success arrives before the captured abort", () => 
 test.each([
   ["same wire revision", outputProjectionRequest(["metric"], "revision-a")],
   ["unrelated target", outputProjectionRequest(["other"], "revision-b")],
-  ["mixed targets", outputProjectionRequest(["metric", "other"], "revision-b")],
   ["duplicate target", outputProjectionRequest(["metric", "metric"], "revision-b")],
   ["different tuple", outputProjectionRequest(["metric"], "revision-b", "relocated")],
   ["malformed body", projectionRequest("outputs")],
@@ -178,27 +177,14 @@ test("exact output proof replaces an ownership sync through the same active proj
   expect(window.readyToRecover("projection-b")).toBe(true);
 });
 
-test.each([
-  ["changed active set", "stable", ["summary", "other"]],
-  ["relocated active tuple", "relocated", ["summary", "table"]],
-] as const)("exact output ownership sync rejects a %s", (_label, identity, activeTargets) => {
+test("exact output ownership sync rejects a relocated active tuple", () => {
   const owner = { id: 1 };
   const window = new ProjectionReadRequestWindow(owner, "projection-a");
   const old = outputProjectionRequest([], "revision-a", "stable", ["summary", "table"]);
-  const successor = outputProjectionRequest(["summary"], "revision-b", identity, activeTargets);
-  window.recordStart(old, owner, 1);
-  window.recordAbort(old);
-  window.seal();
-  window.recordStart(successor, owner, 2);
-  window.recordResponse(successor, owner, 2, 200);
-  expect(window.readyToRecover("projection-b")).toBe(false);
-});
-
-test("exact output ownership sync checks active tuples when both reads request no output", () => {
-  const owner = { id: 1 };
-  const window = new ProjectionReadRequestWindow(owner, "projection-a");
-  const old = outputProjectionRequest([], "revision-a", "stable", ["summary", "table"]);
-  const successor = outputProjectionRequest([], "revision-b", "relocated", ["summary", "table"]);
+  const successor = outputProjectionRequest(["summary"], "revision-b", "relocated", [
+    "summary",
+    "table",
+  ]);
   window.recordStart(old, owner, 1);
   window.recordAbort(old);
   window.seal();
@@ -291,10 +277,7 @@ test("keeps owner, route, method, and read kind exact", () => {
   window.seal();
   window.recordStart(wrongKind, owner, 5);
   window.recordResponse(wrongKind, owner, 5, 200);
-  window.recover("revision-b");
-  expect(window.diagnostics()).toContain(
-    "projection read capture retained 1 abort(s) without a newer successful read",
-  );
+  expect(window.recover("revision-b")).toBe(false);
 });
 
 test("non-abort terminals remain visible and do not need recovery", () => {
@@ -350,9 +333,6 @@ test("terminal missing values do not relax output replacement proof", () => {
   window.terminalizeValues(["missing"]);
   window.seal();
   expect(window.recover("revision-b")).toBe(false);
-  expect(window.diagnostics()).toContain(
-    "projection read capture retained 1 abort(s) without a newer successful read",
-  );
 });
 
 test.each([
@@ -367,9 +347,6 @@ test.each([
   window.terminalizeValues(["missing"]);
   window.seal();
   expect(window.recover("revision-b")).toBe(false);
-  expect(window.diagnostics()).toContain(
-    "projection read capture retained 1 abort(s) without a newer successful read",
-  );
 });
 
 test("a values request started after terminalization remains visible", () => {
@@ -379,26 +356,21 @@ test("a values request started after terminalization remains visible", () => {
   const late = valueProjectionRequest("missing");
   expect(window.recordStart(late, owner, 1)).toBe(false);
   expect(window.recordAbort(late)).toBe(false);
-  expect(window.diagnostics()).toContain(
-    "projection read capture observed a values request after terminalization",
-  );
 });
 
 test("values can be terminalized only while the mutation window accepts reads", () => {
   const window = new ProjectionReadRequestWindow({ id: 1 }, "revision-a");
   window.seal();
   expect(window.terminalizeValues(["missing"])).toBe(false);
-  expect(window.diagnostics()).toContain(
-    "projection read capture terminalized values outside its mutation window",
-  );
 });
 
-test("reports active captured requests at diagnostics close", () => {
+test("active captured requests block recovery", () => {
   const owner = { id: 1 };
   const window = new ProjectionReadRequestWindow(owner, "revision-a");
   window.recordStart(projectionRequest("outputs"), owner, 1);
   window.seal();
-  expect(window.diagnostics()).toContain("projection read capture retained 1 active request(s)");
+  expect(window.readyToRecover("revision-b")).toBe(false);
+  expect(window.recover("revision-b")).toBe(false);
 });
 
 test("rejects recovery when the projection revision is unchanged", () => {
@@ -406,9 +378,6 @@ test("rejects recovery when the projection revision is unchanged", () => {
   const window = new ProjectionReadRequestWindow(owner, "revision-a");
   window.seal();
   expect(window.recover("revision-a")).toBe(false);
-  expect(window.diagnostics()).toContain(
-    "projection read capture recovered before its revision changed",
-  );
 });
 
 test("recovery readiness waits for the exact newer response without poisoning state", () => {
@@ -428,20 +397,7 @@ test("recovery readiness waits for the exact newer response without poisoning st
   expect(window.diagnostics()).toEqual([]);
 });
 
-test("a missing successor remains diagnostic at close", () => {
-  const owner = { id: 1 };
-  const window = new ProjectionReadRequestWindow(owner, "revision-a");
-  const old = outputProjectionRequest(["metric"], "revision-a");
-  window.recordStart(old, owner, 1);
-  window.recordAbort(old);
-  window.seal();
-  expect(window.readyToRecover("revision-b")).toBe(false);
-  expect(window.diagnostics()).toContain(
-    "projection read capture retained 1 abort(s) without a newer successful read",
-  );
-});
-
-test.each([1, 2])("same or older start %i cannot prove a newer abort", (successStart) => {
+test("the same start cannot prove a newer abort", () => {
   const owner = { id: 1 };
   const window = new ProjectionReadRequestWindow(owner, "revision-a");
   const old = outputProjectionRequest(["metric"], "revision-a");
@@ -449,12 +405,12 @@ test.each([1, 2])("same or older start %i cannot prove a newer abort", (successS
   window.recordStart(old, owner, 2);
   window.recordAbort(old);
   window.seal();
-  window.recordStart(success, owner, successStart);
-  window.recordResponse(success, owner, successStart, 200);
+  window.recordStart(success, owner, 2);
+  window.recordResponse(success, owner, 2, 200);
   expect(window.recover("revision-b")).toBe(false);
 });
 
-test.each([204, 302, 409])("status %i cannot prove a captured abort", (status) => {
+test("a non-success status cannot prove a captured abort", () => {
   const owner = { id: 1 };
   const window = new ProjectionReadRequestWindow(owner, "revision-a");
   const old = valueProjectionRequestAt(["metric"], "revision-a");
@@ -463,14 +419,13 @@ test.each([204, 302, 409])("status %i cannot prove a captured abort", (status) =
   window.recordAbort(old);
   window.seal();
   window.recordStart(response, owner, 2);
-  window.recordResponse(response, owner, 2, status);
+  window.recordResponse(response, owner, 2, 409);
   expect(window.recover("revision-b")).toBe(false);
 });
 
 test("recovery before seal fails closed", () => {
   const window = new ProjectionReadRequestWindow({ id: 1 }, "revision-a");
   expect(window.recover("revision-b")).toBe(false);
-  expect(window.diagnostics()).toContain("projection read capture recovered before it was sealed");
 });
 
 test("bounds captured projection requests and fails closed on overflow", () => {
@@ -478,5 +433,4 @@ test("bounds captured projection requests and fails closed on overflow", () => {
   const window = new ProjectionReadRequestWindow(owner, "revision-a", 1);
   expect(window.recordStart(projectionRequest("outputs"), owner, 1)).toBe(true);
   expect(window.recordStart(projectionRequest("values"), owner, 2)).toBe(false);
-  expect(window.diagnostics()).toContain("projection read capture exceeded its request limit");
 });

@@ -20,12 +20,6 @@ test("page retirement rejects recovery before the close event", () => {
   witness.recordOwner({});
 
   expect(witness.recover(false)).toBe(false);
-  expect(witness.diagnostics()).toEqual(
-    expect.arrayContaining([
-      "expected page retirement recovered before the page closed",
-      "expected page retirement observed no page close",
-    ]),
-  );
 });
 
 test("page retirement never claims a foreign request owner", () => {

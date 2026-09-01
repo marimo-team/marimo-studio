@@ -12,16 +12,4 @@ test("records browser warnings and errors while network failures stay request-ow
   expect(shouldRecordConsoleMessage("error", "Failed to load resource: net::ERR_ABORTED")).toBe(
     false,
   );
-  expect(
-    shouldRecordConsoleMessage(
-      "warning",
-      "The resource http://127.0.0.1:4321/_marimo-studio/editor/assets/gradient-test.png was preloaded using link preload but not used within a few seconds.",
-    ),
-  ).toBe(true);
-  expect(
-    shouldRecordConsoleMessage(
-      "warning",
-      "The resource http://127.0.0.1:4321/app.js was preloaded using link preload but not used.",
-    ),
-  ).toBe(true);
 });

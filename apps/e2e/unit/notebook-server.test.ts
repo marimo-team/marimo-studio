@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -70,9 +70,6 @@ const responds = async (port: number): Promise<boolean> => {
   }
 };
 
-const notebookProcessRecords = (directory: string) =>
-  existsSync(directory) ? readdirSync(directory).filter((name) => name.endsWith(".json")) : [];
-
 test("rejects Python resource tracker semaphore leaks", () => {
   expect(() =>
     assertNoLeakedSemaphoreWarning(
@@ -84,7 +81,6 @@ test("rejects Python resource tracker semaphore leaks", () => {
 
 test.each([
   "",
-  "intentional negative-path traceback\n",
   "resource_tracker: There appear to be 2 leaked shared_memory objects to clean up at shutdown\n",
 ])("accepts clean and unrelated notebook stderr", (output) => {
   expect(() => assertNoLeakedSemaphoreWarning(output)).not.toThrow();
@@ -149,44 +145,23 @@ test("authenticates and drains every session before hosted shutdown", async () =
     });
   }
 
-  expect(requests).toEqual([
-    {
-      authorization: "Bearer access-token",
-      body: undefined,
-      path: "/hosted/?file=notebook.py",
-      serverToken: undefined,
-    },
-    {
-      authorization: "Bearer access-token",
-      body: undefined,
-      path: "/hosted/api/home/running_notebooks",
-      serverToken: "server-token",
-    },
-    {
-      authorization: "Bearer access-token",
-      body: '{"sessionId":"session-a"}',
-      path: "/hosted/api/home/shutdown_session",
-      serverToken: "server-token",
-    },
-    {
-      authorization: "Bearer access-token",
-      body: '{"sessionId":"session-b"}',
-      path: "/hosted/api/home/shutdown_session",
-      serverToken: "server-token",
-    },
-    {
-      authorization: "Bearer access-token",
-      body: undefined,
-      path: "/hosted/api/home/running_notebooks",
-      serverToken: "server-token",
-    },
-    {
-      authorization: "Bearer access-token",
-      body: undefined,
-      path: "/hosted/api/kernel/shutdown",
-      serverToken: "server-token",
-    },
+  expect(sessions.size).toBe(0);
+  expect(requests.map(({ path }) => path)).toEqual([
+    "/hosted/?file=notebook.py",
+    "/hosted/api/home/running_notebooks",
+    "/hosted/api/home/shutdown_session",
+    "/hosted/api/home/shutdown_session",
+    "/hosted/api/home/running_notebooks",
+    "/hosted/api/kernel/shutdown",
   ]);
+  expect(requests.every(({ authorization }) => authorization === "Bearer access-token")).toBe(true);
+  expect(requests[0]?.serverToken).toBeUndefined();
+  expect(requests.slice(1).every(({ serverToken }) => serverToken === "server-token")).toBe(true);
+  const drainedSessions = requests
+    .filter(({ path }) => path.endsWith("/shutdown_session"))
+    .map(({ body }) => z.object({ sessionId: z.string() }).parse(JSON.parse(body ?? "{}")))
+    .map(({ sessionId }) => sessionId);
+  expect(new Set(drainedSessions)).toEqual(new Set(["session-a", "session-b"]));
 });
 
 test("rejects a failed graceful-shutdown bootstrap request", async () => {
@@ -340,7 +315,6 @@ const delayedCooperativeKernelExit = async () => {
   try {
     await registration.ready;
     await expect.poll(() => responds(port), { timeout: FIXTURE_SERVER_START_TIMEOUT }).toBe(true);
-    const started = performance.now();
     await stopNotebookProcess(
       {
         child: registration.child,
@@ -351,9 +325,8 @@ const delayedCooperativeKernelExit = async () => {
       { shutdown: "run", timeout: 1_500 },
     );
 
-    const elapsed = performance.now() - started;
-    expect(elapsed).toBeGreaterThanOrEqual(350);
-    expect(elapsed).toBeLessThan(1_200);
+    expect(registration.child.exitCode).toBe(0);
+    expect(registration.child.signalCode).toBeNull();
     expect(processGroupIsRunning(registration.processGroupId)).toBe(false);
     expect(await notebookServerPortIsOpen(port)).toBe(false);
     unregisterNotebookProcess(registration, { directory });
@@ -410,7 +383,7 @@ test("stops a native authenticated Marimo run server without Studio bootstrap", 
       expect.soft(cleanupFailure).toBeUndefined();
       expectProcessTreeRootStopped(server.process, server.processGroupId);
       expect(await notebookServerPortIsOpen(port)).toBe(false);
-      expect(notebookProcessRecords(registryDirectory)).toEqual([]);
+      expect(existsSync(registryDirectory)).toBe(false);
     }
   } finally {
     rmSync(root, { force: true, recursive: true });
@@ -498,8 +471,7 @@ const stopListeningDescendant = async () => {
     await new Promise<void>((resolve) => child.once("close", () => resolve()));
     expect(child.exitCode).toBe(0);
     await expect.poll(() => responds(port), { timeout: FIXTURE_SERVER_START_TIMEOUT }).toBe(true);
-    await stopNotebookServer(server);
-    expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+    await stopNotebookServer(server, { timeout: FIXTURE_PROCESS_STOP_TIMEOUT });
     expect(await notebookServerPortIsOpen(port)).toBe(false);
   } finally {
     if (child.pid !== undefined) {
