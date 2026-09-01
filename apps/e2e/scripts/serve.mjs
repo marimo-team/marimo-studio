@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { cp, mkdir, rm } from "node:fs/promises";
 
+import { copyFixtureProviderPackage } from "./fixture-provider-package.mjs";
 import { e2eNetwork } from "./network.mjs";
 import {
   closeNotebookProcessRegistry,
@@ -140,6 +141,8 @@ try {
     preparation.requireActive();
     await cp(fixture, workspace, { recursive: true });
   }
+  preparation.requireActive();
+  await copyFixtureProviderPackage(workspaceDirectory);
 
   await preparation.run(
     "static fixture export",

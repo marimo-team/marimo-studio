@@ -90,11 +90,11 @@ test("reuses a warm view artifact with current notebook changes", async ({
     count: 1,
     status: 204,
   });
-  await page.getByLabel("Switch page").click();
+  await page.getByLabel("Switch view").click();
   await page.getByRole("button", { name: "qa-view", exact: true }).click();
   await expect(preview.getByRole("heading", { name: "Qa View" })).toBeVisible();
   await expect(preview.locator("#qa-metric")).toHaveText("44");
-  await expect(page.getByLabel("Page build details, Up to date")).toBeVisible();
+  await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
 
   expect(await readWorkspaceFile(receiptPath)).toBe(warmedReceipt);
   await recoverRequestAbort(abandonedHandoff);
@@ -416,7 +416,7 @@ test("keeps Source tabs and the editor reachable at narrow widths", async ({ pag
   await waitForPreview(page);
   await page.getByLabel("Workspace options").click();
   await page.getByRole("button", { name: "Source" }).click();
-  const tablist = page.getByRole("tablist", { name: "Page source files" });
+  const tablist = page.getByRole("tablist", { name: "View source files" });
   const tabs = page.getByRole("tab");
   expect(await tabs.count()).toBeGreaterThan(3);
   const first = tabs.first();
@@ -488,7 +488,7 @@ test("shows an agent-requested page and records its rendered revision", async ({
     session_id: sessionId,
     view: "qa-view",
   });
-  await expect(page.getByLabel("Switch page")).toContainText("qa-view");
+  await expect(page.getByLabel("Switch view")).toContainText("qa-view");
   await expect(previewFrame(page).getByRole("heading", { name: "Qa View" })).toBeVisible();
   replacedEventStream.recovered();
   const abandonedObservation = browserDiagnostics.expectRequestAbort({
@@ -600,7 +600,7 @@ test("keeps a slow activation open until the selected view is acknowledged", asy
   );
   try {
     await retried;
-    await expect(page.getByLabel("Switch page")).toContainText("slow-activation");
+    await expect(page.getByLabel("Switch view")).toContainText("slow-activation");
     await expect(
       preview.getByRole("heading", { name: "Slow Activation", exact: true }),
     ).toBeVisible();
@@ -613,7 +613,7 @@ test("keeps a slow activation open until the selected view is acknowledged", asy
     generation: expect.any(Number),
     view: "slow-activation",
   });
-  await expect(page.getByLabel("Switch page")).toContainText("slow-activation");
+  await expect(page.getByLabel("Switch view")).toContainText("slow-activation");
   await expect(
     preview.getByRole("heading", { name: "Slow Activation", exact: true }),
   ).toBeVisible();

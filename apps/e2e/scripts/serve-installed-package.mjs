@@ -34,13 +34,21 @@ const environmentExecutable = (environmentDirectory, name) =>
 const outputs = new WeakMap();
 const preparation = new PreparationProcessOwner();
 const closures = [];
+const servers = [];
 const shutdowns = [];
 let exitCode = 0;
+let exported;
+let runServer;
 let server;
 let stopping = false;
 let temporaryRoot;
 
-const track = (child) => {
+const track = ({ child, ...server }) => {
+  servers.push({
+    child,
+    ...server,
+    output: () => outputs.get(child)?.() ?? "",
+  });
   closures.push(
     new Promise((resolveClose) => {
       child.once("error", (error) => {
@@ -69,17 +77,9 @@ const stop = (signal) => {
       exitCode = 1;
     }),
   );
-  if (server) {
+  for (const { shutdown, timeout, ...serverProcess } of servers) {
     shutdowns.push(
-      stopNotebookProcess(
-        {
-          child: server,
-          output: outputs.get(server),
-          port: installedPackageNetwork.port,
-          serverUrl: installedPackageNetwork.origin,
-        },
-        { shutdown: "run", signal, timeout: 10_000 },
-      ).catch((error) => {
+      stopNotebookProcess(serverProcess, { shutdown, signal, timeout }).catch((error) => {
         console.error(error);
         exitCode = 1;
       }),
@@ -99,6 +99,7 @@ try {
   const workspaceDirectory = resolve(temporaryRoot, "workspace");
   const configDirectory = resolve(temporaryRoot, "xdg-config");
   const notebookPath = resolve(workspaceDirectory, "notebook.py");
+  const staticDirectory = resolve(temporaryRoot, "static");
   const viewDirectory = resolve(
     workspaceDirectory,
     "__marimo__",
@@ -171,12 +172,28 @@ try {
     { cwd: workspaceDirectory, env: environment, stdio: "inherit" },
   );
   preparation.requireActive();
+  await preparation.run(
+    "export installed Vanilla view",
+    studio,
+    [
+      "view",
+      "export",
+      "dashboard",
+      "--target",
+      notebookPath,
+      "--output",
+      staticDirectory,
+      "--json",
+    ],
+    { cwd: workspaceDirectory, env: environment, stdio: "inherit" },
+  );
+  preparation.requireActive();
 
-  server = track(
-    spawn(
+  server = track({
+    child: spawn(
       marimo,
       [
-        "run",
+        "edit",
         notebookPath,
         "--no-sandbox",
         "--headless",
@@ -193,15 +210,87 @@ try {
         stdio: ["ignore", "pipe", "pipe"],
       },
     ),
-  );
+    port: installedPackageNetwork.port,
+    serverUrl: installedPackageNetwork.origin,
+    shutdown: "studio",
+    timeout: 10_000,
+  });
   outputs.set(
     server,
     captureProcessOutput(server, { stdout: process.stdout, stderr: process.stderr }),
   );
-  await waitForServer(server, `${installedPackageNetwork.origin}/_marimo-studio/status`, {
-    output: outputs.get(server),
-    timeout: 120_000,
+  runServer = track({
+    child: spawn(
+      marimo,
+      [
+        "run",
+        notebookPath,
+        "--no-sandbox",
+        "--headless",
+        "--no-token",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(installedPackageNetwork.run.port),
+      ],
+      {
+        cwd: workspaceDirectory,
+        detached: process.platform !== "win32",
+        env: environment,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    ),
+    port: installedPackageNetwork.run.port,
+    serverUrl: installedPackageNetwork.run.origin,
+    shutdown: "run",
+    timeout: 10_000,
   });
+  outputs.set(
+    runServer,
+    captureProcessOutput(runServer, { stdout: process.stdout, stderr: process.stderr }),
+  );
+  exported = track({
+    child: spawn(
+      python,
+      [
+        "-m",
+        "http.server",
+        String(installedPackageNetwork.static.port),
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        staticDirectory,
+      ],
+      {
+        cwd: workspaceDirectory,
+        detached: process.platform !== "win32",
+        env: environment,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    ),
+    port: installedPackageNetwork.static.port,
+    serverUrl: installedPackageNetwork.static.origin,
+    shutdown: "process",
+    timeout: 10_000,
+  });
+  outputs.set(
+    exported,
+    captureProcessOutput(exported, { stdout: process.stdout, stderr: process.stderr }),
+  );
+  await Promise.all([
+    waitForServer(server, `${installedPackageNetwork.origin}/_marimo-studio/status`, {
+      output: outputs.get(server),
+      timeout: 120_000,
+    }),
+    waitForServer(runServer, `${installedPackageNetwork.run.origin}/_marimo-studio/status`, {
+      output: outputs.get(runServer),
+      timeout: 120_000,
+    }),
+    waitForServer(exported, installedPackageNetwork.static.origin, {
+      output: outputs.get(exported),
+      timeout: 120_000,
+    }),
+  ]);
   await Promise.all(closures);
 } catch (error) {
   if (!stopping) {

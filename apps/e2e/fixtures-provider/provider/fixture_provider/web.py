@@ -6,6 +6,7 @@ import shutil
 from pathlib import PurePosixPath
 
 from marimo_studio.view_providers import (
+    PROVIDER_API_VERSION,
     BuildRequest,
     BuildResult,
     InspectionRequest,
@@ -53,7 +54,7 @@ class MultiFileProvider:
     info = ProviderInfo(
         title="E2E web project",
         summary="Builds one HTML entry and its declared browser assets.",
-        api_version=1,
+        api_version=PROVIDER_API_VERSION,
     )
     _starter = ProviderStarter(
         key="default",
@@ -80,15 +81,27 @@ class MultiFileProvider:
         return StarterPlan(
             files={
                 _ENTRY: (
-                    b'<!doctype html><html><head><link rel="stylesheet" href="app.css">'
-                    b'</head><body><main id="app-shell"></main>'
-                    b'<script type="module" src="scripts/app.js"></script></body></html>'
+                    b'<!doctype html><html lang="en"><head><meta charset="utf-8">'
+                    b'<meta name="viewport" content="width=device-width, initial-scale=1">'
+                    b'<link rel="stylesheet" href="app.css"></head><body>'
+                    b'<main id="app-shell"><h1 data-web-heading>External web project</h1>'
+                    b"<p data-web-script>Waiting for JavaScript</p>"
+                    b'<p>Notebook metric: <strong data-web-value mo-value="metric"></strong></p>'
+                    b'</main><script type="module" src="scripts/app.js"></script></body></html>'
                 ),
-                PurePosixPath("src/app.css"): b"body { margin: 0; }\n",
-                PurePosixPath("src/scripts/app.js"): b'import "./message.js";\n',
+                PurePosixPath("src/app.css"): (
+                    b"body { margin: 0; background: rgb(238, 244, 240); }\n"
+                    b"[data-web-heading] { color: rgb(24, 78, 55); }\n"
+                ),
+                PurePosixPath("src/scripts/app.js"): (
+                    b'import { message } from "./message.js";\n'
+                    b'const target = document.querySelector("[data-web-script]");\n'
+                    b'if (!(target instanceof HTMLElement)) throw new Error("Web marker missing");\n'
+                    b"target.textContent = message;\n"
+                ),
                 PurePosixPath(
                     "src/scripts/message.js"
-                ): b"export const ready = true;\n",
+                ): b'export const message = "Imported module ready";\n',
             },
             cell_targets=(),
         )

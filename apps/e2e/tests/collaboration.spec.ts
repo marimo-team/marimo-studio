@@ -122,12 +122,12 @@ test("keeps two tabs isolated inside one notebook scope", async ({ browserDiagno
       count: 1,
     });
     expect((await activate("report", secondClient)).status()).toBe(200);
-    await expect(second.getByLabel("Switch page")).toContainText("report");
+    await expect(second.getByLabel("Switch view")).toContainText("report");
     await expect(secondPreview.getByRole("heading", { name: "Report" })).toBeVisible();
-    await expect(page.getByLabel("Switch page")).toContainText("dashboard");
+    await expect(page.getByLabel("Switch view")).toContainText("dashboard");
 
     expect((await activate("dashboard", secondClient)).status()).toBe(200);
-    await expect(second.getByLabel("Switch page")).toContainText("dashboard");
+    await expect(second.getByLabel("Switch view")).toContainText("dashboard");
     const original = await readWorkspaceFile(dashboardHtmlPath);
     const published = original.replace("Studio browser fixture", "Published to both tabs");
     await writeViewSource(page, "dashboard", "src/index.html", published);
@@ -186,7 +186,7 @@ test("keeps two tabs isolated inside one notebook scope", async ({ browserDiagno
         return response.status();
       })
       .toBe(200);
-    await expect(page.getByLabel("Switch page")).toContainText("report");
+    await expect(page.getByLabel("Switch view")).toContainText("report");
     await expect(firstPreview.getByRole("heading", { name: "Report" })).toBeVisible();
     await waitForPreview(page);
     replacedEventStreams.recovered();

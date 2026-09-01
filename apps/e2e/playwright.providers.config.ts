@@ -9,7 +9,7 @@ import {
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["provider-runtime.spec.ts", "external-provider.spec.ts"],
+  testMatch: ["provider-runtime.spec.ts", "provider-reveal.spec.ts", "external-provider.spec.ts"],
   timeout: 180_000,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),

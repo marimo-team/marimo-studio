@@ -15,7 +15,7 @@ test("offsets every E2E endpoint while preserving the default port map", () => {
     4_321, 4_322, 4_323, 4_324, 4_325, 4_326,
   ]);
   expect(Object.values(defaults.provider).map(({ port }) => port)).toEqual([
-    4_331, 4_332, 4_333, 4_334,
+    4_331, 4_332, 4_333, 4_334, 4_335, 4_336,
   ]);
   expect(offset.main.studio).toEqual({ origin: "http://127.0.0.1:4421", port: 4_421 });
   expect(offset.provider.external).toEqual({ origin: "http://127.0.0.1:4434", port: 4_434 });
@@ -39,5 +39,5 @@ test("rejects invalid E2E port offsets before starting a server", () => {
   for (const source of ["", "-1", "1.5", "invalid"]) {
     expect(() => createE2ENetwork(source)).toThrow("must be a non-negative integer");
   }
-  expect(() => createE2ENetwork("61202")).toThrow("must be between 0 and 61201");
+  expect(() => createE2ENetwork("61200")).toThrow("must be between 0 and 61199");
 });

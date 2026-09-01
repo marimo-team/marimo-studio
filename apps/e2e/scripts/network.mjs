@@ -1,5 +1,5 @@
 const OFFSET_ENV = "MARIMO_STUDIO_E2E_PORT_OFFSET";
-const MAX_OFFSET = 65_535 - 4_334;
+const MAX_OFFSET = 65_535 - 4_336;
 
 const readPortOffset = (source) => {
   if (!/^\d+$/.test(source)) {
@@ -34,6 +34,8 @@ export const createE2ENetwork = (source = "0") => {
       gallery: endpoint(4_332, portOffset),
       story: endpoint(4_333, portOffset),
       external: endpoint(4_334, portOffset),
+      web: endpoint(4_335, portOffset),
+      reveal: endpoint(4_336, portOffset),
     }),
   });
 };

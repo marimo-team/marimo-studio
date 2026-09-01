@@ -5,8 +5,17 @@ app = marimo.App()
 
 
 @app.cell
-def answer():
-    answer = 42
+def controls():
+    import marimo as mo
+
+    scale = mo.ui.slider(1, 3, value=2, label="Scale")
+    scale
+    return (scale,)
+
+
+@app.cell
+def answer(scale):
+    answer = scale.value * 21
     return (answer,)
 
 

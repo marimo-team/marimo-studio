@@ -20,7 +20,7 @@ const removeTree = (directory) =>
   });
 
 export const clearProviderGeneratedState = async () => {
-  for (const view of ["overview", "gallery", "story"]) {
+  for (const view of ["overview", "gallery", "story", "web", "slides"]) {
     await removeTree(resolve(targetViews, view, ".artifacts"));
   }
   await removeTree(resolve(targetViews, ".locks"));

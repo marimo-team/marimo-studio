@@ -6,6 +6,7 @@ import sys
 from pathlib import PurePosixPath
 
 from marimo_studio.view_providers import (
+    PROVIDER_API_VERSION,
     BuildRequest,
     BuildResult,
     InspectionRequest,
@@ -47,7 +48,7 @@ class ReportProvider:
     info = ProviderInfo(
         title="External report",
         summary="Copies one HTML report into a browser artifact.",
-        api_version=1,
+        api_version=PROVIDER_API_VERSION,
     )
     _starter = ProviderStarter(
         key="default",

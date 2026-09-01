@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { z } from "zod";
 
+import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.mjs";
 import { fixtureDirectory, notebookProcessRegistryDirectory } from "../scripts/paths.mjs";
 import { processGroupIsRunning } from "../scripts/process-group.mjs";
 import { waitForPreview } from "./fixture.ts";
@@ -62,6 +63,7 @@ test("forced runner shutdown drains every open native notebook session", async (
   const root = await mkdtemp(resolve(tmpdir(), "marimo-studio-forced-interruption-"));
   const workspace = resolve(root, "workspace");
   await cp(fixtureDirectory, workspace, { recursive: true });
+  await copyFixtureProviderPackage(workspace);
   const port = await availablePort();
   const server = startNotebookServer({
     authentication: ["--no-token"],
@@ -122,6 +124,7 @@ test("run-mode shutdown drains an active kernel through process lifespan", async
   const root = await mkdtemp(resolve(tmpdir(), "marimo-studio-run-interruption-"));
   const workspace = resolve(root, "workspace");
   await cp(fixtureDirectory, workspace, { recursive: true });
+  await copyFixtureProviderPackage(workspace);
   const notebook = resolve(workspace, "notebook.py");
   await writeFile(
     notebook,

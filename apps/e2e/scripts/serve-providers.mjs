@@ -8,7 +8,9 @@ import {
   providerConfigDirectory,
   providerGalleryStaticDirectory,
   providerNotebookPath,
+  providerRevealStaticDirectory,
   providerStoryStaticDirectory,
+  providerWebStaticDirectory,
   repositoryDirectory,
 } from "./paths.mjs";
 import { PreparationProcessOwner } from "./preparation-process.mjs";
@@ -16,18 +18,18 @@ import {
   clearProviderGeneratedState,
   prepareProviderWorkspace,
 } from "./prepare-provider-runtime.mjs";
-import { stopProcessGroup } from "./process-group.mjs";
 import { captureProcessOutput, stopNotebookProcess, waitForServer } from "./server-process.mjs";
 
 const preparation = new PreparationProcessOwner();
-const children = [];
 const closures = [];
+const servers = [];
 const shutdowns = [];
 const outputs = new WeakMap();
-let live;
 let external;
 let galleryStatic;
+let revealStatic;
 let storyStatic;
+let webStatic;
 let stopping = false;
 let exitCode = 0;
 
@@ -51,19 +53,6 @@ const spawnServer = (args, options = {}) => {
   return child;
 };
 
-const stopServer = (child, port, serverUrl, signal, shutdown) => {
-  if (!child) return;
-  shutdowns.push(
-    stopNotebookProcess(
-      { child, output: outputs.get(child), port, serverUrl },
-      { shutdown, signal },
-    ).catch((error) => {
-      console.error(error);
-      exitCode = 1;
-    }),
-  );
-};
-
 const stop = (signal) => {
   if (stopping) return;
   stopping = true;
@@ -73,47 +62,22 @@ const stop = (signal) => {
       exitCode = 1;
     }),
   );
-  children.forEach((child) => {
-    if (child === live) {
-      stopServer(
-        child,
-        e2eNetwork.provider.live.port,
-        e2eNetwork.provider.live.origin,
-        signal,
-        "run",
-      );
-    } else if (child === external) {
-      stopServer(
-        child,
-        e2eNetwork.provider.external.port,
-        e2eNetwork.provider.external.origin,
-        signal,
-        "run",
-      );
-    } else if (child === galleryStatic) {
-      stopServer(
-        child,
-        e2eNetwork.provider.gallery.port,
-        e2eNetwork.provider.gallery.origin,
-        signal,
-        "process",
-      );
-    } else if (child === storyStatic) {
-      stopServer(
-        child,
-        e2eNetwork.provider.story.port,
-        e2eNetwork.provider.story.origin,
-        signal,
-        "process",
-      );
-    } else {
-      stopProcessGroup(child.pid, signal);
-    }
-  });
+  for (const { shutdown, timeout, ...server } of servers) {
+    shutdowns.push(
+      stopNotebookProcess(server, { shutdown, signal, timeout }).catch((error) => {
+        console.error(error);
+        exitCode = 1;
+      }),
+    );
+  }
 };
 
-const track = (child) => {
-  children.push(child);
+const track = ({ child, ...server }) => {
+  servers.push({
+    child,
+    ...server,
+    output: () => outputs.get(child)?.() ?? "",
+  });
   closures.push(
     new Promise((accept) => {
       child.on("error", (error) => {
@@ -159,6 +123,7 @@ const prepare = async () => {
     ["overview", "marimo-studio/vanilla:default"],
     ["gallery", "marimo-studio/react:default"],
     ["story", "marimo-studio/svelte:default"],
+    ["slides", "marimo-studio/react:reveal"],
   ]) {
     await run(`create ${view} provider view`, [
       "run",
@@ -191,9 +156,26 @@ const prepare = async () => {
     "marimo-studio-e2e-provider/report:default",
     "--json",
   ]);
+  await run("create external web view", [
+    "run",
+    "--frozen",
+    "--group",
+    "e2e",
+    "marimo-studio",
+    "view",
+    "create",
+    "web",
+    "--target",
+    providerNotebookPath,
+    "--starter",
+    "marimo-studio-e2e-provider/web:default",
+    "--json",
+  ]);
   for (const [view, output] of [
     ["gallery", providerGalleryStaticDirectory],
     ["story", providerStoryStaticDirectory],
+    ["web", providerWebStaticDirectory],
+    ["slides", providerRevealStaticDirectory],
   ]) {
     preparation.requireActive();
     await run(`export ${view} production`, [
@@ -223,8 +205,8 @@ try {
   await prepare();
   preparation.requireActive();
 
-  galleryStatic = track(
-    spawnServer(
+  galleryStatic = track({
+    child: spawnServer(
       [
         "run",
         "python",
@@ -238,10 +220,13 @@ try {
       ],
       { stdio: "ignore" },
     ),
-  );
+    port: e2eNetwork.provider.gallery.port,
+    serverUrl: e2eNetwork.provider.gallery.origin,
+    shutdown: "process",
+  });
   preparation.requireActive();
-  storyStatic = track(
-    spawnServer(
+  storyStatic = track({
+    child: spawnServer(
       [
         "run",
         "python",
@@ -255,10 +240,53 @@ try {
       ],
       { stdio: "ignore" },
     ),
-  );
+    port: e2eNetwork.provider.story.port,
+    serverUrl: e2eNetwork.provider.story.origin,
+    shutdown: "process",
+  });
   preparation.requireActive();
-  external = track(
-    spawnServer([
+  webStatic = track({
+    child: spawnServer(
+      [
+        "run",
+        "python",
+        "-m",
+        "http.server",
+        String(e2eNetwork.provider.web.port),
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        providerWebStaticDirectory,
+      ],
+      { stdio: "ignore" },
+    ),
+    port: e2eNetwork.provider.web.port,
+    serverUrl: e2eNetwork.provider.web.origin,
+    shutdown: "process",
+  });
+  preparation.requireActive();
+  revealStatic = track({
+    child: spawnServer(
+      [
+        "run",
+        "python",
+        "-m",
+        "http.server",
+        String(e2eNetwork.provider.reveal.port),
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        providerRevealStaticDirectory,
+      ],
+      { stdio: "ignore" },
+    ),
+    port: e2eNetwork.provider.reveal.port,
+    serverUrl: e2eNetwork.provider.reveal.origin,
+    shutdown: "process",
+  });
+  preparation.requireActive();
+  external = track({
+    child: spawnServer([
       "run",
       "--frozen",
       "--group",
@@ -274,18 +302,23 @@ try {
       "--port",
       String(e2eNetwork.provider.external.port),
     ]),
-  );
+    port: e2eNetwork.provider.external.port,
+    serverUrl: e2eNetwork.provider.external.origin,
+    shutdown: "run",
+  });
 
   await Promise.all([
     waitForServer(galleryStatic, e2eNetwork.provider.gallery.origin),
     waitForServer(storyStatic, e2eNetwork.provider.story.origin),
+    waitForServer(webStatic, `${e2eNetwork.provider.web.origin}/src/index.html`),
+    waitForServer(revealStatic, e2eNetwork.provider.reveal.origin),
     waitForServer(external, e2eNetwork.provider.external.origin, {
       output: outputs.get(external),
     }),
   ]);
   preparation.requireActive();
-  live = track(
-    spawnServer([
+  track({
+    child: spawnServer([
       "run",
       "--frozen",
       "--group",
@@ -301,7 +334,10 @@ try {
       "--port",
       String(e2eNetwork.provider.live.port),
     ]),
-  );
+    port: e2eNetwork.provider.live.port,
+    serverUrl: e2eNetwork.provider.live.origin,
+    shutdown: "run",
+  });
   await Promise.all(closures);
 } catch (error) {
   if (!stopping) {

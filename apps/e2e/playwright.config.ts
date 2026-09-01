@@ -6,7 +6,7 @@ import { mainPlaywrightOutputDirectory, mainPlaywrightReportDirectory } from "./
 
 export default defineConfig({
   testDir: "./tests",
-  testIgnore: ["provider-runtime.spec.ts", "external-provider.spec.ts"],
+  testIgnore: ["provider-runtime.spec.ts", "provider-reveal.spec.ts", "external-provider.spec.ts"],
   timeout: 90_000,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),

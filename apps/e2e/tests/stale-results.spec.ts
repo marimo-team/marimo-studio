@@ -169,7 +169,7 @@ test("cancels one client's held old-view request without changing the peer view"
       },
     );
     expect(activation.status()).toBe(200);
-    await expect(page.getByLabel("Switch page")).toContainText("report");
+    await expect(page.getByLabel("Switch view")).toContainText("report");
     await expect(firstPreview.getByRole("heading", { name: "Report" })).toBeVisible();
     const reportMetric = firstPreview.locator('[mo-value="metric"]');
     await expect(reportMetric).toHaveText(String(lateMetric));
@@ -185,7 +185,7 @@ test("cancels one client's held old-view request without changing the peer view"
 
     await expect(firstPreview.getByRole("heading", { name: "Report" })).toBeVisible();
     await expect(reportMetric).toHaveText("21");
-    await expect(second.getByLabel("Switch page")).toContainText("dashboard");
+    await expect(second.getByLabel("Switch view")).toContainText("dashboard");
     expect(String(lateMetric)).not.toBe(peerMetric);
     await expect(secondMetric).toHaveText(peerMetric ?? "");
     await expect(secondPreview.locator("html")).toHaveAttribute(
@@ -242,10 +242,10 @@ test("cancels a held old-view request without changing current or cached view st
         /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/.test(url.pathname)
       );
     });
-    await page.getByLabel("Switch page").click();
+    await page.getByLabel("Switch view").click();
     await page.getByRole("button", { name: view, exact: true }).click();
     await committed;
-    await expect(page.getByLabel("Switch page")).toContainText(view);
+    await expect(page.getByLabel("Switch view")).toContainText(view);
     const selected = await waitForViewPreview(page, view);
     await expect(selected.getByRole("heading", { name: heading, exact: true })).toBeVisible();
   };

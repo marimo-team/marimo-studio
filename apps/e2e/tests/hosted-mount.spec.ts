@@ -1,3 +1,4 @@
+import { viewProjectSchema } from "@marimo-studio/protocol/view-project";
 import { readFile } from "node:fs/promises";
 
 import {
@@ -35,7 +36,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
 
   await page.goto(`${baseUrl}/?access_token=${accessToken}`);
   await expect(page).toHaveURL(`${baseUrl}/`);
-  await expect(page.getByRole("heading", { name: "Create the first page" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create the first view" })).toBeVisible();
   await expect(page.locator('iframe[title="Marimo editor"]')).toHaveAttribute("inert", "");
   await expect(page.locator('iframe[title="Marimo editor"]')).toHaveAttribute(
     "aria-hidden",
@@ -85,7 +86,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     .selectOption("marimo-studio/vanilla:default");
   await page.getByRole("button", { name: "Create dashboard" }).click();
   await expect(page).toHaveURL(`${baseUrl}/studio/dashboard/`);
-  await expect(page.getByLabel("Switch page")).toContainText("dashboard");
+  await expect(page.getByLabel("Switch view")).toContainText("dashboard");
 
   const after = await page.evaluate(async (url) => {
     const response = await fetch(url);
@@ -114,8 +115,13 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     count: 1,
     status: 204,
   });
+  const projectResponse = await page.request.get(
+    `${baseUrl}/_marimo-studio/views/dashboard/project`,
+  );
+  expect(projectResponse.ok()).toBe(true);
+  const project = viewProjectSchema.parse(await projectResponse.json());
   const saved = await page.evaluate(
-    async ({ content, sourceUrl, token }) => {
+    async ({ catalogGeneration, content, sourceUrl, token, viewGeneration }) => {
       const current = await fetch(sourceUrl, { cache: "no-store" });
       const revision = current.headers.get("ETag");
       if (!current.ok || !revision) {
@@ -127,15 +133,19 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
           "Content-Type": "text/plain; charset=utf-8",
           "If-Match": revision,
           "Marimo-Server-Token": token,
+          "Marimo-Studio-Catalog-Generation": catalogGeneration,
+          "Marimo-Studio-View-Generation": viewGeneration,
         },
         body: content,
       });
       return response.status;
     },
     {
+      catalogGeneration: project.catalog_generation,
       content: replacement,
       sourceUrl: `${baseUrl}/_marimo-studio/views/dashboard/source/index.html`,
       token: serverToken,
+      viewGeneration: project.view_generation,
     },
   );
   expect(saved).toBe(204);

@@ -75,7 +75,7 @@ const selectView = async (page: Page, view: string, heading: string): Promise<Vi
       /^\/_marimo-studio\/active-view-handoffs\/[^/]+$/.test(url.pathname)
     );
   });
-  await page.getByLabel("Switch page").click();
+  await page.getByLabel("Switch view").click();
   const accessibleName = view === "dashboard" ? "dashboard, default" : view;
   await page.getByRole("button", { name: accessibleName, exact: true }).click();
   await committed;

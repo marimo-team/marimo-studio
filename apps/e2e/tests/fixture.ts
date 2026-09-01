@@ -1,4 +1,5 @@
-import { viewListSchema } from "@marimo-studio/protocol/views";
+import { viewProjectSchema } from "@marimo-studio/protocol/view-project";
+import { deletedViewSchema, viewListSchema } from "@marimo-studio/protocol/views";
 import {
   expect,
   test as base,
@@ -144,6 +145,10 @@ export const restoreWorkspace = async () => {
   await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/app.css");
   await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/scripts/app.js");
   await copyFixtureFile("__marimo__/studio/notebook/dashboard/src/scripts/message.js");
+  await copyFixtureFile("__marimo__/studio/notebook/vanilla-local/view.toml");
+  await copyFixtureFile("__marimo__/studio/notebook/vanilla-local/index.html");
+  await copyFixtureFile("__marimo__/studio/notebook/vanilla-local/styles/app.css");
+  await copyFixtureFile("__marimo__/studio/notebook/vanilla-local/scripts/app.js");
   await removeTree(resolve(workspaceDirectory, "__marimo__/studio/plain"));
 };
 
@@ -404,6 +409,10 @@ export const writeViewSource = async (
   file = "notebook.py",
 ): Promise<void> => {
   const encoded = path.split("/").map(encodeURIComponent).join("/");
+  const projectResponse = await page.request.get(
+    `/_marimo-studio/views/${encodeURIComponent(view)}/project?file=${encodeURIComponent(file)}`,
+  );
+  const project = viewProjectSchema.parse(await projectResponse.json());
   const url = `/_marimo-studio/views/${encodeURIComponent(view)}/source/${encoded}?file=${encodeURIComponent(file)}`;
   const current = await page.request.get(url);
   const revision = current.headers().etag;
@@ -415,7 +424,9 @@ export const writeViewSource = async (
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
       "If-Match": revision,
+      "Marimo-Studio-Catalog-Generation": project.catalog_generation,
       "Marimo-Server-Token": await studioServerToken(page),
+      "Marimo-Studio-View-Generation": project.view_generation,
     },
   });
   if (!saved.ok()) {
@@ -431,9 +442,23 @@ export const removeWorkspaceView = async (
   view: string,
   file = "notebook.py",
 ): Promise<void> => {
+  const inventoryUrl = `/_marimo-studio/views?file=${encodeURIComponent(file)}`;
+  const inventoryResponse = await page.request.get(inventoryUrl);
+  const inventory = viewListSchema.parse(await inventoryResponse.json());
+  const target = inventory.views.find((item) => item.name === view);
+  if (!target) {
+    throw new Error(`Could not find ${view} in the current Studio inventory`);
+  }
   const response = await page.request.delete(
     `/_marimo-studio/views/${encodeURIComponent(view)}?file=${encodeURIComponent(file)}`,
-    { headers: { "Marimo-Server-Token": await studioServerToken(page) } },
+    {
+      data: {
+        catalog_generation: inventory.generation,
+        name: view,
+        view_generation: target.generation,
+      },
+      headers: { "Marimo-Server-Token": await studioServerToken(page) },
+    },
   );
   if (!response.ok()) {
     throw new Error(`Could not remove ${view} (${response.status()}): ${await response.text()}`);
@@ -452,16 +477,25 @@ const releaseWindowsWorkspaceProjects = async (
   if (!response.ok()) {
     throw new Error(`Could not inspect Studio views: ${response.status()}`);
   }
-  const inventory = viewListSchema.parse(await response.json());
+  let inventory = viewListSchema.parse(await response.json());
   const survivor = "windows-cleanup";
   if (!inventory.views.some(({ name }) => name === survivor)) {
     const created = await request.post(admin.viewsUrl, {
-      data: { name: survivor, starter: "marimo-studio/vanilla:default" },
+      data: {
+        catalog_generation: inventory.generation,
+        name: survivor,
+        starter: "marimo-studio/vanilla:default",
+      },
       headers,
     });
     if (!created.ok()) {
       throw new Error(`Could not prepare Windows workspace cleanup: ${created.status()}`);
     }
+    const refreshed = await request.get(admin.viewsUrl);
+    if (!refreshed.ok()) {
+      throw new Error(`Could not refresh Studio views: ${refreshed.status()}`);
+    }
+    inventory = viewListSchema.parse(await refreshed.json());
   }
   for (const { name } of inventory.views) {
     if (name === survivor) {
@@ -469,10 +503,22 @@ const releaseWindowsWorkspaceProjects = async (
     }
     const target = new URL(admin.viewsUrl);
     target.pathname = `${target.pathname}/${encodeURIComponent(name)}`;
-    const removed = await request.delete(target.href, { headers });
+    const owner = inventory.views.find((view) => view.name === name);
+    if (!owner) {
+      continue;
+    }
+    const removed = await request.delete(target.href, {
+      data: {
+        catalog_generation: inventory.generation,
+        name,
+        view_generation: owner.generation,
+      },
+      headers,
+    });
     if (!removed.ok()) {
       throw new Error(`Could not release view ${name}: ${removed.status()}`);
     }
+    inventory = deletedViewSchema.parse(await removed.json());
   }
 };
 

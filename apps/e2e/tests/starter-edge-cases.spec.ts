@@ -62,7 +62,7 @@ const expectEmptyPreview = async (page: Page, candidate: (typeof noDisplayCases)
     .toEqual({ diagnostics: [], projections: [] });
 };
 
-test("builds and renders every starter when the notebook has no display cells", async ({
+test("builds and renders every starter when no cell may display output", async ({
   browserDiagnostics,
   page,
 }) => {
@@ -169,7 +169,7 @@ test("keeps the active preview usable after a manifestless creation conflict", a
 
   await rm(conflict, { recursive: true });
   await addWorkspaceView(workspaceNotebookPath, "blocked", "marimo-studio/vanilla:default");
-  await page.getByLabel("Switch page").click();
+  await page.getByLabel("Switch view").click();
   await page.getByRole("button", { name: "blocked", exact: true }).click();
   const recovered = await waitForPreview(page);
   await expect(recovered.getByRole("heading", { name: "Blocked" })).toBeVisible();
@@ -193,6 +193,7 @@ test("publishes complete projects during concurrent starter creation", async ({
     ["race-react-2", "marimo-studio/react:default"],
     ["race-svelte-2", "marimo-studio/svelte:default"],
   ] as const;
+  const existingViews = new Set(["dashboard", "vanilla-local", "deno-seed"]);
   await addWorkspaceView(workspaceNotebookPath, "deno-seed", "marimo-studio/react:default");
   const supersededPresentations = browserDiagnostics.expectRequestFailure({
     origin: studioOrigin,
@@ -220,7 +221,9 @@ test("publishes complete projects during concurrent starter creation", async ({
     expect(response.ok()).toBe(true);
     const inventory = viewListSchema.parse(await response.json());
     for (const { name } of inventory.views) {
-      if (name === "dashboard" || name === "deno-seed" || observed.has(name)) continue;
+      if (existingViews.has(name) || observed.has(name)) {
+        continue;
+      }
       const projectResponse = await page.request.get(
         `/_marimo-studio/views/${name}/project?file=notebook.py`,
       );
@@ -239,10 +242,10 @@ test("publishes complete projects during concurrent starter creation", async ({
   await creation;
   const finalInventory = await sampleCatalog();
   expect(new Set(finalInventory.views.map(({ name }) => name))).toEqual(
-    new Set(["dashboard", "deno-seed", ...candidates.map(([name]) => name)]),
+    new Set([...existingViews, ...candidates.map(([name]) => name)]),
   );
   expect(observed).toEqual(new Set(candidates.map(([name]) => name)));
-  await page.getByLabel("Switch page").click();
+  await page.getByLabel("Switch view").click();
   for (const [name] of candidates) {
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
   }
