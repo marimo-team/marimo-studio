@@ -1,8 +1,11 @@
-import type { ReceiverAdmittedMessage } from "@marimo-studio/protocol/preview-messages";
+import type {
+  ReceiverAdmittedMessage,
+  ReceiverReadyMessage,
+} from "@marimo-studio/protocol/preview-messages";
 
 import { parsePreviewMessage } from "@marimo-studio/protocol/preview-messages";
 
-import { isStudioParentMessage } from "./parent-bridge.ts";
+import { isStudioParentMessage, postToStudioParent } from "./parent-bridge.ts";
 import { studioOwned } from "./studio-ownership.ts";
 
 export interface ReceiverAdmissionTarget {
@@ -51,5 +54,13 @@ export const waitForReceiverAdmission = (
     }
     globalThis.addEventListener("message", listener);
     signal?.addEventListener("abort", retired, { once: true });
+    const ready: ReceiverReadyMessage = {
+      type: "marimo-studio:receiver-ready",
+      runtime: target.runtime,
+      lifecycleId: target.lifecycleId,
+      view: target.view,
+      revision: target.revision(),
+    };
+    postToStudioParent(ready);
   });
 };

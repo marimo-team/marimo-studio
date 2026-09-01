@@ -285,12 +285,6 @@ const startDevelopmentReload = async (): Promise<void> => {
   });
   subscribeRuntimeConfig(() => {
     notifyDiagnostics(getRuntimeConfig().diagnostics, getRuntimeConfig().view);
-    if (
-      globalThis.__MARIMO_STUDIO_RUNTIME_STATE__ === "booting" &&
-      !receiverRefreshHandshake.active
-    ) {
-      announceReceiver();
-    }
     if (baselineReconciler.configure()) {
       reload();
     }

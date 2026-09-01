@@ -1,3 +1,4 @@
+import { parsePreviewMessage } from "@marimo-studio/protocol/preview-messages";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import { waitForReceiverAdmission } from "../src/document/receiver-admission.ts";
@@ -16,6 +17,7 @@ globalThis.__MARIMO_MOUNT_CONFIG__ = {
 
 afterEach(() => {
   globalThis.history.replaceState({}, "", "/");
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -42,6 +44,7 @@ test("Studio admission accepts only the current document identity", async () => 
   );
   const parent = globalThis.window;
   vi.stubGlobal("parent", parent);
+  const post = vi.spyOn(parent, "postMessage");
   let revision = "revision-current";
   const admitted = waitForReceiverAdmission(
     {
@@ -51,6 +54,16 @@ test("Studio admission accepts only the current document identity", async () => 
       revision: () => revision,
     },
     true,
+  );
+  expect(post).toHaveBeenCalledWith(
+    {
+      type: "marimo-studio:receiver-ready",
+      runtime: "server",
+      lifecycleId: 7,
+      view: "dashboard",
+      revision: "revision-current",
+    },
+    globalThis.location.origin,
   );
   let resolved = false;
   void admitted.then(() => {
@@ -72,6 +85,33 @@ test("Studio admission accepts only the current document identity", async () => 
     lifecycleId: 7,
     revision: "revision-next",
   });
+});
+
+test("Studio admission listens before announcing receiver readiness", async () => {
+  const parent = globalThis.window;
+  vi.stubGlobal("parent", parent);
+  const post = vi.spyOn(parent, "postMessage").mockImplementation((message) => {
+    const ready = parsePreviewMessage(message);
+    if (ready?.type === "marimo-studio:receiver-ready") {
+      dispatch(parent, ready.revision);
+    }
+  });
+
+  const admitted = waitForReceiverAdmission(
+    {
+      lifecycleId: 7,
+      runtime: "server",
+      view: "dashboard",
+      revision: () => "revision-current",
+    },
+    true,
+  );
+
+  await expect(admitted).resolves.toMatchObject({
+    lifecycleId: 7,
+    revision: "revision-current",
+  });
+  expect(post).toHaveBeenCalledOnce();
 });
 
 test("standalone presentations do not require Studio admission", async () => {
