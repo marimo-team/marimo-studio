@@ -9,7 +9,7 @@ import { z } from "zod";
 import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.mjs";
 import { fixtureDirectory, notebookProcessRegistryDirectory } from "../scripts/paths.mjs";
 import { processGroupIsRunning } from "../scripts/process-group.mjs";
-import { waitForPreview } from "./fixture.ts";
+import { waitForViewPreview } from "./fixture.ts";
 import {
   type NotebookServer,
   closeFailedNotebookServer,
@@ -32,6 +32,8 @@ const bootstrapSchema = z.object({
 });
 const inventorySchema = z.object({ files: z.array(z.object({ sessionId: z.string() })) });
 const MULTI_SESSION_SHUTDOWN_TIMEOUT = 15_000;
+const MULTI_SESSION_PREVIEW_TIMEOUT = process.platform === "win32" ? 180_000 : 65_000;
+const MULTI_SESSION_TEST_TIMEOUT = process.platform === "win32" ? 300_000 : 150_000;
 
 const availablePort = async (): Promise<number> => {
   const server = createServer();
@@ -59,7 +61,7 @@ const serverResponds = async (port: number): Promise<boolean> => {
 test("forced runner shutdown drains every open native notebook session", async ({
   browser,
 }, testInfo) => {
-  test.setTimeout(150_000);
+  test.setTimeout(MULTI_SESSION_TEST_TIMEOUT);
   const root = await mkdtemp(resolve(tmpdir(), "marimo-studio-forced-interruption-"));
   const workspace = resolve(root, "workspace");
   await cp(fixtureDirectory, workspace, { recursive: true });
@@ -76,8 +78,19 @@ test("forced runner shutdown drains every open native notebook session", async (
   try {
     await waitForNotebookServer(server, `${server.serverUrl}/?file=notebook.py`);
     const pages = await Promise.all(contexts.map((context) => context.newPage()));
-    await Promise.all(pages.map((page) => page.goto(`${server.serverUrl}/?file=notebook.py`)));
-    await Promise.all(pages.map((page) => waitForPreview(page)));
+    await Promise.all(
+      pages.map((page) =>
+        page.goto(`${server.serverUrl}/?file=notebook.py`, {
+          timeout: 60_000,
+          waitUntil: "domcontentloaded",
+        }),
+      ),
+    );
+    await Promise.all(
+      pages.map((page) =>
+        waitForViewPreview(page, "dashboard", "server", MULTI_SESSION_PREVIEW_TIMEOUT),
+      ),
+    );
     const bootstrap = bootstrapSchema.parse(
       JSON.parse((await pages[0].locator("#marimo-studio-bootstrap").textContent()) ?? "null"),
     );
