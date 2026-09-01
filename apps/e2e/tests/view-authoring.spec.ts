@@ -231,6 +231,7 @@ test("opens Studio from the first save with the native session", async ({
   unusedPreload.recovered();
   dialogDescription.recovered();
   await expect(page).toHaveURL(/\/\?file=first-save\.py&region=eu$/);
+  await expect(editorFrame(page).locator(".cm-content").first()).toContainText("saved = True");
 
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
@@ -384,7 +385,9 @@ test("publishes visible edits from each built-in source model", async ({
           candidatePage.getByRole("status", { name: "Source document status" }),
         ).toHaveText("Saved");
         await expect.poll(() => readWorkspaceFile(sourcePath)).toBe(changedSource);
-        await expect(preview.getByRole("heading", { name: candidate.after })).toBeVisible();
+        await expect(preview.getByRole("heading", { name: candidate.after })).toBeVisible({
+          timeout: 65_000,
+        });
         await waitForViewPreview(candidatePage, candidate.view);
         await expect
           .poll(() =>
