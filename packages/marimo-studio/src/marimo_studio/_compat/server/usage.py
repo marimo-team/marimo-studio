@@ -66,9 +66,10 @@ def _usage_route() -> Route:
         cell.cell_contents
         for cell in (getattr(route.endpoint, "__closure__", None) or ())
     )
-    if route.methods != {"GET", "HEAD"} or not any(
+    endpoint_is_usage = route.endpoint is health.usage or any(
         value is health.usage for value in captured
-    ):
+    )
+    if route.methods != {"GET", "HEAD"} or not endpoint_is_usage:
         raise CompatibilityError("The pinned Marimo usage route identity changed.")
     return route
 

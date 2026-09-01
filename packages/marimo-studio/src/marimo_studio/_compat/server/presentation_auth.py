@@ -7,7 +7,11 @@ from typing import Any
 
 from starlette.types import Receive, Scope, Send
 
-from marimo_studio._compat.patch import CompositeCloseHandle, ReversiblePatch
+from marimo_studio._compat.patch import (
+    CallbackCloseHandle,
+    CompositeCloseHandle,
+    ReversiblePatch,
+)
 from marimo_studio._server.presentation.capability import PRESENTATION_PATH
 
 _INVALID_SKEW_WARNING = (
@@ -132,4 +136,14 @@ class PrivatePresentationAuthorization:
                 _skew_patch(),
                 _SESSION_CONNECT_PATCH,
             )
-        return CompositeCloseHandle(patch.open() for patch in self._patches)
+        handles: list[CallbackCloseHandle] = []
+        try:
+            for patch in self._patches:
+                handles.append(patch.open())
+        except BaseException as setup_error:
+            try:
+                CompositeCloseHandle(handles).close()
+            except BaseException as cleanup_error:
+                raise setup_error from cleanup_error
+            raise
+        return CompositeCloseHandle(handles)

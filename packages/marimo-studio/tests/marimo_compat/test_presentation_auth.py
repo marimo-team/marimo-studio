@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from marimo._server.api import middleware
 from starlette.testclient import TestClient
 
+from marimo_studio._compat.patch import ReversiblePatch
 from marimo_studio._compat.server.presentation_auth import (
     PrivatePresentationAuthorization,
 )
@@ -72,3 +74,30 @@ def test_invalid_skew_request_does_not_log_either_token(
     assert "Received request with invalid server token" in caplog.text
     assert expected_token not in caplog.text
     assert "supplied-secret" not in caplog.text
+
+
+def test_presentation_authorization_rolls_back_partial_installation() -> None:
+    owner = SimpleNamespace(first="native", second="native")
+    first = ReversiblePatch(
+        "first presentation patch",
+        owner,
+        "first",
+        lambda _native: "installed",
+    )
+
+    def fail(_native: object) -> object:
+        raise RuntimeError("later patch failed")
+
+    second = ReversiblePatch(
+        "second presentation patch",
+        owner,
+        "second",
+        fail,
+    )
+    authorization = PrivatePresentationAuthorization()
+    authorization._patches = (first, second)
+
+    with pytest.raises(RuntimeError, match="later patch failed"):
+        authorization.open()
+
+    assert owner.first == "native"

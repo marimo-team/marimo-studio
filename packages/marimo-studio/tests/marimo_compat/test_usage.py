@@ -5,7 +5,9 @@ import json
 from typing import cast
 
 import pytest
+from marimo._server.api.endpoints import health
 from psutil import AccessDenied, NoSuchProcess
+from starlette.routing import Route
 from starlette.types import Message, Receive, Scope, Send
 
 from marimo_studio._compat.server.usage import _usage_route, _wrap_usage_app
@@ -124,3 +126,16 @@ def test_server_lifecycles_reference_count_and_restore_the_usage_route() -> None
     finally:
         first.close()
         second.close()
+
+
+def test_usage_route_accepts_the_native_endpoint_directly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    route = next(
+        route
+        for route in health.router.routes
+        if isinstance(route, Route) and route.path == "/api/usage"
+    )
+    monkeypatch.setattr(route, "endpoint", health.usage)
+
+    assert _usage_route() is route
