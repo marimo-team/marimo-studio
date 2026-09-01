@@ -49,6 +49,7 @@ from marimo_studio._workspace.models import (
     StudioDefinition,
     StudioWorkspace,
 )
+from marimo_studio._workspace.mutation_lock import workspace_catalog_lock
 from marimo_studio._workspace.project_manifest import load_view_project
 from marimo_studio._workspace.toml import parse_toml, read_toml
 from marimo_studio._workspace.view_owners import reconcile_view_owners
@@ -68,6 +69,7 @@ _COMMON_CONFIG_FIELDS = frozenset(
 )
 _SUPPORTED_RUNTIMES = frozenset({"server", "wasm"})
 _NOTEBOOK_STEM_MAX_BYTES = PORTABLE_PATH_COMPONENT_MAX_BYTES - len(".py")
+_WORKSPACE_MATERIALIZATION_LIMIT = 8
 
 
 def _reject_unknown_config_fields(
@@ -520,6 +522,22 @@ def materialize_studio_workspace(
         view_generations=view_generations,
         catalog_generation=catalog_generation,
     )
+
+
+def materialize_studio_workspace_after_conflict(
+    definition: StudioDefinition,
+) -> StudioWorkspace:
+    """Resolve a stable workspace while owning its catalog mutation barrier."""
+    with workspace_catalog_lock(definition.view_root):
+        conflict: WorkspaceGenerationConflictError | None = None
+        for _attempt in range(_WORKSPACE_MATERIALIZATION_LIMIT):
+            try:
+                return materialize_studio_workspace(definition)
+            except WorkspaceGenerationConflictError as error:
+                conflict = error
+        if conflict is None:
+            raise RuntimeError("Workspace materialization made no attempts")
+        raise conflict
 
 
 def load_studio(target: str | Path | None = None) -> StudioWorkspace:

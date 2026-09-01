@@ -43,12 +43,17 @@ from marimo_studio._workspace import discover_studio
 from marimo_studio._workspace.config import (
     discover_studio_definition,
     materialize_studio_workspace,
+    materialize_studio_workspace_after_conflict,
 )
 from marimo_studio._workspace.models import (
     StudioDefinition,
     StudioWorkspace,
 )
-from marimo_studio.errors import ConfigurationError, MarimoStudioError
+from marimo_studio.errors import (
+    ConfigurationError,
+    MarimoStudioError,
+    WorkspaceGenerationConflictError,
+)
 from marimo_studio.errors._internal import ArtifactIntegrityError, RuntimeSyncError
 from marimo_studio.view_providers import (
     BuildProfile,
@@ -117,7 +122,10 @@ class NotebookPresentation:
 
     def materialize(self, definition: StudioDefinition) -> StudioWorkspace:
         """Resolve the current authored views for a definition."""
-        return materialize_studio_workspace(definition)
+        try:
+            return materialize_studio_workspace(definition)
+        except WorkspaceGenerationConflictError:
+            return materialize_studio_workspace_after_conflict(definition)
 
     def snapshot(
         self,

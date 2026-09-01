@@ -50,7 +50,11 @@ from marimo_studio._views.sources import (
     write_project_source,
     write_view_manifest,
 )
-from marimo_studio._workspace.config import load_studio, validate_view_name
+from marimo_studio._workspace.config import (
+    load_studio,
+    materialize_studio_workspace_after_conflict,
+    validate_view_name,
+)
 from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
 from marimo_studio._workspace.project_manifest import (
     VIEW_MANIFEST_PATH,
@@ -559,7 +563,14 @@ async def project_response(
     if not has_edit_access(request.scope):
         return forbidden_response()
     try:
-        current = await asyncio.to_thread(load_studio, studio.config_path)
+        try:
+            current = await asyncio.to_thread(load_studio, studio.config_path)
+        except WorkspaceGenerationConflictError:
+            await development.require_view_available(view_name)
+            current = await asyncio.to_thread(
+                _load_studio_after_catalog_settles,
+                studio,
+            )
         catalog = await development.project_catalog(current, view_name)
         payload = await asyncio.to_thread(
             _project_payload,
@@ -571,6 +582,10 @@ async def project_response(
     except MarimoStudioError as error:
         return error_response(error)
     return JSONResponse(payload, headers=NO_STORE)
+
+
+def _load_studio_after_catalog_settles(studio: StudioWorkspace) -> StudioWorkspace:
+    return materialize_studio_workspace_after_conflict(studio)
 
 
 def _project_payload(

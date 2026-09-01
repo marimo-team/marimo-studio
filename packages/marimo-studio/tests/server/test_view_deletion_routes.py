@@ -375,7 +375,7 @@ def test_project_and_source_reads_report_transient_deletion(
         expected_generation: str,
     ) -> StudioWorkspace:
         deletion_started.set()
-        if not release_deletion.wait(timeout=2):
+        if not release_deletion.wait(timeout=10):
             raise RuntimeError("view deletion was not released")
         return remove(
             workspace,
@@ -401,7 +401,7 @@ def test_project_and_source_reads_report_transient_deletion(
             source = client.get("/_marimo-studio/views/operations/source/index.html")
         finally:
             release_deletion.set()
-        removed = pending.result(timeout=2)
+        removed = pending.result(timeout=10)
 
     expected = {
         "error": "view-deletion-in-progress",

@@ -34,6 +34,15 @@ VIEW_OWNER_DIRECTORY = ".owners"
 _VIEW_OWNER_SCHEMA = 1
 _VIEW_OWNER_SUFFIX = ".toml"
 _VIEW_OWNER_GENERATION = re.compile(r"[0-9a-f]{64}")
+_VIEW_OWNER_TRANSACTION = re.compile(
+    r"\.marimo-studio-(?:cas|restore|rollback)-[0-9a-f]{32}"
+)
+
+
+class _ViewOwnerTransactionInProgress(Exception):
+    def __init__(self, path: Path) -> None:
+        super().__init__(str(path))
+        self.path = path
 
 
 @dataclass(frozen=True)
@@ -157,6 +166,8 @@ def _owner_snapshots(
         raise ConfigurationError(f"View owner path is not a directory: {owners_root}")
     owners: dict[str, tuple[ViewOwner, FileIdentity]] = {}
     for path in sorted(owners_root.iterdir(), key=lambda candidate: candidate.name):
+        if _VIEW_OWNER_TRANSACTION.fullmatch(path.name) is not None:
+            raise _ViewOwnerTransactionInProgress(path)
         if path.is_symlink() or not path.is_file():
             raise ConfigurationError(f"Unexpected view owner record: {path}")
         name = _validated_record_name(path)
@@ -176,11 +187,14 @@ def reconcile_view_owners(
     """Adopt external names and tombstone names observed as absent."""
     if not view_root.is_dir() and not names:
         return names
-    if not _view_owner_writes(view_root, names)[0]:
-        return names
+    try:
+        if not _view_owner_writes(view_root, names)[0]:
+            return names
+    except _ViewOwnerTransactionInProgress:
+        pass
     with workspace_catalog_lock(view_root):
         current_names = refresh_names() if refresh_names is not None else names
-        writes, expected = _view_owner_writes(view_root, current_names)
+        writes, expected = _locked_view_owner_writes(view_root, current_names)
         if writes:
             with ExitStack() as locks:
                 for path in sorted(writes):
@@ -190,7 +204,10 @@ def reconcile_view_owners(
                             path.name.removesuffix(_VIEW_OWNER_SUFFIX),
                         )
                     )
-                writes, expected = _view_owner_writes(view_root, current_names)
+                writes, expected = _locked_view_owner_writes(
+                    view_root,
+                    current_names,
+                )
                 if writes:
                     with write_file_transaction(
                         view_root.parent,
@@ -199,6 +216,18 @@ def reconcile_view_owners(
                     ):
                         pass
         return current_names
+
+
+def _locked_view_owner_writes(
+    view_root: Path,
+    names: set[str],
+) -> tuple[dict[Path, str], dict[Path, FileIdentity | None]]:
+    try:
+        return _view_owner_writes(view_root, names)
+    except _ViewOwnerTransactionInProgress as error:
+        raise ConfigurationError(
+            f"Unexpected view owner record: {error.path}"
+        ) from error
 
 
 def _view_owner_writes(

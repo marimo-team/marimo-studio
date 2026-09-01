@@ -19,6 +19,7 @@ from marimo_studio._views.records import ViewDocument
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
 from marimo_studio._workspace.metadata import update_notebook_config
+from marimo_studio.errors import WorkspaceGenerationConflictError
 from marimo_studio.view_providers import ProjectDiagnostic, SourceLocation
 from marimo_studio.view_providers._host import provider_registry
 
@@ -528,6 +529,45 @@ def test_project_and_source_reads_share_one_current_provider_catalog(
     assert refreshed.status_code == 200
     assert removed.status_code == 404
     assert selected.status_code == 200
+
+
+def test_project_read_retries_transient_workspace_generations(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    load = studio_api_module.load_studio
+    settle = studio_api_module.materialize_studio_workspace_after_conflict
+    attempts = 0
+    settled = 0
+
+    def transient_load(target: str | Path):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 4:
+            raise WorkspaceGenerationConflictError()
+        return load(target)
+
+    def settled_load(workspace):
+        nonlocal settled
+        settled += 1
+        return settle(workspace)
+
+    monkeypatch.setattr(studio_api_module, "load_studio", transient_load)
+    monkeypatch.setattr(
+        studio_api_module,
+        "materialize_studio_workspace_after_conflict",
+        settled_load,
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/_marimo-studio/views/dashboard/project")
+
+    assert response.status_code == 200
+    assert attempts == 1
+    assert settled == 1
 
 
 def test_source_put_rejects_a_same_content_recreated_view(

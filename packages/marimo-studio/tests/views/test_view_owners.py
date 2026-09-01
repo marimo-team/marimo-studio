@@ -146,6 +146,29 @@ def test_concurrent_external_adoption_has_one_durable_owner(
     assert set(results) == {current.view_generations["report"]}
 
 
+def test_owner_catalog_waits_for_an_in_flight_transaction_record(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path)
+    observed = load_studio(notebook_path)
+    temporary = observed.view_root / ".owners" / (".marimo-studio-restore-" + "a" * 32)
+    temporary.write_text("transaction snapshot", encoding="utf-8")
+    catalog_lock = owner_module.workspace_catalog_lock
+
+    @contextmanager
+    def finish_transaction(view_root: Path) -> Iterator[None]:
+        with catalog_lock(view_root):
+            temporary.unlink()
+            yield
+
+    monkeypatch.setattr(owner_module, "workspace_catalog_lock", finish_transaction)
+
+    current = load_studio(notebook_path)
+
+    assert current.view_generations == observed.view_generations
+
+
 def test_reconciliation_refreshes_membership_after_concurrent_creation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -268,6 +291,7 @@ def test_view_owner_rejects_invalid_records(tmp_path: Path, source: str) -> None
         "api.toml",
         f"{'a' * 241}.toml",
         "notes.txt",
+        ".marimo-studio-restore-" + "a" * 32,
     ),
 )
 def test_owner_catalog_rejects_unowned_record_names(

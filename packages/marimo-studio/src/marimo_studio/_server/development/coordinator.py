@@ -325,6 +325,11 @@ class DevelopmentCoordinator:
         finally:
             await subscription.close()
 
+    async def require_view_available(self, view_name: str) -> None:
+        """Reject a project read before waiting on a deletion-owned catalog."""
+        async with self._lock:
+            self._require_view_locked(view_name)
+
     async def retained_provider(self, view_name: str) -> str | None:
         """Return the provider from the monitor's last valid workspace."""
         async with self._lock:

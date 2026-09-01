@@ -85,6 +85,34 @@ def test_workspace_materialization_reports_a_disappearing_view_as_a_conflict(
     assert raced
 
 
+def test_locked_workspace_materialization_reaches_a_fixed_point(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path)
+    definition = workspace_config.load_studio_definition(notebook_path)
+    materialize = workspace_config.materialize_studio_workspace
+    attempts = 0
+
+    def transient_materialization(selected):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise WorkspaceGenerationConflictError()
+        return materialize(selected)
+
+    monkeypatch.setattr(
+        workspace_config,
+        "materialize_studio_workspace",
+        transient_materialization,
+    )
+
+    workspace = workspace_config.materialize_studio_workspace_after_conflict(definition)
+
+    assert workspace.default_view == "dashboard"
+    assert attempts == 3
+
+
 def test_explicit_mounts_resolve_without_provider_inspection(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
