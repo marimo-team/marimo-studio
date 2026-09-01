@@ -99,8 +99,18 @@ def _mutation_lock(view_root: Path, filename: str) -> Iterator[None]:
                 os.fsync(descriptor)
             _acquire(descriptor)
             acquired = True
+            lock_state = os.fstat(descriptor)
+            lock_owner = (lock_state.st_dev, lock_state.st_ino, lock_state.st_mode)
+            if filesystem.file_owner(lock_path) != lock_owner:
+                raise ConfigurationError(
+                    f"View mutation lock changed before acquisition: {lock_path}"
+                )
             held.add(lock_path)
             yield
+            if filesystem.file_owner(lock_path) != lock_owner:
+                raise ConfigurationError(
+                    f"View mutation lock changed while held: {lock_path}"
+                )
         finally:
             held.discard(lock_path)
             if acquired:

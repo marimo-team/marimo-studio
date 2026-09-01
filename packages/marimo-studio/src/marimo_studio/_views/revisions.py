@@ -14,11 +14,12 @@ services a precise last-working fallback when a new build fails.
 from __future__ import annotations
 
 import hashlib
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import TracebackType
 
-from marimo_studio._artifacts.inputs import project_revision
+from marimo_studio._artifacts.inputs import project_revision_snapshot
 from marimo_studio._artifacts.records import ViewArtifact
 from marimo_studio._artifacts.retention import ArtifactLease, lease_published_artifact
 from marimo_studio._filesystem.io import read_bytes
@@ -29,6 +30,7 @@ from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import (
     ConfigurationError,
     MarimoStudioError,
+    ViewGenerationConflictError,
     ViewNotFoundError,
 )
 from marimo_studio.view_providers import BuildProfile, ProjectInspection
@@ -108,20 +110,49 @@ def capture_source_revisions(
 ) -> dict[str, str]:
     """Hash current notebook, configuration, and declared provider inputs."""
     selected = _selected_views(studio, view_names)
+    source_paths = tuple(dict.fromkeys((studio.config_path, studio.notebook)))
+    before = tuple(_source_file_state(path) for path in source_paths)
     _notebook_source, base_identity = _presentation_source(studio)
+    after = tuple(_source_file_state(path) for path in source_paths)
+    if before != after:
+        raise ConfigurationError(
+            "Studio sources changed while validation revisions were captured"
+        )
     revisions: dict[str, str] = {}
     for name in selected:
         project = studio.views[name]
         provider = provider_registry().get(project.provider)
         inspection = inspect_view_project_sync(project)
-        input_id = project_revision(
+        project_snapshot = project_revision_snapshot(
             project,
             inspection,
             provider.provenance(inspection),
         )
-        identity = (name, base_identity, input_id)
+        identity = (
+            name,
+            base_identity,
+            after,
+            project_snapshot.revision,
+            project_snapshot.state,
+        )
         revisions[name] = hashlib.sha256(repr(identity).encode()).hexdigest()
+    if tuple(_source_file_state(path) for path in source_paths) != after:
+        raise ConfigurationError(
+            "Studio sources changed while validation revisions were captured"
+        )
     return revisions
+
+
+def _source_file_state(path: os.PathLike[str]) -> tuple[int, int, int, int, int, int]:
+    state = os.stat(path)
+    return (
+        state.st_dev,
+        state.st_ino,
+        state.st_mode,
+        state.st_size,
+        state.st_mtime_ns,
+        state.st_ctime_ns,
+    )
 
 
 @dataclass
@@ -194,6 +225,7 @@ def capture_presentations(
     *,
     profile: BuildProfile = "development",
     prepared: Mapping[str, PreparedViewProject] | None = None,
+    expected_generations: Mapping[str, str] | None = None,
 ) -> PresentationSourceSnapshot:
     """Publish selected artifacts and capture shared notebook source."""
     selected = _selected_views(studio, view_names)
@@ -205,15 +237,30 @@ def capture_presentations(
             try:
                 snapshot = prepared.get(name) if prepared is not None else None
                 leases[name] = (
-                    publish_view(project, profile)
+                    publish_view(
+                        project,
+                        profile,
+                        expected_generation=(
+                            expected_generations.get(name)
+                            if expected_generations is not None
+                            else None
+                        ),
+                    )
                     if snapshot is None
                     else publish_view(
                         project,
                         profile,
                         inspection=snapshot.inspection,
                         input_id=snapshot.input_id,
+                        expected_generation=(
+                            expected_generations.get(name)
+                            if expected_generations is not None
+                            else None
+                        ),
                     )
                 )
+            except ViewGenerationConflictError:
+                raise
             except MarimoStudioError as error:
                 raise_process_cleanup(error)
                 retained = lease_published_artifact(project, profile)

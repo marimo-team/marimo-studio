@@ -2,13 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from marimo_studio.errors import ConfigurationError, MarimoStudioError, ProtocolError
-
-
-class ArtifactCompatibilityError(ConfigurationError):
-    """Generated artifact state targets another provider API version."""
 
 
 class ArtifactIntegrityError(ConfigurationError):
@@ -37,40 +31,6 @@ class RuntimeSyncError(MarimoStudioError):
     transient = True
 
 
-class ViewDeletionError(MarimoStudioError):
-    """A view removal failed before or during filesystem cleanup."""
-
-    code = "view-deletion-error"
-
-    def __init__(self, cleanup: Path | None = None) -> None:
-        self.cleanup = cleanup
-        if cleanup is None:
-            super().__init__(
-                "The view could not be removed. Its project and default view were "
-                "restored."
-            )
-        else:
-            super().__init__(
-                "The view was removed, but filesystem cleanup is incomplete at "
-                f"{cleanup}."
-            )
-
-    def diagnostic_details(self) -> dict[str, object]:
-        return {"cleanup": str(self.cleanup) if self.cleanup is not None else None}
-
-
-class ViewInUseError(MarimoStudioError):
-    """A view has artifact readers in another process."""
-
-    code = "view-in-use"
-    status_code = 409
-
-    def __init__(self, name: str) -> None:
-        super().__init__(
-            f"View {name!r} is open in another process. Close its readers and retry."
-        )
-
-
 class ViewDeletionInProgress(MarimoStudioError):
     """A view-scoped operation was superseded by deletion."""
 
@@ -84,6 +44,20 @@ class ViewDeletionInProgress(MarimoStudioError):
 
     def diagnostic_details(self) -> dict[str, object]:
         return {"view": self.view_name}
+
+
+class ViewDeletionCapacityError(MarimoStudioError):
+    """The server has no free dedicated view-deletion worker."""
+
+    code = "view-deletion-capacity-exhausted"
+    status_code = 503
+    transient = True
+    public_hint = "Retry after an in-flight view deletion finishes."
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Studio is already processing the maximum number of view deletions."
+        )
 
 
 class WorkspaceInitializationError(MarimoStudioError):

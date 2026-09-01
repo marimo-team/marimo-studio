@@ -140,12 +140,12 @@ def test_validate_flags_override_connection_environment(
             "--level",
             "browser",
             "--server",
-            "http://explicit:2718",
+            "https://explicit.example.test:2718",
             "--browser-client",
             "explicit-client",
         ],
         env={
-            "MARIMO_STUDIO_SERVER_URL": "http://environment:2718",
+            "MARIMO_STUDIO_SERVER_URL": "https://environment.example.test:2718",
             "MARIMO_STUDIO_BROWSER_CLIENT": "environment-client",
             "MARIMO_STUDIO_ACCESS_TOKEN": "access-token",
         },
@@ -153,7 +153,7 @@ def test_validate_flags_override_connection_environment(
 
     assert isinstance(result.exception, RuntimeError)
     assert captured == {
-        "server_url": "http://explicit:2718",
+        "server_url": "https://explicit.example.test:2718",
         "access_token": "access-token",
         "browser_client": "explicit-client",
     }

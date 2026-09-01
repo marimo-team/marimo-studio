@@ -6,9 +6,9 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.15"
 dependencies = [
-  "agent-plugins==0.1.0",
+  "agent-plugins==0.1.1",
   "click>=8.2",
   "htpy>=26.5.1,<27",
   "marimo==0.24.0",
@@ -16,6 +16,8 @@ dependencies = [
   "packaging>=25",
   "tomli>=2; python_version < '3.11'",
   "tomlkit>=0.14",
+  "tree-sitter==0.25.2",
+  "tree-sitter-javascript==0.25.0",
   "watchdog==6.0.0",
 ]
 
@@ -94,11 +96,13 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID251"]
 "tests/views/test_runtime_validation.py" = ["TID251"]
 "tests/views/test_view_setup.py" = ["TID251"]
 "tests/views/test_workspace_catalog.py" = ["TID251"]
-"tests/views/test_workspace_lifecycle.py" = ["TID251"]
+"tests/views/test_workspace_binding_ownership.py" = ["TID251"]
+"tests/views/test_workspace_configuration.py" = ["TID251"]
+"tests/views/test_workspace_deletion_lifecycle.py" = ["TID251"]
 "tests/views/test_workspace_security.py" = ["TID251"]
 
 [build-system]
-requires = ["agent-plugins==0.1.0", "uv_build==0.12.2"]
+requires = ["agent-plugins==0.1.1", "uv_build==0.12.2"]
 build-backend = "agent_plugins.build.uv_build"
 
 [tool.agent-plugins]

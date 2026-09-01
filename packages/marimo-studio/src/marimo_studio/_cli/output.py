@@ -26,6 +26,23 @@ def _shell_command(arguments: list[str]) -> str:
     return shlex.join(arguments)
 
 
+def _uvx_command(
+    requirements: tuple[str, ...],
+    arguments: list[str],
+    *,
+    executable_requirement: str | None = None,
+) -> str:
+    command = ["uvx"]
+    if executable_requirement is not None:
+        command.extend(["--from", executable_requirement])
+    for requirement in requirements:
+        if requirement == executable_requirement:
+            continue
+        command.extend(["--with", requirement])
+    command.extend(arguments)
+    return _shell_command(command)
+
+
 def echo_error(message: str) -> None:
     """Write a human error to stderr."""
     echo(red(message), err=True)
@@ -62,7 +79,15 @@ def render_view_next_command(result: ViewSetupResult) -> None:
     """Show the next command after a completed view creation."""
     if result.dry_run:
         return
-    command = _shell_command(["marimo", "edit", str(result.notebook), "--sandbox"])
+    command = _uvx_command(
+        result.launch_requirements,
+        [
+            "marimo",
+            "edit",
+            str(result.notebook),
+            "--sandbox",
+        ],
+    )
     _echo_next_command("edit", command)
 
 
@@ -87,22 +112,37 @@ def render_view_inspection(result: ViewInspection) -> None:
         echo(
             f"    {diagnostic.severity} {diagnostic.code}: {diagnostic.message}{source}"
         )
+        if diagnostic.hint:
+            echo(f"      {light_blue('repair')} {diagnostic.hint}")
     if not result.diagnostics:
         echo("    none")
+    if result.build is not None:
+        echo(
+            f"  {light_blue('published')} {result.build.profile} "
+            f"{result.build.revision}"
+        )
 
 
 def render_status(result: StudioOverview) -> None:
     """Write Studio workspace state in human text."""
     echo(f"{result.notebook} · {result.state}")
     if result.config_path is not None:
-        echo(f"  {light_blue('config')} {result.config_path}")
+        source = f" {result.config_source}" if result.config_source is not None else ""
+        echo(f"  {light_blue('config')}{source} {result.config_path}")
     if result.default_runtime is not None:
         echo(f"  {light_blue('runtime')} {result.default_runtime}")
+    if result.runtimes:
+        echo(f"  {light_blue('runtimes')} {', '.join(result.runtimes)}")
+    if result.bindings:
+        echo(f"  {light_blue('aliases')}")
+        for alias, ref in sorted(result.bindings.items()):
+            echo(f"    {alias} {ref}")
     for view in result.views:
         suffix = " (default)" if view.default else ""
         echo(f"  {light_blue(view.name)}{suffix}\n    {view.path}")
     if result.state == "unconfigured":
-        command = _shell_command(
+        command = _uvx_command(
+            result.launch_requirements,
             [
                 "marimo-studio",
                 "view",
@@ -110,11 +150,13 @@ def render_status(result: StudioOverview) -> None:
                 "dashboard",
                 "--target",
                 str(result.notebook),
-            ]
+            ],
+            executable_requirement=result.launch_requirements[0],
         )
         _echo_next_command("create", command)
     elif result.state == "needs-view" and result.default_view is not None:
-        command = _shell_command(
+        command = _uvx_command(
+            result.launch_requirements,
             [
                 "marimo-studio",
                 "view",
@@ -122,7 +164,8 @@ def render_status(result: StudioOverview) -> None:
                 result.default_view,
                 "--target",
                 str(result.notebook),
-            ]
+            ],
+            executable_requirement=result.launch_requirements[0],
         )
         _echo_next_command("create", command)
 

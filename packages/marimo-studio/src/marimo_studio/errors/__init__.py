@@ -152,6 +152,16 @@ class AgentRequestError(MarimoStudioError):
         self.code = code
         self.status_code = status_code
         self.details = dict(details or {})
+        hint = self.details.pop("hint", None)
+        if isinstance(hint, str):
+            self.public_hint = hint
+        elif hint is not None:
+            self.details["hint"] = hint
+        transient = self.details.pop("transient", None)
+        if isinstance(transient, bool):
+            self.transient = transient
+        elif transient is not None:
+            self.details["transient"] = transient
 
     def diagnostic_details(self) -> dict[str, object]:
         return self.details.copy()
@@ -175,6 +185,25 @@ class RuntimeSelectionError(MarimoStudioError):
 
     code = "runtime-unavailable"
     status_code = 400
+
+
+class RuntimeConfigTooLargeError(MarimoStudioError):
+    """A browser runtime record exceeds its transport boundary."""
+
+    code = "runtime-config-too-large"
+    status_code = 413
+    public_hint = (
+        "Declare finite projection targets for this view or reduce the notebook "
+        "source, then load it again."
+    )
+
+    def __init__(self, size: int, limit: int) -> None:
+        super().__init__(f"Runtime configuration exceeds the {limit}-byte limit.")
+        self.size = size
+        self.limit = limit
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {"bytes": self.size, "max_bytes": self.limit}
 
 
 class SourceNotFoundError(MarimoStudioError):
@@ -282,6 +311,116 @@ class ViewExistsError(MarimoStudioError):
         return {"view": self.name}
 
 
+class ViewGenerationConflictError(MarimoStudioError):
+    """An operation observed an earlier view incarnation."""
+
+    code = "view-generation-conflict"
+    status_code = 409
+    transient = True
+    public_hint = "Reopen the workspace and reacquire the view before retrying."
+
+    def __init__(self, name: str, current_generation: str | None) -> None:
+        super().__init__(f"View {name!r} was replaced before the operation.")
+        self.name = name
+        self.current_generation = current_generation
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {
+            "view": self.name,
+            "current_generation": self.current_generation,
+        }
+
+
+class WorkspaceMutationError(MarimoStudioError):
+    """A workspace mutation needs a fresh read after filesystem recovery."""
+
+    code = "workspace-mutation-incomplete"
+    status_code = 409
+    transient = True
+    public_hint = "Reload the workspace before retrying the operation."
+
+    def __init__(
+        self,
+        operation: str,
+        *,
+        recovery: Path | None,
+        write_committed: bool,
+    ) -> None:
+        super().__init__(f"{operation} did not finish cleanly.")
+        self.operation = operation
+        self.recovery = recovery
+        self.write_committed = write_committed
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {
+            "operation": self.operation,
+            "recovery": str(self.recovery) if self.recovery is not None else None,
+            "write_committed": self.write_committed,
+        }
+
+
+class WorkspaceGenerationConflictError(MarimoStudioError):
+    """A workspace handle observed an earlier workspace incarnation."""
+
+    code = "workspace-generation-conflict"
+    status_code = 409
+    transient = True
+    public_hint = "Open the workspace again before retrying the operation."
+
+    def __init__(self) -> None:
+        super().__init__("The Studio workspace was replaced before the operation.")
+
+
+class ViewDeletionError(MarimoStudioError):
+    """A view removal failed before or during filesystem cleanup."""
+
+    code = "view-deletion-error"
+
+    def __init__(
+        self,
+        cleanup: Path | None = None,
+        *,
+        recovery: Path | None = None,
+        committed_workspace: object | None = None,
+    ) -> None:
+        self.cleanup = cleanup
+        self.recovery = recovery
+        self.committed_workspace = committed_workspace
+        if recovery is not None:
+            super().__init__(
+                "The view could not be removed because its name was recreated. "
+                f"The original project is preserved at {recovery}."
+            )
+        elif cleanup is None:
+            super().__init__(
+                "The view could not be removed. Its project and default view were "
+                "restored."
+            )
+        else:
+            super().__init__(
+                "The view was removed, but filesystem cleanup is incomplete at "
+                f"{cleanup}."
+            )
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return {
+            "cleanup": str(self.cleanup) if self.cleanup is not None else None,
+            "recovery": str(self.recovery) if self.recovery is not None else None,
+        }
+
+
+class ViewInUseError(MarimoStudioError):
+    """A view has artifact readers in another process."""
+
+    code = "view-in-use"
+    status_code = 409
+
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            f"View {name!r} is open in another process. Close its readers and retry."
+        )
+
+
 class LastViewError(MarimoStudioError):
     """A notebook must retain one Studio view."""
 
@@ -303,6 +442,7 @@ __all__ = [
     "NotebookSourceError",
     "ProtocolError",
     "ProviderNotFoundError",
+    "RuntimeConfigTooLargeError",
     "RuntimeSelectionError",
     "RuntimeTimeoutError",
     "SourceConflictError",
@@ -311,7 +451,12 @@ __all__ = [
     "SourceTooLargeError",
     "SourceValidationError",
     "StaticExportError",
+    "ViewDeletionError",
     "ViewExistsError",
+    "ViewGenerationConflictError",
+    "ViewInUseError",
     "ViewNotFoundError",
     "ViewProjectError",
+    "WorkspaceGenerationConflictError",
+    "WorkspaceMutationError",
 ]

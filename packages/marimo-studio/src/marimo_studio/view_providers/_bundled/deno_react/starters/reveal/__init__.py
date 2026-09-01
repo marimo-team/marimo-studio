@@ -149,7 +149,7 @@ def _typescript_slides(
 
 
 def _render(context: StarterContext) -> StarterRendering:
-    cells = tuple(item for item in starter_cells(context) if item[0].displays_output)
+    cells = tuple(item for item in starter_cells(context) if item[0].may_display_output)
     hosts = (
         "{"
         + _typescript_slides(cells, indent="    ")
@@ -179,8 +179,8 @@ starter = BundledStarter(
         key="reveal",
         title="Reveal.js slides",
         summary=(
-            "A React slide deck populated with one enabled notebook display cell "
-            "per slide."
+            "A React slide deck populated with one enabled notebook cell that may "
+            "display output per slide."
         ),
         documents=_DOCUMENTS,
     ),

@@ -20,11 +20,16 @@ from marimo_studio._views.inspection import inspect_view_project_sync
 from marimo_studio._views.remove import delete_view
 from marimo_studio._views.resolve import resolve_studio
 from marimo_studio._workspace import load_studio
-from marimo_studio._workspace.config import canonical_view_root, load_studio_definition
+from marimo_studio._workspace.config import (
+    canonical_view_root,
+    load_studio_definition,
+    validate_view_name,
+)
 from marimo_studio._workspace.metadata import (
     read_notebook_metadata,
 )
 from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
+from marimo_studio._workspace.view_owners import load_view_owner, view_owner_path
 from marimo_studio.errors import (
     ConfigurationError,
     NotebookSourceError,
@@ -59,7 +64,7 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
     )
     assert document is not None
     assert document["tool"]["marimo-studio"]["default"] == "dashboard"
-    assert "marimo-studio" in document["dependencies"]
+    assert "marimo-studio==0.1.0" in document["dependencies"]
     assert notebook_path.read_text(encoding="utf-8").endswith(original)
     assert re.search(r"<h1[^>]*>\s*Dashboard\s*</h1>", document_source)
     assert set(document["tool"]["marimo-studio"]["cells"]) == {"cell-2"}
@@ -82,6 +87,52 @@ def test_view_setup_configures_the_notebook_and_creates_each_view(
     ) == {"/.locks/", "*/.artifacts/"}
     assert report.joinpath("index.html").is_file()
     assert not report.joinpath(".artifacts").exists()
+
+
+@pytest.mark.parametrize("name", ("con", "lpt9", "a" * 241))
+def test_view_names_are_portable_filesystem_components(name: str) -> None:
+    with pytest.raises(ConfigurationError):
+        validate_view_name(name)
+
+
+@pytest.mark.parametrize(
+    "name",
+    (
+        "...py",
+        "CON.py",
+        "COM¹.py",
+        "CONOUT$.py",
+        "cafe\u0301.py",
+        "analysis .py",
+        f"{'a' * 253}.py",
+    ),
+)
+def test_notebook_stems_are_portable_filesystem_components(
+    tmp_path: Path,
+    name: str,
+) -> None:
+    with pytest.raises(ConfigurationError):
+        canonical_view_root(tmp_path / name)
+
+
+def test_workspace_names_accept_their_maximum_portable_size(tmp_path: Path) -> None:
+    view_name = "v" * 240
+    notebook_stem = "n" * 252
+
+    assert validate_view_name(view_name) == view_name
+    assert canonical_view_root(tmp_path / f"{notebook_stem}.py").name == notebook_stem
+
+
+def test_invalid_notebook_stem_cannot_create_a_workspace(
+    notebook_path: Path,
+) -> None:
+    invalid = notebook_path.with_name("...py")
+    invalid.write_bytes(notebook_path.read_bytes())
+
+    with pytest.raises(ConfigurationError, match="portable path component"):
+        prepare_view(invalid)
+
+    assert not (notebook_path.parent / "__marimo__").exists()
 
 
 def test_first_view_publishes_a_complete_workspace_to_readers(
@@ -132,6 +183,9 @@ def test_repeated_and_dry_run_setup_report_file_changes(
     assert repeated.updated == ()
     assert preview.created == ()
     assert preview.updated == ()
+    document = read_notebook_metadata(notebook_path)
+    assert document is not None
+    assert list(document["dependencies"]) == ["marimo-studio==0.1.0"]
 
 
 def test_concurrent_view_setup_serializes_the_same_view_name(
@@ -226,6 +280,11 @@ def test_concurrent_first_view_threads_create_one_coherent_catalog(
     assert set(results) == {"dashboard", "executive"}
     assert set(studio.views) == {"dashboard", "executive"}
     assert studio.default_view in studio.views
+    assert load_view_owner(studio.view_root, "dashboard").present is True
+    assert load_view_owner(studio.view_root, "executive").present is True
+    assert (
+        studio.view_generations["dashboard"] != (studio.view_generations["executive"])
+    )
 
 
 def test_catalog_race_does_not_run_provider_creation_under_mutation_locks(
@@ -410,6 +469,57 @@ default = "dashboard"
         prepare_view(notebook_path)
 
     assert pyproject.read_text(encoding="utf-8").endswith("# concurrent edit\n")
+    assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
+
+
+def test_project_notebook_edit_before_transaction_is_preserved(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pyproject = notebook_path.parent / "pyproject.toml"
+    pyproject.write_text(
+        f'''\
+[tool.marimo-studio]
+notebook = "{notebook_path.name}"
+default = "dashboard"
+''',
+        encoding="utf-8",
+    )
+    transaction = workspace_transactions.write_file_transaction
+
+    @contextmanager
+    def edit_before_transaction(
+        root,
+        writes,
+        *,
+        expected=None,
+        claimed_directories=None,
+    ):
+        notebook_path.write_text(
+            notebook_path.read_text(encoding="utf-8").replace(
+                "doubled = x * 2",
+                "doubled = x * 3",
+            ),
+            encoding="utf-8",
+        )
+        with transaction(
+            root,
+            writes,
+            expected=expected,
+            claimed_directories=claimed_directories,
+        ):
+            yield
+
+    monkeypatch.setattr(
+        create_module,
+        "write_file_transaction",
+        edit_before_transaction,
+    )
+
+    with pytest.raises(ConfigurationError, match="changed"):
+        prepare_view(notebook_path)
+
+    assert "doubled = x * 3" in notebook_path.read_text(encoding="utf-8")
     assert not tuple(canonical_view_root(notebook_path).glob("*/view.toml"))
 
 
@@ -746,6 +856,35 @@ def test_setup_rolls_back_notebook_and_view_when_workspace_load_fails(
 
     assert notebook_path.read_bytes() == original
     assert not (canonical_view_root(notebook_path) / "dashboard").exists()
+    assert not view_owner_path(
+        canonical_view_root(notebook_path),
+        "dashboard",
+    ).exists()
+
+
+def test_failed_recreation_restores_the_absent_name_owner(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prepare_view(notebook_path)
+    prepare_view(notebook_path, "report")
+    delete_view(load_studio(notebook_path), "report")
+    owner = view_owner_path(canonical_view_root(notebook_path), "report")
+    tombstone = owner.read_bytes()
+
+    def fail_workspace_load(_target: Path) -> StudioWorkspace:
+        raise OSError("simulated workspace load failure")
+
+    monkeypatch.setattr(create_module, "load_studio", fail_workspace_load)
+
+    with pytest.raises(OSError, match="simulated workspace load failure"):
+        prepare_view(notebook_path, "report")
+
+    assert owner.read_bytes() == tombstone
+    assert (
+        load_view_owner(canonical_view_root(notebook_path), "report").present is False
+    )
+    assert not canonical_view_root(notebook_path).joinpath("report").exists()
 
 
 @pytest.mark.parametrize("name", ["notes.txt", "script.py"])

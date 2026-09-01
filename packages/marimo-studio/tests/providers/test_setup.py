@@ -69,6 +69,28 @@ def test_starter_failure_rejects_setup_before_any_write(
     assert not (notebook_path.parent / "__marimo__").exists()
 
 
+def test_invalid_provider_launch_requirement_rejects_setup_before_any_write(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = ProviderStub("unused/report", "default")
+    registry = ProviderRegistry(
+        (candidate("report", provider, distribution="example-suite"),),
+        {"example-suite/report": "wrong-package==1.0.0"},
+    )
+    install_registry(monkeypatch, registry)
+    original = notebook_path.read_bytes()
+
+    with pytest.raises(ConfigurationError, match="requirement names"):
+        prepare_view(
+            notebook_path,
+            starter="example-suite/report:default",
+        )
+
+    assert notebook_path.read_bytes() == original
+    assert not (notebook_path.parent / "__marimo__").exists()
+
+
 def test_invalid_starter_paths_reject_setup_before_any_write(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -131,8 +153,7 @@ def test_repeated_setup_and_vanilla_preserve_the_react_requirement(
     prepare_view(notebook_path, "report", starter="marimo-studio/vanilla:vanilla")
 
     dependencies = _dependencies(notebook_path)
-    assert dependencies.count("marimo-studio[deno]") == 1
-    assert "marimo-studio" not in dependencies
+    assert dependencies == ("marimo-studio[deno]==0.1.0",)
 
 
 def test_setup_keeps_requirements_for_every_installed_third_party_view(
@@ -158,3 +179,27 @@ def test_setup_keeps_requirements_for_every_installed_third_party_view(
     dependencies = _dependencies(notebook_path)
     assert dependencies.count("example-suite==1.0.0") == 1
     assert dependencies.count("other-suite==1.0.0") == 1
+
+
+def test_setup_merges_equivalent_provider_version_spellings(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = ProviderStub("example-suite/first", "first")
+    second = ProviderStub("example-suite/second", "second")
+    registry = ProviderRegistry(
+        (
+            candidate("first", first, distribution="example-suite"),
+            candidate("second", second, distribution="example-suite"),
+        ),
+        {
+            "example-suite/first": "example-suite==1.0",
+            "example-suite/second": "example-suite==1.0.0",
+        },
+    )
+    install_registry(monkeypatch, registry)
+
+    prepare_view(notebook_path, "dashboard", starter="example-suite/first:first")
+    prepare_view(notebook_path, "detail", starter="example-suite/second:second")
+
+    assert _dependencies(notebook_path).count("example-suite==1.0") == 1

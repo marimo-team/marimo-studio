@@ -11,6 +11,33 @@ from marimo_studio._processes.limits import (
 )
 
 
+class OwnerGenerationType(click.ParamType[str]):
+    """Parse one opaque SHA-256 workspace owner generation."""
+
+    name = "generation"
+
+    def convert(
+        self,
+        value: object,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> str:
+        if (
+            isinstance(value, str)
+            and len(value) == 64
+            and all(character in "0123456789abcdef" for character in value)
+        ):
+            return value
+        self.fail(
+            "must be a 64-character lowercase hexadecimal string",
+            param,
+            ctx,
+        )
+
+
+owner_generation_type = OwnerGenerationType()
+
+
 def finite_timeout(
     _context: click.Context,
     _parameter: click.Parameter,

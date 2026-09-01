@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from marimo_studio._filesystem.paths import PORTABLE_PATH_COMPONENT_MAX_BYTES
 from marimo_studio._notebook.records import (
     CellRef,
     CellSpec,
@@ -21,6 +22,7 @@ STUDIO_DIRECTORY = "studio"
 ALIAS_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 VIEW_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 RUNTIME_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
+VIEW_NAME_MAX_BYTES = PORTABLE_PATH_COMPONENT_MAX_BYTES - len(".artifacts.lock")
 RESERVED_VIEW_NAMES = frozenset(
     {
         "_marimo-studio",
@@ -64,6 +66,7 @@ class StudioDefinition:
     preserve_session: bool
     cells: dict[str, CellRef]
     show_cell_logs: bool
+    config_generation: str
 
     @property
     def uses_notebook_config(self) -> bool:
@@ -73,6 +76,8 @@ class StudioDefinition:
 @dataclass(frozen=True)
 class StudioWorkspace(StudioDefinition):
     views: dict[str, ViewProject]
+    view_generations: dict[str, str]
+    catalog_generation: str
 
     def __post_init__(self) -> None:
         if not self.views:
@@ -81,6 +86,8 @@ class StudioWorkspace(StudioDefinition):
             raise ConfigurationError(
                 f"Default view {self.default_view!r} does not exist in {self.view_root}"
             )
+        if self.view_generations.keys() != self.views.keys():
+            raise ConfigurationError("View generations must match the view catalog")
 
     def view(self, name: str | None = None) -> ViewProject:
         selected = name or self.default_view
@@ -98,6 +105,7 @@ class BindingResult:
     alias: str
     cell: CellSpec
     config_path: Path
+    catalog_generation: str
     dry_run: bool
     previous_ref: CellRef | None = None
 
@@ -113,6 +121,7 @@ class BindingResult:
                 "source": asdict(self.cell.source),
             },
             "config": str(self.config_path),
+            "catalog_generation": self.catalog_generation,
             "dry_run": self.dry_run,
             "previous_ref": (
                 str(self.previous_ref) if self.previous_ref is not None else None

@@ -23,7 +23,7 @@ from ..provider_test_support import (
 )
 
 
-def test_setup_preserves_pep_723_metadata_and_notebook_body(
+def test_setup_normalizes_studio_constraints_and_preserves_notebook_body(
     notebook_path: Path,
 ) -> None:
     body = notebook_path.read_text(encoding="utf-8")
@@ -45,14 +45,14 @@ def test_setup_preserves_pep_723_metadata_and_notebook_body(
     document = read_notebook_metadata(notebook_path)
 
     assert document is not None
-    assert document["requires-python"] == ">=3.12"
+    assert document["requires-python"] == ">=3.12,<3.15"
     assert document["tool"]["marimo"]["runtime"]["auto_instantiate"] is True
     assert document["tool"]["marimo-studio"]["default"] == "finance"
     assert [
         str(value)
         for value in document["dependencies"]
         if "marimo-studio" in str(value)
-    ] == ["marimo-studio"]
+    ] == ["marimo-studio==0.1.0"]
     assert notebook_path.read_text(encoding="utf-8").endswith(body)
 
 
@@ -81,7 +81,7 @@ def test_view_deletion_keeps_dependencies_and_updates_the_default(
     studio = load_studio(notebook_path)
     before = read_notebook_metadata(notebook_path)
     assert before is not None
-    assert list(before["dependencies"]) == ["marimo-studio[deno]"]
+    assert list(before["dependencies"]) == ["marimo-studio[deno]==0.1.0"]
 
     delete_view(studio, "dashboard")
 

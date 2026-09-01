@@ -16,6 +16,7 @@ from __future__ import annotations
 from pathlib import PurePosixPath
 
 from marimo_studio.view_providers import (
+    PROVIDER_API_VERSION,
     BuildRequest,
     BuildResult,
     InspectionRequest,
@@ -102,7 +103,7 @@ class DenoReactProvider:
     info = ProviderInfo(
         title="React",
         summary="Builds a React project with the pinned Deno toolchain.",
-        api_version=1,
+        api_version=PROVIDER_API_VERSION,
     )
 
     def availability(self, project: ViewProject | None = None) -> ProviderAvailability:

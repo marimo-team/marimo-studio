@@ -55,8 +55,8 @@ from marimo_studio._workspace.mutation_lock import (
     artifact_lease_lock,
     view_mutation_lock,
 )
-from marimo_studio.errors import ConfigurationError
-from marimo_studio.errors._internal import ArtifactIntegrityError, ViewInUseError
+from marimo_studio.errors import ConfigurationError, ViewInUseError
+from marimo_studio.errors._internal import ArtifactIntegrityError
 from marimo_studio.view_providers import (
     BuildProfile,
     ProjectDiagnostic,
@@ -255,7 +255,12 @@ def prune_artifacts_locked(project: ViewProject) -> None:
         protected = _live_pin_revisions(project, create=False)
         _prune_quarantine_locked(project)
         for profile in ("development", "production"):
-            state = read_profile_state(project, profile)
+            try:
+                state = read_profile_state(project, profile)
+            except (OSError, ConfigurationError):
+                # A damaged sibling receipt has unknown ownership. Leave every
+                # revision in place until that profile repairs its own state.
+                return
             if state is not None and state.published is not None:
                 protected.add(state.published.artifact_revision)
 
@@ -499,7 +504,7 @@ class ArtifactLease:
                 self.artifact.root.joinpath(*path.parts),
                 "Artifact file",
             )
-        except ConfigurationError as error:
+        except (OSError, ConfigurationError) as error:
             raise _integrity_error(path) from error
         if (
             len(payload) != record.size
@@ -546,11 +551,14 @@ class ArtifactLease:
                 raise ConfigurationError(
                     f"Artifact file is absent from its manifest: {relative.as_posix()}"
                 )
-            source = open_secure_file(
-                self.artifact.root,
-                self.artifact.root.joinpath(*relative.parts),
-                "Artifact file",
-            )
+            try:
+                source = open_secure_file(
+                    self.artifact.root,
+                    self.artifact.root.joinpath(*relative.parts),
+                    "Artifact file",
+                )
+            except (OSError, ConfigurationError) as error:
+                raise _integrity_error(relative) from error
             return LeasedArtifactFile(
                 self,
                 _verified_snapshot(source, record),
@@ -568,7 +576,10 @@ class ArtifactLease:
                 if not acquired:
                     return
                 for profile in ("development", "production"):
-                    state = read_profile_state(self.project, profile)
+                    try:
+                        state = read_profile_state(self.project, profile)
+                    except (OSError, ConfigurationError):
+                        continue
                     if (
                         state is None
                         or state.published is None

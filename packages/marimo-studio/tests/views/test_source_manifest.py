@@ -6,7 +6,6 @@ import pytest
 
 import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._views.sources as sources_module
-from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._views.sources import read_source, write_source
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import SourceConflictError, SourceValidationError
@@ -15,7 +14,7 @@ from marimo_studio.view_providers._host import provider_registry
 from .source_test_support import studio as _studio
 
 
-def test_manifest_write_preserves_provider_cleanup_failure(
+def test_manifest_write_uses_studio_owned_validation(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -23,20 +22,20 @@ def test_manifest_write_preserves_provider_cleanup_failure(
     current = read_source(studio, "dashboard", "view.toml")
 
     def fail_registry() -> object:
-        raise ProcessCleanupError("manifest provider process survived")
+        pytest.fail("manifest write loaded the provider registry")
 
     monkeypatch.setattr(sources_module, "provider_registry", fail_registry)
+    content = current.content + '\n[options]\nentrypoint = "index.html"\n'
 
-    with pytest.raises(ProcessCleanupError, match="manifest provider process survived"):
-        write_source(
-            studio,
-            "dashboard",
-            "view.toml",
-            current.content + '\n[options]\nentrypoint = "index.html"\n',
-            current.revision,
-        )
+    updated = write_source(
+        studio,
+        "dashboard",
+        "view.toml",
+        content,
+        current.revision,
+    )
 
-    assert read_source(studio, "dashboard", "view.toml") == current
+    assert updated.content == content
 
 
 def test_manifest_write_rejects_invalid_candidates_without_replacing_source(

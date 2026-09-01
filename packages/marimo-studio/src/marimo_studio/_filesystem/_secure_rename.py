@@ -8,7 +8,13 @@ import os
 import sys
 from pathlib import Path
 
+from marimo_studio._filesystem._secure_names import (
+    TemporarySiblingKind,
+    temporary_sibling_name,
+)
 from marimo_studio._filesystem._secure_types import ParentHandle, SecureFileError
+
+_TEMPORARY_RENAME_ATTEMPTS = 128
 
 
 def _raise_rename_error(source: Path, destination: Path) -> None:
@@ -105,3 +111,19 @@ def rename_if_absent(
     raise SecureFileError(
         "This platform does not provide exclusive directory publication"
     )
+
+
+def rename_to_temporary_sibling(
+    parent: ParentHandle,
+    source: Path,
+    kind: TemporarySiblingKind,
+) -> Path:
+    """Move one entry to a fresh bounded sibling without replacing a collision."""
+    for _attempt in range(_TEMPORARY_RENAME_ATTEMPTS):
+        destination = source.with_name(temporary_sibling_name(kind))
+        try:
+            rename_if_absent(parent, source, parent, destination)
+        except FileExistsError:
+            continue
+        return destination
+    raise SecureFileError(f"Could not allocate a temporary sibling for {source}")

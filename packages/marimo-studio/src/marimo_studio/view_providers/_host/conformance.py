@@ -398,11 +398,12 @@ class ProviderConformance:
                 raise _error(self.key, "requires starter notebook cell code")
             if (
                 type(item.has_output_expression) is not bool
-                or type(item.displays_output) is not bool
+                or type(item.may_display_output) is not bool
             ):
                 raise _error(
                     self.key,
-                    "requires starter notebook display flags to be booleans",
+                    "requires has_output_expression and may_display_output "
+                    "to be booleans",
                 )
             source_bytes += len(item.code.encode("utf-8"))
             context_bytes += 256 + sum(

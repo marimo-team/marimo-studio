@@ -21,6 +21,7 @@ from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.records import ValidationReport
 from marimo_studio._views.api import ViewRemovalResult
 from marimo_studio._views.records import ViewBuild, ViewDocument, ViewInspection
+from marimo_studio.errors import WorkspaceGenerationConflictError
 from marimo_studio.view_providers import BuildProfile
 
 _View = TypeVar("_View", bound="View")
@@ -32,15 +33,26 @@ class View:
 
     workspace: WorkspaceHandle
     name: str
+    catalog_generation: str | None
+    generation: str | None
 
     def __init__(self, *_args: object, **_kwargs: object) -> None:
         raise TypeError("Create views through a Studio authoring workspace")
 
     @classmethod
-    def _create(cls: type[_View], workspace: WorkspaceHandle, name: str) -> _View:
+    def _create(
+        cls: type[_View],
+        workspace: WorkspaceHandle,
+        name: str,
+        *,
+        catalog_generation: str | None,
+        generation: str | None,
+    ) -> _View:
         view = object.__new__(cls)
         object.__setattr__(view, "workspace", workspace)
         object.__setattr__(view, "name", name)
+        object.__setattr__(view, "catalog_generation", catalog_generation)
+        object.__setattr__(view, "generation", generation)
         return view
 
     async def inspect(self) -> ViewInspection:
@@ -65,6 +77,8 @@ class View:
             path,
             content,
             expected_revision=expected_revision,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
         )
 
     async def build(
@@ -77,6 +91,8 @@ class View:
             self.workspace.notebook,
             self.name,
             profile=profile,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
         )
 
     async def validate(
@@ -91,6 +107,8 @@ class View:
             level=level,
             view=self.name,
             runtime_timeout=runtime_timeout,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
         )
 
     async def export(
@@ -105,8 +123,19 @@ class View:
             self.name,
             output,
             force=force,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
         )
 
     async def remove(self) -> ViewRemovalResult:
         """Remove this view and return the remaining workspace identity."""
-        return await remove_view(self.workspace.notebook, self.name)
+        if self.catalog_generation is None or self.generation is None:
+            raise WorkspaceGenerationConflictError()
+        result = await remove_view(
+            self.workspace.notebook,
+            self.name,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
+        )
+        self.workspace._capture_catalog_generation(result.catalog_generation)
+        return result

@@ -5,12 +5,12 @@ from __future__ import annotations
 import errno
 import hashlib
 import os
-import secrets
 import stat
 import time
 from contextlib import suppress
 from pathlib import Path
 
+from marimo_studio._filesystem._secure_names import temporary_sibling_name
 from marimo_studio._filesystem._secure_types import (
     ConditionalWriteError,
     FileIdentity,
@@ -259,7 +259,7 @@ def write_file_if_absent_at(
     content: bytes,
     mode: int,
 ) -> FileIdentity:
-    temporary_name = f".{path.name}.restore-{secrets.token_hex(8)}"
+    temporary_name = temporary_sibling_name("restore")
     temporary: str | Path = (
         temporary_name
         if parent.descriptor is not None
@@ -429,7 +429,7 @@ def atomic_write_at(
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     for _attempt in range(128):
-        temporary_name = f".{path.name}.{secrets.token_hex(8)}.tmp"
+        temporary_name = temporary_sibling_name("write")
         target: str | Path = (
             temporary_name
             if parent.descriptor is not None

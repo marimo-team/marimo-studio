@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from collections.abc import Collection
 from pathlib import PurePosixPath, PureWindowsPath
-from unicodedata import category, normalize
 
+from marimo_studio._filesystem.paths import validate_portable_path_component
 from marimo_studio.view_providers._records import (
     MountDeclaration,
     ProjectDiagnostic,
@@ -25,11 +25,6 @@ _PROJECTION_SITE_ID = re.compile(r"[a-z0-9][a-z0-9._:-]{0,127}")
 _PROVIDER_KEY = re.compile(
     r"[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?"
 )
-_WINDOWS_DEVICE_NAME = re.compile(
-    r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?",
-    re.IGNORECASE,
-)
-_WINDOWS_FORBIDDEN_CHARACTERS = frozenset('<>:"|?*')
 
 
 def validate_projection_site_id(value: object, *, field: str) -> str:
@@ -64,20 +59,11 @@ def validate_relative_path(
         raise ValueError(f"{field} must be a normalized project-relative POSIX path")
     if PureWindowsPath(raw).drive:
         raise ValueError(f"{field} must not use a Windows drive prefix")
-    if any(category(character) == "Cc" for character in raw):
-        raise ValueError(f"{field} must not contain control characters")
-    if normalize("NFC", raw) != raw:
-        raise ValueError(f"{field} must use NFC Unicode normalization")
     parts = raw.split("/")
     if any(part in {"", ".", ".."} for part in parts):
         raise ValueError(f"{field} must be a normalized project-relative POSIX path")
     for part in parts:
-        if part.endswith((".", " ")):
-            raise ValueError(f"{field} must not end a path segment with a dot or space")
-        if any(character in _WINDOWS_FORBIDDEN_CHARACTERS for character in part):
-            raise ValueError(f"{field} contains a cross-platform forbidden character")
-        if _WINDOWS_DEVICE_NAME.fullmatch(part) is not None:
-            raise ValueError(f"{field} contains a reserved Windows device name")
+        validate_portable_path_component(part, field=f"{field} path segment")
     path = PurePosixPath(raw)
     if path.is_absolute() or path.as_posix() != raw:
         raise ValueError(f"{field} must be a normalized project-relative POSIX path")

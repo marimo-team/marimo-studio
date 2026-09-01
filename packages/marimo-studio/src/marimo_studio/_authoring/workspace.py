@@ -25,7 +25,7 @@ from marimo_studio._views.overview import overview
 from marimo_studio._views.records import Starter, StudioOverview, ViewSetupResult
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import BindingResult
-from marimo_studio.errors import ConfigurationError
+from marimo_studio.errors import ConfigurationError, WorkspaceGenerationConflictError
 from marimo_studio.view_providers._host import provider_registry
 from marimo_studio.view_providers._host.registry import ProviderDiagnostic
 
@@ -92,6 +92,7 @@ async def create_view(
     *,
     starter: str | Starter | None = None,
     dry_run: bool = False,
+    expected_catalog_generation: str | None = None,
 ) -> ViewSetupResult:
     """Create one view and reject an existing name."""
     return await run_provider_operation(
@@ -101,6 +102,7 @@ async def create_view(
             name,
             starter=starter,
             dry_run=dry_run,
+            expected_catalog_generation=expected_catalog_generation,
         )
     )
 
@@ -112,12 +114,19 @@ async def bind_cell(
     *,
     dry_run: bool = False,
     overwrite: bool = False,
+    expected_catalog_generation: str | None = None,
 ) -> BindingResult:
     """Bind an alias to one saved notebook cell."""
 
     def operation() -> BindingResult:
+        studio = load_studio(notebook)
+        if (
+            expected_catalog_generation is not None
+            and studio.catalog_generation != expected_catalog_generation
+        ):
+            raise WorkspaceGenerationConflictError()
         return bind_cell_operation(
-            load_studio(notebook),
+            studio,
             alias,
             cell_selector,
             dry_run=dry_run,

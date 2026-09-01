@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
 import stat
+from contextlib import suppress
 from pathlib import Path, PurePosixPath
 
 from marimo_studio._artifacts.codec import (
@@ -37,8 +39,8 @@ from marimo_studio._artifacts.records import (
 )
 from marimo_studio._filesystem.io import atomic_write_text
 from marimo_studio._filesystem.secure import secure_directory
+from marimo_studio._processes.cancellation import ProviderOperationControl
 from marimo_studio.errors import ConfigurationError, ViewProjectError
-from marimo_studio.errors._internal import ArtifactCompatibilityError
 from marimo_studio.view_providers import (
     BuildProfile,
     ProjectDiagnostic,
@@ -114,6 +116,47 @@ def write_profile_state(project: ViewProject, state: ArtifactProfileState) -> No
         encode_json(profile_state_dict(state)),
         root=project.root,
     )
+
+
+def write_profile_state_if_active(
+    project: ViewProject,
+    state: ArtifactProfileState,
+    control: ProviderOperationControl,
+) -> bool:
+    """Stage a receipt, then replace its pointer if cancellation has not won."""
+    control_root = artifact_root(project)
+    ensure_secure_directory(project.root, control_root, "Artifact control root")
+    staging = control_root / ".staging"
+    ensure_secure_directory(project.root, staging, "Artifact staging directory")
+    pointer = profile_pointer(project, state.profile)
+    pending = staging / f"receipt-{state.profile}-{secrets.token_hex(16)}.json"
+    assert_secure_path(project.root, pointer, "Artifact profile receipt")
+    assert_secure_path(project.root, pending, "Artifact pending profile receipt")
+    atomic_write_text(
+        pending,
+        encode_json(profile_state_dict(state)),
+        root=project.root,
+    )
+
+    def commit() -> None:
+        with secure_directory(project.root) as filesystem:
+            filesystem.replace(pending, pointer)
+
+    def discard_pending() -> None:
+        with (
+            suppress(OSError, ConfigurationError),
+            secure_directory(project.root) as filesystem,
+        ):
+            filesystem.unlink(pending)
+
+    try:
+        committed = control.commit_if_active(commit)
+    except BaseException:
+        discard_pending()
+        raise
+    if not committed:
+        discard_pending()
+    return committed
 
 
 def recover_staging(project: ViewProject) -> None:
@@ -444,10 +487,7 @@ def read_build_state(
     incarnation = _project_incarnation(project)
     if incarnation is None:
         return _unbuilt_state(profile)
-    try:
-        return _read_build_state(project, profile, incarnation)
-    except ArtifactCompatibilityError:
-        return _unbuilt_state(profile)
+    return _read_build_state(project, profile, incarnation)
 
 
 def read_artifact_state(
@@ -458,17 +498,11 @@ def read_artifact_state(
     incarnation = _project_incarnation(project)
     if incarnation is None:
         return ArtifactStateSnapshot(None, None, _unbuilt_state(profile))
-    try:
-        _read_build_state(project, profile, incarnation)
-    except ArtifactCompatibilityError:
-        return ArtifactStateSnapshot(None, None, _unbuilt_state(profile))
+    _read_build_state(project, profile, incarnation)
     with artifact_lock(project, create=False) as acquired:
         if not acquired or _project_incarnation(project) != incarnation:
             return ArtifactStateSnapshot(None, None, _unbuilt_state(profile))
-        try:
-            state = read_profile_state(project, profile)
-        except ArtifactCompatibilityError:
-            return ArtifactStateSnapshot(None, None, _unbuilt_state(profile))
+        state = read_profile_state(project, profile)
         if state is None:
             return ArtifactStateSnapshot(None, None, _unbuilt_state(profile))
         artifact = None
@@ -478,8 +512,6 @@ def read_artifact_state(
                     project,
                     state.published.artifact_revision,
                 )
-            except ArtifactCompatibilityError:
-                return ArtifactStateSnapshot(None, None, _unbuilt_state(profile))
             except (ConfigurationError, FileNotFoundError):
                 if _project_incarnation(project) != incarnation:
                     return ArtifactStateSnapshot(None, None, _unbuilt_state(profile))

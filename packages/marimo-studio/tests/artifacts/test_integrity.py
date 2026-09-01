@@ -383,6 +383,7 @@ def test_project_revision_canonically_includes_project_configuration(
         project,
         options={"entrypoint": "index.html", "theme": "dark"},
     )
+    renamed = replace(project, name="renamed")
 
     assert project_revision(reordered, inspection, provenance) == project_revision(
         same_options, inspection, provenance
@@ -396,6 +397,7 @@ def test_project_revision_canonically_includes_project_configuration(
         != base
     )
     assert project_revision(reordered, inspection, provenance) != base
+    assert project_revision(renamed, inspection, provenance) != base
 
 
 def test_unsupported_profile_is_rejected_before_artifact_mutation(
@@ -571,7 +573,7 @@ def test_artifact_read_rejects_missing_and_extra_files(
         lambda state: state.update(schema=True),
         lambda state: state.update(schema=2),
         lambda state: state.update(extra="field"),
-        lambda state: state["published"]["provider"].update(api_version=99),
+        lambda state: state["published"]["provider"].update(api_version=0),
         lambda state: state["published"]["provider"].update(
             build_fingerprint="invalid"
         ),

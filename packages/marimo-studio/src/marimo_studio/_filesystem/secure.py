@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import secrets
 import stat
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
@@ -14,6 +13,10 @@ from marimo_studio._filesystem._secure_conditional import (
 )
 from marimo_studio._filesystem._secure_conditional import (
     replace_file_if_identity as _replace_file_if_identity,
+)
+from marimo_studio._filesystem._secure_names import (
+    TemporarySiblingKind,
+    temporary_sibling_name,
 )
 from marimo_studio._filesystem._secure_operations import (
     atomic_write_at as _atomic_write_at,
@@ -37,7 +40,10 @@ from marimo_studio._filesystem._secure_operations import (
 from marimo_studio._filesystem._secure_operations import (
     write_file_if_absent_at as _write_file_if_absent_at,
 )
-from marimo_studio._filesystem._secure_rename import rename_if_absent
+from marimo_studio._filesystem._secure_rename import (
+    rename_if_absent,
+    rename_to_temporary_sibling,
+)
 from marimo_studio._filesystem._secure_tree import (
     directory_entries_digest as _directory_entries_digest,
 )
@@ -194,6 +200,17 @@ class SecureDirectory:
         finally:
             os.close(descriptor)
 
+    def file_owner(self, path: Path) -> tuple[int, int, int]:
+        """Return device, inode, and mode for one contained regular file."""
+        descriptor = self.open_file(path)
+        try:
+            state = os.fstat(descriptor)
+        finally:
+            os.close(descriptor)
+        if not stat.S_ISREG(state.st_mode):
+            raise SecureFileError(f"Contained path is not a regular file: {path}")
+        return state.st_dev, state.st_ino, state.st_mode
+
     def ensure_attached(self, expected: FileIdentity | None = None) -> None:
         """Require the held directory incarnation to remain at its path."""
         if self._owner.descriptor is None:
@@ -225,6 +242,17 @@ class SecureDirectory:
             raise SecureFileError(
                 f"Secure directory moved during the transaction: {self.root}"
             )
+
+    def sync(self) -> None:
+        """Flush directory entry changes for this owned root when supported."""
+        if self._owner.descriptor is not None:
+            os.fsync(self._owner.descriptor)
+
+    def sync_parent(self, path: Path) -> None:
+        """Flush the directory that owns one contained entry when supported."""
+        with self._parent(path) as parent:
+            if parent.descriptor is not None:
+                os.fsync(parent.descriptor)
 
     def atomic_write(
         self,
@@ -266,7 +294,7 @@ class SecureDirectory:
         with self._parent(path) as parent:
             target: str | Path = path.name if parent.descriptor is not None else path
             source = _open_file_at(parent, path, os.O_RDONLY)
-            temporary_name = f".{path.name}.{secrets.token_hex(16)}.detach"
+            temporary_name = temporary_sibling_name("detach")
             temporary: str | Path = (
                 temporary_name
                 if parent.descriptor is not None
@@ -385,6 +413,15 @@ class SecureDirectory:
                 destination,
             )
 
+    def rename_to_temporary_sibling(
+        self,
+        path: Path,
+        kind: TemporarySiblingKind,
+    ) -> Path:
+        """Move one entry to a fresh bounded sibling without replacement."""
+        with self._parent(path) as parent:
+            return rename_to_temporary_sibling(parent, path, kind)
+
     def remove_tree(self, path: Path) -> None:
         """Remove one contained tree without following mutable links."""
         with self._parent(path) as parent:
@@ -468,7 +505,7 @@ class SecureDirectory:
     def create_directory(self, path: Path, mode: int = 0o700) -> FileIdentity:
         """Publish one empty directory while its destination remains absent."""
         with self._parent(path) as parent:
-            temporary_name = f".{path.name}.{secrets.token_hex(8)}.claim"
+            temporary_name = temporary_sibling_name("claim")
             temporary = path.with_name(temporary_name)
             target: str | Path = (
                 temporary_name if parent.descriptor is not None else temporary
@@ -535,6 +572,31 @@ class SecureDirectory:
                 True,
             )
 
+    def directory_owner(self, path: Path) -> tuple[int, int, int]:
+        """Return device, inode, and mode for one contained directory owner."""
+        with self._parent(path) as parent:
+            target: str | Path = path.name if parent.descriptor is not None else path
+            if parent.descriptor is not None:
+                descriptor = os.open(
+                    target,
+                    _directory_flags(),
+                    dir_fd=parent.descriptor,
+                )
+                try:
+                    state = os.fstat(descriptor)
+                finally:
+                    os.close(descriptor)
+            else:
+                handle = _windows_directory_handle(path) if os.name == "nt" else None
+                try:
+                    state = path.stat(follow_symlinks=False)
+                finally:
+                    if handle is not None:
+                        _close_windows_handle(handle)
+            if stat.S_ISLNK(state.st_mode) or not stat.S_ISDIR(state.st_mode):
+                raise SecureFileError(f"Contained path is not a directory: {path}")
+            return state.st_dev, state.st_ino, state.st_mode
+
     def directory_tree_identity(
         self,
         path: Path,
@@ -561,6 +623,20 @@ class SecureDirectory:
             target: str | Path = path.name if parent.descriptor is not None else path
             os.unlink(target, dir_fd=parent.descriptor)
 
+    def entry_exists(self, path: Path) -> bool:
+        """Return whether one contained leaf exists without following links."""
+        with self._parent(path) as parent:
+            target: str | Path = path.name if parent.descriptor is not None else path
+            try:
+                os.stat(
+                    target,
+                    dir_fd=parent.descriptor,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                return False
+            return True
+
     def rmdir(self, path: Path) -> None:
         with self._parent(path) as parent:
             target: str | Path = path.name if parent.descriptor is not None else path
@@ -573,18 +649,12 @@ class SecureDirectory:
     ) -> Path:
         """Move one created directory aside, then verify its empty identity."""
         with self._parent(path) as parent:
-            target: str | Path = path.name if parent.descriptor is not None else path
-            quarantine_name = f".{path.name}.rollback-{secrets.token_hex(8)}"
+            recovery = rename_to_temporary_sibling(parent, path, "rollback")
+            quarantine_name = recovery.name
             quarantine: str | Path = (
                 quarantine_name
                 if parent.descriptor is not None
                 else parent.path / quarantine_name
-            )
-            os.rename(
-                target,
-                quarantine,
-                src_dir_fd=parent.descriptor,
-                dst_dir_fd=parent.descriptor,
             )
             state = os.stat(
                 quarantine,
@@ -601,8 +671,7 @@ class SecureDirectory:
                     True,
                 )
                 if actual == expected:
-                    return path.with_name(quarantine_name)
-            recovery = path.with_name(quarantine_name)
+                    return recovery
             try:
                 rename_if_absent(parent, recovery, parent, path)
             except OSError as restore_error:

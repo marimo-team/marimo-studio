@@ -12,9 +12,12 @@ import marimo
 import pytest
 from click.testing import CliRunner
 
+import marimo_studio._cli.environment as environment_module
 from marimo_studio._cli import cli, main
 from marimo_studio._cli.diagnostics import DiagnosticStream
 from marimo_studio._views.api import prepare_view
+from marimo_studio._views.sources import read_source
+from marimo_studio._workspace import load_studio
 from marimo_studio.errors import AgentRequestError
 from marimo_studio.view_providers._host import provider_registry
 
@@ -254,6 +257,99 @@ def test_main_structures_configuration_errors(
     assert event["exit_code"] == 3
 
 
+@pytest.mark.parametrize(
+    "arguments",
+    (
+        ["status"],
+        ["view", "build", "dashboard"],
+        ["view", "export", "dashboard", "--output", "site"],
+    ),
+)
+def test_provider_commands_admit_the_target_before_bootstrap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    arguments: list[str],
+) -> None:
+    monkeypatch.setattr(
+        environment_module,
+        "_target_provider_ids",
+        lambda _target: pytest.fail("provider discovery reached an invalid target"),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "marimo-studio",
+            *arguments,
+            "--target",
+            str(tmp_path / "missing.py"),
+            "--json",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    output = capsys.readouterr()
+    event = json.loads(output.err)
+    assert raised.value.code == 3
+    assert output.out == ""
+    assert event["code"] == "configuration-error"
+    assert event["exit_code"] == 3
+
+
+@pytest.mark.parametrize("failure", ("wrong-kind", "invalid-utf8", "unreadable"))
+def test_main_structures_bootstrap_target_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failure: str,
+) -> None:
+    target = tmp_path / ("analysis.txt" if failure == "wrong-kind" else "analysis.py")
+    if failure == "invalid-utf8":
+        target.write_bytes(b"\xff")
+    else:
+        target.write_text("import marimo\n", encoding="utf-8")
+    if failure == "unreadable":
+
+        def unreadable(_path: Path) -> None:
+            raise PermissionError("denied")
+
+        monkeypatch.setattr(
+            environment_module,
+            "read_notebook_metadata",
+            unreadable,
+        )
+    monkeypatch.setattr(
+        environment_module,
+        "_target_provider_ids",
+        lambda _target: pytest.fail("provider discovery reached an invalid target"),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "marimo-studio",
+            "validate",
+            "--target",
+            str(target),
+            "--json",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    output = capsys.readouterr()
+    event = json.loads(output.err)
+    assert raised.value.code == 3
+    assert output.out == ""
+    assert event["code"] == "configuration-error"
+    assert event["severity"] == "error"
+    assert event["exit_code"] == 3
+
+
 def test_view_create_recovers_after_the_starter_target_limit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -375,6 +471,10 @@ def test_main_structures_live_agent_request_errors(
             "browser-client-ambiguous",
             "Select one connected Studio browser.",
             status_code=409,
+            details={
+                "hint": "Pass one browser client ID.",
+                "transient": True,
+            },
         )
 
     monkeypatch.setattr(
@@ -407,6 +507,71 @@ def test_main_structures_live_agent_request_errors(
     assert event["command"] == "view show"
     assert event["code"] == "browser-client-ambiguous"
     assert event["exit_code"] == 5
+    assert event["details"] == {
+        "hint": "Pass one browser client ID.",
+        "transient": True,
+    }
+
+    monkeypatch.setattr(sys, "argv", sys.argv[:-1])
+    with pytest.raises(SystemExit) as human_exit:
+        main()
+
+    human = capsys.readouterr()
+    assert human_exit.value.code == 5
+    assert "Error: Select one connected Studio browser." in human.err
+    assert "Hint: Pass one browser client ID." in human.err
+
+
+def test_main_reports_a_source_precondition_conflict_without_mutation(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    setup = prepare_view(notebook_path)
+    studio = load_studio(notebook_path)
+    loaded = read_source(studio, "dashboard", "index.html")
+    current = loaded.content.replace("Dashboard", "Current source")
+    setup.root.joinpath("index.html").write_text(current, encoding="utf-8")
+    replacement = tmp_path / "replacement.html"
+    replacement.write_text(
+        loaded.content.replace("Dashboard", "Stale replacement"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "marimo-studio",
+            "view",
+            "write",
+            "dashboard",
+            "index.html",
+            "--target",
+            str(notebook_path),
+            "--expected-revision",
+            loaded.revision,
+            "--catalog-generation",
+            studio.catalog_generation,
+            "--view-generation",
+            studio.view_generations["dashboard"],
+            "--from",
+            str(replacement),
+            "--json",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    output = capsys.readouterr()
+    event = json.loads(output.err)
+    assert raised.value.code == 3
+    assert output.out == ""
+    assert event["command"] == "view write"
+    assert event["code"] == "source-conflict"
+    assert event["exit_code"] == 3
+    assert setup.root.joinpath("index.html").read_text(encoding="utf-8") == current
 
 
 def test_main_preserves_view_not_found_details(

@@ -32,8 +32,7 @@ from marimo_studio._workspace.mutation_lock import (
     workspace_catalog_lock,
 )
 from marimo_studio._workspace.project_manifest import load_view_project
-from marimo_studio.errors import ConfigurationError
-from marimo_studio.errors._internal import ViewInUseError
+from marimo_studio.errors import ConfigurationError, ViewInUseError
 from marimo_studio.view_providers import (
     BuildProfile,
     ViewProject,

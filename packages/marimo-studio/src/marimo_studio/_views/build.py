@@ -39,9 +39,10 @@ from marimo_studio._artifacts.publication import (
     record_build_started,
     restore_cached_artifact,
 )
-from marimo_studio._artifacts.retention import ArtifactLease, prune_artifacts
+from marimo_studio._artifacts.retention import ArtifactLease
 from marimo_studio._processes.cancellation import (
-    current_provider_cancellation,
+    ProviderOperationControl,
+    current_provider_operation,
     provider_cancellation,
 )
 from marimo_studio._processes.provider_operation import (
@@ -55,9 +56,14 @@ from marimo_studio._processes.provider_runner import (
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._views.records import ViewBuild
+from marimo_studio._workspace.generation import view_generation
 from marimo_studio._workspace.mutation_lock import view_build_lock, view_mutation_lock
 from marimo_studio._workspace.project_manifest import load_view_project
-from marimo_studio.errors import ConfigurationError, ViewProjectError
+from marimo_studio.errors import (
+    ConfigurationError,
+    ViewGenerationConflictError,
+    ViewProjectError,
+)
 from marimo_studio.view_providers import (
     BuildProfile,
     BuildRequest,
@@ -66,7 +72,6 @@ from marimo_studio.view_providers import (
     ProjectDiagnostic,
     ProjectInspection,
     ProviderAvailability,
-    ProviderCancellation,
     ViewProject,
 )
 from marimo_studio.view_providers._host import provider_registry
@@ -286,15 +291,22 @@ def _stable_artifact_commit(
     expected_revision: str,
     expected_state: ProjectInputState,
     started: float,
+    expected_generation: str | None,
 ) -> Iterator[Callable[[], ProjectDiagnostic | None]]:
     """Keep Studio source writes out of the final identity and receipt transaction."""
     with view_mutation_lock(project.root.parent, project.name):
-        try:
-            yield lambda: _project_stability_failure(
+        _require_build_generation(project, expected_generation)
+
+        def confirm_current() -> ProjectDiagnostic | None:
+            _require_build_generation(project, expected_generation)
+            return _project_stability_failure(
                 project,
                 inspection,
                 expected_state,
             )
+
+        try:
+            yield confirm_current
         except ArtifactCommitRejected as rejection:
             record_build_failure(
                 project,
@@ -305,16 +317,18 @@ def _stable_artifact_commit(
             )
 
 
-def _finish_artifact_commit(
+def _require_build_generation(
     project: ViewProject,
-    lease: ArtifactLease,
-) -> ArtifactLease:
+    expected_generation: str | None,
+) -> None:
+    if expected_generation is None:
+        return
     try:
-        prune_artifacts(project)
-    except BaseException:
-        lease.close()
-        raise
-    return lease
+        current_generation = view_generation(project)
+    except (ConfigurationError, OSError) as error:
+        raise ViewGenerationConflictError(project.name, None) from error
+    if current_generation != expected_generation:
+        raise ViewGenerationConflictError(project.name, current_generation)
 
 
 def _load_build_owner(
@@ -340,6 +354,7 @@ def publish_view(
     *,
     inspection: ProjectInspection | None = None,
     input_id: str | None = None,
+    expected_generation: str | None = None,
 ) -> ArtifactLease:
     """Build one profile through provider and artifact owners."""
     if (inspection is None) != (input_id is None):
@@ -348,6 +363,7 @@ def publish_view(
         )
     with view_build_lock(project.root.parent, project.name):
         current, profile, provider = _load_build_owner(project, profile)
+        _require_build_generation(current, expected_generation)
         with build_lock(current) as acquired:
             if not acquired:
                 raise RuntimeError("Blocking artifact build lock was not acquired")
@@ -357,6 +373,7 @@ def publish_view(
                 provider,
                 inspection=inspection,
                 input_id=input_id,
+                expected_generation=expected_generation,
             )
 
 
@@ -367,8 +384,11 @@ def _publish_locked(
     *,
     inspection: ProjectInspection | None,
     input_id: str | None,
+    expected_generation: str | None,
 ) -> ArtifactLease:
     started = time.monotonic()
+    control = current_provider_operation() or ProviderOperationControl()
+    cancellation = control.cancellation
     failures = _inspection_failures(inspection) if inspection is not None else ()
     if failures:
         prepare_artifact_build(project, profile)
@@ -406,6 +426,7 @@ def _publish_locked(
             input_id,
             commit_state,
             started,
+            expected_generation,
         ) as confirm_current:
             cached = restore_cached_artifact(
                 project,
@@ -413,10 +434,11 @@ def _publish_locked(
                 input_id,
                 preparation.current,
                 preparation.current_snapshot,
+                control,
                 confirm_current=confirm_current,
             )
         if cached is not None:
-            return _finish_artifact_commit(project, cached)
+            return cached
     try:
         candidate_owner = capture_artifact_candidate(project, discovered)
         with candidate_owner as candidate:
@@ -477,6 +499,7 @@ def _publish_locked(
                     revision,
                     commit_state,
                     started,
+                    expected_generation,
                 ) as confirm_current:
                     cached = restore_cached_artifact(
                         project,
@@ -484,10 +507,11 @@ def _publish_locked(
                         revision,
                         preparation.current,
                         preparation.current_snapshot,
+                        control,
                         confirm_current=confirm_current,
                     )
                 if cached is not None:
-                    return _finish_artifact_commit(project, cached)
+                    return cached
 
             record_build_started(
                 project,
@@ -495,7 +519,6 @@ def _publish_locked(
                 revision,
                 preparation.recovery_diagnostic,
             )
-            cancellation = current_provider_cancellation() or ProviderCancellation()
             command_timeout = DEFAULT_PROVIDER_COMMAND_TIMEOUT
             request = BuildRequest(
                 project=snapshot,
@@ -577,6 +600,7 @@ def _publish_locked(
                 revision,
                 commit_state,
                 started,
+                expected_generation,
             ) as confirm_current:
                 published = publish_artifact_candidate(
                     project,
@@ -594,9 +618,10 @@ def _publish_locked(
                         == prepared.manifest.artifact_revision
                         else None
                     ),
+                    control,
                     confirm_current=confirm_current,
                 )
-            return _finish_artifact_commit(project, published)
+            return published
     except (ViewProjectError, ProcessCleanupError):
         raise
     except (OSError, ConfigurationError) as error:
@@ -620,18 +645,24 @@ def build_view_project_sync(
     project: ViewProject,
     *,
     profile: BuildProfile = "development",
-    cancellation: ProviderCancellation | None = None,
+    control: ProviderOperationControl | None = None,
+    expected_generation: str | None = None,
 ) -> ArtifactLease:
     """Publish one artifact from a synchronous application owner."""
-    control = cancellation or current_provider_cancellation() or ProviderCancellation()
-    with provider_cancellation(control):
-        return publish_view(project, profile)
+    operation = control or current_provider_operation() or ProviderOperationControl()
+    with provider_cancellation(operation):
+        return publish_view(
+            project,
+            profile,
+            expected_generation=expected_generation,
+        )
 
 
 async def build_view_project(
     project: ViewProject,
     *,
     profile: BuildProfile = "development",
+    expected_generation: str | None = None,
 ) -> ViewBuild:
     """Build one view and return detached publication metadata."""
     lease = await run_provider_operation(
@@ -639,6 +670,7 @@ async def build_view_project(
             build_view_project_sync,
             project,
             profile=profile,
+            expected_generation=expected_generation,
         ),
         discard=lambda late_lease: late_lease.close(),
     )

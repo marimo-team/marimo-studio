@@ -96,6 +96,10 @@ thresholds = [0, 0.5]
 @pytest.mark.parametrize(
     ("source", "message"),
     (
+        (
+            'schema = 1\ngeneration = "legacy"\nprovider = "third-party/json"\n',
+            "Unsupported view manifest field 'generation'",
+        ),
         ('schema = true\nprovider = "third-party/json"\n', "schema must be 1"),
         ("schema = 1\nprovider = 42\n", "provider must be a non-empty string"),
         (

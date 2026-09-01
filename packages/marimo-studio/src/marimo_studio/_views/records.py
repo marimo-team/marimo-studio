@@ -57,6 +57,7 @@ class ViewSetupResult:
     created: tuple[Path, ...]
     updated: tuple[Path, ...]
     dry_run: bool
+    launch_requirements: tuple[str, ...]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -70,6 +71,7 @@ class ViewSetupResult:
             "created": [str(path) for path in self.created],
             "updated": [str(path) for path in self.updated],
             "dry_run": self.dry_run,
+            "launch_requirements": list(self.launch_requirements),
         }
 
 
@@ -78,6 +80,7 @@ class ViewOverview:
     """Identify one authored view in a Studio workspace."""
 
     name: str
+    generation: str
     path: Path
     default: bool
     provider: str
@@ -87,6 +90,7 @@ class ViewOverview:
     def to_dict(self) -> dict[str, object]:
         return {
             "name": self.name,
+            "generation": self.generation,
             "path": str(self.path),
             "default": self.default,
             "provider": self.provider,
@@ -101,6 +105,7 @@ class StudioOverview:
 
     notebook: Path
     state: OverviewState
+    generation: str | None
     config_path: Path | None
     config_source: Literal["notebook", "pyproject"] | None
     view_root: Path
@@ -109,12 +114,14 @@ class StudioOverview:
     runtimes: tuple[str, ...]
     bindings: dict[str, str]
     views: tuple[ViewOverview, ...]
+    launch_requirements: tuple[str, ...]
 
     def to_dict(self) -> dict[str, object]:
         return {
             "schema": 1,
             "notebook": str(self.notebook),
             "state": self.state,
+            "generation": self.generation,
             "config": str(self.config_path) if self.config_path is not None else None,
             "config_source": self.config_source,
             "view_root": str(self.view_root),
@@ -123,6 +130,7 @@ class StudioOverview:
             "runtimes": list(self.runtimes),
             "bindings": self.bindings,
             "views": [view.to_dict() for view in self.views],
+            "launch_requirements": list(self.launch_requirements),
         }
 
 

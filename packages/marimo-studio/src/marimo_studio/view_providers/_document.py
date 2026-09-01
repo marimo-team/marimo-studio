@@ -49,16 +49,26 @@ class HTMLMountDeclaration:
 
 @dataclass(frozen=True)
 class HTMLLocalResource:
-    """One fetched project-local URL that a single-file view cannot publish."""
+    """One fetched project-local URL declared by an HTML document."""
 
     tag: str
     attribute: str
     value: str
     position: tuple[int, int]
+    relations: tuple[str, ...] = ()
+    insertion_offset: int | None = None
 
 
 class HTMLLocalResourceError(ViewProjectError):
-    """A document fetches a project-local resource outside its artifact."""
+    """A document declares a project-local resource outside its contract."""
+
+
+@dataclass(frozen=True)
+class HTMLInlineScript:
+    """One executable inline script and its first source character."""
+
+    content: str
+    position: tuple[int, int]
 
 
 _FETCHED_ATTRIBUTES = {
@@ -102,6 +112,28 @@ _FETCHED_LINK_RELATIONS = frozenset(
         "stylesheet",
     }
 )
+_EXECUTABLE_SCRIPT_TYPES = frozenset(
+    {
+        "",
+        "application/ecmascript",
+        "application/javascript",
+        "application/x-ecmascript",
+        "application/x-javascript",
+        "module",
+        "text/ecmascript",
+        "text/javascript",
+        "text/javascript1.0",
+        "text/javascript1.1",
+        "text/javascript1.2",
+        "text/javascript1.3",
+        "text/javascript1.4",
+        "text/javascript1.5",
+        "text/jscript",
+        "text/livescript",
+        "text/x-ecmascript",
+        "text/x-javascript",
+    }
+)
 
 
 def _advance_source_position(
@@ -118,17 +150,20 @@ def _advance_source_position(
     return line, column + len(segment)
 
 
-def _is_local_resource(value: str) -> bool:
+def is_local_resource_url(value: str) -> bool:
+    """Return whether a fetched URL resolves through the document base."""
     selected = value.strip()
     if not selected or selected.startswith("#"):
         return False
     parsed = urlsplit(selected)
+    if parsed.scheme.casefold() in {"http", "https"} and not parsed.hostname:
+        raise ValueError("HTTP and HTTPS resource URLs must include // and a host")
     return not parsed.scheme and not parsed.netloc
 
 
 def _resource_is_local(value: str, position: tuple[int, int]) -> bool:
     try:
-        return _is_local_resource(value)
+        return is_local_resource_url(value)
     except ValueError as error:
         line, column = position
         raise ViewProjectError(
@@ -172,25 +207,6 @@ def _srcset_urls(source: str) -> tuple[str, ...]:
     return tuple(urls)
 
 
-def validate_self_contained_html(
-    parser: HTMLDocumentParser,
-    path: str,
-) -> None:
-    """Reject fetched local files that cannot enter a single-file artifact."""
-    if not parser.local_resources:
-        return
-    resource = parser.local_resources[0]
-    line, column = resource.position
-    raise HTMLLocalResourceError(
-        f"{path}: Vanilla cannot publish local resource {resource.value!r} "
-        f"from <{resource.tag} {resource.attribute}>. Inline the resource or "
-        "create another view with a provider for multi-file projects.",
-        source=path,
-        line=line,
-        column=column,
-    )
-
-
 class HTMLDocumentParser(HTMLParser):
     """Collect projection hosts and enforce the replaceable shell boundary."""
 
@@ -198,6 +214,7 @@ class HTMLDocumentParser(HTMLParser):
         super().__init__()
         self.mounts: list[HTMLMountDeclaration] = []
         self.local_resources: list[HTMLLocalResource] = []
+        self.inline_scripts: list[HTMLInlineScript] = []
         self.app_shells = 0
         self.heads = 0
         self.bodies = 0
@@ -208,12 +225,16 @@ class HTMLDocumentParser(HTMLParser):
         self.canonical_head_order = True
         self._document_phase = "before-html"
         self.authored_mount_declaration_position: tuple[int, int] | None = None
+        self.authored_source_revision_position: tuple[int, int] | None = None
+        self.import_map_position: tuple[int, int] | None = None
+        self.base_href_position: tuple[int, int] | None = None
         self._open_tags: list[tuple[str, bool]] = []
         self._shell_depth = 0
         self._source = ""
         self._line_offsets = [0]
         self._insertion_character_offset = 0
         self._insertion_byte_offset = 0
+        self._inline_script = False
 
     def feed(self, data: str) -> None:
         self._source += data
@@ -237,6 +258,13 @@ class HTMLDocumentParser(HTMLParser):
         tag: str,
         attrs: list[tuple[str, str | None]],
     ) -> None:
+        if tag in {"script", "style"}:
+            line, column = self.getpos()
+            raise ViewProjectError(
+                f"<{tag}> cannot use self-closing syntax",
+                line=line,
+                column=column + 1,
+            )
         self._start(tag, attrs, self_closing=True)
 
     def handle_endtag(self, tag: str) -> None:
@@ -244,6 +272,8 @@ class HTMLDocumentParser(HTMLParser):
             self.head_closes += 1
         elif tag == "body":
             self.body_closes += 1
+        elif tag == "script":
+            self._inline_script = False
         for index in range(len(self._open_tags) - 1, -1, -1):
             opened_tag, _ = self._open_tags[index]
             if opened_tag != tag:
@@ -256,6 +286,11 @@ class HTMLDocumentParser(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._document_phase in {"before-html", "before-head"} and data.strip():
             self.canonical_head_order = False
+        if self._open_tags and self._open_tags[-1][0] == "script":
+            if self._inline_script:
+                line, column = self.getpos()
+                self.inline_scripts.append(HTMLInlineScript(data, (line, column + 1)))
+            return
         if not self._open_tags or self._open_tags[-1][0] != "style":
             return
         line, column = self.getpos()
@@ -315,6 +350,15 @@ class HTMLDocumentParser(HTMLParser):
                 )
             attribute_names.add(normalized_name)
         attributes = dict(attrs)
+        if tag == "base" and "href" in attributes and self.base_href_position is None:
+            self.base_href_position = position
+        if tag == "script":
+            script_type = (attributes.get("type") or "").strip().casefold()
+            if script_type == "importmap" and self.import_map_position is None:
+                self.import_map_position = position
+            self._inline_script = (
+                "src" not in attributes and script_type in _EXECUTABLE_SCRIPT_TYPES
+            )
         inline_style = attributes.get("style")
         if inline_style is not None:
             for value, _ in css_resource_urls(inline_style):
@@ -338,6 +382,7 @@ class HTMLDocumentParser(HTMLParser):
         fetched = _FETCHED_ATTRIBUTES.get(tag, ())
         if tag in _FETCHED_SVG_HREF_TAGS:
             fetched = (*fetched, "href", "xlink:href")
+        relations: set[str] = set()
         if tag == "link":
             relations = {
                 item.casefold() for item in (attributes.get("rel") or "").split()
@@ -348,13 +393,29 @@ class HTMLDocumentParser(HTMLParser):
             value = attributes.get(attribute)
             if value is not None and _resource_is_local(value, position):
                 self.local_resources.append(
-                    HTMLLocalResource(tag, attribute, value.strip(), position)
+                    HTMLLocalResource(
+                        tag,
+                        attribute,
+                        value.strip(),
+                        position,
+                        tuple(sorted(relations)),
+                        insertion_offset=(
+                            self._start_tag_insertion_offset(line, column)
+                            if tag == "script" and attribute == "src"
+                            else None
+                        ),
+                    )
                 )
         if (
             MOUNT_ATTRIBUTE in attributes
             and self.authored_mount_declaration_position is None
         ):
             self.authored_mount_declaration_position = position
+        if (
+            "data-marimo-studio-source-revision" in attributes
+            and self.authored_source_revision_position is None
+        ):
+            self.authored_source_revision_position = position
         if tag == "head":
             self.heads += 1
         elif tag == "body":
@@ -439,6 +500,8 @@ class HTMLDocumentParser(HTMLParser):
                 )
             )
         if self_closing:
+            if tag == "script":
+                self._inline_script = False
             if is_shell:
                 self._shell_depth -= 1
         else:

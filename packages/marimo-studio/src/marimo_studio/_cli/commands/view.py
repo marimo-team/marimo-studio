@@ -10,7 +10,7 @@ from marimo_studio._cli.help import ColoredGroup
 
 @click.group("view", cls=ColoredGroup)
 def view() -> None:
-    """Create and operate named notebook pages."""
+    """Create and operate named notebook views."""
 
 
 view.add_command(create)

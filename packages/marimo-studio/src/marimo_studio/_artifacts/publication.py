@@ -58,17 +58,19 @@ from marimo_studio._artifacts.repository import (
     revision_root,
     validate_document,
     write_profile_state,
+    write_profile_state_if_active,
 )
 from marimo_studio._artifacts.retention import (
     ArtifactLease,
     lease_artifact_locked,
+    prune_artifacts,
     prune_artifacts_locked,
     quarantine_artifact_revision_locked,
 )
 from marimo_studio._filesystem.io import atomic_write_text
 from marimo_studio._filesystem.secure import secure_directory
+from marimo_studio._processes.cancellation import ProviderOperationControl
 from marimo_studio.errors import ConfigurationError, ViewProjectError
-from marimo_studio.errors._internal import ArtifactCompatibilityError
 from marimo_studio.view_providers import (
     BuildProfile,
     BuildResult,
@@ -116,6 +118,17 @@ def _remove_profile_pointer(project: ViewProject, profile: BuildProfile) -> None
         suppress(FileNotFoundError),
     ):
         filesystem.unlink(pointer)
+
+
+def _cancelled_commit() -> ArtifactCommitRejected:
+    return ArtifactCommitRejected(
+        ProjectDiagnostic(
+            code="build-cancelled",
+            severity="error",
+            message="The view build was cancelled before publication.",
+            hint="Build the view again.",
+        )
+    )
 
 
 def record_build_failure(
@@ -186,11 +199,6 @@ def prepare_artifact_build(
                     profile,
                     state.published,
                 )
-        except ArtifactCompatibilityError:
-            _remove_profile_pointer(project, profile)
-            prune_artifacts_locked(project)
-            current = None
-            current_snapshot = None
         except (OSError, ConfigurationError) as error:
             _remove_profile_pointer(project, profile)
             prune_artifacts_locked(project)
@@ -244,41 +252,57 @@ def restore_cached_artifact(
     project_revision: str,
     cached: ViewArtifact,
     verified: ArtifactRevisionSnapshot,
+    control: ProviderOperationControl,
     *,
     confirm_current: Callable[[], ProjectDiagnostic | None],
 ) -> ArtifactLease | None:
     """Lease a still-current publication after source stability is verified."""
-    with artifact_lock(project) as acquired:
-        if not acquired:
-            raise RuntimeError("Blocking artifact lock was not acquired")
-        state = read_profile_state(project, profile)
-        if (
-            state is None
-            or state.published is None
-            or cached.project_revision != project_revision
-            or state.published.artifact_revision != cached.artifact_revision
-            or verified.revision.manifest.artifact_revision != cached.artifact_revision
-        ):
-            return None
-        current_identity = artifact_tree_identity(
-            project,
-            revision_root(project, cached.artifact_revision),
-        )
-        if current_identity != verified.identity:
-            return None
-        rejection = confirm_current()
-        if rejection is not None:
-            raise ArtifactCommitRejected(rejection)
-        restored = ViewBuildState(
-            profile=profile,
-            phase="published",
-            project_revision=project_revision,
-            artifact_revision=cached.artifact_revision,
-            diagnostics=state.published.diagnostics,
-            duration_ms=state.published.duration_ms,
-        )
-        write_profile_state(project, profile_state(profile, state.published, restored))
-        return lease_artifact_locked(project, cached)
+    lease: ArtifactLease | None = None
+    try:
+        with artifact_lock(project) as acquired:
+            if not acquired:
+                raise RuntimeError("Blocking artifact lock was not acquired")
+            state = read_profile_state(project, profile)
+            if (
+                state is None
+                or state.published is None
+                or cached.project_revision != project_revision
+                or state.published.artifact_revision != cached.artifact_revision
+                or verified.revision.manifest.artifact_revision
+                != cached.artifact_revision
+            ):
+                return None
+            current_identity = artifact_tree_identity(
+                project,
+                revision_root(project, cached.artifact_revision),
+            )
+            if current_identity != verified.identity:
+                return None
+            lease = lease_artifact_locked(project, cached)
+            prune_artifacts_locked(project)
+            rejection = confirm_current()
+            if rejection is not None:
+                raise ArtifactCommitRejected(rejection)
+            restored = ViewBuildState(
+                profile=profile,
+                phase="published",
+                project_revision=project_revision,
+                artifact_revision=cached.artifact_revision,
+                diagnostics=state.published.diagnostics,
+                duration_ms=state.published.duration_ms,
+            )
+            committed = write_profile_state_if_active(
+                project,
+                profile_state(profile, state.published, restored),
+                control,
+            )
+            if not committed:
+                raise _cancelled_commit()
+        return lease
+    except BaseException:
+        if lease is not None:
+            lease.close()
+        raise
 
 
 def record_build_started(
@@ -418,12 +442,14 @@ def publish_artifact_candidate(
     started: float,
     recovery: ProjectDiagnostic | None,
     existing_snapshot: ArtifactRevisionSnapshot | None,
+    control: ProviderOperationControl,
     *,
     confirm_current: Callable[[], ProjectDiagnostic | None],
 ) -> ArtifactLease:
     """Atomically install one prepared candidate and publish its receipt."""
     publication_root = prepared.publication_root
     manifest = prepared.manifest
+    lease: ArtifactLease | None = None
 
     try:
         with artifact_lock(project) as acquired:
@@ -494,16 +520,31 @@ def publish_artifact_candidate(
                 diagnostics=diagnostics,
                 duration_ms=duration_ms,
             )
+            artifact = artifact_from_publication(installed, profile, publication)
+            lease = lease_artifact_locked(project, artifact)
+            prune_artifacts_locked(project)
             rejection = confirm_current()
             if rejection is not None:
                 raise ArtifactCommitRejected(rejection)
-            write_profile_state(
+            committed = write_profile_state_if_active(
                 project,
                 profile_state(profile, publication, completed),
+                control,
             )
-            artifact = artifact_from_publication(installed, profile, publication)
-            return lease_artifact_locked(project, artifact)
+            if not committed:
+                raise _cancelled_commit()
+        return lease
+    except ArtifactCommitRejected:
+        if lease is None:
+            prune_artifacts(project)
+        else:
+            lease.close()
+        raise
     except (OSError, ConfigurationError, RuntimeError, ViewProjectError) as error:
+        if lease is None:
+            prune_artifacts(project)
+        else:
+            lease.close()
         record_build_failure(
             project,
             profile,
@@ -518,3 +559,9 @@ def publish_artifact_candidate(
             started,
             project_revision,
         )
+    except BaseException:
+        if lease is None:
+            prune_artifacts(project)
+        else:
+            lease.close()
+        raise

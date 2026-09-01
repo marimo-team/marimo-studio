@@ -99,8 +99,12 @@ class _InputAccessProvider:
         return vanilla_provider.build(request)
 
 
-def _source_headers(app: object) -> dict[str, str]:
-    return {"Marimo-Server-Token": str(session_manager(app).skew_protection_token)}
+def _source_headers(app: object, studio: StudioWorkspace) -> dict[str, str]:
+    return {
+        "Marimo-Server-Token": str(session_manager(app).skew_protection_token),
+        "Marimo-Studio-Catalog-Generation": studio.catalog_generation,
+        "Marimo-Studio-View-Generation": studio.view_generations["dashboard"],
+    }
 
 
 def _pause_source_lock(
@@ -148,7 +152,7 @@ def test_waiting_put_revalidates_access_from_another_provider_input(
                 "/_marimo-studio/views/dashboard/source/index.html",
                 content=f"{original_content}\n",
                 headers={
-                    **_source_headers(app),
+                    **_source_headers(app, studio),
                     "If-Match": loaded.headers["etag"],
                 },
             )
@@ -207,7 +211,7 @@ def test_policy_change_after_target_replacement_rolls_back_the_source(
             "/_marimo-studio/views/dashboard/source/index.html",
             content=f"{original_content}\n",
             headers={
-                **_source_headers(app),
+                **_source_headers(app, studio),
                 "If-Match": loaded.headers["etag"],
             },
         )

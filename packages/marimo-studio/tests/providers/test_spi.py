@@ -53,8 +53,13 @@ pytestmark = pytest.mark.supported_python
         "cafe\u0301.txt",
         "nested/CON.txt",
         "LPT9/style.css",
+        "COM¹.txt",
+        "LPT²/data.json",
+        "CONIN$",
+        "CONOUT$.txt",
         "trailing.",
         "question?.js",
+        "a" * 256,
     ),
 )
 def test_provider_paths_reject_noncanonical_project_locations(path: str) -> None:

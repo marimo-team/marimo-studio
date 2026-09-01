@@ -72,6 +72,40 @@ def test_catalog_probes_availability_concurrently_and_caches_starters(
     assert [provider.starter_calls for provider in providers] == [1, 1]
 
 
+def test_exact_starter_resolves_only_its_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    providers = (
+        ProviderStub("example/first", "default"),
+        ProviderStub("example/second", "default"),
+    )
+    availability_calls = {"first": 0, "second": 0}
+
+    def availability(name: str) -> ProviderAvailability:
+        availability_calls[name] += 1
+        return ProviderAvailability(True)
+
+    cast(Any, providers[0]).availability = lambda _project=None: availability("first")
+    cast(Any, providers[1]).availability = lambda _project=None: availability("second")
+    registry = ProviderRegistry(
+        (
+            candidate("first", providers[0]),
+            candidate("second", providers[1]),
+        )
+    )
+    monkeypatch.setattr(providers_module, "_REGISTRY", registry)
+
+    starter, selected, local = catalog_module.resolve_starter(
+        "test-first/first:default"
+    )
+
+    assert starter.id == "test-first/first:default"
+    assert selected is registry.get("test-first/first")
+    assert local is providers[0].starter
+    assert availability_calls == {"first": 1, "second": 0}
+    assert [provider.starter_calls for provider in providers] == [1, 0]
+
+
 def test_registry_probes_starters_concurrently_and_caches_successes() -> None:
     barrier = threading.Barrier(2)
     providers = (

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -16,7 +17,6 @@ import pytest
 import marimo_studio._artifacts.inputs as inputs_module
 import marimo_studio._artifacts.publication as publication_module
 import marimo_studio._artifacts.repository as repository_module
-import marimo_studio._artifacts.retention as retention_module
 import marimo_studio._views.build as build_module
 from marimo_studio._artifacts.inputs import project_revision
 from marimo_studio._artifacts.paths import artifact_root
@@ -26,15 +26,29 @@ from marimo_studio._artifacts.repository import (
     read_published_artifact,
 )
 from marimo_studio._artifacts.retention import ArtifactLease, lease_published_artifact
-from marimo_studio._processes.cancellation import provider_cancellation
+from marimo_studio._processes.cancellation import (
+    ProviderOperationControl,
+    provider_cancellation,
+)
+from marimo_studio._views.build import build_view_project
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._views.inspection import inspection_request
-from marimo_studio.errors import ConfigurationError, ViewProjectError
+from marimo_studio._workspace.generation import view_generation
+from marimo_studio._workspace.project_manifest import load_view_project
+from marimo_studio._workspace.view_owners import (
+    encode_view_owner,
+    reconcile_view_owners,
+    view_owner_path,
+)
+from marimo_studio.errors import (
+    ConfigurationError,
+    ViewGenerationConflictError,
+    ViewProjectError,
+)
 from marimo_studio.view_providers import (
     BuildRequest,
     BuildResult,
     ProjectDiagnostic,
-    ProviderCancellation,
     ViewProject,
 )
 from marimo_studio.view_providers._host import provider_registry
@@ -116,6 +130,64 @@ def test_cache_hit_preserves_successful_build_evidence(
     assert cached_build == first_build
     assert cached_build.project_revision == cached.project_revision
     assert cached_build.artifact_revision == cached.artifact_revision
+
+
+def test_copied_artifact_rebuilds_for_its_new_view_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path)
+    reconcile_view_owners(project.root.parent, {project.name})
+    original_generation = view_generation(project)
+    provider = provider_registry().get(project.provider)
+    built_names: list[str] = []
+
+    def emit_view_name(request: BuildRequest) -> BuildResult:
+        built_names.append(request.project.name)
+        (request.staging_root / "index.html").write_text(
+            "<!doctype html><html><head></head><body>"
+            f'<main id="app-shell"><h1>{request.project.name}</h1></main>'
+            "</body></html>",
+            encoding="utf-8",
+        )
+        return BuildResult(PurePosixPath("index.html"), ())
+
+    monkeypatch.setattr(provider, "build", emit_view_name)
+    with publish_artifact_lease(
+        project,
+        "development",
+        expected_generation=original_generation,
+    ) as original:
+        assert original.read_text(original.artifact.document).endswith(
+            '<main id="app-shell"><h1>view</h1></main></body></html>'
+        )
+
+    renamed_root = project.root.with_name("renamed")
+    shutil.copytree(project.root, renamed_root)
+    reconcile_view_owners(project.root.parent, {project.name, "renamed"})
+    renamed = load_view_project(renamed_root)
+    renamed_generation = view_generation(renamed)
+    assert renamed_generation != original_generation
+    copied = read_published_artifact(renamed, "development")
+    assert copied is not None
+    assert (
+        (copied.root / copied.document)
+        .read_text(encoding="utf-8")
+        .endswith('<main id="app-shell"><h1>view</h1></main></body></html>')
+    )
+
+    with publish_artifact_lease(
+        renamed,
+        "development",
+        expected_generation=renamed_generation,
+    ) as rebuilt:
+        assert rebuilt.read_text(rebuilt.artifact.document).endswith(
+            '<main id="app-shell"><h1>renamed</h1></main></body></html>'
+        )
+        assert rebuilt.artifact.project_revision != copied.project_revision
+
+    assert built_names == ["view", "renamed"]
+    assert not copied.root.parent.exists()
 
 
 def test_build_content_hashing_finishes_before_the_mutation_lock(
@@ -350,7 +422,7 @@ def test_prune_failure_does_not_leave_an_unreturned_artifact_pin(
     def fail_prune(_project: ViewProject) -> None:
         raise RuntimeError("forced prune failure")
 
-    monkeypatch.setattr(retention_module, "prune_artifacts_locked", fail_prune)
+    monkeypatch.setattr(publication_module, "prune_artifacts_locked", fail_prune)
 
     with pytest.raises(
         (RuntimeError, ViewProjectError),
@@ -360,6 +432,54 @@ def test_prune_failure_does_not_leave_an_unreturned_artifact_pin(
 
     pins = artifact_root(project) / ".pins"
     assert not pins.exists() or not tuple(pins.glob("*/*"))
+
+
+def test_base_exception_after_pin_acquisition_releases_the_pin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path)
+
+    def interrupt_prune(_project: ViewProject) -> None:
+        raise KeyboardInterrupt("publication interrupted")
+
+    monkeypatch.setattr(
+        publication_module,
+        "prune_artifacts_locked",
+        interrupt_prune,
+    )
+
+    with pytest.raises(KeyboardInterrupt, match="publication interrupted"):
+        publish_artifact_lease(project, "development")
+
+    pins = artifact_root(project) / ".pins"
+    assert not pins.exists() or not tuple(pins.glob("*/*"))
+
+
+def test_receipt_commit_failure_discards_its_staged_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path)
+    publish_artifact(project, "development")
+    state = repository_module.read_profile_state(project, "development")
+    assert state is not None
+    control = ProviderOperationControl()
+
+    def fail_commit(_commit: object) -> bool:
+        raise OSError("receipt pointer unavailable")
+
+    monkeypatch.setattr(control, "commit_if_active", fail_commit)
+
+    with pytest.raises(OSError, match="receipt pointer unavailable"):
+        repository_module.write_profile_state_if_active(
+            project,
+            state,
+            control,
+        )
+
+    staging = artifact_root(project) / ".staging"
+    assert not tuple(staging.glob("receipt-*.json"))
 
 
 def test_provider_build_reads_one_immutable_input_snapshot(
@@ -400,17 +520,120 @@ def test_build_request_receives_the_owner_cancellation(
     project = _project(tmp_path)
     provider = provider_registry().get(project.provider)
     build = provider.build
-    cancellation = ProviderCancellation()
+    control = ProviderOperationControl()
 
     def capture_cancellation(request: BuildRequest) -> BuildResult:
-        assert request.cancellation is cancellation
+        assert request.cancellation is control.cancellation
         return build(request)
 
     monkeypatch.setattr(provider, "build", capture_cancellation)
-    with provider_cancellation(cancellation):
+    with provider_cancellation(control):
         lease = publish_artifact_lease(project, "development")
 
     lease.close()
+
+
+def test_cancelled_async_build_does_not_publish_a_completed_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path)
+    first = publish_artifact(project, "development")
+    _change_document(project, "cancelled generation")
+    provider = provider_registry().get(project.provider)
+    build = provider.build
+    completed = Event()
+
+    def finish_after_cancellation(request: BuildRequest) -> BuildResult:
+        report = build(request)
+        completed.set()
+        cancelled = Event()
+        unregister = request.cancellation.register(cancelled.set)
+        try:
+            if not cancelled.wait(timeout=2):
+                raise RuntimeError("test build was not cancelled")
+        finally:
+            unregister()
+        return report
+
+    monkeypatch.setattr(provider, "build", finish_after_cancellation)
+
+    async def exercise() -> None:
+        task = asyncio.create_task(build_view_project(project))
+        assert await asyncio.to_thread(completed.wait, 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(exercise())
+
+    retained = read_published_artifact(project, "development")
+    assert retained is not None
+    assert retained.artifact_revision == first.artifact_revision
+    state = read_build_state(project, "development")
+    assert state.phase == "failed"
+    assert state.artifact_revision == first.artifact_revision
+    assert [item.code for item in state.diagnostics] == ["build-cancelled"]
+
+
+@pytest.mark.parametrize("cache_hit", (False, True))
+def test_cancellation_before_receipt_commit_preserves_last_good(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    cache_hit: bool,
+) -> None:
+    project = _project(tmp_path)
+    first = publish_artifact(project, "development")
+    if not cache_hit:
+        _change_document(project, "candidate awaiting receipt commit")
+    write = publication_module.write_profile_state_if_active
+    commit_started = Event()
+    cancelled = Event()
+    release = Event()
+
+    def pause_receipt_commit(
+        selected: ViewProject,
+        state: Any,
+        control: ProviderOperationControl,
+    ) -> bool:
+        assert selected == project
+        unregister = control.cancellation.register(cancelled.set)
+        commit_started.set()
+        try:
+            if not release.wait(timeout=2):
+                raise RuntimeError("receipt commit was not released")
+        finally:
+            unregister()
+        return write(selected, state, control)
+
+    monkeypatch.setattr(
+        publication_module,
+        "write_profile_state_if_active",
+        pause_receipt_commit,
+    )
+
+    async def exercise() -> None:
+        task = asyncio.create_task(build_view_project(project))
+        assert await asyncio.to_thread(commit_started.wait, 2)
+        task.cancel()
+        assert await asyncio.to_thread(cancelled.wait, 2)
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(exercise())
+
+    retained = read_published_artifact(project, "development")
+    assert retained is not None
+    assert retained.artifact_revision == first.artifact_revision
+    state = read_build_state(project, "development")
+    assert state.phase == "failed"
+    assert state.artifact_revision == first.artifact_revision
+    assert [item.code for item in state.diagnostics] == ["build-cancelled"]
+    revisions = artifact_root(project) / "revisions"
+    assert {path.name for path in revisions.iterdir()} == {
+        first.artifact_revision.removeprefix("sha256:")
+    }
 
 
 @pytest.mark.parametrize("relative", ("index.html", "view.toml"))
@@ -497,6 +720,8 @@ def test_cached_restore_confirms_source_inside_its_receipt_transaction(
     retained = read_published_artifact(project, "development")
     assert retained is not None
     assert retained.artifact_revision == published.artifact_revision
+    pins = artifact_root(project) / ".pins"
+    assert not pins.exists() or not tuple(pins.glob("*/*"))
 
 
 def test_publication_confirms_source_inside_its_receipt_transaction(
@@ -525,6 +750,92 @@ def test_publication_confirms_source_inside_its_receipt_transaction(
     retained = read_published_artifact(project, "development")
     assert retained is not None
     assert retained.artifact_revision == published.artifact_revision
+    revisions = artifact_root(project) / "revisions"
+    assert {path.name for path in revisions.iterdir()} == {
+        published.artifact_revision.removeprefix("sha256:")
+    }
+
+
+def test_publication_rechecks_the_view_owner_inside_its_receipt_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path)
+    with publish_artifact_lease(project, "development") as lease:
+        published = lease.artifact
+    owner = view_owner_path(project.root.parent, project.name)
+    owner.parent.mkdir()
+    owner.write_text(encode_view_owner(present=True), encoding="utf-8")
+    expected_generation = view_generation(project)
+    _change_document(project, "candidate generation")
+    commit = build_module.publish_artifact_candidate
+
+    def replace_owner_before_commit(*args: Any, **kwargs: Any) -> ArtifactLease:
+        owner.write_text(encode_view_owner(present=True), encoding="utf-8")
+        return commit(*args, **kwargs)
+
+    monkeypatch.setattr(
+        build_module,
+        "publish_artifact_candidate",
+        replace_owner_before_commit,
+    )
+
+    with pytest.raises(ViewGenerationConflictError):
+        publish_artifact_lease(
+            project,
+            "development",
+            expected_generation=expected_generation,
+        )
+
+    retained = read_published_artifact(project, "development")
+    assert retained is not None
+    assert retained.artifact_revision == published.artifact_revision
+
+
+def test_publication_acquires_its_lease_before_replacing_the_profile_pointer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path)
+    first = publish_artifact(project, "development")
+    _change_document(project, "next generation")
+
+    def fail_lease(*_args: object, **_kwargs: object) -> ArtifactLease:
+        raise ConfigurationError("artifact pin unavailable")
+
+    monkeypatch.setattr(
+        publication_module,
+        "lease_artifact_locked",
+        fail_lease,
+    )
+
+    with pytest.raises(ViewProjectError, match="artifact pin unavailable"):
+        publish_artifact_lease(project, "development")
+
+    retained = read_published_artifact(project, "development")
+    assert retained is not None
+    assert retained.artifact_revision == first.artifact_revision
+    revisions = artifact_root(project) / "revisions"
+    assert {path.name for path in revisions.iterdir()} == {
+        first.artifact_revision.removeprefix("sha256:")
+    }
+
+
+def test_corrupt_sibling_profile_does_not_fail_a_completed_publication(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    production = publish_artifact(project, "production")
+    _profile_path(project, "production").write_text("{", encoding="utf-8")
+    _change_document(project, "next development generation")
+
+    development = publish_artifact(project, "development")
+
+    assert development.artifact_revision != production.artifact_revision
+    retained = read_published_artifact(project, "development")
+    assert retained is not None
+    assert retained.artifact_revision == development.artifact_revision
+    assert production.root.parent.is_dir()
 
 
 def test_publication_revalidates_prehashed_artifact_identity_at_commit(

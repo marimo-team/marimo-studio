@@ -39,6 +39,20 @@ def runtime_assets(
         + "\n",
         encoding="utf-8",
     )
+    licenses = assets / "licenses"
+    licenses.joinpath("marimo").mkdir(parents=True)
+    licenses.joinpath("marimo-studio").mkdir()
+    licenses.joinpath("THIRD_PARTY_NOTICES.json").write_text("{}\n", encoding="utf-8")
+    licenses.joinpath("THIRD_PARTY_NOTICES.txt").write_text(
+        "notices\n", encoding="utf-8"
+    )
+    licenses.joinpath("THIRD_PARTY_LICENSES.txt").write_text(
+        "licenses\n", encoding="utf-8"
+    )
+    licenses.joinpath("marimo", "LICENSE").write_text("license\n", encoding="utf-8")
+    licenses.joinpath("marimo-studio", "LICENSE").write_text(
+        "license\n", encoding="utf-8"
+    )
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(assets_module, "runtime_assets_path", lambda: assets)
     yield assets

@@ -165,9 +165,17 @@ def create_static_notebook_loader() -> StaticNotebookLoader:
 def create_runtime_probe() -> LiveNotebookRunner:
     """Construct the isolated runtime probe for the pinned Marimo release."""
     validate_marimo_release()
-    from marimo_studio._compat.runtime_probe import probe_runtime
+    from marimo_studio._notebook.runtime_process import probe_runtime_isolated
 
-    return probe_runtime
+    return probe_runtime_isolated
+
+
+def create_worker_runtime_probe() -> LiveNotebookRunner:
+    """Construct the Marimo probe used inside an owned runtime worker."""
+    validate_marimo_release()
+    from marimo_studio._compat.runtime_probe import probe_runtime_in_worker
+
+    return probe_runtime_in_worker
 
 
 def create_environment_flag_builder() -> EnvironmentFlagBuilder:

@@ -19,7 +19,7 @@ from marimo_studio._cli.diagnostics import (
     json_option,
     run_in_environment,
 )
-from marimo_studio._cli.environment import should_reenter
+from marimo_studio._cli.environment import provider_bootstrap_required, should_reenter
 from marimo_studio._cli.help import ColoredCommand
 from marimo_studio._cli.options import (
     browser_client_option,
@@ -29,7 +29,11 @@ from marimo_studio._cli.options import (
     target_option,
 )
 from marimo_studio._cli.output import echo_json, render_validation
-from marimo_studio._cli.targets import load_studio_target
+from marimo_studio._cli.targets import (
+    load_studio_target,
+    resolve_environment_target,
+    resolve_notebook,
+)
 from marimo_studio._validation.limits import (
     DEFAULT_BROWSER_TIMEOUT,
     MAX_BROWSER_TIMEOUT,
@@ -68,7 +72,13 @@ def validate(
     runtime_timeout: float,
     json_output: bool,
 ) -> None:
-    """Validate every configured page or one selected page."""
+    """Validate every configured view or one selected view.
+
+    When needed, Studio reruns the command through uv with requirements derived
+    from the target's saved views and Python metadata. uv may resolve and install
+    packages before provider code loads. Reviewed provider code then runs with
+    the current user's filesystem, environment, and network authority.
+    """
     if browser_client is not None and server_url is None:
         raise click.BadParameter(
             "requires --server or MARIMO_STUDIO_SERVER_URL",
@@ -79,6 +89,10 @@ def validate(
             "browser validation requires --server or MARIMO_STUDIO_SERVER_URL",
             param_hint="--server",
         )
+    notebook = resolve_notebook(target)
+    environment = resolve_environment_target(target, notebook)
+    if provider_bootstrap_required(environment):
+        raise click.exceptions.Exit(run_in_environment(environment, sys.argv[1:]))
     studio = load_studio_target(target)
     if level != "static" and should_reenter(studio, None):
         raise click.exceptions.Exit(run_in_environment(studio, sys.argv[1:]))

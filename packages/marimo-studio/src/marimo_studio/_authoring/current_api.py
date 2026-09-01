@@ -41,6 +41,8 @@ class View(SavedView):
             connection=self.workspace._connection() if level == "browser" else None,
             browser_timeout=browser_timeout,
             runtime_timeout=runtime_timeout,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
         )
 
 
@@ -54,14 +56,47 @@ class Workspace(SavedWorkspace):
         starter: str | Starter | None = None,
     ) -> View:
         """Create one named view and return its live handle."""
-        result = await create_view_operation(self.notebook, name, starter=starter)
-        return View._create(self, result.name)
+        result = await create_view_operation(
+            self.notebook,
+            name,
+            starter=starter,
+            expected_catalog_generation=self._catalog_generation,
+        )
+        assert result.workspace is not None
+        self._capture_workspace(result.workspace)
+        return View._create(
+            self,
+            result.name,
+            catalog_generation=result.workspace.catalog_generation,
+            generation=result.workspace.view_generations[result.name],
+        )
 
     def view(self, name: str) -> View:
         """Return a live handle for one named view."""
         if not isinstance(name, str) or not name:
             raise ValueError("view name must be a non-empty string")
-        return View._create(self, name)
+        if self._catalog_generation is None:
+            return View._create(
+                self,
+                name,
+                catalog_generation=None,
+                generation=None,
+            )
+        try:
+            studio = self._current_workspace()
+        except ConfigurationError:
+            return View._create(
+                self,
+                name,
+                catalog_generation=self._catalog_generation,
+                generation=self._fallback_view_generation(name),
+            )
+        return View._create(
+            self,
+            name,
+            catalog_generation=studio.catalog_generation,
+            generation=studio.view_generations.get(name),
+        )
 
 
 def current_workspace() -> Workspace:

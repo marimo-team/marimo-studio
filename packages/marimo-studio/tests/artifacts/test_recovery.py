@@ -19,11 +19,14 @@ from marimo_studio._artifacts.repository import (
     read_artifact_state,
     read_build_state,
 )
+from marimo_studio._artifacts.retention import lease_published_artifact
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio._workspace.project_manifest import load_view_project
+from marimo_studio.errors import ViewProjectError
 from marimo_studio.view_providers import (
     ViewProject,
 )
+from marimo_studio.view_providers._host import provider_registry
 
 from ..artifact_test_support import (
     profile_path as _profile_path,
@@ -115,24 +118,57 @@ def test_build_repairs_replaceable_generated_state(
     assert any(item.code == "artifact-state-repaired" for item in state.diagnostics)
 
 
-def test_provider_contract_mismatch_rebuilds_without_a_repair_warning(
+def test_provider_api_change_preserves_last_good_until_the_next_build(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = _project(tmp_path)
-    publish_artifact_lease(project, "development").close()
+    provider = provider_registry().get(project.provider)
+    build = provider.build
+    with publish_artifact_lease(project, "development") as first_lease:
+        first = first_lease.artifact
     pointer = _profile_path(project)
     state = _read_json(pointer)
     state["published"]["provider"]["api_version"] = 2
+    previous_project_revision = f"sha256:{'f' * 64}"
+    state["published"]["project_revision"] = previous_project_revision
+    state["build"]["project_revision"] = previous_project_revision
     _write_json(pointer, state)
 
-    stale = read_artifact_state(project, "development")
-    assert stale.artifact is None
-    assert stale.build.phase == "unbuilt"
+    retained = read_artifact_state(project, "development")
+    assert retained.artifact is not None
+    assert retained.artifact.artifact_revision == first.artifact_revision
+    assert retained.artifact.provider.api_version == 2
+    assert retained.build.phase == "published"
+    last_good = lease_published_artifact(project, "development")
+    assert last_good is not None
+    with last_good:
+        assert last_good.read_text(last_good.artifact.document)
 
+    def fail_rebuild(_request: object) -> None:
+        raise RuntimeError("provider API rebuild failed")
+
+    monkeypatch.setattr(provider, "build", fail_rebuild)
+    with pytest.raises(ViewProjectError, match="provider API rebuild failed"):
+        publish_artifact_lease(project, "development")
+
+    failed = read_artifact_state(project, "development")
+    assert failed.artifact is not None
+    assert failed.artifact.provider.api_version == 2
+    assert failed.build.phase == "failed"
+    assert failed.build.artifact_revision == first.artifact_revision
+    last_good = lease_published_artifact(project, "development")
+    assert last_good is not None
+    with last_good:
+        assert last_good.read_text(last_good.artifact.document)
+
+    monkeypatch.setattr(provider, "build", build)
     publish_artifact_lease(project, "development").close()
-    rebuilt = read_build_state(project, "development")
-    assert rebuilt.phase == "published"
-    assert rebuilt.diagnostics == ()
+    rebuilt = read_artifact_state(project, "development")
+    assert rebuilt.artifact is not None
+    assert rebuilt.artifact.provider.api_version == 1
+    assert rebuilt.build.phase == "published"
+    assert rebuilt.build.diagnostics == ()
 
 
 def test_artifact_state_settles_when_its_view_is_removed_during_read(

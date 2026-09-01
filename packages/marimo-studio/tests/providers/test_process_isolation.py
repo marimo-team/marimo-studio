@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 import marimo_studio.view_providers._host.operations.process as process_module
+from marimo_studio._cli.environment import SANDBOX_ENV
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._workspace.models import StudioWorkspace
@@ -572,7 +573,7 @@ def test_view_creation_http_cancellation_drains_provider_work_before_return(
     from ..app_helpers import configured
 
     monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
-    configured(notebook_path)
+    studio = configured(notebook_path)
     marker = tmp_path / "create-pids"
     monkeypatch.setenv("MARIMO_STUDIO_PROVIDER_CREATE_MARKER", str(marker))
     registry = _registry("create-tree", "create_tree_provider")
@@ -587,6 +588,7 @@ def test_view_creation_http_cancellation_drains_provider_work_before_return(
 
         body = json.dumps(
             {
+                "catalog_generation": studio.catalog_generation,
                 "name": "cancelled",
                 "starter": "test-process/create-tree:default",
             }
@@ -628,6 +630,17 @@ def test_view_creation_http_cancellation_drains_provider_work_before_return(
                 "server-token",
             )
         )
+        deadline = asyncio.get_running_loop().time() + _PROCESS_START_TIMEOUT
+        while not marker.is_file() and not operation.done():
+            if asyncio.get_running_loop().time() >= deadline:
+                raise AssertionError("Provider process tree did not start")
+            await asyncio.sleep(0.01)
+        if operation.done():
+            response = await operation
+            raise AssertionError(
+                "View creation finished before its provider process started: "
+                + bytes(response.body).decode("utf-8", errors="replace")
+            )
         recorded = await asyncio.to_thread(_wait_for_pids, marker, 3)
         operation.cancel()
         results = await asyncio.gather(operation, return_exceptions=True)
@@ -658,6 +671,7 @@ def test_cli_sigint_drains_the_provider_process_tree(
     )
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(Path(__file__).parents[2])
+    environment[SANDBOX_ENV] = "1"
     process = subprocess.Popen(
         [sys.executable, "-c", script],
         stdin=subprocess.DEVNULL,
@@ -697,7 +711,20 @@ def test_external_provider_runtime_validation_owns_the_complete_runtime_tree(
 
     from ..app_helpers import configured
 
-    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
+    distribution = tmp_path / "test_process-1.0.0.dist-info"
+    distribution.mkdir()
+    (distribution / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: test-process\nVersion: 1.0.0\n",
+        encoding="utf-8",
+    )
+    (distribution / "entry_points.txt").write_text(
+        f"[marimo_studio.view_provider]\nruntime = {__name__}:runtime_provider\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(
+        "PYTHONPATH",
+        os.pathsep.join((str(tmp_path), str(Path(__file__).parents[2]))),
+    )
     studio = configured(notebook_path)
     marker = tmp_path / "runtime-pids"
     child_code = (

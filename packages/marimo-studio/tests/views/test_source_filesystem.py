@@ -12,6 +12,7 @@ from marimo_studio.errors import (
     SourceEncodingError,
     SourceNotFoundError,
     SourceTooLargeError,
+    ViewGenerationConflictError,
 )
 
 from .source_test_support import SOURCE_PATH
@@ -126,7 +127,7 @@ def test_source_read_rejects_a_symlink_swapped_before_open(
 @pytest.mark.skipif(
     os.name == "nt", reason="symlink creation needs elevated Windows access"
 )
-def test_source_read_keeps_an_open_parent_when_the_view_root_is_swapped(
+def test_source_read_rejects_a_swapped_view_root(
     notebook_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -158,9 +159,11 @@ def test_source_read_keeps_an_open_parent_when_the_view_root_is_swapped(
 
     monkeypatch.setattr(sources_module.os, "open", replace_root_then_open)
 
-    document = read_source(studio, "dashboard", SOURCE_PATH)
+    with pytest.raises(ConfigurationError):
+        read_source(studio, "dashboard", SOURCE_PATH)
 
-    assert document.content == original
+    assert swapped
+    assert (retired / SOURCE_PATH).read_text(encoding="utf-8") == original
     assert (external / SOURCE_PATH).read_text(encoding="utf-8") == "SECRET"
 
 
@@ -192,7 +195,9 @@ def test_manifest_read_rejects_a_root_swapped_after_validation(
 
     monkeypatch.setattr(Path, "is_dir", validate_then_swap)
 
-    with pytest.raises((ConfigurationError, SourceNotFoundError)):
+    with pytest.raises(
+        (ConfigurationError, SourceNotFoundError, ViewGenerationConflictError)
+    ):
         sources_module.read_view_manifest(studio, "dashboard")
 
     assert swapped
@@ -226,7 +231,7 @@ def test_source_write_keeps_its_commit_inside_a_swapped_view_root(
     ) -> int:
         nonlocal swapped
         if (
-            str(path).startswith(f".{SOURCE_PATH}.")
+            str(path).startswith(".marimo-studio-cas-")
             and dir_fd is not None
             and not swapped
         ):

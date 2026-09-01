@@ -13,28 +13,79 @@ server, agent, build, validation, and export entry points.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
-from marimo_studio._filesystem.io import reject_mutable_symlinks
+from marimo_studio._filesystem._secure_types import ConditionalWriteError
+from marimo_studio._filesystem.io import (
+    read_file_snapshot_with_identity,
+    reject_mutable_symlinks,
+)
+from marimo_studio._filesystem.paths import (
+    PORTABLE_PATH_COMPONENT_MAX_BYTES,
+    validate_portable_path_component,
+)
 from marimo_studio._notebook.records import CellRef
-from marimo_studio._workspace.metadata import notebook_config
+from marimo_studio._workspace.generation import (
+    directory_generation,
+    view_generation,
+    workspace_catalog_generation,
+)
+from marimo_studio._workspace.metadata import (
+    _provider_dependency_requirements,
+    notebook_config,
+    notebook_config_source,
+)
 from marimo_studio._workspace.models import (
     ALIAS_PATTERN,
     MARIMO_DIRECTORY,
     PYPROJECT_NAME,
     RESERVED_VIEW_NAMES,
-    RUNTIME_PATTERN,
     STUDIO_DIRECTORY,
+    VIEW_NAME_MAX_BYTES,
     VIEW_PATTERN,
     StudioDefinition,
     StudioWorkspace,
 )
 from marimo_studio._workspace.project_manifest import load_view_project
-from marimo_studio._workspace.toml import read_toml
-from marimo_studio.errors import ConfigurationError
+from marimo_studio._workspace.toml import parse_toml, read_toml
+from marimo_studio._workspace.view_owners import reconcile_view_owners
+from marimo_studio.errors import ConfigurationError, WorkspaceGenerationConflictError
+from marimo_studio.errors._internal import WorkspaceInitializationError
 from marimo_studio.view_providers import ViewProject
+
+_COMMON_CONFIG_FIELDS = frozenset(
+    {
+        "cells",
+        "default",
+        "preserve_session",
+        "runtime",
+        "runtimes",
+        "show_cell_logs",
+    }
+)
+_SUPPORTED_RUNTIMES = frozenset({"server", "wasm"})
+_NOTEBOOK_STEM_MAX_BYTES = PORTABLE_PATH_COMPONENT_MAX_BYTES - len(".py")
+
+
+def _reject_unknown_config_fields(
+    data: Mapping[str, Any],
+    path: Path,
+    *,
+    project: bool,
+) -> None:
+    supported = _COMMON_CONFIG_FIELDS | (
+        {"notebook"} if project else {"provider_dependencies"}
+    )
+    unknown = sorted(set(data) - supported)
+    if unknown:
+        raise ConfigurationError(
+            f"Unsupported [tool.marimo-studio] field {unknown[0]!r}: {path}"
+        )
+    if not project:
+        _provider_dependency_requirements(data)
 
 
 def validate_view_name(name: str) -> str:
@@ -45,14 +96,21 @@ def validate_view_name(name: str) -> str:
         )
     if name in RESERVED_VIEW_NAMES:
         raise ConfigurationError(f"View name {name!r} is reserved.")
+    try:
+        validate_portable_path_component(
+            name,
+            field="View name",
+            max_bytes=VIEW_NAME_MAX_BYTES,
+        )
+    except ValueError as error:
+        raise ConfigurationError(str(error)) from error
     return name
 
 
 def _runtime_id(value: object, field: str) -> str:
-    if not isinstance(value, str) or not RUNTIME_PATTERN.fullmatch(value):
+    if not isinstance(value, str) or value not in _SUPPORTED_RUNTIMES:
         raise ConfigurationError(
-            f"{field} must start with a lowercase letter and contain lowercase "
-            "letters, digits, or hyphens"
+            f"{field} must be one of: {', '.join(sorted(_SUPPORTED_RUNTIMES))}"
         )
     return value
 
@@ -86,6 +144,7 @@ def _pyproject_config(
         return None
     if not isinstance(config, dict):
         raise ConfigurationError(f"[tool.marimo-studio] must be a TOML table: {path}")
+    _reject_unknown_config_fields(config, path, project=True)
     return config
 
 
@@ -108,7 +167,15 @@ def _project_notebook(
     config_path: Path,
     data: Mapping[str, Any],
 ) -> Path:
-    return _path(config_path.parent, data.get("notebook"), "notebook")
+    root = config_path.parent.resolve()
+    notebook = _path(root, data.get("notebook"), "notebook")
+    try:
+        notebook.relative_to(root)
+    except ValueError as error:
+        raise ConfigurationError(
+            f"notebook must stay inside the project directory: {config_path}"
+        ) from error
+    return notebook
 
 
 def _project_for_notebook(
@@ -126,6 +193,7 @@ def _project_for_notebook(
         data = tool.get("marimo-studio") if isinstance(tool, dict) else None
         if not isinstance(data, dict):
             continue
+        _reject_unknown_config_fields(data, config_path, project=True)
         configured = data.get("notebook")
         if not isinstance(configured, str) or not configured.strip():
             continue
@@ -225,6 +293,14 @@ def _path(base: Path, value: object, field: str) -> Path:
 def canonical_view_root(notebook: str | Path) -> Path:
     """Return the authored view directory for a notebook."""
     path = Path(notebook).expanduser().resolve()
+    try:
+        validate_portable_path_component(
+            path.stem,
+            field="Notebook filename stem",
+            max_bytes=_NOTEBOOK_STEM_MAX_BYTES,
+        )
+    except ValueError as error:
+        raise ConfigurationError(str(error)) from error
     return path.parent / MARIMO_DIRECTORY / STUDIO_DIRECTORY / path.stem
 
 
@@ -257,12 +333,16 @@ def discover_views(
     return views
 
 
-def load_studio_definition(
-    target: str | Path | None = None,
+def _studio_definition(
+    config_path: Path,
+    data: Mapping[str, Any],
 ) -> StudioDefinition:
-    """Load the configuration that declares a Studio workspace."""
-    config_path, data = _load_config(Path(target or ".").expanduser())
     config_source = "pyproject" if config_path.name == PYPROJECT_NAME else "notebook"
+    _reject_unknown_config_fields(
+        data,
+        config_path,
+        project=config_source == "pyproject",
+    )
     notebook = (
         _project_notebook(config_path, data)
         if config_source == "pyproject"
@@ -288,13 +368,38 @@ def load_studio_definition(
     for alias, value in raw_cells.items():
         if not isinstance(alias, str) or not ALIAS_PATTERN.fullmatch(alias):
             raise ConfigurationError(f"Invalid cell alias: {alias}")
-        raw_ref = value.get("ref") if isinstance(value, dict) else None
+        if not isinstance(value, dict):
+            raise ConfigurationError(f"Cell binding {alias} must be a TOML table")
+        unknown_binding_fields = sorted(set(value) - {"ref"})
+        if unknown_binding_fields:
+            raise ConfigurationError(
+                f"Unsupported field {unknown_binding_fields[0]!r} "
+                f"in cell binding {alias!r}"
+            )
+        raw_ref = value.get("ref")
         if not isinstance(raw_ref, str):
             raise ConfigurationError(f"Cell binding {alias} must contain a ref string")
         try:
             cells[alias] = CellRef.parse(raw_ref)
         except ValueError as error:
             raise ConfigurationError(f"Invalid binding for {alias}: {error}") from error
+    config_generation = hashlib.sha256(
+        repr(
+            (
+                config_path.parent,
+                config_source,
+                notebook,
+                view_root,
+                default_view,
+                default_runtime,
+                runtimes,
+                preserve_session,
+                show_cell_logs,
+                tuple(sorted(cells.items())),
+                _provider_dependency_requirements(data),
+            )
+        ).encode("utf-8")
+    ).hexdigest()
     return StudioDefinition(
         root=config_path.parent,
         config_path=config_path,
@@ -307,7 +412,52 @@ def load_studio_definition(
         preserve_session=preserve_session,
         cells=cells,
         show_cell_logs=show_cell_logs,
+        config_generation=config_generation,
     )
+
+
+def studio_definition_from_source(config_path: Path, source: str) -> StudioDefinition:
+    """Decode a Studio definition from one captured configuration source."""
+    if config_path.name == PYPROJECT_NAME:
+        data = _pyproject_config(
+            parse_toml(source, config_path),
+            config_path,
+            required=True,
+        )
+    else:
+        data = notebook_config_source(config_path, source)
+    if data is None:
+        raise ConfigurationError(
+            f"Studio configuration not found in captured source: {config_path}"
+        )
+    return _studio_definition(config_path, data)
+
+
+def load_studio_definition(
+    target: str | Path | None = None,
+) -> StudioDefinition:
+    """Load the configuration that declares a Studio workspace."""
+    config_path, _data = _load_config(Path(target or ".").expanduser())
+    payload, _mode, identity = read_file_snapshot_with_identity(
+        config_path,
+        root=config_path.parent,
+    )
+    try:
+        source = payload.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ConfigurationError(
+            f"Workspace file is not UTF-8 text: {config_path}"
+        ) from error
+    definition = studio_definition_from_source(config_path, source)
+    _confirmed, _confirmed_mode, confirmed_identity = read_file_snapshot_with_identity(
+        config_path,
+        root=config_path.parent,
+    )
+    if confirmed_identity != identity:
+        raise ConfigurationError(
+            "Studio configuration changed while it was loaded. Run the operation again."
+        )
+    return definition
 
 
 def materialize_studio_workspace(
@@ -315,6 +465,44 @@ def materialize_studio_workspace(
 ) -> StudioWorkspace:
     """Resolve a Studio definition into its initialized workspace."""
     views = discover_views(definition.view_root)
+    try:
+        owner_names = reconcile_view_owners(
+            definition.view_root,
+            set(views),
+            refresh_names=lambda: set(discover_views(definition.view_root)),
+        )
+    except ConditionalWriteError as error:
+        raise WorkspaceGenerationConflictError() from error
+    if owner_names != set(views):
+        views = discover_views(definition.view_root)
+        if set(views) != owner_names:
+            raise WorkspaceGenerationConflictError()
+    if not views:
+        raise WorkspaceInitializationError(definition.default_view)
+    try:
+        view_generations = {
+            name: view_generation(project) for name, project in views.items()
+        }
+        root_generation = directory_generation(definition.view_root)
+    except FileNotFoundError as error:
+        raise WorkspaceGenerationConflictError() from error
+    catalog_generation = workspace_catalog_generation(
+        definition,
+        views,
+        view_generations,
+        root_generation,
+    )
+    if discover_views(definition.view_root) != views:
+        raise WorkspaceGenerationConflictError()
+    try:
+        generation_changed = any(
+            view_generation(project) != view_generations[name]
+            for name, project in views.items()
+        )
+    except FileNotFoundError as error:
+        raise WorkspaceGenerationConflictError() from error
+    if generation_changed:
+        raise WorkspaceGenerationConflictError()
     return StudioWorkspace(
         root=definition.root,
         config_path=definition.config_path,
@@ -327,7 +515,10 @@ def materialize_studio_workspace(
         preserve_session=definition.preserve_session,
         cells=definition.cells,
         show_cell_logs=definition.show_cell_logs,
+        config_generation=definition.config_generation,
         views=views,
+        view_generations=view_generations,
+        catalog_generation=catalog_generation,
     )
 
 

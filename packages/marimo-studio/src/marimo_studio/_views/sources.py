@@ -39,18 +39,30 @@ from marimo_studio._filesystem.secure import (
     open_contained_file,
     secure_directory,
 )
-from marimo_studio._processes.provider_operation import raise_process_cleanup
 from marimo_studio._views.inspection import inspect_view_project_sync
 from marimo_studio._views.records import ViewDocument
-from marimo_studio._workspace.config import load_studio, validate_view_name
+from marimo_studio._workspace.config import (
+    load_studio,
+    load_studio_definition,
+    materialize_studio_workspace,
+    validate_view_name,
+)
+from marimo_studio._workspace.generation import (
+    provider_free_catalog_generation,
+    view_name_generation,
+)
 from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
-from marimo_studio._workspace.mutation_lock import view_mutation_lock
+from marimo_studio._workspace.mutation_lock import (
+    view_mutation_lock,
+    workspace_catalog_lock,
+)
 from marimo_studio._workspace.project_manifest import (
     VIEW_MANIFEST_DOCUMENT,
     VIEW_MANIFEST_PATH,
     decode_view_manifest,
     decode_view_provider,
 )
+from marimo_studio._workspace.view_owners import ensure_present_view_owner
 from marimo_studio.errors import (
     ConfigurationError,
     MarimoStudioError,
@@ -59,7 +71,10 @@ from marimo_studio.errors import (
     SourceNotFoundError,
     SourceTooLargeError,
     SourceValidationError,
+    ViewGenerationConflictError,
+    WorkspaceGenerationConflictError,
 )
+from marimo_studio.errors._internal import WorkspaceInitializationError
 from marimo_studio.view_providers import (
     ProjectInspection,
     ViewProject,
@@ -81,14 +96,28 @@ class PreparedSourceWrite:
     input_state: ProjectInputState | None = None
 
 
+@dataclass(frozen=True)
+class OwnedViewDocument:
+    """Pair one source revision with its workspace and view owners."""
+
+    document: ViewDocument
+    catalog_generation: str
+    view_generation: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            **self.document.to_dict(),
+            "catalog_generation": self.catalog_generation,
+            "view_generation": self.view_generation,
+        }
+
+
 def _view(studio: StudioWorkspace, view_name: str) -> ViewProject:
-    try:
-        return studio.views[view_name]
-    except KeyError as error:
-        raise SourceNotFoundError(f"Unknown view {view_name!r}.") from error
+    return studio.view(view_name)
 
 
-def _relative_path(value: str) -> PurePosixPath:
+def source_path(value: str) -> PurePosixPath:
+    """Return one validated Studio source path."""
     path = PurePosixPath(value)
     if (
         not value
@@ -106,7 +135,7 @@ def source_spec(
     view_name: str,
 ) -> SourceDocumentSpec:
     """Return one document authorized by a normalized inspection."""
-    relative = _relative_path(name)
+    relative = source_path(name)
     if relative == VIEW_MANIFEST_PATH:
         return VIEW_MANIFEST_DOCUMENT
     matches = [item for item in inspection.editor_documents if item.path == relative]
@@ -158,7 +187,12 @@ def _read_document_snapshot(
             f"View project {view_name!r} is outside the Studio workspace."
         )
     path = root.joinpath(*spec.path.parts)
-    reject_mutable_symlinks(studio.notebook.parent, {path})
+    try:
+        reject_mutable_symlinks(studio.notebook.parent, {path})
+    except ConfigurationError as error:
+        raise SourceNotFoundError(
+            f"{spec.path.as_posix()} is unavailable in view {view_name!r}."
+        ) from error
     try:
         descriptor = open_contained_file(studio.notebook.parent, path)
     except OSError as error:
@@ -267,37 +301,159 @@ def read_view_manifest(
     view_name: str,
 ) -> ViewDocument:
     """Read the core manifest independently of provider inspection."""
-    with view_mutation_lock(studio.view_root, view_name):
-        return _read_view_manifest_locked(studio, view_name)
+    return read_view_manifest_with_owner(studio, view_name).document
+
+
+def _manifest_owner_generations(
+    studio: StudioDefinition,
+    view_name: str,
+) -> tuple[str, str]:
+    _validate_source_view_name(view_name)
+    try:
+        workspace = materialize_studio_workspace(studio)
+    except (MarimoStudioError, OSError):
+        workspace = None
+    if workspace is not None:
+        if view_name in workspace.view_generations:
+            return (
+                workspace.catalog_generation,
+                workspace.view_generations[view_name],
+            )
+        target = studio.view_root / view_name
+        if not target.is_dir() or not (target / VIEW_MANIFEST_PATH.name).is_file():
+            raise ViewGenerationConflictError(view_name, None)
+    target = studio.view_root / view_name
+    if not target.is_dir() or not (target / VIEW_MANIFEST_PATH.name).is_file():
+        raise ViewGenerationConflictError(view_name, None)
+    try:
+        ensure_present_view_owner(studio.view_root, view_name)
+        return (
+            provider_free_catalog_generation(studio),
+            view_name_generation(studio.view_root, view_name),
+        )
+    except OSError as error:
+        raise ViewGenerationConflictError(view_name, None) from error
+
+
+def _require_source_owner(
+    studio: StudioDefinition,
+    view_name: str,
+    *,
+    expected_catalog_generation: str | None,
+    expected_generation: str | None,
+) -> None:
+    catalog_generation, current_generation = _manifest_owner_generations(
+        studio,
+        view_name,
+    )
+    if expected_generation is not None and current_generation != expected_generation:
+        raise ViewGenerationConflictError(view_name, current_generation)
+    if (
+        expected_catalog_generation is not None
+        and catalog_generation != expected_catalog_generation
+    ):
+        raise WorkspaceGenerationConflictError()
+
+
+def _reload_source_owner(
+    studio: StudioDefinition,
+    view_name: str,
+    *,
+    expected_catalog_generation: str | None,
+    expected_generation: str | None,
+) -> StudioDefinition:
+    current = load_studio_definition(studio.config_path)
+    if current.view_root != studio.view_root:
+        raise WorkspaceGenerationConflictError()
+    _require_source_owner(
+        current,
+        view_name,
+        expected_catalog_generation=expected_catalog_generation,
+        expected_generation=expected_generation,
+    )
+    return current
+
+
+def admit_source_owner(
+    target: str | Path,
+    view_name: str,
+    *,
+    expected_catalog_generation: str | None,
+    expected_generation: str | None,
+) -> None:
+    """Admit a source mutation through provider-free owner records."""
+    _validate_source_view_name(view_name)
+    studio = load_studio_definition(target)
+    with (
+        workspace_catalog_lock(studio.view_root),
+        view_mutation_lock(studio.view_root, view_name),
+    ):
+        _reload_source_owner(
+            studio,
+            view_name,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+        )
+
+
+def read_view_manifest_with_owner(
+    studio: StudioDefinition,
+    view_name: str,
+) -> OwnedViewDocument:
+    """Read the core manifest with the owners observed under its view lock."""
+    _validate_source_view_name(view_name)
+    with (
+        workspace_catalog_lock(studio.view_root),
+        view_mutation_lock(studio.view_root, view_name),
+    ):
+        current = load_studio_definition(studio.config_path)
+        if current.view_root != studio.view_root:
+            raise WorkspaceGenerationConflictError()
+        before_catalog, before_view = _manifest_owner_generations(
+            current,
+            view_name,
+        )
+        document = _read_view_manifest_locked(current, view_name)
+        catalog_generation, view_generation = _manifest_owner_generations(
+            current,
+            view_name,
+        )
+        if view_generation != before_view:
+            raise ViewGenerationConflictError(view_name, view_generation)
+        if catalog_generation != before_catalog:
+            raise WorkspaceGenerationConflictError()
+        return OwnedViewDocument(
+            document,
+            catalog_generation,
+            view_generation,
+        )
+
+
+def _validate_source_view_name(view_name: str) -> None:
+    try:
+        validate_view_name(view_name)
+    except ConfigurationError as error:
+        raise SourceNotFoundError(f"Unknown Studio view {view_name!r}.") from error
 
 
 def _validate_view_manifest(
     root: Path,
-    view_name: str,
     content: str,
     expected_provider: str | None,
 ) -> None:
     manifest = root / VIEW_MANIFEST_PATH.name
     try:
         document = tomlkit.parse(content)
-        provider, options = decode_view_manifest(document.unwrap(), manifest)
+        provider, _options = decode_view_manifest(
+            document.unwrap(),
+            manifest,
+        )
         if expected_provider is not None and provider != expected_provider:
             raise SourceValidationError(
                 "A view keeps one provider. Create another view with the "
                 "desired starter."
             )
-        registry = provider_registry()
-        registry.validate_project(
-            ViewProject(
-                name=view_name,
-                root=root,
-                manifest=manifest,
-                provider=provider,
-                options=options,
-            )
-        )
     except (ConfigurationError, OSError, ValueError, ParseError) as error:
-        raise_process_cleanup(error)
         raise SourceValidationError(str(error)) from error
 
 
@@ -315,17 +471,37 @@ def write_view_manifest(
     content: str,
     expected_revision: str,
     expected_provider: str | None = None,
+    *,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
 ) -> ViewDocument:
     """Validate and conditionally replace one core view manifest."""
     if len(content.encode("utf-8")) > SOURCE_DOCUMENT_MAX_BYTES:
         raise SourceTooLargeError(
             f"view.toml exceeds the {SOURCE_DOCUMENT_MAX_BYTES}-byte source limit."
         )
-    with view_mutation_lock(studio.view_root, view_name):
+    with (
+        workspace_catalog_lock(studio.view_root),
+        view_mutation_lock(studio.view_root, view_name),
+    ):
+        if expected_generation is not None or expected_catalog_generation is not None:
+            studio = _reload_source_owner(
+                studio,
+                view_name,
+                expected_catalog_generation=expected_catalog_generation,
+                expected_generation=expected_generation,
+            )
         current, expected_identity = _read_view_manifest_snapshot_locked(
             studio,
             view_name,
         )
+        if expected_generation is not None or expected_catalog_generation is not None:
+            studio = _reload_source_owner(
+                studio,
+                view_name,
+                expected_catalog_generation=expected_catalog_generation,
+                expected_generation=expected_generation,
+            )
         if current.revision != expected_revision:
             raise SourceConflictError(current.path.as_posix(), current.revision)
         if current.content == content:
@@ -344,18 +520,31 @@ def write_view_manifest(
         retained_provider = current_provider or expected_provider
         _validate_view_manifest(
             root,
-            view_name,
             content,
             retained_provider,
         )
         manifest = root / VIEW_MANIFEST_PATH.name
         try:
             with secure_directory(root) as files:
+                if (
+                    expected_generation is not None
+                    or expected_catalog_generation is not None
+                ):
+                    studio = _reload_source_owner(
+                        studio,
+                        view_name,
+                        expected_catalog_generation=expected_catalog_generation,
+                        expected_generation=expected_generation,
+                    )
+                    if _manifest_root(studio, view_name) != root:
+                        raise WorkspaceGenerationConflictError()
+                files.ensure_attached()
                 files.replace_file_if_identity(
                     manifest,
                     content.encode(),
                     expected_identity,
                 )
+                files.ensure_attached()
         except ConditionalWriteError as error:
             raise SourceConflictError(
                 VIEW_MANIFEST_PATH.as_posix(),
@@ -388,9 +577,23 @@ def write_view_manifest(
 def _current_project(
     studio: StudioWorkspace,
     expected: ViewProject,
+    *,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
 ) -> tuple[StudioWorkspace, ViewProject]:
     expected = provider_registry().validate_project(expected)
-    current_studio = load_studio(studio.config_path)
+    try:
+        current_studio = load_studio(studio.config_path)
+    except WorkspaceInitializationError as error:
+        raise ViewGenerationConflictError(expected.name, None) from error
+    current_generation = current_studio.view_generations.get(expected.name)
+    if expected_generation is not None and current_generation != expected_generation:
+        raise ViewGenerationConflictError(expected.name, current_generation)
+    if (
+        expected_catalog_generation is not None
+        and current_studio.catalog_generation != expected_catalog_generation
+    ):
+        raise WorkspaceGenerationConflictError()
     current = provider_registry().validate_project(_view(current_studio, expected.name))
     if (
         current.root != expected.root
@@ -407,11 +610,20 @@ def read_source(
     name: str,
 ) -> ViewDocument:
     """Read one provider-discovered source document."""
-    if _relative_path(name) == VIEW_MANIFEST_PATH:
-        return read_view_manifest(studio, view_name)
+    return read_source_with_owner(studio, view_name, name).document
+
+
+def read_source_with_owner(
+    studio: StudioWorkspace,
+    view_name: str,
+    name: str,
+) -> OwnedViewDocument:
+    """Read one provider document with its current catalog and view owners."""
+    if source_path(name) == VIEW_MANIFEST_PATH:
+        return read_view_manifest_with_owner(studio, view_name)
     project = _view(studio, view_name)
     inspection = inspect_view_project_sync(project)
-    return read_project_source(
+    return read_project_source_with_owner(
         studio,
         project,
         source_spec(inspection, name, project.name),
@@ -424,11 +636,34 @@ def read_project_source(
     spec: SourceDocumentSpec,
 ) -> ViewDocument:
     """Read a document authorized by the current shared project catalog."""
+    return read_project_source_with_owner(studio, project, spec).document
+
+
+def read_project_source_with_owner(
+    studio: StudioWorkspace,
+    project: ViewProject,
+    spec: SourceDocumentSpec,
+) -> OwnedViewDocument:
+    """Read an authorized document with owners captured under its view lock."""
     if spec.path == VIEW_MANIFEST_PATH:
-        return read_view_manifest(studio, project.name)
-    with view_mutation_lock(studio.view_root, project.name):
+        return read_view_manifest_with_owner(studio, project.name)
+    with (
+        workspace_catalog_lock(studio.view_root),
+        view_mutation_lock(studio.view_root, project.name),
+    ):
         current_studio, current = _current_project(studio, project)
-        return _read(current_studio, current, spec)
+        document = _read(current_studio, current, spec)
+        _current_project(
+            current_studio,
+            current,
+            expected_catalog_generation=current_studio.catalog_generation,
+            expected_generation=current_studio.view_generations[project.name],
+        )
+        return OwnedViewDocument(
+            document,
+            current_studio.catalog_generation,
+            current_studio.view_generations[project.name],
+        )
 
 
 def write_source(
@@ -437,14 +672,19 @@ def write_source(
     name: str,
     content: str,
     expected_revision: str,
+    *,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
 ) -> ViewDocument:
     """Replace one editable document when its loaded ETag is current."""
-    if _relative_path(name) == VIEW_MANIFEST_PATH:
+    if source_path(name) == VIEW_MANIFEST_PATH:
         return write_view_manifest(
             studio,
             view_name,
             content,
             expected_revision,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
         )
     project = _view(studio, view_name)
     inspection = inspect_view_project_sync(project)
@@ -457,6 +697,14 @@ def write_source(
             provider.provenance(inspection),
         )
     except (ConfigurationError, OSError, ValueError) as error:
+        revision = _conflict_revision(
+            studio,
+            project.name,
+            project.root,
+            spec,
+        )
+        if revision is not None:
+            raise SourceConflictError(spec.path.as_posix(), revision) from error
         raise SourceNotFoundError(
             f"Unknown source document {spec.path.as_posix()!r} "
             f"in view {project.name!r}."
@@ -472,6 +720,8 @@ def write_source(
         ),
         content,
         expected_revision,
+        expected_catalog_generation=expected_catalog_generation,
+        expected_generation=expected_generation,
     )
 
 
@@ -480,6 +730,9 @@ def write_project_source(
     prepared: PreparedSourceWrite,
     content: str,
     expected_revision: str,
+    *,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
 ) -> ViewDocument:
     """Conditionally replace one document through a same-directory rename."""
     project = prepared.project
@@ -490,6 +743,8 @@ def write_project_source(
             project.name,
             content,
             expected_revision,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
         )
     if len(content.encode("utf-8")) > SOURCE_DOCUMENT_MAX_BYTES:
         raise SourceTooLargeError(
@@ -514,8 +769,16 @@ def write_project_source(
     assert input_state is not None
     if input_id != prepared.input_id:
         raise SourceConflictError(expected_spec.path.as_posix(), None)
-    with view_mutation_lock(studio.view_root, project.name):
-        current_studio, current_project = _current_project(studio, project)
+    with (
+        workspace_catalog_lock(studio.view_root),
+        view_mutation_lock(studio.view_root, project.name),
+    ):
+        current_studio, current_project = _current_project(
+            studio,
+            project,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+        )
         current_spec = source_spec(
             prepared.inspection,
             expected_spec.path.as_posix(),

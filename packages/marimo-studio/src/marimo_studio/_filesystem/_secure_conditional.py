@@ -5,17 +5,18 @@ from __future__ import annotations
 import errno
 import hashlib
 import os
-import secrets
 import stat
 from contextlib import suppress
 from pathlib import Path
 from typing import Protocol
 
+from marimo_studio._filesystem._secure_names import temporary_sibling_name
 from marimo_studio._filesystem._secure_operations import (
     copy_file_if_absent_at,
     open_file_at,
     regular_identity,
 )
+from marimo_studio._filesystem._secure_rename import rename_to_temporary_sibling
 from marimo_studio._filesystem._secure_types import (
     ConditionalWriteError,
     FileIdentity,
@@ -66,7 +67,7 @@ def replace_file_if_identity(
     expected: FileIdentity,
 ) -> FileIdentity:
     """Replace one regular file when its full identity is still current."""
-    temporary = path.with_name(f".{path.name}.{secrets.token_hex(16)}.cas")
+    temporary = path.with_name(temporary_sibling_name("cas"))
     descriptor = filesystem.create_file(temporary, stat.S_IMODE(expected.mode))
     temporary_exists = True
     try:
@@ -136,17 +137,12 @@ def quarantine_if_identity(
     """Move one leaf aside atomically, then verify the moved identity."""
     with parent_context(path) as parent:
         target: str | Path = path.name if parent.descriptor is not None else path
-        quarantine_name = f".{path.name}.rollback-{secrets.token_hex(8)}"
+        recovery = rename_to_temporary_sibling(parent, path, "rollback")
+        quarantine_name = recovery.name
         quarantine: str | Path = (
             quarantine_name
             if parent.descriptor is not None
             else parent.path / quarantine_name
-        )
-        os.rename(
-            target,
-            quarantine,
-            src_dir_fd=parent.descriptor,
-            dst_dir_fd=parent.descriptor,
         )
         state = os.stat(
             quarantine,
@@ -172,7 +168,7 @@ def quarantine_if_identity(
             finally:
                 os.close(descriptor)
         if actual == expected:
-            return path.with_name(quarantine_name)
+            return recovery
         recovered = False
         if not stat.S_ISDIR(state.st_mode):
             try:
@@ -208,7 +204,7 @@ def quarantine_if_identity(
             else:
                 os.unlink(quarantine, dir_fd=parent.descriptor)
                 recovered = True
-        location = path if recovered else path.with_name(quarantine_name)
+        location = path if recovered else recovery
         raise ConditionalWriteError(
             f"Contained leaf changed before rollback and was preserved at {location}",
             recovery=None if recovered else location,

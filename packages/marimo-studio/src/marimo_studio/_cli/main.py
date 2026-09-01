@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from importlib.metadata import version
 
 import click
 
@@ -20,21 +21,25 @@ from marimo_studio._cli.help import ColoredGroup
 from marimo_studio._cli.output import echo_error
 from marimo_studio.errors import MarimoStudioError
 
+_STUDIO_REQUIREMENT = f"marimo-studio=={version('marimo-studio')}"
+
 
 @click.group(
     cls=ColoredGroup,
     context_settings={"help_option_names": ["-h", "--help"]},
-    epilog="""\b
+    epilog=f"""\b
 Examples:
   marimo-studio status --target analysis.py
   marimo-studio view create dashboard --target analysis.py
-  marimo edit analysis.py --sandbox
+
+Default Vanilla authoring:
+  uvx --with {_STUDIO_REQUIREMENT} marimo edit analysis.py --sandbox
 """,
     no_args_is_help=True,
 )
 @click.version_option(prog_name="marimo-studio", package_name="marimo-studio")
 def cli() -> None:
-    """Design custom pages for Marimo notebooks."""
+    """Design custom views for Marimo notebooks."""
 
 
 cli.add_command(doctor)
@@ -64,6 +69,15 @@ def _show_click_error(error: click.ClickException) -> None:
     echo_error(f"Error: {error.format_message()}")
 
 
+def _error_details(error: MarimoStudioError) -> dict[str, object] | None:
+    details = error.diagnostic_details()
+    if error.public_hint:
+        details["hint"] = error.public_hint
+    if error.transient:
+        details["transient"] = True
+    return details or None
+
+
 def main() -> None:
     """Run the Marimo Studio console script."""
     diagnostics = diagnostics_from_argv(sys.argv[1:])
@@ -87,9 +101,11 @@ def main() -> None:
             message=str(error),
             severity="error",
             exit_code=error.exit_code,
-            details=error.diagnostic_details() or None,
+            details=_error_details(error),
         ):
             echo_error(f"Error: {error}")
+            if error.public_hint:
+                click.echo(f"Hint: {error.public_hint}", err=True)
         raise SystemExit(error.exit_code) from None
     except click.ClickException as error:
         if not diagnostics.emit(

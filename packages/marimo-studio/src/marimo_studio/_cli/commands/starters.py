@@ -1,4 +1,4 @@
-"""List installed starting points for new pages."""
+"""List installed starting points for new views."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from marimo_studio._cli.output import echo_json
 @click.command("starters", cls=ColoredCommand)
 @json_option
 def starters(json_output: bool) -> None:
-    """List installed starting points for new pages."""
+    """List installed starting points for new views."""
     records = asyncio.run(installed_starters())
     if json_output:
         echo_json(

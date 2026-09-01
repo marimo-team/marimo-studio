@@ -49,6 +49,9 @@ from ..artifact_test_support import (
     change_document as _change_document,
 )
 from ..artifact_test_support import (
+    profile_path as _profile_path,
+)
+from ..artifact_test_support import (
     project as _project,
 )
 from ..artifact_test_support import (
@@ -409,6 +412,9 @@ def test_artifact_responses_require_verified_bytes(
 
     assert response.status_code == 404
     assert "etag" not in response.headers
+    state = read_build_state(project, "development")
+    assert state.phase == "stale"
+    assert state.diagnostics[0].code == "artifact-integrity-failed"
 
 
 def test_artifact_corruption_marks_the_publication_stale_and_rebuilds(
@@ -435,6 +441,27 @@ def test_artifact_corruption_marks_the_publication_stale_and_rebuilds(
     assert next(
         item for item in rebuilt.files if item.path == rebuilt.document
     ).sha256 == (record.sha256)
+
+
+def test_corrupt_sibling_receipt_does_not_block_integrity_state(
+    tmp_path: Path,
+) -> None:
+    project = _project(tmp_path)
+    owner = publish_artifact_lease(project, "production")
+    _profile_path(project).write_text("{", encoding="utf-8")
+    document = owner.artifact.root / owner.artifact.document
+    document.unlink()
+
+    with owner:
+        response = artifact_file_response(
+            owner.share(),
+            owner.artifact.document.as_posix(),
+        )
+
+    assert response.status_code == 404
+    state = read_build_state(project, "production")
+    assert state.phase == "stale"
+    assert state.diagnostics[0].code == "artifact-integrity-failed"
 
 
 def test_open_response_is_isolated_from_later_source_growth(tmp_path: Path) -> None:
@@ -720,7 +747,13 @@ def test_presentation_capture_retains_construction_error_after_cleanup_failures(
         "executive": _LeaseCloser("executive", calls),
     }
 
-    def publish(project: ViewProject, _profile: BuildProfile) -> ArtifactLease:
+    def publish(
+        project: ViewProject,
+        _profile: BuildProfile,
+        *,
+        expected_generation: str | None = None,
+    ) -> ArtifactLease:
+        _ = expected_generation
         if project.name == "operations":
             raise RuntimeError("construction failed")
         return cast(ArtifactLease, leases[project.name])

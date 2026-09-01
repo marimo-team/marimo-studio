@@ -1,9 +1,10 @@
 """Identify and copy the exact view inputs that a provider may build.
 
-A project revision combines provider package identity, provider build
-semantics, explicit view options, ``view.toml``, and every file in the bounded
-input scope returned by inspection. Generated artifact state stays outside
-that identity, so a build output cannot make its own source appear changed.
+A project revision combines the view name, provider package identity, provider
+build semantics, explicit view options, ``view.toml``, and every file in the
+bounded input scope returned by inspection. Generated artifact state stays
+outside that identity, so a build output cannot make its own source appear
+changed.
 
 Studio compares each input before and after reading it, then copies the exact
 bytes into an isolated build directory. If any input changes during capture,
@@ -130,6 +131,7 @@ def _identity(
     try:
         return json.dumps(
             {
+                "name": project.name,
                 "provider": provenance.to_dict(),
                 "options": dict(project.options),
             },

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterator, Mapping
 from contextlib import ExitStack, contextmanager
 from pathlib import Path, PurePosixPath
 
@@ -210,6 +210,30 @@ def _require_owned_identities(
         _require_identities(owner, {path: identity})
 
 
+def _require_absent_entries(
+    filesystem: SecureDirectory,
+    paths: Collection[Path],
+) -> None:
+    for path in paths:
+        if filesystem.entry_exists(path):
+            raise ConfigurationError(
+                f"Workspace path was recreated before the transaction committed: "
+                f"{path}. Run the operation again."
+            )
+
+
+def _require_directory_identities(
+    filesystem: SecureDirectory,
+    expected: Mapping[Path, FileIdentity],
+) -> None:
+    for path, identity in expected.items():
+        if filesystem.directory_identity(path) != identity:
+            raise ConfigurationError(
+                f"Workspace directory changed before the transaction committed: "
+                f"{path}. Run the operation again."
+            )
+
+
 def _expected_tree_paths(
     files: tuple[PurePosixPath, ...],
 ) -> frozenset[str]:
@@ -264,12 +288,15 @@ def write_file_transaction(
     writes: Mapping[Path, str | bytes],
     *,
     expected: Mapping[Path, FileIdentity | None] | None = None,
+    expected_absent_entries: Collection[Path] = (),
+    expected_directories: Mapping[Path, FileIdentity] | None = None,
     claimed_directories: Mapping[Path, tuple[PurePosixPath, ...]] | None = None,
 ) -> Iterator[None]:
     """Conditionally write files and restore prior state after a failure."""
     paths = set(writes)
     read_set = dict(expected or {})
     directory_claims = dict(claimed_directories or {})
+    directory_read_set = dict(expected_directories or {})
     with secure_directory(root) as filesystem, ExitStack() as ownership:
         snapshots: dict[Path, tuple[bytes, int] | None] = {}
         initial_identities: dict[Path, FileIdentity | None] = {}
@@ -290,6 +317,8 @@ def write_file_transaction(
             read_set,
             known=initial_identities,
         )
+        _require_absent_entries(filesystem, expected_absent_entries)
+        _require_directory_identities(filesystem, directory_read_set)
         directories: dict[Path, FileIdentity] = {}
         claimed_filesystems: dict[Path, SecureDirectory] = {}
         written_files: dict[Path, FileIdentity] = {}
@@ -368,6 +397,8 @@ def write_file_transaction(
             }
             committed.update(written_files)
             yield
+            _require_absent_entries(filesystem, expected_absent_entries)
+            _require_directory_identities(filesystem, directory_read_set)
             for directory, identity in committed_trees.items():
                 claimed = claimed_filesystems[directory]
                 claimed.ensure_attached(directories[directory])

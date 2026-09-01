@@ -8,6 +8,7 @@ import pytest
 
 import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._workspace.config as workspace_config
+import marimo_studio._workspace.mutation_lock as mutation_locks
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.inspection import inspection_request
 from marimo_studio._views.resolve import resolve_studio
@@ -16,9 +17,12 @@ from marimo_studio._workspace.mutation_lock import (
     view_mutation_lock,
     workspace_catalog_lock,
 )
+from marimo_studio._workspace.view_owners import view_owner_path
 from marimo_studio.errors import (
     ConfigurationError,
+    WorkspaceGenerationConflictError,
 )
+from marimo_studio.view_providers import ViewProject
 from marimo_studio.view_providers._host import provider_registry
 
 
@@ -49,6 +53,36 @@ def test_view_inventory_ignores_a_project_removed_during_load(
     monkeypatch.setattr(workspace_config, "load_view_project", load)
 
     assert set(workspace_config.discover_views(root)) == {"stable"}
+
+
+@pytest.mark.parametrize("disappearance", ("owner", "directory"))
+def test_workspace_materialization_reports_a_disappearing_view_as_a_conflict(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    disappearance: str,
+) -> None:
+    prepare_view(notebook_path)
+    definition = workspace_config.load_studio_definition(notebook_path)
+    generation = workspace_config.view_generation
+    raced = False
+
+    def disappear(project: ViewProject) -> str:
+        nonlocal raced
+        result = generation(project)
+        if not raced:
+            raced = True
+            if disappearance == "owner":
+                view_owner_path(definition.view_root, project.name).unlink()
+            else:
+                shutil.rmtree(project.root)
+        return result
+
+    monkeypatch.setattr(workspace_config, "view_generation", disappear)
+
+    with pytest.raises(WorkspaceGenerationConflictError):
+        workspace_config.materialize_studio_workspace(definition)
+
+    assert raced
 
 
 def test_explicit_mounts_resolve_without_provider_inspection(
@@ -159,3 +193,62 @@ def test_workspace_lock_creation_cannot_follow_a_raced_view_root(
 
     assert raced
     assert tuple(external.iterdir()) == ()
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="Windows prevents replacement while the lock is held"
+)
+def test_workspace_lock_rejects_a_replaced_lockfile_after_acquisition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    view_root = tmp_path / "views"
+    acquire = mutation_locks._acquire
+    replaced = False
+
+    def acquire_then_replace(descriptor: int) -> None:
+        nonlocal replaced
+        acquire(descriptor)
+        lock = view_root / ".locks" / ".catalog.lock"
+        lock.unlink()
+        lock.write_text("replacement", encoding="utf-8")
+        replaced = True
+
+    monkeypatch.setattr(mutation_locks, "_acquire", acquire_then_replace)
+
+    with (
+        pytest.raises(ConfigurationError, match="changed before acquisition"),
+        workspace_catalog_lock(view_root),
+    ):
+        pytest.fail("replaced lockfile must not be trusted")
+
+    assert replaced
+
+
+@pytest.mark.skipif(
+    os.name != "nt", reason="Windows enforces byte-range locks across file handles"
+)
+def test_workspace_lock_blocks_replacement_while_held_on_windows(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    view_root = tmp_path / "views"
+    acquire = mutation_locks._acquire
+    blocked = False
+
+    def acquire_then_attempt_replacement(descriptor: int) -> None:
+        nonlocal blocked
+        acquire(descriptor)
+        lock = view_root / ".locks" / ".catalog.lock"
+        with pytest.raises(PermissionError):
+            lock.unlink()
+        blocked = True
+
+    monkeypatch.setattr(
+        mutation_locks,
+        "_acquire",
+        acquire_then_attempt_replacement,
+    )
+
+    with workspace_catalog_lock(view_root):
+        assert blocked

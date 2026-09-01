@@ -36,7 +36,7 @@ from marimo_studio.errors import ConfigurationError
 
 @click.group("notebook", cls=ColoredGroup)
 def notebook() -> None:
-    """Inspect saved cells and name results for pages."""
+    """Inspect saved cells and name results for views."""
 
 
 @click.command("inspect", cls=ColoredCommand)

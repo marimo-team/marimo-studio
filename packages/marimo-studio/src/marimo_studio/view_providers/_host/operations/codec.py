@@ -276,7 +276,7 @@ def _cell_spec(value: object) -> CellSpec:
             "downstream",
             "config",
             "has_output_expression",
-            "displays_output",
+            "may_display_output",
             "markdown",
             "code",
         },
@@ -284,11 +284,11 @@ def _cell_spec(value: object) -> CellSpec:
     )
     index = data["index"]
     has_output_expression = data["has_output_expression"]
-    displays_output = data["displays_output"]
+    may_display_output = data["may_display_output"]
     if (
         type(index) is not int
         or type(has_output_expression) is not bool
-        or type(displays_output) is not bool
+        or type(may_display_output) is not bool
     ):
         raise ValueError("Starter notebook cell scalars are invalid")
     return CellSpec(
@@ -318,7 +318,7 @@ def _cell_spec(value: object) -> CellSpec:
         ),
         config=_cell_config(data["config"]),
         has_output_expression=has_output_expression,
-        displays_output=displays_output,
+        may_display_output=may_display_output,
         markdown=_optional_text(
             data["markdown"],
             "starter notebook cell markdown",

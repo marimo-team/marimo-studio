@@ -27,7 +27,7 @@ _DOCUMENTS = (
 
 
 def _render(context: StarterContext) -> StarterRendering:
-    cells = tuple(item for item in starter_cells(context) if item[0].displays_output)
+    cells = tuple(item for item in starter_cells(context) if item[0].may_display_output)
     targets = tuple(target for _cell, target in cells)
     hosts = (
         "{"
@@ -52,8 +52,8 @@ starter = BundledStarter(
         key="default",
         title="React",
         summary=(
-            "A typed React application populated with Studio notebook display "
-            "cells and a live-value hook."
+            "A typed React application populated with notebook cells that may "
+            "display output and a live-value hook."
         ),
         documents=_DOCUMENTS,
     ),

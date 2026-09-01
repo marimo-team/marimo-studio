@@ -98,7 +98,7 @@ def test_runtime_check_scopes_values_to_the_selected_view(
 
     monkeypatch.setattr(
         checks_module,
-        "create_runtime_probe",
+        "create_worker_runtime_probe",
         lambda: probe,
     )
     results = asyncio.run(
@@ -201,7 +201,7 @@ def test_runtime_check_reports_rich_output_format_failures(
 
     monkeypatch.setattr(
         checks_module,
-        "create_runtime_probe",
+        "create_worker_runtime_probe",
         lambda: probe,
     )
     results = asyncio.run(
@@ -245,7 +245,7 @@ def test_runtime_check_propagates_output_response_errors(
 
     monkeypatch.setattr(
         checks_module,
-        "create_runtime_probe",
+        "create_worker_runtime_probe",
         lambda: probe,
     )
     results = asyncio.run(
@@ -324,7 +324,7 @@ if __name__ == "__main__":
 
     monkeypatch.setattr(
         checks_module,
-        "create_runtime_probe",
+        "create_worker_runtime_probe",
         lambda: probe,
     )
     results = asyncio.run(check_runtime_studio(load_studio(notebook)))
@@ -455,7 +455,7 @@ def test_runtime_check_ignores_plain_htmx_routes(
 
     monkeypatch.setattr(
         checks_module,
-        "create_runtime_probe",
+        "create_worker_runtime_probe",
         lambda: probe,
     )
     results = asyncio.run(

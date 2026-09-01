@@ -153,7 +153,7 @@ export const App = () => (
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
-def test_react_starters_build_without_display_cells(
+def test_react_starters_build_without_possible_output_cells(
     tmp_path: Path,
     starter_key: str,
 ) -> None:

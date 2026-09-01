@@ -19,9 +19,7 @@ from marimo_studio._artifacts.records import (
 )
 from marimo_studio._workspace.models import RESERVED_VIEW_ASSET_NAMES
 from marimo_studio.errors import ConfigurationError
-from marimo_studio.errors._internal import ArtifactCompatibilityError
 from marimo_studio.view_providers import (
-    PROVIDER_API_VERSION,
     BuildProfile,
     MountDeclaration,
     ProjectDiagnostic,
@@ -166,12 +164,11 @@ def _provider_provenance(
         },
         label,
     )
-    api_version = _integer(data["api_version"], f"{label} API version")
-    if api_version != PROVIDER_API_VERSION:
-        raise ArtifactCompatibilityError(
-            f"{label} targets provider API version {api_version}; "
-            f"Studio requires {PROVIDER_API_VERSION}"
-        )
+    api_version = _integer(
+        data["api_version"],
+        f"{label} API version",
+        minimum=1,
+    )
     return ProviderProvenance(
         key=_string(data["key"], f"{label} key"),
         distribution=_string(data["distribution"], f"{label} distribution"),

@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import stat
 import subprocess
+import sys
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -165,6 +167,27 @@ esac
     assert sum("python -c " in command for command in commands) == 1
     assert sum("verify-installed-package.py" in command for command in commands) == 2
     assert sum("marimo-studio[deno]==0.1.0" in command for command in commands) == 1
+    assert not any("--with agent-plugins" in command for command in commands)
+
+
+def test_distribution_checksums_cover_release_artifacts(tmp_path: Path) -> None:
+    wheel = tmp_path / "marimo_studio-0.1.0-py3-none-any.whl"
+    sdist = tmp_path / "marimo_studio-0.1.0.tar.gz"
+    wheel.write_bytes(b"wheel")
+    sdist.write_bytes(b"source")
+
+    completed = subprocess.run(
+        [sys.executable, _ROOT / "scripts" / "write-dist-checksums.py", tmp_path],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert tmp_path.joinpath("SHA256SUMS").read_text(encoding="utf-8").splitlines() == [
+        f"{sha256(wheel.read_bytes()).hexdigest()}  {wheel.name}",
+        f"{sha256(sdist.read_bytes()).hexdigest()}  {sdist.name}",
+    ]
 
 
 def test_release_dry_run_checks_the_exact_main_commit_without_tagging(
@@ -173,6 +196,9 @@ def test_release_dry_run_checks_the_exact_main_commit_without_tagging(
     script, binaries = _release_workspace(tmp_path, "release.sh")
     root = script.parents[1]
     command_log = root / "commands"
+    release_notes = root / ".github" / "release-notes" / "v0.1.0.md"
+    release_notes.parent.mkdir(parents=True)
+    release_notes.write_text("release notes\n", encoding="utf-8")
     _write_executable(
         binaries / "git",
         """#!/bin/sh
@@ -255,6 +281,9 @@ def test_publish_gate_checks_version_tag_sha_and_main_ancestry(
     script, binaries = _release_workspace(tmp_path, "check-release.sh")
     root = script.parents[1]
     release_checks = root / "release-checks"
+    release_notes = root / ".github" / "release-notes" / "v0.1.0.md"
+    release_notes.parent.mkdir(parents=True)
+    release_notes.write_text("release notes\n", encoding="utf-8")
     _write_executable(
         binaries / "uv",
         """#!/bin/sh

@@ -58,18 +58,26 @@ def _starter_records() -> tuple[tuple[Starter, _CatalogProvider, ProviderStarter
     availability = _provider_availability(tuple(providers.values()))
     return tuple(
         (
-            Starter(
-                id=starter_id(provider.key, starter.key),
-                title=starter.title,
-                summary=starter.summary,
-                provider=provider.key,
-                documents=starter.documents,
-                availability=availability[provider.key],
-            ),
+            _starter_record(provider, starter, availability[provider.key]),
             provider,
             starter,
         )
         for provider, starter in records
+    )
+
+
+def _starter_record(
+    provider: _CatalogProvider,
+    starter: ProviderStarter,
+    availability: ProviderAvailability,
+) -> Starter:
+    return Starter(
+        id=starter_id(provider.key, starter.key),
+        title=starter.title,
+        summary=starter.summary,
+        provider=provider.key,
+        documents=starter.documents,
+        availability=availability,
     )
 
 
@@ -99,11 +107,28 @@ def resolve_starter(
     identity: str,
 ) -> tuple[Starter, ViewProvider, ProviderStarter]:
     """Return the public record and provider-local starter for one key."""
-    records = _starter_records()
-    matches = [record for record in records if record[0].id == identity]
+    provider_key, separator, local_key = identity.rpartition(":")
+    if not separator or not provider_key or not local_key:
+        raise ConfigurationError(
+            f"Unknown view starter {identity!r}. Use '<provider>:<starter>'."
+        )
+    provider = provider_registry().get(provider_key)
+    provider_starters = provider.starters()
+    matches = [starter for starter in provider_starters if starter.key == local_key]
     if len(matches) != 1:
-        available = ", ".join(record[0].id for record in records) or "none"
+        available = (
+            ", ".join(
+                starter_id(provider.key, starter.key) for starter in provider_starters
+            )
+            or "none"
+        )
         raise ConfigurationError(
             f"Unknown view starter {identity!r}. Installed starters: {available}"
         )
-    return matches[0]
+    provider_starter = matches[0]
+    record = _starter_record(
+        provider,
+        provider_starter,
+        provider.availability(),
+    )
+    return record, provider, provider_starter

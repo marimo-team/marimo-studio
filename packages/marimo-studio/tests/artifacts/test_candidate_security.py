@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import pytest
@@ -22,6 +22,7 @@ from marimo_studio._artifacts.repository import (
     read_published_artifact,
 )
 from marimo_studio._artifacts.retention import lease_published_artifact
+from marimo_studio._filesystem.paths import PORTABLE_PATH_COMPONENT_MAX_BYTES
 from marimo_studio._views.build import publish_view as publish_artifact_lease
 from marimo_studio.errors import ConfigurationError, ViewProjectError
 from marimo_studio.view_providers import (
@@ -31,14 +32,32 @@ from marimo_studio.view_providers import (
 from marimo_studio.view_providers._host import provider_registry
 
 from ..artifact_test_support import (
+    add_provider_outputs,
+    publish_artifact,
+)
+from ..artifact_test_support import (
     profile_path as _profile_path,
 )
 from ..artifact_test_support import (
     project as _project,
 )
-from ..artifact_test_support import (
-    publish_artifact,
-)
+
+_MAX_COMPONENT_BYTES = PORTABLE_PATH_COMPONENT_MAX_BYTES
+
+
+@pytest.mark.supported_python
+def test_publication_builds_a_max_component_asset(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _project(tmp_path)
+    relative = PurePosixPath("a" * _MAX_COMPONENT_BYTES)
+    add_provider_outputs(monkeypatch, project, {relative: b"max component"})
+
+    artifact = publish_artifact(project, "development")
+
+    assert artifact.root.joinpath(*relative.parts).read_bytes() == b"max component"
+    assert relative in {item.path for item in artifact.files}
 
 
 @pytest.mark.skipif(

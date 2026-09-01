@@ -60,6 +60,7 @@ def _studio(path: Path, cells: dict[str, CellRef]) -> StudioDefinition:
         preserve_session=False,
         cells=cells,
         show_cell_logs=True,
+        config_generation="fixture-config-generation",
     )
 
 

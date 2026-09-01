@@ -28,6 +28,7 @@ class ViewRemovalResult:
     view: str
     default_view: str
     views: tuple[str, ...]
+    catalog_generation: str
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -36,6 +37,7 @@ class ViewRemovalResult:
             "view": self.view,
             "default_view": self.default_view,
             "views": list(self.views),
+            "catalog_generation": self.catalog_generation,
         }
 
 
@@ -64,6 +66,7 @@ def prepare_view(
     *,
     starter: str | Starter | None = None,
     dry_run: bool = False,
+    expected_catalog_generation: str | None = None,
 ) -> ViewSetupResult:
     """Configure a notebook and create a named view."""
     return _prepare_view(
@@ -72,6 +75,7 @@ def prepare_view(
         starter=starter,
         inspect_notebook=inspect_notebook,
         dry_run=dry_run,
+        expected_catalog_generation=expected_catalog_generation,
     )
 
 
@@ -81,6 +85,7 @@ def create_view(
     *,
     starter: str | Starter | None = None,
     dry_run: bool = False,
+    expected_catalog_generation: str | None = None,
 ) -> ViewSetupResult:
     """Create one new view and reject an existing name."""
     return _prepare_view(
@@ -90,15 +95,28 @@ def create_view(
         inspect_notebook=inspect_notebook,
         dry_run=dry_run,
         fail_if_exists=True,
+        expected_catalog_generation=expected_catalog_generation,
     )
 
 
-def remove_view(studio: StudioWorkspace, name: str) -> ViewRemovalResult:
+def remove_view(
+    studio: StudioWorkspace,
+    name: str,
+    *,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
+) -> ViewRemovalResult:
     """Remove one named view and return the remaining workspace identity."""
-    updated = _delete_view(studio, name)
+    updated = _delete_view(
+        studio,
+        name,
+        expected_catalog_generation=expected_catalog_generation,
+        expected_generation=expected_generation,
+    )
     return ViewRemovalResult(
         notebook=updated.notebook,
         view=name,
         default_view=updated.default_view,
         views=tuple(updated.views),
+        catalog_generation=updated.catalog_generation,
     )

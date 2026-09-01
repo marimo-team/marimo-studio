@@ -153,7 +153,7 @@ def test_svelte_keeps_mutated_static_domains_fail_closed(
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
-def test_svelte_starter_builds_without_display_cells(tmp_path: Path) -> None:
+def test_svelte_starter_builds_without_possible_output_cells(tmp_path: Path) -> None:
     tmp_path.joinpath("analysis.py").write_text(
         no_display_notebook_source(),
         encoding="utf-8",
