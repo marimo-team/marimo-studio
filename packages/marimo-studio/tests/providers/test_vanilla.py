@@ -186,6 +186,22 @@ def test_vanilla_instruments_exact_parser_sites(tmp_path: Path) -> None:
     ]
 
 
+def test_vanilla_build_preserves_crlf_line_endings(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    source = project.root / "index.html"
+    authored = source.read_bytes().replace(b"\n", b"\r\n")
+    source.write_bytes(authored)
+    inspection = provider.inspect(inspection_request(project))
+    files = project.root / ".artifacts" / ".staging" / "crlf" / "files"
+    files.mkdir(parents=True)
+
+    provider.build(provider_build_request(project, inspection, files))
+
+    built = (files / "index.html").read_bytes()
+    assert b"\r\r\n" not in built
+    assert built.count(b"\r\n") == authored.count(b"\r\n")
+
+
 def test_vanilla_rejects_authored_mount_declaration_id(tmp_path: Path) -> None:
     project = _project(tmp_path)
     source = project.root / "index.html"

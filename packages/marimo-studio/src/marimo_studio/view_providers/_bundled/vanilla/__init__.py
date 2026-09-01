@@ -227,7 +227,7 @@ class VanillaProvider:
         if request.cancellation.cancelled:
             return _cancelled_build()
         document = request.staging_root.joinpath(*source_entry.parts)
-        document.write_text(instrumented, encoding="utf-8")
+        document.write_bytes(instrumented.encode("utf-8"))
         return BuildResult(source_entry, ())
 
 

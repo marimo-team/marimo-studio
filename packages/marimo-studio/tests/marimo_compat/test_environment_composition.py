@@ -514,7 +514,7 @@ def test_inline_environment_ignores_a_false_studio_uv_source(
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "marimo-studio ; sys_platform == 'win32'",
+#   "marimo-studio ; python_version < '3.0'",
 # ]
 #
 # [tool.uv.sources]

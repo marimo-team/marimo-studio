@@ -39,7 +39,7 @@ def test_inline_config_snapshot_deduplicates_the_notebook_identity(
         include_notebook=True,
     )
 
-    assert snapshot.source == notebook_path.read_text(encoding="utf-8")
+    assert snapshot.source == notebook_path.read_bytes().decode("utf-8")
     assert snapshot.notebook_identity == snapshot.config_identity
     assert snapshot.expected_identities == {
         notebook_path: snapshot.config_identity,

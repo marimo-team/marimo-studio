@@ -465,7 +465,7 @@ def test_view_manifest_read_and_write_repair_a_malformed_manifest_without_bootst
     manifest = setup.root / "view.toml"
     repaired = manifest.read_text(encoding="utf-8")
     malformed = "schema = [\n"
-    manifest.write_text(malformed, encoding="utf-8")
+    manifest.write_bytes(malformed.encode("utf-8"))
     monkeypatch.setattr(
         "marimo_studio._cli.commands.view_source.provider_bootstrap_required",
         lambda _target: pytest.fail("view.toml triggered provider bootstrap"),
