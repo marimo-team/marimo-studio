@@ -308,6 +308,63 @@ it("preserves editor history, selection, and scroll for each opened document", a
   controller.dispose();
 });
 
+it("preserves CRLF line endings through an editor save", async () => {
+  const path = "src/App.svelte" as const;
+  const remote = new PaneRemote();
+  remote.setSource(path, {
+    content: "first line\r\nsecond line\r\n",
+    revision: "revision:crlf",
+  });
+  const controller = new SourceController(
+    vi.fn(),
+    "token",
+    "svelte",
+    "source-crlf-test",
+    vi.fn(),
+    remote,
+  );
+  await controller.start();
+  render(<SourcePane controller={controller} visible />);
+  const editor = await screen.findByLabelText("src/App.svelte source");
+  const view = editorView(editor);
+
+  view.dispatch({ changes: { from: view.state.doc.length, insert: "saved" } });
+  controller.save(path);
+
+  await vi.waitFor(() => expect(controller.getSnapshot().documents[0]?.state.phase).toBe("saved"));
+  expect((await remote.read("svelte", path)).content).toBe("first line\r\nsecond line\r\nsaved");
+  controller.dispose();
+});
+
+it("keeps mixed line endings as distinct editor lines", async () => {
+  const path = "src/App.svelte" as const;
+  const remote = new PaneRemote();
+  remote.setSource(path, {
+    content: "first\r\nsecond\nthird\r",
+    revision: "revision:mixed-lines",
+  });
+  const controller = new SourceController(
+    vi.fn(),
+    "token",
+    "svelte",
+    "source-mixed-lines-test",
+    vi.fn(),
+    remote,
+  );
+  await controller.start();
+  render(<SourcePane controller={controller} visible />);
+  const editor = await screen.findByLabelText("src/App.svelte source");
+  const view = editorView(editor);
+
+  expect(view.state.doc.lines).toBe(4);
+  view.dispatch({ changes: { from: view.state.doc.length, insert: "saved" } });
+  controller.save(path);
+
+  await vi.waitFor(() => expect(controller.getSnapshot().documents[0]?.state.phase).toBe("saved"));
+  expect((await remote.read("svelte", path)).content).toBe("first\nsecond\nthird\nsaved");
+  controller.dispose();
+});
+
 it("resets undo history for an authoritative external source replacement", async () => {
   Object.defineProperties(Range.prototype, {
     getBoundingClientRect: { configurable: true, value: () => new DOMRect() },

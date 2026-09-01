@@ -55,6 +55,25 @@ interface EditorCompartments {
 
 const externalChange = Annotation.define<boolean>();
 
+const sourceLineSeparator = (value: string): string | undefined => {
+  const separators = value.match(/\r\n|\r|\n/g);
+  const first = separators?.[0];
+  return first !== undefined && separators?.every((separator) => separator === first) === true
+    ? first
+    : undefined;
+};
+
+const sourceEditorState = (value: string, extensions: readonly Extension[]): EditorState => {
+  const lineSeparator = sourceLineSeparator(value);
+  return EditorState.create({
+    doc: value,
+    extensions:
+      lineSeparator === undefined
+        ? extensions
+        : [...extensions, EditorState.lineSeparator.of(lineSeparator)],
+  });
+};
+
 const basicSetup = {
   autocompletion: true,
   bracketMatching: true,
@@ -69,7 +88,7 @@ const basicSetup = {
 } as const;
 
 const synchronizeValue = (view: EditorView, value: string): void => {
-  if (view.state.doc.toString() === value) {
+  if (view.state.sliceDoc() === value) {
     return;
   }
   view.dispatch({
@@ -86,15 +105,15 @@ const replacementState = (
   value: string,
   extensions: readonly Extension[],
 ): EditorState => {
-  const length = value.length;
+  const state = sourceEditorState(value, extensions);
+  const length = state.doc.length;
   const ranges = view.state.selection.ranges.map((range) =>
     EditorSelection.range(Math.min(range.anchor, length), Math.min(range.head, length)),
   );
-  return EditorState.create({
-    doc: value,
-    extensions,
+  return state.update({
     selection: EditorSelection.create(ranges, view.state.selection.mainIndex),
-  });
+    annotations: Transaction.addToHistory.of(false),
+  }).state;
 };
 
 export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(function SourceEditor(
@@ -148,7 +167,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(fu
           update.docChanged &&
           !update.transactions.some((transaction) => transaction.annotation(externalChange))
         ) {
-          onChangeRef.current(update.state.doc.toString());
+          onChangeRef.current(update.state.sliceDoc());
         }
       }),
     [],
@@ -229,10 +248,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(fu
     if (!parent) {
       return;
     }
-    const state = EditorState.create({
-      doc: initialEditor.value,
-      extensions: initialEditor.extensions,
-    });
+    const state = sourceEditorState(initialEditor.value, initialEditor.extensions);
     const view = new EditorView({ parent, state });
     editor.current = view;
     const key = currentDocument.current;
@@ -279,13 +295,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(fu
       });
       restored = states.current.get(key);
       currentDocument.current = key;
-      view.setState(
-        restored?.state ??
-          EditorState.create({
-            doc: value,
-            extensions,
-          }),
-      );
+      view.setState(restored?.state ?? sourceEditorState(value, extensions));
     }
     view.dispatch({
       effects: [
@@ -299,7 +309,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, SourceEditorProps>(fu
     const authoritativeReplacement =
       previous !== undefined &&
       previous.replacementVersion !== replacementVersion &&
-      view.state.doc.toString() !== value;
+      view.state.sliceDoc() !== value;
     const preservedScroll = {
       top: restored?.scrollTop ?? view.scrollDOM.scrollTop,
       left: restored?.scrollLeft ?? view.scrollDOM.scrollLeft,
