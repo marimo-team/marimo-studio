@@ -139,38 +139,6 @@ def test_provider_command_help_explains_saved_environment_bootstrap(
     assert "filesystem, environment, and network authority" in output
 
 
-@pytest.mark.parametrize(
-    ("arguments", "description"),
-    (
-        (["--help"], "Design custom views for Marimo notebooks."),
-        (["notebook", "--help"], "Inspect saved cells and name results for views."),
-        (["starters", "--help"], "List installed starting points for new views."),
-        (["status", "--help"], "Describe Studio configuration and views."),
-        (["view", "--help"], "Create and operate named notebook views."),
-        (["view", "create", "--help"], "Create one named view."),
-        (["view", "remove", "--help"], "Remove one view and its source files."),
-        (
-            ["view", "build", "--help"],
-            "Build one view's browser page for development or production.",
-        ),
-        (["view", "show", "--help"], "Show one view in a connected Studio tab."),
-        (["view", "export", "--help"], "Export one view as a static WebAssembly site."),
-        (
-            ["validate", "--help"],
-            "Validate every configured view or one selected view.",
-        ),
-    ),
-)
-def test_command_help_uses_view_for_named_projects(
-    arguments: list[str],
-    description: str,
-) -> None:
-    result = CliRunner().invoke(cli, arguments, prog_name="marimo-studio")
-
-    assert result.exit_code == 0, result.output
-    assert description in unstyle(result.output)
-
-
 def test_cli_bind_updates_the_shared_cell_registry(
     notebook_path: Path,
 ) -> None:

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click import unstyle
-from click.testing import CliRunner
+from click.testing import CliRunner, Result
 
 import marimo_studio._views.sources as sources_module
 from marimo_studio._cli import cli
@@ -29,13 +31,61 @@ from marimo_studio.view_providers import SourceDocument, ViewProject
 from ..helpers import replace_app_shell
 
 
-def _owner_arguments(document: dict[str, object]) -> list[str]:
+def _owner_arguments(document: Mapping[str, object]) -> list[str]:
     return [
         "--catalog-generation",
         str(document["catalog_generation"]),
         "--view-generation",
         str(document["view_generation"]),
     ]
+
+
+def _read_document(
+    runner: CliRunner,
+    notebook: Path,
+    path: str,
+) -> dict[str, Any]:
+    result = runner.invoke(
+        cli,
+        [
+            "view",
+            "read",
+            "dashboard",
+            path,
+            "--target",
+            str(notebook),
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    return json.loads(result.stdout)
+
+
+def _write_document(
+    runner: CliRunner,
+    notebook: Path,
+    path: str,
+    document: Mapping[str, object],
+    content: str,
+    *,
+    json_output: bool = False,
+) -> Result:
+    arguments = [
+        "view",
+        "write",
+        "dashboard",
+        path,
+        "--target",
+        str(notebook),
+        "--expected-revision",
+        str(document["revision"]),
+        *_owner_arguments(document),
+        "--from",
+        "-",
+    ]
+    if json_output:
+        arguments.append("--json")
+    return runner.invoke(cli, arguments, input=content)
 
 
 def test_view_inspect_human_output_renders_the_provider_project_catalog(
@@ -106,64 +156,30 @@ def test_view_read_and_write_share_revision_aware_source_contract(
 ) -> None:
     prepare_view(notebook_path)
     runner = CliRunner()
-    loaded = runner.invoke(
-        cli,
-        [
-            "view",
-            "read",
-            "dashboard",
-            "index.html",
-            "--target",
-            str(notebook_path),
-            "--json",
-        ],
-    )
-
-    assert loaded.exit_code == 0, loaded.output
-    document = json.loads(loaded.stdout)
+    document = _read_document(runner, notebook_path, "index.html")
     studio = load_studio(notebook_path)
     assert document["catalog_generation"] == studio.catalog_generation
     assert document["view_generation"] == studio.view_generations["dashboard"]
     content = document["content"].replace("Dashboard", "CLI dashboard")
-    written = runner.invoke(
-        cli,
-        [
-            "view",
-            "write",
-            "dashboard",
-            "index.html",
-            "--target",
-            str(notebook_path),
-            "--expected-revision",
-            document["revision"],
-            *_owner_arguments(document),
-            "--from",
-            "-",
-            "--json",
-        ],
-        input=content,
+    written = _write_document(
+        runner,
+        notebook_path,
+        "index.html",
+        document,
+        content,
+        json_output=True,
     )
 
     assert written.exit_code == 0, written.output
     updated = json.loads(written.stdout)
     assert updated["revision"] != document["revision"]
     assert "CLI dashboard" in updated["content"]
-    stale = runner.invoke(
-        cli,
-        [
-            "view",
-            "write",
-            "dashboard",
-            "index.html",
-            "--target",
-            str(notebook_path),
-            "--expected-revision",
-            document["revision"],
-            *_owner_arguments(document),
-            "--from",
-            "-",
-        ],
-        input=document["content"],
+    stale = _write_document(
+        runner,
+        notebook_path,
+        "index.html",
+        document,
+        document["content"],
     )
     assert stale.exit_code != 0
     assert isinstance(stale.exception, SourceConflictError)
@@ -175,20 +191,7 @@ def test_view_write_rejects_an_identical_recreated_view(
 ) -> None:
     setup = prepare_view(notebook_path)
     runner = CliRunner()
-    loaded = runner.invoke(
-        cli,
-        [
-            "view",
-            "read",
-            "dashboard",
-            "index.html",
-            "--target",
-            str(notebook_path),
-            "--json",
-        ],
-    )
-    assert loaded.exit_code == 0, loaded.output
-    document = json.loads(loaded.stdout)
+    document = _read_document(runner, notebook_path, "index.html")
     retired = setup.root.with_name("retired-dashboard")
     setup.root.rename(retired)
     shutil.copytree(retired, setup.root)
@@ -197,22 +200,12 @@ def test_view_write_rejects_an_identical_recreated_view(
         lambda _target: pytest.fail("stale source owner reached provider bootstrap"),
     )
 
-    written = runner.invoke(
-        cli,
-        [
-            "view",
-            "write",
-            "dashboard",
-            "index.html",
-            "--target",
-            str(notebook_path),
-            "--expected-revision",
-            document["revision"],
-            *_owner_arguments(document),
-            "--from",
-            "-",
-        ],
-        input=document["content"].replace("Dashboard", "Stale write"),
+    written = _write_document(
+        runner,
+        notebook_path,
+        "index.html",
+        document,
+        document["content"].replace("Dashboard", "Stale write"),
     )
 
     assert isinstance(written.exception, ViewGenerationConflictError)
@@ -303,20 +296,7 @@ def test_view_manifest_write_rechecks_a_replacement_after_admission(
 ) -> None:
     setup = prepare_view(notebook_path)
     runner = CliRunner()
-    loaded = runner.invoke(
-        cli,
-        [
-            "view",
-            "read",
-            "dashboard",
-            "view.toml",
-            "--target",
-            str(notebook_path),
-            "--json",
-        ],
-    )
-    assert loaded.exit_code == 0, loaded.output
-    document = json.loads(loaded.stdout)
+    document = _read_document(runner, notebook_path, "view.toml")
     retired = setup.root.with_name("retired-dashboard")
     reload_owner = sources_module._reload_source_owner
     reloads = 0
@@ -343,22 +323,12 @@ def test_view_manifest_write_rechecks_a_replacement_after_admission(
 
     monkeypatch.setattr(sources_module, "_reload_source_owner", reload_then_replace)
 
-    written = runner.invoke(
-        cli,
-        [
-            "view",
-            "write",
-            "dashboard",
-            "view.toml",
-            "--target",
-            str(notebook_path),
-            "--expected-revision",
-            document["revision"],
-            *_owner_arguments(document),
-            "--from",
-            "-",
-        ],
-        input=document["content"] + '\n[options]\nmode = "compact"\n',
+    written = _write_document(
+        runner,
+        notebook_path,
+        "view.toml",
+        document,
+        document["content"] + '\n[options]\nmode = "compact"\n',
     )
 
     assert isinstance(written.exception, ViewGenerationConflictError)
@@ -471,40 +441,15 @@ def test_view_manifest_read_and_write_repair_a_malformed_manifest_without_bootst
         lambda _target: pytest.fail("view.toml triggered provider bootstrap"),
     )
     runner = CliRunner()
-
-    loaded = runner.invoke(
-        cli,
-        [
-            "view",
-            "read",
-            "dashboard",
-            "view.toml",
-            "--target",
-            str(notebook_path),
-            "--json",
-        ],
-    )
-
-    assert loaded.exit_code == 0, loaded.output
-    document = json.loads(loaded.stdout)
+    document = _read_document(runner, notebook_path, "view.toml")
     assert document["content"] == malformed
-    written = runner.invoke(
-        cli,
-        [
-            "view",
-            "write",
-            "dashboard",
-            "view.toml",
-            "--target",
-            str(notebook_path),
-            "--expected-revision",
-            document["revision"],
-            *_owner_arguments(document),
-            "--from",
-            "-",
-            "--json",
-        ],
-        input=repaired,
+    written = _write_document(
+        runner,
+        notebook_path,
+        "view.toml",
+        document,
+        repaired,
+        json_output=True,
     )
 
     assert written.exit_code == 0, written.output
@@ -521,40 +466,17 @@ def test_view_manifest_repair_rejects_a_changed_sibling_catalog(
     malformed = "schema = [\n"
     manifest.write_text(malformed, encoding="utf-8")
     runner = CliRunner()
-    loaded = runner.invoke(
-        cli,
-        [
-            "view",
-            "read",
-            "dashboard",
-            "view.toml",
-            "--target",
-            str(notebook_path),
-            "--json",
-        ],
-    )
-    assert loaded.exit_code == 0, loaded.output
-    document = json.loads(loaded.stdout)
+    document = _read_document(runner, notebook_path, "view.toml")
     retired = executive.root.with_name("retired-executive")
     executive.root.rename(retired)
     shutil.copytree(retired, executive.root)
 
-    written = runner.invoke(
-        cli,
-        [
-            "view",
-            "write",
-            "dashboard",
-            "view.toml",
-            "--target",
-            str(notebook_path),
-            "--expected-revision",
-            document["revision"],
-            *_owner_arguments(document),
-            "--from",
-            "-",
-        ],
-        input=repaired,
+    written = _write_document(
+        runner,
+        notebook_path,
+        "view.toml",
+        document,
+        repaired,
     )
 
     assert isinstance(written.exception, WorkspaceGenerationConflictError)
@@ -570,38 +492,15 @@ def test_view_manifest_repair_rejects_a_new_manifestless_sibling(
     malformed = "schema = [\n"
     manifest.write_text(malformed, encoding="utf-8")
     runner = CliRunner()
-    loaded = runner.invoke(
-        cli,
-        [
-            "view",
-            "read",
-            "dashboard",
-            "view.toml",
-            "--target",
-            str(notebook_path),
-            "--json",
-        ],
-    )
-    assert loaded.exit_code == 0, loaded.output
-    document = json.loads(loaded.stdout)
+    document = _read_document(runner, notebook_path, "view.toml")
     dashboard.root.parent.joinpath("incoming").mkdir()
 
-    written = runner.invoke(
-        cli,
-        [
-            "view",
-            "write",
-            "dashboard",
-            "view.toml",
-            "--target",
-            str(notebook_path),
-            "--expected-revision",
-            document["revision"],
-            *_owner_arguments(document),
-            "--from",
-            "-",
-        ],
-        input=repaired,
+    written = _write_document(
+        runner,
+        notebook_path,
+        "view.toml",
+        document,
+        repaired,
     )
 
     assert isinstance(written.exception, WorkspaceGenerationConflictError)
@@ -624,39 +523,15 @@ def test_view_manifest_write_keeps_an_external_provider_independent(
         lambda _target: pytest.fail("view.toml triggered provider bootstrap"),
     )
     runner = CliRunner()
-    loaded = runner.invoke(
-        cli,
-        [
-            "view",
-            "read",
-            "dashboard",
-            "view.toml",
-            "--target",
-            str(notebook_path),
-            "--json",
-        ],
-    )
-
-    assert loaded.exit_code == 0, loaded.output
-    document = json.loads(loaded.stdout)
+    document = _read_document(runner, notebook_path, "view.toml")
     updated = external + '\n[options]\nmode = "compact"\n'
-    written = runner.invoke(
-        cli,
-        [
-            "view",
-            "write",
-            "dashboard",
-            "view.toml",
-            "--target",
-            str(notebook_path),
-            "--expected-revision",
-            document["revision"],
-            *_owner_arguments(document),
-            "--from",
-            "-",
-            "--json",
-        ],
-        input=updated,
+    written = _write_document(
+        runner,
+        notebook_path,
+        "view.toml",
+        document,
+        updated,
+        json_output=True,
     )
 
     assert written.exit_code == 0, written.output
@@ -761,19 +636,7 @@ def test_view_write_bounds_and_decodes_replacement_source(
 ) -> None:
     prepare_view(notebook_path)
     runner = CliRunner()
-    loaded = runner.invoke(
-        cli,
-        [
-            "view",
-            "read",
-            "dashboard",
-            "index.html",
-            "--target",
-            str(notebook_path),
-            "--json",
-        ],
-    )
-    document = json.loads(loaded.stdout)
+    document = _read_document(runner, notebook_path, "index.html")
     monkeypatch.setattr("marimo_studio._cli.input.SOURCE_DOCUMENT_MAX_BYTES", 4)
     oversized = tmp_path / "oversized.html"
     oversized.write_bytes(b"12345")

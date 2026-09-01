@@ -264,18 +264,19 @@ def test_show_http_rejects_mixed_session_and_browser_selectors(
     assert mixed_activation.json()["field"] == "browser_client"
 
 
-@pytest.mark.parametrize(
-    ("method", "path", "payload", "error", "field"),
-    [
-        pytest.param(
+def test_browser_mutation_http_rejects_noncanonical_records(
+    notebook_path: Path,
+) -> None:
+    server = agent_edit_server(notebook_path)
+    cases = (
+        (
             "PATCH",
             "/_marimo-studio/views/dashboard/show",
             {},
             "invalid-show-request",
             "request",
-            id="activation",
         ),
-        pytest.param(
+        (
             "POST",
             "/_marimo-studio/activations/1/ack",
             {
@@ -285,9 +286,8 @@ def test_show_http_rejects_mixed_session_and_browser_selectors(
             },
             "invalid-activation-ack",
             None,
-            id="acknowledgement",
         ),
-        pytest.param(
+        (
             "POST",
             "/_marimo-studio/active-view-handoffs/handoff-operation-1",
             {
@@ -298,32 +298,21 @@ def test_show_http_rejects_mixed_session_and_browser_selectors(
             },
             "invalid-active-view-handoff",
             None,
-            id="handoff",
         ),
-    ],
-)
-def test_browser_mutation_http_rejects_noncanonical_records(
-    notebook_path: Path,
-    method: str,
-    path: str,
-    payload: dict[str, object],
-    error: str,
-    field: str | None,
-) -> None:
-    server = agent_edit_server(notebook_path)
+    )
 
     with TestClient(server.app) as client:
-        response = client.request(
-            method,
-            path,
-            headers=server.headers,
-            json=payload,
-        )
-
-    assert response.status_code == 400
-    assert response.json()["error"] == error
-    if field is not None:
-        assert response.json()["field"] == field
+        for method, path, payload, error, field in cases:
+            response = client.request(
+                method,
+                path,
+                headers=server.headers,
+                json=payload,
+            )
+            assert response.status_code == 400, path
+            assert response.json()["error"] == error, path
+            if field is not None:
+                assert response.json()["field"] == field, path
 
 
 def test_external_observation_uses_the_selected_browser_session() -> None:

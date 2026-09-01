@@ -221,43 +221,29 @@ def test_code_mode_validation_rejects_a_replacement_before_publication(
     assert not root.joinpath(".artifacts").exists()
 
 
-def test_agent_analysis_rejects_noncanonical_request_records(
+def test_agent_analysis_rejects_invalid_request_records(
     notebook_path: Path,
 ) -> None:
     server = agent_edit_server(notebook_path)
 
     with TestClient(server.app) as client:
-        response = client.post(
+        noncanonical = client.post(
             "/_marimo-studio/validate",
             headers=server.headers,
             json={"schema": 1, "view": "dashboard", "unexpected": True},
         )
-
-    assert response.status_code == 400
-    assert response.json()["error"] == "invalid-validation-request"
-
-
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("runtime_timeout", 301),
-        ("browser_timeout", 10**1000),
-    ],
-)
-def test_agent_analysis_rejects_an_out_of_range_timeout(
-    notebook_path: Path,
-    field: str,
-    value: int,
-) -> None:
-    server = agent_edit_server(notebook_path)
-
-    with TestClient(server.app) as client:
-        response = client.post(
+        out_of_range = client.post(
             "/_marimo-studio/validate",
             headers=server.headers,
-            json={"schema": 1, "view": "dashboard", field: value},
+            json={
+                "schema": 1,
+                "view": "dashboard",
+                "runtime_timeout": 301,
+            },
         )
 
-    assert response.status_code == 400
-    assert response.json()["error"] == "invalid-validation-request"
-    assert response.json()["field"] == field
+    assert noncanonical.status_code == 400
+    assert noncanonical.json()["error"] == "invalid-validation-request"
+    assert out_of_range.status_code == 400
+    assert out_of_range.json()["error"] == "invalid-validation-request"
+    assert out_of_range.json()["field"] == "runtime_timeout"

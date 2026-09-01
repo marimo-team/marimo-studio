@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -13,6 +14,26 @@ from marimo_studio._validation.progressive import ValidationRequest
 from marimo_studio.errors import ProtocolError
 
 from ..helpers import ready_runtime_status
+
+
+def _validation_evidence(
+    notebook: Path,
+    *,
+    observations: tuple[BrowserObservation, ...] = (),
+    browser_required: bool = False,
+) -> ValidationEvidence:
+    return ValidationEvidence(
+        notebook=notebook,
+        views=("dashboard",),
+        runtime="server",
+        revisions={"dashboard": "revision-1"},
+        static_checks=(),
+        runtime_checks=(),
+        runtime_skipped=None,
+        browser_observations=observations,
+        browser_required=browser_required,
+        issues=(),
+    )
 
 
 def test_http_errors_preserve_structured_details() -> None:
@@ -38,18 +59,7 @@ def test_validation_transport_budget_covers_runtime_and_browser_deadlines(
 ) -> None:
     notebook = tmp_path / "analysis.py"
     notebook.write_text("", encoding="utf-8")
-    report = ValidationEvidence(
-        notebook=notebook,
-        views=("dashboard",),
-        runtime="server",
-        revisions={"dashboard": "revision-1"},
-        static_checks=(),
-        runtime_checks=(),
-        runtime_skipped=None,
-        browser_observations=(),
-        browser_required=False,
-        issues=(),
-    )
+    report = _validation_evidence(notebook)
     captured: dict[str, object] = {}
 
     async def request(*_args, **kwargs):
@@ -86,18 +96,7 @@ def test_validation_rejects_a_browser_policy_downgrade(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
-    report = ValidationEvidence(
-        notebook=notebook,
-        views=("dashboard",),
-        runtime="server",
-        revisions={"dashboard": "revision-1"},
-        static_checks=(),
-        runtime_checks=(),
-        runtime_skipped=None,
-        browser_observations=(),
-        browser_required=False,
-        issues=(),
-    )
+    report = _validation_evidence(notebook)
 
     async def request(*_args: object, **_kwargs: object) -> dict[str, object]:
         return report.to_dict()
@@ -220,15 +219,9 @@ def test_validation_rejects_evidence_from_another_selected_browser(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
-    report = ValidationEvidence(
-        notebook=notebook,
-        views=("dashboard",),
-        runtime="server",
-        revisions={"dashboard": "revision-1"},
-        static_checks=(),
-        runtime_checks=(),
-        runtime_skipped=None,
-        browser_observations=(
+    report = _validation_evidence(
+        notebook,
+        observations=(
             BrowserObservation(
                 view="dashboard",
                 state="ready",
@@ -243,7 +236,6 @@ def test_validation_rejects_evidence_from_another_selected_browser(
             ),
         ),
         browser_required=True,
-        issues=(),
     )
 
     async def request(*_args: object, **_kwargs: object) -> dict[str, object]:
@@ -273,15 +265,9 @@ def test_code_mode_analysis_rejects_evidence_from_another_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     notebook = (tmp_path / "analysis.py").resolve()
-    report = ValidationEvidence(
-        notebook=notebook,
-        views=("dashboard",),
-        runtime="server",
-        revisions={"dashboard": "revision-1"},
-        static_checks=(),
-        runtime_checks=(),
-        runtime_skipped=None,
-        browser_observations=(
+    report = _validation_evidence(
+        notebook,
+        observations=(
             BrowserObservation(
                 view="dashboard",
                 state="ready",
@@ -295,7 +281,6 @@ def test_code_mode_analysis_rejects_evidence_from_another_session(
             ),
         ),
         browser_required=True,
-        issues=(),
     )
 
     async def request(*_args, **_kwargs):

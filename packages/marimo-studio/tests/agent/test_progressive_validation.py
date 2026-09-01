@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import shutil
-from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path, PurePosixPath
 
 import pytest
 
-import marimo_studio._validation.progressive as analysis_module
 import marimo_studio._validation.service as validation_service
 from marimo_studio._validation.evidence import (
     BrowserDiagnostic,
@@ -44,27 +42,18 @@ from ..helpers import ready_runtime_status
 
 
 @pytest.mark.parametrize(
-    ("field", "create", "value"),
+    ("field", "value"),
     [
-        (
-            "browser_timeout",
-            lambda value: ValidationOptions(browser_timeout=value),
-            10**1000,
-        ),
-        (
-            "runtime_timeout",
-            lambda value: ValidationOptions(runtime_timeout=value),
-            -(10**1000),
-        ),
+        ("browser_timeout", 10**1000),
+        ("runtime_timeout", -(10**1000)),
     ],
 )
-def test_validation_options_reject_oversized_timeout_integers(
+def test_validation_request_rejects_oversized_timeout_integers(
     field: str,
-    create: Callable[[int], ValidationOptions],
     value: int,
 ) -> None:
     with pytest.raises(CapabilityInputError) as raised:
-        create(value)
+        ValidationRequest.from_dict({"schema": 1, field: value})
 
     assert raised.value.code == "invalid-validation-request"
     assert raised.value.field == field
@@ -176,6 +165,60 @@ def _check_report(
     *checks: CheckResult,
 ) -> CheckReport:
     return CheckReport(studio.notebook, None, checks)
+
+
+def _passing_studio(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> StudioWorkspace:
+    prepare_view(notebook_path)
+    studio = load_studio(notebook_path)
+    monkeypatch.setattr(
+        validation_service,
+        "check_studio",
+        lambda studio, *_args, **_kwargs: _check_report(
+            studio,
+            CheckResult("static", "pass", "ready"),
+        ),
+    )
+    return studio
+
+
+async def _passing_runtime(
+    *_args: object,
+    **_kwargs: object,
+) -> tuple[CheckResult, ...]:
+    return (CheckResult("runtime", "pass", "ready"),)
+
+
+def _ready_observation(
+    view: str,
+    revision: str,
+    sequence: int = 0,
+) -> BrowserObservation:
+    return BrowserObservation(
+        view=view,
+        runtime="server",
+        revision=revision,
+        state="ready",
+        client_id="browser-client-1234",
+        runtime_instance="runtime-instance",
+        session_id="s_123456",
+        request_id=f"request-{view}",
+        sequence=sequence,
+        runtime_status=ready_runtime_status(view, revision),
+    )
+
+
+async def _observe_ready(
+    _studio: StudioWorkspace,
+    views: tuple[str, ...],
+    revisions: dict[str, str],
+) -> tuple[BrowserObservation, ...]:
+    return tuple(
+        _ready_observation(view, revisions[view], index)
+        for index, view in enumerate(views)
+    )
 
 
 def test_validation_levels_preserve_projection_repair_context(
@@ -291,13 +334,15 @@ def test_validation_skips_runtime_and_builds_repair_issues(
         runtime_called = True
         return ()
 
-    monkeypatch.setattr(analysis_module, "check_runtime_studio_isolated", runtime)
     report = asyncio.run(
-        validate_progressively(studio, ValidationOptions(require_browser=True))
+        validate_progressively(
+            studio,
+            ValidationOptions(require_browser=True),
+            runtime_checker=runtime,
+        )
     )
 
     assert not runtime_called
-    assert report.ok is False
     assert report.ok is False
     assert report.runtime_skipped is not None
     assert report.issues[0].to_dict() == {
@@ -316,49 +361,23 @@ def test_required_browser_evidence_controls_handoff_readiness(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    prepare_view(notebook_path)
-    studio = load_studio(notebook_path)
-    monkeypatch.setattr(
-        validation_service,
-        "check_studio",
-        lambda studio, *_args, **_kwargs: _check_report(
-            studio, CheckResult("static", "pass", "ready")
-        ),
-    )
-
-    async def runtime(*_args, **_kwargs):
-        return (CheckResult("runtime", "pass", "ready"),)
-
-    async def observe(_studio, views, revisions):
-        return tuple(
-            BrowserObservation(
-                view=view,
-                runtime="server",
-                revision=revisions[view],
-                state="ready",
-                client_id="browser-client-1234",
-                runtime_instance="runtime-instance",
-                session_id="s_123456",
-                request_id=f"request-{view}",
-                sequence=index,
-                runtime_status=ready_runtime_status(view, revisions[view]),
-            )
-            for index, view in enumerate(views)
-        )
-
-    monkeypatch.setattr(analysis_module, "check_runtime_studio_isolated", runtime)
+    studio = _passing_studio(notebook_path, monkeypatch)
     observed = asyncio.run(
         validate_progressively(
             studio,
             ValidationOptions(require_browser=True),
-            observe_browser=observe,
+            observe_browser=_observe_ready,
+            runtime_checker=_passing_runtime,
         )
     )
     unobserved = asyncio.run(
-        validate_progressively(studio, ValidationOptions(require_browser=True))
+        validate_progressively(
+            studio,
+            ValidationOptions(require_browser=True),
+            runtime_checker=_passing_runtime,
+        )
     )
 
-    assert observed.ok is True
     assert observed.ok is True
     missing_session = replace(
         observed,
@@ -367,7 +386,6 @@ def test_required_browser_evidence_controls_handoff_readiness(
         ),
     )
     assert missing_session.ok is False
-    assert unobserved.ok is False
     assert unobserved.ok is False
     assert unobserved.issues[0].code == "browser-not-requested"
     assert unobserved.to_dict()["summary"] == {
@@ -405,12 +423,12 @@ def _analyze_mounts(
         ),
     )
 
-    async def runtime(*_args, **_kwargs):
-        return (CheckResult("runtime", "pass", "ready"),)
-
-    monkeypatch.setattr(analysis_module, "check_runtime_studio_isolated", runtime)
     return asyncio.run(
-        validate_progressively(studio, ValidationOptions(require_browser=False))
+        validate_progressively(
+            studio,
+            ValidationOptions(require_browser=False),
+            runtime_checker=_passing_runtime,
+        )
     )
 
 
@@ -425,7 +443,6 @@ def test_validation_without_browser_uses_complete_runtime_evidence(
     )
 
     assert report.dynamic_browser_required is False
-    assert report.ok is True
     assert report.ok is True
     assert report.issues == ()
     stages = report.to_dict()["stages"]
@@ -462,7 +479,6 @@ def test_wildcard_mounts_require_browser_evidence_and_a_repair_action(
 
     assert report.dynamic_browser_required is True
     assert report.ok is False
-    assert report.ok is False
     assert [action.code for action in report.issues] == ["browser-not-requested"]
     stages = report.to_dict()["stages"]
     assert isinstance(stages, dict)
@@ -476,28 +492,17 @@ def test_browser_connection_errors_become_repair_issues(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    prepare_view(notebook_path)
-    studio = load_studio(notebook_path)
-    monkeypatch.setattr(
-        validation_service,
-        "check_studio",
-        lambda studio, *_args, **_kwargs: _check_report(
-            studio, CheckResult("static", "pass", "ready")
-        ),
-    )
-
-    async def runtime(*_args, **_kwargs):
-        return (CheckResult("runtime", "pass", "ready"),)
+    studio = _passing_studio(notebook_path, monkeypatch)
 
     async def observe(_studio, _views, _revisions):
         raise ProtocolError("The running Studio server is unavailable.")
 
-    monkeypatch.setattr(analysis_module, "check_runtime_studio_isolated", runtime)
     report = asyncio.run(
         validate_progressively(
             studio,
             ValidationOptions(require_browser=True),
             observe_browser=observe,
+            runtime_checker=_passing_runtime,
         )
     )
 
@@ -514,15 +519,7 @@ def test_unexpected_stage_failure_cancels_sibling_analysis_work(
     monkeypatch: pytest.MonkeyPatch,
     failing_stage: str,
 ) -> None:
-    prepare_view(notebook_path)
-    studio = load_studio(notebook_path)
-    monkeypatch.setattr(
-        validation_service,
-        "check_studio",
-        lambda studio, *_args, **_kwargs: _check_report(
-            studio, CheckResult("static", "pass", "ready")
-        ),
-    )
+    studio = _passing_studio(notebook_path, monkeypatch)
     sibling_cancelled = False
 
     async def exercise() -> None:
@@ -582,15 +579,7 @@ def test_validation_rejects_evidence_collected_across_source_revisions(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    prepare_view(notebook_path)
-    studio = load_studio(notebook_path)
-    monkeypatch.setattr(
-        validation_service,
-        "check_studio",
-        lambda studio, *_args, **_kwargs: _check_report(
-            studio, CheckResult("static", "pass", "ready")
-        ),
-    )
+    studio = _passing_studio(notebook_path, monkeypatch)
 
     async def runtime(
         studio: StudioWorkspace,
@@ -610,28 +599,11 @@ def test_validation_rejects_evidence_collected_across_source_revisions(
         )
         return (CheckResult("runtime", "pass", "ready"),)
 
-    async def observe(_studio, views, revisions):
-        return tuple(
-            BrowserObservation(
-                view=view,
-                runtime="server",
-                revision=revisions[view],
-                state="ready",
-                client_id="browser-client-1234",
-                runtime_instance="runtime-instance",
-                session_id="s_123456",
-                request_id=f"request-{view}",
-                sequence=index,
-                runtime_status=ready_runtime_status(view, revisions[view]),
-            )
-            for index, view in enumerate(views)
-        )
-
     report = asyncio.run(
         validate_progressively(
             studio,
             ValidationOptions(require_browser=True),
-            observe_browser=observe,
+            observe_browser=_observe_ready,
             runtime_checker=runtime,
         )
     )
@@ -644,16 +616,9 @@ def test_focused_analysis_ignores_an_unrelated_view_edit(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    prepare_view(notebook_path)
+    studio = _passing_studio(notebook_path, monkeypatch)
     prepare_view(notebook_path, "executive")
     studio = load_studio(notebook_path)
-    monkeypatch.setattr(
-        validation_service,
-        "check_studio",
-        lambda studio, *_args, **_kwargs: _check_report(
-            studio, CheckResult("static", "pass", "ready")
-        ),
-    )
 
     async def runtime(*_args, **_kwargs):
         template = studio.views["executive"].root / "index.html"
@@ -663,30 +628,11 @@ def test_focused_analysis_ignores_an_unrelated_view_edit(
         )
         return (CheckResult("runtime", "pass", "ready"),)
 
-    async def observe(_studio, views, revisions):
-        return (
-            BrowserObservation(
-                view=views[0],
-                runtime="server",
-                revision=revisions[views[0]],
-                state="ready",
-                client_id="browser-client-1234",
-                runtime_instance="runtime-instance",
-                session_id="s_123456",
-                request_id="request-dashboard",
-                sequence=1,
-                runtime_status=ready_runtime_status(
-                    views[0],
-                    revisions[views[0]],
-                ),
-            ),
-        )
-
     report = asyncio.run(
         validate_progressively(
             studio,
             ValidationOptions(view="dashboard", require_browser=True),
-            observe_browser=observe,
+            observe_browser=_observe_ready,
             runtime_checker=runtime,
         )
     )
@@ -699,44 +645,17 @@ def test_selected_view_deletion_becomes_a_source_unavailable_action(
     notebook_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    prepare_view(notebook_path)
-    studio = load_studio(notebook_path)
-    monkeypatch.setattr(
-        validation_service,
-        "check_studio",
-        lambda studio, *_args, **_kwargs: _check_report(
-            studio, CheckResult("static", "pass", "ready")
-        ),
-    )
+    studio = _passing_studio(notebook_path, monkeypatch)
 
     async def runtime(*_args, **_kwargs):
         (studio.views["dashboard"].root / "index.html").unlink()
         return (CheckResult("runtime", "pass", "ready"),)
 
-    async def observe(_studio, views, revisions):
-        return (
-            BrowserObservation(
-                view=views[0],
-                runtime="server",
-                revision=revisions[views[0]],
-                state="ready",
-                client_id="browser-client-1234",
-                runtime_instance="runtime-instance",
-                session_id="s_123456",
-                request_id="request-dashboard",
-                sequence=1,
-                runtime_status=ready_runtime_status(
-                    views[0],
-                    revisions[views[0]],
-                ),
-            ),
-        )
-
     report = asyncio.run(
         validate_progressively(
             studio,
             ValidationOptions(view="dashboard", require_browser=True),
-            observe_browser=observe,
+            observe_browser=_observe_ready,
             runtime_checker=runtime,
         )
     )

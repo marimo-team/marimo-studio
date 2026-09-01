@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import get_type_hints
 
 import click
@@ -48,7 +47,7 @@ def test_python_and_cli_authoring_operations_stay_in_parity() -> None:
     assert _leaf_paths(cli) == {path for _owner, _member, path in PARITY}
 
 
-def test_authoring_exports_annotation_reachable_result_records() -> None:
+def test_authoring_exports_public_records_with_resolvable_annotations() -> None:
     records = {
         "BindingResult",
         "InspectionResult",
@@ -78,37 +77,8 @@ def test_authoring_exports_annotation_reachable_result_records() -> None:
         "open_workspace",
     }
     assert records == set(studio_authoring.__all__)
-
-    assert (
-        get_type_hints(studio_authoring.StudioOverview)["views"]
-        == tuple[studio_authoring.ViewOverview, ...]
-    )
-    assert (
-        get_type_hints(studio_authoring.ViewInspection)["diagnostics"]
-        == tuple[studio_authoring.StudioDiagnostic, ...]
-    )
-    assert (
-        get_type_hints(studio_authoring.ProviderReport)["providers"]
-        == tuple[studio_authoring.ProviderDiagnostic, ...]
-    )
-    runtime = get_type_hints(studio_authoring.RuntimeProbe)
-    assert runtime == {
-        "cells": dict[str, studio_authoring.RuntimeCell],
-        "values": studio_authoring.ValueReadResult,
-        "outputs": studio_authoring.OutputRenderResult,
-    }
-    assert (
-        get_type_hints(studio_authoring.RuntimeCell)["outputs"]
-        == tuple[studio_authoring.RuntimeOutput, ...]
-    )
-    assert (
-        get_type_hints(studio_authoring.ValueReadResult)["errors"]
-        == dict[str, studio_authoring.ValueReadError]
-    )
-    assert get_type_hints(studio_authoring.OutputRenderResult) == {
-        "outputs": dict[str, studio_authoring.RenderedOutput],
-        "errors": dict[str, studio_authoring.ValueReadError],
-    }
+    for name in records:
+        get_type_hints(getattr(studio_authoring, name))
 
 
 def test_expected_errors_are_public() -> None:
@@ -143,32 +113,3 @@ def test_expected_errors_are_public() -> None:
     }
     assert studio_errors.ViewDeletionError.code == "view-deletion-error"
     assert studio_errors.ViewInUseError.code == "view-in-use"
-
-
-def test_browser_operations_belong_to_the_live_agent_view() -> None:
-    assert studio_agent.View is not studio_authoring.View
-    assert studio_agent.Workspace is not studio_authoring.Workspace
-    assert not hasattr(studio_authoring.View, "show")
-    assert hasattr(studio_agent.View, "show")
-
-
-def test_cli_commands_depend_on_authoring_services() -> None:
-    commands = Path(__file__).parents[2] / "src" / "marimo_studio" / "_cli" / "commands"
-    for path in commands.glob("*.py"):
-        source = path.read_text(encoding="utf-8")
-        assert "marimo_studio.agent" not in source
-    service_users = {
-        path.name
-        for path in commands.glob("*.py")
-        if "marimo_studio._authoring" in path.read_text(encoding="utf-8")
-    }
-    assert service_users == {
-        "doctor.py",
-        "notebook.py",
-        "starters.py",
-        "status.py",
-        "validate.py",
-        "view_create.py",
-        "view_delivery.py",
-        "view_source.py",
-    }

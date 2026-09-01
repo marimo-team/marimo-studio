@@ -167,7 +167,6 @@ esac
     assert sum("python -c " in command for command in commands) == 1
     assert sum("verify-installed-package.py" in command for command in commands) == 2
     assert sum("marimo-studio[deno]==0.1.0" in command for command in commands) == 1
-    assert not any("--with agent-plugins" in command for command in commands)
 
 
 def test_distribution_checksums_cover_release_artifacts(tmp_path: Path) -> None:

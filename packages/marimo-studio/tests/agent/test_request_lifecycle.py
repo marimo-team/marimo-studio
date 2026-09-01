@@ -22,17 +22,12 @@ from ..app_helpers import configured
 from ..client_test_support import bind_native_session
 
 
-def test_observation_disconnect_clears_the_browser_operation(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    studio = configured(notebook_path)
-    notebook_scope = NotebookScope.create(studio.notebook)
+def _native_context(studio: StudioWorkspace) -> Any:
     editor_session = SimpleNamespace(
         initialization_id="notebook.py",
         app_file_manager=SimpleNamespace(path=studio.notebook),
     )
-    context: Any = SimpleNamespace(
+    return SimpleNamespace(
         server_token="server-token",
         file_key="notebook.py",
         notebook=studio.notebook,
@@ -42,6 +37,15 @@ def test_observation_disconnect_clears_the_browser_operation(
             )
         ),
     )
+
+
+def test_observation_disconnect_clears_the_browser_operation(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = configured(notebook_path)
+    notebook_scope = NotebookScope.create(studio.notebook)
+    context = _native_context(studio)
 
     async def project_runtime(*_args: object) -> object:
         return SimpleNamespace(instance="runtime-instance")
@@ -170,20 +174,7 @@ def test_already_disconnected_observation_skips_source_capture(
 ) -> None:
     studio = configured(notebook_path)
     notebook_scope = NotebookScope.create(studio.notebook)
-    editor_session = SimpleNamespace(
-        initialization_id="notebook.py",
-        app_file_manager=SimpleNamespace(path=studio.notebook),
-    )
-    context: Any = SimpleNamespace(
-        server_token="server-token",
-        file_key="notebook.py",
-        notebook=studio.notebook,
-        _session_manager=SimpleNamespace(
-            get_session=lambda session_id: (
-                editor_session if str(session_id) == "s_123456" else None
-            )
-        ),
-    )
+    context = _native_context(studio)
     snapshots = 0
 
     async def snapshot(_view: str) -> object:
@@ -268,20 +259,7 @@ def test_show_disconnect_clears_the_browser_operation(
 ) -> None:
     studio = configured(notebook_path)
     notebook_scope = NotebookScope.create(studio.notebook)
-    editor_session = SimpleNamespace(
-        initialization_id="notebook.py",
-        app_file_manager=SimpleNamespace(path=studio.notebook),
-    )
-    context: Any = SimpleNamespace(
-        server_token="server-token",
-        file_key="notebook.py",
-        notebook=studio.notebook,
-        _session_manager=SimpleNamespace(
-            get_session=lambda session_id: (
-                editor_session if str(session_id) == "s_123456" else None
-            )
-        ),
-    )
+    context = _native_context(studio)
 
     async def exercise() -> tuple[int, object | None]:
         client_id = "browser-client-1234"

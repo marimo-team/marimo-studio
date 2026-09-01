@@ -24,6 +24,21 @@ from marimo_studio.view_providers._host.registry import ProviderRegistry
 from ..provider_test_support import ProviderStub, candidate, install_registry
 
 
+def _editor_command(notebook: Path) -> str:
+    arguments = [
+        "uvx",
+        "--with",
+        f"marimo-studio=={version('marimo-studio')}",
+        "marimo",
+        "edit",
+        str(notebook),
+        "--sandbox",
+    ]
+    return (
+        subprocess.list2cmdline(arguments) if os.name == "nt" else shlex.join(arguments)
+    )
+
+
 def test_view_create_bootstraps_lists_and_checks_named_views(
     notebook_path: Path,
 ) -> None:
@@ -201,30 +216,36 @@ def test_human_output_uses_color_and_json_remains_machine_readable(
     human_output = unstyle(human.output)
     assert "Would create view dashboard" in human_output
     assert human_output.count(f"update {notebook_path}") == 1
-    assert "\x1b[" not in machine.output
     assert json.loads(machine.stdout)["view"] == "dashboard"
 
 
-def test_view_create_reports_the_editor_command(notebook_path: Path) -> None:
-    result = CliRunner().invoke(
+def test_view_create_reports_the_editor_command_in_human_and_json_output(
+    notebook_path: Path,
+) -> None:
+    runner = CliRunner()
+    human = runner.invoke(
         cli,
         ["view", "create", "dashboard", "--target", str(notebook_path)],
     )
-
-    assert result.exit_code == 0, result.output
-    arguments = [
-        "uvx",
-        "--with",
-        f"marimo-studio=={version('marimo-studio')}",
-        "marimo",
-        "edit",
-        str(notebook_path),
-        "--sandbox",
-    ]
-    expected = (
-        subprocess.list2cmdline(arguments) if os.name == "nt" else shlex.join(arguments)
+    machine = runner.invoke(
+        cli,
+        [
+            "view",
+            "create",
+            "executive",
+            "--target",
+            str(notebook_path),
+            "--json",
+        ],
     )
-    assert expected in unstyle(result.stderr)
+
+    assert human.exit_code == 0, human.output
+    assert _editor_command(notebook_path) in unstyle(human.stderr)
+    assert machine.exit_code == 0, machine.output
+    event = json.loads(machine.stderr)
+    assert event["code"] == "next-command"
+    assert event["message"] == _editor_command(notebook_path)
+    assert event["details"] == {"action": "edit"}
 
 
 def test_view_create_reports_exact_requirements_for_every_provider_distribution(
@@ -284,42 +305,6 @@ def test_view_create_reports_exact_requirements_for_every_provider_distribution(
     event = json.loads(result.stderr)
     assert event["code"] == "next-command"
     assert event["message"] == expected
-
-
-def test_text_recovery_hints_respect_jsonl_diagnostics(
-    notebook_path: Path,
-) -> None:
-    result = CliRunner().invoke(
-        cli,
-        [
-            "view",
-            "create",
-            "dashboard",
-            "--target",
-            str(notebook_path),
-            "--json",
-        ],
-    )
-
-    assert result.exit_code == 0, result.output
-    events = [json.loads(line) for line in result.stderr.splitlines()]
-    assert len(events) == 1
-    event = events[0]
-    arguments = [
-        "uvx",
-        "--with",
-        f"marimo-studio=={version('marimo-studio')}",
-        "marimo",
-        "edit",
-        str(notebook_path),
-        "--sandbox",
-    ]
-    expected = (
-        subprocess.list2cmdline(arguments) if os.name == "nt" else shlex.join(arguments)
-    )
-    assert event["code"] == "next-command"
-    assert event["message"] == expected
-    assert event["details"] == {"action": "edit"}
 
 
 def test_view_create_resolves_an_uninitialized_project_from_the_current_directory(

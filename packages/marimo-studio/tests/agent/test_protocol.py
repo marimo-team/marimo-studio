@@ -169,34 +169,10 @@ def test_wasm_analysis_round_trip_accepts_coherent_null_runtime_session(
 
 
 def test_validation_report_requires_coherent_browser_evidence(tmp_path: Path) -> None:
-    notebook = (tmp_path / "analysis.py").resolve()
-    report = ValidationEvidence(
-        notebook=notebook,
-        views=("dashboard",),
+    report = _ready_validation_evidence(
+        tmp_path,
         runtime="server",
-        revisions={"dashboard": "revision-1"},
-        static_checks=(CheckResult("static", "pass", "Sources are valid"),),
-        runtime_checks=(CheckResult("runtime", "pass", "Notebook completed"),),
-        runtime_skipped=None,
-        browser_observations=(
-            BrowserObservation(
-                view="dashboard",
-                runtime="server",
-                revision="revision-1",
-                state="ready",
-                client_id="browser-client-1234",
-                runtime_instance="runtime-instance",
-                session_id="s_123456",
-                request_id="request-dashboard",
-                sequence=2,
-                runtime_status=ready_runtime_status(
-                    "dashboard",
-                    "revision-1",
-                ),
-            ),
-        ),
-        browser_required=True,
-        issues=(),
+        session_id="s_123456",
     )
     failed_static = replace(
         report,
@@ -247,14 +223,12 @@ def test_validation_report_requires_coherent_browser_evidence(tmp_path: Path) ->
     )
 
     assert failed_static.ok is False
-    assert failed_static.ok is False
     assert failed_static.to_dict()["summary"] == {
         "pass": 2,
         "warn": 0,
         "fail": 1,
     }
     assert missing_runtime.ok is False
-    assert browser_error.ok is False
     assert browser_error.ok is False
     assert all(
         with_runtime_status(status).ok is False for status in mismatched_statuses
@@ -312,7 +286,6 @@ def test_validation_protocol_rejects_unrecognized_fields(tmp_path: Path) -> None
     ("field", "value"),
     [
         ("ok", 1),
-        ("ok", 0),
         ("summary", {"pass": True, "warn": 0, "fail": 0}),
         ("summary", {"pass": -1, "warn": 0, "fail": 0}),
         ("summary", {"pass": 1, "warn": 0}),

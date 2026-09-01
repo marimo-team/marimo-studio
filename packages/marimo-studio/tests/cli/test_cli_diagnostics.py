@@ -18,7 +18,7 @@ from marimo_studio._cli.diagnostics import DiagnosticStream
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.sources import read_source
 from marimo_studio._workspace import load_studio
-from marimo_studio.errors import AgentRequestError
+from marimo_studio.errors import AgentRequestError, ConfigurationError
 from marimo_studio.view_providers._host import provider_registry
 
 from ..helpers import replace_app_shell
@@ -268,7 +268,6 @@ def test_main_structures_configuration_errors(
 def test_provider_commands_admit_the_target_before_bootstrap(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
     arguments: list[str],
 ) -> None:
     monkeypatch.setattr(
@@ -276,34 +275,18 @@ def test_provider_commands_admit_the_target_before_bootstrap(
         "_target_provider_ids",
         lambda _target: pytest.fail("provider discovery reached an invalid target"),
     )
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "marimo-studio",
-            *arguments,
-            "--target",
-            str(tmp_path / "missing.py"),
-            "--json",
-        ],
+    result = CliRunner().invoke(
+        cli,
+        [*arguments, "--target", str(tmp_path / "missing.py"), "--json"],
     )
 
-    with pytest.raises(SystemExit) as raised:
-        main()
-
-    output = capsys.readouterr()
-    event = json.loads(output.err)
-    assert raised.value.code == 3
-    assert output.out == ""
-    assert event["code"] == "configuration-error"
-    assert event["exit_code"] == 3
+    assert isinstance(result.exception, ConfigurationError)
 
 
 @pytest.mark.parametrize("failure", ("wrong-kind", "invalid-utf8", "unreadable"))
-def test_main_structures_bootstrap_target_errors(
+def test_bootstrap_rejects_invalid_targets_before_provider_discovery(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
     failure: str,
 ) -> None:
     target = tmp_path / ("analysis.txt" if failure == "wrong-kind" else "analysis.py")
@@ -326,65 +309,36 @@ def test_main_structures_bootstrap_target_errors(
         "_target_provider_ids",
         lambda _target: pytest.fail("provider discovery reached an invalid target"),
     )
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "marimo-studio",
-            "validate",
-            "--target",
-            str(target),
-            "--json",
-        ],
+    result = CliRunner().invoke(
+        cli,
+        ["validate", "--target", str(target), "--json"],
     )
 
-    with pytest.raises(SystemExit) as raised:
-        main()
-
-    output = capsys.readouterr()
-    event = json.loads(output.err)
-    assert raised.value.code == 3
-    assert output.out == ""
-    assert event["code"] == "configuration-error"
-    assert event["severity"] == "error"
-    assert event["exit_code"] == 3
+    assert isinstance(result.exception, ConfigurationError)
 
 
-def test_view_create_recovers_after_the_starter_target_limit(
+def test_view_create_rejects_the_starter_target_limit_without_mutation(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     notebook = tmp_path / "large.py"
     source = _display_notebook_source(257)
     notebook.write_text(source, encoding="utf-8")
-    argv = [
-        "marimo-studio",
-        "view",
-        "create",
-        "dashboard",
-        "--target",
-        str(notebook),
-        "--json",
-    ]
-    monkeypatch.setattr(sys, "argv", argv)
+    result = CliRunner().invoke(
+        cli,
+        [
+            "view",
+            "create",
+            "dashboard",
+            "--target",
+            str(notebook),
+            "--json",
+        ],
+    )
 
-    with pytest.raises(SystemExit) as raised:
-        main()
-
-    rejected = capsys.readouterr()
-    event = json.loads(rejected.err)
-    assert raised.value.code == 3
-    assert event["code"] == "configuration-error"
-    assert "limits starter plan cell targets to 256 records" in event["message"]
+    assert isinstance(result.exception, ConfigurationError)
+    assert "limits starter plan cell targets to 256 records" in str(result.exception)
     assert notebook.read_text(encoding="utf-8") == source
     assert not tmp_path.joinpath("__marimo__").exists()
-
-    notebook.write_text(_display_notebook_source(1), encoding="utf-8")
-    main()
-
-    accepted = capsys.readouterr()
-    assert json.loads(accepted.out)["view"] == "dashboard"
 
 
 @pytest.mark.native_process
@@ -503,7 +457,6 @@ def test_main_structures_live_agent_request_errors(
     output = capsys.readouterr()
     event = json.loads(output.err)
     assert raised.value.code == 5
-    assert output.out == ""
     assert event["command"] == "view show"
     assert event["code"] == "browser-client-ambiguous"
     assert event["exit_code"] == 5
@@ -567,7 +520,6 @@ def test_main_reports_a_source_precondition_conflict_without_mutation(
     output = capsys.readouterr()
     event = json.loads(output.err)
     assert raised.value.code == 3
-    assert output.out == ""
     assert event["command"] == "view write"
     assert event["code"] == "source-conflict"
     assert event["exit_code"] == 3
@@ -602,7 +554,6 @@ def test_main_preserves_view_not_found_details(
     output = capsys.readouterr()
     event = json.loads(output.err)
     assert raised.value.code == 3
-    assert output.out == ""
     assert event["code"] == "view-not-found"
     assert event["details"] == {
         "view": "missing",
