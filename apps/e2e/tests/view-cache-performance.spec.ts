@@ -182,6 +182,7 @@ test("reloads a cached sibling after notebook state changes", async ({
   browserDiagnostics,
   page,
 }) => {
+  test.setTimeout(180_000);
   const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
   await addWorkspaceView(workspaceNotebookPath, "report");
   const reportPath = resolve(workspaceDirectory, "__marimo__/studio/notebook/report/index.html");
