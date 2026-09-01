@@ -44,6 +44,7 @@ class BundledStarter:
 StarterCatalog = Mapping[str, BundledStarter]
 
 _MARKER_NAME = re.compile(r"__[A-Z0-9_]+__")
+_LINE_SEPARATOR = re.compile(r"\r\n|\r|\n")
 
 
 def starter_catalog(*starters: BundledStarter) -> StarterCatalog:
@@ -102,8 +103,25 @@ def _tree_files(
             except UnicodeDecodeError:
                 files[relative] = payload
                 continue
+            separators = _LINE_SEPARATOR.findall(source)
+            line_separator = (
+                separators[0]
+                if separators and all(item == separators[0] for item in separators)
+                else None
+            )
+
+            def replacement(
+                match: re.Match[str],
+                separator: str | None = line_separator,
+            ) -> str:
+                value = replacements[match.group(0)]
+                if separator is None:
+                    return value
+                normalized = _LINE_SEPARATOR.sub("\n", value)
+                return normalized.replace("\n", separator)
+
             rendered = marker_pattern.sub(
-                lambda match: replacements[match.group(0)],
+                replacement,
                 source,
             )
             files[relative] = rendered.encode()

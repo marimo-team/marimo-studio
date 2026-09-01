@@ -113,6 +113,39 @@ def test_bundled_starter_preserves_binary_files(
     assert plan.files[PurePosixPath("public/mark.png")] == image
 
 
+def test_bundled_starter_matches_replacement_line_endings_to_its_resource(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = _fixture_package(
+        tmp_path,
+        monkeypatch,
+        {
+            "default/__init__.py": "",
+            "default/files/index.html": b"<main>\r\n__BODY__\r\n</main>\r\n",
+        },
+    )
+    info = _starter()
+    starter = BundledStarter(
+        info=info,
+        package=package,
+        render=lambda _context: StarterRendering(
+            {"__BODY__": "first\nsecond"},
+            (),
+        ),
+    )
+
+    plan = create_starter(
+        starter_catalog(starter),
+        info,
+        provider_starter_context(tmp_path),
+    )
+
+    assert plan.files[PurePosixPath("index.html")] == (
+        b"<main>\r\nfirst\r\nsecond\r\n</main>\r\n"
+    )
+
+
 def test_reveal_starter_uses_markdown_title_and_notebook_cells(
     tmp_path: Path,
 ) -> None:
