@@ -25,6 +25,10 @@ ruleTester.run("anti-slop/no-unsafe-dictionary-type", noUnsafeDictionaryTypeRule
     "import type { Base } from './owner'; interface Empty extends Base {} type Values = Record<string, Empty>;",
     "namespace Domain { export interface Base { readonly id: string } } interface Empty extends Domain.Base {} type Values = Record<string, Empty>;",
     "interface Left extends Right {} interface Right extends Left {} type Values = Record<string, Left>;",
+    "type Values = { outer: string }; function owner() { type Values = { value: string }; const result: Values = { value: 'ok' }; }",
+    "class Value { name!: string } interface Value {} type Values = Record<string, Value>;",
+    "namespace Types { export interface Value { name: string } } import Value = Types.Value; type Values = Record<string, Value>;",
+    "export {}; namespace globalThis { export type Record<Key, Value> = { key: Key; value: Value }; } type Values = globalThis.Record<string, unknown>;",
   ],
   invalid: [
     {
@@ -113,6 +117,22 @@ ruleTester.run("anti-slop/no-unsafe-dictionary-type", noUnsafeDictionaryTypeRule
     },
     {
       code: "namespace Domain { export interface Base {} } interface Empty extends Domain.Base {} type Values = Record<string, Empty>;",
+      errors: [error],
+    },
+    {
+      code: "type Values = { outer: string }; function owner() { type Values = Record<string, unknown>; const result: Values = {}; }",
+      errors: [error],
+    },
+    {
+      code: "interface Empty { first?: never } interface Empty { second?: never } type Values = Record<string, Empty>;",
+      errors: [error],
+    },
+    {
+      code: "namespace Types { export interface Empty {} } import Empty = Types.Empty; type Values = Record<string, Empty>;",
+      errors: [error],
+    },
+    {
+      code: "type Values = globalThis.Record<string, unknown>;",
       errors: [error],
     },
   ],

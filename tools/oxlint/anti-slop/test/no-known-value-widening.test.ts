@@ -36,6 +36,15 @@ ruleTester.run("anti-slop/no-known-value-widening", noKnownValueWideningRule, {
     "interface Result { readonly [key: string]: number; readonly id: number } const result: Result = { id: 1 };",
     "interface Result { readonly [key: string]: number } interface Result { readonly id: number } const result: Result = { id: 1 };",
     "type Result = { readonly [key: string]: number; readonly id: number }; const result: Result = { id: 1 };",
+    "type Box<Value> = { readonly value: Value }; const value: Box<object> = { value: {} };",
+    "interface Base { readonly [key: string]: number } interface Values extends Base { readonly id: number } const values: Values = { id: 1 };",
+    "type Base<Key extends PropertyKey> = Record<Key, number>; interface Values extends Base<'id'> {} const values: Values = { id: 1 };",
+    "class Base { readonly [key: string]: number; readonly id = 1 } interface Values extends Base {} const values: Values = { id: 1 };",
+    "class Base { readonly [key: string]: number; constructor(readonly id: number) {} } interface Values extends Base {} const values: Values = { id: 1 };",
+    "namespace Domain { export class Base { readonly [key: string]: number; readonly id = 1 } } interface Values extends Domain.Base {} const values: Values = { id: 1 };",
+    "import type { Base } from './owner'; interface Values extends Base {} const values: Values = { item: 1 };",
+    "namespace Domain { export type Values = { readonly id: number } } import Values = Domain.Values; const values: Values = { id: 1 };",
+    'export {}; namespace globalThis { export type Record<Key, Value> = { key: Key; value: Value }; } const values: globalThis.Record<string, string> = { key: "name", value: "Ada" };',
     "const fields: { [K in string & 'id']: number } = { id: 1 };",
     "declare const condition: boolean; declare const external: unknown; const widened: unknown = condition ? { id: 1 } : external;",
     "declare function touch(): void; declare function load(): unknown; const widened: unknown = (touch(), load());",
@@ -216,6 +225,50 @@ ruleTester.run("anti-slop/no-known-value-widening", noKnownValueWideningRule, {
     },
     {
       code: "type Values = { [key: string]: number; readonly id?: number }; const values: Values = { item: 1 };",
+      errors: [error],
+    },
+    {
+      code: "type Box<Value> = Value; const value: Box<object> = { id: 1 };",
+      errors: [error],
+    },
+    {
+      code: "interface Base { [key: string]: number } interface Values extends Base {} const values: Values = { item: 1 };",
+      errors: [error],
+    },
+    {
+      code: "type Base = { [key: string]: number }; interface Values extends Base {} const values: Values = { item: 1 };",
+      errors: [error],
+    },
+    {
+      code: "type Base<Key extends PropertyKey> = Record<Key, number>; interface Values extends Base<string> {} const values: Values = { item: 1 };",
+      errors: [error],
+    },
+    {
+      code: "class Base { readonly [key: string]: number } interface Values extends Base {} const values: Values = { item: 1 };",
+      errors: [error],
+    },
+    {
+      code: "class Base { readonly [key: string]: number; constructor(id: number) {} } interface Values extends Base {} const values: Values = { item: 1 };",
+      errors: [error],
+    },
+    {
+      code: "class Base { readonly [key: string]: number; constructor(readonly id?: number) {} } interface Values extends Base {} const values: Values = { item: 1 };",
+      errors: [error],
+    },
+    {
+      code: "namespace Domain { export class Base { readonly [key: string]: number } } interface Values extends Domain.Base {} const values: Values = { item: 1 };",
+      errors: [error],
+    },
+    {
+      code: "namespace Domain { export type Values = Record<string, number> } import Values = Domain.Values; const values: Values = { item: 1 };",
+      errors: [error],
+    },
+    {
+      code: "interface Base { [key: string]: number } interface Values extends Base {} const fields: { [Key in keyof Values]: number } = { item: 1 };",
+      errors: [error],
+    },
+    {
+      code: "const values: globalThis.Record<string, string> = { name: 'Ada' };",
       errors: [error],
     },
     {

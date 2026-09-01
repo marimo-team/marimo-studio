@@ -16,6 +16,7 @@ ruleTester.run(
       "const registry = { // SAFETY: Validation established the property name.\n[input as string]: value };",
       "const value = { id: input } as const;",
       "// SAFETY: Validation established the owner contract.\nconst value = <Owner>input;",
+      "// SAFETY: Validation established the string contract.\nconst value = (() => input as string)();",
     ],
     invalid: [
       {
@@ -44,6 +45,18 @@ ruleTester.run(
       },
       {
         code: "const value = <Owner>input;",
+        errors: [error],
+      },
+      {
+        code: "// SAFETY: The callback registration is controlled.\nconst callback = () => input as string;",
+        errors: [error],
+      },
+      {
+        code: "// SAFETY: The function registration is controlled.\nfunction consume(value = input as string) {}",
+        errors: [error],
+      },
+      {
+        code: "// SAFETY: The class registration is controlled.\nconst Model = class extends (input as Constructor) {};",
         errors: [error],
       },
     ],
