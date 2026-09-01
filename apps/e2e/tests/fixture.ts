@@ -32,6 +32,7 @@ import {
   observeBrowserContext,
   type BrowserDiagnostics,
   type BrowserDiagnosticsScope,
+  type BrowserResponseRecovery,
   type ProjectionRefreshCapture,
   type RequestAbortCapture,
   type ResponseTransitionCapture,
@@ -238,13 +239,30 @@ export const labeledSlider = (root: FrameLocator | Locator, label: RegExp | stri
 export const editorSlider = (page: Page, label: RegExp | string = /^Scale/) =>
   labeledSlider(editorFrame(page), label);
 
+const PREVIEW_TIMEOUT = 65_000;
+
+export const expectEditorModelReplayRecovery = (diagnostics: BrowserDiagnostics) => {
+  const recovery: BrowserResponseRecovery = diagnostics.expectConsole({
+    type: "error",
+    text: /^Error: Model not found for key: [a-f\d]{32}\n\s+at http:\/\/127\.0\.0\.1:\d+\/_marimo-studio\/editor\/assets\/state-[^/\s]+\.js:\d+:\d+$/,
+    required: false,
+  });
+  return {
+    recovered: async (page: Page): Promise<void> => {
+      await expect(editorFrame(page).getByRole("button", { name: "Widget count: 7" })).toBeVisible({
+        timeout: PREVIEW_TIMEOUT,
+      });
+      recovery.recovered();
+    },
+  };
+};
+
 export const presentationFrame = (page: Page): FrameLocator =>
   page.frameLocator("iframe#marimo-studio-presentation");
 
 export const previewFrame = (page: Page, runtime = "server"): FrameLocator =>
   page.frameLocator(`iframe[data-preview-runtime-frame="${runtime}"]`);
 
-const PREVIEW_TIMEOUT = 65_000;
 export const WASM_PREVIEW_TIMEOUT = 125_000;
 
 const waitForPreviewFrame = async (page: Page, selector: string, timeout = PREVIEW_TIMEOUT) => {

@@ -10,6 +10,7 @@ import {
   captureProjectionRefresh,
   editorFrame,
   expect,
+  expectEditorModelReplayRecovery,
   readWorkspaceFile,
   recoverRequestAbort,
   retireWorkspacePage,
@@ -180,6 +181,7 @@ test("reloads a cached sibling after notebook state changes", async ({
   browserDiagnostics,
   page,
 }) => {
+  const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
   await addWorkspaceView(workspaceNotebookPath, "report");
   const reportPath = resolve(workspaceDirectory, "__marimo__/studio/notebook/report/index.html");
   const reportSource = await readWorkspaceFile(reportPath);
@@ -194,6 +196,7 @@ test("reloads a cached sibling after notebook state changes", async ({
   await writeWorkspaceFile(reportPath, projectedReport);
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
+  await editorModelRecovery.recovered(page);
   const abandonedHandoffs = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin,
     method: "POST",

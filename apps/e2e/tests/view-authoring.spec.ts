@@ -15,6 +15,7 @@ import {
   dashboardHtmlPath,
   editorFrame,
   expect,
+  expectEditorModelReplayRecovery,
   expectSupersededRenewalConfig,
   labeledSlider,
   plainDashboardHtmlPath,
@@ -319,11 +320,7 @@ test("publishes visible edits from each built-in source model", async ({
   for (const candidate of cases) {
     const candidatePage = await page.context().newPage();
     await test.step(`${candidate.view} edit`, async () => {
-      const editorModelRecovery = browserDiagnostics.expectConsole({
-        type: "error",
-        text: /^Error: Model not found for key: [a-f\d]{32}\n\s+at http:\/\/127\.0\.0\.1:\d+\/_marimo-studio\/editor\/assets\/state-[^/\s]+\.js:\d+:\d+$/,
-        required: false,
-      });
+      const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
       try {
         await candidatePage.goto(`/studio/${candidate.view}/?file=notebook.py`);
         const preview = await waitForViewPreview(candidatePage, candidate.view, "server", 120_000);
@@ -332,7 +329,7 @@ test("publishes visible edits from each built-in source model", async ({
           labeledSlider(preview.locator('marimo-cell[name="controls"]'), /^Scale/),
         ).toBeVisible();
         await expect(preview.getByRole("button", { name: "Widget count: 7" })).toBeVisible();
-        editorModelRecovery.recovered();
+        await editorModelRecovery.recovered(candidatePage);
 
         const sourceTab = candidatePage.getByRole("tab", { name: candidate.path });
         if (!(await sourceTab.isVisible())) {
@@ -617,6 +614,7 @@ test("keeps relative navigation public across direct view reloads", async ({
 });
 
 test("creates a view and removes its files", async ({ browserDiagnostics, page }) => {
+  const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
     2,
@@ -639,6 +637,7 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
   });
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
+  await editorModelRecovery.recovered(page);
   await initialWorkspaceStream;
 
   await page.getByLabel("Switch view").click();
@@ -689,10 +688,15 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
 test.describe("touch input", () => {
   test.use({ hasTouch: true });
 
-  test("keeps view removal directly available without hover", async ({ page }) => {
+  test("keeps view removal directly available without hover", async ({
+    browserDiagnostics,
+    page,
+  }) => {
+    const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
     await addWorkspaceView(workspaceNotebookPath, "report");
     await page.goto(studioEntryUrl);
     await waitForPreview(page);
+    await editorModelRecovery.recovered(page);
     await page.getByLabel("Switch view").tap();
     await page.getByLabel("Remove report view").tap();
 

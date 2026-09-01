@@ -1,6 +1,13 @@
-import { expect, test, waitForViewPreview, writeViewSource } from "./fixture.ts";
+import {
+  expect,
+  expectEditorModelReplayRecovery,
+  test,
+  waitForViewPreview,
+  writeViewSource,
+} from "./fixture.ts";
 
-test("publishes Vanilla local CSS and JavaScript sources", async ({ page }) => {
+test("publishes Vanilla local CSS and JavaScript sources", async ({ browserDiagnostics, page }) => {
+  const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
   const artifactResponses: Array<{ asset: string; status: number }> = [];
   page.on("response", (response) => {
     const match = new URL(response.url()).pathname.match(
@@ -15,6 +22,7 @@ test("publishes Vanilla local CSS and JavaScript sources", async ({ page }) => {
   });
   await page.goto("/studio/vanilla-local/?file=notebook.py");
   const preview = await waitForViewPreview(page, "vanilla-local");
+  await editorModelRecovery.recovered(page);
   const root = preview.locator("html");
 
   await expect(preview.getByRole("heading", { name: "Vanilla local sources" })).toBeVisible();
