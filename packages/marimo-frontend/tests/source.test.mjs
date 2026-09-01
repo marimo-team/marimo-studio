@@ -77,6 +77,8 @@ const isMissing = async (path) => {
   }
 };
 
+const lineEndingVariants = (source) => [source, source.replaceAll("\n", "\r\n")];
+
 test("source metadata validates the prepared checkout contract", () => {
   expect(
     decodeMarimoSource(
@@ -149,7 +151,7 @@ test("the evergreen browser build keeps one WOFF2 KaTeX source", () => {
 });
 
 test("the presentation table owns one observed header ref", () => {
-  const transformed = stabilizeDataTableHeaderRefs(`
+  const source = `
 export function renderTableHeader<TData>(table: Table<TData>) {
   return <TableHead
             ref={(thead) => {
@@ -157,14 +159,18 @@ export function renderTableHeader<TData>(table: Table<TData>) {
             }}
   />;
 }
-`);
+`;
 
-  expect(transformed).toContain("ref={studioColumnSizingRef(table, header.column)}");
-  expect(transformed).toContain("const observer = new ResizeObserver(measure)");
+  const transformed = lineEndingVariants(source).map(stabilizeDataTableHeaderRefs);
+  expect(transformed[0]).toBe(transformed[1]);
+  for (const result of transformed) {
+    expect(result).toContain("ref={studioColumnSizingRef(table, header.column)}");
+    expect(result).toContain("const observer = new ResizeObserver(measure)");
+  }
 });
 
 test("presentation focus ignores native cell containers it does not render", () => {
-  const transformed = silenceMissingPresentationCellScroll(`
+  const source = `
   if (!element) {
     Logger.warn("scrollCellIntoView: element not found");
     return;
@@ -174,15 +180,18 @@ test("presentation focus ignores native cell containers it does not render", () 
       \`[CellFocusManager] scrollCellIntoView: element not found: \${cellId}\`,
     );
   }
-`);
+`;
 
-  expect(transformed).not.toContain("Logger.warn");
-  expect(transformed).toContain("return;");
+  const transformed = lineEndingVariants(source).map(silenceMissingPresentationCellScroll);
+  expect(transformed[0]).toBe(transformed[1]);
+  for (const result of transformed) {
+    expect(result).not.toContain("Logger.warn");
+    expect(result).toContain("return;");
+  }
 });
 
 test("opaque presentations construct WebAssembly workers from inline modules", () => {
-  const transformed = isolateWasmWorker(
-    `const main = new Worker(
+  const source = `const main = new Worker(
       // oxlint-disable-next-line unicorn/relative-url-style
       new URL("./worker/worker.ts", import.meta.url),
       {
@@ -207,15 +216,19 @@ const autoInstantiate = {
             getInitialAppMode() === "read"
               ? true
               : userConfig.runtime.auto_instantiate,
-};`,
-    "/marimo/worker.ts",
-  );
+};`;
 
-  expect(transformed).toContain('from "/marimo/worker.ts?worker&inline"');
-  expect(transformed).not.toContain('from "/marimo/save-worker.ts?worker&inline"');
-  expect(transformed).toContain("new MarimoStudioMainWorker({ name: getWasmWorkerName() })");
-  expect(transformed).toContain('new URL("./worker/save-worker.ts", import.meta.url)');
-  expect(transformed).toContain("auto_instantiate: userConfig.runtime.auto_instantiate");
+  const transformed = lineEndingVariants(source).map((candidate) =>
+    isolateWasmWorker(candidate, "/marimo/worker.ts"),
+  );
+  expect(transformed[0]).toBe(transformed[1]);
+  for (const result of transformed) {
+    expect(result).toContain('from "/marimo/worker.ts?worker&inline"');
+    expect(result).not.toContain('from "/marimo/save-worker.ts?worker&inline"');
+    expect(result).toContain("new MarimoStudioMainWorker({ name: getWasmWorkerName() })");
+    expect(result).toContain('new URL("./worker/save-worker.ts", import.meta.url)');
+    expect(result).toContain("auto_instantiate: userConfig.runtime.auto_instantiate");
+  }
 });
 
 test("presentation workers use the in-memory controller", () => {

@@ -2,6 +2,7 @@ import type { Plugin } from "vite";
 
 import { join } from "node:path";
 
+const normalizeLineEndings = (source: string): string => source.replaceAll("\r\n", "\n");
 const saveWorkerSource = `new Worker(
       // oxlint-disable-next-line unicorn/relative-url-style
       new URL("./worker/save-worker.ts", import.meta.url),
@@ -29,16 +30,17 @@ const forcedReadModeInstantiation = `auto_instantiate:
 const selectiveReadModeInstantiation = "auto_instantiate: userConfig.runtime.auto_instantiate,";
 
 export const isolateWasmWorker = (source: string, mainWorker: string): string => {
-  if (!source.includes(mainWorkerSource) || !source.includes(saveWorkerSource)) {
+  const normalized = normalizeLineEndings(source);
+  if (!normalized.includes(mainWorkerSource) || !normalized.includes(saveWorkerSource)) {
     throw new Error("Marimo WebAssembly workers no longer match the opaque-frame adapter");
   }
-  if (!source.includes(forcedReadModeInstantiation)) {
+  if (!normalized.includes(forcedReadModeInstantiation)) {
     throw new Error("Marimo WebAssembly startup no longer matches selective presentation mode");
   }
   const imports = `import MarimoStudioMainWorker from ${JSON.stringify(`${mainWorker}?worker&inline`)};\n`;
   return (
     imports +
-    source
+    normalized
       .replace(mainWorkerSource, "new MarimoStudioMainWorker({ name: getWasmWorkerName() })")
       .replace(forcedReadModeInstantiation, selectiveReadModeInstantiation)
   );

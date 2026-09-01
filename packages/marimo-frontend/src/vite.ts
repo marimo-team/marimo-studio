@@ -7,6 +7,7 @@ import { readMarimoSourceSync } from "../scripts/metadata.mjs";
 import { createWasmWorkerViteIntegration } from "./wasm-worker-vite.ts";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const normalizeLineEndings = (source: string): string => source.replaceAll("\r\n", "\n");
 const katexSourcePattern =
   /src:\s*(url\([^)]*\)\s*format\("woff2"\)),\s*url\([^)]*\.woff[^)]*\)\s*format\("woff"\),\s*url\([^)]*\.ttf[^)]*\)\s*format\("truetype"\);?/g;
 
@@ -70,10 +71,11 @@ const studioColumnSizingRef = <TData,>(
 `;
 
 export const stabilizeDataTableHeaderRefs = (source: string): string => {
-  if (!source.includes(tableHeaderRef) || !source.includes(tableRendererAnchor)) {
+  const normalized = normalizeLineEndings(source);
+  if (!normalized.includes(tableHeaderRef) || !normalized.includes(tableRendererAnchor)) {
     throw new Error("Marimo data table header refs no longer match the React 19 adapter");
   }
-  return source
+  return normalized
     .replace(tableHeaderRef, stableTableHeaderRef)
     .replace(tableRendererAnchor, `${tableHeaderRefOwner}${tableRendererAnchor}`);
 };
@@ -87,12 +89,13 @@ const missingCellScrollWarnings = [
 ] as const;
 
 export const silenceMissingPresentationCellScroll = (source: string): string => {
-  if (!missingCellScrollWarnings.every((warning) => source.includes(warning))) {
+  const normalized = normalizeLineEndings(source);
+  if (!missingCellScrollWarnings.every((warning) => normalized.includes(warning))) {
     throw new Error("Marimo cell scrolling no longer matches the presentation adapter");
   }
   return missingCellScrollWarnings.reduce(
     (current, warning) => current.replaceAll(warning, ""),
-    source,
+    normalized,
   );
 };
 
