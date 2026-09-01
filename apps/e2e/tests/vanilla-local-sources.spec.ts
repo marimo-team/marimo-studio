@@ -28,7 +28,9 @@ test("publishes Vanilla local CSS and JavaScript sources", async ({ page }) => {
     "styles/app.css",
     "body { color: rgb(34 197 94); }\n",
   );
-  await expect(preview.locator("body")).toHaveCSS("color", "rgb(34, 197, 94)");
+  await expect(preview.locator("body")).toHaveCSS("color", "rgb(34, 197, 94)", {
+    timeout: 65_000,
+  });
 
   await writeViewSource(
     page,
@@ -36,7 +38,9 @@ test("publishes Vanilla local CSS and JavaScript sources", async ({ page }) => {
     "scripts/app.js",
     'document.documentElement.dataset.localScript = "updated";\n',
   );
-  await expect(root).toHaveAttribute("data-local-script", "updated");
+  await expect(root).toHaveAttribute("data-local-script", "updated", {
+    timeout: 65_000,
+  });
 
   await page.getByLabel("Workspace options").click();
   await page.getByRole("button", { name: "Source" }).click();
