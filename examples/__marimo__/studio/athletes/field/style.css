@@ -247,7 +247,7 @@ a:focus-visible {
   line-height: 1;
 }
 
-.facts span {
+.facts li > span {
   color: var(--muted);
   font-family: var(--mono);
   font-size: 0.58rem;
