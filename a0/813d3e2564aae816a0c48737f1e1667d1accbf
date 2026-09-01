@@ -1,0 +1,22 @@
+packages/presentation/src/document/receiver-admission.ts
+  s_af5d583a28e9c5::t_b346968d486bf7 1-4,8,57-64
+packages/presentation/tests/receiver-admission.test.ts
+  s_af5d583a28e9c5::t_a596601f7c9a47 1,93-95
+  s_af5d583a28e9c5::t_b346968d486bf7 20,47,58-67,90-92,96-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a0813d3e2564aae816a0c48737f1e1667d1accbf",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
