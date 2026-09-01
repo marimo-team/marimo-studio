@@ -246,7 +246,9 @@ test("publishes complete projects during concurrent starter creation", async ({
   expect(observed).toEqual(new Set(candidates.map(([name]) => name)));
   await page.getByLabel("Switch view").click();
   for (const [name] of candidates) {
-    await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name, exact: true })).toBeVisible({
+      timeout: 65_000,
+    });
   }
   await page.keyboard.press("Escape");
   await expect

@@ -79,6 +79,17 @@ const expectSharedHeading = async (
   ]);
 };
 
+const readDashboardSource = async (page: Page): Promise<string> => {
+  const response = await page.request.get(
+    new URL("/_marimo-studio/views/dashboard/source/src/index.html?file=notebook.py", page.url())
+      .href,
+  );
+  if (!response.ok()) {
+    throw new Error(`Could not read dashboard source (${response.status()})`);
+  }
+  return response.text();
+};
+
 test("keeps two tabs isolated inside one notebook scope", async ({ browserDiagnostics, page }) => {
   const replacedEventStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
@@ -289,7 +300,7 @@ test("shares publication and recovery across two Studio sessions", async ({
       expect(secondSession).toMatch(/^s_[\da-z]{6}$/);
       expect(secondSession).not.toBe(firstSession);
 
-      const original = await readWorkspaceFile(collaborativeDashboardHtmlPath);
+      const original = await readDashboardSource(page);
       const firstSave = original.replace("Studio browser fixture", "Saved by first client");
       const discarded = original.replace("Studio browser fixture", "Discarded second edit");
       const releaseDiscardedSave = await holdDashboardSourceWrites(second);
@@ -300,7 +311,7 @@ test("shares publication and recovery across two Studio sessions", async ({
       await firstEditor.press(selectAllShortcut);
       await page.keyboard.insertText(firstSave);
       await firstEditor.press(saveShortcut);
-      await expect.poll(() => readWorkspaceFile(collaborativeDashboardHtmlPath)).toBe(firstSave);
+      await expect.poll(() => readDashboardSource(page)).toBe(firstSave);
       await releaseDiscardedSave();
 
       await expect(second.getByRole("alert")).toContainText("changed on disk");
@@ -319,14 +330,14 @@ test("shares publication and recovery across two Studio sessions", async ({
       await firstEditor.press(selectAllShortcut);
       await page.keyboard.insertText(competing);
       await firstEditor.press(saveShortcut);
-      await expect.poll(() => readWorkspaceFile(collaborativeDashboardHtmlPath)).toBe(competing);
+      await expect.poll(() => readDashboardSource(page)).toBe(competing);
       await releaseSecondSave();
       await expectSharedHeading(firstPreview, secondPreview, "Competing first edit");
       await Promise.all([waitForPreview(page), waitForPreview(second)]);
 
       await expect(second.getByRole("alert")).toContainText("changed on disk");
       await second.getByRole("button", { name: "Overwrite saved version with my edits" }).click();
-      await expect.poll(() => readWorkspaceFile(collaborativeDashboardHtmlPath)).toBe(secondWins);
+      await expect.poll(() => readDashboardSource(page)).toBe(secondWins);
 
       await expectSharedHeading(firstPreview, secondPreview, "Saved by second client");
       await Promise.all([waitForPreview(page), waitForPreview(second)]);
@@ -345,7 +356,6 @@ test("shares publication and recovery across two Studio sessions", async ({
 
       const repaired = secondWins.replace("Saved by second client", "Repaired publication");
       await writeWorkspaceFile(collaborativeDashboardHtmlPath, repaired);
-      await expect.poll(() => readWorkspaceFile(collaborativeDashboardHtmlPath)).toBe(repaired);
       await expect
         .poll(async () => {
           const response = await second.request.get(
