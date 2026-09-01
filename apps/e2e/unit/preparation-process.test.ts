@@ -1,6 +1,7 @@
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 
 import { spawn } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { createServer } from "node:net";
 import { expect, test } from "vite-plus/test";
 import { z } from "zod";
@@ -91,4 +92,18 @@ test("does not spawn another preparation phase after cancellation", async () => 
     owner.run("late preparation", process.execPath, ["-e", "process.exit(0)"]),
   ).rejects.toBeInstanceOf(PreparationCancelled);
   expect(spawns).toBe(0);
+});
+
+test("preserves cancellation when concurrent process cleanup fails", async () => {
+  // SAFETY: The owner reads only `pid` and subscribes with `once` in this synthetic failure case.
+  const child = new EventEmitter() as ChildProcess;
+  Object.assign(child, { pid: undefined });
+  const owner = new PreparationProcessOwner({ spawn: () => child });
+  const running = owner.run("test preparation", process.execPath, []);
+
+  const stopping = owner.stop("SIGTERM", 0);
+  await expect(stopping).rejects.toThrow("survived shutdown");
+  const cancelled = expect(running).rejects.toBeInstanceOf(PreparationCancelled);
+  child.emit("exit", null, "SIGTERM");
+  await cancelled;
 });

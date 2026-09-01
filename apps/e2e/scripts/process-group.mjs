@@ -31,18 +31,22 @@ const liveProcessGroupMembers = (processGroupId) => {
     .sort((left, right) => left - right);
 };
 
-const processEnvironmentContains = (pid, name, value) => {
+export const processEnvironmentContains = (
+  pid,
+  name,
+  value,
+  { platform = process.platform, readFile = readFileSync, run = spawnSync } = {},
+) => {
   const marker = `${name}=${value}`;
-  if (process.platform === "linux") {
+  if (platform === "linux") {
     try {
-      return readFileSync(`/proc/${pid}/environ`).toString("utf8").split("\0").includes(marker);
-    } catch (error) {
-      if (error?.code === "ENOENT" || error?.code === "ESRCH") return undefined;
-      return false;
+      return readFile(`/proc/${pid}/environ`).toString("utf8").split("\0").includes(marker);
+    } catch {
+      return undefined;
     }
   }
-  if (process.platform !== "darwin") return undefined;
-  const result = spawnSync("ps", ["eww", "-p", String(pid), "-o", "command="], {
+  if (platform !== "darwin") return undefined;
+  const result = run("ps", ["eww", "-p", String(pid), "-o", "command="], {
     encoding: "utf8",
     maxBuffer: 4 * 1024 * 1024,
   });

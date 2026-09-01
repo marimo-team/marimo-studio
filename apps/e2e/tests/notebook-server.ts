@@ -94,11 +94,13 @@ export const startNotebookServer = ({
   const ready = registration.ready.catch((error) => {
     throw new Error(`Notebook process registration failed: ${String(error)}\n${output()}`);
   });
-  notebookRegistrations.set(child, {
-    directory: registryDirectory,
-    ownerNonce,
-    processGroupId,
-  });
+  if (processGroupId !== undefined) {
+    notebookRegistrations.set(child, {
+      directory: registryDirectory,
+      ownerNonce,
+      processGroupId,
+    });
+  }
   const passwordOption = authentication.indexOf("--token-password");
   return {
     authToken: passwordOption >= 0 ? authentication[passwordOption + 1] : undefined,

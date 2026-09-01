@@ -11,6 +11,7 @@ import {
 import { stopProcessGroup } from "./process-group.mjs";
 
 const FORCE_STOP_DELAY = 250;
+const PORT_CLOSE_TIMEOUT = 5_000;
 const PORT_POLL_INTERVAL = 50;
 const command = process.argv[2];
 const args = process.argv.slice(3);
@@ -65,10 +66,15 @@ const finish = () => {
   if (process.connected) process.disconnect();
 };
 
-const finishWhenPortCloses = async () => {
+const finishWhenPortCloses = async (deadline = Date.now() + PORT_CLOSE_TIMEOUT) => {
   if (finished) return;
   if (await portIsOpen()) {
-    setTimeout(finishWhenPortCloses, PORT_POLL_INTERVAL);
+    if (Date.now() >= deadline) {
+      finish();
+      forceStop();
+      return;
+    }
+    setTimeout(() => void finishWhenPortCloses(deadline), PORT_POLL_INTERVAL);
     return;
   }
   finish();

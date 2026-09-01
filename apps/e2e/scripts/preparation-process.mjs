@@ -8,8 +8,8 @@ const STOP_POLL_INTERVAL = 50;
 const defaultSpawn = spawnChild;
 
 export class PreparationCancelled extends Error {
-  constructor() {
-    super("E2E preparation was cancelled");
+  constructor(options) {
+    super("E2E preparation was cancelled", options);
     this.name = "PreparationCancelled";
   }
 }
@@ -95,6 +95,9 @@ export class PreparationProcessOwner {
     }
     if (cleanupError !== undefined) {
       if (operationError !== undefined) {
+        if (operationError instanceof PreparationCancelled) {
+          throw new PreparationCancelled({ cause: cleanupError });
+        }
         throw new Error(cleanupError.message, { cause: operationError });
       }
       throw cleanupError;

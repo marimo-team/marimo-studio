@@ -15,7 +15,7 @@ const supervisorPath = resolve(
   "notebook-process-supervisor.mjs",
 );
 
-const supervisorReadiness = (child, timeout) => {
+const supervisorReadiness = (child, timeout, missingProcessGroup) => {
   let rejectPending;
   let resolveRegistered;
   let resolveStarted;
@@ -36,23 +36,36 @@ const supervisorReadiness = (child, timeout) => {
   void started.catch(() => undefined);
   let settled = false;
   let startRequested = false;
+  let timer;
   const fail = (error) => {
     if (settled) return;
     settled = true;
     clearTimeout(timer);
     rejectPending(error);
   };
-  const timer = setTimeout(
-    () => fail(new Error("Notebook process registration timed out")),
-    timeout,
+  const armTimeout = (message) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fail(new Error(message)), timeout);
+  };
+  armTimeout("Notebook process registration timed out");
+  child.once("error", (error) =>
+    fail(
+      missingProcessGroup
+        ? new Error("Notebook process supervisor did not expose a process group ID", {
+            cause: error,
+          })
+        : error,
+    ),
   );
-  child.once("error", fail);
   child.once("exit", (code, signal) => {
     const status = signal ? `signal ${signal}` : `status ${code ?? 1}`;
     fail(new Error(`Notebook process supervisor exited with ${status}`));
   });
   child.on("message", (message) => {
-    if (message?.type === "registered") resolveRegistered();
+    if (message?.type === "registered") {
+      clearTimeout(timer);
+      resolveRegistered();
+    }
     if (message?.type === "started") {
       settled = true;
       clearTimeout(timer);
@@ -68,11 +81,17 @@ const supervisorReadiness = (child, timeout) => {
     }
     if (!startRequested) {
       startRequested = true;
-      await new Promise((resolveSent, rejectSent) => {
-        child.send({ type: "start" }, (error) =>
-          error ? rejectSent(error) : resolveSent(undefined),
-        );
-      });
+      armTimeout("Notebook process start timed out");
+      try {
+        await new Promise((resolveSent, rejectSent) => {
+          child.send({ type: "start" }, (error) =>
+            error ? rejectSent(error) : resolveSent(undefined),
+          );
+        });
+      } catch (error) {
+        fail(error);
+        throw error;
+      }
     }
     await started;
   };
@@ -90,6 +109,7 @@ export const spawnRegisteredNotebookSupervisor = ({
   stdio = ["ignore", "pipe", "pipe"],
 }) => {
   const ownerNonce = createNotebookProcessOwnerNonce();
+  /** @type {import("node:child_process").ChildProcess} */
   const child = spawn(process.execPath, [supervisorPath, command, ...args], {
     cwd,
     detached: process.platform !== "win32",
@@ -102,12 +122,7 @@ export const spawnRegisteredNotebookSupervisor = ({
     stdio: [...stdio, "ipc"],
   });
   const processGroupId = child.pid;
-  if (processGroupId === undefined) {
-    child.once("error", () => undefined);
-    child.kill("SIGKILL");
-    throw new Error("Notebook process supervisor did not expose a process group ID");
-  }
-  const readiness = supervisorReadiness(child, readyTimeout);
+  const readiness = supervisorReadiness(child, readyTimeout, processGroupId === undefined);
   return Object.freeze({
     child,
     ownerNonce,
