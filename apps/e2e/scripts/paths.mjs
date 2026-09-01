@@ -28,13 +28,12 @@ export const createE2EPaths = (root, portOffset = 0) => {
     hostedWorkspaceDirectory: resolve(providerWorkspaceRoot, "hosted"),
     mainPlaywrightOutputDirectory:
       portOffset === 0 ? resultRoot : resolve(resultRoot, "playwright-main"),
-    providerPlaywrightOutputDirectory:
-      portOffset === 0 ? resultRoot : resolve(resultRoot, "playwright-provider"),
+    providerPlaywrightOutputDirectory: resolve(resultRoot, "playwright-provider"),
     mainPlaywrightReportDirectory:
       portOffset === 0 ? resolve(root, "playwright-report") : resolve(resultRoot, "report-main"),
     providerPlaywrightReportDirectory:
       portOffset === 0
-        ? resolve(root, "playwright-report")
+        ? resolve(root, "playwright-report/provider")
         : resolve(resultRoot, "report-provider"),
   });
 };

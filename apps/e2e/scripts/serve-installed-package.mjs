@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { cp, mkdtemp, mkdir, rm, stat } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, delimiter, isAbsolute, resolve } from "node:path";
 
@@ -291,6 +291,10 @@ try {
       timeout: 120_000,
     }),
   ]);
+  await writeFile(
+    resolve(staticDirectory, installedPackageNetwork.readiness.path.slice(1)),
+    "ready\n",
+  );
   await Promise.all(closures);
 } catch (error) {
   if (!stopping) {

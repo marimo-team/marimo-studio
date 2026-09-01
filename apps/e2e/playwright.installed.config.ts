@@ -46,7 +46,7 @@ export default defineConfig({
   webServer: {
     command: "node scripts/serve-installed-package.mjs",
     env: { ...process.env, MARIMO_STUDIO_E2E_WHEEL: installedWheel },
-    url: `${installedPackageNetwork.origin}/_marimo-studio/status`,
+    url: installedPackageNetwork.readiness.url,
     reuseExistingServer: false,
     timeout: 240_000,
     gracefulShutdown: { signal: "SIGTERM", timeout: 15_000 },

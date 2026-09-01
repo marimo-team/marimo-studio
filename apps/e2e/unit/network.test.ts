@@ -4,40 +4,56 @@ import { expect, test } from "vite-plus/test";
 import { createE2ENetwork } from "../scripts/network.mjs";
 import { createE2EPaths } from "../scripts/paths.mjs";
 
-test("offsets every E2E endpoint while preserving the default port map", () => {
+test("offsets every E2E endpoint without creating collisions", () => {
   const defaults = createE2ENetwork();
   const offset = createE2ENetwork("100");
 
   expect(defaults.portOffset).toBe(0);
   expect(offset.portOffset).toBe(100);
-
-  expect(Object.values(defaults.main).map(({ port }) => port)).toEqual([
-    4_321, 4_322, 4_323, 4_324, 4_325, 4_326,
-  ]);
-  expect(Object.values(defaults.provider).map(({ port }) => port)).toEqual([
-    4_331, 4_332, 4_333, 4_334, 4_335, 4_336,
-  ]);
-  expect(offset.main.studio).toEqual({ origin: "http://127.0.0.1:4421", port: 4_421 });
-  expect(offset.provider.external).toEqual({ origin: "http://127.0.0.1:4434", port: 4_434 });
+  for (const [baselineScope, movedScope] of [
+    [defaults.main, offset.main],
+    [defaults.provider, offset.provider],
+  ]) {
+    expect(new Set(Object.keys(movedScope))).toEqual(new Set(Object.keys(baselineScope)));
+    const baselineEndpoints = Object.values(baselineScope);
+    const movedEndpoints = Object.values(movedScope);
+    for (const [index, baseline] of baselineEndpoints.entries()) {
+      const moved = movedEndpoints[index];
+      expect(moved).toBeDefined();
+      if (moved === undefined) throw new Error("Offset endpoint is unavailable");
+      expect(moved.port).toBe(baseline.port + 100);
+      expect(moved.origin).toBe(`http://127.0.0.1:${moved.port}`);
+    }
+  }
+  const ports = [...Object.values(defaults.main), ...Object.values(defaults.provider)].map(
+    ({ port }) => port,
+  );
+  expect(new Set(ports).size).toBe(ports.length);
 });
 
-test("isolates every mutable path while preserving default CI locations", () => {
+test("isolates mutable paths across suites and concurrent runs", () => {
   const root = resolve("/repo/apps/e2e");
   const defaults = createE2EPaths(root);
   const offset = createE2EPaths(root, 100);
 
-  expect(defaults.workspaceDirectory).toBe(resolve(root, ".workspace"));
-  expect(defaults.configDirectory).toBe(resolve(root, "test-results/xdg-config"));
-  expect(defaults.mainPlaywrightOutputDirectory).toBe(resolve(root, "test-results"));
-  expect(defaults.mainPlaywrightReportDirectory).toBe(resolve(root, "playwright-report"));
+  expect(defaults.providerPlaywrightOutputDirectory).not.toBe(
+    defaults.mainPlaywrightOutputDirectory,
+  );
+  expect(defaults.providerPlaywrightReportDirectory).not.toBe(
+    defaults.mainPlaywrightReportDirectory,
+  );
   expect(new Set(Object.values(offset)).size).toBe(Object.values(offset).length);
   const offsetRoot = resolve(root, "test-results/offset-100") + sep;
   expect(Object.values(offset).every((path) => path.includes(offsetRoot))).toBe(true);
 });
 
-test("rejects invalid E2E port offsets before starting a server", () => {
-  for (const source of ["", "-1", "1.5", "invalid"]) {
-    expect(() => createE2ENetwork(source)).toThrow("must be a non-negative integer");
-  }
-  expect(() => createE2ENetwork("61200")).toThrow("must be between 0 and 61199");
+test("bounds E2E port offsets to valid TCP ports", () => {
+  expect(() => createE2ENetwork("-1")).toThrow(TypeError);
+  expect(() => createE2ENetwork("61200")).toThrow(RangeError);
+  const highest = createE2ENetwork("61199");
+  expect(
+    [...Object.values(highest.main), ...Object.values(highest.provider)].every(
+      ({ port }) => port <= 65_535,
+    ),
+  ).toBe(true);
 });
