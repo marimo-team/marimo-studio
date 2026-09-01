@@ -19,7 +19,7 @@ _CELL_MARKER = "__NOTEBOOK_CELLS_HTML__"
 
 
 def _render(context: StarterContext) -> StarterRendering:
-    cells = tuple(item for item in starter_cells(context) if item[0].displays_output)
+    cells = tuple(item for item in starter_cells(context) if item[0].may_display_output)
     markup = "".join(
         '\n        <marimo-cell name="'
         + html.escape(target.target, quote=True)
@@ -39,8 +39,8 @@ starter = BundledStarter(
         key="default",
         title="HTML document",
         summary=(
-            "One editable HTML file populated with Studio notebook display "
-            "cells and an inline live-value adapter."
+            "One editable HTML file populated with notebook cells that may display "
+            "output and an inline live-value adapter."
         ),
         documents=(PurePosixPath("index.html"), PurePosixPath("AGENTS.md")),
     ),

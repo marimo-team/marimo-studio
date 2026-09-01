@@ -6,9 +6,11 @@ gestures, progress, and the slide overview. Three.js renders one point for each
 record in the projected `athlete_facts` table.
 
 Keep the project on the `marimo-studio/vanilla` provider. `index.html` is the
-complete authored document. Import browser dependencies from exact HTTPS ESM
-URLs and keep the `mo-value="athlete_facts"` host in the document so Studio can
-authorize the projection.
+entry document and owns structure and projection hosts. `style.css` owns the
+visual system. `main.js` owns the point field and presentation behavior. Import
+browser dependencies from exact HTTPS ESM URLs and keep the
+`mo-value="athlete_facts"` host in the entry document so Studio can authorize
+the projection.
 
 The four chapters reuse the same points:
 
@@ -30,7 +32,9 @@ Preserve deterministic layouts so the same athlete returns to the same place.
 Keep captions factual and derive spatial layouts from the projected rows.
 Maintain the flat black, chalk, and signal-blue system in `DESIGN.md`. Support
 pointer inspection as an enhancement while keeping the chapter copy complete on
-its own.
+its own. Render WebGL on demand when reduced motion is active, with fresh frames
+after layout transitions, resizes, pointer changes, and motion preference
+changes. Keep continuous field rotation for the default motion preference.
 
 Run Studio inspection and production build after source changes. Export the view
 through the WASM runtime and check both a desktop viewport and a narrow mobile

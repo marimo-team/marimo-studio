@@ -1,7 +1,7 @@
 # HTML starter instructions
 
 Follow the Marimo Studio skill for notebook ownership, projection selection,
-view lifecycle, and validation. This file covers the single-document project
+view lifecycle, and validation. This file covers the browser-native project
 supplied by this starter.
 
 ## Project intent
@@ -14,14 +14,15 @@ agents.
 ## Use the supplied Studio integration
 
 `index.html` starts with one `<marimo-cell>` host for each enabled notebook cell
-that displays an output or literal Markdown. Keep, reorder, group, or replace
-those hosts as the page design develops. Their generated names remain stable
-Studio targets for the notebook cells.
+that may display output, including literal Markdown. Keep, reorder, group, or
+replace those hosts as the page design develops. Their generated names remain
+stable Studio targets for the notebook cells.
 
-`index.html` defines `observeMarimoValue` inside its module script. Use it when
-page JavaScript consumes a notebook value or eager dataframe. Keep the
-corresponding `mo-value` host in authored HTML so Studio can inspect and
-authorize its selector.
+The starter defines `observeMarimoValue` inside the `index.html` module script.
+Keep it inline or move it to a JavaScript file referenced directly from the
+entry document. Use it when page JavaScript consumes a notebook value or eager
+dataframe. Keep the corresponding `mo-value` host in authored HTML so Studio
+can inspect and authorize its selector.
 
 ```html
 <span id="rows-data" hidden mo-value="rows"></span>
@@ -74,12 +75,34 @@ prefer versioned imports when the same source must rebuild consistently.
 
 ## Work within the HTML project
 
-- Keep document structure, styles, and browser behavior in `index.html`.
+- Keep the document structure and projection hosts in `index.html`.
+- Keep styles and browser behavior inline for a compact page, or reference CSS
+  through `<link rel="stylesheet">` and JavaScript through `<script src>`
+  directly from `index.html`. Studio copies these exact `.css`, `.js`, and
+  `.mjs` source files into the browser artifact.
+- Keep each direct source as a leaf file. Bundle or inline local CSS `url()` and
+  `@import` dependencies and local JavaScript imports or re-exports. Explicit
+  HTTPS, data, and fragment references remain available.
+- Leave `<base href>` out of the entry document. HTTP and HTTPS dependency URLs
+  need `//` and a host.
+- Choose a provider that builds the JavaScript module graph for import maps,
+  computed imports, and source-phase imports.
+- Keep direct JavaScript within the pinned parser's accepted grammar. Inspection
+  fails closed when it cannot establish the dependency boundary.
+- End `break` and `continue` with `;` when another statement follows. The pinned
+  grammar rejects a following regex statement when automatic semicolon
+  insertion separates it from the restricted statement.
+- The pinned grammar rejects import attributes on re-export statements. Import
+  the remote module with its attributes, then use
+  `export { value as default }` to preserve a default re-export. Enumerate named
+  exports or choose a graph-building provider for a wildcard re-export.
 - Keep projection hosts inside `#app-shell`.
-- Inline project-owned CSS, JavaScript, images, and fonts with the document.
-  External HTTP URLs and `data:` URLs remain available.
+- Inline project-owned images and fonts with the document. External HTTP URLs
+  and `data:` URLs remain available.
 - Use browser APIs for focused interaction. Choose the React or Svelte starter
-  when the page needs a component build and a multi-file application source.
+  when the page needs component compilation, a local import graph, or separate
+  browser assets.
 
-Studio publishes this file directly after validating its HTML and projection
-hosts. Treat the built document as the acceptance boundary for the page.
+Studio publishes the entry document and its declared local sources after
+validating the HTML and projection hosts. Treat the built artifact as the
+acceptance boundary for the page.

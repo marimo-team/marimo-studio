@@ -1,0 +1,7 @@
+:root {
+  --fixture-color: rgb(68 144 255);
+}
+
+body {
+  color: var(--fixture-color);
+}

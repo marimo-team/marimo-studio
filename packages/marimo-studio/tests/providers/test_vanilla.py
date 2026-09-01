@@ -2,44 +2,16 @@ from __future__ import annotations
 
 from dataclasses import replace
 from html.parser import HTMLParser
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 import pytest
 
 from marimo_studio._views.inspection import inspection_request
-from marimo_studio._workspace.project_manifest import (
-    encode_view_manifest,
-    load_view_project,
-)
-from marimo_studio.view_providers import ViewProject
 from marimo_studio.view_providers._bundled.vanilla import provider
 
 from ..helpers import no_display_notebook_source
-from ..provider_test_support import provider_build_request, provider_starter_context
-
-
-def _write_files(root: Path, files: dict[PurePosixPath, bytes]) -> ViewProject:
-    for relative, content in files.items():
-        path = root.joinpath(*relative.parts)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(content)
-    (root / "view.toml").write_text(
-        encode_view_manifest("marimo-studio/vanilla"),
-        encoding="utf-8",
-    )
-    return replace(load_view_project(root), options={"entrypoint": "index.html"})
-
-
-def _project(tmp_path: Path) -> ViewProject:
-    plan = provider.create(
-        provider.starters()[0],
-        provider_starter_context(
-            tmp_path,
-            view_name="overview",
-            notebook_name="analysis",
-        ),
-    )
-    return _write_files(tmp_path / "overview", dict(plan.files))
+from ..provider_test_support import provider_build_request
+from ._vanilla_test_support import _project
 
 
 class _ProjectionTags(HTMLParser):
@@ -69,7 +41,7 @@ def test_vanilla_starter_exposes_its_generated_notebook_cell(tmp_path: Path) -> 
     ]
 
 
-def test_vanilla_starter_builds_without_display_cells(tmp_path: Path) -> None:
+def test_vanilla_starter_builds_without_possible_output_cells(tmp_path: Path) -> None:
     tmp_path.joinpath("analysis.py").write_text(
         no_display_notebook_source(),
         encoding="utf-8",
@@ -231,6 +203,26 @@ def test_vanilla_rejects_authored_mount_declaration_id(tmp_path: Path) -> None:
     assert "data-marimo-studio-site is reserved" in inspection.diagnostics[0].message
 
 
+def test_vanilla_rejects_authored_source_revision(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    source = project.root / "index.html"
+    source.write_text(
+        source.read_text(encoding="utf-8").replace(
+            "</head>",
+            '<script data-marimo-studio-source-revision="authored"></script></head>',
+        ),
+        encoding="utf-8",
+    )
+
+    inspection = provider.inspect(inspection_request(project))
+
+    assert [item.code for item in inspection.diagnostics] == ["entry-document-invalid"]
+    assert (
+        "data-marimo-studio-source-revision is reserved"
+        in inspection.diagnostics[0].message
+    )
+
+
 @pytest.mark.parametrize(
     "entrypoint",
     (
@@ -263,138 +255,3 @@ def test_vanilla_rejects_symlinked_entrypoint(tmp_path: Path) -> None:
 
     assert [item.code for item in inspection.diagnostics] == ["entry-document-invalid"]
     assert "symlink" in inspection.diagnostics[0].message
-
-
-@pytest.mark.parametrize(
-    "resource",
-    (
-        '<link rel="stylesheet" href="app.css" />',
-        '<link rel="modulepreload" href="scripts/app.js" />',
-        '<script type="module" src="scripts/app.js"></script>',
-        '<img src="images/chart.png" alt="Chart" />',
-        "<style>.chart { background: url(images/chart.png) }</style>",
-        '<div style="background: url(images/chart.png)"></div>',
-        '<img srcset="images/small.png 1x, images/large.png 2x" />',
-        '<source srcset="https://cdn.example.test/small.png 1x, '
-        'images/large.png 2x" />',
-        '<link rel="preload" as="image" imagesrcset="images/small.png 1x" />',
-        '<svg><image href="images/chart.png" /></svg>',
-        '<svg><feImage xlink:href="images/chart.png" /></svg>',
-    ),
-)
-def test_vanilla_rejects_fetched_local_resources(
-    tmp_path: Path,
-    resource: str,
-) -> None:
-    project = _project(tmp_path)
-    source = project.root / "index.html"
-    source.write_text(
-        source.read_text(encoding="utf-8").replace("</head>", f"{resource}</head>"),
-        encoding="utf-8",
-    )
-
-    inspection = provider.inspect(inspection_request(project))
-
-    assert [item.code for item in inspection.diagnostics] == [
-        "local-resource-unsupported"
-    ]
-    assert "provider for multi-file projects" in inspection.diagnostics[0].message
-    assert inspection.diagnostics[0].source is not None
-
-
-def test_vanilla_allows_document_navigation_and_remote_resources(
-    tmp_path: Path,
-) -> None:
-    project = _project(tmp_path)
-    source = project.root / "index.html"
-    source.write_text(
-        source.read_text(encoding="utf-8")
-        .replace(
-            "</head>",
-            """<script src="https://cdn.example.test/app.js"></script>
-            <style>
-              @import "https://cdn.example.test/app.css";
-              .data { background: url(data:image/svg+xml;base64,PHN2Zy8+) }
-              .fragment { background: url(#gradient) }
-              .responsive { background: image-set(
-                "https://cdn.example.test/chart.png" 1x,
-                "data:image/png;base64,iVBORw0KGgo=" 2x
-              ) }
-              .literal::after { content: "url(images/not-a-resource.png)" }
-              /* url(images/not-a-resource.png) */
-            </style>
-            <img srcset="https://cdn.example.test/small.png 1x,
-              data:image/png;base64,iVBORw0KGgo= 2x" />
-            </head>""",
-        )
-        .replace(
-            "</main>",
-            '<a href="details.html">Details</a></main>',
-        ),
-        encoding="utf-8",
-    )
-
-    inspection = provider.inspect(inspection_request(project))
-
-    assert inspection.diagnostics == ()
-
-
-def test_vanilla_reports_malformed_resource_urls_as_project_diagnostics(
-    tmp_path: Path,
-) -> None:
-    project = _project(tmp_path)
-    source = project.root / "index.html"
-    source.write_text(
-        source.read_text(encoding="utf-8").replace(
-            "</head>",
-            '<style>body { background: url("http://[") }</style></head>',
-        ),
-        encoding="utf-8",
-    )
-
-    inspection = provider.inspect(inspection_request(project))
-
-    assert [item.code for item in inspection.diagnostics] == ["entry-document-invalid"]
-    assert "Invalid resource URL" in inspection.diagnostics[0].message
-
-
-def test_vanilla_exposes_instructions_outside_the_build_inputs(tmp_path: Path) -> None:
-    project = _project(tmp_path)
-    (project.root / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
-    (project.root / "DESIGN.md").write_text("# Page design\n", encoding="utf-8")
-
-    inspection = provider.inspect(inspection_request(project))
-    files = project.root / ".artifacts" / ".staging" / "single" / "files"
-    files.mkdir(parents=True)
-    report = provider.build(provider_build_request(project, inspection, files))
-
-    assert [item.path.as_posix() for item in inspection.editor_documents] == [
-        "index.html",
-        "AGENTS.md",
-        "DESIGN.md",
-    ]
-    assert [item.to_dict() for item in inspection.input_scope] == [
-        {"path": "view.toml", "kind": "file"},
-        {"path": "index.html", "kind": "file"},
-    ]
-    assert report.document == PurePosixPath("index.html")
-    assert [
-        path.relative_to(files).as_posix()
-        for path in files.rglob("*")
-        if path.is_file()
-    ] == ["index.html"]
-
-
-def test_vanilla_build_observes_cancellation_before_copying(tmp_path: Path) -> None:
-    project = _project(tmp_path)
-    inspection = provider.inspect(inspection_request(project))
-    files = project.root / ".artifacts" / ".staging" / "cancelled" / "files"
-    files.mkdir(parents=True)
-    request = provider_build_request(project, inspection, files)
-    request.cancellation.cancel()
-
-    result = provider.build(request)
-
-    assert result.document is None
-    assert [diagnostic.code for diagnostic in result.diagnostics] == ["build-cancelled"]
-    assert tuple(files.iterdir()) == ()

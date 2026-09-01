@@ -1,0 +1,607 @@
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+:root {
+  color-scheme: dark;
+  --canvas: #060606;
+  --surface: #141414;
+  --text: #f4f1ea;
+  --muted: #9a9ca3;
+  --line: #242832;
+  --blue: #4490ff;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 20rem;
+  min-height: 100%;
+  background: var(--canvas);
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  overflow-x: hidden;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--display);
+}
+
+button,
+a {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 4px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+#field-canvas {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.topbar,
+.controls,
+.athlete-credit {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.topbar {
+  position: fixed;
+  z-index: 10;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: grid;
+  min-height: 4.25rem;
+  grid-template-columns: minmax(10rem, 1fr) auto minmax(10rem, 1fr);
+  gap: 1.5rem;
+  align-items: center;
+  padding: 0.9rem clamp(1rem, 3vw, 2.5rem);
+  border-bottom: 1px solid var(--line);
+  background: var(--canvas);
+}
+
+.artifact-title {
+  color: var(--text);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.artifact-title::before {
+  display: inline-block;
+  width: 0.48rem;
+  height: 0.48rem;
+  margin-right: 0.65rem;
+  background: var(--blue);
+  content: "";
+  vertical-align: -0.02rem;
+}
+
+.view-nav {
+  display: flex;
+  gap: clamp(0.8rem, 2vw, 1.8rem);
+}
+
+.view-nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.view-nav a:hover,
+.view-nav a:focus-visible,
+.view-nav a[aria-current="page"] {
+  color: var(--blue);
+}
+
+.data-status {
+  justify-self: end;
+  color: var(--muted);
+  text-align: right;
+}
+
+.data-status[data-ready="true"] {
+  color: var(--text);
+}
+
+.data-status::before {
+  content: "○ ";
+}
+
+.data-status:not([data-ready])::before {
+  display: inline-block;
+  color: var(--blue);
+  animation: athlete-field-pulse 1.15s ease-in-out infinite;
+}
+
+.data-status[data-ready="true"]::before {
+  color: var(--blue);
+  content: "● ";
+}
+
+:where([mo-value]):is(
+    :not([data-state]),
+    [data-state="connecting"],
+    [data-state="loading"]
+  ):empty::before,
+:where(marimo-cell):is(
+    :not(:defined),
+    [data-state="connecting"],
+    [data-state="loading"]
+  ):empty::before {
+  --marimo-cell-skeleton-color: rgb(68 144 255 / 24%);
+  --marimo-value-skeleton-color: rgb(68 144 255 / 34%);
+  animation: athlete-field-pulse 1.3s ease-in-out infinite;
+}
+
+@keyframes athlete-field-pulse {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.slides {
+  position: relative;
+  z-index: 2;
+}
+
+.slide {
+  min-height: min(72vh, 46rem);
+  margin: 6.5rem auto 2rem;
+  padding: clamp(2rem, 5vw, 4rem);
+  border: 1px solid var(--line);
+  background: var(--canvas);
+}
+
+.slide-copy {
+  max-width: 38rem;
+}
+
+.chapter {
+  margin: 0 0 1.1rem;
+  color: var(--blue);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.slide h2 {
+  max-width: 8.5ch;
+  margin: 0;
+  font-size: clamp(4.2rem, 9vw, 8.4rem);
+  font-weight: 300;
+  letter-spacing: -0.045em;
+  line-height: 0.84;
+  text-wrap: balance;
+}
+
+.slide h2 strong {
+  color: var(--blue);
+  font-weight: inherit;
+}
+
+.lede {
+  max-width: 31rem;
+  margin: 1.4rem 0 0;
+  color: var(--muted);
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  line-height: 1.42;
+  text-wrap: pretty;
+}
+
+.lede strong {
+  color: var(--text);
+  font-weight: 400;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2.4rem;
+  margin: 1.8rem 0 0;
+  padding: 1.1rem 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.facts li {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.facts strong {
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 2rem;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.facts span {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.filter-control {
+  width: min(20rem, 100%);
+  min-height: 3rem;
+  margin-top: 1.2rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--text);
+  pointer-events: auto;
+  --accent: var(--blue);
+  --accent-foreground: var(--text);
+  --background: var(--surface);
+  --border: var(--line);
+  --card: var(--surface);
+  --card-foreground: var(--text);
+  --foreground: var(--text);
+  --input: var(--line);
+}
+
+.filter-control marimo-cell {
+  display: block;
+}
+
+.selection-facts {
+  margin-top: 0.9rem;
+  padding-top: 0.85rem;
+}
+
+.legend {
+  display: flex;
+  gap: 1.2rem;
+  align-items: center;
+  margin-top: 1.2rem;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.legend span::before {
+  display: inline-block;
+  width: 0.42rem;
+  height: 0.42rem;
+  margin-right: 0.45rem;
+  background: var(--text);
+  content: "";
+  vertical-align: 0.02rem;
+}
+
+.legend .medalist::before {
+  background: var(--blue);
+}
+
+.athlete-credit {
+  position: fixed;
+  z-index: 5;
+  right: clamp(1rem, 3vw, 2.5rem);
+  bottom: 5.7rem;
+  width: min(18rem, calc(100vw - 2rem));
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  pointer-events: none;
+}
+
+.athlete-credit strong,
+.athlete-credit span {
+  display: block;
+}
+
+.athlete-credit strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.athlete-credit span {
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.58rem;
+  line-height: 1.45;
+}
+
+.profile-axes {
+  position: fixed;
+  z-index: 4;
+  top: 6rem;
+  right: clamp(1rem, 3vw, 2.5rem);
+  display: flex;
+  gap: 1rem;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  opacity: 0;
+  text-transform: uppercase;
+  transition: opacity 180ms ease;
+}
+
+body[data-mode="profile"] .profile-axes {
+  opacity: 1;
+}
+
+.profile-axes b {
+  color: var(--blue);
+  font-weight: 500;
+}
+
+.controls {
+  position: fixed;
+  z-index: 10;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  min-height: 4.4rem;
+  grid-template-columns: minmax(8rem, 1fr) auto minmax(8rem, 1fr);
+  gap: 1.5rem;
+  align-items: center;
+  padding: 0.85rem clamp(1rem, 3vw, 2.5rem);
+  border-top: 1px solid var(--line);
+  background: var(--canvas);
+}
+
+.slide-count {
+  color: var(--text);
+}
+
+.key-guide {
+  color: var(--muted);
+  text-align: center;
+}
+
+.control-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-self: end;
+}
+
+.control-actions button {
+  min-width: 2.6rem;
+  min-height: 2.2rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+}
+
+.control-actions button:hover:not(:disabled) {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.control-actions button:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.progress {
+  position: fixed;
+  z-index: 12;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: var(--blue);
+}
+
+.region {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.shower.full {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.shower.full .slide {
+  position: fixed;
+  z-index: 2;
+  inset: 0;
+  display: grid;
+  min-height: 0;
+  margin: 0;
+  padding: 7rem clamp(1rem, 3vw, 2.5rem) 6rem;
+  border: 0;
+  background: transparent;
+  align-items: end;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.shower.full .slide.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.shower.full .slide-copy {
+  width: min(43vw, 38rem);
+  background: var(--canvas);
+}
+
+.shower.list {
+  padding: 1px 0 5rem;
+}
+
+.shower.list #field-canvas {
+  opacity: 0.22;
+}
+
+.shower.list .slides {
+  width: min(70rem, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+.shower.list .slide {
+  cursor: pointer;
+}
+
+.shower.list .controls,
+.shower.list .progress,
+.shower.list .athlete-credit,
+.shower.list .profile-axes {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    min-height: 6.1rem;
+    grid-template-columns: 1fr auto;
+    gap: 0.75rem 1rem;
+    align-content: center;
+  }
+
+  .view-nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .data-status {
+    max-width: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .shower.full .slide {
+    padding: 7rem 1rem 5.5rem;
+  }
+
+  .shower.full .slide-copy {
+    width: 100%;
+    max-width: 34rem;
+  }
+
+  .slide h2 {
+    max-width: 9ch;
+    font-size: clamp(3.5rem, 17vw, 5.8rem);
+  }
+
+  .lede {
+    max-width: 27rem;
+    margin-top: 0.9rem;
+    font-size: 1rem;
+    line-height: 1.32;
+  }
+
+  .facts {
+    gap: 0.8rem 1.6rem;
+    margin-top: 1rem;
+    padding-top: 0.8rem;
+  }
+
+  .filter-control {
+    min-height: 2.7rem;
+    margin-top: 0.8rem;
+  }
+
+  .facts strong {
+    font-size: 1.55rem;
+  }
+
+  .legend {
+    margin-top: 0.75rem;
+  }
+
+  .athlete-credit,
+  .profile-axes {
+    display: none;
+  }
+
+  .controls {
+    min-height: 4rem;
+    grid-template-columns: 1fr auto;
+  }
+
+  .key-guide {
+    display: none;
+  }
+
+  .control-actions button[data-wide] {
+    display: none;
+  }
+}
+
+@media (max-height: 700px) {
+  .shower.full .slide {
+    padding-top: 5.5rem;
+    padding-bottom: 4.8rem;
+  }
+
+  .slide h2 {
+    font-size: clamp(3rem, 11vh, 6rem);
+  }
+
+  .lede {
+    margin-top: 0.75rem;
+  }
+
+  .facts {
+    margin-top: 0.8rem;
+  }
+
+  .legend {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-axes {
+    transition: none;
+  }
+
+  .data-status::before,
+  [mo-value]::before,
+  marimo-cell::before {
+    animation: none !important;
+    opacity: 0.62;
+  }
+}
