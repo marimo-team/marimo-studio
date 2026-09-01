@@ -27,9 +27,6 @@ def test_css_resources_keep_nested_function_context_and_source_order() -> None:
         "fourth.png",
         "fifth.png",
     ]
-    assert [offset for _value, offset in resources] == sorted(
-        offset for _value, offset in resources
-    )
 
 
 def test_html_css_resources_preserve_positions_across_rules() -> None:

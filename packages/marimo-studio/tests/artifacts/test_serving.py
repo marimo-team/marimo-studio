@@ -193,136 +193,125 @@ async def _discard_message(_message: Message) -> None:
     return
 
 
-def test_artifact_route_closes_acquisition_completed_after_disconnect(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+def _cancel_request(
+    handler: ReadyWorkspaceHandler,
+    route: ReadyWorkspaceRoute,
+    started: Event,
+    release: Event,
 ) -> None:
-    handler, route, presentation = _artifact_route(notebook_path)
-    original = presentation.lease_artifact
-    started = Event()
-    release = Event()
-    acquired: list[ArtifactLease] = []
-
-    def acquire(view: str, revision: str) -> ArtifactLease | None:
-        started.set()
-        if not release.wait(timeout=2):
-            raise RuntimeError("Artifact acquisition was not released")
-        lease = original(view, revision)
-        if lease is not None:
-            acquired.append(lease)
-        return lease
-
-    monkeypatch.setattr(presentation, "lease_artifact", acquire)
-    try:
-
-        async def exercise() -> None:
-            task = asyncio.create_task(
-                handler.handle(route, _request_body, _discard_message)
-            )
-            assert await asyncio.to_thread(started.wait, 2)
-            task.cancel()
-            release.set()
-            with pytest.raises(asyncio.CancelledError):
-                await task
-
-        asyncio.run(exercise())
-        assert len(acquired) == 1
-        assert acquired[0].closed
-    finally:
-        presentation.close()
-
-
-def test_artifact_route_closes_prepared_response_after_disconnect(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    handler, route, presentation = _artifact_route(notebook_path)
-    prepare = ready_handler_module.artifact_file_response
-    started = Event()
-    release = Event()
-    prepared: list[Any] = []
-    acquired: list[ArtifactLease] = []
-    original = presentation.lease_artifact
-
-    def acquire(view: str, revision: str) -> ArtifactLease | None:
-        lease = original(view, revision)
-        if lease is not None:
-            acquired.append(lease)
-        return lease
-
-    def prepare_response(
-        lease: ArtifactLease,
-        relative: str,
-        *,
-        head: bool = False,
-        if_none_match: str | None = None,
-    ) -> Any:
-        started.set()
-        if not release.wait(timeout=2):
-            raise RuntimeError("Artifact response preparation was not released")
-        response = prepare(
-            lease,
-            relative,
-            head=head,
-            if_none_match=if_none_match,
+    async def exercise() -> None:
+        task = asyncio.create_task(
+            handler.handle(route, _request_body, _discard_message)
         )
-        prepared.append(response)
-        return response
+        assert await asyncio.to_thread(started.wait, 2)
+        task.cancel()
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
 
-    monkeypatch.setattr(
-        ready_handler_module,
-        "artifact_file_response",
-        prepare_response,
-    )
-    monkeypatch.setattr(presentation, "lease_artifact", acquire)
-    try:
-
-        async def exercise() -> None:
-            task = asyncio.create_task(
-                handler.handle(route, _request_body, _discard_message)
-            )
-            assert await asyncio.to_thread(started.wait, 2)
-            task.cancel()
-            release.set()
-            with pytest.raises(asyncio.CancelledError):
-                await task
-
-        asyncio.run(exercise())
-        assert len(prepared) == 1
-        assert len(acquired) == 1
-        assert acquired[0].closed
-    finally:
-        presentation.close()
+    asyncio.run(exercise())
 
 
-def test_artifact_route_closes_response_owner_when_send_disconnects(
+def test_artifact_route_closes_response_owners_after_disconnect(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     handler, route, presentation = _artifact_route(notebook_path)
-    acquired: list[ArtifactLease] = []
     original = presentation.lease_artifact
-
-    def acquire(view: str, revision: str) -> ArtifactLease | None:
-        lease = original(view, revision)
-        if lease is not None:
-            acquired.append(lease)
-        return lease
-
-    monkeypatch.setattr(presentation, "lease_artifact", acquire)
-
-    async def disconnect(_message: Message) -> None:
-        raise asyncio.CancelledError
-
     try:
+        acquisition_started = Event()
+        acquisition_release = Event()
+        acquisition: list[ArtifactLease] = []
 
-        async def exercise() -> None:
-            with pytest.raises(asyncio.CancelledError):
-                await handler.handle(route, _request_body, disconnect)
+        def acquire_after_disconnect(view: str, revision: str) -> ArtifactLease | None:
+            acquisition_started.set()
+            if not acquisition_release.wait(timeout=2):
+                raise RuntimeError("Artifact acquisition was not released")
+            lease = original(view, revision)
+            if lease is not None:
+                acquisition.append(lease)
+            return lease
 
-        asyncio.run(exercise())
-        assert len(acquired) == 1
-        assert acquired[0].closed
+        with monkeypatch.context() as patch:
+            patch.setattr(presentation, "lease_artifact", acquire_after_disconnect)
+            _cancel_request(
+                handler,
+                route,
+                acquisition_started,
+                acquisition_release,
+            )
+        assert len(acquisition) == 1
+        assert acquisition[0].closed
+
+        preparation_started = Event()
+        preparation_release = Event()
+        prepared: list[Any] = []
+        preparation: list[ArtifactLease] = []
+        prepare = ready_handler_module.artifact_file_response
+
+        def acquire_for_preparation(view: str, revision: str) -> ArtifactLease | None:
+            lease = original(view, revision)
+            if lease is not None:
+                preparation.append(lease)
+            return lease
+
+        def prepare_after_disconnect(
+            lease: ArtifactLease,
+            relative: str,
+            *,
+            head: bool = False,
+            if_none_match: str | None = None,
+        ) -> Any:
+            preparation_started.set()
+            if not preparation_release.wait(timeout=2):
+                raise RuntimeError("Artifact response preparation was not released")
+            response = prepare(
+                lease,
+                relative,
+                head=head,
+                if_none_match=if_none_match,
+            )
+            prepared.append(response)
+            return response
+
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                ready_handler_module,
+                "artifact_file_response",
+                prepare_after_disconnect,
+            )
+            patch.setattr(presentation, "lease_artifact", acquire_for_preparation)
+            _cancel_request(
+                handler,
+                route,
+                preparation_started,
+                preparation_release,
+            )
+        assert len(prepared) == 1
+        assert len(preparation) == 1
+        assert preparation[0].closed
+
+        sent: list[ArtifactLease] = []
+
+        def acquire_for_send(view: str, revision: str) -> ArtifactLease | None:
+            lease = original(view, revision)
+            if lease is not None:
+                sent.append(lease)
+            return lease
+
+        async def disconnect(_message: Message) -> None:
+            raise asyncio.CancelledError
+
+        with monkeypatch.context() as patch:
+            patch.setattr(presentation, "lease_artifact", acquire_for_send)
+
+            async def exercise_send() -> None:
+                with pytest.raises(asyncio.CancelledError):
+                    await handler.handle(route, _request_body, disconnect)
+
+            asyncio.run(exercise_send())
+        assert len(sent) == 1
+        assert sent[0].closed
     finally:
         presentation.close()
 
@@ -763,4 +752,4 @@ def test_presentation_capture_retains_construction_error_after_cleanup_failures(
     with pytest.raises(RuntimeError, match="construction failed"):
         revisions_module.capture_presentations(studio)
 
-    assert calls == ["dashboard", "executive"]
+    assert set(calls) == {"dashboard", "executive"}

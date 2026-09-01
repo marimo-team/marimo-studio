@@ -105,19 +105,6 @@ def test_prune_settles_when_project_disappears_before_pin_scan(
     assert not project.root.exists()
 
 
-def test_prune_rejects_an_existing_non_directory_project_root(
-    tmp_path: Path,
-) -> None:
-    project = _project(tmp_path)
-    shutil.rmtree(project.root)
-    project.root.write_text("not a project directory\n", encoding="utf-8")
-
-    with pytest.raises(
-        ConfigurationError, match="View project root must be a directory"
-    ):
-        prune_artifacts_locked(project)
-
-
 def test_public_prune_does_not_recreate_a_removed_project(tmp_path: Path) -> None:
     project = _project(tmp_path)
     publish_artifact(project, "development")

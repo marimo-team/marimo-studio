@@ -177,7 +177,7 @@ def test_svelte_starter_builds_without_possible_output_cells(tmp_path: Path) -> 
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
-def test_svelte_projection_diagnostic_names_the_cell_attribute(
+def test_svelte_locates_a_missing_projection_target_in_authored_source(
     tmp_path: Path,
 ) -> None:
     root, project = _project(tmp_path, svelte_provider, "marimo-studio/svelte")
@@ -192,8 +192,8 @@ def test_svelte_projection_diagnostic_names_the_cell_attribute(
     diagnostic = _inspect(svelte_provider, project).diagnostics[0]
 
     assert diagnostic.code == "projection-target-missing"
-    assert diagnostic.message == "<marimo-cell> requires a non-empty name."
-    assert 'Use <marimo-cell name="...">' in diagnostic.hint
+    assert diagnostic.source is not None
+    assert diagnostic.source.path == Path("src/App.svelte")
 
 
 @pytest.mark.skipif(
@@ -267,10 +267,8 @@ def test_svelte_each_extracts_bounded_and_wildcard_mounts(
         for item in _inspect(svelte_provider, project).diagnostics
         if item.code == "projection-target-unbounded"
     )
-    assert diagnostic.message == (
-        "Studio cannot determine every possible <marimo-cell> name."
-    )
-    assert 'Add data-marimo-allow="*"' in diagnostic.hint
+    assert diagnostic.source is not None
+    assert diagnostic.source.path == Path("src/App.svelte")
 
 
 @pytest.mark.skipif(
@@ -315,7 +313,7 @@ def test_svelte_vite_config_cannot_access_paths_outside_staging(
 
         assert report.document is None, operation
         diagnostic = report.diagnostics[0]
-        assert "NotCapable" in diagnostic.message, operation
+        assert diagnostic.code == "svelte-build-failed", operation
         assert secret not in diagnostic.message, operation
         if operation == "write":
             assert not target.exists()

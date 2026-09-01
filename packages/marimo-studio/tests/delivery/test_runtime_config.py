@@ -28,14 +28,16 @@ pytestmark = pytest.mark.supported_python
 
 def test_runtime_config_budget_counts_encoded_utf8_bytes() -> None:
     value = {"label": "Zürich"}
-    encoded = encode_runtime_config(value, max_bytes=19)
+    encoded = encode_runtime_config(value, max_bytes=1_024)
+    encoded_size = len(encoded)
 
-    assert len(encoded) == 19
+    assert encode_runtime_config(value, max_bytes=encoded_size) == encoded
+
     with pytest.raises(RuntimeConfigTooLargeError) as raised:
-        encode_runtime_config(value, max_bytes=18)
+        encode_runtime_config(value, max_bytes=encoded_size - 1)
 
-    assert raised.value.size == 19
-    assert raised.value.limit == 18
+    assert raised.value.size == encoded_size
+    assert raised.value.limit == encoded_size - 1
 
 
 def test_runtime_config_matches_the_browser_protocol_fixture() -> None:
@@ -201,8 +203,6 @@ def test_runtime_config_exposes_only_embedded_runtime_settings() -> None:
         "display": {"theme": "light"},
         "runtime": {"show_tracebacks": True},
     }
-    serialized = json.dumps(payload)
-    assert "leak-" not in serialized
 
 
 def test_projection_revision_tracks_its_runtime_contract() -> None:

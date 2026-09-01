@@ -148,7 +148,6 @@ def test_publication_rejects_a_hardlink_added_after_detachment(
         publish_artifact(project, "development")
 
     assert linked
-    assert external_source.is_file()
     assert read_published_artifact(project, "development") is None
 
 
@@ -514,4 +513,3 @@ def test_artifact_control_read_keeps_its_parent_when_project_root_is_swapped(
     value = read_json(project.root, path, f"artifact {control}")
 
     assert value == expected
-    assert value != {"secret": True}

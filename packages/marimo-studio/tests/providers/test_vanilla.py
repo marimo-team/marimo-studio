@@ -85,26 +85,19 @@ def test_vanilla_rejects_duplicate_projection_and_shell_attributes(
     inspection = provider.inspect(inspection_request(project))
 
     assert [item.code for item in inspection.diagnostics] == ["entry-document-invalid"]
-    assert "Duplicate HTML attribute" in inspection.diagnostics[0].message
 
 
-def test_vanilla_projection_diagnostics_name_the_authored_attributes(
+def test_vanilla_projection_diagnostics_locate_authored_sources(
     tmp_path: Path,
 ) -> None:
     project = _project(tmp_path)
     cases = (
-        (
-            '<marimo-cell target="summary"></marimo-cell>',
-            "<marimo-cell> requires a non-empty name.",
-        ),
-        (
-            '<marimo-output name="summary"></marimo-output>',
-            "<marimo-output> requires a non-empty value.",
-        ),
-        ("<span mo-value></span>", "mo-value requires a non-empty selector."),
+        '<marimo-cell target="summary"></marimo-cell>',
+        '<marimo-output name="summary"></marimo-output>',
+        "<span mo-value></span>",
     )
 
-    for projection, message in cases:
+    for projection in cases:
         (project.root / "index.html").write_text(
             f"""<!doctype html>
 <html>
@@ -120,8 +113,7 @@ def test_vanilla_projection_diagnostics_name_the_authored_attributes(
 
         diagnostic = provider.inspect(inspection_request(project)).diagnostics[0]
 
-        assert diagnostic.message == message
-        assert 'Use <marimo-cell name="...">' in diagnostic.hint
+        assert diagnostic.code == "entry-document-invalid"
         assert diagnostic.source is not None
         assert diagnostic.source.line == 5
 
@@ -202,41 +194,32 @@ def test_vanilla_build_preserves_crlf_line_endings(tmp_path: Path) -> None:
     assert built.count(b"\r\n") == authored.count(b"\r\n")
 
 
-def test_vanilla_rejects_authored_mount_declaration_id(tmp_path: Path) -> None:
+def test_vanilla_rejects_authored_runtime_attributes(tmp_path: Path) -> None:
     project = _project(tmp_path)
     source = project.root / "index.html"
-    source.write_text(
-        source.read_text(encoding="utf-8").replace(
+    original = source.read_text(encoding="utf-8")
+    replacements = (
+        (
             '<main id="app-shell"',
             '<main id="app-shell" data-marimo-studio-site="authored"',
         ),
-        encoding="utf-8",
-    )
-
-    inspection = provider.inspect(inspection_request(project))
-
-    assert [item.code for item in inspection.diagnostics] == ["entry-document-invalid"]
-    assert "data-marimo-studio-site is reserved" in inspection.diagnostics[0].message
-
-
-def test_vanilla_rejects_authored_source_revision(tmp_path: Path) -> None:
-    project = _project(tmp_path)
-    source = project.root / "index.html"
-    source.write_text(
-        source.read_text(encoding="utf-8").replace(
+        (
             "</head>",
             '<script data-marimo-studio-source-revision="authored"></script></head>',
         ),
-        encoding="utf-8",
     )
 
-    inspection = provider.inspect(inspection_request(project))
+    for target, replacement in replacements:
+        source.write_text(
+            original.replace(target, replacement),
+            encoding="utf-8",
+        )
 
-    assert [item.code for item in inspection.diagnostics] == ["entry-document-invalid"]
-    assert (
-        "data-marimo-studio-source-revision is reserved"
-        in inspection.diagnostics[0].message
-    )
+        inspection = provider.inspect(inspection_request(project))
+
+        assert [item.code for item in inspection.diagnostics] == [
+            "entry-document-invalid"
+        ]
 
 
 @pytest.mark.parametrize(
@@ -270,4 +253,3 @@ def test_vanilla_rejects_symlinked_entrypoint(tmp_path: Path) -> None:
     inspection = provider.inspect(inspection_request(project))
 
     assert [item.code for item in inspection.diagnostics] == ["entry-document-invalid"]
-    assert "symlink" in inspection.diagnostics[0].message

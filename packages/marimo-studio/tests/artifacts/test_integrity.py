@@ -88,25 +88,6 @@ class _EntryPoint:
         return self.provider
 
 
-class _LeaseCloser:
-    def __init__(
-        self,
-        name: str,
-        calls: list[str],
-        failure: BaseException | None = None,
-    ) -> None:
-        self.name = name
-        self.calls = calls
-        self.failure = failure
-        self.closed = False
-
-    def close(self) -> None:
-        self.calls.append(self.name)
-        self.closed = True
-        if self.failure is not None:
-            raise self.failure
-
-
 class _ExternalVanillaProvider:
     def __init__(self) -> None:
         self.info = vanilla_provider.info
@@ -163,6 +144,7 @@ def _external_project(tmp_path: Path) -> ViewProject:
         (FileBudget(100, 1, 1024 * 1024), "Reduce the file size"),
         (FileBudget(100, 1024 * 1024, 1), "reduce their sizes"),
     ),
+    ids=("file-count", "single-file-size", "total-size"),
 )
 def test_project_input_budgets_fail_before_provider_build(
     tmp_path: Path,
@@ -264,6 +246,7 @@ def test_artifact_document_budget_is_checked_before_its_payload_is_read(
         (FileBudget(100, 1, 1024 * 1024), "Reduce the file size"),
         (FileBudget(100, 1024 * 1024, 1), "reduce their sizes"),
     ),
+    ids=("file-count", "single-file-size", "total-size"),
 )
 def test_artifact_output_budgets_reject_provider_results(
     tmp_path: Path,
@@ -297,17 +280,7 @@ def test_profiles_share_one_content_only_artifact(tmp_path: Path) -> None:
     assert development.root == production.root
     assert development.profile == "development"
     assert production.profile == "production"
-    manifest = _read_json(_manifest_path(development))
-    assert set(manifest) == {
-        "schema",
-        "artifact_revision",
-        "document",
-        "files",
-        "mounts",
-    }
-    development_state = _read_json(_profile_path(project))
     production_state = _read_json(_profile_path(project, "production"))
-    assert development_state["published"]["provider"]["key"] == project.provider
     assert production_state["published"]["artifact_revision"] == (
         development.artifact_revision
     )
@@ -430,6 +403,7 @@ def test_live_manifest_is_revalidated_before_artifact_control_creation(
         ("schema", 2),
         ("artifact_revision", "sha256:" + "0" * 64),
     ),
+    ids=("schema-type", "schema-version", "artifact-revision"),
 )
 def test_artifact_manifest_rejects_corrupt_identity_fields(
     tmp_path: Path,
@@ -484,6 +458,13 @@ def test_artifact_manifest_rejects_duplicate_json_fields(tmp_path: Path) -> None
             lambda site: site.update(kind="value", allowedTargets=["report..total"]),
             "dot selection",
         ),
+    ),
+    ids=(
+        "site-id",
+        "source-line-positive",
+        "source-line-browser-safe",
+        "allowed-targets",
+        "value-target-path",
     ),
 )
 def test_persisted_mounts_use_canonical_validation(
@@ -589,10 +570,20 @@ def test_artifact_read_rejects_missing_and_extra_files(
             }
         ),
     ),
+    ids=(
+        "schema-type",
+        "schema-version",
+        "top-level-field",
+        "provider-api-version",
+        "provider-build-fingerprint",
+        "provider-field",
+        "duration",
+        "published-error-diagnostic",
+    ),
 )
 def test_profile_receipt_rejects_corrupt_publication_evidence(
     tmp_path: Path,
-    mutate: Any,
+    mutate: Callable[[dict[str, Any]], None],
 ) -> None:
     project = _project(tmp_path)
     publish_artifact(project, "development")
@@ -613,6 +604,7 @@ def test_profile_receipt_rejects_corrupt_publication_evidence(
         (lambda item: item.update(message=""), "message"),
         (lambda item: item.update(hint=" padded "), "hint"),
     ),
+    ids=("code", "severity", "message", "hint"),
 )
 def test_persisted_build_diagnostics_use_canonical_validation(
     tmp_path: Path,

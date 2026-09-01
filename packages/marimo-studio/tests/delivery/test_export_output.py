@@ -20,7 +20,11 @@ from marimo_studio.errors import StaticExportError, ViewGenerationConflictError
 from .export_test_support import configure_export_view
 
 
-@pytest.mark.parametrize("force", (False, True))
+@pytest.mark.parametrize(
+    "force",
+    (False, True),
+    ids=("new-destination", "forced-replacement"),
+)
 def test_export_supports_a_max_component_destination(
     notebook_path: Path,
     tmp_path: Path,
@@ -36,7 +40,8 @@ def test_export_supports_a_max_component_destination(
 
     assert result.output == output
     assert output.joinpath("index.html").is_file()
-    assert not output.joinpath("previous.txt").exists()
+    if force:
+        assert not output.joinpath("previous.txt").exists()
     assert not tuple(tmp_path.glob(".marimo-studio-export-*"))
 
 
@@ -253,7 +258,7 @@ def test_forced_export_retries_an_occupied_recovery_name(
     assert not second.exists()
 
 
-def test_forced_export_restores_output_when_recovery_identity_read_fails(
+def test_forced_export_restores_output_after_replacement_failures(
     notebook_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -261,6 +266,7 @@ def test_forced_export_restores_output_when_recovery_identity_read_fails(
     output = _existing_export(notebook_path, tmp_path)
     expected = output.joinpath("index.html").read_bytes()
     directory_identity = output_module.directory_identity
+    publish_absent = output_module.publish_absent
 
     def fail_recovery_read(
         filesystem: export_module.SecureDirectory,
@@ -269,23 +275,6 @@ def test_forced_export_restores_output_when_recovery_identity_read_fails(
         if path.name.startswith(".marimo-studio-export-recovery-"):
             raise PermissionError("recovery identity unavailable")
         return directory_identity(filesystem, path)
-
-    monkeypatch.setattr(output_module, "directory_identity", fail_recovery_read)
-
-    with pytest.raises(StaticExportError, match="Could not verify previous"):
-        export_view(notebook_path, output, force=True)
-
-    assert output.joinpath("index.html").read_bytes() == expected
-
-
-def test_forced_export_restores_output_when_bundle_commit_fails(
-    notebook_path: Path,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    output = _existing_export(notebook_path, tmp_path)
-    expected = output.joinpath("index.html").read_bytes()
-    publish_absent = output_module.publish_absent
 
     def fail_bundle(
         filesystem: export_module.SecureDirectory,
@@ -296,12 +285,17 @@ def test_forced_export_restores_output_when_bundle_commit_fails(
             raise PermissionError("bundle commit failed")
         publish_absent(filesystem, staged, destination)
 
-    monkeypatch.setattr(output_module, "publish_absent", fail_bundle)
+    failures = (
+        ("directory_identity", fail_recovery_read, "Could not verify previous"),
+        ("publish_absent", fail_bundle, "Could not replace"),
+    )
+    for attribute, failure, message in failures:
+        with monkeypatch.context() as patch:
+            patch.setattr(output_module, attribute, failure)
+            with pytest.raises(StaticExportError, match=message):
+                export_view(notebook_path, output, force=True)
 
-    with pytest.raises(StaticExportError, match="Could not replace"):
-        export_view(notebook_path, output, force=True)
-
-    assert output.joinpath("index.html").read_bytes() == expected
+        assert output.joinpath("index.html").read_bytes() == expected, attribute
 
 
 def test_export_detects_a_concurrently_substituted_empty_output_directory(

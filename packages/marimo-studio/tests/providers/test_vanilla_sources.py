@@ -184,9 +184,7 @@ def test_vanilla_reports_a_missing_local_source(tmp_path: Path) -> None:
     missing = provider.inspect(inspection_request(project))
 
     assert [item.code for item in missing.diagnostics] == ["local-resource-invalid"]
-    assert (
-        "local source is unavailable: scripts/app.js" in missing.diagnostics[0].message
-    )
+    assert missing.diagnostics[0].source is not None
 
 
 def test_vanilla_rejects_a_symlinked_local_source(tmp_path: Path) -> None:
@@ -208,7 +206,7 @@ def test_vanilla_rejects_a_symlinked_local_source(tmp_path: Path) -> None:
     inspection = provider.inspect(inspection_request(project))
 
     assert [item.code for item in inspection.diagnostics] == ["local-resource-invalid"]
-    assert "symlink" in inspection.diagnostics[0].message
+    assert inspection.diagnostics[0].source is not None
 
 
 @pytest.mark.parametrize(

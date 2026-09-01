@@ -94,28 +94,30 @@ def test_interrupted_build_becomes_stale_and_cleans_staging(tmp_path: Path) -> N
     assert tuple((artifact_root(project) / ".staging").iterdir()) == ()
 
 
-@pytest.mark.parametrize("damage", ("receipt", "missing-revision", "manifest"))
-def test_build_repairs_replaceable_generated_state(
-    tmp_path: Path,
-    damage: str,
-) -> None:
+def test_build_repairs_each_replaceable_generated_state(tmp_path: Path) -> None:
     project = _project(tmp_path)
-    first = publish_artifact_lease(project, "development")
-    revision = first.artifact.root.parent
-    first.close()
-    if damage == "receipt":
-        _profile_path(project).write_text("{", encoding="utf-8")
-    elif damage == "missing-revision":
-        shutil.rmtree(revision)
-    else:
-        (revision / "artifact.json").write_text("{}\n", encoding="utf-8")
+    publish_artifact_lease(project, "development").close()
 
-    rebuilt = publish_artifact_lease(project, "development")
-    rebuilt.close()
+    for damage in ("receipt", "missing revision", "manifest"):
+        published = read_artifact_state(project, "development").artifact
+        assert published is not None
+        revision = published.root.parent
+        if damage == "receipt":
+            _profile_path(project).write_text("{", encoding="utf-8")
+        elif damage == "missing revision":
+            shutil.rmtree(revision)
+        else:
+            (revision / "artifact.json").write_text("{}\n", encoding="utf-8")
 
-    state = read_build_state(project, "development")
-    assert state.phase == "published"
-    assert any(item.code == "artifact-state-repaired" for item in state.diagnostics)
+        publish_artifact_lease(project, "development").close()
+
+        repaired = read_artifact_state(project, "development")
+        assert repaired.build.phase == "published", damage
+        assert repaired.artifact is not None, damage
+        if damage == "receipt":
+            assert [item.code for item in repaired.build.diagnostics] == [
+                "artifact-state-repaired"
+            ]
 
 
 def test_provider_api_change_preserves_last_good_until_the_next_build(
@@ -127,6 +129,7 @@ def test_provider_api_change_preserves_last_good_until_the_next_build(
     build = provider.build
     with publish_artifact_lease(project, "development") as first_lease:
         first = first_lease.artifact
+        expected_document = first_lease.read_text(first.document)
     pointer = _profile_path(project)
     state = _read_json(pointer)
     state["published"]["provider"]["api_version"] = 2
@@ -143,7 +146,7 @@ def test_provider_api_change_preserves_last_good_until_the_next_build(
     last_good = lease_published_artifact(project, "development")
     assert last_good is not None
     with last_good:
-        assert last_good.read_text(last_good.artifact.document)
+        assert last_good.read_text(last_good.artifact.document) == expected_document
 
     def fail_rebuild(_request: object) -> None:
         raise RuntimeError("provider API rebuild failed")
@@ -160,7 +163,7 @@ def test_provider_api_change_preserves_last_good_until_the_next_build(
     last_good = lease_published_artifact(project, "development")
     assert last_good is not None
     with last_good:
-        assert last_good.read_text(last_good.artifact.document)
+        assert last_good.read_text(last_good.artifact.document) == expected_document
 
     monkeypatch.setattr(provider, "build", build)
     publish_artifact_lease(project, "development").close()

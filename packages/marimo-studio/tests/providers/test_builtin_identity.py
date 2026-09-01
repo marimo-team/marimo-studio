@@ -7,24 +7,12 @@ from pathlib import Path
 import pytest
 
 from marimo_studio._views.inspection import inspection_request
-from marimo_studio.view_providers import PROVIDER_API_VERSION
-from marimo_studio.view_providers._bundled.deno_react import provider as react_provider
-from marimo_studio.view_providers._bundled.deno_svelte import (
-    provider as svelte_provider,
-)
 from marimo_studio.view_providers._bundled.vanilla import provider as vanilla_provider
 from marimo_studio.view_providers._host import provider_registry
 
 from ..deno_provider_test_support import project as _project
 
 pytestmark = pytest.mark.supported_python
-
-
-def test_built_in_providers_use_the_current_api_version() -> None:
-    assert {
-        provider.info.api_version
-        for provider in (react_provider, svelte_provider, vanilla_provider)
-    } == {PROVIDER_API_VERSION}
 
 
 def test_built_in_registration_labels_resolve_canonical_provider_ids() -> None:

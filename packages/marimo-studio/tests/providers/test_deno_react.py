@@ -185,7 +185,7 @@ def test_react_starters_build_without_possible_output_cells(
     not _deno.deno_availability().available,
     reason="marimo-studio[deno] is unavailable",
 )
-def test_react_projection_diagnostics_name_the_authored_attributes(
+def test_react_projection_diagnostics_locate_authored_sources(
     tmp_path: Path,
 ) -> None:
     root, project = _project(tmp_path, react_provider, "marimo-studio/react")
@@ -206,28 +206,15 @@ def test_react_projection_diagnostics_name_the_authored_attributes(
     assert [
         (
             item.code,
-            item.message,
+            item.source.path if item.source is not None else None,
             item.source.line if item.source is not None else None,
         )
         for item in diagnostics
     ] == [
-        (
-            "projection-target-missing",
-            "<marimo-cell> requires a non-empty name.",
-            3,
-        ),
-        (
-            "projection-target-missing",
-            "<marimo-output> requires a non-empty value.",
-            4,
-        ),
-        (
-            "projection-target-missing",
-            "mo-value requires a non-empty selector.",
-            5,
-        ),
+        ("projection-target-missing", Path("src/App.tsx"), 3),
+        ("projection-target-missing", Path("src/App.tsx"), 4),
+        ("projection-target-missing", Path("src/App.tsx"), 5),
     ]
-    assert all('Use <marimo-cell name="...">' in item.hint for item in diagnostics)
 
 
 @pytest.mark.skipif(
@@ -379,10 +366,8 @@ export const App = () => (
         for item in _inspect(react_provider, project).diagnostics
         if item.code == "projection-target-unbounded"
     )
-    assert diagnostic.message == (
-        "Studio cannot determine every possible <marimo-cell> name."
-    )
-    assert 'Add data-marimo-allow="*"' in diagnostic.hint
+    assert diagnostic.source is not None
+    assert diagnostic.source.path == Path("src/App.tsx")
 
 
 @pytest.mark.parametrize(

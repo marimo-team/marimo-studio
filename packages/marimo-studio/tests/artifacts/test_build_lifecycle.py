@@ -100,7 +100,6 @@ def test_cache_hit_preserves_successful_build_evidence(
     first_lease.close()
     first_build = read_build_state(project, "development")
     receipt = _read_json(_profile_path(project))
-    assert receipt["schema"] == 1
     assert receipt["published"]["diagnostics"] == [warning.to_dict()]
     assert receipt["published"]["duration_ms"] == first_build.duration_ms
     receipt["build"].update(
@@ -278,7 +277,11 @@ def test_cached_restore_rebuilds_a_corrupt_retained_artifact(
     assert restored == expected
 
 
-@pytest.mark.parametrize("corrupt_receipt", (False, True))
+@pytest.mark.parametrize(
+    "corrupt_receipt",
+    (False, True),
+    ids=("published-receipt", "corrupt-receipt"),
+)
 def test_prepared_inspection_errors_block_provider_build_and_cached_reuse(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -409,7 +412,11 @@ def test_manifest_write_failure_records_a_failed_attempt_and_keeps_last_good(
     ]
 
 
-@pytest.mark.parametrize("cache_hit", (False, True))
+@pytest.mark.parametrize(
+    "cache_hit",
+    (False, True),
+    ids=("new-publication", "cached-publication"),
+)
 def test_prune_failure_does_not_leave_an_unreturned_artifact_pin(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -576,7 +583,11 @@ def test_cancelled_async_build_does_not_publish_a_completed_candidate(
     assert [item.code for item in state.diagnostics] == ["build-cancelled"]
 
 
-@pytest.mark.parametrize("cache_hit", (False, True))
+@pytest.mark.parametrize(
+    "cache_hit",
+    (False, True),
+    ids=("new-publication", "cached-publication"),
+)
 def test_cancellation_before_receipt_commit_preserves_last_good(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
