@@ -167,6 +167,41 @@ describe("Control endpoint", () => {
     expect(registry.messages).toEqual([]);
   });
 
+  test("a failed apply cannot roll back a newer apply", async () => {
+    const registry = new FakeRegistry();
+    let rejectFirst: ((error: Error) => void) | undefined;
+    const firstRequest = new Promise<null>((_resolve, reject) => {
+      rejectFirst = reject;
+    });
+    let markFirstStarted: (() => void) | undefined;
+    const firstStarted = new Promise<void>((resolve) => {
+      markFirstStarted = resolve;
+    });
+    const send = vi
+      .fn<SendControlValues>()
+      .mockImplementationOnce(() => {
+        markFirstStarted?.();
+        return firstRequest;
+      })
+      .mockResolvedValue(null);
+    const controls = endpoint(registry, send);
+
+    const first = controls.apply([{ objectId: "slider-0", value: 1 }]);
+    const second = controls.apply([{ objectId: "slider-0", value: 2 }]);
+    await firstStarted;
+    rejectFirst?.(new Error("first request failed"));
+
+    await expect(first).rejects.toThrow("first request failed");
+    await expect(second).resolves.toBeUndefined();
+    expect(registry.lookupValue("slider-0")).toBe(2);
+    expect(registry.messages).toEqual([
+      {
+        objectId: "slider-0",
+        message: { type: "marimo-ui-value-update", value: 2 },
+      },
+    ]);
+  });
+
   test("keeps a replaced control's stale update out of the kernel", async () => {
     const registry = new FakeRegistry();
     retainUnmountedControlValues(registry);
@@ -280,8 +315,10 @@ describe("Control endpoint", () => {
     expect(registry.registerInstance).toBe(original);
 
     const replacement = endpoint(registry, async () => null);
+    const updates: ControlUpdate[] = [];
+    replacement.subscribe((update) => updates.push(update));
     registry.registerInstance("slider-0", controlElement(7));
-    expect(registry.messages).toHaveLength(1);
+    expect(updates).toEqual([{ objectId: "slider-0", value: 7 }]);
     replacement.dispose();
   });
 });

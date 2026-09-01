@@ -34,10 +34,12 @@ const childCache = <T>(node: RefCacheNode, ref: PossibleRef<T>): RefCacheNode =>
 };
 
 const isRefCallback = <T>(ref: PossibleRef<T>): ref is React.RefCallback<T> =>
-  ref instanceof Function;
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Function prototypes are realm-local.
+  typeof ref === "function";
 
 const isRefCleanup = (cleanup: void | RefCleanup): cleanup is RefCleanup =>
-  cleanup instanceof Function;
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Function prototypes are realm-local.
+  typeof cleanup === "function";
 
 const setRef = <T>(ref: PossibleRef<T>, value: T): (() => void) | void => {
   if (isRefCallback(ref)) {

@@ -31,6 +31,7 @@ export const retainUnmountedControlValues = <TId>(registry: EmbeddedControlRegis
   }
   const reset = replacementResets.get(registry) ?? new Set<TId>();
   const generations = new Map<TId, string>();
+  const retiredGenerations = new Map<TId, Set<string>>();
   replacementResets.set(registry, reset);
   const set = registry.set.bind(registry);
   registry.set = (objectId, value) => {
@@ -43,6 +44,9 @@ export const retainUnmountedControlValues = <TId>(registry: EmbeddedControlRegis
   registry.registerInstance = (objectId, instance) => {
     const randomId = instance.parentElement?.getAttribute("random-id");
     const previousGeneration = generations.get(objectId);
+    if (randomId && retiredGenerations.get(objectId)?.has(randomId)) {
+      return;
+    }
     if (
       reset.has(objectId) &&
       (randomId === null ||
@@ -71,6 +75,11 @@ export const retainUnmountedControlValues = <TId>(registry: EmbeddedControlRegis
       throw error;
     }
     if (randomId) {
+      if (previousGeneration && previousGeneration !== randomId) {
+        const retired = retiredGenerations.get(objectId) ?? new Set<string>();
+        retired.add(previousGeneration);
+        retiredGenerations.set(objectId, retired);
+      }
       generations.set(objectId, randomId);
     }
   };
@@ -96,7 +105,12 @@ export const retainUnmountedControlValues = <TId>(registry: EmbeddedControlRegis
   };
   const broadcastValueUpdate = registry.broadcastValueUpdate.bind(registry);
   registry.broadcastValueUpdate = (initiator, objectId, value) => {
-    if (reset.has(objectId)) {
+    const currentGeneration = generations.get(objectId);
+    const initiatorGeneration = initiator.parentElement?.getAttribute("random-id");
+    if (
+      reset.has(objectId) ||
+      (currentGeneration !== undefined && initiatorGeneration !== currentGeneration)
+    ) {
       return;
     }
     broadcastValueUpdate(initiator, objectId, value);

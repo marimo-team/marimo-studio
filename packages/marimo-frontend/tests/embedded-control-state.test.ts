@@ -152,7 +152,7 @@ test("a reused control node resets when its generation changes", () => {
   assert.deepEqual(registry.value("owner-0"), 1);
 });
 
-test("a retired generation stays blocked until its replacement mounts", () => {
+test("only the current control generation can mount or publish", () => {
   const registry = new Registry();
   retainUnmountedControlValues(registry);
   const retired = controlElement(2, "retired");
@@ -167,6 +167,10 @@ test("a retired generation stays blocked until its replacement mounts", () => {
   const replacement = controlElement(1, "replacement");
   registry.registerInstance("owner-0", replacement);
   registry.broadcastValueUpdate(replacement, "owner-0", 1);
+
+  registry.registerInstance("owner-0", retired);
+  registry.broadcastValueUpdate(retired, "owner-0", 9);
+
   assert.deepEqual(registry.value("owner-0"), 1);
   assert.deepEqual(registry.published, ["owner-0"]);
 });
