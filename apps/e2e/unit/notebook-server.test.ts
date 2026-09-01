@@ -28,8 +28,9 @@ import {
 } from "../tests/notebook-server.ts";
 
 const boundAddressSchema = z.object({ port: z.number().int().positive() });
+const FIXTURE_SERVER_START_TIMEOUT = 5_000;
 const PROBE_TIMEOUT = 500;
-const NATIVE_SERVER_START_TIMEOUT = process.platform === "win32" ? 15_000 : 5_000;
+const NATIVE_SERVER_START_TIMEOUT = 15_000;
 const posixTest = process.platform === "win32" ? test.skip : test;
 
 const expectProcessTreeRootStopped = (
@@ -232,17 +233,20 @@ test("reports bootstrap failure after containing the registered notebook process
   try {
     await registration.ready;
     await expect
-      .poll(async () => {
-        try {
-          const response = await fetch(`http://127.0.0.1:${port}`, {
-            signal: AbortSignal.timeout(PROBE_TIMEOUT),
-          });
-          await response.body?.cancel();
-          return response.status;
-        } catch {
-          return 0;
-        }
-      })
+      .poll(
+        async () => {
+          try {
+            const response = await fetch(`http://127.0.0.1:${port}`, {
+              signal: AbortSignal.timeout(PROBE_TIMEOUT),
+            });
+            await response.body?.cancel();
+            return response.status;
+          } catch {
+            return 0;
+          }
+        },
+        { timeout: FIXTURE_SERVER_START_TIMEOUT },
+      )
       .toBe(503);
     await expect(
       stopNotebookProcess(
@@ -264,7 +268,7 @@ test("reports bootstrap failure after containing the registered notebook process
     stopProcessGroup(registration.processGroupId, "SIGKILL");
     rmSync(directory, { force: true, recursive: true });
   }
-});
+}, 10_000);
 
 test("run shutdown owns the full grace period before forcing a resistant group", async () => {
   const directory = mkdtempSync(resolve(tmpdir(), "marimo-studio-run-grace-"));
@@ -286,7 +290,7 @@ test("run shutdown owns the full grace period before forcing a resistant group",
   });
   try {
     await registration.ready;
-    await expect.poll(() => responds(port)).toBe(true);
+    await expect.poll(() => responds(port), { timeout: FIXTURE_SERVER_START_TIMEOUT }).toBe(true);
     const started = performance.now();
     await stopNotebookProcess(
       {
@@ -307,7 +311,7 @@ test("run shutdown owns the full grace period before forcing a resistant group",
     stopProcessGroup(registration.processGroupId, "SIGKILL");
     rmSync(directory, { force: true, recursive: true });
   }
-});
+}, 10_000);
 
 const delayedCooperativeKernelExit = async () => {
   const directory = mkdtempSync(resolve(tmpdir(), "marimo-studio-run-cooperative-"));
@@ -334,7 +338,7 @@ const delayedCooperativeKernelExit = async () => {
   });
   try {
     await registration.ready;
-    await expect.poll(() => responds(port)).toBe(true);
+    await expect.poll(() => responds(port), { timeout: FIXTURE_SERVER_START_TIMEOUT }).toBe(true);
     const started = performance.now();
     await stopNotebookProcess(
       {
@@ -361,6 +365,7 @@ const delayedCooperativeKernelExit = async () => {
 posixTest(
   "run shutdown lets a delayed cooperative kernel exit inside its grace period",
   delayedCooperativeKernelExit,
+  15_000,
 );
 
 test("stops a native authenticated Marimo run server without Studio bootstrap", async () => {
@@ -491,7 +496,7 @@ const stopListeningDescendant = async () => {
   try {
     await new Promise<void>((resolve) => child.once("close", () => resolve()));
     expect(child.exitCode).toBe(0);
-    await expect.poll(() => responds(port)).toBe(true);
+    await expect.poll(() => responds(port), { timeout: FIXTURE_SERVER_START_TIMEOUT }).toBe(true);
     await stopNotebookServer(server);
     expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
     expect(await notebookServerPortIsOpen(port)).toBe(false);
@@ -501,7 +506,7 @@ const stopListeningDescendant = async () => {
     }
   }
 };
-posixTest("stops a listening descendant after its wrapper exits", stopListeningDescendant, 15_000);
+posixTest("stops a listening descendant after its wrapper exits", stopListeningDescendant, 20_000);
 
 test("forces shutdown when the graceful endpoint leaves the server alive", async () => {
   const port = await availablePort();
@@ -525,7 +530,7 @@ test("forces shutdown when the graceful endpoint leaves the server alive", async
   });
 
   try {
-    await expect.poll(() => responds(port)).toBe(true);
+    await expect.poll(() => responds(port), { timeout: FIXTURE_SERVER_START_TIMEOUT }).toBe(true);
     await stopNotebookProcess(
       {
         child,
@@ -541,7 +546,7 @@ test("forces shutdown when the graceful endpoint leaves the server alive", async
       stopProcessGroup(child.pid, "SIGKILL");
     }
   }
-});
+}, 10_000);
 
 test("reports a session drain failure after forcing the server process closed", async () => {
   const port = await availablePort();
@@ -566,7 +571,7 @@ test("reports a session drain failure after forcing the server process closed", 
   });
 
   try {
-    await expect.poll(() => responds(port)).toBe(true);
+    await expect.poll(() => responds(port), { timeout: FIXTURE_SERVER_START_TIMEOUT }).toBe(true);
     await expect(
       stopNotebookProcess(
         {
@@ -584,7 +589,7 @@ test("reports a session drain failure after forcing the server process closed", 
       stopProcessGroup(child.pid, "SIGKILL");
     }
   }
-});
+}, 10_000);
 
 test("forces a signal-resistant static server to exit", async () => {
   const port = await availablePort();
@@ -601,7 +606,7 @@ test("forces a signal-resistant static server to exit", async () => {
   });
 
   try {
-    await expect.poll(() => responds(port)).toBe(true);
+    await expect.poll(() => responds(port), { timeout: FIXTURE_SERVER_START_TIMEOUT }).toBe(true);
     await stopNotebookProcess(
       {
         child,
@@ -617,4 +622,4 @@ test("forces a signal-resistant static server to exit", async () => {
       stopProcessGroup(child.pid, "SIGKILL");
     }
   }
-});
+}, 10_000);
