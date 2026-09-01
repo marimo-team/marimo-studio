@@ -239,9 +239,8 @@ def test_timed_out_description_keeps_a_healthy_provider_usable(
         _wait_until_dead((blocked_pid,))
         diagnostics = registry.diagnostics()
         assert [item.registration for item in diagnostics] == ["blocked", "healthy"]
-        assert (
-            f"exceeded its {_METADATA_OPERATION_TIMEOUT:g} second limit"
-            in (diagnostics[0].error or "")
+        assert f"exceeded its {_METADATA_OPERATION_TIMEOUT:g} second limit" in (
+            diagnostics[0].error or ""
         )
         assert diagnostics[1].loaded
     finally:
@@ -351,6 +350,4 @@ def test_external_provider_metadata_operations_have_a_containment_deadline(
                 )
             error = str(captured.value)
 
-    assert (
-        f"exceeded its {_METADATA_OPERATION_TIMEOUT:g} second limit" in error
-    )
+    assert f"exceeded its {_METADATA_OPERATION_TIMEOUT:g} second limit" in error
