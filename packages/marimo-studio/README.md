@@ -18,7 +18,7 @@ results by name and controls their layout and browser interaction.
 Create a view named `dashboard`, then open it beside the notebook:
 
 ```console
-uvx marimo-studio view create dashboard --target analysis.py
+uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard --target analysis.py
 uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
 ```
 
@@ -30,6 +30,10 @@ keeps the last successful result available.
 The installed Agent Skill gives coding agents the same workflow. People and
 agents inspect the same notebook and view source, make revision-safe edits,
 build, preview, and validate the rendered result.
+
+See the [Rio athletes
+example](https://marimo-team.github.io/marimo-studio/examples/athletes) for one
+notebook rendered as a report, linked explorer, and interactive briefing.
 
 Marimo Studio 0.1.0 supports Python 3.10 through 3.14 and Marimo 0.24.0. Read
 [Why Studio?](https://marimo-team.github.io/marimo-studio/why-studio) for the

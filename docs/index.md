@@ -52,6 +52,9 @@ features:
     linkText: Author with an agent
 ---
 
+Marimo Studio 0.1 is experimental. Public contracts may change between minor
+releases before 1.0. See [Compatibility and support](reference/compatibility.md).
+
 ## See it in action
 
 <StudioExample family="athletes" />

@@ -71,7 +71,7 @@ presentation built from one point per athlete.
 Start with a saved notebook such as `analysis.py`:
 
 ```console
-uvx marimo-studio view create dashboard --target analysis.py
+uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard --target analysis.py
 uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
 ```
 

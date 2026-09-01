@@ -9,13 +9,13 @@ Start with Python 3.10 through 3.14, `uv`, and a saved Marimo notebook such as
 `analysis.py`. Preview the first view's writes:
 
 ```console
-uvx marimo-studio view create dashboard --target analysis.py --dry-run
+uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard --target analysis.py --dry-run
 ```
 
 Create the view after reviewing the plan:
 
 ```console
-uvx marimo-studio view create dashboard --target analysis.py
+uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard --target analysis.py
 ```
 
 Studio writes the view beside the notebook:
