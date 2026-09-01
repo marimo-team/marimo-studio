@@ -18,7 +18,7 @@ export const SourceConflict = ({
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const discardOnly = conflict.kind !== "revision";
   const message = {
-    orphan: `${name} is no longer part of this page.`,
+    orphan: `${name} is no longer part of this view.`,
     "read-only": `${name} became read-only while you were editing.`,
     revision: `${name} changed on disk while you were editing.`,
   }[conflict.kind];

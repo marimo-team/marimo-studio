@@ -139,6 +139,10 @@ export const createStudioServices = (
     (view) => preview.prepareViewDeletion(view),
     (view) => preview.releaseView(view),
     bootstrap.defaultView,
+    (view) => {
+      preview.replaceView(view);
+      source.replaceView(view);
+    },
   );
   const workspaceEvents = new WorkspaceEventCoordinator({
     eventsUrl: routes.endpoint(bootstrap.urls.events),

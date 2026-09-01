@@ -30,6 +30,7 @@ let observer: MutationObserver | undefined;
 let stopProjectionChanges: (() => void) | undefined;
 let stopReadinessChanges: (() => void) | undefined;
 let generation = 0;
+let pendingEvaluation: number | undefined;
 let ownedRuntimeDiagnosticHost: HTMLElement | undefined;
 
 const runtimeDiagnosticHost = (): HTMLElement => {
@@ -146,10 +147,19 @@ export const announceRenderedViewReady = (): void => {
 
 const notifyRenderedViewChanged = (): void => {
   const activeGeneration = generation;
+  if (pendingEvaluation === activeGeneration) {
+    return;
+  }
+  pendingEvaluation = activeGeneration;
   queueMicrotask(() => {
-    if (activeGeneration === generation) {
-      evaluate();
+    if (pendingEvaluation !== activeGeneration) {
+      return;
     }
+    pendingEvaluation = undefined;
+    if (activeGeneration !== generation) {
+      return;
+    }
+    evaluate();
   });
 };
 
@@ -208,6 +218,7 @@ export const startRenderedViewObserver = (updateQuery: (query: string) => Promis
 
 export const stopRenderedViewObserver = (): void => {
   generation += 1;
+  pendingEvaluation = undefined;
   observer?.disconnect();
   observer = undefined;
   stopProjectionChanges?.();

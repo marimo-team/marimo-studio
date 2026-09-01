@@ -134,5 +134,5 @@ const inlineWasmWorkerDataModule = (frontend: string): Plugin => {
 
 export const createWasmWorkerViteIntegration = (frontend: string, packageRoot: string) => ({
   plugins: [opaqueWasmWorker(frontend), inlineWasmWorkerDataModule(frontend)],
-  workerPlugins: [presentationWasmController(frontend, packageRoot)],
+  workerPlugins: () => [presentationWasmController(frontend, packageRoot)],
 });

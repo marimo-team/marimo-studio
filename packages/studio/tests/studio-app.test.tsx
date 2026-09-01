@@ -14,7 +14,7 @@ import { ViewController } from "../src/features/views/controller.ts";
 import { LayoutController } from "../src/features/workspace/controller.ts";
 import { Divider } from "../src/features/workspace/Divider.tsx";
 import { computeLayout, developLayout } from "../src/features/workspace/model.ts";
-import { starter, unbuiltView, viewList } from "./fixtures.ts";
+import { starter, unbuiltView, viewGeneration, viewList, viewOwner } from "./fixtures.ts";
 import { deferred, studioBootstrap as bootstrap } from "./studio-test-support.ts";
 
 const brand = {
@@ -26,6 +26,7 @@ const brand = {
 
 const sourceProject = (view: string) => ({
   schema: 1 as const,
+  ...viewOwner,
   view,
   provider: "test/source",
   provider_options: {},
@@ -282,6 +283,7 @@ describe("Studio shell", () => {
         if (resource === "project") {
           return Response.json({
             schema: 1,
+            ...viewOwner,
             view,
             provider: "test/source",
             provider_options: {},
@@ -355,6 +357,13 @@ describe("Studio shell", () => {
         return Response.json(viewList(removed ? ["dashboard"] : ["dashboard", "report"]));
       }
       if (url.pathname === "/_marimo-studio/views/report" && method === "DELETE") {
+        expect(init?.body).toBe(
+          JSON.stringify({
+            catalog_generation: viewGeneration(0),
+            name: "report",
+            view_generation: viewGeneration(2),
+          }),
+        );
         removed = true;
         return Response.json({ ...viewList(["dashboard"]), name: "report" });
       }
@@ -390,7 +399,8 @@ describe("Studio shell", () => {
 
     const choosing = services.views.choose("report", "develop", { query: "?pending=1", hash: "" });
     await vi.waitFor(() => expect(synchronize).toHaveBeenCalledWith("?pending=1"));
-    services.views.beginRemoval("report");
+    const owner = services.views.getSnapshot();
+    services.views.beginRemoval("report", owner.catalogGeneration!, owner.viewGenerations.report!);
     expect(await services.views.deleteSelected()).toBe(true);
     navigation.resolve(true);
     expect(await choosing).toBe(false);
@@ -599,7 +609,7 @@ describe("Studio shell", () => {
       />,
     );
 
-    await user.click(screen.getByLabelText("Switch page: dashboard"));
+    await user.click(screen.getByLabelText("Switch view: dashboard"));
     await user.click(screen.getByRole("button", { name: "report" }));
     await vi.waitFor(() => expect(views.getSnapshot().selecting).toBe("report"));
 

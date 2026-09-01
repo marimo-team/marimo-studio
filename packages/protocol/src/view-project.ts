@@ -5,6 +5,7 @@ import { providerKeySchema } from "./provider-catalog.ts";
 import { ownRecordSchema } from "./records.ts";
 import { jsonValueSchema, type JsonValue } from "./runtime-config.ts";
 import { sourceDocumentPathSchema, sourceDocumentSchema } from "./source-documents.ts";
+import { ownerGenerationSchema, viewNameSchema } from "./views.ts";
 
 const canonicalMessageSchema = z
   .string()
@@ -55,7 +56,9 @@ export const publishedArtifactSchema = z
 export const viewProjectSchema = z
   .object({
     schema: z.literal(1),
-    view: z.string().trim().min(1),
+    catalog_generation: ownerGenerationSchema,
+    view_generation: ownerGenerationSchema,
+    view: viewNameSchema,
     provider: providerKeySchema,
     provider_options: ownRecordSchema(z.string(), jsonValueSchema),
     documents: z.array(sourceDocumentSchema),

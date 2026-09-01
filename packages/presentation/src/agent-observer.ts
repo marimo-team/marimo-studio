@@ -17,7 +17,6 @@ import {
   documentLifecycleEnvelope,
 } from "./document/document-lifecycle-id.ts";
 import { isStudioParentMessage, postToStudioParent } from "./document/parent-bridge.ts";
-import { messageJson } from "./json.ts";
 import { renderedProjectionInstances } from "./projections/instances.ts";
 import { toBrowserDiagnostics } from "./readiness-diagnostics.ts";
 import { readiness } from "./readiness.ts";
@@ -91,11 +90,7 @@ const observationRequested = (event: MessageEvent<unknown>): void => {
   if (!isStudioParentMessage(event)) {
     return;
   }
-  const payload = messageJson(event);
-  if (payload === undefined) {
-    return;
-  }
-  const request = parsePreviewMessage(payload);
+  const request = parsePreviewMessage(event.data);
   if (
     request?.type !== "marimo-studio:observe-view" ||
     request.lifecycleId !== activeDocumentLifecycleId()

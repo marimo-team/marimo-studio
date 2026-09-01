@@ -7,13 +7,21 @@ import { expect, it, vi } from "vite-plus/test";
 import { z } from "zod";
 
 import { StudioHost } from "../src/app/StudioHost.tsx";
-import { starter, componentStarter, unbuiltView, viewList } from "./fixtures.ts";
+import {
+  starter,
+  componentStarter,
+  unbuiltView,
+  viewGeneration,
+  viewList,
+  viewOwner,
+} from "./fixtures.ts";
 import { deferred } from "./studio-test-support.ts";
 
 const host: StudioHostBootstrap = {
   schema: 1,
   state: "needs-view",
   defaultView: "dashboard",
+  generation: viewGeneration(0),
   notebook: { name: "analysis.py" },
   clientId: "browser-client-1234",
   serverInstance: "server-instance",
@@ -50,7 +58,13 @@ const ready: StudioBootstrap = {
   workspaceId: "workspace",
 };
 
-const createViewBodySchema = z.object({ starter: z.string() });
+const createViewBodySchema = z
+  .object({
+    catalog_generation: z.string(),
+    name: z.string(),
+    starter: z.string(),
+  })
+  .strict();
 
 class EventSourceStub {
   addEventListener(): void {}
@@ -74,6 +88,7 @@ const activationHost: StudioHostBootstrap = {
 };
 const sourceProject = {
   schema: 1 as const,
+  ...viewOwner,
   view: "dashboard",
   provider: "marimo-studio/vanilla",
   provider_options: {},
@@ -212,7 +227,7 @@ it("retries first-view authoring options after a transient inventory failure", a
   expect(editorFrame).toHaveAttribute("inert");
   expect(editorFrame).toHaveAttribute("aria-hidden", "true");
   expect(screen.getByRole("main")).toHaveFocus();
-  await user.click(screen.getByRole("button", { name: "Retry page choices" }));
+  await user.click(screen.getByRole("button", { name: "Retry view choices" }));
 
   expect(await screen.findByRole("combobox", { name: "Start with" })).toHaveValue(
     "marimo-studio/vanilla:default",
@@ -284,6 +299,8 @@ it("opens an already-created first view after a bootstrap retry", async () => {
       if (init?.method === "POST" && url.pathname.endsWith("/_marimo-studio/views")) {
         creates += 1;
         const body = createViewBodySchema.parse(await new Request(url, init).json());
+        expect(body.catalog_generation).toBe(host.generation);
+        expect(body.name).toBe("dashboard");
         createdStarter = body.starter;
         return Response.json(
           {
@@ -343,7 +360,7 @@ it("opens an already-created first view after a bootstrap retry", async () => {
     reload.mock.invocationCallOrder[0]!,
   );
   expect(screen.queryByLabelText("Studio workspace")).not.toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Create the first page" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Create the first view" })).toBeVisible();
 
   fireEvent.load(editorFrame);
   expect(await screen.findByLabelText("Studio workspace")).toBeVisible();

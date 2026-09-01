@@ -2,7 +2,6 @@ import type { ReceiverAdmittedMessage } from "@marimo-studio/protocol/preview-me
 
 import { parsePreviewMessage } from "@marimo-studio/protocol/preview-messages";
 
-import { messageJson } from "../json.ts";
 import { isStudioParentMessage } from "./parent-bridge.ts";
 import { studioOwned } from "./studio-ownership.ts";
 
@@ -37,11 +36,7 @@ export const waitForReceiverAdmission = (
       if (!isStudioParentMessage(event)) {
         return;
       }
-      const payload = messageJson(event);
-      if (payload === undefined) {
-        return;
-      }
-      const message = parsePreviewMessage(payload);
+      const message = parsePreviewMessage(event.data);
       if (
         message?.type !== "marimo-studio:receiver-admitted" ||
         message.runtime !== target.runtime ||

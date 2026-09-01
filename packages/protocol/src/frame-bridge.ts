@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { jsonValueSchema } from "./runtime-config.ts";
+import { viewNameSchema } from "./views.ts";
 
 const requestIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const generationSchema = z.string().regex(/^[A-Za-z0-9_-]{8,128}$/);
@@ -9,7 +10,7 @@ const frameIdentityFields = {
   revision: z.string().min(1).max(256),
   runtime: z.string().min(1).max(128),
   sessionId: z.string().min(1).max(256).nullable(),
-  view: z.string().min(1).max(128),
+  view: viewNameSchema,
 };
 
 export const frameControlUpdateSchema = z.strictObject({

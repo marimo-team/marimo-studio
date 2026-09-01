@@ -307,7 +307,10 @@ it("keeps the prior document warm after creation and evicts it at the cache boun
     (view) => deck.releaseView(view),
   );
 
-  await expect(controller.create("report", starter.id)).resolves.toBe(true);
+  await controller.refreshInventory();
+  await expect(
+    controller.create("report", starter.id, controller.getSnapshot().catalogGeneration!),
+  ).resolves.toBe(true);
   await expect(controller.choose("dashboard")).resolves.toBe(true);
   expect(deck.getSnapshot().states.server!.lifecycleId).toBe(dashboardLifecycleId);
   expect(

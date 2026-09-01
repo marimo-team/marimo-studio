@@ -10,18 +10,26 @@ it("reads nested provider paths through encoded source URLs", async () => {
   vi.stubGlobal("fetch", async (input: string | URL | Request) => {
     const url = input instanceof Request ? input.url : input.toString();
     requests.push(url);
-    return new Response("content", { headers: { ETag: '"sha256:source"' } });
+    return new Response("content", {
+      headers: {
+        ETag: '"sha256:source"',
+        "Marimo-Studio-Catalog-Generation": "a".repeat(64),
+        "Marimo-Studio-View-Generation": "b".repeat(64),
+      },
+    });
   });
   const remote = createSourceRemote(
     (view) => `http://localhost/_marimo-studio/views/${view}`,
     "token",
   );
 
-  await remote.read("react", "src/cards/Metric #1.tsx");
+  const source = await remote.read("react", "src/cards/Metric #1.tsx");
 
   expect(new URL(requests[0]).pathname).toBe(
     "/_marimo-studio/views/react/source/src/cards/Metric%20%231.tsx",
   );
+  expect(source.catalogGeneration).toBe("a".repeat(64));
+  expect(source.viewGeneration).toBe("b".repeat(64));
 });
 
 it("parses provider project catalogs from the view support endpoint", async () => {
@@ -35,6 +43,8 @@ it("parses provider project catalogs from the view support endpoint", async () =
   vi.stubGlobal("fetch", async () =>
     Response.json({
       schema: 1,
+      catalog_generation: "a".repeat(64),
+      view_generation: "b".repeat(64),
       view: "svelte",
       provider: "marimo-studio/svelte",
       provider_options: {},
@@ -87,8 +97,10 @@ it.each(["project", "source"] as const)(
 );
 
 it("preserves external recovery metadata from a conditional source write", async () => {
-  vi.stubGlobal("fetch", async () =>
-    Response.json(
+  vi.stubGlobal("fetch", async (_input: RequestInfo | URL, init?: RequestInit) => {
+    expect(new Headers(init?.headers).get("Marimo-Studio-Catalog-Generation")).toBe("a".repeat(64));
+    expect(new Headers(init?.headers).get("Marimo-Studio-View-Generation")).toBe("b".repeat(64));
+    return Response.json(
       {
         error: "source-conflict",
         message: "src/App.tsx changed on disk.",
@@ -96,14 +108,21 @@ it("preserves external recovery metadata from a conditional source write", async
         external_recovery: "/workspace/.src-App.tsx.external-recovery",
       },
       { status: 412 },
-    ),
-  );
+    );
+  });
   const remote = createSourceRemote(
     (view) => `http://localhost/_marimo-studio/views/${view}`,
     "token",
   );
 
-  const write = remote.write("react", "src/App.tsx", "local", "sha256:loaded");
+  const write = remote.write(
+    "react",
+    "src/App.tsx",
+    "local",
+    "sha256:loaded",
+    "a".repeat(64),
+    "b".repeat(64),
+  );
 
   await expect(write).rejects.toEqual(
     expect.objectContaining<Partial<RevisionConflict>>({

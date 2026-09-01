@@ -14,16 +14,18 @@ import {
   type SourceState,
   SyncedSource,
 } from "../src/features/source-editor/sync.ts";
-import { unbuiltView } from "./fixtures.ts";
+import { unbuiltView, viewOwner } from "./fixtures.ts";
 
 class MemoryRemote implements SourceRemote {
   source: RemoteSource = { content: "initial", revision: "r1" };
   conflict = false;
   readError: Error | undefined;
+  lastWriteOwner: { catalogGeneration: string; viewGeneration: string } | undefined;
 
   project(view: string): Promise<ViewProject> {
     return Promise.resolve({
       schema: 1,
+      ...viewOwner,
       view,
       provider: "test/provider",
       provider_options: {},
@@ -47,7 +49,10 @@ class MemoryRemote implements SourceRemote {
     _path: SourceDocumentPath,
     content: string,
     revision: string,
+    catalogGeneration: string,
+    viewGeneration: string,
   ): Promise<string> {
+    this.lastWriteOwner = { catalogGeneration, viewGeneration };
     if (this.conflict || revision !== this.source.revision) {
       return Promise.reject(new RevisionConflict(this.source.revision));
     }
@@ -55,6 +60,28 @@ class MemoryRemote implements SourceRemote {
     return Promise.resolve(this.source.revision);
   }
 }
+
+test("a source read can replace the owner used by its next write", async () => {
+  const remote = new MemoryRemote();
+  remote.source = {
+    content: "repairable",
+    revision: "r1",
+    catalogGeneration: "a".repeat(64),
+    viewGeneration: "b".repeat(64),
+  };
+  const result = observed();
+  const source = new SyncedSource(editable("view.toml"), remote, result.observer, 60_000);
+  source.setOwner("c".repeat(64), "d".repeat(64));
+
+  await source.load("dashboard");
+  source.edit("repaired");
+  await source.save();
+
+  assert.deepEqual(remote.lastWriteOwner, {
+    catalogGeneration: "a".repeat(64),
+    viewGeneration: "b".repeat(64),
+  });
+});
 
 interface PendingWrite {
   content: string;

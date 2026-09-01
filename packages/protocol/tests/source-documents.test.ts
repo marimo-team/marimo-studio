@@ -13,6 +13,8 @@ import { unbuiltView } from "./fixtures.ts";
 
 const projectPayload = () => ({
   schema: 1 as const,
+  catalog_generation: "a".repeat(64),
+  view_generation: "b".repeat(64),
   view: "react",
   provider: "marimo-studio/react",
   provider_options: {

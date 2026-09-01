@@ -4,6 +4,7 @@ import type { BrowserMessageInput } from "./frame-bridge.ts";
 
 import { jsonCodec } from "./json.ts";
 import { type JsonValue, runtimeIdSchema } from "./runtime-config";
+import { viewNameSchema } from "./views.ts";
 
 export const workspaceChangeKindSchema = z.enum(["project", "build", "presentation", "views"]);
 const workspaceChangeSchema = z.object({ kind: workspaceChangeKindSchema });
@@ -61,7 +62,7 @@ export const parsePresentationBuild = (source: string): PresentationBuild | unde
 
 const presentationChangeSchema = z.object({
   kind: z.literal("presentation"),
-  view: z.string().min(1),
+  view: viewNameSchema,
   revision: z.string().min(1),
 });
 const presentationChangeCodec = jsonCodec(presentationChangeSchema);
@@ -77,7 +78,7 @@ const activeViewSchema = z
   .object({
     schema: z.literal(1),
     generation: z.int().nonnegative(),
-    view: z.string().min(1),
+    view: viewNameSchema,
   })
   .strict();
 const activeViewCodec = jsonCodec(activeViewSchema);
@@ -186,7 +187,7 @@ const observeViewSchema = z
   .object({
     schema: z.literal(1),
     requestId: z.string().min(1),
-    view: z.string().min(1),
+    view: viewNameSchema,
     runtime: runtimeIdSchema,
     runtimeInstance: z.string().min(1),
     revision: z.string().min(1),

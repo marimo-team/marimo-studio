@@ -9,6 +9,7 @@ import { useViewMenu } from "./useViewMenu.ts";
 
 export const ViewMenu = ({ controller }: { controller: ViewController }) => {
   const model = useViewMenu(controller);
+  const statusMessage = model.snapshot.removeMessage ?? model.snapshot.selectionMessage;
   const panels = {
     create: (
       <CreateViewForm
@@ -43,9 +44,16 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
   };
   const viewList = (
     <>
-      <strong className="studio-menu-heading">Switch page</strong>
-      <div className="studio-view-list" role="group" aria-label="Pages">
+      <strong className="studio-menu-heading">Switch view</strong>
+      <div className="studio-view-list" role="group" aria-label="Views">
         {model.rows.map((view) => {
+          const removeOwner =
+            view.catalogGeneration && view.generation
+              ? {
+                  catalogGeneration: view.catalogGeneration,
+                  generation: view.generation,
+                }
+              : undefined;
           let accessibleName = view.name;
           if (view.selecting) {
             accessibleName = `${view.name}, loading`;
@@ -74,15 +82,21 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
                 <span>{view.name}</span>
                 {view.default ? <small className="studio-view-default">Default</small> : null}
               </button>
-              {model.canRemove ? (
+              {model.canRemove && removeOwner ? (
                 <button
                   type="button"
                   className="studio-view-remove"
                   data-view-remove={view.name}
-                  aria-label={`Remove ${view.name} page`}
-                  title={`Remove ${view.name} page`}
+                  aria-label={`Remove ${view.name} view`}
+                  title={`Remove ${view.name} view`}
                   disabled={model.snapshot.deleting}
-                  onClick={() => model.actions.beginRemoval(view.name)}
+                  onClick={() =>
+                    model.actions.beginRemoval(
+                      view.name,
+                      removeOwner.catalogGeneration,
+                      removeOwner.generation,
+                    )
+                  }
                 >
                   <Trash2Icon className="studio-view-remove-icon" aria-hidden="true" />
                 </button>
@@ -99,7 +113,7 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
           onClick={model.actions.beginCreate}
         >
           <PlusIcon className="studio-menu-item-icon" strokeWidth={1.75} aria-hidden="true" />
-          <span>New page</span>
+          <span>New view</span>
         </button>
       </div>
     </>
@@ -123,7 +137,7 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
         <summary
           ref={model.refs.trigger}
           className="studio-control studio-menu-trigger"
-          aria-label={`Switch page: ${model.snapshot.current}`}
+          aria-label={`Switch view: ${model.snapshot.current}`}
           aria-disabled={model.snapshot.creating || model.snapshot.deleting}
           onClick={(event) => {
             if (model.snapshot.creating || model.snapshot.deleting) {
@@ -140,13 +154,13 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
           </div>
         </div>
       </details>
-      {model.snapshot.selectionMessage ? (
+      {statusMessage ? (
         <div
           className="studio-view-selection-message"
-          data-state={model.snapshot.selectionMessage.state}
+          data-state={statusMessage.state}
           role="alert"
         >
-          <span>{model.snapshot.selectionMessage.text}</span>
+          <span>{statusMessage.text}</span>
           <button type="button" onClick={() => controller.dismiss()}>
             Dismiss
           </button>

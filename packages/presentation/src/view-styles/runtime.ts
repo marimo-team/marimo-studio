@@ -4,6 +4,7 @@ const APP_SHELL = "#app-shell";
 const OUTPUT_BOUNDARY = "[data-marimo-cell-output]";
 const RUNTIME_STYLE = "data-marimo-studio-runtime";
 const VIEW_STYLE = "data-marimo-studio-view-utilities";
+const MAX_CACHED_VIEW_STYLES = 8;
 
 declare global {
   var __MARIMO_STUDIO_STYLE_TIMEOUT__: ReturnType<typeof setTimeout> | undefined;
@@ -17,6 +18,9 @@ export interface StagedViewStyles {
 }
 
 type GenerateViewCss = (tokens: ReadonlySet<string>) => Promise<string>;
+
+const classTokenIdentity = (tokens: ReadonlySet<string>): string =>
+  JSON.stringify([...tokens].sort());
 
 let controller: ViewStyleController | undefined;
 let currentDiagnostic: ViewStyleDiagnostic | undefined;
@@ -93,6 +97,7 @@ export class ViewStyleController {
   private requestedGeneration = 0;
   private completedGeneration = 0;
   private activeRefresh: Promise<void> | undefined;
+  private readonly generationCache = new Map<string, Promise<string>>();
   private observed = false;
 
   constructor(private readonly generate: GenerateViewCss = defaultGenerator) {
@@ -111,7 +116,7 @@ export class ViewStyleController {
           .catch((cause: unknown) => {
             styleFailure(
               "view-styles-failed",
-              "View styling could not update. The authored page remains available.",
+              "View styling could not update. The authored view remains available.",
               "Check the browser console and the view utility classes.",
             );
             setPresentationRefreshState(claim, "error");
@@ -124,7 +129,7 @@ export class ViewStyleController {
             void prepareIcons(node).catch(() => {
               styleFailure(
                 "view-icons-failed",
-                "View icons could not start. The authored page remains available.",
+                "View icons could not start. The authored view remains available.",
                 "Check the browser console and the authored icon names.",
               );
             });
@@ -135,7 +140,7 @@ export class ViewStyleController {
   }
 
   async stage(root: Element): Promise<StagedViewStyles> {
-    const css = await this.generate(collectViewClassTokens(root));
+    const css = await this.generateCss(collectViewClassTokens(root));
     await prepareIcons(root);
     let discarded = false;
     let committed = false;
@@ -193,6 +198,30 @@ export class ViewStyleController {
     this.requestedGeneration += 1;
   }
 
+  private generateCss(tokens: ReadonlySet<string>): Promise<string> {
+    const identity = classTokenIdentity(tokens);
+    const cached = this.generationCache.get(identity);
+    if (cached) {
+      this.generationCache.delete(identity);
+      this.generationCache.set(identity, cached);
+      return cached;
+    }
+    const result = this.generate(tokens).catch((cause: unknown) => {
+      if (this.generationCache.get(identity) === result) {
+        this.generationCache.delete(identity);
+      }
+      throw cause;
+    });
+    this.generationCache.set(identity, result);
+    if (this.generationCache.size > MAX_CACHED_VIEW_STYLES) {
+      const oldest = this.generationCache.keys().next().value;
+      if (oldest !== undefined) {
+        this.generationCache.delete(oldest);
+      }
+    }
+    return result;
+  }
+
   refresh(): Promise<void> {
     this.requestedGeneration += 1;
     this.activeRefresh ??= this.runRefreshes().finally(() => {
@@ -209,7 +238,7 @@ export class ViewStyleController {
         this.completedGeneration = generation;
         continue;
       }
-      const css = await this.generate(collectViewClassTokens(root));
+      const css = await this.generateCss(collectViewClassTokens(root));
       await prepareIcons(root);
       if (generation === this.requestedGeneration) {
         this.style.textContent = css;
@@ -316,7 +345,7 @@ export const initializeViewStyles = async (
     }
     const diagnostic = styleFailure(
       "view-styles-failed",
-      "View styling could not start. The authored page remains available.",
+      "View styling could not start. The authored view remains available.",
       "Check the browser console and the view utility classes.",
     );
     console.error("marimo-studio view styling error", error);

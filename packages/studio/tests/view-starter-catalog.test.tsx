@@ -29,13 +29,13 @@ it("recovers the starter catalog after a failed Create refresh", async () => {
   const user = userEvent.setup();
   render(<ViewMenu controller={controller} />);
 
-  await user.click(screen.getByLabelText(/^Switch page:/));
-  await user.click(screen.getByRole("button", { name: "New page" }));
+  await user.click(screen.getByLabelText(/^Switch view:/));
+  await user.click(screen.getByRole("button", { name: "New view" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Authoring options are temporarily unavailable.",
   );
-  await user.click(screen.getByRole("button", { name: "Retry page choices" }));
+  await user.click(screen.getByRole("button", { name: "Retry view choices" }));
 
   expect(await screen.findByRole("radio", { name: /HTML/ })).toBeChecked();
   expect(controller.getSnapshot().starterCatalog).toEqual({ phase: "ready" });
@@ -56,7 +56,7 @@ it("reveals selected starter files on demand and keeps recovery actions local", 
     },
   };
   const remote: ViewRemote = {
-    list: vi.fn(async () => viewList(["dashboard"])),
+    list: vi.fn(async () => viewList(["dashboard"], "dashboard", [starter, unavailable])),
     create: vi.fn(),
     remove: vi.fn(),
   };
@@ -73,8 +73,8 @@ it("reveals selected starter files on demand and keeps recovery actions local", 
   const user = userEvent.setup();
   render(<ViewMenu controller={controller} />);
 
-  await user.click(screen.getByLabelText(/^Switch page:/));
-  await user.click(screen.getByRole("button", { name: "New page" }));
+  await user.click(screen.getByLabelText(/^Switch view:/));
+  await user.click(screen.getByRole("button", { name: "New view" }));
 
   const react = screen.getByRole("radio", { name: /Component project/ }).closest("label");
   expect(react).toHaveTextContent("Install Deno to use React.");
@@ -105,8 +105,8 @@ it("keeps a single-distribution starter catalog flat", async () => {
   const user = userEvent.setup();
   const { container } = render(<ViewMenu controller={controller} />);
 
-  await user.click(screen.getByLabelText(/^Switch page:/));
-  await user.click(screen.getByRole("button", { name: "New page" }));
+  await user.click(screen.getByLabelText(/^Switch view:/));
+  await user.click(screen.getByRole("button", { name: "New view" }));
 
   expect(container.querySelector(".studio-starter-group")).toBeNull();
   expect(screen.queryByRole("group", { name: "From marimo-studio" })).not.toBeInTheDocument();
@@ -116,7 +116,7 @@ it("keeps a single-distribution starter catalog flat", async () => {
 
 it("groups starter choices by registering distribution", async () => {
   const remote: ViewRemote = {
-    list: vi.fn(async () => viewList(["dashboard"])),
+    list: vi.fn(async () => viewList(["dashboard"], "dashboard", [componentStarter, starter])),
     create: vi.fn(),
     remove: vi.fn(),
   };
@@ -133,8 +133,8 @@ it("groups starter choices by registering distribution", async () => {
   const user = userEvent.setup();
   render(<ViewMenu controller={controller} />);
 
-  await user.click(screen.getByLabelText(/^Switch page:/));
-  await user.click(screen.getByRole("button", { name: "New page" }));
+  await user.click(screen.getByLabelText(/^Switch view:/));
+  await user.click(screen.getByRole("button", { name: "New view" }));
 
   const acme = screen.getByRole("group", { name: "From acme-views" });
   const studio = screen.getByRole("group", { name: "From marimo-studio" });

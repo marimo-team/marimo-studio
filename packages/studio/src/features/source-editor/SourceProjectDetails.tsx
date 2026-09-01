@@ -29,7 +29,7 @@ const BUILD_DISPLAY = {
 
 const buildRelationship = (phase: ViewBuildState["phase"], published: boolean): string => {
   if (phase === "stale") {
-    return "Saved source has changed. Build the page to update Preview.";
+    return "Saved source has changed. Build the view to update Preview.";
   }
   if (phase === "failed" && published) {
     return "The latest build failed. Preview still shows the last successful version.";
@@ -42,7 +42,7 @@ const buildRelationship = (phase: ViewBuildState["phase"], published: boolean): 
   }
   return published
     ? "Preview shows the last successful build."
-    : "Build the page to create its first preview.";
+    : "Build the view to create its first preview.";
 };
 
 export const SourceProjectDetails = ({
@@ -62,7 +62,7 @@ export const SourceProjectDetails = ({
   if (inspection.phase === "ready") {
     relationship = buildRelationship(build.phase, artifact !== null && artifact !== undefined);
   } else if (inspection.phase === "checking") {
-    relationship = "Checking current source against the published page.";
+    relationship = "Checking current source against the published view.";
   } else {
     relationship = inspection.message;
   }
@@ -84,7 +84,7 @@ export const SourceProjectDetails = ({
       >
         <summary
           className="studio-control studio-menu-trigger studio-source-details-trigger"
-          aria-label={`Page build details, ${label}`}
+          aria-label={`View build details, ${label}`}
           tabIndex={0}
         >
           <BuildIcon className="studio-source-build-icon" aria-hidden="true" focusable="false" />
@@ -93,7 +93,7 @@ export const SourceProjectDetails = ({
         </summary>
         <div
           className="studio-menu-popover studio-source-details-popover"
-          aria-label="Page build status"
+          aria-label="View build status"
           role="region"
         >
           <strong className="studio-menu-heading">Build status</strong>
@@ -106,7 +106,7 @@ export const SourceProjectDetails = ({
           ) : null}
         </div>
       </details>
-      <span className="studio-visually-hidden" role="status" aria-label="Page build status">
+      <span className="studio-visually-hidden" role="status" aria-label="View build status">
         {label}
       </span>
     </>

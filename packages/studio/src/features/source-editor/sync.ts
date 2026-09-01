@@ -41,6 +41,8 @@ export class SyncedSource {
   private state: SourceState;
   private loadState: SourceState | undefined;
   private sourceVersion = 0;
+  private catalogGeneration = "";
+  private viewGeneration = "";
   private readGeneration = 0;
   private accessGeneration = 0;
   private disposed = false;
@@ -66,6 +68,11 @@ export class SyncedSource {
 
   get replacementVersion(): number {
     return this.sourceVersion;
+  }
+
+  setOwner(catalogGeneration: string, viewGeneration: string): void {
+    this.catalogGeneration = catalogGeneration;
+    this.viewGeneration = viewGeneration;
   }
 
   async updateDocument(document: SourceDocument): Promise<void> {
@@ -413,7 +420,14 @@ export class SyncedSource {
       this.writingContent = content;
       this.emit("saving");
       try {
-        const next = await this.remote.write(view, this.path, content, revision);
+        const next = await this.remote.write(
+          view,
+          this.path,
+          content,
+          revision,
+          this.catalogGeneration,
+          this.viewGeneration,
+        );
         if (generation !== this.generation) {
           return false;
         }
@@ -488,6 +502,9 @@ export class SyncedSource {
   }
 
   private apply(source: RemoteSource): void {
+    if (source.catalogGeneration && source.viewGeneration) {
+      this.setOwner(source.catalogGeneration, source.viewGeneration);
+    }
     this.content = source.content;
     this.revision = source.revision;
     this.diskSource = source;

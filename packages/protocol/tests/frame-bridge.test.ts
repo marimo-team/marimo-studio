@@ -11,6 +11,26 @@ const identity = {
   view: "dashboard",
 };
 
+const identityMessages = (view: string) => [
+  {
+    type: "marimo-studio:frame-control-apply" as const,
+    generation: "generation-a",
+    requestId: "request-control",
+    updates: [{ objectId: "cell-control", value: { selected: [1, 2] } }],
+    ...identity,
+    view,
+  },
+  {
+    type: "marimo-studio:frame-query-apply" as const,
+    generation: "generation-a",
+    requestId: "request-query",
+    query: "?region=emea",
+    hash: "#details",
+    ...identity,
+    view,
+  },
+];
+
 interface CyclicBridgeProbe {
   generation: string;
   lifecycleId: number;
@@ -55,4 +75,15 @@ test("frame bridge accepts bounded controls and rejects cyclic payloads", () => 
     }),
     undefined,
   );
+});
+
+test("frame control and query identities use the portable 240-byte contract", () => {
+  for (const length of [128, 129, 228, 229, 240]) {
+    for (const message of identityMessages("v".repeat(length))) {
+      assert.notEqual(parseFrameBridgeMessage(message), undefined, `${length}: ${message.type}`);
+    }
+  }
+  for (const message of identityMessages("v".repeat(241))) {
+    assert.equal(parseFrameBridgeMessage(message), undefined, message.type);
+  }
 });

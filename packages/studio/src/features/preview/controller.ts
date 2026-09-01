@@ -464,7 +464,7 @@ export class PreviewController {
         code: "notebook-save-failed",
         severity: "error",
         message: "Notebook save failed.",
-        hint: "Retry the save to update this page.",
+        hint: "Retry the save to update this view.",
         view: this.view,
         scope: "runtime",
       },
@@ -481,7 +481,7 @@ export class PreviewController {
         code: "notebook-sync-failed",
         severity: "error",
         message: "Notebook change could not be synchronized.",
-        hint: "Retry the edit to update this page.",
+        hint: "Retry the edit to update this view.",
         view: this.view,
         scope: "runtime",
       },
@@ -870,7 +870,7 @@ export class PreviewController {
             "control-sync-failed",
             "warning",
             "Control state could not be synchronized.",
-            status.error?.message ?? "Wait for both notebook runtimes, then retry the page.",
+            status.error?.message ?? "Wait for both notebook runtimes, then retry the view.",
           )
         : undefined;
     this.showReadyStatus();

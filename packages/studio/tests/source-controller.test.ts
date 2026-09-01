@@ -6,7 +6,7 @@ import { expect, it, vi } from "vite-plus/test";
 import type { RemoteSource, SourceRemote } from "../src/features/source-editor/remote.ts";
 
 import { SourceController } from "../src/features/source-editor/controller.ts";
-import { unbuiltView } from "./fixtures.ts";
+import { unbuiltView, viewOwner } from "./fixtures.ts";
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
@@ -30,6 +30,7 @@ const project = (
   provider = `test/${view}`,
 ): ViewProject => ({
   schema: 1,
+  ...viewOwner,
   view,
   provider,
   provider_options: {},
@@ -207,6 +208,52 @@ it("falls back when a persisted document is absent from the current catalog", as
   expect(globalThis.localStorage.getItem("source-controller-test:source:react")).toBe(
     "src/App.tsx",
   );
+  source.dispose();
+});
+
+it("replaces the active session when the same view gets a new owner", async () => {
+  const remote = new MemorySourceRemote();
+  remote.setProject("react", [document("src/App.tsx", "typescriptreact")]);
+  const source = controller(remote);
+
+  await source.start();
+  remote.files.set("react:src/App.tsx", {
+    content: "replacement source",
+    revision: "revision:react:replacement",
+  });
+  source.replaceView("react");
+
+  await vi.waitFor(() => {
+    expect(remote.inspections).toEqual(["react", "react"]);
+    expect(source.getSnapshot().documents[0]).toMatchObject({
+      content: "replacement source",
+      loaded: true,
+    });
+  });
+  expect(remote.reads).toEqual(["react:src/App.tsx", "react:src/App.tsx"]);
+  expect(remote.writes).toEqual([]);
+  source.dispose();
+});
+
+it("keeps unsaved source visible when the view owner is replaced", async () => {
+  const remote = new MemorySourceRemote();
+  remote.setProject("react", [document("src/App.tsx", "typescriptreact")]);
+  const source = controller(remote);
+
+  await source.start();
+  source.edit("src/App.tsx", "stale buffered source");
+  source.replaceView("react");
+
+  expect(source.getSnapshot()).toMatchObject({
+    inspection: {
+      phase: "unavailable",
+      message:
+        "View react was replaced. Unsaved edits remain in Source. Copy them before reopening the view.",
+    },
+    documents: [{ content: "stale buffered source", loaded: true }],
+  });
+  expect(remote.inspections).toEqual(["react"]);
+  expect(remote.writes).toEqual([]);
   source.dispose();
 });
 

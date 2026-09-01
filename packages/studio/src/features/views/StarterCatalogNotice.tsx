@@ -14,18 +14,18 @@ export const StarterCatalogNotice = ({
       <div className="studio-starter-catalog-error" role="alert">
         <span>{catalog.message}</span>
         <button type="button" className="studio-control" onClick={onRetry}>
-          Retry page choices
+          Retry view choices
         </button>
       </div>
     );
   }
   if (empty && catalog.phase === "ready") {
-    return <p className="studio-form-hint">No page choices are available.</p>;
+    return <p className="studio-form-hint">No view choices are available.</p>;
   }
   if (empty) {
     return (
       <p className="studio-form-hint" role="status" aria-live="polite">
-        Loading page choices…
+        Loading view choices…
       </p>
     );
   }

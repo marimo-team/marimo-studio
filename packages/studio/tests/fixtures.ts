@@ -35,16 +35,28 @@ export const componentStarter: Starter = {
   documents: ["src/App.tsx", "src/index.html"],
 };
 
+export const viewGeneration = (index: number): string => index.toString(16).padStart(64, "0");
+
+export const viewOwner = {
+  catalog_generation: viewGeneration(0),
+  view_generation: viewGeneration(1),
+};
+
 export const viewList = (
   names: readonly string[],
   defaultView = names[0] ?? "dashboard",
   starters: readonly Starter[] = [starter],
   defaultStarter = "marimo-studio/vanilla:default",
+  generations: Readonly<Record<string, string>> = {},
 ): ViewList => ({
   schema: 1,
+  generation: viewGeneration(0),
   default_view: defaultView,
   default_starter: defaultStarter,
-  views: names.map((name) => ({ name })),
+  views: names.map((name, index) => ({
+    generation: generations[name] ?? viewGeneration(index + 1),
+    name,
+  })),
   starters: [...starters],
 });
 

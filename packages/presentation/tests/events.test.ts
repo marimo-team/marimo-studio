@@ -40,6 +40,15 @@ class EventSourceStub extends EventTarget {
   }
 }
 
+interface CyclicPresentationProbe {
+  readonly type: "marimo-studio:presentation-refresh";
+  readonly runtime: "server";
+  readonly lifecycleId: number;
+  readonly view: "dashboard";
+  readonly phase: "pending";
+  self?: CyclicPresentationProbe;
+}
+
 beforeEach(() => {
   EventSourceStub.instances = [];
   vi.stubGlobal("EventSource", EventSourceStub);
@@ -159,6 +168,46 @@ test("standalone navigation trusts the active runtime and scrubs private query",
       },
     ],
   ]);
+  dispose();
+});
+
+test("static documents leave fragments, queries, and sibling links to the browser", () => {
+  globalThis.history.replaceState({}, "", "/published/site/field/index.html?region=emea");
+  commitRuntimeConfig(
+    runtimeConfig({
+      dev: false,
+      presentationSessionId: undefined,
+      publicRootUrl: "./",
+      documentRootUrl: "./",
+      view: "field",
+      views: ["field", "summary"],
+    }),
+  );
+  const direct = vi.fn();
+  const dispose = bindViewNavigation(direct, false);
+  const links = ["#details", "?region=apac", "../summary/"];
+  const intercepted: boolean[] = [];
+  const preventBrowserNavigation = (event: MouseEvent) => {
+    intercepted.push(event.defaultPrevented);
+    event.preventDefault();
+  };
+  document.addEventListener("click", preventBrowserNavigation);
+
+  for (const href of links) {
+    const anchor = document.createElement("a");
+    anchor.setAttribute("href", href);
+    document.body.append(anchor);
+    const click = new MouseEvent("click", {
+      bubbles: true,
+      button: 0,
+      cancelable: true,
+    });
+
+    anchor.dispatchEvent(click);
+  }
+  expect(intercepted).toEqual([false, false, false]);
+  expect(direct).not.toHaveBeenCalled();
+  document.removeEventListener("click", preventBrowserNavigation);
   dispose();
 });
 
@@ -345,4 +394,38 @@ test("presentation refresh events target the current document lifecycle", () => 
   channel.port1.close();
   channel.port2.close();
   dispose();
+});
+
+test("presentation events bound hostile structured-clone data before recursive parsing", () => {
+  setActiveDocumentLifecycleId(7);
+  commitRuntimeConfig(runtimeConfig());
+  const parent = {};
+  vi.stubGlobal("parent", parent);
+  const refresh = vi.fn();
+  const dispose = bindPresentationEvents({ changed: vi.fn(), refresh });
+  const payload: CyclicPresentationProbe = {
+    type: "marimo-studio:presentation-refresh",
+    runtime: "server",
+    lifecycleId: 7,
+    view: "dashboard",
+    phase: "pending",
+  };
+  payload.self = payload;
+  const browserErrors = vi.fn((event: ErrorEvent) => event.preventDefault());
+  globalThis.addEventListener("error", browserErrors);
+  const event = new MessageEvent("message", {
+    origin: globalThis.location.origin,
+    data: payload,
+  });
+  Object.defineProperty(event, "source", { value: parent });
+
+  try {
+    globalThis.dispatchEvent(event);
+  } finally {
+    globalThis.removeEventListener("error", browserErrors);
+    dispose();
+  }
+
+  expect(browserErrors).not.toHaveBeenCalled();
+  expect(refresh).not.toHaveBeenCalled();
 });

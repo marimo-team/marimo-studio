@@ -24,7 +24,7 @@ import { commitRuntimeConfig } from "../src/runtime-config";
 import { OutputPortal } from "../src/runtime/outputs/OutputPortal";
 import { RuntimeOutputs } from "../src/runtime/outputs/RuntimeOutputs";
 import { runtimeCellFixture } from "./runtime-cell-fixture";
-import { projectionRequest, runtimeConfig } from "./runtime-fixtures";
+import { projectionRequest, projectionRuntimeConfig, runtimeConfig } from "./runtime-fixtures";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -447,6 +447,107 @@ test("retargets a preserved output portal through an authored shell morph", asyn
   expect(host.dataset.state).toBe("error");
   expect(host.textContent).toContain('Notebook variable "missing_output" does not resolve');
   await act(async () => runtimeRoot.unmount());
+});
+
+test("reads ready rich output hosts in one bounded batch", async () => {
+  const requests = [projectionRequest("report", "output"), projectionRequest("figure", "output")];
+  commitRuntimeConfig(projectionRuntimeConfig(requests));
+  document.body.innerHTML = `
+    <marimo-output value="report" data-marimo-studio-site="${requests[0]!.siteId}"></marimo-output>
+    <marimo-output value="figure" data-marimo-studio-site="${requests[1]!.siteId}"></marimo-output>
+    <div id="root"></div>
+  `;
+  const root = createRoot(document.querySelector("#root")!);
+  const readOutputs = vi.fn<OutputReader>(async (request) => ({
+    outputs: Object.fromEntries(
+      request.projections.map((projection, index) => [
+        projection.target,
+        output(projection.target, index + 1),
+      ]),
+    ),
+    errors: {},
+  }));
+
+  await act(async () => {
+    root.render(
+      createElement(RuntimeOutputs, {
+        cells: indexCells([runtimeCell(1, "report-cell"), runtimeCell(1, "figure-cell")]),
+        connectionState: "OPEN",
+        readOutputs,
+        runtimeReady: true,
+      }),
+    );
+  });
+  await vi.waitFor(() => {
+    expect(document.querySelector('[value="report"]')?.getAttribute("data-state")).toBe("ready");
+    expect(document.querySelector('[value="figure"]')?.getAttribute("data-state")).toBe("ready");
+  });
+
+  const reads = readOutputs.mock.calls
+    .map(([request]) => request)
+    .filter((request) => request.projections.length > 0);
+  expect(reads).toHaveLength(1);
+  expect(reads[0]?.projections.map((projection) => projection.target).sort()).toEqual([
+    "figure",
+    "report",
+  ]);
+  await act(async () => root.unmount());
+});
+
+test("keeps a sibling output ready when one split leaf exceeds the response budget", async () => {
+  const requests = [
+    projectionRequest("oversized", "output"),
+    projectionRequest("summary", "output"),
+  ];
+  commitRuntimeConfig(projectionRuntimeConfig(requests));
+  document.body.innerHTML = `
+    <marimo-output value="oversized" data-marimo-studio-site="${requests[0]!.siteId}"></marimo-output>
+    <marimo-output value="summary" data-marimo-studio-site="${requests[1]!.siteId}"></marimo-output>
+    <div id="root"></div>
+  `;
+  const root = createRoot(document.querySelector("#root")!);
+  const readOutputs = vi.fn<OutputReader>(async (request): Promise<OutputReadResponse> => {
+    const target = request.projections[0]?.target;
+    if (request.projections.length > 1 || target === "oversized") {
+      return {
+        outputs: {},
+        errors: {
+          "*": {
+            code: "response-too-large",
+            message: "The output response exceeds the aggregate byte limit.",
+          },
+        },
+      };
+    }
+    return target
+      ? { outputs: { [target]: output(target, 1) }, errors: {} }
+      : { outputs: {}, errors: {} };
+  });
+
+  await act(async () => {
+    root.render(
+      createElement(RuntimeOutputs, {
+        cells: indexCells([runtimeCell(1, "oversized-cell"), runtimeCell(1, "summary-cell")]),
+        connectionState: "OPEN",
+        readOutputs,
+        runtimeReady: true,
+      }),
+    );
+  });
+  await act(async () => {
+    await vi.waitFor(() => {
+      expect(document.querySelector('[value="oversized"]')?.getAttribute("data-state")).toBe(
+        "error",
+      );
+      expect(document.querySelector('[value="summary"]')?.getAttribute("data-state")).toBe("ready");
+    });
+  });
+
+  const oversized = document.querySelector<HTMLElement>('[value="oversized"]')!;
+  const summary = document.querySelector<HTMLElement>('[value="summary"]')!;
+  expect(oversized.dataset.marimoDiagnosticCode).toBe("response-too-large");
+  expect(summary.dataset.outputMime).toBe("text/plain");
+  await act(async () => root.unmount());
 });
 
 test.each(["__proto__", "constructor"])(

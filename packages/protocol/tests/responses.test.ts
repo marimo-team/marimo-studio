@@ -9,6 +9,8 @@ import {
   valueReadResponseSchema,
 } from "../src/value-read.ts";
 import {
+  createViewRequestSchema,
+  deleteViewRequestSchema,
   type CreatedView,
   parseCreatedView,
   parseDeletedView,
@@ -18,11 +20,17 @@ import {
 import { componentStarter, projectionRequest, starter } from "./fixtures.ts";
 
 test("view responses validate list, create, and delete envelopes", () => {
+  const dashboardGeneration = "a".repeat(64);
+  const reportGeneration = "b".repeat(64);
   const views: ViewList = {
     schema: 1,
+    generation: "c".repeat(64),
     default_view: "dashboard",
     default_starter: "marimo-studio/vanilla:default",
-    views: [{ name: "dashboard" }, { name: "report" }],
+    views: [
+      { generation: dashboardGeneration, name: "dashboard" },
+      { generation: reportGeneration, name: "report" },
+    ],
     starters: [componentStarter, starter],
   };
   const created: CreatedView = {
@@ -38,10 +46,39 @@ test("view responses validate list, create, and delete envelopes", () => {
   assert.deepEqual(parseViewList(views), views);
   assert.deepEqual(parseCreatedView(created), created);
   assert.deepEqual(parseDeletedView(deleted), deleted);
+  assert.deepEqual(
+    parseDeletedView({ ...deleted, cleanup: "/tmp/delete-view" }).cleanup,
+    "/tmp/delete-view",
+  );
+  assert.deepEqual(
+    createViewRequestSchema.parse({
+      catalog_generation: views.generation,
+      name: "report",
+      starter: "marimo-studio/vanilla:default",
+    }),
+    {
+      catalog_generation: views.generation,
+      name: "report",
+      starter: "marimo-studio/vanilla:default",
+    },
+  );
+  assert.deepEqual(
+    deleteViewRequestSchema.parse({
+      catalog_generation: views.generation,
+      name: "report",
+      view_generation: reportGeneration,
+    }),
+    {
+      catalog_generation: views.generation,
+      name: "report",
+      view_generation: reportGeneration,
+    },
+  );
 
   assert.throws(() => parseViewList({ ...views, default_view: "missing" }));
   assert.throws(() => parseViewList({ ...views, default_view: "" }));
   assert.throws(() => parseViewList({ ...views, default_starter: "missing" }));
+  assert.throws(() => parseViewList({ ...views, generation: "stale" }));
   assert.throws(() => parseViewList({ ...views, unexpected: true }));
   assert.throws(() => parseViewList({ ...views, views: [views.views[0], views.views[0]] }));
   assert.throws(() =>
@@ -49,6 +86,30 @@ test("view responses validate list, create, and delete envelopes", () => {
   );
   assert.throws(() =>
     parseViewList({ ...views, views: [{ ...views.views[0], name: "Bad View" }] }),
+  );
+  assert.throws(() =>
+    parseViewList({ ...views, views: [{ ...views.views[0], generation: "stale" }] }),
+  );
+  assert.throws(() =>
+    createViewRequestSchema.parse({
+      catalog_generation: views.generation,
+      name: "report",
+      starter: "vanilla",
+    }),
+  );
+  assert.throws(() =>
+    deleteViewRequestSchema.parse({
+      catalog_generation: views.generation,
+      name: "report",
+    }),
+  );
+  assert.throws(() =>
+    deleteViewRequestSchema.parse({
+      catalog_generation: views.generation,
+      name: "report",
+      view_generation: reportGeneration,
+      extra: true,
+    }),
   );
   assert.throws(() => parseCreatedView({ schema: 2, name: 42 }));
   assert.throws(() => parseCreatedView({ ...created, unexpected: true }));
@@ -69,6 +130,7 @@ test("view responses validate list, create, and delete envelopes", () => {
     }),
   );
   assert.throws(() => parseDeletedView({ ...deleted, unexpected: true }));
+  assert.throws(() => parseDeletedView({ ...deleted, cleanup: "" }));
 });
 
 test("value responses validate errors before presentation consumes them", () => {

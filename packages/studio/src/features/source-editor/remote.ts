@@ -9,6 +9,8 @@ import { parseViewProject } from "@marimo-studio/protocol/view-project";
 export interface RemoteSource {
   content: string;
   revision: string;
+  catalogGeneration?: string;
+  viewGeneration?: string;
 }
 
 export interface SourceConflict {
@@ -21,7 +23,14 @@ export interface SourceConflict {
 export interface SourceRemote {
   project(view: string): Promise<ViewProject>;
   read(view: string, path: SourceDocumentPath): Promise<RemoteSource>;
-  write(view: string, path: SourceDocumentPath, content: string, revision: string): Promise<string>;
+  write(
+    view: string,
+    path: SourceDocumentPath,
+    content: string,
+    revision: string,
+    catalogGeneration: string,
+    viewGeneration: string,
+  ): Promise<string>;
 }
 
 export class RevisionConflict extends Error {
@@ -37,7 +46,9 @@ const responseJson = async (response: Response) => jsonValueSchema.parse(await r
 
 const responseErrorMessage = async (response: Response, fallback: string): Promise<string> => {
   try {
-    return parseErrorResponse(await responseJson(response)).message ?? fallback;
+    const error = parseErrorResponse(await responseJson(response));
+    const message = error.message ?? fallback;
+    return error.hint ? `${message} ${error.hint}` : message;
   } catch {
     return fallback;
   }
@@ -75,15 +86,34 @@ export const createSourceRemote = (
       if (!revision) {
         throw new Error(`${path} response did not include an ETag`);
       }
-      return { content: await response.text(), revision };
+      const catalogGeneration = response.headers.get("Marimo-Studio-Catalog-Generation");
+      const viewGeneration = response.headers.get("Marimo-Studio-View-Generation");
+      if (catalogGeneration === null && viewGeneration === null) {
+        return { content: await response.text(), revision };
+      }
+      if (catalogGeneration === null || viewGeneration === null) {
+        throw new Error(`${path} response included an incomplete source owner`);
+      }
+      if (!/^[0-9a-f]{64}$/.test(catalogGeneration) || !/^[0-9a-f]{64}$/.test(viewGeneration)) {
+        throw new Error(`${path} response included an invalid source owner`);
+      }
+      const source: RemoteSource = {
+        content: await response.text(),
+        revision,
+      };
+      source.catalogGeneration = catalogGeneration;
+      source.viewGeneration = viewGeneration;
+      return source;
     },
-    async write(view, path, content, revision) {
+    async write(view, path, content, revision, catalogGeneration, viewGeneration) {
       const response = await fetch(sourceUrl(view, path), {
         method: "PUT",
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
           "If-Match": `"${revision}"`,
+          "Marimo-Studio-Catalog-Generation": catalogGeneration,
           "Marimo-Server-Token": serverToken,
+          "Marimo-Studio-View-Generation": viewGeneration,
         },
         body: content,
       });

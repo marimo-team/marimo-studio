@@ -147,13 +147,13 @@ export class PreviewDeck {
         this.notebookMutationFailed({
           code: "notebook-save-failed",
           message: "Notebook save failed.",
-          hint: "Retry the save to update this page.",
+          hint: "Retry the save to update this view.",
         }),
       transactionFailed: () =>
         this.notebookMutationFailed({
           code: "notebook-sync-failed",
           message: "Notebook change could not be synchronized.",
-          hint: "Retry the edit to update this page.",
+          hint: "Retry the edit to update this view.",
         }),
     });
     this.viewSwitch = { view: this.view, runtime: this.runtime };
@@ -396,6 +396,27 @@ export class PreviewDeck {
       }
     }
     if (released) {
+      this.publish();
+    }
+  }
+
+  replaceView(view: string): void {
+    this.presentationBuilds.delete(view);
+    this.presentationRevisions.delete(view);
+    let changed = false;
+    for (const slot of this.slots) {
+      if (slot.view !== view) {
+        continue;
+      }
+      if (this.isActive(slot)) {
+        slot.stale = false;
+        slot.controller?.reload();
+      } else {
+        this.releaseSlot(slot);
+      }
+      changed = true;
+    }
+    if (changed) {
       this.publish();
     }
   }

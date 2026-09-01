@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import { setActiveDocumentLifecycleId } from "../src/document/document-lifecycle-id.ts";
-import { startQuerySync } from "../src/document/query-sync.ts";
+import { bindRuntimeQueryHistory, startQuerySync } from "../src/document/query-sync.ts";
 import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
 import { runtimeConfig } from "./runtime-fixtures.ts";
 
@@ -98,4 +98,35 @@ test("an isolated direct view reports public query changes to its wrapper", () =
   );
   globalThis.history.pushState = pushState;
   globalThis.history.replaceState = replaceState;
+});
+
+test("static browser history restores the public WebAssembly query", async () => {
+  globalThis.history.replaceState({}, "", "/report/?region=apac");
+  const updateQuery = vi.fn(async () => {});
+  const reload = vi.fn();
+  const dispose = bindRuntimeQueryHistory(updateQuery, reload);
+
+  globalThis.history.replaceState({}, "", "/report/?region=emea&access_token=secret&runtime=wasm");
+  globalThis.dispatchEvent(new PopStateEvent("popstate"));
+
+  await vi.waitFor(() => expect(updateQuery).toHaveBeenCalledWith("?region=emea"));
+  expect(reload).not.toHaveBeenCalled();
+  dispose();
+
+  globalThis.history.replaceState({}, "", "/report/?region=americas");
+  globalThis.dispatchEvent(new PopStateEvent("popstate"));
+  expect(updateQuery).toHaveBeenCalledOnce();
+});
+
+test("static browser history reloads when query synchronization fails", async () => {
+  const updateQuery = vi.fn(async () => {
+    throw new Error("query bridge unavailable");
+  });
+  const reload = vi.fn();
+  const dispose = bindRuntimeQueryHistory(updateQuery, reload);
+
+  globalThis.dispatchEvent(new PopStateEvent("popstate"));
+
+  await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+  dispose();
 });

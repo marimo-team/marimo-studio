@@ -11,7 +11,7 @@ export type ViewMenuPanel = "create" | "list" | "remove";
 
 interface ViewMenuActions {
   beginCreate: () => void;
-  beginRemoval: (view: string) => void;
+  beginRemoval: (view: string, catalogGeneration: string, generation: string) => void;
   cancelCreate: () => void;
   cancelRemoval: () => void;
   choose: (view: string) => void;
@@ -34,8 +34,10 @@ interface ViewMenuRefs {
 }
 
 interface ViewMenuRow {
+  catalogGeneration?: string;
   current: boolean;
   default: boolean;
+  generation?: string;
   name: string;
   removing: boolean;
   selecting: boolean;
@@ -101,6 +103,7 @@ export const useViewMenu = (controller: ViewController): ViewMenuModel => {
   const newView = useRef<HTMLButtonElement>(null);
   const popover = useRef<HTMLDivElement>(null);
   const confirmRemoval = useRef<HTMLButtonElement>(null);
+  const creationCatalogGeneration = useRef<string | undefined>(undefined);
   const removalView = useRef<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -184,10 +187,15 @@ export const useViewMenu = (controller: ViewController): ViewMenuModel => {
   const submitCreate = useCallback(
     (event: FormEvent) => {
       event.preventDefault();
-      void controller.create(name, starter).then((created) => {
+      const catalogGeneration = creationCatalogGeneration.current;
+      if (!catalogGeneration) {
+        return;
+      }
+      void controller.create(name, starter, catalogGeneration).then((created) => {
         if (!created) {
           return;
         }
+        creationCatalogGeneration.current = undefined;
         setName("");
         setCreating(false);
         close();
@@ -205,27 +213,33 @@ export const useViewMenu = (controller: ViewController): ViewMenuModel => {
   const beginCreate = useCallback(() => {
     controller.cancelPendingSelection();
     controller.dismiss();
+    creationCatalogGeneration.current = snapshot.catalogGeneration;
     setCreating(true);
-    void controller.ensureStarterCatalog();
-  }, [controller]);
+    void controller.ensureStarterCatalog().then(() => {
+      creationCatalogGeneration.current ??= controller.getSnapshot().catalogGeneration;
+    });
+  }, [controller, snapshot.catalogGeneration]);
   const retryStarters = useCallback(() => {
-    void controller.ensureStarterCatalog();
+    void controller.ensureStarterCatalog().then(() => {
+      creationCatalogGeneration.current ??= controller.getSnapshot().catalogGeneration;
+    });
   }, [controller]);
   const cancelCreate = useCallback(() => {
     if (snapshot.creating) {
       return;
     }
     setCreating(false);
+    creationCatalogGeneration.current = undefined;
     setName("");
     controller.dismiss();
     focusNextFrame(() => newView.current);
   }, [controller, snapshot.creating]);
   const beginRemoval = useCallback(
-    (view: string) => {
+    (view: string, catalogGeneration: string, generation: string) => {
       setCreating(false);
       controller.cancelPendingSelection();
       removalView.current = view;
-      controller.beginRemoval(view);
+      controller.beginRemoval(view, catalogGeneration, generation);
     },
     [controller],
   );
@@ -255,14 +269,17 @@ export const useViewMenu = (controller: ViewController): ViewMenuModel => {
         return;
       }
       setCreating(false);
+      creationCatalogGeneration.current = undefined;
       setName("");
       controller.dismissPanels();
     },
     [controller, snapshot.creating, snapshot.deleting, syncPopover],
   );
   const rows = snapshot.views.map((view) => ({
+    catalogGeneration: snapshot.catalogGeneration,
     current: view === snapshot.current,
     default: view === snapshot.defaultView,
+    generation: snapshot.viewGenerations[view],
     name: view,
     removing: view === snapshot.removing,
     selecting: view === snapshot.selecting,

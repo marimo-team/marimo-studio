@@ -72,7 +72,9 @@
     "width": "medium"
   },
   "userConfig": {
-    "theme": "system"
+    "display": {
+      "theme": "system"
+    }
   },
   "configOverrides": {},
   "dev": true,

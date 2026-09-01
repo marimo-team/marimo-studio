@@ -14,7 +14,7 @@ import { bindFragmentRestores, bindViewNavigation } from "./document/events";
 import { startFrameRuntimeBridge } from "./document/frame-runtime-bridge.ts";
 import { onFinalPageHide } from "./document/page-lifecycle";
 import { postToStudioParent } from "./document/parent-bridge.ts";
-import { startQuerySync } from "./document/query-sync";
+import { bindRuntimeQueryHistory, startQuerySync } from "./document/query-sync";
 import { waitForReceiverAdmission } from "./document/receiver-admission.ts";
 import { presentationRefreshUrl, presentationRenewalSupportUrl } from "./document/refresh-url.ts";
 import { createPresentationRevisions } from "./document/revision-runtime";
@@ -317,10 +317,14 @@ const bootstrap = async (registry: RuntimeRegistry, signal = documentLifetime.si
   startPresentationObservers(updateConfiguredRuntimeQuery);
   onFinalPageHide(stopPresentationObservers);
   const config = getRuntimeConfig();
-  const stopRuntimeNavigation = bindRuntimeNavigation(presentationRevisions);
-  const stopViewNavigation = config.dev
-    ? () => {}
-    : bindStandaloneViewNavigation(presentationRevisions);
+  const livePresentation = config.presentationSessionId !== undefined;
+  const stopRuntimeNavigation = livePresentation
+    ? bindRuntimeNavigation(presentationRevisions)
+    : () => {};
+  const stopViewNavigation =
+    config.dev || !livePresentation
+      ? () => {}
+      : bindStandaloneViewNavigation(presentationRevisions);
   const stopFragmentRestores = bindFragmentRestores();
   onFinalPageHide(stopRuntimeNavigation);
   onFinalPageHide(stopViewNavigation);
@@ -337,6 +341,10 @@ const bootstrap = async (registry: RuntimeRegistry, signal = documentLifetime.si
     globalThis.location.reload();
     return;
   }
+  const stopStaticQueryHistory = livePresentation
+    ? () => {}
+    : bindRuntimeQueryHistory((query) => session.updateQuery(query));
+  onFinalPageHide(stopStaticQueryHistory);
   browser.__MARIMO_STUDIO_RUNTIME_STATE__ = "mounted";
   const stopFrameBridge = startFrameRuntimeBridge(session.sessionId ?? null);
   onFinalPageHide(stopFrameBridge);

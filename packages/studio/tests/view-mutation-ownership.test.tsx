@@ -6,7 +6,7 @@ import type { ViewRemote } from "../src/features/views/remote.ts";
 
 import { ViewController } from "../src/features/views/controller.ts";
 import { ViewMenu } from "../src/features/views/ViewMenu.tsx";
-import { starter, viewList } from "./fixtures.ts";
+import { starter, viewGeneration, viewList } from "./fixtures.ts";
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -34,18 +34,19 @@ it("keeps creation and removal directly available in the switcher", async () => 
     [starter],
     starter.id,
   );
+  await controller.refreshInventory();
   const user = userEvent.setup();
   render(<ViewMenu controller={controller} />);
 
-  expect(screen.getByLabelText("Switch page: dashboard")).toHaveTextContent("dashboard");
-  await user.click(screen.getByLabelText(/^Switch page:/));
+  expect(screen.getByLabelText("Switch view: dashboard")).toHaveTextContent("dashboard");
+  await user.click(screen.getByLabelText(/^Switch view:/));
   expect(screen.getByRole("button", { name: "dashboard, default" })).toBeVisible();
-  expect(screen.getByRole("button", { name: "New page" })).toBeVisible();
-  expect(screen.getByLabelText("Remove report page")).toBeInTheDocument();
-  screen.getByRole("button", { name: "New page" }).focus();
+  expect(screen.getByRole("button", { name: "New view" })).toBeVisible();
+  expect(screen.getByLabelText("Remove report view")).toBeInTheDocument();
+  screen.getByRole("button", { name: "New view" }).focus();
   await user.keyboard("{Escape}");
-  expect(screen.getByLabelText(/^Switch page:/)).toHaveFocus();
-  expect(screen.getByLabelText(/^Switch page:/).closest("details")?.open).toBe(false);
+  expect(screen.getByLabelText(/^Switch view:/)).toHaveFocus();
+  expect(screen.getByLabelText(/^Switch view:/).closest("details")?.open).toBe(false);
   controller.dispose();
 });
 
@@ -66,23 +67,24 @@ it("closes immediately while a selected view loads and can reopen on its pending
     [starter],
     starter.id,
   );
+  await controller.refreshInventory();
   const user = userEvent.setup();
   render(<ViewMenu controller={controller} />);
-  const menu = screen.getByLabelText(/^Switch page:/).closest("details");
+  const menu = screen.getByLabelText(/^Switch view:/).closest("details");
   expect(menu).not.toBeNull();
 
-  await user.click(screen.getByLabelText(/^Switch page:/));
+  await user.click(screen.getByLabelText(/^Switch view:/));
   await user.click(screen.getByRole("button", { name: "report" }));
 
   expect(menu?.open).toBe(false);
   expect(controller.getSnapshot().selecting).toBe("report");
-  await user.click(screen.getByLabelText(/^Switch page:/));
+  await user.click(screen.getByLabelText(/^Switch view:/));
   expect(screen.getByRole("button", { name: "report, loading" })).toHaveAttribute(
     "aria-busy",
     "true",
   );
   selected.resolve(true);
-  await vi.waitFor(() => expect(screen.getByLabelText("Switch page: report")).toBeVisible());
+  await vi.waitFor(() => expect(screen.getByLabelText("Switch view: report")).toBeVisible());
   expect(menu?.open).toBe(true);
   expect(controller.getSnapshot().selecting).toBeUndefined();
   controller.dispose();
@@ -113,11 +115,12 @@ it.each([
       [starter],
       starter.id,
     );
+    await controller.refreshInventory();
     const user = userEvent.setup();
     render(<ViewMenu controller={controller} />);
-    const menu = screen.getByLabelText(/^Switch page:/).closest("details");
+    const menu = screen.getByLabelText(/^Switch view:/).closest("details");
 
-    await user.click(screen.getByLabelText(/^Switch page:/));
+    await user.click(screen.getByLabelText(/^Switch view:/));
     await user.click(screen.getByRole("button", { name: "report" }));
 
     expect(menu?.open).toBe(false);
@@ -146,17 +149,18 @@ it("keeps a newer create panel open when an earlier view selection settles", asy
     [starter],
     starter.id,
   );
+  await controller.refreshInventory();
   const user = userEvent.setup();
   render(<ViewMenu controller={controller} />);
 
-  await user.click(screen.getByLabelText(/^Switch page:/));
+  await user.click(screen.getByLabelText(/^Switch view:/));
   await user.click(screen.getByRole("button", { name: "report" }));
-  await user.click(screen.getByLabelText(/^Switch page:/));
-  await user.click(screen.getByRole("button", { name: "New page" }));
+  await user.click(screen.getByLabelText(/^Switch view:/));
+  await user.click(screen.getByRole("button", { name: "New view" }));
   selected.resolve(true);
 
-  await vi.waitFor(() => expect(screen.getByLabelText("New page")).toBeVisible());
-  expect(screen.getByLabelText(/^Switch page:/).closest("details")?.open).toBe(true);
+  await vi.waitFor(() => expect(screen.getByLabelText("New view")).toBeVisible());
+  expect(screen.getByLabelText(/^Switch view:/).closest("details")?.open).toBe(true);
   expect(cancelSelection).toHaveBeenCalledTimes(1);
   controller.dispose();
 });
@@ -179,13 +183,14 @@ it("keeps direct removal open when an earlier view selection settles", async () 
     [starter],
     starter.id,
   );
+  await controller.refreshInventory();
   const user = userEvent.setup();
   render(<ViewMenu controller={controller} />);
 
-  await user.click(screen.getByLabelText(/^Switch page:/));
+  await user.click(screen.getByLabelText(/^Switch view:/));
   await user.click(screen.getByRole("button", { name: "report" }));
-  await user.click(screen.getByLabelText(/^Switch page:/));
-  await user.click(screen.getByLabelText("Remove report page"));
+  await user.click(screen.getByLabelText(/^Switch view:/));
+  await user.click(screen.getByLabelText("Remove report view"));
   selected.resolve(true);
 
   await vi.waitFor(() => expect(screen.getByRole("button", { name: "Remove" })).toBeVisible());
@@ -213,19 +218,20 @@ it.each(["success", "failure"] as const)(
       [starter],
       starter.id,
     );
+    await controller.refreshInventory();
     const user = userEvent.setup();
     render(<ViewMenu controller={controller} />);
-    const menu = screen.getByLabelText(/^Switch page:/).closest("details");
+    const menu = screen.getByLabelText(/^Switch view:/).closest("details");
     expect(menu).not.toBeNull();
-    await user.click(screen.getByLabelText(/^Switch page:/));
-    await user.click(screen.getByRole("button", { name: "New page" }));
-    await user.type(screen.getByLabelText("New page"), "created");
+    await user.click(screen.getByLabelText(/^Switch view:/));
+    await user.click(screen.getByRole("button", { name: "New view" }));
+    await user.type(screen.getByLabelText("New view"), "created");
     await user.click(screen.getByRole("button", { name: "Create" }));
     expect(await screen.findByRole("button", { name: "Creating…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
-    expect(screen.getByLabelText(/^Switch page:/)).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByLabelText(/^Switch view:/)).toHaveAttribute("aria-disabled", "true");
 
-    await user.click(screen.getByLabelText(/^Switch page:/));
+    await user.click(screen.getByLabelText(/^Switch view:/));
     expect(menu?.open).toBe(true);
 
     if (outcome === "success") {
@@ -263,24 +269,33 @@ it.each(["success", "failure"] as const)(
       [starter],
       starter.id,
     );
+    await controller.refreshInventory();
     const user = userEvent.setup();
     render(<ViewMenu controller={controller} />);
-    const menu = screen.getByLabelText(/^Switch page:/).closest("details");
+    const menu = screen.getByLabelText(/^Switch view:/).closest("details");
     expect(menu).not.toBeNull();
-    await user.click(screen.getByLabelText(/^Switch page:/));
-    await user.click(screen.getByLabelText("Remove report page"));
+    await user.click(screen.getByLabelText(/^Switch view:/));
+    await user.click(screen.getByLabelText("Remove report view"));
     expect(screen.getByText(/permanently deletes/)).toHaveTextContent("report");
     await user.click(screen.getByRole("button", { name: "Remove" }));
     expect(await screen.findByRole("button", { name: "Removing…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
-    expect(screen.getByLabelText(/^Switch page:/)).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByLabelText(/^Switch view:/)).toHaveAttribute("aria-disabled", "true");
 
-    await user.click(screen.getByLabelText(/^Switch page:/));
+    await user.click(screen.getByLabelText(/^Switch view:/));
     expect(menu?.open).toBe(true);
 
     if (outcome === "success") {
-      removed.resolve({ ...viewList(["dashboard"]), name: "report" });
+      removed.resolve({
+        ...viewList(["dashboard"]),
+        cleanup: "/tmp/studio-delete-report",
+        name: "report",
+      });
       await vi.waitFor(() => expect(menu?.open).toBe(false));
+      expect(remote.remove).toHaveBeenCalledWith("report", viewGeneration(0), viewGeneration(2));
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "View report was removed. Files awaiting cleanup remain at /tmp/studio-delete-report.",
+      );
     } else {
       removed.reject(new Error("remove failed"));
       expect(await screen.findByRole("alert")).toHaveTextContent("remove failed");

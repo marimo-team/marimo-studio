@@ -7,6 +7,7 @@ import {
   runtimeBindingsSchema,
 } from "./projections.ts";
 import { ownRecordSchema } from "./records.ts";
+import { viewNameSchema } from "./views.ts";
 
 export type JsonValue =
   | string
@@ -32,7 +33,7 @@ export const projectionDiagnosticSchema = z
     severity: z.enum(["warning", "error"]),
     message: z.string(),
     hint: z.string(),
-    view: z.string(),
+    view: viewNameSchema,
     projection: z.enum(["cell", "value", "output"]),
     target: z.string(),
     source: z
@@ -63,8 +64,8 @@ const runtimeConfigFields = {
   schema: z.literal(1),
   revision: z.string(),
   projectionRevision: z.string().regex(/^[a-f0-9]{64}$/),
-  view: z.string(),
-  views: z.array(z.string()),
+  view: viewNameSchema,
+  views: z.array(viewNameSchema),
   runtime: runtimeEnvelopeSchema,
   rootUrl: z.string(),
   publicRootUrl: z.string(),

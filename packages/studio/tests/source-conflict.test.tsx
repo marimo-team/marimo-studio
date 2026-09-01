@@ -20,7 +20,7 @@ it.each([
     local: "local app",
     remote: "last disk app",
     revision: "r1",
-    message: "src/App.tsx is no longer part of this page.",
+    message: "src/App.tsx is no longer part of this view.",
     diskLabel: "Last saved version",
   },
 ])("shows discard recovery for a $kind conflict", async (scenario) => {

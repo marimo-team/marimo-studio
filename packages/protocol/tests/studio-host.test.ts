@@ -21,12 +21,25 @@ describe("Studio host bootstrap", () => {
   it("accepts every workspace lifecycle that preserves the editor", () => {
     expect(parseStudioHostBootstrap(payload).state).toBe("unconfigured");
     expect(
-      parseStudioHostBootstrap({ ...payload, state: "needs-view", defaultView: "dashboard" }).state,
+      parseStudioHostBootstrap({
+        ...payload,
+        state: "needs-view",
+        defaultView: "dashboard",
+        generation: "a".repeat(64),
+      }).state,
     ).toBe("needs-view");
     expect(parseStudioHostBootstrap({ ...payload, state: "ready" }).state).toBe("ready");
   });
 
   it("requires the first view in needs-view state", () => {
     expect(() => parseStudioHostBootstrap({ ...payload, state: "needs-view" })).toThrow();
+    expect(() =>
+      parseStudioHostBootstrap({
+        ...payload,
+        state: "needs-view",
+        defaultView: "dashboard",
+        generation: "stale",
+      }),
+    ).toThrow();
   });
 });

@@ -10,8 +10,3 @@ export const responseJsonOrNull = async (response: Response): Promise<JsonValue>
     return null;
   }
 };
-
-export const messageJson = (event: MessageEvent<unknown>): JsonValue | undefined => {
-  const parsed = jsonValueSchema.safeParse(event.data);
-  return parsed.success ? parsed.data : undefined;
-};

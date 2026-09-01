@@ -98,7 +98,7 @@ export const CreateViewForm = ({
   );
   return (
     <form className="studio-new-view-form" aria-busy={busy} onSubmit={onSubmit}>
-      <label htmlFor="studio-view-name">New page</label>
+      <label htmlFor="studio-view-name">New view</label>
       <input
         ref={inputRef}
         id="studio-view-name"

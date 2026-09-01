@@ -108,6 +108,30 @@ export class SourceController {
     }
   }
 
+  replaceView(view: string): void {
+    if (this.disposed || view !== this.view) {
+      return;
+    }
+    if (this.session?.hasPendingChanges) {
+      this.inspection = {
+        phase: "unavailable",
+        message: `View ${view} was replaced. Unsaved edits remain in Source. Copy them before reopening the view.`,
+      };
+      this.publish();
+      return;
+    }
+    this.transition += 1;
+    this.refreshQueue = undefined;
+    this.session?.dispose();
+    this.session = undefined;
+    this.inspection = { phase: "checking" };
+    this.targetDiagnostic = undefined;
+    this.publish();
+    if (this.started) {
+      void this.loadCurrentSession();
+    }
+  }
+
   private loadCurrentSession(): Promise<void> {
     if (this.disposed || this.session?.view === this.view) {
       return Promise.resolve();

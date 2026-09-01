@@ -11,7 +11,7 @@ import type { RemoteSource, SourceRemote } from "../src/features/source-editor/r
 import { SourceController } from "../src/features/source-editor/controller.ts";
 import { SourcePane } from "../src/features/source-editor/SourcePane.tsx";
 import { SourceProjectDetails } from "../src/features/source-editor/SourceProjectDetails.tsx";
-import { unbuiltView } from "./fixtures.ts";
+import { unbuiltView, viewOwner } from "./fixtures.ts";
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -54,6 +54,7 @@ class PaneRemote implements SourceRemote {
   project(view: string): Promise<ViewProject> {
     return Promise.resolve({
       schema: 1,
+      ...viewOwner,
       view,
       provider: "marimo-studio/svelte",
       provider_options: {},
@@ -194,7 +195,7 @@ it("keeps provider diagnostics visible when no source documents are exposed", as
   expect(screen.getByRole("status", { name: "Source document status" })).toHaveTextContent(
     "No source documents",
   );
-  expect(screen.getByText("This page has no source files to edit.")).toBeVisible();
+  expect(screen.getByText("This view has no source files to edit.")).toBeVisible();
   expect(screen.getByRole("alert")).toHaveTextContent(diagnostic.message);
   controller.dispose();
 });
@@ -207,6 +208,7 @@ it("shows an HTTP conflict recovery path in the Source pane", async () => {
     if (url.pathname.endsWith("/project")) {
       return Response.json({
         schema: 1,
+        ...viewOwner,
         view: "react",
         provider: "marimo-studio/react",
         provider_options: {},
@@ -475,13 +477,13 @@ it("keeps actionable build status behind the disclosure", async () => {
 
   const user = userEvent.setup();
   render(<SourcePane controller={controller} visible />);
-  const buildStatus = screen.getByRole("region", { name: "Page build status" });
-  const trigger = screen.getByLabelText("Page build details, Build needed");
+  const buildStatus = screen.getByRole("region", { name: "View build status" });
+  const trigger = screen.getByLabelText("View build details, Build needed");
   expect(buildStatus).not.toBeVisible();
   await user.click(trigger);
   expect(buildStatus).toBeVisible();
   expect(buildStatus).toHaveTextContent(
-    "Saved source has changed. Build the page to update Preview.",
+    "Saved source has changed. Build the view to update Preview.",
   );
   expect(buildStatus).toHaveTextContent("Rebuild the current source.");
   expect(buildStatus).toHaveTextContent("Save the source, then rebuild.");
@@ -511,11 +513,11 @@ it("explains when build freshness is unavailable", async () => {
       inspection={{ phase: "unavailable", message: "Inspection unavailable" }}
     />,
   );
-  const trigger = screen.getByLabelText("Page build details, Build status unavailable");
+  const trigger = screen.getByLabelText("View build details, Build status unavailable");
   expect(trigger).toBeVisible();
 
   await user.click(trigger);
-  expect(screen.getByRole("region", { name: "Page build status" })).toHaveTextContent(
+  expect(screen.getByRole("region", { name: "View build status" })).toHaveTextContent(
     "Inspection unavailable",
   );
 });
@@ -582,6 +584,7 @@ it("announces source loading while a selected view hydrates", async () => {
     }
     return Promise.resolve({
       schema: 1,
+      ...viewOwner,
       view,
       provider: "marimo-studio/svelte",
       provider_options: {},
@@ -613,6 +616,7 @@ it("announces source loading while a selected view hydrates", async () => {
   await vi.waitFor(() => expect(screen.getAllByText("Loading source documents")).toHaveLength(2));
   pending.resolve({
     schema: 1,
+    ...viewOwner,
     view: "pending",
     provider: "marimo-studio/svelte",
     provider_options: {},

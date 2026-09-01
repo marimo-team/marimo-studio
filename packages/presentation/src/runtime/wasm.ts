@@ -15,7 +15,6 @@ import {
   functionResultSchema,
   throwIfWasmAborted,
   waitForWasmCaller,
-  waitForWasmProjectionBridge,
 } from "../values/wasm";
 import { awaitWasmStartup, retryWasmRpc, WASM_PROJECTION_NAMESPACE } from "../wasm-rpc";
 import { createWasmInitialization } from "./initialization";
@@ -24,6 +23,7 @@ import { type WasmRuntimeData, wasmRuntimeDataSchema } from "./wasm-config";
 import { createWasmMountedProjectionPreparation } from "./wasm-mounted-projections";
 import { createWasmProjectionExecutor } from "./wasm-projection-execution";
 import { createWasmQueryWriter } from "./wasm-query";
+import { prepareWasmProjectionRuntime, resolveWasmRuntimeUrl } from "./wasm-startup";
 
 const configureProjections = async (
   invoke: RuntimeInvoke,
@@ -86,19 +86,6 @@ const requestValues = async (
             active_projections: request.activeProjections,
             max_value_bytes: 1_000_000,
           },
-        }),
-      signal,
-    ),
-  );
-
-const requestProjectionBridge = async (invoke: RuntimeInvoke, signal?: AbortSignal) =>
-  functionResultSchema.parse(
-    await retryWasmRpc(
-      () =>
-        invoke({
-          namespace: WASM_PROJECTION_NAMESPACE,
-          functionName: "projection_bridge_ready",
-          args: {},
         }),
       signal,
     ),
@@ -191,29 +178,22 @@ export const mountWasmRuntime = (
       code: data.code,
       filename: data.filename,
       version: data.version,
-      url: new URL(context.presentation.rootUrl, globalThis.location.origin).toString(),
+      url: resolveWasmRuntimeUrl(context.presentation.rootUrl),
       waitForReady(workerInitialized, invoke, executeCells) {
         return awaitWasmStartup(
           initialization.wait(workerInitialized, async (signal) => {
             try {
               throwIfWasmAborted(signal);
               resolveCellExecutor(executeCells);
-              const bootstrapCell = data.executionCells.find(
-                (cell) => cell.id === data.bootstrapCellId,
-              );
-              if (bootstrapCell === undefined) {
-                throw new Error("The WebAssembly projection bootstrap cell is unavailable.");
-              }
-              throwIfWasmAborted(signal);
-              await waitForWasmCaller(executeCells([bootstrapCell]), signal);
-              throwIfWasmAborted(signal);
-              await waitForWasmProjectionBridge(
-                (requestSignal) => requestProjectionBridge(invoke, requestSignal),
+              await prepareWasmProjectionRuntime({
+                authorizeProjections,
+                config: context.presentation,
+                data,
+                executeCells,
+                invoke,
+                queryWriter,
                 signal,
-              );
-              throwIfWasmAborted(signal);
-              await authorizeProjections(invoke, context.presentation, signal);
-              throwIfWasmAborted(signal);
+              });
               resolveProjectionRuntime();
             } catch (cause) {
               const error =

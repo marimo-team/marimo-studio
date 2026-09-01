@@ -59,6 +59,23 @@ test("executes each authorized dependency closure once", async () => {
   expect(executeCells).toHaveBeenNthCalledWith(2, [{ id: "second-cell", code: "second = 2" }]);
 });
 
+test("waits for runtime startup before executing a projection", async () => {
+  let ready = () => {};
+  const runtimeReady = new Promise<void>((resolve) => {
+    ready = resolve;
+  });
+  const executeCells = vi.fn(async () => {});
+  const executor = createWasmProjectionExecutor(executeCells, () => runtimeReady);
+
+  const preparing = executor.prepareRequests(config, data, [first]);
+  await Promise.resolve();
+
+  expect(executeCells).not.toHaveBeenCalled();
+  ready();
+  await preparing;
+  expect(executeCells).toHaveBeenCalledOnce();
+});
+
 test("drops an unmounted projection before its execution slot starts", async () => {
   let finishFirst = () => {};
   const firstExecution = new Promise<void>((resolve) => {

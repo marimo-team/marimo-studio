@@ -223,6 +223,7 @@ export class SourceSession {
     for (const document of project.documents) {
       const source = this.sources.get(document.path);
       if (source) {
+        source.setOwner(project.catalog_generation, project.view_generation);
         this.documents.set(document.path, document);
         updates.push(source.updateDocument(document));
       } else {
@@ -337,6 +338,7 @@ export class SourceSession {
         this.options.changed();
       },
     });
+    source.setOwner(this.project.catalog_generation, this.project.view_generation);
     this.order.push(document.path);
     this.documents.set(document.path, document);
     this.contents.set(document.path, "");

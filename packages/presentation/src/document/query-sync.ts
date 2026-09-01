@@ -7,6 +7,25 @@ import { documentLifecycleEnvelope } from "./document-lifecycle-id.ts";
 import { postToStudioParent } from "./parent-bridge.ts";
 import { studioOwned } from "./studio-ownership.ts";
 
+export const bindRuntimeQueryHistory = (
+  updateQuery: (query: string) => Promise<void>,
+  reload: () => void = () => globalThis.location.reload(),
+): (() => void) => {
+  let active = true;
+  const synchronize = () => {
+    void updateQuery(publicNotebookQuery(globalThis.location.search)).catch(() => {
+      if (active) {
+        reload();
+      }
+    });
+  };
+  globalThis.addEventListener("popstate", synchronize);
+  return () => {
+    active = false;
+    globalThis.removeEventListener("popstate", synchronize);
+  };
+};
+
 export const startQuerySync = (): void => {
   const physicallyFramed = globalThis.parent !== globalThis.window;
   if (!studioOwned() && !physicallyFramed) {

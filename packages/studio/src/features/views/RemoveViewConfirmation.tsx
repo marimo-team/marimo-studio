@@ -26,9 +26,9 @@ export const RemoveViewConfirmation = ({
     aria-labelledby="studio-remove-view-title"
     aria-busy={busy}
   >
-    <strong id="studio-remove-view-title">Remove page?</strong>
+    <strong id="studio-remove-view-title">Remove view?</strong>
     <p className="studio-remove-view-detail">
-      This permanently deletes the <strong>{view}</strong> page and its files.
+      This permanently deletes the <strong>{view}</strong> view and its files.
     </p>
     {replacementDefault ? (
       <p className="studio-remove-view-detail">

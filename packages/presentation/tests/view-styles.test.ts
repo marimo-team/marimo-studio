@@ -100,7 +100,9 @@ test("staged utility CSS commits atomically and ignores output mutations", async
       <marimo-cell><div data-marimo-cell-output></div></marimo-cell>
     </main>
   `;
+  let generations = 0;
   const controller = new ViewStyleController(async (tokens) => {
+    generations += 1;
     const tokenList = [...tokens].sort().join(" ");
     return `/* ${tokenList} */`;
   });
@@ -122,12 +124,19 @@ test("staged utility CSS commits atomically and ignores output mutations", async
     '<div class="bg-red-500 flex">Runtime output</div>';
   await settleMutations();
   assert.equal(style.textContent, "/* grid */");
+  assert.equal(generations, 2);
+
+  document.querySelector("#app-shell")!.append(document.createElement("section"));
+  await settleMutations();
+  assert.equal(style.textContent, "/* grid */");
+  assert.equal(generations, 2);
 
   document
     .querySelector("#app-shell")!
     .append(Object.assign(document.createElement("section"), { className: "studio-card" }));
   await settleMutations();
   assert.equal(style.textContent, "/* grid studio-card */");
+  assert.equal(generations, 3);
   controller.disconnect();
 });
 
@@ -214,6 +223,10 @@ test("a live utility regeneration failure becomes a presentation diagnostic", as
   assert.equal(document.documentElement.dataset.marimoStudioStyles, "error");
   assert.equal(diagnostic?.dataset.marimoDiagnosticCode, "view-styles-failed");
   assert.equal(diagnostic?.dataset.marimoDiagnosticScope, "presentation");
+  assert.equal(
+    diagnostic?.textContent,
+    "View styling could not update. The authored view remains available.",
+  );
   controller.disconnect();
 });
 
@@ -262,6 +275,10 @@ test("an active style initialization failure remains visible", async () => {
   const diagnostic = await initializeViewStyles(true, new AbortController().signal);
 
   assert.equal(diagnostic?.code, "view-styles-failed");
+  assert.equal(
+    diagnostic?.message,
+    "View styling could not start. The authored view remains available.",
+  );
   assert.equal(document.documentElement.dataset.marimoStudioStyles, "error");
   assert.notEqual(document.querySelector("[data-marimo-studio-style-error]"), null);
   assert.equal(consoleError.mock.calls.length, 1);

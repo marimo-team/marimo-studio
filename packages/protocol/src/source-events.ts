@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { jsonCodec } from "./json.ts";
 import { sourceDocumentPathSchema } from "./source-documents.ts";
+import { viewNameSchema } from "./views.ts";
 
 export const sourceFileChangeSchema = z.object({
   path: sourceDocumentPathSchema,
@@ -20,7 +21,7 @@ export type SourceFileChange = z.infer<typeof sourceFileChangeSchema>;
 const presentationBaselineSchema = z
   .object({
     schema: z.literal(1),
-    view: z.string().min(1),
+    view: viewNameSchema,
     revision: z.string().min(1).nullable(),
   })
   .strict();

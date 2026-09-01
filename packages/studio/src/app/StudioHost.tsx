@@ -358,7 +358,8 @@ export const StudioHost = ({
           selectedStarter?.availability.action ?? "Choose an available starting option.",
         );
       }
-      const view = createdView ?? (await views.create(host.defaultView, starter)).name;
+      const view =
+        createdView ?? (await views.create(host.defaultView, starter, host.generation)).name;
       setCreatedView(view);
       await openWorkspace(view);
     } catch (cause) {
@@ -388,9 +389,9 @@ export const StudioHost = ({
     >
       <div className="studio-initialization-card">
         <span className="studio-initialization-eyebrow">Marimo Studio</span>
-        <h1>Create the first page</h1>
+        <h1>Create the first view</h1>
         <p>
-          Create <code>{host.defaultView}</code> to open the notebook, page source, and preview
+          Create <code>{host.defaultView}</code> to open the notebook, view source, and preview
           together.
         </p>
         <form onSubmit={(event) => void createFirstView(event)}>

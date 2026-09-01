@@ -6,6 +6,7 @@ import {
   projectionInstanceIsReady,
 } from "./projections";
 import { runtimeIdSchema } from "./runtime-config";
+import { viewNameSchema } from "./views.ts";
 
 export const browserDiagnosticSchema = z
   .object({
@@ -13,7 +14,7 @@ export const browserDiagnosticSchema = z
     severity: z.enum(["warning", "error"]),
     message: z.string(),
     hint: z.string(),
-    view: z.string().min(1),
+    view: viewNameSchema,
     scope: z.string().min(1),
     projection: z.enum(["cell", "value", "output"]).optional(),
     target: z.string().optional(),
@@ -96,7 +97,7 @@ export const runtimeStatusTransitionSchema = z
 export const runtimeStatusReportSchema = z
   .object({
     runtime: runtimeIdSchema,
-    view: z.string().min(1),
+    view: viewNameSchema,
     revision: z.string().min(1).nullable(),
     sessionId: z.string().min(1).nullable(),
     current: runtimeStatusSnapshotSchema,
@@ -147,7 +148,7 @@ export const runtimeStatusReportSchema = z
 export const browserObservationSchema = z
   .object({
     schema: z.literal(1),
-    view: z.string().min(1),
+    view: viewNameSchema,
     runtime: runtimeIdSchema,
     revision: z.string().min(1),
     state: z.enum(["ready", "loading", "error"]),

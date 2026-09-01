@@ -3,7 +3,7 @@ import { test } from "vite-plus/test";
 
 import type { JsonValue } from "../src/runtime-config.ts";
 
-import { parsePreviewMessage } from "../src/preview-messages.ts";
+import { parsePreviewMessage, previewMessageFitsBudget } from "../src/preview-messages.ts";
 import { emptyProjectionEvidence } from "./fixtures.ts";
 
 const pendingDiagnostic = {
@@ -55,6 +55,50 @@ const observation = ({
     error: null,
   })),
 });
+
+const viewIdentityMessages = (view: string) => [
+  {
+    type: "marimo-studio:switch-view",
+    runtime: "server",
+    lifecycleId: 7,
+    view,
+    documentUrl: "/view/",
+    supportUrl: "/_marimo-studio/views/view",
+  },
+  {
+    type: "marimo-studio:view-ready",
+    runtime: "server",
+    lifecycleId: 7,
+    view,
+    revision: "presentation-v2",
+  },
+  {
+    type: "marimo-studio:view-observation",
+    runtime: "server",
+    lifecycleId: 7,
+    view,
+    revision: "presentation-v2",
+    state: "loading",
+    diagnostics: [],
+    runtimeInstance: "runtime-instance",
+    sessionId: "s_123456",
+    requestId: "request-view",
+    query: "",
+    projectionInstances: [],
+  },
+];
+
+interface CyclicPreviewProbe {
+  readonly type: string;
+  readonly runtime: string;
+  readonly lifecycleId: number;
+  readonly query: string;
+  self?: CyclicPreviewProbe;
+}
+
+interface DeepPreviewProbe {
+  readonly nested: string | DeepPreviewProbe;
+}
 
 test("preview messages decode every supported discriminant", () => {
   const messages: JsonValue[] = [
@@ -213,6 +257,17 @@ test("preview messages decode every supported discriminant", () => {
   );
 });
 
+test("preview view identities use the portable 240-byte contract", () => {
+  for (const length of [128, 129, 228, 229, 240]) {
+    for (const message of viewIdentityMessages("v".repeat(length))) {
+      assert.notEqual(parsePreviewMessage(message), undefined, `${length}: ${message.type}`);
+    }
+  }
+  for (const message of viewIdentityMessages("v".repeat(241))) {
+    assert.equal(parsePreviewMessage(message), undefined, message.type);
+  }
+});
+
 test("preview messages reject malformed protocol classes", () => {
   const malformed: JsonValue[] = [
     null,
@@ -250,6 +305,25 @@ test("preview messages reject malformed protocol classes", () => {
   malformed.forEach((message) => assert.deepEqual(parsePreviewMessage(message), undefined));
 });
 
+test("preview message budgets reject cyclic and deeply nested structured-clone graphs", () => {
+  const cyclic: CyclicPreviewProbe = {
+    type: "marimo-studio:query-change",
+    runtime: "server",
+    lifecycleId: 7,
+    query: "",
+  };
+  cyclic.self = cyclic;
+  let deep: string | DeepPreviewProbe = "leaf";
+  for (let index = 0; index < 40; index += 1) {
+    deep = { nested: deep };
+  }
+
+  assert.equal(previewMessageFitsBudget(cyclic), false);
+  assert.equal(previewMessageFitsBudget(deep), false);
+  assert.equal(parsePreviewMessage(cyclic), undefined);
+  assert.equal(parsePreviewMessage(deep), undefined);
+});
+
 test("preview mutation messages reject oversized domain fields", () => {
   const oversized: JsonValue[] = [
     {
@@ -278,7 +352,7 @@ test("preview mutation messages reject oversized domain fields", () => {
       type: "marimo-studio:navigate-view",
       runtime: "server",
       lifecycleId: 7,
-      view: `v${"x".repeat(128)}`,
+      view: "v".repeat(241),
       query: "",
       hash: "",
     },

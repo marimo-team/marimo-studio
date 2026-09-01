@@ -1,6 +1,7 @@
 import type { ViewNavigationIntent } from "@marimo-studio/protocol/preview-messages";
 import type { Starter } from "@marimo-studio/protocol/provider-catalog";
-import type { ViewList } from "@marimo-studio/protocol/views";
+
+import { type ViewList, viewNameError } from "@marimo-studio/protocol/views";
 
 import type { StarterCatalogState } from "./catalog.ts";
 import type { ViewRemote } from "./remote.ts";
@@ -14,9 +15,11 @@ export interface ViewMessage {
 }
 
 export interface ViewSnapshot {
+  catalogGeneration?: string;
   current: string;
   defaultView: string;
   views: readonly string[];
+  viewGenerations: Readonly<Record<string, string>>;
   selecting?: string;
   starters: readonly Starter[];
   defaultStarter: string;
@@ -24,9 +27,12 @@ export interface ViewSnapshot {
   creating: boolean;
   deleting: boolean;
   removing?: string;
+  removingCatalogGeneration?: string;
+  removingGeneration?: string;
   selectionMessage?: ViewMessage;
   createMessage?: ViewMessage;
   removeError?: string;
+  removeMessage?: ViewMessage;
 }
 
 type Listener = () => void;
@@ -62,11 +68,13 @@ export class ViewController {
     private readonly settleView: (view: string) => Promise<boolean> = async () => true,
     private readonly releaseView: (view: string) => void = () => {},
     initialDefaultView = initialView,
+    private readonly replaceView: (view: string) => void = () => {},
   ) {
     this.snapshot = {
       current: initialView,
       defaultView: initialDefaultView,
       views: initialViews,
+      viewGenerations: {},
       starters: initialStarters,
       defaultStarter: initialDefaultStarter,
       starterCatalog: initialStarters.length > 0 ? { phase: "ready" } : { phase: "idle" },
@@ -112,7 +120,7 @@ export class ViewController {
       if (!selected && !signal?.aborted && this.isCurrentMutation(generation)) {
         this.update({
           selectionMessage: {
-            text: `Could not open ${view}. The previous page remains active. Check Source and runtime status, then retry.`,
+            text: `Could not open ${view}. The previous view remains active. Check Source and runtime status, then retry.`,
             state: "error",
           },
         });
@@ -122,7 +130,7 @@ export class ViewController {
       if (!signal?.aborted && this.isCurrentMutation(generation)) {
         this.update({
           selectionMessage: {
-            text: `${errorMessage(cause)} The previous page remains active.`,
+            text: `${errorMessage(cause)} The previous view remains active.`,
             state: "error",
           },
         });
@@ -169,14 +177,24 @@ export class ViewController {
     return true;
   }
 
-  async create(name: string, starter: string): Promise<boolean> {
-    if (this.disposed || this.snapshot.creating || this.snapshot.deleting) {
+  async create(name: string, starter: string, catalogGeneration: string): Promise<boolean> {
+    if (this.disposed || this.snapshot.creating || this.snapshot.deleting || !catalogGeneration) {
       return false;
     }
-    if (!/^[a-z][a-z0-9-]*$/.test(name)) {
+    const nameError = viewNameError(name);
+    if (nameError) {
       this.update({
         createMessage: {
-          text: "Start with a lowercase letter. Use letters, numbers, and hyphens.",
+          text: nameError,
+          state: "error",
+        },
+      });
+      return false;
+    }
+    if (this.snapshot.catalogGeneration !== catalogGeneration) {
+      this.update({
+        createMessage: {
+          text: "The view catalog changed. Close this form, then create the view again.",
           state: "error",
         },
       });
@@ -201,13 +219,13 @@ export class ViewController {
       if (!prepared) {
         this.update({
           createMessage: {
-            text: "Resolve the current source before creating a page.",
+            text: "Resolve the current source before creating a view.",
             state: "error",
           },
         });
         return false;
       }
-      const created = await this.remote.create(name, starter);
+      const created = await this.remote.create(name, starter, catalogGeneration);
       if (!this.isCurrentMutation(generation)) {
         return false;
       }
@@ -219,7 +237,7 @@ export class ViewController {
       }
       this.update({
         createMessage: {
-          text: "Page created. Resolve the current source, then select it from Pages.",
+          text: "View created. Resolve the current source, then select it from Views.",
           state: "warning",
         },
       });
@@ -234,27 +252,44 @@ export class ViewController {
     }
   }
 
-  beginRemoval(view: string): void {
+  beginRemoval(view: string, catalogGeneration: string, generation: string): void {
     if (
       this.disposed ||
       this.snapshot.creating ||
       this.snapshot.deleting ||
-      this.snapshot.views.length < 2
+      this.snapshot.views.length < 2 ||
+      this.snapshot.catalogGeneration !== catalogGeneration ||
+      this.snapshot.viewGenerations[view] !== generation
     ) {
       return;
     }
-    this.update({ removing: view, removeError: undefined });
+    this.update({
+      removing: view,
+      removingCatalogGeneration: catalogGeneration,
+      removingGeneration: generation,
+      removeError: undefined,
+      removeMessage: undefined,
+    });
   }
 
   cancelRemoval(): void {
-    this.update({ removing: undefined, removeError: undefined });
+    this.update({
+      removing: undefined,
+      removingCatalogGeneration: undefined,
+      removingGeneration: undefined,
+      removeError: undefined,
+    });
   }
 
   async deleteSelected(): Promise<boolean> {
     const name = this.snapshot.removing;
+    const expectedCatalogGeneration = this.snapshot.removingCatalogGeneration;
+    const expectedGeneration = this.snapshot.removingGeneration;
     if (
       this.disposed ||
       !name ||
+      !expectedCatalogGeneration ||
+      !expectedGeneration ||
       this.snapshot.creating ||
       this.snapshot.deleting ||
       !this.snapshot.views.includes(name)
@@ -263,14 +298,6 @@ export class ViewController {
     }
     const generation = this.beginMutation({ deleting: true, removeError: undefined });
     try {
-      const prepared = name !== this.snapshot.current || (await this.prepareCurrentView());
-      if (!this.isCurrentMutation(generation)) {
-        return false;
-      }
-      if (!prepared) {
-        this.update({ removeError: "Resolve the current source before removing this page." });
-        return false;
-      }
       if (name === this.snapshot.current) {
         const inventory = await this.loadInventory();
         if (!this.isCurrentMutation(generation)) {
@@ -281,8 +308,26 @@ export class ViewController {
             removeError:
               this.snapshot.starterCatalog.phase === "error"
                 ? this.snapshot.starterCatalog.message
-                : "Could not load available pages.",
+                : "Could not load available views.",
           });
+          return false;
+        }
+        const currentGeneration = inventory.views.find((view) => view.name === name)?.generation;
+        if (
+          inventory.generation !== expectedCatalogGeneration ||
+          currentGeneration !== expectedGeneration
+        ) {
+          this.update({
+            removeError: `View ${name} was replaced. Close this confirmation, then remove the current view.`,
+          });
+          return false;
+        }
+        const prepared = await this.prepareCurrentView();
+        if (!this.isCurrentMutation(generation)) {
+          return false;
+        }
+        if (!prepared) {
+          this.update({ removeError: "Resolve the current source before removing this view." });
           return false;
         }
         const names = inventory.views.map((view) => view.name);
@@ -295,7 +340,7 @@ export class ViewController {
           !(await this.selectWithinMutation(successor, "develop", undefined, generation))
         ) {
           if (this.isCurrentMutation(generation)) {
-            this.update({ removeError: "Select another page before removing this one." });
+            this.update({ removeError: "Select another view before removing this one." });
           }
           return false;
         }
@@ -305,27 +350,37 @@ export class ViewController {
         }
         if (!settled) {
           if (this.isCurrentMutation(generation)) {
-            this.update({ removeError: "Wait for the selected page to finish loading." });
+            this.update({ removeError: "Wait for the selected view to finish loading." });
           }
           return false;
         }
       }
-      this.releaseView(name);
-      const removed = await this.remote.remove(name);
+      const removed = await this.remote.remove(name, expectedCatalogGeneration, expectedGeneration);
       if (!this.isCurrentMutation(generation)) {
         return false;
       }
+      this.releaseView(name);
       const remaining = removed.views.map((view) => view.name);
       this.acceptInventory(removed);
       if (!remaining.includes(this.snapshot.current)) {
         if (
           !(await this.selectWithinMutation(removed.default_view, "develop", undefined, generation))
         ) {
-          this.update({ removeError: "Select an available page to continue." });
+          this.update({ removeError: "Select an available view to continue." });
           return false;
         }
       }
-      this.update({ removing: undefined });
+      this.update({
+        removing: undefined,
+        removingCatalogGeneration: undefined,
+        removingGeneration: undefined,
+        removeMessage: removed.cleanup
+          ? {
+              text: `View ${name} was removed. Files awaiting cleanup remain at ${removed.cleanup}.`,
+              state: "warning",
+            }
+          : undefined,
+      });
       return true;
     } catch (cause) {
       if (this.isCurrentMutation(generation)) {
@@ -340,14 +395,23 @@ export class ViewController {
   dismiss(): void {
     this.update({
       removing: undefined,
+      removingCatalogGeneration: undefined,
+      removingGeneration: undefined,
       removeError: undefined,
+      removeMessage: undefined,
       selectionMessage: undefined,
       createMessage: undefined,
     });
   }
 
   dismissPanels(): void {
-    this.update({ removing: undefined, removeError: undefined, createMessage: undefined });
+    this.update({
+      removing: undefined,
+      removingCatalogGeneration: undefined,
+      removingGeneration: undefined,
+      removeError: undefined,
+      createMessage: undefined,
+    });
   }
 
   dispose(): void {
@@ -362,7 +426,10 @@ export class ViewController {
   }
 
   async ensureStarterCatalog(): Promise<void> {
-    if (this.snapshot.starterCatalog.phase !== "ready") {
+    if (
+      this.snapshot.catalogGeneration === undefined ||
+      this.snapshot.starterCatalog.phase !== "ready"
+    ) {
       await this.refreshInventory();
     }
   }
@@ -446,9 +513,18 @@ export class ViewController {
         return undefined;
       }
       const previousCurrent = this.snapshot.current;
+      const previousGenerations = this.snapshot.viewGenerations;
       const nextViews = new Set(inventory.views.map((view) => view.name));
       const removedViews = this.snapshot.views.filter((view) => !nextViews.has(view));
+      const replacedViews = inventory.views
+        .filter(
+          (view) =>
+            previousGenerations[view.name] !== undefined &&
+            previousGenerations[view.name] !== view.generation,
+        )
+        .map((view) => view.name);
       this.acceptInventory(inventory);
+      replacedViews.forEach((view) => this.replaceView(view));
       for (const view of removedViews) {
         if (view !== previousCurrent) {
           this.releaseView(view);
@@ -474,8 +550,13 @@ export class ViewController {
 
   private acceptInventory(inventory: ViewList): void {
     const views = inventory.views.map((view) => view.name);
+    const viewGenerations = Object.fromEntries(
+      inventory.views.map((view) => [view.name, view.generation]),
+    );
     this.update({
+      catalogGeneration: inventory.generation,
       views,
+      viewGenerations,
       defaultView: inventory.default_view,
       starters: inventory.starters,
       defaultStarter: inventory.default_starter,

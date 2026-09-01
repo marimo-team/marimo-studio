@@ -12,6 +12,7 @@ import {
   projectionInstanceIsReady,
 } from "./projections";
 import { runtimeIdSchema } from "./runtime-config";
+import { viewNameSchema } from "./views.ts";
 
 const OBSERVATION_MESSAGE_BOUNDS = {
   maxDepth: 32,
@@ -23,11 +24,6 @@ const utf8 = new TextEncoder();
 const boundedUtf8String = (maximum: number) =>
   z.string().refine((value) => utf8.encode(value).byteLength <= maximum);
 
-const viewSchema = z
-  .string()
-  .min(1)
-  .max(128)
-  .regex(/^[a-z][a-z0-9-]*$/);
 const revisionSchema = z.string().min(1).max(256);
 const sessionIdSchema = z.string().min(1).max(256);
 const requestIdSchema = z.string().min(1).max(256);
@@ -48,7 +44,7 @@ export const viewDiagnosticSchema = browserDiagnosticSchema.safeExtend({
   code: z.string().min(1).max(128),
   message: diagnosticTextSchema,
   hint: diagnosticTextSchema,
-  view: viewSchema,
+  view: viewNameSchema,
   scope: z.string().min(1).max(128),
   target: projectionTargetSchema.optional(),
   source: diagnosticSourceSchema.optional(),
@@ -77,7 +73,7 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     type: z.literal("marimo-studio:navigate-view"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema,
+    view: viewNameSchema,
     query: querySchema,
     hash: hashSchema,
     history: z.literal("push").optional(),
@@ -86,7 +82,7 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     type: z.literal("marimo-studio:replay-document"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema,
+    view: viewNameSchema,
     url: documentUrlSchema,
   }),
   z.strictObject({
@@ -105,19 +101,19 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     type: z.literal("marimo-studio:receiver-ready"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema.optional(),
+    view: viewNameSchema.optional(),
     revision: revisionSchema,
   }),
   z.strictObject({
     type: z.literal("marimo-studio:receiver-unready"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema.optional(),
+    view: viewNameSchema.optional(),
   }),
   z.strictObject({
     type: z.literal("marimo-studio:switch-view"),
     ...runtimeField,
-    view: viewSchema,
+    view: viewNameSchema,
     ...documentLifecycleField,
     documentUrl: documentUrlSchema,
     supportUrl: documentUrlSchema,
@@ -126,34 +122,34 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     type: z.literal("marimo-studio:presentation-change"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema,
+    view: viewNameSchema,
   }),
   z.strictObject({
     type: z.literal("marimo-studio:presentation-refresh"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema,
+    view: viewNameSchema,
     phase: z.enum(["pending", "settled"]),
   }),
   z.strictObject({
     type: z.literal("marimo-studio:presentation-refresh-barrier"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema,
+    view: viewNameSchema,
     generation: z.int().positive().max(Number.MAX_SAFE_INTEGER),
   }),
   z.strictObject({
     type: z.literal("marimo-studio:receiver-admitted"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema,
+    view: viewNameSchema,
     revision: revisionSchema,
   }),
   z.strictObject({
     type: z.literal("marimo-studio:view-ready"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema,
+    view: viewNameSchema,
     revision: revisionSchema,
     sessionId: sessionIdSchema.optional(),
   }),
@@ -161,21 +157,21 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     type: z.literal("marimo-studio:view-sync-pending"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema,
+    view: viewNameSchema,
     diagnostic: viewDiagnosticSchema,
   }),
   z.strictObject({
     type: z.literal("marimo-studio:view-diagnostics"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema,
+    view: viewNameSchema,
     diagnostics: z.array(viewDiagnosticSchema).max(200),
   }),
   z.strictObject({
     type: z.literal("marimo-studio:view-error"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema,
+    view: viewNameSchema,
     revision: revisionSchema.optional(),
     sessionId: sessionIdSchema.nullable().optional(),
     diagnostic: viewDiagnosticSchema,
@@ -184,7 +180,7 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     type: z.literal("marimo-studio:view-observation"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema,
+    view: viewNameSchema,
     revision: revisionSchema,
     state: z.enum(["ready", "loading", "error"]),
     diagnostics: z.array(viewDiagnosticSchema).max(200),
@@ -198,7 +194,7 @@ const previewMessageInputSchema = z.discriminatedUnion("type", [
     type: z.literal("marimo-studio:observe-view"),
     ...runtimeField,
     ...documentLifecycleField,
-    view: viewSchema,
+    view: viewNameSchema,
     revision: revisionSchema,
     runtimeInstance: runtimeInstanceSchema,
     requestId: requestIdSchema,
@@ -326,7 +322,7 @@ const previewMessageDiscriminantSchema = z.object({
   type: z.string().max(64),
 });
 
-const acceptsPreviewMessageBudget = (value: BrowserMessageInput): boolean => {
+export const previewMessageFitsBudget = (value: BrowserMessageInput): boolean => {
   if (isBoundedBrowserMessage(value, FRAME_BRIDGE_MESSAGE_BOUNDS)) {
     return true;
   }
@@ -338,7 +334,7 @@ const acceptsPreviewMessageBudget = (value: BrowserMessageInput): boolean => {
 };
 
 export const parsePreviewMessage = (value: BrowserMessageInput): PreviewMessage | undefined => {
-  if (!acceptsPreviewMessageBudget(value)) {
+  if (!previewMessageFitsBudget(value)) {
     return undefined;
   }
   const result = previewMessageSchema.safeParse(value);

@@ -11,7 +11,6 @@ import {
 } from "@marimo-studio/protocol/preview-messages";
 import { publicNotebookQuery } from "@marimo-studio/protocol/query";
 
-import { messageJson } from "../json.ts";
 import { getMountConfig, getRuntimeConfig, hasRuntimeConfig } from "../runtime-config/index.ts";
 import {
   activeDocumentLifecycleId,
@@ -55,8 +54,7 @@ export const bindFragmentRestores = (): (() => void) => {
     if (!isStudioParentMessage(event)) {
       return;
     }
-    const payload = messageJson(event);
-    const request = payload === undefined ? undefined : parsePreviewMessage(payload);
+    const request = parsePreviewMessage(event.data);
     if (
       request?.type !== "marimo-studio:restore-fragment" ||
       !hasRuntimeConfig() ||
@@ -117,11 +115,7 @@ export const bindViewSwitches = (callback: (request: SwitchViewMessage) => void)
     if (!isStudioParentMessage(event)) {
       return;
     }
-    const payload = messageJson(event);
-    if (payload === undefined) {
-      return;
-    }
-    const request = parsePreviewMessage(payload);
+    const request = parsePreviewMessage(event.data);
     if (
       request?.type === "marimo-studio:switch-view" &&
       (!hasRuntimeConfig() || request.runtime === getRuntimeConfig().runtime.id)
@@ -145,11 +139,7 @@ export const bindPresentationEvents = (callbacks: PresentationEventCallbacks): (
     if (!isStudioParentMessage(event)) {
       return;
     }
-    const payload = messageJson(event);
-    if (payload === undefined) {
-      return;
-    }
-    const request = parsePreviewMessage(payload);
+    const request = parsePreviewMessage(event.data);
     if (
       (request?.type !== "marimo-studio:presentation-change" &&
         request?.type !== "marimo-studio:presentation-refresh" &&
@@ -184,6 +174,9 @@ export const bindViewNavigation = (
   navigate: (request: DirectViewNavigation) => boolean | Promise<boolean>,
   runtimeExplicit = getMountConfig().runtimeExplicit,
 ): (() => void) => {
+  if (getRuntimeConfig().presentationSessionId === undefined) {
+    return () => {};
+  }
   const listener = (event: MouseEvent) => {
     if (
       event.defaultPrevented ||

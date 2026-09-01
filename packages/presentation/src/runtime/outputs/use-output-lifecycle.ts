@@ -6,6 +6,7 @@ import type { RuntimeConnectionState } from "../cell-state";
 
 import { getRuntimeConfig } from "../../runtime-config";
 import { OutputOwnerReconciler } from "./output-owner-reconciler";
+import { createBatchedOutputReader } from "./output-read-batcher";
 
 export const useOutputLifecycle = ({
   activeProjections,
@@ -25,6 +26,7 @@ export const useOutputLifecycle = ({
     () => (request, signal) => reconciler.read(projectionRevision, request, signal),
     [projectionRevision, reconciler],
   );
+  const batchedReader = useMemo(() => createBatchedOutputReader(ownedReader), [ownedReader]);
 
   useEffect(() => () => reconciler.dispose(), [reconciler]);
 
@@ -40,5 +42,5 @@ export const useOutputLifecycle = ({
     });
   }, [activeProjections, connectionState, projectionRevision, reconciler, runtimeReady]);
 
-  return ownedReader;
+  return batchedReader;
 };
