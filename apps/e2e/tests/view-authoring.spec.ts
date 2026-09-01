@@ -15,6 +15,7 @@ import {
   dashboardHtmlPath,
   editorFrame,
   expect,
+  expectSupersededRenewalConfig,
   labeledSlider,
   plainDashboardHtmlPath,
   plainNotebookPath,
@@ -100,6 +101,7 @@ test("routes directory notebooks by Studio configuration", async ({ browserDiagn
 });
 
 test("activates Studio after the first view is created", async ({ browserDiagnostics, page }) => {
+  const supersededConfig = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
     2,
@@ -181,6 +183,7 @@ shown.to_dict()
   await waitForPreview(page);
   await expect(preview.locator("#fresh-value")).toHaveText("99");
   replacedWorkspaceStreams.recovered();
+  supersededConfig.recovered();
 });
 
 test("opens Studio from the first save with the native session", async ({

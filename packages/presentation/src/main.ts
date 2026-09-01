@@ -227,7 +227,16 @@ const loadPresentationRuntimeConfig = async (
   );
   const renewalSupportUrl = presentationRenewalSupportUrl(documentUrl, mount.supportUrl);
   if (renewalSupportUrl === new URL(mount.supportUrl, globalThis.location.href).href) {
-    return await loadRuntimeConfig(runtimeSessionId, signal);
+    try {
+      return await loadRuntimeConfig(runtimeSessionId, signal);
+    } catch (cause) {
+      if (
+        !(cause instanceof RuntimeConfigRequestError) ||
+        cause.code !== "presentation-revision-unavailable"
+      ) {
+        throw cause;
+      }
+    }
   }
   return commitRuntimeConfig(
     await fetchCurrentRuntimeConfig(

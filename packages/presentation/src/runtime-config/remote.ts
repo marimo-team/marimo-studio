@@ -149,7 +149,10 @@ export const fetchRuntimeConfigWithRetry = async (
     operation: () =>
       fetchRuntimeConfig(supportUrl, signal, runtime, previewSessionId, revision, runtimeSessionId),
     delays: RETRY_DELAYS,
-    retryWhen: (error) => error instanceof RuntimeConfigRequestError && error.transient,
+    retryWhen: (error) =>
+      error instanceof RuntimeConfigRequestError &&
+      error.transient &&
+      error.code !== "presentation-revision-unavailable",
     retryAfterExhaustion: (error) =>
       error instanceof RuntimeConfigRequestError && error.code === "runtime-startup-pending"
         ? 5_000

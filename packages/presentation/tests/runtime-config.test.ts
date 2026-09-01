@@ -399,6 +399,37 @@ test("runtime config retries a transient session mismatch", async () => {
   assert.deepEqual(attempts, 2);
 });
 
+test("fixed revision rejects an unavailable snapshot without retrying it", async () => {
+  const originalFetch = globalThis.fetch;
+  let attempts = 0;
+  globalThis.fetch = () => {
+    attempts += 1;
+    return Promise.resolve(
+      Response.json(
+        {
+          error: "presentation-revision-unavailable",
+          message: "The requested presentation revision is no longer available.",
+          transient: true,
+        },
+        { status: 409 },
+      ),
+    );
+  };
+
+  try {
+    const error = await fetchRuntimeConfigForRevision(
+      "/_marimo-studio/views/dashboard",
+      "retired-revision",
+    ).catch((cause: unknown) => cause);
+    assert.ok(error instanceof RuntimeConfigRequestError);
+    assert.deepEqual(error.code, "presentation-revision-unavailable");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(attempts, 1);
+});
+
 test("runtime config retries a failed network request", async () => {
   const originalFetch = globalThis.fetch;
   let attempts = 0;
