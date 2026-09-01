@@ -1,0 +1,25 @@
+packages/presentation/src/main.ts
+  s_af5d583a28e9c5::t_ee56cc5876c8f2 230-239
+packages/presentation/src/runtime-config/remote.ts
+  s_af5d583a28e9c5::t_a596601f7c9a47 152-155
+apps/e2e/tests/view-authoring.spec.ts
+  s_af5d583a28e9c5::t_ee56cc5876c8f2 18,104,186
+packages/presentation/tests/runtime-config.test.ts
+  s_af5d583a28e9c5::t_ee56cc5876c8f2 402-432
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8417deb644a463890fbd696489acd64f66281597",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
