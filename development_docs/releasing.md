@@ -17,7 +17,6 @@ A release contains one coordinated compatibility unit:
   [Agent Plugin](https://github.com/peter-gy/agent-plugins)
 - Optional Deno dependency metadata
 - Generated Studio, presentation, runtime, and WebAssembly browser assets
-- Browser dependency inventory and third-party license texts
 - Supported Marimo version, tag commit, and private layout fingerprints
 - Wheel and source distribution metadata needed to rebuild the same wheel
 - Distribution checksums and GitHub build provenance
@@ -105,10 +104,9 @@ two wheels to be byte-identical, then runs the installed-package matrix once.
 The base installation verifies:
 
 - Package version and import
-- Python compatibility, exact runtime dependencies, and their license files
+- Python compatibility, exact runtime dependencies, and package license metadata
 - Public import allowlist and `py.typed`
 - Runtime and Studio browser assets
-- Browser package inventory, license digests, and package license metadata
 - Provider, agent, and CLI entry points
 - Agent Plugin discovery through `agent_plugins.locate()`
 - Starter discovery and the default vanilla starter

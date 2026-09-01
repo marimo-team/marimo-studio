@@ -4,12 +4,10 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite-plus";
 
 import { buildMetadata } from "./build-metadata.ts";
-import { browserLicenseInventory } from "./license-inventory.ts";
 
 const packageRoot = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = resolve(packageRoot, "../..");
 const marimo = createMarimoViteIntegration();
-const licenses = browserLicenseInventory();
 const entrypoint = (specifier: string) => fileURLToPath(import.meta.resolve(specifier));
 
 export default defineConfig({
@@ -17,9 +15,9 @@ export default defineConfig({
   css: {
     postcss: marimo.postcss,
   },
-  plugins: [...marimo.plugins, buildMetadata(), licenses.emitter],
+  plugins: [...marimo.plugins, buildMetadata()],
   worker: {
-    plugins: () => [...marimo.workerPlugins(), licenses.collector()],
+    plugins: () => marimo.workerPlugins(),
   },
   resolve: {
     alias: marimo.aliases,

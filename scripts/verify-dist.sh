@@ -56,23 +56,10 @@ expected = {
     for source in sources
 }
 package_root = root / "packages" / "marimo-studio"
-browser_license_root = (
-    package_root / "src" / "marimo_studio" / "_static" / "browser" / "licenses"
-)
 license_sources = {
     "LICENSE": package_root / "LICENSE",
 }
 license_bytes = {name: source.read_bytes() for name, source in license_sources.items()}
-browser_license_sources = {
-    "THIRD_PARTY_LICENSES.txt": browser_license_root / "THIRD_PARTY_LICENSES.txt",
-    "THIRD_PARTY_NOTICES.json": browser_license_root / "THIRD_PARTY_NOTICES.json",
-    "THIRD_PARTY_NOTICES.txt": browser_license_root / "THIRD_PARTY_NOTICES.txt",
-    "marimo/LICENSE": browser_license_root / "marimo" / "LICENSE",
-    "marimo-studio/LICENSE": package_root / "LICENSE",
-}
-browser_license_bytes = {
-    name: source.read_bytes() for name, source in browser_license_sources.items()
-}
 
 
 def packaged(files, read, archive):
@@ -123,14 +110,6 @@ for path in archives:
                 packaged_bytes = archive.read(f"{metadata_root}licenses/{relative}")
                 if packaged_bytes != expected_bytes:
                     raise AssertionError(f"Wheel license differs for {relative}: {path}")
-            for relative, expected_bytes in browser_license_bytes.items():
-                packaged_bytes = archive.read(
-                    f"marimo_studio/_static/browser/licenses/{relative}"
-                )
-                if packaged_bytes != expected_bytes:
-                    raise AssertionError(
-                        f"Wheel browser license differs for {relative}: {path}"
-                    )
     else:
         with open_tar(path, "r:gz") as archive:
             members = [member for member in archive.getmembers() if member.isfile()]
@@ -150,14 +129,6 @@ for path in archives:
                 packaged_bytes = read(f"{distribution_root}/{relative}")
                 if packaged_bytes != expected_bytes:
                     raise AssertionError(f"Source license differs for {relative}: {path}")
-            for relative, expected_bytes in browser_license_bytes.items():
-                packaged_bytes = read(
-                    f"{distribution_root}/src/marimo_studio/_static/browser/licenses/{relative}"
-                )
-                if packaged_bytes != expected_bytes:
-                    raise AssertionError(
-                        f"Source browser license differs for {relative}: {path}"
-                    )
     if actual != expected:
         raise AssertionError(
             f"Agent Plugin bytes differ in {path}: "

@@ -7,8 +7,6 @@ import json
 import re
 from pathlib import Path
 
-from .browser_licenses import verify_browser_licenses
-
 REQUIRED_ASSETS = {
     "build-meta.json",
     "entry-manifest.json",
@@ -251,4 +249,3 @@ def verify_browser_assets(root: Path, release: dict[str, object]) -> None:
         raise AssertionError(
             "Installed browser metadata does not match the pinned release"
         )
-    verify_browser_licenses(root, release)

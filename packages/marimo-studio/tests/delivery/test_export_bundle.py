@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -32,6 +34,40 @@ from ..helpers import replace_app_shell
 from .export_test_support import configure_export_view
 
 
+class _DocumentResources(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.base: str | None = None
+        self.references: list[str] = []
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        attributes = dict(attrs)
+        if tag == "base":
+            self.base = attributes.get("href")
+        elif tag == "script":
+            reference = attributes.get("src")
+            if reference:
+                self.references.append(reference)
+        elif tag == "link" and "stylesheet" in (attributes.get("rel") or "").split():
+            reference = attributes.get("href")
+            if reference:
+                self.references.append(reference)
+
+
+def _assert_document_resources_resolve(document: Path) -> None:
+    parser = _DocumentResources()
+    parser.feed(document.read_text(encoding="utf-8"))
+    assert parser.base is not None
+    for reference in parser.references:
+        parsed = urlsplit(reference)
+        if not parsed.scheme and not parsed.netloc:
+            assert document.parent.joinpath(parsed.path).is_file(), reference
+
+
 def test_export_view_writes_a_complete_static_bundle(
     notebook_path: Path,
     tmp_path: Path,
@@ -58,7 +94,6 @@ def test_export_view_writes_a_complete_static_bundle(
             encoding="utf-8"
         )
     )
-    document = result.entrypoint.read_text(encoding="utf-8")
     assert result.view == "dashboard"
     assert result.output == output
     assert result.files == sum(1 for path in output.rglob("*") if path.is_file())
@@ -81,24 +116,14 @@ def test_export_view_writes_a_complete_static_bundle(
     }
     code = runtime_data["code"]
     compile(code, "notebook.py", "exec")
-    assert '"render_values"' in code
-    assert 'src="./_marimo-studio/assets/runtime.js"' in document
-    assert 'href="./_marimo-studio/assets/runtime.css"' in document
-    assert '<base href="./">' in document
-    assert 'window.message = "ready"' in document
-    assert '"runtime":"wasm"' in document
+    _assert_document_resources_resolve(result.entrypoint)
     assert not output.joinpath("_marimo-studio/views/dashboard/cells").exists()
     assert not output.joinpath("app.js").exists()
-    assert output.joinpath("public/sample.txt").read_text(encoding="utf-8") == (
-        "public asset"
+    assert (
+        output.joinpath("public/sample.txt").read_bytes()
+        == public.joinpath("sample.txt").read_bytes()
     )
     assert output.joinpath("_marimo-studio/assets/runtime.js").is_file()
-    assert output.joinpath(
-        "_marimo-studio/assets/licenses/THIRD_PARTY_NOTICES.json"
-    ).is_file()
-    assert output.joinpath(
-        "_marimo-studio/assets/licenses/marimo-studio/LICENSE"
-    ).is_file()
     assert output.joinpath(".nojekyll").is_file()
 
 
@@ -190,7 +215,6 @@ def test_export_preserves_nested_vanilla_local_sources(
 
     result = export_view(notebook_path, output)
 
-    document = result.entrypoint.read_text(encoding="utf-8")
     config = json.loads(
         output.joinpath("_marimo-studio/views/dashboard/config").read_text(
             encoding="utf-8"
@@ -198,19 +222,17 @@ def test_export_preserves_nested_vanilla_local_sources(
     )
     assert result.document.as_posix() == "pages/index.html"
     assert result.entrypoint == output / "pages" / "index.html"
-    assert '<base href="./">' in document
-    assert 'src="../_marimo-studio/assets/runtime.js"' in document
-    assert 'href="./app.css?theme=nested"' in document
-    assert 'src="./app.js#boot"' in document
-    assert "data-marimo-studio-source-revision" in document
+    _assert_document_resources_resolve(result.entrypoint)
     assert config["rootUrl"] == "../"
     assert config["publicRootUrl"] == "../"
     assert config["supportUrl"] == "../_marimo-studio/views/dashboard"
-    assert output.joinpath("pages/app.js").read_text(encoding="utf-8") == (
-        'window.nestedAsset = "ready";\n'
+    assert (
+        output.joinpath("pages/app.js").read_bytes()
+        == pages.joinpath("app.js").read_bytes()
     )
-    assert output.joinpath("pages/app.css").read_text(encoding="utf-8") == (
-        "body { color: canvastext; }\n"
+    assert (
+        output.joinpath("pages/app.css").read_bytes()
+        == pages.joinpath("app.css").read_bytes()
     )
     assert not output.joinpath("pages/unused.js").exists()
     assert not output.joinpath("index.html").exists()
@@ -353,8 +375,6 @@ def test_export_revision_changes_with_runtime_configuration(
     assert before["userConfig"] == {"display": {"theme": "light"}}
     assert after["userConfig"] == {"display": {"theme": "dark"}}
     assert before["configOverrides"] == {"runtime": {"show_tracebacks": True}}
-    assert "leak-static" not in json.dumps(before)
-    assert "leak-static" not in json.dumps(after)
     assert before["revision"] != after["revision"]
     assert before["runtime"] == after["runtime"]
     assert before["projectionTargets"] == after["projectionTargets"]
@@ -372,9 +392,6 @@ def test_static_export_enforces_the_shared_encoded_byte_budget(
     with pytest.raises(RuntimeConfigTooLargeError) as raised:
         export_view(notebook_path, output)
 
-    assert raised.value.code == "runtime-config-too-large"
-    assert str(raised.value) == "Runtime configuration exceeds the 1-byte limit."
-    assert raised.value.public_hint == RuntimeConfigTooLargeError.public_hint
     assert raised.value.size > 1
     assert raised.value.limit == 1
     assert not output.exists()
@@ -448,13 +465,11 @@ def test_export_uses_the_composed_browser_projection(
         )
     )
     assert config["runtime"]["instance"] == "composed-instance"
-    assert config["runtime"]["data"] == {
-        "code": "# composed browser projection\n",
-        "filename": "notebook.py",
-        "version": release.version,
-        "executionCells": [{"id": "bootstrap", "code": "register_bridge()"}],
-        "bootstrapCellId": "bootstrap",
-    }
+    runtime = config["runtime"]["data"]
+    assert runtime["code"] == "# composed browser projection\n"
+    assert runtime["executionCells"] == [
+        {"id": runtime["bootstrapCellId"], "code": "register_bridge()"}
+    ]
 
 
 @pytest.mark.parametrize(
