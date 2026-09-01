@@ -1,0 +1,52 @@
+packages/marimo-studio/tests/providers/test_vanilla_resource_policy.py
+  s_af5d583a28e9c5::t_16da370e37e4cf 54-55,187,189-193
+  s_af5d583a28e9c5::t_c38708d0e0c26a 365
+packages/marimo-studio/tests/providers/test_vanilla.py
+  s_af5d583a28e9c5::t_d8672f2419851a 95-97,100,197,200-202,206,212-216,218-222
+  s_af5d583a28e9c5::t_88ff4b5f042702 116
+  s_af5d583a28e9c5::t_eeb7e03cf0b2e9 90
+packages/marimo-studio/tests/artifacts/test_integrity.py
+  s_af5d583a28e9c5::t_fd7b536c9d95ea 406
+  s_af5d583a28e9c5::t_9da75a0bf26aa2 147,249,462-468,573-582,586,607
+packages/marimo-studio/tests/artifacts/test_recovery.py
+  s_af5d583a28e9c5::t_c2bda5ddbfbe83 114-120
+  s_af5d583a28e9c5::t_1cd2d7c2582b08 97,99-110,112
+  s_af5d583a28e9c5::t_c4407698824204 132,149,166
+packages/marimo-studio/tests/artifacts/test_serving.py
+  s_af5d583a28e9c5::t_1cd2d7c2582b08 196-200,202-210,212,215,222-225,227-251,253-288,291-292,294,296-300,302-303,305-306,308-310,312-314,755
+  s_af5d583a28e9c5::t_123a18665f6373 226,252
+packages/marimo-studio/tests/artifacts/test_build_lifecycle.py
+  s_af5d583a28e9c5::t_fd7b536c9d95ea 280-284,415-419,586-590
+packages/marimo-studio/tests/delivery/test_export_output.py
+  s_af5d583a28e9c5::t_f4e0bf2f3a263f 261,269,288-296,298
+  s_af5d583a28e9c5::t_fd7b536c9d95ea 23-27
+  s_af5d583a28e9c5::t_13377cb683d296 43-44
+packages/marimo-studio/tests/delivery/test_runtime_config.py
+  s_af5d583a28e9c5::t_4a4c49adde82a7 31-34,37,39-40
+packages/marimo-studio/tests/providers/test_deno_svelte.py
+  s_af5d583a28e9c5::t_6d4f4b16fa1c8d 316
+  s_af5d583a28e9c5::t_eeb7e03cf0b2e9 180
+  s_af5d583a28e9c5::t_6b3adc7f9abef4 195-196,270-271
+packages/marimo-studio/tests/providers/test_deno_react.py
+  s_af5d583a28e9c5::t_048f09b85c5d50 209,214-216
+  s_af5d583a28e9c5::t_eeb7e03cf0b2e9 188
+  s_af5d583a28e9c5::t_6b3adc7f9abef4 369-370
+packages/marimo-studio/tests/providers/test_vanilla_sources.py
+  s_af5d583a28e9c5::t_d8672f2419851a 187,209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3d539a367461840dd039990ccad9644ba74c95fa",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
