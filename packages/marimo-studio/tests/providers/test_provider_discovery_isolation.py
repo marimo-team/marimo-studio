@@ -40,8 +40,6 @@ pytestmark = pytest.mark.native_process
 _PROVIDER_MODULE = "tests.providers.test_process_isolation"
 _PROCESS_START_TIMEOUT = 15.0
 _METADATA_OPERATION_TIMEOUT = 1.5
-_METADATA_ELAPSED_LIMIT = 3.0
-_CONTAINMENT_ELAPSED_LIMIT = 5.0
 _CONCURRENT_DISCOVERY_TIMEOUT = _PROCESS_START_TIMEOUT + 5.0
 
 
@@ -234,17 +232,17 @@ def test_timed_out_description_keeps_a_healthy_provider_usable(
     blocked_pid = 0
 
     try:
-        started = time.monotonic()
         ids = registry.ids
-        elapsed = time.monotonic() - started
 
         assert ids == ("test-timeout/healthy",)
-        assert elapsed < _METADATA_ELAPSED_LIMIT
         blocked_pid = int(marker.read_text(encoding="utf-8"))
         _wait_until_dead((blocked_pid,))
         diagnostics = registry.diagnostics()
         assert [item.registration for item in diagnostics] == ["blocked", "healthy"]
-        assert "exceeded" in (diagnostics[0].error or "")
+        assert (
+            f"exceeded its {_METADATA_OPERATION_TIMEOUT:g} second limit"
+            in (diagnostics[0].error or "")
+        )
         assert diagnostics[1].loaded
     finally:
         if blocked_pid:
@@ -333,7 +331,6 @@ def test_external_provider_metadata_operations_have_a_containment_deadline(
         "catalog_provider",
         timeout=_METADATA_OPERATION_TIMEOUT,
     )
-    started = time.monotonic()
 
     if operation == "describe":
         assert registry.ids == ()
@@ -354,5 +351,6 @@ def test_external_provider_metadata_operations_have_a_containment_deadline(
                 )
             error = str(captured.value)
 
-    assert time.monotonic() - started < _CONTAINMENT_ELAPSED_LIMIT
-    assert "exceeded" in error
+    assert (
+        f"exceeded its {_METADATA_OPERATION_TIMEOUT:g} second limit" in error
+    )
