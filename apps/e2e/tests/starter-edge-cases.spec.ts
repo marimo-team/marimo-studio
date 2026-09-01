@@ -8,11 +8,13 @@ import { resolve } from "node:path";
 import {
   addWorkspaceView,
   buildWorkspaceView,
+  captureProjectionRefresh,
   expect,
   exportWorkspaceView,
   labeledSlider,
   noDisplayStaticExportUrl,
   recoverRequestAbort,
+  recoverProjectionRefresh,
   retireWorkspacePage,
   studioOrigin,
   test,
@@ -210,6 +212,7 @@ test("publishes complete projects during concurrent starter creation", async ({
   const initialRevision = await dashboard
     .locator("html")
     .evaluate(() => globalThis.marimoStudio.identity().revision);
+  const dashboardRefresh = await captureProjectionRefresh(page, browserDiagnostics);
   let complete = false;
   const creation = Promise.all(
     candidates.map(([view, starter]) => addWorkspaceView(workspaceNotebookPath, view, starter)),
@@ -265,6 +268,7 @@ test("publishes complete projects during concurrent starter creation", async ({
     "End",
   );
   await expect(refreshedDashboard.locator('strong[mo-value="metric"]')).toContainText("63");
+  await recoverProjectionRefresh(dashboardRefresh, page);
   await retireWorkspacePage(page, browserDiagnostics);
   supersededPresentations.recovered();
 });

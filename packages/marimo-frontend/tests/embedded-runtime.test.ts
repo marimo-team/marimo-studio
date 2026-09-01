@@ -42,6 +42,7 @@ import {
 import { EmbeddedRuntimeViewComponent } from "../src/embedded-runtime-view.tsx";
 import { mountEmbeddedRuntime as mountMarimoRuntime } from "../src/embedded-runtime.tsx";
 import { bootstrapSession, isSessionId } from "../src/session-bootstrap.ts";
+import { getRuntimeManager } from "../src/upstream/runtime.ts";
 
 const testSessionId = (): SessionId => {
   const sessionId = "s_abc123";
@@ -794,6 +795,84 @@ test("mounts the exported Marimo runtime facade", async () => {
     const mounted = handle;
     if (mounted) {
       await act(async () => mounted.dispose());
+    }
+    delete window.__MARIMO_STATIC__;
+  }
+});
+
+test("rotates an exported server transport through one runtime manager", async () => {
+  window.__MARIMO_STATIC__ = { files: {} };
+  await bootstrapSession(() => undefined);
+  const theme = createThemeSource();
+  let firstHandle: EmbeddedRuntimeHandle | undefined;
+  let secondHandle: EmbeddedRuntimeHandle | undefined;
+
+  try {
+    await act(async () => {
+      firstHandle = mountMarimoRuntime({
+        autoInstantiate: true,
+        exposeSession: true,
+        initialMode: "read",
+        presentation: presentation(),
+        render: () => null,
+        root: root(),
+        theme: theme.source,
+        transport: serverTransport(),
+        viewMode: "read",
+      });
+      await firstHandle.initialized;
+    });
+    if (!firstHandle) {
+      throw new Error("Expected the first exported runtime mount");
+    }
+    const mountedFirst = firstHandle;
+    const firstManager = getRuntimeManager();
+    const nextTransport: EmbeddedServerTransport = {
+      ...serverTransport((url) => {
+        url.searchParams.set("rotated", "true");
+        return url;
+      }),
+      presentationSessionId: "s_view02",
+      serverToken: "next-token",
+      url: "https://next.example.test/base/",
+    };
+
+    mountedFirst.updateServerTransport(nextTransport);
+
+    const rotatedManager = getRuntimeManager();
+    expect(rotatedManager).toBe(firstManager);
+    expect(rotatedManager.httpURL.toString()).toBe(nextTransport.url);
+    expect(rotatedManager.headers()).toMatchObject({
+      "Marimo-Server-Token": nextTransport.serverToken,
+      "Marimo-Session-Id": nextTransport.presentationSessionId,
+    });
+    const socket = rotatedManager.getWsURL(mountedFirst.sessionId);
+    expect(socket.origin).toBe("wss://next.example.test");
+    expect(socket.searchParams.get("rotated")).toBe("true");
+
+    await act(async () => mountedFirst.dispose());
+    firstHandle = undefined;
+    await act(async () => {
+      secondHandle = mountMarimoRuntime({
+        autoInstantiate: true,
+        exposeSession: true,
+        initialMode: "read",
+        presentation: presentation(),
+        render: () => null,
+        root: root(),
+        theme: theme.source,
+        transport: serverTransport(),
+        viewMode: "read",
+      });
+      await secondHandle.initialized;
+    });
+    expect(getRuntimeManager()).not.toBe(firstManager);
+  } finally {
+    if (firstHandle) {
+      await act(async () => firstHandle?.dispose());
+    }
+    if (secondHandle) {
+      await act(async () => secondHandle?.dispose());
     }
     delete window.__MARIMO_STATIC__;
   }

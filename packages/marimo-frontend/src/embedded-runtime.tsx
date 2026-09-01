@@ -197,6 +197,7 @@ const EmbeddedRuntimeProviders = ({ children }: { children: ReactNode }) => (
 );
 
 let pluginsInitialized = false;
+let serverRuntimeConfig: { url: string; lazy: false; serverToken: string } | undefined;
 
 const initializeMovablePlugins = (): void => {
   const registry = globalThis.customElements;
@@ -223,6 +224,7 @@ const initializeMovablePlugins = (): void => {
 };
 
 const initializeEmbeddedRuntime = (): void => {
+  serverRuntimeConfig = undefined;
   retainUnmountedControlValues(UI_ELEMENT_REGISTRY);
   if (!pluginsInitialized) {
     initializeMovablePlugins();
@@ -307,11 +309,17 @@ const transportHost: EmbeddedTransportHost = {
     };
   },
   prepareServer(transport) {
-    store.set(runtimeConfigAtom, {
-      url: transport.url,
-      lazy: false,
-      serverToken: transport.serverToken,
-    });
+    if (serverRuntimeConfig === undefined) {
+      serverRuntimeConfig = {
+        url: transport.url,
+        lazy: false,
+        serverToken: transport.serverToken,
+      };
+      store.set(runtimeConfigAtom, serverRuntimeConfig);
+    } else {
+      serverRuntimeConfig.url = transport.url;
+      serverRuntimeConfig.serverToken = transport.serverToken;
+    }
     return getRuntimeManager();
   },
   prepareWasm(transport) {
