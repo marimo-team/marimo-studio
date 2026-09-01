@@ -1,0 +1,27 @@
+packages/marimo-frontend/tests/source.test.mjs
+  s_af5d583a28e9c5::t_290ceb0621423d 88,92,95-97
+  s_af5d583a28e9c5::t_5ced20bcfbbc18 338,350,355,359
+  s_af5d583a28e9c5::t_c3b8477051ca1e 5,98-104,244-246,255-256,259,263-276,302,304-328,331,334-337,339,341-349,351-354,356-358,362-369
+  s_af5d583a28e9c5::t_2597884636ac1b 196-197,201,205,219,221
+  s_af5d583a28e9c5::t_2096f025b9e5f0 85-87,91,93-94,176,178-185,198-200,202-204,206-218,220,222-223,227,229-232,237-238,247,252-254,387,395-398,402-404,413-420,423,429-443
+  s_af5d583a28e9c5::t_859c29e8e575e6 340
+  s_af5d583a28e9c5::t_3ff0374cd27c75 360-361
+  s_af5d583a28e9c5::t_bc73d7524d5380 7,89-90
+  s_af5d583a28e9c5::t_d0cc19edf49d94 405-410
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "dfa16afeb344367548a066f21fe0e19dea90dc4e",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
