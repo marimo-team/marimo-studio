@@ -1,0 +1,26 @@
+packages/marimo-studio/tests/providers/test_provider_discovery_isolation.py
+  s_af5d583a28e9c5::t_2fe7e9a3a1b863 42-44
+packages/marimo-studio/tests/marimo_compat/test_environment_reentry.py
+  s_af5d583a28e9c5::t_1d16b59c294da9 18-19,138-140,142
+  s_af5d583a28e9c5::t_1cca41eed7314e 141
+packages/marimo-studio/tests/marimo_compat/test_environment_composition.py
+  s_af5d583a28e9c5::t_1d16b59c294da9 17-18,49-51,53
+  s_af5d583a28e9c5::t_a381655e40ea9a 153
+  s_af5d583a28e9c5::t_1cca41eed7314e 52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f578012d5cbf8424e6c56a53a7f5a75b460ddc60",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
