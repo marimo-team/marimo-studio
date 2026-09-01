@@ -1,5 +1,5 @@
 // @deno-types="npm:@types/react@19.2.10"
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export type MarimoJsonValue =
   | null
@@ -79,12 +79,14 @@ export type MarimoValueElement<T = MarimoValue> = HTMLSpanElement & {
 
 /** Return a live notebook value and a ref for its explicit `mo-value` host. */
 export const useMarimoValue = <T = MarimoValue>(selector: string) => {
-  const hostRef = useRef<MarimoValueElement<T>>(null);
+  const [host, setHost] = useState<MarimoValueElement<T> | null>(null);
   const [value, setValue] = useState<T>();
   const [error, setError] = useState(false);
+  const hostRef = useCallback((node: MarimoValueElement<T> | null) => {
+    setHost(node);
+  }, []);
 
   useEffect(() => {
-    const host = hostRef.current;
     if (host === null) {
       return;
     }
@@ -103,7 +105,7 @@ export const useMarimoValue = <T = MarimoValue>(selector: string) => {
       host.removeEventListener("marimo-value-updated", sync);
       host.removeEventListener("marimo-value-error", fail);
     };
-  }, [selector]);
+  }, [host, selector]);
 
   return { error, hostRef, value };
 };

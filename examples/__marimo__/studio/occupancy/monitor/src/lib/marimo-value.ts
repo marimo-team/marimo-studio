@@ -102,6 +102,7 @@ export const observeMarimoValue = <T = MarimoValue>(
   return {
     update(next: MarimoValueOptions<T>) {
       current = next;
+      sync();
     },
     destroy() {
       host.removeEventListener("marimo-value-updated", sync);
