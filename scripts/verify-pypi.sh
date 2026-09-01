@@ -29,7 +29,6 @@ verify_base() {
 		--isolated \
 		--default-index https://pypi.org/simple \
 		--with "marimo-studio==$version" \
-		--with "agent-plugins==0.1.0" \
 		python scripts/verify-installed-package.py --expected-version "$version"
 }
 
@@ -40,7 +39,6 @@ verify_deno() {
 		--isolated \
 		--default-index https://pypi.org/simple \
 		--with "marimo-studio[deno]==$version" \
-		--with "agent-plugins==0.1.0" \
 		python scripts/verify-installed-package.py \
 		--expected-version "$version" \
 		--deno

@@ -19,9 +19,10 @@ app = marimo.App()
 
 @app.cell
 def title():
+    metric = 42
     title = "ready"
     title
-    return (title,)
+    return metric, title
 
 if __name__ == "__main__":
     app.run()

@@ -33,8 +33,12 @@ done
 plugin_digests="$root/dist/agent-plugin-digests.json"
 uv run --frozen python - "$plugin_digests" "${wheels[@]}" "${sdists[@]}" <<'PY'
 from hashlib import sha256
+from email.parser import BytesParser
 import json
 from pathlib import Path
+from packaging.requirements import Requirement
+from packaging.specifiers import SpecifierSet
+from packaging.utils import canonicalize_name
 from tarfile import open as open_tar
 from zipfile import ZipFile
 import sys
@@ -50,6 +54,24 @@ sources = (
 expected = {
     source.relative_to(root).as_posix(): sha256(source.read_bytes()).hexdigest()
     for source in sources
+}
+package_root = root / "packages" / "marimo-studio"
+browser_license_root = (
+    package_root / "src" / "marimo_studio" / "_static" / "browser" / "licenses"
+)
+license_sources = {
+    "LICENSE": package_root / "LICENSE",
+}
+license_bytes = {name: source.read_bytes() for name, source in license_sources.items()}
+browser_license_sources = {
+    "THIRD_PARTY_LICENSES.txt": browser_license_root / "THIRD_PARTY_LICENSES.txt",
+    "THIRD_PARTY_NOTICES.json": browser_license_root / "THIRD_PARTY_NOTICES.json",
+    "THIRD_PARTY_NOTICES.txt": browser_license_root / "THIRD_PARTY_NOTICES.txt",
+    "marimo/LICENSE": browser_license_root / "marimo" / "LICENSE",
+    "marimo-studio/LICENSE": package_root / "LICENSE",
+}
+browser_license_bytes = {
+    name: source.read_bytes() for name, source in browser_license_sources.items()
 }
 
 
@@ -67,10 +89,48 @@ def packaged(files, read, archive):
     }
 
 
+def verify_metadata(source, archive):
+    metadata = BytesParser().parsebytes(source)
+    if metadata["License-Expression"] != "Apache-2.0":
+        raise AssertionError(f"Distribution has the wrong license expression: {archive}")
+    if set(metadata.get_all("License-File") or ()) != set(license_sources):
+        raise AssertionError(f"Distribution has the wrong license files: {archive}")
+    if SpecifierSet(metadata["Requires-Python"] or "") != SpecifierSet(">=3.10,<3.15"):
+        raise AssertionError(f"Distribution has the wrong Python requirement: {archive}")
+    requirements = [Requirement(value) for value in metadata.get_all("Requires-Dist") or ()]
+    by_name = {}
+    for requirement in requirements:
+        by_name.setdefault(canonicalize_name(requirement.name), []).append(requirement)
+    for name, specifier in {
+        "agent-plugins": "==0.1.1",
+        "tree-sitter": "==0.25.2",
+        "tree-sitter-javascript": "==0.25.0",
+    }.items():
+        selected = by_name.get(canonicalize_name(name), [])
+        if len(selected) != 1 or str(selected[0].specifier) != specifier:
+            raise AssertionError(f"Distribution has the wrong {name} requirement: {archive}")
+
+
 for path in archives:
     if path.suffix == ".whl":
         with ZipFile(path) as archive:
-            actual = packaged(archive.namelist(), archive.read, path)
+            names = archive.namelist()
+            actual = packaged(names, archive.read, path)
+            metadata_name = next(name for name in names if name.endswith(".dist-info/METADATA"))
+            metadata_root = metadata_name.removesuffix("METADATA")
+            verify_metadata(archive.read(metadata_name), path)
+            for relative, expected_bytes in license_bytes.items():
+                packaged_bytes = archive.read(f"{metadata_root}licenses/{relative}")
+                if packaged_bytes != expected_bytes:
+                    raise AssertionError(f"Wheel license differs for {relative}: {path}")
+            for relative, expected_bytes in browser_license_bytes.items():
+                packaged_bytes = archive.read(
+                    f"marimo_studio/_static/browser/licenses/{relative}"
+                )
+                if packaged_bytes != expected_bytes:
+                    raise AssertionError(
+                        f"Wheel browser license differs for {relative}: {path}"
+                    )
     else:
         with open_tar(path, "r:gz") as archive:
             members = [member for member in archive.getmembers() if member.isfile()]
@@ -84,6 +144,20 @@ for path in archives:
                 return stream.read()
 
             actual = packaged(names, read, path)
+            distribution_root = names[0].split("/", 1)[0]
+            verify_metadata(read(f"{distribution_root}/PKG-INFO"), path)
+            for relative, expected_bytes in license_bytes.items():
+                packaged_bytes = read(f"{distribution_root}/{relative}")
+                if packaged_bytes != expected_bytes:
+                    raise AssertionError(f"Source license differs for {relative}: {path}")
+            for relative, expected_bytes in browser_license_bytes.items():
+                packaged_bytes = read(
+                    f"{distribution_root}/src/marimo_studio/_static/browser/licenses/{relative}"
+                )
+                if packaged_bytes != expected_bytes:
+                    raise AssertionError(
+                        f"Source browser license differs for {relative}: {path}"
+                    )
     if actual != expected:
         raise AssertionError(
             f"Agent Plugin bytes differ in {path}: "

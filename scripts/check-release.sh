@@ -27,6 +27,12 @@ if [[ "v$package_version" != "$GITHUB_REF_NAME" ]]; then
 	exit 1
 fi
 
+release_notes=".github/release-notes/$GITHUB_REF_NAME.md"
+if [[ ! -s "$release_notes" ]]; then
+	error "Release notes are missing or empty: $release_notes"
+	exit 1
+fi
+
 if [[ "$(git cat-file -t "$GITHUB_REF")" != tag ]]; then
 	error "Release tag $GITHUB_REF_NAME must be annotated"
 	exit 1

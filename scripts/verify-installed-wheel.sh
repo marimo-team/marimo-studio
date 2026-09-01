@@ -43,10 +43,21 @@ import sys
 print(Path(sys.argv[1]).resolve().as_uri())
 PY
 )"
+bootstrap_root="$(mktemp -d "${TMPDIR:-/tmp}/marimo-studio-bootstrap.XXXXXX")"
+trap 'rm -rf "$bootstrap_root"' EXIT
+wheelhouse="$bootstrap_root/wheels"
+mkdir "$wheelhouse"
+uv build --wheel --out-dir "$wheelhouse" \
+	"$root/apps/e2e/fixtures-provider/provider"
+provider_wheels=("$wheelhouse"/marimo_studio_e2e_provider-*.whl)
+if [[ ${#provider_wheels[@]} -ne 1 ]]; then
+	printf 'ERROR: Expected one external provider wheel in %s\n' "$wheelhouse" >&2
+	exit 1
+fi
+provider_wheel="${provider_wheels[0]}"
 
 uv run --no-project --isolated --no-cache \
 	--with "$wheel" \
-	--with "agent-plugins==0.1.0" \
 	python scripts/verify-installed-package.py \
 	--expected-version "$package_version" \
 	--expected-plugin-digests "$plugin_digests"
@@ -57,8 +68,20 @@ uv run --no-project --isolated --no-cache --no-sources-package marimo-studio \
 	python scripts/verify-external-provider.py --typecheck
 uv run --no-project --isolated --no-cache \
 	--with "marimo-studio[deno] @ $wheel_uri" \
-	--with "agent-plugins==0.1.0" \
 	python scripts/verify-installed-package.py \
 	--expected-version "$package_version" \
 	--expected-plugin-digests "$plugin_digests" \
 	--deno
+
+MARIMO_STUDIO_ACCEPTANCE_STUDIO_WHEEL="$wheel" \
+	MARIMO_STUDIO_ACCEPTANCE_PROVIDER_WHEEL="$provider_wheel" \
+	uv run --no-project --isolated --no-cache --no-sources-package marimo-studio \
+	--no-sources-package marimo-studio-e2e-provider \
+	--with "marimo-studio[deno] @ $wheel_uri" \
+	--with "$provider_wheel" \
+	python scripts/verify-provider-bootstrap.py prepare \
+	"$bootstrap_root/workspace"
+uv run --no-project --isolated --no-cache --no-sources-package marimo-studio \
+	--with "$wheel" \
+	python scripts/verify-provider-bootstrap.py verify \
+	"$bootstrap_root/workspace"

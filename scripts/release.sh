@@ -87,6 +87,11 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 TAG="v$VERSION"
+RELEASE_NOTES=".github/release-notes/$TAG.md"
+if [[ ! -s "$RELEASE_NOTES" ]]; then
+	error "Release notes are missing or empty: $RELEASE_NOTES"
+	exit 1
+fi
 if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
 	error "Release tag already exists: $TAG"
 	exit 1

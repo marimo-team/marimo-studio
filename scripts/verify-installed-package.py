@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import gzip
 import importlib.util
 import json
 import os
@@ -22,6 +21,10 @@ import marimo_studio.agent as studio_agent
 import marimo_studio.authoring as studio_authoring
 import tomlkit
 from marimo_studio._delivery.assets import runtime_assets_path
+from marimo_studio._release_checks import (
+    verify_browser_assets,
+    verify_distribution_metadata,
+)
 
 _DISTRIBUTION = "marimo-studio"
 _ENTRY_POINTS = {
@@ -33,17 +36,6 @@ _ENTRY_POINTS = {
     ("marimo_studio.view_provider", "svelte"),
     ("marimo_studio.view_provider", "vanilla"),
 }
-_REQUIRED_ASSETS = {
-    "build-meta.json",
-    "runtime.css",
-    "runtime.js",
-    "studio.css",
-    "studio.js",
-}
-_MAX_BROWSER_ASSET_BYTES = 24 * 1024 * 1024
-_MAX_BROWSER_ASSET_FILES = 400
-_MAX_ENTRY_ASSET_BYTES = 600 * 1024
-_MAX_ENTRY_GZIP_BYTES = 120 * 1024
 _NOTEBOOK = """import marimo
 
 app = marimo.App()
@@ -121,8 +113,12 @@ assert set(marimo_studio.agent.__all__) == {
     "agent_plugin", "agent_skill", "current_workspace",
 }
 assert set(marimo_studio.authoring.__all__) == {
-    "ValidationIssue", "ValidationReport", "View", "ViewBuild", "Workspace", "doctor",
-    "open_workspace",
+    "BindingResult", "InspectionResult", "OutputRenderResult", "ProviderDiagnostic",
+    "ProviderReport", "RenderedOutput", "RuntimeCell", "RuntimeOutput", "RuntimeProbe",
+    "Starter", "StaticExportResult", "StudioDiagnostic", "StudioOverview",
+    "ValidationIssue", "ValidationReport", "ValueReadError", "ValueReadResult", "View",
+    "ViewBuild", "ViewDocument", "ViewInspection", "ViewOverview", "ViewRemovalResult",
+    "Workspace", "doctor", "open_workspace",
 }
 assert set(marimo_studio.view_providers.__all__) == {
     "PROVIDER_API_VERSION", "BuildProfile", "BuildRequest", "BuildResult",
@@ -138,10 +134,12 @@ assert set(marimo_studio.view_providers.__all__) == {
 assert set(marimo_studio.errors.__all__) == {
     "AgentRequestError", "BindingError", "CapabilityInputError", "ConfigurationError",
     "DependencyError", "LastViewError", "MarimoStudioError", "NotebookSourceError",
-    "ProtocolError", "ProviderNotFoundError", "RuntimeSelectionError", "RuntimeTimeoutError",
-    "SourceConflictError", "SourceEncodingError", "SourceNotFoundError", "SourceTooLargeError",
-    "SourceValidationError", "StaticExportError", "ViewExistsError", "ViewNotFoundError",
-    "ViewProjectError",
+    "ProtocolError", "ProviderNotFoundError", "RuntimeConfigTooLargeError",
+    "RuntimeSelectionError", "RuntimeTimeoutError", "SourceConflictError",
+    "SourceEncodingError", "SourceNotFoundError", "SourceTooLargeError",
+    "SourceValidationError", "StaticExportError", "ViewDeletionError", "ViewExistsError",
+    "ViewGenerationConflictError", "ViewInUseError", "ViewNotFoundError", "ViewProjectError",
+    "WorkspaceGenerationConflictError", "WorkspaceMutationError",
 }
 providers = marimo_studio.view_providers
 assert tuple(signature(providers.ViewProvider.create).parameters) == (
@@ -162,7 +160,7 @@ assert tuple(field.name for field in fields(providers.CellConfigSpec)) == (
 assert tuple(field.name for field in fields(providers.CellSpec)) == (
     "ref", "runtime_id", "index", "kind", "name", "source", "code_sha256",
     "preview", "definitions", "references", "upstream", "downstream", "config",
-    "has_output_expression", "displays_output", "markdown", "code",
+    "has_output_expression", "may_display_output", "markdown", "code",
 )
 assert tuple(field.name for field in fields(providers.NotebookSpec)) == (
     "path", "revision", "cells", "app_config",
@@ -223,63 +221,6 @@ def _verify_agent_plugin(expected_path: Path | None) -> None:
         )
     if str(skill / "SKILL.md") not in (studio_agent.__doc__ or ""):
         raise AssertionError("Studio agent help omits its installed Agent Skill")
-
-
-def _verify_browser_assets() -> None:
-    root = runtime_assets_path()
-    present = {path.name for path in root.iterdir() if path.is_file()}
-    if not _REQUIRED_ASSETS.issubset(present):
-        raise AssertionError(
-            f"Missing browser assets: {sorted(_REQUIRED_ASSETS - present)}"
-        )
-    chunks = tuple((root / "chunks").glob("*.js"))
-    workers = tuple((root / "assets").glob("*worker*.js"))
-    if not chunks or not workers:
-        raise AssertionError("Installed browser chunks or workers are missing")
-    unsupported_katex = tuple(root.glob("assets/KaTeX_*.woff")) + tuple(
-        root.glob("assets/KaTeX_*.ttf")
-    )
-    runtime_css = (root / "runtime.css").read_text(encoding="utf-8")
-    if (
-        unsupported_katex
-        or 'format("woff")' in runtime_css
-        or 'format("truetype")' in runtime_css
-    ):
-        raise AssertionError(
-            "Installed KaTeX assets violate the WOFF2 browser contract"
-        )
-    files = tuple(path for path in root.rglob("*") if path.is_file())
-    total_bytes = sum(path.stat().st_size for path in files)
-    if len(files) > _MAX_BROWSER_ASSET_FILES or total_bytes > _MAX_BROWSER_ASSET_BYTES:
-        raise AssertionError(
-            f"Browser assets exceed the package budget: {len(files)} files, "
-            f"{total_bytes} bytes"
-        )
-    entry_assets = tuple(
-        root / name for name in ("runtime.js", "runtime.css", "studio.js", "studio.css")
-    )
-    entry_bytes = sum(path.stat().st_size for path in entry_assets)
-    entry_gzip_bytes = sum(
-        len(gzip.compress(path.read_bytes())) for path in entry_assets
-    )
-    if entry_bytes > _MAX_ENTRY_ASSET_BYTES or entry_gzip_bytes > _MAX_ENTRY_GZIP_BYTES:
-        raise AssertionError(
-            "Browser entry assets exceed the first-load budget: "
-            f"{entry_bytes} raw bytes, {entry_gzip_bytes} gzip bytes"
-        )
-    build_meta = json.loads((root / "build-meta.json").read_text(encoding="utf-8"))
-    release = json.loads(
-        resources.files("marimo_studio._compat")
-        .joinpath("release.json")
-        .read_text(encoding="utf-8")
-    )
-    if build_meta.get("marimo") != {
-        "repository": "https://github.com/marimo-team/marimo.git",
-        **release,
-    }:
-        raise AssertionError(
-            "Installed browser metadata does not match the pinned release"
-        )
 
 
 def _validate_cli(notebook: Path, view: str) -> None:
@@ -387,7 +328,13 @@ def main() -> None:
         raise TypeError("Installed Python APIs are unavailable")
     _verify_entry_points()
     _verify_agent_plugin(args.expected_plugin_digests)
-    _verify_browser_assets()
+    verify_distribution_metadata(_DISTRIBUTION)
+    release = json.loads(
+        resources.files("marimo_studio._compat")
+        .joinpath("release.json")
+        .read_text(encoding="utf-8")
+    )
+    verify_browser_assets(runtime_assets_path(), release)
     _verify_views(deno=args.deno)
     print(
         json.dumps(

@@ -50,6 +50,9 @@ jobs:
       - name: Test frontend
         run: make frontend-test
 
+      - name: Audit locked dependencies
+        run: make audit
+
       - name: Build package
         run: make package
 
@@ -114,7 +117,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -128,10 +131,14 @@ jobs:
           python-version: "3.12"
 
   installed-package:
-    name: Installed package and provider (Windows)
+    name: Installed package and provider (${{ matrix.os }})
     needs: quality
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
