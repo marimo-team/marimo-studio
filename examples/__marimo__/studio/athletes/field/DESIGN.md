@@ -12,10 +12,10 @@ colors:
 typography:
   display:
     fontFamily: Barlow Condensed
-    fontSize: 104px
+    fontSize: "clamp(4.2rem, 9vw, 8.4rem)"
     fontWeight: 300
-    lineHeight: 0.86
-    letterSpacing: -0.035em
+    lineHeight: 0.84
+    letterSpacing: -0.045em
   headline:
     fontFamily: Barlow Condensed
     fontSize: 52px

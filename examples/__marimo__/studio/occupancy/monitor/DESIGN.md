@@ -109,6 +109,13 @@ surface depth. Hairline forest borders define the chart and control boundaries.
 Inputs use 8px corners, metric cards use 16px, and the chart vessel uses 32px.
 Status and small instrument labels may use a full pill radius.
 
+## Motion
+
+Loading indicators may pulse while notebook values connect. Under
+`prefers-reduced-motion: reduce`, stop the pulses and transitions, keep loading
+indicators visible at a fixed opacity, and render ECharts updates with zero
+animation duration.
+
 ## Components
 
 The status capsule uses lime on forest text. Metrics are separate soft cards
