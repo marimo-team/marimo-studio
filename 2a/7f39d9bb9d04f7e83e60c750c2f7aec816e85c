@@ -1,0 +1,19 @@
+apps/e2e/unit/notebook-server.test.ts
+  s_af5d583a28e9c5::t_938cbe461c2235 31,260,541,583,617
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2a7f39d9bb9d04f7e83e60c750c2f7aec816e85c",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
