@@ -1,46 +1,70 @@
 ---
 title: Place notebook results in a view
-description: Use complete cells, rendered Python objects, and browser values in custom frontend source.
+description: Use complete cells, rendered outputs, and browser values in view source documents.
 ---
 
 # Place notebook results in a view
 
-The athlete report uses all three projection forms in one document:
+View source requests notebook results through projection hosts. Choose the host
+that matches what the frontend needs:
+
+| Result          | View source                       | Use it for                                                          |
+| --------------- | --------------------------------- | ------------------------------------------------------------------- |
+| Complete cell   | `<marimo-cell name="summary">`    | Native controls, output, logs, errors, and reactive behavior        |
+| Rendered output | `<marimo-output value="chart">`   | One Python value rendered through marimo's native output system     |
+| Browser value   | `<span mo-value="metrics.total">` | JSON-compatible data or an eager dataframe consumed by browser code |
+
+All projection hosts belong inside `#app-shell`.
+
+## Place a complete cell
+
+Name the producing cell in the notebook:
+
+```python
+@app.cell
+def sport_control(athletes, mo):
+    sport = mo.ui.dropdown(
+        options=athletes["sport"].unique().sort().to_list(),
+        label="Sport",
+    )
+    sport
+    return (sport,)
+```
+
+Place the cell by name:
 
 ```html
 <marimo-cell name="sport_control"></marimo-cell>
-
-<strong mo-value="athlete_summary.athletes"></strong>
-
-<marimo-output value="top_sports"></marimo-output>
 ```
 
-Changing the sport control reruns its dependent notebook cell. Studio updates
-the scalar total and rendered Polars table without rebuilding the frontend.
+The host preserves the native control and its complete cell lifecycle. A
+control change reruns dependent notebook cells and updates their mounted
+results.
 
-## Choose the projection form
+## Render one notebook output
 
-| Notebook result     | View source                       | Use it when                                                                 |
-| ------------------- | --------------------------------- | --------------------------------------------------------------------------- |
-| Complete cell       | `<marimo-cell name="summary">`    | The view needs the cell output, controls, logs, or errors                   |
-| One rendered object | `<marimo-output value="chart">`   | Marimo should render one Python object with its native rich-output system   |
-| Browser value       | `<span mo-value="metrics.total">` | JavaScript will format or pass a JSON-compatible value to a browser library |
+Use `marimo-output` when marimo should choose the native renderer:
 
-Object and value selectors can read attributes, dictionary keys, and list
-items:
+```html
+<marimo-output value="selected_roster"></marimo-output>
+```
+
+The Rio athletes report uses this host for the filtered Polars table. It uses
+`mo-value="top_sports"` separately so browser JavaScript can draw the
+participation chart.
+
+Output selectors can traverse attributes, dictionary keys, and list items:
 
 ```text
-metrics.total
+report.chart
 results["overview"]
-rows[0].label
+rows[0]
 ```
 
-Calls, operators, slices, and private attributes are outside the selector
-syntax.
+## Read a browser value
 
-## React to a browser value
-
-Register the update listener before reading the current value:
+`mo-value` assigns the current value to `host.marimoValue` and dispatches an
+event when the value changes:
 
 ```html
 <span id="summary-data" hidden mo-value="summary"></span>
@@ -64,48 +88,59 @@ Register the update listener before reading the current value:
 </script>
 ```
 
-`undefined` means the value has not arrived or cannot currently be read. JSON
-`null` remains a valid value. Listen for `marimo-value-error` when the view
-needs a local recovery state.
+Register the listener before reading `marimoValue`. `undefined` means the
+value has not arrived or cannot currently be read. JSON `null` remains a valid
+value. Listen for `marimo-value-error` when the view needs a local recovery
+state.
 
 React starters provide `useMarimoValue`. Svelte starters provide
 `observeMarimoValue`.
 
 ## Pass a dataframe to JavaScript
 
-An eager dataframe reaches browser code as a shared Flechette `Table`. Studio
-encodes the dataframe as Arrow IPC and decodes it before assigning
-`host.marimoValue` and `event.detail.value`.
+An eager dataframe reaches browser code as a
+[Flechette](https://github.com/uwdata/flechette) `Table`. Studio encodes the
+dataframe as [Arrow IPC](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc),
+a columnar data interchange format, and decodes it before updating the host.
 
 ```js
 const chartRows = table.select(["region", "revenue"]).toArray();
 ```
 
-Keep the table columnar while selecting columns or passing data to a
-column-oriented library. Materialize row objects at the consumer boundary.
+Treat the shared table as immutable. Keep data columnar while selecting fields
+or passing it to a column-oriented library. Call `toArray()` at a consumer that
+needs row objects.
 
-The athlete explorer reads `athlete_facts` as Arrow IPC, then inserts a copy
-into DuckDB-WASM for Mosaic queries. The occupancy views pass projected tables
-to ECharts and Recharts.
+The Browser runtime requires browser-compatible dataframe and Arrow writer
+packages. Materialize lazy or remote queries in the notebook before projecting
+them.
 
-WebAssembly notebooks must include browser-compatible dataframe and Arrow
-writer packages. Materialize lazy or remote queries in the notebook before
-projecting them.
+## Use dynamic projection targets deliberately
 
-## Name a result
+React and Svelte providers inspect literal targets and finite arrays during the
+build. Keep those targets explicit when possible:
 
-A semantic native cell name is the most direct target:
-
-```python
-@app.cell
-def summary(data):
-    result = data.describe()
-    result
-    return (result,)
+```tsx
+{
+  ["summary", "details"].map((name) => <marimo-cell key={name} name={name} />);
+}
 ```
 
-Give an existing anonymous cell a stable alias when renaming it is not
-appropriate:
+When runtime state can choose any notebook target, declare that broader
+authorization on the host:
+
+```tsx
+<marimo-cell name={selectedName} data-marimo-allow="*" />
+```
+
+`data-marimo-allow="*"` permits that source location to request any valid
+target of the same projection kind. Use it at the narrowest dynamic host. A
+computed target without the declaration fails provider inspection.
+
+## Name and validate targets
+
+A semantic native cell name is the direct target. Give an anonymous cell a
+stable alias when renaming it is unsuitable:
 
 ```console
 marimo-studio notebook bind summary --target analysis.py --cell 12
@@ -113,15 +148,13 @@ marimo-studio notebook bind summary --target analysis.py --cell 12
 
 The alias belongs to the notebook and is available to every view.
 
-## Validate projections
-
-Check source and notebook names without running the notebook:
+Validate source and notebook names without executing the notebook:
 
 ```console
 marimo-studio validate dashboard --target analysis.py
 ```
 
-Execute the notebook and inspect selected results with runtime validation:
+Execute the complete notebook, then check the view's selected projections:
 
 ```console
 marimo-studio validate dashboard \
@@ -129,5 +162,7 @@ marimo-studio validate dashboard \
   --level runtime
 ```
 
-Runtime validation can perform the notebook's configured file, network,
-database, and data access.
+Runtime validation can perform file, network, database, and other work from any
+notebook cell. Use it with trusted notebooks. See the
+[Projection DOM API](../reference/projections.md) for event payloads, state
+attributes, duplicate-host rules, and limits.

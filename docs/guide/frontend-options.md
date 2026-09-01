@@ -1,71 +1,59 @@
 ---
 title: Choose a frontend
-description: Match each view to the smallest frontend and browser library that supports its task.
+description: Match each view to the smallest frontend and browser toolchain that supports its task.
 ---
 
 # Choose a frontend
 
-Start with browser-native HTML. Keep a small view in one file, or move its CSS
-and JavaScript into direct local references. Move to React or Svelte when
-component structure, imported assets, or a larger module graph makes that source
+Start with Vanilla HTML, CSS, and JavaScript. Choose
+[React](https://react.dev/) or [Svelte](https://svelte.dev/) when component
+structure, imported assets, or a larger module graph makes the view project
 easier to maintain.
 
-Every frontend uses the same `marimo-cell`, `marimo-output`, and `mo-value`
-projection contract.
+Every built-in view provider supports `marimo-cell`, `marimo-output`, and
+`mo-value`.
+
+| Starter                         | Choose it for                                            |
+| ------------------------------- | -------------------------------------------------------- |
+| `marimo-studio/vanilla:default` | Reports, small tools, and browser-native pages           |
+| `marimo-studio/react:default`   | Typed React applications and component systems           |
+| `marimo-studio/react:reveal`    | Ordered [Reveal.js](https://revealjs.com/) presentations |
+| `marimo-studio/svelte:default`  | Svelte applications with concise reactive browser state  |
 
 ## Vanilla HTML
 
-Choose the default starter for reports, small tools, and browser-native views:
+Create the default starter:
 
 ```console
 marimo-studio view create report --target analysis.py
 ```
 
-The generated `index.html` contains inline CSS and JavaScript. Keep that shape
-for a small view, or split direct local sources:
+The starter creates `index.html` and `AGENTS.md`. It populates the document
+with the notebook cells that may display output and supplies an inline
+`observeMarimoValue` adapter.
+
+Keep CSS and JavaScript inline for a compact page, or reference local leaf
+files directly:
 
 ```html
 <link rel="stylesheet" href="./style.css" />
 <script type="module" src="./main.js"></script>
 ```
 
-Studio resolves each local path relative to the entry HTML. Safe parent paths
-inside the view project, nested entrypoints, query strings, and fragments remain
-valid. Keep that base explicit by leaving `<base href>` out of the entry
-document. Each resolved `.css`, `.js`, or `.mjs` file appears in Source,
-invalidates the build when it changes, and publishes at the same artifact path.
-An HTTP or HTTPS dependency URL must include `//` and a host.
+The Vanilla provider publishes those directly referenced `.css`, `.js`, and
+`.mjs` files at the same artifact paths. Local CSS imports, CSS asset URLs, and
+JavaScript module imports require bundling or another provider. Remote modules
+require browser network access and a hosting
+[Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP)
+that allows their origins.
 
-The Vanilla provider publishes the files named by those direct tags. Bundle
-JavaScript imports into the referenced script. Encode CSS assets as data URLs or
-load them from an external URL you trust. Choose another frontend provider when
-the build should traverse a complete source tree. Inspection reports a
-source-located error for local CSS `url()` or `@import` dependencies, local
-JavaScript imports or re-exports, and computed dynamic imports. Import maps and
-source-phase imports require a provider that builds the JavaScript module graph.
-Inspection fails closed when the pinned JavaScript grammar cannot establish the
-dependency boundary. The athlete report uses browser APIs. The three-file
-athlete field briefing adds Shower and Three.js. The earthquake story imports
-Observable Plot.
-
-Tree-sitter JavaScript 0.25 rejects a regex statement immediately after a
-`break` or `continue` terminated through automatic semicolon insertion, even
-though browsers parse that unreachable statement. Terminate `break` and
-`continue` explicitly with `;` when another statement follows on the next line.
-The same grammar rejects import attributes on re-export statements. Import the
-remote module with its attributes, then export the local binding:
-
-```js
-import data from "https://cdn.example.test/data.json" with { type: "json" };
-export { data as default };
-```
-
-Enumerate named exports the same way. Choose a provider that builds the module
-graph when the view needs a wildcard re-export with import attributes.
+Leave `<base href>` out of the authored entry document. Studio supplies the
+delivery base when it publishes the artifact.
 
 ## React
 
-Choose React for component applications and existing React teams:
+Create a typed React project with the pinned [Deno](https://docs.deno.com/)
+JavaScript and TypeScript toolchain:
 
 ```console
 uvx --from 'marimo-studio[deno]==0.1.0' marimo-studio view create operations \
@@ -73,13 +61,23 @@ uvx --from 'marimo-studio[deno]==0.1.0' marimo-studio view create operations \
   --starter marimo-studio/react:default
 ```
 
-Studio creates TSX, CSS, Deno configuration, and a frozen dependency lock. Add
-exact npm imports to `deno.json`. The earthquake operations view uses MapLibre,
-and the occupancy model review uses Recharts.
+The starter includes [TypeScript](https://www.typescriptlang.org/) with JSX
+markup in `.tsx` files, CSS, custom-element declarations, a
+`useMarimoValue` hook, `deno.json`, and a frozen lockfile. Its build runs type
+checking before bundling.
+
+Add an exact dependency from the view project root:
+
+```console
+deno add --frozen=false --save-exact npm:d3@7
+```
+
+Commit `deno.json` and `deno.lock` after an intentional update. Normal Studio
+builds keep the lockfile frozen.
 
 ## React with Reveal.js
 
-Choose the Reveal starter for ordered presentations:
+Create a slide deck:
 
 ```console
 uvx --from 'marimo-studio[deno]==0.1.0' marimo-studio view create briefing \
@@ -88,12 +86,12 @@ uvx --from 'marimo-studio[deno]==0.1.0' marimo-studio view create briefing \
 ```
 
 The starter supplies Reveal.js structure, navigation, fragments, overview, and
-speaker-ready slide semantics. Notebook controls and dependent results can live
-inside a slide, as the earthquake briefing demonstrates.
+one initial slide for each notebook cell that may display output. Place Marimo
+controls and dependent results directly inside a slide.
 
 ## Svelte
 
-Choose Svelte for component views built around concise reactive browser state:
+Create a typed Svelte project:
 
 ```console
 uvx --from 'marimo-studio[deno]==0.1.0' marimo-studio view create explorer \
@@ -101,9 +99,18 @@ uvx --from 'marimo-studio[deno]==0.1.0' marimo-studio view create explorer \
   --starter marimo-studio/svelte:default
 ```
 
-Studio creates Svelte, TypeScript, CSS, Vite, Deno configuration, and a frozen
-dependency lock. The athlete explorer adds Mosaic, vgplot, and DuckDB-WASM. The
-occupancy monitor adds ECharts.
+The starter includes Svelte, TypeScript,
+[Vite](https://vite.dev/), a frontend development and build tool, an
+`observeMarimoValue` action, `package.json`, Deno configuration, and a frozen
+lockfile. Its build runs `svelte-check` before Vite.
+
+Add an exact application dependency from the view project root:
+
+```console
+deno add --package-json --frozen=false --save-exact npm:d3@7
+```
+
+Commit `package.json` and `deno.lock` after the update.
 
 ## Inspect installed starters
 
@@ -111,9 +118,17 @@ occupancy monitor adds ECharts.
 marimo-studio starters
 ```
 
-The command lists each stable starter ID, generated files, provider, and setup
-action.
+Human-readable output lists the starter ID, summary, provider, availability,
+and setup action. Use JSON when a tool needs the advertised source-document
+plan:
 
-A team can preserve another frontend project by implementing a
-[view provider](../reference/provider-api.md). The provider declares editable
-source, build inputs, and the command that produces the browser artifact.
+```console
+marimo-studio starters --json
+```
+
+The **Files created** detail in Studio shows the same document plan before view
+creation. A starter may also create provider-owned files required by its build.
+
+Use [Manage view source](manage-source.md) for the distinction between source
+documents and build inputs. Teams can add another project shape through a
+[view provider](../reference/provider-api.md).

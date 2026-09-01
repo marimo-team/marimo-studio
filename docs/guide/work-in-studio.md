@@ -1,70 +1,87 @@
 ---
 title: Edit and preview in Studio
-description: Work with notebook code, view source, and the rendered result in one marimo session.
+description: Work with notebook code, view source, and the rendered result in one Marimo session.
 ---
 
 # Edit and preview in Studio
 
-Use the exact launch requirements printed by `view create`. For a notebook with
-the default 0.1.0 view, run:
+Open the notebook with the launch requirements printed by `view create`. For a
+notebook that uses the default 0.1.0 starter:
 
 ```console
 uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
 ```
 
-Studio keeps three surfaces connected to the same saved notebook:
+Studio connects three surfaces to the saved notebook:
 
-- **Notebook** contains Python and reactive computation.
-- **Source** contains the selected view's frontend files.
-- **Preview** renders the view with notebook results attached.
+- **Notebook** edits Python and reactive computation.
+- **Source** edits the selected view project's source documents.
+- **Preview** renders the current artifact with notebook results attached.
 
-Choose **Develop** to arrange all three for everyday authoring. Notebook,
-Source, and Preview can also fill the workspace individually.
+## Choose a mode
 
-## Save and rebuild
+| Mode         | Surfaces                      |
+| ------------ | ----------------------------- |
+| **Notebook** | Notebook                      |
+| **Develop**  | Notebook, Source, and Preview |
+| **Preview**  | Preview                       |
+| **Source**   | Source and Preview            |
 
-Source saves after an edit and rebuilds the selected view. The build status
-shows **Building**, **Up to date**, **Build needed**, or **Build failed**.
+Use **Develop** for everyday authoring. Source stays beside Preview so a source
+edit and its visible result can be compared directly.
 
-Preview stays on the last successful version while another build runs. A failed
-build keeps that version visible and places the repair message beside Source.
+## Arrange the workspace
 
-Use an explicit terminal build when another editor, a coding agent, CI, or a
-production workflow changes the files:
+Open **Workspace options** to arrange panes, equalize split sizes, restore the
+default workspace, or open the saved layout. While arranging, add a missing
+surface beside another pane, swap panes, close a pane, or drag a divider.
+
+Studio saves the custom layout for each notebook and selected view in the
+current browser. **Open saved layout** returns to that arrangement.
+
+When the available width or height cannot fit every visible pane, Studio uses
+compact navigation. Choose Notebook, Source, or Preview from the compact tabs
+instead of shrinking the surfaces below their working size.
+
+## Save and build
+
+Source saves the active document and rebuilds the selected view. The build
+status reports:
+
+- **Building** while a replacement artifact is being prepared
+- **Up to date** when Preview matches saved source
+- **Build needed** when saved source has changed
+- **Build failed** when the latest attempt reported an error
+
+Preview stays on the last successful artifact while another build runs. A
+failed build keeps that artifact visible and puts the repair diagnostic beside
+Source.
+
+Use an explicit build after another editor, coding agent, or CI process changes
+the project:
 
 ```console
 marimo-studio view build dashboard --target analysis.py
 ```
 
-## Resolve a concurrent edit
+## Switch views and runtimes
 
-Studio compares each save with the source version that was loaded. When another
-browser, editor, or coding agent saves first, Studio keeps your unsaved buffer
-and shows both versions.
+The view menu saves pending Source edits before selecting another view. A
+failed save or unresolved conflict stops the switch so the current document can
+be repaired.
 
-- **Use saved version** discards your unsaved edits and loads the newer file.
-- **Overwrite saved version with my edits** replaces the newer saved file with
-  your buffer.
+The runtime menu controls where notebook code executes:
 
-Review **Your edits** and **Saved version** before choosing. When Studio reports
-a recovery file, that path contains the previous saved content.
+- **Python runtime** uses the editor's Python session and can access local
+  files, databases, installed packages, and server credentials. Its
+  configuration ID is `server`.
+- **Browser runtime** starts a notebook in a browser worker. The browser
+  receives notebook source and must reach its dependencies and data. Its
+  configuration ID is `wasm`.
 
-## Switch views
+Switching runtimes keeps the view artifact fixed and replaces the notebook
+runtime that supplies results.
 
-The view menu saves pending edits before selecting another view. A failed save
-or unresolved conflict stops the switch. The previous view remains active so
-you can repair the source and retry.
-
-## Compare Python and browser execution
-
-The runtime menu answers where the notebook runs:
-
-- **Python** uses the editor's Python session and can access local files,
-  databases, installed packages, and server credentials.
-- **Browser** starts a separate notebook in the visitor's browser. The browser
-  receives the notebook source and must be able to fetch its data.
-
-Switching the runtime keeps the view source fixed while changing where notebook
-code and controls execute.
-
-Use [Run or publish a view](run-and-share.md) before sharing either runtime.
+Use **Open preview in new tab** to inspect the current presentation without the
+authoring panes. Continue with [Manage view source](manage-source.md) for the
+Source catalog and conflict recovery.

@@ -3,19 +3,22 @@ import { defineConfig, type HeadConfig, type Plugin, type UserConfig } from "vit
 import llmstxt from "vitepress-plugin-llms";
 
 import {
+  authoringItems,
+  deliveryItems,
   exampleItems,
-  guideItems,
   headIcons,
   introductionItems,
   normalizeBasePath,
   projectItems,
   referenceItems,
   routes,
+  startItems,
   withBasePath,
 } from "./routes.ts";
 
 const repository = "https://github.com/marimo-team/marimo-studio";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-studio/");
+const socialImage = new URL("screenshots/studio-develop.png", siteUrl).href;
 const socialDescription =
   "Build multiple custom web views from one marimo notebook with modern web tools and coding agents.";
 const basePath = normalizeBasePath(process.env.BASE_PATH);
@@ -64,6 +67,7 @@ export default defineConfig({
   ],
   lang: "en-US",
   lastUpdated: true,
+  sitemap: { hostname: siteUrl.href },
   srcDir: "../../docs",
   title: "Marimo Studio",
   transformHead({ description, page, title }): HeadConfig[] {
@@ -78,8 +82,19 @@ export default defineConfig({
       ["meta", { content: title, property: "og:title" }],
       ["meta", { content: pageDescription, property: "og:description" }],
       ["meta", { content: canonical, property: "og:url" }],
+      ["meta", { content: socialImage, property: "og:image" }],
+      ["meta", { content: "1800", property: "og:image:width" }],
+      ["meta", { content: "1100", property: "og:image:height" }],
+      [
+        "meta",
+        {
+          content: "Notebook, view source, and Preview in Marimo Studio",
+          property: "og:image:alt",
+        },
+      ],
       ["meta", { content: title, name: "twitter:title" }],
       ["meta", { content: pageDescription, name: "twitter:description" }],
+      ["meta", { content: socialImage, name: "twitter:image" }],
     ];
   },
   themeConfig: {
@@ -96,7 +111,11 @@ export default defineConfig({
       { text: "Overview", link: routes.whatIsStudio },
       {
         text: "Guide",
-        items: guideItems,
+        items: [
+          { text: "Start", items: startItems },
+          { text: "Author", items: authoringItems },
+          { text: "Deliver", items: deliveryItems },
+        ],
       },
       { text: "Examples", link: routes.examples.index },
       { text: "Reference", link: routes.reference.index },
@@ -112,9 +131,19 @@ export default defineConfig({
           items: introductionItems,
         },
         {
-          text: "Guide",
+          text: "Start",
           collapsed: false,
-          items: guideItems,
+          items: startItems,
+        },
+        {
+          text: "Author",
+          collapsed: false,
+          items: authoringItems,
+        },
+        {
+          text: "Deliver",
+          collapsed: true,
+          items: deliveryItems,
         },
         { text: "Examples", link: routes.examples.index },
         { text: "Reference", link: routes.reference.index },

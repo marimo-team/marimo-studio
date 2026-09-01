@@ -5,52 +5,74 @@ description: Create a web view from a saved Marimo notebook and place one reacti
 
 # Create your first view
 
-Start with Python 3.10 through 3.14, `uv`, and a saved Marimo notebook such as
-`analysis.py`. Preview the first view's writes:
+Start with Python 3.10 through 3.14, [uv](https://docs.astral.sh/uv/), a Python
+project and environment manager, and a saved Marimo notebook such as
+`analysis.py`.
+
+::: tip Save a new notebook first
+For an untitled notebook, use Marimo **Save As** before creating a view. Studio
+follows the saved notebook after Marimo reloads it. The view project then has a
+stable location beside that file.
+:::
+
+## Create the view project
+
+Preview the filesystem and configuration changes:
 
 ```console
-uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard --target analysis.py --dry-run
+uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard \
+  --target analysis.py \
+  --dry-run
 ```
 
 Create the view after reviewing the plan:
 
 ```console
-uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard --target analysis.py
+uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard \
+  --target analysis.py
 ```
 
-Studio writes the view beside the notebook:
+The default starter creates this view project beside the notebook:
 
 ```text
 analysis.py
 __marimo__/studio/analysis/
-  .gitignore
-  .owners/
-    dashboard.toml
   dashboard/
     view.toml
     index.html
+    AGENTS.md
 ```
 
-The first creation can update the notebook's PEP 723 Python requirement, pin the
-installed Studio version, choose the default view, and add cell aliases. It also
-creates the view project, durable owner record, and workspace ignore rules shown
-in the plan.
+`view.toml` records the view provider. `index.html` is the first source
+document. `AGENTS.md` gives coding agents project-specific guidance. A
+`DESIGN.md` file also appears in Source when you add one to record the
+audience, task, and visual decisions for the view.
 
-The default starter begins in `index.html`. Keep its CSS and JavaScript inline,
-or reference local `.css`, `.js`, and `.mjs` files directly from that document.
-View creation prints the exact launch command for Studio and every configured
-provider. For the default 0.1.0 view, open the authoring workspace with:
+The first create command can update the notebook's Studio configuration, set
+`dashboard` as the default view, and pin the Studio requirement. It prints the
+launch command required by the selected starter.
+
+## Open Studio
+
+For the default 0.1.0 starter, run:
 
 ```console
 uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
 ```
 
-Choose **Develop** to work with the notebook, view source, and rendered preview
-in one session.
+Marimo's `--sandbox` flag resolves the notebook's declared Python dependencies
+with uv. It manages the environment and does not isolate untrusted notebook
+code from your files or network.
 
-## Place one result
+Choose **Develop** to see Notebook, Source, and Preview together.
 
-Give the producing notebook cell a semantic name:
+When a notebook already has Studio configuration but no view project, Studio
+opens **Create the first view**. Choose a starter, review **Files created**, and
+create the configured default view from that screen.
+
+## Place one notebook cell
+
+Give a producing cell a semantic name:
 
 ```python
 @app.cell
@@ -62,17 +84,18 @@ def sales_summary():
     return (summary,)
 ```
 
-Place that complete cell inside `#app-shell` in the view:
+Place the complete cell inside `#app-shell`:
 
 ```html
-<main id="app-shell">
+<main id="app-shell" class="studio-view">
   <marimo-cell name="sales_summary"></marimo-cell>
 </main>
 ```
 
 Save `index.html`. Preview renders **Revenue is on target**. A later notebook
-run updates the view through Marimo reactivity. A failed frontend build keeps
-the last successful preview available and reports the source problem.
+run updates the mounted cell through Marimo reactivity. A frontend build error
+keeps the last successful artifact visible and reports the affected source
+document.
 
 ## Run the view
 
@@ -82,10 +105,9 @@ Start the notebook as an application:
 uvx --with marimo-studio==0.1.0 marimo run analysis.py --sandbox
 ```
 
-The default view opens at `/`. Each additional view uses its name as a route.
+The default view opens at `/`. Another view named `report` opens at `/report/`.
 
-The [Rio athletes example](../examples/athletes.md) develops the same contract
-into three finished views. Continue with [complete cells, rendered objects, and
-browser values](notebook-results.md) when the view needs more than one result.
-Use [Troubleshoot Studio](troubleshooting.md) when Studio cannot discover the
-view, build its source, or connect a notebook result.
+Continue with [Place notebook results in a view](notebook-results.md) for
+rendered outputs and browser values. Use [Troubleshoot
+Studio](troubleshooting.md) when Studio cannot discover the view or build its
+source.

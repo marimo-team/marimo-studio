@@ -29,3 +29,16 @@ analysis as a report, explorer, story, map, monitor, model review, or deck.
     <small>ECharts · Recharts · Marimo controls</small>
   </a>
 </div>
+
+## Run an example locally
+
+From the repository root, open one example notebook:
+
+```console
+uv run marimo edit examples/athletes.py --sandbox
+```
+
+Replace `athletes.py` with `earthquakes.py` or `occupancy.py` to open another
+family. Studio discovers the view projects stored beside each notebook. The
+examples fetch pinned datasets and can load fonts, maps, or remote modules
+declared by their view source.

@@ -5,17 +5,22 @@ description: Inspect notebook and view source, make a revision-safe edit, show t
 
 # Author with a coding agent
 
-Marimo Studio ships an Agent Skill and a Python API bound to the current
-code-mode notebook and Studio tab. The agent works with the same notebook,
-source files, builds, and Preview that a person sees.
+Marimo Studio ships an [Agent Skill](https://agentskills.io/), a portable set
+of instructions that teaches a coding agent how to use Studio, and a Python API
+bound to the current [Marimo code mode](https://docs.marimo.io/guides/editor_features/tools/#code-mode)
+notebook and Studio tab. Code mode gives the agent a Python execution inside
+the live notebook kernel. The agent works with the same source documents,
+builds, and Preview that a person sees.
 
-The workflow has five visible actions:
+Use this loop:
 
 ```text
 inspect -> edit -> build -> show -> verify
 ```
 
-Open the current workspace once in each code-mode execution:
+## Open the current workspace
+
+Create the handles once in each code-mode execution:
 
 ```python
 import marimo_studio.agent as studio_agent
@@ -24,20 +29,19 @@ workspace = studio_agent.current_workspace()
 view = workspace.view("dashboard")
 ```
 
-The inspect, edit, and build snippets use these `workspace` and `view` handles
-within the same execution.
+The remaining snippets use these handles within the same execution.
 
-## Inspect the notebook and view
+## Inspect before editing
 
-Read the notebook inventory before changing its analytical model:
+Read the notebook inventory:
 
 ```python
 notebook = await workspace.inspect_notebook()
 print(notebook.notebook.named_cells())
 ```
 
-When a requested change reaches into a result's computation, ask for that cell
-and every cell that produces its inputs:
+When a request reaches into a result's computation, inspect the producing cell
+and its upstream context:
 
 ```python
 producer = await workspace.inspect_notebook(
@@ -47,7 +51,8 @@ producer = await workspace.inspect_notebook(
 )
 ```
 
-Inspect the selected view to find the files Studio exposes for editing:
+Inspect the selected view to find the source documents exposed by its view
+provider:
 
 ```python
 inspection = await view.inspect()
@@ -55,12 +60,12 @@ for document in inspection.documents:
     print(document.path, document.language, document.access)
 ```
 
-Choose project-relative files whose access is `edit`.
+Edit project-relative documents whose access is `edit`. Read `AGENTS.md` and
+`DESIGN.md` when present before changing the project.
 
-## Edit without overwriting a newer save
+## Write against the current revision
 
-Read the file immediately before writing it. Pass the source version returned
-by that read:
+Read a source document immediately before replacing it:
 
 ```python
 document = await view.read("index.html")
@@ -73,25 +78,22 @@ await view.write(
 )
 ```
 
-If a person or another agent saved first, Studio raises `SourceConflictError`
-and preserves the newer file. Read it again, incorporate both changes, and save
-against the new revision.
+If another author saved first, Studio raises `SourceConflictError` and keeps
+the newer source. Read it again, incorporate both changes, and write against
+the new revision.
 
-## Build the view
+## Build and show
 
 ```python
 build = await view.build()
 print(build.revision)
 ```
 
-Studio validates the complete browser output before replacing Preview. A failed
-build keeps the last successful view available and reports source-located
-issues for repair.
+Studio validates the complete candidate before publishing it. A failed build
+keeps the last successful artifact in Preview.
 
-## Show the view in Studio
-
-Run this in the next code-mode execution so the Studio tab can complete the
-transition:
+Run `show()` in the next code-mode execution so the Studio tab can complete
+the transition:
 
 ```python
 import marimo_studio.agent as studio_agent
@@ -100,27 +102,28 @@ view = studio_agent.current_workspace().view("dashboard")
 await view.show()
 ```
 
-Use the browser tool provided by the coding environment to exercise controls,
-navigation, conditional content, and dynamic results in that same Studio tab.
+Exercise controls, navigation, conditional content, and dynamic results in the
+same Studio tab.
 
-## Verify the rendered result
+## Verify the rendered view
 
-Run browser validation after the view settles and its relevant interactions
-have been exercised:
+Run browser validation after the relevant interactions settle:
 
 ```python
 import marimo_studio.agent as studio_agent
 
-report = await studio_agent.current_workspace().view("dashboard").validate(level="browser")
+report = await studio_agent.current_workspace().view("dashboard").validate(
+    level="browser"
+)
 if not report.ok:
     for issue in report.issues:
         print(issue.message, issue.advice)
 ```
 
-A successful report belongs to the current saved source, runtime, Studio tab,
-and rendered view. Repair each reported issue, then repeat build, show,
+The report belongs to the current saved notebook, source revisions, runtime,
+Studio tab, and presentation. Repair each issue, then repeat build, show,
 interaction, and validation.
 
 Use [`marimo_studio.authoring`](../reference/python-api.md) for scripts that
-work with a saved notebook outside code mode. Use the [CLI
+open a saved notebook outside code mode. Use the [CLI
 reference](../reference/cli.md) for terminal automation.

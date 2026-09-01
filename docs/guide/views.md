@@ -1,42 +1,50 @@
 ---
 title: One notebook, many views
-description: One reactive notebook preserves analytical context while each view defines its own presentation and interaction.
+description: Keep shared analysis in one reactive notebook and give each task its own named view.
 ---
 
 # One notebook, many views
 
-The Rio athlete notebook powers a publication report, a linked data explorer,
-and a Three.js briefing. All three presentations draw from the same analytical
-source:
+A view is the stable name and URL for one interface backed by a notebook. Add a
+view when the same analysis needs a different layout, explanation, interaction,
+or audience.
 
 <StudioExample family="athletes" />
 
-The **Notebook** tab renders the backing analytical document as static Marimo
-HTML. The neighboring tabs run its purpose-built views through WebAssembly.
+The Rio athletes notebook supports three views. The report uses native Marimo
+controls and a rendered [Polars](https://pola.rs/) table. The explorer passes
+the full athlete table to [Svelte](https://svelte.dev/),
+[Mosaic](https://uwdata.github.io/mosaic/), and
+[DuckDB-WASM](https://duckdb.org/docs/stable/clients/wasm/overview). The field
+briefing presents the same records through [Three.js](https://threejs.org/).
 
-The report embeds a Marimo dropdown and rendered Polars result. The explorer
-passes the complete athlete table to Svelte, Mosaic, vgplot, and DuckDB-WASM.
-The briefing projects that table into Three.js and mounts the native sport
-control. All three views use the notebook's roster and measures.
+## Keep ownership clear
 
-## Analytical context stays with the notebook
+The notebook owns data loading, transformations, metrics, models, reusable
+controls, and Python execution. Each view owns its view project, browser
+dependencies, layout, wording, and interaction.
 
-The notebook owns data loading, metrics, reusable filters, and shared results.
-Each view owns purpose-specific layout, wording, browser interaction, and
-browser libraries.
+| Change                                  | Owner        |
+| --------------------------------------- | ------------ |
+| Correct a shared measure                | Notebook     |
+| Add a reusable control                  | Notebook     |
+| Change a chart library                  | View project |
+| Rewrite an explanation for one audience | View project |
 
-The notebook stays readable as an analysis while each frontend uses the
-interaction model its task needs.
+Each view has an independent build and last successful artifact. Building one
+view leaves the notebook session and other views available.
 
-## Create a view for each purpose
+## Create another view
+
+Open the view menu and choose **New view**. Enter a lowercase name, choose a
+starter, and inspect **Files created** before confirming. Studio saves pending
+Source edits before switching to the new view.
+
+The equivalent command is:
 
 ```console
-marimo-studio view create dashboard --target analysis.py
 marimo-studio view create report --target analysis.py
 ```
-
-Both views read the same notebook results. Their source trees, dependencies,
-builds, and last successful artifacts remain independent.
 
 Set the main route in the notebook configuration:
 
@@ -45,19 +53,33 @@ Set the main route in the notebook configuration:
 default = "dashboard"
 ```
 
-The default view opens at `/`. The report opens at `/report/`.
+The default view opens at `/`. The `report` view opens at `/report/`.
 
-## Switch presentation, keep computation
+## Switch views
 
-The view menu saves pending source edits before selecting another view. The
-active Python notebook session remains connected, so controls and computed
-results continue from their current values.
+Choose a view from the view menu. Studio keeps the active Python runtime
+session connected, so controls and computed results retain their current state.
+Each Browser runtime view uses its own browser notebook instance.
 
-A static export gives each view a self-contained directory. Place linked views
-as siblings and use relative links such as `../report/index.html`. The link
-remains valid at a local root, beneath a deployment base path, and after copying
-the parent directory.
+If Source has pending edits, Studio saves them before the switch. A failed save
+or unresolved source conflict keeps the current view selected for repair.
 
-Use [the frontend guide](frontend-options.md) to choose a starter for each
-view. Use [the live examples](../examples/index.md) to compare eight finished
-presentations.
+## Remove a view
+
+Use the remove action beside a view name and confirm **Remove view**. Removal
+permanently deletes the view project and its files. If the removed view was the
+default, Studio names the replacement in the confirmation and promotes it to
+the main route.
+
+Studio keeps at least one view. Create a replacement before removing the last
+one.
+
+The terminal command follows the same contract:
+
+```console
+marimo-studio view remove report --target analysis.py
+```
+
+Use [Choose a frontend](frontend-options.md) to select a starter. Use [Navigate
+and preserve state](navigation-and-sessions.md) when views link to one another
+or share public query state.

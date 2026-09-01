@@ -1,14 +1,19 @@
 ---
 title: Configuration
-description: Configure the notebook, default view, execution environments, aliases, view source, and generated files.
+description: Configure the notebook, default view, runtimes, aliases, view projects, provider options, and saved files.
 ---
 
 # Configuration
 
-Studio reads settings from the notebook's PEP 723 block or from one project
-`pyproject.toml`. Keep one source of Studio settings for each notebook. When
-both files configure the same notebook, Studio reports both paths and asks you
-to choose one.
+Studio reads one `[tool.marimo-studio]` table from the notebook's
+[PEP 723](https://peps.python.org/pep-0723/) block, which stores Python script
+dependencies and tool configuration inside the script, or from a containing
+`pyproject.toml`. The two forms are mutually exclusive for one notebook. When
+both files configure the same notebook, Studio reports both paths and requires
+one configuration source.
+
+Both locations use [TOML](https://toml.io/en/), a configuration format built
+from named tables and typed values.
 
 ## Notebook settings
 
@@ -24,15 +29,15 @@ Creating the first view can add these settings to a standalone notebook:
 # ///
 ```
 
-| Field                   | Default     | Behavior                                                            |
-| ----------------------- | ----------- | ------------------------------------------------------------------- |
-| `default`               | Required    | Names the view served at `/`                                        |
-| `runtime`               | `"server"`  | Chooses where the notebook runs when the URL has no override        |
-| `runtimes`              | `[runtime]` | Lists the runtimes people may select                                |
-| `preserve_session`      | `false`     | Reconnects a Python-backed refresh to its matching notebook session |
-| `show_cell_logs`        | `true`      | Includes stdout and stderr in complete-cell results                 |
-| `cells`                 | Empty       | Stores aliases for existing anonymous cells                         |
-| `provider_dependencies` | Omitted     | Records third-party requirements that Studio added                  |
+| Field                   | Type                           | Default     | Behavior                                                                       |
+| ----------------------- | ------------------------------ | ----------- | ------------------------------------------------------------------------------ |
+| `default`               | string                         | Required    | Names the view served at `/`                                                   |
+| `runtime`               | `"server"` or `"wasm"`         | `"server"`  | Chooses the notebook runtime when the URL has no valid override                |
+| `runtimes`              | non-empty array of runtime IDs | `[runtime]` | Lists the distinct runtimes people may select. It must contain `runtime`       |
+| `preserve_session`      | boolean                        | `false`     | Reconnects an eligible Python runtime refresh to its matching notebook session |
+| `show_cell_logs`        | boolean                        | `true`      | Includes stdout and stderr in complete-cell projections                        |
+| `cells`                 | table                          | Empty       | Stores stable aliases for existing notebook cells                              |
+| `provider_dependencies` | array of requirements          | Omitted     | Inline PEP 723 ownership record for third-party requirements that Studio added |
 
 For a standalone notebook, view creation pins the installed Studio version.
 React and Svelte add the `deno` extra to that exact Studio requirement. An
@@ -45,17 +50,22 @@ requirement from the browser notebook dependency list. A requirement remains
 when it predates view creation, the user later changes it, or the notebook
 imports the distribution directly.
 
-`runtime` accepts `server` for Python execution and `wasm` for browser
-execution. The default runtime must also appear in `runtimes`.
+`server` selects the Python runtime. `wasm` selects the Browser runtime. Runtime
+selection and delivery are separate choices. `marimo run` serves a live
+presentation. `marimo-studio view export` packages a static Browser runtime
+site.
 
-Studio caps the complete browser runtime payload at 16 MiB of UTF-8 JSON. A
+`preserve_session` applies to Python run-mode sessions. Studio reuses a session
+when the saved notebook, public URL path, canonical public query, and replay
+scope still match. A changed identity starts another session.
+
+Studio caps the complete Browser runtime configuration at 16 MiB of UTF-8 JSON. A
 `runtime-config-too-large` diagnostic means that record exceeded the boundary.
 Notebook source and broad projection declarations are common contributors. Use
 finite projection targets or reduce the saved notebook source before retrying.
 
-Runtime and delivery are separate choices. These fields choose where the
-notebook executes. Use `marimo run` to serve a live view and
-`marimo-studio view export` to package the Browser runtime as a static directory.
+See [Notebook result projections](projections.md) for runtime-visible result
+contracts and [Limits](limits.md#runtime-payloads) for payload boundaries.
 
 ## Project settings
 
@@ -74,17 +84,23 @@ runtime = "server"
 runtimes = ["server", "wasm"]
 ```
 
-`notebook` resolves relative to `pyproject.toml` and must stay within that
-project directory. Add Studio and any frontend build dependencies through the
-project's package workflow.
+`notebook` is required in project configuration. It resolves relative to
+`pyproject.toml` and must stay within that project directory. Project
+configuration accepts the common fields in the notebook table and rejects
+`provider_dependencies`. Add Studio and view provider requirements through the
+project's dependency workflow.
 
 ## Provider environments
 
-`dependencies` is the executable environment contract. For
+Python `dependencies` are the executable environment contract. For
 `provider = "acme-views/report"`, the notebook or project must declare an active
 `acme-views` dependency. `status`, `view create`, `view inspect`, `view read`,
 `view write`, `view build`, `view export`, and `validate` resolve that metadata
 before importing the provider.
+
+Keep the `uv` executable available. Studio re-enters the target environment
+through `uv` when the current process does not satisfy the resolved Studio and
+provider requirements.
 
 `provider_dependencies` records the exact entries Studio introduced. Static
 WebAssembly cleanup uses that ownership record when removing an owned provider
@@ -102,7 +118,7 @@ conflicting exact pins, different direct URLs, a direct URL combined with a
 version range, and multiple differing ranges with no exact selection. Pin the
 provider or align those ranges before retrying.
 
-## View settings and source
+## View projects
 
 Views for `analysis.py` live beside the notebook:
 
@@ -118,19 +134,20 @@ __marimo__/studio/analysis/
     main.js
 ```
 
-The default starter creates `index.html`. The optional `style.css` and `main.js`
-files appear when that document references them directly. Other providers can
-declare a different source tree.
+A new Vanilla view creates `index.html` and `AGENTS.md` as editable Source
+documents. Directly referenced local `style.css` and `main.js` files also enter
+the Vanilla Source catalog. Other providers declare their own Source documents
+and build inputs. See [Built-in view providers](built-in-providers.md) for the
+initial project shapes and options.
 
-`view.toml` records the installed frontend integration that creates and builds
-the view:
+`view.toml` records the view provider that inspects and builds the view project:
 
 ```toml
 schema = 1
 provider = "marimo-studio/vanilla"
 ```
 
-An integration can accept explicit view settings:
+A view provider can accept explicit options:
 
 ```toml
 schema = 1
@@ -140,31 +157,74 @@ provider = "acme-views/report"
 entrypoint = "web/report.html"
 ```
 
+`schema` must equal `1`. `provider` must be a valid installed provider key.
+`options` must contain JSON-compatible TOML scalars, arrays, or tables with
+finite numbers. Unknown top-level fields fail configuration loading.
+
+Studio Source writes can update `options` and preserve the current provider
+key. Create another view with the desired starter to change frontend stacks.
+An external `view.toml` edit invalidates an in-flight Source mutation and
+requires fresh provider inspection.
+
 Studio maintains each view incarnation in `.owners/<view-name>.toml`. Keep the
 `.owners` directory with the workspace. A valid project copied or renamed to a
 new view name receives a fresh owner when Studio discovers it. Removing a view
 through Studio records the absent name before that name can be reused.
 
-Use Studio create and remove operations for same-name replacement. Studio can
-also rotate ownership after it observes an external absence. A filesystem
-delete and recreation completed between observations is outside the mutation
-contract when it reuses the same directory owner. This includes exact-byte
-recreation.
+Use Studio create and remove operations for same-name replacement. Existing
+workspace and view handles reject the replacement through their observed
+generations. [Identities and state](identities.md#ownership-generations)
+defines those tokens.
 
-The selected integration validates `[options]` and reports unsupported values
-beside the file.
+The selected view provider validates `[options]` and reports unsupported values
+beside `view.toml`.
 
-View names start with a lowercase letter and contain lowercase letters, numbers,
-or hyphens. They must also fit one portable cross-platform filename. A directory
-becomes a view when it contains a valid `view.toml`. Studio adopts an externally
-created view directory by writing its owner record under the catalog lock.
+View names start with a lowercase letter and contain lowercase letters, digits,
+or hyphens. A name may use at most 240 UTF-8 bytes. Studio rejects reserved
+route names and Windows device names. A directory becomes a view when it
+contains a valid `view.toml`. Studio adopts an externally created view directory
+by writing its owner record under the catalog lock.
+
+## Source documents and build inputs
+
+Provider inspection returns two separate allowlists:
+
+| List             | Purpose                                                                     |
+| ---------------- | --------------------------------------------------------------------------- |
+| Source documents | Ordered UTF-8 files visible in Source with `edit` or `read` access          |
+| Build inputs     | Exact files and bounded directories copied into an immutable build snapshot |
+
+Studio adds editable `view.toml` to the Source catalog through its
+provider-independent manifest path. View providers include that file in the
+build input set and keep it out of their `editor_documents` records.
+
+A Source path uses forward slashes, starts at the view project root, and cannot
+contain `.` or `..` segments. It must name a contained regular file. Source
+writes reject symlinks, invalid UTF-8, files larger than
+64 MiB, read-only documents, stale revisions, and stale workspace or view
+generations.
+
+## Build profiles
+
+`development` and `production` maintain independent build attempts and retained
+artifacts:
+
+| Profile       | Used by                                 |
+| ------------- | --------------------------------------- |
+| `development` | Studio Preview and authoring inspection |
+| `production`  | Run mode and static export              |
+
+A failed replacement keeps the last successful artifact for the same profile
+available. See [Identities and state](identities.md#build-freshness) for the
+authoring status values.
 
 ## Saved and generated files
 
-Commit `.owners/`, `view.toml`, view source, frontend configuration, and
-dependency lock files. Studio writes replaceable build output beneath each
-view's `.artifacts/` directory and cross-process locks beneath the workspace
-`.locks/` directory. The workspace `.gitignore` excludes both generated paths.
+Commit `.owners/`, `view.toml`, Source documents, build inputs, frontend
+configuration, and dependency lockfiles. Studio writes replaceable build state
+beneath each view's `.artifacts/` directory and cross-process locks beneath the
+workspace `.locks/` directory. The workspace `.gitignore` excludes both
+generated paths.
 
 Delete one view's `.artifacts/` directory when its generated state needs a
 clean rebuild. The next build recreates it from saved source.

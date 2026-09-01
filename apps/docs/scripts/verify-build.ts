@@ -151,6 +151,23 @@ for (const path of documentationDefaultExamplePaths) {
   check(renderedSite.includes(`href="${href}"`), `Missing base-aware example link: ${href}`);
 }
 
+for (const generated of ["llms.txt", "llms-full.txt", "robots.txt", "sitemap.xml"]) {
+  check(
+    await isFile(join(distDir, generated)),
+    `Missing generated documentation file: ${generated}`,
+  );
+}
+
+const sitemapPath = join(distDir, "sitemap.xml");
+if (await isFile(sitemapPath)) {
+  const sitemap = await readFile(sitemapPath, "utf8");
+  for (const route of siteRoutes) {
+    const cleanRoute = route === "/" ? "" : route.replace(/^\//, "");
+    const canonical = new URL(cleanRoute, "https://marimo-team.github.io/marimo-studio/").href;
+    check(sitemap.includes(`<loc>${canonical}</loc>`), `Sitemap is missing route: ${canonical}`);
+  }
+}
+
 if (failures.length > 0) {
   console.error(
     `Documentation build verification failed:\n${failures.map((failure) => `- ${failure}`).join("\n")}`,

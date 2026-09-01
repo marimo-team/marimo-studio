@@ -6,8 +6,12 @@ description: Inspect notebooks, author views, verify the current Studio tab, and
 # Python API
 
 Use `marimo_studio.authoring` for a saved notebook on disk. Use
-`marimo_studio.agent` inside marimo code mode when an operation needs the
-current Studio tab.
+`marimo_studio.agent` inside
+[Marimo code mode](https://docs.marimo.io/guides/editor_features/tools/#code-mode)
+when an operation needs the current Studio tab. Code mode gives a coding agent
+a Python execution inside the live notebook kernel. Public records are frozen
+dataclasses. Their `to_dict()` methods produce the schema used by
+`marimo-studio --json`.
 
 ## `marimo_studio.authoring`
 
@@ -81,7 +85,9 @@ or view incarnations change.
 
 `launch_requirements` lists the exact Studio requirement with configured
 provider extras and the exact installed third-party provider distributions
-required to reopen the workspace in another `uv` environment.
+required to reopen the workspace in another `uv` environment. The `uv`
+executable must be available when Studio needs to prepare or re-enter that
+environment.
 
 ### `ViewOverview`
 
@@ -106,7 +112,9 @@ errors.
 
 ### `RuntimeOutput`
 
-Summarizes one cell output by channel, MIME type, and whether its payload is
+Summarizes one cell output by channel,
+[media type](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types),
+which identifies formats such as HTML or an image, and whether its payload is
 empty.
 
 ### `ValueReadResult`
@@ -131,8 +139,10 @@ UI object reset identifiers.
 
 ### `Starter`
 
-Describes one installed starting point, its provider, generated documents, and
-current availability.
+Describes one installed starter through `id`, `title`, `summary`, `provider`,
+the initial Source document plan in `documents`, and current `availability`.
+The complete created file set is returned by a dry-run creation operation, not
+by this catalog record.
 
 ### `BindingResult`
 
@@ -181,7 +191,8 @@ and view generation. A same-name replacement raises
 `force=True`.
 
 `build()` returns the artifact revision produced by the selected development or
-production build. A failed build leaves the last successful view available.
+production build. The profiles maintain independent publications. A failed
+build leaves the last successful artifact for that profile available.
 
 ### `ViewBuild`
 
@@ -204,8 +215,10 @@ and current revision.
 
 ### `ViewInspection`
 
-Contains the provider, authorized documents, source-located diagnostics, build
-freshness, and retained successful build for one view.
+Contains `view`, `provider`, authorized Source `documents`, source-located
+`diagnostics`, development build `freshness`, and the retained successful
+development `build`. See [Identities and
+state](identities.md#build-freshness) for freshness values.
 
 ### `StudioDiagnostic`
 
@@ -214,8 +227,9 @@ optional source location.
 
 ### `StaticExportResult`
 
-Identifies the exported view, output directory, entrypoint document, and file
-count returned by `View.export()`.
+Contains `notebook`, `view`, `output`, provider artifact `document`, and `files`.
+The `entrypoint` property resolves `output / document`. `to_dict()` also emits
+`runtime: "wasm"` and the resolved `entrypoint` path.
 
 ### `ViewRemovalResult`
 
@@ -270,8 +284,8 @@ false. Warnings remain available for task-specific judgment.
 await doctor(provider: str | None = None) -> ProviderReport
 ```
 
-Returns installed frontend registrations, package versions, availability, and
-starting points. Pass a provider key to select one registration.
+Returns installed view provider registrations, package versions, availability,
+and starter IDs. Pass a provider key to select one registration.
 
 ### `ProviderReport`
 
@@ -298,8 +312,10 @@ resources = studio_agent.agent_plugin()
 agent_plugin() -> agent_plugins.Plugin
 ```
 
-Returns the Agent Plugin installed with the current Studio version. The plugin
-contains the packaged skills and resources selected by the distribution build.
+Returns the [Agent Plugin](https://github.com/peter-gy/agent-plugins) installed
+with the current Studio version. An Agent Plugin packages skills and related
+resources for coding agents. Studio's plugin contains the skills and resources
+selected by the distribution build.
 Raises `AgentPluginError` when the installed distribution has no usable plugin.
 
 ### `agent_skill`
@@ -371,6 +387,8 @@ ShowResult(
 ```
 
 Confirms that the intended Studio tab accepted the view selection.
+`generation` is the tab's monotonically increasing activation generation. It
+is distinct from the 64-character view generation used for mutation ownership.
 
 ### `ValidationReport`
 
@@ -411,9 +429,17 @@ app = create_asgi_app("analysis.py")
 create_asgi_app(notebook: str | Path) -> ASGIApp
 ```
 
-Returns a Marimo run-mode ASGI application that serves the notebook's default
-and named views. The application lifespan opens Studio services and closes its
-notebook sessions and background tasks during shutdown.
+Returns a Marimo run-mode [ASGI](https://asgi.readthedocs.io/en/latest/)
+application that serves the notebook's default and named views. ASGI is the
+standard interface between asynchronous Python web applications and servers.
+The application lifespan opens Studio services and closes its notebook
+sessions and background tasks during shutdown.
+
+Forward the application lifespan through the ASGI server. Marimo owns
+authentication and supplies read and edit scopes to Studio routes. The hosting
+stack owns TLS, proxy headers, process supervision, network exposure, and
+resource limits. See [Compatibility and
+support](compatibility.md#deployment-boundary).
 
 `marimo_studio.asgi:app` reads the notebook path from
 `MARIMO_STUDIO_NOTEBOOK` for application servers:
@@ -425,7 +451,7 @@ MARIMO_STUDIO_NOTEBOOK=/srv/analysis/analysis.py \
 
 ### `STUDIO_RESULT_SELECTOR`
 
-CSS selector for complete cells, rendered objects, and values that Studio has
+CSS selector for complete cells, rendered outputs, and values that Studio has
 connected to their notebook producers. Browser tools can use it to target
 rendered notebook results.
 
@@ -457,3 +483,76 @@ Every expected error exposes a stable `code`, CLI `exit_code`, HTTP
 `status_code`, retry classification, public hint, and structured diagnostic
 details. Catch a narrower class such as `SourceConflictError`,
 `ViewNotFoundError`, or `RuntimeTimeoutError` when the recovery differs.
+
+The complete class, code, status, and recovery table is in [Errors and
+JSON](errors-and-json.md#public-error-classes).
+
+## Public records
+
+These tables list fields that have related names across command and Python
+surfaces. Nested notebook records are documented under `NotebookSpec` and
+`InspectionResult`.
+
+### Workspace and view records
+
+| Record               | Fields                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `StudioOverview`     | `notebook`, `state`, `generation`, `config_path`, `config_source`, `view_root`, `default_view`, `default_runtime`, `runtimes`, `bindings`, `views`, `launch_requirements` |
+| `ViewOverview`       | `name`, `generation`, `path`, `default`, `provider`, `documents`, `artifact_revision`                                                                                     |
+| `Starter`            | `id`, `title`, `summary`, `provider`, `documents`, `availability`                                                                                                         |
+| `BindingResult`      | `alias`, `cell`, `config_path`, `catalog_generation`, `dry_run`, `previous_ref`                                                                                           |
+| `ViewDocument`       | `path`, `language`, `access`, `content`, `revision`                                                                                                                       |
+| `ViewInspection`     | `view`, `provider`, `documents`, `diagnostics`, `freshness`, `build`                                                                                                      |
+| `ViewBuild`          | `view`, `profile`, `revision`, `issues`                                                                                                                                   |
+| `ViewRemovalResult`  | `notebook`, `view`, `default_view`, `views`, `catalog_generation`                                                                                                         |
+| `StaticExportResult` | `notebook`, `view`, `output`, `document`, `files` and computed `entrypoint`                                                                                               |
+
+`StudioOverview.state` is `unconfigured`, `needs-view`, or `ready`.
+`ViewInspection.freshness` is `current`, `stale`, `unbuilt`, `building`, or
+`failed`.
+
+### Provider records
+
+| Record                 | Fields                                                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `ProviderReport`       | `providers`                                                                                                                  |
+| `ProviderDiagnostic`   | `registration`, `distribution`, `version`, `provider_key`, `error`, `info`, `availability`, `starters` and computed `loaded` |
+| `ProviderAvailability` | `available`, `version`, `reason`, `action`                                                                                   |
+
+`ProviderDiagnostic.to_dict()` emits `key` for `provider_key`, expands
+`ProviderInfo` into `schema`, `title`, `summary`, and `api_version`, and emits
+the qualified starter IDs.
+
+### Notebook inspection records
+
+| Record               | Fields                                                                                                                                                                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `InspectionResult`   | `notebook`, selected `cells`, optional `runtime`                                                                                                                                                                              |
+| `NotebookSpec`       | `path`, `revision`, `cells`, `app_config`                                                                                                                                                                                     |
+| `CellSpec`           | `ref`, `runtime_id`, `index`, `kind`, `name`, `source`, `code_sha256`, `preview`, `definitions`, `references`, `upstream`, `downstream`, `config`, `has_output_expression`, `may_display_output`, `markdown`, optional `code` |
+| `RuntimeProbe`       | `cells`, `values`, `outputs`                                                                                                                                                                                                  |
+| `RuntimeCell`        | `status`, `outputs`, `errors`                                                                                                                                                                                                 |
+| `RuntimeOutput`      | `channel`, `mimetype`, `empty`                                                                                                                                                                                                |
+| `ValueReadResult`    | `values`, `errors`                                                                                                                                                                                                            |
+| `OutputRenderResult` | `outputs`, `errors`                                                                                                                                                                                                           |
+| `ValueReadError`     | `code`, `message`                                                                                                                                                                                                             |
+| `RenderedOutput`     | `owner_cell_id`, `mimetype`, `data`, `timestamp`, `reset_ui_object_ids`                                                                                                                                                       |
+
+`InspectionResult.to_dict()` embeds runtime cell state into selected cell
+records. Its top-level `runtime` field contains serialized values and value
+errors. `RuntimeProbe.outputs` remains available on the Python record for
+requested rendered output selectors.
+
+### Validation and browser records
+
+| Record             | Fields                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| `ValidationReport` | `notebook`, `view`, `level`, `ok`, `issues`, `evidence`                               |
+| `ValidationIssue`  | `stage`, `severity`, `code`, `message`, `advice`, optional `view`, `target`, `source` |
+| `ShowResult`       | `notebook`, `view`, `generation`, `session_id`, `client_id`                           |
+
+Static and runtime evidence contain named check records. Browser evidence adds
+presentation revisions, runtime identity, browser observations, runtime status,
+and projection instance state. [Identities and
+state](identities.md#runtime-and-browser-identities) defines the identity
+relationships.

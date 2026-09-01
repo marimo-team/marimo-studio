@@ -6,14 +6,19 @@ description: Inspect notebooks and create, edit, build, show, validate, export, 
 # CLI
 
 `marimo-studio` works with saved notebooks. Pass `--target` a notebook,
-project directory, or `pyproject.toml`. When omitted, Studio looks for one
-configured notebook from the current directory.
+project directory, or `pyproject.toml`. When omitted, Studio resolves one
+unambiguous configured notebook from the current directory and its parents.
 
-Prefix a one-off command with `uvx`, as in `uvx marimo-studio status`. Use
-`uv run marimo-studio` inside a project that pins Studio.
+Prefix a one-off command with `uvx`, [uv](https://docs.astral.sh/uv/)'s
+temporary command runner, as in `uvx marimo-studio status`. Use
+`uv run marimo-studio` inside a project that pins Studio. Keep the `uv`
+executable available for provider-backed commands. Studio uses it to re-enter
+the notebook's declared Python environment when the current process lacks a
+required Studio extra or third-party provider.
 
 Add `--json` when another program will read the result. Studio writes one JSON
-result to stdout and JSON Lines diagnostic events to stderr.
+result to stdout and JSON Lines diagnostic events to stderr. [Errors and
+JSON](errors-and-json.md) defines the channel, event, and failure contracts.
 
 ::: warning Provider-backed commands execute trusted code
 Commands such as `doctor`, `starters`, `status`, `view create`, `view inspect`,
@@ -29,7 +34,8 @@ running these commands or installing their launch requirements.
 `view export`, and `validate` read provider IDs from saved `view.toml` files
 before provider code loads. Studio derives built-in requirements such as
 `marimo-studio[deno]` from those IDs and reads third-party provider requirements
-from the notebook's PEP 723 block or project `pyproject.toml`.
+from the notebook's [PEP 723](https://peps.python.org/pep-0723/) inline script
+metadata or project `pyproject.toml`.
 
 When the current process does not satisfy those requirements, Studio reruns the
 command through `uv`. `uv` may resolve and install packages before provider code
@@ -46,10 +52,11 @@ is unavailable or its content needs repair.
 marimo-studio doctor [PROVIDER] [--json]
 ```
 
-Lists installed frontend integrations, their package versions, availability,
-and view starting points. A named provider exits with status `1` when it cannot
-load or build in the current environment. The full inventory remains available
-when another optional provider is unavailable.
+Lists installed view provider registrations, package versions, metadata,
+availability, and starter IDs. A named provider exits with status `1` when it
+cannot load or reports unavailable. `doctor` does not inspect a view project or
+run a provider build. The full inventory remains available when another
+optional provider is unavailable.
 
 ## `marimo-studio starters`
 
@@ -57,9 +64,11 @@ when another optional provider is unavailable.
 marimo-studio starters [--json]
 ```
 
-Lists the installed choices for new view source. Each result includes the ID
-accepted by `view create --starter`, the files it creates, and the setup action
-for an unavailable choice.
+Lists installed starters for new view projects. Human output includes the
+starter ID, summary, provider key, availability, and recovery action. JSON adds
+the title and `documents`, which is the starter's initial Source document plan.
+Use `view create --dry-run` to inspect every file the selected starter and
+Studio will write.
 
 ## `marimo-studio status`
 
@@ -85,7 +94,9 @@ Inspects saved cells, names, definitions, references, and dependency edges.
 Repeat `--cell` to select a cell by name, stable ref, or zero-based index.
 
 `--include-code` returns complete selected cell source. `--runtime` executes the
-complete notebook and adds bounded MIME outputs and JSON-compatible values.
+complete notebook and adds bounded
+[media type](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types)
+outputs, such as HTML or an image, and JSON-compatible values.
 `--context upstream` adds every cell that produces a selected cell's inputs.
 `--runtime-timeout` controls how long that execution may run.
 
@@ -105,10 +116,11 @@ reports the change. `--overwrite` replaces an existing alias.
 marimo-studio view create VIEW [--target PATH] [--starter ID] [--dry-run] [--json]
 ```
 
-Creates one named view and rejects an existing name. The default choice creates
-one editable HTML file and exposes its directly referenced local CSS and
-JavaScript files. `--starter` selects another installed starting point.
-`--dry-run` reports every planned write.
+Creates one named view and rejects an existing name. The default starter is
+`marimo-studio/vanilla:default`. It creates editable `index.html` and
+`AGENTS.md` documents. Vanilla inspection also exposes directly referenced
+local CSS and JavaScript files. `--starter` selects another installed starter.
+`--dry-run` reports every planned write without committing it.
 
 A completed creation returns exact `launch_requirements` in JSON and prints the
 next `uvx` command with one `--with` argument for each requirement. Install and
@@ -120,8 +132,10 @@ run requirements for reviewed providers.
 marimo-studio view inspect VIEW [--target PATH] [--json]
 ```
 
-Returns editable and read-only source files, current diagnostics, development
-build freshness, and the latest successful development build used by Preview.
+Returns editable and read-only source documents, current diagnostics,
+development build freshness, and the retained successful development artifact
+used by Preview. [Identities and state](identities.md#build-freshness) defines
+the freshness values.
 
 ## `marimo-studio view read`
 
@@ -129,7 +143,7 @@ build freshness, and the latest successful development build used by Preview.
 marimo-studio view read VIEW DOCUMENT [--target PATH] [--json]
 ```
 
-Reads one allowed text file and its current source revision.
+Reads one authorized UTF-8 source document and its current source revision.
 
 Use `--json` before editing. The JSON result includes `revision`,
 `catalog_generation`, and `view_generation` from the same source read. Human
@@ -144,16 +158,21 @@ marimo-studio view write VIEW DOCUMENT --expected-revision REVISION
 ```
 
 Reads UTF-8 content from a file or stdin. The write succeeds when the source
-revision, workspace catalog generation, and view generation still match the
-preceding JSON read. A conflict preserves the current file. Read the document
-again, review its content, and retry with the new preconditions. Both generation
-flags accept the 64-character lowercase hexadecimal values returned by
-`view read --json`.
+revision, catalog generation, view generation, file identity, provider access
+decision, and surrounding build inputs still match the preceding read. A
+conflict preserves the current file. Read the document again, review its
+content, and retry with the new preconditions. Both generation flags accept the
+64-character lowercase hexadecimal values returned by `view read --json`.
 
-Use `view remove` and `view create` for same-name replacement. Direct filesystem
-delete and recreation completed between observations is outside the 0.1
-mutation-ownership contract when it reuses `(device, inode, mode)`. This includes
-exact-byte recreation.
+Source paths use forward slashes and start at the view project root. The
+document must appear in the current Source catalog with `access="edit"`.
+`view.toml` remains available
+through Studio's provider-independent manifest path. A write may change its
+`options`, but a view keeps its original provider key.
+
+Use `view remove` and `view create` for same-name replacement. [Identities and
+state](identities.md#ownership-generations) defines the ownership checks that
+reject a stale handle after replacement.
 
 ```sh
 marimo-studio view read dashboard index.html --target analysis.py --json > source.json
@@ -174,9 +193,17 @@ The same flow repairs `view.toml` when provider inspection is unavailable.
 marimo-studio view build VIEW [--target PATH] [--profile development|production] [--json]
 ```
 
-Builds and validates one view. `development` updates authoring Preview.
-`production` prepares run mode and export. A failed build leaves the last
-successful view available.
+Builds and validates one view from an immutable snapshot of its declared build
+inputs.
+
+| Profile       | Consumer                   | Publication state                                |
+| ------------- | -------------------------- | ------------------------------------------------ |
+| `development` | Studio Preview             | Independent latest attempt and retained artifact |
+| `production`  | Run mode and static export | Independent latest attempt and retained artifact |
+
+A failed build keeps the last successful artifact for the selected profile
+available. A successful build publishes the candidate only after output
+validation and a final source and ownership check.
 
 ## `marimo-studio view show`
 
@@ -202,14 +229,22 @@ Remote server URLs must use HTTPS. HTTP is accepted for loopback hosts such as
 marimo-studio view export VIEW --output DIRECTORY [--target PATH] [--force] [--json]
 ```
 
-Builds the production view and writes a static browser site. The result includes
-the exact entry file. `--force` replaces an existing output directory after its
-boundary has been validated.
+Builds the production profile and writes a Browser runtime site. The result
+contains the exact entry file and file count. `--force` replaces an existing
+output directory after Studio confirms that it still matches the directory
+observed before the build.
 
-Studio validates the destination before starting the production build. When the
-directory already exists, review it before rerunning with `--force`.
+Studio rejects a symlink destination, a filesystem root, the user's home
+directory, and any destination that contains, equals, or sits within an export
+source. It stages and verifies the complete directory before an atomic
+replacement. When replacement fails after moving an existing destination,
+the error reports its recovery directory.
 
-The exported directory contains the notebook source.
+The exported directory contains the production artifact, Browser runtime,
+saved notebook source, runtime configuration, notebook `public/` files, and a
+`.nojekyll` marker. Serve the directory over HTTP. Browser package imports,
+remote data, fonts, maps, and other view dependencies still require the network
+access expected by the authored notebook and frontend.
 
 ## `marimo-studio view remove`
 
@@ -217,7 +252,7 @@ The exported directory contains the notebook source.
 marimo-studio view remove VIEW [--target PATH] [--yes] [--json]
 ```
 
-Confirms before deleting the view and its source files. `--yes` is required for
+Confirms before deleting the view project. `--yes` is required for
 machine-readable or non-interactive use. A configured notebook keeps at least
 one view. The JSON result includes the updated `catalog_generation`.
 
@@ -259,3 +294,6 @@ execution. `--browser-timeout` bounds the wait for current rendered evidence.
 |   `6` | The installed Studio and marimo protocols disagree                |
 |   `7` | The notebook environment cannot be prepared                       |
 | `130` | The command was interrupted                                       |
+
+See [Errors and JSON](errors-and-json.md#expected-command-failures) for the
+machine-readable error event associated with each category.

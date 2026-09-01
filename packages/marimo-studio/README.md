@@ -1,53 +1,58 @@
 # Marimo Studio
 
-**One notebook. A studio for every view.**
+Marimo Studio builds custom reports, apps, and presentations from one
+[marimo](https://marimo.io/) notebook. Keep the analysis in Python, then shape
+each view with HTML, [React](https://react.dev/),
+[Svelte](https://svelte.dev/), or the browser libraries your work needs.
 
-Marimo Studio keeps one reproducible marimo notebook as the analytical model
-and lets you build a purpose-built web view for each job. The notebook keeps
-data access, transformations, controls, and reusable results together as one
-reactive Python program. Each named view owns its frontend source, layout, and
-interaction while drawing from notebook cells, outputs, and values.
+Marimo Studio 0.1 is experimental. Pin Studio and third-party view providers in
+saved projects.
 
-Marimo Studio 0.1.0 is the first public release. Pin Studio and third-party view
-providers in saved projects. Public CLI, Python, provider, and saved
-configuration contracts may change between minor releases before 1.0.
+## Create your first view
 
-All Python computation runs in the notebook. View source references notebook
-results by name and controls their layout and browser interaction.
-
-Create a view named `dashboard`, then open it beside the notebook:
+Open a notebook in an environment that contains Studio:
 
 ```console
-uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard --target analysis.py
 uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
 ```
 
-Choose **Develop** to edit the notebook, view source, and rendered result in one
-session. The create command writes the `dashboard` view project and makes it the
-default route. Saving its source rebuilds the view automatically. A failed build
-keeps the last successful result available.
+`uvx` is [uv](https://docs.astral.sh/uv/)'s temporary command runner. It creates
+an isolated Python environment for this invocation.
 
-The installed Agent Skill gives coding agents the same workflow. People and
-agents inspect the same notebook and view source, make revision-safe edits,
-build, preview, and validate the rendered result.
+Add a displayable cell and save the notebook. Studio opens the first-view
+screen. Create a view named `dashboard`, then choose **Develop** to edit the
+notebook, view source, and rendered Preview together.
 
-See the [Rio athletes
-example](https://marimo-team.github.io/marimo-studio/examples/athletes) for one
-notebook rendered as a report, linked explorer, and interactive briefing.
+For terminal-first setup with an existing saved notebook, run:
 
-Marimo Studio 0.1.0 supports Python 3.10 through 3.14 and Marimo 0.24.0. Read
-[Why Studio?](https://marimo-team.github.io/marimo-studio/why-studio) for the
-product model and the [Marimo Studio
-documentation](https://marimo-team.github.io/marimo-studio/) for frontend
-choices, notebook results, deployment, and API reference. See [Compatibility
-and support](https://marimo-team.github.io/marimo-studio/reference/compatibility)
-and [Troubleshooting](https://marimo-team.github.io/marimo-studio/guide/troubleshooting)
-before maintaining or deploying a view.
+```console
+uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard --target analysis.py
+```
+
+Saving Source builds a new immutable artifact. A failed build reports the source
+problem and keeps the current artifact available.
+
+## Choose a runtime
+
+- The **Python runtime** uses a server-side marimo session and can access local
+  files, databases, credentials, and native packages.
+- The **Browser runtime** runs the saved notebook in a
+  [Pyodide](https://pyodide.org/) worker. Pyodide is a Python distribution
+  compiled for the browser. The browser receives notebook source and must be
+  able to fetch its dependencies and data.
+
+## Continue
+
+- [Start here](https://marimo-team.github.io/marimo-studio/guide/)
+- [Examples](https://marimo-team.github.io/marimo-studio/examples/)
+- [Run or export a view](https://marimo-team.github.io/marimo-studio/guide/run-and-share)
+- [Reference](https://marimo-team.github.io/marimo-studio/reference/)
+- [Compatibility and support](https://marimo-team.github.io/marimo-studio/reference/compatibility)
+- [Troubleshooting](https://marimo-team.github.io/marimo-studio/guide/troubleshooting)
+- [Security](https://github.com/marimo-team/marimo-studio/blob/main/SECURITY.md)
 
 Use [GitHub Issues](https://github.com/marimo-team/marimo-studio/issues) for
-public bug reports and support requests. Report suspected vulnerabilities
-through the private path in the [security
-policy](https://github.com/marimo-team/marimo-studio/blob/main/SECURITY.md).
+public bug reports and support requests.
 
 ## License
 

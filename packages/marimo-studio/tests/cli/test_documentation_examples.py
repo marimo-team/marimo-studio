@@ -186,11 +186,11 @@ def test_documented_result_cells_survive_marimo_parsing(tmp_path) -> None:
     examples = (
         (
             "docs/guide/getting-started.md",
-            "Give the producing notebook cell a semantic name:",
+            "## Place one notebook cell",
         ),
         (
             "docs/guide/notebook-results.md",
-            "A semantic native cell name is the most direct target:",
+            "## Place a complete cell",
         ),
     )
     for index, (path, heading) in enumerate(examples):

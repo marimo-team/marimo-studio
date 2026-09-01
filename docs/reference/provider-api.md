@@ -1,21 +1,21 @@
 ---
-title: Add support for another frontend
-description: Connect frontend source and its existing build command to Marimo Studio.
+title: View provider API
+description: Register a view provider that creates, inspects, and builds frontend view projects.
 ---
 
-# Add support for another frontend
+# View provider API
 
-A team can keep an existing frontend project and build it inside Studio. A
-small Python integration tells Studio:
+A view provider connects an existing frontend project and build command to
+Studio. It tells Studio:
 
-- which starting files it can create
-- which source files people can edit
-- which files affect the browser build
-- how to produce the browser page Studio serves
+- which starters it offers
+- which Source documents people can edit
+- which build inputs affect the browser artifact
+- how to produce the browser files Studio validates and publishes
 
-Studio calls this integration a **view provider**. Studio continues to own
-notebook execution, safe source writes, immutable build inputs, output
-validation, the last successful artifact, browser sessions, and agent workflows.
+Studio owns notebook execution, conditional Source writes, immutable build
+snapshots, artifact validation and publication, presentations, browser
+sessions, and agent workflows.
 
 ::: warning View providers are trusted code
 An installed provider runs Python and child commands with the current user's
@@ -41,9 +41,15 @@ dependencies = ["marimo-studio>=0.1,<0.2"]
 report = "acme_views:provider"
 ```
 
-Studio derives the installed key from the distribution and registration name.
-Distribution `acme-views` and registration `report` produce
-`acme-views/report`.
+Studio derives the provider key from the canonical distribution name and entry
+point registration. Distribution `acme-views` and registration `report`
+produce `acme-views/report`. The key is an opaque product identity. It is not a
+Python import path.
+
+One installed registration owns one provider key. Studio rejects duplicate
+registrations for the same key. A view stores its provider key in `view.toml`.
+Studio Source writes preserve that key. Create another view when selecting a
+different provider through supported authoring operations.
 
 ## Implement the protocol
 
@@ -72,8 +78,9 @@ class ViewProvider(Protocol):
 Provider methods are synchronous. Studio runs them away from the server event
 loop and supplies a cancellation contract plus a supervised command runner.
 
-`ProviderInfo` contains the title and summary shown during view creation, plus
-`api_version`. Set `api_version` to `PROVIDER_API_VERSION`.
+`ProviderInfo` contains the title and summary used by provider discovery and
+diagnostics, plus `api_version`. Starter title and summary appear during view
+creation. Set `api_version` to `PROVIDER_API_VERSION`.
 
 Studio requires an exact provider API match. Test the provider before expanding
 its Studio dependency to a newer minor release. [Compatibility and
@@ -81,10 +88,15 @@ support](compatibility.md) owns the current release policy.
 
 ## Create starting files
 
-`ProviderStarter` describes one starting point with a provider-local key,
-title, summary, and required files. Studio qualifies the local key with the
-provider key. Local key `default` from `acme-views/report` becomes
+`ProviderStarter` describes one starter with a provider-local key,
+title, summary, and initial Source document plan. Studio qualifies the local
+key with the provider key. Local key `default` from `acme-views/report` becomes
 `acme-views/report:default`.
+
+`documents` advertises the Source documents a new project is expected to
+expose. `StarterPlan.files` is the complete provider-owned file set. Every
+advertised document must appear in that file set. Studio adds `view.toml` and
+workspace ignore rules outside the provider plan.
 
 `StarterContext.notebook` is a detached `NotebookSpec` for a saved notebook
 revision. Its ordered cells include source, kind, name, literal Markdown,
@@ -151,23 +163,24 @@ notebook. Return the same selected `cell_targets` for both calls.
 trusted with that source. Runtime values and cell outputs reach the generated
 page through Studio projections when the view runs.
 
-`StarterPlan.files` contains provider-owned files. Studio writes `view.toml`
-and the workspace ignore rules. Starting files cannot claim Studio control
-paths such as `view.toml`, `.artifacts/`, `.locks/`, or `.gitignore`.
+`StarterPlan.files` contains provider-owned files. Starting files cannot claim
+Studio control paths such as `view.toml`, `.artifacts/`, `.locks/`, or
+`.gitignore`.
 
 ## Inspect the current project
 
 `inspect()` returns `ProjectInspection` with:
 
-- `editor_documents`, the ordered text files shown in Source
+- `editor_documents`, the ordered UTF-8 files shown in Source
 - `input_scope`, the exact files and bounded directories that affect a build
 - notebook-result declarations found in the source
 - source-located diagnostics
 - `build_fingerprint`, which changes when provider build behavior changes
 
-Studio watches editor documents and the input scope. It uses the input scope for
-safe build snapshots and build identity. Include `view.toml` in the scope and
-keep it out of `editor_documents` because Studio owns that file.
+Studio watches Source documents and the input scope. It uses the input scope for
+immutable build snapshots and project revision identity. Include `view.toml`
+in the scope and keep it out of `editor_documents` because Studio owns and
+exposes that Source document independently.
 
 An editor document may stay outside `input_scope` when editing it should not
 invalidate or rebuild the frontend artifact. Studio still confines reads and
@@ -182,9 +195,8 @@ inputs, mounts, and diagnostics. Keep reusable downloaded or generated data in
 
 ### Declare projection sites
 
-`ProjectInspection.mounts` connects a projection element in editable source to
-the corresponding element in the built artifact. For this one-line
-`index.html`:
+`ProjectInspection.mounts` connects a projection host in authored source to the
+corresponding host in the built artifact. For this one-line `index.html`:
 
 ```html
 <marimo-cell name="summary"></marimo-cell>
@@ -255,16 +267,19 @@ that projection kind.
 ## Build browser files
 
 `BuildRequest` contains a read-only project snapshot, its accepted inspection,
-the exact input paths, build profile, staging directory, cache directory,
-cancellation owner, command budget, and supervised runner.
+the exact input paths, project revision, build profile, staging directory,
+cache directory, cancellation owner, command budget, and supervised runner.
 
 Run existing frontend commands through `request.runner.run()`. Use a working
 directory inside the snapshot, write the browser output beneath
 `request.staging_root`, and return the entry HTML document in `BuildResult`.
 
+`development` builds Studio Preview. `production` builds run mode and static
+export. Each profile keeps independent attempt and retained-publication state.
+
 The entry document needs one `head`, one `body`, and one `#app-shell`. Studio
-validates paths, symlinks, file limits, reserved routes, and the complete output
-before making the page available.
+validates paths, symlinks, file limits, reserved routes, mount instrumentation,
+and the complete output before publication.
 
 ## Bound commands and cancellation
 
@@ -370,7 +385,7 @@ class ReportProvider:
 provider = ReportProvider()
 ```
 
-After installing the package, verify its registration and starting files:
+After installing the package, verify its registration and starter catalog:
 
 ```console
 marimo-studio doctor acme-views/report
@@ -380,3 +395,215 @@ marimo-studio starters
 Test view creation, a successful build, a failed build that leaves the last
 successful artifact available, and one notebook result rendered through the
 installed package.
+
+## Record reference
+
+### `ProviderInfo`
+
+```text
+ProviderInfo(title: str, summary: str, api_version: int)
+```
+
+Studio snapshots and validates this record during provider discovery. The
+supported `api_version` is `PROVIDER_API_VERSION`.
+
+### `ProviderAvailability`
+
+```text
+ProviderAvailability(
+    available: bool,
+    version: str | None = None,
+    reason: str | None = None,
+    action: str | None = None,
+)
+```
+
+Return `reason` and an actionable `action` when `available` is false.
+
+### `ProviderStarter`
+
+```text
+ProviderStarter(
+    key: str,
+    title: str,
+    summary: str,
+    documents: tuple[PurePosixPath, ...],
+)
+```
+
+`key` is local to the provider. `documents` is the initial Source document
+plan, not the complete generated file set.
+
+### `ViewProject`
+
+```text
+ViewProject(
+    name: str,
+    root: Path,
+    manifest: Path,
+    provider: str,
+    options: Mapping[str, JsonValue],
+)
+```
+
+`options` is detached, validated JSON-compatible data from `view.toml`.
+
+### `SourceDocument`
+
+```text
+SourceDocument(
+    path: PurePosixPath,
+    language: str,
+    access: Literal["edit", "read"],
+    label: str | None = None,
+)
+```
+
+`path` is contained project-relative POSIX text. `language` is the editor
+language ID. `label` supplies an optional display name.
+
+### `ProjectInput`
+
+```text
+ProjectInput(
+    path: PurePosixPath,
+    kind: Literal["file", "directory"],
+)
+```
+
+A directory is a bounded recursive build input. Studio snapshots the normalized
+file inventory before calling `build()`.
+
+### `SourceLocation`
+
+```text
+SourceLocation(path: PurePosixPath, line: int, column: int)
+```
+
+Line and column are one-based safe integers.
+
+### `MountDeclaration`
+
+```text
+MountDeclaration(
+    id: str,
+    kind: Literal["cell", "output", "value"],
+    source: SourceLocation,
+    allowed_targets: tuple[str, ...] | None,
+)
+```
+
+Finite `allowed_targets` must be non-empty and unique. `None` declares a
+dynamic site. The provider must instrument the matching artifact host with
+`mount_attribute(id)`.
+
+### `ProjectDiagnostic`
+
+```text
+ProjectDiagnostic(
+    code: str,
+    severity: Literal["warning", "error"],
+    message: str,
+    hint: str = "",
+    source: SourceLocation | None = None,
+)
+```
+
+An error diagnostic blocks publication. Add `source` and `hint` when a Source
+edit can repair it.
+
+### `ProjectInspection`
+
+```text
+ProjectInspection(
+    editor_documents: tuple[SourceDocument, ...],
+    input_scope: tuple[ProjectInput, ...],
+    mounts: tuple[MountDeclaration, ...],
+    diagnostics: tuple[ProjectDiagnostic, ...],
+    build_fingerprint: str,
+)
+```
+
+Change `build_fingerprint` when provider behavior can change artifact bytes for
+unchanged project inputs.
+
+### `StarterContext` and `StarterPlan`
+
+```text
+StarterContext(
+    view_name: str,
+    notebook_name: str,
+    notebook: NotebookSpec,
+    cell_targets: Mapping[CellRef, StarterCellTarget],
+)
+
+StarterPlan(
+    files: Mapping[PurePosixPath, bytes],
+    cell_targets: tuple[StarterCellTarget, ...],
+)
+```
+
+`StarterCellTarget(cell, target)` records the exact context entry consumed by
+generated projection source.
+
+### `InspectionRequest`
+
+```text
+InspectionRequest(
+    project: ViewProject,
+    runner: ProviderRunner,
+    cancellation: ProviderCancellation,
+    cache_root: Path,
+    command_timeout: float,
+)
+```
+
+Inspection is read-only for the project. Reusable provider cache data belongs
+beneath `cache_root`.
+
+### `BuildRequest` and `BuildResult`
+
+```text
+BuildRequest(
+    project: ViewProject,
+    inspection: ProjectInspection,
+    inputs: tuple[PurePosixPath, ...],
+    project_revision: str,
+    profile: Literal["development", "production"],
+    staging_root: Path,
+    cache_root: Path,
+    cancellation: ProviderCancellation,
+    runner: ProviderRunner,
+    command_timeout: float,
+)
+
+BuildResult(
+    document: PurePosixPath | None,
+    diagnostics: tuple[ProjectDiagnostic, ...],
+)
+```
+
+Write candidate browser files beneath `staging_root`. Return `document=None`
+when diagnostics prevent an entry document from being published.
+
+### `ProviderRunner`
+
+```text
+runner.run(
+    command: Sequence[str],
+    *,
+    cwd: Path,
+    timeout: float = 120.0,
+    environment: Mapping[str, str] | None = None,
+) -> ProviderCommandResult
+```
+
+`ProviderCommandResult` contains `returncode`, bounded `stdout`, and bounded
+`stderr`. `environment=None` inherits the Studio process environment. A mapping
+replaces the child environment.
+
+### Limits and built-in examples
+
+[Limits](limits.md#provider-records) lists provider record and file budgets.
+[Built-in view providers](built-in-providers.md) lists the bundled provider
+keys, starters, and supported options.
