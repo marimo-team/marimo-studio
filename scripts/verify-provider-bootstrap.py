@@ -123,24 +123,25 @@ def _run(
     *arguments: str,
     input_text: str | None = None,
 ) -> dict[str, object]:
+    input_bytes = input_text.encode("utf-8") if input_text is not None else None
     completed = subprocess.run(
         ["marimo-studio", *arguments, "--json"],
         check=False,
         capture_output=True,
-        input=input_text,
-        text=True,
+        input=input_bytes,
         timeout=180,
     )
+    stdout = completed.stdout.decode("utf-8")
+    stderr = completed.stderr.decode("utf-8")
     if completed.returncode != 0:
         raise AssertionError(
-            f"Installed command failed: {' '.join(arguments)}\n"
-            f"{completed.stdout}{completed.stderr}"
+            f"Installed command failed: {' '.join(arguments)}\n{stdout}{stderr}"
         )
     try:
-        payload = json.loads(completed.stdout)
+        payload = json.loads(stdout)
     except json.JSONDecodeError as error:
         raise AssertionError(
-            f"Installed command returned invalid JSON: {completed.stdout!r}"
+            f"Installed command returned invalid JSON: {stdout!r}"
         ) from error
     if not isinstance(payload, dict):
         raise TypeError("Installed command returned a non-object JSON result")
