@@ -301,6 +301,8 @@ async def validate_views_response(
                 ),
                 runtime_checker=check_runtime_studio_isolated,
                 development=notebook_scope.development,
+                expected_catalog_generation=(validation_request.catalog_generation),
+                expected_generations=validation_request.expected_generations,
             ),
         )
     except RequestDisconnected:

@@ -21,7 +21,7 @@ from marimo_studio._delivery.urls import (
     STUDIO_CLIENT_QUERY_PARAM,
 )
 from marimo_studio._server.auth import has_edit_access
-from marimo_studio._server.headers import NO_STORE
+from marimo_studio._server.headers import FRAME_ANCESTORS_SELF, NO_STORE
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
 from marimo_studio._server.ports import (
     DocumentTransactionEvidence,
@@ -183,6 +183,11 @@ async def delegate_editor_request(
                     delegated_scope,
                     location.notebook,
                 )
+        delegated_send = (
+            _editor_document_send(send)
+            if scope["type"] == "http" and editor_root
+            else send
+        )
         served = False
         if (
             scope["type"] == "http"
@@ -215,13 +220,13 @@ async def delegate_editor_request(
                 app,
                 delegated_scope,
                 receive,
-                send,
+                delegated_send,
                 resource_path=editor_target,
                 runtime_url=str(connection.url),
                 eager_runtime=workspace is not None,
             )
         if not served:
-            await app(delegated_scope, receive, send)
+            await app(delegated_scope, receive, delegated_send)
         return True
 
     if (
@@ -266,6 +271,17 @@ async def delegate_editor_request(
                 sessions.request_studio_reload(server.context(location), session_id)
         return True
     return False
+
+
+def _editor_document_send(send: Send) -> Send:
+    async def protected_send(message: Message) -> None:
+        if message["type"] == "http.response.start":
+            headers = list(message.get("headers", ()))
+            headers.append((b"content-security-policy", FRAME_ANCESTORS_SELF.encode()))
+            message = {**message, "headers": headers}
+        await send(message)
+
+    return protected_send
 
 
 async def _bind_editor_session(

@@ -21,6 +21,7 @@ from ..app_helpers import configured
 def _request(
     messages: list[Message],
     content_length: str,
+    studio: StudioWorkspace,
 ) -> tuple[Request, Callable[[], int]]:
     calls = 0
 
@@ -47,6 +48,14 @@ def _request(
             (b"content-length", content_length.encode()),
             (b"if-match", b"sha256:loaded"),
             (b"marimo-server-token", b"server-token"),
+            (
+                b"marimo-studio-catalog-generation",
+                studio.catalog_generation.encode(),
+            ),
+            (
+                b"marimo-studio-view-generation",
+                studio.view_generations["dashboard"].encode(),
+            ),
         ],
         "client": ("test", 1),
         "server": ("test", 80),
@@ -80,6 +89,7 @@ def test_partial_source_disconnect_returns_499_without_mutation(
             {"type": "http.disconnect"},
         ],
         "100",
+        studio,
     )
 
     response = _source_response(request, studio)
@@ -98,6 +108,7 @@ def test_short_terminal_source_body_returns_499_without_mutation(
     request, receive_calls = _request(
         [{"type": "http.request", "body": b"partial", "more_body": False}],
         "100",
+        studio,
     )
 
     response = _source_response(request, studio)
@@ -116,6 +127,7 @@ def test_source_body_longer_than_declared_is_rejected_without_mutation(
     request, receive_calls = _request(
         [{"type": "http.request", "body": b"too long", "more_body": False}],
         "3",
+        studio,
     )
 
     response = _source_response(request, studio)
@@ -133,7 +145,7 @@ def test_source_upload_rejects_invalid_content_length_before_receiving(
     original = source.read_bytes()
 
     for content_length in ("invalid", "-1"):
-        request, receive_calls = _request([], content_length)
+        request, receive_calls = _request([], content_length, studio)
         response = _source_response(request, studio)
 
         assert response.status_code == 400, content_length

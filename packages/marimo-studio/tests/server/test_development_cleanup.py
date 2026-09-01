@@ -7,7 +7,10 @@ from typing import Any, cast
 
 import pytest
 
-from marimo_studio._processes.cancellation import current_provider_cancellation
+from marimo_studio._processes.cancellation import (
+    ProviderOperationControl,
+    current_provider_cancellation,
+)
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
 from marimo_studio._server.development.ports import FileChangeCallback, ProjectWatchPlan
@@ -39,7 +42,7 @@ def test_last_waiter_observes_completed_cleanup_failure(
 
         task = asyncio.create_task(fail())
         await asyncio.gather(task, return_exceptions=True)
-        control = ProviderCancellation()
+        control = ProviderOperationControl()
         key = ("dashboard", 1)
         if owner == "publication":
             publication = _Publication(

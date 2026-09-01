@@ -44,6 +44,11 @@ from marimo_studio._server.presentation.capability import (
 )
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
 from marimo_studio._server.records import ServerContext, ServerLocation, ServerMode
+from marimo_studio._server.request_body import (
+    BoundedBodyError,
+    bounded_body_error_response,
+    read_bounded_body,
+)
 from marimo_studio._server.routing import could_handle
 from marimo_studio.errors import MarimoStudioError
 
@@ -51,6 +56,7 @@ _CAPABILITY_REQUEST_HEADERS = (
     "Content-Type, Marimo-Session-Id, Marimo-Server-Token, "
     "Marimo-Studio-Preview-Session-Id, X-Runtime-Url"
 )
+_NATIVE_POST_MAX_BYTES = 64 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -229,10 +235,24 @@ class PresentationCapabilityHandler:
             return CapabilityResolution(scope, relative, handled=True)
         if not could_handle(route.target, mode):
             assert context is not None
+            delegated_receive = receive
+            if method == "POST":
+                assert isinstance(connection, Request)
+                try:
+                    body = await read_bounded_body(
+                        connection,
+                        max_bytes=_NATIVE_POST_MAX_BYTES,
+                    )
+                except BoundedBodyError as error:
+                    response = bounded_body_error_response(error)
+                    response.headers.update(PRESENTATION_RESPONSE_HEADERS)
+                    await _send_response(response, scope, receive, send)
+                    return CapabilityResolution(scope, relative, handled=True)
+                delegated_receive = _replay_body(body, receive)
             await _send_capability_app(
                 self._app,
                 self._server.authorize_presentation(capability_scope, context),
-                receive,
+                delegated_receive,
                 send,
             )
             return CapabilityResolution(scope, relative, handled=True)
@@ -419,6 +439,19 @@ async def send_capability_app(
     send: Send,
 ) -> None:
     await _send_capability_app(app, scope, receive, send)
+
+
+def _replay_body(body: bytes, receive: Receive) -> Receive:
+    pending = True
+
+    async def replay() -> Message:
+        nonlocal pending
+        if pending:
+            pending = False
+            return {"type": "http.request", "body": body, "more_body": False}
+        return await receive()
+
+    return replay
 
 
 def _capability_preflight(

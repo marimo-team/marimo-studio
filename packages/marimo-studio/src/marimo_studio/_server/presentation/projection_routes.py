@@ -117,7 +117,12 @@ async def values_response(
     if sessions.ownership(context, session_id) == "foreign":
         return _session_unavailable(session_id)
     try:
-        runtime_cell_refs = _runtime_cell_refs(snapshot, context, session_id, sessions)
+        runtime_cell_refs = await _runtime_cell_refs(
+            snapshot,
+            context,
+            session_id,
+            sessions,
+        )
     except RuntimeSyncError as error:
         return _runtime_sync_pending(error)
     try:
@@ -201,7 +206,12 @@ async def outputs_response(
     if sessions.ownership(context, session_id) == "foreign":
         return _session_unavailable(session_id)
     try:
-        runtime_cell_refs = _runtime_cell_refs(snapshot, context, session_id, sessions)
+        runtime_cell_refs = await _runtime_cell_refs(
+            snapshot,
+            context,
+            session_id,
+            sessions,
+        )
     except RuntimeSyncError as error:
         return _runtime_sync_pending(error)
     try:
@@ -262,13 +272,17 @@ def _resolve_requests(
     return resolved
 
 
-def _runtime_cell_refs(
+async def _runtime_cell_refs(
     snapshot: PresentationSnapshot,
     context: ServerContext,
     session_id: str,
     sessions: SessionState,
 ) -> dict[CellRef, str]:
-    live_cells = sessions.live_cells(context, session_id)
+    live_cells = await sessions.live_cells(
+        context,
+        session_id,
+        include_dependency_closures=False,
+    )
     return {
         CellRef.parse(reference): runtime_id
         for reference, runtime_id in snapshot.resolved.runtime_cell_refs(

@@ -46,6 +46,7 @@ def test_edit_workspace_mutations_require_the_current_server_token(
 
     with TestClient(app) as client:
         loaded = client.get("/_marimo-studio/views/dashboard/source/index.html")
+        project = client.get("/_marimo-studio/views/dashboard/project").json()
         source_headers = {"If-Match": loaded.headers["etag"]}
         missing = client.put(
             "/_marimo-studio/views/dashboard/source/index.html",
@@ -63,7 +64,12 @@ def test_edit_workspace_mutations_require_the_current_server_token(
         valid = client.put(
             "/_marimo-studio/views/dashboard/source/index.html",
             content=loaded.text,
-            headers={**source_headers, "Marimo-Server-Token": token},
+            headers={
+                **source_headers,
+                "Marimo-Server-Token": token,
+                "Marimo-Studio-Catalog-Generation": project["catalog_generation"],
+                "Marimo-Studio-View-Generation": project["view_generation"],
+            },
         )
         missing_delete = client.delete("/_marimo-studio/views/executive")
         invalid_delete = client.delete(

@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from marimo_studio._delivery.runtime_config import encode_runtime_config
 from marimo_studio._delivery.urls import STUDIO_CLIENT_QUERY_PARAM
 from marimo_studio._server.agent.clients import StudioClientRegistry
-from marimo_studio._server.auth import forbidden_response, has_edit_access
+from marimo_studio._server.auth import (
+    error_response,
+    forbidden_response,
+    has_edit_access,
+)
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.ports import (
     ExistingSessionAttachment,
@@ -24,6 +30,7 @@ from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
+from marimo_studio.errors import RuntimeConfigTooLargeError
 from marimo_studio.errors._internal import RuntimeSyncError
 
 _CLIENT_PATTERN = re.compile(r"[A-Za-z0-9_-]{16,128}")
@@ -128,7 +135,7 @@ async def runtime_config_response(
                 code="runtime-startup-pending",
             )
     try:
-        payload = build_runtime_config(
+        payload = await build_runtime_config(
             snapshot,
             context,
             runtimes,
@@ -138,8 +145,11 @@ async def runtime_config_response(
             presentation_session_id,
             runtime_session_id,
         )
+        encoded = await asyncio.to_thread(encode_runtime_config, payload)
     except RuntimeSyncError as error:
         return _session_pending(str(error))
+    except RuntimeConfigTooLargeError as error:
+        return error_response(error)
     if client_id is not None:
         assert preview_session_id is not None
         runtime = payload.get("runtime")
@@ -157,7 +167,7 @@ async def runtime_config_response(
             return _session_pending(
                 "Studio is waiting for an earlier preview connection to finish."
             )
-    return JSONResponse(payload, headers=NO_STORE)
+    return Response(encoded, media_type="application/json", headers=NO_STORE)
 
 
 def _invalid_studio_session() -> JSONResponse:

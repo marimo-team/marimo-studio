@@ -9,9 +9,11 @@ import pytest
 
 from marimo_studio._delivery.runtime_config import (
     RuntimeConfigInputs,
+    encode_runtime_config,
     runtime_projection_revision,
 )
 from marimo_studio._projections.resolution import projection_policy
+from marimo_studio.errors import RuntimeConfigTooLargeError
 
 _FIXTURE = (
     Path(__file__).resolve().parents[4]
@@ -22,6 +24,18 @@ _FIXTURE = (
 )
 
 pytestmark = pytest.mark.supported_python
+
+
+def test_runtime_config_budget_counts_encoded_utf8_bytes() -> None:
+    value = {"label": "Zürich"}
+    encoded = encode_runtime_config(value, max_bytes=19)
+
+    assert len(encoded) == 19
+    with pytest.raises(RuntimeConfigTooLargeError) as raised:
+        encode_runtime_config(value, max_bytes=18)
+
+    assert raised.value.size == 19
+    assert raised.value.limit == 18
 
 
 def test_runtime_config_matches_the_browser_protocol_fixture() -> None:
@@ -78,7 +92,7 @@ def test_runtime_config_matches_the_browser_protocol_fixture() -> None:
             },
         ),
         app_config={"width": "medium"},
-        user_config={"theme": "system"},
+        user_config={"display": {"theme": "system"}},
         config_overrides={},
         dev=True,
         mode="edit",
@@ -87,6 +101,108 @@ def test_runtime_config_matches_the_browser_protocol_fixture() -> None:
     expected = json.loads(_FIXTURE.read_text(encoding="utf-8"))
 
     assert inputs.to_dict(revision="presentation-revision") == expected
+
+
+def test_runtime_config_exposes_only_embedded_runtime_settings() -> None:
+    inputs = RuntimeConfigInputs(
+        view="dashboard",
+        views=("dashboard",),
+        runtime_id="wasm",
+        runtime_instance="runtime-instance",
+        runtime_data={},
+        root_url="./",
+        public_root_url="./",
+        document_root_url="./",
+        support_url="./_marimo-studio/views/dashboard",
+        projection_revision="a" * 64,
+        show_cell_logs=False,
+        projection_targets={"cells": {}, "variables": {}},
+        mounts=(),
+        projection_policy=projection_policy(),
+        runtime_cell_refs={},
+        diagnostics=(),
+        app_config={},
+        user_config={
+            "display": {
+                "theme": "dark",
+                "cell_output": "above",
+                "locale": "de-CH",
+                "custom_css": ["leak-user-custom-css"],
+            },
+            "runtime": {
+                "auto_instantiate": True,
+                "output_max_bytes": 1024,
+                "dotenv": ["leak-user-dotenv"],
+                "pythonpath": ["leak-user-pythonpath"],
+            },
+            "server": {
+                "transport": "sse",
+                "disable_file_downloads": True,
+                "browser": "leak-user-browser-command",
+            },
+            "completion": {
+                "codeium_api_key": "leak-completion-key",
+                "api_key": "leak-deprecated-completion-key",
+            },
+            "ai": {
+                "open_ai": {
+                    "api_key": "leak-openai-key",
+                    "extra_headers": {"Authorization": "leak-ai-header"},
+                },
+                "bedrock": {
+                    "aws_access_key_id": "leak-aws-id",
+                    "aws_secret_access_key": "leak-aws-secret",
+                },
+                "custom_providers": {
+                    "private": {"api_key": "leak-custom-provider-key"}
+                },
+            },
+            "mcp": {
+                "mcpServers": {
+                    "stdio": {"env": {"TOKEN": "leak-mcp-env"}},
+                    "http": {"headers": {"Authorization": "leak-mcp-header"}},
+                }
+            },
+            "unknown": {"credential": "leak-unknown-key"},
+        },
+        config_overrides={
+            "display": {"theme": "light"},
+            "runtime": {
+                "show_tracebacks": True,
+                "dotenv": ["leak-override-dotenv"],
+            },
+            "ai": {"anthropic": {"api_key": "leak-override-ai-key"}},
+            "mcp": {
+                "mcpServers": {"private": {"headers": {"Token": "leak-override-mcp"}}}
+            },
+        },
+        dev=False,
+        mode="run",
+    )
+
+    payload = inputs.to_dict(revision="presentation-revision")
+
+    assert payload["userConfig"] == {
+        "display": {
+            "theme": "dark",
+            "cell_output": "above",
+            "locale": "de-CH",
+        },
+        "runtime": {
+            "auto_instantiate": True,
+            "output_max_bytes": 1024,
+        },
+        "server": {
+            "transport": "sse",
+            "disable_file_downloads": True,
+        },
+    }
+    assert payload["configOverrides"] == {
+        "display": {"theme": "light"},
+        "runtime": {"show_tracebacks": True},
+    }
+    serialized = json.dumps(payload)
+    assert "leak-" not in serialized
 
 
 def test_projection_revision_tracks_its_runtime_contract() -> None:

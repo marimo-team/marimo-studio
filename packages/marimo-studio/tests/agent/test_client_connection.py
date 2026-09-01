@@ -112,6 +112,35 @@ def test_server_connection_separates_credentials_and_notebook_routing() -> None:
 
 
 @pytest.mark.parametrize(
+    "url",
+    (
+        "http://localhost:2718",
+        "http://localhost.:2718",
+        "http://studio.localhost:2718",
+        "http://127.255.255.254:2718",
+        "http://[::1]:2718",
+        "http://[::ffff:127.0.0.1]:2718",
+        "https://studio.example.test",
+    ),
+)
+def test_server_connection_accepts_https_and_loopback_http(url: str) -> None:
+    assert studio_server_connection(url).server_url == url.rstrip("/")
+
+
+@pytest.mark.parametrize(
+    "url",
+    (
+        "http://studio.example.test:2718",
+        "http://192.168.1.20:2718",
+        "http://localhost.example.test:2718",
+    ),
+)
+def test_server_connection_requires_https_outside_loopback(url: str) -> None:
+    with pytest.raises(ProtocolError, match="must use https"):
+        studio_server_connection(url)
+
+
+@pytest.mark.parametrize(
     ("url", "message"),
     (
         pytest.param(
@@ -167,6 +196,22 @@ def test_code_mode_connection_reads_callback_and_session_context() -> None:
     assert connection.routing_query == (("file", "analysis.py"),)
     assert connection.server_token == ""
     assert connection.session_id == "s_123456"
+
+
+def test_code_mode_connection_rejects_a_remote_http_callback() -> None:
+    request = _code_mode_request(
+        meta={
+            SCREENSHOT_SERVER_URL_KEY: "http://studio.example.test:2718",
+            SCREENSHOT_AUTH_TOKEN_KEY: "access-token",
+            STUDIO_SESSION_ID_KEY: "s_123456",
+        },
+    )
+
+    with (
+        http_request_context(request),
+        pytest.raises(ProtocolError, match="must use https"),
+    ):
+        code_mode_connection()
 
 
 def test_code_mode_request_negotiates_the_server_token(

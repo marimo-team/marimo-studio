@@ -13,7 +13,7 @@ from marimo_studio._server.presentation.evidence_policy import (
     projection_policy_failures,
 )
 from marimo_studio._server.presentation.service import PresentationSnapshot
-from marimo_studio._server.runtime.catalog import RuntimeProjection
+from marimo_studio._server.runtime.catalog import RuntimeEvidenceProjection
 from marimo_studio._validation.evidence import (
     BrowserObservation,
     ObservedProjectionInstance,
@@ -23,7 +23,7 @@ from marimo_studio.errors import ProtocolError
 
 def _runtime_binding_is_current(
     projection: ResolvedProjection,
-    runtime: RuntimeProjection,
+    runtime: RuntimeEvidenceProjection,
 ) -> bool:
     expected_runtime_ids: list[str] = []
     for reference in projection.dependency_closure:
@@ -55,7 +55,7 @@ def _require_failure(instance: ObservedProjectionInstance, code: str) -> None:
 
 def _resolved_runtime_id(
     projection: ResolvedProjection,
-    runtime: RuntimeProjection,
+    runtime: RuntimeEvidenceProjection,
 ) -> str:
     runtime_id = runtime.cell_refs.get(str(projection.producer))
     if runtime_id is None:
@@ -66,7 +66,7 @@ def _resolved_runtime_id(
 def validate_projection_evidence(
     observation: BrowserObservation,
     snapshot: PresentationSnapshot,
-    runtime: RuntimeProjection,
+    runtime: RuntimeEvidenceProjection,
 ) -> None:
     """Derive mount authorization and runtime facts from compact browser state."""
     if (

@@ -7,7 +7,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from marimo_studio._processes.cancellation import provider_cancellation
+from marimo_studio._processes.cancellation import (
+    ProviderOperationControl,
+    provider_cancellation,
+)
 from marimo_studio._processes.ownership import (
     propagate_cancellation,
     settle_ownership,
@@ -15,7 +18,7 @@ from marimo_studio._processes.ownership import (
 from marimo_studio._processes.provider_operation import process_cleanup_errors
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._server.development.task_ownership import run_owned_worker
-from marimo_studio.view_providers import BuildProfile, ProviderCancellation
+from marimo_studio.view_providers import BuildProfile
 
 _INACTIVE_PUBLICATION_LIMIT = 2
 _PublicationKey = tuple[str, int, BuildProfile]
@@ -31,7 +34,7 @@ class _PublicationAdmission:
 
 @dataclass
 class _Publication:
-    control: ProviderCancellation
+    control: ProviderOperationControl
     task: asyncio.Task[Any]
     admission: _PublicationAdmission
     waiters: int = 0
@@ -40,7 +43,7 @@ class _Publication:
 
 @dataclass
 class _Baseline:
-    control: ProviderCancellation
+    control: ProviderOperationControl
     task: asyncio.Task[Any]
     waiters: int = 0
     waiter_releases: set[asyncio.Future[None]] = field(default_factory=set)
@@ -114,7 +117,7 @@ class PublicationRegistry:
                 ):
                     draining = publication.task
                 elif publication is None or publication.task.done():
-                    control = ProviderCancellation()
+                    control = ProviderOperationControl()
                     admission = _PublicationAdmission(foreground=not warmup)
                     task = asyncio.create_task(
                         self._run(control, operation, admission),
@@ -163,7 +166,7 @@ class PublicationRegistry:
             self._require_view(view_name)
             baseline = self._baselines.get(key)
             if baseline is None or baseline.task.done():
-                control = ProviderCancellation()
+                control = ProviderOperationControl()
                 task = asyncio.create_task(self._run(control, operation))
                 baseline = _Baseline(control, task)
                 self._baselines[key] = baseline
@@ -292,7 +295,7 @@ class PublicationRegistry:
 
     async def _run(
         self,
-        control: ProviderCancellation,
+        control: ProviderOperationControl,
         operation: Callable[[], Any],
         admission: _PublicationAdmission | None = None,
     ) -> Any:
@@ -302,7 +305,7 @@ class PublicationRegistry:
 
         claimed = admission is not None and await self._claim_slot(admission)
         try:
-            return await run_owned_worker(control, run)
+            return await run_owned_worker(control.cancellation, run)
         finally:
             if claimed:
                 await self._release_slot()

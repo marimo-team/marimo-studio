@@ -35,7 +35,7 @@ from marimo_studio._delivery.urls import (
     with_query,
 )
 from marimo_studio._server.agent.clients import StudioClientRegistry
-from marimo_studio._server.headers import DOCUMENT_HEADERS
+from marimo_studio._server.headers import DOCUMENT_HEADERS, EDIT_DOCUMENT_HEADERS
 from marimo_studio._server.ports import SessionReplay, SessionState
 from marimo_studio._server.presentation.capability import (
     PRESENTATION_RESPONSE_HEADERS,
@@ -318,7 +318,7 @@ def studio_response(
         return PlainTextResponse(
             f"Unknown view {selected!r}",
             status_code=404,
-            headers=DOCUMENT_HEADERS,
+            headers=EDIT_DOCUMENT_HEADERS,
         )
     client_id = secrets.token_urlsafe(18)
     native_session_id = _editor_session_id(request, context, sessions, session_ids)
@@ -337,7 +337,7 @@ def studio_response(
             config=studio,
             selected=selected,
         ),
-        headers=DOCUMENT_HEADERS,
+        headers=EDIT_DOCUMENT_HEADERS,
     )
 
 
@@ -369,8 +369,9 @@ def initialization_response(
             native_session_id,
             state="needs-view",
             default_view=definition.default_view,
+            generation=definition.config_generation,
         ),
-        headers=DOCUMENT_HEADERS,
+        headers=EDIT_DOCUMENT_HEADERS,
     )
 
 
@@ -402,7 +403,7 @@ def unconfigured_response(
             native_session_id,
             state="unconfigured",
         ),
-        headers=DOCUMENT_HEADERS,
+        headers=EDIT_DOCUMENT_HEADERS,
     )
 
 

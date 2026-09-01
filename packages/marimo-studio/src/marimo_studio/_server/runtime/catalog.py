@@ -18,13 +18,14 @@ from typing import TYPE_CHECKING, Protocol
 
 from marimo_studio._delivery.browser_ports import BrowserRuntimeProjector
 from marimo_studio._notebook.cell_refs import safe_cell_ref_matches
-from marimo_studio._notebook.records import CellRef
+from marimo_studio._notebook.records import CellRef, LiveCellSnapshot
 from marimo_studio._server.ports import SessionState
 from marimo_studio._server.presentation.capability import (
     presentation_revision_capability,
     presentation_revision_url,
 )
 from marimo_studio._server.records import ServerContext
+from marimo_studio._server.runtime.wasm_work import WasmProjectionWork
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._workspace.models import (
     RUNTIME_PATTERN,
@@ -39,9 +40,14 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RuntimeProjection:
+    runtime_id: str
     instance: str
     data: dict[str, object]
     cell_refs: dict[str, str]
+
+
+@dataclass(frozen=True)
+class RuntimeEvidenceProjection(RuntimeProjection):
     current_cell_refs: dict[str, str]
     dependency_closures: dict[str, tuple[str, ...]]
 
@@ -50,7 +56,9 @@ class RuntimeProvider(Protocol):
     id: str
     label: str
 
-    def project(
+    async def close(self) -> None: ...
+
+    async def project(
         self,
         snapshot: PresentationSnapshot,
         context: ServerContext,
@@ -59,6 +67,16 @@ class RuntimeProvider(Protocol):
         presentation_session_id: str | None = None,
         runtime_session_id: str | None = None,
     ) -> RuntimeProjection: ...
+
+    async def project_evidence(
+        self,
+        snapshot: PresentationSnapshot,
+        context: ServerContext,
+        session_id: str | None,
+        binding_id: str | None = None,
+        presentation_session_id: str | None = None,
+        runtime_session_id: str | None = None,
+    ) -> RuntimeEvidenceProjection: ...
 
 
 def _digest(*values: str) -> str:
@@ -93,8 +111,16 @@ class ServerRuntime:
 
     def __init__(self, sessions: SessionState) -> None:
         self._sessions = sessions
+        self._closed = False
 
-    def project(
+    async def close(self) -> None:
+        self._closed = True
+
+    def _require_open(self) -> None:
+        if self._closed:
+            raise RuntimeSyncError("Server runtime projection is shutting down.")
+
+    async def project(
         self,
         snapshot: PresentationSnapshot,
         context: ServerContext,
@@ -103,22 +129,88 @@ class ServerRuntime:
         presentation_session_id: str | None = None,
         runtime_session_id: str | None = None,
     ) -> RuntimeProjection:
-        if presentation_session_id is None:
-            raise ValueError("A server runtime requires a presentation session")
-        if runtime_session_id is None:
-            raise ValueError("A server runtime requires a native runtime session")
-        cells = self._sessions.live_cells(context, session_id)
-        bindings = snapshot.resolved.runtime_cell_refs(cells)
-        current_cell_refs = (
-            {
-                cell.runtime_id: str(cell.ref)
-                for cell in snapshot.resolved.notebook.cells
-            }
-            if cells is None
-            else {
-                runtime_id: str(ref) for runtime_id, ref in cells.current_refs.items()
-            }
+        self._require_open()
+        bindings, _cells = await self._runtime_bindings(
+            snapshot,
+            context,
+            session_id,
+            include_dependency_closures=False,
         )
+        self._require_open()
+        return self._projection(
+            snapshot,
+            context,
+            bindings,
+            binding_id,
+            presentation_session_id,
+            runtime_session_id,
+        )
+
+    async def project_evidence(
+        self,
+        snapshot: PresentationSnapshot,
+        context: ServerContext,
+        session_id: str | None,
+        binding_id: str | None = None,
+        presentation_session_id: str | None = None,
+        runtime_session_id: str | None = None,
+    ) -> RuntimeEvidenceProjection:
+        self._require_open()
+        bindings, cells = await self._runtime_bindings(
+            snapshot,
+            context,
+            session_id,
+            include_dependency_closures=True,
+        )
+        self._require_open()
+        projection = self._projection(
+            snapshot,
+            context,
+            bindings,
+            binding_id,
+            presentation_session_id,
+            runtime_session_id,
+        )
+        return RuntimeEvidenceProjection(
+            runtime_id=projection.runtime_id,
+            instance=projection.instance,
+            data=projection.data,
+            cell_refs=projection.cell_refs,
+            current_cell_refs=(
+                {
+                    cell.runtime_id: str(cell.ref)
+                    for cell in snapshot.resolved.notebook.cells
+                }
+                if cells is None
+                else {
+                    runtime_id: str(ref)
+                    for runtime_id, ref in cells.current_refs.items()
+                }
+            ),
+            dependency_closures=(
+                _static_dependency_closures(snapshot, bindings)
+                if cells is None
+                else dict(cells.dependency_closures)
+            ),
+        )
+
+    async def _runtime_bindings(
+        self,
+        snapshot: PresentationSnapshot,
+        context: ServerContext,
+        session_id: str | None,
+        *,
+        include_dependency_closures: bool,
+    ) -> tuple[
+        dict[str, str],
+        LiveCellSnapshot | None,
+    ]:
+        cells = await self._sessions.live_cells(
+            context,
+            session_id,
+            include_dependency_closures=include_dependency_closures,
+        )
+        bindings = snapshot.resolved.runtime_cell_refs(cells)
         current_matches = (
             safe_cell_ref_matches(
                 {reference: CellRef.parse(reference) for reference in bindings},
@@ -137,7 +229,23 @@ class ServerRuntime:
             raise RuntimeSyncError(
                 "Studio is waiting for the notebook kernel to apply the saved source."
             )
+        return bindings, cells
+
+    def _projection(
+        self,
+        snapshot: PresentationSnapshot,
+        context: ServerContext,
+        bindings: dict[str, str],
+        binding_id: str | None,
+        presentation_session_id: str | None,
+        runtime_session_id: str | None,
+    ) -> RuntimeProjection:
+        if presentation_session_id is None:
+            raise ValueError("A server runtime requires a presentation session")
+        if runtime_session_id is None:
+            raise ValueError("A server runtime requires a native runtime session")
         return RuntimeProjection(
+            runtime_id=self.id,
             instance=_digest(
                 context.file_key,
                 context.base_url,
@@ -165,8 +273,6 @@ class ServerRuntime:
                 **({"file": context.file_key} if context.routing_query else {}),
             },
             cell_refs=bindings,
-            current_cell_refs=current_cell_refs,
-            dependency_closures=_static_dependency_closures(snapshot, bindings),
         )
 
 
@@ -176,8 +282,12 @@ class WasmRuntime:
 
     def __init__(self, browser: BrowserRuntimeProjector) -> None:
         self._browser = browser
+        self._work = WasmProjectionWork(browser)
 
-    def project(
+    async def close(self) -> None:
+        await self._work.close()
+
+    async def project(
         self,
         snapshot: PresentationSnapshot,
         context: ServerContext,
@@ -186,15 +296,49 @@ class WasmRuntime:
         presentation_session_id: str | None = None,
         runtime_session_id: str | None = None,
     ) -> RuntimeProjection:
-        del context, session_id, binding_id, presentation_session_id, runtime_session_id
-        projection = self._browser.project(
-            snapshot.resolved.workspace.notebook,
+        del context, binding_id
+        notebook = snapshot.resolved.workspace.notebook
+        owner_id = (
+            presentation_session_id
+            or runtime_session_id
+            or session_id
+            or snapshot.revision
+        )
+        projection = await self._work.project(
+            notebook,
             snapshot.notebook_source,
+            (str(notebook), owner_id),
         )
         bindings = snapshot.resolved.runtime_cell_refs(None)
         return RuntimeProjection(
+            runtime_id=self.id,
             instance=projection.instance,
             data=projection.runtime_data(),
+            cell_refs=bindings,
+        )
+
+    async def project_evidence(
+        self,
+        snapshot: PresentationSnapshot,
+        context: ServerContext,
+        session_id: str | None,
+        binding_id: str | None = None,
+        presentation_session_id: str | None = None,
+        runtime_session_id: str | None = None,
+    ) -> RuntimeEvidenceProjection:
+        projection = await self.project(
+            snapshot,
+            context,
+            session_id,
+            binding_id,
+            presentation_session_id,
+            runtime_session_id,
+        )
+        bindings = projection.cell_refs
+        return RuntimeEvidenceProjection(
+            runtime_id=projection.runtime_id,
+            instance=projection.instance,
+            data=projection.data,
             cell_refs=bindings,
             current_cell_refs={
                 cell.runtime_id: str(cell.ref)
@@ -223,6 +367,18 @@ class RuntimeRegistry:
             raise ValueError("Runtime providers must have unique IDs")
         self._providers = providers
         self._by_id = by_id
+        self._closed = False
+
+    async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        for provider in self._providers:
+            await provider.close()
+
+    def _require_open(self) -> None:
+        if self._closed:
+            raise RuntimeSyncError("Runtime projection is shutting down.")
 
     @property
     def ids(self) -> tuple[str, ...]:
@@ -266,6 +422,62 @@ class RuntimeRegistry:
                 f"Runtime {selected!r} is unavailable. Available runtimes: {names}."
             )
         return self._by_id[selected], available
+
+    async def project(
+        self,
+        snapshot: PresentationSnapshot,
+        context: ServerContext,
+        requested: str | None,
+        session_id: str | None,
+        binding_id: str | None = None,
+        presentation_session_id: str | None = None,
+        runtime_session_id: str | None = None,
+    ) -> RuntimeProjection:
+        """Capture server state on its owner and offload browser compilation."""
+        self._require_open()
+        provider, _available = self.select(
+            snapshot.resolved.workspace,
+            context,
+            requested,
+        )
+        projection = await provider.project(
+            snapshot,
+            context,
+            session_id,
+            binding_id,
+            presentation_session_id,
+            runtime_session_id,
+        )
+        self._require_open()
+        return projection
+
+    async def project_evidence(
+        self,
+        snapshot: PresentationSnapshot,
+        context: ServerContext,
+        requested: str | None,
+        session_id: str | None,
+        binding_id: str | None = None,
+        presentation_session_id: str | None = None,
+        runtime_session_id: str | None = None,
+    ) -> RuntimeEvidenceProjection:
+        """Capture server evidence on its owner and offload browser compilation."""
+        self._require_open()
+        provider, _available = self.select(
+            snapshot.resolved.workspace,
+            context,
+            requested,
+        )
+        projection = await provider.project_evidence(
+            snapshot,
+            context,
+            session_id,
+            binding_id,
+            presentation_session_id,
+            runtime_session_id,
+        )
+        self._require_open()
+        return projection
 
 
 def create_runtime_registry(

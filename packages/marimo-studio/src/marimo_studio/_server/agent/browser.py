@@ -83,14 +83,10 @@ async def browser_observation_response(
             headers=NO_STORE,
         )
     try:
-        provider, _available = runtimes.select(
-            snapshot.resolved.workspace,
-            context,
-            observation.runtime,
-        )
-        runtime = provider.project(
+        runtime = await runtimes.project_evidence(
             snapshot,
             context,
+            observation.runtime,
             observation.session_id,
             observation.session_id,
             observation.session_id,
@@ -331,18 +327,16 @@ async def observe_views(
                 "Studio sources changed before browser validation began.",
                 status_code=409,
             )
-        provider, _available = runtimes.select(
-            snapshot.resolved.workspace,
-            context,
-            runtime,
-        )
-        runtime_instance = provider.project(
-            snapshot,
-            context,
-            session_id,
-            session_id,
-            session_id,
-            session_id,
+        runtime_instance = (
+            await runtimes.project(
+                snapshot,
+                context,
+                runtime,
+                session_id,
+                session_id,
+                session_id,
+                session_id,
+            )
         ).instance
         observation_request = await notebook_scope.agents.request_observation(
             target,

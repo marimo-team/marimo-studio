@@ -223,7 +223,7 @@ def _live_test_session(
     path: str | None = None,
     initialization_id: str | None = None,
 ) -> _LiveTestSession:
-    document = SimpleNamespace(cells=rows)
+    document = SimpleNamespace(cells=rows, version=0)
     session = _LiveTestSession()
     session.document = document
     session.session_view = SimpleNamespace(

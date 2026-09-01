@@ -145,6 +145,7 @@ def studio_document(
     config: StudioWorkspace | None = None,
     selected: str | None = None,
     default_view: str | None = None,
+    generation: str | None = None,
 ) -> str:
     """Return the stable editor host and optional ready-workspace bootstrap."""
     server_instance = server_instance_id(server_token)
@@ -212,8 +213,9 @@ def studio_document(
         },
     }
     if state == "needs-view":
-        assert default_view is not None
+        assert default_view is not None and generation is not None
         host["defaultView"] = default_view
+        host["generation"] = generation
 
     bootstrap: dict[str, object] | None = None
     if state == "ready":

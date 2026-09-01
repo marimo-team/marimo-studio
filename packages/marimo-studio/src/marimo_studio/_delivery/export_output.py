@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import secrets
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 
 import marimo_studio._delivery.assets as _assets
+from marimo_studio._filesystem._secure_names import (
+    TemporarySiblingKind,
+    temporary_sibling_name,
+)
 from marimo_studio._filesystem.secure import (
     SecureDirectory,
     SecureFileError,
@@ -94,9 +97,12 @@ def publish_absent(
         ) from error
 
 
-def temporary_directory(filesystem: SecureDirectory, prefix: str) -> Path:
+def temporary_directory(
+    filesystem: SecureDirectory,
+    kind: TemporarySiblingKind,
+) -> Path:
     for _attempt in range(128):
-        path = filesystem.root / f"{prefix}{secrets.token_hex(8)}"
+        path = filesystem.root / temporary_sibling_name(kind)
         try:
             filesystem.create_directory(path)
         except FileExistsError:
@@ -105,12 +111,6 @@ def temporary_directory(filesystem: SecureDirectory, prefix: str) -> Path:
     raise StaticExportError(
         f"Could not reserve a temporary static export directory in {filesystem.root}"
     )
-
-
-def _recovery_path(filesystem: SecureDirectory, output: Path) -> Path:
-    recovery = temporary_directory(filesystem, f".{output.name}-recovery-")
-    filesystem.rmdir(recovery)
-    return recovery
 
 
 def _restore_previous(
@@ -149,14 +149,16 @@ def commit_bundle(staged: Path, target: OutputTarget) -> None:
             ) from error
         return
 
-    recovery = _recovery_path(filesystem, output)
     try:
         if directory_identity(filesystem, output) != target.identity:
             raise StaticExportError(
                 f"Output changed while the static export was prepared: {output}. "
                 "Run the export again."
             )
-        filesystem.replace(output, recovery)
+        recovery = filesystem.rename_to_temporary_sibling(
+            output,
+            "export-recovery",
+        )
         try:
             previous_identity = directory_identity(filesystem, recovery)
         except OSError as error:

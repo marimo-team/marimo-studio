@@ -137,6 +137,11 @@ class PresentationMiddleware:
             except BaseException as error:
                 failure = error
             try:
+                await self._runtimes.close()
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+            try:
                 await self._adapters.session_state.close()
             except BaseException as error:
                 if failure is None:

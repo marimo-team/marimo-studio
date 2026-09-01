@@ -118,7 +118,16 @@ def test_run_preserved_session_ignores_forged_studio_frame_identity(
             },
         )
         raw_capability = client.get(_presentation_fallback_url(response.text))
-        artifact_html = client.get(f"{_artifact_base(raw_capability.text)}index.html")
+        capability_artifact_base = _artifact_base(raw_capability.text)
+        artifact_html = client.get(f"{capability_artifact_base}index.html")
+        direct_artifact_base = (
+            "/dashboard/_marimo-studio/artifacts/"
+            + capability_artifact_base.split(
+                "/dashboard/_marimo-studio/artifacts/",
+                1,
+            )[1]
+        )
+        direct_artifact_html = client.get(f"{direct_artifact_base}index.html")
 
     assert response.status_code == 200
     assert response.headers["content-security-policy"].startswith("default-src 'none'")
@@ -136,6 +145,13 @@ def test_run_preserved_session_ignores_forged_studio_frame_identity(
     artifact_sandbox_policy = artifact_html.headers["content-security-policy"].split()
     assert artifact_sandbox_policy[0] == "sandbox"
     assert "allow-same-origin" not in artifact_sandbox_policy[1:]
+    direct_sandbox_policy = direct_artifact_html.headers[
+        "content-security-policy"
+    ].split()
+    assert direct_artifact_html.status_code == 200
+    assert direct_artifact_html.headers["access-control-allow-origin"] == "null"
+    assert direct_sandbox_policy[0] == "sandbox"
+    assert "allow-same-origin" not in direct_sandbox_policy[1:]
 
 
 @pytest.mark.requires_node

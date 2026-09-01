@@ -19,6 +19,66 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
+from marimo_studio.errors import RuntimeConfigTooLargeError
+
+RUNTIME_CONFIG_MAX_BYTES = 16 * 1024 * 1024
+
+_BROWSER_MARIMO_CONFIG_FIELDS: dict[str, tuple[str, ...]] = {
+    "display": (
+        "theme",
+        "cell_output",
+        "default_width",
+        "dataframes",
+        "default_table_page_size",
+        "default_table_max_columns",
+        "locale",
+    ),
+    "runtime": (
+        "auto_instantiate",
+        "auto_reload",
+        "reactive_tests",
+        "on_cell_change",
+        "output_max_bytes",
+        "std_stream_max_bytes",
+        "default_sql_output",
+        "default_csv_encoding",
+        "show_tracebacks",
+    ),
+    "server": ("transport", "disable_file_downloads"),
+    "experimental": ("execution_type",),
+}
+
+
+def _browser_marimo_config(config: Mapping[str, object]) -> dict[str, object]:
+    """Return the Marimo settings consumed by the embedded browser runtime."""
+    browser_config: dict[str, object] = {}
+    for section, fields in _BROWSER_MARIMO_CONFIG_FIELDS.items():
+        source = config.get(section)
+        if not isinstance(source, Mapping):
+            continue
+        selected = {field: source[field] for field in fields if field in source}
+        if selected:
+            browser_config[section] = selected
+    return browser_config
+
+
+def encode_runtime_config(
+    value: Mapping[str, object],
+    *,
+    max_bytes: int | None = None,
+) -> bytes:
+    """Encode one runtime record within the live and static delivery budget."""
+    limit = RUNTIME_CONFIG_MAX_BYTES if max_bytes is None else max_bytes
+    payload = json.dumps(
+        value,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    if len(payload) > limit:
+        raise RuntimeConfigTooLargeError(len(payload), limit)
+    return payload
+
 
 def _projection_diagnostic_identity(
     diagnostic: Mapping[str, object],
@@ -133,8 +193,8 @@ class RuntimeConfigInputs:
             "runtimeBindings": {"cellRefs": dict(self.runtime_cell_refs)},
             "diagnostics": [dict(diagnostic) for diagnostic in self.diagnostics],
             "appConfig": dict(self.app_config),
-            "userConfig": dict(self.user_config),
-            "configOverrides": dict(self.config_overrides),
+            "userConfig": _browser_marimo_config(self.user_config),
+            "configOverrides": _browser_marimo_config(self.config_overrides),
             "dev": self.dev,
             "mode": self.mode,
         }

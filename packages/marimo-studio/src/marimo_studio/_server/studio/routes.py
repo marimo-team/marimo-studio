@@ -36,25 +36,22 @@ from marimo_studio._server.request_body import (
     read_bounded_body,
     read_json_body,
 )
+from marimo_studio._server.studio.deletion import delete_owned_view
 from marimo_studio._views.api import create_view
 from marimo_studio._views.catalog import starters
 from marimo_studio._views.inspection import view_project_state
 from marimo_studio._views.records import ViewDocument
-from marimo_studio._views.remove import delete_view
 from marimo_studio._views.sources import (
     SOURCE_DOCUMENT_MAX_BYTES,
     PreparedSourceWrite,
     read_project_source,
-    read_view_manifest,
+    read_view_manifest_with_owner,
     source_spec,
     write_project_source,
     write_view_manifest,
 )
-from marimo_studio._workspace.config import validate_view_name
+from marimo_studio._workspace.config import load_studio, validate_view_name
 from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
-from marimo_studio._workspace.mutation_lock import (
-    workspace_catalog_lock,
-)
 from marimo_studio._workspace.project_manifest import (
     VIEW_MANIFEST_PATH,
 )
@@ -62,12 +59,23 @@ from marimo_studio.errors import (
     MarimoStudioError,
     SourceConflictError,
     SourceTooLargeError,
+    ViewGenerationConflictError,
+    WorkspaceGenerationConflictError,
 )
-from marimo_studio.errors._internal import ViewDeletionError
 from marimo_studio.view_providers._host import provider_registry
 from marimo_studio.view_providers._host.package_policy import DEFAULT_STARTER_ID
 
 _STUDIO_MUTATION_JSON_MAX_BYTES = 64 * 1024
+
+
+def _owner_generation(value: object) -> str | None:
+    if (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    ):
+        return value
+    return None
 
 
 async def create_view_response(
@@ -89,8 +97,21 @@ async def create_view_response(
         )
     except JSONBodyError as error:
         return json_body_error_response(error)
+    fields = {"catalog_generation", "name", "starter"}
+    if not isinstance(body, dict) or set(body) != fields:
+        return JSONResponse(
+            {
+                "error": "invalid-view-create-request",
+                "message": (
+                    "View creation requires name, starter, and catalog generation."
+                ),
+            },
+            status_code=400,
+            headers=NO_STORE,
+        )
     name = body.get("name") if isinstance(body, dict) else None
     starter = body.get("starter") if isinstance(body, dict) else None
+    catalog_generation = _owner_generation(body.get("catalog_generation"))
     if not isinstance(name, str):
         return JSONResponse(
             {
@@ -100,11 +121,22 @@ async def create_view_response(
             status_code=400,
             headers=NO_STORE,
         )
-    if starter is not None and not isinstance(starter, str):
+    if not isinstance(starter, str):
         return JSONResponse(
             {
                 "error": "invalid-view-starter",
-                "message": "starter must be a string when provided.",
+                "message": "starter must be a string.",
+            },
+            status_code=400,
+            headers=NO_STORE,
+        )
+    if catalog_generation is None:
+        return JSONResponse(
+            {
+                "error": "invalid-view-create-request",
+                "message": (
+                    "View creation requires name, starter, and catalog generation."
+                ),
             },
             status_code=400,
             headers=NO_STORE,
@@ -124,6 +156,7 @@ async def create_view_response(
                 definition.notebook,
                 name,
                 starter=starter,
+                expected_catalog_generation=catalog_generation,
             )
         )
     except MarimoStudioError as error:
@@ -154,47 +187,62 @@ async def delete_view_response(
     if token_error := invalid_server_token_response(request, server_token):
         return token_error
     try:
-
-        def remove() -> StudioWorkspace:
-            with (
-                workspace_catalog_lock(studio.view_root),
-                presentation.deleting_view(name),
-            ):
-                return delete_view(studio, name)
-
-        async with development.deleting_view(name) as deletion:
-            worker = asyncio.create_task(asyncio.to_thread(remove))
-            try:
-                updated = await asyncio.shield(worker)
-            except ViewDeletionError as error:
-                if error.cleanup is not None:
-                    deletion.commit()
-                raise
-            except asyncio.CancelledError:
-                while not worker.done():
-                    try:
-                        await asyncio.shield(worker)
-                    except asyncio.CancelledError:
-                        continue
-                    except BaseException:
-                        break
-                try:
-                    worker.result()
-                except ViewDeletionError as error:
-                    if error.cleanup is not None:
-                        deletion.commit()
-                except BaseException:
-                    pass
-                else:
-                    deletion.commit()
-                raise
+        body = await read_json_body(
+            request,
+            max_bytes=_STUDIO_MUTATION_JSON_MAX_BYTES,
+        )
+    except JSONBodyError as error:
+        return json_body_error_response(error)
+    fields = {"catalog_generation", "name", "view_generation"}
+    if not isinstance(body, dict) or set(body) != fields:
+        return JSONResponse(
+            {
+                "error": "invalid-view-delete-request",
+                "message": "View deletion requires name and current owner generations.",
+            },
+            status_code=400,
+            headers=NO_STORE,
+        )
+    request_name = body.get("name")
+    catalog_generation = _owner_generation(body.get("catalog_generation"))
+    view_generation = _owner_generation(body.get("view_generation"))
+    if request_name != name or catalog_generation is None or view_generation is None:
+        return JSONResponse(
+            {
+                "error": "invalid-view-delete-request",
+                "message": "View deletion requires name and current owner generations.",
+            },
+            status_code=400,
+            headers=NO_STORE,
+        )
+    try:
+        starter_records = await run_provider_operation(
+            lambda: tuple(item.to_dict() for item in starters())
+        )
     except MarimoStudioError as error:
         return error_response(error)
-    inventory = await run_provider_operation(
-        partial(view_inventory_payload, updated, updated)
+    try:
+        result = await delete_owned_view(
+            studio,
+            name,
+            expected_catalog_generation=catalog_generation,
+            expected_generation=view_generation,
+            presentation=presentation,
+            development=development,
+        )
+    except MarimoStudioError as error:
+        return error_response(error)
+    inventory = view_inventory_payload(
+        result.workspace,
+        result.workspace,
+        starter_records=starter_records,
     )
     return JSONResponse(
-        {**inventory, "name": name},
+        {
+            **inventory,
+            "name": name,
+            **({"cleanup": str(result.cleanup)} if result.cleanup is not None else {}),
+        },
         headers=NO_STORE,
     )
 
@@ -202,18 +250,35 @@ async def delete_view_response(
 def view_inventory_payload(
     definition: StudioDefinition,
     workspace: StudioWorkspace | None,
+    *,
+    starter_records: tuple[dict[str, object], ...] | None = None,
 ) -> dict[str, object]:
     """Return configured views and installed starters."""
     return {
         "schema": 1,
+        "generation": (
+            workspace.catalog_generation
+            if workspace is not None
+            else definition.config_generation
+        ),
         "default_view": definition.default_view,
         "default_starter": DEFAULT_STARTER_ID,
         "views": (
-            [{"name": project.name} for project in workspace.views.values()]
+            [
+                {
+                    "generation": workspace.view_generations[project.name],
+                    "name": project.name,
+                }
+                for project in workspace.views.values()
+            ]
             if workspace is not None
             else []
         ),
-        "starters": [item.to_dict() for item in starters()],
+        "starters": (
+            list(starter_records)
+            if starter_records is not None
+            else [item.to_dict() for item in starters()]
+        ),
     }
 
 
@@ -231,12 +296,18 @@ async def source_response(
         if not has_edit_access(request.scope):
             return forbidden_response()
         try:
+            owner_headers: dict[str, str] = {}
             if manifest:
-                source = await asyncio.to_thread(
-                    read_view_manifest,
+                snapshot = await asyncio.to_thread(
+                    read_view_manifest_with_owner,
                     studio,
                     view_name,
                 )
+                source = snapshot.document
+                owner_headers = {
+                    "Marimo-Studio-Catalog-Generation": (snapshot.catalog_generation),
+                    "Marimo-Studio-View-Generation": snapshot.view_generation,
+                }
             else:
                 if not isinstance(studio, StudioWorkspace):
                     return Response(status_code=404)
@@ -251,7 +322,11 @@ async def source_response(
         return PlainTextResponse(
             source.content,
             media_type="text/plain",
-            headers={**NO_STORE, "ETag": f'"{source.revision}"'},
+            headers={
+                **NO_STORE,
+                **owner_headers,
+                "ETag": f'"{source.revision}"',
+            },
         )
     if request.method != "PUT":
         return Response(status_code=405)
@@ -265,6 +340,23 @@ async def source_response(
             {
                 "error": "source-revision-required",
                 "message": "If-Match must contain the loaded source revision.",
+            },
+            status_code=428,
+            headers=NO_STORE,
+        )
+    catalog_generation = _owner_generation(
+        request.headers.get("Marimo-Studio-Catalog-Generation")
+    )
+    view_generation = _owner_generation(
+        request.headers.get("Marimo-Studio-View-Generation")
+    )
+    if catalog_generation is None or view_generation is None:
+        return JSONResponse(
+            {
+                "error": "source-generation-required",
+                "message": (
+                    "Source writes require current catalog and view generations."
+                ),
             },
             status_code=428,
             headers=NO_STORE,
@@ -309,6 +401,8 @@ async def source_response(
                     content,
                     expected,
                     expected_provider,
+                    expected_catalog_generation=catalog_generation,
+                    expected_generation=view_generation,
                 ),
                 development,
                 view_name,
@@ -321,6 +415,8 @@ async def source_response(
                 view_name,
                 name,
                 development,
+                expected_catalog_generation=catalog_generation,
+                expected_generation=view_generation,
             )
             source = await _write_source_and_refresh(
                 partial(
@@ -329,6 +425,8 @@ async def source_response(
                     prepared,
                     content,
                     expected,
+                    expected_catalog_generation=catalog_generation,
+                    expected_generation=view_generation,
                 ),
                 development,
                 view_name,
@@ -396,7 +494,17 @@ async def _prepare_source_write(
     view_name: str,
     name: str,
     development: DevelopmentCoordinator,
+    *,
+    expected_catalog_generation: str,
+    expected_generation: str,
 ) -> PreparedSourceWrite:
+    current_studio = await asyncio.to_thread(load_studio, studio.config_path)
+    current_generation = current_studio.view_generations.get(view_name)
+    if current_generation != expected_generation:
+        raise ViewGenerationConflictError(view_name, current_generation)
+    if current_studio.catalog_generation != expected_catalog_generation:
+        raise WorkspaceGenerationConflictError()
+    studio = current_studio
     last_conflict_path: str | None = None
     for _attempt in range(2):
         catalog = await development.project_catalog(studio, view_name)
@@ -451,8 +559,15 @@ async def project_response(
     if not has_edit_access(request.scope):
         return forbidden_response()
     try:
-        catalog = await development.project_catalog(studio, view_name)
-        payload = await asyncio.to_thread(_project_payload, catalog, view_name)
+        current = await asyncio.to_thread(load_studio, studio.config_path)
+        catalog = await development.project_catalog(current, view_name)
+        payload = await asyncio.to_thread(
+            _project_payload,
+            catalog,
+            view_name,
+            current.catalog_generation,
+            current.view_generations[view_name],
+        )
     except MarimoStudioError as error:
         return error_response(error)
     return JSONResponse(payload, headers=NO_STORE)
@@ -461,6 +576,8 @@ async def project_response(
 def _project_payload(
     catalog: ProjectCatalog,
     view_name: str,
+    catalog_generation: str,
+    view_generation: str,
 ) -> dict[str, object]:
     project = provider_registry().validate_project(catalog.project)
     inspection = catalog.inspection
@@ -469,6 +586,8 @@ def _project_payload(
     documents = [spec.to_dict() for spec in inspection.editor_documents]
     return {
         "schema": 1,
+        "catalog_generation": catalog_generation,
+        "view_generation": view_generation,
         "view": view_name,
         "provider": project.provider,
         "provider_options": dict(project.options),

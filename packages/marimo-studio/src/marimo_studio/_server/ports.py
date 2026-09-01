@@ -145,10 +145,12 @@ class SessionState(Protocol):
 
     def has_notebook_session(self, context: ServerContext) -> bool: ...
 
-    def live_cells(
+    async def live_cells(
         self,
         context: ServerContext,
         session_id: str | None,
+        *,
+        include_dependency_closures: bool,
     ) -> LiveCellSnapshot | None: ...
 
 

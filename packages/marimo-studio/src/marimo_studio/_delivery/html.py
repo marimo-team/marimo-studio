@@ -31,7 +31,7 @@ _STYLE_LOADING_SCRIPT = """\
       status.dataset.state = "error";
       status.setAttribute("role", "alert");
       status.textContent =
-        "View styling could not start. The authored page remains available.";
+        "View styling could not start. The authored view remains available.";
       document.body.append(status);
     };
     if (document.body) show();

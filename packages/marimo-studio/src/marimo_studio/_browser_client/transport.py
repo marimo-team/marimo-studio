@@ -9,6 +9,7 @@ import socket
 import threading
 from contextlib import suppress
 from dataclasses import dataclass
+from ipaddress import IPv6Address, ip_address
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -44,6 +45,8 @@ def studio_server_connection(
         raise ProtocolError("The Studio server URL is invalid.") from error
     if parts.scheme not in {"http", "https"} or not parts.netloc or hostname is None:
         raise ProtocolError("Studio server URLs must use http or https.")
+    if parts.scheme == "http" and not _is_loopback_host(hostname):
+        raise ProtocolError("Non-loopback Studio server URLs must use https.")
     parameters = parse_qsl(parts.query, keep_blank_values=True)
     if (
         parts.username is not None
@@ -63,6 +66,23 @@ def studio_server_connection(
         auth_token=access_token,
         routing_query=routing_query,
         browser_client=browser_client,
+    )
+
+
+def _is_loopback_host(hostname: str) -> bool:
+    normalized = hostname.rstrip(".").lower()
+    if normalized == "localhost" or normalized.endswith(".localhost"):
+        return True
+    try:
+        address = ip_address(normalized)
+    except ValueError:
+        return False
+    if address.is_loopback:
+        return True
+    return (
+        isinstance(address, IPv6Address)
+        and address.ipv4_mapped is not None
+        and address.ipv4_mapped.is_loopback
     )
 
 

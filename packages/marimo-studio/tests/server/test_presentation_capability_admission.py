@@ -14,6 +14,7 @@ from marimo_studio import create_asgi_app
 from marimo_studio._delivery.urls import WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM
 from marimo_studio._server.agent.clients import ClientBinding, StudioClientRegistry
 from marimo_studio._server.ports import SessionOwner
+from marimo_studio._server.presentation import access as presentation_access
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.server_instance import server_instance_id
@@ -45,12 +46,40 @@ def test_presentation_capability_grants_runtime_reads_and_rejects_editor_routes(
         path=str(studio.notebook),
     )
     manager.get_session_by_file_key = lambda _file_key: session
-    manager.get_session = lambda session_id: (
-        session if str(session_id) == "s_nativ1" else None
-    )
+    claimed: dict[str, object] = {"s_nativ1": session}
+    manager.get_session = lambda session_id: claimed.get(str(session_id))
     server_token = str(manager.skew_protection_token)
     events_scope: dict[str, object] = {}
     projected_sessions: list[str | None] = []
+    stdin_values: list[str] = []
+    session_with_input: Any = session
+    session_with_input.put_input = stdin_values.append
+    authorize = SessionIdAllocator.authorize
+    admit_next_native_post = False
+
+    def admit_runtime(
+        allocator: SessionIdAllocator,
+        context: ServerContext,
+        sessions: Any,
+        view_name: str,
+        presentation_session_id: str,
+        runtime_session_id: str,
+        **options: Any,
+    ) -> bool:
+        nonlocal admit_next_native_post
+        authorized = authorize(
+            allocator,
+            context,
+            sessions,
+            view_name,
+            presentation_session_id,
+            runtime_session_id,
+            **options,
+        )
+        if authorized and admit_next_native_post:
+            claimed[runtime_session_id] = session
+            admit_next_native_post = False
+        return authorized
 
     async def scoped_events(
         _studio: object,
@@ -91,6 +120,8 @@ def test_presentation_capability_grants_runtime_reads_and_rejects_editor_routes(
         "marimo_studio._server.support.outputs_response",
         capture_outputs,
     )
+    monkeypatch.setattr(SessionIdAllocator, "authorize", admit_runtime)
+    monkeypatch.setattr(presentation_access, "_NATIVE_POST_MAX_BYTES", 16)
 
     with TestClient(app) as client:
         initial = client.get(
@@ -178,6 +209,17 @@ def test_presentation_capability_grants_runtime_reads_and_rejects_editor_routes(
             headers={"Marimo-Session-Id": "s_other2"},
             json={},
         )
+        oversized_native_request = client.post(
+            f"{capability_root}api/kernel/function_call",
+            headers={"Marimo-Session-Id": session_id},
+            content=b"x" * 17,
+        )
+        admit_next_native_post = True
+        native_request = client.post(
+            f"{capability_root}api/kernel/stdin",
+            headers={"Marimo-Session-Id": session_id},
+            json={"text": "ok"},
+        )
 
     assert shell.status_code == 200
     assert presentation.status_code == 200
@@ -191,6 +233,12 @@ def test_presentation_capability_grants_runtime_reads_and_rejects_editor_routes(
     assert projected_sessions == [runtime_session_id]
     assert native_session_outputs.status_code == 403
     assert native_session_preflight.status_code == 204
+    assert oversized_native_request.status_code == 413
+    assert oversized_native_request.headers["access-control-allow-origin"] == "null"
+    assert oversized_native_request.json()["error"] == "request-body-too-large"
+    assert native_request.status_code == 200
+    assert native_request.headers["access-control-allow-origin"] == "null"
+    assert stdin_values == ["ok"]
     assert events.status_code == 200
     assert events_scope == {"view": "dashboard", "client_id": None}
     assert runtime_config.headers["access-control-allow-origin"] == "null"

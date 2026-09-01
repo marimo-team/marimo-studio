@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import pydoc
+import shutil
 import threading
 from contextvars import ContextVar
 from importlib.metadata import distribution
@@ -23,6 +24,8 @@ from marimo_studio._validation.evidence import (
 )
 from marimo_studio._validation.progressive import ValidationRequest
 from marimo_studio._validation.results import CheckResult
+from marimo_studio._views import revisions as revisions_module
+from marimo_studio._workspace import load_studio
 from marimo_studio.agent import ShowResult
 from marimo_studio.errors import (
     CapabilityInputError,
@@ -30,7 +33,11 @@ from marimo_studio.errors import (
     ProtocolError,
     SourceConflictError,
     SourceValidationError,
+    ViewGenerationConflictError,
+    ViewNotFoundError,
+    WorkspaceGenerationConflictError,
 )
+from marimo_studio.view_providers._host import provider_registry
 
 from ..helpers import ready_runtime_status
 
@@ -68,12 +75,19 @@ def test_agent_plugin_exposes_the_packaged_studio_skill() -> None:
     skill = studio_agent.agent_skill()
 
     assert plugin.manifest.name == "marimo-studio"
+    assert plugin.manifest.description == (
+        "Author and validate focused views from Marimo notebooks."
+    )
+    assert plugin.manifest.license == "Apache-2.0"
     assert skill in plugin.skills
     assert skill.path.name == "marimo-studio"
     assert (skill / "SKILL.md").is_file()
     assert (skill / "agents" / "openai.yaml").is_file()
     assert skill.frontmatter.splitlines()[0] == "name: marimo-studio"
     assert isinstance(skill, agent_plugins.Skill)
+    interface = (skill / "agents" / "openai.yaml").read_text(encoding="utf-8")
+    assert 'short_description: "Build focused views from Marimo notebooks"' in interface
+    assert "inspect the notebook and view source" in interface
 
 
 def test_agent_module_help_points_to_the_packaged_studio_skill() -> None:
@@ -180,6 +194,21 @@ def test_view_documents_use_revision_aware_source_operations(
     asyncio.run(exercise())
 
 
+def test_missing_view_document_operations_report_the_view(
+    notebook_path: Path,
+) -> None:
+    workspace = _workspace(notebook_path)
+    asyncio.run(workspace.create_view("dashboard"))
+
+    with pytest.raises(ViewNotFoundError) as raised:
+        asyncio.run(workspace.view("missing").read("index.html"))
+
+    assert raised.value.diagnostic_details() == {
+        "view": "missing",
+        "available_views": ["dashboard"],
+    }
+
+
 def test_agent_repairs_a_malformed_view_manifest(notebook_path: Path) -> None:
     workspace = _workspace(notebook_path)
     asyncio.run(workspace.create_view("dashboard"))
@@ -268,6 +297,148 @@ def test_view_remove_returns_the_remaining_workspace(notebook_path: Path) -> Non
 
     assert result.view == "report"
     assert result.views == ("dashboard",)
+
+
+def test_workspace_advances_after_sequential_bindings(notebook_path: Path) -> None:
+    workspace = _workspace(notebook_path)
+    asyncio.run(workspace.create_view("dashboard"))
+
+    first = asyncio.run(workspace.bind("first-result", 0))
+    second = asyncio.run(workspace.bind("second-result", 1))
+
+    assert first.catalog_generation != second.catalog_generation
+    status = asyncio.run(workspace.status())
+    assert {"first-result", "second-result"} <= set(status.bindings)
+
+
+def test_workspace_advances_after_remove_and_requires_view_reacquisition(
+    notebook_path: Path,
+) -> None:
+    workspace = _workspace(notebook_path)
+    asyncio.run(workspace.create_view("dashboard"))
+    report = asyncio.run(workspace.create_view("report"))
+    dashboard = workspace.view("dashboard")
+
+    removed = asyncio.run(report.remove())
+
+    assert removed.catalog_generation != report.catalog_generation
+    with pytest.raises(WorkspaceGenerationConflictError):
+        asyncio.run(dashboard.validate())
+    created = asyncio.run(workspace.create_view("analysis"))
+    current = workspace.view("dashboard")
+    assert asyncio.run(current.inspect()).view == "dashboard"
+    assert created.name == "analysis"
+
+
+def test_view_handle_cannot_remove_a_copied_replacement(notebook_path: Path) -> None:
+    workspace = _workspace(notebook_path)
+    asyncio.run(workspace.create_view("dashboard"))
+    view = asyncio.run(workspace.create_view("report"))
+    root = notebook_path.parent / "__marimo__" / "studio" / "analysis" / "report"
+    retired = root.with_name("retired-report")
+    root.rename(retired)
+    shutil.copytree(retired, root)
+
+    with pytest.raises(WorkspaceGenerationConflictError):
+        asyncio.run(view.remove())
+
+    assert root.joinpath("view.toml").is_file()
+
+
+def test_view_handle_cannot_write_or_build_a_copied_replacement(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = _workspace(notebook_path)
+    view = asyncio.run(workspace.create_view("dashboard"))
+    document = asyncio.run(view.read("index.html"))
+    root = notebook_path.parent / "__marimo__" / "studio" / "analysis" / "dashboard"
+    retired = root.with_name("retired-dashboard")
+    root.rename(retired)
+    shutil.copytree(retired, root)
+    provider = provider_registry().get(
+        load_studio(notebook_path).views["dashboard"].provider
+    )
+    monkeypatch.setattr(
+        provider,
+        "inspect",
+        lambda _request: pytest.fail("stale View.write inspected the replacement"),
+    )
+
+    with pytest.raises(ViewGenerationConflictError) as write_error:
+        asyncio.run(
+            view.write(
+                "index.html",
+                "stale replacement",
+                expected_revision=document.revision,
+            )
+        )
+    assert (
+        str(write_error.value) == "View 'dashboard' was replaced before the operation."
+    )
+    assert write_error.value.public_hint == (
+        "Reopen the workspace and reacquire the view before retrying."
+    )
+    with pytest.raises(ViewGenerationConflictError) as build_error:
+        asyncio.run(view.build())
+    assert (
+        str(build_error.value) == "View 'dashboard' was replaced before the operation."
+    )
+    assert build_error.value.public_hint == write_error.value.public_hint
+    with pytest.raises(ViewGenerationConflictError):
+        asyncio.run(view.validate())
+    output = tmp_path / "existing-export"
+    output.mkdir()
+    sentinel = output / "sentinel.txt"
+    sentinel.write_text("preserve", encoding="utf-8")
+    with pytest.raises(ViewGenerationConflictError):
+        asyncio.run(view.export(output, force=True))
+
+    assert root.joinpath("index.html").read_text(encoding="utf-8") == document.content
+    assert sentinel.read_text(encoding="utf-8") == "preserve"
+
+
+def test_view_validate_rejects_a_replacement_before_artifact_publication(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = _workspace(notebook_path)
+    view = asyncio.run(workspace.create_view("dashboard"))
+    root = notebook_path.parent / "__marimo__" / "studio" / "analysis" / "dashboard"
+    retired = root.with_name("retired-dashboard")
+    publish_view = revisions_module.publish_view
+    replaced = False
+
+    def replace_then_publish(*args: Any, **kwargs: Any):
+        nonlocal replaced
+        if not replaced:
+            root.rename(retired)
+            shutil.copytree(retired, root)
+            replaced = True
+        return publish_view(*args, **kwargs)
+
+    monkeypatch.setattr(revisions_module, "publish_view", replace_then_publish)
+
+    with pytest.raises(ViewGenerationConflictError):
+        asyncio.run(view.validate())
+
+    assert replaced
+    assert not root.joinpath(".artifacts").exists()
+
+
+def test_workspace_handle_cannot_create_in_a_newer_catalog(
+    notebook_path: Path,
+) -> None:
+    observed = _workspace(notebook_path)
+    asyncio.run(observed.create_view("dashboard"))
+    current = _workspace(notebook_path)
+    asyncio.run(current.create_view("report"))
+
+    with pytest.raises(WorkspaceGenerationConflictError):
+        asyncio.run(observed.create_view("operations"))
+
+    assert "operations" not in load_studio(notebook_path).views
 
 
 def test_authoring_doctor_returns_provider_diagnostics() -> None:
@@ -403,7 +574,6 @@ def test_workspace_bind_cancellation_drains_atomic_commit_before_return(
 ) -> None:
     import marimo_studio._authoring.workspace as workspace_operations
     import marimo_studio._views.api as views_api
-    from marimo_studio._workspace import load_studio
 
     workspace = _workspace(notebook_path)
     asyncio.run(workspace.create_view("dashboard"))
@@ -504,7 +674,11 @@ def test_view_analysis_uses_the_attached_studio_server(
     view = workspace.view("dashboard")
 
     async def analyze(_connection, notebook, request):
-        assert request == ValidationRequest(view="dashboard")
+        assert request == ValidationRequest(
+            view="dashboard",
+            catalog_generation=view.catalog_generation,
+            view_generation=view.generation,
+        )
         return ValidationEvidence(
             notebook=notebook,
             views=("dashboard",),

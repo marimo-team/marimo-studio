@@ -48,6 +48,7 @@ from marimo_studio._delivery.html import runtime_document
 from marimo_studio._delivery.ports import ExportAdapters
 from marimo_studio._delivery.runtime_config import (
     RuntimeConfigInputs,
+    encode_runtime_config,
     runtime_projection_revision,
 )
 from marimo_studio._filesystem.secure import (
@@ -68,10 +69,16 @@ from marimo_studio._workspace.models import (
     RESERVED_VIEW_ASSET_NAMES,
     StudioWorkspace,
 )
+from marimo_studio._workspace.mutation_lock import (
+    view_mutation_lock,
+    workspace_catalog_lock,
+)
 from marimo_studio.errors import (
     MarimoStudioError,
     StaticExportError,
+    ViewGenerationConflictError,
     ViewNotFoundError,
+    WorkspaceGenerationConflictError,
 )
 from marimo_studio.view_providers._host import provider_registry
 
@@ -157,7 +164,7 @@ def _runtime_config(
     artifact: ViewArtifact,
     document: str,
     notebook_source: str,
-) -> tuple[str, dict[str, object]]:
+) -> tuple[str, bytes]:
     projection = adapters.browser.project(
         studio.notebook,
         notebook_source,
@@ -241,7 +248,7 @@ def _runtime_config(
         filename="notebook.py",
         marimo_version=projection.version,
     )
-    return rendered, config
+    return rendered, encode_runtime_config(config)
 
 
 def _asset_files(
@@ -452,7 +459,7 @@ def _write_bundle(
     filesystem.ensure_parent(config_path)
     filesystem.atomic_write(
         config_path,
-        json.dumps(config, ensure_ascii=False, separators=(",", ":")).encode(),
+        config,
         mode=0o644,
     )
     filesystem.atomic_write(output / ".nojekyll", b"", mode=0o644)
@@ -491,6 +498,8 @@ def export_view(
     *,
     view: str | None = None,
     force: bool = False,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
 ) -> StaticExportResult:
     """Export one configured view as an HTTP-hosted WebAssembly site."""
     adapters = create_export_adapters()
@@ -500,9 +509,28 @@ def export_view(
     selected = view or studio.default_view
     if selected not in studio.views:
         raise ViewNotFoundError(selected, available=tuple(studio.views))
+    current_generation = studio.view_generations.get(selected)
+    if expected_generation is not None and current_generation != expected_generation:
+        raise ViewGenerationConflictError(selected, current_generation)
+    if (
+        expected_catalog_generation is not None
+        and studio.catalog_generation != expected_catalog_generation
+    ):
+        raise WorkspaceGenerationConflictError()
+    destination = _validate_output(Path(output), studio)
+    if destination.exists() and not force:
+        raise StaticExportError(
+            f"Output already exists: {destination}. Pass --force to replace it."
+        )
 
     try:
-        lease = publish_view(studio.views[selected], "production")
+        lease = publish_view(
+            studio.views[selected],
+            "production",
+            expected_generation=expected_generation,
+        )
+    except (ViewGenerationConflictError, WorkspaceGenerationConflictError):
+        raise
     except MarimoStudioError as error:
         raise StaticExportError(str(error)) from error
     with lease:
@@ -518,12 +546,11 @@ def export_view(
             published_mounts={selected: artifact.mounts},
         )
         _projection_error(resolved, selected)
-        destination = _validate_output(Path(output), studio)
         with _output_filesystem(destination) as filesystem:
             output_target = _target(filesystem, destination, force=force)
             staging_root = _temporary_directory(
                 filesystem,
-                f".{destination.name}-export-",
+                "export",
             )
             staged = staging_root / "bundle"
             filesystem.create_directory(staged)
@@ -541,7 +568,26 @@ def export_view(
                         notebook_stamp,
                         config_stamp,
                     )
-                _commit_bundle(staged, output_target)
+                with (
+                    workspace_catalog_lock(studio.view_root),
+                    view_mutation_lock(studio.view_root, selected),
+                ):
+                    current = load_studio(target)
+                    current_generation = current.view_generations.get(selected)
+                    if (
+                        expected_generation is not None
+                        and current_generation != expected_generation
+                    ):
+                        raise ViewGenerationConflictError(
+                            selected,
+                            current_generation,
+                        )
+                    if (
+                        expected_catalog_generation is not None
+                        and current.catalog_generation != expected_catalog_generation
+                    ):
+                        raise WorkspaceGenerationConflictError()
+                    _commit_bundle(staged, output_target)
             finally:
                 with suppress(OSError):
                     filesystem.remove_tree(staging_root)

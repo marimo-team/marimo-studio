@@ -348,6 +348,8 @@ def test_projection_uses_live_runtime_ids_after_a_cell_is_inserted(
         reference: f"live-{index}" for index, reference in enumerate(references)
     }
     live_cells = LiveCellSnapshot(
+        owner="session:test",
+        generation="0" * 64,
         ids=live_ids,
         names={},
         dependency_closures={
@@ -359,9 +361,12 @@ def test_projection_uses_live_runtime_ids_after_a_cell_is_inserted(
     )
     observed: list[dict[CellRef, str]] = []
 
+    async def current_live_cells(*_args: object, **_kwargs: object):
+        return live_cells
+
     monkeypatch.setattr(
         "marimo_studio._compat.server.session_state.PrivateSessionState.live_cells",
-        lambda *_args: live_cells,
+        current_live_cells,
     )
 
     async def read_projection(
@@ -424,7 +429,10 @@ def test_projection_waits_for_the_live_session_binding(
         read_projection,
     )
 
-    def syncing_session(*_args: object) -> LiveCellSnapshot:
+    async def syncing_session(
+        *_args: object,
+        **_kwargs: object,
+    ) -> LiveCellSnapshot:
         raise RuntimeSyncError("The live session is applying the saved notebook.")
 
     with TestClient(create_asgi_app(studio.notebook)) as client:

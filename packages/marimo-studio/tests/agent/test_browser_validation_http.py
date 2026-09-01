@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -7,8 +8,13 @@ from starlette.testclient import TestClient
 
 from marimo_studio._compat.server.session_state import PrivateSessionState
 from marimo_studio._server.agent import api as agent_api
+from marimo_studio._validation import service as validation_service
 from marimo_studio._validation.evidence import BrowserObservation
 from marimo_studio._validation.results import CheckResult
+from marimo_studio._views.presentation_publication import PresentationPublication
+from marimo_studio._views.revisions import PreparedViewProject
+from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio.view_providers import BuildProfile
 
 from ..agent_support import agent_edit_server
 from ..helpers import ready_runtime_status
@@ -152,6 +158,67 @@ def test_code_mode_analysis_requires_one_named_view(
             "allow_view_activation": False,
         }
     ]
+
+
+def test_code_mode_validation_rejects_a_replacement_before_publication(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    server = agent_edit_server(notebook_path, session_id="s_123456")
+    root = server.studio.views["dashboard"].root
+    retired = root.with_name("retired-dashboard")
+    publish_presentation = validation_service.publish_presentation
+    replaced = False
+
+    def replace_then_publish(
+        studio: StudioWorkspace,
+        view_name: str,
+        prepared: PreparedViewProject | None = None,
+        *,
+        profile: BuildProfile = "development",
+        expected_catalog_generation: str | None = None,
+        expected_generation: str | None = None,
+    ) -> PresentationPublication:
+        nonlocal replaced
+        if not replaced:
+            root.rename(retired)
+            shutil.copytree(retired, root)
+            shutil.rmtree(root / ".artifacts")
+            replaced = True
+        return publish_presentation(
+            studio,
+            view_name,
+            prepared,
+            profile=profile,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+        )
+
+    monkeypatch.setattr(PrivateSessionState, "exists", lambda *_args: True)
+    monkeypatch.setattr(
+        validation_service,
+        "publish_presentation",
+        replace_then_publish,
+    )
+
+    with TestClient(server.app) as client:
+        response = client.post(
+            "/_marimo-studio/validate",
+            headers=server.headers,
+            json={
+                "schema": 1,
+                "view": "dashboard",
+                "browser_timeout": 0,
+                "require_browser": True,
+                "catalog_generation": server.studio.catalog_generation,
+                "view_generation": server.studio.view_generations["dashboard"],
+            },
+        )
+
+    assert replaced
+    assert response.status_code == 409
+    assert response.json()["error"] == "view-generation-conflict"
+    assert not root.joinpath(".artifacts").exists()
 
 
 def test_agent_analysis_rejects_noncanonical_request_records(

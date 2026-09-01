@@ -6,3 +6,8 @@ DOCUMENT_HEADERS = {
     "Referrer-Policy": "same-origin",
     "X-Content-Type-Options": "nosniff",
 }
+FRAME_ANCESTORS_SELF = "frame-ancestors 'self'"
+EDIT_DOCUMENT_HEADERS = {
+    **DOCUMENT_HEADERS,
+    "Content-Security-Policy": FRAME_ANCESTORS_SELF,
+}

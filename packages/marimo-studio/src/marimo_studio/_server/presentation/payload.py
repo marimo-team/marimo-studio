@@ -113,7 +113,7 @@ def render_presentation_document(
     )
 
 
-def build_runtime_config(
+async def build_runtime_config(
     snapshot: PresentationSnapshot,
     context: ServerContext,
     runtimes: RuntimeRegistry,
@@ -126,18 +126,14 @@ def build_runtime_config(
     resolved = snapshot.resolved
     view_name = snapshot.view_name
     view = resolved.views[view_name]
-    provider, _ = runtimes.select(
-        resolved.workspace,
-        context,
-        runtime_id,
-    )
     capability_session_id = presentation_session_id or session_id
     if capability_session_id is None:
         raise ValueError("A presentation session is required for runtime configuration")
     runtime_authority_session_id = runtime_session_id or capability_session_id
-    projection = provider.project(
+    projection = await runtimes.project(
         snapshot,
         context,
+        runtime_id,
         session_id,
         binding_id,
         capability_session_id,
@@ -157,7 +153,7 @@ def build_runtime_config(
     projection_revision = runtime_projection_revision(
         source_revision=snapshot.source_revision,
         view=view_name,
-        runtime_id=provider.id,
+        runtime_id=projection.runtime_id,
         runtime_instance=projection.instance,
         mounts=mounts,
         projection_targets=targets,
@@ -172,7 +168,7 @@ def build_runtime_config(
     inputs = RuntimeConfigInputs(
         view=view_name,
         views=tuple(resolved.workspace.views),
-        runtime_id=provider.id,
+        runtime_id=projection.runtime_id,
         runtime_instance=projection.instance,
         runtime_data=projection.data,
         root_url=public_url(context.base_url, "/"),

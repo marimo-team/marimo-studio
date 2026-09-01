@@ -16,7 +16,7 @@ from marimo_studio._server.presentation.service import (
     NotebookPresentation,
     PresentationSnapshot,
 )
-from marimo_studio._server.runtime.catalog import RuntimeProjection
+from marimo_studio._server.runtime.catalog import RuntimeEvidenceProjection
 from marimo_studio._validation.evidence import (
     BrowserObservation,
     ObservedProjectionInstance,
@@ -26,14 +26,15 @@ from marimo_studio.errors import ProtocolError
 from ..app_helpers import configured
 
 
-def _runtime(snapshot: PresentationSnapshot) -> RuntimeProjection:
+def _runtime(snapshot: PresentationSnapshot) -> RuntimeEvidenceProjection:
     cell_refs = snapshot.resolved.runtime_cell_refs(None)
-    return RuntimeProjection(
-        "runtime-instance",
-        {},
-        cell_refs,
-        {runtime_id: ref for ref, runtime_id in cell_refs.items()},
-        {
+    return RuntimeEvidenceProjection(
+        runtime_id="server",
+        instance="runtime-instance",
+        data={},
+        cell_refs=cell_refs,
+        current_cell_refs={runtime_id: ref for ref, runtime_id in cell_refs.items()},
+        dependency_closures={
             cell_refs[str(producer)]: tuple(
                 cell_refs[str(reference)]
                 for reference in snapshot.symbols.dependency_closure(producer)
@@ -45,7 +46,7 @@ def _runtime(snapshot: PresentationSnapshot) -> RuntimeProjection:
 
 def _ready_observation(
     snapshot: PresentationSnapshot,
-    runtime: RuntimeProjection,
+    runtime: RuntimeEvidenceProjection,
 ) -> BrowserObservation:
     instances: list[ObservedProjectionInstance] = []
     for index, mount in enumerate(snapshot.mounts):

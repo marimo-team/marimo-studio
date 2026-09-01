@@ -204,10 +204,10 @@ class ReadyWorkspaceHandler:
             and studio_owned_request(route.request)
         ):
             grant_capability_headers(response)
+        if artifact_response is not None:
+            grant_capability_headers(artifact_response)
         if route.capability is not None:
             grant_capability_headers(response)
-            if artifact_response is not None:
-                grant_capability_headers(artifact_response)
         if artifact_response is not None:
             await _send_artifact_response(
                 artifact_response,

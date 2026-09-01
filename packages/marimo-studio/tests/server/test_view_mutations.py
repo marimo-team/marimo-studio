@@ -3,9 +3,8 @@ from __future__ import annotations
 import asyncio
 import shutil
 import threading
-from collections.abc import AsyncGenerator, MutableMapping
+from collections.abc import MutableMapping
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
 from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
@@ -14,18 +13,12 @@ import pytest
 from starlette.testclient import TestClient
 
 import marimo_studio._server.studio.routes as studio_api_module
-import marimo_studio._views.remove as workspace_views
 from marimo_studio import create_asgi_app
-from marimo_studio._server.development.coordinator import (
-    DevelopmentCoordinator,
-)
-from marimo_studio._server.notebook_scope import NotebookScope
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.records import ViewDocument
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
 from marimo_studio._workspace.metadata import update_notebook_config
-from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.view_providers import ProjectDiagnostic, SourceLocation
 from marimo_studio.view_providers._host import provider_registry
 
@@ -33,9 +26,21 @@ from ..app_helpers import configured as _configured
 from ..app_helpers import edit_mode as _edit_mode
 from ..app_helpers import marimo_app as _marimo_app
 from ..app_helpers import session_manager as _session_manager
+from ._view_mutation_test_support import _create_owned_view
 from .app_test_support import (
     _studio_host,
 )
+
+
+def _source_owner_headers(client: TestClient, view: str) -> dict[str, str]:
+    project = client.get(f"/_marimo-studio/views/{view}/project").json()
+    return {
+        "Marimo-Studio-Catalog-Generation": cast(
+            str,
+            project["catalog_generation"],
+        ),
+        "Marimo-Studio-View-Generation": cast(str, project["view_generation"]),
+    }
 
 
 def test_view_list_tracks_new_folders_without_restarting_marimo(
@@ -59,7 +64,31 @@ def test_view_list_tracks_new_folders_without_restarting_marimo(
         "executive",
         "operations",
     ]
+    assert len(before["generation"]) == 64
+    assert before["generation"] != after["generation"]
+    before_views = {item["name"]: item["generation"] for item in before["views"]}
+    after_views = {item["name"]: item["generation"] for item in after["views"]}
+    assert all(len(generation) == 64 for generation in after_views.values())
+    assert before_views == {
+        name: after_views[name] for name in ("dashboard", "executive")
+    }
     assert page.status_code == 200
+
+
+def test_catalog_generation_tracks_default_without_replacing_views(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    before = load_studio(studio.notebook)
+
+    def select_executive(config: MutableMapping[str, Any]) -> None:
+        config["default"] = "executive"
+
+    update_notebook_config(studio.notebook, select_executive)
+    after = load_studio(studio.notebook)
+
+    assert after.catalog_generation != before.catalog_generation
+    assert after.view_generations == before.view_generations
 
 
 def test_cancelled_http_source_write_finishes_commit_and_refresh_once(
@@ -130,15 +159,14 @@ def test_definition_state_initializes_the_first_view_from_edit_mode(
     with TestClient(app) as client:
         status_before = client.get("/_marimo-studio/status")
         views_before = client.get("/_marimo-studio/views")
+        before_payload = views_before.json()
         initializer = client.get("/")
         host = _studio_host(initializer.text)
-        created = client.post(
-            "/_marimo-studio/views",
-            json={
-                "name": definition.default_view,
-                "starter": "marimo-studio/vanilla:default",
-            },
-            headers=headers,
+        created = _create_owned_view(
+            client,
+            definition.default_view,
+            headers,
+            cast(str, before_payload["generation"]),
         )
         status_after = client.get("/_marimo-studio/status")
         bootstrap = client.get(
@@ -152,7 +180,6 @@ def test_definition_state_initializes_the_first_view_from_edit_mode(
         "default_view": "dashboard",
         "views": [],
     }
-    before_payload = views_before.json()
     assert before_payload["schema"] == 1
     assert before_payload["default_view"] == "dashboard"
     assert before_payload["default_starter"] == "marimo-studio/vanilla:default"
@@ -231,6 +258,7 @@ def test_edit_workspace_creates_views_and_conditionally_updates_source(
 
     with TestClient(app) as client:
         loaded = client.get("/_marimo-studio/views/dashboard/source/index.html")
+        owner_headers = _source_owner_headers(client, "dashboard")
         replacement = loaded.text.replace(
             '<main id="app-shell">',
             '<main id="app-shell"><h1>Updated in Studio</h1>',
@@ -238,36 +266,33 @@ def test_edit_workspace_creates_views_and_conditionally_updates_source(
         saved = client.put(
             "/_marimo-studio/views/dashboard/source/index.html",
             content=replacement,
-            headers={"If-Match": loaded.headers["etag"], **mutation_headers},
+            headers={
+                "If-Match": loaded.headers["etag"],
+                **owner_headers,
+                **mutation_headers,
+            },
         )
         stale = client.put(
             "/_marimo-studio/views/dashboard/source/index.html",
             content="stale",
-            headers={"If-Match": loaded.headers["etag"], **mutation_headers},
-        )
-        created = client.post(
-            "/_marimo-studio/views",
-            json={
-                "name": "operations",
-                "starter": "marimo-studio/vanilla:default",
+            headers={
+                "If-Match": loaded.headers["etag"],
+                **owner_headers,
+                **mutation_headers,
             },
-            headers=mutation_headers,
         )
-        duplicate = client.post(
+        created = _create_owned_view(client, "operations", mutation_headers)
+        duplicate = _create_owned_view(client, "operations", mutation_headers)
+        invalid = _create_owned_view(client, "Operations Report", mutation_headers)
+        generation = client.get("/_marimo-studio/views").json()["generation"]
+        null_starter = client.post(
             "/_marimo-studio/views",
-            json={
-                "name": "operations",
-                "starter": "marimo-studio/vanilla:default",
-            },
             headers=mutation_headers,
-        )
-        invalid = client.post(
-            "/_marimo-studio/views",
             json={
-                "name": "Operations Report",
-                "starter": "marimo-studio/vanilla:default",
+                "catalog_generation": generation,
+                "name": "null-starter",
+                "starter": None,
             },
-            headers=mutation_headers,
         )
 
     assert loaded.status_code == 200
@@ -289,6 +314,8 @@ def test_edit_workspace_creates_views_and_conditionally_updates_source(
     assert duplicate.json()["error"] == "view-exists"
     assert invalid.status_code == 400
     assert invalid.json()["error"] == "invalid-view-name"
+    assert null_starter.status_code == 400
+    assert null_starter.json()["error"] == "invalid-view-starter"
 
 
 def test_source_put_rejects_an_oversized_chunked_body(
@@ -302,11 +329,13 @@ def test_source_put_rejects_an_oversized_chunked_body(
 
     with TestClient(app) as client:
         loaded = client.get("/_marimo-studio/views/dashboard/source/index.html")
+        owner_headers = _source_owner_headers(client, "dashboard")
         rejected = client.put(
             "/_marimo-studio/views/dashboard/source/index.html",
             content=iter((b"too-", b"large")),
             headers={
                 "If-Match": loaded.headers["etag"],
+                **owner_headers,
                 "Marimo-Server-Token": str(_session_manager(app).skew_protection_token),
             },
         )
@@ -334,24 +363,71 @@ def test_concurrent_same_name_view_posts_commit_once(
     monkeypatch.setattr(provider, "create", synchronize_plan)
 
     with TestClient(app) as client:
+        generation = cast(
+            str,
+            client.get("/_marimo-studio/views").json()["generation"],
+        )
 
         def create():
-            return client.post(
-                "/_marimo-studio/views",
-                json={
-                    "name": "operations",
-                    "starter": "marimo-studio/vanilla:default",
-                },
-                headers=headers,
-            )
+            return _create_owned_view(client, "operations", headers, generation)
 
         with ThreadPoolExecutor(max_workers=2) as executor:
             responses = tuple(executor.map(lambda _index: create(), range(2)))
 
     assert sorted(response.status_code for response in responses) == [201, 409]
     conflict = next(response for response in responses if response.status_code == 409)
-    assert conflict.json()["error"] == "view-exists"
+    assert conflict.json()["error"] == "workspace-generation-conflict"
     assert tuple(load_studio(notebook_path).views).count("operations") == 1
+
+
+def test_view_creation_rejects_a_stale_catalog_until_its_owner_is_refreshed(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
+
+    with TestClient(app) as client:
+        original_generation = cast(
+            str,
+            client.get("/_marimo-studio/views").json()["generation"],
+        )
+        first = _create_owned_view(
+            client,
+            "operations",
+            headers,
+            original_generation,
+        )
+        stale = _create_owned_view(
+            client,
+            "analysis",
+            headers,
+            original_generation,
+        )
+        current_generation = cast(
+            str,
+            client.get("/_marimo-studio/views").json()["generation"],
+        )
+        current = _create_owned_view(
+            client,
+            "analysis",
+            headers,
+            current_generation,
+        )
+
+    assert first.status_code == 201
+    assert current_generation != original_generation
+    assert stale.status_code == 409
+    assert stale.json() == {
+        "error": "workspace-generation-conflict",
+        "message": "The Studio workspace was replaced before the operation.",
+        "hint": "Open the workspace again before retrying the operation.",
+        "transient": True,
+    }
+    assert current.status_code == 201
+    assert (studio.view_root / "operations" / "view.toml").is_file()
+    assert (studio.view_root / "analysis" / "view.toml").is_file()
 
 
 def test_concurrent_view_posts_reject_a_manifestless_directory(
@@ -375,16 +451,13 @@ def test_concurrent_view_posts_reject_a_manifestless_directory(
     )
 
     with TestClient(app) as client:
+        generation = cast(
+            str,
+            client.get("/_marimo-studio/views").json()["generation"],
+        )
 
         def create():
-            return client.post(
-                "/_marimo-studio/views",
-                json={
-                    "name": "operations",
-                    "starter": "marimo-studio/vanilla:default",
-                },
-                headers=headers,
-            )
+            return _create_owned_view(client, "operations", headers, generation)
 
         with ThreadPoolExecutor(max_workers=2) as executor:
             responses = tuple(executor.map(lambda _index: create(), range(2)))
@@ -414,6 +487,10 @@ def test_project_and_source_reads_share_one_current_provider_catalog(
 
     with TestClient(app) as client:
         project = client.get("/_marimo-studio/views/dashboard/project")
+        owner_headers = {
+            "Marimo-Studio-Catalog-Generation": project.json()["catalog_generation"],
+            "Marimo-Studio-View-Generation": project.json()["view_generation"],
+        }
         documents = [
             client.get(f"/_marimo-studio/views/dashboard/source/{path}")
             for path in ("index.html", "view.toml")
@@ -424,6 +501,7 @@ def test_project_and_source_reads_share_one_current_provider_catalog(
             content=documents[0].text + "\n",
             headers={
                 "If-Match": documents[0].headers["etag"],
+                **owner_headers,
                 "Marimo-Server-Token": token,
             },
         )
@@ -450,6 +528,53 @@ def test_project_and_source_reads_share_one_current_provider_catalog(
     assert refreshed.status_code == 200
     assert removed.status_code == 404
     assert selected.status_code == 200
+
+
+def test_source_put_rejects_a_same_content_recreated_view(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    prepare_view(studio.notebook, "operations")
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
+
+    with TestClient(app) as client:
+        original_project = client.get("/_marimo-studio/views/operations/project").json()
+        original_source = client.get(
+            "/_marimo-studio/views/operations/source/index.html"
+        )
+        root = studio.view_root / "operations"
+        retired = root.with_name("retired-operations")
+        root.rename(retired)
+        shutil.copytree(retired, root)
+        replacement_project = client.get(
+            "/_marimo-studio/views/operations/project"
+        ).json()
+        replacement_source = client.get(
+            "/_marimo-studio/views/operations/source/index.html"
+        )
+        stale = client.put(
+            "/_marimo-studio/views/operations/source/index.html",
+            content="stale replacement",
+            headers={
+                "If-Match": original_source.headers["etag"],
+                "Marimo-Server-Token": headers["Marimo-Server-Token"],
+                "Marimo-Studio-Catalog-Generation": replacement_project[
+                    "catalog_generation"
+                ],
+                "Marimo-Studio-View-Generation": original_project["view_generation"],
+            },
+        )
+
+    assert original_source.text == replacement_source.text
+    assert original_source.headers["etag"] == replacement_source.headers["etag"]
+    assert original_project["view_generation"] != replacement_project["view_generation"]
+    assert stale.status_code == 409
+    assert stale.json()["error"] == "view-generation-conflict"
+    assert (studio.view_root / "operations" / "index.html").read_text(
+        encoding="utf-8"
+    ) == replacement_source.text
 
 
 def test_project_endpoint_preserves_manifest_diagnostics_outside_editor_documents(
@@ -490,6 +615,10 @@ def test_cold_server_lifecycle_repairs_a_malformed_manifest(
     notebook_path: Path,
 ) -> None:
     configured = _configured(notebook_path)
+    owner_headers = {
+        "Marimo-Studio-Catalog-Generation": configured.catalog_generation,
+        "Marimo-Studio-View-Generation": configured.view_generations["dashboard"],
+    }
     manifest = configured.views["dashboard"].manifest
     original = manifest.read_text(encoding="utf-8")
     manifest.write_text("schema = ", encoding="utf-8")
@@ -502,16 +631,32 @@ def test_cold_server_lifecycle_repairs_a_malformed_manifest(
         invalid_project = client.get("/_marimo-studio/views/dashboard/project")
         invalid_source = client.get("/_marimo-studio/views/dashboard/source/index.html")
         repair_source = client.get("/_marimo-studio/views/dashboard/source/view.toml")
+        repair_owner_headers = {
+            "Marimo-Studio-Catalog-Generation": repair_source.headers[
+                "Marimo-Studio-Catalog-Generation"
+            ],
+            "Marimo-Studio-View-Generation": repair_source.headers[
+                "Marimo-Studio-View-Generation"
+            ],
+        }
         rejected = client.put(
             "/_marimo-studio/views/dashboard/source/view.toml",
             content="schema = 2\n",
-            headers={"If-Match": repair_source.headers["etag"], **headers},
+            headers={
+                "If-Match": repair_source.headers["etag"],
+                **repair_owner_headers,
+                **headers,
+            },
         )
         still_invalid = manifest.read_text(encoding="utf-8")
         repaired_write = client.put(
             "/_marimo-studio/views/dashboard/source/view.toml",
             content=original,
-            headers={"If-Match": repair_source.headers["etag"], **headers},
+            headers={
+                "If-Match": repair_source.headers["etag"],
+                **repair_owner_headers,
+                **headers,
+            },
         )
         repaired = client.get("/_marimo-studio/views/dashboard/project")
 
@@ -522,249 +667,16 @@ def test_cold_server_lifecycle_repairs_a_malformed_manifest(
     assert invalid_source.json()["error"] == "configuration-error"
     assert repair_source.status_code == 200
     assert repair_source.text == "schema = "
+    assert (
+        repair_owner_headers["Marimo-Studio-Catalog-Generation"]
+        != owner_headers["Marimo-Studio-Catalog-Generation"]
+    )
+    assert (
+        repair_owner_headers["Marimo-Studio-View-Generation"]
+        == owner_headers["Marimo-Studio-View-Generation"]
+    )
     assert rejected.status_code == 400
     assert rejected.json()["error"] == "invalid-source-content"
     assert still_invalid == "schema = "
     assert repaired_write.status_code == 204
     assert repaired.status_code == 200
-
-
-def test_view_deletion_removes_files_promotes_the_default_and_keeps_one_view(
-    notebook_path: Path,
-) -> None:
-    studio = _configured(notebook_path)
-    prepare_view(studio.notebook, "operations")
-    asset = studio.view_root / "operations" / "assets" / "note.txt"
-    asset.parent.mkdir(parents=True)
-    asset.write_text("authored view asset", encoding="utf-8")
-    app = _marimo_app(studio.notebook)
-    _edit_mode(app)
-    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
-
-    with TestClient(app) as client:
-        removed = client.delete(
-            "/_marimo-studio/views/operations",
-            headers=headers,
-        )
-        promoted = client.delete(
-            "/_marimo-studio/views/dashboard",
-            headers=headers,
-        )
-        last = client.delete(
-            "/_marimo-studio/views/executive",
-            headers=headers,
-        )
-        views = client.get("/_marimo-studio/views").json()
-
-    assert removed.status_code == 200, removed.text
-    removed_payload = removed.json()
-    assert removed_payload["schema"] == 1
-    assert removed_payload["name"] == "operations"
-    assert removed_payload["default_view"] == "dashboard"
-    assert [item["name"] for item in removed_payload["views"]] == [
-        "dashboard",
-        "executive",
-    ]
-    assert not (studio.view_root / "operations").exists()
-    assert promoted.status_code == 200
-    assert promoted.json()["default_view"] == "executive"
-    updated = load_studio(studio.notebook)
-    assert views["schema"] == 1
-    assert views["default_view"] == "executive"
-    assert [item["name"] for item in views["views"]] == ["executive"]
-    assert updated.default_view == "executive"
-    assert not (studio.view_root / "dashboard").exists()
-    assert last.status_code == 409
-    assert last.json() == {
-        "error": "last-view",
-        "message": "Keep at least one view.",
-    }
-    assert (studio.views["executive"].root / "index.html").is_file()
-
-
-def test_view_deletion_builds_provider_inventory_off_the_event_loop(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    studio = _configured(notebook_path)
-    prepare_view(studio.notebook, "operations")
-    app = _marimo_app(studio.notebook)
-    _edit_mode(app)
-    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
-    inventory = studio_api_module.view_inventory_payload
-    started = threading.Event()
-    release = threading.Event()
-
-    def blocking_inventory(*args: Any, **kwargs: Any) -> dict[str, object]:
-        started.set()
-        assert release.wait(timeout=2)
-        return inventory(*args, **kwargs)
-
-    monkeypatch.setattr(studio_api_module, "view_inventory_payload", blocking_inventory)
-
-    with TestClient(app) as client, ThreadPoolExecutor(max_workers=2) as executor:
-        deletion = executor.submit(
-            client.delete,
-            "/_marimo-studio/views/operations",
-            headers=headers,
-        )
-        assert started.wait(timeout=2)
-        health = executor.submit(client.get, "/health")
-        try:
-            assert health.result(timeout=1).status_code == 200
-        finally:
-            release.set()
-        assert deletion.result(timeout=2).status_code == 200
-
-
-def test_view_deletion_releases_retained_artifacts_before_windows_cleanup(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    studio = _configured(notebook_path)
-    prepare_view(studio.notebook, "operations")
-    scopes: list[NotebookScope] = []
-    create_scope = NotebookScope.create
-
-    def capture_scope(
-        path: Path,
-        watcher: Any = None,
-        session_ids: Any = None,
-    ) -> NotebookScope:
-        scope = create_scope(path, watcher, session_ids)
-        scopes.append(scope)
-        return scope
-
-    monkeypatch.setattr(NotebookScope, "create", staticmethod(capture_scope))
-    app = _marimo_app(studio.notebook)
-    _edit_mode(app)
-    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
-    remove_tree = workspace_views.SecureDirectory.remove_tree
-
-    def reject_retained_handles(
-        filesystem: workspace_views.SecureDirectory,
-        path: Path,
-    ) -> None:
-        pins = tuple(path.glob("**/.artifacts/.pins/*/*"))
-        if pins:
-            raise PermissionError(f"retained artifact handle: {pins[0]}")
-        remove_tree(filesystem, path)
-
-    with TestClient(app) as client:
-        client.get("/_marimo-studio/views")
-        assert len(scopes) == 1
-        scopes[0].presentation.snapshot("operations")
-        retained_pins = tuple(
-            (studio.view_root / "operations").glob(".artifacts/.pins/*/*")
-        )
-        monkeypatch.setattr(
-            workspace_views.SecureDirectory,
-            "remove_tree",
-            reject_retained_handles,
-        )
-        removed = client.delete(
-            "/_marimo-studio/views/operations",
-            headers=headers,
-        )
-
-    assert retained_pins
-    assert removed.status_code == 200
-    assert not (studio.view_root / "operations").exists()
-
-
-def test_project_and_source_reads_report_transient_deletion(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    studio = _configured(notebook_path)
-    prepare_view(studio.notebook, "operations")
-    app = _marimo_app(studio.notebook)
-    _edit_mode(app)
-    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
-    remove = studio_api_module.delete_view
-    deletion_started = threading.Event()
-    release_deletion = threading.Event()
-
-    def block_deletion(workspace: StudioWorkspace, view_name: str) -> StudioWorkspace:
-        deletion_started.set()
-        if not release_deletion.wait(timeout=2):
-            raise RuntimeError("view deletion was not released")
-        return remove(workspace, view_name)
-
-    monkeypatch.setattr(studio_api_module, "delete_view", block_deletion)
-
-    with TestClient(app) as client, ThreadPoolExecutor(max_workers=1) as executor:
-        pending = executor.submit(
-            client.delete,
-            "/_marimo-studio/views/operations",
-            headers=headers,
-        )
-        assert deletion_started.wait(timeout=2)
-        try:
-            project = client.get("/_marimo-studio/views/operations/project")
-            source = client.get("/_marimo-studio/views/operations/source/index.html")
-        finally:
-            release_deletion.set()
-        removed = pending.result(timeout=2)
-
-    expected = {
-        "error": "view-deletion-in-progress",
-        "message": "View 'operations' is being deleted.",
-        "view": "operations",
-        "transient": True,
-    }
-    assert project.status_code == 409
-    assert project.json() == expected
-    assert source.status_code == 409
-    assert source.json() == expected
-    assert removed.status_code == 200
-
-
-def test_view_deletion_cancels_build_before_off_thread_filesystem_cleanup(
-    notebook_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    studio = _configured(notebook_path)
-    prepare_view(studio.notebook, "operations")
-    app = _marimo_app(studio.notebook)
-    _edit_mode(app)
-    headers = {"Marimo-Server-Token": str(_session_manager(app).skew_protection_token)}
-    events: list[tuple[str, int]] = []
-    remove = studio_api_module.delete_view
-
-    @asynccontextmanager
-    async def deleting_view(
-        _coordinator: object,
-        view_name: str,
-    ) -> AsyncGenerator[None, None]:
-        assert view_name == "operations"
-        events.append(("guard-enter", threading.get_ident()))
-        try:
-            yield
-        finally:
-            events.append(("guard-exit", threading.get_ident()))
-
-    def remove_off_thread(
-        workspace: StudioWorkspace,
-        view_name: str,
-    ) -> StudioWorkspace:
-        events.append(("delete", threading.get_ident()))
-        return remove(workspace, view_name)
-
-    monkeypatch.setattr(DevelopmentCoordinator, "deleting_view", deleting_view)
-    monkeypatch.setattr(studio_api_module, "delete_view", remove_off_thread)
-
-    with TestClient(app) as client:
-        removed = client.delete(
-            "/_marimo-studio/views/operations",
-            headers=headers,
-        )
-
-    assert removed.status_code == 200
-    assert [name for name, _thread in events] == [
-        "guard-enter",
-        "delete",
-        "guard-exit",
-    ]
-    assert events[0][1] != events[1][1]
-    assert events[0][1] == events[2][1]

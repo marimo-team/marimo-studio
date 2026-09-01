@@ -188,6 +188,7 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
     assert head.headers["location"] == "/studio/dashboard/"
     assert post.status_code == 405
     assert editor.status_code == 200
+    assert editor.headers["content-security-policy"] == "frame-ancestors 'self'"
     assert forged_editor.status_code == 403
     assert default_workspace.status_code == 200
     assert workspace_redirect.status_code == 307
@@ -195,6 +196,8 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
         "/studio/executive/?layout=preview"
     )
     assert workspace.status_code == 200
+    for document in (landing_workspace, default_workspace, workspace):
+        assert document.headers["content-security-policy"] == "frame-ancestors 'self'"
     assert view_redirect.status_code == 307
     assert view_redirect.headers["location"] == "/executive/?region=emea"
     assert waiting.status_code == 202

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path, PurePosixPath
@@ -28,7 +29,11 @@ from marimo_studio._views.api import prepare_view
 from marimo_studio._views.presentation_publication import publish_presentation
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
-from marimo_studio.errors import CapabilityInputError, ProtocolError
+from marimo_studio.errors import (
+    CapabilityInputError,
+    ProtocolError,
+    ViewGenerationConflictError,
+)
 from marimo_studio.view_providers import (
     MountDeclaration,
     SourceLocation,
@@ -72,13 +77,98 @@ def test_validation_request_round_trips_its_versioned_record() -> None:
         runtime_timeout=75,
         require_browser=False,
         browser_client="browser-client-1234",
+        catalog_generation="a" * 64,
+        view_generation="b" * 64,
     )
 
     assert ValidationRequest.from_dict(request.to_dict()) == request
     assert request.to_dict()["schema"] == 1
+    assert "catalog_generation" not in ValidationRequest(view="dashboard").to_dict()
     with pytest.raises(CapabilityInputError) as raised:
         ValidationRequest.from_dict({})
     assert raised.value.field == "request"
+
+
+@pytest.mark.parametrize(
+    ("payload", "field"),
+    [
+        ({"catalog_generation": "a" * 64}, "view_generation"),
+        ({"view_generation": "b" * 64}, "catalog_generation"),
+        (
+            {
+                "catalog_generation": "invalid",
+                "view_generation": "b" * 64,
+            },
+            "catalog_generation",
+        ),
+        (
+            {
+                "catalog_generation": "a" * 64,
+                "view_generation": "b" * 64,
+            },
+            "view",
+        ),
+    ],
+)
+def test_validation_request_rejects_incomplete_owner_records(
+    payload: dict[str, str],
+    field: str,
+) -> None:
+    with pytest.raises(CapabilityInputError) as raised:
+        ValidationRequest.from_dict({"schema": 1, **payload})
+
+    assert raised.value.field == field
+
+
+def test_strict_validation_rechecks_the_view_owner_before_return(
+    notebook_path: Path,
+) -> None:
+    prepare_view(notebook_path)
+    studio = load_studio(notebook_path)
+    root = studio.views["dashboard"].root
+    retired = root.with_name("retired-dashboard")
+
+    async def runtime(*_args: object, **_kwargs: object) -> tuple[CheckResult, ...]:
+        return (CheckResult("runtime", "pass", "ready"),)
+
+    async def observe(
+        _studio: StudioWorkspace,
+        views: tuple[str, ...],
+        revisions: dict[str, str],
+    ) -> tuple[BrowserObservation, ...]:
+        root.rename(retired)
+        shutil.copytree(retired, root)
+        return (
+            BrowserObservation(
+                view=views[0],
+                runtime="server",
+                revision=revisions[views[0]],
+                state="ready",
+                client_id="browser-client-1234",
+                runtime_instance="runtime-instance",
+                session_id="s_123456",
+                request_id="request-dashboard",
+                sequence=1,
+                runtime_status=ready_runtime_status(
+                    views[0],
+                    revisions[views[0]],
+                ),
+            ),
+        )
+
+    with pytest.raises(ViewGenerationConflictError):
+        asyncio.run(
+            validate_progressively(
+                studio,
+                ValidationOptions(view="dashboard", require_browser=True),
+                observe_browser=observe,
+                runtime_checker=runtime,
+                expected_catalog_generation=studio.catalog_generation,
+                expected_generations={
+                    "dashboard": studio.view_generations["dashboard"]
+                },
+            )
+        )
 
 
 def _check_report(

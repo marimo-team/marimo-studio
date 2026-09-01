@@ -159,10 +159,14 @@ def test_edit_workspace_validates_and_records_browser_observations(
 
     monkeypatch.setattr(AgentCoordinator, "record", record)
     monkeypatch.setattr(browser_agent, "validate_projection_evidence", validate)
+
+    async def no_live_cells(*_args: object, **_kwargs: object) -> None:
+        return None
+
     monkeypatch.setattr(
         PrivateSessionState,
         "live_cells",
-        lambda _sessions, _context, _session_id: None,
+        no_live_cells,
     )
 
     with TestClient(server.app) as client:
@@ -343,24 +347,23 @@ def test_external_observation_uses_the_selected_browser_session() -> None:
     )
     context: Any = SimpleNamespace()
 
-    class Provider:
-        def project(
-            self,
-            _snapshot: object,
-            _context: object,
-            session_id: str | None,
-            binding_id: str | None,
-            presentation_session_id: str | None,
-            runtime_session_id: str | None,
-        ) -> object:
-            assert presentation_session_id == session_id
-            assert runtime_session_id == session_id
-            projected_sessions.append((session_id, binding_id))
-            return SimpleNamespace(instance=f"runtime-{session_id}")
+    async def project(
+        _snapshot: object,
+        _context: object,
+        _runtime: str,
+        session_id: str | None,
+        binding_id: str | None,
+        presentation_session_id: str | None,
+        runtime_session_id: str | None,
+    ) -> object:
+        assert presentation_session_id == session_id
+        assert runtime_session_id == session_id
+        projected_sessions.append((session_id, binding_id))
+        return SimpleNamespace(instance=f"runtime-{session_id}")
 
     runtimes = cast(
         RuntimeRegistry,
-        SimpleNamespace(select=lambda *_args: (Provider(), ("server",))),
+        SimpleNamespace(project=project),
     )
     sessions = cast(SessionState, SimpleNamespace(exists=lambda *_args: True))
     requested = asyncio.Event()
@@ -504,12 +507,13 @@ def test_code_mode_observation_rejects_an_active_view_changed_during_snapshot() 
         agents=agents,
     )
     context: Any = SimpleNamespace()
-    provider = SimpleNamespace(
-        project=lambda *_args: SimpleNamespace(instance="runtime-instance")
-    )
+
+    async def project(*_args: object) -> object:
+        return SimpleNamespace(instance="runtime-instance")
+
     runtimes = cast(
         RuntimeRegistry,
-        SimpleNamespace(select=lambda *_args: (provider, ("server",))),
+        SimpleNamespace(project=project),
     )
     sessions = cast(SessionState, SimpleNamespace(exists=lambda *_args: True))
 

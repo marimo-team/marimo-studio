@@ -8,6 +8,7 @@ import pytest
 
 import marimo_studio._delivery.assets as assets_module
 import marimo_studio._delivery.export as export_module
+import marimo_studio._delivery.runtime_config as runtime_config_module
 from marimo_studio._artifacts.retention import ArtifactLease
 from marimo_studio._composition import create_browser_runtime_projector
 from marimo_studio._delivery.browser_ports import (
@@ -18,7 +19,11 @@ from marimo_studio._delivery.export import export_view
 from marimo_studio._delivery.ports import ExportAdapters, StaticRuntimeConfig
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._workspace import load_studio
-from marimo_studio.errors import StaticExportError, ViewProjectError
+from marimo_studio.errors import (
+    RuntimeConfigTooLargeError,
+    StaticExportError,
+    ViewProjectError,
+)
 from marimo_studio.errors._internal import CompatibilityError
 from marimo_studio.view_providers import BuildProfile, ViewProject
 
@@ -88,6 +93,12 @@ def test_export_view_writes_a_complete_static_bundle(
         "public asset"
     )
     assert output.joinpath("_marimo-studio/assets/runtime.js").is_file()
+    assert output.joinpath(
+        "_marimo-studio/assets/licenses/THIRD_PARTY_NOTICES.json"
+    ).is_file()
+    assert output.joinpath(
+        "_marimo-studio/assets/licenses/marimo-studio/LICENSE"
+    ).is_file()
     assert output.joinpath(".nojekyll").is_file()
 
 
@@ -144,7 +155,7 @@ def test_export_public_assets_reject_symlink_swaps(
     assert not output.exists()
 
 
-def test_export_preserves_only_a_nested_vanilla_entry_document(
+def test_export_preserves_nested_vanilla_local_sources(
     notebook_path: Path,
     tmp_path: Path,
 ) -> None:
@@ -157,11 +168,14 @@ def test_export_preserves_only_a_nested_vanilla_entry_document(
         .read_text(encoding="utf-8")
         .replace(
             "</head>",
-            '<script>window.nestedAsset = "ready";</script></head>',
+            '<link rel="stylesheet" href="./app.css?theme=nested">\n'
+            '<script type="module" src="./app.js#boot"></script></head>',
         ),
         encoding="utf-8",
     )
     (pages / "app.js").write_text('window.nestedAsset = "ready";\n', encoding="utf-8")
+    (pages / "app.css").write_text("body { color: canvastext; }\n", encoding="utf-8")
+    (pages / "unused.js").write_text("throw new Error();\n", encoding="utf-8")
     source_root.joinpath("index.html").write_text(
         "<!doctype html><title>Independent root asset</title>\n",
         encoding="utf-8",
@@ -186,11 +200,19 @@ def test_export_preserves_only_a_nested_vanilla_entry_document(
     assert result.entrypoint == output / "pages" / "index.html"
     assert '<base href="./">' in document
     assert 'src="../_marimo-studio/assets/runtime.js"' in document
-    assert 'window.nestedAsset = "ready"' in document
+    assert 'href="./app.css?theme=nested"' in document
+    assert 'src="./app.js#boot"' in document
+    assert "data-marimo-studio-source-revision" in document
     assert config["rootUrl"] == "../"
     assert config["publicRootUrl"] == "../"
     assert config["supportUrl"] == "../_marimo-studio/views/dashboard"
-    assert not output.joinpath("pages/app.js").exists()
+    assert output.joinpath("pages/app.js").read_text(encoding="utf-8") == (
+        'window.nestedAsset = "ready";\n'
+    )
+    assert output.joinpath("pages/app.css").read_text(encoding="utf-8") == (
+        "body { color: canvastext; }\n"
+    )
+    assert not output.joinpath("pages/unused.js").exists()
     assert not output.joinpath("index.html").exists()
 
 
@@ -205,8 +227,14 @@ def test_export_rejects_unlisted_artifact_files(
     def publish_with_extra_file(
         project: ViewProject,
         profile: BuildProfile,
+        *,
+        expected_generation: str | None = None,
     ) -> ArtifactLease:
-        lease = publish(project, profile)
+        lease = publish(
+            project,
+            profile,
+            expected_generation=expected_generation,
+        )
         lease.artifact.root.joinpath("unlisted.js").write_text(
             "unlisted",
             encoding="utf-8",
@@ -291,8 +319,25 @@ def test_export_revision_changes_with_runtime_configuration(
         lambda: ExportAdapters(
             browser=adapters.browser,
             runtime_config=lambda notebook: StaticRuntimeConfig(
-                user={"theme": theme["value"]},
-                overrides={},
+                user={
+                    "display": {"theme": theme["value"]},
+                    "completion": {"codeium_api_key": "leak-static-completion"},
+                    "ai": {"open_ai": {"api_key": "leak-static-ai"}},
+                    "mcp": {
+                        "mcpServers": {
+                            "private": {
+                                "env": {"TOKEN": "leak-static-mcp-env"},
+                                "headers": {"Authorization": "leak-static-mcp-header"},
+                            }
+                        }
+                    },
+                },
+                overrides={
+                    "runtime": {
+                        "show_tracebacks": True,
+                        "dotenv": ["leak-static-dotenv"],
+                    }
+                },
             ),
         ),
     )
@@ -305,11 +350,34 @@ def test_export_revision_changes_with_runtime_configuration(
     export_view(notebook_path, output, force=True)
     after = json.loads(config_path.read_text(encoding="utf-8"))
 
-    assert before["userConfig"] == {"theme": "light"}
-    assert after["userConfig"] == {"theme": "dark"}
+    assert before["userConfig"] == {"display": {"theme": "light"}}
+    assert after["userConfig"] == {"display": {"theme": "dark"}}
+    assert before["configOverrides"] == {"runtime": {"show_tracebacks": True}}
+    assert "leak-static" not in json.dumps(before)
+    assert "leak-static" not in json.dumps(after)
     assert before["revision"] != after["revision"]
     assert before["runtime"] == after["runtime"]
     assert before["projectionTargets"] == after["projectionTargets"]
+
+
+def test_static_export_enforces_the_shared_encoded_byte_budget(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configure_export_view(notebook_path)
+    output = tmp_path / "site"
+    monkeypatch.setattr(runtime_config_module, "RUNTIME_CONFIG_MAX_BYTES", 1)
+
+    with pytest.raises(RuntimeConfigTooLargeError) as raised:
+        export_view(notebook_path, output)
+
+    assert raised.value.code == "runtime-config-too-large"
+    assert str(raised.value) == "Runtime configuration exceeds the 1-byte limit."
+    assert raised.value.public_hint == RuntimeConfigTooLargeError.public_hint
+    assert raised.value.size > 1
+    assert raised.value.limit == 1
+    assert not output.exists()
 
 
 def test_export_rejects_browser_release_drift_before_creating_output(

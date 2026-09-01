@@ -8,10 +8,12 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from starlette.testclient import TestClient
 
+import marimo_studio._delivery.runtime_config as runtime_config_module
 from marimo_studio import create_asgi_app
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._workspace.metadata import update_notebook_config
+from marimo_studio.errors import RuntimeConfigTooLargeError
 from marimo_studio.errors._internal import RuntimeStartupError
 from marimo_studio.view_providers import BuildProfile
 
@@ -65,6 +67,29 @@ def test_edit_mode_offers_the_configured_preview_runtimes(notebook_path: Path) -
     assert bootstrap["urls"]["query"] == "/_marimo-studio/query"
 
 
+def test_live_runtime_config_enforces_the_shared_encoded_byte_budget(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    monkeypatch.setattr(runtime_config_module, "RUNTIME_CONFIG_MAX_BYTES", 1)
+
+    with TestClient(create_asgi_app(studio.notebook)) as client:
+        response = client.get("/_marimo-studio/views/dashboard/config")
+
+    payload = response.json()
+    assert response.status_code == 413
+    assert response.headers["Marimo-Studio-Error"] == "runtime-config-too-large"
+    assert payload == {
+        "error": "runtime-config-too-large",
+        "message": "Runtime configuration exceeds the 1-byte limit.",
+        "bytes": payload["bytes"],
+        "max_bytes": 1,
+        "hint": RuntimeConfigTooLargeError.public_hint,
+    }
+    assert payload["bytes"] > 1
+
+
 def test_studio_runtime_config_binds_without_exposing_its_editor_session(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -81,7 +106,7 @@ def test_studio_runtime_config_binds_without_exposing_its_editor_session(
         captured["client_id"] = client_id
         return "s_123456"
 
-    def runtime_config(
+    async def runtime_config(
         _snapshot: object,
         _context: object,
         _runtimes: object,
@@ -373,7 +398,7 @@ def test_studio_runtime_config_resolves_session_after_snapshot(
     ) -> str:
         return active["session_id"]
 
-    def runtime_config(
+    async def runtime_config(
         _snapshot: object,
         _context: object,
         _runtimes: object,
@@ -545,9 +570,13 @@ def test_server_runtime_instance_stays_stable_when_lookup_session_connects(
     studio = _configured(notebook_path)
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
+
+    async def no_live_cells(*_args: object, **_kwargs: object) -> None:
+        return None
+
     monkeypatch.setattr(
         "marimo_studio._compat.server.session_state.PrivateSessionState.live_cells",
-        lambda _sessions, _context, _session_id: None,
+        no_live_cells,
     )
 
     with TestClient(app) as client:

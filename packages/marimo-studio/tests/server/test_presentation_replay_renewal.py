@@ -76,9 +76,8 @@ def test_document_renewal_cannot_rebind_its_native_runtime_session(
     studio = _configured(notebook_path)
     app = _marimo_app(studio.notebook)
     _edit_mode(app)
-    _session_manager(app).get_session_by_file_key = lambda _file_key: (
-        _live_test_session(())
-    )
+    live_session = _live_test_session(())
+    _session_manager(app).get_session_by_file_key = lambda _file_key: live_session
     with TestClient(app) as client:
         shell = client.get("/dashboard/")
         frame_url = _presentation_frame_url(shell.text)
@@ -336,9 +335,8 @@ def test_signed_document_refresh_survives_token_authentication(
     studio = _configured(notebook_path)
     app = _marimo_app(studio.notebook, token="test-token")
     _edit_mode(app)
-    _session_manager(app).get_session_by_file_key = lambda _file_key: (
-        _live_test_session(())
-    )
+    live_session = _live_test_session(())
+    _session_manager(app).get_session_by_file_key = lambda _file_key: live_session
 
     with TestClient(app) as authenticated:
         established = authenticated.get(

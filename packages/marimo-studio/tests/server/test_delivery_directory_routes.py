@@ -164,10 +164,15 @@ def test_directory_support_routes_keep_notebook_identity(tmp_path: Path) -> None
                 "activeProjections": [output_projection],
             },
         )
+        inventory = client.get("/_marimo-studio/views?file=first.py").json()
         created = client.post(
             "/_marimo-studio/views?file=first.py",
             headers={"Marimo-Server-Token": server_token},
-            json={"name": "detail", "starter": "marimo-studio/vanilla:default"},
+            json={
+                "catalog_generation": inventory["generation"],
+                "name": "detail",
+                "starter": "marimo-studio/vanilla:default",
+            },
         )
         marimo_resource = client.get(f"{authored_root}dashboard/public-files-sw.js")
         authored_document = client.get(
@@ -249,6 +254,7 @@ def test_mounted_directory_host_promotes_with_canonical_urls(tmp_path: Path) -> 
             host["urls"]["views"],
             headers={"Marimo-Server-Token": host["serverToken"]},
             json={
+                "catalog_generation": host["generation"],
                 "name": "dashboard",
                 "starter": "marimo-studio/vanilla:default",
             },

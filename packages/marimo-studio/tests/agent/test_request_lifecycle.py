@@ -43,16 +43,13 @@ def test_observation_disconnect_clears_the_browser_operation(
         ),
     )
 
-    def select_runtime(*_args: object):
-        provider = SimpleNamespace(
-            project=lambda *_args: SimpleNamespace(instance="runtime-instance")
-        )
-        return provider, ("server",)
+    async def project_runtime(*_args: object) -> object:
+        return SimpleNamespace(instance="runtime-instance")
 
     sessions = cast(SessionState, SimpleNamespace(exists=lambda *_args: True))
     runtimes = cast(
         RuntimeRegistry,
-        SimpleNamespace(ids=("server",), select=select_runtime),
+        SimpleNamespace(ids=("server",), project=project_runtime),
     )
 
     async def exercise() -> tuple[int, tuple[object, ...]]:

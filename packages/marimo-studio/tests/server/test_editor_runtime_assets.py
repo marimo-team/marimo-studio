@@ -25,6 +25,7 @@ from marimo_studio._compat.server.editor_runtime import (
     _protect_editor_query_parameters,
     _serialize_document_transactions,
 )
+from marimo_studio._server.editor_bridge import _editor_document_send
 from marimo_studio._views.api import prepare_view
 from marimo_studio.errors import ProtocolError
 
@@ -60,6 +61,45 @@ def _resources(source: str) -> _ResourceParser:
     parser = _ResourceParser()
     parser.feed(source)
     return parser
+
+
+def test_editor_document_framing_preserves_existing_content_policy() -> None:
+    sent: list[Message] = []
+
+    async def send(message: Message) -> None:
+        sent.append(message)
+
+    protected_send = _editor_document_send(send)
+
+    async def exercise() -> None:
+        await protected_send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [
+                    (b"content-security-policy", b"default-src 'self'"),
+                    (b"content-security-policy", b"script-src 'self'"),
+                    (b"set-cookie", b"first=1"),
+                    (b"set-cookie", b"second=2"),
+                ],
+            }
+        )
+
+    asyncio.run(exercise())
+
+    assert sent == [
+        {
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                (b"content-security-policy", b"default-src 'self'"),
+                (b"content-security-policy", b"script-src 'self'"),
+                (b"set-cookie", b"first=1"),
+                (b"set-cookie", b"second=2"),
+                (b"content-security-policy", b"frame-ancestors 'self'"),
+            ],
+        }
+    ]
 
 
 def test_configured_editor_starts_its_runtime_without_user_action(
