@@ -1,0 +1,20 @@
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_svelte/build.py
+  s_af5d583a28e9c5::t_9743c51e3d6328 193-199,342
+  s_af5d583a28e9c5::t_d9c9a2218b1002 345
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ac1d3fd0bd1eee74c351ab6762ebaff433604911",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
