@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import suppress
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from time import monotonic
@@ -32,6 +34,11 @@ from marimo_studio._delivery.urls import (
 )
 from marimo_studio._notebook.cell_refs import cell_refs
 from marimo_studio._notebook.records import LiveCellIdentity, LiveCellSnapshot
+from marimo_studio._processes.latest_work import LatestWork
+from marimo_studio._processes.ownership import (
+    propagate_cancellation,
+    settle_ownership,
+)
 from marimo_studio._server.ports import EditorSessionIdentity, SessionOwner
 from marimo_studio._server.presentation.ports import ProjectionUnavailable
 from marimo_studio._server.records import ServerContext
@@ -40,6 +47,15 @@ from marimo_studio.errors._internal import RuntimeStartupError, RuntimeSyncError
 _SESSION_PATTERN = re.compile(r"s_[a-z0-9]{6}")
 _NATIVE_INSTANTIATION_TIMEOUT_SECONDS = 30.0
 CanonicalPublicQuery = tuple[tuple[str, tuple[str, ...]], ...]
+
+
+@dataclass(frozen=True)
+class _LiveCellCapture:
+    session_owner: int
+    document_generation: int
+    cells: tuple[tuple[str, str, str], ...]
+    executed_cells: tuple[tuple[str, str], ...]
+    graph_parents: tuple[tuple[str, tuple[str, ...]], ...] | None
 
 
 def _is_session_id(value: object) -> bool:
@@ -135,10 +151,13 @@ def _has_notebook_session(context: ServerContext) -> bool:
     return manager.get_session_by_file_key(context.file_key) is not None
 
 
-def _live_cells(
+def _capture_live_cells(
     context: ServerContext,
     session_id: str | None,
-) -> LiveCellSnapshot | None:
+    *,
+    include_dependency_closures: bool,
+    session_owner: Callable[[Session], int],
+) -> _LiveCellCapture | None:
     if session_id is not None:
         session = current_session(context, session_id)
     elif context.mode == "edit":
@@ -153,50 +172,109 @@ def _live_cells(
         raise RuntimeSyncError(
             "The Marimo session is still connecting. Studio will retry shortly."
         )
-    rows = tuple(session.document.cells)
-    refs = cell_refs(row.code for row in rows)
-    ordered_ids = tuple(str(row.id) for row in rows)
-    graph = session.app_file_manager.app.graph
-    graph_ids = {str(cell_id): cell_id for cell_id in graph.cells}
+    document = session.document
+    rows = tuple((str(row.id), row.code, row.name) for row in document.cells)
+    ordered_ids = tuple(runtime_id for runtime_id, _code, _name in rows)
     executed_code = {
         str(cell_id): code
-        for cell_id, code in session.session_view.last_executed_code.items()
+        for cell_id, code in session.session_view.last_executed_code.copy().items()
     }
     ordered_executed_cells = tuple(
         (runtime_id, executed_code[runtime_id])
         for runtime_id in ordered_ids
         if runtime_id in executed_code
     )
-    executed_refs = cell_refs(code for _runtime_id, code in ordered_executed_cells)
-    dependency_closures = {
-        runtime_id: tuple(
+    graph_parents: tuple[tuple[str, tuple[str, ...]], ...] | None = None
+    if include_dependency_closures:
+        graph = session.app_file_manager.app.graph
+        with graph.lock:
+            graph_ids = {str(cell_id): cell_id for cell_id in graph.cells}
+            graph_parents = tuple(
+                (
+                    runtime_id,
+                    tuple(
+                        candidate
+                        for candidate in ordered_ids
+                        if candidate in graph_ids
+                        and graph_ids[candidate]
+                        in graph.topology.parents.get(graph_ids[runtime_id], ())
+                    ),
+                )
+                for runtime_id in ordered_ids
+                if runtime_id in graph_ids
+            )
+    return _LiveCellCapture(
+        session_owner=session_owner(session),
+        document_generation=document.version,
+        cells=rows,
+        executed_cells=ordered_executed_cells,
+        graph_parents=graph_parents,
+    )
+
+
+def _dependency_closures(
+    ordered_ids: tuple[str, ...],
+    graph_parents: tuple[tuple[str, tuple[str, ...]], ...] | None,
+) -> dict[str, tuple[str, ...]]:
+    if graph_parents is None:
+        return {}
+    parents = dict(graph_parents)
+    closures: dict[str, tuple[str, ...]] = {}
+    for runtime_id in ordered_ids:
+        if runtime_id not in parents:
+            continue
+        ancestors: set[str] = set()
+        pending = list(parents[runtime_id])
+        while pending:
+            parent = pending.pop()
+            if parent in ancestors:
+                continue
+            ancestors.add(parent)
+            pending.extend(parents.get(parent, ()))
+        closures[runtime_id] = tuple(
             candidate
             for candidate in ordered_ids
-            if candidate
-            in {
-                runtime_id,
-                *(str(cell_id) for cell_id in graph.ancestors(graph_ids[runtime_id])),
-            }
+            if candidate == runtime_id or candidate in ancestors
         )
-        for runtime_id in ordered_ids
-        if runtime_id in graph_ids
-    }
+    return closures
+
+
+def _materialize_live_cells(capture: _LiveCellCapture) -> LiveCellSnapshot:
+    ordered_ids = tuple(runtime_id for runtime_id, _code, _name in capture.cells)
+    refs = cell_refs(code for _runtime_id, code, _name in capture.cells)
+    executed_refs = cell_refs(code for _runtime_id, code in capture.executed_cells)
     names: dict[str, list[LiveCellIdentity]] = {}
-    for ref, row in zip(refs, rows, strict=True):
-        if row.name == "_":
+    for ref, (runtime_id, _code, name) in zip(
+        refs,
+        capture.cells,
+        strict=True,
+    ):
+        if name == "_":
             continue
-        names.setdefault(row.name, []).append(
-            LiveCellIdentity(ref=ref, runtime_id=str(row.id))
+        names.setdefault(name, []).append(
+            LiveCellIdentity(ref=ref, runtime_id=runtime_id)
         )
     return LiveCellSnapshot(
-        ids={ref: str(row.id) for ref, row in zip(refs, rows, strict=True)},
+        owner=f"session:{capture.session_owner:x}",
+        generation=hashlib.sha256(repr(capture).encode("utf-8")).hexdigest(),
+        ids={
+            ref: runtime_id
+            for ref, (runtime_id, _code, _name) in zip(
+                refs,
+                capture.cells,
+                strict=True,
+            )
+        },
         names={name: tuple(identities) for name, identities in names.items()},
-        dependency_closures=dependency_closures,
+        dependency_closures=_dependency_closures(
+            ordered_ids,
+            capture.graph_parents,
+        ),
         current_refs={
             runtime_id: ref
             for ref, (runtime_id, _cell) in zip(
                 executed_refs,
-                ordered_executed_cells,
+                capture.executed_cells,
                 strict=True,
             )
         },
@@ -215,6 +293,16 @@ class PrivateSessionState:
         )
         self._waiting_since: WeakKeyDictionary[Session, float] = WeakKeyDictionary()
         self._start_failures: WeakKeyDictionary[Session, str] = WeakKeyDictionary()
+        self._runtime_owners: WeakKeyDictionary[Session, int] = WeakKeyDictionary()
+        self._next_runtime_owner = 0
+        self._live_materializer = LatestWork[LiveCellSnapshot](
+            superseded_error=lambda: RuntimeSyncError(
+                "A newer Marimo session generation replaced this capture."
+            ),
+            closed_error=lambda: RuntimeSyncError(
+                "Marimo session state is shutting down."
+            ),
+        )
 
     def is_session_id(self, value: object) -> bool:
         return _is_session_id(value)
@@ -224,16 +312,28 @@ class PrivateSessionState:
         if self._closed:
             return
         self._closed = True
+        failure: BaseException | None = None
+        try:
+            await self._live_materializer.close()
+        except BaseException as error:
+            failure = error
         tasks = tuple(set(self._starting.values()))
         for task in tasks:
             task.cancel()
+        cancellation: asyncio.CancelledError | None = None
         if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            _results, cancellation = await settle_ownership(
+                asyncio.gather(*tasks, return_exceptions=True)
+            )
         self._starting.clear()
         self._waiting_since.clear()
         self._start_failures.clear()
         self._instantiation_requested.clear()
         self._started.clear()
+        self._runtime_owners.clear()
+        if failure is not None:
+            raise failure
+        propagate_cancellation(cancellation)
 
     def exists(self, context: ServerContext, session_id: str) -> bool:
         return current_session(context, session_id) is not None
@@ -445,12 +545,49 @@ class PrivateSessionState:
     def has_notebook_session(self, context: ServerContext) -> bool:
         return _has_notebook_session(context)
 
-    def live_cells(
+    def _runtime_owner(self, session: Session) -> int:
+        owner = self._runtime_owners.get(session)
+        if owner is not None:
+            return owner
+        self._next_runtime_owner += 1
+        self._runtime_owners[session] = self._next_runtime_owner
+        return self._next_runtime_owner
+
+    async def live_cells(
         self,
         context: ServerContext,
         session_id: str | None,
+        *,
+        include_dependency_closures: bool,
     ) -> LiveCellSnapshot | None:
-        return _live_cells(context, session_id)
+        if self._closed:
+            raise RuntimeSyncError("Marimo session state is shutting down.")
+        capture = _capture_live_cells(
+            context,
+            session_id,
+            include_dependency_closures=include_dependency_closures,
+            session_owner=self._runtime_owner,
+        )
+        if capture is None:
+            return None
+        snapshot = await self._live_materializer.run(
+            capture,
+            (capture.session_owner, include_dependency_closures),
+            partial(_materialize_live_cells, capture),
+        )
+        if self._closed:
+            raise RuntimeSyncError("Marimo session state is shutting down.")
+        current = _capture_live_cells(
+            context,
+            session_id,
+            include_dependency_closures=include_dependency_closures,
+            session_owner=self._runtime_owner,
+        )
+        if current != capture:
+            raise RuntimeSyncError(
+                "The Marimo session changed while Studio captured runtime bindings."
+            )
+        return snapshot
 
 
 def _single_string(value: object) -> str | None:

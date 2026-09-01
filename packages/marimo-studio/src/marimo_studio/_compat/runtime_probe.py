@@ -1,4 +1,4 @@
-"""Run an isolated Marimo session for explicit CLI inspection."""
+"""Run a Marimo session inside an owned runtime worker."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from marimo_studio._compat.kernel_values import (
 )
 from marimo_studio._compat.kernel_values.representations import inspection_value
 from marimo_studio._compat.runtime_requests import instantiate_notebook_request
+from marimo_studio._notebook.source_generation import NotebookSourceGeneration
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._projections.runtime_records import (
     OutputRenderResult,
@@ -84,18 +85,19 @@ def _build_manager(path: Path, *, timeout: float, show_tracebacks: bool) -> Any:
     raise ProtocolError("Could not locate Marimo's runtime inspection session")
 
 
-async def probe_runtime(
+async def probe_runtime_in_worker(
     path: Path,
     *,
     cell_ids: tuple[str, ...],
     variables: tuple[str, ...],
-    output_selectors: tuple[str, ...] = (),
     output_selector_groups: tuple[tuple[str, ...], ...] = (),
     timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     show_tracebacks: bool = False,
     value_max_bytes: int | None = None,
+    source_generation: NotebookSourceGeneration | None = None,
 ) -> RuntimeProbe:
-    """Run a notebook session and return terminal outputs and values."""
+    """Run a notebook session owned by the current isolated worker."""
+    del source_generation
     from marimo._messaging.cell_output import CellChannel
     from marimo._messaging.notification import CompletedRunNotification
     from marimo._messaging.serde import deserialize_kernel_message
@@ -129,7 +131,7 @@ async def probe_runtime(
         def on_detach(self) -> None:
             return
 
-    groups = output_selector_groups or ((output_selectors,) if output_selectors else ())
+    groups = output_selector_groups
     allowed_outputs = tuple(
         dict.fromkeys(selector for group in groups for selector in group)
     )

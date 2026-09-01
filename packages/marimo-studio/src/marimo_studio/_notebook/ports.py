@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 from marimo_studio._notebook.records import CellKind, NotebookSpec, SourceSpan
+from marimo_studio._notebook.source_generation import NotebookSourceGeneration
 from marimo_studio._projections.runtime_records import RuntimeProbe
 
 
@@ -21,6 +23,7 @@ class LiveNotebookRunner(Protocol):
         show_tracebacks: bool,
         timeout: float,
         value_max_bytes: int | None = None,
+        source_generation: NotebookSourceGeneration | None = None,
     ) -> RuntimeProbe: ...
 
 
@@ -43,7 +46,7 @@ class StaticCell:
     kind: CellKind
     markdown: str | None
     has_output_expression: bool
-    displays_output: bool
+    may_display_output: bool
     definitions: tuple[str, ...]
     references: tuple[str, ...]
     parents: tuple[str, ...]
@@ -69,7 +72,8 @@ class EnvironmentFlagBuilder(Protocol):
     def __call__(
         self,
         notebook: Path,
-        package_requirement: str | None,
+        launch_requirements: tuple[str, ...],
         *,
         compose_project: bool,
+        marker_environment: Mapping[str, str] | None,
     ) -> list[str]: ...

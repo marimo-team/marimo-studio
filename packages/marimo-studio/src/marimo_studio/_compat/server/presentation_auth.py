@@ -10,6 +10,35 @@ from starlette.types import Receive, Scope, Send
 from marimo_studio._compat.patch import CompositeCloseHandle, ReversiblePatch
 from marimo_studio._server.presentation.capability import PRESENTATION_PATH
 
+_INVALID_SKEW_WARNING = (
+    "Received request with invalid server token (skew protection token)."
+)
+_REDACTED_SKEW_WARNING = (
+    "Received request with invalid server token (skew protection token). "
+    "This could mean the server has new code deployed but the client is still "
+    "using an old version."
+)
+
+
+def _wrap_skew_warning(
+    original: Callable[..., Any],
+) -> Callable[..., Any]:
+    def warning(message: object, *args: object, **kwargs: object) -> Any:
+        if isinstance(message, str) and message.startswith(_INVALID_SKEW_WARNING):
+            return original(_REDACTED_SKEW_WARNING, **kwargs)
+        return original(message, *args, **kwargs)
+
+    return warning
+
+
+class _SkewLogRedactor:
+    def __init__(self, logger: Any) -> None:
+        self._logger = logger
+        self.warning = _wrap_skew_warning(logger.warning)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._logger, name)
+
 
 def _wrap_skew_call(
     original: Callable[[Any, Scope, Receive, Send], Any],
@@ -63,6 +92,17 @@ def _skew_patch() -> ReversiblePatch:
     )
 
 
+def _skew_log_patch() -> ReversiblePatch:
+    from marimo._server.api import middleware
+
+    return ReversiblePatch(
+        "skew protection log redaction",
+        middleware,
+        "LOGGER",
+        _SkewLogRedactor,
+    )
+
+
 def _cors_patch() -> ReversiblePatch:
     from starlette.middleware.cors import CORSMiddleware
 
@@ -88,6 +128,7 @@ class PrivatePresentationAuthorization:
 
             self._patches = (
                 _cors_patch(),
+                _skew_log_patch(),
                 _skew_patch(),
                 _SESSION_CONNECT_PATCH,
             )

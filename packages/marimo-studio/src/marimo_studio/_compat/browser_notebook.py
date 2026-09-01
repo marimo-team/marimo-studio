@@ -5,8 +5,11 @@ from __future__ import annotations
 import ast
 import inspect
 import textwrap
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Mapping
+from importlib.metadata import packages_distributions
 from pathlib import Path
+
+from packaging.utils import NormalizedName, canonicalize_name
 
 from marimo_studio._compat.browser_bridge import install_browser_bridge
 from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
@@ -14,11 +17,7 @@ from marimo_studio._compat.notebook import run_guard_line
 from marimo_studio._delivery.urls import PRIVATE_QUERY_KEYS
 from marimo_studio._projections.records import ValueReference
 from marimo_studio._projections.values import MAX_OUTPUT_SELECTORS, MAX_VALUE_PATH_STEPS
-from marimo_studio._workspace.metadata import (
-    _document,
-    _replace_metadata,
-    set_package_requirement,
-)
+from marimo_studio._workspace.metadata import browser_notebook_metadata_source
 
 MAX_VALUE_SELECTOR_COUNT = 100
 MAX_VALUE_BYTES = 1_000_000
@@ -27,18 +26,30 @@ WASM_PROJECTION_NAMESPACE = "_marimo_studio_wasm"
 BROWSER_BRIDGE_CELL_NAME = "__marimo_studio_values"
 
 
-def _sanitized_metadata(source: str, path: Path) -> str:
-    document = _document(source, path)
-    if document is None:
-        return source
-    set_package_requirement(document, None)
-    tool = document.get("tool")
-    if isinstance(tool, MutableMapping):
-        tool.pop("marimo-studio", None)
-        tool.pop("uv", None)
-        if not tool:
-            document.pop("tool", None)
-    return _replace_metadata(source, path, document)
+def _imported_distributions(source: str) -> frozenset[NormalizedName]:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return frozenset()
+    modules = {
+        alias.name.partition(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
+    modules.update(
+        node.module.partition(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module
+    )
+    distributions = packages_distributions()
+    imported = {canonicalize_name(module) for module in modules}
+    imported.update(
+        canonicalize_name(distribution)
+        for module in modules
+        for distribution in distributions.get(module, ())
+    )
+    return frozenset(imported)
 
 
 def selector_specs(
@@ -98,7 +109,11 @@ def browser_notebook_source(
     source: str,
 ) -> str:
     """Return source for a full Pyodide notebook runtime."""
-    sanitized = _sanitized_metadata(source, path)
+    sanitized = browser_notebook_metadata_source(
+        path,
+        source,
+        imported_distributions=_imported_distributions(source),
+    )
     bridge = _value_bridge()
     guard = run_guard_line(sanitized)
     if guard is None:

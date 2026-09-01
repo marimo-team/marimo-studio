@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -26,6 +27,16 @@ _POSIX_ONLY = pytest.mark.skipif(
     os.name != "posix",
     reason="POSIX process groups are required",
 )
+
+
+def test_process_returncode_formats_windows_exception_status() -> None:
+    assert (
+        process_supervisor.process_returncode_message(
+            0xC0000005,
+            platform="nt",
+        )
+        == "exited with status 0xC0000005"
+    )
 
 
 def test_process_supervisor_times_out_and_terminates_the_worker() -> None:
@@ -286,9 +297,12 @@ def test_observer_setup_failure_terminates_a_fast_detached_descendant(
 
     def fail_observer(_process: object) -> object:
         deadline = time.monotonic() + 2
-        while not marker.is_file() and time.monotonic() < deadline:
+        observed_pid: int | None = None
+        while observed_pid is None and time.monotonic() < deadline:
+            with suppress(FileNotFoundError, ValueError):
+                observed_pid = int(marker.read_text(encoding="utf-8"))
             time.sleep(0.01)
-        assert marker.is_file()
+        assert observed_pid is not None
         raise RuntimeError("observer setup failed")
 
     monkeypatch.setattr(process_supervisor, "_ProcessExitObserver", fail_observer)

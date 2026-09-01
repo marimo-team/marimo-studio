@@ -18,7 +18,6 @@ from typing import Any
 
 from marimo._session.state import serialize as native_session_cache
 from marimo._session.state.serialize import SessionCacheWriter
-from marimo._utils.async_path import AsyncPath
 
 from marimo_studio._compat.patch import CallbackCloseHandle, ReversiblePatch
 from marimo_studio._filesystem.io import atomic_write_text
@@ -49,21 +48,18 @@ def _run_replacement(_native_run: Any) -> Any:
                     )
                     content = json.dumps(data, indent=2)
                     path = Path(writer.path)
-                    if isinstance(writer.path, AsyncPath):
-                        (
-                            _identity,
-                            failure,
-                            cancellation,
-                        ) = await settle_ownership_outcome(
-                            asyncio.to_thread(atomic_write_text, path, content)
-                        )
-                        if failure is not None:
-                            native_session_cache.LOGGER.error(f"Write error: {failure}")
-                            propagate_cancellation(cancellation)
-                            break
+                    (
+                        _identity,
+                        failure,
+                        cancellation,
+                    ) = await settle_ownership_outcome(
+                        asyncio.to_thread(atomic_write_text, path, content)
+                    )
+                    if failure is not None:
+                        native_session_cache.LOGGER.error(f"Write error: {failure}")
                         propagate_cancellation(cancellation)
-                    else:
-                        atomic_write_text(path, content)
+                        break
+                    propagate_cancellation(cancellation)
                 await asyncio.sleep(writer.interval)
             except asyncio.CancelledError:
                 raise

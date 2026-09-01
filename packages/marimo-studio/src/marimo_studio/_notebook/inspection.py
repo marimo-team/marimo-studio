@@ -22,6 +22,10 @@ from marimo_studio._notebook.records import (
     NotebookSpec,
     select_cells,
 )
+from marimo_studio._notebook.source_generation import (
+    capture_notebook_source_generation,
+    require_notebook_source_generation,
+)
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio.errors import ConfigurationError
 
@@ -113,7 +117,7 @@ def _notebook_snapshot(path: str | Path) -> tuple[NotebookSpec, StaticNotebook]:
                 hide_code=cell.hide_code,
             ),
             has_output_expression=cell.has_output_expression,
-            displays_output=cell.displays_output,
+            may_display_output=cell.may_display_output,
             markdown=cell.markdown,
             code=None,
         )
@@ -190,7 +194,10 @@ async def inspect_runtime(
             definition for cell in selected for definition in cell.definitions
         )
     )
-    _require_source_revision(notebook.path, static.source_revision)
+    source_generation = capture_notebook_source_generation(
+        notebook.path,
+        static.source_revision,
+    )
     runtime = await create_runtime_probe()(
         notebook.path,
         cell_ids=tuple(cell.runtime_id for cell in selected),
@@ -199,8 +206,9 @@ async def inspect_runtime(
         show_tracebacks=True,
         timeout=runtime_timeout,
         value_max_bytes=_RUNTIME_VALUE_BYTES,
+        source_generation=source_generation,
     )
-    _require_source_revision(notebook.path, static.source_revision)
+    require_notebook_source_generation(notebook.path, source_generation)
     return InspectionResult(
         notebook=notebook,
         cells=cells,
@@ -220,16 +228,3 @@ def _attach_selected_code(
         )
         for cell in cells
     )
-
-
-def _require_source_revision(path: Path, expected: str) -> None:
-    try:
-        current = hashlib.sha256(path.read_bytes()).hexdigest()
-    except OSError as error:
-        raise ConfigurationError(
-            f"Notebook changed during inspection: {path}. Retry the request."
-        ) from error
-    if current != expected:
-        raise ConfigurationError(
-            f"Notebook changed during inspection: {path}. Retry the request."
-        )

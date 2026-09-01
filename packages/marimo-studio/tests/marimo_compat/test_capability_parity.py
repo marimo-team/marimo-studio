@@ -150,7 +150,12 @@ def test_view_read_and_build_adapters_match(notebook_path) -> None:
         "--target",
         str(notebook_path),
     )
-    assert command_document == {"schema": 1, **document.to_dict()}
+    assert command_document == {
+        "schema": 1,
+        **document.to_dict(),
+        "catalog_generation": view.catalog_generation,
+        "view_generation": view.generation,
+    }
 
     build = asyncio.run(view.build()).to_dict()
     command_build = _json_command(

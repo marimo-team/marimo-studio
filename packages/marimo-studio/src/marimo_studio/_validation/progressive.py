@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import math
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING
@@ -26,6 +26,7 @@ from marimo_studio._validation.limits import (
     DEFAULT_BROWSER_TIMEOUT,
     MAX_BROWSER_TIMEOUT,
 )
+from marimo_studio._validation.ownership import require_validation_owner
 from marimo_studio._validation.ports import RuntimeChecker
 from marimo_studio._validation.results import CheckResult
 from marimo_studio._validation.runtime_process import check_runtime_studio_isolated
@@ -94,6 +95,8 @@ class ValidationRequest:
     runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT
     require_browser: bool = True
     browser_client: str | None = None
+    catalog_generation: str | None = None
+    view_generation: str | None = None
 
     def __post_init__(self) -> None:
         _ = self.options
@@ -105,6 +108,38 @@ class ValidationRequest:
                 "browser_client",
                 "browser_client must be a non-empty string or null",
             )
+        for field, generation in (
+            ("catalog_generation", self.catalog_generation),
+            ("view_generation", self.view_generation),
+        ):
+            if generation is not None and (
+                not isinstance(generation, str)
+                or len(generation) != 64
+                or any(character not in "0123456789abcdef" for character in generation)
+            ):
+                raise CapabilityInputError(
+                    "invalid-validation-request",
+                    field,
+                    f"{field} must be a 64-character lowercase hexadecimal "
+                    "string or null",
+                )
+        if (self.catalog_generation is None) != (self.view_generation is None):
+            missing = (
+                "catalog_generation"
+                if self.catalog_generation is None
+                else "view_generation"
+            )
+            raise CapabilityInputError(
+                "invalid-validation-request",
+                missing,
+                "catalog_generation and view_generation must be provided together",
+            )
+        if self.catalog_generation is not None and not self.view:
+            raise CapabilityInputError(
+                "invalid-validation-request",
+                "view",
+                "Strict validation generations require a named view",
+            )
 
     @property
     def options(self) -> ValidationOptions:
@@ -115,8 +150,15 @@ class ValidationRequest:
             require_browser=self.require_browser,
         )
 
+    @property
+    def expected_generations(self) -> dict[str, str] | None:
+        if self.view_generation is None:
+            return None
+        assert self.view is not None
+        return {self.view: self.view_generation}
+
     def to_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "schema": 1,
             "view": self.view,
             "browser_timeout": self.browser_timeout,
@@ -124,6 +166,10 @@ class ValidationRequest:
             "require_browser": self.require_browser,
             "browser_client": self.browser_client,
         }
+        if self.catalog_generation is not None:
+            payload["catalog_generation"] = self.catalog_generation
+            payload["view_generation"] = self.view_generation
+        return payload
 
     @classmethod
     def from_dict(cls, payload: object) -> ValidationRequest:
@@ -140,6 +186,8 @@ class ValidationRequest:
                     "runtime_timeout",
                     "require_browser",
                     "browser_client",
+                    "catalog_generation",
+                    "view_generation",
                 }
             )
         ):
@@ -154,6 +202,8 @@ class ValidationRequest:
             runtime_timeout=payload.get("runtime_timeout", DEFAULT_RUNTIME_TIMEOUT),
             require_browser=payload.get("require_browser", True),
             browser_client=payload.get("browser_client"),
+            catalog_generation=payload.get("catalog_generation"),
+            view_generation=payload.get("view_generation"),
         )
 
     def require_focused_view(self) -> None:
@@ -187,6 +237,8 @@ async def validate_progressively(
     observe_browser: BrowserObserver | None = None,
     runtime_checker: RuntimeChecker | None = None,
     development: DevelopmentCoordinator | None = None,
+    expected_catalog_generation: str | None = None,
+    expected_generations: Mapping[str, str] | None = None,
 ) -> ValidationEvidence:
     """Validate selected views and return a repair-oriented report.
 
@@ -195,10 +247,17 @@ async def validate_progressively(
     rendered Studio pages.
     """
     options = options or ValidationOptions()
+    require_validation_owner(
+        studio,
+        expected_catalog_generation=expected_catalog_generation,
+        expected_generations=expected_generations,
+    )
     preparation = await prepare_validation(
         studio,
         view_name=options.view,
         development=development,
+        expected_catalog_generation=expected_catalog_generation,
+        expected_generations=expected_generations,
     )
     views = preparation.views
     revisions = preparation.revisions
@@ -255,7 +314,7 @@ async def validate_progressively(
         )
     )
     issues = (*issues, *project_issues)
-    return ValidationEvidence(
+    evidence = ValidationEvidence(
         notebook=studio.notebook,
         views=views,
         runtime=studio.default_runtime,
@@ -268,6 +327,16 @@ async def validate_progressively(
         issues=issues,
         dynamic_browser_required=preparation.dynamic_browser_required,
     )
+    if expected_catalog_generation is not None or expected_generations is not None:
+        from marimo_studio._workspace import load_studio
+
+        current = await asyncio.to_thread(load_studio, studio.config_path)
+        require_validation_owner(
+            current,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generations=expected_generations,
+        )
+    return evidence
 
 
 def _project_state_issues(

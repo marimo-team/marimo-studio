@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any, BinaryIO, Protocol, cast
 
 _TERMINATION_TIMEOUT = 2.0
-_MAX_OUTPUT_BYTES = 2_000_000
+MAX_PROCESS_STDOUT_BYTES = 2_000_000
 _MAX_ERROR_BYTES = 16_000
 _MAX_ERROR_STREAM_BYTES = 2_000_000
 _READ_CHUNK_BYTES = 64 * 1024
@@ -34,6 +34,25 @@ class ProcessResult:
     stderr: bytes
     timed_out: bool = False
     output_too_large: bool = False
+
+
+def process_returncode_message(
+    returncode: int,
+    *,
+    platform: str = os.name,
+) -> str:
+    """Describe one POSIX signal status or Windows exception status."""
+    if platform != "posix":
+        if returncode < 0 or returncode > 0x7FFFFFFF:
+            return f"exited with status 0x{returncode & 0xFFFFFFFF:08X}"
+        return f"exited with status {returncode}"
+    if returncode >= 0:
+        return f"exited with status {returncode}"
+    try:
+        name = signal.Signals(-returncode).name
+    except ValueError:
+        name = str(-returncode)
+    return f"was terminated by signal {name}"
 
 
 class ProcessCleanupError(OSError):
@@ -211,7 +230,11 @@ class ProcessSupervisor:
             owns_process_tree=self._owns_process_tree,
         )
         overflow = threading.Event()
-        stdout = _BoundedCapture(_MAX_OUTPUT_BYTES, _MAX_OUTPUT_BYTES, overflow)
+        stdout = _BoundedCapture(
+            MAX_PROCESS_STDOUT_BYTES,
+            MAX_PROCESS_STDOUT_BYTES,
+            overflow,
+        )
         stderr = _BoundedCapture(
             _MAX_ERROR_BYTES,
             _MAX_ERROR_STREAM_BYTES,

@@ -17,7 +17,7 @@ from marimo_studio._compat.kernel_values.authorization import (
 )
 from marimo_studio._compat.kernel_values.kernel import _KernelBridgeLifespan
 from marimo_studio._compat.notebook import load_static_notebook
-from marimo_studio._compat.runtime_probe import probe_runtime
+from marimo_studio._compat.runtime_probe import probe_runtime_in_worker
 
 from .values_test_support import (
     _encoded_json,
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     cell = load_static_notebook(notebook).cells[0]
 
     result = asyncio.run(
-        probe_runtime(
+        probe_runtime_in_worker(
             notebook,
             cell_ids=(cell.runtime_id,),
             variables=("context.count",),
@@ -276,11 +276,11 @@ if __name__ == "__main__":
     )
 
     result = asyncio.run(
-        probe_runtime(
+        probe_runtime_in_worker(
             notebook,
             cell_ids=(),
             variables=(),
-            output_selectors=("df",),
+            output_selector_groups=(("df",),),
             timeout=10,
         )
     )
@@ -314,11 +314,11 @@ if __name__ == "__main__":
     )
 
     result = asyncio.run(
-        probe_runtime(
+        probe_runtime_in_worker(
             notebook,
             cell_ids=(),
             variables=(),
-            output_selectors=("first", "second"),
+            output_selector_groups=(("first", "second"),),
             timeout=10,
         )
     )

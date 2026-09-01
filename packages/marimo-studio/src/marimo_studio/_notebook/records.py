@@ -72,6 +72,8 @@ class LiveCellIdentity:
 
 @dataclass(frozen=True)
 class LiveCellSnapshot:
+    owner: str
+    generation: str
     ids: Mapping[CellRef, str]
     names: Mapping[str, tuple[LiveCellIdentity, ...]]
     dependency_closures: Mapping[str, tuple[str, ...]]
@@ -109,7 +111,7 @@ class CellSpec:
     downstream: tuple[CellRef, ...]
     config: CellConfigSpec
     has_output_expression: bool
-    displays_output: bool
+    may_display_output: bool
     markdown: str | None
     code: str | None = None
 
@@ -129,7 +131,7 @@ class CellSpec:
             "downstream": [str(ref) for ref in self.downstream],
             "config": asdict(self.config),
             "has_output_expression": self.has_output_expression,
-            "displays_output": self.displays_output,
+            "may_display_output": self.may_display_output,
             "markdown": self.markdown,
         }
         if self.code is not None:

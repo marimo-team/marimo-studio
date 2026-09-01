@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import ctypes
+import time
 from ctypes import wintypes
 from threading import Lock
 from typing import Any
 
 _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9
+_JOB_OBJECT_BASIC_ACCOUNTING_INFORMATION = 1
 _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
 _PROCESS_TERMINATE = 0x0001
 _PROCESS_SET_QUOTA = 0x0100
 _PROCESS_SUSPEND_RESUME = 0x0800
 _ctypes_api: Any = ctypes
+_TERMINATION_TIMEOUT = 2.0
+_TERMINATION_POLL_INTERVAL = 0.01
 
 
 def _load_library(name: str) -> Any:
@@ -60,6 +64,19 @@ class _ExtendedLimitInformation(ctypes.Structure):
         ("JobMemoryLimit", ctypes.c_size_t),
         ("PeakProcessMemoryUsed", ctypes.c_size_t),
         ("PeakJobMemoryUsed", ctypes.c_size_t),
+    ]
+
+
+class _BasicAccountingInformation(ctypes.Structure):
+    _fields_ = [
+        ("TotalUserTime", ctypes.c_longlong),
+        ("TotalKernelTime", ctypes.c_longlong),
+        ("ThisPeriodTotalUserTime", ctypes.c_longlong),
+        ("ThisPeriodTotalKernelTime", ctypes.c_longlong),
+        ("TotalPageFaultCount", wintypes.DWORD),
+        ("TotalProcesses", wintypes.DWORD),
+        ("ActiveProcesses", wintypes.DWORD),
+        ("TotalTerminatedProcesses", wintypes.DWORD),
     ]
 
 
@@ -145,6 +162,22 @@ class WindowsJob:
             kernel32.TerminateJobObject.restype = wintypes.BOOL
             if not kernel32.TerminateJobObject(handle, 1):
                 raise _windows_error()
+            kernel32.QueryInformationJobObject.argtypes = [
+                wintypes.HANDLE,
+                ctypes.c_int,
+                ctypes.c_void_p,
+                wintypes.DWORD,
+                ctypes.POINTER(wintypes.DWORD),
+            ]
+            kernel32.QueryInformationJobObject.restype = wintypes.BOOL
+            deadline = time.monotonic() + _TERMINATION_TIMEOUT
+            while _active_processes(kernel32, handle):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise OSError(
+                        "Windows job processes remained alive after termination."
+                    )
+                time.sleep(min(_TERMINATION_POLL_INTERVAL, remaining))
 
     def close(self) -> None:
         with self._lock:
@@ -157,3 +190,17 @@ class WindowsJob:
             if not kernel32.CloseHandle(handle):
                 raise _windows_error()
             self._handle = 0
+
+
+def _active_processes(kernel32: Any, handle: int) -> int:
+    accounting = _BasicAccountingInformation()
+    returned = wintypes.DWORD()
+    if not kernel32.QueryInformationJobObject(
+        handle,
+        _JOB_OBJECT_BASIC_ACCOUNTING_INFORMATION,
+        ctypes.byref(accounting),
+        ctypes.sizeof(accounting),
+        ctypes.byref(returned),
+    ):
+        raise _windows_error()
+    return int(accounting.ActiveProcesses)

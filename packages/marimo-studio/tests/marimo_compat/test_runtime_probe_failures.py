@@ -8,7 +8,7 @@ import pytest
 import marimo_studio._compat.kernel_values.session as kernel_session_module
 import marimo_studio._compat.runtime_probe as runtime_probe_module
 from marimo_studio._compat.kernel_values.session import _FunctionResultWaiter
-from marimo_studio._compat.runtime_probe import probe_runtime
+from marimo_studio._compat.runtime_probe import probe_runtime_in_worker
 from marimo_studio._server.presentation.ports import ProjectionUnavailable
 
 
@@ -35,7 +35,7 @@ def test_runtime_probe_preserves_session_creation_failures(
 
     with pytest.raises(RuntimeError, match="session startup failed"):
         asyncio.run(
-            probe_runtime(
+            probe_runtime_in_worker(
                 notebook_path,
                 cell_ids=(),
                 variables=(),

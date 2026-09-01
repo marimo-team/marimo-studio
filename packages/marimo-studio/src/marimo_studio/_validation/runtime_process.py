@@ -4,27 +4,38 @@ from __future__ import annotations
 
 import asyncio
 import json
-import math
 import os
-import signal
 import sys
+import tempfile
 from functools import partial
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from marimo_studio._processes.async_command import run_supervised_command
 from marimo_studio._processes.limits import (
     DEFAULT_RUNTIME_TIMEOUT,
-    MAX_RUNTIME_TIMEOUT,
     runtime_process_timeout,
+    validate_runtime_timeout,
 )
-from marimo_studio._processes.ownership import settle_ownership
 from marimo_studio._processes.provider_operation import (
-    find_process_cleanup_error,
     raise_process_cleanup,
     run_provider_operation,
 )
-from marimo_studio._processes.supervisor import ProcessCleanupError, ProcessSupervisor
+from marimo_studio._processes.response_file import (
+    ProcessResponseError,
+    read_process_response,
+    write_process_response,
+)
+from marimo_studio._processes.supervisor import (
+    ProcessCleanupError,
+    ProcessResult,
+    process_returncode_message,
+)
 from marimo_studio._validation.results import CheckResult
+from marimo_studio._validation.runtime_protocol import (
+    encode_runtime_validation_request,
+    load_runtime_validation_request,
+)
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
 
@@ -37,10 +48,7 @@ async def check_runtime_studio_isolated(
     timeout: float = DEFAULT_RUNTIME_TIMEOUT,
 ) -> tuple[CheckResult, ...]:
     """Run Studio's runtime checks in a supervised Python process."""
-    if not math.isfinite(timeout) or not 0 <= timeout <= MAX_RUNTIME_TIMEOUT:
-        raise ValueError(
-            f"timeout must be a finite number between 0 and {MAX_RUNTIME_TIMEOUT:g}"
-        )
+    validate_runtime_timeout(timeout)
     views: tuple[str, ...] = ()
     before: dict[str, str] | None = None
     if expected_revisions is not None:
@@ -57,33 +65,24 @@ async def check_runtime_studio_isolated(
             )
         if before != expected_revisions:
             return (_source_changed_check(studio.notebook),)
-    supervisor = ProcessSupervisor()
     process_timeout = runtime_process_timeout(timeout)
-    command = [
-        sys.executable,
-        "-m",
-        "marimo_studio._validation.runtime_process",
-        str(studio.notebook),
-        view_name or "",
-        json.dumps(expected_revisions or {}, separators=(",", ":")),
-        f"{timeout:.17g}",
-    ]
-    task = asyncio.create_task(
-        asyncio.to_thread(supervisor.run, command, process_timeout)
-    )
     try:
-        result = await asyncio.shield(task)
-    except asyncio.CancelledError as cancellation:
-        supervisor.cancel()
-        try:
-            await settle_ownership(task)
-        except BaseException as error:
-            cleanup = find_process_cleanup_error(error)
-            if cleanup is not None:
-                raise cleanup from cancellation
-            raise cancellation from error
-        raise cancellation
+        request = encode_runtime_validation_request(
+            studio.notebook,
+            view_name,
+            expected_revisions,
+            timeout,
+        )
+    except ValueError as error:
+        return _process_failure(
+            studio,
+            f"Isolated notebook runtime request is invalid: {error}",
+        )
+    try:
+        result, response = await _run_runtime_worker(request, process_timeout)
     except ProcessCleanupError as error:
+        if isinstance(error.__cause__, asyncio.CancelledError):
+            raise
         return _process_failure(
             studio,
             f"Isolated notebook runtime cleanup failed: {error}",
@@ -92,6 +91,11 @@ async def check_runtime_studio_isolated(
                 "Stop the remaining notebook processes, repair the host process "
                 "cleanup failure, then rerun validation."
             ),
+        )
+    except ProcessResponseError as error:
+        return _process_failure(
+            studio,
+            f"Isolated notebook runtime response is unavailable: {error}",
         )
     except OSError as error:
         return _process_failure(
@@ -116,15 +120,15 @@ async def check_runtime_studio_isolated(
             "Isolated notebook runtime returned more than 2 MB of output.",
         )
     if result.returncode != 0:
-        detail = result.stderr.decode("utf-8", errors="replace").strip()
-        suffix = f": {detail}" if detail else ""
-        failure = f"Isolated notebook runtime {_returncode_message(result.returncode)}"
+        failure = (
+            f"Isolated notebook runtime {process_returncode_message(result.returncode)}"
+        )
         return _process_failure(
             studio,
-            f"{failure}{suffix}",
+            failure,
         )
     try:
-        payload = json.loads(result.stdout)
+        payload = json.loads(response)
     except (json.JSONDecodeError, UnicodeDecodeError):
         return _process_failure(
             studio,
@@ -166,16 +170,32 @@ async def check_runtime_studio_isolated(
     )
 
 
-def _returncode_message(returncode: int, *, platform: str = os.name) -> str:
-    if returncode >= 0:
-        return f"exited with status {returncode}"
-    if platform != "posix":
-        return f"exited with status 0x{returncode & 0xFFFFFFFF:08X}"
-    try:
-        name = signal.Signals(-returncode).name
-    except ValueError:
-        name = str(-returncode)
-    return f"was terminated by signal {name}"
+async def _run_runtime_worker(
+    request: bytes,
+    timeout: float,
+) -> tuple[ProcessResult, bytes]:
+    with tempfile.TemporaryDirectory(prefix="marimo-studio-validation-") as root:
+        request_path = Path(root) / "request.json"
+        response_path = Path(root) / "response.json"
+        request_path.write_bytes(request)
+        result = await run_supervised_command(
+            [
+                sys.executable,
+                "-m",
+                "marimo_studio._validation.runtime_process",
+                str(request_path),
+                str(response_path),
+            ],
+            timeout,
+        )
+        response = (
+            read_process_response(response_path)
+            if not result.timed_out
+            and not result.output_too_large
+            and result.returncode == 0
+            else b""
+        )
+    return result, response
 
 
 def _process_failure(
@@ -259,46 +279,46 @@ def _source_changed_check(notebook: Path) -> CheckResult:
 
 
 def _run_worker(
-    notebook: str,
-    view_name: str,
-    expected_json: str,
-    timeout_text: str,
+    request_path: Path,
+    response_path: Path,
 ) -> int:
     from marimo_studio._validation.static import check_runtime_studio
     from marimo_studio._workspace import load_studio
 
-    path = Path(notebook)
-    timeout = float(timeout_text)
-    if not math.isfinite(timeout) or not 0 <= timeout <= MAX_RUNTIME_TIMEOUT:
-        raise ValueError("Runtime timeout is outside the supported range")
-    expected_value = json.loads(expected_json)
-    if not isinstance(expected_value, dict) or not all(
-        isinstance(key, str) and isinstance(value, str)
-        for key, value in expected_value.items()
-    ):
-        raise ValueError("Expected revisions must be a string mapping")
+    request = load_runtime_validation_request(request_path)
+    path = request.notebook
+    timeout = request.timeout
     studio = load_studio(path)
-    views = (view_name,) if view_name else tuple(studio.views)
+    views = (
+        (request.view_name,) if request.view_name is not None else tuple(studio.views)
+    )
     from marimo_studio._views.revisions import capture_published_presentations
 
-    snapshot = capture_published_presentations(studio, views)
-    if snapshot is None:
-        checks = _process_failure(
-            studio,
-            "Published presentations are unavailable for runtime validation.",
-        )
+    expected = request.expected_revisions
+    if expected is not None and _source_revisions(studio, views) != expected:
+        checks = (_source_changed_check(path),)
     else:
-        with snapshot:
-            mounts = {name: snapshot.artifacts[name].mounts for name in views}
-        checks = asyncio.run(
-            check_runtime_studio(
+        snapshot = capture_published_presentations(studio, views)
+        if snapshot is None:
+            checks = _process_failure(
                 studio,
-                view_name=view_name or None,
-                timeout=timeout,
-                _published_mounts=mounts,
+                "Published presentations are unavailable for runtime validation.",
             )
-        )
-    sys.stdout.write(
+        else:
+            with snapshot:
+                mounts = {name: snapshot.artifacts[name].mounts for name in views}
+            checks = asyncio.run(
+                check_runtime_studio(
+                    studio,
+                    view_name=request.view_name,
+                    timeout=timeout,
+                    _published_mounts=mounts,
+                )
+            )
+            if expected is not None and _source_revisions(studio, views) != expected:
+                checks = (*checks, _source_changed_check(path))
+    write_process_response(
+        response_path,
         json.dumps(
             {
                 "schema": 1,
@@ -306,15 +326,18 @@ def _run_worker(
             },
             ensure_ascii=False,
             separators=(",", ":"),
-        )
+        ).encode("utf-8"),
     )
     return 0
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
+    if len(sys.argv) != 3:
         raise SystemExit(2)
-    exit_code = _run_worker(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+    exit_code = _run_worker(
+        Path(sys.argv[1]),
+        Path(sys.argv[2]),
+    )
     # The supervisor owns this isolated process group. Flush the protocol
     # response before bypassing interpreter waits for a lingering kernel thread.
     sys.stdout.flush()

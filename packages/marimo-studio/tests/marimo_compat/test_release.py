@@ -18,7 +18,7 @@ import marimo_studio._delivery.assets as assets_module
 import marimo_studio._validation.static as checks_module
 from marimo_studio._compat.notebook import load_static_notebook
 from marimo_studio._compat.patch import ReversiblePatch
-from marimo_studio._compat.runtime_probe import probe_runtime
+from marimo_studio._compat.runtime_probe import probe_runtime_in_worker
 from marimo_studio._composition import create_browser_runtime_projector
 from marimo_studio._validation.static import check_studio
 from marimo_studio._views.api import prepare_view
@@ -185,7 +185,7 @@ def test_browser_projection_bootstrap_executes_in_the_native_kernel(
     projected.write_text(projection.code, encoding="utf-8")
 
     runtime = asyncio.run(
-        probe_runtime(
+        probe_runtime_in_worker(
             projected,
             cell_ids=(projection.bootstrap_cell_id,),
             variables=(),

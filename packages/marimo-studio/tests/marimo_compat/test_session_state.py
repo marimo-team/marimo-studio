@@ -1,5 +1,8 @@
-"""Protect synchronous Marimo session ownership classification."""
+"""Protect Marimo session ownership and detached live-cell capture."""
 
+import asyncio
+import threading
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -16,6 +19,17 @@ from marimo_studio._compat.server.session_state import (
     session_creation_query_matches,
     session_matches_notebook,
 )
+from marimo_studio.errors._internal import RuntimeSyncError
+
+
+def _live_capture() -> session_state_module._LiveCellCapture:
+    return session_state_module._LiveCellCapture(
+        session_owner=7,
+        document_generation=1,
+        cells=(("first", "value = 1", "value"), ("second", "value", "_")),
+        executed_cells=(("first", "value = 1"), ("second", "value")),
+        graph_parents=(("first", ()), ("second", ("first",))),
+    )
 
 
 def test_session_owner_uses_the_initialization_identity() -> None:
@@ -108,3 +122,334 @@ def test_first_save_requests_session_resume_before_reload(
     assert isinstance(second, QueryParamsSetNotification)
     assert (second.key, second.value) == ("marimo_studio_resume", "1")
     assert isinstance(third, ReloadNotification)
+
+
+def test_live_cell_capture_materializes_off_its_event_loop_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner_threads: list[int] = []
+    worker_threads: list[int] = []
+    capture = _live_capture()
+    native_materialize = session_state_module._materialize_live_cells
+
+    def capture_cells(*_args: object, **_kwargs: object):
+        owner_threads.append(threading.get_ident())
+        return capture
+
+    def materialize(value: session_state_module._LiveCellCapture):
+        worker_threads.append(threading.get_ident())
+        return native_materialize(value)
+
+    monkeypatch.setattr(session_state_module, "_capture_live_cells", capture_cells)
+    monkeypatch.setattr(session_state_module, "_materialize_live_cells", materialize)
+
+    async def exercise():
+        owner = threading.get_ident()
+        snapshot = await PrivateSessionState().live_cells(
+            cast(Any, object()),
+            "s_123456",
+            include_dependency_closures=True,
+        )
+        return owner, snapshot
+
+    owner, snapshot = asyncio.run(exercise())
+
+    assert owner_threads == [owner, owner]
+    assert len(worker_threads) == 1 and worker_threads[0] != owner
+    assert snapshot is not None
+    assert snapshot.owner == "session:7"
+    assert len(snapshot.generation) == 64
+    assert snapshot.dependency_closures == {
+        "first": ("first",),
+        "second": ("first", "second"),
+    }
+
+
+@pytest.mark.parametrize(
+    ("change", "replacement"),
+    (
+        (
+            "edit",
+            replace(
+                _live_capture(),
+                document_generation=2,
+                cells=(
+                    ("first", "value = 2", "value"),
+                    ("second", "value", "_"),
+                ),
+            ),
+        ),
+        (
+            "reorder",
+            replace(
+                _live_capture(),
+                document_generation=2,
+                cells=tuple(reversed(_live_capture().cells)),
+            ),
+        ),
+        (
+            "save",
+            replace(
+                _live_capture(),
+                session_owner=8,
+                document_generation=0,
+            ),
+        ),
+        (
+            "evidence",
+            replace(
+                _live_capture(),
+                executed_cells=(("first", "value = 2"),),
+                graph_parents=(("first", ()), ("second", ())),
+            ),
+        ),
+    ),
+)
+def test_live_cell_capture_rejects_a_concurrent_generation_change(
+    monkeypatch: pytest.MonkeyPatch,
+    change: str,
+    replacement: session_state_module._LiveCellCapture,
+) -> None:
+    capture = _live_capture()
+    captures = iter((capture, replacement))
+    materializing = threading.Event()
+    release = threading.Event()
+    native_materialize = session_state_module._materialize_live_cells
+
+    monkeypatch.setattr(
+        session_state_module,
+        "_capture_live_cells",
+        lambda *_args, **_kwargs: next(captures),
+    )
+
+    def materialize(value: session_state_module._LiveCellCapture):
+        materializing.set()
+        assert release.wait(timeout=2), change
+        return native_materialize(value)
+
+    monkeypatch.setattr(session_state_module, "_materialize_live_cells", materialize)
+
+    async def exercise() -> None:
+        task = asyncio.create_task(
+            PrivateSessionState().live_cells(
+                cast(Any, object()),
+                "s_123456",
+                include_dependency_closures=True,
+            )
+        )
+        assert await asyncio.to_thread(materializing.wait, 1), change
+        release.set()
+        with pytest.raises(RuntimeSyncError, match="changed while Studio captured"):
+            await task
+
+    try:
+        asyncio.run(exercise())
+    finally:
+        release.set()
+
+
+def test_live_cell_materialization_keeps_the_running_and_latest_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = _live_capture()
+    captures_by_generation = {
+        generation: replace(base, document_generation=generation)
+        for generation in range(1, 5)
+    }
+    captures = iter(
+        (
+            captures_by_generation[1],
+            captures_by_generation[2],
+            captures_by_generation[3],
+            captures_by_generation[4],
+            captures_by_generation[4],
+        )
+    )
+    materialized: list[int] = []
+    started = threading.Event()
+    release = threading.Event()
+    native_materialize = session_state_module._materialize_live_cells
+
+    monkeypatch.setattr(
+        session_state_module,
+        "_capture_live_cells",
+        lambda *_args, **_kwargs: next(captures),
+    )
+
+    def materialize(capture: session_state_module._LiveCellCapture):
+        materialized.append(capture.document_generation)
+        if len(materialized) == 1:
+            started.set()
+            assert release.wait(timeout=2)
+        return native_materialize(capture)
+
+    monkeypatch.setattr(session_state_module, "_materialize_live_cells", materialize)
+    state = PrivateSessionState()
+
+    async def capture() -> object:
+        return await state.live_cells(
+            cast(Any, object()),
+            "s_123456",
+            include_dependency_closures=True,
+        )
+
+    async def exercise() -> list[object]:
+        tasks = [asyncio.create_task(capture())]
+        assert await asyncio.to_thread(started.wait, 1)
+        for _generation in range(2, 5):
+            tasks.append(asyncio.create_task(capture()))
+            await asyncio.sleep(0)
+        release.set()
+        return await asyncio.gather(*tasks, return_exceptions=True)
+
+    try:
+        results = asyncio.run(exercise())
+    finally:
+        release.set()
+
+    assert materialized == [1, 4]
+    assert all(isinstance(result, RuntimeSyncError) for result in results[:-1])
+    assert isinstance(results[-1], session_state_module.LiveCellSnapshot)
+
+
+def test_runtime_config_and_evidence_capture_in_separate_owner_lanes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_capture = replace(_live_capture(), graph_parents=None)
+    evidence_capture = _live_capture()
+    materialized: list[bool] = []
+    started = threading.Event()
+    release = threading.Event()
+    native_materialize = session_state_module._materialize_live_cells
+
+    def capture_cells(
+        *_args: object,
+        include_dependency_closures: bool,
+        **_kwargs: object,
+    ) -> session_state_module._LiveCellCapture:
+        return evidence_capture if include_dependency_closures else config_capture
+
+    def materialize(capture: session_state_module._LiveCellCapture):
+        materialized.append(capture.graph_parents is not None)
+        if len(materialized) == 1:
+            started.set()
+            assert release.wait(timeout=2)
+        return native_materialize(capture)
+
+    monkeypatch.setattr(session_state_module, "_capture_live_cells", capture_cells)
+    monkeypatch.setattr(session_state_module, "_materialize_live_cells", materialize)
+    state = PrivateSessionState()
+
+    async def exercise() -> tuple[object, object]:
+        config = asyncio.create_task(
+            state.live_cells(
+                cast(Any, object()),
+                "s_123456",
+                include_dependency_closures=False,
+            )
+        )
+        assert await asyncio.to_thread(started.wait, 1)
+        evidence = asyncio.create_task(
+            state.live_cells(
+                cast(Any, object()),
+                "s_123456",
+                include_dependency_closures=True,
+            )
+        )
+        await asyncio.sleep(0)
+        release.set()
+        return await config, await evidence
+
+    try:
+        config, evidence = asyncio.run(exercise())
+    finally:
+        release.set()
+
+    assert materialized == [False, True]
+    assert isinstance(config, session_state_module.LiveCellSnapshot)
+    assert isinstance(evidence, session_state_module.LiveCellSnapshot)
+
+
+def test_session_close_drains_live_cell_materialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capture = _live_capture()
+    started = threading.Event()
+    release = threading.Event()
+    native_materialize = session_state_module._materialize_live_cells
+    monkeypatch.setattr(
+        session_state_module,
+        "_capture_live_cells",
+        lambda *_args, **_kwargs: capture,
+    )
+
+    def materialize(value: session_state_module._LiveCellCapture):
+        started.set()
+        assert release.wait(timeout=2)
+        return native_materialize(value)
+
+    monkeypatch.setattr(session_state_module, "_materialize_live_cells", materialize)
+    state = PrivateSessionState()
+
+    async def exercise() -> None:
+        capturing = asyncio.create_task(
+            state.live_cells(
+                cast(Any, object()),
+                "s_123456",
+                include_dependency_closures=True,
+            )
+        )
+        assert await asyncio.to_thread(started.wait, 1)
+        closing = asyncio.create_task(state.close())
+        await asyncio.sleep(0)
+        assert not closing.done()
+        release.set()
+        await closing
+        result = await asyncio.gather(capturing, return_exceptions=True)
+        assert isinstance(result[0], RuntimeSyncError)
+        with pytest.raises(RuntimeSyncError, match="shutting down"):
+            await state.live_cells(
+                cast(Any, object()),
+                "s_123456",
+                include_dependency_closures=False,
+            )
+
+    try:
+        asyncio.run(exercise())
+    finally:
+        release.set()
+
+
+def test_session_close_cancellation_drains_startup_ownership() -> None:
+    class Session:
+        pass
+
+    async def exercise() -> None:
+        state = PrivateSessionState()
+        session = cast(Any, Session())
+        cleanup_started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def startup() -> None:
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                cleanup_started.set()
+                await release.wait()
+                raise
+
+        startup_task = asyncio.create_task(startup())
+        state._starting[session] = startup_task
+        closing = asyncio.create_task(state.close())
+        await cleanup_started.wait()
+        closing.cancel()
+        closing.cancel()
+        await asyncio.sleep(0)
+        assert not closing.done()
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await closing
+        assert not state._starting
+        assert startup_task.done()
+
+    asyncio.run(exercise())

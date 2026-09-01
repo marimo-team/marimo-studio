@@ -303,9 +303,11 @@ def test_session_cache_preserves_export_order_interval_and_error_policy(
     assert "Write error: disk stopped" in caplog.text
 
 
-def test_session_cache_cancellation_waits_for_async_publication(
+@pytest.mark.parametrize("async_path", (False, True))
+def test_session_cache_cancellation_waits_for_publication(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    async_path: bool,
 ) -> None:
     entered = threading.Event()
     release = threading.Event()
@@ -314,7 +316,8 @@ def test_session_cache_cancellation_waits_for_async_publication(
     path.write_text(json.dumps({"writer": "published"}), encoding="utf-8")
     view = _ExportingView("short", 1)
     writer = _writer(path, view)
-    writer.path = AsyncPath(path)
+    if async_path:
+        writer.path = AsyncPath(path)
     rename = secure_operations.os.rename
     replace = secure_operations.os.replace
 
@@ -367,24 +370,28 @@ def test_session_cache_cancellation_waits_for_async_publication(
         handle.close()
 
 
-def test_session_cache_path_writer_keeps_synchronous_publication(
+def test_session_cache_path_writer_captures_on_loop_and_publishes_in_thread(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     path = tmp_path / "session.json"
-    calls: list[Path] = []
+    loop_thread = threading.get_ident()
+    serialization_threads: list[int] = []
+    publications: list[tuple[Path, int]] = []
     view = _ExportingView("short", 1)
     writer = _writer(path, view)
     writer.path = path
 
+    def serialize(view: _ExportingView, **kwargs: object) -> dict[str, object]:
+        serialization_threads.append(threading.get_ident())
+        return _serialized_view(view, **kwargs)
+
     def publish(destination: Path, content: str) -> object:
-        calls.append(destination)
+        publications.append((destination, threading.get_ident()))
         destination.write_text(content, encoding="utf-8")
         return object()
 
-    monkeypatch.setattr(
-        native_session_cache, "serialize_session_view", _serialized_view
-    )
+    monkeypatch.setattr(native_session_cache, "serialize_session_view", serialize)
     monkeypatch.setattr(session_cache_module, "atomic_write_text", publish)
     handle = PrivateSessionCachePublication().open()
     try:
@@ -392,7 +399,9 @@ def test_session_cache_path_writer_keeps_synchronous_publication(
     finally:
         handle.close()
 
-    assert calls == [path]
+    assert serialization_threads == [loop_thread]
+    assert [destination for destination, _thread in publications] == [path]
+    assert publications[0][1] != loop_thread
     assert json.loads(read_text(path))["writer"] == "short"
 
 

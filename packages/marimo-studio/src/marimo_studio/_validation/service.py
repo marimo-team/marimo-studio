@@ -14,6 +14,7 @@ these check results, while browser validation adds rendered observations on top.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Literal
@@ -23,6 +24,7 @@ from marimo_studio._processes.provider_operation import (
     raise_process_cleanup,
     run_provider_operation,
 )
+from marimo_studio._validation.ownership import require_validation_owner
 from marimo_studio._validation.ports import RuntimeChecker
 from marimo_studio._validation.records import ValidationReport
 from marimo_studio._validation.results import CheckResult
@@ -34,6 +36,7 @@ from marimo_studio._views.revisions import (
     capture_published_presentations,
     capture_source_revisions,
 )
+from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError, ViewNotFoundError
 
@@ -91,8 +94,13 @@ def _source_revisions(
 def _presentation_revisions(
     studio: StudioWorkspace,
     views: tuple[str, ...],
+    expected_generations: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
-    with capture_presentations(studio, views) as snapshot:
+    with capture_presentations(
+        studio,
+        views,
+        expected_generations=expected_generations,
+    ) as snapshot:
         return {view: snapshot.revisions[view] for view in views}
 
 
@@ -146,6 +154,7 @@ def _prepare_validation(
     studio: StudioWorkspace,
     view_name: str | None,
     revisions: dict[str, str] | None = None,
+    expected_generations: Mapping[str, str] | None = None,
 ) -> ValidationPreparation:
     from marimo_studio._views.inspection import inspect_view_mounts
 
@@ -187,7 +196,7 @@ def _prepare_validation(
     source_revisions = after or before or {view: "unavailable" for view in selected}
     try:
         revisions = (
-            _presentation_revisions(studio, selected)
+            _presentation_revisions(studio, selected, expected_generations)
             if revisions is None
             else revisions
         )
@@ -231,15 +240,29 @@ async def prepare_validation(
     *,
     view_name: str | None,
     development: DevelopmentCoordinator | None = None,
+    expected_catalog_generation: str | None = None,
+    expected_generations: Mapping[str, str] | None = None,
 ) -> ValidationPreparation:
     """Capture source identity and run the canonical static stage."""
     revisions = (
         None
         if development is None
-        else await _publish_validation_presentations(studio, view_name, development)
+        else await _publish_validation_presentations(
+            studio,
+            view_name,
+            development,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generations=expected_generations,
+        )
     )
     return await run_provider_operation(
-        partial(_prepare_validation, studio, view_name, revisions)
+        partial(
+            _prepare_validation,
+            studio,
+            view_name,
+            revisions,
+            expected_generations,
+        )
     )
 
 
@@ -247,6 +270,9 @@ async def _publish_validation_presentations(
     studio: StudioWorkspace,
     view_name: str | None,
     development: DevelopmentCoordinator,
+    *,
+    expected_catalog_generation: str | None = None,
+    expected_generations: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
     views = _views(studio, view_name)
     for view in views:
@@ -255,8 +281,26 @@ async def _publish_validation_presentations(
         await development.publish(
             view,
             catalog.generation,
-            partial(publish_presentation, studio, view, prepared),
+            partial(
+                publish_presentation,
+                studio,
+                view,
+                prepared,
+                expected_catalog_generation=expected_catalog_generation,
+                expected_generation=(
+                    expected_generations.get(view)
+                    if expected_generations is not None
+                    else None
+                ),
+            ),
         )
+        if expected_catalog_generation is not None or expected_generations is not None:
+            current = await asyncio.to_thread(load_studio, studio.config_path)
+            require_validation_owner(
+                current,
+                expected_catalog_generation=expected_catalog_generation,
+                expected_generations=expected_generations,
+            )
     return await asyncio.to_thread(_published_presentation_revisions, studio, views)
 
 
@@ -328,12 +372,16 @@ async def validate_studio(
     runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
     runtime_checker: RuntimeChecker,
     development: DevelopmentCoordinator | None = None,
+    expected_catalog_generation: str | None = None,
+    expected_generations: Mapping[str, str] | None = None,
 ) -> ValidationRun:
     """Run revision-coherent static and optional runtime validation."""
     preparation = await prepare_validation(
         studio,
         view_name=view_name,
         development=development,
+        expected_catalog_generation=expected_catalog_generation,
+        expected_generations=expected_generations,
     )
     runtime = (
         await run_runtime_validation(

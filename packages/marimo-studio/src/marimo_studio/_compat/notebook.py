@@ -135,7 +135,7 @@ _MARIMO_SQL = _MarimoOperation("sql")
 _MARIMO_APPEND = _MarimoOperation("append")
 _MARIMO_REPLACE = _MarimoOperation("replace")
 _MARIMO_REPLACE_AT_INDEX = _MarimoOperation("replace_at_index")
-_VISIBLE_OUTPUT_WORK_BUDGET = 20_000
+_POSSIBLE_OUTPUT_WORK_BUDGET = 20_000
 _BindingNode = (
     _CallableNode
     | _DeferredNode
@@ -157,7 +157,7 @@ class _SymbolicWorkLimit(RuntimeError):
     pass
 
 
-class _VisibleOutputFound(RuntimeError):
+class _PossibleOutputFound(RuntimeError):
     pass
 
 
@@ -232,7 +232,7 @@ class _LocalBindingVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-class _VisibleOutputVisitor(ast.NodeVisitor):
+class _PossibleOutputVisitor(ast.NodeVisitor):
     _EAGER_ITERABLE_CALLS = frozenset(
         {
             "all",
@@ -250,9 +250,8 @@ class _VisibleOutputVisitor(ast.NodeVisitor):
     )
 
     def __init__(self, work_budget: int | None = None) -> None:
-        self.displays_output = False
         self._work_remaining = (
-            _VISIBLE_OUTPUT_WORK_BUDGET if work_budget is None else work_budget
+            _POSSIBLE_OUTPUT_WORK_BUDGET if work_budget is None else work_budget
         )
         self._active_functions: set[int] = set()
         self._active_deferred: set[int] = set()
@@ -799,7 +798,7 @@ class _VisibleOutputVisitor(ast.NodeVisitor):
             and self._is_marimo(function.value.value)
         )
         if sql_call or output_call:
-            raise _VisibleOutputFound
+            raise _PossibleOutputFound
         self.visit(function)
         eager_name = (
             function.id
@@ -825,7 +824,7 @@ class _VisibleOutputVisitor(ast.NodeVisitor):
             operation.name != "sql" or not self._output_is_false(node)
             for operation in operations
         ):
-            raise _VisibleOutputFound
+            raise _PossibleOutputFound
         if consume_result and eager_name in {"filter", "map", "zip"}:
             deferred = self._binding(node)
             if isinstance(deferred, _DeferredAdapter):
@@ -1063,7 +1062,7 @@ class _VisibleOutputVisitor(ast.NodeVisitor):
             return
         for callback in self._binding_values(node.callback):
             if isinstance(callback, _MarimoOperation):
-                raise _VisibleOutputFound
+                raise _PossibleOutputFound
             elif isinstance(callback, _CallableNode):
                 self._charge(len(node.sources))
                 call = ast.Call(
@@ -1323,15 +1322,15 @@ class _VisibleOutputVisitor(ast.NodeVisitor):
         self._scopes[-1][node.name] = None
 
 
-def _displays_output(module: ast.Module) -> bool:
-    visitor = _VisibleOutputVisitor()
+def _may_display_output(module: ast.Module) -> bool:
+    visitor = _PossibleOutputVisitor()
     try:
         visitor.visit(module)
-    except _VisibleOutputFound:
+    except _PossibleOutputFound:
         return True
     except (_SymbolicWorkLimit, RecursionError):
         return True
-    return visitor.displays_output
+    return False
 
 
 def load_static_notebook(path: Path) -> StaticNotebook:
@@ -1444,8 +1443,8 @@ def load_static_notebook(path: Path) -> StaticNotebook:
                 kind=cell_kind(serialized_cells[index]),
                 markdown=get_markdown_from_cell(row.cell, row.code),
                 has_output_expression=has_output_expression,
-                displays_output=(
-                    has_output_expression or _displays_output(compiled.mod)
+                may_display_output=(
+                    has_output_expression or _may_display_output(compiled.mod)
                 ),
                 definitions=tuple(sorted(row.cell.defs)),
                 references=tuple(sorted(row.cell.refs)),

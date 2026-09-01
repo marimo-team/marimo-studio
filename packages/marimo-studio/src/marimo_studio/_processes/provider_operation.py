@@ -6,10 +6,12 @@ import asyncio
 from collections.abc import Callable, Sequence
 from typing import TypeVar
 
-from marimo_studio._processes.cancellation import provider_cancellation
+from marimo_studio._processes.cancellation import (
+    ProviderOperationControl,
+    provider_cancellation,
+)
 from marimo_studio._processes.ownership import settle_ownership
 from marimo_studio._processes.supervisor import ProcessCleanupError
-from marimo_studio.view_providers import ProviderCancellation
 
 _T = TypeVar("_T")
 
@@ -20,7 +22,7 @@ async def run_provider_operation(
     discard: Callable[[_T], None] | None = None,
 ) -> _T:
     """Cancel and drain provider work when its awaiting owner is cancelled."""
-    control = ProviderCancellation()
+    control = ProviderOperationControl()
 
     def run() -> _T:
         with provider_cancellation(control):

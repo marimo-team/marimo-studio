@@ -9,7 +9,7 @@ from pathlib import Path
 
 from marimo_studio._composition import (
     create_browser_runtime_projector,
-    create_runtime_probe,
+    create_worker_runtime_probe,
     marimo_release_identity,
 )
 from marimo_studio._notebook.inspection import inspect_notebook
@@ -117,7 +117,7 @@ async def check_runtime_studio(
         studio,
         inspect_notebook=inspect_notebook,
         view_name=view_name,
-        probe_runtime=create_runtime_probe(),
+        probe_runtime=create_worker_runtime_probe(),
         timeout=timeout,
         published_mounts=_published_mounts,
     )

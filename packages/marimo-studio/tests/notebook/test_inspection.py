@@ -87,6 +87,13 @@ def test_inspection_can_return_complete_cell_code(notebook_path: Path) -> None:
     assert spec.cells[1].preview == spec.cells[1].code
 
 
+def test_cell_spec_serializes_the_possible_output_signal(notebook_path: Path) -> None:
+    output = inspect_notebook(notebook_path).cells[1]
+
+    assert output.may_display_output is True
+    assert output.to_dict()["may_display_output"] is True
+
+
 def test_inspection_reports_complete_decorated_cell_spans(
     tmp_path: Path,
 ) -> None:
@@ -195,7 +202,7 @@ if __name__ == "__main__":
     assert spec.cells[1].markdown == "# Evidence report\n\nCurrent results."
 
 
-def test_inspection_matches_marimo_display_semantics(tmp_path: Path) -> None:
+def test_inspection_reports_possible_marimo_output_paths(tmp_path: Path) -> None:
     notebook = tmp_path / "display.py"
     notebook.write_text(
         f'''\
@@ -914,7 +921,7 @@ def _(mo):
     cells = inspect_notebook(notebook).cells
 
     assert [cell.has_output_expression for cell in cells] == [True] + [False] * 77
-    assert [cell.displays_output for cell in cells] == [
+    assert [cell.may_display_output for cell in cells] == [
         True,
         False,
         True,
@@ -1006,12 +1013,12 @@ def test_inspection_conservatively_falls_back_at_the_symbolic_budget(
         "value = 1\nreturn (value,)",
     )
     loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_VISIBLE_OUTPUT_WORK_BUDGET", 1)
+    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1)
 
     cell = inspect_notebook(notebook).cells[0]
 
     assert not cell.has_output_expression
-    assert cell.displays_output
+    assert cell.may_display_output
 
 
 def test_inspection_charges_repeated_wide_call_scopes(
@@ -1029,11 +1036,11 @@ def test_inspection_charges_repeated_wide_call_scopes(
         f"{repeated_calls}\nvalue = 1\nreturn (value,)",
     )
     loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_VISIBLE_OUTPUT_WORK_BUDGET", 1_500)
+    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_500)
 
     cell = inspect_notebook(notebook).cells[0]
 
-    assert cell.displays_output
+    assert cell.may_display_output
 
 
 def test_inspection_charges_scope_copies_before_branch_allocation(
@@ -1049,11 +1056,11 @@ def test_inspection_charges_scope_copies_before_branch_allocation(
         "value = 1\nreturn (value,)",
     )
     loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_VISIBLE_OUTPUT_WORK_BUDGET", 500)
+    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 500)
 
     cell = inspect_notebook(notebook).cells[0]
 
-    assert cell.displays_output
+    assert cell.may_display_output
 
 
 def test_inspection_charges_repeated_alternative_scans(
@@ -1076,11 +1083,11 @@ def test_inspection_charges_repeated_alternative_scans(
         "value = 1\nreturn (value,)",
     )
     loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_VISIBLE_OUTPUT_WORK_BUDGET", 1_500)
+    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_500)
 
     cell = inspect_notebook(notebook).cells[0]
 
-    assert cell.displays_output
+    assert cell.may_display_output
 
 
 def test_inspection_charges_deep_scope_lookups(
@@ -1097,11 +1104,11 @@ def test_inspection_charges_deep_scope_lookups(
         "\n\n".join(functions) + "\n\ndepth_20()\nvalue = 1\nreturn (value,)",
     )
     loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_VISIBLE_OUTPUT_WORK_BUDGET", 1_000)
+    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_000)
 
     cell = inspect_notebook(notebook).cells[0]
 
-    assert cell.displays_output
+    assert cell.may_display_output
 
 
 def test_inspection_charges_control_flow_summaries(
@@ -1119,11 +1126,11 @@ def test_inspection_charges_control_flow_summaries(
         f"{repeated_calls}\nvalue = 1\nreturn (value,)",
     )
     loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_VISIBLE_OUTPUT_WORK_BUDGET", 1_000)
+    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_000)
 
     cell = inspect_notebook(notebook).cells[0]
 
-    assert cell.displays_output
+    assert cell.may_display_output
 
 
 def test_inspection_charges_cross_scope_try_collectors(
@@ -1148,14 +1155,14 @@ def test_inspection_charges_cross_scope_try_collectors(
         "\n\n".join(functions) + "\n\ntry_depth_15()\nvalue = 1\nreturn (value,)",
     )
     loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_VISIBLE_OUTPUT_WORK_BUDGET", 1_500)
+    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_500)
 
     cell = inspect_notebook(notebook).cells[0]
 
-    assert cell.displays_output
+    assert cell.may_display_output
 
 
-def test_inspection_stops_after_a_wide_visible_sql_call(
+def test_inspection_stops_after_a_wide_sql_output_call(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1172,11 +1179,11 @@ def test_inspection_stops_after_a_wide_visible_sql_call(
         f"{repeated_calls}\nvalue = 1\nreturn (value,)",
     )
     loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_VISIBLE_OUTPUT_WORK_BUDGET", 1_000)
+    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_000)
 
     cell = inspect_notebook(notebook).cells[0]
 
-    assert cell.displays_output
+    assert cell.may_display_output
 
 
 def test_inspection_charges_wide_deferred_adapters(
@@ -1195,11 +1202,11 @@ def test_inspection_charges_wide_deferred_adapters(
         "return (quiet_map_callback, value, wide_map)",
     )
     loader: Any = inspection_module.create_static_notebook_loader()
-    monkeypatch.setitem(loader.__globals__, "_VISIBLE_OUTPUT_WORK_BUDGET", 1_000)
+    monkeypatch.setitem(loader.__globals__, "_POSSIBLE_OUTPUT_WORK_BUDGET", 1_000)
 
     cell = inspect_notebook(notebook).cells[0]
 
-    assert cell.displays_output
+    assert cell.may_display_output
 
 
 def test_inspection_bounds_branching_symbolic_calls(tmp_path: Path) -> None:
@@ -1222,7 +1229,7 @@ def test_inspection_bounds_branching_symbolic_calls(tmp_path: Path) -> None:
     elapsed = monotonic() - started
 
     assert elapsed < 5
-    assert cell.displays_output
+    assert cell.may_display_output
 
 
 def test_inspection_bounds_retained_try_scopes(tmp_path: Path) -> None:
@@ -1238,7 +1245,7 @@ def test_inspection_bounds_retained_try_scopes(tmp_path: Path) -> None:
     elapsed = monotonic() - started
 
     assert elapsed < 5
-    assert cell.displays_output
+    assert cell.may_display_output
 
 
 def test_notebook_revision_tracks_provider_visible_source_locations(
@@ -1256,7 +1263,7 @@ def test_notebook_revision_tracks_provider_visible_source_locations(
     assert updated.cells[0].source.start_line == original.cells[0].source.start_line + 1
 
 
-def test_inspection_selects_display_cells_before_applying_the_limit(
+def test_inspection_selects_output_expression_cells_before_applying_the_limit(
     notebook_path: Path,
 ) -> None:
     spec = inspect_notebook(notebook_path)
@@ -1384,6 +1391,22 @@ def test_runtime_inspection_rejects_a_change_during_execution(
         path.write_text(
             path.read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8"
         )
+        return object()
+
+    monkeypatch.setattr(inspection_module, "create_runtime_probe", lambda: probe)
+
+    with pytest.raises(ConfigurationError, match="changed during inspection"):
+        asyncio.run(inspect_runtime(notebook_path, selectors=(1,)))
+
+
+def test_runtime_inspection_rejects_an_aba_change_during_execution(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def probe(path: Path, **_options: object) -> object:
+        source = path.read_text(encoding="utf-8")
+        path.write_text(source + "\n# transient change\n", encoding="utf-8")
+        path.write_text(source, encoding="utf-8")
         return object()
 
     monkeypatch.setattr(inspection_module, "create_runtime_probe", lambda: probe)

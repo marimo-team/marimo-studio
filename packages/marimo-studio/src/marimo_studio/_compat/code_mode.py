@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from starlette.datastructures import Headers
 from starlette.types import Scope
 
-from marimo_studio._browser_client.transport import StudioServerConnection
+from marimo_studio._browser_client.transport import (
+    StudioServerConnection,
+    studio_server_connection,
+)
 from marimo_studio.errors import ProtocolError
 
 STUDIO_SESSION_ID_KEY = "marimo_studio_session_id"
@@ -73,9 +77,9 @@ def code_mode_connection() -> StudioServerConnection:
         for item in request.query_params.get(key, [])
         if isinstance(item, str)
     )
-    return StudioServerConnection(
-        server_url=server_url,
-        auth_token=auth_token,
+    connection = studio_server_connection(server_url, access_token=auth_token)
+    return replace(
+        connection,
         routing_query=routing_query,
         session_id=session_id,
     )
