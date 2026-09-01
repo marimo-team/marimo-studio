@@ -29,6 +29,7 @@ from marimo_studio._views.sources import (
 )
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
+from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio._workspace.project_manifest import VIEW_MANIFEST_PATH
 from marimo_studio.errors import (
     ProtocolError,
@@ -42,14 +43,34 @@ async def read_document(
     notebook: Path,
     view: str,
     path: str | PurePosixPath,
+    *,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
 ) -> ViewDocument:
     """Read one authorized document and its current revision."""
 
     def operation() -> ViewDocument:
         name = str(path)
         if PurePosixPath(name) == VIEW_MANIFEST_PATH:
+            if (
+                expected_catalog_generation is not None
+                or expected_generation is not None
+            ):
+                admit_source_owner(
+                    notebook,
+                    view,
+                    expected_catalog_generation=expected_catalog_generation,
+                    expected_generation=expected_generation,
+                )
             return read_view_manifest(load_studio_definition(notebook), view)
-        return read_source(load_studio(notebook), view, name)
+        studio = load_studio(notebook)
+        _require_view_owner(
+            studio,
+            view,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+        )
+        return read_source(studio, view, name)
 
     return await run_provider_operation(operation)
 
@@ -116,10 +137,39 @@ async def write_document(
     return await run_provider_operation(operation)
 
 
-async def inspect_view(notebook: Path, view: str) -> ViewInspection:
+async def inspect_view(
+    notebook: Path,
+    view: str,
+    *,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
+) -> ViewInspection:
     """Inspect source documents, diagnostics, and build state."""
     studio = await asyncio.to_thread(load_studio, notebook)
+    _require_view_owner(
+        studio,
+        view,
+        expected_catalog_generation=expected_catalog_generation,
+        expected_generation=expected_generation,
+    )
     return await inspect_view_project(studio, view)
+
+
+def _require_view_owner(
+    studio: StudioWorkspace,
+    view: str,
+    *,
+    expected_catalog_generation: str | None,
+    expected_generation: str | None,
+) -> None:
+    current_generation = studio.view_generations.get(view)
+    if expected_generation is not None and current_generation != expected_generation:
+        raise ViewGenerationConflictError(view, current_generation)
+    if (
+        expected_catalog_generation is not None
+        and studio.catalog_generation != expected_catalog_generation
+    ):
+        raise WorkspaceGenerationConflictError()
 
 
 async def build_view(

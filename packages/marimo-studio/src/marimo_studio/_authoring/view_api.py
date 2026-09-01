@@ -57,11 +57,22 @@ class View:
 
     async def inspect(self) -> ViewInspection:
         """Inspect source documents, diagnostics, and build state."""
-        return await inspect_view(self.workspace.notebook, self.name)
+        return await inspect_view(
+            self.workspace.notebook,
+            self.name,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
+        )
 
     async def read(self, path: str | PurePosixPath) -> ViewDocument:
         """Read one document with its current content revision."""
-        return await read_document(self.workspace.notebook, self.name, path)
+        return await read_document(
+            self.workspace.notebook,
+            self.name,
+            path,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
+        )
 
     async def write(
         self,

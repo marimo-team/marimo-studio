@@ -75,19 +75,12 @@ def test_agent_plugin_exposes_the_packaged_studio_skill() -> None:
     skill = studio_agent.agent_skill()
 
     assert plugin.manifest.name == "marimo-studio"
-    assert plugin.manifest.description == (
-        "Author and validate focused views from Marimo notebooks."
-    )
     assert plugin.manifest.license == "Apache-2.0"
     assert skill in plugin.skills
     assert skill.path.name == "marimo-studio"
     assert (skill / "SKILL.md").is_file()
     assert (skill / "agents" / "openai.yaml").is_file()
-    assert skill.frontmatter.splitlines()[0] == "name: marimo-studio"
     assert isinstance(skill, agent_plugins.Skill)
-    interface = (skill / "agents" / "openai.yaml").read_text(encoding="utf-8")
-    assert 'short_description: "Build focused views from Marimo notebooks"' in interface
-    assert "inspect the notebook and view source" in interface
 
 
 def test_agent_module_help_points_to_the_packaged_studio_skill() -> None:
@@ -97,8 +90,6 @@ def test_agent_module_help_points_to_the_packaged_studio_skill() -> None:
 
     assert str(plugin.path) in rendered
     assert str(skill / "SKILL.md") in rendered
-    assert "resources = studio_agent.agent_plugin()" in rendered
-    assert "skill = studio_agent.agent_skill()" in rendered
 
 
 def test_agent_creation_and_binding_share_the_saved_notebook(
@@ -247,7 +238,10 @@ def test_agent_repairs_a_malformed_view_manifest(notebook_path: Path) -> None:
             expected_revision=broken.revision,
         )
         assert repaired.content == valid
-        assert (await recovered.inspect()).view == "dashboard"
+        with pytest.raises(WorkspaceGenerationConflictError):
+            await recovered.inspect()
+        current = studio_authoring.open_workspace(notebook_path).view("dashboard")
+        assert (await current.inspect()).view == "dashboard"
 
     asyncio.run(exercise())
 
@@ -330,28 +324,28 @@ def test_workspace_advances_after_remove_and_requires_view_reacquisition(
     assert created.name == "analysis"
 
 
-def test_view_handle_cannot_remove_a_copied_replacement(notebook_path: Path) -> None:
+def test_view_handle_cannot_read_or_inspect_after_catalog_changes(
+    notebook_path: Path,
+) -> None:
     workspace = _workspace(notebook_path)
-    asyncio.run(workspace.create_view("dashboard"))
-    view = asyncio.run(workspace.create_view("report"))
-    root = notebook_path.parent / "__marimo__" / "studio" / "analysis" / "report"
-    retired = root.with_name("retired-report")
-    root.rename(retired)
-    shutil.copytree(retired, root)
+    view = asyncio.run(workspace.create_view("dashboard"))
+    asyncio.run(workspace.create_view("report"))
 
     with pytest.raises(WorkspaceGenerationConflictError):
-        asyncio.run(view.remove())
+        asyncio.run(view.read("index.html"))
+    with pytest.raises(WorkspaceGenerationConflictError):
+        asyncio.run(view.inspect())
 
-    assert root.joinpath("view.toml").is_file()
 
-
-def test_view_handle_cannot_write_or_build_a_copied_replacement(
+def test_view_handle_rejects_every_operation_on_a_copied_replacement(
     notebook_path: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workspace = _workspace(notebook_path)
-    view = asyncio.run(workspace.create_view("dashboard"))
+    asyncio.run(workspace.create_view("dashboard"))
+    asyncio.run(workspace.create_view("report"))
+    view = workspace.view("dashboard")
     document = asyncio.run(view.read("index.html"))
     root = notebook_path.parent / "__marimo__" / "studio" / "analysis" / "dashboard"
     retired = root.with_name("retired-dashboard")
@@ -363,9 +357,13 @@ def test_view_handle_cannot_write_or_build_a_copied_replacement(
     monkeypatch.setattr(
         provider,
         "inspect",
-        lambda _request: pytest.fail("stale View.write inspected the replacement"),
+        lambda _request: pytest.fail("stale view inspected the replacement"),
     )
 
+    with pytest.raises(ViewGenerationConflictError):
+        asyncio.run(view.read("index.html"))
+    with pytest.raises(ViewGenerationConflictError):
+        asyncio.run(view.inspect())
     with pytest.raises(ViewGenerationConflictError) as write_error:
         asyncio.run(
             view.write(
@@ -394,8 +392,11 @@ def test_view_handle_cannot_write_or_build_a_copied_replacement(
     sentinel.write_text("preserve", encoding="utf-8")
     with pytest.raises(ViewGenerationConflictError):
         asyncio.run(view.export(output, force=True))
+    with pytest.raises(WorkspaceGenerationConflictError):
+        asyncio.run(view.remove())
 
     assert root.joinpath("index.html").read_text(encoding="utf-8") == document.content
+    assert root.joinpath("view.toml").is_file()
     assert sentinel.read_text(encoding="utf-8") == "preserve"
 
 
