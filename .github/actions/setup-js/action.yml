@@ -11,12 +11,14 @@ runs:
   using: composite
   steps:
     - name: Set up Socket Firewall
+      if: runner.os != 'Windows'
       uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
       with:
         mode: firewall-free
+        firewall-version: "1.15.0"
 
     - name: Set up Vite+
-      uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
+      uses: voidzero-dev/setup-vp@1b32467adbe183473499fd9d5d372c3ed9641754 # v1.18.0
       with:
         node-version-file: .node-version
         version: 0.2.4
