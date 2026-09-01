@@ -67,7 +67,10 @@ import {
   viewStateAtom,
   WebSocketState,
 } from "./upstream/runtime.ts";
+import { terminatePresentationWasmWorker } from "./wasm-worker-owner.ts";
 import "./upstream/style.ts";
+
+export { terminatePresentationWasmWorker } from "./wasm-worker-owner.ts";
 
 export type EmbeddedConnectionState = "NOT_STARTED" | "CONNECTING" | "OPEN" | "CLOSING" | "CLOSED";
 
@@ -327,6 +330,7 @@ const transportHost: EmbeddedTransportHost = {
     store.set(requestClientAtom, resolveRequestClient());
     return bridge.initialized.promise;
   },
+  releaseWasm: terminatePresentationWasmWorker,
   async executeWasmCells(cells) {
     const cellIds = cells.map((cell) => {
       // SAFETY: This ID was compiled from the Marimo source loaded into this worker.

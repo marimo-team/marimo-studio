@@ -75,6 +75,7 @@ class TransportHostDouble implements EmbeddedTransportHost {
   readonly workerInitialized = Promise.resolve();
   serverRequestActivations = 0;
   serverRequestReleases = 0;
+  wasmReleases = 0;
   readonly executeWasmCells = vi.fn(async () => {});
 
   activateServerRequests(): () => void {
@@ -97,6 +98,10 @@ class TransportHostDouble implements EmbeddedTransportHost {
   prepareWasm(transport: EmbeddedWasmTransport): Promise<void> {
     this.wasmTransports.push(transport);
     return this.workerInitialized;
+  }
+
+  releaseWasm(): void {
+    this.wasmReleases += 1;
   }
 }
 
@@ -548,6 +553,7 @@ test("waits for WebAssembly readiness before reporting initialization", async ()
   );
   expect(host.transport.wasmTransports).toHaveLength(1);
   await act(async () => handle.dispose());
+  expect(host.transport.wasmReleases).toBe(1);
 });
 
 test("reports synchronous transport failures through the handle", async () => {
@@ -665,6 +671,7 @@ test("retains runtime ownership when mount rollback cannot release a resource", 
     throw new Error("Expected mount rollback to report an aggregate failure");
   }
   expect(failure.errors).toContain(cleanupError);
+  expect(host.transport.wasmReleases).toBe(1);
   expect(() =>
     mountEmbeddedRuntime({
       autoInstantiate: false,

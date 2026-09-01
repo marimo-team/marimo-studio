@@ -28,22 +28,71 @@ const forcedReadModeInstantiation = `auto_instantiate:
               ? true
               : userConfig.runtime.auto_instantiate,`;
 const selectiveReadModeInstantiation = "auto_instantiate: userConfig.runtime.auto_instantiate,";
+const defaultWasmRpcFactory = `export function getWorkerRPC<WorkerSchema extends RPCSchema>(worker: Worker) {
+  return createRPC<ParentSchema, WorkerSchema>({
+    transport: createWorkerTransport(worker, {
+      transportId: TRANSPORT_ID,
+    }),
+    maxRequestTime: 20_000, // 20 seconds`;
+const configurableWasmRpcFactory = `export function getWorkerRPC<WorkerSchema extends RPCSchema>(
+  worker: Worker,
+  maxRequestTime = 20_000,
+) {
+  return createRPC<ParentSchema, WorkerSchema>({
+    transport: createWorkerTransport(worker, {
+      transportId: TRANSPORT_ID,
+    }),
+    maxRequestTime,`;
+const defaultMainWorkerRpc = "this.rpc = getWorkerRPC<WorkerSchema>(worker);";
+// Studio owns a 120-second terminal startup deadline and terminates this worker.
+// Keep the transport deadline longer so package loading cannot fail first.
+const extendedMainWorkerRpc = "this.rpc = getWorkerRPC<WorkerSchema>(worker, 125_000);";
+const unownedSessionStart = `this.rpc.addMessageListener("ready", () => {
+      this.startSession();
+    });`;
+const ownedSessionStart = `this.rpc.addMessageListener("ready", () => {
+      startPresentationWasmSession(() => this.startSession());
+    });`;
 
-export const isolateWasmWorker = (source: string, mainWorker: string): string => {
+export const isolateWasmWorker = (
+  source: string,
+  mainWorker: string,
+  workerOwner: string,
+): string => {
   const normalized = normalizeLineEndings(source);
-  if (!normalized.includes(mainWorkerSource) || !normalized.includes(saveWorkerSource)) {
+  if (
+    !normalized.includes(mainWorkerSource) ||
+    !normalized.includes(saveWorkerSource) ||
+    normalized.split(defaultMainWorkerRpc).length !== 2 ||
+    normalized.split(unownedSessionStart).length !== 2
+  ) {
     throw new Error("Marimo WebAssembly workers no longer match the opaque-frame adapter");
   }
   if (!normalized.includes(forcedReadModeInstantiation)) {
     throw new Error("Marimo WebAssembly startup no longer matches selective presentation mode");
   }
-  const imports = `import MarimoStudioMainWorker from ${JSON.stringify(`${mainWorker}?worker&inline`)};\n`;
+  const imports = `import MarimoStudioMainWorker from ${JSON.stringify(`${mainWorker}?worker&inline`)};
+import { ownPresentationWasmWorker, startPresentationWasmSession } from ${JSON.stringify(workerOwner)};
+`;
   return (
     imports +
     normalized
-      .replace(mainWorkerSource, "new MarimoStudioMainWorker({ name: getWasmWorkerName() })")
+      .replace(
+        mainWorkerSource,
+        "ownPresentationWasmWorker(new MarimoStudioMainWorker({ name: getWasmWorkerName() }))",
+      )
+      .replace(defaultMainWorkerRpc, extendedMainWorkerRpc)
+      .replace(unownedSessionStart, ownedSessionStart)
       .replace(forcedReadModeInstantiation, selectiveReadModeInstantiation)
   );
+};
+
+export const exposeWasmRpcDeadline = (source: string): string => {
+  const normalized = normalizeLineEndings(source);
+  if (normalized.split(defaultWasmRpcFactory).length !== 2) {
+    throw new Error("Marimo WebAssembly RPC deadline no longer matches the presentation adapter");
+  }
+  return normalized.replace(defaultWasmRpcFactory, configurableWasmRpcFactory);
 };
 
 const defaultWasmControllerImport = 'import { getController } from "./getController";';
@@ -80,8 +129,9 @@ export default function WorkerWrapper(options) {
 }`;
 };
 
-const opaqueWasmWorker = (frontend: string): Plugin => {
+const opaqueWasmWorker = (frontend: string, packageRoot: string): Plugin => {
   const workerRoot = join(frontend, "src", "core", "wasm", "worker");
+  const workerOwner = join(packageRoot, "src", "wasm-worker-owner.ts").replaceAll("\\", "/");
   return {
     name: "marimo-studio-opaque-wasm-worker",
     enforce: "pre",
@@ -89,7 +139,11 @@ const opaqueWasmWorker = (frontend: string): Plugin => {
       const path = id.split("?", 1)[0]?.replaceAll("\\", "/");
       if (path?.endsWith("/core/wasm/bridge.ts")) {
         return {
-          code: isolateWasmWorker(source, join(workerRoot, "worker.ts").replaceAll("\\", "/")),
+          code: isolateWasmWorker(
+            source,
+            join(workerRoot, "worker.ts").replaceAll("\\", "/"),
+            workerOwner,
+          ),
           map: null,
         };
       }
@@ -116,6 +170,20 @@ const presentationWasmController = (frontend: string, packageRoot: string): Plug
   };
 };
 
+const configurablePresentationWasmRpcDeadline = (frontend: string): Plugin => {
+  const rpc = join(frontend, "src", "core", "wasm", "rpc.ts").replaceAll("\\", "/");
+  return {
+    name: "marimo-studio-presentation-wasm-rpc-deadline",
+    enforce: "pre",
+    transform(source, id) {
+      const path = id.split("?", 1)[0]?.replaceAll("\\", "/");
+      if (path === rpc) {
+        return { code: exposeWasmRpcDeadline(source), map: null };
+      }
+    },
+  };
+};
+
 const inlineWasmWorkerDataModule = (frontend: string): Plugin => {
   const worker = join(frontend, "src", "core", "wasm", "worker", "worker.ts").replaceAll("\\", "/");
   return {
@@ -135,6 +203,10 @@ const inlineWasmWorkerDataModule = (frontend: string): Plugin => {
 };
 
 export const createWasmWorkerViteIntegration = (frontend: string, packageRoot: string) => ({
-  plugins: [opaqueWasmWorker(frontend), inlineWasmWorkerDataModule(frontend)],
+  plugins: [
+    opaqueWasmWorker(frontend, packageRoot),
+    configurablePresentationWasmRpcDeadline(frontend),
+    inlineWasmWorkerDataModule(frontend),
+  ],
   workerPlugins: () => [presentationWasmController(frontend, packageRoot)],
 });

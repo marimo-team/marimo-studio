@@ -15,6 +15,7 @@ import {
   studioOrigin,
   studioServerToken,
   test,
+  WASM_PREVIEW_TIMEOUT,
   waitForPreview,
   writeDashboardSource,
 } from "./fixture.ts";
@@ -34,6 +35,7 @@ const expectPreviewInteractive = async (page: Page, runtime: "server" | "wasm") 
 test("starts the notebook automatically and initializes WebAssembly on demand", async ({
   page,
 }) => {
+  test.setTimeout(210_000);
   await page.addInitScript(() => {
     globalThis.__e2ePreviewStatuses = [];
     const record = () => {
@@ -67,7 +69,7 @@ test("starts the notebook automatically and initializes WebAssembly on demand", 
   await expect(wasmFrame).toHaveAttribute("src", "about:blank");
   await page.getByLabel("Python preview runtime").click();
   await page.getByRole("button", { name: /Browser/ }).click();
-  const wasm = await waitForPreview(page, "wasm");
+  const wasm = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   await expectPreviewInteractive(page, "wasm");
 
   await expect(wasm.locator('strong[mo-value="metric"]')).toHaveText("42");
@@ -132,7 +134,9 @@ test("static WebAssembly executes the mounted dependency closure", async ({ page
   await page.goto(staticExportUrl);
   const status = page.locator("#projected-status");
 
-  await expect(status).toHaveAttribute("data-state", "ready", { timeout: 65_000 });
+  await expect(status).toHaveAttribute("data-state", "ready", {
+    timeout: WASM_PREVIEW_TIMEOUT,
+  });
   await expect(status).toHaveText("clean");
   await expect(page.locator("#escaped-slash")).toHaveText("slash");
   await expect(page.locator("#surrogate-pair")).toHaveText("emoji");
@@ -195,6 +199,7 @@ test("preserves native output state across HTML edits and replaces terminal fail
   browserDiagnostics,
   page,
 }) => {
+  test.setTimeout(210_000);
   const staleOutputs = browserDiagnostics.expectResponse({
     status: 409,
     path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/outputs$/,
@@ -213,7 +218,7 @@ test("preserves native output state across HTML edits and replaces terminal fail
   const server = await waitForPreview(page);
   await page.getByLabel("Python preview runtime").click();
   await page.getByRole("button", { name: /Browser/ }).click();
-  const wasm = await waitForPreview(page, "wasm");
+  const wasm = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   const runtimeMarker = "projected-output-runtime";
   await wasm.locator("html").evaluate((_html, marker) => {
     globalThis.__e2eRuntimeMarker = marker;
@@ -297,6 +302,7 @@ test("preserves native output state across HTML edits and replaces terminal fail
 });
 
 test("preserves projected controls across refresh and owner removal", async ({ page }) => {
+  test.setTimeout(210_000);
   await page.goto(studioEntryUrl);
   const server = await waitForPreview(page);
   const serverFresh = server.locator("#fresh-control").getByRole("slider");
@@ -309,7 +315,7 @@ test("preserves projected controls across refresh and owner removal", async ({ p
 
   await page.getByLabel("Python preview runtime").click();
   await page.getByRole("button", { name: /Browser/ }).click();
-  const wasm = await waitForPreview(page, "wasm");
+  const wasm = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   await expectPreviewInteractive(page, "wasm");
   const wasmFresh = wasm.locator("#fresh-control").getByRole("slider");
   const wasmMixed = wasm.locator("#mixed-controls").getByRole("slider");
@@ -388,6 +394,7 @@ test("preserves runtime state while modes and controls change", async ({
   browserDiagnostics,
   page,
 }) => {
+  test.setTimeout(210_000);
   const supersededDocuments = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin,
     method: "GET",
@@ -405,7 +412,7 @@ test("preserves runtime state while modes and controls change", async ({
 
   await page.getByLabel("Python preview runtime").click();
   await page.getByRole("button", { name: /Browser/ }).click();
-  const wasm = await waitForPreview(page, "wasm");
+  const wasm = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   const wasmWidget = wasm.getByRole("button", { name: /Widget count:/ });
   await expect(wasmWidget).toHaveText(/^Widget count: \d+$/);
   const wasmWidgetCount = Number((await wasmWidget.textContent())?.split(": ").at(-1));

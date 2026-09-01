@@ -1,4 +1,6 @@
-export const WASM_STARTUP_TIMEOUT_MS = 60_000;
+// Browser dependency loading can outlive Marimo's default worker RPC deadline.
+// This owner terminates the worker when the complete startup window expires.
+export const WASM_STARTUP_TIMEOUT_MS = 120_000;
 
 const waitForWasmInitialization = (
   controller: AbortController,
@@ -40,7 +42,11 @@ const waitForWasmInitialization = (
       signal.throwIfAborted();
     })().then(
       () => settle(resolve),
-      (cause: unknown) => settle(() => reject(cause)),
+      (cause: unknown) => {
+        if (!signal.aborted) {
+          controller.abort(cause);
+        }
+      },
     );
   });
 };
@@ -55,8 +61,11 @@ export interface WasmInitialization {
   abort(cause?: unknown): void;
 }
 
-export const createWasmInitialization = (): WasmInitialization => {
+export const createWasmInitialization = (
+  abortWorker: () => void = () => {},
+): WasmInitialization => {
   const controller = new AbortController();
+  controller.signal.addEventListener("abort", abortWorker, { once: true });
   return {
     signal: controller.signal,
     wait: (workerInitialized, notebookInitialized, timeout) =>

@@ -5,7 +5,7 @@ import type { ProviderProjection } from "./provider-runtime-evidence.ts";
 
 import { e2eNetwork } from "../scripts/network.mjs";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
-import { labeledSlider, presentationFrame } from "./fixture.ts";
+import { labeledSlider, presentationFrame, WASM_PREVIEW_TIMEOUT } from "./fixture.ts";
 import { providerProjectionSchema } from "./provider-runtime-evidence.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
 
@@ -123,19 +123,26 @@ const expectNativeTableLayout = async (root: Locator, requireInnerScroll = false
   expect(layout.viewportHasNoHorizontalOverflow).toBe(true);
 };
 
-const waitForRuntime = async (root: Locator): Promise<void> => {
+const waitForRuntime = async (root: Locator, timeout = 65_000): Promise<void> => {
+  const deadline = Date.now() + timeout;
+  const remaining = () => Math.max(1, deadline - Date.now());
   await expect
     .poll(() => root.evaluate(() => globalThis.marimoStudio !== undefined).catch(() => false), {
-      timeout: 65_000,
+      timeout: remaining(),
     })
     .toBe(true);
-  await root.evaluate(() =>
-    Promise.race([
-      globalThis.marimoStudio.ready(),
-      new Promise<never>((_resolve, reject) =>
-        setTimeout(() => reject(new Error("The projection runtime did not become ready")), 65_000),
-      ),
-    ]),
+  await root.evaluate(
+    (_root, readyTimeout) =>
+      Promise.race([
+        globalThis.marimoStudio.ready(),
+        new Promise<never>((_resolve, reject) =>
+          setTimeout(
+            () => reject(new Error("The projection runtime did not become ready")),
+            readyTimeout,
+          ),
+        ),
+      ]),
+    remaining(),
   );
 };
 
@@ -166,7 +173,7 @@ const exerciseRuntime = async (
 
   const root =
     runtimeLabel === "Server" ? presentationFrame(page).locator("html") : page.locator("html");
-  await waitForRuntime(root);
+  await waitForRuntime(root, runtimeLabel === "static WebAssembly" ? WASM_PREVIEW_TIMEOUT : 65_000);
   const mount = mountConfigSchema.parse(
     await root.evaluate(() => globalThis.__MARIMO_MOUNT_CONFIG__),
   );

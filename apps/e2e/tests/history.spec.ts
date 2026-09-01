@@ -16,6 +16,7 @@ import {
   recoverRequestAbort,
   restoreWorkspace,
   test,
+  WASM_PREVIEW_TIMEOUT,
   workspaceCreatedViewHtmlPath,
   workspaceNotebookPath,
   writeWorkspaceFile,
@@ -50,12 +51,14 @@ test("keeps the configured WebAssembly default implicit across wrapper reload", 
   );
   const server = startRunServer();
   const rendered = presentationFrame(page);
-  const waitForReady = async () => {
+  const waitForReady = async (timeout = 65_000) => {
+    const deadline = Date.now() + timeout;
+    const remaining = () => Math.max(1, deadline - Date.now());
     await expect(rendered.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready", {
-      timeout: 60_000,
+      timeout: remaining(),
     });
     await expect(rendered.locator('[mo-value="metric"]')).toHaveText("42", {
-      timeout: 60_000,
+      timeout: remaining(),
     });
   };
   const mountedRuntime = () =>
@@ -67,7 +70,7 @@ test("keeps the configured WebAssembly default implicit across wrapper reload", 
       `${runServerUrl}/dashboard/?access_token=${runServerToken}&region=emea`,
     );
     await page.goto(`${runServerUrl}/dashboard/?access_token=${runServerToken}&region=emea`);
-    await waitForReady();
+    await waitForReady(WASM_PREVIEW_TIMEOUT);
     expect(await mountedRuntime()).toBe("wasm");
     await expect(page).toHaveURL(`${runServerUrl}/dashboard/?region=emea`);
     await expect(rendered.locator("#wasm-region")).toHaveText("emea");
@@ -130,6 +133,7 @@ test("keeps explicit WebAssembly authority through a pre-ready wrapper reload", 
   browserDiagnostics,
   page,
 }) => {
+  test.setTimeout(210_000);
   const configRuntimes: string[] = [];
   const serverSessions: string[] = [];
   const serverSockets: string[] = [];
@@ -185,7 +189,7 @@ test("keeps explicit WebAssembly authority through a pre-ready wrapper reload", 
     const retirement = browserDiagnostics.expectFrameRetirement(retiringFrame);
     await page.reload();
     await expect(rendered.locator("html")).toHaveAttribute("data-marimo-studio-state", "ready", {
-      timeout: 65_000,
+      timeout: WASM_PREVIEW_TIMEOUT,
     });
     retirement.recovered();
     await expect(page).toHaveURL(`${runServerUrl}/dashboard/?runtime=wasm`);

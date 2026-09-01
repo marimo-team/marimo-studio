@@ -6,12 +6,13 @@ import {
   readWorkspaceFile,
   studioEntryUrl,
   test,
+  WASM_PREVIEW_TIMEOUT,
   waitForPreview,
   workspaceNotebookPath,
   writeWorkspaceFile,
 } from "./fixture.ts";
 
-test.describe.configure({ timeout: 150_000 });
+test.describe.configure({ timeout: 210_000 });
 
 const installProjectedDataframe = async () => {
   const notebook = await readWorkspaceFile(workspaceNotebookPath);
@@ -160,7 +161,7 @@ test("delivers and refreshes dataframe values in Server and WebAssembly runtimes
 
   await page.getByLabel("Python preview runtime").click();
   await page.getByRole("button", { name: /Browser/ }).click();
-  const wasm = await waitForPreview(page, "wasm");
+  const wasm = await waitForPreview(page, "wasm", WASM_PREVIEW_TIMEOUT);
   const wasmSummary = await expectProjectedDataframe(wasm);
   const wasmEmptySummary = await expectEmptyDataframe(wasm);
   const wasmFingerprint = await wasmSummary.getAttribute("data-fingerprint");

@@ -20,6 +20,7 @@ import {
   stabilizeDataTableHeaderRefs,
 } from "../src/vite.ts";
 import {
+  exposeWasmRpcDeadline,
   isolateWasmWorker,
   launchInlineWorkerFromDataModule,
   usePresentationWasmController,
@@ -191,6 +192,9 @@ test("presentation focus ignores native cell containers it does not render", () 
 });
 
 test("opaque presentations construct WebAssembly workers from inline modules", () => {
+  const readyListener = `this.rpc.addMessageListener("ready", () => {
+      this.startSession();
+    });`;
   const source = `const main = new Worker(
       // oxlint-disable-next-line unicorn/relative-url-style
       new URL("./worker/worker.ts", import.meta.url),
@@ -216,19 +220,65 @@ const autoInstantiate = {
             getInitialAppMode() === "read"
               ? true
               : userConfig.runtime.auto_instantiate,
-};`;
+};
+this.rpc = getWorkerRPC<WorkerSchema>(worker);
+${readyListener}`;
 
   const transformed = lineEndingVariants(source).map((candidate) =>
-    isolateWasmWorker(candidate, "/marimo/worker.ts"),
+    isolateWasmWorker(candidate, "/marimo/worker.ts", "/studio/wasm-worker-owner.ts"),
   );
   expect(transformed[0]).toBe(transformed[1]);
   for (const result of transformed) {
     expect(result).toContain('from "/marimo/worker.ts?worker&inline"');
+    expect(result).toContain('from "/studio/wasm-worker-owner.ts"');
+    expect(result).toContain("startPresentationWasmSession(() => this.startSession())");
     expect(result).not.toContain('from "/marimo/save-worker.ts?worker&inline"');
-    expect(result).toContain("new MarimoStudioMainWorker({ name: getWasmWorkerName() })");
+    expect(result).toContain(
+      "ownPresentationWasmWorker(new MarimoStudioMainWorker({ name: getWasmWorkerName() }))",
+    );
     expect(result).toContain('new URL("./worker/save-worker.ts", import.meta.url)');
+    expect(result).toContain("getWorkerRPC<WorkerSchema>(worker, 125_000)");
     expect(result).toContain("auto_instantiate: userConfig.runtime.auto_instantiate");
   }
+  expect(() =>
+    isolateWasmWorker(
+      `${source}\nthis.rpc = getWorkerRPC<WorkerSchema>(worker);`,
+      "/marimo/worker.ts",
+      "/studio/wasm-worker-owner.ts",
+    ),
+  ).toThrow("Marimo WebAssembly workers no longer match the opaque-frame adapter");
+  expect(() =>
+    isolateWasmWorker(
+      `${source}\n${readyListener}`,
+      "/marimo/worker.ts",
+      "/studio/wasm-worker-owner.ts",
+    ),
+  ).toThrow("Marimo WebAssembly workers no longer match the opaque-frame adapter");
+});
+
+test("presentation WebAssembly requests retain the startup window", () => {
+  const source = `export function getWorkerRPC<WorkerSchema extends RPCSchema>(worker: Worker) {
+  return createRPC<ParentSchema, WorkerSchema>({
+    transport: createWorkerTransport(worker, {
+      transportId: TRANSPORT_ID,
+    }),
+    maxRequestTime: 20_000, // 20 seconds
+  });
+}`;
+  const transformed = lineEndingVariants(source).map(exposeWasmRpcDeadline);
+
+  expect(transformed[0]).toBe(transformed[1]);
+  for (const result of transformed) {
+    expect(result).toContain("maxRequestTime = 20_000");
+    expect(result).toContain("maxRequestTime,");
+  }
+  expect(() => exposeWasmRpcDeadline("export function getWorkerRPC() {}"))
+    .toThrowErrorMatchingInlineSnapshot(`
+      [Error: Marimo WebAssembly RPC deadline no longer matches the presentation adapter]
+    `);
+  expect(() => exposeWasmRpcDeadline(`${source}\n${source}`)).toThrowErrorMatchingInlineSnapshot(`
+    [Error: Marimo WebAssembly RPC deadline no longer matches the presentation adapter]
+  `);
 });
 
 test("presentation workers use the in-memory controller", () => {

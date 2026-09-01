@@ -244,9 +244,14 @@ export const presentationFrame = (page: Page): FrameLocator =>
 export const previewFrame = (page: Page, runtime = "server"): FrameLocator =>
   page.frameLocator(`iframe[data-preview-runtime-frame="${runtime}"]`);
 
-const waitForPreviewFrame = async (page: Page, selector: string, timeout = 65_000) => {
+const PREVIEW_TIMEOUT = 65_000;
+export const WASM_PREVIEW_TIMEOUT = 125_000;
+
+const waitForPreviewFrame = async (page: Page, selector: string, timeout = PREVIEW_TIMEOUT) => {
+  const deadline = Date.now() + timeout;
+  const remaining = () => Math.max(1, deadline - Date.now());
   const frame = page.locator(selector);
-  await expect(frame).toBeAttached({ timeout });
+  await expect(frame).toBeAttached({ timeout: remaining() });
   const preview = page.frameLocator(selector);
   await expect
     .poll(
@@ -263,22 +268,22 @@ const waitForPreviewFrame = async (page: Page, selector: string, timeout = 65_00
             ]);
           })
           .catch(() => false),
-      { timeout },
+      { timeout: remaining() },
     )
     .toBe(true);
-  await expect(frame).not.toHaveAttribute("inert", { timeout });
-  await expect(frame).not.toHaveAttribute("aria-busy", { timeout });
+  await expect(frame).not.toHaveAttribute("inert", { timeout: remaining() });
+  await expect(frame).not.toHaveAttribute("aria-busy", { timeout: remaining() });
   return preview;
 };
 
-export const waitForPreview = async (page: Page, runtime = "server") =>
-  waitForPreviewFrame(page, `iframe[data-preview-runtime-frame="${runtime}"]`);
+export const waitForPreview = async (page: Page, runtime = "server", timeout = PREVIEW_TIMEOUT) =>
+  waitForPreviewFrame(page, `iframe[data-preview-runtime-frame="${runtime}"]`, timeout);
 
 export const waitForViewPreview = async (
   page: Page,
   view: string,
   runtime = "server",
-  timeout = 65_000,
+  timeout = PREVIEW_TIMEOUT,
 ) =>
   waitForPreviewFrame(
     page,

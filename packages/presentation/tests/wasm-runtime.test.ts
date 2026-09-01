@@ -17,6 +17,45 @@ const deferred = () => {
 describe("WebAssembly runtime initialization", () => {
   afterEach(() => vi.useRealTimers());
 
+  it("retains dependency-heavy startup while the worker keeps progressing", async () => {
+    vi.useFakeTimers();
+    const worker = deferred();
+    const notebookInitialized = vi.fn(async () => {});
+    const terminateWorker = vi.fn();
+    const initialization = createWasmInitialization(terminateWorker);
+    const waiting = initialization.wait(worker.promise, notebookInitialized);
+
+    await vi.advanceTimersByTimeAsync(119_999);
+    expect(notebookInitialized).not.toHaveBeenCalled();
+    worker.resolve();
+    await waiting;
+    expect(notebookInitialized).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(initialization.signal.aborted).toBe(false);
+    expect(notebookInitialized).toHaveBeenCalledOnce();
+    expect(terminateWorker).not.toHaveBeenCalled();
+  });
+
+  it("terminates in-flight worker startup at the terminal deadline", async () => {
+    vi.useFakeTimers();
+    const notebook = deferred();
+    const terminateWorker = vi.fn();
+    const initialization = createWasmInitialization(terminateWorker);
+    const waiting = initialization.wait(Promise.resolve(), () => notebook.promise);
+    const rejected = expect(waiting).rejects.toThrow(
+      "WebAssembly runtime did not start within 120 seconds.",
+    );
+
+    await vi.advanceTimersByTimeAsync(120_000);
+    await rejected;
+    expect(terminateWorker).toHaveBeenCalledOnce();
+
+    notebook.resolve();
+    await notebook.promise;
+    await Promise.resolve();
+    expect(terminateWorker).toHaveBeenCalledOnce();
+  });
+
   it("reports a worker that never starts", async () => {
     vi.useFakeTimers();
     const worker = deferred();

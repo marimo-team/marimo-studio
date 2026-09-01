@@ -55,6 +55,7 @@ export interface EmbeddedTransportHost {
   activateServerRequests(): () => void;
   prepareServer(transport: EmbeddedServerTransport): TransportRuntime;
   prepareWasm(transport: EmbeddedWasmTransport): Promise<void>;
+  releaseWasm(): void;
   executeWasmCells: EmbeddedCellExecutor;
 }
 
@@ -178,6 +179,7 @@ export const createTransportInitializer = (
         return { initialized: Promise.resolve(), release };
       }
 
+      release = () => host.releaseWasm();
       const workerInitialized = host.prepareWasm(transport);
       return {
         initialized: Promise.resolve(

@@ -3,6 +3,7 @@ import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 import type { ValueReadRequest } from "@marimo-studio/protocol/value-read";
 import type { RuntimeContext, RuntimeSession } from "@marimo-studio/runtime";
 
+import { terminatePresentationWasmWorker } from "@marimo-studio/marimo-frontend/embedded-runtime";
 import { z } from "zod";
 
 import type { RuntimeInvoke } from "./runtime";
@@ -97,7 +98,7 @@ export const mountWasmRuntime = (
 ): RuntimeSession => {
   let data = initialData;
   let presentation = context.presentation;
-  const initialization = createWasmInitialization();
+  const initialization = createWasmInitialization(terminatePresentationWasmWorker);
   const queryWriter = createWasmQueryWriter(initialization.signal);
   let resolveProjectionRuntime = () => {};
   let rejectProjectionRuntime = (_cause: Error) => {};
