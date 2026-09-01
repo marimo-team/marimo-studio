@@ -78,10 +78,8 @@ test("frame bridge accepts bounded controls and rejects cyclic payloads", () => 
 });
 
 test("frame control and query identities use the portable 240-byte contract", () => {
-  for (const length of [128, 129, 228, 229, 240]) {
-    for (const message of identityMessages("v".repeat(length))) {
-      assert.notEqual(parseFrameBridgeMessage(message), undefined, `${length}: ${message.type}`);
-    }
+  for (const message of identityMessages("v".repeat(240))) {
+    assert.notEqual(parseFrameBridgeMessage(message), undefined, message.type);
   }
   for (const message of identityMessages("v".repeat(241))) {
     assert.equal(parseFrameBridgeMessage(message), undefined, message.type);

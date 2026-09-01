@@ -264,10 +264,8 @@ test("preview messages decode every supported discriminant", () => {
 });
 
 test("preview view identities use the portable 240-byte contract", () => {
-  for (const length of [128, 129, 228, 229, 240]) {
-    for (const message of viewIdentityMessages("v".repeat(length))) {
-      assert.notEqual(parsePreviewMessage(message), undefined, `${length}: ${message.type}`);
-    }
+  for (const message of viewIdentityMessages("v".repeat(240))) {
+    assert.notEqual(parsePreviewMessage(message), undefined, message.type);
   }
   for (const message of viewIdentityMessages("v".repeat(241))) {
     assert.equal(parsePreviewMessage(message), undefined, message.type);

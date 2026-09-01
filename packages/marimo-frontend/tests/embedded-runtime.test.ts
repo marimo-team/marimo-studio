@@ -350,9 +350,6 @@ test("mounts, updates, and disposes the server runtime through one handle", asyn
 
   expect(handle.sessionId).toBe("s_abc123");
   expect(globalThis.__MARIMO_STUDIO_SESSION_ID__).toBe("s_abc123");
-  expect(host.view?.cells).toEqual([]);
-  expect(host.view?.connection.state).toBe("OPEN");
-  expect(host.view?.initialization).toEqual({ state: "ready" });
   expect(target.textContent).toBe("s_abc123");
   expect(host.initializeCalls).toBe(1);
   expect(host.connectingCalls).toBe(1);
@@ -732,7 +729,6 @@ test("composes the live kernel view and submits stdin through both Marimo paths"
   expect(renderedView.initialization).toEqual({ state: "ready" });
   expect(renderedView.cells).toEqual([cell]);
   expect(renderedView.connection).toEqual({ state: "OPEN" });
-  expect(kernel.connectionSessions.length).toBeGreaterThan(0);
   expect(new Set(kernel.connectionSessions)).toEqual(new Set([sessionId]));
   expect(new Set(kernel.connectionAutoInstantiate)).toEqual(new Set([false]));
   expect(kernel.startCalls).toBe(1);

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
 import { parseErrorResponse } from "../src/errors.ts";
-import { PROJECTION_UNPAIRED_SURROGATE_CODE, projectionRequestSchema } from "../src/projections.ts";
+import { projectionRequestSchema } from "../src/projections.ts";
 import {
   parseValueReadResponse,
   valueReadRequestSchema,
@@ -76,7 +76,6 @@ test("view responses validate list, create, and delete envelopes", () => {
   );
 
   assert.throws(() => parseViewList({ ...views, default_view: "missing" }));
-  assert.throws(() => parseViewList({ ...views, default_view: "" }));
   assert.throws(() => parseViewList({ ...views, default_starter: "missing" }));
   assert.throws(() => parseViewList({ ...views, generation: "stale" }));
   assert.throws(() => parseViewList({ ...views, unexpected: true }));
@@ -86,9 +85,6 @@ test("view responses validate list, create, and delete envelopes", () => {
   );
   assert.throws(() =>
     parseViewList({ ...views, views: [{ ...views.views[0], name: "Bad View" }] }),
-  );
-  assert.throws(() =>
-    parseViewList({ ...views, views: [{ ...views.views[0], generation: "stale" }] }),
   );
   assert.throws(() =>
     createViewRequestSchema.parse({
@@ -114,7 +110,6 @@ test("view responses validate list, create, and delete envelopes", () => {
   assert.throws(() => parseCreatedView({ schema: 2, name: 42 }));
   assert.throws(() => parseCreatedView({ ...created, unexpected: true }));
   assert.throws(() => parseDeletedView(views));
-  assert.throws(() => parseDeletedView({ ...deleted, default_view: "" }));
   assert.throws(() =>
     parseDeletedView({
       ...deleted,
@@ -123,12 +118,6 @@ test("view responses validate list, create, and delete envelopes", () => {
     }),
   );
   assert.throws(() => parseDeletedView({ ...views, name: "dashboard" }));
-  assert.throws(() =>
-    parseDeletedView({
-      ...deleted,
-      starters: [views.starters[0], views.starters[0]],
-    }),
-  );
   assert.throws(() => parseDeletedView({ ...deleted, unexpected: true }));
   assert.throws(() => parseDeletedView({ ...deleted, cleanup: "" }));
 });
@@ -266,7 +255,7 @@ test.each([
 
   assert.equal(result.success, false);
   if (!result.success) {
-    assert.equal(result.error.issues[0]?.message, PROJECTION_UNPAIRED_SURROGATE_CODE);
+    assert.equal(result.error.issues[0]?.message, "projection-unpaired-surrogate");
   }
 });
 

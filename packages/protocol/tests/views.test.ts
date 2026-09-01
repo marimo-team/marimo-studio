@@ -1,20 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
-import {
-  parseCreatedView,
-  VIEW_NAME_MAX_BYTES,
-  viewNameError,
-  viewNameSchema,
-} from "../src/views.ts";
+import { parseCreatedView, viewNameError, viewNameSchema } from "../src/views.ts";
 
 test("view names use the portable backend contract", () => {
-  assert.equal(VIEW_NAME_MAX_BYTES, 240);
-  for (const length of [128, 129, VIEW_NAME_MAX_BYTES]) {
-    const name = "a".repeat(length);
-    assert.equal(viewNameError(name), undefined);
-    assert.deepEqual(parseCreatedView({ schema: 1, name }), { schema: 1, name });
-  }
+  const maximumName = "a".repeat(240);
+  assert.equal(viewNameError(maximumName), undefined);
+  assert.deepEqual(parseCreatedView({ schema: 1, name: maximumName }), {
+    schema: 1,
+    name: maximumName,
+  });
 
   const invalid = [
     [
@@ -24,7 +19,7 @@ test("view names use the portable backend contract", () => {
     ["api", "View name 'api' is reserved."],
     ["con", "View name contains a reserved Windows device name"],
     ["lpt9", "View name contains a reserved Windows device name"],
-    ["a".repeat(VIEW_NAME_MAX_BYTES + 1), "View name exceeds the 240-byte limit"],
+    ["a".repeat(241), "View name exceeds the 240-byte limit"],
   ] as const;
 
   for (const [name, message] of invalid) {

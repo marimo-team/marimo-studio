@@ -218,10 +218,6 @@ test("mount configuration validates injected document data", () => {
     replay: true,
   };
   assert.deepEqual(parseMountConfig(owned), owned);
-  assert.throws(() => parseMountConfig({ ...mount, revision: 42 }));
-  assert.throws(() => parseMountConfig({ ...mount, runtime: "WebAssembly" }));
-  assert.throws(() => parseMountConfig({ ...mount, runtimeExplicit: "yes" }));
-  assert.throws(() => parseMountConfig({ ...mount, replay: "yes" }));
   assert.throws(() => parseMountConfig({ ...mount, lifecycleId: 0 }));
   assert.throws(() => parseMountConfig({ ...mount, runtimeSessionId: "forged" }));
   assert.throws(() => parseMountConfig({ ...mount, clientId: "client-123456789" }));

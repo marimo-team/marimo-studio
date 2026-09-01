@@ -23,7 +23,8 @@ test("replaces named UI generations while retaining cached output state", () => 
 
   reconcileProjectedOutputState(output([fresh]), entries, resetVirtualFiles, trackVirtualFiles);
 
-  expect([...entries.keys()]).toEqual([cached]);
+  expect(entries.has(fresh)).toBe(false);
+  expect(entries.has(cached)).toBe(true);
   expect(resetVirtualFiles).toHaveBeenCalledWith(owner);
   expect(trackVirtualFiles).toHaveBeenCalledWith({
     cell_id: owner,
