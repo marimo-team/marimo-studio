@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
-from marimo_studio._notebook.runtime_protocol import decode_runtime_response
+from marimo_studio._notebook.runtime_protocol import (
+    _validate_json_depth,
+    decode_runtime_response,
+    load_runtime_request,
+)
 from marimo_studio._projections.runtime_records import (
     OutputRenderResult,
     RenderedOutput,
@@ -17,6 +22,20 @@ from marimo_studio._projections.runtime_records import (
     ValueReadResult,
 )
 from marimo_studio.errors import ProtocolError
+
+
+def _nested_value(depth: int) -> object:
+    value: object = 0
+    for _index in range(depth):
+        value = [value]
+    return value
+
+
+def _nested_empty_lists(depth: int) -> object:
+    value: object = []
+    for _index in range(depth - 1):
+        value = [value]
+    return value
 
 
 def test_runtime_protocol_round_trips_complete_probe() -> None:
@@ -66,14 +85,51 @@ def test_runtime_protocol_rejects_nonfinite_values() -> None:
 def test_runtime_protocol_rejects_excessive_nesting() -> None:
     payload = (
         b'{"schema":1,"runtime":{"cells":{},"values":{"values":{"x":'
-        + b"[" * 1_500
+        + b"[" * 100
         + b"0"
-        + b"]" * 1_500
+        + b"]" * 100
         + b'},"errors":{}},"outputs":{"outputs":{},"errors":{}}}}'
     )
 
     with pytest.raises(ProtocolError, match="invalid JSON"):
         decode_runtime_response(payload)
+
+
+def test_runtime_protocol_json_depth_has_an_explicit_boundary() -> None:
+    _validate_json_depth(_nested_value(64))
+    _validate_json_depth(_nested_empty_lists(64))
+
+    with pytest.raises(ValueError, match="JSON exceeds 64 container levels"):
+        _validate_json_depth(_nested_value(65))
+    with pytest.raises(ValueError, match="JSON exceeds 64 container levels"):
+        _validate_json_depth(_nested_empty_lists(65))
+
+
+def test_runtime_request_maps_excessive_nesting_to_a_protocol_error(
+    tmp_path: Path,
+) -> None:
+    request = tmp_path / "request.json"
+    request.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "notebook": str(tmp_path / "analysis.py"),
+                "cellIds": [],
+                "variables": [],
+                "outputSelectorGroups": [],
+                "showTracebacks": False,
+                "timeout": 1,
+                "valueMaxBytes": 1024,
+                "sourceGeneration": _nested_value(100),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ProtocolError, match="request is invalid") as raised:
+        load_runtime_request(request)
+
+    assert str(raised.value.__cause__) == "JSON exceeds 64 container levels"
 
 
 def test_runtime_protocol_rejects_an_unbounded_timestamp() -> None:

@@ -20,6 +20,7 @@ from marimo_studio.errors import ConfigurationError, ProtocolError, RuntimeTimeo
 
 RUNTIME_PROTOCOL_SCHEMA = 1
 _MAX_REQUEST_BYTES = 256 * 1024
+_MAX_JSON_DEPTH = 64
 _REQUEST_FIELDS = {
     "schema",
     "notebook",
@@ -186,11 +187,23 @@ def _validate_timeout(value: object) -> None:
 
 
 def _loads_json(payload: bytes) -> object:
-    return json.loads(
+    value = json.loads(
         payload,
         parse_constant=_reject_json_constant,
         parse_float=_parse_json_float,
     )
+    _validate_json_depth(value)
+    return value
+
+
+def _validate_json_depth(value: object, depth: int = 0) -> None:
+    if not isinstance(value, (dict, list)):
+        return
+    if depth >= _MAX_JSON_DEPTH:
+        raise ValueError(f"JSON exceeds {_MAX_JSON_DEPTH} container levels")
+    children = value.values() if isinstance(value, dict) else value
+    for child in children:
+        _validate_json_depth(child, depth + 1)
 
 
 def _reject_json_constant(value: str) -> object:
