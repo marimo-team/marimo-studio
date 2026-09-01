@@ -1,14 +1,14 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
 import { PreviewController } from "../src/features/preview/controller.ts";
-import { PreviewDeck } from "../src/features/preview/deck.ts";
 import { createFrameBridgeSource, installFrameBridge } from "./frame-bridge-test-support.ts";
 import {
   acknowledgementPort,
-  cachedFrames,
+  cachedFramesWithWindows,
   dispatchPreviewMessage,
   dispatchPreviewRefreshHandshake,
   frame,
+  previewDeck,
 } from "./preview-test-support.ts";
 
 afterEach(() => {
@@ -24,17 +24,7 @@ it("preserves a ready active frame when the editor reloads without a mutation", 
     configurable: true,
     value: previewWindow,
   });
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
-    runtimes: ["server"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
-  });
+  const deck = previewDeck();
   deck.attach(editor, new Map([["server", preview]]));
   const lifecycleId = deck.getSnapshot().states.server!.lifecycleId;
   dispatchPreviewMessage(previewWindow, {
@@ -69,17 +59,7 @@ it("clears stale interactivity only after an accepted unchanged completion", asy
     configurable: true,
     value: previewWindow,
   });
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
-    runtimes: ["server"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
-  });
+  const deck = previewDeck();
   deck.attach(frame("complete"), new Map([["server", preview]]));
   const lifecycleId = deck.getSnapshot().states.server!.lifecycleId;
   dispatchPreviewMessage(previewWindow, {
@@ -143,17 +123,7 @@ it("keeps a failed reloaded build inert until a repaired publication settles", a
     configurable: true,
     value: previewWindow,
   });
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
-    runtimes: ["server"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
-  });
+  const deck = previewDeck();
   deck.attach(frame("complete"), new Map([["server", preview]]));
   const initialLifecycle = deck.getSnapshot().states.server!.lifecycleId;
   dispatchPreviewMessage(previewWindow, {
@@ -233,25 +203,8 @@ it("keeps a failed reloaded build inert until a repaired publication settles", a
 });
 
 it("recreates a cached view after a pending mutation reloads the editor document", async () => {
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
-    runtimes: ["server"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
-  });
-  const frames = cachedFrames(deck, {});
-  const windows = new Map(
-    [...frames].map(([id, cached]) => {
-      const frameWindow = createFrameBridgeSource();
-      Object.defineProperty(cached, "contentWindow", { configurable: true, value: frameWindow });
-      return [id, frameWindow];
-    }),
-  );
+  const deck = previewDeck();
+  const { frames, windows } = cachedFramesWithWindows(deck, createFrameBridgeSource);
   deck.attach(frame("complete"), frames);
 
   const markReady = async (view: string, revision: string) => {

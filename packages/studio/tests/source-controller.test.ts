@@ -516,12 +516,13 @@ it("does not start an old-view read after its source session is disposed", async
   );
 
   await selectSourceView(source, "svelte");
+  const readsAfterSelection = remote.reads.length;
   retiredRead.resolve({ content: "disk block", revision: "revision:block:current" });
   await retiredRead.promise;
   await Promise.resolve();
   await Promise.resolve();
 
-  expect(remote.reads).not.toContain("react:src/new.html");
+  expect(remote.reads).toHaveLength(readsAfterSelection);
   expect(source.getSnapshot().view).toBe("svelte");
   source.dispose();
 });

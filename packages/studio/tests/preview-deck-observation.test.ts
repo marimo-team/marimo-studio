@@ -4,7 +4,6 @@ import type { RecordBrowserObservation } from "../src/features/preview/observati
 
 import { PreviewControlController } from "../src/features/preview/control-controller.ts";
 import { PreviewController } from "../src/features/preview/controller.ts";
-import { PreviewDeck } from "../src/features/preview/deck.ts";
 import { PreviewObservationController } from "../src/features/preview/observation-controller.ts";
 import { emptyProjectionEvidence } from "./fixtures.ts";
 import { installFrameBridge } from "./frame-bridge-test-support.ts";
@@ -13,6 +12,7 @@ import {
   dispatchPreviewMessage,
   dispatchPreviewRefreshHandshake,
   frame,
+  previewDeck,
 } from "./preview-test-support.ts";
 
 afterEach(() => {
@@ -130,17 +130,7 @@ it("keeps an exact projection failure interactive while a runtime failure blocks
     configurable: true,
     value: previewWindow,
   });
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
-    runtimes: ["server"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
-  });
+  const deck = previewDeck();
   deck.attach(frame("complete"), new Map([["server", preview]]));
   const lifecycleId = deck.getSnapshot().states.server!.lifecycleId;
   dispatchPreviewMessage(previewWindow, {
@@ -208,17 +198,7 @@ it("admits a session-bearing projection error after its delayed build completes"
     configurable: true,
     value: previewWindow,
   });
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
-    runtimes: ["server"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
-  });
+  const deck = previewDeck();
   deck.attach(frame("complete"), new Map([["server", preview]]));
   const lifecycleId = deck.getSnapshot().states.server!.lifecycleId;
   deck.presentationBuildStarted("dashboard");

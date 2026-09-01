@@ -1,11 +1,11 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
-import { PreviewDeck } from "../src/features/preview/deck.ts";
 import {
   controller,
   dispatchPreviewMessage,
   dispatchPreviewRefreshHandshake,
   frame,
+  previewDeck,
 } from "./preview-test-support.ts";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -452,16 +452,8 @@ it("reloads only the active preview for a newer editor binding", () => {
   const editor = frame("loading");
   const serverFrame = frame("complete");
   const wasmFrame = frame("complete");
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
+  const deck = previewDeck({
     runtimes: ["server", "wasm"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
   });
   deck.attach(
     editor,

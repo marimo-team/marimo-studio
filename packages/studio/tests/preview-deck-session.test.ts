@@ -3,9 +3,8 @@ import { afterEach, expect, it, vi } from "vite-plus/test";
 
 import type { RecordBrowserObservation } from "../src/features/preview/observation-remote.ts";
 
-import { PreviewDeck } from "../src/features/preview/deck.ts";
 import { emptyProjectionEvidence } from "./fixtures.ts";
-import { dispatchPreviewMessage, frame } from "./preview-test-support.ts";
+import { dispatchPreviewMessage, frame, previewDeck } from "./preview-test-support.ts";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -31,16 +30,10 @@ it.each([
       value: previewWindow,
     });
     const record = vi.fn<RecordBrowserObservation>(async () => undefined);
-    const deck = new PreviewDeck({
-      initialView: "dashboard",
+    const deck = previewDeck({
       initialRuntime: runtime,
-      initialNavigation: { query: "", hash: "" },
       runtimes: [runtime],
       viewUrl: (view, selectedRuntime) => `/${view}?runtime=${selectedRuntime}`,
-      supportUrl: (view) => `/support/${view}`,
-      syncQuery: vi.fn(),
-      syncEditorQuery: vi.fn(async () => "accepted" as const),
-      navigate: vi.fn(),
       recordObservation: record,
     });
     deck.attach(editor, new Map([[runtime, preview]]));

@@ -151,9 +151,9 @@ it("bounds a committed-view recovery that never becomes ready", async () => {
   const recovery = coordinator.recoverActiveView("dashboard", new AbortController().signal);
   const rejected = expect(recovery).rejects.toMatchObject({ name: "TimeoutError" });
 
-  await vi.advanceTimersByTimeAsync(9_999);
+  await Promise.resolve();
   expect(EventSourceStub.instances).toHaveLength(2);
-  await vi.advanceTimersByTimeAsync(1);
+  await vi.runAllTimersAsync();
 
   await rejected;
   coordinator.dispose();

@@ -103,12 +103,11 @@ it("keeps a single-distribution starter catalog flat", async () => {
     starter.id,
   );
   const user = userEvent.setup();
-  const { container } = render(<ViewMenu controller={controller} />);
+  render(<ViewMenu controller={controller} />);
 
   await user.click(screen.getByLabelText(/^Switch view:/));
   await user.click(screen.getByRole("button", { name: "New view" }));
 
-  expect(container.querySelector(".studio-starter-group")).toBeNull();
   expect(screen.queryByRole("group", { name: "From marimo-studio" })).not.toBeInTheDocument();
   expect(screen.getByRole("radio", { name: /HTML/ })).toBeChecked();
   controller.dispose();

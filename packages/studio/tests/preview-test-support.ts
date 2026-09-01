@@ -4,9 +4,9 @@ import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 import { vi } from "vite-plus/test";
 
 import type { ControlEndpoint } from "../src/features/preview/control-sync.ts";
-import type { PreviewDeck } from "../src/features/preview/deck.ts";
 
 import { PreviewController } from "../src/features/preview/controller.ts";
+import { PreviewDeck } from "../src/features/preview/deck.ts";
 import { symbolicRuntimeFields } from "./fixtures.ts";
 
 export const frame = (readyState: DocumentReadyState): HTMLIFrameElement => {
@@ -38,6 +38,18 @@ export const cachedFrames = (
       return [id, cached];
     }),
   );
+
+export const cachedFramesWithWindows = <Source>(deck: PreviewDeck, createSource: () => Source) => {
+  const frames = cachedFrames(deck, {});
+  const windows = new Map(
+    [...frames].map(([id, cached]) => {
+      const source = createSource();
+      Object.defineProperty(cached, "contentWindow", { configurable: true, value: source });
+      return [id, source];
+    }),
+  );
+  return { frames, windows };
+};
 
 export const acknowledgementPort = () => {
   const channel = new MessageChannel();
@@ -135,3 +147,19 @@ export const controlEndpoint = (): ControlEndpoint => ({
   apply: vi.fn(async () => {}),
   dispose: vi.fn(),
 });
+
+type PreviewDeckOptions = ConstructorParameters<typeof PreviewDeck>[0];
+
+export const previewDeck = (options: Partial<PreviewDeckOptions> = {}): PreviewDeck =>
+  new PreviewDeck({
+    initialView: "dashboard",
+    initialRuntime: "server",
+    initialNavigation: { query: "", hash: "" },
+    runtimes: ["server"],
+    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
+    supportUrl: (view) => `/support/${view}`,
+    syncQuery: vi.fn(),
+    syncEditorQuery: vi.fn(async () => "accepted" as const),
+    navigate: vi.fn(),
+    ...options,
+  });

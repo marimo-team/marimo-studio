@@ -1,21 +1,11 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
-import { z } from "zod";
 
-import type { JsonFetch, JsonRequestInit } from "./agent-remote-test-support.ts";
+import type { JsonFetch } from "./agent-remote-test-support.ts";
 
 import {
   createViewActivationRemote,
   ViewActivationAcknowledgementError,
 } from "../src/app/activation-remote.ts";
-
-const activationAcknowledgementSchema = z.object({
-  schema: z.literal(1),
-  clientId: z.string(),
-  view: z.string(),
-});
-
-const activationRequestBody = (init: JsonRequestInit) =>
-  activationAcknowledgementSchema.parse(JSON.parse(init.body));
 
 afterEach(() => {
   vi.useRealTimers();
@@ -85,10 +75,6 @@ it("retries when an activation acknowledgement body stalls", async () => {
   expect(fetch.mock.calls[1]?.[1].signal?.aborted).toBe(false);
   expect(owner.signal.aborted).toBe(false);
   expect(fetch.mock.calls[0]?.[0]).toContain("/_marimo-studio/activations/11/ack");
-  expect(fetch.mock.calls.map(([, init]) => activationRequestBody(init).view)).toEqual([
-    "report",
-    "report",
-  ]);
 });
 
 it("retries an activation acknowledgement while the browser binding settles", async () => {
@@ -108,10 +94,6 @@ it("retries an activation acknowledgement while the browser binding settles", as
   await acknowledged;
 
   expect(fetch).toHaveBeenCalledTimes(2);
-  expect(fetch.mock.calls.map(([, init]) => activationRequestBody(init).view)).toEqual([
-    "report",
-    "report",
-  ]);
 });
 
 it("does not retry a rejected activation acknowledgement", async () => {

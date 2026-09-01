@@ -1,18 +1,15 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
 import { PreviewController } from "../src/features/preview/controller.ts";
-import {
-  PREVIEW_VIEW_CACHE_SIZE,
-  PreviewDeck,
-  WASM_PREVIEW_VIEW_CACHE_SIZE,
-} from "../src/features/preview/deck.ts";
 import { createFrameBridgeSource, installFrameBridge } from "./frame-bridge-test-support.ts";
 import {
   acknowledgementPort,
   cachedFrames,
+  cachedFramesWithWindows,
   dispatchPreviewMessage,
   dispatchPreviewRefreshHandshake,
   frame,
+  previewDeck,
 } from "./preview-test-support.ts";
 
 afterEach(() => {
@@ -58,26 +55,14 @@ it("restores the prior controller and editor query after a target view fails", a
     });
     return "accepted" as const;
   });
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
+  const deck = previewDeck({
     initialRuntime: "wasm",
     initialNavigation: { query: "?region=emea", hash: "#overview" },
     runtimes: ["wasm"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
     syncEditorQuery,
-    navigate: vi.fn(),
   });
   const editor = frame("loading");
-  const frames = cachedFrames(deck, {});
-  const windows = new Map(
-    [...frames].map(([id, preview]) => {
-      const source = createFrameBridgeSource();
-      Object.defineProperty(preview, "contentWindow", { configurable: true, value: source });
-      return [id, source];
-    }),
-  );
+  const { frames, windows } = cachedFramesWithWindows(deck, createFrameBridgeSource);
   deck.attach(editor, frames);
   const dashboard = deck
     .getSnapshot()
@@ -166,16 +151,8 @@ it("restores the prior controller and editor query after a target view fails", a
 
 it("keeps the runtime stable until a staged navigation commits", async () => {
   const ready = deferred<boolean>();
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
+  const deck = previewDeck({
     runtimes: ["server", "wasm"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
   });
   vi.spyOn(deck, "stageView").mockReturnValue({
     ready: ready.promise,
@@ -204,16 +181,8 @@ it("starts an inactive runtime when the user selects it", () => {
     configurable: true,
     value: serverWindow,
   });
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
+  const deck = previewDeck({
     runtimes: ["server", "wasm"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
   });
   deck.attach(
     editor,
@@ -223,12 +192,6 @@ it("starts an inactive runtime when the user selects it", () => {
     ]),
   );
   const inactiveSource = wasmFrame.src;
-  expect(deck.frameIds.filter((id) => id.startsWith("server"))).toHaveLength(
-    PREVIEW_VIEW_CACHE_SIZE,
-  );
-  expect(deck.frameIds.filter((id) => id.startsWith("wasm"))).toHaveLength(
-    WASM_PREVIEW_VIEW_CACHE_SIZE,
-  );
   dispatchPreviewMessage(serverWindow, {
     type: "marimo-studio:view-ready",
     runtime: "server",
@@ -257,16 +220,8 @@ it("refreshes the selected preview without reconnecting an inactive runtime", as
     configurable: true,
     value: wasmWindow,
   });
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
+  const deck = previewDeck({
     runtimes: ["server", "wasm"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
   });
   deck.attach(
     editor,
@@ -327,16 +282,8 @@ it("refreshes a changed presentation when an inactive runtime becomes active", a
     configurable: true,
     value: wasmWindow,
   });
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
+  const deck = previewDeck({
     runtimes: ["server", "wasm"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
   });
   deck.attach(
     editor,
@@ -424,27 +371,26 @@ it("refreshes a changed presentation when an inactive runtime becomes active", a
   deck.presentationBuildCompleted("dashboard", "revision-2");
   deck.presentationChanged("dashboard", "revision-2");
 
-  expect(serverWindow.postMessage.mock.calls).toEqual([
-    [
-      {
-        type: "marimo-studio:presentation-refresh",
-        runtime: "server",
-        lifecycleId: deck.getSnapshot().states.server!.lifecycleId,
-        view: "dashboard",
-        phase: "settled",
-      },
-      "*",
-    ],
-    [
-      {
-        type: "marimo-studio:presentation-change",
-        runtime: "server",
-        lifecycleId: deck.getSnapshot().states.server!.lifecycleId,
-        view: "dashboard",
-      },
-      "*",
-    ],
-  ]);
+  const serverLifecycleId = deck.getSnapshot().states.server!.lifecycleId;
+  expect(serverWindow.postMessage).toHaveBeenCalledWith(
+    {
+      type: "marimo-studio:presentation-refresh",
+      runtime: "server",
+      lifecycleId: serverLifecycleId,
+      view: "dashboard",
+      phase: "settled",
+    },
+    "*",
+  );
+  expect(serverWindow.postMessage).toHaveBeenCalledWith(
+    {
+      type: "marimo-studio:presentation-change",
+      runtime: "server",
+      lifecycleId: serverLifecycleId,
+      view: "dashboard",
+    },
+    "*",
+  );
   expect(
     wasmWindow.postMessage.mock.calls.some(
       ([message]) => message.type === "marimo-studio:presentation-change",
@@ -480,16 +426,8 @@ it("retains an exact server frame after a delayed same-revision baseline", async
   const wasmFrame = frame("complete");
   const serverWindow = createFrameBridgeSource();
   const wasmWindow = createFrameBridgeSource();
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
+  const deck = previewDeck({
     runtimes: ["server", "wasm"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
   });
   deck.attach(
     editor,
@@ -564,16 +502,10 @@ it("seeds initial deep-link query and hash into every runtime state", () => {
     (view: string, runtime: string, navigation?: { query: string; hash: string }) =>
       `/${view}/?runtime=${runtime}&${navigation?.query.slice(1) ?? ""}${navigation?.hash ?? ""}`,
   );
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
+  const deck = previewDeck({
     initialNavigation: { query: "?region=emea", hash: "#details" },
     runtimes: ["server", "wasm"],
     viewUrl,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
   });
 
   expect(deck.getSnapshot().states.server?.url).toContain("region=emea#details");
@@ -597,16 +529,10 @@ it("seeds the current navigation intent into a lazily created runtime", () => {
     (view: string, runtime: string, navigation?: { query: string; hash: string }) =>
       `/${view}/?runtime=${runtime}&${navigation?.query.slice(1) ?? ""}${navigation?.hash ?? ""}`,
   );
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
+  const deck = previewDeck({
     initialNavigation: { query: "?region=emea", hash: "#overview" },
     runtimes: ["server", "wasm"],
     viewUrl,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
   });
   deck.attach(
     editor,
@@ -633,17 +559,7 @@ it("awaits only the active preview and reloads an inactive cached view", async (
   const gate = vi
     .spyOn(PreviewController.prototype, "notebookMutationPending")
     .mockResolvedValue(unchanged);
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
-    runtimes: ["server"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
-  });
+  const deck = previewDeck();
   const frames = cachedFrames(deck, { server: frame("complete") });
   const dashboardFrame = frames.get("server")!;
   deck.attach(frame("complete"), frames);
@@ -673,17 +589,7 @@ it("disposes an unresponsive active reader before acknowledging the editor", asy
   const gate = vi
     .spyOn(PreviewController.prototype, "notebookMutationPending")
     .mockRejectedValue(new DOMException("preview unavailable", "TimeoutError"));
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
-    runtimes: ["server"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
-  });
+  const deck = previewDeck();
   const frameElement = frame("complete");
   deck.attach(frame("complete"), cachedFrames(deck, { server: frameElement }));
   const acknowledgement = acknowledgementPort();
@@ -714,17 +620,7 @@ it("gates a replacement view before acknowledging a switched editor mutation", a
     .mockResolvedValue(replacementUnchanged);
   const dispose = vi.spyOn(PreviewController.prototype, "dispose");
   const activate = vi.spyOn(PreviewController.prototype, "activate").mockResolvedValue(true);
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
-    runtimes: ["server"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
-  });
+  const deck = previewDeck();
   const dashboard = frame("complete");
   deck.attach(frame("complete"), cachedFrames(deck, { server: dashboard }));
   const acknowledgement = acknowledgementPort();

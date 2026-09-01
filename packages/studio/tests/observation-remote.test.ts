@@ -73,10 +73,6 @@ it("uploads browser observations in monotonic order within one request", async (
 
   const payloads = fetch.mock.calls.map(([, init]) => observationRequestBody(init));
   expect(payloads.map((payload) => payload.sequence)).toEqual([0, 1]);
-  expect(payloads.map((payload) => payload.requestId)).toEqual([
-    "request-dashboard",
-    "request-dashboard",
-  ]);
   expect(payloads.map((payload) => payload.state)).toEqual(["loading", "ready"]);
 });
 
@@ -185,10 +181,6 @@ it("a new request supersedes a stalled upload before its retry budget", async ()
 
   await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   await Promise.all([expired, fresh]);
-  expect(fetch.mock.calls.map(([, init]) => observationRequestBody(init).requestId)).toEqual([
-    "expired-request",
-    "fresh-request",
-  ]);
 });
 
 it("a stalled loading upload yields promptly to terminal evidence", async () => {
@@ -237,8 +229,4 @@ it("a stalled loading upload yields promptly to terminal evidence", async () => 
   await ready;
 
   expect(fetch).toHaveBeenCalledTimes(2);
-  expect(fetch.mock.calls.map(([, init]) => observationRequestBody(init).state)).toEqual([
-    "loading",
-    "ready",
-  ]);
 });

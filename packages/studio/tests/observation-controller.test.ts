@@ -65,10 +65,18 @@ const acceptObservation = (message: ViewObservationMessage): RuntimeStatusReport
   };
 };
 
+const previewHost = () => {
+  const preview = document.createElement("iframe");
+  const postMessage = vi.fn();
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: { postMessage },
+  });
+  return { preview, postMessage };
+};
+
 it("keeps an observation request until terminal evidence is recorded", async () => {
-  document.body.innerHTML = "<iframe></iframe>";
-  const preview = document.querySelector("iframe")!;
-  const postMessage = vi.spyOn(preview.contentWindow!, "postMessage");
+  const { preview, postMessage } = previewHost();
   const record = vi.fn(async (_value: RenderedBrowserObservation) => undefined);
   const controller = new PreviewObservationController("server", preview, acceptObservation, record);
 
@@ -108,9 +116,7 @@ it("keeps an observation request until terminal evidence is recorded", async () 
 });
 
 it("releases terminal evidence after its bounded upload fails", async () => {
-  document.body.innerHTML = "<iframe></iframe>";
-  const preview = document.querySelector("iframe")!;
-  const postMessage = vi.spyOn(preview.contentWindow!, "postMessage");
+  const { preview, postMessage } = previewHost();
   const record = vi.fn(async (_value: RenderedBrowserObservation) => {
     throw new Error("network unavailable");
   });
@@ -127,9 +133,7 @@ it("releases terminal evidence after its bounded upload fails", async () => {
 });
 
 it("does not resend a request while terminal evidence is uploading", async () => {
-  document.body.innerHTML = "<iframe></iframe>";
-  const preview = document.querySelector("iframe")!;
-  const postMessage = vi.spyOn(preview.contentWindow!, "postMessage");
+  const { preview, postMessage } = previewHost();
   let finishUpload!: () => void;
   const record = vi.fn(
     async (_value: RenderedBrowserObservation) =>
@@ -155,9 +159,7 @@ it("does not resend a request while terminal evidence is uploading", async () =>
 });
 
 it("a new observation request supersedes stale browser work", () => {
-  document.body.innerHTML = "<iframe></iframe>";
-  const preview = document.querySelector("iframe")!;
-  const postMessage = vi.spyOn(preview.contentWindow!, "postMessage");
+  const { preview, postMessage } = previewHost();
   const controller = new PreviewObservationController("server", preview, acceptObservation);
 
   controller.request({ ...request, requestId: "stale-request", revision: "revision-1" }, 1);
@@ -173,8 +175,7 @@ it("a new observation request supersedes stale browser work", () => {
 });
 
 it("drops superseded replies before accepting their runtime state", () => {
-  document.body.innerHTML = "<iframe></iframe>";
-  const preview = document.querySelector("iframe")!;
+  const { preview } = previewHost();
   const accept = vi.fn(acceptObservation);
   const controller = new PreviewObservationController("server", preview, accept);
 

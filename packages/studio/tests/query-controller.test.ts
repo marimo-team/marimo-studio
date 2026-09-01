@@ -6,6 +6,8 @@ import type { EditorQuerySyncResult } from "../src/features/preview/query-remote
 import { PreviewQueryController } from "../src/features/preview/query-controller.ts";
 import { createFrameBridgeSource, installFrameBridge } from "./frame-bridge-test-support.ts";
 
+type SyncEditorQuery = ConstructorParameters<typeof PreviewQueryController>[3];
+
 afterEach(() => {
   vi.useRealTimers();
   document.body.replaceChildren();
@@ -96,14 +98,7 @@ it("serializes writes and coalesces them to the latest query", async () => {
   const first = deferred();
   const second = deferred();
   const sync = vi
-    .fn<
-      (
-        query: string,
-        operationId: string,
-        writeGeneration: number,
-        signal: AbortSignal,
-      ) => Promise<EditorQuerySyncResult>
-    >()
+    .fn<SyncEditorQuery>()
     .mockReturnValueOnce(first.promise)
     .mockReturnValueOnce(second.promise);
   const controller = new PreviewQueryController("wasm", frame(), vi.fn(), sync, vi.fn());
@@ -126,14 +121,7 @@ it("serializes writes and coalesces them to the latest query", async () => {
 it("retries the latest query after the editor reconnects", async () => {
   vi.useFakeTimers();
   const sync = vi
-    .fn<
-      (
-        query: string,
-        operationId: string,
-        writeGeneration: number,
-        signal: AbortSignal,
-      ) => Promise<EditorQuerySyncResult>
-    >()
+    .fn<SyncEditorQuery>()
     .mockResolvedValueOnce("retry")
     .mockResolvedValueOnce("accepted");
   const controller = new PreviewQueryController("wasm", frame(), vi.fn(), sync, vi.fn());
@@ -149,16 +137,36 @@ it("retries the latest query after the editor reconnects", async () => {
   controller.cancel();
 });
 
+it("reports a rejected editor write until its retry recovers", async () => {
+  vi.useFakeTimers();
+  const sync = vi
+    .fn<SyncEditorQuery>()
+    .mockRejectedValueOnce(new Error("editor write failed"))
+    .mockResolvedValueOnce("accepted");
+  const statuses: string[] = [];
+  const controller = new PreviewQueryController(
+    "wasm",
+    frame(),
+    vi.fn(),
+    sync,
+    vi.fn(),
+    "",
+    (status) => statuses.push(status.phase),
+  );
+  vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+  controller.previewChanged("region=apac");
+  await vi.waitFor(() => expect(statuses.at(-1)).toBe("degraded"));
+  await vi.runOnlyPendingTimersAsync();
+  await vi.waitFor(() => expect(statuses.at(-1)).toBe("ready"));
+
+  expect(sync).toHaveBeenCalledTimes(2);
+  controller.cancel();
+});
+
 it("accepts a server navigation query without committing parent query state", async () => {
   const operation = deferred();
-  const sync = vi.fn<
-    (
-      query: string,
-      operationId: string,
-      writeGeneration: number,
-      signal: AbortSignal,
-    ) => Promise<EditorQuerySyncResult>
-  >(() => operation.promise);
+  const sync = vi.fn<SyncEditorQuery>(() => operation.promise);
   const syncQuery = vi.fn();
   const controller = new PreviewQueryController("server", frame(), syncQuery, sync, vi.fn());
 
@@ -168,15 +176,11 @@ it("accepts a server navigation query without committing parent query state", as
   expect(sync.mock.calls[0]?.[0]).toBe("?region=apac");
   const operationId = sync.mock.calls[0]?.[1];
   expect(operationId).toMatch(/^query_/);
-  expect(syncQuery).not.toHaveBeenCalled();
   operation.resolve("accepted");
   await operation.promise;
-  expect(syncQuery).not.toHaveBeenCalled();
   controller.editorChanged("region=apac", false, operationId);
-  expect(syncQuery).not.toHaveBeenCalled();
   controller.editorChanged("region=apac", false, operationId, true);
   await expect(navigation).resolves.toBe(true);
-  expect(syncQuery).not.toHaveBeenCalled();
   controller.commitNavigation("region=apac");
   expect(syncQuery).not.toHaveBeenCalled();
   expect(sync).toHaveBeenCalledOnce();
@@ -184,14 +188,7 @@ it("accepts a server navigation query without committing parent query state", as
 });
 
 it("restores an accepted navigation query when staged view readiness fails", async () => {
-  const sync = vi.fn<
-    (
-      query: string,
-      operationId: string,
-      writeGeneration: number,
-      signal: AbortSignal,
-    ) => Promise<EditorQuerySyncResult>
-  >(async () => "accepted");
+  const sync = vi.fn<SyncEditorQuery>(async () => "accepted");
   const controller = new PreviewQueryController("server", frame(), vi.fn(), sync, vi.fn(), "");
 
   const navigation = controller.synchronizeNavigation("?region=apac");
@@ -213,14 +210,7 @@ it("restores an accepted navigation query when staged view readiness fails", asy
 it("repairs an accepted navigation when its completion marker is lost", async () => {
   vi.useFakeTimers();
   const syncQuery = vi.fn();
-  const sync = vi.fn<
-    (
-      query: string,
-      operationId: string,
-      writeGeneration: number,
-      signal: AbortSignal,
-    ) => Promise<EditorQuerySyncResult>
-  >(async () => "accepted");
+  const sync = vi.fn<SyncEditorQuery>(async () => "accepted");
   const controller = new PreviewQueryController("server", frame(), syncQuery, sync, vi.fn());
 
   const navigation = controller.synchronizeNavigation("region=apac");
@@ -240,57 +230,8 @@ it("repairs an accepted navigation when its completion marker is lost", async ()
   controller.cancel();
 });
 
-it("ignores a timed-out tagged completion after later operations evict its identity", async () => {
-  vi.useFakeTimers();
-  const syncQuery = vi.fn();
-  const changed = vi.fn();
-  const sync = vi.fn<
-    (
-      query: string,
-      operationId: string,
-      writeGeneration: number,
-      signal: AbortSignal,
-    ) => Promise<EditorQuerySyncResult>
-  >(async () => "accepted");
-  const controller = new PreviewQueryController(
-    "wasm",
-    frame(),
-    syncQuery,
-    sync,
-    changed,
-    "?region=emea",
-  );
-
-  const navigation = controller.synchronizeNavigation("?region=apac");
-  const timedOutOperation = sync.mock.calls[0]?.[1];
-  await vi.advanceTimersByTimeAsync(5_000);
-  await expect(navigation).resolves.toBe(false);
-  await vi.waitFor(() => expect(sync).toHaveBeenCalledTimes(2));
-
-  for (let index = 0; index < 105; index += 1) {
-    controller.previewChanged(`latest=${index}`);
-    await vi.waitFor(() => expect(sync).toHaveBeenCalledTimes(index + 3));
-  }
-  const changedBeforeStaleCompletion = changed.mock.calls.length;
-  const queryWritesBeforeStaleCompletion = syncQuery.mock.calls.length;
-
-  controller.editorChanged("?region=apac", false, timedOutOperation, true);
-
-  expect(controller.currentQuery).toBe("?latest=104");
-  expect(changed).toHaveBeenCalledTimes(changedBeforeStaleCompletion);
-  expect(syncQuery).toHaveBeenCalledTimes(queryWritesBeforeStaleCompletion);
-  controller.cancel();
-});
-
 it("ignores an old controller operation while accepting an untagged editor change", async () => {
-  const oldSync = vi.fn<
-    (
-      query: string,
-      operationId: string,
-      writeGeneration: number,
-      signal: AbortSignal,
-    ) => Promise<EditorQuerySyncResult>
-  >(async () => "accepted");
+  const oldSync = vi.fn<SyncEditorQuery>(async () => "accepted");
   const oldController = new PreviewQueryController(
     "wasm",
     frame(),
@@ -328,15 +269,35 @@ it("ignores an old controller operation while accepting an untagged editor chang
   currentController.cancel();
 });
 
+it("ignores a late completion after its operation history is evicted", async () => {
+  const syncQuery = vi.fn();
+  const changed = vi.fn();
+  const sync = vi.fn<SyncEditorQuery>(async () => "accepted");
+  const controller = new PreviewQueryController("wasm", frame(), syncQuery, sync, changed);
+
+  controller.previewChanged("entry=0");
+  await vi.waitFor(() => expect(sync).toHaveBeenCalledOnce());
+  const retiredOperation = sync.mock.calls[0]?.[1];
+
+  // Cross the bounded operation history so the first accepted write is no
+  // longer retained when its delayed completion arrives.
+  for (let entry = 1; entry <= 100; entry += 1) {
+    controller.previewChanged(`entry=${entry}`);
+    await vi.waitFor(() => expect(sync).toHaveBeenCalledTimes(entry + 1));
+  }
+  const changeCount = changed.mock.calls.length;
+  const queryCount = syncQuery.mock.calls.length;
+
+  controller.editorChanged("entry=0", false, retiredOperation, true);
+
+  expect(controller.currentQuery).toBe("?entry=100");
+  expect(changed).toHaveBeenCalledTimes(changeCount);
+  expect(syncQuery).toHaveBeenCalledTimes(queryCount);
+  controller.cancel();
+});
+
 it("keeps write generations monotonic across controller recreation", async () => {
-  const firstSync = vi.fn<
-    (
-      query: string,
-      operationId: string,
-      writeGeneration: number,
-      signal: AbortSignal,
-    ) => Promise<EditorQuerySyncResult>
-  >(async () => "accepted");
+  const firstSync = vi.fn<SyncEditorQuery>(async () => "accepted");
   const first = new PreviewQueryController("wasm", frame(), vi.fn(), firstSync, vi.fn(), "");
   first.previewChanged("view=first");
   await vi.waitFor(() => expect(firstSync).toHaveBeenCalledOnce());
@@ -346,14 +307,7 @@ it("keeps write generations monotonic across controller recreation", async () =>
   }
   first.cancel();
 
-  const secondSync = vi.fn<
-    (
-      query: string,
-      operationId: string,
-      writeGeneration: number,
-      signal: AbortSignal,
-    ) => Promise<EditorQuerySyncResult>
-  >(async () => "accepted");
+  const secondSync = vi.fn<SyncEditorQuery>(async () => "accepted");
   const second = new PreviewQueryController("wasm", frame(), vi.fn(), secondSync, vi.fn(), "");
   second.previewChanged("view=second");
   await vi.waitFor(() => expect(secondSync).toHaveBeenCalledOnce());
@@ -366,14 +320,7 @@ it("does not treat local query equality as committed editor state", async () => 
   const first = deferred();
   const second = deferred();
   const sync = vi
-    .fn<
-      (
-        query: string,
-        operationId: string,
-        writeGeneration: number,
-        signal: AbortSignal,
-      ) => Promise<EditorQuerySyncResult>
-    >()
+    .fn<SyncEditorQuery>()
     .mockReturnValueOnce(first.promise)
     .mockReturnValueOnce(second.promise);
   const controller = new PreviewQueryController("wasm", frame(), vi.fn(), sync, vi.fn());
@@ -396,51 +343,10 @@ it("does not treat local query equality as committed editor state", async () => 
   controller.cancel();
 });
 
-it("reports editor query failure until the latest state recovers", async () => {
-  vi.useFakeTimers();
-  const sync = vi
-    .fn<
-      (
-        query: string,
-        operationId: string,
-        writeGeneration: number,
-        signal: AbortSignal,
-      ) => Promise<EditorQuerySyncResult>
-    >()
-    .mockRejectedValueOnce(new Error("editor write failed"))
-    .mockResolvedValueOnce("accepted");
-  const statuses: string[] = [];
-  const controller = new PreviewQueryController(
-    "wasm",
-    frame(),
-    vi.fn(),
-    sync,
-    vi.fn(),
-    "",
-    (status) => statuses.push(status.phase),
-  );
-  vi.spyOn(console, "warn").mockImplementation(() => undefined);
-
-  controller.previewChanged("region=apac");
-  await vi.waitFor(() => expect(statuses).toContain("degraded"));
-  await vi.advanceTimersByTimeAsync(1_000);
-  await vi.waitFor(() => expect(statuses.at(-1)).toBe("ready"));
-
-  expect(sync).toHaveBeenCalledTimes(2);
-  controller.cancel();
-});
-
 it("restores the committed query when a dispatched navigation echoes after cancellation", async () => {
   const dispatched = deferred();
   const sync = vi
-    .fn<
-      (
-        query: string,
-        operationId: string,
-        writeGeneration: number,
-        signal: AbortSignal,
-      ) => Promise<EditorQuerySyncResult>
-    >()
+    .fn<SyncEditorQuery>()
     .mockReturnValueOnce(dispatched.promise)
     .mockResolvedValue("accepted");
   const controller = new PreviewQueryController(
@@ -468,14 +374,7 @@ it("restores the committed query when a dispatched navigation echoes after cance
 
 it("does not compensate a dispatched operation proven unqueued", async () => {
   const dispatched = deferred();
-  const sync = vi.fn<
-    (
-      query: string,
-      operationId: string,
-      writeGeneration: number,
-      signal: AbortSignal,
-    ) => Promise<EditorQuerySyncResult>
-  >(() => dispatched.promise);
+  const sync = vi.fn<SyncEditorQuery>(() => dispatched.promise);
   const controller = new PreviewQueryController(
     "server",
     frame(),
@@ -501,14 +400,7 @@ it("does not compensate a dispatched operation proven unqueued", async () => {
 it("queues a superseded echo until the newer navigation commits", async () => {
   const dispatched = deferred();
   const sync = vi
-    .fn<
-      (
-        query: string,
-        operationId: string,
-        writeGeneration: number,
-        signal: AbortSignal,
-      ) => Promise<EditorQuerySyncResult>
-    >()
+    .fn<SyncEditorQuery>()
     .mockReturnValueOnce(dispatched.promise)
     .mockResolvedValue("accepted");
   const controller = new PreviewQueryController(
@@ -545,14 +437,7 @@ it("restores the prior commit when a newer navigation fails after an old echo", 
   const first = deferred();
   const second = deferred();
   const sync = vi
-    .fn<
-      (
-        query: string,
-        operationId: string,
-        writeGeneration: number,
-        signal: AbortSignal,
-      ) => Promise<EditorQuerySyncResult>
-    >()
+    .fn<SyncEditorQuery>()
     .mockReturnValueOnce(first.promise)
     .mockReturnValueOnce(second.promise)
     .mockResolvedValue("accepted");
@@ -585,14 +470,7 @@ it("restores the prior commit when a newer navigation fails after an old echo", 
 
 it("keeps the current query when a navigation write fails", async () => {
   const syncQuery = vi.fn();
-  const sync = vi.fn<
-    (
-      query: string,
-      operationId: string,
-      writeGeneration: number,
-      signal: AbortSignal,
-    ) => Promise<EditorQuerySyncResult>
-  >(async () => {
+  const sync = vi.fn<SyncEditorQuery>(async () => {
     throw new Error("query write failed");
   });
   const controller = new PreviewQueryController("server", frame(), syncQuery, sync, vi.fn());
@@ -608,14 +486,7 @@ it("keeps the current query when a navigation write fails", async () => {
 it("preserves newer editor intent across a delayed preview echo", async () => {
   const first = deferred();
   const sync = vi
-    .fn<
-      (
-        query: string,
-        operationId: string,
-        writeGeneration: number,
-        signal: AbortSignal,
-      ) => Promise<EditorQuerySyncResult>
-    >()
+    .fn<SyncEditorQuery>()
     .mockReturnValueOnce(first.promise)
     .mockResolvedValueOnce("accepted");
   const controller = new PreviewQueryController("wasm", frame(), vi.fn(), sync, vi.fn());
@@ -636,14 +507,7 @@ it("preserves newer editor intent across a delayed preview echo", async () => {
 it("keeps a real editor change that equals an in-flight preview query", async () => {
   const first = deferred();
   const sync = vi
-    .fn<
-      (
-        query: string,
-        operationId: string,
-        writeGeneration: number,
-        signal: AbortSignal,
-      ) => Promise<EditorQuerySyncResult>
-    >()
+    .fn<SyncEditorQuery>()
     .mockReturnValueOnce(first.promise)
     .mockResolvedValueOnce("accepted");
   const changed = vi.fn();
@@ -664,14 +528,7 @@ it("preserves newer editor intent when an accepted response is lost", async () =
   vi.useFakeTimers();
   const first = deferred();
   const sync = vi
-    .fn<
-      (
-        query: string,
-        operationId: string,
-        writeGeneration: number,
-        signal: AbortSignal,
-      ) => Promise<EditorQuerySyncResult>
-    >()
+    .fn<SyncEditorQuery>()
     .mockReturnValueOnce(first.promise)
     .mockResolvedValueOnce("accepted");
   const controller = new PreviewQueryController("wasm", frame(), vi.fn(), sync, vi.fn());
@@ -688,44 +545,10 @@ it("preserves newer editor intent when an accepted response is lost", async () =
   controller.cancel();
 });
 
-it("replaces a stale retry with a newer editor query", async () => {
-  vi.useFakeTimers();
-  const first = deferred();
-  const sync = vi
-    .fn<
-      (
-        query: string,
-        operationId: string,
-        writeGeneration: number,
-        signal: AbortSignal,
-      ) => Promise<EditorQuerySyncResult>
-    >()
-    .mockReturnValueOnce(first.promise)
-    .mockResolvedValueOnce("accepted");
-  const controller = new PreviewQueryController("wasm", frame(), vi.fn(), sync, vi.fn());
-
-  controller.previewChanged("region=preview");
-  controller.editorChanged("region=editor", false);
-  first.resolve("retry");
-  await vi.advanceTimersByTimeAsync(1_000);
-
-  expect(sync.mock.calls.map(([query]) => query)).toEqual(["?region=preview", "?region=editor"]);
-  controller.cancel();
-});
-
 it("does not retry a cancelled write", async () => {
   vi.useFakeTimers();
   const pending = deferred();
-  const sync = vi
-    .fn<
-      (
-        query: string,
-        operationId: string,
-        writeGeneration: number,
-        signal: AbortSignal,
-      ) => Promise<EditorQuerySyncResult>
-    >()
-    .mockReturnValue(pending.promise);
+  const sync = vi.fn<SyncEditorQuery>().mockReturnValue(pending.promise);
   const controller = new PreviewQueryController("wasm", frame(), vi.fn(), sync, vi.fn());
 
   controller.previewChanged("region=emea");

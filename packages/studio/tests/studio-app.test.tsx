@@ -8,13 +8,13 @@ import { createStudioServices } from "../src/app/services.ts";
 import { StudioErrorBoundary } from "../src/app/StudioErrorBoundary.tsx";
 import { RuntimeStatus } from "../src/features/navigation/RuntimeStatus.tsx";
 import { Toolbar } from "../src/features/navigation/Toolbar.tsx";
-import { PreviewDeck } from "../src/features/preview/deck.ts";
 import { previewStatus } from "../src/features/preview/status.ts";
 import { ViewController } from "../src/features/views/controller.ts";
 import { LayoutController } from "../src/features/workspace/controller.ts";
 import { Divider } from "../src/features/workspace/Divider.tsx";
 import { computeLayout, developLayout } from "../src/features/workspace/model.ts";
 import { starter, unbuiltView, viewGeneration, viewList, viewOwner } from "./fixtures.ts";
+import { previewDeck } from "./preview-test-support.ts";
 import { deferred, studioBootstrap as bootstrap } from "./studio-test-support.ts";
 
 const brand = {
@@ -57,16 +57,13 @@ const remote = (starters = [starter], defaultStarter = starter.id): ViewRemote =
 
 const controllers = (starters = [starter], defaultStarter = starter.id) => {
   const layout = new LayoutController("test-workspace", bootstrap.selectedView);
-  const preview = new PreviewDeck({
+  const preview = previewDeck({
     initialView: bootstrap.selectedView,
     initialRuntime: bootstrap.defaultRuntime,
     initialNavigation: { query: "", hash: "" },
     runtimes: bootstrap.runtimes.map((runtime) => runtime.id),
     viewUrl: (view, runtime) => `/${view}/?runtime=${runtime}`,
     supportUrl: (view) => `/_marimo-studio/views/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
   });
   const views = new ViewController(
     bootstrap.selectedView,
@@ -575,16 +572,13 @@ describe("Studio shell", () => {
     const user = userEvent.setup();
     const selection = deferred<boolean>();
     const layout = new LayoutController("runtime-selection", bootstrap.selectedView);
-    const preview = new PreviewDeck({
+    const preview = previewDeck({
       initialView: bootstrap.selectedView,
       initialRuntime: bootstrap.defaultRuntime,
       initialNavigation: { query: "", hash: "" },
       runtimes: bootstrap.runtimes.map((runtime) => runtime.id),
       viewUrl: (view, runtime) => `/${view}/?runtime=${runtime}`,
       supportUrl: (view) => `/_marimo-studio/views/${view}`,
-      syncQuery: vi.fn(),
-      syncEditorQuery: vi.fn(async () => "accepted" as const),
-      navigate: vi.fn(),
     });
     const views = new ViewController(
       bootstrap.selectedView,

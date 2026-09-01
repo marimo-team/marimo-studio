@@ -2,10 +2,7 @@ import type { BrowserMessageInput } from "@marimo-studio/protocol/frame-bridge";
 
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
-import {
-  bindEditorDocumentMutations,
-  EDITOR_DOCUMENT_MUTATION_BRIDGE_ATTRIBUTE,
-} from "../src/app/editor-document-mutation.ts";
+import { bindEditorDocumentMutations } from "../src/app/editor-document-mutation.ts";
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -48,7 +45,6 @@ it("admits document mutations from the exact editor bridge", () => {
   const stop = bindEditorDocumentMutations(editor, callbacks);
   const acknowledgement = testPort();
 
-  expect(editor).toHaveAttribute(EDITOR_DOCUMENT_MUTATION_BRIDGE_ATTRIBUTE);
   dispatch(
     source,
     {
@@ -85,7 +81,18 @@ it("admits document mutations from the exact editor bridge", () => {
   editor.dispatchEvent(new Event("load"));
   expect(callbacks.reloaded).toHaveBeenCalledOnce();
   stop();
-  expect(editor).not.toHaveAttribute(EDITOR_DOCUMENT_MUTATION_BRIDGE_ATTRIBUTE);
+  dispatch(
+    source,
+    {
+      schema: 1,
+      type: "marimo-studio:editor-document-saved",
+      generation: 5,
+    },
+    [],
+  );
+  editor.dispatchEvent(new Event("load"));
+  expect(callbacks.saved).toHaveBeenCalledOnce();
+  expect(callbacks.reloaded).toHaveBeenCalledOnce();
   acknowledgement.channel.port2.close();
 });
 

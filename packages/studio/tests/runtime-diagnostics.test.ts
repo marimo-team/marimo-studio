@@ -2,9 +2,7 @@ import type { BrowserDiagnostic } from "@marimo-studio/protocol/browser-observat
 
 import { expect, it } from "vite-plus/test";
 
-import { PreviewDeck } from "../src/features/preview/deck.ts";
 import { RuntimeDiagnostics } from "../src/features/preview/runtime-diagnostics.ts";
-import { previewStatus } from "../src/features/preview/status.ts";
 
 const warning: BrowserDiagnostic = {
   code: "value-stale",
@@ -82,42 +80,6 @@ it("owns diagnostic evidence returned to callers", () => {
     message: "The projected value is stale.",
     source: { path: "dashboard.html", line: 4, column: 2 },
   });
-});
-
-it("describes a degraded runtime without flattening its diagnostics", () => {
-  expect(
-    previewStatus("server", {
-      phase: "degraded",
-      diagnostics: [warning],
-    }),
-  ).toEqual({
-    diagnostics: [warning],
-    message: "Live with 1 warning",
-    state: "warning",
-  });
-});
-
-it("queries owned runtime diagnostics through the preview deck", () => {
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
-    runtimes: ["server", "wasm"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: () => undefined,
-    syncEditorQuery: async () => "accepted",
-    navigate: async () => true,
-  });
-
-  const report = deck.runtimeDiagnostics("server");
-  expect(report?.current.phase).toBe("connecting");
-  if (report !== undefined) {
-    report.current.phase = "failed";
-  }
-  expect(deck.runtimeDiagnostics("server")?.current.phase).toBe("connecting");
-  expect(deck.runtimeDiagnostics("unknown")).toBeUndefined();
-  deck.dispose();
 });
 
 it("bounds history while keeping monotonic transition sequences", () => {

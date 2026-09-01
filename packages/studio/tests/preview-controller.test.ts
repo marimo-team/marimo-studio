@@ -281,10 +281,11 @@ it("starts WASM control synchronization from an active rendered-view session", a
 
   await vi.waitFor(() => expect(connect).toHaveBeenCalledOnce());
   expect(fetch).toHaveBeenCalledTimes(2);
-  expect(fetch.mock.calls.map(([, init]) => init?.headers)).toEqual([
-    { "Marimo-Session-Id": "s_editor1" },
-    { "Marimo-Session-Id": "s_editor1" },
-  ]);
+  expect(
+    fetch.mock.calls.every(
+      ([, init]) => new Headers(init?.headers).get("Marimo-Session-Id") === "s_editor1",
+    ),
+  ).toBe(true);
   wasm.dispose();
 });
 

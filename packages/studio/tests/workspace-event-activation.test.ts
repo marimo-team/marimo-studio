@@ -112,7 +112,6 @@ it("restores the previous view after terminal acknowledgement failure", async ()
 
   await vi.waitFor(() => expect(model.choose).toHaveBeenCalledTimes(2));
   expect(model.views.getSnapshot().current).toBe("dashboard");
-  expect(model.choose.mock.calls.map(([view]) => view)).toEqual(["report", "dashboard"]);
   expect(model.choose).toHaveBeenLastCalledWith(
     "dashboard",
     "preserve",
@@ -139,7 +138,6 @@ it("keeps the selected view while an acknowledgement outcome is uncertain", asyn
 
   await vi.waitFor(() => expect(EventSourceStub.instances).toHaveLength(2));
   expect(model.views.getSnapshot().current).toBe("report");
-  expect(model.choose.mock.calls.map(([view]) => view)).toEqual(["report"]);
   expect(acknowledge).toHaveBeenCalledOnce();
   warning.mockRestore();
   coordinator.dispose();

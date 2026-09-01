@@ -1,15 +1,16 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
 import { PreviewControlController } from "../src/features/preview/control-controller.ts";
-import { PREVIEW_VIEW_CACHE_SIZE, PreviewDeck } from "../src/features/preview/deck.ts";
 import { ViewController } from "../src/features/views/controller.ts";
 import { starter, viewList } from "./fixtures.ts";
 import { createFrameBridgeSource, installFrameBridge } from "./frame-bridge-test-support.ts";
 import {
   cachedFrames,
+  cachedFramesWithWindows,
   dispatchPreviewMessage,
   dispatchPreviewRefreshHandshake,
   frame,
+  previewDeck,
 } from "./preview-test-support.ts";
 
 afterEach(() => {
@@ -32,16 +33,9 @@ it("releases inactive runtime frames before deleting the previous view", async (
     value: wasmWindow,
   });
   const viewUrl = vi.fn((view: string, runtime: string) => `/${view}?runtime=${runtime}`);
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
+  const deck = previewDeck({
     runtimes: ["server", "wasm"],
     viewUrl,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
   });
   const frames = cachedFrames(deck, { server: serverFrame, wasm: wasmFrame });
   const windows = new Map(
@@ -111,25 +105,11 @@ it("releases inactive runtime frames before deleting the previous view", async (
 });
 
 it("clears presentation state before a removed view name is recreated", async () => {
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
-    runtimes: ["server"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
-  });
-  const frames = cachedFrames(deck, {});
-  const windows = new Map(
-    [...frames].map(([id, cached]) => {
-      const frameWindow = { dispatchEvent: vi.fn(), postMessage: vi.fn() };
-      Object.defineProperty(cached, "contentWindow", { configurable: true, value: frameWindow });
-      return [id, frameWindow];
-    }),
-  );
+  const deck = previewDeck();
+  const { frames, windows } = cachedFramesWithWindows(deck, () => ({
+    dispatchEvent: vi.fn(),
+    postMessage: vi.fn(),
+  }));
   deck.attach(frame("complete"), frames);
   const makeReady = async (view: string, revision: string, refresh = false) => {
     const staged = deck.stageView(view);
@@ -207,25 +187,12 @@ it("clears presentation state before a removed view name is recreated", async ()
 
 it("keeps the prior document warm after creation and evicts it at the cache bound", async () => {
   const editor = frame("complete");
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
-    runtimes: ["server"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
-  });
-  const frames = cachedFrames(deck, {});
-  const windows = new Map(
-    [...frames].map(([id, cached]) => {
-      const frameWindow = { dispatchEvent: vi.fn(), postMessage: vi.fn() };
-      Object.defineProperty(cached, "contentWindow", { configurable: true, value: frameWindow });
-      return [id, frameWindow];
-    }),
-  );
+  const viewUrl = vi.fn((view: string, runtime: string) => `/${view}?runtime=${runtime}`);
+  const deck = previewDeck({ viewUrl });
+  const { frames, windows } = cachedFramesWithWindows(deck, () => ({
+    dispatchEvent: vi.fn(),
+    postMessage: vi.fn(),
+  }));
   deck.attach(editor, frames);
   let dashboardLifecycleId = 0;
 
@@ -311,26 +278,18 @@ it("keeps the prior document warm after creation and evicts it at the cache boun
   await expect(
     controller.create("report", starter.id, controller.getSnapshot().catalogGeneration!),
   ).resolves.toBe(true);
+  viewUrl.mockClear();
   await expect(controller.choose("dashboard")).resolves.toBe(true);
   expect(deck.getSnapshot().states.server!.lifecycleId).toBe(dashboardLifecycleId);
-  expect(
-    deck
-      .getSnapshot()
-      .frames.find(({ runtime, view }) => runtime === "server" && view === "dashboard")?.id,
-  ).toBe(dashboardSlot.id);
-  expect(frames.get(dashboardSlot.id)).toBe(dashboardFrame);
-  expect(dashboardFrame.contentWindow).toBe(dashboardWindow);
+  expect(viewUrl).not.toHaveBeenCalled();
   expect(dashboardFrame.src).toBe(dashboardSource);
 
   await makeReady("gallery");
   const story = await makeReady("story");
   await makeReady("analysis");
-  const assigned = deck
-    .getSnapshot()
-    .frames.filter(({ runtime, view }) => runtime === "server" && view);
-  expect(assigned).toHaveLength(PREVIEW_VIEW_CACHE_SIZE);
-  expect(assigned.map(({ view }) => view)).not.toContain("dashboard");
-  expect(assigned.map(({ view }) => view)).not.toContain("report");
+  viewUrl.mockClear();
+  await makeReady("dashboard");
+  expect(viewUrl).toHaveBeenCalledWith("dashboard", "server", { query: "", hash: "" });
   expect(story.frame.src).toContain("/story");
   controller.dispose();
   deck.dispose();
@@ -339,25 +298,11 @@ it("keeps the prior document warm after creation and evicts it at the cache boun
 it("supersedes an abandoned build before refreshing a cached sibling", async () => {
   const beginControls = vi.spyOn(PreviewControlController.prototype, "begin");
   const editor = frame("complete");
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
-    runtimes: ["server"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
-  });
-  const frames = cachedFrames(deck, {});
-  const windows = new Map(
-    [...frames].map(([id, cached]) => {
-      const frameWindow = { dispatchEvent: vi.fn(), postMessage: vi.fn() };
-      Object.defineProperty(cached, "contentWindow", { configurable: true, value: frameWindow });
-      return [id, frameWindow];
-    }),
-  );
+  const deck = previewDeck();
+  const { frames, windows } = cachedFramesWithWindows(deck, () => ({
+    dispatchEvent: vi.fn(),
+    postMessage: vi.fn(),
+  }));
   deck.attach(editor, frames);
   const makeReady = async (view: string, refresh = false) => {
     const staged = deck.stageView(view);
@@ -464,16 +409,8 @@ it("keeps document identity monotonic when an inactive controller is recreated",
     configurable: true,
     value: wasmWindow,
   });
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    initialNavigation: { query: "", hash: "" },
+  const deck = previewDeck({
     runtimes: ["server", "wasm"],
-    viewUrl: (view, runtime) => `/${view}?runtime=${runtime}`,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
   });
   deck.attach(
     editor,
@@ -531,5 +468,79 @@ it("keeps document identity monotonic when an inactive controller is recreated",
       current: { phase: "ready" },
     }),
   );
+  deck.dispose();
+});
+
+it("loads a fresh WebAssembly document when returning to an earlier view", async () => {
+  const preview = frame("complete");
+  const previewWindow = createFrameBridgeSource();
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: previewWindow,
+  });
+  const viewUrl = vi.fn((view: string, runtime: string) => `/${view}?runtime=${runtime}`);
+  const deck = previewDeck({
+    initialRuntime: "wasm",
+    runtimes: ["wasm"],
+    viewUrl,
+  });
+  deck.attach(frame("complete"), new Map([["wasm", preview]]));
+  const initialLifecycleId = deck.getSnapshot().states.wasm!.lifecycleId;
+  const initialSource = preview.src;
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:receiver-ready",
+    runtime: "wasm",
+    lifecycleId: initialLifecycleId,
+    view: "dashboard",
+    revision: "revision:dashboard",
+  });
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-ready",
+    runtime: "wasm",
+    lifecycleId: initialLifecycleId,
+    view: "dashboard",
+    revision: "revision:dashboard",
+  });
+
+  const report = deck.stageView("report");
+  const reportLifecycleId = deck.getSnapshot().states.wasm!.lifecycleId;
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:receiver-ready",
+    runtime: "wasm",
+    lifecycleId: reportLifecycleId,
+    view: "report",
+    revision: "revision:report",
+  });
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-ready",
+    runtime: "wasm",
+    lifecycleId: reportLifecycleId,
+    view: "report",
+    revision: "revision:report",
+  });
+  await expect(report.ready).resolves.toBe(true);
+
+  viewUrl.mockClear();
+  const returning = deck.stageView("dashboard");
+  const returningLifecycleId = deck.getSnapshot().states.wasm!.lifecycleId;
+
+  expect(returningLifecycleId).toBeGreaterThan(initialLifecycleId);
+  expect(preview.src).not.toBe(initialSource);
+  expect(viewUrl).toHaveBeenCalledWith("dashboard", "wasm", { query: "", hash: "" });
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:receiver-ready",
+    runtime: "wasm",
+    lifecycleId: returningLifecycleId,
+    view: "dashboard",
+    revision: "revision:dashboard:new",
+  });
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-ready",
+    runtime: "wasm",
+    lifecycleId: returningLifecycleId,
+    view: "dashboard",
+    revision: "revision:dashboard:new",
+  });
+  await expect(returning.ready).resolves.toBe(true);
   deck.dispose();
 });

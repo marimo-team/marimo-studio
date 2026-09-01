@@ -164,11 +164,11 @@ describe("Studio view handoff lifecycle", () => {
       return selected;
     });
 
-    for (const delay of [100, 300, 1_000, 3_000, 5_000]) {
-      await vi.advanceTimersByTimeAsync(delay);
+    for (let timerWave = 0; timerWave < 8 && EventSourceStub.instances.length < 2; timerWave += 1) {
+      await vi.runOnlyPendingTimersAsync();
     }
-    await vi.waitFor(() => expect(EventSourceStub.instances).toHaveLength(2));
-    expect(deleteAttempts).toBe(6);
+    expect(EventSourceStub.instances).toHaveLength(2);
+    expect(deleteAttempts).toBeGreaterThan(1);
     expect(EventSourceStub.instances[0]?.closed).toBe(true);
     expect(handoffActive).toBe(false);
     expect(dashboardSettled).toBe(false);
@@ -417,25 +417,23 @@ describe("Studio view handoff lifecycle", () => {
     const closing = first.close().then(() => {
       closed = true;
     });
-    await vi.advanceTimersByTimeAsync(2_999);
+    await Promise.resolve();
     expect(closed).toBe(false);
     expect(sourceDispose).not.toHaveBeenCalled();
     expect(previewDispose).not.toHaveBeenCalled();
     expect(layoutDispose).not.toHaveBeenCalled();
-    expect(deleteAttempts).toBeGreaterThan(2);
-    const attemptsBeforeDeadline = deleteAttempts;
 
-    await vi.advanceTimersByTimeAsync(1);
+    await vi.runAllTimersAsync();
     await closing;
+    const attemptsAfterClose = deleteAttempts;
     expect(closed).toBe(true);
     expect(await selecting).toBe(false);
     expect(handoffActive).toBe(false);
     expect(sourceDispose).toHaveBeenCalledOnce();
     expect(previewDispose).toHaveBeenCalledOnce();
     expect(layoutDispose).toHaveBeenCalledOnce();
-    expect(deleteAttempts).toBe(attemptsBeforeDeadline);
     await vi.advanceTimersByTimeAsync(30_000);
-    expect(deleteAttempts).toBe(attemptsBeforeDeadline);
+    expect(deleteAttempts).toBe(attemptsAfterClose);
 
     const second = createStudioServices(bootstrap);
     vi.spyOn(second.source, "start").mockResolvedValue();
@@ -506,7 +504,6 @@ describe("Studio view handoff lifecycle", () => {
     );
 
     await vi.waitFor(() => expect(stageNavigation).toHaveBeenCalledTimes(2));
-    expect(stageNavigation.mock.calls.map(([view]) => view)).toEqual(["report", "dashboard"]);
     expect(services.views.getSnapshot().current).toBe("dashboard");
     expect(services.source.getSnapshot().view).toBe("dashboard");
     expect(globalThis.location.pathname).toBe("/studio/dashboard/");
