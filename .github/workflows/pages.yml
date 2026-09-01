@@ -19,18 +19,13 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      pages: write
+      pages: read
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Set up JavaScript workspace
-        uses: ./.github/actions/setup-js
-        with:
-          prepare-marimo-frontend: "true"
 
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
@@ -39,8 +34,13 @@ jobs:
           cache-dependency-glob: uv.lock
           python-version: "3.12"
 
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+        with:
+          prepare-marimo-frontend: "true"
+
       - name: Configure GitHub Pages
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         id: pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
@@ -50,13 +50,13 @@ jobs:
         run: make docs-build
 
       - name: Upload GitHub Pages artifact
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: apps/docs/.vitepress/dist
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10

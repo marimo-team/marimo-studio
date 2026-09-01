@@ -55,11 +55,18 @@ features:
       alt: Python and WebAssembly runtimes
       width: "24"
       height: "24"
-    title: Pluggable Runtimes
-    details: Keep view source fixed while the notebook runs on a Python server, in a browser worker, or as a static export.
+    title: Runtime and delivery
+    details: Run the notebook on a Python server or in a browser worker, then serve it live or package the browser runtime as a static export.
     link: ./guide/run-and-share
     linkText: Run or publish
 ---
+
+::: info 0.1 release
+Marimo Studio 0.1.0 supports Python 3.10 through 3.14, Marimo 0.24.0, and a
+Chromium browser target. Read [Compatibility and
+support](reference/compatibility.md) for the pre-1.0 change policy and support
+paths.
+:::
 
 ## The same analysis, three distinct views
 

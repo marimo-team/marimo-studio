@@ -14,14 +14,29 @@ small Python integration tells Studio:
 - how to produce the browser page Studio serves
 
 Studio calls this integration a **view provider**. Studio continues to own
-notebook execution, safe source writes, build isolation, validation, the last
-successful page, browser sessions, and agent workflows.
+notebook execution, safe source writes, immutable build inputs, output
+validation, the last successful artifact, browser sessions, and agent workflows.
+
+::: warning View providers are trusted code
+An installed provider runs Python and child commands with the current user's
+filesystem permissions, environment variables, and network access. Studio runs
+third-party calls in owned child processes to bound deadlines, output, and
+cleanup. That process boundary is lifecycle containment, not a security sandbox.
+Review the provider package and its dependencies before installing it in an
+environment that contains credentials or private notebook source.
+:::
 
 ## Register the provider
 
-Publish one object through Python package metadata:
+Publish one object through Python package metadata. Bound the Studio dependency
+to the minor line that the provider has tested:
 
 ```toml
+[project]
+name = "acme-views"
+version = "0.1.0"
+dependencies = ["marimo-studio>=0.1,<0.2"]
+
 [project.entry-points."marimo_studio.view_provider"]
 report = "acme_views:provider"
 ```
@@ -55,10 +70,14 @@ class ViewProvider(Protocol):
 ```
 
 Provider methods are synchronous. Studio runs them away from the server event
-loop and supplies cooperative cancellation plus a supervised command runner.
+loop and supplies a cancellation contract plus a supervised command runner.
 
-`ProviderInfo` contains the title and summary shown during page creation, plus
+`ProviderInfo` contains the title and summary shown during view creation, plus
 `api_version`. Set `api_version` to `PROVIDER_API_VERSION`.
+
+Studio requires an exact provider API match. Test the provider before expanding
+its Studio dependency to a newer minor release. [Compatibility and
+support](compatibility.md) owns the current release policy.
 
 ## Create starting files
 
@@ -72,6 +91,13 @@ revision. Its ordered cells include source, kind, name, literal Markdown,
 configuration, definitions, references, and dependency edges. The revision
 changes when any provider-visible field changes. Static inspection compiles
 this metadata and leaves cell bodies unexecuted.
+
+`CellSpec.may_display_output` is a conservative static signal. It is `True`
+when the cell ends in an output expression, when symbolic analysis finds a
+Marimo output operation, or when ambiguity, work-budget exhaustion, or the
+recursion limit prevents a definitive result. Use it to seed an editable
+starter while retaining likely output cells. `CellSpec.has_output_expression`
+reports the narrower final-expression case.
 
 `StarterContext.cell_targets` maps each ordinary cell to a
 `StarterCellTarget`. The target uses a native cell name, an existing Studio
@@ -93,13 +119,18 @@ def create(starter, context):
         context.cell_targets[cell.ref]
         for cell in context.notebook.cells
         if cell.kind == "cell" and not cell.config.disabled
-        if cell.displays_output
+        if cell.may_display_output
     )
     cells = "\n".join(
         f'<marimo-cell name="{html.escape(item.target, quote=True)}"></marimo-cell>'
         for item in selected
     )
-    document = f'<main id="app-shell">{cells}</main>'
+    document = f'''<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Notebook view</title></head>
+  <body><main id="app-shell">{cells}</main></body>
+</html>
+'''
     return StarterPlan(
         files={ENTRY: document.encode()},
         cell_targets=selected,
@@ -145,6 +176,10 @@ writes to the exact path returned by provider inspection.
 Put provider caches beneath `request.cache_root`. Keep generated dependencies
 outside a recursive source directory when they do not affect browser output.
 
+`inspect()` is a read-only project operation. Report editable documents, build
+inputs, mounts, and diagnostics. Keep reusable downloaded or generated data in
+`request.cache_root`.
+
 ## Build browser files
 
 `BuildRequest` contains a read-only project snapshot, its accepted inspection,
@@ -158,6 +193,32 @@ directory inside the snapshot, write the browser output beneath
 The entry document needs one `head`, one `body`, and one `#app-shell`. Studio
 validates paths, symlinks, file limits, reserved routes, and the complete output
 before making the page available.
+
+## Bound commands and cancellation
+
+`request.runner.run(command, cwd=...)` starts a supervised child command with a
+working directory inside `request.project.root`. It accepts these keyword
+arguments:
+
+- `timeout` is a finite positive number of seconds. The default is 120 seconds.
+  Every command in one request also shares `request.command_timeout` as an
+  aggregate budget.
+- `environment=None` inherits the current Studio process environment. Passing a
+  mapping replaces that environment for the child command.
+- The result contains `returncode`, bounded `stdout`, and bounded `stderr`.
+  Convert a nonzero return code into a source-located `ProjectDiagnostic` when a
+  reader can repair the build input.
+
+`request.cancellation` supplies the cooperative signal for provider
+implementations that run in process. Check `cancelled` around filesystem work
+that the runner does not own. A registered callback can interrupt a long-running
+library call and should be unregistered when that call completes.
+
+Installed third-party calls also have an outer process owner. Cancellation, a
+deadline, or excessive command output can terminate that process tree before
+the provider observes the cooperative signal or runs cleanup code. Write
+candidate browser files beneath `request.staging_root`, keep reusable state
+beneath `request.cache_root`, and leave durable workspace publication to Studio.
 
 ## Minimal provider
 
@@ -240,6 +301,6 @@ marimo-studio doctor acme-views/report
 marimo-studio starters
 ```
 
-Test page creation, a successful build, a failed build that leaves the last
-successful page available, and one notebook result rendered through the
+Test view creation, a successful build, a failed build that leaves the last
+successful artifact available, and one notebook result rendered through the
 installed package.

@@ -18,11 +18,13 @@ export const routes = {
     frontendOptions: "/guide/frontend-options",
     codingAgents: "/guide/coding-agents",
     runAndShare: "/guide/run-and-share",
+    troubleshooting: "/guide/troubleshooting",
   },
   referenceRoot: "/reference/",
   reference: {
     index: "/reference/",
     cli: "/reference/cli",
+    compatibility: "/reference/compatibility",
     configuration: "/reference/configuration",
     pythonApi: "/reference/python-api",
     providerApi: "/reference/provider-api",
@@ -49,6 +51,7 @@ export const guideItems = [
   { text: "Choose a frontend", link: routes.guide.frontendOptions },
   { text: "Author with a coding agent", link: routes.guide.codingAgents },
   { text: "Run or publish a view", link: routes.guide.runAndShare },
+  { text: "Troubleshoot Studio", link: routes.guide.troubleshooting },
 ];
 
 export const referenceItems = [
@@ -56,7 +59,23 @@ export const referenceItems = [
   { text: "CLI", link: routes.reference.cli },
   { text: "Python API", link: routes.reference.pythonApi },
   { text: "Configuration", link: routes.reference.configuration },
+  { text: "Compatibility and support", link: routes.reference.compatibility },
   { text: "Add another frontend", link: routes.reference.providerApi },
+];
+
+export const projectItems = [
+  {
+    text: "Issues and support",
+    link: "https://github.com/marimo-team/marimo-studio/issues",
+  },
+  {
+    text: "Security policy",
+    link: "https://github.com/marimo-team/marimo-studio/blob/main/SECURITY.md",
+  },
+  {
+    text: "Contributing",
+    link: "https://github.com/marimo-team/marimo-studio/blob/main/CONTRIBUTING.md",
+  },
 ];
 
 export const siteRoutes = [

@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm examples:build && vitepress build && pnpm verify",
+    "build": "pnpm test && pnpm examples:build && vitepress build && pnpm verify",
     "dev": "pnpm examples:build && vitepress dev --host 127.0.0.1 --port 4173 --strictPort",
     "examples:build": "node scripts/build-examples.ts",
     "preview": "vitepress preview --host 127.0.0.1 --port 4173 --strictPort",
+    "test": "vp test scripts/source-integrity.test.ts",
     "verify": "node scripts/verify-build.ts"
   },
   "devDependencies": {

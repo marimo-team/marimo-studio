@@ -1,6 +1,6 @@
 ---
 title: Author with a coding agent
-description: Inspect notebook and page source, make a revision-safe edit, show the result, and validate the rendered page.
+description: Inspect notebook and view source, make a revision-safe edit, show the result, and validate the rendered view.
 ---
 
 # Author with a coding agent
@@ -27,7 +27,7 @@ view = workspace.view("dashboard")
 The inspect, edit, and build snippets use these `workspace` and `view` handles
 within the same execution.
 
-## Inspect the notebook and page
+## Inspect the notebook and view
 
 Read the notebook inventory before changing its analytical model:
 
@@ -47,7 +47,7 @@ producer = await workspace.inspect_notebook(
 )
 ```
 
-Inspect the selected page to find the files Studio exposes for editing:
+Inspect the selected view to find the files Studio exposes for editing:
 
 ```python
 inspection = await view.inspect()
@@ -77,7 +77,7 @@ If a person or another agent saved first, Studio raises `SourceConflictError`
 and preserves the newer file. Read it again, incorporate both changes, and save
 against the new revision.
 
-## Build the page
+## Build the view
 
 ```python
 build = await view.build()
@@ -85,10 +85,10 @@ print(build.revision)
 ```
 
 Studio validates the complete browser output before replacing Preview. A failed
-build keeps the last successful page available and reports source-located
+build keeps the last successful view available and reports source-located
 issues for repair.
 
-## Show the page in Studio
+## Show the view in Studio
 
 Run this in the next code-mode execution so the Studio tab can complete the
 transition:
@@ -105,7 +105,7 @@ navigation, conditional content, and dynamic results in that same Studio tab.
 
 ## Verify the rendered result
 
-Run browser validation after the page settles and its relevant interactions
+Run browser validation after the view settles and its relevant interactions
 have been exercised:
 
 ```python
@@ -118,7 +118,7 @@ if not report.ok:
 ```
 
 A successful report belongs to the current saved source, runtime, Studio tab,
-and rendered page. Repair each reported issue, then repeat build, show,
+and rendered view. Repair each reported issue, then repeat build, show,
 interaction, and validation.
 
 Use [`marimo_studio.authoring`](../reference/python-api.md) for scripts that

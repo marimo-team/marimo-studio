@@ -7,20 +7,32 @@ description: Studio views use a Python or WebAssembly runtime. The WebAssembly r
 
 A Studio view can use one of two notebook runtimes:
 
-- **Python** connects the view to an isolated server-side notebook session
-  with access to local files, databases, credentials, native packages, and
-  anywidgets.
-- **WebAssembly** starts a compatible notebook in a browser worker. Python
-  packages must run in Pyodide, and data sources must be reachable from the
-  visitor's browser.
+| Studio menu | Configuration | Notebook execution                                                                                               |
+| ----------- | ------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Python**  | `server`      | Isolated server-side session with access to local files, databases, credentials, native packages, and anywidgets |
+| **Browser** | `wasm`        | Pyodide worker whose packages and data sources must be reachable from the visitor's browser                      |
 
 When both runtimes are configured, Studio can change the active runtime and
 keep the view source fixed.
 
+Runtime and delivery are separate choices. `marimo run` serves a live view.
+`marimo-studio view export` packages the Browser runtime as a static directory.
+
 ## Run with Python
 
+`marimo-studio status --target analysis.py --json` prepares configured provider
+requirements from saved notebook or project metadata before loading providers.
+`uv` may resolve and install packages during that step. The resulting
+`launch_requirements` field contains the exact Studio and provider environment
+for `marimo run`.
+
+Review `view.toml` and the saved Python dependencies before running `status`
+against an unfamiliar project. Pass each launch requirement to `uv run` through
+`--with`. A notebook whose only provider is the default 0.1.0 Vanilla provider
+runs with:
+
 ```console
-uv run --with marimo-studio marimo run analysis.py \
+uv run --with marimo-studio==0.1.0 marimo run analysis.py \
   --sandbox \
   --headless \
   --host 127.0.0.1 \
@@ -32,7 +44,7 @@ The default view opens at `/`. A view named `report` opens at `/report/`.
 Use Marimo token settings when other clients can reach the process:
 
 ```console
-uv run --with marimo-studio marimo run analysis.py \
+uv run --with marimo-studio==0.1.0 marimo run analysis.py \
   --sandbox \
   --headless \
   --host 0.0.0.0 \
@@ -103,6 +115,18 @@ The export contains the saved notebook source and files from the notebook's
 `public/` directory. Its dependencies must install in Pyodide, and external
 data must be reachable from the browser.
 :::
+
+Host static exports on a dedicated origin. Authored JavaScript, notebook code,
+widgets, and rendered outputs run with that origin's browser authority.
+
+The Browser runtime fetches Pyodide and versioned Marimo runtime metadata over
+the network. Allow the required worker, script, connection, and package origins
+in the hosting content security policy. Static exports are not offline bundles.
+
+Studio caps the complete browser runtime payload at 16 MiB of UTF-8 JSON.
+Notebook source and broad projection declarations are common contributors. When
+Studio reports `runtime-config-too-large`, use finite projection targets or
+reduce the saved notebook source before exporting again.
 
 Use `--force` after reviewing an existing destination that should be replaced.
 

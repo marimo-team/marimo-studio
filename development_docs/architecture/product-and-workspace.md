@@ -35,6 +35,21 @@ entrypoint = "web/report.html"
 overrides. The selected provider validates that mapping and applies its defaults
 inside its inspection and build operations.
 
+Studio stores per-name incarnation records in
+`__marimo__/studio/<notebook-stem>/.owners/`. Each record contains a 64-character
+generation and whether the name is present. View generation combines that
+durable owner with the current project-directory owner. Create and delete update
+the owner record in the same file transaction as configuration. Catalog loading
+adopts external names and records names observed as absent through the catalog
+lock.
+
+The 0.1 mutation owner covers Studio create and delete, external absences seen
+by catalog loading, and copies or renames with a distinct directory owner. An
+external delete and recreation that occurs between observations and reuses the
+same device, inode, and mode has no observable directory identity change. That
+case is outside the mutation-ownership contract and includes exact-byte
+recreation.
+
 Studio writes the manifest. A starter writes provider-owned source and native
 tool files. Starter identity never enters project, artifact, presentation, or
 browser identity.
@@ -47,8 +62,9 @@ Call `Workspace.view(name)` to operate an existing project.
 Creation validates the notebook and starter before writing. Under the workspace
 catalog lock, one file transaction claims and pins each new view directory,
 writes its provider files, and keeps the project undiscoverable until
-`view.toml` publishes the complete project. The workspace `.gitignore` receives
-any missing generated-state rules in the same transaction.
+`view.toml` publishes the complete project. The same transaction writes the
+fresh per-name owner and any missing generated-state rules in the workspace
+`.gitignore`.
 
 The first view is complete before notebook-local PEP 723 metadata declares the
 workspace. Existing workspaces receive required configuration before the new

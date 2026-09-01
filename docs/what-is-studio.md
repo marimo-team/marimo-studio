@@ -13,17 +13,42 @@ The notebook owns data access, Python computation, controls, and reusable
 results. A view owns its HTML, CSS, JavaScript, layout, visual encoding, wording,
 and browser interaction.
 
+## Read the model through one notebook
+
+The Building occupancy notebook defines sensor baselines, anomaly candidates,
+an occupancy score, and a threshold sweep. Its **Monitor** and **Model review**
+views present those results for two different decisions:
+
+<StudioExample family="occupancy" />
+
+Change **Signal** in Monitor. Marimo reruns the cells that produce the selected
+series, then Studio updates the ECharts view without rebuilding its frontend.
+Move the threshold in Model review and the same notebook score drives its
+accuracy, precision, recall, and error evidence.
+
+Each view has separate HTML, CSS, JavaScript, and a last successful browser
+artifact. Saving Monitor source builds a new Monitor artifact. Model review and
+the active notebook session remain available during that build.
+
+This example has three independently changing layers:
+
+| Action                    | Changes                                                                | Remains available                      |
+| ------------------------- | ---------------------------------------------------------------------- | -------------------------------------- |
+| Save view source          | Studio builds and publishes a new immutable artifact                   | Notebook session and current results   |
+| Change a notebook control | Marimo reruns affected Python cells and Studio updates mounted results | View source and artifact               |
+| Switch runtime            | The notebook runs in Python or a browser worker                        | View source and artifact               |
+| Repair a failed build     | Studio replaces Preview after the next valid artifact publishes        | Last successful artifact during repair |
+
+Preview combines one published artifact with the selected notebook runtime. A
+source revision identifies editable files, an artifact revision identifies
+built browser files, and a presentation revision identifies the artifact and
+notebook state shown together.
+
 ## One notebook, many views
 
 The same analysis can support an explorer, monitor, report, review, or
 presentation. Each view has its own source files, browser dependencies, build,
 route, and last successful artifact.
-
-The Building occupancy notebook supports a facilities monitor and an
-interactive model review. Switch between the two views, then open **Notebook**
-to inspect the shared sensor calculations and threshold evaluation behind them.
-
-<StudioExample family="occupancy" />
 
 A shared analytical change belongs to the notebook. A change made for one job
 belongs to its view. [One notebook, many views](guide/views.md) explains how

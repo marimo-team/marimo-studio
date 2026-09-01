@@ -15,6 +15,14 @@ together as one reactive Python program. Each named view owns its frontend
 source, layout, and interaction while drawing from notebook cells, outputs, and
 values.
 
+> **0.1 status:** Marimo Studio 0.1.0 is the first public release. The
+> notebook-to-view workflow, projection elements, and last-successful build
+> behavior are supported product contracts. Before 1.0, CLI, Python, provider,
+> and saved configuration contracts may change between minor releases. Pin
+> Studio and third-party view providers in saved projects. Read [Compatibility
+> and support](https://marimo-team.github.io/marimo-studio/reference/compatibility)
+> before adopting Studio in a maintained project.
+
 Agentic coding makes interfaces quick to create. The analysis behind them still
 takes human attention. Marimo Studio keeps that analysis as the durable
 analytical model behind every view. Read [Why
@@ -77,7 +85,7 @@ Start with a saved notebook such as `analysis.py`:
 
 ```console
 uvx marimo-studio view create dashboard --target analysis.py
-uvx --with marimo-studio marimo edit analysis.py --sandbox
+uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
 ```
 
 The first command creates the view source beside the notebook. The second opens
@@ -88,7 +96,7 @@ marimo with three connected surfaces:
 - **Preview** for the rendered view
 
 Choose **Develop** to see all three. Saving Source rebuilds Preview, while a
-failed build leaves the last successful page available.
+failed build leaves the last successful view available.
 
 ![Notebook, view source, and Preview together in Develop](apps/docs/public/screenshots/studio-develop.png)
 
@@ -98,16 +106,19 @@ purpose.
 
 ## Choose a frontend
 
-The default view keeps its HTML, styles, and browser code in one editable file.
-It starts with enabled cells that display output or literal Markdown in document
-order, which gives reports, dashboards, and focused tools an editable first page
-immediately.
+The default view starts in one editable `index.html`. Keep styles and scripts
+inline, or move them into directly referenced local CSS and JavaScript files as
+the view grows. The starter places enabled cells that may display output,
+including literal Markdown, in document order. This gives reports, dashboards,
+and focused tools an editable first view immediately.
 
 Choose React or Svelte when the view benefits from components and a larger
 frontend source tree. Use the `marimo-studio/react:reveal` starter for a React
-slide deck with one initial slide per enabled display cell. Install
-`marimo-studio[deno]` in that environment so Studio can build those files with
-the pinned Deno toolchain.
+slide deck with one initial slide per enabled cell that may display output. Run
+React, Reveal.js, and Svelte creation through `marimo-studio[deno]==0.1.0`. Once
+configured, Studio derives the Deno requirement from the saved provider key for
+`status`, view creation, source inspection and editing commands, `view build`,
+`view export`, and `validate`.
 
 Teams can connect another frontend build when an existing project should remain
 the source of the view. The [frontend integration
@@ -142,22 +153,30 @@ complete workflow.
 
 ## Run or publish
 
-View source stays fixed while the notebook runs on a Python server, in a browser
-worker, or as a static export. Use `marimo run` when the notebook needs Python
-packages, local files, databases, or server credentials. Browser execution and
-static export are available when the notebook and its data can run in Pyodide.
+View source stays fixed while the notebook runs on a Python server or in a
+browser worker. Use `marimo run` when the notebook needs Python packages, local
+files, databases, or server credentials. Use browser execution when the notebook
+and its data can run in Pyodide. A static export packages that browser runtime
+and the view into a directory for HTTP hosting.
 
 Read [Run or publish a
 view](https://marimo-team.github.io/marimo-studio/guide/run-and-share) before
 choosing where the notebook will execute.
 
-See the [Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/)
-for guided workflows and exact API contracts.
+## Documentation and support
 
-## Compatibility
-
-Marimo Studio 0.1.0 requires Python 3.10 or newer and Marimo 0.24.0. React,
+Marimo Studio 0.1.0 supports Python 3.10 through 3.14 and Marimo 0.24.0. React,
 Reveal.js, and Svelte authoring use the optional Deno 2.9.5 dependency.
+
+- [Documentation](https://marimo-team.github.io/marimo-studio/) covers guided
+  workflows and exact API contracts.
+- [Troubleshooting](https://marimo-team.github.io/marimo-studio/guide/troubleshooting)
+  starts from common symptoms and repair commands.
+- [Issues](https://github.com/marimo-team/marimo-studio/issues) tracks public bug
+  reports and support requests.
+- [Security policy](SECURITY.md) defines the private vulnerability-reporting
+  path.
+- [Contributing](CONTRIBUTING.md) defines repository setup and review gates.
 
 ## License
 

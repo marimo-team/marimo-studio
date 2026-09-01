@@ -8,6 +8,10 @@ data access, transformations, controls, and reusable results together as one
 reactive Python program. Each named view owns its frontend source, layout, and
 interaction while drawing from notebook cells, outputs, and values.
 
+Marimo Studio 0.1.0 is the first public release. Pin Studio and third-party view
+providers in saved projects. Public CLI, Python, provider, and saved
+configuration contracts may change between minor releases before 1.0.
+
 All Python computation runs in the notebook. View source references notebook
 results by name and controls their layout and browser interaction.
 
@@ -15,21 +19,31 @@ Create a view named `dashboard`, then open it beside the notebook:
 
 ```console
 uvx marimo-studio view create dashboard --target analysis.py
-uvx --with marimo-studio marimo edit analysis.py --sandbox
+uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
 ```
 
 Choose **Develop** to edit the notebook, view source, and rendered result in one
-session. Saving the source rebuilds the view automatically.
+session. The create command writes the `dashboard` view project and makes it the
+default route. Saving its source rebuilds the view automatically. A failed build
+keeps the last successful result available.
 
 The installed Agent Skill gives coding agents the same workflow. People and
 agents inspect the same notebook and view source, make revision-safe edits,
 build, preview, and validate the rendered result.
 
-Marimo Studio 0.1.0 requires Python 3.10 or newer and Marimo 0.24.0. Read the
-[Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/) for
-frontend choices, notebook results, deployment, and API reference. Read [Why
-Studio?](https://marimo-team.github.io/marimo-studio/why-studio) for the product
-model.
+Marimo Studio 0.1.0 supports Python 3.10 through 3.14 and Marimo 0.24.0. Read
+[Why Studio?](https://marimo-team.github.io/marimo-studio/why-studio) for the
+product model and the [Marimo Studio
+documentation](https://marimo-team.github.io/marimo-studio/) for frontend
+choices, notebook results, deployment, and API reference. See [Compatibility
+and support](https://marimo-team.github.io/marimo-studio/reference/compatibility)
+and [Troubleshooting](https://marimo-team.github.io/marimo-studio/guide/troubleshooting)
+before maintaining or deploying a view.
+
+Use [GitHub Issues](https://github.com/marimo-team/marimo-studio/issues) for
+public bug reports and support requests. Report suspected vulnerabilities
+through the private path in the [security
+policy](https://github.com/marimo-team/marimo-studio/blob/main/SECURITY.md).
 
 ## License
 

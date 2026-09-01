@@ -93,10 +93,11 @@ operator can use a live monitor during an incident and a report afterward. Each
 situation can have an interface designed for the task while the underlying
 analysis stays the same.
 
-Modern frontend code remains modern frontend code. A view can begin as one HTML
-file or use React, Svelte, an existing frontend build, and specialized
-visualization libraries. It can use normal package tooling, CSS, browser APIs,
-graphics systems, and interaction techniques.
+Modern frontend code remains modern frontend code. A view can begin with HTML
+plus inline or local CSS and JavaScript. It can also use React, Svelte, an
+existing frontend build, and specialized visualization libraries. Each choice
+can use its normal package tooling, browser APIs, graphics systems, and
+interaction techniques.
 
 ## Separate Python and frontend
 
@@ -141,7 +142,7 @@ layout, styling, browser dependencies, and wording stay in the view.
 
 An agent can generate or rewrite frontend source quickly. That speed increases
 the need to know which source was changed, which notebook result it used, which
-build is visible, and which rendered page was actually checked.
+build is visible, and which rendered view was actually checked.
 
 Studio gives those operations explicit revisions. A source read returns its
 current revision. A write commits against that revision. If a person or another
@@ -149,7 +150,7 @@ agent saved first, Studio preserves the newer source and reports the conflict.
 
 A build uses a coherent source snapshot and publishes an immutable artifact. A
 failed build reports source-located diagnostics and keeps the last successful
-page available.
+view available.
 
 [Human and agent authoring](guide/coding-agents.md) follow the same visible
 sequence:

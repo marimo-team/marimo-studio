@@ -1,28 +1,29 @@
 ---
 title: Edit and preview in Studio
-description: Work with notebook code, page source, and the rendered result in one marimo session.
+description: Work with notebook code, view source, and the rendered result in one marimo session.
 ---
 
 # Edit and preview in Studio
 
-Open a notebook that already has a page:
+Use the exact launch requirements printed by `view create`. For a notebook with
+the default 0.1.0 view, run:
 
 ```console
-uvx --with marimo-studio marimo edit analysis.py --sandbox
+uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
 ```
 
 Studio keeps three surfaces connected to the same saved notebook:
 
 - **Notebook** contains Python and reactive computation.
-- **Source** contains the selected page's frontend files.
-- **Preview** renders the page with notebook results attached.
+- **Source** contains the selected view's frontend files.
+- **Preview** renders the view with notebook results attached.
 
 Choose **Develop** to arrange all three for everyday authoring. Notebook,
 Source, and Preview can also fill the workspace individually.
 
 ## Save and rebuild
 
-Source saves after an edit and rebuilds the selected page. The build status
+Source saves after an edit and rebuilds the selected view. The build status
 shows **Building**, **Up to date**, **Build needed**, or **Build failed**.
 
 Preview stays on the last successful version while another build runs. A failed
@@ -48,10 +49,10 @@ and shows both versions.
 Review **Your edits** and **Saved version** before choosing. When Studio reports
 a recovery file, that path contains the previous saved content.
 
-## Switch pages
+## Switch views
 
-The page menu saves pending edits before selecting another view. A failed save
-or unresolved conflict stops the switch. The previous page remains active so
+The view menu saves pending edits before selecting another view. A failed save
+or unresolved conflict stops the switch. The previous view remains active so
 you can repair the source and retry.
 
 ## Compare Python and browser execution
@@ -63,7 +64,7 @@ The runtime menu answers where the notebook runs:
 - **Browser** starts a separate notebook in the visitor's browser. The browser
   receives the notebook source and must be able to fetch its data.
 
-Switching the runtime keeps the page source fixed while changing where notebook
+Switching the runtime keeps the view source fixed while changing where notebook
 code and controls execute.
 
 Use [Run or publish a view](run-and-share.md) before sharing either runtime.

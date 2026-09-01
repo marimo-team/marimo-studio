@@ -32,6 +32,10 @@ Open **Field briefing** to move through the roster as a four-chapter Three.js
 presentation. The same athlete records regroup by sport, medal status, height,
 weight, and age.
 
+Field briefing uses the Vanilla provider with `index.html`, `style.css`, and
+`main.js`. The HTML links the local CSS and JavaScript directly, so Studio shows,
+rebuilds, and publishes all three files.
+
 ## Read the source
 
 - [Report view](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/athletes/overview)

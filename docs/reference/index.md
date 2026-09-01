@@ -14,5 +14,7 @@ contracts.
 - [Python API](python-api.md) defines saved-workspace and code-mode operations.
 - [Configuration](configuration.md) defines notebook metadata, runtimes, routes,
   and view manifests.
+- [Compatibility and support](compatibility.md) defines the 0.1 environment,
+  change policy, and support paths.
 - [Add another frontend](provider-api.md) defines the provider contract for
   creating, inspecting, and building frontend source.

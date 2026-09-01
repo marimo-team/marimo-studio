@@ -1,6 +1,6 @@
 ---
 title: Python API
-description: Inspect notebooks, author pages, verify the current Studio tab, and serve a configured notebook.
+description: Inspect notebooks, author views, verify the current Studio tab, and serve a configured notebook.
 ---
 
 # Python API
@@ -23,9 +23,10 @@ workspace = open_workspace("analysis.py")
 open_workspace(notebook: str | Path) -> Workspace
 ```
 
-Opens one saved notebook for inspection, page authoring, builds, static or
-runtime validation, export, and removal. Raises `ConfigurationError` when the
-path does not identify a saved notebook.
+Returns a workspace handle for an existing regular file. The call resolves the
+path and verifies the file. It raises `ConfigurationError` when the resolved path
+is not a regular file. Each operation loads and validates the notebook and Studio
+configuration it needs.
 
 ### `Workspace`
 
@@ -56,17 +57,104 @@ await workspace.validate(
 ```
 
 Static notebook inspection never executes notebook code. Runtime inspection
-and runtime validation execute the complete notebook in an isolated process.
+and runtime validation execute the complete notebook in an owned child process.
+The child inherits the interpreter environment, current directory, OS user
+permissions, filesystem access, and network access. The process boundary owns
+cleanup and terminates the child process tree after cancellation or a timeout.
+It is a lifecycle boundary, not a security sandbox. Run trusted notebook code.
+
 Use `context="upstream"` with one or more selectors to include every cell that
 produces their inputs.
 
-`create_view()` raises `ViewExistsError` when the name already has a page.
-`view()` returns a handle without reading the filesystem. Operations on that
-handle report a missing or invalid page.
+`create_view()` raises `ViewExistsError` when the name already has a view.
+`view()` reads the current catalog and returns a handle bound to that workspace
+and view incarnation. `create_view()` and `bind()` reject a replacement
+workspace with `WorkspaceGenerationConflictError`. Open a new workspace before
+retrying the operation.
+
+### `StudioOverview`
+
+Describes the configuration source, notebook, view root, runtime choices, cell
+aliases, and configured views returned by `Workspace.status()`.
+`generation` identifies the returned catalog and changes when its configuration
+or view incarnations change.
+
+`launch_requirements` lists the exact Studio requirement with configured
+provider extras and the exact installed third-party provider distributions
+required to reopen the workspace in another `uv` environment.
+
+### `ViewOverview`
+
+Identifies one configured view, its project path, provider, Source document
+paths, default status, generation, and current artifact revision. Call
+`View.inspect()` to read each document's access mode.
+
+### `InspectionResult`
+
+Contains the selected static notebook cells and optional runtime outputs and
+values returned by `Workspace.inspect_notebook()`.
+
+### `RuntimeProbe`
+
+Contains runtime cell state, serialized values, and rendered outputs for one
+completed runtime inspection.
+
+### `RuntimeCell`
+
+Records one selected cell's terminal status, output summaries, and runtime
+errors.
+
+### `RuntimeOutput`
+
+Summarizes one cell output by channel, MIME type, and whether its payload is
+empty.
+
+### `ValueReadResult`
+
+Maps requested value selectors to serialized values or `ValueReadError`
+records.
+
+### `ValueReadError`
+
+Provides the stable code and message for one value that the runtime could not
+serialize or return.
+
+### `OutputRenderResult`
+
+Maps requested output selectors to `RenderedOutput` or `ValueReadError`
+records.
+
+### `RenderedOutput`
+
+Contains one rendered output's owner cell, MIME type, payload, timestamp, and
+UI object reset identifiers.
+
+### `Starter`
+
+Describes one installed starting point, its provider, generated documents, and
+current availability.
+
+### `BindingResult`
+
+Identifies the alias, selected notebook cell, configuration path, and previous
+binding returned by `Workspace.bind()`. `catalog_generation` identifies the
+post-commit catalog captured by the owning workspace.
 
 ### `View`
 
-`View` binds page operations to one workspace and name.
+`View` binds view operations to one workspace and name.
+`catalog_generation` and `generation` identify the catalog and view incarnation
+that the handle observed.
+
+Successful `Workspace.bind()`, `Workspace.create_view()`, and `View.remove()`
+advance the owning `Workspace`. Existing `View` handles remain bound to their
+original generations. Reacquire them with `workspace.view(name)` after a catalog
+mutation.
+
+Use Studio's remove and create operations for same-name replacement. Direct
+filesystem delete and recreation completed between observations is outside the
+0.1 mutation-ownership contract when it reuses `(device, inode, mode)`. This
+includes exact-byte recreation.
 
 ```text
 await view.inspect() -> ViewInspection
@@ -86,8 +174,14 @@ await view.remove() -> ViewRemovalResult
 Studio editor. A stale revision raises `SourceConflictError` and preserves the
 newer file.
 
-`build()` returns the page revision produced by the selected development or
-production build. A failed build leaves the last successful page available.
+`write()`, `build()`, `validate()`, and `export()` verify the handle's catalog
+and view generation. A same-name replacement raises
+`ViewGenerationConflictError` before source or artifact publication changes.
+`export()` checks again before replacing its destination, including when
+`force=True`.
+
+`build()` returns the artifact revision produced by the selected development or
+production build. A failed build leaves the last successful view available.
 
 ### `ViewBuild`
 
@@ -100,8 +194,40 @@ ViewBuild(
 )
 ```
 
-Describes one successful page build. `revision` identifies the complete browser
+Describes one successful view build. `revision` identifies the complete browser
 output.
+
+### `ViewDocument`
+
+Contains one authorized document's path, language, access mode, UTF-8 content,
+and current revision.
+
+### `ViewInspection`
+
+Contains the provider, authorized documents, source-located diagnostics, build
+freshness, and retained successful build for one view.
+
+### `StudioDiagnostic`
+
+Names one source or build issue with a stable code, severity, repair hint, and
+optional source location.
+
+### `StaticExportResult`
+
+Identifies the exported view, output directory, entrypoint document, and file
+count returned by `View.export()`.
+
+### `ViewRemovalResult`
+
+Identifies the removed view, the updated default view, and the remaining view
+names returned by `View.remove()`. `catalog_generation` identifies the
+post-commit catalog captured by the owning workspace.
+
+`remove()` raises `ViewInUseError` while another process holds an artifact
+lease for the view. A catalog change, including a same-name replacement, raises
+`WorkspaceGenerationConflictError` and requires a new `Workspace` and `View`
+handle. `ViewDeletionError` reports an incomplete filesystem cleanup and
+exposes the cleanup path through `diagnostic_details()`.
 
 ### `ValidationReport`
 
@@ -118,7 +244,7 @@ ValidationReport(
 
 `ok` answers whether the requested validation completed against one coherent
 source and runtime state. Browser validation also requires current evidence from
-the selected rendered page.
+the selected rendered view.
 
 ### `ValidationIssue`
 
@@ -146,6 +272,17 @@ await doctor(provider: str | None = None) -> ProviderReport
 
 Returns installed frontend registrations, package versions, availability, and
 starting points. Pass a provider key to select one registration.
+
+### `ProviderReport`
+
+Contains the provider registration records returned by `doctor()`. Each record
+includes its derived key, distribution, installed version, load state,
+availability, and starter IDs.
+
+### `ProviderDiagnostic`
+
+Describes one installed provider registration, including its package identity,
+load error, provider metadata, availability, and discovered starter IDs.
 
 ## `marimo_studio.agent`
 
@@ -216,9 +353,9 @@ await view.validate(
 ```
 
 `show()` selects the view in the current Studio tab. Run it in a separate
-code-mode execution before browser validation so the page can finish rendering.
+code-mode execution before browser validation so the view can finish rendering.
 
-Browser validation requires one view. Exercise relevant page interactions
+Browser validation requires one view. Exercise relevant view interactions
 before requesting the report.
 
 ### `ShowResult`
@@ -233,7 +370,7 @@ ShowResult(
 )
 ```
 
-Confirms that the intended Studio tab accepted the page selection.
+Confirms that the intended Studio tab accepted the view selection.
 
 ### `ValidationReport`
 
@@ -275,7 +412,7 @@ create_asgi_app(notebook: str | Path) -> ASGIApp
 ```
 
 Returns a Marimo run-mode ASGI application that serves the notebook's default
-and named pages. The application lifespan opens Studio services and closes its
+and named views. The application lifespan opens Studio services and closes its
 notebook sessions and background tasks during shutdown.
 
 `marimo_studio.asgi:app` reads the notebook path from
