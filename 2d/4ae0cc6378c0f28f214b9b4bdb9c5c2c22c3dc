@@ -1,0 +1,20 @@
+docs/reference/provider-api.md
+  s_af5d583a28e9c5::t_6ba32a127b7598 183-238,240-250,293-295
+  s_af5d583a28e9c5::t_f314353862ef86 239
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2d4ae0cc6378c0f28f214b9b4bdb9c5c2c22c3dc",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
