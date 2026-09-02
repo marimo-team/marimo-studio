@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from threading import Event, Thread
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -34,11 +35,37 @@ class _AsyncCloser:
 
 
 class _PresentationCloser:
-    def __init__(self, calls: list[str]) -> None:
+    def __init__(
+        self,
+        calls: list[str],
+        failure: BaseException | None = None,
+    ) -> None:
         self.calls = calls
+        self.failure = failure
 
     def close(self) -> None:
         self.calls.append("presentation")
+        if self.failure is not None:
+            raise self.failure
+
+
+class _BlockingPresentationCloser:
+    def __init__(
+        self,
+        calls: list[str],
+        entered: Event,
+        release: Event,
+    ) -> None:
+        self.calls = calls
+        self.entered = entered
+        self.release = release
+
+    def close(self) -> None:
+        self.calls.append("presentation:enter")
+        self.entered.set()
+        if not self.release.wait(timeout=2):
+            raise RuntimeError("test presentation teardown was not released")
+        self.calls.append("presentation:done")
 
 
 def test_registry_reuses_a_scope_without_constructing_another(
@@ -113,12 +140,18 @@ def test_registry_shares_session_identity_across_notebooks(tmp_path: Path) -> No
 
 
 def test_scope_closes_every_later_owner_after_shutdown_fails(tmp_path: Path) -> None:
-    for owner in ("development", "agents"):
+    for owner in ("development", "presentation", "agents"):
         calls: list[str] = []
         failure = RuntimeError(f"{owner} shutdown failed")
         notebook_scope = NotebookScope(
             notebook=tmp_path / "analysis.py",
-            presentation=cast(Any, _PresentationCloser(calls)),
+            presentation=cast(
+                Any,
+                _PresentationCloser(
+                    calls,
+                    failure if owner == "presentation" else None,
+                ),
+            ),
             clients=cast(Any, _AsyncCloser("clients", calls)),
             agents=cast(
                 Any,
@@ -221,6 +254,73 @@ def test_scope_close_drains_each_async_owner_before_advancing(
         finally:
             release_close.set()
             await asyncio.gather(closing, return_exceptions=True)
+
+    asyncio.run(exercise())
+
+
+def test_scope_close_drains_presentation_teardown_off_the_event_loop(
+    tmp_path: Path,
+) -> None:
+    async def exercise() -> None:
+        calls: list[str] = []
+        presentation_entered = Event()
+        release_presentation = Event()
+        heartbeat = asyncio.Event()
+        notebook_scope = NotebookScope(
+            notebook=tmp_path / "analysis.py",
+            presentation=cast(
+                Any,
+                _BlockingPresentationCloser(
+                    calls,
+                    presentation_entered,
+                    release_presentation,
+                ),
+            ),
+            clients=cast(Any, _AsyncCloser("clients", calls)),
+            agents=cast(Any, _AsyncCloser("agents", calls)),
+            development=cast(Any, _AsyncCloser("development", calls)),
+            lifecycle=cast(Any, _AsyncCloser("lifecycle", calls)),
+        )
+        loop = asyncio.get_running_loop()
+
+        def schedule_heartbeat() -> None:
+            if presentation_entered.wait(timeout=2):
+                loop.call_soon_threadsafe(heartbeat.set)
+
+        observer = Thread(target=schedule_heartbeat)
+        observer.start()
+        closing = asyncio.create_task(notebook_scope.close())
+        try:
+            await asyncio.wait_for(heartbeat.wait(), timeout=3)
+            assert calls == [
+                "lifecycle",
+                "development",
+                "presentation:enter",
+            ]
+
+            closing.cancel()
+            await asyncio.sleep(0)
+            closing.cancel()
+            await asyncio.sleep(0)
+            assert not closing.done()
+
+            release_presentation.set()
+            with pytest.raises(asyncio.CancelledError):
+                await closing
+            assert calls == [
+                "lifecycle",
+                "development",
+                "presentation:enter",
+                "presentation:done",
+                "agents",
+                "clients",
+            ]
+        finally:
+            release_presentation.set()
+            observer.join(timeout=2)
+            await asyncio.gather(closing, return_exceptions=True)
+
+        assert not observer.is_alive()
 
     asyncio.run(exercise())
 

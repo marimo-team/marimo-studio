@@ -86,14 +86,7 @@ class NotebookScope:
 
         await close_async(self.lifecycle.close)
         await close_async(self.development.close)
-        try:
-            self.presentation.close()
-        except asyncio.CancelledError as error:
-            if cancellation is None:
-                cancellation = error
-        except BaseException as error:
-            if failure is None:
-                failure = error
+        await close_async(lambda: asyncio.to_thread(self.presentation.close))
         for resource in (self.agents, self.clients):
             await close_async(resource.close)
         if failure is not None:
