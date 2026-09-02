@@ -30,6 +30,7 @@ from marimo_studio.view_providers._bundled._deno.project import (
 from marimo_studio.view_providers._validation import validate_relative_path
 
 _LABEL = "React provider"
+_ENTRYPOINT = PurePosixPath("src/index.html")
 _SCRIPT_SOURCE = re.compile(
     r"(?:^|\s)src\s*=\s*(?:\"(?P<double>[^\"]*)\"|'(?P<single>[^']*)'|"
     r"(?P<bare>[^\s\"'=<>`]+))",
@@ -149,28 +150,7 @@ def _local_target_error(
 def react_project_diagnostics(project: ViewProject) -> tuple[ProjectDiagnostic, ...]:
     """Validate React configuration and HTML module paths without resolving them."""
     diagnostics: list[ProjectDiagnostic] = []
-    try:
-        entry = validate_relative_path(
-            project.options.get("entrypoint", "src/index.html"),
-            field="marimo-studio/react entrypoint",
-        )
-    except ValueError as error:
-        return (
-            _boundary_diagnostic(
-                "provider-options-invalid",
-                str(error),
-                PurePosixPath("view.toml"),
-            ),
-        )
-    if entry != PurePosixPath("src/index.html"):
-        diagnostics.append(
-            _boundary_diagnostic(
-                "react-entrypoint-unsupported",
-                "React entrypoint must be src/index.html",
-                PurePosixPath("view.toml"),
-            )
-        )
-    entry_path = project.root.joinpath(*entry.parts)
+    entry_path = project.root.joinpath(*_ENTRYPOINT.parts)
     if entry_path.is_file():
         try:
             source = entry_path.read_text(encoding="utf-8")
@@ -188,7 +168,7 @@ def react_project_diagnostics(project: ViewProject) -> tuple[ProjectDiagnostic, 
                         _boundary_diagnostic(
                             "module-path-outside-project",
                             error,
-                            entry,
+                            _ENTRYPOINT,
                         )
                     )
         except (OSError, UnicodeError, ValueError) as error:
@@ -196,7 +176,7 @@ def react_project_diagnostics(project: ViewProject) -> tuple[ProjectDiagnostic, 
                 _boundary_diagnostic(
                     "react-entry-document-invalid",
                     str(error),
-                    entry,
+                    _ENTRYPOINT,
                 )
             )
     try:
@@ -486,10 +466,7 @@ def _build_react(
             request.project.options.get("main", "src/main.tsx"),
             field="React main",
         )
-        entrypoint = validate_relative_path(
-            request.project.options.get("entrypoint", "src/index.html"),
-            field="React entrypoint",
-        )
+        entrypoint = _ENTRYPOINT
         config = validate_relative_path(
             request.project.options.get("config", "deno.json"),
             field="React Deno config",

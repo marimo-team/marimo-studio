@@ -100,14 +100,15 @@ declared `mo-value` host.
 deck. It uses the same project shape as the React starter and places one
 eligible notebook cell on each slide.
 
+The provider builds `src/index.html` as the HTML entry document.
+
 ### Options
 
-| Option       | Type                        | Default          | Contract                                                                                  |
-| ------------ | --------------------------- | ---------------- | ----------------------------------------------------------------------------------------- |
-| `entrypoint` | Project-relative POSIX path | `src/index.html` | Selects the HTML entry document. The built-in provider currently requires this exact path |
-| `main`       | Project-relative POSIX path | `src/main.tsx`   | Selects the React module imported by the entry document                                   |
-| `config`     | Project-relative POSIX path | `deno.json`      | Selects the Deno configuration                                                            |
-| `lockfile`   | Project-relative POSIX path | `deno.lock`      | Selects the frozen Deno lockfile                                                          |
+| Option     | Type                        | Default        | Contract                                                |
+| ---------- | --------------------------- | -------------- | ------------------------------------------------------- |
+| `main`     | Project-relative POSIX path | `src/main.tsx` | Selects the React module imported by the entry document |
+| `config`   | Project-relative POSIX path | `deno.json`    | Selects the Deno configuration                          |
+| `lockfile` | Project-relative POSIX path | `deno.lock`    | Selects the frozen Deno lockfile                        |
 
 ## `marimo-studio/svelte`
 

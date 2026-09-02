@@ -53,6 +53,9 @@ different provider through supported authoring operations.
 
 ## Implement the protocol
 
+Implement the `ViewProvider` protocol and publish one provider object from the
+registered entry point:
+
 ```python
 class ViewProvider(Protocol):
     info: ProviderInfo
@@ -85,6 +88,20 @@ creation. Set `api_version` to `PROVIDER_API_VERSION`.
 Studio requires an exact provider API match. Test the provider before expanding
 its Studio dependency to a newer minor release. [Compatibility and
 support](compatibility.md) owns the current release policy.
+
+### Exported type aliases
+
+| Name               | Type and use                                                                                         |
+| ------------------ | ---------------------------------------------------------------------------------------------------- |
+| `BuildProfile`     | `Literal["development", "production"]` passed to `BuildRequest.profile`                              |
+| `CellKind`         | `Literal["cell", "setup", "function", "class", "unparsable"]` returned by static notebook inspection |
+| `DocumentAccess`   | `Literal["edit", "read"]` used by `SourceDocument.access`                                            |
+| `JsonValue`        | Recursive JSON-compatible scalar, list, or string-keyed dictionary used by provider options          |
+| `ProjectInputKind` | `Literal["file", "directory"]` used by `ProjectInput.kind`                                           |
+| `ProjectionKind`   | `Literal["cell", "output", "value"]` used by `MountDeclaration.kind`                                 |
+
+`PROVIDER_API_VERSION` is the integer that a provider assigns to
+`ProviderInfo.api_version`. Studio 0.1 requires an exact match.
 
 ## Create starting files
 
@@ -241,8 +258,9 @@ def inspect(self, request):
 column numbers are one-based. The mount ID must be unique within the inspection
 and remain stable for the same source site.
 
-During `build()`, read the accepted site from `request.inspection.mounts` and
-add its canonical attribute to the corresponding projection element:
+During `build()`, read the accepted site from `request.inspection.mounts`.
+`mount_attribute` returns the canonical attribute to add to the corresponding
+projection element:
 
 ```python
 site = request.inspection.mounts[0]
@@ -296,10 +314,11 @@ arguments:
   Convert a nonzero return code into a source-located `ProjectDiagnostic` when a
   reader can repair the build input.
 
-`request.cancellation` supplies the cooperative signal for provider
-implementations that run in process. Check `cancelled` around filesystem work
-that the runner does not own. A registered callback can interrupt a long-running
-library call and should be unregistered when that call completes.
+`request.cancellation` is a `ProviderCancellation` object that supplies the
+cooperative signal for provider implementations that run in process. Check
+`cancelled` around filesystem work that the runner does not own. A registered
+callback can interrupt a long-running library call and should be unregistered
+when that call completes.
 
 Installed third-party calls also have an outer process owner. Cancellation, a
 deadline, or excessive command output can terminate that process tree before
@@ -397,6 +416,86 @@ successful artifact available, and one notebook result rendered through the
 installed package.
 
 ## Record reference
+
+### `CellRef`
+
+```text
+CellRef(
+    fingerprint: str,
+    layout_fingerprint: str,
+    occurrence: int = 0,
+)
+```
+
+Identifies one saved notebook cell from semantic and layout fingerprints.
+Providers receive `CellRef` values as keys in `StarterContext.cell_targets` and
+return the selected values through `StarterCellTarget`. Treat received values
+as opaque identities. `str(ref)` returns the serialized `cell:v1:` form and
+`CellRef.parse(value)` restores it.
+
+### `SourceSpan`
+
+```text
+SourceSpan(
+    start_line: int,
+    end_line: int,
+    start_column: int = 0,
+    end_column: int = 0,
+)
+```
+
+Locates one cell in the saved notebook. Lines and columns use the coordinates
+reported by Marimo's static notebook compiler.
+
+### `CellConfigSpec`
+
+```text
+CellConfigSpec(
+    column: int | None,
+    disabled: bool,
+    hide_code: bool,
+)
+```
+
+Contains the saved cell layout column, execution-disabled state, and code
+visibility setting.
+
+### `CellSpec`
+
+`CellSpec` contains the provider-visible static record for one saved cell:
+
+| Field                          | Contract                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `ref`                          | Semantic `CellRef` used by starter target records and dependency edges    |
+| `runtime_id`                   | Cell ID in the compiled notebook snapshot                                 |
+| `index`                        | Zero-based document position                                              |
+| `kind`                         | One `CellKind` value                                                      |
+| `name`                         | Native Marimo cell name, or `None` for an anonymous cell                  |
+| `source`                       | `SourceSpan` in the saved notebook                                        |
+| `code_sha256` and `preview`    | Source digest and bounded preview text                                    |
+| `definitions` and `references` | Variable names produced and consumed by the cell                          |
+| `upstream` and `downstream`    | Ordered semantic `CellRef` dependencies                                   |
+| `config`                       | Saved `CellConfigSpec`                                                    |
+| `has_output_expression`        | Whether the cell ends with an output expression                           |
+| `may_display_output`           | Conservative signal for starter projection selection                      |
+| `markdown`                     | Literal Markdown text when static inspection can recover it               |
+| `code`                         | Complete source when the owning inspection requested it, otherwise `None` |
+
+### `NotebookSpec`
+
+```text
+NotebookSpec(
+    path: Path,
+    revision: str,
+    cells: tuple[CellSpec, ...],
+    app_config: dict[str, Any],
+)
+```
+
+Describes the saved notebook snapshot passed to `StarterContext`. `cells` stays
+in document order. `app_config` is detached JSON-compatible configuration.
+`by_ref()` indexes cells by semantic identity, `named_cells()` indexes native
+names, and `to_dict()` returns the schema 1 record.
 
 ### `ProviderInfo`
 

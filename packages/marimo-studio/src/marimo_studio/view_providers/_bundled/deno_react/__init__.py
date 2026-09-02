@@ -57,7 +57,7 @@ _INPUT_SCOPE = (
     ProjectInput(PurePosixPath("public"), "directory"),
 )
 _DOCUMENT_ROOTS = (PurePosixPath("AGENTS.md"), PurePosixPath("DESIGN.md"))
-_REQUIRED = ("view.toml",)
+_REQUIRED = ("view.toml", "src/index.html")
 _EDITOR_LANGUAGES = {
     "AGENTS.md": "markdown",
     "DESIGN.md": "markdown",
@@ -82,7 +82,6 @@ _PROJECT = ProviderProjectSpec(
     editor_languages=_EDITOR_LANGUAGES,
     read_only=frozenset({"deno.lock"}),
     option_paths={
-        "entrypoint": "src/index.html",
         "main": "src/main.tsx",
         "config": "deno.json",
         "lockfile": "deno.lock",
