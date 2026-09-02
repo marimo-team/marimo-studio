@@ -207,6 +207,13 @@ test("publishes complete projects during concurrent starter creation", async ({
     .evaluate(() => globalThis.marimoStudio.identity().revision);
   const dashboardRefresh = await captureProjectionRefresh(page, browserDiagnostics);
   const supersededRenewal = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
+  const supersededWorkspaceGenerations = browserDiagnostics.expectResponse({
+    status: 409,
+    path: /^\/_marimo-studio\/presentation\/[^/]+\/dashboard\/$/,
+    error: "workspace-generation-conflict",
+    count: candidates.length,
+    required: false,
+  });
   let complete = false;
   const creation = Promise.all(
     candidates.map(([view, starter]) => addWorkspaceView(workspaceNotebookPath, view, starter)),
@@ -265,6 +272,7 @@ test("publishes complete projects during concurrent starter creation", async ({
   );
   await expect(refreshedDashboard.locator('strong[mo-value="metric"]')).toContainText("63");
   await recoverProjectionRefresh(dashboardRefresh, page);
+  supersededWorkspaceGenerations.recovered();
   supersededRenewal.recovered();
   await retireWorkspacePage(page, browserDiagnostics);
   supersededPresentations.recovered();

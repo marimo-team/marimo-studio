@@ -166,6 +166,7 @@ shown.to_dict()
   await expect.poll(() => readWorkspaceFile(plainNotebookPath)).toContain("fresh_value = 99");
 
   await page.getByRole("button", { name: "Develop", exact: true }).click();
+  await recoverWorkspaceEventStream(replacedWorkspaceStreams);
   await writeViewSource(
     page,
     "dashboard",
@@ -178,7 +179,6 @@ shown.to_dict()
   );
   await waitForPreview(page);
   await expect(preview.locator("#fresh-value")).toHaveText("99", { timeout: 65_000 });
-  replacedWorkspaceStreams.recovered();
   supersededConfig.recovered();
 });
 
