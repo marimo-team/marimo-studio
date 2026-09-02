@@ -652,10 +652,12 @@ def test_view_creation_http_cancellation_drains_provider_work_before_return(
             },
             receive,
         )
+        definition = load_studio_definition(notebook_path)
         operation = asyncio.create_task(
             create_view_response(
                 request,
-                load_studio_definition(notebook_path),
+                definition.notebook,
+                studio.catalog_generation,
                 "server-token",
             )
         )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import subprocess
@@ -7,10 +8,16 @@ import sys
 from pathlib import Path
 
 import pytest
+from starlette.types import Message
 
 from marimo_studio import create_asgi_app
 from marimo_studio._composition import create_security_policy
-from marimo_studio._server.headers import edit_document_headers, frame_ancestors_policy
+from marimo_studio._server.headers import (
+    edit_document_headers,
+    edit_document_send,
+    frame_ancestors_policy,
+)
+from marimo_studio._server.pages import error_response
 from marimo_studio._server.security import (
     ALLOWED_EMBED_ORIGINS_ENV,
     SecurityPolicy,
@@ -56,6 +63,56 @@ def test_allowed_embed_origins_are_added_after_self(
     assert _origin_values(policy) == expected
     assert frame_ancestors_policy(policy) == "frame-ancestors 'self' " + " ".join(
         expected
+    )
+
+
+def test_repair_document_uses_the_embedding_security_policy(tmp_path: Path) -> None:
+    policy = parse_allowed_embed_origins("https://notebooks.example.com")
+
+    response = error_response(
+        "/studio/",
+        ConfigurationError("Invalid workspace"),
+        tmp_path / "notebook.py",
+        base_url="",
+        dev=True,
+        structured=False,
+        server_token="server-token",
+        security_policy=policy,
+    )
+
+    assert response.headers["content-security-policy"] == (
+        "frame-ancestors 'self' https://notebooks.example.com"
+    )
+
+
+def test_native_document_preserves_existing_content_security_directives() -> None:
+    messages: list[Message] = []
+    policy = parse_allowed_embed_origins("https://notebooks.example.com")
+
+    async def send(message: Message) -> None:
+        messages.append(message)
+
+    async def exercise() -> None:
+        await edit_document_send(send, policy)(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [
+                    (
+                        b"content-security-policy",
+                        b"default-src 'self'; frame-ancestors 'none'; "
+                        b"script-src 'self'",
+                    )
+                ],
+            }
+        )
+
+    asyncio.run(exercise())
+
+    headers = dict(messages[0].get("headers", ()))
+    assert headers[b"content-security-policy"] == (
+        b"default-src 'self'; script-src 'self'; "
+        b"frame-ancestors 'self' https://notebooks.example.com"
     )
 
 

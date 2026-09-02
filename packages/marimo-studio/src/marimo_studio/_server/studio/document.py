@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Literal, cast
 
 from htpy import (
@@ -38,6 +37,7 @@ from marimo_studio._delivery.urls import (
     with_notebook_query,
     with_query,
 )
+from marimo_studio._server.records import ServerContext
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.studio.editor_capability import (
     editor_binding_capability,
@@ -45,6 +45,7 @@ from marimo_studio._server.studio.editor_capability import (
 from marimo_studio._server.studio.event_capability import (
     workspace_events_capability,
 )
+from marimo_studio._server.studio.session_handoff import HostSessionTicket
 from marimo_studio._workspace.models import StudioWorkspace
 
 StudioHostState = Literal["unconfigured", "needs-view", "ready"]
@@ -131,10 +132,7 @@ def studio_bootstrap_payload(
 
 
 def studio_document(
-    notebook: Path,
-    base_url: str,
-    server_token: str,
-    file_key: str,
+    context: ServerContext,
     query: Sequence[tuple[str, str]],
     routing_query: Sequence[tuple[str, str]],
     runtimes: tuple[tuple[str, str], ...],
@@ -148,7 +146,11 @@ def studio_document(
     generation: str | None = None,
 ) -> str:
     """Return the stable editor host and optional ready-workspace bootstrap."""
-    server_instance = server_instance_id(server_token)
+    notebook = context.notebook
+    base_url = context.base_url
+    server_token = context.server_token
+    file_key = context.file_key
+    server_instance = server_instance_id(context.server_token)
     events_capability = workspace_events_capability(
         server_token,
         file_key,
@@ -163,6 +165,11 @@ def studio_document(
         native_session_id,
     )
     support_url = public_url(base_url, SUPPORT_PATH)
+    host_session = HostSessionTicket.issue(
+        context,
+        native_session_id,
+        query,
+    )
 
     def routed(url: str) -> str:
         return with_query(url, routing_query)
@@ -276,6 +283,10 @@ def studio_document(
                         id="marimo-studio-host",
                         type="application/json",
                     )[Markup(_json(host))],
+                    script(
+                        id="marimo-studio-host-session",
+                        type="application/json",
+                    )[Markup(_json(host_session.browser_config("complete")))],
                     *(
                         (
                             script(
@@ -286,20 +297,6 @@ def studio_document(
                         if bootstrap is not None
                         else ()
                     ),
-                    script[
-                        Markup(
-                            """
-                            const studioUrl = new URL(globalThis.location.href);
-                            studioUrl.searchParams.delete("session_id");
-                            studioUrl.searchParams.delete("marimo_studio_resume");
-                            globalThis.history.replaceState(
-                              globalThis.history.state,
-                              "",
-                              studioUrl,
-                            );
-                            """
-                        )
-                    ],
                     noscript[
                         node_list(
                             "Studio requires JavaScript. ",

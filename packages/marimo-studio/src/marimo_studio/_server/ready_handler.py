@@ -200,6 +200,7 @@ class ReadyWorkspaceHandler:
                 ),
                 lifecycle_id=request_lifecycle_id(route.request),
                 runtime=route.request.query_params.get("runtime", "server"),
+                security_policy=self._security_policy,
                 view_name=route.request_view,
             )
         if (
