@@ -1,0 +1,19 @@
+packages/marimo-studio/tests/cli/test_validate_command.py
+  s_af5d583a28e9c5::t_86f497f40af67d 233,240-241,244-245,258,270
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3a97b0480717a9ceb8828340dd6dc1b4d4fd2b85",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
