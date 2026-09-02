@@ -72,6 +72,7 @@ from marimo_studio._server.routing import (
     view_route_alias,
 )
 from marimo_studio._server.runtime.catalog import create_runtime_registry
+from marimo_studio._server.security import DEFAULT_SECURITY_POLICY, SecurityPolicy
 from marimo_studio._server.workspace_lifecycle import (
     Invalid,
     NeedsView,
@@ -97,8 +98,10 @@ class PresentationMiddleware:
         self,
         app: ASGIApp,
         adapter_factory: Callable[[], ServerAdapters],
+        security_policy: SecurityPolicy = DEFAULT_SECURITY_POLICY,
     ) -> None:
         self.app = app
+        self._security_policy = security_policy
         self._adapters = adapter_factory()
         self._notebooks = NotebookScopeRegistry()
         self._capabilities = PresentationCapabilityHandler(
@@ -115,10 +118,12 @@ class PresentationMiddleware:
             app,
             self._adapters,
             self._runtimes,
+            security_policy,
         )
         self._ready_routes = ReadyWorkspaceHandler(
             self._adapters,
             self._runtimes,
+            security_policy,
         )
 
     @asynccontextmanager
@@ -224,6 +229,7 @@ class PresentationMiddleware:
             code_mode=self._adapters.code_mode,
             editor_runtime=self._adapters.editor_runtime,
             document_transactions=self._adapters.document_transactions,
+            security_policy=self._security_policy,
             relative=relative,
             mode=mode,
         ):

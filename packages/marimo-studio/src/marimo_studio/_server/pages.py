@@ -35,7 +35,7 @@ from marimo_studio._delivery.urls import (
     with_query,
 )
 from marimo_studio._server.agent.clients import StudioClientRegistry
-from marimo_studio._server.headers import DOCUMENT_HEADERS, EDIT_DOCUMENT_HEADERS
+from marimo_studio._server.headers import DOCUMENT_HEADERS, edit_document_headers
 from marimo_studio._server.ports import SessionReplay, SessionState
 from marimo_studio._server.presentation.capability import (
     PRESENTATION_RESPONSE_HEADERS,
@@ -63,6 +63,7 @@ from marimo_studio._server.presentation.session import (
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
+from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.studio import (
     repair_document,
@@ -308,6 +309,7 @@ def studio_response(
     runtimes: tuple[tuple[str, str], ...],
     sessions: SessionState,
     session_ids: SessionIdAllocator,
+    security_policy: SecurityPolicy,
 ) -> Response:
     """Render the edit workspace for one selected view."""
     if context.mode != "edit":
@@ -318,7 +320,7 @@ def studio_response(
         return PlainTextResponse(
             f"Unknown view {selected!r}",
             status_code=404,
-            headers=EDIT_DOCUMENT_HEADERS,
+            headers=edit_document_headers(security_policy),
         )
     client_id = secrets.token_urlsafe(18)
     native_session_id = _editor_session_id(request, context, sessions, session_ids)
@@ -337,7 +339,7 @@ def studio_response(
             config=studio,
             selected=selected,
         ),
-        headers=EDIT_DOCUMENT_HEADERS,
+        headers=edit_document_headers(security_policy),
     )
 
 
@@ -348,6 +350,7 @@ def initialization_response(
     runtimes: tuple[tuple[str, str], ...],
     sessions: SessionState,
     session_ids: SessionIdAllocator,
+    security_policy: SecurityPolicy,
 ) -> Response:
     """Render the authenticated first-view initializer in edit mode."""
     if context.mode != "edit":
@@ -371,7 +374,7 @@ def initialization_response(
             default_view=definition.default_view,
             generation=definition.config_generation,
         ),
-        headers=EDIT_DOCUMENT_HEADERS,
+        headers=edit_document_headers(security_policy),
     )
 
 
@@ -382,6 +385,7 @@ def unconfigured_response(
     runtimes: tuple[tuple[str, str], ...],
     sessions: SessionState,
     session_ids: SessionIdAllocator,
+    security_policy: SecurityPolicy,
 ) -> Response:
     """Render the stable editor host before Studio is configured."""
     if context.mode != "edit":
@@ -403,7 +407,7 @@ def unconfigured_response(
             native_session_id,
             state="unconfigured",
         ),
-        headers=EDIT_DOCUMENT_HEADERS,
+        headers=edit_document_headers(security_policy),
     )
 
 

@@ -215,6 +215,29 @@ def test_edit_mode_enters_studio_and_embeds_the_native_editor(
     assert len(workspace_sessions) == 3
 
 
+def test_edit_documents_allow_configured_embed_origins(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    monkeypatch.setenv(
+        "MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS",
+        "http://localhost:55021,https://notebooks.example.com",
+    )
+    app = _marimo_app(studio.notebook, programmatic=True)
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        workspace = client.get("/studio/")
+        editor = client.get(_studio_bootstrap(workspace.text)["urls"]["editor"])
+
+    expected = (
+        "frame-ancestors 'self' http://localhost:55021 https://notebooks.example.com"
+    )
+    assert workspace.headers["content-security-policy"] == expected
+    assert editor.headers["content-security-policy"] == expected
+
+
 def test_direct_native_editor_enables_cell_alias_sync(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,

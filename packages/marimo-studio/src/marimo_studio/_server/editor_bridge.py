@@ -21,7 +21,7 @@ from marimo_studio._delivery.urls import (
     STUDIO_CLIENT_QUERY_PARAM,
 )
 from marimo_studio._server.auth import has_edit_access
-from marimo_studio._server.headers import FRAME_ANCESTORS_SELF, NO_STORE
+from marimo_studio._server.headers import NO_STORE, frame_ancestors_policy
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
 from marimo_studio._server.ports import (
     DocumentTransactionEvidence,
@@ -42,6 +42,7 @@ from marimo_studio._server.request_body import (
     read_bounded_body,
 )
 from marimo_studio._server.routing import native_editor_target
+from marimo_studio._server.security import DEFAULT_SECURITY_POLICY, SecurityPolicy
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.studio.editor_capability import (
     editor_binding_capability_matches,
@@ -78,6 +79,7 @@ async def delegate_editor_request(
     document_transactions: DocumentTransactionEvidence,
     relative: str,
     mode: str,
+    security_policy: SecurityPolicy = DEFAULT_SECURITY_POLICY,
 ) -> bool:
     """Delegate one editor or code-mode request and report whether it matched."""
     editor_target = native_editor_target(relative)
@@ -184,7 +186,7 @@ async def delegate_editor_request(
                     location.notebook,
                 )
         delegated_send = (
-            _editor_document_send(send)
+            _editor_document_send(send, security_policy)
             if scope["type"] == "http" and editor_root
             else send
         )
@@ -273,11 +275,16 @@ async def delegate_editor_request(
     return False
 
 
-def _editor_document_send(send: Send) -> Send:
+def _editor_document_send(
+    send: Send,
+    security_policy: SecurityPolicy = DEFAULT_SECURITY_POLICY,
+) -> Send:
+    content_security_policy = frame_ancestors_policy(security_policy).encode()
+
     async def protected_send(message: Message) -> None:
         if message["type"] == "http.response.start":
             headers = list(message.get("headers", ()))
-            headers.append((b"content-security-policy", FRAME_ANCESTORS_SELF.encode()))
+            headers.append((b"content-security-policy", content_security_policy))
             message = {**message, "headers": headers}
         await send(message)
 

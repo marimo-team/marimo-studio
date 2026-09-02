@@ -13,6 +13,7 @@ setup is closed before the original startup failure returns to its owner.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,11 @@ from marimo_studio._server.ports import (
     ASGIMiddlewareFactory,
     CloseHandle,
     ServerAdapters,
+)
+from marimo_studio._server.security import (
+    ALLOWED_EMBED_ORIGINS_ENV,
+    SecurityPolicy,
+    parse_allowed_embed_origins,
 )
 
 
@@ -144,6 +150,11 @@ def create_server_adapters() -> ServerAdapters:
     )
 
 
+def create_security_policy() -> SecurityPolicy:
+    """Load the process security policy for one server composition."""
+    return parse_allowed_embed_origins(os.environ.get(ALLOWED_EMBED_ORIGINS_ENV, ""))
+
+
 def install_presentation_authorization() -> CloseHandle:
     """Install the process-wide Marimo presentation authorization adapter."""
     validate_marimo_release()
@@ -207,12 +218,17 @@ def create_export_adapters() -> ExportAdapters:
 
 def programmatic_middleware(
     notebook: Path,
+    security_policy: SecurityPolicy | None = None,
 ) -> ASGIMiddlewareFactory:
     """Construct the Marimo middleware for one programmatic notebook."""
     validate_marimo_release()
     from marimo_studio._compat.server.programmatic import programmatic_middleware
 
-    return programmatic_middleware(notebook, create_server_adapters)
+    return programmatic_middleware(
+        notebook,
+        create_server_adapters,
+        security_policy if security_policy is not None else create_security_policy(),
+    )
 
 
 def own_programmatic_lifespans(app: Any) -> Any:

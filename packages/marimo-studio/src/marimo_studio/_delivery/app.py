@@ -8,6 +8,7 @@ from typing import cast
 import marimo
 
 from marimo_studio._composition import (
+    create_security_policy,
     own_programmatic_lifespans,
     programmatic_middleware,
 )
@@ -17,6 +18,7 @@ from marimo_studio._workspace.config import load_studio_definition
 
 def create_asgi_app(notebook: str | Path) -> ASGIApp:
     """Build a run-mode Marimo app for one configured notebook."""
+    security_policy = create_security_policy()
     definition = load_studio_definition(notebook)
     app = cast(
         ASGIApp,
@@ -27,7 +29,7 @@ def create_asgi_app(notebook: str | Path) -> ASGIApp:
         .with_app(
             path="/",
             root=str(definition.notebook),
-            middleware=[programmatic_middleware(definition.notebook)],
+            middleware=[programmatic_middleware(definition.notebook, security_policy)],
         )
         .build(),
     )
