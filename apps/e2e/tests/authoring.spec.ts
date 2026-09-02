@@ -13,11 +13,7 @@ import {
   studioClientId,
 } from "./authoring-test-support.ts";
 import {
-  activateWorkspaceView,
-  addWorkspaceView,
-  bindWorkspaceCell,
   captureProjectionRefresh,
-  checkWorkspace,
   dashboardCssPath,
   dashboardHtmlPath,
   editorFrame,
@@ -42,8 +38,9 @@ import {
 test("reuses a warm view artifact with current notebook changes", async ({
   browserDiagnostics,
   page,
+  studioCli,
 }) => {
-  await addWorkspaceView(workspaceNotebookPath, "qa-view");
+  await studioCli.addWorkspaceView(workspaceNotebookPath, "qa-view");
   const qaSourcePath = workspaceCreatedViewHtmlPath("qa-view");
   const qaSource = await readWorkspaceFile(qaSourcePath);
   await writeWorkspaceFile(
@@ -173,9 +170,10 @@ test("keeps browser and disk source edits in sync", async ({ browserDiagnostics,
 test("keeps configured aliases attached to edited notebook cells", async ({
   browserDiagnostics,
   page,
+  studioCli,
 }) => {
   const supersededRenewal = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
-  await bindWorkspaceCell("range-control", 1);
+  await studioCli.bindWorkspaceCell("range-control", 1);
   const source = await readWorkspaceFile(dashboardHtmlPath);
   await writeWorkspaceFile(
     dashboardHtmlPath,
@@ -224,7 +222,7 @@ mo.vstack([scale, fail_outputs])`);
   await expect(preview.locator('[mo-value="metric"]')).toHaveText("42");
   await expect(preview.locator("#rich-summary-output h3")).toHaveText("Current total: 42");
   await recoverProjectionRefresh(aliasRefresh, page);
-  expect(await checkWorkspace()).toBe(true);
+  expect(await studioCli.checkWorkspace()).toBe(true);
   supersededRenewal.recovered();
   replacedWorkspaceStream.recovered();
 });
@@ -466,8 +464,9 @@ test("keeps Source tabs and the editor reachable at narrow widths", async ({ pag
 test("shows an agent-requested page and records its rendered revision", async ({
   browserDiagnostics,
   page,
+  studioCli,
 }) => {
-  await addWorkspaceView(workspaceNotebookPath, "qa-view");
+  await studioCli.addWorkspaceView(workspaceNotebookPath, "qa-view");
   const sessionRequest = page.waitForRequest(
     (request) =>
       new URL(request.url()).pathname.endsWith("/_marimo-studio/editor/api/usage") &&
@@ -486,7 +485,7 @@ test("shows an agent-requested page and records its rendered revision", async ({
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
     1,
   );
-  const activated = await activateWorkspaceView("qa-view", clientId);
+  const activated = await studioCli.activateWorkspaceView("qa-view", clientId);
   expect(activated).toMatchObject({
     client_id: clientId,
     generation: expect.any(Number),
@@ -558,6 +557,7 @@ test("shows an agent-requested page and records its rendered revision", async ({
 test("keeps a slow activation open until the selected view is acknowledged", async ({
   browserDiagnostics,
   page,
+  studioCli,
 }) => {
   test.setTimeout(60_000);
   const replacedEventStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
@@ -570,7 +570,7 @@ test("keeps a slow activation open until the selected view is acknowledged", asy
     path: /^\/_marimo-studio\/activations\/\d+\/ack$/,
     count: 1,
   });
-  await addWorkspaceView(workspaceNotebookPath, "slow-activation");
+  await studioCli.addWorkspaceView(workspaceNotebookPath, "slow-activation");
   let releaseAcknowledgement = () => {};
   let retryStarted = () => {};
   const release = new Promise<void>((resolveRelease) => {
@@ -592,7 +592,7 @@ test("keeps a slow activation open until the selected view is acknowledged", asy
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
   const clientId = await studioClientId(page);
-  const activation = activateWorkspaceView("slow-activation", clientId);
+  const activation = studioCli.activateWorkspaceView("slow-activation", clientId);
   let activationSettled = false;
   void activation.then(
     () => {

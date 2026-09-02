@@ -9,8 +9,6 @@ import {
   studioEditorSessionId,
 } from "./authoring-test-support.ts";
 import {
-  addWorkspaceView,
-  buildWorkspaceView,
   dashboardHtmlPath,
   editorFrame,
   expect,
@@ -218,12 +216,25 @@ test("loads a native module graph from a directory view", async ({ browserDiagno
 test("publishes visible edits from each built-in source model", async ({
   browserDiagnostics,
   page,
+  studioCli,
 }) => {
   test.setTimeout(600_000);
-  await addWorkspaceView(workspaceNotebookPath, "html-view", "marimo-studio/vanilla:default");
-  await addWorkspaceView(workspaceNotebookPath, "react-view", "marimo-studio/react:default");
-  await addWorkspaceView(workspaceNotebookPath, "svelte-view", "marimo-studio/svelte:default");
-  await buildWorkspaceView("html-view");
+  await studioCli.addWorkspaceView(
+    workspaceNotebookPath,
+    "html-view",
+    "marimo-studio/vanilla:default",
+  );
+  await studioCli.addWorkspaceView(
+    workspaceNotebookPath,
+    "react-view",
+    "marimo-studio/react:default",
+  );
+  await studioCli.addWorkspaceView(
+    workspaceNotebookPath,
+    "svelte-view",
+    "marimo-studio/svelte:default",
+  );
+  await studioCli.buildWorkspaceView("html-view");
 
   const completedSourceWrites = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin,

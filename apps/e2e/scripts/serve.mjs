@@ -9,6 +9,7 @@ import {
   stopRegisteredNotebookProcesses,
 } from "./notebook-process-registry.mjs";
 import {
+  appDirectory,
   configDirectory,
   fixtureDirectory,
   hostedFixtureDirectory,
@@ -23,8 +24,17 @@ import { PreparationProcessOwner } from "./preparation-process.mjs";
 import { captureProcessOutput, stopNotebookProcess, waitForServer } from "./server-process.mjs";
 
 const outputs = new WeakMap();
-const startServer = (args, environment = {}) => {
-  const child = spawn("uv", ["run", "--frozen", "--group", "e2e", "marimo", "edit", ...args], {
+const startServer = (args, environment = {}, portOffset) => {
+  const marimoCommand =
+    portOffset === undefined
+      ? ["marimo", "edit"]
+      : [
+          "python",
+          resolve(appDirectory, "scripts/_compat/marimo_edit.py"),
+          "--port-offset",
+          String(portOffset),
+        ];
+  const child = spawn("uv", ["run", "--frozen", "--group", "e2e", ...marimoCommand, ...args], {
     cwd: repositoryDirectory,
     detached: process.platform !== "win32",
     env: {
@@ -244,6 +254,7 @@ try {
       {
         MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS: `http://localhost:${e2eNetwork.main.exported.port}`,
       },
+      e2eNetwork.portOffset,
     ),
   );
   await Promise.all(closures);
