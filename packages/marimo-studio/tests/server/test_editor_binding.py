@@ -152,6 +152,42 @@ def test_editor_client_keeps_one_server_assigned_session() -> None:
     asyncio.run(exercise())
 
 
+def test_host_transfer_reserves_then_discards_the_outgoing_binding() -> None:
+    async def exercise() -> None:
+        clients = StudioClientRegistry()
+        lease = await clients.bind_session(_SESSION_ID, _CLIENT_ID)
+        assert lease is not None
+        assert clients.accept_session_binding(lease, object()) is not None
+
+        suspended = await clients.suspend_session_for_host(_SESSION_ID)
+        assert suspended is not None
+        assert await clients.bind_session(_SESSION_ID, _CLIENT_ID) is None
+        assert await clients.bind_session(_SESSION_ID, "replacement-client") is None
+        assert clients.commit_session_to_host(suspended)
+        assert await clients.bind_session(_SESSION_ID, "replacement-client") is not None
+        await clients.close()
+
+    asyncio.run(exercise())
+
+
+def test_rejected_host_admission_restores_the_outgoing_editor_client() -> None:
+    async def exercise() -> None:
+        clients = StudioClientRegistry()
+        claim = object()
+        lease = await clients.bind_session(_SESSION_ID, _CLIENT_ID)
+        assert lease is not None
+        assert clients.accept_session_binding(lease, claim) is not None
+
+        suspended = await clients.suspend_session_for_host(_SESSION_ID)
+        assert suspended is not None
+        assert clients.restore_session_after_host_failure(suspended)
+        restored = await clients.binding_for_session(_SESSION_ID)
+        assert restored is not None and restored.client_id == _CLIENT_ID
+        await clients.close()
+
+    asyncio.run(exercise())
+
+
 def test_connector_preclaim_rejects_and_releases_the_editor_binding() -> None:
     async def exercise() -> None:
         clients = StudioClientRegistry()

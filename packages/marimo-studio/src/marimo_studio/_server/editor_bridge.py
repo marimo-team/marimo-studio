@@ -385,7 +385,7 @@ async def _bind_editor_session(
         mode="current" if owner.state == "current" else "fresh",
         notebook=str(context.notebook),
         runtime_session_id=session_id,
-        binding_current=lambda: lease_holder[0].current,
+        binding_current=lambda: lease_holder[0].phase == "active",
         on_accept=accept_binding,
         on_reject=reject_binding,
         on_close=close_binding,

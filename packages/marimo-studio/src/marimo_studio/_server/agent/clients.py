@@ -221,7 +221,7 @@ class StudioClientRegistry:
             await self._condition.wait_for(
                 lambda: (
                     self._closed
-                    or not lease.current
+                    or lease.phase != "active"
                     or not self._query_mutations.active(lease)
                 )
             )
@@ -314,6 +314,51 @@ class StudioClientRegistry:
     async def binding_for_session(self, session_id: str) -> ClientBinding | None:
         async with self._condition:
             return self._bindings.for_session(session_id)
+
+    async def owns_session(self, session_id: str) -> bool:
+        """Return whether an active or suspended binding owns the session ID."""
+        async with self._condition:
+            return session_id in self._session_clients
+
+    async def suspend_session_for_host(
+        self,
+        session_id: str,
+    ) -> SessionBindingLease | None:
+        """Suspend a Studio binding while the native host resumes its session."""
+        async with self._condition:
+            client_id = self._session_clients.get(session_id)
+            client = self._clients.get(client_id) if client_id is not None else None
+            lease = client.binding_lease if client is not None else None
+            if lease is None or not self._bindings.current(lease):
+                return None
+            await self._condition.wait_for(
+                lambda: self._closed or not self._query_mutations.active(lease)
+            )
+            if self._closed or not self._bindings.current(lease):
+                return None
+            changed = self._bindings.suspend(lease)
+            if changed:
+                self._condition.notify_all()
+        if changed:
+            self._publish()
+        return lease if changed else None
+
+    def restore_session_after_host_failure(self, lease: SessionBindingLease) -> bool:
+        """Restore the suspended Studio binding after rejected native admission."""
+        if self._closed or not self._bindings.restore(lease):
+            return False
+        self._publish()
+        self._schedule_notify()
+        return True
+
+    def commit_session_to_host(self, lease: SessionBindingLease) -> bool:
+        """Discard the outgoing Studio client after native admission succeeds."""
+        if self._closed or not self._bindings.suspended(lease):
+            return False
+        self._discard_locked(lease.client_id)
+        self._publish()
+        self._schedule_notify()
+        return True
 
     async def binding_for_client(self, client_id: str) -> ClientBinding | None:
         async with self._condition:

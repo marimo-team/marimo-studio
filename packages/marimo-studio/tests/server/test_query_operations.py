@@ -225,7 +225,7 @@ def test_native_session_close_releases_its_deferred_query_owner() -> None:
         await closed
 
         assert terminal.cancelled()
-        assert not binding.current
+        assert binding.phase == "retired"
         assert await clients.binding_for_client(client_id) is None
         await clients.close()
 
@@ -282,7 +282,7 @@ def test_stale_native_close_releases_only_its_binding_incarnation() -> None:
         assert first_deferred.done()
         assert not second_terminal.done()
         assert not second_deferred.done()
-        assert second.current
+        assert second.phase == "active"
         assert await clients.session_for_client(client_id) == session_id
 
         second_closed = clients.native_session_closed(second)

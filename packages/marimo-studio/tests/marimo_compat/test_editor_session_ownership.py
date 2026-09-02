@@ -439,7 +439,7 @@ def test_native_connector_rejects_a_lost_lifetime_owner() -> None:
             mode="fresh",
             notebook="notebook.py",
             runtime_session_id="s_target",
-            binding_current=lambda: lease.current,
+            binding_current=lambda: lease.phase == "active",
             on_reject=reject_binding,
             on_close=lambda: None,
             lifetime_owner=object(),
