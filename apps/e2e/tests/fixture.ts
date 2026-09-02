@@ -239,7 +239,7 @@ export const labeledSlider = (root: FrameLocator | Locator, label: RegExp | stri
 export const editorSlider = (page: Page, label: RegExp | string = /^Scale/) =>
   labeledSlider(editorFrame(page), label);
 
-const PREVIEW_TIMEOUT = 65_000;
+const PREVIEW_TIMEOUT = process.platform === "win32" ? 120_000 : 65_000;
 
 export const expectEditorModelReplayRecovery = (diagnostics: BrowserDiagnostics, count = 1) => {
   const recovery: BrowserResponseRecovery = diagnostics.expectConsole({

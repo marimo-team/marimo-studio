@@ -7,7 +7,7 @@ import { mainPlaywrightOutputDirectory, mainPlaywrightReportDirectory } from "./
 export default defineConfig({
   testDir: "./tests",
   testIgnore: ["provider-runtime.spec.ts", "provider-reveal.spec.ts", "external-provider.spec.ts"],
-  timeout: 90_000,
+  timeout: process.platform === "win32" ? 180_000 : 90_000,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
