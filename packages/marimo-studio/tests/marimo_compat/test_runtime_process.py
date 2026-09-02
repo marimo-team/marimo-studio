@@ -165,6 +165,54 @@ def test_isolated_runtime_reports_cleanup_failures(
     assert "cleanup failed" in checks[0].message
 
 
+@pytest.mark.parametrize(
+    ("response", "message"),
+    (
+        (None, "response is unavailable"),
+        (b"{", "returned invalid JSON"),
+        (b"x" * 2_000_001, "response is unavailable"),
+    ),
+    ids=("missing", "malformed", "oversized"),
+)
+def test_isolated_runtime_rejects_invalid_process_responses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    response: bytes | None,
+    message: str,
+) -> None:
+    captured_paths: tuple[Path, Path] | None = None
+
+    class Supervisor:
+        def run(self, command, _timeout):
+            nonlocal captured_paths
+            captured_paths = (Path(command[-2]), Path(command[-1]))
+            if response is not None:
+                captured_paths[1].write_bytes(response)
+            return SimpleNamespace(
+                timed_out=False,
+                output_too_large=False,
+                returncode=0,
+                stdout=b"",
+                stderr=b"",
+            )
+
+        def cancel(self) -> None:
+            return
+
+    monkeypatch.setattr(async_command, "ProcessSupervisor", Supervisor)
+    studio = cast(
+        StudioWorkspace,
+        SimpleNamespace(notebook=tmp_path / "analysis.py"),
+    )
+
+    checks = asyncio.run(runtime_process.check_runtime_studio_isolated(studio))
+
+    assert checks[0].status == "fail"
+    assert message in checks[0].message
+    assert captured_paths is not None
+    assert all(not path.exists() for path in captured_paths)
+
+
 def test_repeatedly_cancelled_runtime_waits_for_process_cleanup(
     tmp_path,
     monkeypatch,
@@ -173,9 +221,12 @@ def test_repeatedly_cancelled_runtime_waits_for_process_cleanup(
     cancelled = threading.Event()
     release = threading.Event()
     finished = threading.Event()
+    captured_paths: tuple[Path, Path] | None = None
 
     class Supervisor:
         def run(self, _command, _timeout):
+            nonlocal captured_paths
+            captured_paths = (Path(_command[-2]), Path(_command[-1]))
             started.set()
             try:
                 assert cancelled.wait(timeout=2)
@@ -219,6 +270,8 @@ def test_repeatedly_cancelled_runtime_waits_for_process_cleanup(
         asyncio.run(exercise())
     finally:
         release.set()
+    assert captured_paths is not None
+    assert all(not path.exists() for path in captured_paths)
 
 
 def test_cancelled_runtime_surfaces_process_cleanup_failure(

@@ -6,12 +6,11 @@ import asyncio
 import json
 import os
 import sys
-import tempfile
 from functools import partial
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from marimo_studio._processes.async_command import run_supervised_command
+from marimo_studio._processes.isolated_module import run_isolated_module_request
 from marimo_studio._processes.limits import (
     DEFAULT_RUNTIME_TIMEOUT,
     runtime_process_timeout,
@@ -23,7 +22,6 @@ from marimo_studio._processes.provider_operation import (
 )
 from marimo_studio._processes.response_file import (
     ProcessResponseError,
-    read_process_response,
     write_process_response,
 )
 from marimo_studio._processes.supervisor import (
@@ -174,28 +172,13 @@ async def _run_runtime_worker(
     request: bytes,
     timeout: float,
 ) -> tuple[ProcessResult, bytes]:
-    with tempfile.TemporaryDirectory(prefix="marimo-studio-validation-") as root:
-        request_path = Path(root) / "request.json"
-        response_path = Path(root) / "response.json"
-        request_path.write_bytes(request)
-        result = await run_supervised_command(
-            [
-                sys.executable,
-                "-m",
-                "marimo_studio._validation.runtime_process",
-                str(request_path),
-                str(response_path),
-            ],
-            timeout,
-        )
-        response = (
-            read_process_response(response_path)
-            if not result.timed_out
-            and not result.output_too_large
-            and result.returncode == 0
-            else b""
-        )
-    return result, response
+    outcome = await run_isolated_module_request(
+        "marimo_studio._validation.runtime_process",
+        request,
+        timeout,
+        prefix="marimo-studio-validation-",
+    )
+    return outcome.process, outcome.response or b""
 
 
 def _process_failure(
