@@ -135,6 +135,54 @@ describe("feature controller lifecycle", () => {
     controller.dispose();
   });
 
+  it("keeps coalesced invalidation callers pending through the successor read", async () => {
+    const stale = deferred<Awaited<ReturnType<ViewRemote["list"]>>>();
+    const fresh = deferred<Awaited<ReturnType<ViewRemote["list"]>>>();
+    const remote: ViewRemote = {
+      list: vi
+        .fn()
+        .mockImplementationOnce(() => stale.promise)
+        .mockImplementationOnce(() => fresh.promise),
+      create: vi.fn(),
+      remove: vi.fn(),
+    };
+    const controller = new ViewController(
+      "dashboard",
+      ["dashboard"],
+      remote,
+      vi.fn(async () => true),
+      vi.fn(async () => true),
+      vi.fn(),
+    );
+
+    const initialRefresh = controller.refreshInventory();
+    await vi.waitFor(() => expect(remote.list).toHaveBeenCalledOnce());
+    const catalogRefresh = controller.refreshInventory();
+    const repeatedCatalogRefresh = controller.refreshInventory();
+    let catalogRefreshSettled = false;
+    let repeatedCatalogRefreshSettled = false;
+    void catalogRefresh.then(() => {
+      catalogRefreshSettled = true;
+    });
+    void repeatedCatalogRefresh.then(() => {
+      repeatedCatalogRefreshSettled = true;
+    });
+    stale.resolve(viewList(["dashboard"]));
+
+    await initialRefresh;
+    await vi.waitFor(() => expect(remote.list).toHaveBeenCalledTimes(2));
+    await Promise.resolve();
+    expect(catalogRefreshSettled).toBe(false);
+    expect(repeatedCatalogRefreshSettled).toBe(false);
+
+    fresh.resolve(viewList(["dashboard", "report"]));
+    await Promise.all([catalogRefresh, repeatedCatalogRefresh]);
+
+    expect(remote.list).toHaveBeenCalledTimes(2);
+    expect(controller.getSnapshot().views).toEqual(["dashboard", "report"]);
+    controller.dispose();
+  });
+
   it("keeps shared inventory alive when its first caller is superseded", async () => {
     const listing = deferred<Awaited<ReturnType<ViewRemote["list"]>>>();
     const remote: ViewRemote = {

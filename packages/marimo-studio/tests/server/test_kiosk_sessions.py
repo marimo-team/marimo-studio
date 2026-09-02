@@ -452,6 +452,20 @@ def test_fresh_unclaimed_routes_hold_capacity() -> None:
         handle.close()
 
 
+def test_unclaimed_routes_cover_the_browser_connection_window() -> None:
+    now = 0.0
+    manager = _Manager()
+    target = _Session()
+    manager.sessions["s_target"] = target
+    adapter, handle = _open(manager, clock=lambda: now)
+    try:
+        assert adapter.attach(_context(manager), "s_view01", "s_target")
+        now = 30.0
+        assert _connect(manager, "s_view01") == (target, ConnectionType.KIOSK)
+    finally:
+        handle.close()
+
+
 def test_expired_unclaimed_routes_release_capacity() -> None:
     now = 0.0
     manager = _Manager()

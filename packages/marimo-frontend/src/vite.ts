@@ -99,6 +99,19 @@ export const silenceMissingPresentationCellScroll = (source: string): string => 
   );
 };
 
+// Studio keeps each unclaimed preview route for 60 seconds, so one slow local
+// handshake can use 30 seconds and still leave time for reconnect scheduling.
+const marimoWebSocketConnectionTimeout = "      connectionTimeout: 10_000,";
+const studioWebSocketConnectionTimeout = "      connectionTimeout: 30_000,";
+
+export const extendWebSocketConnectionTimeout = (source: string): string => {
+  const normalized = normalizeLineEndings(source);
+  if (!normalized.includes(marimoWebSocketConnectionTimeout)) {
+    throw new Error("Marimo WebSocket connection timeout no longer matches the Studio adapter");
+  }
+  return normalized.replace(marimoWebSocketConnectionTimeout, studioWebSocketConnectionTimeout);
+};
+
 const evergreenKaTeXFonts = (): Plugin => ({
   name: "marimo-studio-evergreen-katex-fonts",
   enforce: "pre",
@@ -148,6 +161,17 @@ const quietPresentationCellScroll = (): Plugin => ({
   },
 });
 
+const studioWebSocketConnectionWindow = (): Plugin => ({
+  name: "marimo-studio-websocket-connection-window",
+  enforce: "pre",
+  transform(source, id) {
+    const path = id.split("?", 1)[0]?.replaceAll("\\", "/");
+    if (path?.endsWith("/core/websocket/transports/ws.ts")) {
+      return { code: extendWebSocketConnectionTimeout(source), map: null };
+    }
+  },
+});
+
 const opaqueFrameLogger = (frontend: string, logger: string): Plugin => ({
   name: "marimo-studio-opaque-frame-logger",
   enforce: "pre",
@@ -176,6 +200,7 @@ export const createMarimoViteIntegration = () => {
       evergreenKaTeXFonts(),
       stableDataTableHeaderRefs(),
       quietPresentationCellScroll(),
+      studioWebSocketConnectionWindow(),
       ...wasmWorkers.plugins,
     ],
     workerPlugins: wasmWorkers.workerPlugins,

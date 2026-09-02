@@ -42,12 +42,18 @@ interface InventoryRequest {
   readonly promise: Promise<ViewList | undefined>;
 }
 
+interface QueuedInventoryRefresh {
+  readonly afterGeneration: number;
+  readonly promise: Promise<void>;
+}
+
 export class ViewController {
   private readonly listeners = new Set<Listener>();
   private snapshot: ViewSnapshot;
   private refreshGeneration = 0;
   private mutationGeneration = 0;
   private inventoryRequest: InventoryRequest | undefined;
+  private queuedInventoryRefresh: QueuedInventoryRefresh | undefined;
   private disposed = false;
 
   constructor(
@@ -421,6 +427,7 @@ export class ViewController {
     this.disposed = true;
     this.refreshGeneration += 1;
     this.mutationGeneration += 1;
+    this.queuedInventoryRefresh = undefined;
     this.cancelSelection();
     this.listeners.clear();
   }
@@ -439,6 +446,35 @@ export class ViewController {
       return;
     }
     if (this.snapshot.creating || this.snapshot.deleting) {
+      return;
+    }
+    const current = this.inventoryRequest;
+    if (current?.generation === this.refreshGeneration) {
+      const queued = this.queuedInventoryRefresh;
+      if (queued?.afterGeneration === current.generation) {
+        await queued.promise;
+        return;
+      }
+      const promise = (async () => {
+        await current.promise;
+        if (
+          this.disposed ||
+          this.snapshot.creating ||
+          this.snapshot.deleting ||
+          current.generation !== this.refreshGeneration
+        ) {
+          return;
+        }
+        await this.loadInventory();
+      })();
+      const refresh = { afterGeneration: current.generation, promise };
+      this.queuedInventoryRefresh = refresh;
+      void promise.finally(() => {
+        if (this.queuedInventoryRefresh === refresh) {
+          this.queuedInventoryRefresh = undefined;
+        }
+      });
+      await promise;
       return;
     }
     await this.loadInventory();
@@ -470,6 +506,7 @@ export class ViewController {
     this.cancelSelection();
     const generation = ++this.mutationGeneration;
     this.refreshGeneration += 1;
+    this.queuedInventoryRefresh = undefined;
     this.update({ selecting: undefined, ...next });
     return generation;
   }

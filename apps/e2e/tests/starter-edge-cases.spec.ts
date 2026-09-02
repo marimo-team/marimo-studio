@@ -16,6 +16,7 @@ import {
   noDisplayStaticExportUrl,
   recoverRequestAbort,
   recoverProjectionRefresh,
+  recoverWorkspaceEventStream,
   retireWorkspacePage,
   studioOrigin,
   test,
@@ -174,7 +175,7 @@ test("keeps the active preview usable after a manifestless creation conflict", a
     labeledSlider(recovered.locator('marimo-cell[name="controls"]'), /^Scale/),
   ).toBeVisible();
   await recoverRequestAbort(abandonedHandoff);
-  replacedWorkspaceStream.recovered();
+  await recoverWorkspaceEventStream(replacedWorkspaceStream);
   await retireWorkspacePage(page, browserDiagnostics);
   supersededPresentation.recovered();
 });

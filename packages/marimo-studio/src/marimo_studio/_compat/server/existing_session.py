@@ -53,7 +53,9 @@ from marimo_studio._server.records import ServerContext
 from marimo_studio._server.server_instance import server_instance_id
 
 _MAX_ROUTES = 100
-_PREVIEW_CONNECT_GRACE = 30.0
+# The browser permits a 30-second initial handshake. Retain its route across
+# that attempt and the reconnect scheduling that follows a transport timeout.
+_PREVIEW_CONNECT_GRACE = 60.0
 
 
 class _StudioSessionRejected(WebSocketDisconnect):

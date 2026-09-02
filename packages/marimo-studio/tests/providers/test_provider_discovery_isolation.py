@@ -83,9 +83,9 @@ def test_provider_python_work_does_not_consume_the_command_budget(
 ) -> None:
     monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
     installed = _registry("delayed", "delayed_provider").get("test-process/delayed")
-    project = _project(tmp_path, installed.key, delay=0.3, command=0.2)
+    project = _project(tmp_path, installed.key, delay=2.1, command=0.0)
 
-    result = installed.inspect(inspection_request(project, command_timeout=0.4))
+    result = installed.inspect(inspection_request(project, command_timeout=2.0))
 
     assert result.build_fingerprint == inspection().build_fingerprint
 
