@@ -1,0 +1,19 @@
+apps/e2e/tests/starter-edge-cases.spec.ts
+  s_af5d583a28e9c5::t_6da7e5a5dcdc07 212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "03e73b9feeb4b732948723fa09d43b2c551d00ff",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
