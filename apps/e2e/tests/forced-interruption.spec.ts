@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { z } from "zod";
@@ -12,6 +11,7 @@ import { readStudioBootstrap } from "./authoring-test-support.ts";
 import { waitForViewPreview } from "./fixture.ts";
 import {
   type NotebookServer,
+  availablePort,
   closeFailedNotebookServer,
   startNotebookServer,
   stopNotebookServer,
@@ -30,19 +30,6 @@ const inventorySchema = z.object({ files: z.array(z.object({ sessionId: z.string
 const MULTI_SESSION_SHUTDOWN_TIMEOUT = 15_000;
 const MULTI_SESSION_PREVIEW_TIMEOUT = process.platform === "win32" ? 180_000 : 65_000;
 const MULTI_SESSION_TEST_TIMEOUT = process.platform === "win32" ? 300_000 : 150_000;
-
-const availablePort = async (): Promise<number> => {
-  const server = createServer();
-  await new Promise<void>((resolveListen, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolveListen);
-  });
-  const address = z.object({ port: z.number().int().positive() }).parse(server.address());
-  await new Promise<void>((resolveClose, reject) => {
-    server.close((error) => (error === undefined ? resolveClose() : reject(error)));
-  });
-  return address.port;
-};
 
 const serverIsReachable = async (port: number): Promise<boolean> => {
   try {

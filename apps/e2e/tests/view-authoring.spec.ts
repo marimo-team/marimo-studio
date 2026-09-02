@@ -1,10 +1,9 @@
-import type { Page } from "@playwright/test";
-
 import { viewListSchema } from "@marimo-studio/protocol/views";
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import {
+  executeCodeMode,
   saveShortcut,
   selectAllShortcut,
   studioEditorSessionId,
@@ -34,33 +33,6 @@ import {
   writeDashboardSource,
   writeViewSource,
 } from "./fixture.ts";
-
-const executeCodeMode = async (
-  page: Page,
-  file: string,
-  sessionId: string,
-  code: string,
-): Promise<void> => {
-  const result = await editorFrame(page)
-    .locator("html")
-    .evaluate(
-      async (_, request) => {
-        const query = new URLSearchParams({ file: request.file });
-        const response = await fetch(`/_marimo-studio/editor/api/kernel/execute?${query}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Marimo-Session-Id": request.sessionId,
-          },
-          body: JSON.stringify({ code: request.code }),
-        });
-        return { ok: response.ok, text: await response.text() };
-      },
-      { code, file, sessionId },
-    );
-  expect(result.ok).toBe(true);
-  expect(result.text).toContain('"success": true');
-};
 
 test("routes directory notebooks by Studio configuration", async ({ browserDiagnostics, page }) => {
   const directoryLandingFilenameFallback = browserDiagnostics.expectConsole({
@@ -117,7 +89,7 @@ test("activates Studio after the first view is created", async ({ browserDiagnos
   await editorFrame(page).locator(".cm-content").first().focus();
 
   await executeCodeMode(
-    page,
+    editorFrame(page),
     "plain.py",
     sessionId,
     `
@@ -203,7 +175,7 @@ test("opens Studio from the first save with the native session", async ({
     1,
   );
   await executeCodeMode(
-    page,
+    editorFrame(page),
     "first-save.py",
     sessionId,
     `

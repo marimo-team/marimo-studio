@@ -1,6 +1,7 @@
 import type { ChildProcess } from "node:child_process";
+import type { AddressInfo } from "node:net";
 
-import { connect } from "node:net";
+import { connect, createServer } from "node:net";
 
 import { unregisterNotebookProcess } from "../scripts/notebook-process-registry.mjs";
 import {
@@ -44,6 +45,23 @@ export interface NotebookServer {
   authToken: string | undefined;
   output(): string;
 }
+
+export const availablePort = async (): Promise<number> => {
+  const server = createServer();
+  await new Promise<void>((resolveListen, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolveListen);
+  });
+  // SAFETY: Listening with a TCP host and port makes Node return AddressInfo.
+  const address = server.address() as AddressInfo | null;
+  if (address === null) {
+    throw new Error("TCP listener did not expose its assigned port");
+  }
+  await new Promise<void>((resolveClose, reject) => {
+    server.close((error) => (error === undefined ? resolveClose() : reject(error)));
+  });
+  return address.port;
+};
 
 export const startNotebookServer = ({
   command,
