@@ -124,19 +124,25 @@ test("source metadata validates the prepared checkout contract", () => {
   expect(() => decodeMarimoSource("invalid")).toThrow();
 });
 
-test("package preparation enters Corepack through the Windows interpreter", () => {
+test("package preparation invokes the workspace Corepack through Node", () => {
+  const invocation = pnpmInvocation(["install", "--frozen-lockfile"]);
+  expect(invocation.command).toBe(process.execPath);
+  expect(invocation.args[0]).toMatch(/[/\\]corepack[/\\]dist[/\\]corepack\.js$/);
+  expect(invocation.args.slice(1)).toEqual(["pnpm", "install", "--frozen-lockfile"]);
+
   expect(
     pnpmInvocation(["install", "--frozen-lockfile"], {
-      platform: "win32",
-      commandInterpreter: "C:\\Windows\\System32\\cmd.exe",
+      nodeExecutable: "C:\\Program Files\\nodejs\\node.exe",
+      corepackExecutable: "C:\\workspace\\node_modules\\corepack\\dist\\corepack.js",
     }),
   ).toEqual({
-    command: "C:\\Windows\\System32\\cmd.exe",
-    args: ["/d", "/s", "/c", "corepack", "pnpm", "install", "--frozen-lockfile"],
-  });
-  expect(pnpmInvocation(["install", "--frozen-lockfile"], { platform: "linux" })).toEqual({
-    command: "corepack",
-    args: ["pnpm", "install", "--frozen-lockfile"],
+    command: "C:\\Program Files\\nodejs\\node.exe",
+    args: [
+      "C:\\workspace\\node_modules\\corepack\\dist\\corepack.js",
+      "pnpm",
+      "install",
+      "--frozen-lockfile",
+    ],
   });
 });
 
