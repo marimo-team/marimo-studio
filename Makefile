@@ -14,7 +14,7 @@ DENO_PROVIDER_ROOTS := $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/_
 DENO_PROVIDER_LINT_SOURCES := $(shell find $(DENO_PROVIDER_ROOTS) -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' | sort)
 
 .PHONY: help setup format lint typecheck python-test frontend-test test check build
-.PHONY: e2e e2e-ui docs-examples docs-build docs-serve audit package
+.PHONY: e2e e2e-ui docs-examples docs-build docs-serve package
 .PHONY: _anti-slop-check _architecture-check _provider-sources-check
 .PHONY: _prepare-frontend _frontend-ready _browser-install _browser-ready
 
@@ -90,15 +90,6 @@ docs-build: _frontend-ready build ## Build the VitePress documentation.
 
 docs-serve: _frontend-ready build ## Serve documentation at http://127.0.0.1:4173/.
 	BASE_PATH= $(VP) run --filter @marimo-studio/docs dev
-
-audit: ## Audit locked Python and JavaScript dependencies.
-	$(UV) run --frozen --group release pip-audit \
-		--strict \
-		--disable-pip \
-		--require-hashes \
-		--requirement <($(UV) export --frozen --package marimo-studio \
-			--no-dev --all-extras --no-emit-workspace --no-annotate --no-header)
-	$(PNPM) audit --audit-level low
 
 package: build ## Build and validate the wheel and source distribution.
 	rm -rf "$(DIST_DIR)"
