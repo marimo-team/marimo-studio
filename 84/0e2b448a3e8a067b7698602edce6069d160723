@@ -1,0 +1,26 @@
+apps/e2e/tests/view-authoring.spec.ts
+  s_af5d583a28e9c5::t_222606175ffe5d 418,420,650-652,675-677
+apps/e2e/tests/vanilla-local-sources.spec.ts
+  s_af5d583a28e9c5::t_d3e0644788e9da 14
+  s_af5d583a28e9c5::t_222606175ffe5d 4,13,49-50
+apps/e2e/tests/view-cache-performance.spec.ts
+  s_af5d583a28e9c5::t_222606175ffe5d 182,184
+apps/e2e/tests/fixture.ts
+  s_af5d583a28e9c5::t_222606175ffe5d 251,256
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "840e2b448a3e8a067b7698602edce6069d160723",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
