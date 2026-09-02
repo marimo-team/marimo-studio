@@ -689,7 +689,17 @@ def write_source(
     project = _view(studio, view_name)
     inspection = inspect_view_project_sync(project)
     provider = provider_registry().get(project.provider)
-    spec = source_spec(inspection, name, project.name)
+    try:
+        spec = source_spec(inspection, name, project.name)
+    except SourceNotFoundError:
+        with (
+            workspace_catalog_lock(studio.view_root),
+            view_mutation_lock(studio.view_root, project.name),
+        ):
+            studio, project = _current_project(studio, project)
+        inspection = inspect_view_project_sync(project)
+        provider = provider_registry().get(project.provider)
+        spec = source_spec(inspection, name, project.name)
     try:
         snapshot = project_revision_snapshot(
             project,
