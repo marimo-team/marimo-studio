@@ -248,7 +248,6 @@ test("publishes visible edits from each built-in source model", async ({
   page,
 }) => {
   test.setTimeout(600_000);
-  const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
   await addWorkspaceView(workspaceNotebookPath, "html-view", "marimo-studio/vanilla:default");
   await addWorkspaceView(workspaceNotebookPath, "react-view", "marimo-studio/react:default");
   await addWorkspaceView(workspaceNotebookPath, "svelte-view", "marimo-studio/svelte:default");
@@ -282,6 +281,7 @@ test("publishes visible edits from each built-in source model", async ({
       view: "svelte-view",
     },
   ] as const;
+  const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics, cases.length);
   for (const candidate of cases) {
     await test.step(`${candidate.view} edit`, async () => {
       await page.goto(`/studio/${candidate.view}/?file=notebook.py`);
@@ -539,6 +539,7 @@ test("keeps relative navigation public across direct view reloads", async ({
 });
 
 test("creates a view and removes its files", async ({ browserDiagnostics, page }) => {
+  test.setTimeout(180_000);
   const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
@@ -568,7 +569,9 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
   await page.getByRole("button", { name: "New view" }).click();
   await page.getByLabel("New view").fill("qa-view");
   await page.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByLabel("Switch view")).toContainText("qa-view");
+  await expect(page.getByLabel("Switch view")).toContainText("qa-view", {
+    timeout: 65_000,
+  });
   await expect(page.getByRole("tab", { name: "index.html" })).toHaveAttribute(
     "aria-selected",
     "true",

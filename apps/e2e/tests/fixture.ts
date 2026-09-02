@@ -241,10 +241,11 @@ export const editorSlider = (page: Page, label: RegExp | string = /^Scale/) =>
 
 const PREVIEW_TIMEOUT = 65_000;
 
-export const expectEditorModelReplayRecovery = (diagnostics: BrowserDiagnostics) => {
+export const expectEditorModelReplayRecovery = (diagnostics: BrowserDiagnostics, count = 1) => {
   const recovery: BrowserResponseRecovery = diagnostics.expectConsole({
     type: "error",
     text: /^Error: Model not found for key: [a-f\d]{32}\n\s+at http:\/\/127\.0\.0\.1:\d+\/_marimo-studio\/editor\/assets\/state-[^/\s]+\.js:\d+:\d+$/,
+    count,
     required: false,
   });
   return {

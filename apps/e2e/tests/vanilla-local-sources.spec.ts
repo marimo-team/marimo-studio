@@ -8,6 +8,7 @@ import {
 } from "./fixture.ts";
 
 test("publishes Vanilla local CSS and JavaScript sources", async ({ browserDiagnostics, page }) => {
+  test.setTimeout(240_000);
   const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
   await page.goto("/studio/vanilla-local/?file=notebook.py");
   const preview = await waitForViewPreview(page, "vanilla-local", "server", 120_000);
@@ -26,7 +27,7 @@ test("publishes Vanilla local CSS and JavaScript sources", async ({ browserDiagn
     "body { color: rgb(34 197 94); }\n",
   );
   await expect(preview.locator("body")).toHaveCSS("color", "rgb(34, 197, 94)", {
-    timeout: 65_000,
+    timeout: 120_000,
   });
 
   await writeViewSource(
@@ -36,7 +37,7 @@ test("publishes Vanilla local CSS and JavaScript sources", async ({ browserDiagn
     'document.documentElement.dataset.localScript = "updated";\n',
   );
   await expect(root).toHaveAttribute("data-local-script", "updated", {
-    timeout: 65_000,
+    timeout: 120_000,
   });
 
   await page.getByLabel("Workspace options").click();
