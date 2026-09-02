@@ -26,6 +26,7 @@ from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.presentation.session import PresentationSession
 from marimo_studio._server.records import ServerContext, ServerLocation
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
+from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._server.support import support_response
 from marimo_studio._server.workspace_lifecycle import Invalid, NeedsView, Unconfigured
 from marimo_studio.errors import MarimoStudioError
@@ -58,10 +59,12 @@ class LifecycleRouteHandler:
         app: ASGIApp,
         adapters: ServerAdapters,
         runtimes: RuntimeRegistry,
+        security_policy: SecurityPolicy,
     ) -> None:
         self._app = app
         self._adapters = adapters
         self._runtimes = runtimes
+        self._security_policy = security_policy
 
     async def handle(
         self,
@@ -92,6 +95,7 @@ class LifecycleRouteHandler:
                     self._runtimes.options,
                     self._adapters.session_state,
                     route.notebook_scope.session_ids,
+                    self._security_policy,
                 )
             else:
                 response = initialization_response(
@@ -101,6 +105,7 @@ class LifecycleRouteHandler:
                     self._runtimes.configured_options(lifecycle.definition.runtimes),
                     self._adapters.session_state,
                     route.notebook_scope.session_ids,
+                    self._security_policy,
                 )
         elif isinstance(lifecycle, NeedsView):
             response = await self._error_response(route, lifecycle.error)

@@ -121,7 +121,9 @@ Studio window.
 Presentation responses enforce a sandbox content security policy, a null-origin
 CORS audience, no referrer, and explicit exposed headers. Studio documents use
 no-store, `nosniff`, and same-origin referrer policy. The native editor bridge
-adds `frame-ancestors 'self'` to the editor document.
+and outer edit documents use one `SecurityPolicy` for `frame-ancestors`. The
+policy always includes `'self'` and may include canonical origins loaded from
+`MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` during server composition.
 
 ## Session admission
 

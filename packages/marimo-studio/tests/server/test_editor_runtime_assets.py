@@ -26,6 +26,7 @@ from marimo_studio._compat.server.editor_runtime import (
     _serialize_document_transactions,
 )
 from marimo_studio._server.editor_bridge import _editor_document_send
+from marimo_studio._server.security import parse_allowed_embed_origins
 from marimo_studio._views.api import prepare_view
 from marimo_studio.errors import ProtocolError
 
@@ -99,6 +100,37 @@ def test_editor_document_framing_preserves_existing_content_policy() -> None:
                 (b"content-security-policy", b"frame-ancestors 'self'"),
             ],
         }
+    ]
+
+
+def test_editor_document_framing_adds_configured_origins() -> None:
+    sent: list[Message] = []
+
+    async def send(message: Message) -> None:
+        sent.append(message)
+
+    policy = parse_allowed_embed_origins(
+        "http://localhost:55021,https://notebooks.example.com"
+    )
+    protected_send = _editor_document_send(send, policy)
+
+    async def exercise() -> None:
+        await protected_send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [],
+            }
+        )
+
+    asyncio.run(exercise())
+
+    assert sent[0]["headers"] == [
+        (
+            b"content-security-policy",
+            b"frame-ancestors 'self' http://localhost:55021 "
+            b"https://notebooks.example.com",
+        )
     ]
 
 

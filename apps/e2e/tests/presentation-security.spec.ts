@@ -1,3 +1,4 @@
+import { e2eNetwork } from "../scripts/network.mjs";
 import {
   dashboardHtmlPath,
   dashboardManifestPath,
@@ -14,6 +15,48 @@ import {
   writeDashboardSource,
   writeWorkspaceFile,
 } from "./fixture.ts";
+
+test("allows a configured parent origin and blocks an unlisted parent", async ({
+  browserDiagnostics,
+  context,
+  page,
+}) => {
+  const studioUrl = new URL(studioEntryUrl, `http://localhost:${e2eNetwork.main.studio.port}`).href;
+  const target = new URLSearchParams({ target: studioUrl });
+
+  await page.goto(`http://localhost:${e2eNetwork.main.exported.port}/embed-host.html?${target}`);
+  await expect(
+    page.frameLocator('iframe[title="Embedded Studio"]').locator("#marimo-studio-host"),
+  ).toBeAttached();
+  await expect(
+    page
+      .frameLocator('iframe[title="Embedded Studio"]')
+      .frameLocator('iframe[title="Marimo editor"]')
+      .getByRole("button", { name: "Widget count: 7" }),
+  ).toBeVisible();
+
+  const refused = browserDiagnostics.expectConsole({
+    type: "error",
+    text: /Framing .*frame-ancestors/,
+  });
+  const blocked = browserDiagnostics.expectRequestFailure({
+    origin: `http://localhost:${e2eNetwork.main.studio.port}`,
+    path: /^\/studio\/dashboard\/$/,
+    method: "GET",
+    errorText: "net::ERR_BLOCKED_BY_RESPONSE",
+  });
+  const unlisted = await context.newPage();
+  try {
+    await unlisted.goto(`${e2eNetwork.main.exported.origin}/embed-host.html?${target}`);
+    await expect(
+      unlisted.frameLocator('iframe[title="Embedded Studio"]').locator("#marimo-studio-host"),
+    ).not.toBeAttached();
+    refused.recovered();
+    blocked.recovered();
+  } finally {
+    await unlisted.close();
+  }
+});
 
 test("keeps standalone navigation inside server-authored route authority", async ({ page }) => {
   await page.goto(studioEntryUrl);
