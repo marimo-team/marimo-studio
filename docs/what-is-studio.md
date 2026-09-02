@@ -12,9 +12,10 @@ job.
 
 <StudioExample family="occupancy" />
 
-The Building occupancy notebook supports a live monitor and a model review.
-Both views use the same sensor analysis. Each has its own source documents,
-browser dependencies, build, route, and current artifact.
+The Building occupancy notebook supports a live monitor, a model review, and a
+printable field report. All three views use the same sensor analysis. Each has
+its own source documents, browser dependencies, build, route, and current
+artifact.
 
 ## The product model
 
@@ -26,11 +27,11 @@ saved Marimo notebook
   -> Preview with notebook results
 ```
 
-A **view** is the stable name and URL, such as `monitor` or `model-review`. Its
-**view project** is the saved frontend directory. A **view provider** inspects
-that project and builds an immutable browser **artifact**. Studio combines the
-artifact with a notebook runtime to create the **presentation** shown in
-Preview.
+A **view** is the stable name and URL, such as `monitor`, `model-review`, or
+`pdf-report`. Its **view project** is the saved frontend directory. A **view
+provider** inspects that project and builds an immutable browser **artifact**.
+Studio combines the artifact with a notebook runtime to create the
+**presentation** shown in Preview.
 
 The notebook and each view can change independently:
 

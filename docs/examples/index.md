@@ -1,6 +1,6 @@
 ---
 title: Examples
-description: Compare eight live views backed by three Marimo notebooks.
+description: Compare nine live views backed by three Marimo notebooks.
 sidebar: false
 aside: false
 outline: false
@@ -9,7 +9,7 @@ pageClass: studio-example-page
 
 # One notebook, many views
 
-Three notebooks back eight live views. Open a family to compare the same
+Three notebooks back nine live views. Open a family to compare the same
 analysis as a report, explorer, story, map, monitor, model review, or deck.
 
 <div class="studio-example-catalog">
@@ -25,8 +25,8 @@ analysis as a report, explorer, story, map, monitor, model review, or deck.
   </a>
   <a href="./occupancy">
     <strong>Building occupancy</strong>
-    <p>A facilities monitor and an interactive model review.</p>
-    <small>ECharts · Recharts · Marimo controls</small>
+    <p>A facilities monitor, interactive model review, and printable field report.</p>
+    <small>ECharts · Recharts · React PDF · Marimo controls</small>
   </a>
 </div>
 

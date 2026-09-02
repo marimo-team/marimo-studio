@@ -1,6 +1,6 @@
 ---
 title: Building occupancy
-description: Compare a facilities monitor and an interactive model review backed by one room-sensor notebook.
+description: Compare a facilities monitor, model review, and printable field report backed by one room-sensor notebook.
 sidebar: false
 aside: false
 outline: false
@@ -28,8 +28,12 @@ marker, confusion counts, and error evidence update from the same notebook
 score. [Recharts](https://recharts.org/) renders the threshold curve as a React
 component.
 
+In **PDF report**, change the room, lookback period, or threshold. The printable
+A4 report updates its operating summary, environment trends, and model evidence
+through [React PDF](https://react-pdf.org/), a React renderer for PDF documents.
+
 Open **Notebook** to inspect the rolling calculations and threshold evaluation
-that both views present.
+that all three views present.
 
 ## Run locally
 
@@ -39,8 +43,8 @@ From the repository root:
 uv run marimo edit examples/occupancy.py --sandbox
 ```
 
-Open Studio from the marimo editor, then switch between `monitor` and
-`model-review`. The notebook fetches the pinned occupancy CSV from
+Open Studio from the marimo editor, then switch among `monitor`, `model-review`,
+and `pdf-report`. The notebook fetches the pinned occupancy CSV from
 `raw.githubusercontent.com`. The Browser runtime also needs
 [Pyodide](https://pyodide.org/), the Python distribution that runs in the
 browser, and its Python packages on an uncached run.
@@ -50,6 +54,7 @@ browser, and its Python packages on an uncached run.
 - [Notebook](https://github.com/marimo-team/marimo-studio/blob/main/examples/occupancy.py)
 - [Facilities monitor](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/monitor)
 - [Model review](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/model-review)
+- [PDF field report](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/pdf-report)
 
-Both views keep statistical definitions in the notebook. Their component code
+All three views keep statistical definitions in the notebook. Their component code
 formats and presents those results for separate decisions.

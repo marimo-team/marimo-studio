@@ -33,7 +33,7 @@ is involved. Rotate the credential before sharing additional evidence.
 Studio view source and installed view providers execute code. Review their
 source and dependencies before use. The [frontend provider
 reference](docs/reference/provider-api.md) defines provider execution, and [Run
-or publish a view](docs/guide/run-and-share.md) defines browser and static-export
+or export a view](docs/guide/run-and-share.md) defines browser and static-export
 boundaries.
 
 Runtime notebook inspection and validation execute notebook code in a supervised
