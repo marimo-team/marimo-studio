@@ -75,6 +75,14 @@ if (await isFile(indexPath)) {
     const href = withBasePath(basePath, iconPath);
     check(index.includes(`href="${href}"`), `Missing head icon reference: ${href}`);
   }
+
+  const socialImage = "https://marimo-team.github.io/marimo-studio/og.png";
+  const openGraphImageTag = index.match(/<meta\b[^>]*\bproperty="og:image"[^>]*>/)?.[0];
+  check(
+    openGraphImageTag?.includes(`content="${socialImage}"`) ?? false,
+    `Missing Open Graph image: ${socialImage}`,
+  );
+  check(await isFile(join(distDir, "og.png")), "Missing published Open Graph image: /og.png");
 }
 
 const renderedSite = builtDocuments.join("\n");

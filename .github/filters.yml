@@ -1,0 +1,268 @@
+ci_control: &ci_control
+  - ".github/filters.yml"
+  - ".github/workflows/ci.yml"
+  - ".github/actions/setup-js/**"
+  - ".github/actions/test-python/**"
+  - "Makefile"
+
+browser_control: &browser_control
+  - ".github/filters.yml"
+  - ".github/workflows/e2e.yml"
+  - ".github/actions/setup-js/**"
+
+pages_control: &pages_control
+  - ".github/filters.yml"
+  - ".github/workflows/pages.yml"
+  - ".github/actions/setup-js/**"
+  - "Makefile"
+
+python_inputs: &python_inputs
+  - *ci_control
+  - ".python-version"
+  - "pyproject.toml"
+  - "uv.lock"
+  - "packages/marimo-studio/pyproject.toml"
+  - "packages/marimo-studio/src/**"
+  - "packages/marimo-studio/tests/**"
+  - "scripts/python-test.sh"
+
+frontend_inputs: &frontend_inputs
+  - *ci_control
+  - ".node-version"
+  - "package.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "tsconfig.json"
+  - "vite.config.ts"
+  - "apps/browser/**"
+  - "apps/e2e/**"
+  - "packages/marimo-frontend/**"
+  - "packages/presentation/**"
+  - "packages/protocol/**"
+  - "packages/runtime/**"
+  - "packages/studio/**"
+  - "tools/oxlint/**"
+
+browser_assets: &browser_assets
+  - "apps/browser/**"
+  - "apps/docs/public/brand/marimo-studio-mark-dark.svg"
+  - "apps/docs/public/brand/marimo-studio-mark-light.svg"
+  - "packages/marimo-frontend/package.json"
+  - "packages/marimo-frontend/scripts/**"
+  - "packages/marimo-frontend/src/**"
+  - "packages/presentation/package.json"
+  - "packages/presentation/src/**"
+  - "packages/protocol/package.json"
+  - "packages/protocol/src/**"
+  - "packages/runtime/package.json"
+  - "packages/runtime/src/**"
+  - "packages/studio/package.json"
+  - "packages/studio/src/**"
+
+browser_product: &browser_product
+  - *browser_assets
+  - "packages/marimo-studio/pyproject.toml"
+  - "packages/marimo-studio/src/**"
+  - "!packages/marimo-studio/src/marimo_studio/_release_checks/**"
+
+browser_infra: &browser_infra
+  - *browser_control
+  - ".node-version"
+  - ".python-version"
+  - "package.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "pyproject.toml"
+  - "tsconfig.json"
+  - "uv.lock"
+  - "apps/e2e/package.json"
+  - "apps/e2e/scripts/browser.mjs"
+  - "apps/e2e/scripts/graceful-shutdown.mjs"
+  - "apps/e2e/scripts/network.mjs"
+  - "apps/e2e/scripts/paths.mjs"
+  - "apps/e2e/scripts/preparation-process.mjs"
+  - "apps/e2e/scripts/process-group.mjs"
+  - "apps/e2e/scripts/server-process.mjs"
+
+documentation:
+  - "README.md"
+  - "AGENTS.md"
+  - "CLAUDE.md"
+  - "CONTRIBUTING.md"
+  - "LICENSE"
+  - "SECURITY.md"
+  - "docs/**"
+  - "development_docs/**"
+  - "apps/docs/**"
+  - "packages/marimo-studio/README.md"
+  - "skills/marimo-studio/**"
+  - ".github/release-notes/**"
+  - "examples/**"
+  - "packages/marimo-studio/tests/cli/test_documentation_examples.py"
+
+pages:
+  - *pages_control
+  - "README.md"
+  - "docs/**"
+  - "apps/docs/**"
+  - "packages/marimo-studio/README.md"
+  - "skills/marimo-studio/**"
+  - "examples/**"
+  - *browser_product
+  - ".node-version"
+  - ".python-version"
+  - "package.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "pyproject.toml"
+  - "tsconfig.json"
+  - "uv.lock"
+
+quality:
+  - "**"
+  - "!README.md"
+  - "!AGENTS.md"
+  - "!CLAUDE.md"
+  - "!CONTRIBUTING.md"
+  - "!LICENSE"
+  - "!SECURITY.md"
+  - "!docs/**"
+  - "!development_docs/**"
+  - "!apps/docs/**"
+  - "!packages/marimo-studio/README.md"
+  - "!skills/marimo-studio/**"
+  - "!.github/release-notes/**"
+  - "!examples/**"
+
+python_contracts:
+  - *python_inputs
+
+frontend_contracts:
+  - *frontend_inputs
+
+dependency_inputs:
+  - *ci_control
+  - ".node-version"
+  - ".python-version"
+  - "package.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "pyproject.toml"
+  - "uv.lock"
+  - "apps/*/package.json"
+  - "packages/*/package.json"
+  - "packages/marimo-studio/pyproject.toml"
+  - "tools/**/package.json"
+
+distribution:
+  - *ci_control
+  - ".node-version"
+  - ".python-version"
+  - "package.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "plugin.json"
+  - "pyproject.toml"
+  - "tsconfig.json"
+  - "uv.lock"
+  - "vite.config.ts"
+  - "packages/marimo-studio/pyproject.toml"
+  - "packages/marimo-studio/README.md"
+  - "packages/marimo-studio/LICENSE"
+  - "packages/marimo-studio/src/**"
+  - *browser_assets
+  - "skills/marimo-studio/**"
+  - "apps/e2e/fixtures-provider/provider/**"
+  - "scripts/verify-dist.sh"
+  - "scripts/verify-installed-wheel.sh"
+  - "scripts/verify-installed-package.py"
+  - "scripts/verify-external-provider.py"
+  - "scripts/verify-provider-bootstrap.py"
+  - "scripts/write-dist-checksums.py"
+
+installed_distribution:
+  - *ci_control
+  - ".node-version"
+  - ".python-version"
+  - "package.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "pyproject.toml"
+  - "tsconfig.json"
+  - "uv.lock"
+  - "vite.config.ts"
+  - "packages/marimo-studio/pyproject.toml"
+  - "packages/marimo-studio/src/**"
+  - *browser_assets
+  - "apps/e2e/fixtures-provider/provider/**"
+  - "scripts/verify-installed-wheel.sh"
+  - "scripts/verify-installed-package.py"
+  - "scripts/verify-external-provider.py"
+  - "scripts/verify-provider-bootstrap.py"
+
+main_browser:
+  - *browser_product
+  - *browser_infra
+  - "Makefile"
+  - "apps/e2e/playwright.config.ts"
+  - "apps/e2e/fixtures/**"
+  - "apps/e2e/fixtures-hosted/**"
+  - "apps/e2e/fixtures-provider/provider/**"
+  - "apps/e2e/tests/**"
+  - "!apps/e2e/tests/provider-runtime.spec.ts"
+  - "!apps/e2e/tests/provider-reveal.spec.ts"
+  - "!apps/e2e/tests/external-provider.spec.ts"
+  - "apps/e2e/scripts/collaborative-workspace.mjs"
+  - "apps/e2e/scripts/fixture-provider-package.mjs"
+  - "apps/e2e/scripts/notebook-process-registry.mjs"
+  - "apps/e2e/scripts/notebook-process-supervisor.mjs"
+  - "apps/e2e/scripts/registered-notebook-process.mjs"
+  - "apps/e2e/scripts/serve.mjs"
+
+provider_browser:
+  - *browser_product
+  - *browser_infra
+  - "apps/e2e/playwright.providers.config.ts"
+  - "apps/e2e/fixtures-provider/**"
+  - "apps/e2e/tests/provider-runtime.spec.ts"
+  - "apps/e2e/tests/provider-reveal.spec.ts"
+  - "apps/e2e/tests/external-provider.spec.ts"
+  - "apps/e2e/tests/!(*.spec).ts"
+  - "apps/e2e/scripts/cleanup-provider-runtime.mjs"
+  - "apps/e2e/scripts/prepare-provider-runtime.mjs"
+  - "apps/e2e/scripts/serve-providers.mjs"
+
+installed_browser:
+  - *browser_product
+  - *browser_infra
+  - "apps/e2e/playwright.installed.config.ts"
+  - "apps/e2e/fixtures-installed/**"
+  - "apps/e2e/installed-tests/**"
+  - "apps/e2e/scripts/installed-package-network.mjs"
+  - "apps/e2e/scripts/run-installed-package.mjs"
+  - "apps/e2e/scripts/serve-installed-package.mjs"
+  - "apps/e2e/tests/!(*.spec).ts"
+
+windows_unit:
+  - *browser_infra
+  - "apps/e2e/unit/**"
+  - "apps/e2e/scripts/**"
+  - "apps/e2e/tests/!(*.spec).ts"
+  - "vite.config.ts"
+
+windows_lifecycle:
+  - *browser_product
+  - *browser_infra
+  - "apps/e2e/fixtures-provider/provider/**"
+  - "apps/e2e/tests/forced-interruption.spec.ts"
+  - "apps/e2e/tests/view-authoring.spec.ts"
+  - "apps/e2e/tests/view-cache-performance.spec.ts"
+  - "apps/e2e/tests/vanilla-local-sources.spec.ts"
+  - "apps/e2e/tests/!(*.spec).ts"
+  - "apps/e2e/fixtures/**"
+  - "apps/e2e/scripts/collaborative-workspace.mjs"
+  - "apps/e2e/scripts/fixture-provider-package.mjs"
+  - "apps/e2e/scripts/notebook-process-registry.mjs"
+  - "apps/e2e/scripts/notebook-process-supervisor.mjs"
+  - "apps/e2e/scripts/registered-notebook-process.mjs"
+  - "apps/e2e/scripts/serve.mjs"

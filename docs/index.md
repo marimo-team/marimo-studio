@@ -61,6 +61,13 @@ features:
     linkText: Compare runtimes
 ---
 
+## One notebook, many views
+
+<StudioExample family="athletes" />
+
+[Explore all examples](examples/index.md), [open the reference](reference/index.md),
+or [troubleshoot a problem](guide/troubleshooting.md).
+
 ## Start with one result
 
 1. [Create a view](guide/getting-started.md) from a saved notebook.
@@ -73,10 +80,3 @@ Continue through [source management](guide/manage-source.md),
 [deployment](guide/deploy.md), agents, and recovery. Use
 [Reference](reference/index.md) for exact commands, APIs, configuration, events,
 identities, errors, and limits.
-
-## See one notebook become several views
-
-<StudioExample family="athletes" />
-
-[Explore all examples](examples/index.md), [open the reference](reference/index.md),
-or [troubleshoot a problem](guide/troubleshooting.md).

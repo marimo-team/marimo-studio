@@ -18,7 +18,7 @@ import {
 
 const repository = "https://github.com/marimo-team/marimo-studio";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-studio/");
-const socialImage = new URL("screenshots/studio-develop.png", siteUrl).href;
+const socialImage = new URL("og.png", siteUrl).href;
 const socialDescription =
   "Build multiple custom web views from one marimo notebook with modern web tools and coding agents.";
 const basePath = normalizeBasePath(process.env.BASE_PATH);
@@ -76,25 +76,25 @@ export default defineConfig({
 
     return [
       ["link", { href: canonical, rel: "canonical" }],
-      ["meta", { content: "website", property: "og:type" }],
-      ["meta", { content: "Marimo Studio", property: "og:site_name" }],
-      ["meta", { content: "en_US", property: "og:locale" }],
-      ["meta", { content: title, property: "og:title" }],
-      ["meta", { content: pageDescription, property: "og:description" }],
-      ["meta", { content: canonical, property: "og:url" }],
-      ["meta", { content: socialImage, property: "og:image" }],
-      ["meta", { content: "1800", property: "og:image:width" }],
-      ["meta", { content: "1100", property: "og:image:height" }],
+      ["meta", { property: "og:type", content: "website" }],
+      ["meta", { property: "og:site_name", content: "Marimo Studio" }],
+      ["meta", { property: "og:locale", content: "en_US" }],
+      ["meta", { property: "og:title", content: title }],
+      ["meta", { property: "og:description", content: pageDescription }],
+      ["meta", { property: "og:url", content: canonical }],
+      ["meta", { property: "og:image", content: socialImage }],
+      ["meta", { property: "og:image:width", content: "2400" }],
+      ["meta", { property: "og:image:height", content: "1260" }],
       [
         "meta",
         {
-          content: "Notebook, view source, and Preview in Marimo Studio",
           property: "og:image:alt",
+          content: "Notebook, view source, and Preview in Marimo Studio",
         },
       ],
-      ["meta", { content: title, name: "twitter:title" }],
-      ["meta", { content: pageDescription, name: "twitter:description" }],
-      ["meta", { content: socialImage, name: "twitter:image" }],
+      ["meta", { name: "twitter:title", content: title }],
+      ["meta", { name: "twitter:description", content: pageDescription }],
+      ["meta", { name: "twitter:image", content: socialImage }],
     ];
   },
   themeConfig: {
