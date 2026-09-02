@@ -9,14 +9,15 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import suppress
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
 import pytest
 
+import marimo_studio._processes.process_owner as process_owner
 import marimo_studio._processes.supervisor as process_supervisor
 
 from ..async_test_support import wait_for_event
@@ -29,6 +30,44 @@ _POSIX_ONLY = pytest.mark.skipif(
 )
 
 
+class _ProcessOwnerProxy:
+    def __init__(self, owner: process_owner.ProcessOwner) -> None:
+        self._owner = owner
+        self.launch_environment = owner.launch_environment
+
+    def attach(self, process: subprocess.Popen[bytes]) -> None:
+        self._owner.attach(process)
+
+    def terminate(self) -> None:
+        self._owner.terminate()
+
+    def close(self) -> None:
+        self._owner.close()
+
+
+class _FakeProcessOwner:
+    def __init__(
+        self,
+        *,
+        terminate: Callable[[], None] | None = None,
+        close: Callable[[], None] | None = None,
+    ) -> None:
+        self.launch_environment: dict[str, str] = {}
+        self._terminate = terminate
+        self._close = close
+
+    def attach(self, _process: object) -> None:
+        return
+
+    def terminate(self) -> None:
+        if self._terminate is not None:
+            self._terminate()
+
+    def close(self) -> None:
+        if self._close is not None:
+            self._close()
+
+
 def test_process_returncode_formats_windows_exception_status() -> None:
     assert (
         process_supervisor.process_returncode_message(
@@ -37,6 +76,62 @@ def test_process_returncode_formats_windows_exception_status() -> None:
         )
         == "exited with status 0xC0000005"
     )
+
+
+@_POSIX_ONLY
+def test_tagged_process_scan_skips_unreadable_same_user_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import psutil
+
+    def unreadable_environment() -> dict[str, str]:
+        raise SystemError(
+            "proc_environ could not inspect the process"
+        ) from PermissionError("process arguments are protected")
+
+    uid = os.getuid()
+    unreadable = SimpleNamespace(
+        info={"uids": SimpleNamespace(real=uid)},
+        environ=unreadable_environment,
+    )
+    owned = SimpleNamespace(
+        info={"uids": SimpleNamespace(real=uid)},
+        environ=lambda: {"_MARIMO_STUDIO_PROCESS_OWNER": "owner-token"},
+    )
+    monkeypatch.setattr(psutil, "process_iter", lambda _attrs: [unreadable, owned])
+
+    owner = process_owner._PosixProcessOwner(
+        {},
+        owner_token="owner-token",
+        group_token="group-token",
+    )
+
+    assert owner._matching_detached_processes(psutil) == [owned]
+
+
+@_POSIX_ONLY
+def test_tagged_process_scan_reports_an_unexpected_system_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import psutil
+
+    def broken_environment() -> dict[str, str]:
+        raise SystemError("unexpected psutil failure")
+
+    process = SimpleNamespace(
+        info={"uids": SimpleNamespace(real=os.getuid())},
+        environ=broken_environment,
+    )
+    monkeypatch.setattr(psutil, "process_iter", lambda _attrs: [process])
+
+    owner = process_owner._PosixProcessOwner(
+        {},
+        owner_token="owner-token",
+        group_token="group-token",
+    )
+
+    with pytest.raises(SystemError, match="unexpected psutil failure"):
+        owner._matching_detached_processes(psutil)
 
 
 def test_process_supervisor_times_out_and_terminates_the_worker() -> None:
@@ -254,7 +349,7 @@ def test_process_supervisor_cleans_up_when_exit_observer_setup_fails(
 ) -> None:
     process: subprocess.Popen[bytes] | None = None
     native_start = process_supervisor._start_process
-    native_cleanup = process_supervisor._terminate_owned_processes
+    native_owner_factory = process_supervisor.create_process_owner
     cleanup_calls = 0
 
     def start(*args, **kwargs):
@@ -262,17 +357,21 @@ def test_process_supervisor_cleans_up_when_exit_observer_setup_fails(
         process = native_start(*args, **kwargs)
         return process
 
-    def cleanup(*args, **kwargs):
-        nonlocal cleanup_calls
-        cleanup_calls += 1
-        return native_cleanup(*args, **kwargs)
+    class CountingOwner(_ProcessOwnerProxy):
+        def terminate(self) -> None:
+            nonlocal cleanup_calls
+            cleanup_calls += 1
+            super().terminate()
+
+    def create_owner(*args, **kwargs) -> process_owner.ProcessOwner:
+        return CountingOwner(native_owner_factory(*args, **kwargs))
 
     def fail_observer(_process: object) -> object:
         raise RuntimeError("observer setup failed")
 
     monkeypatch.setattr(process_supervisor, "_start_process", start)
     monkeypatch.setattr(process_supervisor, "_ProcessExitObserver", fail_observer)
-    monkeypatch.setattr(process_supervisor, "_terminate_owned_processes", cleanup)
+    monkeypatch.setattr(process_supervisor, "create_process_owner", create_owner)
 
     with pytest.raises(RuntimeError, match="observer setup failed"):
         process_supervisor.ProcessSupervisor().run(
@@ -296,13 +395,7 @@ def test_observer_setup_failure_terminates_a_fast_detached_descendant(
     child_pid = 0
 
     def fail_observer(_process: object) -> object:
-        deadline = time.monotonic() + 2
-        observed_pid: int | None = None
-        while observed_pid is None and time.monotonic() < deadline:
-            with suppress(FileNotFoundError, ValueError):
-                observed_pid = int(marker.read_text(encoding="utf-8"))
-            time.sleep(0.01)
-        assert observed_pid is not None
+        _wait_for_pid(marker)
         raise RuntimeError("observer setup failed")
 
     monkeypatch.setattr(process_supervisor, "_ProcessExitObserver", fail_observer)
@@ -322,7 +415,7 @@ def test_observer_setup_failure_terminates_a_fast_detached_descendant(
                 ],
                 timeout=30,
             )
-        child_pid = int(marker.read_text(encoding="utf-8"))
+        child_pid = _wait_for_pid(marker)
         assert not _process_exists(child_pid)
     finally:
         if child_pid and _process_exists(child_pid):
@@ -390,7 +483,7 @@ def test_process_supervisor_surfaces_cleanup_failure_over_setup_failure(
     def fail_observer(_process: object) -> object:
         raise RuntimeError("observer setup failed")
 
-    def fail_cleanup(_process: object, _owner: object) -> None:
+    def fail_cleanup() -> None:
         raise OSError("group cleanup failed")
 
     process.wait = wait
@@ -399,9 +492,12 @@ def test_process_supervisor_surfaces_cleanup_failure_over_setup_failure(
     monkeypatch.setattr(
         process_supervisor, "_start_process", lambda *_args, **_kwargs: process
     )
-    monkeypatch.setattr(process_supervisor, "_own_process_tree", lambda *_args: None)
     monkeypatch.setattr(process_supervisor, "_ProcessExitObserver", fail_observer)
-    monkeypatch.setattr(process_supervisor, "_terminate_owned_processes", fail_cleanup)
+    monkeypatch.setattr(
+        process_supervisor,
+        "create_process_owner",
+        lambda *_args, **_kwargs: _FakeProcessOwner(terminate=fail_cleanup),
+    )
 
     with pytest.raises(
         process_supervisor.ProcessCleanupError,
@@ -440,14 +536,15 @@ def test_process_supervisor_fails_when_final_forced_termination_does_not_exit(
     monkeypatch.setattr(
         process_supervisor, "_start_process", lambda *_args, **_kwargs: process
     )
-    monkeypatch.setattr(process_supervisor, "_own_process_tree", lambda *_args: None)
     monkeypatch.setattr(process_supervisor, "_ProcessExitObserver", fail_observer)
     monkeypatch.setattr(
-        process_supervisor, "_terminate_owned_processes", lambda *_args: None
+        process_supervisor,
+        "create_process_owner",
+        lambda *_args, **_kwargs: _FakeProcessOwner(),
     )
     monkeypatch.setattr(
         process_supervisor,
-        "_wait_for_exit",
+        "wait_for_exit",
         lambda _process, _timeout: False,
     )
 
@@ -486,13 +583,9 @@ def test_process_supervisor_closes_every_owner_when_wait_raises(
         nonlocal kills
         kills += 1
 
-    class TreeOwner:
-        def terminate(self) -> None:
-            return
-
-        def close(self) -> None:
-            nonlocal owner_closed
-            owner_closed = True
+    def close_owner() -> None:
+        nonlocal owner_closed
+        owner_closed = True
 
     class ExitObserver:
         @staticmethod
@@ -518,13 +611,12 @@ def test_process_supervisor_closes_every_owner_when_wait_raises(
         process_supervisor, "_ProcessExitObserver", lambda _process: ExitObserver()
     )
     monkeypatch.setattr(
-        process_supervisor, "_own_process_tree", lambda *_args: TreeOwner()
+        process_supervisor,
+        "create_process_owner",
+        lambda *_args, **_kwargs: _FakeProcessOwner(close=close_owner),
     )
     monkeypatch.setattr(process_supervisor, "_start_readers", lambda *_args: ())
     monkeypatch.setattr(process_supervisor, "_finish_readers", finish_readers)
-    monkeypatch.setattr(
-        process_supervisor, "_terminate_owned_processes", lambda *_args: None
-    )
 
     with pytest.raises(
         process_supervisor.ProcessCleanupError,
@@ -560,7 +652,7 @@ def test_process_supervisor_cleans_group_once_before_reaping_leader(
         process.returncode = 0
         return 0
 
-    def cleanup(_process: object, _owner: object) -> None:
+    def cleanup() -> None:
         nonlocal cleanup_calls
         assert not process.reaped
         cleanup_calls += 1
@@ -584,8 +676,11 @@ def test_process_supervisor_cleans_group_once_before_reaping_leader(
     )
     monkeypatch.setattr(process_supervisor, "_start_readers", lambda *_args: ())
     monkeypatch.setattr(process_supervisor, "_finish_readers", lambda *_args: None)
-    monkeypatch.setattr(process_supervisor, "_own_process_tree", lambda *_args: None)
-    monkeypatch.setattr(process_supervisor, "_terminate_owned_processes", cleanup)
+    monkeypatch.setattr(
+        process_supervisor,
+        "create_process_owner",
+        lambda *_args, **_kwargs: _FakeProcessOwner(terminate=cleanup),
+    )
 
     result = process_supervisor.ProcessSupervisor().run(
         [sys.executable, "-c", "pass"],
@@ -663,11 +758,7 @@ def test_process_supervisor_terminates_detached_process_on_early_finish(
             ],
             0.2 if finish == "timeout" else 30,
         )
-        deadline = time.monotonic() + 2
-        while not marker.is_file() and time.monotonic() < deadline:
-            time.sleep(0.01)
-        assert marker.is_file()
-        child_pid = int(marker.read_text(encoding="utf-8"))
+        child_pid = _wait_for_pid(marker)
         if finish == "cancel":
             supervisor.cancel()
         result = future.result(timeout=5)
@@ -700,3 +791,13 @@ def _process_exists(pid: int) -> bool:
     )
     state = result.stdout.strip()
     return bool(state) and not state.startswith("Z")
+
+
+def _wait_for_pid(marker: Path, timeout: float = 2) -> int:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            return int(marker.read_text(encoding="utf-8"))
+        except (FileNotFoundError, ValueError):
+            time.sleep(0.01)
+    pytest.fail(f"Process PID was not published to {marker}")

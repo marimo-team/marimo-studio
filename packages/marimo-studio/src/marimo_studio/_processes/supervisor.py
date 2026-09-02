@@ -3,28 +3,26 @@
 from __future__ import annotations
 
 import os
-import secrets
 import select
 import signal
 import subprocess
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import Any, BinaryIO, Protocol, cast
+from typing import Any, BinaryIO, cast
 
-_TERMINATION_TIMEOUT = 2.0
+from marimo_studio._processes.process_owner import (
+    TERMINATION_TIMEOUT as _TERMINATION_TIMEOUT,
+)
+from marimo_studio._processes.process_owner import create_process_owner, wait_for_exit
+
 MAX_PROCESS_STDOUT_BYTES = 2_000_000
 _MAX_ERROR_BYTES = 16_000
 _MAX_ERROR_STREAM_BYTES = 2_000_000
 _READ_CHUNK_BYTES = 64 * 1024
 _FORCED_SIGNAL = getattr(signal, "SIGKILL", signal.SIGTERM)
-_KILL_PROCESS_GROUP = cast(
-    "Callable[[int, int], None] | None",
-    getattr(os, "killpg", None),
-)
-_PROCESS_OWNER_ENV = "_MARIMO_STUDIO_PROCESS_OWNER"
 
 
 @dataclass(frozen=True)
@@ -57,60 +55,6 @@ def process_returncode_message(
 
 class ProcessCleanupError(OSError):
     """Owned child processes or operating-system handles could not be cleaned up."""
-
-
-class _ProcessTreeOwner(Protocol):
-    def terminate(self) -> None: ...
-
-    def close(self) -> None: ...
-
-
-class _TaggedProcessTreeOwner:
-    """Terminate same-user descendants that escaped their original group."""
-
-    def __init__(self, token: str) -> None:
-        self._token = token
-
-    def terminate(self) -> None:
-        try:
-            import psutil
-        except ImportError as error:
-            raise OSError(
-                "Detached process cleanup requires the installed psutil runtime."
-            ) from error
-        for requested_signal in ("terminate", "kill"):
-            processes = self._matching_processes(psutil)
-            if not processes:
-                return
-            for process in processes:
-                with suppress(psutil.Error):
-                    getattr(process, requested_signal)()
-            _gone, alive = psutil.wait_procs(processes, timeout=_TERMINATION_TIMEOUT)
-            if not alive and not self._matching_processes(psutil):
-                return
-        remaining = self._matching_processes(psutil)
-        if remaining:
-            raise OSError(
-                "Owned detached processes remained alive after forced termination: "
-                + ", ".join(str(process.pid) for process in remaining)
-            )
-
-    def _matching_processes(self, psutil: Any) -> list[Any]:
-        owner = os.getuid() if hasattr(os, "getuid") else None
-        matches = []
-        for process in psutil.process_iter(("pid", "uids")):
-            try:
-                uids = process.info.get("uids")
-                if owner is not None and (uids is None or uids.real != owner):
-                    continue
-                if process.environ().get(_PROCESS_OWNER_ENV) == self._token:
-                    matches.append(process)
-            except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
-                continue
-        return matches
-
-    def close(self) -> None:
-        return
 
 
 class _ProcessExitObserver:
@@ -220,14 +164,14 @@ class ProcessSupervisor:
                 stdout=b"",
                 stderr=b"",
             )
-        process_environment, owner_token = _owned_environment(
+        process_owner = create_process_owner(
             env,
             owns_process_tree=self._owns_process_tree,
         )
         process = _start_process(
             command,
             cwd=cwd,
-            env=process_environment,
+            env=process_owner.launch_environment,
             owns_process_tree=self._owns_process_tree,
         )
         overflow = threading.Event()
@@ -245,7 +189,6 @@ class ProcessSupervisor:
         stop_readers = threading.Event()
         readers: list[threading.Thread] = []
         exit_observer: _ProcessExitObserver | None = None
-        tree_owner: _ProcessTreeOwner | None = None
         cleanup_errors: list[Exception] = []
         cleanup_started = False
 
@@ -255,10 +198,7 @@ class ProcessSupervisor:
                 return
             cleanup_started = True
             try:
-                if self._owns_process_tree:
-                    _terminate_owned_processes(process, tree_owner)
-                else:
-                    _terminate_process(process)
+                process_owner.terminate()
             except OSError as error:
                 cleanup_errors.append(error)
 
@@ -266,11 +206,7 @@ class ProcessSupervisor:
         returncode = -int(_FORCED_SIGNAL)
         operation_error: BaseException | None = None
         try:
-            tree_owner = (
-                _own_process_tree(process, owner_token)
-                if self._owns_process_tree
-                else None
-            )
+            process_owner.attach(process)
             exit_observer = _ProcessExitObserver(process)
             _start_readers(process, stdout, stderr, stop_readers, readers)
             if self._cancelled.is_set():
@@ -296,7 +232,7 @@ class ProcessSupervisor:
             except subprocess.TimeoutExpired:
                 with suppress(OSError, ProcessLookupError):
                     process.kill()
-                _wait_for_exit(process, _TERMINATION_TIMEOUT)
+                wait_for_exit(process, _TERMINATION_TIMEOUT)
                 observed_returncode = process.poll()
                 returncode = (
                     observed_returncode
@@ -308,7 +244,7 @@ class ProcessSupervisor:
         finally:
             terminate_processes()
             try:
-                exited = _wait_for_exit(process, _TERMINATION_TIMEOUT)
+                exited = wait_for_exit(process, _TERMINATION_TIMEOUT)
             except OSError as error:
                 cleanup_errors.append(error)
                 exited = False
@@ -320,7 +256,7 @@ class ProcessSupervisor:
                 except OSError as error:
                     cleanup_errors.append(error)
                 try:
-                    forced_exit = _wait_for_exit(process, _TERMINATION_TIMEOUT)
+                    forced_exit = wait_for_exit(process, _TERMINATION_TIMEOUT)
                 except OSError as error:
                     cleanup_errors.append(error)
                     forced_exit = None
@@ -331,11 +267,10 @@ class ProcessSupervisor:
                             "final forced termination."
                         )
                     )
-            if tree_owner is not None:
-                try:
-                    tree_owner.close()
-                except Exception as error:
-                    cleanup_errors.append(error)
+            try:
+                process_owner.close()
+            except Exception as error:
+                cleanup_errors.append(error)
             try:
                 _finish_readers(process, tuple(readers), stop_readers)
             except Exception as error:
@@ -361,24 +296,6 @@ class ProcessSupervisor:
             timed_out=timed_out,
             output_too_large=overflow.is_set(),
         )
-
-
-def _owned_environment(
-    environment: Mapping[str, str] | None,
-    *,
-    owns_process_tree: bool,
-) -> tuple[dict[str, str], str | None]:
-    selected = os.environ.copy() if environment is None else dict(environment)
-    inherited = os.environ.get(_PROCESS_OWNER_ENV)
-    if owns_process_tree and inherited is None:
-        token = secrets.token_urlsafe(24)
-    else:
-        token = inherited
-    if token is not None:
-        selected[_PROCESS_OWNER_ENV] = token
-    else:
-        selected.pop(_PROCESS_OWNER_ENV, None)
-    return selected, token if owns_process_tree and inherited is None else None
 
 
 def _start_process(
@@ -506,206 +423,6 @@ def _close_process_streams(process: subprocess.Popen[bytes]) -> None:
                 stream.close()
 
 
-def _own_process_tree(
-    process: subprocess.Popen[bytes],
-    owner_token: str | None,
-) -> _ProcessTreeOwner | None:
-    if os.name == "posix":
-        return _TaggedProcessTreeOwner(owner_token) if owner_token is not None else None
-    if os.name != "nt":
-        return None
-    from marimo_studio._processes.windows import WindowsJob
-
-    return WindowsJob.create_for_process(process.pid)
-
-
-def _terminate_owned_processes(
-    process: subprocess.Popen[bytes],
-    tree_owner: _ProcessTreeOwner | None = None,
-    *,
-    platform: str | None = None,
-) -> None:
-    selected_platform = os.name if platform is None else platform
-    if selected_platform == "posix":
-        group_error: OSError | None = None
-        try:
-            _terminate_process_group(process)
-        except OSError as error:
-            group_error = error
-        try:
-            if tree_owner is not None:
-                tree_owner.terminate()
-        except OSError as error:
-            if group_error is not None:
-                raise error from group_error
-            raise
-        if group_error is not None:
-            raise group_error
-        return
-
-    if tree_owner is not None:
-        try:
-            tree_owner.terminate()
-        except OSError as error:
-            with suppress(OSError, ProcessLookupError):
-                process.kill()
-            if not _wait_for_exit(process, _TERMINATION_TIMEOUT):
-                raise OSError(
-                    "The owned process remained alive after a "
-                    "Windows job termination failure."
-                ) from error
-            raise
-        if _wait_for_exit(process, _TERMINATION_TIMEOUT):
-            return
-        with suppress(OSError, ProcessLookupError):
-            process.kill()
-        if _wait_for_exit(process, _TERMINATION_TIMEOUT):
-            return
-        raise OSError("The owned process remained alive after Windows job termination.")
-    if process.poll() is not None:
-        return
-    break_signal = getattr(signal, "CTRL_BREAK_EVENT", None)
-    if break_signal is not None:
-        with suppress(OSError, ProcessLookupError):
-            process.send_signal(break_signal)
-        if _wait_for_exit(process, _TERMINATION_TIMEOUT):
-            return
-    with suppress(OSError, subprocess.TimeoutExpired):
-        subprocess.run(
-            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-            check=False,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=_TERMINATION_TIMEOUT,
-        )
-    if _wait_for_exit(process, _TERMINATION_TIMEOUT):
-        return
-    with suppress(OSError, ProcessLookupError):
-        process.kill()
-    if _wait_for_exit(process, _TERMINATION_TIMEOUT):
-        return
-    raise OSError(
-        "The owned process remained alive after taskkill and forced termination."
-    )
-
-
-def _terminate_process_group(process: subprocess.Popen[bytes]) -> None:
-    _signal_process_group(process, signal.SIGTERM)
-    if _wait_for_process_group_exit(process, _TERMINATION_TIMEOUT):
-        return
-    _signal_process_group(process, _FORCED_SIGNAL)
-    if not _wait_for_process_group_exit(process, _TERMINATION_TIMEOUT):
-        with suppress(OSError, ProcessLookupError):
-            process.kill()
-        _wait_for_exit(process, _TERMINATION_TIMEOUT)
-        if not _process_group_disappeared(process):
-            raise OSError(
-                "The owned process group remained alive after forced termination."
-            )
-
-
-def _terminate_process(process: subprocess.Popen[bytes]) -> None:
-    """Stop one child while its enclosing operation owns the process tree."""
-    if process.poll() is not None:
-        return
-    with suppress(OSError, ProcessLookupError):
-        process.terminate()
-    if _wait_for_exit(process, _TERMINATION_TIMEOUT):
-        return
-    with suppress(OSError, ProcessLookupError):
-        process.kill()
-    if _wait_for_exit(process, _TERMINATION_TIMEOUT):
-        return
-    raise OSError(
-        "The contained child process remained alive after forced termination."
-    )
-
-
-def _signal_process_group(
-    process: subprocess.Popen[bytes],
-    requested_signal: signal.Signals,
-) -> None:
-    if _KILL_PROCESS_GROUP is None:
-        return
-    try:
-        _KILL_PROCESS_GROUP(process.pid, requested_signal)
-    except ProcessLookupError:
-        return
-    except OSError as error:
-        if _process_group_disappeared(process):
-            return
-        if _wait_for_process_group_exit(
-            process,
-            _TERMINATION_TIMEOUT,
-        ):
-            return
-        with suppress(OSError, ProcessLookupError):
-            process.kill()
-        _wait_for_exit(process, _TERMINATION_TIMEOUT)
-        raise error
-
-
-def _process_group_disappeared(
-    process: subprocess.Popen[bytes],
-) -> bool:
-    if _KILL_PROCESS_GROUP is None:
-        return True
-    try:
-        _KILL_PROCESS_GROUP(process.pid, 0)
-    except ProcessLookupError:
-        return True
-    except PermissionError:
-        return _permission_denied_group_disappeared(process)
-    except OSError:
-        return False
-    return _process_group_has_live_members(process.pid) is False
-
-
-def _permission_denied_group_disappeared(
-    process: subprocess.Popen[bytes],
-) -> bool:
-    live_members = _process_group_has_live_members(process.pid)
-    return live_members is False
-
-
-def _process_group_has_live_members(group: int) -> bool | None:
-    """Inspect a POSIX group after Darwin reports EPERM for a zombie leader."""
-    try:
-        result = subprocess.run(
-            ["ps", "-axo", "pgid=,stat="],
-            check=False,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=_TERMINATION_TIMEOUT,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if result.returncode != 0:
-        return None
-    for line in result.stdout.splitlines():
-        fields = line.split(maxsplit=1)
-        if len(fields) != 2:
-            continue
-        try:
-            process_group = int(fields[0])
-        except ValueError:
-            continue
-        if process_group == group and not fields[1].startswith("Z"):
-            return True
-    return False
-
-
-def _wait_for_exit(process: subprocess.Popen[bytes], timeout: float) -> bool:
-    try:
-        process.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return False
-    return True
-
-
 def _process_exited_without_reaping(process: subprocess.Popen[bytes]) -> bool:
     if os.name != "posix":
         return process.poll() is not None
@@ -730,27 +447,3 @@ def _process_exited_without_reaping(process: subprocess.Popen[bytes]) -> bool:
         return True
     except psutil.Error:
         return False
-
-
-def _wait_for_process_group_exit(
-    process: subprocess.Popen[bytes],
-    timeout: float,
-) -> bool:
-    if _KILL_PROCESS_GROUP is None:
-        return process.poll() is not None
-    deadline = time.monotonic() + timeout
-    while True:
-        try:
-            _KILL_PROCESS_GROUP(process.pid, 0)
-        except ProcessLookupError:
-            return True
-        except PermissionError:
-            if _permission_denied_group_disappeared(process):
-                return True
-        else:
-            if _process_group_has_live_members(process.pid) is False:
-                return True
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            return False
-        time.sleep(min(0.01, remaining))
