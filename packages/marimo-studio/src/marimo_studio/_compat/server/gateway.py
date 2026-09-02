@@ -7,7 +7,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qsl, urlencode
+from urllib.parse import parse_qsl, quote, urlencode
 
 from starlette.authentication import AuthCredentials, SimpleUser
 from starlette.requests import Request
@@ -231,9 +231,15 @@ def _authorize_presentation_request(
     headers = [
         (name, value)
         for name, value in scope.get("headers", ())
-        if bytes(name).lower() != b"marimo-server-token"
+        if bytes(name).lower() not in {b"marimo-server-token", b"x-notebook-id"}
     ]
     headers.append((b"marimo-server-token", context.server_token.encode()))
+    headers.append(
+        (
+            b"x-notebook-id",
+            quote(context.file_key, safe="~()*!.'").encode("ascii"),
+        )
+    )
     query = [
         (name, value)
         for name, value in parse_qsl(
