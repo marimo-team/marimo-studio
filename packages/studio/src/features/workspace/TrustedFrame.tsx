@@ -23,7 +23,7 @@ export const TrustedFrame = ({
       ref={frameRef}
       {...attributes}
       title={title}
-      allow="clipboard-read; clipboard-write"
+      allow="clipboard-write"
       aria-busy={active && !interactive ? true : undefined}
       hidden={!active}
       inert={!active || !interactive}

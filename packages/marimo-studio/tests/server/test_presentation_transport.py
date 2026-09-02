@@ -169,6 +169,7 @@ def test_isolated_presentation_binds_navigation_to_server_configuration() -> Non
         'id="marimo-studio-presentation" '
         'src="/_marimo-studio/presentation/token/dashboard/"'
     ) in document
+    assert 'allow="clipboard-write"' in document
 
 
 def test_preserved_session_wrapper_creates_its_frame_after_replay_admission() -> None:
@@ -191,6 +192,7 @@ def test_preserved_session_wrapper_creates_its_frame_after_replay_admission() ->
     assert "<iframe" not in document
     assert 'data-marimo-studio-frame-blueprint=""' in document
     assert 'data-frame-sandbox="allow-downloads allow-forms allow-modals ' in document
+    assert 'data-frame-allow="clipboard-write"' in document
 
     encoded = re.search(r"const config = Object\.freeze\((\{[^\n]+\})\);", document)
     assert encoded is not None

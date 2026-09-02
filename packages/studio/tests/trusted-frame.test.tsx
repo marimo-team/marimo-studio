@@ -16,6 +16,7 @@ it("keeps a visible preview inert until its runtime is ready", () => {
     />,
   );
   const frame = screen.getByTitle("dashboard custom view using server");
+  expect(frame).toHaveAttribute("allow", "clipboard-write");
   expect(frame).toHaveAttribute("inert");
   expect(frame).toHaveAttribute("aria-busy", "true");
 
