@@ -176,7 +176,7 @@ test("Arrow authorization failures stay terminal and selector-local", async () =
   expect(decoded.errors.frame?.code).toBe("value-resource-unavailable");
 });
 
-test("Arrow decoding remains available when SubtleCrypto is unavailable", async () => {
+test("Arrow decoding fails locally when SHA-256 verification is unavailable", async () => {
   const bytes = arrowBytes();
   vi.stubGlobal("crypto", {});
   vi.stubGlobal(
@@ -186,6 +186,11 @@ test("Arrow decoding remains available when SubtleCrypto is unavailable", async 
 
   const decoded = await decodeValueReadResponse({
     values: {
+      report: {
+        codec: "json-v1",
+        fingerprint: `sha256:${"0".repeat(64)}`,
+        value: { total: 42 },
+      },
       frame: {
         codec: "arrow-ipc-v1",
         fingerprint: `sha256:${"0".repeat(64)}`,
@@ -196,8 +201,12 @@ test("Arrow decoding remains available when SubtleCrypto is unavailable", async 
     errors: {},
   });
 
-  expect(decoded.values.frame?.codec).toBe("arrow-ipc-v1");
-  expect(decoded.errors.frame).toBeUndefined();
+  expect(decoded.values.report?.value).toEqual({ total: 42 });
+  expect(decoded.values.frame).toBeUndefined();
+  expect(decoded.errors.frame).toEqual({
+    code: "value-integrity-unavailable",
+    message: "The Arrow IPC resource could not be verified because SHA-256 is unavailable.",
+  });
 });
 
 test("Arrow verification failures stay local to their selectors", async () => {
