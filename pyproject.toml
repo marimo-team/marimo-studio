@@ -12,7 +12,7 @@ test = [
 test-deno = [{ include-group = "test" }, "deno==2.9.5"]
 dev = [
   { include-group = "test" },
-  "agent-plugins==0.1.1",
+  "agent-plugins>=0.1.0",
   "basedpyright==1.39.10",
   "deno==2.9.5",
   "marimo[recommended]==0.24.0",
