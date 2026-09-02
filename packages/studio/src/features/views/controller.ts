@@ -48,6 +48,7 @@ export class ViewController {
   private refreshGeneration = 0;
   private mutationGeneration = 0;
   private inventoryRequest: InventoryRequest | undefined;
+  private inventoryRefreshRequested = false;
   private disposed = false;
 
   constructor(
@@ -421,6 +422,7 @@ export class ViewController {
     this.disposed = true;
     this.refreshGeneration += 1;
     this.mutationGeneration += 1;
+    this.inventoryRefreshRequested = false;
     this.cancelSelection();
     this.listeners.clear();
   }
@@ -440,6 +442,20 @@ export class ViewController {
     }
     if (this.snapshot.creating || this.snapshot.deleting) {
       return;
+    }
+    const current = this.inventoryRequest;
+    if (current?.generation === this.refreshGeneration) {
+      this.inventoryRefreshRequested = true;
+      await current.promise;
+      if (
+        this.disposed ||
+        this.snapshot.creating ||
+        this.snapshot.deleting ||
+        !this.inventoryRefreshRequested
+      ) {
+        return;
+      }
+      this.inventoryRefreshRequested = false;
     }
     await this.loadInventory();
   }
@@ -470,6 +486,7 @@ export class ViewController {
     this.cancelSelection();
     const generation = ++this.mutationGeneration;
     this.refreshGeneration += 1;
+    this.inventoryRefreshRequested = false;
     this.update({ selecting: undefined, ...next });
     return generation;
   }
