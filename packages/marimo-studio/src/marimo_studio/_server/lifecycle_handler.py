@@ -175,6 +175,7 @@ class LifecycleRouteHandler:
             presentation.notebook,
             base_url=route.location.base_url,
             dev=route.context.dev,
+            edit_mode=route.context.mode == "edit",
             structured=_accepts_json(route.request),
             server_token=route.context.server_token,
             routing_query=route.context.routing_query,

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 
+import pytest
 from starlette.requests import Request
 from starlette.testclient import TestClient
 
@@ -452,6 +453,65 @@ def test_invalid_studio_config_does_not_intercept_marimo_routes(
     assert refresh.status_code == 500
     assert refresh.headers["content-type"].startswith("application/json")
     assert refresh.json()["error"] == "configuration-error"
+
+
+@pytest.mark.parametrize(
+    ("allowed_origins", "expected_policy"),
+    (
+        (None, "frame-ancestors 'self'"),
+        (
+            "http://localhost:55021,https://notebooks.example.com",
+            "frame-ancestors 'self' http://localhost:55021 "
+            "https://notebooks.example.com",
+        ),
+    ),
+)
+def test_invalid_studio_config_keeps_edit_error_documents_framed(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    allowed_origins: str | None,
+    expected_policy: str,
+) -> None:
+    studio = _configured(notebook_path)
+
+    def invalidate(config: MutableMapping[str, object]) -> None:
+        del config["default"]
+
+    update_notebook_config(studio.notebook, invalidate)
+    if allowed_origins is None:
+        monkeypatch.delenv("MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS", raising=False)
+    else:
+        monkeypatch.setenv("MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS", allowed_origins)
+    app = _marimo_app(studio.notebook, programmatic=True)
+    _edit_mode(app)
+
+    with TestClient(app) as client:
+        document = client.get("/studio/dashboard/")
+        structured = client.get(
+            "/studio/dashboard/",
+            headers={"Accept": "application/json"},
+        )
+        presentation = client.get("/dashboard/")
+        presentation_structured = client.get(
+            "/dashboard/",
+            headers={"Accept": "application/json"},
+        )
+        support = client.get("/_marimo-studio/views")
+    with TestClient(_marimo_app(studio.notebook, programmatic=True)) as client:
+        run_document = client.get("/dashboard/")
+
+    for response in (
+        document,
+        structured,
+        presentation,
+        presentation_structured,
+    ):
+        assert response.status_code == 500
+        assert response.headers["content-security-policy"] == expected_policy
+    assert support.status_code == 500
+    assert "content-security-policy" not in support.headers
+    assert run_document.status_code == 500
+    assert "content-security-policy" not in run_document.headers
 
 
 def test_edit_mode_hosts_an_unconfigured_notebook_without_intercepting_run_mode(

@@ -30,6 +30,19 @@ def _origin_values(policy: SecurityPolicy) -> tuple[str, ...]:
     return tuple(origin.value for origin in policy.allowed_embed_origins)
 
 
+def _origin_with_length(index: int, length: int) -> str:
+    scheme = "https://"
+    first = f"h{index}"
+    remaining = length - len(scheme) - len(first)
+    labels = [first]
+    while remaining:
+        label_length = min(63, remaining - 1)
+        assert label_length > 0
+        labels.append("a" * label_length)
+        remaining -= label_length + 1
+    return scheme + ".".join(labels)
+
+
 def test_empty_configuration_preserves_same_origin_framing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -75,6 +88,7 @@ def test_repair_document_uses_the_embedding_security_policy(tmp_path: Path) -> N
         tmp_path / "notebook.py",
         base_url="",
         dev=True,
+        edit_mode=True,
         structured=False,
         server_token="server-token",
         security_policy=policy,
@@ -128,6 +142,43 @@ def test_allowed_embed_origins_are_canonicalized_and_deduplicated() -> None:
         "http://localhost:8080",
         "https://[2001:db8::1]",
     )
+
+
+def test_allowed_embed_origins_accept_the_configured_limits() -> None:
+    origins = [*(_origin_with_length(index, 255) for index in range(15))]
+    origins.append(_origin_with_length(15, 256))
+    source = ",".join(origins)
+
+    assert len(source.encode("utf-8")) == 4096
+    assert len(_origin_values(parse_allowed_embed_origins(source))) == 16
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    (
+        (
+            ",".join("https://example.com" for _index in range(33)),
+            f"{ALLOWED_EMBED_ORIGINS_ENV} contains 33 origin entries. Maximum is 32.",
+        ),
+        (
+            ",".join(
+                [
+                    *(_origin_with_length(index, 255) for index in range(15)),
+                    _origin_with_length(15, 257),
+                ]
+            ),
+            f"{ALLOWED_EMBED_ORIGINS_ENV} contains 4097 UTF-8 bytes. Maximum is 4096.",
+        ),
+    ),
+)
+def test_allowed_embed_origins_reject_values_over_the_configured_limits(
+    source: str,
+    message: str,
+) -> None:
+    with pytest.raises(ConfigurationError) as captured:
+        parse_allowed_embed_origins(source)
+
+    assert str(captured.value) == message
 
 
 @pytest.mark.parametrize(

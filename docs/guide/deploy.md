@@ -77,7 +77,18 @@ Studio adds these origins to the
 Content Security Policy directive on the workspace and native editor documents.
 `'self'` remains present for Studio's internal editor iframe. Studio normalizes
 host casing, default ports, and an optional trailing slash, then removes
-duplicates. An invalid origin stops server startup and names the rejected value.
+duplicates. The configuration accepts at most 32 origin entries and 4,096
+UTF-8 bytes. An invalid or oversized value stops server startup and names the
+rejected setting.
+
+Allow a parent origin only when you trust its pages to present Studio controls.
+An allowed parent can position the authenticated workspace inside its own
+interface and attempt clickjacking, where a user is misled into interacting with
+the framed application. The allowlist changes framing policy. Marimo
+authentication remains required. Marimo token sessions use `SameSite=Lax`
+cookies. For a same-site parent on another origin, authenticate on the Studio
+origin before loading the workspace in the frame. A cross-site parent needs an
+external authentication layer designed for third-party iframe contexts.
 
 This setting controls which parent documents may frame Studio. Marimo's
 `--allow-origins` option controls request origins for browser clients.

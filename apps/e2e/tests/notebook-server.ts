@@ -22,6 +22,7 @@ interface NotebookServerOptions {
   port: number;
   authentication: readonly string[];
   editRoot?: "marimo" | "studio";
+  environment?: NodeJS.ProcessEnv;
   extensions?: "native" | "studio";
   registryDirectory?: string;
 }
@@ -53,11 +54,13 @@ export const startNotebookServer = ({
   port,
   authentication,
   editRoot = "studio",
+  environment: extraEnvironment = {},
   extensions = "studio",
   registryDirectory = notebookProcessRegistryDirectory,
 }: NotebookServerOptions): NotebookServer => {
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
+    ...extraEnvironment,
     PYTHONUNBUFFERED: "1",
     XDG_CONFIG_HOME: configDirectory,
   };
