@@ -233,7 +233,11 @@ async def support_response(
             runtimes,
             session_state,
         )
-    if support_path == "/views" and isinstance(lifecycle, Unconfigured):
+    if (
+        context.mode == "edit"
+        and support_path == "/views"
+        and isinstance(lifecycle, Unconfigured)
+    ):
         generation = unconfigured_catalog_generation(lifecycle.notebook)
         if request.method == "GET":
             return JSONResponse(
