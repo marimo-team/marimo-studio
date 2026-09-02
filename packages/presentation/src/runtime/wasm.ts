@@ -19,6 +19,7 @@ import {
 } from "../values/wasm";
 import { awaitWasmStartup, retryWasmRpc, WASM_PROJECTION_NAMESPACE } from "../wasm-rpc";
 import { createWasmInitialization } from "./initialization";
+import { createObservedDeferred } from "./observed-deferred";
 import { mountSharedRuntime } from "./runtime";
 import { type WasmRuntimeData, wasmRuntimeDataSchema } from "./wasm-config";
 import { createWasmMountedProjectionPreparation } from "./wasm-mounted-projections";
@@ -100,21 +101,11 @@ export const mountWasmRuntime = (
   let presentation = context.presentation;
   const initialization = createWasmInitialization(terminatePresentationWasmWorker);
   const queryWriter = createWasmQueryWriter(initialization.signal);
-  let resolveProjectionRuntime = () => {};
-  let rejectProjectionRuntime = (_cause: Error) => {};
-  const projectionRuntimeReady = new Promise<void>((resolve, reject) => {
-    resolveProjectionRuntime = resolve;
-    rejectProjectionRuntime = reject;
-  });
-  let resolveCellExecutor = (_executeCells: EmbeddedCellExecutor) => {};
-  let rejectCellExecutor = (_cause: Error) => {};
-  const cellExecutorReady = new Promise<EmbeddedCellExecutor>((resolve, reject) => {
-    resolveCellExecutor = resolve;
-    rejectCellExecutor = reject;
-  });
+  const projectionRuntime = createObservedDeferred<void>();
+  const cellExecutor = createObservedDeferred<EmbeddedCellExecutor>();
   const projectionExecutor = createWasmProjectionExecutor(
-    async (cells) => (await cellExecutorReady)(cells),
-    () => projectionRuntimeReady,
+    async (cells) => (await cellExecutor.promise)(cells),
+    () => projectionRuntime.promise,
   );
   let authorizationGeneration = 0;
   let authorization:
@@ -185,7 +176,7 @@ export const mountWasmRuntime = (
           initialization.wait(workerInitialized, async (signal) => {
             try {
               throwIfWasmAborted(signal);
-              resolveCellExecutor(executeCells);
+              cellExecutor.resolve(executeCells);
               await prepareWasmProjectionRuntime({
                 authorizeProjections,
                 config: context.presentation,
@@ -195,13 +186,13 @@ export const mountWasmRuntime = (
                 queryWriter,
                 signal,
               });
-              resolveProjectionRuntime();
+              projectionRuntime.resolve();
             } catch (cause) {
               const error =
                 cause instanceof Error
                   ? cause
                   : new Error("The WebAssembly projection bridge failed to initialize.");
-              rejectProjectionRuntime(error);
+              projectionRuntime.reject(error);
               throw error;
             }
           }),
@@ -213,7 +204,7 @@ export const mountWasmRuntime = (
       createWasmValueReader(
         async () => await initialized,
         async (request, signal) => {
-          await waitForWasmCaller(projectionRuntimeReady, signal);
+          await waitForWasmCaller(projectionRuntime.promise, signal);
           const config = getRuntimeConfig();
           if (request.revision !== config.revision) {
             throw new Error("The value request revision is not active.");
@@ -227,7 +218,7 @@ export const mountWasmRuntime = (
       createWasmOutputReader(
         async () => await initialized,
         createWasmOutputRequest(sessionId, invoke, async (request, signal) => {
-          await waitForWasmCaller(projectionRuntimeReady, signal);
+          await waitForWasmCaller(projectionRuntime.promise, signal);
           const config = getRuntimeConfig();
           if (request.revision !== config.revision) {
             throw new Error("The output request revision is not active.");
@@ -262,10 +253,10 @@ export const mountWasmRuntime = (
     dispose: () => {
       const error = new DOMException("The runtime was disposed.", "AbortError");
       initialization.abort(error);
-      queryWriter.dispose();
+      void queryWriter.dispose();
       mountedProjections.dispose();
-      rejectCellExecutor(error);
-      rejectProjectionRuntime(error);
+      cellExecutor.reject(error);
+      projectionRuntime.reject(error);
       authorization = undefined;
       runtime.dispose();
     },
