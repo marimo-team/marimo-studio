@@ -391,7 +391,17 @@ body[data-mode="profile"] .profile-axes {
 .control-actions {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
   justify-self: end;
+}
+
+.fullscreen-status {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.fullscreen-status:empty {
+  display: none;
 }
 
 .control-actions button {
@@ -565,7 +575,7 @@ body[data-mode="profile"] .profile-axes {
     display: none;
   }
 
-  .control-actions button[data-wide] {
+  .control-actions [data-wide] {
     display: none;
   }
 }

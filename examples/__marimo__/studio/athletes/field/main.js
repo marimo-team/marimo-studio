@@ -13,6 +13,7 @@ const previousButton = document.querySelector("#previous-button");
 const nextButton = document.querySelector("#next-button");
 const overviewButton = document.querySelector("#overview-button");
 const fullscreenButton = document.querySelector("#fullscreen-button");
+const fullscreenStatus = document.querySelector("#fullscreen-status");
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const numberFormat = new Intl.NumberFormat("en-US");
 const goldenAngle = Math.PI * (3 - Math.sqrt(5));
@@ -505,13 +506,23 @@ overviewButton.addEventListener("click", () => {
   if (shower.isFullMode) shower.exitFullMode();
   else shower.enterFullMode();
 });
-fullscreenButton.addEventListener("click", async () => {
-  if (document.fullscreenElement) await document.exitFullscreen();
-  else await document.documentElement.requestFullscreen();
-});
-document.addEventListener("fullscreenchange", () => {
+const updateFullscreenControl = () => {
   fullscreenButton.textContent = document.fullscreenElement ? "Exit" : "Full";
+  fullscreenButton.disabled = !document.fullscreenEnabled;
+  fullscreenStatus.textContent = document.fullscreenEnabled
+    ? ""
+    : "Fullscreen unavailable";
+};
+fullscreenButton.addEventListener("click", async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch {
+    fullscreenStatus.textContent = "Fullscreen request failed";
+  }
 });
+document.addEventListener("fullscreenchange", updateFullscreenControl);
+updateFullscreenControl();
 
 const failData = () => {
   dataStatus.textContent = "Roster unavailable";
