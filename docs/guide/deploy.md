@@ -62,6 +62,26 @@ configured public path inconsistently.
 Use `--allow-origins` when browser clients must connect from another explicit
 origin. Keep the list to origins that should receive notebook sessions.
 
+## Embed the Studio edit workspace
+
+Set `MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` when another site embeds Studio's edit
+workspace. The value is a comma-separated list of exact HTTP or HTTPS origins:
+
+```console
+MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS=http://localhost:55021,https://notebooks.example.com \
+  marimo edit /srv/analysis/analysis.py --headless --port 8000
+```
+
+Studio adds these origins to the
+[`frame-ancestors`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/frame-ancestors)
+Content Security Policy directive on the workspace and native editor documents.
+`'self'` remains present for Studio's internal editor iframe. Studio normalizes
+host casing, default ports, and an optional trailing slash, then removes
+duplicates. An invalid origin stops server startup and names the rejected value.
+
+This setting controls which parent documents may frame Studio. Marimo's
+`--allow-origins` option controls request origins for browser clients.
+
 ## Run as an ASGI application
 
 [ASGI](https://asgi.readthedocs.io/en/latest/) is the standard interface
