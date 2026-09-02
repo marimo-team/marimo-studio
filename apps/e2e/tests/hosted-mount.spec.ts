@@ -24,6 +24,18 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     `${baseUrl}/_marimo-studio/dev/events`,
     1,
   );
+  const interruptedDocumentTransaction = browserDiagnostics.expectRequestFailure({
+    origin: hostedOrigin,
+    path: /^\/hosted\/_marimo-studio\/editor\/api\/document\/transaction$/,
+    method: "POST",
+    errorText: "net::ERR_ABORTED",
+    required: false,
+  });
+  const interruptedDocumentTransactionLog = browserDiagnostics.expectConsole({
+    type: "error",
+    text: /^Failed to handle request: sendDocumentTransaction TypeError: Failed to fetch/,
+    required: false,
+  });
   await expect
     .poll(
       async () =>
@@ -180,5 +192,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   await expect(value).toHaveText("63");
   await recoverRequestAbort(supersededConfigRead);
   await recoverRequestAbort(abandonedSourceWrite);
+  interruptedDocumentTransaction.recovered();
+  interruptedDocumentTransactionLog.recovered();
   replacedWorkspaceStream.recovered();
 });
