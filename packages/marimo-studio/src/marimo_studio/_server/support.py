@@ -311,6 +311,7 @@ async def support_response(
         return await activation_ack_response(
             request,
             context,
+            workspace,
             notebook_scope,
             int(raw_generation),
         )

@@ -8,11 +8,16 @@ from enum import Enum
 from marimo_studio._server.agent.clients import PeerStatus, PeerTarget
 from marimo_studio._server.agent.events import ViewActivation
 from marimo_studio._server.agent.store import (
-    ActivationAcknowledgement,
+    AcknowledgedActivation,
+    ActivationOperation,
     AgentOperationStore,
+    PendingActivation,
+    RejectedActivation,
+    RetainedActivation,
     coordinator_closed_error,
 )
-from marimo_studio.errors import AgentRequestError
+from marimo_studio._workspace.ownership import ObservedViewOwner
+from marimo_studio.errors import AgentRequestError, MarimoStudioError
 
 
 class ActivationAckOutcome(str, Enum):
@@ -25,7 +30,13 @@ class ActivationCoordinator:
     def __init__(self, store: AgentOperationStore) -> None:
         self._store = store
 
-    async def activate(self, target: PeerTarget, view: str) -> ViewActivation:
+    async def activate(
+        self,
+        target: PeerTarget,
+        view: str,
+        *,
+        owner: ObservedViewOwner | None = None,
+    ) -> ViewActivation:
         if not self._store.clients.matches(target, require_connected=True):
             raise AgentRequestError(
                 "browser-client-unavailable",
@@ -53,13 +64,16 @@ class ActivationCoordinator:
                 client_id=target.client_id,
                 session_id=target.session_id,
                 view=view,
+                owner=owner,
             )
-            self._store.activations[target.client_id] = activation
+            operation = PendingActivation(activation)
+            self._store.activation_operations[target.client_id] = operation
             self._store.condition.notify_all()
         async with self._store.condition:
             self._store.require_open()
             if not self._matches(activation, require_connected=True):
-                self._store.activations.pop(target.client_id, None)
+                if self._store.activation_operations.get(target.client_id) is operation:
+                    self._store.activation_operations.pop(target.client_id)
                 self._store.condition.notify_all()
                 raise AgentRequestError(
                     "browser-session-changed",
@@ -74,35 +88,35 @@ class ActivationCoordinator:
         client_id: str,
         generation: int,
         view: str,
+        *,
+        owner: ObservedViewOwner | None = None,
     ) -> ActivationAckOutcome:
         async with self._store.condition:
             self._store.require_open()
-            activation = self._store.activations.get(client_id)
-            acknowledged = self._store.acknowledged_activations.get(client_id)
-            if (
-                activation is None
-                and acknowledged is not None
-                and acknowledged.activation.generation == generation
-                and acknowledged.activation.view == view
-            ):
+            operation = self._store.activation_operations.get(client_id)
+            if isinstance(
+                operation,
+                (AcknowledgedActivation, RetainedActivation),
+            ) and self._request_matches(operation.activation, generation, view, owner):
                 target = await self._store.clients.target_for_client(client_id)
                 return (
                     ActivationAckOutcome.APPLIED
                     if target is not None
-                    and target.session_id == acknowledged.activation.session_id
+                    and target.session_id == operation.activation.session_id
                     and target.binding_generation
-                    == acknowledged.activation.binding_generation
+                    == operation.activation.binding_generation
                     and target.active_view == view
                     and target.active_view_generation
-                    == acknowledged.active_view_generation
+                    == operation.active_view_generation
                     else ActivationAckOutcome.REJECTED
                 )
-            if (
-                activation is None
-                or activation.generation != generation
-                or activation.view != view
+            if not isinstance(
+                operation, PendingActivation
+            ) or not self._request_matches(
+                operation.activation, generation, view, owner
             ):
                 return ActivationAckOutcome.REJECTED
+            activation = operation.activation
             target = self._target(activation)
             committed = await self._store.clients.commit_active_view(target, view)
             if committed is None:
@@ -120,16 +134,42 @@ class ActivationCoordinator:
                 or committed.binding_generation != activation.binding_generation
             ):
                 return ActivationAckOutcome.REJECTED
-            self._store.acknowledged_activations[client_id] = ActivationAcknowledgement(
+            self._store.activation_operations[client_id] = AcknowledgedActivation(
                 activation=activation,
                 active_view_generation=committed.active_view_generation,
             )
             self._store.condition.notify_all()
             return ActivationAckOutcome.APPLIED
 
+    async def reject(
+        self,
+        client_id: str,
+        generation: int,
+        view: str,
+        error: MarimoStudioError,
+        *,
+        owner: ObservedViewOwner | None = None,
+    ) -> ActivationAckOutcome:
+        async with self._store.condition:
+            self._store.require_open()
+            operation = self._store.activation_operations.get(client_id)
+            if not isinstance(
+                operation, PendingActivation
+            ) or not self._request_matches(
+                operation.activation, generation, view, owner
+            ):
+                return ActivationAckOutcome.REJECTED
+            self._store.activation_operations[client_id] = RejectedActivation(
+                operation.activation,
+                error,
+            )
+            self._store.condition.notify_all()
+            return ActivationAckOutcome.REJECTED
+
     async def wait(self, activation: ViewActivation, timeout: float) -> None:
         timed_out = False
         closed = False
+        failure: MarimoStudioError | None = None
         async with self._store.condition:
             try:
                 await asyncio.wait_for(
@@ -139,12 +179,26 @@ class ActivationCoordinator:
             except asyncio.TimeoutError:
                 timed_out = not self._finished(activation)
             except asyncio.CancelledError:
-                self._clear(activation)
+                self._discard_unacknowledged(activation)
                 raise
             closed = self._store.closed
-            self._clear(activation)
+            operation = self._operation_for(activation)
+            if isinstance(operation, RejectedActivation):
+                failure = operation.error
+            if isinstance(operation, AcknowledgedActivation):
+                self._store.activation_operations[activation.client_id] = (
+                    RetainedActivation(
+                        operation.activation,
+                        operation.active_view_generation,
+                    )
+                )
+                self._store.condition.notify_all()
+            elif not isinstance(operation, RetainedActivation):
+                self._discard_unacknowledged(activation)
         if closed:
             raise coordinator_closed_error()
+        if failure is not None:
+            raise failure
         status = self._store.clients.status(self._target(activation))
         if status is PeerStatus.REBOUND:
             raise AgentRequestError(
@@ -186,36 +240,36 @@ class ActivationCoordinator:
         client_id: str,
         delivered: int | None,
     ) -> ViewActivation | None:
-        activation = self._store.activations.get(client_id)
-        acknowledged = self._store.acknowledged_activations.get(client_id)
-        if (
-            activation is None
-            or (
-                acknowledged is not None
-                and activation.generation == acknowledged.activation.generation
-            )
-            or activation.generation == delivered
-            or not self._matches(activation)
-        ):
+        operation = self._store.activation_operations.get(client_id)
+        if not isinstance(operation, PendingActivation):
+            return None
+        activation = operation.activation
+        if activation.generation == delivered or not self._matches(activation):
             return None
         return activation
 
     def _finished(self, activation: ViewActivation) -> bool:
-        acknowledged = self._store.acknowledged_activations.get(activation.client_id)
+        operation = self._operation_for(activation)
         return (
             self._store.closed
-            or self._store.activations.get(activation.client_id) != activation
+            or not isinstance(operation, PendingActivation)
             or not self._matches(activation)
-            or (
-                acknowledged is not None
-                and acknowledged.activation.generation >= activation.generation
-            )
         )
 
-    def _clear(self, activation: ViewActivation) -> None:
-        if self._store.activations.get(activation.client_id) == activation:
-            self._store.activations.pop(activation.client_id, None)
+    def _discard_unacknowledged(self, activation: ViewActivation) -> None:
+        operation = self._operation_for(activation)
+        if isinstance(operation, (PendingActivation, RejectedActivation)):
+            self._store.activation_operations.pop(activation.client_id)
             self._store.condition.notify_all()
+
+    def _operation_for(
+        self,
+        activation: ViewActivation,
+    ) -> ActivationOperation | None:
+        operation = self._store.activation_operations.get(activation.client_id)
+        if operation is None or operation.activation != activation:
+            return None
+        return operation
 
     def _matches(
         self,
@@ -237,4 +291,17 @@ class ActivationCoordinator:
             binding_generation=activation.binding_generation,
             active_view=None,
             active_view_generation=activation.active_view_generation,
+        )
+
+    @staticmethod
+    def _request_matches(
+        activation: ViewActivation,
+        generation: int,
+        view: str,
+        owner: ObservedViewOwner | None,
+    ) -> bool:
+        return (
+            activation.generation == generation
+            and activation.view == view
+            and activation.owner == owner
         )

@@ -38,6 +38,10 @@ from marimo_studio._workspace.models import (
     StudioDefinition,
     StudioWorkspace,
 )
+from marimo_studio._workspace.ownership import (
+    observed_view_owner,
+    workspace_view_owner,
+)
 from marimo_studio.errors import ConfigurationError, WorkspaceGenerationConflictError
 from marimo_studio.errors._internal import WorkspaceInitializationError
 
@@ -177,8 +181,7 @@ class Workspace:
         return View._create(
             self,
             result.name,
-            catalog_generation=result.workspace.catalog_generation,
-            generation=result.workspace.view_generations[result.name],
+            owner=workspace_view_owner(result.workspace, result.name),
         )
 
     def view(self, name: str) -> View:
@@ -189,8 +192,7 @@ class Workspace:
             return View._create(
                 self,
                 name,
-                catalog_generation=None,
-                generation=None,
+                owner=None,
             )
         try:
             studio = self._current_workspace()
@@ -198,14 +200,15 @@ class Workspace:
             return View._create(
                 self,
                 name,
-                catalog_generation=self._catalog_generation,
-                generation=self._fallback_view_generation(name),
+                owner=observed_view_owner(
+                    self._catalog_generation,
+                    self._fallback_view_generation(name),
+                ),
             )
         return View._create(
             self,
             name,
-            catalog_generation=studio.catalog_generation,
-            generation=studio.view_generations.get(name),
+            owner=workspace_view_owner(studio, name),
         )
 
     async def bind(

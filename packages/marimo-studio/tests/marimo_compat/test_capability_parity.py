@@ -19,6 +19,7 @@ from marimo_studio._cli import cli, main
 from marimo_studio._validation.evidence import ValidationEvidence
 from marimo_studio._validation.progressive import ValidationOptions
 from marimo_studio._validation.results import CheckResult
+from marimo_studio._workspace.ownership import PresentViewOwner
 from marimo_studio.agent import ShowResult
 from marimo_studio.errors import AgentRequestError
 
@@ -324,9 +325,8 @@ def test_show_adapters_return_the_same_result(
         lambda *_args, **_kwargs: cli_connection,
     )
 
-    python = asyncio.run(
-        studio_agent.current_workspace().view("dashboard").show()
-    ).to_dict()
+    view = studio_agent.current_workspace().view("dashboard")
+    python = asyncio.run(view.show()).to_dict()
     command = _json_command(
         "view",
         "show",
@@ -341,7 +341,16 @@ def test_show_adapters_return_the_same_result(
 
     assert command == python == result.to_dict()
     assert requests == [
-        (code_connection, ViewShowRequest("dashboard")),
+        (
+            code_connection,
+            ViewShowRequest(
+                "dashboard",
+                owner=PresentViewOwner(
+                    cast(str, view.catalog_generation),
+                    cast(str, view.generation),
+                ),
+            ),
+        ),
         (
             cli_connection,
             ViewShowRequest(

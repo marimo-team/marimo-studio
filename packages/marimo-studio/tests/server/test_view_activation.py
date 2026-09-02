@@ -17,6 +17,7 @@ from marimo_studio._server.presentation.activation import (
     activate_studio_view,
 )
 from marimo_studio._server.records import ServerContext
+from marimo_studio._workspace.ownership import AbsentViewOwner, PresentViewOwner
 from marimo_studio.errors import (
     AgentRequestError,
     CapabilityInputError,
@@ -31,16 +32,36 @@ def test_activation_request_round_trips_its_versioned_record() -> None:
     request = ViewShowRequest(
         "dashboard",
         browser_client="browser-client-1234",
+        owner=PresentViewOwner("a" * 64, "b" * 64),
     )
+    absent = ViewShowRequest("report", owner=AbsentViewOwner("a" * 64))
 
     assert ViewShowRequest.from_dict("dashboard", request.to_dict()) == request
+    assert ViewShowRequest.from_dict(
+        "dashboard",
+        ViewShowRequest("dashboard").to_dict(),
+    ) == ViewShowRequest("dashboard")
+    assert ViewShowRequest.from_dict("report", absent.to_dict()) == absent
     for payload in (
         {**request.to_dict(), "schema": True},
         {**request.to_dict(), "unexpected": True},
+        {
+            key: value
+            for key, value in request.to_dict().items()
+            if key != "view_generation"
+        },
+        {
+            **ViewShowRequest("dashboard").to_dict(),
+            "catalog_generation": "a" * 64,
+        },
     ):
         with pytest.raises(CapabilityInputError) as raised:
             ViewShowRequest.from_dict("dashboard", payload)
-        assert raised.value.field == "request"
+        assert raised.value.field in {
+            "request",
+            "catalog_generation",
+            "view_generation",
+        }
 
 
 async def _activate_connected(

@@ -73,7 +73,10 @@ it("keeps agent acknowledgement behind target preparation and committed stream o
 
   selection.resolve(true);
   await vi.waitFor(() =>
-    expect(acknowledge).toHaveBeenCalledWith(7, "report", expect.any(AbortSignal)),
+    expect(acknowledge).toHaveBeenCalledWith(
+      { schema: 1, generation: 7, view: "report" },
+      expect.any(AbortSignal),
+    ),
   );
   expect(model.views.getSnapshot().current).toBe("report");
   expect(preview.presentationStreamAbandoned).toHaveBeenCalledWith("dashboard");

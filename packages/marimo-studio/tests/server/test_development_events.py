@@ -89,6 +89,7 @@ async def _activation_acknowledgement(
             _client_id: str,
             _generation: int,
             _view: str,
+            **_kwargs: object,
         ) -> ActivationAckOutcome:
             return outcome
 
@@ -110,6 +111,7 @@ async def _activation_acknowledgement(
     response = await agent_api.activation_ack_response(
         request,
         cast(Any, SimpleNamespace(server_token="test-token")),
+        cast(Any, SimpleNamespace()),
         cast(Any, SimpleNamespace(agents=Agents())),
         1,
     )

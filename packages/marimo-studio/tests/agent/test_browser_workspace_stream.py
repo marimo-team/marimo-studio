@@ -11,6 +11,7 @@ import pytest
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.agent.coordinator import AgentCoordinator
 from marimo_studio._server.development import routes as dev
+from marimo_studio._workspace.ownership import AbsentViewOwner
 from marimo_studio.errors import AgentRequestError
 
 from ..app_helpers import configured
@@ -46,7 +47,11 @@ def test_change_stream_delivers_agent_view_activation(
         ready = await anext(stream)
         await bind_native_session(clients, "s_123456", client_id)
         target = await clients.select_target(client_id=client_id)
-        activation = await agents.activate(target, "executive")
+        activation = await agents.activate(
+            target,
+            "executive",
+            owner=AbsentViewOwner("a" * 64),
+        )
         activated = await asyncio.wait_for(anext(stream), timeout=1)
         session = await asyncio.wait_for(anext(stream), timeout=1)
         stopping = True
@@ -58,9 +63,14 @@ def test_change_stream_delivers_agent_view_activation(
     ready, activated, session = asyncio.run(collect())
 
     assert ready == b"event: ready\ndata: {}\n\n"
-    assert activated == (
-        b'event: activate\ndata: {"schema":1,"generation":1,"view":"executive"}\n\n'
-    )
+    assert activated.startswith(b"event: activate\n")
+    assert json.loads(activated.split(b"data: ", 1)[1]) == {
+        "schema": 1,
+        "generation": 1,
+        "view": "executive",
+        "catalogGeneration": "a" * 64,
+        "viewGeneration": None,
+    }
     assert json.loads(session.split(b"data: ", 1)[1]) == {
         "schema": 1,
         "generation": 1,

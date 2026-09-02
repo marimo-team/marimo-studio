@@ -26,7 +26,10 @@ it("selects and then acknowledges an agent activation", async () => {
   );
 
   await vi.waitFor(() =>
-    expect(acknowledge).toHaveBeenCalledWith(7, "report", expect.any(AbortSignal)),
+    expect(acknowledge).toHaveBeenCalledWith(
+      { schema: 1, generation: 7, view: "report" },
+      expect.any(AbortSignal),
+    ),
   );
   expect(model.ensureAvailable).toHaveBeenCalledWith("report", expect.any(AbortSignal));
   expect(model.choose).toHaveBeenCalledWith(
@@ -40,6 +43,36 @@ it("selects and then acknowledges an agent activation", async () => {
   coordinator.dispose();
 });
 
+it("acknowledges an activation with one parsed view owner", async () => {
+  const { acknowledge, coordinator } = setup();
+  const catalogGeneration = "a".repeat(64);
+  const viewGeneration = "b".repeat(64);
+
+  EventSourceStub.instances[0]?.emit(
+    "activate",
+    JSON.stringify({
+      schema: 1,
+      generation: 8,
+      view: "report",
+      catalogGeneration,
+      viewGeneration,
+    }),
+  );
+
+  await vi.waitFor(() =>
+    expect(acknowledge).toHaveBeenCalledWith(
+      {
+        schema: 1,
+        generation: 8,
+        view: "report",
+        owner: { kind: "present", catalogGeneration, viewGeneration },
+      },
+      expect.any(AbortSignal),
+    ),
+  );
+  coordinator.dispose();
+});
+
 it("refreshes an already active view before acknowledging its activation", async () => {
   const { acknowledge, coordinator, model, preview } = setup();
 
@@ -49,7 +82,10 @@ it("refreshes an already active view before acknowledging its activation", async
   );
 
   await vi.waitFor(() =>
-    expect(acknowledge).toHaveBeenCalledWith(8, "dashboard", expect.any(AbortSignal)),
+    expect(acknowledge).toHaveBeenCalledWith(
+      { schema: 1, generation: 8, view: "dashboard" },
+      expect.any(AbortSignal),
+    ),
   );
   expect(model.choose).toHaveBeenCalledWith(
     "dashboard",
@@ -70,7 +106,10 @@ it("acknowledges host promotion without reloading the starting preview", async (
   const { acknowledge, coordinator, preview } = setup(undefined, activation);
 
   await vi.waitFor(() =>
-    expect(acknowledge).toHaveBeenCalledWith(8, "dashboard", expect.any(AbortSignal)),
+    expect(acknowledge).toHaveBeenCalledWith(
+      { schema: 1, generation: 8, view: "dashboard" },
+      expect.any(AbortSignal),
+    ),
   );
   EventSourceStub.instances[0]?.emit("activate", JSON.stringify(activation));
   await Promise.resolve();
@@ -203,7 +242,10 @@ it("lets the newest activation generation own selection and acknowledgement", as
 
   analysis.resolve(true);
   await vi.waitFor(() =>
-    expect(acknowledge).toHaveBeenCalledWith(11, "analysis", expect.any(AbortSignal)),
+    expect(acknowledge).toHaveBeenCalledWith(
+      { schema: 1, generation: 11, view: "analysis" },
+      expect.any(AbortSignal),
+    ),
   );
   report.resolve(true);
   await Promise.resolve();
@@ -355,7 +397,7 @@ it("forwards validated session replacement evidence", () => {
 it("aborts pending acknowledgement and blocks events after disposal", async () => {
   let signal: AbortSignal | undefined;
   const { acknowledge, coordinator, model } = setup();
-  acknowledge.mockImplementation(async (_generation, _view, activeSignal) => {
+  acknowledge.mockImplementation(async (_activation, activeSignal) => {
     signal = activeSignal;
     await new Promise<void>(() => {});
   });

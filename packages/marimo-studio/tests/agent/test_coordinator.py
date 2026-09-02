@@ -19,6 +19,7 @@ from marimo_studio._validation.evidence import (
     BrowserObservation,
     ObservedProjectionInstance,
 )
+from marimo_studio._workspace.ownership import PresentViewOwner
 from marimo_studio.errors import AgentRequestError
 
 from ..async_test_support import wait_for_event
@@ -81,7 +82,6 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
             )
             is ActivationAckOutcome.REJECTED
         )
-
         waiting = asyncio.create_task(agents.wait_for_activation(activation, 1))
         assert (
             await agents.acknowledge_activation(
@@ -91,6 +91,9 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
             )
             is ActivationAckOutcome.APPLIED
         )
+        with pytest.raises(AgentRequestError) as occupied:
+            await agents.activate(target, "report")
+        assert occupied.value.code == "browser-operation-in-progress"
         await waiting
         settled = await agents.pending_operations(target, None, None)
         assert settled.activation is None
@@ -110,6 +113,117 @@ def test_activation_replays_until_the_target_browser_acknowledges_it() -> None:
             )
             is ActivationAckOutcome.REJECTED
         )
+        target = await clients.select_target(client_id=target.client_id)
+        replacement = await agents.activate(target, "report")
+        assert replacement.view == "report"
+        await agents.close()
+        await clients.close()
+
+    asyncio.run(exercise())
+
+
+def test_activation_replay_requires_the_acknowledged_workspace_owner() -> None:
+    async def exercise() -> None:
+        clients = StudioClientRegistry()
+        agents = AgentCoordinator(clients)
+        target, _lease = await connected_target(clients)
+        owner = PresentViewOwner("a" * 64, "b" * 64)
+        activation = await agents.activate(target, "executive", owner=owner)
+        waiting = asyncio.create_task(agents.wait_for_activation(activation, 1))
+
+        assert (
+            await agents.acknowledge_activation(
+                target.client_id,
+                activation.generation,
+                activation.view,
+                owner=activation.owner,
+            )
+            is ActivationAckOutcome.APPLIED
+        )
+        await waiting
+
+        assert (
+            await agents.acknowledge_activation(
+                target.client_id,
+                activation.generation,
+                activation.view,
+                owner=PresentViewOwner("c" * 64, "b" * 64),
+            )
+            is ActivationAckOutcome.REJECTED
+        )
+
+    asyncio.run(exercise())
+
+
+def test_activation_rejection_requires_the_pending_workspace_owner() -> None:
+    async def exercise() -> None:
+        clients = StudioClientRegistry()
+        agents = AgentCoordinator(clients)
+        target, _lease = await connected_target(clients)
+        owner = PresentViewOwner("a" * 64, "b" * 64)
+        activation = await agents.activate(target, "executive", owner=owner)
+        waiting = asyncio.create_task(agents.wait_for_activation(activation, 1))
+
+        assert (
+            await agents.reject_activation(
+                target.client_id,
+                activation.generation,
+                activation.view,
+                AgentRequestError("forged-owner", "Forged owner", status_code=409),
+                owner=PresentViewOwner("c" * 64, "b" * 64),
+            )
+            is ActivationAckOutcome.REJECTED
+        )
+        pending = await agents.pending_operations(target, None, None)
+        assert pending.activation == activation
+        assert not waiting.done()
+
+        assert (
+            await agents.acknowledge_activation(
+                target.client_id,
+                activation.generation,
+                activation.view,
+                owner=activation.owner,
+            )
+            is ActivationAckOutcome.APPLIED
+        )
+        await waiting
+
+    asyncio.run(exercise())
+
+
+def test_activation_rejection_retains_its_slot_until_waiting_observes_it() -> None:
+    async def exercise() -> None:
+        clients = StudioClientRegistry()
+        agents = AgentCoordinator(clients)
+        target, _lease = await connected_target(clients)
+        activation = await agents.activate(target, "executive")
+        failure = AgentRequestError(
+            "view-generation-conflict",
+            "The selected view changed.",
+            status_code=409,
+        )
+
+        assert (
+            await agents.reject_activation(
+                target.client_id,
+                activation.generation,
+                activation.view,
+                failure,
+            )
+            is ActivationAckOutcome.REJECTED
+        )
+        with pytest.raises(AgentRequestError) as occupied:
+            await agents.activate(target, "report")
+        assert occupied.value.code == "browser-operation-in-progress"
+
+        with pytest.raises(AgentRequestError) as rejected:
+            await agents.wait_for_activation(activation, 1)
+        assert rejected.value is failure
+        replacement = await agents.activate(target, "report")
+        assert replacement.view == "report"
+        await agents.close()
+        await clients.close()
 
     asyncio.run(exercise())
 
@@ -151,8 +265,25 @@ def test_activation_commit_wins_atomically_over_timeout(
         target, _lease = await connected_target(clients, active_view="dashboard")
         activation = await agents.activate(target, "executive")
         committed = asyncio.Event()
+        deadline_scheduled = asyncio.Event()
         release = asyncio.Event()
+        deadline: list[tuple[Any, tuple[object, ...]]] = []
         commit_active_view = clients.commit_active_view
+        loop = asyncio.get_running_loop()
+        call_at = loop.call_at
+        activation_timeout = 123.456
+
+        def observe_deadline(
+            when: float,
+            callback: Any,
+            *args: object,
+            context: Any = None,
+        ):
+            if when - loop.time() > 100:
+                deadline.append((callback, args))
+                deadline_scheduled.set()
+                return call_at(loop.time() + 3_600, callback, *args, context=context)
+            return call_at(when, callback, *args, context=context)
 
         async def delayed_commit(selected: PeerTarget, view: str):
             result = await commit_active_view(selected, view)
@@ -161,7 +292,11 @@ def test_activation_commit_wins_atomically_over_timeout(
             return result
 
         monkeypatch.setattr(clients, "commit_active_view", delayed_commit)
-        waiting = asyncio.create_task(agents.wait_for_activation(activation, 0.01))
+        monkeypatch.setattr(loop, "call_at", observe_deadline)
+        waiting = asyncio.create_task(
+            agents.wait_for_activation(activation, activation_timeout)
+        )
+        await wait_for_event(deadline_scheduled)
         acknowledgement = asyncio.create_task(
             agents.acknowledge_activation(
                 target.client_id,
@@ -171,8 +306,8 @@ def test_activation_commit_wins_atomically_over_timeout(
         )
 
         await wait_for_event(committed)
-        await asyncio.sleep(0.02)
-        assert not waiting.done()
+        callback, args = deadline.pop()
+        callback(*args)
         release.set()
 
         assert await acknowledgement is ActivationAckOutcome.APPLIED
@@ -637,8 +772,7 @@ def test_close_rejects_operations_paused_before_store_admission(
         assert raised.value.code == "browser-coordinator-closed"
         assert raised.value.status_code == 503
 
-        assert agents._store.activations == {}
-        assert agents._store.acknowledged_activations == {}
+        assert agents._store.activation_operations == {}
         assert agents._store.observation_requests == {}
         assert agents._store.observations == {}
         assert agents._store.observation_sequences == {}

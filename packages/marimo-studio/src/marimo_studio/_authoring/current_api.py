@@ -12,6 +12,10 @@ from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.limits import DEFAULT_BROWSER_TIMEOUT
 from marimo_studio._validation.records import ValidationLevel, ValidationReport
 from marimo_studio._views.records import Starter
+from marimo_studio._workspace.ownership import (
+    observed_view_owner,
+    workspace_view_owner,
+)
 from marimo_studio.errors import ConfigurationError
 
 
@@ -24,6 +28,7 @@ class View(SavedView):
             self.workspace.notebook,
             self.name,
             self.workspace._connection(),
+            owner=self._owner,
         )
 
     async def validate(
@@ -67,8 +72,7 @@ class Workspace(SavedWorkspace):
         return View._create(
             self,
             result.name,
-            catalog_generation=result.workspace.catalog_generation,
-            generation=result.workspace.view_generations[result.name],
+            owner=workspace_view_owner(result.workspace, result.name),
         )
 
     def view(self, name: str) -> View:
@@ -79,8 +83,7 @@ class Workspace(SavedWorkspace):
             return View._create(
                 self,
                 name,
-                catalog_generation=None,
-                generation=None,
+                owner=None,
             )
         try:
             studio = self._current_workspace()
@@ -88,14 +91,15 @@ class Workspace(SavedWorkspace):
             return View._create(
                 self,
                 name,
-                catalog_generation=self._catalog_generation,
-                generation=self._fallback_view_generation(name),
+                owner=observed_view_owner(
+                    self._catalog_generation,
+                    self._fallback_view_generation(name),
+                ),
             )
         return View._create(
             self,
             name,
-            catalog_generation=studio.catalog_generation,
-            generation=studio.view_generations.get(name),
+            owner=workspace_view_owner(studio, name),
         )
 
 
