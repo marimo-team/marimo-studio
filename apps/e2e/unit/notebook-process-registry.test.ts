@@ -126,6 +126,7 @@ test.skipIf(!supportsProcessEnvironmentInspection)(
 test("a delayed start gets a fresh readiness timeout", async () => {
   const directory = mkdtempSync(resolve(tmpdir(), "marimo-studio-e2e-processes-"));
   const port = await availablePort();
+  const readyTimeout = 2_000;
   const registration = spawnRegisteredNotebookSupervisor({
     args: ["-e", "process.exit(0)"],
     command: process.execPath,
@@ -133,12 +134,12 @@ test("a delayed start gets a fresh readiness timeout", async () => {
     directory,
     env: process.env,
     port,
-    readyTimeout: 300,
+    readyTimeout,
     stdio: ["ignore", "ignore", "ignore"],
   });
   try {
     await registration.registered;
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 400));
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, readyTimeout + 100));
 
     await expect(registration.start()).resolves.toBeUndefined();
     await waitForClose(registration.child);
