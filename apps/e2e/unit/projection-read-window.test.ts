@@ -127,6 +127,17 @@ test("recovers when the newer success arrives before the captured abort", () => 
   expect(window.diagnostics()).toEqual([]);
 });
 
+test("an empty values read carries no recovery obligation", () => {
+  const owner = { id: 1 };
+  const window = new ProjectionReadRequestWindow(owner, "projection-a");
+  const empty = valueProjectionRequestAt([], "revision-a");
+  expect(window.recordStart(empty, owner, 1)).toBe(true);
+  expect(window.recordAbort(empty)).toBe(true);
+  window.seal();
+  expect(window.recover("projection-b")).toBe(true);
+  expect(window.diagnostics()).toEqual([]);
+});
+
 test.each([
   ["same wire revision", outputProjectionRequest(["metric"], "revision-a")],
   ["unrelated target", outputProjectionRequest(["other"], "revision-b")],

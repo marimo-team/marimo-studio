@@ -54,7 +54,7 @@ const projectionWireIdentity = (
       kind === "outputs"
         ? outputReadRequestSchema.safeParse(value)
         : valueReadRequestSchema.safeParse(value);
-    if (!parsed.success || (kind === "values" && parsed.data.projections.length === 0)) {
+    if (!parsed.success) {
       return undefined;
     }
     const projections = parsed.data.projections.map(projectionTuple).sort();
@@ -143,6 +143,10 @@ export class ProjectionReadRequestWindow {
     this.requests.delete(request);
     if (!operation.candidate) {
       return false;
+    }
+    if (operation.kind === "values" && operation.wire?.projections.length === 0) {
+      this.pruneSuccessfulReads();
+      return true;
     }
     this.aborts += 1;
     if (this.isTerminalValueOperation(operation)) {
