@@ -14,6 +14,7 @@ import {
   readWorkspaceFile,
   recoverRequestAbort,
   recoverResponseTransition,
+  recoverWorkspaceEventStream,
   retireWorkspacePage,
   studioEntryUrl,
   studioOrigin,
@@ -58,11 +59,22 @@ test.afterAll(async () => {
 });
 
 const selectView = async (page: Page, view: string, heading: string) => {
+  const streamReady = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.status() === 200 &&
+      response.request().method() === "GET" &&
+      url.origin === studioOrigin &&
+      url.pathname === "/_marimo-studio/dev/events" &&
+      url.searchParams.get("marimo_studio_view") === view
+    );
+  });
   await page.getByLabel("Switch view").click();
   const accessibleName = view === "dashboard" ? "dashboard, default" : view;
   await page.getByRole("button", { name: accessibleName, exact: true }).click();
   const preview = await waitForViewPreview(page, view);
   await expect(preview.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+  await streamReady;
   return preview;
 };
 
@@ -113,7 +125,7 @@ test("reuses isolated named-view documents after their cold load", async ({
     }),
   ).toHaveValue("gallery notes");
   await recoverRequestAbort(abandonedHandoffs);
-  streamChanges.recovered();
+  await recoverWorkspaceEventStream(streamChanges);
 
   await retireWorkspacePage(page, browserDiagnostics);
 });
@@ -178,7 +190,7 @@ test("reloads a cached sibling after notebook state changes", async ({
   await expect(reloadedReport.locator('[mo-value="metric"]')).toHaveText("44");
   await recoverResponseTransition(dashboardProjectRefresh);
   await recoverRequestAbort(abandonedHandoffs);
-  replacedWorkspaceStreams.recovered();
+  await recoverWorkspaceEventStream(replacedWorkspaceStreams);
   await editorModelRecovery.ready(page);
   await retireWorkspacePage(page, browserDiagnostics);
   editorModelRecovery.recovered();
