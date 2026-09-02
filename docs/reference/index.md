@@ -10,16 +10,16 @@ owns task workflows and developed examples.
 
 ## Product contracts
 
-| Contract                                                   | Reference                                        |
-| ---------------------------------------------------------- | ------------------------------------------------ |
-| Commands, output, and exit status                          | [CLI](cli.md)                                    |
-| Notebook settings, view projects, and saved files          | [Configuration](configuration.md)                |
-| Cells, rendered outputs, live values, and DOM events       | [Notebook result projections](projections.md)    |
-| Provider keys, starters, and built-in options              | [Built-in view providers](built-in-providers.md) |
-| Revisions, generations, runtime instances, and state names | [Identities and state](identities.md)            |
-| File, projection, payload, and timeout boundaries          | [Limits](limits.md)                              |
-| Machine output and expected failures                       | [Errors and JSON](errors-and-json.md)            |
-| Supported releases and execution environments              | [Compatibility and support](compatibility.md)    |
+| Contract                                                        | Reference                                        |
+| --------------------------------------------------------------- | ------------------------------------------------ |
+| Commands, output, and exit status                               | [CLI](cli.md)                                    |
+| Server entry, notebook settings, view projects, and saved files | [Configuration](configuration.md)                |
+| Cells, rendered outputs, live values, and DOM events            | [Notebook result projections](projections.md)    |
+| Provider keys, starters, and built-in options                   | [Built-in view providers](built-in-providers.md) |
+| Revisions, generations, runtime instances, and state names      | [Identities and state](identities.md)            |
+| File, projection, payload, and timeout boundaries               | [Limits](limits.md)                              |
+| Machine output and expected failures                            | [Errors and JSON](errors-and-json.md)            |
+| Supported releases and execution environments                   | [Compatibility and support](compatibility.md)    |
 
 ## Extension contracts
 

@@ -71,6 +71,9 @@ peer, browser-runtime, code-mode, and lifecycle adapters. The ASGI middleware
 receives one bundle per application composition. Feature modules depend on
 their narrow ports, while `_composition.py` owns the concrete bundle shape.
 
+`StudioRoutePolicy` is immutable composition input beside the adapter bundle.
+Route handlers read no process environment.
+
 ### `ExportAdapters`
 
 - `BrowserRuntimeProjector`
