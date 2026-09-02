@@ -41,6 +41,16 @@ test("preserves an untitled native session through save and Studio entry", async
     text: /Missing `Description` or `aria-describedby=\{undefined\}` for \{DialogContent\}/,
     required: false,
   });
+  const closedLspHealth = diagnostics.expectConsole({
+    type: "error",
+    text: /^Error requesting .*\/api\/lsp\/health TypeError: Failed to fetch$/,
+    required: false,
+  });
+  const closedUsageStats = diagnostics.expectConsole({
+    type: "error",
+    text: /^Failed to handle request: getUsageStats TypeError: Failed to fetch$/,
+    required: false,
+  });
   const replacedWorkspaceStream = diagnostics.expectWorkspaceEventStreamReplacement(
     `${server.serverUrl}/_marimo-studio/dev/events`,
     2,
@@ -108,6 +118,8 @@ shown.to_dict()
 
     filenameFallback.recovered();
     dialogDescription.recovered();
+    closedLspHealth.recovered();
+    closedUsageStats.recovered();
     await diagnostics.close();
     diagnosticsClosed = true;
     expect(diagnostics.messages, "unexpected browser diagnostics").toEqual([]);
