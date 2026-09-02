@@ -3,11 +3,12 @@ import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
+import { e2eNetwork } from "../scripts/network.mjs";
 import { fixtureDirectory } from "../scripts/paths.mjs";
 import { executeCodeMode, studioEditorSessionId } from "./authoring-test-support.ts";
+import { observeBrowserContext } from "./browser-diagnostics.ts";
 import { editorFrame } from "./fixture.ts";
 import {
-  availablePort,
   closeFailedNotebookServer,
   startNotebookServer,
   stopNotebookServer,
@@ -25,10 +26,26 @@ test("preserves an untitled native session through save and Studio entry", async
     authentication: ["--no-token"],
     command: "edit",
     editRoot: "marimo",
-    port: await availablePort(),
+    port: e2eNetwork.main.hostSession.port,
     target: workspace,
   });
   const context = await browser.newContext();
+  const diagnostics = observeBrowserContext(context);
+  const filenameFallback = diagnostics.expectConsole({
+    type: "warning",
+    text: /^No filename provided, using fallback$/,
+    required: false,
+  });
+  const dialogDescription = diagnostics.expectConsole({
+    type: "warning",
+    text: /Missing `Description` or `aria-describedby=\{undefined\}` for \{DialogContent\}/,
+    required: false,
+  });
+  const replacedWorkspaceStream = diagnostics.expectWorkspaceEventStreamReplacement(
+    `${server.serverUrl}/_marimo-studio/dev/events`,
+    2,
+  );
+  let diagnosticsClosed = false;
   let stopped = false;
   try {
     await waitForNotebookServer(server, `${server.serverUrl}/`);
@@ -83,11 +100,26 @@ shown.to_dict()
     await direct.goto(`${server.serverUrl}/studio/dashboard/?file=notebook.py`);
     expect(await studioEditorSessionId(direct)).toBe(directSessionId);
     await expect(editorFrame(direct).locator("[data-cell-id]").first()).toBeVisible();
+    replacedWorkspaceStream.recovered();
     await direct.close();
 
+    filenameFallback.recovered();
+    dialogDescription.recovered();
+    await diagnostics.close();
+    diagnosticsClosed = true;
+    expect(diagnostics.messages, "unexpected browser diagnostics").toEqual([]);
     await stopNotebookServer(server);
     stopped = true;
   } finally {
+    if (!diagnosticsClosed) {
+      await diagnostics.close();
+      if (diagnostics.messages.length > 0) {
+        await testInfo.attach("browser-diagnostics", {
+          body: Buffer.from(diagnostics.messages.join("\n")),
+          contentType: "text/plain",
+        });
+      }
+    }
     await context.close();
     const cleanupFailure = !stopped ? await closeFailedNotebookServer(server) : undefined;
     if (cleanupFailure !== undefined) {

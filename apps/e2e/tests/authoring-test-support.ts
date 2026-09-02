@@ -107,7 +107,7 @@ export const executeCodeMode = async (
     },
     { code, file, sessionId },
   );
-  expect(result.ok).toBe(true);
+  expect(result.ok, result.text).toBe(true);
   expect(result.text).toContain('"success": true');
 };
 
