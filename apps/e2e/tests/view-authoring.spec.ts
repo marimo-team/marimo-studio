@@ -623,18 +623,17 @@ test.describe("touch input", () => {
     page,
   }) => {
     const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
-    await addWorkspaceView(workspaceNotebookPath, "report");
     await page.goto(studioEntryUrl);
     await waitForPreview(page);
     await page.getByLabel("Switch view").tap();
-    await page.getByLabel("Remove report view").tap();
+    await page.getByLabel("Remove vanilla-local view").tap();
 
     const confirmation = page.getByRole("region", { name: "Remove view?" });
     await expect(confirmation).toContainText(
-      "This permanently deletes the report view and its files.",
+      "This permanently deletes the vanilla-local view and its files.",
     );
     await page.getByRole("button", { name: "Cancel" }).tap();
-    await expect(page.getByLabel("Remove report view")).toBeFocused();
+    await expect(page.getByLabel("Remove vanilla-local view")).toBeFocused();
     await editorModelRecovery.ready(page);
     await retireWorkspacePage(page, browserDiagnostics);
     editorModelRecovery.recovered();
