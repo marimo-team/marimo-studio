@@ -355,6 +355,8 @@ class StudioClientRegistry:
         """Discard the outgoing Studio client after native admission succeeds."""
         if self._closed or not self._bindings.suspended(lease):
             return False
+        for task in self._query_mutations.release_binding(lease):
+            task.cancel()
         self._discard_locked(lease.client_id)
         self._publish()
         self._schedule_notify()
@@ -439,8 +441,11 @@ class StudioClientRegistry:
     ) -> QueryOperationClaim | None:
         async with self._condition:
             client = self._clients.get(client_id)
+            lease = client.binding_lease if client is not None else None
             if (
                 client is None
+                or lease is None
+                or not self._bindings.current(lease)
                 or not self._presence.is_connected(client)
                 or client.session_id != expected_session_id
                 or self._session_clients.get(expected_session_id) != client_id
@@ -461,8 +466,11 @@ class StudioClientRegistry:
     ) -> bool:
         async with self._condition:
             client = self._clients.get(claim.client_id)
+            lease = client.binding_lease if client is not None else None
             if (
                 client is None
+                or lease is None
+                or not self._bindings.current(lease)
                 or not self._presence.is_connected(client)
                 or client.session_id != claim.session_id
                 or client.binding_generation != claim.binding_generation
@@ -475,8 +483,11 @@ class StudioClientRegistry:
     async def acquire_query_mutation(self, claim: QueryOperationClaim) -> bool:
         async with self._condition:
             client = self._clients.get(claim.client_id)
+            lease = client.binding_lease if client is not None else None
             if (
                 client is None
+                or lease is None
+                or not self._bindings.current(lease)
                 or not self._presence.is_connected(client)
                 or client.session_id != claim.session_id
                 or client.binding_generation != claim.binding_generation

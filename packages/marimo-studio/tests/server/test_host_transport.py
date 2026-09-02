@@ -18,6 +18,10 @@ from marimo_studio._server.ports import (
     SessionOwner,
     SessionState,
 )
+from marimo_studio._server.presentation.admission import (
+    NATIVE_SESSION_ADMISSION_SCOPE_KEY,
+    NativeSessionAdmission,
+)
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.route_policy import StudioRoutePolicy
 from marimo_studio._server.security import SecurityPolicy
@@ -236,6 +240,40 @@ def test_unsettled_admission_restores_only_the_same_session(
             else:
                 assert restored is not None
                 assert restored.client_id == "browser-client"
+        finally:
+            await harness.close()
+
+    asyncio.run(exercise())
+
+
+def test_accepted_admission_commits_the_native_session_transfer(
+    notebook_path: Path,
+) -> None:
+    async def exercise() -> None:
+        harness = _TransportHarness(notebook_path)
+        await harness.bind_studio()
+        await harness.authorize()
+
+        async def downstream(scope: Scope, receive: Receive, send: Send) -> None:
+            del receive, send
+            admission = cast(
+                NativeSessionAdmission,
+                scope[NATIVE_SESSION_ADMISSION_SCOPE_KEY],
+            )
+            assert admission.on_accept is not None
+            admission.settled = True
+            admission.on_accept(harness.sessions.claim)
+
+        try:
+            assert await harness.transport("/sse", downstream)
+            assert harness.sessions.released
+            assert (
+                await harness.notebooks.get(notebook_path).clients.binding_for_session(
+                    _SESSION_ID
+                )
+                is None
+            )
+            assert not harness.handler.session_active(harness.context, _SESSION_ID)
         finally:
             await harness.close()
 
