@@ -51,12 +51,22 @@ const drainSessions = async (apiRoot, headers, deadline) => {
 
 const accessHeaders = (authToken) => (authToken ? { Authorization: `Bearer ${authToken}` } : {});
 
-export const requestStudioShutdown = async (serverUrl, authToken, timeout = 5_000) => {
+export const requestStudioShutdown = async (
+  serverUrl,
+  authToken,
+  timeout = 5_000,
+  studioEntry = "",
+) => {
   const authorization = accessHeaders(authToken);
   const deadline = Date.now() + timeout;
-  const documentResponse = await requestWithin(`${serverUrl}/?file=notebook.py`, deadline, {
-    headers: authorization,
-  });
+  const entrySession = studioEntry ? "&session_id=s_shutdn" : "";
+  const documentResponse = await requestWithin(
+    `${serverUrl}${studioEntry}/?file=notebook.py${entrySession}`,
+    deadline,
+    {
+      headers: authorization,
+    },
+  );
   if (!documentResponse.ok) {
     throw new Error(`Marimo bootstrap returned ${documentResponse.status}`);
   }

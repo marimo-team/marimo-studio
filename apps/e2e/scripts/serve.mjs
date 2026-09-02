@@ -81,6 +81,7 @@ const stop = (signal) => {
       output: outputs.get(hosted),
       port: e2eNetwork.main.hosted.port,
       serverUrl: `${e2eNetwork.main.hosted.origin}/hosted`,
+      studioEntry: "/studio",
       shutdown: "studio",
     },
     exported && {
@@ -176,19 +177,22 @@ try {
   );
 
   hosted = track(
-    startServer([
-      hostedNotebookPath,
-      "--no-sandbox",
-      "--headless",
-      "--token-password",
-      "studio-e2e-token",
-      "--base-url",
-      "/hosted",
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(e2eNetwork.main.hosted.port),
-    ]),
+    startServer(
+      [
+        hostedNotebookPath,
+        "--no-sandbox",
+        "--headless",
+        "--token-password",
+        "studio-e2e-token",
+        "--base-url",
+        "/hosted",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(e2eNetwork.main.hosted.port),
+      ],
+      { MARIMO_STUDIO_EDIT_ROOT: "marimo" },
+    ),
   );
   exported = track(
     spawn(

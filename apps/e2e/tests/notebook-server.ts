@@ -22,6 +22,7 @@ interface NotebookServerOptions {
   target: string;
   port: number;
   authentication: readonly string[];
+  editRoot?: "marimo" | "studio";
   extensions?: "native" | "studio";
   registryDirectory?: string;
 }
@@ -41,6 +42,7 @@ export interface NotebookServer {
   port: number;
   ready: Promise<void>;
   serverUrl: string;
+  studioEntry?: string;
   shutdown: "run" | "studio";
   authToken: string | undefined;
   output(): string;
@@ -68,6 +70,7 @@ export const startNotebookServer = ({
   target,
   port,
   authentication,
+  editRoot = "studio",
   extensions = "studio",
   registryDirectory = notebookProcessRegistryDirectory,
 }: NotebookServerOptions): NotebookServer => {
@@ -80,6 +83,7 @@ export const startNotebookServer = ({
   delete environment.MARIMO_KERNEL_LIFESPAN_DENYLIST;
   delete environment.MARIMO_SERVER_ASGI_MIDDLEWARE_ALLOWLIST;
   delete environment.MARIMO_SERVER_ASGI_MIDDLEWARE_DENYLIST;
+  environment.MARIMO_STUDIO_EDIT_ROOT = editRoot;
   if (extensions === "native") {
     environment.MARIMO_KERNEL_LIFESPAN_DENYLIST = "marimo-studio";
     environment.MARIMO_SERVER_ASGI_MIDDLEWARE_DENYLIST = "marimo-studio";
@@ -128,6 +132,7 @@ export const startNotebookServer = ({
     processGroupId,
     ready,
     serverUrl: `http://127.0.0.1:${port}`,
+    studioEntry: editRoot === "marimo" ? "/studio" : "",
     shutdown: command === "run" ? "run" : "studio",
   };
 };
@@ -155,6 +160,7 @@ export const stopNotebookServer = async (
         port: server.port,
         processGroupId: server.processGroupId,
         serverUrl: server.serverUrl,
+        studioEntry: server.studioEntry,
       },
       { shutdown: server.shutdown, timeout },
     );
