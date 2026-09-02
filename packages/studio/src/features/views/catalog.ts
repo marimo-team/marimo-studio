@@ -13,6 +13,7 @@ export type StarterCatalogState =
 
 export interface StarterCatalogSnapshot {
   state: StarterCatalogState;
+  generation: string;
   starters: readonly Starter[];
   defaultStarter: string;
 }
@@ -30,9 +31,11 @@ export class StarterCatalogController {
     private readonly list: ViewRemote["list"],
     initialStarters: readonly Starter[] = [],
     initialDefaultStarter = "",
+    initialGeneration = "",
   ) {
     this.snapshot = {
       state: initialStarters.length > 0 ? { phase: "ready" } : { phase: "idle" },
+      generation: initialGeneration,
       starters: initialStarters,
       defaultStarter: initialDefaultStarter,
     };
@@ -71,13 +74,14 @@ export class StarterCatalogController {
     return request;
   }
 
-  accept(inventory: Pick<ViewList, "default_starter" | "starters">): void {
+  accept(inventory: Pick<ViewList, "default_starter" | "generation" | "starters">): void {
     if (this.disposed) {
       return;
     }
     this.generation += 1;
     this.publish({
       state: { phase: "ready" },
+      generation: inventory.generation,
       starters: inventory.starters,
       defaultStarter: inventory.default_starter,
     });
@@ -104,6 +108,7 @@ export class StarterCatalogController {
       }
       this.publish({
         state: { phase: "ready" },
+        generation: inventory.generation,
         starters: inventory.starters,
         defaultStarter: inventory.default_starter,
       });
