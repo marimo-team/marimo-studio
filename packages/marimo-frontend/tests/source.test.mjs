@@ -18,6 +18,7 @@ import {
 } from "../scripts/source.mjs";
 import {
   evergreenKaTeXFontCss,
+  extendWebSocketConnectionTimeout,
   silenceMissingPresentationCellScroll,
   stabilizeDataTableHeaderRefs,
 } from "../src/vite.ts";
@@ -254,6 +255,22 @@ export function warnAboutOtherFailure() {
   module.scrollCellIntoView(null, "cell-1");
   module.warnAboutOtherFailure();
   expect(module.readWarnings()).toEqual([["another focus failure"]]);
+});
+
+test("browser connections retain the Studio startup window", () => {
+  const source = `new ReconnectingWebSocket(urlProvider, undefined, {
+      maxRetries: MAX_RETRIES,
+      startClosed: true,
+      connectionTimeout: 10_000,
+    });`;
+
+  const transformed = lineEndingVariants(source).map(extendWebSocketConnectionTimeout);
+  expect(transformed[0]).toBe(transformed[1]);
+  expect(transformed[0]).toContain("connectionTimeout: 30_000");
+  expect(transformed[0]).not.toContain("connectionTimeout: 10_000");
+  expect(() => extendWebSocketConnectionTimeout("connectionTimeout: 4_000,")).toThrow(
+    "Marimo WebSocket connection timeout no longer matches the Studio adapter",
+  );
 });
 
 test("opaque presentations execute through one owned inline WebAssembly worker", async () => {
