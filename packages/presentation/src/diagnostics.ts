@@ -28,8 +28,20 @@ export interface RuntimeDiagnostic {
   scope: "runtime";
 }
 
+export interface MountDeclarationDiagnostic {
+  code: string;
+  severity: "error";
+  message: string;
+  hint: string;
+  view: string;
+  scope: "projection";
+  projection: "cell" | "value" | "output";
+  source: { path: string; line: number; column: number };
+}
+
 export type StudioDiagnostic =
   | ProjectionDiagnostic
+  | MountDeclarationDiagnostic
   | PresentationDiagnostic
   | HostDiagnostic
   | RuntimeDiagnostic;

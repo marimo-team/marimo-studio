@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type {
+  EmbeddedCellExecutor,
   EmbeddedFunction,
   EmbeddedPresentationConfig,
   EmbeddedRuntimeHandle,
@@ -22,6 +23,7 @@ export interface EmbeddedRuntimeRenderer {
     initialized: Promise<void>,
     renderView: (runtime: EmbeddedRuntimeView) => ReactNode,
     sessionId: SessionId,
+    autoInstantiate: boolean,
   ): void;
   dispose(): void;
 }
@@ -45,38 +47,95 @@ export interface EmbeddedRuntimeHost {
 interface TransportRuntime {
   getSseURL: (sessionId: SessionId) => URL;
   getWsURL: (sessionId: SessionId) => URL;
+  headers: () => Record<string, string>;
+  sessionHeaders: () => Record<string, string>;
 }
 
 export interface EmbeddedTransportHost {
-  activateServerRequests(): void;
+  activateServerRequests(): () => void;
   prepareServer(transport: EmbeddedServerTransport): TransportRuntime;
   prepareWasm(transport: EmbeddedWasmTransport): Promise<void>;
+  releaseWasm(): void;
+  executeWasmCells: EmbeddedCellExecutor;
 }
+
+export interface PageBoundModelValueSender<Request> {
+  readonly send: (request: Request) => Promise<null>;
+  dispose(): void;
+}
+
+export const bindModelValueSenderToPage = <Request>(
+  send: (request: Request) => Promise<null>,
+  page: Window = globalThis.window,
+): PageBoundModelValueSender<Request> => {
+  let finalPageHidden = false;
+  let disposed = false;
+  const pagehide = (event: PageTransitionEvent) => {
+    if (!event.persisted) {
+      finalPageHidden = true;
+    }
+  };
+  page.addEventListener("pagehide", pagehide, true);
+  return {
+    send: async (request) => {
+      if (finalPageHidden || disposed) {
+        return null;
+      }
+      try {
+        return await send(request);
+      } catch (error) {
+        if (finalPageHidden || disposed) {
+          return null;
+        }
+        throw error;
+      }
+    },
+    dispose() {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
+      page.removeEventListener("pagehide", pagehide, true);
+    },
+  };
+};
 
 interface TransportURLPatch {
   readonly getSseURL: TransportRuntime["getSseURL"];
   readonly getWsURL: TransportRuntime["getWsURL"];
+  readonly headers: TransportRuntime["headers"];
+  readonly sessionHeaders: TransportRuntime["sessionHeaders"];
 }
 
 const transportURLPatches = new WeakMap<object, TransportURLPatch>();
 
 const configureTransportURLs = (
   runtime: TransportRuntime,
-  transformTransportURL: EmbeddedServerTransport["transformTransportURL"],
+  transport: EmbeddedServerTransport,
 ): (() => void) => {
   if (transportURLPatches.has(runtime)) {
     throw new Error("The embedded runtime transport URLs already have an owner");
   }
   const originalGetWsURL = runtime.getWsURL;
   const originalGetSseURL = runtime.getSseURL;
+  const originalHeaders = runtime.headers;
+  const originalSessionHeaders = runtime.sessionHeaders;
   const getWsURL: TransportRuntime["getWsURL"] = (sessionId) =>
-    transformTransportURL(originalGetWsURL.call(runtime, sessionId));
+    transport.transformTransportURL(originalGetWsURL.call(runtime, sessionId));
   const getSseURL: TransportRuntime["getSseURL"] = (sessionId) =>
-    transformTransportURL(originalGetSseURL.call(runtime, sessionId));
-  const patch = { getSseURL, getWsURL };
+    transport.transformTransportURL(originalGetSseURL.call(runtime, sessionId));
+  const presentationHeaders = (headers: Record<string, string>) => ({
+    ...headers,
+    "Marimo-Session-Id": transport.presentationSessionId,
+  });
+  const headers = () => presentationHeaders(originalHeaders.call(runtime));
+  const sessionHeaders = () => presentationHeaders(originalSessionHeaders.call(runtime));
+  const patch = { getSseURL, getWsURL, headers, sessionHeaders };
   transportURLPatches.set(runtime, patch);
   runtime.getWsURL = getWsURL;
   runtime.getSseURL = getSseURL;
+  runtime.headers = headers;
+  runtime.sessionHeaders = sessionHeaders;
 
   let released = false;
   return () => {
@@ -86,12 +145,16 @@ const configureTransportURLs = (
     if (
       transportURLPatches.get(runtime) !== patch ||
       runtime.getWsURL !== getWsURL ||
-      runtime.getSseURL !== getSseURL
+      runtime.getSseURL !== getSseURL ||
+      runtime.headers !== headers ||
+      runtime.sessionHeaders !== sessionHeaders
     ) {
       throw new Error("The embedded runtime transport URL methods changed before disposal");
     }
     runtime.getWsURL = originalGetWsURL;
     runtime.getSseURL = originalGetSseURL;
+    runtime.headers = originalHeaders;
+    runtime.sessionHeaders = originalSessionHeaders;
     transportURLPatches.delete(runtime);
     released = true;
   };
@@ -106,14 +169,22 @@ export const createTransportInitializer = (
     try {
       if (transport.kind === "server") {
         const runtime = host.prepareServer(transport);
-        release = configureTransportURLs(runtime, transport.transformTransportURL);
-        host.activateServerRequests();
+        const releaseTransportURLs = configureTransportURLs(runtime, transport);
+        release = releaseTransportURLs;
+        const releaseRequests = host.activateServerRequests();
+        release = () => {
+          releaseRequests();
+          releaseTransportURLs();
+        };
         return { initialized: Promise.resolve(), release };
       }
 
+      release = () => host.releaseWasm();
       const workerInitialized = host.prepareWasm(transport);
       return {
-        initialized: Promise.resolve(transport.waitForReady(workerInitialized, invoke)),
+        initialized: Promise.resolve(
+          transport.waitForReady(workerInitialized, invoke, host.executeWasmCells),
+        ),
         release,
       };
     } catch (error) {
@@ -204,6 +275,7 @@ export const createEmbeddedRuntimeMount = (host: EmbeddedRuntimeHost) => {
     let initialized!: Promise<void>;
     let sessionId!: SessionId;
     let transport: InitializedTransport | undefined;
+    let activeTransport = options.transport;
     let stopTheme = () => {};
     let stopExposingSession = () => {};
     let renderer: EmbeddedRuntimeRenderer | undefined;
@@ -230,7 +302,7 @@ export const createEmbeddedRuntimeMount = (host: EmbeddedRuntimeHost) => {
       stopTheme = options.theme.subscribe(syncTheme);
       renderer = host.createRenderer(options.root);
       stopExposingSession = exposeSession(sessionId, options.exposeSession);
-      renderer.render(initialized, options.render, sessionId);
+      renderer.render(initialized, options.render, sessionId, options.autoInstantiate);
     } catch (error) {
       const cleanupErrors = runDisposers(disposers);
       if (disposers.size === 0) {
@@ -250,6 +322,30 @@ export const createEmbeddedRuntimeMount = (host: EmbeddedRuntimeHost) => {
       initialized,
       invoke: host.invoke,
       sessionId,
+      updateServerTransport(next) {
+        if (disposing) {
+          return;
+        }
+        if (activeTransport.kind !== "server") {
+          throw new Error("A WebAssembly runtime cannot switch to a server transport");
+        }
+        const previous = activeTransport;
+        transport?.release();
+        try {
+          transport = host.initializeTransport(next);
+          activeTransport = next;
+        } catch (error) {
+          try {
+            transport = host.initializeTransport(previous);
+          } catch (rollbackError) {
+            throw new AggregateError(
+              [error, rollbackError],
+              "Server transport update and rollback failed",
+            );
+          }
+          throw error;
+        }
+      },
       update(next) {
         if (disposing) {
           return;

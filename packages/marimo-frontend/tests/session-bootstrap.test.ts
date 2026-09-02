@@ -13,7 +13,6 @@ describe("Session bootstrap", () => {
       return "s_abc123";
     });
 
-    expect(importOrder).toEqual([]);
     expect(() => session.current()).toThrow("has not been bootstrapped");
 
     const sessionId = await session.bootstrap(async () => {

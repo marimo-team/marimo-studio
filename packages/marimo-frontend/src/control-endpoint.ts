@@ -24,8 +24,10 @@ const eventObjectId = (event: Event): string | undefined => {
 
 export type { ControlEndpoint, ControlUpdate } from "./control-endpoint-core.ts";
 
-export const connectControlEndpoint = (frame: HTMLIFrameElement): ControlEndpoint | undefined => {
-  const browser = frame.contentWindow;
+const connectWindowControlEndpoint = (
+  browser: Window | null,
+  target: EventTarget,
+): ControlEndpoint | undefined => {
   const registry = browser?._marimo_private_UIElementRegistry;
   const sendControlValues = browser?._marimo_private_RuntimeState?._sendComponentValues;
   if (!browser || !registry || !sendControlValues) {
@@ -33,7 +35,7 @@ export const connectControlEndpoint = (frame: HTMLIFrameElement): ControlEndpoin
   }
 
   return createControlEndpoint(
-    browser.document,
+    target,
     registry,
     {
       type: MarimoValueReadyEvent.TYPE,
@@ -41,4 +43,16 @@ export const connectControlEndpoint = (frame: HTMLIFrameElement): ControlEndpoin
     },
     sendControlValues,
   );
+};
+
+export const connectCurrentControlEndpoint = (): ControlEndpoint | undefined =>
+  connectWindowControlEndpoint(globalThis.window, globalThis.document);
+
+export const connectControlEndpoint = (frame: HTMLIFrameElement): ControlEndpoint | undefined => {
+  try {
+    const browser = frame.contentWindow;
+    return browser ? connectWindowControlEndpoint(browser, browser.document) : undefined;
+  } catch {
+    return undefined;
+  }
 };

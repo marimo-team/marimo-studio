@@ -10,7 +10,6 @@ from weakref import WeakKeyDictionary
 from marimo._runtime.params import QueryParams
 from marimo._server.api.endpoints.ws.ws_session_connector import SessionConnector
 
-from marimo_studio._capabilities import ServerContext
 from marimo_studio._compat.patch import (
     CallbackCloseHandle,
     CompositeCloseHandle,
@@ -18,9 +17,9 @@ from marimo_studio._compat.patch import (
 )
 from marimo_studio._compat.server.gateway import context_handle
 from marimo_studio._compat.server.session_state import session_matches_notebook
-from marimo_studio.errors import CompatibilityError
-
-DOCUMENT_REPLAY_QUERY_PARAM = "marimo_studio_resume"
+from marimo_studio._delivery.urls import DOCUMENT_REPLAY_QUERY_PARAM
+from marimo_studio._server.records import ServerContext
+from marimo_studio.errors._internal import CompatibilityError
 
 _FILES: WeakKeyDictionary[Any, dict[str, dict[object, Path]]] = WeakKeyDictionary()
 _LOCK = RLock()
@@ -129,7 +128,7 @@ class PrivateSessionReplay:
             files = _FILES.setdefault(manager, {})
             owners = files.setdefault(context.file_key, {})
             if enabled:
-                owners[self._owner] = context.notebook.resolve()
+                owners[self._owner] = context.notebook
                 self._managers[manager] = None
                 return
             owners.pop(self._owner, None)
@@ -151,6 +150,3 @@ class PrivateSessionReplay:
                 if not files:
                     _FILES.pop(manager, None)
             self._managers.clear()
-
-
-__all__ = ["DOCUMENT_REPLAY_QUERY_PARAM", "PrivateSessionReplay"]

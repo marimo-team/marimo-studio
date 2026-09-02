@@ -7,72 +7,116 @@ PNPM ?= pnpm
 VP := $(PNPM) exec vp
 DIST_DIR := $(CURDIR)/dist
 PY_PACKAGE := packages/marimo-studio
+PYTHON_PATHS := $(PY_PACKAGE) scripts
 FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples packages skills package.json plugin.json pnpm-workspace.yaml tsconfig.json vite.config.ts
-TYPECHECK_PATHS := apps/browser apps/docs/.vitepress apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/src vite.config.ts
+TYPECHECK_PATHS := apps/browser apps/docs/.vitepress apps/docs/scripts apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/scripts packages/marimo-frontend/src vite.config.ts
+DENO_PROVIDER_ROOTS := $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/_deno $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_react $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_svelte
+DENO_PROVIDER_LINT_SOURCES := $(shell find $(DENO_PROVIDER_ROOTS) -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' | sort)
 
-.PHONY: help install anti-slop-check format lint typecheck test examples-check e2e e2e-ui check build docs-build docs-serve package prepare-frontend
+.PHONY: help setup format lint typecheck python-test frontend-test test check build
+.PHONY: e2e e2e-ui docs-examples docs-build docs-serve audit package
+.PHONY: _anti-slop-check _architecture-check _provider-sources-check
+.PHONY: _prepare-frontend _frontend-ready _browser-install _browser-ready
 
 help: ## List development targets.
-	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-install: ## Install locked Python and JavaScript dependencies.
-	$(UV) sync --locked
+setup: ## Prepare dependencies, browser assets, and Chromium.
+	$(UV) sync --locked --reinstall-package marimo-studio
 	$(PNPM) install --frozen-lockfile
+	$(MAKE) _prepare-frontend
+	$(MAKE) build
+	$(MAKE) _browser-install
 
-anti-slop-check: ## Verify the managed Oxlint policy.
+_anti-slop-check:
 	node --test --test-concurrency=1 tools/oxlint/anti-slop/test/*.test.ts tools/oxlint/anti-slop/test/compatibility/*.test.ts
 	$(PNPM) exec tsc -p tools/oxlint/anti-slop/tsconfig.json --noEmit
 
 format: ## Format Python and JavaScript sources.
-	cd $(PY_PACKAGE) && $(UV) run --project ../.. ruff format .
+	$(UV) run ruff format $(PYTHON_PATHS)
 	$(VP) fmt $(FORMAT_PATHS)
+	$(UV) run --frozen deno fmt $(DENO_PROVIDER_ROOTS)
 
-lint: prepare-frontend anti-slop-check ## Check formatting, source, workflows, and shell scripts.
-	cd $(PY_PACKAGE) && $(UV) run --project ../.. ruff format --check .
-	cd $(PY_PACKAGE) && $(UV) run --project ../.. ruff check .
+_provider-sources-check:
+	$(UV) run --frozen deno fmt --check $(DENO_PROVIDER_ROOTS)
+	$(UV) run --frozen deno lint --rules-exclude=no-import-prefix $(DENO_PROVIDER_LINT_SOURCES)
+
+_architecture-check:
+	$(UV) run python scripts/check_python_architecture.py
+
+lint: _frontend-ready _anti-slop-check _architecture-check _provider-sources-check ## Check formatting, source, workflows, and shell scripts.
+	$(UV) run ruff format --check $(PYTHON_PATHS)
+	$(UV) run ruff check $(PYTHON_PATHS)
 	$(VP) fmt --check $(FORMAT_PATHS)
 	$(VP) lint apps packages vite.config.ts
 	uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
 	shellcheck scripts/*.sh
 
-typecheck: prepare-frontend ## Type-check Python and TypeScript sources.
+typecheck: _frontend-ready ## Type-check Python and TypeScript sources.
 	$(UV) run ty check
 	$(UV) run pyrefly check
+	$(UV) run basedpyright --level error
 	$(VP) check --no-fmt --no-lint $(TYPECHECK_PATHS)
 
-test: ## Run Python and browser-runtime tests.
-	$(UV) run pytest
+python-test: ## Run the complete Python test profile for this environment.
+	./scripts/python-test.sh --profile all
+
+frontend-test: _frontend-ready ## Run JavaScript and TypeScript tests.
 	$(VP) run -r test
 
-examples-check: build ## Validate every example notebook and Studio view.
-	$(UV) run marimo check examples/analysis.py examples/nga_collection.py
-	$(UV) run marimo-studio check examples/analysis.py --runtime
-	$(UV) run marimo-studio check examples/nga_collection.py
+test: python-test frontend-test ## Run Python and frontend tests.
 
-e2e: build ## Test Studio in Chromium with a live Marimo kernel.
-	$(PNPM) --filter @marimo-studio/e2e e2e
-
-e2e-ui: build ## Open the browser test runner.
-	$(PNPM) --filter @marimo-studio/e2e e2e:ui
-
-check: lint typecheck test examples-check ## Run the local quality gates.
+check: lint typecheck test ## Run the local quality gates.
 
 build: ## Build browser assets into the Python package.
 	$(VP) run --filter @marimo-studio/browser build
 
-docs-build: ## Build the VitePress documentation.
+_browser-install:
+	$(PNPM) --filter @marimo-studio/e2e install-browser
+
+e2e: _browser-ready build ## Test source and installed-package flows in Chromium.
+	$(PNPM) --filter @marimo-studio/e2e e2e
+	$(PNPM) --filter @marimo-studio/e2e e2e:providers
+	$(PNPM) --filter @marimo-studio/e2e e2e:installed
+
+e2e-ui: _browser-ready build ## Open the browser test runner.
+	$(PNPM) --filter @marimo-studio/e2e e2e:ui
+
+docs-examples: _frontend-ready build ## Export examples for the documentation site.
+	$(VP) run --filter @marimo-studio/docs examples:build
+
+docs-build: _frontend-ready build ## Build the VitePress documentation.
 	$(VP) run --filter @marimo-studio/docs build
 
-docs-serve: ## Serve documentation at http://127.0.0.1:4173/.
+docs-serve: _frontend-ready build ## Serve documentation at http://127.0.0.1:4173/.
 	BASE_PATH= $(VP) run --filter @marimo-studio/docs dev
+
+audit: ## Audit locked Python and JavaScript dependencies.
+	$(UV) run --frozen --group release pip-audit \
+		--strict \
+		--disable-pip \
+		--require-hashes \
+		--requirement <($(UV) export --frozen --package marimo-studio \
+			--no-dev --all-extras --no-emit-workspace --no-annotate --no-header)
+	$(PNPM) audit --audit-level low
 
 package: build ## Build and validate the wheel and source distribution.
 	rm -rf "$(DIST_DIR)"
 	$(UV) build --package marimo-studio --out-dir "$(DIST_DIR)"
-	uvx twine check "$(DIST_DIR)"/*.whl "$(DIST_DIR)"/*.tar.gz
 	mkdir -p "$(DIST_DIR)/from-sdist"
 	$(UV) build --wheel "$(DIST_DIR)"/*.tar.gz --out-dir "$(DIST_DIR)/from-sdist"
+	$(UV) run --frozen --group release twine check \
+		"$(DIST_DIR)"/*.whl \
+		"$(DIST_DIR)"/*.tar.gz \
+		"$(DIST_DIR)"/from-sdist/*.whl
 	./scripts/verify-dist.sh
+	$(UV) run --frozen python scripts/write-dist-checksums.py "$(DIST_DIR)"
 
-prepare-frontend:
+_prepare-frontend:
 	$(PNPM) --filter @marimo-studio/marimo-frontend prepare:upstream
+
+_frontend-ready:
+	$(PNPM) --filter @marimo-studio/marimo-frontend check:upstream
+
+_browser-ready:
+	@$(PNPM) --filter @marimo-studio/e2e check-browser

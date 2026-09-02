@@ -1,13 +1,18 @@
 import { useMemo, useSyncExternalStore } from "react";
 
-import type { CellIndex } from "../../cells/bindings";
+import type { CellIndex } from "../../cells/index";
 import type { OutputReader } from "../../outputs/reader";
 import type { RuntimeConnectionState } from "../cell-state";
 import type { RuntimeCell } from "../runtime-cell";
 
-import { resolveCellBinding } from "../../cells/bindings";
 import { getOutputHosts, subscribeOutputHosts } from "../../outputs/host";
-import { useRuntimeConfig } from "../use-runtime-config";
+import { projectionRequestForHost } from "../../projections/identity";
+import { applyProjectionMetadata } from "../../projections/instances";
+import {
+  createProjectionResolutionContext,
+  resolveHostProjection,
+} from "../../projections/resolution";
+import { useRuntimeProjectionConfig } from "../use-runtime-config";
 import { DuplicateOutputPortal } from "./DuplicateOutputPortal";
 import { OutputPortal } from "./OutputPortal";
 import { useOutputLifecycle } from "./use-output-lifecycle";
@@ -42,56 +47,73 @@ export const RuntimeOutputs = ({
   readOutputs: OutputReader;
   runtimeReady: boolean;
 }) => {
-  const config = useRuntimeConfig();
+  const projectionConfig = useRuntimeProjectionConfig();
   const hosts = useSyncExternalStore(subscribeOutputHosts, getOutputHosts, getOutputHosts);
-  const activeKey = Array.from(
-    new Set(
-      hosts
-        .map((host) => host.valueSelector)
-        .filter((selector) => {
-          const binding = config.outputBindings[selector];
-          return binding !== undefined && canOwnOutput(resolveCellBinding(binding.cell, cells));
-        }),
-    ),
-  )
-    .sort()
-    .join("\u0000");
-  const activeSelectors = useMemo(() => (activeKey ? activeKey.split("\u0000") : []), [activeKey]);
-  useOutputLifecycle({
-    activeSelectors,
+  const { resolvedHosts, primaryHosts, activeProjections } = useMemo(() => {
+    const context = createProjectionResolutionContext(projectionConfig, document);
+    const resolved = hosts.map((host) => {
+      const resolution = resolveHostProjection(
+        projectionConfig,
+        host,
+        projectionRequestForHost(host, "output", host.valueSelector),
+        context,
+      );
+      applyProjectionMetadata(host, resolution);
+      return { host, resolution };
+    });
+    const primary = new Map<string, (typeof hosts)[number]>();
+    resolved.forEach(({ host, resolution }) => {
+      if (resolution.ok && !primary.has(resolution.value.request.target)) {
+        primary.set(resolution.value.request.target, host);
+      }
+    });
+    const active = resolved.flatMap(({ host, resolution }) => {
+      if (!resolution.ok || primary.get(resolution.value.request.target) !== host) {
+        return [];
+      }
+      const runtimeId = resolution.value.runtimeCellId;
+      const cell = runtimeId === undefined ? undefined : cells.byId.get(runtimeId);
+      return canOwnOutput(cell) ? [resolution.value.request] : [];
+    });
+    return {
+      resolvedHosts: resolved,
+      primaryHosts: primary,
+      activeProjections: active,
+    };
+  }, [cells, hosts, projectionConfig]);
+  const ownedOutputReader = useOutputLifecycle({
+    activeProjections,
     connectionState,
     readOutputs,
-    revision: config.revision,
+    projectionRevision: projectionConfig.projectionRevision,
     runtimeReady,
   });
 
-  const primaryHosts = new Map<string, (typeof hosts)[number]>();
-  hosts.forEach((host) => {
-    if (!primaryHosts.has(host.valueSelector)) {
-      primaryHosts.set(host.valueSelector, host);
+  return resolvedHosts.map(({ host, resolution }) => {
+    if (resolution.ok && primaryHosts.get(resolution.value.request.target) !== host) {
+      return <DuplicateOutputPortal key={hostId(host)} host={host} />;
     }
-  });
-
-  return hosts.map((host) => {
-    if (primaryHosts.get(host.valueSelector) !== host) {
-      return <DuplicateOutputPortal key={`${hostId(host)}:${host.valueSelector}`} host={host} />;
-    }
-    const binding = config.outputBindings[host.valueSelector];
-    const diagnostic = config.diagnostics.find(
-      (item) => item.projection === "output" && item.target === host.valueSelector,
+    const diagnostic = projectionConfig.diagnostics.find(
+      (item) =>
+        item.projection === "output" &&
+        item.target === host.valueSelector &&
+        (item.siteId === undefined ||
+          item.siteId === (resolution.ok ? resolution.value.site.id : undefined)),
     );
+    const projection = resolution.ok ? resolution.value : undefined;
+    const runtimeId = projection?.runtimeCellId;
     return (
       <OutputPortal
-        key={`${hostId(host)}:${host.valueSelector}`}
-        activeSelectors={activeSelectors}
-        binding={binding}
-        cell={resolveCellBinding(binding?.cell, cells)}
+        key={hostId(host)}
+        activeProjections={activeProjections}
+        projection={projection}
+        resolutionFailure={resolution.ok ? undefined : resolution.error}
+        cell={runtimeId === undefined ? undefined : cells.byId.get(runtimeId)}
         connectionState={connectionState}
-        developer={config.dev || config.mode === "edit"}
+        developer={projectionConfig.dev || projectionConfig.mode === "edit"}
         diagnostic={diagnostic}
         host={host}
-        readOutputs={readOutputs}
-        revision={config.revision}
+        readOutputs={ownedOutputReader}
         runtimeReady={runtimeReady}
       />
     );

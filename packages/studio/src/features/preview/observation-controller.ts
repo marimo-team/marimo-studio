@@ -15,7 +15,7 @@ interface PendingObservation {
 type AcceptObservation = (message: ViewObservationMessage) => RuntimeStatusReport;
 
 export class PreviewObservationController {
-  private readonly requests = new Map<string, PendingObservation>();
+  private pending: PendingObservation | undefined;
 
   constructor(
     private readonly runtime: string,
@@ -24,40 +24,41 @@ export class PreviewObservationController {
     private readonly record?: RecordBrowserObservation,
   ) {}
 
-  request(request: ObserveViewRequest): void {
+  request(request: ObserveViewRequest, lifecycleId: number): void {
     if (request.runtime !== this.runtime) {
       return;
     }
-    this.requests.clear();
-    this.requests.set(request.requestId, {
+    this.pending = {
       message: {
         type: "marimo-studio:observe-view",
         runtime: request.runtime,
+        lifecycleId,
         view: request.view,
         revision: request.revision,
         runtimeInstance: request.runtimeInstance,
         requestId: request.requestId,
       },
       terminalUpload: false,
-    });
+    };
     this.post();
   }
 
   post(): void {
-    for (const request of this.requests.values()) {
-      if (!request.terminalUpload) {
-        this.preview.contentWindow?.postMessage(request.message, globalThis.location.origin);
-      }
+    const request = this.pending;
+    if (request && !request.terminalUpload) {
+      this.preview.contentWindow?.postMessage(request.message, "*");
     }
   }
 
   receive(message: ViewObservationMessage): void {
-    const request = this.requests.get(message.requestId);
+    const request = this.pending;
     const expected = request?.message;
     if (
       request === undefined ||
       expected === undefined ||
+      expected.requestId !== message.requestId ||
       request.terminalUpload ||
+      expected.lifecycleId !== message.lifecycleId ||
       expected.view !== message.view ||
       expected.runtime !== message.runtime ||
       expected.revision !== message.revision ||
@@ -76,6 +77,7 @@ export class PreviewObservationController {
       sessionId: message.sessionId,
       requestId: message.requestId,
       query: message.query,
+      projectionInstances: message.projectionInstances,
       runtimeStatus,
     };
     if (message.state !== "loading") {
@@ -83,26 +85,26 @@ export class PreviewObservationController {
     }
     const upload = this.record?.(observation);
     if (upload === undefined) {
-      if (message.state !== "loading") {
-        this.requests.delete(message.requestId);
+      if (message.state !== "loading" && this.pending === request) {
+        this.pending = undefined;
       }
       return;
     }
     void upload
       .then(() => {
-        if (request.terminalUpload && this.requests.get(message.requestId) === request) {
-          this.requests.delete(message.requestId);
+        if (request.terminalUpload && this.pending === request) {
+          this.pending = undefined;
         }
       })
       .catch((error) => {
-        if (request.terminalUpload && this.requests.get(message.requestId) === request) {
-          this.requests.delete(message.requestId);
+        if (request.terminalUpload && this.pending === request) {
+          this.pending = undefined;
         }
         console.warn("Studio browser observation could not be recorded", error);
       });
   }
 
   clear(): void {
-    this.requests.clear();
+    this.pending = undefined;
   }
 }

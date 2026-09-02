@@ -1,29 +1,44 @@
 ---
 title: Examples
-description: Run a reactive revenue forecast and a three-view collection research workflow.
+description: Compare eight live views backed by three Marimo notebooks.
+sidebar: false
+aside: false
+outline: false
+pageClass: studio-example-page
 ---
 
-# Examples
+# One notebook, many views
 
-The included examples keep source data, transformations, calculations,
-controls, and domain decisions in Marimo notebooks. Their Studio views provide
-separate page structure, browser behavior, and routes for each audience.
+Three notebooks back eight live views. Open a family to compare the same
+analysis as a report, explorer, story, map, monitor, model review, or deck.
 
-## Revenue forecast <Badge type="info" text="One view" />
+<div class="studio-example-catalog">
+  <a href="./athletes">
+    <strong>Rio 2016 athletes</strong>
+    <p>A publication report, linked Mosaic explorer, and Three.js briefing.</p>
+    <small>Vanilla HTML · Svelte · Mosaic · Three.js</small>
+  </a>
+  <a href="./earthquakes">
+    <strong>Earthquake watch</strong>
+    <p>A scroll-driven story, an operations map, and a briefing deck.</p>
+    <small>Observable Plot · MapLibre · Reveal.js</small>
+  </a>
+  <a href="./occupancy">
+    <strong>Building occupancy</strong>
+    <p>A facilities monitor and an interactive model review.</p>
+    <small>ECharts · Recharts · Marimo controls</small>
+  </a>
+</div>
 
-One notebook powers a responsive dashboard with scenario controls, forecast
-measures, interpretation, quarterly detail, native Marimo output, and a small
-JavaScript module.
+## Run an example locally
 
-[Run the revenue forecast](revenue-forecast.md)
+From the repository root, open one example notebook:
 
-## Collection research <Badge type="tip" text="Three views" />
+```console
+uv run marimo edit examples/athletes.py --sandbox
+```
 
-One notebook powers three views for corpus discovery, visual study, and packet
-preparation. Filters, provenance, and ordered selections move through the
-workflow in the same Marimo session.
-
-[Run the collection research workflow](collection-research.md)
-
-Use [Create your first view](../guide/getting-started.md) to apply the same
-model to an existing notebook.
+Replace `athletes.py` with `earthquakes.py` or `occupancy.py` to open another
+family. Studio discovers the view projects stored beside each notebook. The
+examples fetch pinned datasets and can load fonts, maps, or remote modules
+declared by their view source.

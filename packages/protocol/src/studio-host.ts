@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import type { JsonValue } from "./runtime-config";
 
+import { ownerGenerationSchema, viewNameSchema } from "./views.ts";
+
 const studioHostBaseSchema = z.object({
   schema: z.literal(1),
   notebook: z.object({
@@ -22,7 +24,8 @@ export const studioHostBootstrapSchema = z.discriminatedUnion("state", [
   studioHostBaseSchema.extend({ state: z.literal("unconfigured") }),
   studioHostBaseSchema.extend({
     state: z.literal("needs-view"),
-    defaultView: z.string().trim().min(1),
+    defaultView: viewNameSchema,
+    generation: ownerGenerationSchema,
   }),
   studioHostBaseSchema.extend({ state: z.literal("ready") }),
 ]);

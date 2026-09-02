@@ -1,0 +1,33 @@
+{
+  "lock": {
+    "path": "deno.lock",
+    "frozen": true
+  },
+  "nodeModulesDir": "none",
+  "minimumDependencyAge": "P7D",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "lib": ["DOM", "DOM.Iterable", "ES2023"],
+    "strict": true,
+    "types": ["npm:@types/react@19.2.10", "npm:@types/react-dom@19.2.3"]
+  },
+  "imports": {
+    "@revealjs/react": "npm:@revealjs/react@0.2.1",
+    "d3-geo": "npm:d3-geo@3.1.1",
+    "d3-scale": "npm:d3-scale@4.0.2",
+    "d3-shape": "npm:d3-shape@3.2.0",
+    "react": "npm:react@19.2.4",
+    "react/jsx-runtime": "npm:react@19.2.4/jsx-runtime",
+    "react-dom/client": "npm:react-dom@19.2.4/client",
+    "reveal.js": "npm:reveal.js@6.0.1",
+    "reveal.js/reveal.css": "npm:reveal.js@6.0.1/reveal.css",
+    "typescript": "npm:typescript@6.0.3"
+  },
+  "fmt": {
+    "include": ["deno.json", "src/"]
+  },
+  "lint": {
+    "include": ["src/"]
+  }
+}

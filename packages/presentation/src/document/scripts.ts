@@ -25,10 +25,23 @@ const EXECUTABLE_TYPES = new Set([
 const executes = (script: HTMLScriptElement): boolean =>
   EXECUTABLE_TYPES.has(script.type.trim().toLowerCase());
 
-export const hasAuthoredScripts = (root: ParentNode): boolean =>
-  Array.from(root.querySelectorAll<HTMLScriptElement>(AUTHORED_SCRIPT)).some(
-    (script) => !script.closest("[data-marimo-cell-output]") && executes(script),
-  );
+const authoredScripts = (root: ParentNode): readonly string[] =>
+  Array.from(root.querySelectorAll<HTMLScriptElement>(AUTHORED_SCRIPT))
+    .filter((script) => !script.closest("[data-marimo-cell-output]") && executes(script))
+    .map((script) => script.outerHTML);
 
-export const requiresDocumentReload = (current: Document, next: Document): boolean =>
-  hasAuthoredScripts(current) || hasAuthoredScripts(next);
+export const hasAuthoredScripts = (root: ParentNode): boolean => authoredScripts(root).length > 0;
+
+export const requiresDocumentReload = (
+  current: Document,
+  next: Document,
+  shellChanged: boolean,
+): boolean => {
+  const before = authoredScripts(current);
+  const after = authoredScripts(next);
+  return (
+    before.length !== after.length ||
+    before.some((script, index) => script !== after[index]) ||
+    (shellChanged && (before.length > 0 || after.length > 0))
+  );
+};

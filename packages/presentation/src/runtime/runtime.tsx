@@ -4,6 +4,7 @@ import {
   type EmbeddedFunction,
   type EmbeddedPresentationConfig,
   type EmbeddedRuntimeView,
+  type EmbeddedServerTransport,
   type EmbeddedTransport,
   mountEmbeddedRuntime,
 } from "@marimo-studio/marimo-frontend/embedded-runtime";
@@ -22,12 +23,14 @@ type RuntimeReaderContext = Pick<EmbeddedRuntimeView, "initialized" | "invoke" |
 export type RuntimeInvoke = EmbeddedFunction;
 
 export interface RuntimeMountOptions {
+  autoInstantiate: boolean;
   id: string;
   instance: string;
   initialMode: InitialMode;
   viewMode: ViewMode;
   exposeSession: boolean;
   transport: EmbeddedTransport;
+  serverTransport?: (config: RuntimeConfig) => EmbeddedServerTransport;
   updateQuery: (invoke: RuntimeInvoke, query: string) => Promise<void>;
   valueReader: (runtime: RuntimeReaderContext) => ValueReader;
   outputReader: (runtime: RuntimeReaderContext) => OutputReader;
@@ -39,6 +42,9 @@ const embeddedPresentation = (config: RuntimeConfig): EmbeddedPresentationConfig
   userConfig: jsonValueSchema.parse(config.userConfig),
 });
 
+const presentationFingerprint = (presentation: EmbeddedPresentationConfig): string =>
+  JSON.stringify(presentation);
+
 export const mountSharedRuntime = (
   config: RuntimeConfig,
   runtimeRoot: HTMLElement,
@@ -46,10 +52,17 @@ export const mountSharedRuntime = (
 ): RuntimeSession => {
   let readValues: ValueReader | undefined;
   let readOutputs: OutputReader | undefined;
+  let presentation = embeddedPresentation(config);
+  let fingerprint = presentationFingerprint(presentation);
+  let serverTransportFingerprint =
+    options.transport.kind === "server"
+      ? `${options.transport.url}\0${options.transport.serverToken}`
+      : undefined;
   const runtime = mountEmbeddedRuntime({
+    autoInstantiate: options.autoInstantiate,
     exposeSession: options.exposeSession,
     initialMode: options.initialMode,
-    presentation: embeddedPresentation(config),
+    presentation,
     root: runtimeRoot,
     theme: pageThemeSource,
     transport: options.transport,
@@ -70,7 +83,20 @@ export const mountSharedRuntime = (
       if (next.runtime.id !== options.id || next.runtime.instance !== options.instance) {
         return "reload";
       }
-      runtime.update(embeddedPresentation(next));
+      const nextTransport = options.serverTransport?.(next);
+      if (nextTransport) {
+        const nextTransportFingerprint = `${nextTransport.url}\0${nextTransport.serverToken}`;
+        if (nextTransportFingerprint !== serverTransportFingerprint) {
+          runtime.updateServerTransport(nextTransport);
+          serverTransportFingerprint = nextTransportFingerprint;
+        }
+      }
+      presentation = embeddedPresentation(next);
+      const nextFingerprint = presentationFingerprint(presentation);
+      if (nextFingerprint !== fingerprint) {
+        runtime.update(presentation);
+        fingerprint = nextFingerprint;
+      }
       return "applied";
     },
     updateQuery: (query) => options.updateQuery(runtime.invoke, query),

@@ -4,11 +4,20 @@ import type {
 } from "@marimo-studio/protocol/preview-messages";
 
 import { parsePreviewMessage } from "@marimo-studio/protocol/preview-messages";
+import {
+  type ObservedProjectionInstance,
+  projectionInstanceIsReady,
+} from "@marimo-studio/protocol/projections";
 import { publicNotebookQuery } from "@marimo-studio/protocol/query";
 
 import type { ReadinessSnapshot } from "./readiness.ts";
 
-import { messageJson } from "./json.ts";
+import {
+  activeDocumentLifecycleId,
+  documentLifecycleEnvelope,
+} from "./document/document-lifecycle-id.ts";
+import { isStudioParentMessage, postToStudioParent } from "./document/parent-bridge.ts";
+import { renderedProjectionInstances } from "./projections/instances.ts";
 import { toBrowserDiagnostics } from "./readiness-diagnostics.ts";
 import { readiness } from "./readiness.ts";
 import { refreshRenderedView } from "./rendered-view-observer.ts";
@@ -19,14 +28,27 @@ type BrowserObservationState = "loading" | "ready" | "error";
 let pending: { request: ObserveViewMessage; state?: BrowserObservationState } | undefined;
 let stopReadiness: (() => void) | undefined;
 
-const observationState = (snapshot: ReadinessSnapshot): BrowserObservationState =>
-  snapshot.settled && snapshot.page !== "connecting" ? snapshot.page : "loading";
+const observationState = (
+  snapshot: ReadinessSnapshot,
+  instances: readonly ObservedProjectionInstance[],
+): BrowserObservationState => {
+  const page = snapshot.settled && snapshot.page !== "connecting" ? snapshot.page : "loading";
+  if (page !== "ready") {
+    return page;
+  }
+  return instances.every(projectionInstanceIsReady) ? "ready" : "loading";
+};
 
-const publishObservation = (request: ObserveViewMessage, state: BrowserObservationState): void => {
+const publishObservation = (
+  request: ObserveViewMessage,
+  state: BrowserObservationState,
+  projectionInstances: readonly ObservedProjectionInstance[],
+): void => {
   const view = renderedViewIdentity();
   const message: ViewObservationMessage = {
     type: "marimo-studio:view-observation",
     runtime: view.runtime,
+    ...documentLifecycleEnvelope(),
     view: view.view,
     revision: view.revision,
     state,
@@ -35,8 +57,9 @@ const publishObservation = (request: ObserveViewMessage, state: BrowserObservati
     sessionId: view.sessionId ?? null,
     requestId: request.requestId,
     query: publicNotebookQuery(globalThis.location.search),
+    projectionInstances: [...projectionInstances],
   };
-  globalThis.parent.postMessage(message, globalThis.location.origin);
+  postToStudioParent(message);
 };
 
 const publish = (snapshot: ReadinessSnapshot): void => {
@@ -45,7 +68,8 @@ const publish = (snapshot: ReadinessSnapshot): void => {
   }
   const view = renderedViewIdentity();
   const request = pending.request;
-  const state = observationState(snapshot);
+  const projectionInstances = renderedProjectionInstances();
+  const state = observationState(snapshot, projectionInstances);
   if (
     request.runtime !== view.runtime ||
     request.view !== view.view ||
@@ -55,23 +79,22 @@ const publish = (snapshot: ReadinessSnapshot): void => {
   ) {
     return;
   }
-  publishObservation(request, state);
+  publishObservation(request, state, projectionInstances);
   pending.state = state;
-  if (snapshot.settled) {
+  if (state !== "loading") {
     pending = undefined;
   }
 };
 
 const observationRequested = (event: MessageEvent<unknown>): void => {
-  if (event.origin !== globalThis.location.origin || event.source !== globalThis.parent) {
+  if (!isStudioParentMessage(event)) {
     return;
   }
-  const payload = messageJson(event);
-  if (payload === undefined) {
-    return;
-  }
-  const request = parsePreviewMessage(payload);
-  if (request?.type !== "marimo-studio:observe-view") {
+  const request = parsePreviewMessage(event.data);
+  if (
+    request?.type !== "marimo-studio:observe-view" ||
+    request.lifecycleId !== activeDocumentLifecycleId()
+  ) {
     return;
   }
   pending = { request };

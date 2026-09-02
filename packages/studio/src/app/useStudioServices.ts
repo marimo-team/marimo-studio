@@ -11,7 +11,7 @@ import { createStudioServices } from "./services.ts";
 
 interface StudioServiceBinding extends StudioServices {
   editorFrame: HTMLIFrameElement;
-  frameRef: (runtime: string) => RefCallback<HTMLIFrameElement>;
+  frameRef: (frameId: string) => RefCallback<HTMLIFrameElement>;
 }
 
 interface StartupFailure {
@@ -34,24 +34,24 @@ export const useStudioServices = (
   const frameCallbacks = useMemo(
     () =>
       new Map(
-        services.runtimeIds.map((runtime) => [
-          runtime,
+        services.previewFrameIds.map((frameId) => [
+          frameId,
           (element: HTMLIFrameElement | null) => {
             if (element) {
-              previewFrames.set(runtime, element);
+              previewFrames.set(frameId, element);
             } else {
-              previewFrames.delete(runtime);
+              previewFrames.delete(frameId);
             }
           },
         ]),
       ),
-    [previewFrames, services.runtimeIds],
+    [previewFrames, services.previewFrameIds],
   );
   const frameRef = useCallback(
-    (runtime: string) => {
-      const callback = frameCallbacks.get(runtime);
+    (frameId: string) => {
+      const callback = frameCallbacks.get(frameId);
       if (!callback) {
-        throw new Error(`Missing preview frame callback for ${runtime}`);
+        throw new Error(`Missing preview frame callback for ${frameId}`);
       }
       return callback;
     },
@@ -76,14 +76,21 @@ export const useStudioServices = (
         services.layout.stopArranging();
       }
     };
+    const releasePage = (event: PageTransitionEvent) => {
+      if (!event.persisted) {
+        void services.close().catch(() => undefined);
+      }
+    };
     globalThis.addEventListener("beforeunload", protectPendingSource);
     globalThis.addEventListener("keydown", stopArranging);
+    globalThis.addEventListener("pagehide", releasePage);
 
     return () => {
       active = false;
       globalThis.removeEventListener("beforeunload", protectPendingSource);
       globalThis.removeEventListener("keydown", stopArranging);
-      services.dispose();
+      globalThis.removeEventListener("pagehide", releasePage);
+      void services.close().catch(() => undefined);
     };
   }, [editorFrame, previewFrames, services]);
 

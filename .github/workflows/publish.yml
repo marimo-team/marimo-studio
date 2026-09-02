@@ -6,6 +6,7 @@ on:
       - "v[0-9]*.[0-9]*.[0-9]*"
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -32,28 +33,21 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --locked
 
-      - name: Set up Socket Firewall
-        uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
         with:
-          mode: firewall-free
+          prepare-marimo-frontend: "true"
 
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
-        with:
-          node-version-file: .node-version
-          version: 0.2.4
-          cache: true
-          sfw: true
-          run-install: |
-            - args: ["--frozen-lockfile"]
+      - name: Verify release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/check-release.sh
 
-      - name: Enable pnpm
-        run: corepack enable pnpm
+      - name: Audit locked dependencies
+        run: make audit
 
       - name: Build release
-        run: |
-          ./scripts/check-release.sh
-          make package
+        run: make package
 
       - name: Upload package artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -62,17 +56,44 @@ jobs:
           path: |
             dist/marimo_studio-*.whl
             dist/marimo_studio-*.tar.gz
+            dist/SHA256SUMS
           retention-days: 1
           if-no-files-found: error
 
-  publish:
+  attest:
+    name: Build provenance
     needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - name: Download package artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist
+
+      - name: Attest package provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/marimo_studio-*.whl
+            dist/marimo_studio-*.tar.gz
+
+  publish:
+    needs: attest
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
       name: pypi
       url: https://pypi.org/project/marimo-studio/
     permissions:
+      actions: read
       contents: read
       id-token: write
     steps:
@@ -80,6 +101,7 @@ jobs:
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: false
+          version: "0.12.7"
 
       - name: Download package artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -116,21 +138,42 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      actions: read
       contents: write
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
+      - name: Download package artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          node-version-file: .node-version
-          package-manager-cache: false
+          name: dist
+          path: dist
 
-      - name: Update release notes
-        run: npx --yes changelogithub@14.0.0
+      - name: Create GitHub release notes
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" \
+              dist/marimo_studio-*.whl \
+              dist/marimo_studio-*.tar.gz \
+              dist/SHA256SUMS \
+              --clobber
+            gh release edit "${GITHUB_REF_NAME}" \
+              --draft=false \
+              --verify-tag \
+              --notes-file ".github/release-notes/${GITHUB_REF_NAME}.md" \
+              --title "${GITHUB_REF_NAME}"
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              dist/marimo_studio-*.whl \
+              dist/marimo_studio-*.tar.gz \
+              dist/SHA256SUMS \
+              --verify-tag \
+              --notes-file ".github/release-notes/${GITHUB_REF_NAME}.md" \
+              --title "${GITHUB_REF_NAME}"
+          fi
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

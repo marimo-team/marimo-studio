@@ -1,10 +1,12 @@
-import { parseRuntimeConfig, type RuntimeControls } from "@marimo-studio/protocol/runtime-config";
+import { parseRuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
+
+import type { RuntimeCellMap } from "./control-sync.ts";
 
 export interface RuntimeControlSnapshot {
   revision: string;
   runtime: string;
-  controls?: RuntimeControls;
+  controls: RuntimeCellMap;
 }
 
 export const fetchRuntimeControls = async (
@@ -32,6 +34,6 @@ export const fetchRuntimeControls = async (
   return {
     revision: config.revision,
     runtime: config.runtime.id,
-    controls: config.runtime.controls,
+    controls: { cells: config.runtimeBindings.cellRefs },
   };
 };

@@ -26,3 +26,20 @@ test("the active view base resolves from its document and survives runtime chang
   assert.equal(source.baseURI, "https://example.com/report/");
   viewBase.stop();
 });
+
+test("the active view keeps ownership when an authored base becomes first", async () => {
+  const source = new DOMParser().parseFromString(
+    '<html><head><base href="./"><base href="https://assets.example/"></head><body></body></html>',
+    "text/html",
+  );
+  const href = resolveDocumentBase(source, "https://example.com/site/pages/index.html");
+  const viewBase = new DocumentBase(source);
+  viewBase.start(href);
+
+  source.querySelector("base")?.remove();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(source.baseURI, "https://example.com/site/pages/");
+  assert.equal(source.querySelector("base")?.getAttribute("href"), href);
+  viewBase.stop();
+});

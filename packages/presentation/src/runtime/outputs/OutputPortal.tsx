@@ -1,16 +1,17 @@
-import type {
-  ProjectionDiagnostic,
-  ValueBindingConfig,
-} from "@marimo-studio/protocol/runtime-config";
+import type { ProjectionDiagnostic } from "@marimo-studio/protocol/runtime-config";
 
 import { createPortal } from "react-dom";
 
 import type { MarimoOutputElement } from "../../outputs/host";
 import type { OutputReader } from "../../outputs/reader";
+import type {
+  ProjectionResolutionFailure,
+  ResolvedProjection,
+  RuntimeProjectionRequest as ProjectionRequest,
+} from "../../projections/resolution";
 import type { RuntimeConnectionState } from "../cell-state";
 import type { RuntimeCell } from "../runtime-cell";
 
-import { cellBindingKey } from "../../cells/bindings";
 import { useDeliveryTimeout } from "../use-delivery-timeout";
 import { valueCellFailure, valueCellModel } from "../values/value-cell-model";
 import { ProjectedOutput } from "./ProjectedOutput";
@@ -18,7 +19,8 @@ import { useOutputHost } from "./use-output-host";
 import { type OutputDiagnostic, useOutputProjection } from "./use-output-projection";
 
 const structuralOutputFailure = (
-  binding: ValueBindingConfig | undefined,
+  projection: ResolvedProjection | undefined,
+  resolutionFailure: ProjectionResolutionFailure | undefined,
   diagnostic: ProjectionDiagnostic | undefined,
   modelFailure: "defining-cell-error" | "runtime-cell-not-received" | undefined,
   selector: string,
@@ -26,7 +28,14 @@ const structuralOutputFailure = (
   if (diagnostic) {
     return diagnostic;
   }
-  if (!binding) {
+  if (resolutionFailure) {
+    return {
+      code: resolutionFailure.code,
+      message: resolutionFailure.message,
+      hint: "Fix the projection target at its reported source site.",
+    };
+  }
+  if (!projection) {
     return {
       code: "unknown-selector",
       message: `Output ${JSON.stringify(selector)} is unavailable.`,
@@ -37,53 +46,59 @@ const structuralOutputFailure = (
 };
 
 export const OutputPortal = ({
-  activeSelectors,
-  binding,
+  activeProjections,
+  projection,
+  resolutionFailure,
   cell,
   connectionState,
   developer,
   diagnostic,
   host,
   readOutputs,
-  revision,
   runtimeReady,
 }: {
-  activeSelectors: string[];
-  binding: ValueBindingConfig | undefined;
+  activeProjections: ProjectionRequest[];
+  projection: ResolvedProjection | undefined;
+  resolutionFailure: ProjectionResolutionFailure | undefined;
   cell: RuntimeCell | undefined;
   connectionState: RuntimeConnectionState;
   developer: boolean;
   diagnostic?: ProjectionDiagnostic;
   host: MarimoOutputElement;
   readOutputs: OutputReader;
-  revision: string;
   runtimeReady: boolean;
 }) => {
   const selector = host.valueSelector;
   const deliveryTimedOut = useDeliveryTimeout(
-    runtimeReady && binding !== undefined && cell === undefined && diagnostic === undefined,
-    binding ? cellBindingKey(binding.cell) : undefined,
+    runtimeReady && projection !== undefined && cell === undefined && diagnostic === undefined,
+    projection ? `${projection.producer}\u0000${projection.runtimeCellId ?? ""}` : undefined,
   );
   const model = valueCellModel(cell, runtimeReady, deliveryTimedOut);
   const sourceCellId = cell?.id;
-  const bindingIdentity = binding
-    ? `${binding.variable}\u0000${cellBindingKey(binding.cell)}`
+  const projectionIdentity = projection
+    ? `${projection.variable ?? ""}\u0000${projection.producer}`
     : undefined;
-  const structuralFailure = structuralOutputFailure(binding, diagnostic, model.failure, selector);
+  const structuralFailure = structuralOutputFailure(
+    projection,
+    resolutionFailure,
+    diagnostic,
+    model.failure,
+    selector,
+  );
   const projectionState = useOutputProjection({
-    activeSelectors,
-    bindingIdentity,
+    activeProjections,
+    request: projection?.request,
+    projectionIdentity,
     blocked: structuralFailure !== undefined,
     connectionState,
     model,
     readOutputs,
-    revision,
     selector,
     sourceCellId,
   });
   const effectiveFailure = structuralFailure ?? projectionState.failure;
   useOutputHost({
-    bindingVariable: binding?.variable,
+    projectionVariable: projection?.variable ?? undefined,
     failure: effectiveFailure,
     host,
     modelPhase: model.phase,

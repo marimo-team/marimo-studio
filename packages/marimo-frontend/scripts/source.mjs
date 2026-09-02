@@ -13,6 +13,14 @@ const workspaceRoot = resolve(packageRoot, "../..");
 const cacheRoot = join(packageRoot, ".cache");
 const checkout = join(cacheRoot, "marimo");
 const metadataPath = join(cacheRoot, "source.json");
+const environmentRoot = resolve(
+  workspaceRoot,
+  process.env.UV_PROJECT_ENVIRONMENT?.trim() || ".venv",
+);
+const pythonExecutable =
+  process.platform === "win32"
+    ? join(environmentRoot, "Scripts", "python.exe")
+    : join(environmentRoot, "bin", "python");
 
 export const repository = "https://github.com/marimo-team/marimo.git";
 
@@ -25,16 +33,16 @@ const release = JSON.parse(
 export const expectedVersion = release.version;
 export const expectedCommit = release.commit;
 
-const capture = async (command, args, cwd) => {
-  const result = await exec(command, args, { cwd, encoding: "utf8" });
+const capture = async (command, args, cwd, env) => {
+  const result = await exec(command, args, { cwd, encoding: "utf8", env });
   return result.stdout.trim();
 };
 
 const run = (command, args, cwd) =>
   new Promise((resolveRun, rejectRun) => {
     const child = spawn(command, args, { cwd, stdio: "inherit" });
-    child.on("error", rejectRun);
-    child.on("exit", (code, signal) => {
+    child.once("error", rejectRun);
+    child.once("close", (code, signal) => {
       if (code === 0) {
         resolveRun();
         return;
@@ -48,6 +56,22 @@ const run = (command, args, cwd) =>
       );
     });
   });
+
+export const pnpmInvocation = (
+  args,
+  { platform = process.platform, commandInterpreter = process.env.ComSpec } = {},
+) =>
+  platform === "win32"
+    ? {
+        command: commandInterpreter || "cmd.exe",
+        args: ["/d", "/s", "/c", "corepack", "pnpm", ...args],
+      }
+    : { command: "corepack", args: ["pnpm", ...args] };
+
+const runPnpm = async (args, cwd) => {
+  const invocation = pnpmInvocation(args);
+  await run(invocation.command, invocation.args, cwd);
+};
 
 const exists = async (path) => {
   try {
@@ -73,6 +97,13 @@ const resolvedVersion = () =>
     workspaceRoot,
   );
 
+const installedVersion = () =>
+  capture(
+    pythonExecutable,
+    ["-B", "-c", "import marimo; print(marimo.__version__)"],
+    workspaceRoot,
+  );
+
 const projectVersion = (path) =>
   capture("uv", ["--color", "never", "--project", path, "version", "--short"], workspaceRoot);
 
@@ -95,7 +126,10 @@ export const assertMarimoCommit = async (path) => {
 };
 
 export const assertCleanCheckout = async (path) => {
-  const status = await capture("git", ["status", "--porcelain=v1", "--untracked-files=all"], path);
+  const status = await capture("git", ["status", "--porcelain=v1", "--untracked-files=all"], path, {
+    ...process.env,
+    GIT_OPTIONAL_LOCKS: "0",
+  });
   if (status) {
     throw new Error(
       "The Marimo checkout has local source changes. Studio requires the configured release commit.",
@@ -104,15 +138,29 @@ export const assertCleanCheckout = async (path) => {
 };
 
 const installWorkspace = async (path) => {
-  await run("corepack", ["pnpm", "install", "--frozen-lockfile"], path);
-  await run("corepack", ["pnpm", "--dir", "packages/llm-info", "codegen"], path);
+  await runPnpm(["install", "--frozen-lockfile"], path);
+  await runPnpm(["--dir", "packages/llm-info", "codegen"], path);
 };
+
+const workspacePaths = (path) => [
+  join(path, "node_modules", ".pnpm"),
+  join(path, "frontend", "node_modules"),
+  join(path, "packages", "llm-info", "data", "generated", "models.json"),
+];
+
+const isWorkspaceInstalled = async (path) =>
+  (await Promise.all(workspacePaths(path).map(exists))).every(Boolean);
 
 const remoteUrl = (path) => capture("git", ["remote", "get-url", "origin"], path);
 
 export const prepareOwnedCheckout = async ({ path, repository, commit }) => {
   if ((await exists(join(path, ".git"))) && (await remoteUrl(path)) !== repository) {
-    await rm(path, { force: true, recursive: true });
+    await rm(path, {
+      force: true,
+      maxRetries: 10,
+      recursive: true,
+      retryDelay: 20,
+    });
   }
 
   if (!(await exists(join(path, ".git")))) {
@@ -149,11 +197,7 @@ export const isPreparedOwnedCheckout = async ({ path, repository, commit }) => {
     if (origin !== repository || head !== commit || status) {
       return false;
     }
-    return (
-      (await exists(join(path, "node_modules", ".pnpm"))) &&
-      (await exists(join(path, "frontend", "node_modules"))) &&
-      (await exists(join(path, "packages", "llm-info", "data", "generated", "models.json")))
-    );
+    return isWorkspaceInstalled(path);
   } catch {
     return false;
   }
@@ -191,6 +235,9 @@ export const prepareMarimoSource = async () => {
     await assertVersion(path, version);
     await assertMarimoCommit(path);
     await assertCleanCheckout(path);
+    if (!(await isWorkspaceInstalled(path))) {
+      await installWorkspace(path);
+    }
   } else {
     const reusable = await reusableOwnedSource(version);
     if (reusable) {
@@ -202,10 +249,45 @@ export const prepareMarimoSource = async () => {
     await assertVersion(checkout, version);
   }
 
+  await assertMarimoCommit(path);
+  await assertCleanCheckout(path);
   const commit = await capture("git", ["rev-parse", "HEAD"], path);
   const source = { commit, path, repository, version };
   await mkdir(cacheRoot, { recursive: true });
   await writeFile(metadataPath, `${JSON.stringify(source, null, 2)}\n`);
+  return source;
+};
+
+export const assertPreparedMarimoSource = async () => {
+  const version = await installedVersion();
+  if (version !== expectedVersion) {
+    throw new Error(
+      `The Python environment resolves Marimo ${version}, but Studio requires ${expectedVersion}`,
+    );
+  }
+
+  const source = await readMarimoSource();
+  const configured = process.env.MARIMO_REPO?.trim();
+  const expectedPath = configured ? resolve(configured) : checkout;
+  if (
+    source.commit !== expectedCommit ||
+    source.path !== expectedPath ||
+    source.repository !== repository ||
+    source.version !== expectedVersion
+  ) {
+    throw new Error("The prepared Marimo source metadata does not match the configured release");
+  }
+
+  await assertMarimoCommit(source.path);
+  await assertCleanCheckout(source.path);
+  if (!configured && (await remoteUrl(source.path)) !== repository) {
+    throw new Error("The prepared Marimo checkout has an unexpected origin");
+  }
+  if (!(await isWorkspaceInstalled(source.path))) {
+    throw new Error(
+      "The prepared Marimo checkout is missing frontend dependencies or generated data",
+    );
+  }
   return source;
 };
 

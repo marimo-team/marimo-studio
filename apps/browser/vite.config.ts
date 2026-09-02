@@ -15,7 +15,10 @@ export default defineConfig({
   css: {
     postcss: marimo.postcss,
   },
-  plugins: [buildMetadata()],
+  plugins: [...marimo.plugins, buildMetadata()],
+  worker: {
+    plugins: () => marimo.workerPlugins(),
+  },
   resolve: {
     alias: marimo.aliases,
   },
@@ -31,6 +34,7 @@ export default defineConfig({
     ),
     emptyOutDir: true,
     cssCodeSplit: true,
+    manifest: "entry-manifest.json",
     rollupOptions: {
       input: {
         runtime: join(packageRoot, "src", "runtime.ts"),

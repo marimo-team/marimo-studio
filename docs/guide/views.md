@@ -1,116 +1,85 @@
 ---
-title: Create and manage views
-description: Give several audiences their own pages while reusing one Marimo notebook.
+title: One notebook, many views
+description: Keep shared analysis in one reactive notebook and give each task its own named view.
 ---
 
-# Create and manage views
+# One notebook, many views
 
-Create one view for each audience or task that needs a distinct page. Views
-reuse the notebook's cells and aliases while owning separate HTML, CSS,
-modules, assets, and routes. The notebook remains the shared owner of data,
-calculations, controls, and domain decisions.
+A view is the stable name and URL for one interface backed by a notebook. Add a
+view when the same analysis needs a different layout, explanation, interaction,
+or audience.
 
-## Plan each view around one job
+<StudioExample family="athletes" />
 
-Start with the reader's first question, then choose the notebook results that
-answer it.
+The Rio athletes notebook supports three views. The report uses native Marimo
+controls and a rendered [Polars](https://pola.rs/) table. The explorer passes
+the full athlete table to [Svelte](https://svelte.dev/),
+[Mosaic](https://uwdata.github.io/mosaic/), and
+[DuckDB-WASM](https://duckdb.org/docs/stable/clients/wasm/overview). The field
+briefing presents the same records through [Three.js](https://threejs.org/).
 
-| View         | Reader job                           | Likely content                                        |
-| ------------ | ------------------------------------ | ----------------------------------------------------- |
-| `dashboard`  | Explore and adjust the current model | Controls, detailed measures, plots, and tables        |
-| `operations` | Find conditions that require action  | Exceptions, thresholds, owners, and next steps        |
-| `executive`  | Review the outcome and decision      | Headline measures, material risks, and recommendation |
+## Keep ownership clear
 
-The [collection research example](../examples/collection-research.md) uses one
-notebook for corpus discovery, visual study, and packet preparation.
+The notebook owns data loading, transformations, metrics, models, reusable
+controls, and Python execution. Each view owns its view project, browser
+dependencies, layout, wording, and interaction.
 
-## Add a view
+| Change                                  | Owner        |
+| --------------------------------------- | ------------ |
+| Correct a shared measure                | Notebook     |
+| Add a reusable control                  | Notebook     |
+| Change a chart library                  | View project |
+| Rewrite an explanation for one audience | View project |
 
-In Studio, open the view menu and choose **New view**. Enter a name such as
-`operations` or `executive`.
+Each view has an independent build and last successful artifact. Building one
+view leaves the notebook session and other views available.
 
-The equivalent terminal command is:
+## Create another view
+
+Open the view menu and choose **New view**. Enter a lowercase name, choose a
+starter, and inspect **Files created** before confirming. Studio saves pending
+Source edits before switching to the new view.
+
+The equivalent command is:
 
 ```console
-uvx marimo-studio view add analysis.py --name executive
+marimo-studio view create report --target analysis.py
 ```
 
-A view name starts with a lowercase letter and contains lowercase letters,
-numbers, or hyphens. The new page starts with every notebook cell in source
-order.
+Set the main route in the notebook configuration:
 
-Inspect the configured views and current default:
-
-```console
-uvx marimo-studio overview analysis.py
+```toml
+[tool.marimo-studio]
+default = "dashboard"
 ```
 
-## Switch between views
+The default view opens at `/`. The `report` view opens at `/report/`.
 
-Choose a view from the Studio toolbar. Studio keeps the notebook editor and
-prepared preview runtimes mounted while the selected page changes.
+## Switch views
 
-Link directly to another authored view with a relative URL:
+Choose a view from the view menu. Studio keeps the active Python runtime
+session connected, so controls and computed results retain their current state.
+Each Browser runtime view uses its own browser notebook instance.
 
-```html
-<a href="../executive/">Open the executive brief</a>
-```
-
-In the Studio workspace, the link opens the target view while preserving the
-current workspace mode. In run mode, the same link opens the target view in
-the current browser session.
-
-Public query parameters travel with the link and remain aligned between the
-notebook editor and selected preview. This lets one view link to a filtered or
-otherwise parameterized state in another view.
-
-::: info View routes
-The configured `default` view opens at `/`. Every named view is also available
-at `/<view-name>/`.
-:::
+If Source has pending edits, Studio saves them before the switch. A failed save
+or unresolved source conflict keeps the current view selected for repair.
 
 ## Remove a view
 
-Open the view menu, choose **Remove view**, and confirm the named view. Studio
-first saves the active source and prepares a successor view. It retargets the
-preview and source stream before deleting the old directory. If the removed
-view was the default, Studio makes the first remaining view the new default.
+Use the remove action beside a view name and confirm **Remove view**. Removal
+permanently deletes the view project and its files. If the removed view was the
+default, Studio names the replacement in the confirmation and promotes it to
+the main route.
 
-The equivalent terminal command prompts before deleting the view directory:
+Studio keeps at least one view. Create a replacement before removing the last
+one.
+
+The terminal command follows the same contract:
 
 ```console
-uvx marimo-studio view remove analysis.py --name executive
+marimo-studio view remove report --target analysis.py
 ```
 
-Pass `--yes` after reviewing the target when a script performs the removal.
-
-A configured notebook retains at least one view.
-
-## Commit view source
-
-The authored files for `analysis.py` live under:
-
-```text
-__marimo__/studio/analysis/<view-name>/
-```
-
-Commit this directory with the notebook. If the repository broadly ignores
-`__marimo__`, keep the Studio source with targeted rules:
-
-::: details Keep Studio source in a broadly ignored `__marimo__` directory
-
-```text
-!**/__marimo__/
-**/__marimo__/*
-!**/__marimo__/studio/
-!**/__marimo__/studio/**
-```
-
-:::
-
-[Notebook configuration](../reference/configuration.md) defines the default
-view and runtime. [Use notebook results](notebook-results.md) covers the three
-projection forms. [Author with the live workspace](live-authoring.md) covers
-view switching, source synchronization, and saved layouts. [Use HTML, CSS, and
-JavaScript](web-platform.md) covers styling, modules, assets, and loading
-states.
+Use [Choose a frontend](frontend-options.md) to select a starter. Use [Navigate
+and preserve state](navigation-and-sessions.md) when views link to one another
+or share public query state.

@@ -1,138 +1,113 @@
 ---
 title: Create your first view
-description: Add a view to a saved Marimo notebook and render one live notebook output.
+description: Create a web view from a saved Marimo notebook and place one reactive result inside it.
 ---
 
 # Create your first view
 
-Add a view to a saved [marimo](https://marimo.io/) notebook, open it beside the
-native editor, and replace the starter page with one focused output.
+Start with Python 3.10 through 3.14, [uv](https://docs.astral.sh/uv/), a Python
+project and environment manager, and a saved Marimo notebook such as
+`analysis.py`.
 
-The commands use `analysis.py` as the notebook path. You need Python 3.10 or
-newer and [uv](https://docs.astral.sh/uv/).
+::: tip Save a new notebook first
+For an untitled notebook, use Marimo **Save As** before creating a view. Studio
+follows the saved notebook after Marimo reloads it. The view project then has a
+stable location beside that file.
+:::
 
-## Add the view
+## Create the view project
+
+Preview the filesystem and configuration changes:
 
 ```console
-uvx marimo-studio view add analysis.py
+uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard \
+  --target analysis.py \
+  --dry-run
 ```
 
-Studio adds its notebook configuration and creates:
+Create the view after reviewing the plan:
+
+```console
+uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard \
+  --target analysis.py
+```
+
+The default starter creates this view project beside the notebook:
 
 ```text
 analysis.py
-__marimo__/
-  studio/
-    analysis/
-      dashboard/
-        index.html
-        app.css
+__marimo__/studio/analysis/
+  dashboard/
+    view.toml
+    index.html
+    AGENTS.md
 ```
 
-The starter document places every notebook cell in source order. This gives
-you a working preview before you choose the final content.
+`view.toml` records the view provider. `index.html` is the first source
+document. `AGENTS.md` gives coding agents project-specific guidance. A
+`DESIGN.md` file also appears in Source when you add one to record the
+audience, task, and visual decisions for the view.
 
-If the notebook already contains `[tool.marimo-studio]` and its view directory
-is empty, open the notebook with `marimo edit`. Studio presents **Create the
-first view** and uses the configured `default` name.
+The first create command can update the notebook's Studio configuration, set
+`dashboard` as the default view, and pin the Studio requirement. It prints the
+launch command required by the selected starter.
 
-## Open the workspace
+## Open Studio
+
+For the default 0.1.0 starter, run:
 
 ```console
-uv run --with marimo-studio marimo edit analysis.py --sandbox
+uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
 ```
 
-Marimo opens its editor beside the selected view. Choose **Build** to keep both
-visible. Open **HTML & CSS** from the workspace menu when you want the view
-source and preview together.
+Marimo's `--sandbox` flag resolves the notebook's declared Python dependencies
+with uv. It manages the environment and does not isolate untrusted notebook
+code from your files or network.
 
-Change a notebook control and confirm that the starter view updates. The
-Server preview and editor use the same Python session.
+Choose **Develop** to see Notebook, Source, and Preview together.
 
-The **Notebook**, **Build**, **Preview**, and **HTML & CSS** modes change what
-fills the workspace while keeping the notebook and prepared previews
-available. Arrange and resize the three surfaces from the workspace menu.
-[Author with the live workspace](live-authoring.md) develops this workflow.
+When a notebook already has Studio configuration but no view project, Studio
+opens **Create the first view**. Choose a starter, review **Files created**, and
+create the configured default view from that screen.
 
-::: info The same notebook runs as the finished view
-Studio uses Marimo's existing application command. After authoring, run
-`uv run --with marimo-studio marimo run analysis.py --sandbox`. The configured
-default view opens at `/`, and each named view has its own route.
-:::
+## Place one notebook cell
 
-::: details Browse a notebook folder first
+Give a producing cell a semantic name:
 
-Pass the folder to Marimo:
+```python
+@app.cell
+def sales_summary():
+    import marimo as mo
 
-```console
-uv run --with marimo-studio marimo edit notebooks/ --sandbox
+    summary = mo.md("## Revenue is on target")
+    summary
+    return (summary,)
 ```
 
-The root page remains the Marimo notebook gallery. Opening a configured
-notebook enters its Studio workspace. Other notebooks open in the native
-Marimo editor.
-:::
+Place the complete cell inside `#app-shell`:
 
-## Name the output
-
-Inspect cells that end with a displayed result:
-
-```console
-uvx marimo-studio inspect analysis.py --display
-```
-
-Use a native Marimo cell name when the intended cell already has one. Bind an
-anonymous cell to a stable alias when it does not:
-
-```console
-uvx marimo-studio bind analysis.py --cell 3 --as summary
-```
-
-Replace `3` with the zero-based index reported by `inspect`.
-
-## Place the output
-
-Open `index.html` and replace the contents of `#app-shell`:
-
-```html{9} [index.html]
-<main id="app-shell" class="studio-view grid gap-6">
-  <header>
-    <p class="studio-eyebrow">Quarterly review</p>
-    <h1 class="text-4xl font-semibold tracking-tight">Revenue at a glance</h1>
-  </header>
-
-  <section class="studio-card p-5" aria-labelledby="summary-title">
-    <h2 id="summary-title" class="text-lg font-semibold">Summary</h2>
-    <marimo-cell name="summary"></marimo-cell>
-  </section>
+```html
+<main id="app-shell" class="studio-view">
+  <marimo-cell name="sales_summary"></marimo-cell>
 </main>
 ```
 
-Save the file. Studio refreshes the authored shell and mounts the live Marimo
-output under **Summary**. Change a notebook control again and confirm that the
-summary reacts.
+Save `index.html`. Preview renders **Revenue is on target**. A later notebook
+run updates the mounted cell through Marimo reactivity. A frontend build error
+keeps the last successful artifact visible and reports the affected source
+document.
 
-## Check the view
+## Run the view
 
-Validate the document, cell alias, and value selectors:
-
-```console
-uvx marimo-studio check analysis.py
-```
-
-Run projected cells and resolve projected values before sharing:
+Start the notebook as an application:
 
 ```console
-uvx marimo-studio check analysis.py --runtime
+uvx --with marimo-studio==0.1.0 marimo run analysis.py --sandbox
 ```
 
-::: warning Runtime checks execute notebook code
-The runtime check executes notebook code. It can perform the same file,
-network, database, and data access as the projected cells.
-:::
+The default view opens at `/`. Another view named `report` opens at `/report/`.
 
-Continue with [Create and manage views](views.md) when another audience needs
-its own page. [Use notebook results](notebook-results.md) adds rich objects and
-JSON-compatible values. [Author with the live workspace](live-authoring.md)
-covers source feedback and runtime comparison. [Use HTML, CSS, and
-JavaScript](web-platform.md) adds styling, assets, and browser behavior.
+Continue with [Place notebook results in a view](notebook-results.md) for
+rendered outputs and browser values. Use [Troubleshoot
+Studio](troubleshooting.md) when Studio cannot discover the view or build its
+source.

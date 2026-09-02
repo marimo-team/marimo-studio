@@ -7,8 +7,8 @@ import { type CellDiagnostic, projectCell } from "./cell-projection";
 
 interface CellProjectionOptions {
   alias: string;
-  bindingKey?: string;
-  bindingPresent: boolean;
+  projectionKey?: string;
+  projectionPresent: boolean;
   cell: RuntimeCell | undefined;
   diagnostic?: CellDiagnostic;
   runtimeReady: boolean;
@@ -17,27 +17,28 @@ interface CellProjectionOptions {
 
 export const useCellProjection = ({
   alias,
-  bindingKey,
-  bindingPresent,
+  projectionKey,
+  projectionPresent,
   cell,
   diagnostic,
   runtimeReady,
   showCellLogs,
 }: CellProjectionOptions) => {
-  const waiting = runtimeReady && bindingPresent && cell === undefined && diagnostic === undefined;
-  const deliveryTimedOut = useDeliveryTimeout(waiting, bindingKey);
+  const waiting =
+    runtimeReady && projectionPresent && cell === undefined && diagnostic === undefined;
+  const deliveryTimedOut = useDeliveryTimeout(waiting, projectionKey);
 
   return useMemo(
     () =>
       projectCell({
         alias,
-        bindingPresent,
+        projectionPresent,
         cell,
         diagnostic,
         deliveryTimedOut,
         runtimeReady,
         showCellLogs,
       }),
-    [alias, bindingPresent, cell, deliveryTimedOut, diagnostic, runtimeReady, showCellLogs],
+    [alias, cell, deliveryTimedOut, diagnostic, projectionPresent, runtimeReady, showCellLogs],
   );
 };

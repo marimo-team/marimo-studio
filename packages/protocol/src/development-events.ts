@@ -1,24 +1,84 @@
 import { z } from "zod";
 
+import type { BrowserMessageInput } from "./frame-bridge.ts";
+
 import { jsonCodec } from "./json.ts";
-import { runtimeIdSchema } from "./runtime-config";
+import { type JsonValue, runtimeIdSchema } from "./runtime-config";
+import { viewNameSchema } from "./views.ts";
 
-export const shellChangeKindSchema = z.enum(["css", "html", "runtime", "views"]);
-const shellChangeSchema = z.object({ kind: shellChangeKindSchema });
-const shellChangeCodec = jsonCodec(shellChangeSchema);
+export const workspaceChangeKindSchema = z.enum(["project", "build", "presentation", "views"]);
+const workspaceChangeSchema = z.object({ kind: workspaceChangeKindSchema });
+const workspaceChangeCodec = jsonCodec(workspaceChangeSchema);
 
-export type ShellChangeKind = z.infer<typeof shellChangeKindSchema>;
+export type WorkspaceChangeKind = z.infer<typeof workspaceChangeKindSchema>;
 
-export const parseShellChange = (source: string): ShellChangeKind | undefined => {
-  const result = shellChangeCodec.safeDecode(source);
+const activationAckResponseSchema = z
+  .object({
+    schema: z.literal(1),
+    outcome: z.enum(["applied", "retryable", "rejected"]),
+  })
+  .strict();
+
+export type ActivationAckResponse = z.infer<typeof activationAckResponseSchema>;
+
+export const parseActivationAckResponse = (
+  payload: JsonValue,
+): ActivationAckResponse | undefined => {
+  const result = activationAckResponseSchema.safeParse(payload);
+  return result.success ? result.data : undefined;
+};
+
+export const parseWorkspaceChange = (source: string): WorkspaceChangeKind | undefined => {
+  const result = workspaceChangeCodec.safeDecode(source);
   return result.success ? result.data.kind : undefined;
+};
+
+const presentationBuildSchema = z.union([
+  z.object({
+    kind: z.literal("build"),
+    phase: z.literal("building"),
+  }),
+  z.object({
+    kind: z.literal("build"),
+    build: z.object({}),
+    revision: z.string().min(1).nullable(),
+  }),
+]);
+const presentationBuildCodec = jsonCodec(presentationBuildSchema);
+
+export type PresentationBuild =
+  | { readonly phase: "building" }
+  | { readonly phase: "complete"; readonly revision: string | null };
+
+export const parsePresentationBuild = (source: string): PresentationBuild | undefined => {
+  const result = presentationBuildCodec.safeDecode(source);
+  if (!result.success) {
+    return undefined;
+  }
+  return "phase" in result.data
+    ? { phase: "building" }
+    : { phase: "complete", revision: result.data.revision };
+};
+
+const presentationChangeSchema = z.object({
+  kind: z.literal("presentation"),
+  view: viewNameSchema,
+  revision: z.string().min(1),
+});
+const presentationChangeCodec = jsonCodec(presentationChangeSchema);
+
+export const parsePresentationChange = (
+  source: string,
+): { readonly view: string; readonly revision: string } | undefined => {
+  const result = presentationChangeCodec.safeDecode(source);
+  return result.success ? { view: result.data.view, revision: result.data.revision } : undefined;
 };
 
 const activeViewSchema = z
   .object({
     schema: z.literal(1),
     generation: z.int().nonnegative(),
-    view: z.string().min(1),
+    view: viewNameSchema,
   })
   .strict();
 const activeViewCodec = jsonCodec(activeViewSchema);
@@ -47,11 +107,87 @@ export const parseEditorSessionBinding = (source: string): EditorSessionBinding 
   return result.success ? result.data : undefined;
 };
 
+const editorDocumentMutationSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      schema: z.literal(1),
+      type: z.literal("marimo-studio:editor-document-mutation"),
+      generation: z.int().positive().max(Number.MAX_SAFE_INTEGER),
+    })
+    .strict(),
+  z
+    .object({
+      schema: z.literal(1),
+      type: z.literal("marimo-studio:editor-document-saved"),
+      generation: z.int().positive().max(Number.MAX_SAFE_INTEGER),
+    })
+    .strict(),
+  z
+    .object({
+      schema: z.literal(1),
+      type: z.literal("marimo-studio:editor-document-save-failed"),
+      generation: z.int().positive().max(Number.MAX_SAFE_INTEGER),
+    })
+    .strict(),
+  z
+    .object({
+      schema: z.literal(1),
+      type: z.literal("marimo-studio:editor-document-transaction-failed"),
+      generation: z.int().positive().max(Number.MAX_SAFE_INTEGER),
+    })
+    .strict(),
+  z
+    .object({
+      schema: z.literal(1),
+      type: z.literal("marimo-studio:editor-document-transaction-applied"),
+      generation: z.int().positive().max(Number.MAX_SAFE_INTEGER),
+      changed: z.boolean(),
+    })
+    .strict(),
+]);
+
+export type EditorDocumentMutation = z.infer<typeof editorDocumentMutationSchema>;
+
+export const parseEditorDocumentMutation = (
+  payload: BrowserMessageInput,
+): EditorDocumentMutation | undefined => {
+  const result = editorDocumentMutationSchema.safeParse(payload);
+  return result.success ? result.data : undefined;
+};
+
+const editorDocumentMutationAcknowledgementSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      schema: z.literal(1),
+      type: z.literal("marimo-studio:editor-document-mutation-ready"),
+      generation: z.int().positive().max(Number.MAX_SAFE_INTEGER),
+    })
+    .strict(),
+  z
+    .object({
+      schema: z.literal(1),
+      type: z.literal("marimo-studio:editor-document-mutation-failed"),
+      generation: z.int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    })
+    .strict(),
+]);
+
+export type EditorDocumentMutationAcknowledgement = z.infer<
+  typeof editorDocumentMutationAcknowledgementSchema
+>;
+
+export const parseEditorDocumentMutationAcknowledgement = (
+  payload: BrowserMessageInput,
+): EditorDocumentMutationAcknowledgement | undefined => {
+  const result = editorDocumentMutationAcknowledgementSchema.safeParse(payload);
+  return result.success ? result.data : undefined;
+};
+
 const observeViewSchema = z
   .object({
     schema: z.literal(1),
     requestId: z.string().min(1),
-    view: z.string().min(1),
+    view: viewNameSchema,
     runtime: runtimeIdSchema,
     runtimeInstance: z.string().min(1),
     revision: z.string().min(1),

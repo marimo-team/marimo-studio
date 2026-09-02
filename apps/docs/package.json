@@ -4,13 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vitepress build",
-    "dev": "vitepress dev --host 127.0.0.1 --port 4173 --strictPort",
-    "preview": "vitepress preview --host 127.0.0.1 --port 4173 --strictPort"
+    "build": "pnpm test && pnpm examples:build && vitepress build && pnpm verify",
+    "dev": "pnpm examples:build && vitepress dev --host 127.0.0.1 --port 4173 --strictPort",
+    "examples:build": "node scripts/build-examples.ts",
+    "preview": "vitepress preview --host 127.0.0.1 --port 4173 --strictPort",
+    "test": "vp test scripts/source-integrity.test.ts",
+    "verify": "node scripts/verify-build.ts"
   },
   "devDependencies": {
+    "@iconify/vue": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
     "vitepress": "catalog:",
     "vitepress-plugin-llms": "1.13.2",
     "vue": "catalog:"

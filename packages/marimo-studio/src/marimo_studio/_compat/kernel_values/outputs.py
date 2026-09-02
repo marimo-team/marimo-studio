@@ -10,12 +10,15 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
-from marimo_studio.types import (
+from marimo_studio._projections.runtime_records import (
     OutputRenderResult,
     RenderedOutput,
     ValueReadError,
 )
-from marimo_studio.values import parse_value_reference, resolve_value_reference
+from marimo_studio._projections.values import (
+    parse_value_reference,
+    resolve_value_reference,
+)
 
 
 def _owner_id(consumer_id: str, selector: str) -> str:
@@ -82,7 +85,7 @@ class KernelOutputRenderer:
             if selector not in allowed:
                 errors[selector] = ValueReadError(
                     "unknown-selector",
-                    f"Selector {selector!r} is not present in a configured view.",
+                    f"Selector {selector!r} is not authorized for this request.",
                 )
                 continue
             if selector not in active:

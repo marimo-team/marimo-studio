@@ -6,6 +6,7 @@ import type { ViewController } from "../views/controller.ts";
 import type { LayoutController } from "../workspace/controller.ts";
 import type { Surface } from "../workspace/schema.ts";
 
+import { standaloneViewUrl } from "../../shared/standaloneViewUrl.ts";
 import { PopoutIcon } from "../../shared/ui/icons.tsx";
 import { ViewMenu } from "../views/ViewMenu.tsx";
 import { SURFACE_LABELS } from "../workspace/pane-actions.ts";
@@ -26,6 +27,7 @@ interface ToolbarProps {
 
 export const Toolbar = (props: ToolbarProps) => {
   const model = useToolbar(props);
+  const popoutUrl = standaloneViewUrl(model.previewState.url);
   const showCompactNavigation = model.compact && model.compactSurfaces.length > 1;
   return (
     <header className="studio-toolbar">
@@ -43,6 +45,7 @@ export const Toolbar = (props: ToolbarProps) => {
       <div className="studio-controls">
         <RuntimeMenu
           current={model.runtime}
+          disabled={model.runtimeDisabled}
           runtimes={model.runtimes}
           status={model.status}
           visible={model.previewVisible}
@@ -50,9 +53,9 @@ export const Toolbar = (props: ToolbarProps) => {
         />
         <a
           className="studio-control studio-icon-button studio-toolbar-action"
-          href={model.previewState.url}
+          href={popoutUrl}
           target="_blank"
-          rel="noopener"
+          rel="noopener noreferrer"
           aria-label="Open preview in a new tab"
           hidden={!model.previewVisible}
         >
@@ -61,9 +64,10 @@ export const Toolbar = (props: ToolbarProps) => {
         <WorkspaceMenu
           arranging={model.arranging}
           mode={model.mode}
-          previewUrl={model.previewState.url}
+          previewUrl={popoutUrl}
           previewVisible={model.previewVisible}
           runtime={model.runtime}
+          runtimeDisabled={model.runtimeDisabled}
           runtimes={model.runtimes}
           status={model.status}
           onWorkspaceAction={model.actions.applyWorkspaceAction}

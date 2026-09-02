@@ -5,9 +5,10 @@ import { parseStudioBootstrap } from "../src/studio-bootstrap.ts";
 const payload = {
   schema: 1,
   notebook: { name: "analysis.py" },
+  defaultView: "dashboard",
   selectedView: "dashboard",
   views: ["dashboard"],
-  runtimes: [{ id: "server", label: "Server" }],
+  runtimes: [{ id: "server", label: "Python" }],
   defaultRuntime: "server",
   clientId: "browser-client-1234",
   serverInstance: "server-instance",

@@ -4,12 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "e2e": "playwright test",
+    "check-browser": "node scripts/check-browser.mjs",
+    "e2e": "node scripts/run-main-shards.mjs",
+    "e2e:installed": "node scripts/run-installed-package.mjs",
+    "e2e:providers": "playwright test --config playwright.providers.config.ts",
+    "e2e:windows": "playwright test tests/forced-interruption.spec.ts tests/view-authoring.spec.ts tests/view-cache-performance.spec.ts tests/vanilla-local-sources.spec.ts --grep \"forced runner shutdown|run-mode shutdown|keeps view removal directly available without hover|reloads a cached sibling after notebook state changes|publishes Vanilla local CSS and JavaScript sources\"",
+    "e2e:windows:providers": "playwright test --config playwright.providers.config.ts provider-runtime.spec.ts provider-reveal.spec.ts external-provider.spec.ts",
     "e2e:ui": "playwright test --ui",
     "install-browser": "playwright install --with-deps chromium",
-    "serve": "node scripts/serve.mjs"
+    "serve": "node scripts/serve.mjs",
+    "serve:providers": "node scripts/serve-providers.mjs",
+    "test": "vp test unit"
   },
   "devDependencies": {
+    "@marimo-studio/protocol": "workspace:*",
     "@playwright/test": "catalog:",
     "@types/node": "catalog:",
     "zod": "catalog:"

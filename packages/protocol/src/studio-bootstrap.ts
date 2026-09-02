@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { runtimeIdSchema, type JsonValue } from "./runtime-config";
+import { viewNameSchema } from "./views.ts";
 
 export const studioRuntimeSchema = z.object({
   id: runtimeIdSchema,
@@ -13,8 +14,9 @@ export const studioBootstrapSchema = z
     notebook: z.object({
       name: z.string().trim().min(1),
     }),
-    selectedView: z.string().trim().min(1),
-    views: z.array(z.string().trim().min(1)).min(1),
+    defaultView: viewNameSchema,
+    selectedView: viewNameSchema,
+    views: z.array(viewNameSchema).min(1),
     runtimes: z.array(studioRuntimeSchema).min(1),
     defaultRuntime: z.string().trim().min(1),
     urls: z.object({
@@ -53,6 +55,13 @@ export const studioBootstrapSchema = z
         code: "custom",
         path: ["selectedView"],
         message: "Selected view is not present in views",
+      });
+    }
+    if (!value.views.includes(value.defaultView)) {
+      context.addIssue({
+        code: "custom",
+        path: ["defaultView"],
+        message: "Default view is not present in views",
       });
     }
     if (!value.runtimes.some((runtime) => runtime.id === value.defaultRuntime)) {

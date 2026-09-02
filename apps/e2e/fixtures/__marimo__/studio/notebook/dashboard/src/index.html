@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Studio provider fixture</title>
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <main id="app-shell" class="studio-view">
+      <h1>Studio browser fixture</h1>
+      <marimo-cell name="controls"></marimo-cell>
+      <marimo-cell name="counter_widget"></marimo-cell>
+      <p>Projected total: <strong mo-value="metric"></strong></p>
+      <marimo-output id="rich-summary-output" value="rich_summary"></marimo-output>
+      <marimo-output value="rich_table"></marimo-output>
+      <marimo-output id="fresh-control" value="fresh_control"></marimo-output>
+      <marimo-output id="mixed-controls" value="mixed_controls"></marimo-output>
+      <marimo-output id="shared-control-owner" value="projected_control"></marimo-output>
+      <marimo-output
+        id="shared-control-consumer"
+        value="projected_control_alias"
+      ></marimo-output>
+      <marimo-output id="shared-control-peer" value="projected_control_peer"></marimo-output>
+      <marimo-output
+        id="long-output"
+        value='long_output["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]'
+      ></marimo-output>
+    </main>
+  </body>
+</html>

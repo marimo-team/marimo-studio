@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#060606" />
+    <title>Rio 2016 athlete field</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body id="app-shell" class="shower" data-mode="roster">
+    <canvas id="field-canvas" aria-hidden="true"></canvas>
+
+    <header class="topbar">
+      <a class="artifact-title" href="#opening">Rio 2016 / The Field</a>
+      <nav class="view-nav" aria-label="Athlete views">
+        <a href="../overview/index.html">Overview</a>
+        <a href="../explorer/index.html">Explorer</a>
+        <a href="../field/index.html" aria-current="page">Field</a>
+      </nav>
+      <span class="data-status" id="data-status" role="status"
+        >Loading roster</span
+      >
+    </header>
+
+    <main class="slides">
+      <section class="slide" id="opening" data-mode="roster">
+        <div class="slide-copy">
+          <p class="chapter">Rio de Janeiro · 05 August 2016</p>
+          <h2>
+            <strong mo-value="games_summary.athletes"></strong> arrived in Rio.
+          </h2>
+          <p class="lede">
+            The Olympic roster brought together
+            <strong mo-value="games_summary.nationalities"></strong>
+            delegations across
+            <strong mo-value="games_summary.sports"></strong> sports.
+          </p>
+          <ul class="facts">
+            <li>
+              <strong mo-value="games_summary.women"></strong>
+              <span>Women</span>
+            </li>
+            <li>
+              <strong mo-value="games_summary.men"></strong>
+              <span>Men</span>
+            </li>
+          </ul>
+          <div class="legend" role="list" aria-label="Point color legend">
+            <span role="listitem">Roster</span>
+            <span class="medalist" role="listitem">Medalist</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" id="sports" data-mode="sports">
+        <div class="slide-copy">
+          <p class="chapter">The sporting field</p>
+          <h2>
+            <strong mo-value="games_summary.sports"></strong> centers of
+            gravity.
+          </h2>
+          <p class="lede">
+            <strong mo-value="games_summary.largest_sport"></strong> brought the
+            largest field with
+            <strong mo-value="games_summary.largest_count"></strong> athletes.
+            Bring any sport into the center to see its field.
+          </p>
+          <div class="filter-control">
+            <marimo-cell name="sport_control"></marimo-cell>
+          </div>
+          <ul class="facts selection-facts" aria-label="Selected sport summary">
+            <li>
+              <strong mo-value="athlete_summary.athletes"></strong>
+              <span>Athletes</span>
+            </li>
+            <li>
+              <strong mo-value="athlete_summary.nationalities"></strong>
+              <span>Delegations</span>
+            </li>
+            <li>
+              <strong mo-value="athlete_summary.medalists"></strong>
+              <span>Medalists</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="slide" id="podium" data-mode="medals">
+        <div class="slide-copy">
+          <p class="chapter">The podium</p>
+          <h2>The field narrows <strong>fast.</strong></h2>
+          <p class="lede">
+            <strong mo-value="games_summary.medalists"></strong> athletes
+            recorded at least one medal award, or
+            <strong
+              ><span mo-value="games_summary.medalist_share_percent"></span
+              >%</strong
+            >
+            of the roster.
+          </p>
+          <ul class="facts">
+            <li>
+              <strong mo-value="games_summary.medal_awards"></strong>
+              <span>Athlete medal awards</span>
+            </li>
+            <li>
+              <strong mo-value="games_summary.multi_medalists"></strong>
+              <span>Multiple awards</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="slide" id="profiles" data-mode="profile">
+        <div class="slide-copy">
+          <p class="chapter">Body profiles</p>
+          <h2>There is no single Olympic <strong>body.</strong></h2>
+          <p class="lede">
+            Among reported measurements, the median athlete was
+            <strong mo-value="games_summary.median_age"></strong> years old,
+            <strong
+              ><span mo-value="games_summary.median_height"></span> m</strong
+            >
+            tall, and
+            <strong
+              ><span mo-value="games_summary.median_weight"></span> kg</strong
+            >.
+          </p>
+          <ul class="facts">
+            <li>
+              <strong mo-value="games_summary.profile_count"></strong>
+              <span>Complete profiles</span>
+            </li>
+            <li>
+              <strong
+                ><span mo-value="games_summary.profile_share_percent"></span
+                >%</strong
+              >
+              <span>Of the roster</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <div class="profile-axes" aria-hidden="true">
+      <span><b>X</b> height</span>
+      <span><b>Y</b> weight</span>
+      <span><b>Z</b> age</span>
+    </div>
+
+    <aside class="athlete-credit" id="athlete-credit" hidden>
+      <strong id="athlete-name"></strong>
+      <span id="athlete-meta"></span>
+    </aside>
+
+    <footer class="controls" aria-label="Presentation controls">
+      <span class="slide-count" id="slide-count">01 / 04</span>
+      <span class="key-guide"
+        >Arrow keys navigate · F fills screen · Esc shows all</span
+      >
+      <div class="control-actions">
+        <button type="button" id="overview-button" data-wide>All</button>
+        <button type="button" id="fullscreen-button" data-wide>Full</button>
+        <button
+          type="button"
+          id="previous-button"
+          aria-label="Previous chapter"
+        >
+          ←
+        </button>
+        <button type="button" id="next-button" aria-label="Next chapter">
+          →
+        </button>
+      </div>
+    </footer>
+    <div class="progress" aria-label="Presentation progress"></div>
+
+    <span id="athlete-data" hidden mo-value="athlete_facts"></span>
+    <span
+      id="sport-selection"
+      hidden
+      mo-value="athlete_summary.selection"
+    ></span>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

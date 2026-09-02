@@ -1,24 +1,44 @@
 import type { QueryChangeMessage } from "@marimo-studio/protocol/preview-messages";
 
 import { publicNotebookQuery } from "@marimo-studio/protocol/query";
-import { runtimeIdFromSearch } from "@marimo-studio/protocol/runtime-selection";
 
 import { getMountConfig, getRuntimeConfig, hasRuntimeConfig } from "../runtime-config";
+import { documentLifecycleEnvelope } from "./document-lifecycle-id.ts";
+import { postToStudioParent } from "./parent-bridge.ts";
+import { studioOwned } from "./studio-ownership.ts";
+
+export const bindRuntimeQueryHistory = (
+  updateQuery: (query: string) => Promise<void>,
+  reload: () => void = () => globalThis.location.reload(),
+): (() => void) => {
+  let active = true;
+  const synchronize = () => {
+    void updateQuery(publicNotebookQuery(globalThis.location.search)).catch(() => {
+      if (active) {
+        reload();
+      }
+    });
+  };
+  globalThis.addEventListener("popstate", synchronize);
+  return () => {
+    active = false;
+    globalThis.removeEventListener("popstate", synchronize);
+  };
+};
 
 export const startQuerySync = (): void => {
-  const frame = globalThis.frameElement;
-  if (frame?.localName !== "iframe" || !frame.hasAttribute("data-preview-frame")) {
+  const physicallyFramed = globalThis.parent !== globalThis.window;
+  if (!studioOwned() && !physicallyFramed) {
     return;
   }
   const notify = () => {
     const message: QueryChangeMessage = {
       type: "marimo-studio:query-change",
-      runtime: hasRuntimeConfig()
-        ? getRuntimeConfig().runtime.id
-        : runtimeIdFromSearch(globalThis.location.search, getMountConfig().runtime),
+      runtime: hasRuntimeConfig() ? getRuntimeConfig().runtime.id : getMountConfig().runtime,
+      ...documentLifecycleEnvelope(),
       query: publicNotebookQuery(globalThis.location.search),
     };
-    globalThis.parent.postMessage(message, globalThis.location.origin);
+    postToStudioParent(message);
   };
   const pushState = globalThis.history.pushState.bind(globalThis.history);
   const replaceState = globalThis.history.replaceState.bind(globalThis.history);

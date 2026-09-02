@@ -13,7 +13,7 @@ from importlib.metadata import version
 from importlib.resources import files
 from typing import Any, Literal
 
-from marimo_studio.errors import CompatibilityError
+from marimo_studio.errors._internal import CompatibilityError
 
 _RELEASE = json.loads(
     files("marimo_studio._compat").joinpath("release.json").read_text(encoding="utf-8")
@@ -47,6 +47,7 @@ class SymbolContract:
     qualname: str
     parameters: tuple[ParameterContract, ...] | None
     source_sha256: str
+    closure_indices: tuple[int, ...] = ()
 
     @property
     def name(self) -> str:
@@ -76,6 +77,14 @@ def _source_contract(
 
 
 _SYMBOLS = {
+    "usage-process-sampling": (
+        SymbolContract(
+            "marimo._server.api.endpoints.health",
+            "usage",
+            _parameters(("request", "POSITIONAL_OR_KEYWORD", False)),
+            "6fa17048382f0bb92cb51a646926c54f2c3db12b9ead226b41f9f97717c02cd6",
+        ),
+    ),
     "server-context": (
         _source_contract(
             "marimo._server.session_manager",
@@ -100,6 +109,40 @@ _SYMBOLS = {
             ),
             "993c2270c70d67b7527e82e1064793e13e36caa894617ebcc46df7ad1778dd45",
         ),
+        SymbolContract(
+            "marimo._server.session_manager",
+            "SessionManager.close_session",
+            _parameters(
+                ("self", "POSITIONAL_OR_KEYWORD", False),
+                ("session_id", "POSITIONAL_OR_KEYWORD", False),
+            ),
+            "5d674124e696138fa8e7e1bcad672fdb8d1b7a36c79deef704ccee43d6019d6a",
+        ),
+    ),
+    "programmatic-main-module": (
+        SymbolContract(
+            "marimo._runtime.patches",
+            "patch_sys_module",
+            _parameters(("module", "POSITIONAL_OR_KEYWORD", False)),
+            "494ba13930024d0711ae04ff917d72107b695969c40e1778b177df6787d33be4",
+        ),
+    ),
+    "session-query-metadata": (
+        _source_contract(
+            "marimo._session.managers.kernel",
+            "KernelManagerImpl.__init__",
+            "cab5c5e1db540f13bd6efa5475812786515223648944a724cccc4e0c76ddcbb6",
+        ),
+        _source_contract(
+            "marimo._session.managers.ipc",
+            "IPCKernelManagerImpl.__init__",
+            "3ac3132fb01fcbe1367b300061faecf7a8a48047c4819a536318a700d5cf655c",
+        ),
+        _source_contract(
+            "marimo._session.managers.app_host",
+            "AppHostKernelManager.__init__",
+            "014556ace181b9a55450149a7e303ac7d83e1cc6ea6dc08698137a08d21fcf43",
+        ),
     ),
     "existing-session-attachment": (
         _source_contract(
@@ -120,6 +163,12 @@ _SYMBOLS = {
             "fb918e0fca6ebdc0d0ef0770a5aa5b4bf0a9f96aeab43713770d042d3f54f962",
         ),
         SymbolContract(
+            "marimo._server.api.endpoints.ws.ws_session_connector",
+            "SessionConnector._create_new_session",
+            _parameters(("self", "POSITIONAL_OR_KEYWORD", False)),
+            "34d2ba947825a2719de541d92927a1718f9905d73e54ef906f96577e360685d7",
+        ),
+        SymbolContract(
             "marimo._server.api.endpoints.ws_endpoint",
             "WebSocketHandler.start",
             _parameters(("self", "POSITIONAL_OR_KEYWORD", False)),
@@ -135,6 +184,16 @@ _SYMBOLS = {
             ),
             "30d6ac8d47c223e0c4c22c8b48186fdbf8e043baec34bda52d1107b3c783fe29",
         ),
+        SymbolContract(
+            "marimo._server.api.endpoints.ws.session_handler",
+            "SessionHandler._on_disconnect",
+            _parameters(
+                ("self", "POSITIONAL_OR_KEYWORD", False),
+                ("e", "POSITIONAL_OR_KEYWORD", False),
+                ("cleanup_fn", "POSITIONAL_OR_KEYWORD", False),
+            ),
+            "d552fc5aa3b3724d429e2fedd8363ef5d5b426a69349e403fc3a59d5112173e5",
+        ),
     ),
     "session-replay": (
         SymbolContract(
@@ -145,6 +204,14 @@ _SYMBOLS = {
                 ("session", "POSITIONAL_OR_KEYWORD", False),
             ),
             "fa5709fd94b1a953e97c29a3acc620452c270025c6a3047efaa279487f193203",
+        ),
+    ),
+    "session-cache-publication": (
+        SymbolContract(
+            "marimo._session.state.serialize",
+            "SessionCacheWriter.run",
+            _parameters(("self", "POSITIONAL_OR_KEYWORD", False)),
+            "91479c6f2ba69ff586e60605196263bf9350c5b7c5d78d01100d22818ab4114f",
         ),
     ),
     "notebook-save-transform": (
@@ -164,6 +231,40 @@ _SYMBOLS = {
                 ("previous_path", "KEYWORD_ONLY", True),
             ),
             "5de4d099725d669ccef2a111501a7160922179a9337b60d02486a67c4daa649b",
+        ),
+    ),
+    "document-transaction-evidence": (
+        SymbolContract(
+            "marimo._server.api.endpoints.document",
+            "document_transaction",
+            _parameters(("request", "POSITIONAL_OR_KEYWORD", False)),
+            "54cc42d08406f4baac07dc8777c563609345264769454a9472141c34d46c807e",
+            (0,),
+        ),
+        SymbolContract(
+            "marimo._messaging.notebook.document",
+            "NotebookDocument.apply",
+            _parameters(
+                ("self", "POSITIONAL_OR_KEYWORD", False),
+                ("tx", "POSITIONAL_OR_KEYWORD", False),
+            ),
+            "4a442fd6a6657614d6f3ec21ccd3b7c89d8a646e5c708cff6b68e76deae59f04",
+        ),
+        SymbolContract(
+            "marimo._server.api.deps",
+            "AppState.get_current_session",
+            _parameters(("self", "POSITIONAL_OR_KEYWORD", False)),
+            "d93367ee269d025636b5eae05785c7634a5892017634172fe321e18cf770ddc1",
+        ),
+        _source_contract(
+            "marimo._session.session",
+            "SessionImpl.document.fget",
+            "1872e92c1205e410d33e220852f7522d04dba78e2c5037cd5b45aa524614e3cb",
+        ),
+        _source_contract(
+            "marimo._messaging.notebook.document",
+            "NotebookDocument.cells.fget",
+            "34fe5025eec035e8370bf13e308ae47d9e09bae26ca0538d26c96f829b006ade",
         ),
     ),
     "session-extension-state": (
@@ -321,6 +422,11 @@ def _resolve(contract: SymbolContract) -> Any:
     value: Any = import_module(contract.module)
     for part in contract.qualname.split("."):
         value = getattr(value, part)
+    for index in contract.closure_indices:
+        closure = value.__closure__
+        if closure is None:
+            raise AttributeError(f"{contract.name} has no closure")
+        value = closure[index].cell_contents
     return value
 
 
@@ -419,14 +525,6 @@ def _contract_snapshot() -> dict[str, object]:
         "installedVersion": version("marimo"),
         "contracts": contracts,
     }
-
-
-__all__ = [
-    "MARIMO_RELEASE_COMMIT",
-    "MARIMO_VERSION",
-    "assert_pinned_release",
-    "clear_release_cache",
-]
 
 
 if __name__ == "__main__":

@@ -1,4 +1,8 @@
+import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
 import { notifyProjectionChanged } from "../projections/changes.ts";
+import { hostsInDocumentOrder } from "../projections/host-order.ts";
+import { PROJECTION_SITE_ATTRIBUTE } from "../projections/identity.ts";
+import { resetProjectionHostMetadata } from "../projections/instances.ts";
 
 export type CellHostState = "connecting" | "loading" | "stale" | "ready" | "missing" | "error";
 
@@ -22,6 +26,11 @@ const RUNTIME_ATTRIBUTES = new Set([
   "data-marimo-diagnostic-code",
   "data-marimo-diagnostic-hint",
   "data-marimo-diagnostic-message",
+  "data-marimo-producer-ref",
+  "data-marimo-projection-kind",
+  "data-marimo-projection-target",
+  "data-marimo-projection-variable",
+  "data-marimo-studio-instance",
   "data-marimo-selector",
   "data-marimo-variable",
   "data-output-mime",
@@ -35,6 +44,7 @@ const measuredHeights = new Map<string, number>();
 let snapshot: readonly MarimoCellElement[] = [];
 let activeViewportClass = "";
 let resizeListenerRegistered = false;
+let publishMovePending = false;
 
 const viewportClass = (): string => {
   if (globalThis.innerWidth < 640) {
@@ -82,8 +92,36 @@ const writeMeasuredHeight = (key: string, height: number) => {
 };
 
 const publish = () => {
-  snapshot = Array.from(hosts);
+  snapshot = hostsInDocumentOrder(hosts);
   listeners.forEach((listener) => listener());
+};
+
+const publishAfterMove = () => {
+  if (publishMovePending) {
+    return;
+  }
+  publishMovePending = true;
+  queueMicrotask(() => {
+    publishMovePending = false;
+    const next = hostsInDocumentOrder(hosts);
+    if (next.length !== snapshot.length || next.some((host, index) => host !== snapshot[index])) {
+      publish();
+    }
+  });
+};
+
+const releaseCellHost = (host: MarimoCellElement) => {
+  sizeObserver?.unobserve(host);
+  if (!hosts.delete(host)) {
+    return;
+  }
+  resetProjectionHostMetadata(host);
+  delete host.dataset.state;
+  host.removeAttribute("aria-busy");
+  host.style.removeProperty(MEASURED_HEIGHT_PROPERTY);
+  hosts.forEach(prepareCellHost);
+  publish();
+  notifyProjectionChanged();
 };
 
 const applyMeasuredHeight = (host: HTMLElement) => {
@@ -119,7 +157,7 @@ const sizeObserver =
     : null;
 
 export class MarimoCellElement extends HTMLElement {
-  static observedAttributes = ["name"];
+  static observedAttributes = ["name", PROJECTION_SITE_ATTRIBUTE];
   private hasRendered = false;
 
   get cellName(): string {
@@ -127,6 +165,9 @@ export class MarimoCellElement extends HTMLElement {
   }
 
   connectedCallback() {
+    if (!isArtifactProjectionHost(this)) {
+      return;
+    }
     prepareCellHost(this);
     hosts.add(this);
     applyMeasuredHeight(this);
@@ -137,25 +178,42 @@ export class MarimoCellElement extends HTMLElement {
     publish();
   }
 
-  connectedMoveCallback() {}
+  connectedMoveCallback() {
+    if (!isArtifactProjectionHost(this)) {
+      releaseCellHost(this);
+      return;
+    }
+    if (!hosts.has(this)) {
+      prepareCellHost(this);
+      hosts.add(this);
+      applyMeasuredHeight(this);
+      sizeObserver?.observe(this);
+      if (!this.querySelector(OUTPUT_SELECTOR)) {
+        setCellHostState(this, "connecting");
+      }
+    }
+    publishAfterMove();
+    notifyProjectionChanged();
+  }
 
   disconnectedCallback() {
     sizeObserver?.unobserve(this);
     queueMicrotask(() => {
-      if (this.isConnected) {
+      if (this.isConnected && isArtifactProjectionHost(this)) {
         return;
       }
-      hosts.delete(this);
-      hosts.forEach(prepareCellHost);
-      publish();
+      releaseCellHost(this);
     });
   }
 
-  attributeChangedCallback() {
-    if (this.isConnected) {
-      applyMeasuredHeight(this);
-      publish();
+  attributeChangedCallback(_name: string, previous: string | null, current: string | null) {
+    if (!this.isConnected || previous === current || !isArtifactProjectionHost(this)) {
+      return;
     }
+    resetProjectionHostMetadata(this);
+    setCellHostState(this, "connecting");
+    applyMeasuredHeight(this);
+    publish();
   }
 
   markRendered(): boolean {
@@ -166,6 +224,9 @@ export class MarimoCellElement extends HTMLElement {
 }
 
 export const prepareCellHost = (host: Element) => {
+  if (!isArtifactProjectionHost(host)) {
+    return;
+  }
   const name = host.getAttribute("name")?.trim();
   if (!name) {
     return;
@@ -183,7 +244,9 @@ export const prepareCellHost = (host: Element) => {
 };
 
 export const prepareCellHosts = (root: ParentNode) => {
-  root.querySelectorAll("marimo-cell").forEach(prepareCellHost);
+  root
+    .querySelectorAll("marimo-cell")
+    .forEach((host) => isArtifactProjectionHost(host) && prepareCellHost(host));
 };
 
 export const syncProjectionHostAttributes = (live: HTMLElement, source: Element): void => {
@@ -194,7 +257,10 @@ export const syncProjectionHostAttributes = (live: HTMLElement, source: Element)
     }
   }
   for (const attribute of Array.from(source.attributes)) {
-    if (!RUNTIME_ATTRIBUTES.has(attribute.name)) {
+    if (
+      !RUNTIME_ATTRIBUTES.has(attribute.name) &&
+      live.getAttribute(attribute.name) !== attribute.value
+    ) {
       live.setAttribute(attribute.name, attribute.value);
     }
   }
@@ -206,6 +272,9 @@ export const syncProjectionHostAttributes = (live: HTMLElement, source: Element)
 
 export const syncPreservedCellHosts = (source: ParentNode, live: Document): void => {
   source.querySelectorAll<HTMLElement>("marimo-cell[data-hx-preserve][id]").forEach((host) => {
+    if (!isArtifactProjectionHost(host)) {
+      return;
+    }
     const preserved = live.getElementById(host.id);
     if (preserved?.localName === "marimo-cell" && preserved !== host) {
       syncProjectionHostAttributes(preserved, host);

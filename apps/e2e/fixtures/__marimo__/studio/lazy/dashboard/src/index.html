@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lazy WebAssembly projection</title>
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <main id="app-shell" class="studio-view">
+      <h1>Lazy WebAssembly projection</h1>
+      <p>
+        Independent branch:
+        <strong id="projected-status" mo-value='runtime_state["status"]'></strong>
+      </p>
+      <p>
+        Escaped slash:
+        <strong id="escaped-slash" mo-value='runtime_state["a\/b"]'></strong>
+      </p>
+      <p>
+        Surrogate pair:
+        <strong id="surrogate-pair" mo-value='runtime_state["\ud83d\ude00"]'></strong>
+      </p>
+    </main>
+  </body>
+</html>

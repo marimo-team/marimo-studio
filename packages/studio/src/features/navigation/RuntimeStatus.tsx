@@ -4,9 +4,37 @@ export const RuntimeStatus = ({ status }: { status: PreviewStatus }) => (
   <div
     className="studio-runtime-status"
     data-state={status.state}
-    title={status.title || undefined}
+    role="status"
+    aria-label="Preview runtime status"
   >
-    <span className="studio-runtime-dot" aria-hidden="true" />
-    <span>{status.message}</span>
+    <div className="studio-runtime-status-summary">
+      <span className="studio-runtime-dot" aria-hidden="true" />
+      <strong>{status.message}</strong>
+    </div>
+    {status.diagnostics.length > 0 ? (
+      <ul className="studio-runtime-diagnostics">
+        {status.diagnostics.map((diagnostic, index) => (
+          <li
+            key={[
+              diagnostic.code,
+              diagnostic.target,
+              diagnostic.source?.path,
+              diagnostic.source?.line,
+              diagnostic.source?.column,
+              index,
+            ].join(":")}
+          >
+            <span>{diagnostic.message}</span>
+            {diagnostic.target ? <code>{diagnostic.target}</code> : null}
+            {diagnostic.source ? (
+              <code>
+                {diagnostic.source.path}:{diagnostic.source.line}:{diagnostic.source.column}
+              </code>
+            ) : null}
+            {diagnostic.hint ? <small>{diagnostic.hint}</small> : null}
+          </li>
+        ))}
+      </ul>
+    ) : null}
   </div>
 );

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "vite-plus/test";
+import { test, vi } from "vite-plus/test";
 
 import { ViewTransition } from "../src/features/views/transition.ts";
 
@@ -22,11 +22,12 @@ test("the latest view request is the only transition committed", async () => {
     },
     commit(view, landing, changed) {
       committed.push([view, landing, changed]);
+      return true;
     },
     cancel() {},
   });
 
-  const first = transition.select("operations", "split");
+  const first = transition.select("operations", "develop");
   const second = transition.select("executive", "preserve");
   loads.get("executive")!.resolve(true);
   assert.deepEqual(await second, true);
@@ -41,11 +42,12 @@ test("choosing the current view cancels a pending transition", async () => {
   const committed: Array<[string, string, boolean]> = [];
   let cancellations = 0;
   const transition = new ViewTransition("dashboard", {
-    prepare() {
-      return pending.promise;
+    prepare(view) {
+      return view === "dashboard" ? Promise.resolve(true) : pending.promise;
     },
     commit(view, landing, changed) {
       committed.push([view, landing, changed]);
+      return true;
     },
     cancel() {
       cancellations += 1;
@@ -53,10 +55,209 @@ test("choosing the current view cancels a pending transition", async () => {
   });
 
   const switching = transition.select("operations", "preserve");
-  assert.deepEqual(await transition.select("dashboard", "split"), true);
+  assert.deepEqual(await transition.select("dashboard", "develop"), true);
   pending.resolve(true);
 
   assert.deepEqual(await switching, false);
   assert.deepEqual(cancellations, 1);
-  assert.deepEqual(committed, [["dashboard", "split", false]]);
+  assert.deepEqual(committed, [["dashboard", "develop", false]]);
+});
+
+test("commits navigation intent only after target preparation succeeds", async () => {
+  const committed: unknown[][] = [];
+  const transition = new ViewTransition("dashboard", {
+    prepare: async (view) => view === "report",
+    commit(...args) {
+      committed.push(args);
+      return true;
+    },
+    cancel() {},
+  });
+  const intent = { query: "?region=apac", hash: "#details" };
+
+  assert.equal(await transition.select("broken", "preserve", intent), false);
+  assert.deepEqual(committed, []);
+  assert.equal(await transition.select("report", "preserve", intent), true);
+  assert.deepEqual(committed, [["report", "preserve", true, intent]]);
+});
+
+test("prepares same-view navigation before committing it", async () => {
+  const committed: unknown[][] = [];
+  const prepared: unknown[][] = [];
+  const transition = new ViewTransition("dashboard", {
+    prepare(...args) {
+      prepared.push(args);
+      return Promise.resolve(false);
+    },
+    commit(...args) {
+      committed.push(args);
+      return true;
+    },
+    cancel() {},
+  });
+  const intent = { query: "?region=apac", hash: "#details" };
+
+  assert.equal(await transition.select("dashboard", "preserve", intent), false);
+  assert.deepEqual(prepared, [["dashboard", false, intent]]);
+  assert.deepEqual(committed, []);
+});
+
+test("commits only the newest same-view navigation", async () => {
+  const first = deferred<boolean>();
+  const second = deferred<boolean>();
+  const committed: unknown[][] = [];
+  const transition = new ViewTransition("dashboard", {
+    prepare(_view, _changed, navigation) {
+      return navigation?.hash === "#first" ? first.promise : second.promise;
+    },
+    commit(...args) {
+      committed.push(args);
+      return true;
+    },
+    cancel() {},
+  });
+
+  const older = transition.select("dashboard", "preserve", {
+    query: "?region=older",
+    hash: "#first",
+  });
+  const newer = transition.select("dashboard", "preserve", {
+    query: "?region=newer",
+    hash: "#second",
+  });
+  first.resolve(true);
+  assert.equal(await older, false);
+  second.resolve(true);
+  assert.equal(await newer, true);
+  assert.deepEqual(committed, [
+    ["dashboard", "preserve", false, { query: "?region=newer", hash: "#second" }],
+  ]);
+});
+
+test("an aborted transition settles before late preparation can commit", async () => {
+  const prepared = deferred<boolean>();
+  const commit = vi.fn(() => true);
+  const cancel = vi.fn();
+  const transition = new ViewTransition("dashboard", {
+    prepare: () => prepared.promise,
+    commit,
+    cancel,
+  });
+
+  const owner = new AbortController();
+  const selecting = transition.select("report", "develop", undefined, owner.signal);
+  owner.abort();
+
+  assert.equal(await selecting, false);
+  prepared.resolve(true);
+  await Promise.resolve();
+  assert.equal(commit.mock.calls.length, 0);
+  assert.equal(cancel.mock.calls.length, 1);
+});
+
+test("a failed staged view can be retried from the previous selection", async () => {
+  const changed: boolean[] = [];
+  const rollback = vi.fn();
+  let ready = false;
+  const transition = new ViewTransition("dashboard", {
+    prepare: async () => true,
+    stage(_view, viewChanged) {
+      changed.push(viewChanged);
+      return { ready: Promise.resolve(ready), rollback };
+    },
+    commit: () => true,
+    cancel: vi.fn(),
+  });
+
+  assert.equal(await transition.select("report", "develop"), false);
+  ready = true;
+  assert.equal(await transition.select("report", "develop"), true);
+
+  assert.deepEqual(changed, [true, true]);
+  assert.equal(rollback.mock.calls.length, 1);
+});
+
+test("a failed replacement restores the committed view after superseding a staged view", async () => {
+  const reportReady = deferred<boolean>();
+  const reportRollback = deferred<void>();
+  const rollbacks: string[] = [];
+  const unhandled = vi.fn();
+  let presented = "dashboard";
+  let presentedWhenStorySettled: string | undefined;
+  process.on("unhandledRejection", unhandled);
+  try {
+    const transition = new ViewTransition("dashboard", {
+      prepare: async () => true,
+      stage(view) {
+        const previous = presented;
+        presented = view;
+        return {
+          ready: view === "report" ? reportReady.promise : Promise.resolve(false),
+          rollback: async () => {
+            rollbacks.push(view);
+            if (view === "report") {
+              await reportRollback.promise;
+            }
+            presented = previous;
+          },
+        };
+      },
+      commit: vi.fn(() => true),
+      cancel: vi.fn(),
+    });
+
+    const report = transition.select("report", "preserve");
+    await vi.waitFor(() => assert.equal(presented, "report"));
+    const story = transition.select("story", "preserve");
+    void story.then(() => {
+      presentedWhenStorySettled = presented;
+    });
+    reportReady.resolve(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(presentedWhenStorySettled, undefined);
+    reportRollback.resolve();
+    assert.deepEqual(await Promise.all([report, story]), [false, false]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(presented, "dashboard");
+    assert.equal(presentedWhenStorySettled, "dashboard");
+    assert.deepEqual(rollbacks, ["report", "story"]);
+    assert.equal(unhandled.mock.calls.length, 0);
+  } finally {
+    process.off("unhandledRejection", unhandled);
+  }
+});
+
+test("cancel observes one staged rollback rejection", async () => {
+  const ready = deferred<boolean>();
+  const staged = deferred<void>();
+  const rollback = vi.fn(async () => {
+    throw new Error("rollback failed");
+  });
+  const unhandled = vi.fn();
+  process.on("unhandledRejection", unhandled);
+  try {
+    const transition = new ViewTransition("dashboard", {
+      prepare: async () => true,
+      stage: () => {
+        staged.resolve();
+        return { ready: ready.promise, rollback };
+      },
+      commit: vi.fn(() => true),
+      cancel: vi.fn(),
+    });
+
+    const selecting = transition.select("report", "preserve");
+    await staged.promise;
+    transition.cancel();
+    ready.resolve(true);
+
+    assert.equal(await selecting, false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(rollback.mock.calls.length, 1);
+    assert.equal(unhandled.mock.calls.length, 0);
+  } finally {
+    process.off("unhandledRejection", unhandled);
+  }
 });

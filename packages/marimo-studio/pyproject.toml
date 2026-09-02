@@ -1,14 +1,14 @@
 [project]
 name = "marimo-studio"
-version = "0.0.6"
+version = "0.1.0"
 description = "Custom views for Marimo notebooks"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.15"
 dependencies = [
-  "agent-plugins==0.1.0",
+  "agent-plugins==0.1.1",
   "click>=8.2",
   "htpy>=26.5.1,<27",
   "marimo==0.24.0",
@@ -16,7 +16,13 @@ dependencies = [
   "packaging>=25",
   "tomli>=2; python_version < '3.11'",
   "tomlkit>=0.14",
+  "tree-sitter==0.25.2",
+  "tree-sitter-javascript==0.25.0",
+  "watchdog==6.0.0",
 ]
+
+[project.optional-dependencies]
+deno = ["deno==2.9.5"]
 
 [project.urls]
 Homepage = "https://marimo-team.github.io/marimo-studio/"
@@ -35,6 +41,11 @@ marimo-studio = "marimo_studio._entrypoints:kernel_lifespan"
 
 [project.entry-points."marimo.agent.capability"]
 studio = "marimo_studio.agent"
+
+[project.entry-points."marimo_studio.view_provider"]
+react = "marimo_studio.view_providers._bundled.deno_react:provider"
+svelte = "marimo_studio.view_providers._bundled.deno_svelte:provider"
+vanilla = "marimo_studio.view_providers._bundled.vanilla:provider"
 
 [tool.ruff]
 src = ["src"]
@@ -65,25 +76,33 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID251"]
 "src/marimo_studio/_composition.py" = ["TID251"]
 "tests/app_helpers.py" = ["TID251"]
 "tests/conftest.py" = ["TID251"]
-"tests/test_agent_browser_api.py" = ["TID251"]
-"tests/test_agent_client.py" = ["TID251"]
-"tests/test_agent.py" = ["TID251"]
-"tests/test_app.py" = ["TID251"]
-"tests/test_browser_outputs.py" = ["TID251"]
-"tests/test_cached_cells.py" = ["TID251"]
-"tests/test_code_mode_bridge.py" = ["TID251"]
-"tests/test_compatibility.py" = ["TID251"]
-"tests/test_environment.py" = ["TID251"]
-"tests/test_kiosk_sessions.py" = ["TID251"]
-"tests/test_live_cell_aliases.py" = ["TID251"]
-"tests/test_peer_controls.py" = ["TID251"]
-"tests/test_session_replay.py" = ["TID251"]
-"tests/test_server_context.py" = ["TID251"]
-"tests/test_values.py" = ["TID251"]
-"tests/test_workspace.py" = ["TID251"]
+"tests/agent/test_browser_activation_observation.py" = ["TID251"]
+"tests/agent/test_browser_validation_http.py" = ["TID251"]
+"tests/agent/test_client_connection.py" = ["TID251"]
+"tests/agent/test_code_mode_bridge.py" = ["TID251"]
+"tests/agent/test_workspace.py" = ["TID251"]
+"tests/marimo_compat/**/*.py" = ["TID251"]
+"tests/projections/test_authorization.py" = ["TID251"]
+"tests/server/app_test_support.py" = ["TID251"]
+"tests/server/test_context.py" = ["TID251"]
+"tests/server/test_delivery_directory_routes.py" = ["TID251"]
+"tests/server/test_editor_runtime_assets.py" = ["TID251"]
+"tests/server/test_kiosk_sessions.py" = ["TID251"]
+"tests/server/test_peer_controls.py" = ["TID251"]
+"tests/server/test_presentation_runtime.py" = ["TID251"]
+"tests/server/test_projection_api.py" = ["TID251"]
+"tests/server/test_runtime_config.py" = ["TID251"]
+"tests/server/test_session_startup.py" = ["TID251"]
+"tests/views/test_runtime_validation.py" = ["TID251"]
+"tests/views/test_view_setup.py" = ["TID251"]
+"tests/views/test_workspace_catalog.py" = ["TID251"]
+"tests/views/test_workspace_binding_ownership.py" = ["TID251"]
+"tests/views/test_workspace_configuration.py" = ["TID251"]
+"tests/views/test_workspace_deletion_lifecycle.py" = ["TID251"]
+"tests/views/test_workspace_security.py" = ["TID251"]
 
 [build-system]
-requires = ["agent-plugins==0.1.0", "uv_build==0.12.2"]
+requires = ["agent-plugins==0.1.1", "uv_build==0.12.2"]
 build-backend = "agent_plugins.build.uv_build"
 
 [tool.agent-plugins]

@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      pages: write
+      pages: read
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -27,26 +27,20 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Socket Firewall
-        uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          mode: firewall-free
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          python-version: "3.12"
 
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
         with:
-          node-version-file: .node-version
-          version: 0.2.4
-          cache: true
-          sfw: true
-          run-install: |
-            - args: ["--frozen-lockfile"]
-
-      - name: Enable pnpm
-        run: corepack enable pnpm
+          prepare-marimo-frontend: "true"
 
       - name: Configure GitHub Pages
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         id: pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
@@ -55,27 +49,14 @@ jobs:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
         run: make docs-build
 
-      - name: Check GitHub Pages paths
-        env:
-          BASE_PATH: ${{ steps.pages.outputs.base_path }}
-        run: |
-          index="apps/docs/.vitepress/dist/index.html"
-          test -f apps/docs/.vitepress/dist/guide/getting-started.html
-          test -f apps/docs/.vitepress/dist/reference/index.html
-          grep -q "href=\"${BASE_PATH}/assets/" "$index"
-          grep -q "src=\"${BASE_PATH}/assets/" "$index"
-          grep -q "href=\"${BASE_PATH}/brand/marimo-studio-mark-light.svg\"" "$index"
-          grep -q "href=\"${BASE_PATH}/brand/marimo-studio-mark-dark.svg\"" "$index"
-          grep -q "href=\"${BASE_PATH}/guide/getting-started\"" "$index"
-
       - name: Upload GitHub Pages artifact
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: apps/docs/.vitepress/dist
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10

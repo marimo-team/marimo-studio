@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>__NOTEBOOK_NAME_HTML__ · __VIEW_NAME_HTML__</title>
+    <style>
+      body {
+        margin: 0;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: var(--text-font);
+      }
+
+      .view-results {
+        display: grid;
+        gap: 1.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app-shell" class="studio-view">
+      <header class="view-header">
+        <p class="studio-eyebrow">__NOTEBOOK_NAME_HTML__</p>
+        <h1>__VIEW_HEADING_HTML__</h1>
+      </header>
+      <section class="view-results" aria-label="Notebook results">__NOTEBOOK_CELLS_HTML__</section>
+    </main>
+    <script type="module">
+      /** Subscribe an explicit `mo-value` host to current values and later updates. */
+      const observeMarimoValue = (host, { onValue, onError = () => {} }) => {
+        const sync = (event) => onValue(event.detail.value);
+        const fail = (event) => onError(event.detail);
+        host.addEventListener("marimo-value-updated", sync);
+        host.addEventListener("marimo-value-error", fail);
+        if (host.marimoValue !== undefined) {
+          onValue(host.marimoValue);
+        }
+        return () => {
+          host.removeEventListener("marimo-value-updated", sync);
+          host.removeEventListener("marimo-value-error", fail);
+        };
+      };
+
+      document.querySelector("#app-shell")?.setAttribute("data-ready", "");
+    </script>
+  </body>
+</html>

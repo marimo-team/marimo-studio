@@ -11,21 +11,20 @@ import {
   updateConfiguredRuntime,
   updateConfiguredRuntimeQuery,
 } from "../src/runtime/coordinator";
+import { symbolicRuntimeFields } from "./runtime-fixtures";
 
 const config = (instance: string): RuntimeConfig => ({
   schema: 1,
   revision: "revision-a",
   view: "dashboard",
   views: ["dashboard"],
-  runtime: { id: "test", instance, available: ["test"], data: {} },
+  runtime: { id: "test", instance, data: {} },
   rootUrl: "/",
   publicRootUrl: "/",
   documentRootUrl: "/",
   supportUrl: "/_marimo-studio/views/dashboard",
   showCellLogs: true,
-  cellBindings: {},
-  valueBindings: {},
-  outputBindings: {},
+  ...symbolicRuntimeFields,
   diagnostics: [],
   appConfig: {},
   userConfig: {},

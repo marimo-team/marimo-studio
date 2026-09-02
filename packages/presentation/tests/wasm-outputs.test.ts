@@ -4,10 +4,9 @@ import type { OutputResponseReconciler } from "../src/outputs/reader";
 import type { FunctionResult } from "../src/values/wasm";
 
 import { createWasmOutputReader, createWasmOutputRequest } from "../src/outputs/wasm";
-import {
-  createProjectionSpecSynchronizer,
-  type WasmProjectionSpecs,
-} from "../src/runtime/wasm-config";
+import { projectionWireRequest } from "../src/projections/identity";
+import { commitRuntimeConfig } from "../src/runtime-config";
+import { projectionRequest, projectionRuntimeConfig } from "./runtime-fixtures";
 
 const rendered = {
   found: true,
@@ -27,42 +26,30 @@ const rendered = {
 } satisfies FunctionResult;
 
 describe("WebAssembly output reads", () => {
-  test("retries an unchanged projection update after synchronization fails", async () => {
-    const initial = { valueSpecs: {}, outputSpecs: {} };
-    const projected = {
-      valueSpecs: {},
-      outputSpecs: { df: ["df", []] },
-    } satisfies WasmProjectionSpecs;
-    const failure = new Error("RPC request timed out.");
-    const apply = vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce(undefined);
-    const synchronize = createProjectionSpecSynchronizer(initial, apply);
-
-    await expect(synchronize(projected)).rejects.toBe(failure);
-    await expect(synchronize(projected)).resolves.toBeUndefined();
-    expect(apply).toHaveBeenCalledTimes(2);
-    expect(apply).toHaveBeenLastCalledWith(projected);
-  });
-
   test("dispatches a native render at most once after a worker failure", async () => {
+    const df = projectionRequest("df", "output");
+    commitRuntimeConfig(projectionRuntimeConfig([df]));
     const failure = new Error("RPC request timed out.");
     const invoke = vi.fn(async () => Promise.reject(failure));
-    const request = createWasmOutputRequest("preview-a", invoke);
+    const authorize = vi.fn(async () => {});
+    const request = createWasmOutputRequest("preview-a", invoke, authorize);
+    const projection = {
+      revision: "presentation-revision",
+      projections: [df],
+      activeProjections: [df],
+    };
 
-    await expect(
-      request({
-        revision: "presentation-revision",
-        selectors: ["df"],
-        activeSelectors: ["df"],
-      }),
-    ).rejects.toBe(failure);
+    await expect(request(projection)).rejects.toBe(failure);
 
+    expect(authorize).toHaveBeenCalledWith(projection, undefined);
     expect(invoke).toHaveBeenCalledOnce();
     expect(invoke).toHaveBeenCalledWith({
-      namespace: "_marimo_studio",
+      namespace: "_marimo_studio_wasm",
       functionName: "render_values",
       args: {
-        selectors: ["df"],
-        active_selectors: ["df"],
+        revision: "presentation-revision",
+        projections: [projectionWireRequest(df)],
+        active_projections: [projectionWireRequest(df)],
         consumer_id: "preview-a",
         max_output_bytes: 1_000_000,
       },
@@ -70,6 +57,10 @@ describe("WebAssembly output reads", () => {
   });
 
   test("waits for initialization, serializes renders, and drops aborted queued work", async () => {
+    const df = projectionRequest("df", "output");
+    const figure = projectionRequest("figure", "output");
+    const staleRequest = projectionRequest("stale", "output");
+    commitRuntimeConfig(projectionRuntimeConfig([df, figure, staleRequest]));
     let initialize = () => {};
     const initialized = new Promise<void>((resolve) => {
       initialize = resolve;
@@ -86,18 +77,18 @@ describe("WebAssembly output reads", () => {
     const reader = createWasmOutputReader(() => initialized, request, reconcile);
     const firstProjection = {
       revision: "presentation-revision",
-      selectors: ["df"],
-      activeSelectors: ["df", "figure"],
+      projections: [df],
+      activeProjections: [df, figure],
     };
     const secondProjection = {
       revision: "presentation-revision",
-      selectors: ["figure"],
-      activeSelectors: ["df", "figure"],
+      projections: [figure],
+      activeProjections: [df, figure],
     };
     const staleProjection = {
       revision: "presentation-revision",
-      selectors: ["stale"],
-      activeSelectors: ["df"],
+      projections: [staleRequest],
+      activeProjections: [df, staleRequest],
     };
     const controller = new AbortController();
     const first = reader(firstProjection);
@@ -121,6 +112,8 @@ describe("WebAssembly output reads", () => {
   });
 
   test("discards a native render after its caller stops waiting", async () => {
+    const df = projectionRequest("df", "output");
+    commitRuntimeConfig(projectionRuntimeConfig([df]));
     let complete: (value: FunctionResult) => void = () => {};
     const response = new Promise<FunctionResult>((resolve) => {
       complete = resolve;
@@ -131,8 +124,8 @@ describe("WebAssembly output reads", () => {
     const controller = new AbortController();
     const projection = {
       revision: "presentation-revision",
-      selectors: ["df"],
-      activeSelectors: ["df"],
+      projections: [df],
+      activeProjections: [df],
     };
 
     const reading = reader(projection, controller.signal);

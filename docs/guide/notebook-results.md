@@ -1,165 +1,168 @@
 ---
-title: Use notebook results
-description: Include complete cell output, render one Python object through Marimo, or read a JSON-compatible value in the browser.
+title: Place notebook results in a view
+description: Use complete cells, rendered outputs, and browser values in view source documents.
 ---
 
-# Use notebook results
+# Place notebook results in a view
 
-A Studio view projects notebook results through three primitives. Choose the
-primitive from the result the page needs.
+View source requests notebook results through projection hosts. Choose the host
+that matches what the frontend needs:
 
-| Need                                               | Projection                    |
-| -------------------------------------------------- | ----------------------------- |
-| Include everything a cell produced                 | `<marimo-cell name="...">`    |
-| Render one Python object through Marimo            | `<marimo-output value="...">` |
-| Read a JSON-compatible value in HTML or JavaScript | `mo-value="..."`              |
+| Result          | View source                       | Use it for                                                          |
+| --------------- | --------------------------------- | ------------------------------------------------------------------- |
+| Complete cell   | `<marimo-cell name="summary">`    | Native controls, output, logs, errors, and reactive behavior        |
+| Rendered output | `<marimo-output value="chart">`   | One Python value rendered through marimo's native output system     |
+| Browser value   | `<span mo-value="metrics.total">` | JSON-compatible data or an eager dataframe consumed by browser code |
 
-Keep calculations, formatting, slicing, and data selection in notebook cells.
-The view then selects named cells or variable references from the reactive
-graph.
+All projection hosts belong inside `#app-shell`.
 
-## Include complete cell output <Badge type="info" text="marimo-cell" />
+## Place a complete cell
 
-Use a native cell name or an alias created with `marimo-studio bind`:
-
-```html
-<section aria-labelledby="analysis-title">
-  <h2 id="analysis-title">Analysis</h2>
-  <marimo-cell name="analysis"></marimo-cell>
-</section>
-```
-
-`<marimo-cell>` includes the complete output produced by the cell. It works for
-a final expression and for imperative output such as:
+Name the producing cell in the notebook:
 
 ```python
 @app.cell
-def _(mo):
-    for index in range(10):
-        mo.output.append(index)
+def sport_control(athletes, mo):
+    sport = mo.ui.dropdown(
+        options=athletes["sport"].unique().sort().to_list(),
+        label="Sport",
+    )
+    sport
+    return (sport,)
 ```
 
-Marimo mounts the result through its output plugins and widget clients.
-Controls, plots, tables, downloads, and anywidgets stay connected to the
-selected runtime. Standard output and standard error appear when
-`show_cell_logs` is enabled in the notebook configuration.
-
-Each cell name can appear once in a view. Bind an unnamed cell with the
-zero-based index reported by `inspect`:
-
-```console
-uvx marimo-studio inspect analysis.py --display
-uvx marimo-studio bind analysis.py --cell 4 --as analysis
-```
-
-## Render one Python object <Badge type="tip" text="marimo-output" />
-
-Use `<marimo-output>` when the page needs Marimo to format a variable as if it
-were the displayed expression of a notebook cell:
+Place the cell by name:
 
 ```html
-<section aria-labelledby="dataset-title">
-  <h2 id="dataset-title">Dataset</h2>
-  <marimo-output value="df"></marimo-output>
-</section>
+<marimo-cell name="sport_control"></marimo-cell>
 ```
 
-The `value` accepts a root variable or a nested selection:
+The host preserves the native control and its complete cell lifecycle. A
+control change reruns dependent notebook cells and updates their mounted
+results.
+
+## Render one notebook output
+
+Use `marimo-output` when marimo should choose the native renderer:
 
 ```html
-<marimo-output value="report.figure"></marimo-output>
-<marimo-output value="results[0]"></marimo-output>
+<marimo-output value="selected_roster"></marimo-output>
 ```
 
-Marimo selects the MIME formatter and mounts the result through its native
-output area. A DataFrame becomes the native data table. Markdown, plots,
-controls, downloads, and widgets retain their regular behavior.
+The Rio athletes report uses this host for the filtered Polars table. It uses
+`mo-value="top_sports"` separately so browser JavaScript can draw the
+participation chart.
 
-The defining notebook cell remains the reactive owner. During a rerun, the
-current output stays visible in a stale state until its replacement is ready.
-Each rich-output selector can appear once in a view.
+Output selectors can traverse attributes, dictionary keys, and list items:
 
-## Read a JSON-compatible value <Badge type="info" text="mo-value" />
+```text
+report.chart
+results["overview"]
+rows[0]
+```
 
-Add `mo-value` to the HTML element that should receive a Python value:
+## Read a browser value
+
+`mo-value` assigns the current value to `host.marimoValue` and dispatches an
+event when the value changes:
 
 ```html
-<time mo-value="report.updated_at"></time>
-<strong mo-value="selection.count"></strong>
-<span mo-value="series[0].label"></span>
-<span mo-value='metadata["key.with.dots"]'></span>
+<span id="summary-data" hidden mo-value="summary"></span>
+<output id="summary-total"></output>
+
+<script type="module">
+  const host = document.querySelector("#summary-data");
+  const output = document.querySelector("#summary-total");
+
+  const render = (value) => {
+    output.value = value.total.toLocaleString();
+  };
+
+  host.addEventListener("marimo-value-updated", (event) => {
+    render(event.detail.value);
+  });
+
+  if (host.marimoValue !== undefined) {
+    render(host.marimoValue);
+  }
+</script>
 ```
 
-A reference starts with one notebook variable. It can continue through mapping
-keys, attributes, list indexes, and item keys. Strings, numbers, and booleans
-render as text. Objects and arrays render as compact JSON. JSON `null` renders
-as empty text while remaining available to browser code as `null`.
+Register the listener before reading `marimoValue`. `undefined` means the
+value has not arrived or cannot currently be read. JSON `null` remains a valid
+value. Listen for `marimo-value-error` when the view needs a local recovery
+state.
 
-Define presentation values in a small notebook cell:
+React starters provide `useMarimoValue`. Svelte starters provide
+`observeMarimoValue`.
 
-```python
-@app.cell
-def _(df):
-    report = {
-        "updated_at": f"{df['Date'].max():%d %b %Y}",
-        "rows": len(df),
-    }
-    return (report,)
+## Pass a dataframe to JavaScript
+
+An eager dataframe reaches browser code as a
+[Flechette](https://github.com/uwdata/flechette) `Table`. Studio encodes the
+dataframe as [Arrow IPC](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc),
+a columnar data interchange format, and decodes it before updating the host.
+
+```js
+const chartRows = table.select(["region", "revenue"]).toArray();
 ```
 
-Several small value cells let unrelated reactive branches update
-independently.
+Treat the shared table as immutable. Keep data columnar while selecting fields
+or passing it to a column-oriented library. Call `toArray()` at a consumer that
+needs row objects.
 
-## Choose between rich output and browser data
+The Browser runtime requires browser-compatible dataframe and Arrow writer
+packages. Materialize lazy or remote queries in the notebook before projecting
+them.
 
-`<marimo-output>` asks Marimo to choose a renderer for the selected object.
-Use it for a native table, plot, Markdown object, control, download, or widget.
+## Use dynamic projection targets deliberately
 
-`mo-value` serializes the selected value as JSON. Use it for labels, counts,
-lists, configuration objects, or structured data consumed by browser code.
+React and Svelte providers inspect literal targets and finite arrays during the
+build. Keep those targets explicit when possible:
 
-## Reserve loading space
-
-Give substantial projections a realistic first-load size:
-
-```css
-marimo-cell[name="analysis"] {
-  --marimo-cell-skeleton-height: 28rem;
-}
-
-marimo-output[value="df"] {
-  --marimo-cell-skeleton-height: 24rem;
-}
-
-time[mo-value] {
-  --marimo-value-skeleton-width: 12ch;
+```tsx
+{
+  ["summary", "details"].map((name) => <marimo-cell key={name} name={name} />);
 }
 ```
 
-Mounted outputs inherit the surrounding font and color. The
-`--marimo-cell-*` properties control output surfaces, borders, spacing, fonts,
-and accents.
+When runtime state can choose any notebook target, declare that broader
+authorization on the host:
 
-## Check the projections
+```tsx
+<marimo-cell name={selectedName} data-marimo-allow="*" />
+```
 
-Run a static check while authoring:
+`data-marimo-allow="*"` permits that source location to request any valid
+target of the same projection kind. Use it at the narrowest dynamic host. A
+computed target without the declaration fails provider inspection.
+
+## Name and validate targets
+
+A semantic native cell name is the direct target. Give an anonymous cell a
+stable alias when renaming it is unsuitable:
 
 ```console
-uvx marimo-studio check analysis.py --view dashboard
+marimo-studio notebook bind summary --target analysis.py --cell 12
 ```
 
-Execute projected cells and resolve projected values before sharing:
+The alias belongs to the notebook and is available to every view.
+
+Validate source and notebook names without executing the notebook:
 
 ```console
-uvx marimo-studio check analysis.py --view dashboard --runtime
+marimo-studio validate dashboard --target analysis.py
 ```
 
-::: warning Runtime checks execute notebook code
-The runtime check executes notebook code. It can perform the same file,
-network, database, and data access as the projected cells.
-:::
+Execute the complete notebook, then check the view's selected projections:
 
-Use the [view document reference](../reference/view-document.md) for selector
-grammar, states, events, readiness, and diagnostics. Continue with
-[Use HTML, CSS, and JavaScript](web-platform.md) to connect JSON-compatible
-values to browser behavior.
+```console
+marimo-studio validate dashboard \
+  --target analysis.py \
+  --level runtime
+```
+
+Runtime validation can perform file, network, database, and other work from any
+notebook cell. Use it with trusted notebooks. See the
+[Projection DOM API](../reference/projections.md) for event payloads, state
+attributes, duplicate-host rules, and limits.

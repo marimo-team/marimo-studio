@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo } from "react";
 
 import type { RuntimeCell, SubmitStdin } from "../runtime-cell";
 
-import { indexCells } from "../../cells/bindings";
+import { indexCells } from "../../cells/index";
 import { errorMessage } from "../../errors";
 import { setRuntimeConnectionState } from "../../rendered-view-observer";
 import {

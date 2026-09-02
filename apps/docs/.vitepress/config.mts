@@ -2,16 +2,28 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, type HeadConfig, type Plugin, type UserConfig } from "vitepress";
 import llmstxt from "vitepress-plugin-llms";
 
+import {
+  authoringItems,
+  deliveryItems,
+  exampleItems,
+  headIcons,
+  introductionItems,
+  normalizeBasePath,
+  projectItems,
+  referenceItems,
+  routes,
+  startItems,
+  withBasePath,
+} from "./routes.ts";
+
 const repository = "https://github.com/marimo-team/marimo-studio";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-studio/");
+const socialImage = new URL("screenshots/studio-develop.png", siteUrl).href;
 const socialDescription =
-  "Keep analytical context in one reactive, reproducible Marimo notebook, then shape a custom web view for each audience.";
-const socialImageAlt = "Marimo Studio: Tune your notebook for every audience.";
-const socialImageUrl = new URL("og.png", siteUrl).href;
-const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
-const basePath = baseName ? `/${baseName}` : "";
+  "Build multiple custom web views from one marimo notebook with modern web tools and coding agents.";
+const basePath = normalizeBasePath(process.env.BASE_PATH);
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
-const publicPath = (path: string): string => `${basePath}${path}`;
+const publicPath = (path: string): string => withBasePath(basePath, path);
 const canonicalUrl = (page: string): string => {
   const route = page
     .replace(/^\/+/, "")
@@ -29,7 +41,6 @@ const viteConfig: UserConfig["vite"] = {
   plugins: llmsPlugins,
   publicDir,
 };
-
 export default defineConfig({
   base: basePath ? `${basePath}/` : "/",
   cleanUrls: true,
@@ -38,7 +49,7 @@ export default defineConfig({
     [
       "link",
       {
-        href: publicPath("/brand/marimo-studio-mark-light.svg"),
+        href: publicPath(headIcons.light),
         media: "(prefers-color-scheme: light)",
         rel: "icon",
         type: "image/svg+xml",
@@ -47,7 +58,7 @@ export default defineConfig({
     [
       "link",
       {
-        href: publicPath("/brand/marimo-studio-mark-dark.svg"),
+        href: publicPath(headIcons.dark),
         media: "(prefers-color-scheme: dark)",
         rel: "icon",
         type: "image/svg+xml",
@@ -56,6 +67,7 @@ export default defineConfig({
   ],
   lang: "en-US",
   lastUpdated: true,
+  sitemap: { hostname: siteUrl.href },
   srcDir: "../../docs",
   title: "Marimo Studio",
   transformHead({ description, page, title }): HeadConfig[] {
@@ -70,17 +82,19 @@ export default defineConfig({
       ["meta", { content: title, property: "og:title" }],
       ["meta", { content: pageDescription, property: "og:description" }],
       ["meta", { content: canonical, property: "og:url" }],
-      ["meta", { content: socialImageUrl, property: "og:image" }],
-      ["meta", { content: socialImageUrl, property: "og:image:secure_url" }],
-      ["meta", { content: "image/png", property: "og:image:type" }],
-      ["meta", { content: "2400", property: "og:image:width" }],
-      ["meta", { content: "1260", property: "og:image:height" }],
-      ["meta", { content: socialImageAlt, property: "og:image:alt" }],
-      ["meta", { content: "summary_large_image", name: "twitter:card" }],
+      ["meta", { content: socialImage, property: "og:image" }],
+      ["meta", { content: "1800", property: "og:image:width" }],
+      ["meta", { content: "1100", property: "og:image:height" }],
+      [
+        "meta",
+        {
+          content: "Notebook, view source, and Preview in Marimo Studio",
+          property: "og:image:alt",
+        },
+      ],
       ["meta", { content: title, name: "twitter:title" }],
       ["meta", { content: pageDescription, name: "twitter:description" }],
-      ["meta", { content: socialImageUrl, name: "twitter:image" }],
-      ["meta", { content: socialImageAlt, name: "twitter:image:alt" }],
+      ["meta", { content: socialImage, name: "twitter:image" }],
     ];
   },
   themeConfig: {
@@ -94,112 +108,58 @@ export default defineConfig({
       light: "/brand/marimo-studio-lockup-horizontal-light.svg",
     },
     nav: [
-      { text: "Overview", link: "/overview" },
+      { text: "Overview", link: routes.whatIsStudio },
       {
         text: "Guide",
         items: [
-          { text: "Guide overview", link: "/guide/" },
-          { text: "Create your first view", link: "/guide/getting-started" },
-          { text: "Create and manage views", link: "/guide/views" },
-          { text: "Use notebook results", link: "/guide/notebook-results" },
-          { text: "Author with the live workspace", link: "/guide/live-authoring" },
-          { text: "Use HTML, CSS, and JavaScript", link: "/guide/web-platform" },
-          { text: "Agent-native authoring", link: "/guide/coding-agents" },
-          { text: "Run, export, and share", link: "/guide/run-and-share" },
+          { text: "Start", items: startItems },
+          { text: "Author", items: authoringItems },
+          { text: "Deliver", items: deliveryItems },
         ],
       },
-      { text: "Examples", link: "/examples/" },
-      { text: "Reference", link: "/reference/" },
+      { text: "Examples", link: routes.examples.index },
+      { text: "Reference", link: routes.reference.index },
+      { text: "Project", items: projectItems },
     ],
     outline: [2, 3],
     search: { provider: "local" },
     sidebar: {
-      "/guide/": [
-        {
-          text: "Guide",
-          collapsed: false,
-          items: [
-            { text: "Guide overview", link: "/guide/" },
-            { text: "Create your first view", link: "/guide/getting-started" },
-            { text: "Create and manage views", link: "/guide/views" },
-            { text: "Use notebook results", link: "/guide/notebook-results" },
-            { text: "Author with the live workspace", link: "/guide/live-authoring" },
-            { text: "Use HTML, CSS, and JavaScript", link: "/guide/web-platform" },
-            { text: "Agent-native authoring", link: "/guide/coding-agents" },
-            { text: "Run, export, and share", link: "/guide/run-and-share" },
-          ],
-        },
-      ],
-      "/examples/": [
-        {
-          text: "Examples",
-          collapsed: false,
-          items: [
-            { text: "Examples overview", link: "/examples/" },
-            { text: "Revenue forecast", link: "/examples/revenue-forecast" },
-            { text: "Collection research", link: "/examples/collection-research" },
-          ],
-        },
-      ],
-      "/reference/": [
-        {
-          text: "Reference",
-          collapsed: false,
-          items: [
-            { text: "Reference overview", link: "/reference/" },
-            { text: "View document API", link: "/reference/view-document" },
-            { text: "Agent API", link: "/reference/agent-api" },
-            { text: "CLI", link: "/reference/cli" },
-            { text: "Notebook configuration", link: "/reference/configuration" },
-            { text: "Runtime behavior", link: "/reference/runtimes" },
-            { text: "Python API", link: "/reference/python-api" },
-          ],
-        },
-      ],
-      "/": [
+      [routes.home]: [
         {
           text: "Introduction",
           collapsed: false,
-          items: [
-            { text: "Marimo Studio", link: "/" },
-            { text: "Overview", link: "/overview" },
-            { text: "Create your first view", link: "/guide/getting-started" },
-          ],
+          items: introductionItems,
         },
         {
-          text: "Guide",
-          collapsed: true,
-          items: [
-            { text: "Guide overview", link: "/guide/" },
-            { text: "Create and manage views", link: "/guide/views" },
-            { text: "Use notebook results", link: "/guide/notebook-results" },
-            { text: "Author with the live workspace", link: "/guide/live-authoring" },
-            { text: "Use HTML, CSS, and JavaScript", link: "/guide/web-platform" },
-            { text: "Agent-native authoring", link: "/guide/coding-agents" },
-            { text: "Run, export, and share", link: "/guide/run-and-share" },
-          ],
+          text: "Start",
+          collapsed: false,
+          items: startItems,
         },
+        {
+          text: "Author",
+          collapsed: false,
+          items: authoringItems,
+        },
+        {
+          text: "Deliver",
+          collapsed: true,
+          items: deliveryItems,
+        },
+        { text: "Examples", link: routes.examples.index },
+        { text: "Reference", link: routes.reference.index },
+      ],
+      [routes.examplesRoot]: [
         {
           text: "Examples",
-          collapsed: true,
-          items: [
-            { text: "Examples overview", link: "/examples/" },
-            { text: "Revenue forecast", link: "/examples/revenue-forecast" },
-            { text: "Collection research", link: "/examples/collection-research" },
-          ],
+          collapsed: false,
+          items: exampleItems,
         },
+      ],
+      [routes.referenceRoot]: [
         {
           text: "Reference",
-          collapsed: true,
-          items: [
-            { text: "Reference overview", link: "/reference/" },
-            { text: "View document API", link: "/reference/view-document" },
-            { text: "Agent API", link: "/reference/agent-api" },
-            { text: "CLI", link: "/reference/cli" },
-            { text: "Notebook configuration", link: "/reference/configuration" },
-            { text: "Runtime behavior", link: "/reference/runtimes" },
-            { text: "Python API", link: "/reference/python-api" },
-          ],
+          collapsed: false,
+          items: referenceItems,
         },
       ],
     },

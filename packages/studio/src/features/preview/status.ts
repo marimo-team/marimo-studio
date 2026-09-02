@@ -4,23 +4,18 @@ import type {
 } from "@marimo-studio/protocol/browser-observations";
 
 export interface PreviewStatus {
+  diagnostics: readonly BrowserDiagnostic[];
   message: string;
   state: "loading" | "ready" | "warning" | "error";
-  title: string;
 }
 
 const STARTING_MESSAGES = new Map([
-  ["server", "Connecting to server"],
-  ["wasm", "Starting WebAssembly"],
+  ["server", "Connecting to Python"],
+  ["wasm", "Starting browser notebook"],
 ]);
 
 export const previewStartingMessage = (runtime: string): string =>
   STARTING_MESSAGES.get(runtime) ?? `Connecting to ${runtime}`;
-
-const diagnosticTitle = (diagnostics: readonly BrowserDiagnostic[]): string =>
-  diagnostics
-    .map((diagnostic) => [diagnostic.message, diagnostic.hint].filter(Boolean).join(" "))
-    .join("\n");
 
 const degradedMessage = (diagnostics: readonly BrowserDiagnostic[]): string => {
   const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "error").length;
@@ -34,17 +29,17 @@ const degradedMessage = (diagnostics: readonly BrowserDiagnostic[]): string => {
 };
 
 export const previewStatus = (runtime: string, status: RuntimeStatusSnapshot): PreviewStatus => {
-  const title = diagnosticTitle(status.diagnostics);
+  const diagnostics = status.diagnostics;
   switch (status.phase) {
     case "connecting":
-      return { message: previewStartingMessage(runtime), state: "loading", title };
+      return { diagnostics, message: previewStartingMessage(runtime), state: "loading" };
     case "synchronizing":
-      return { message: "Synchronizing preview", state: "loading", title };
+      return { diagnostics, message: "Updating preview", state: "loading" };
     case "ready":
-      return { message: "Live", state: "ready", title };
+      return { diagnostics, message: "Live", state: "ready" };
     case "degraded":
-      return { message: degradedMessage(status.diagnostics), state: "warning", title };
+      return { diagnostics, message: degradedMessage(diagnostics), state: "warning" };
     case "failed":
-      return { message: "Needs repair", state: "error", title };
+      return { diagnostics, message: "Needs repair", state: "error" };
   }
 };

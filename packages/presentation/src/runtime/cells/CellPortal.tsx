@@ -11,8 +11,8 @@ import { useCellHost } from "./use-cell-host";
 import { useCellProjection } from "./use-cell-projection";
 
 interface CellPortalProps {
-  bindingKey?: string;
-  bindingPresent: boolean;
+  projectionKey?: string;
+  projectionPresent: boolean;
   cell: RuntimeCell | undefined;
   developer: boolean;
   diagnostic?: CellDiagnostic;
@@ -23,8 +23,8 @@ interface CellPortalProps {
 }
 
 export const CellPortal = memo(function CellPortal({
-  bindingKey,
-  bindingPresent,
+  projectionKey,
+  projectionPresent,
   cell,
   developer,
   diagnostic,
@@ -35,8 +35,8 @@ export const CellPortal = memo(function CellPortal({
 }: CellPortalProps) {
   const projection = useCellProjection({
     alias: host.cellName,
-    bindingKey,
-    bindingPresent,
+    projectionKey,
+    projectionPresent,
     cell,
     diagnostic,
     runtimeReady,

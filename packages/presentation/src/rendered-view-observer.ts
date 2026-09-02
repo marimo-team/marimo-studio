@@ -3,17 +3,26 @@ import type {
   ViewReadyMessage,
   ViewSyncPendingMessage,
 } from "@marimo-studio/protocol/preview-messages";
+import type { ObservedProjectionInstance } from "@marimo-studio/protocol/projections";
 
 import type { RuntimeDiagnostic, StudioDiagnostic } from "./diagnostics.ts";
 
+import { documentLifecycleEnvelope } from "./document/document-lifecycle-id.ts";
+import { postToStudioParent } from "./document/parent-bridge.ts";
+import { studioOwned } from "./document/studio-ownership.ts";
 import { projectionHosts } from "./projections/host-runtime.ts";
+import { renderedProjectionInstances } from "./projections/instances.ts";
 import { toBrowserDiagnostic } from "./readiness-diagnostics.ts";
 import { type ReadinessSnapshot, readiness, type RuntimeConnectionState } from "./readiness.ts";
 import { renderedViewDiagnostics, renderedViewIdentity } from "./rendered-view-state.ts";
+import { getRuntimeConfig } from "./runtime-config/index.ts";
+import { viewStyleDiagnostic } from "./view-styles/runtime.ts";
 
 interface MarimoStudioApi {
   ready: () => Promise<void>;
   diagnostics: () => readonly StudioDiagnostic[];
+  identity: () => { readonly projectionRevision: string; readonly revision: string };
+  projections: () => readonly ObservedProjectionInstance[];
   updateQuery: (query: string) => Promise<void>;
 }
 
@@ -21,18 +30,20 @@ let observer: MutationObserver | undefined;
 let stopProjectionChanges: (() => void) | undefined;
 let stopReadinessChanges: (() => void) | undefined;
 let generation = 0;
+let pendingEvaluation: number | undefined;
+let ownedRuntimeDiagnosticHost: HTMLElement | undefined;
 
 const runtimeDiagnosticHost = (): HTMLElement => {
-  const existing = document.querySelector<HTMLElement>("[data-marimo-studio-runtime-diagnostic]");
-  if (existing) {
-    return existing;
+  if (ownedRuntimeDiagnosticHost?.isConnected) {
+    return ownedRuntimeDiagnosticHost;
   }
   const host = document.createElement("div");
   host.dataset.marimoStudioRuntimeDiagnostic = "";
   host.setAttribute("role", "alert");
   host.hidden = true;
   document.body.append(host);
-  return host;
+  ownedRuntimeDiagnosticHost = host;
+  return ownedRuntimeDiagnosticHost;
 };
 
 const publishRuntimeDiagnostic = (diagnostic?: RuntimeDiagnostic): void => {
@@ -45,18 +56,58 @@ const publishRuntimeDiagnostic = (diagnostic?: RuntimeDiagnostic): void => {
   host.dataset.state = diagnostic.severity === "warning" ? "waiting" : "error";
   host.setAttribute("role", diagnostic.severity === "warning" ? "status" : "alert");
   host.title = diagnostic.hint;
-  host.hidden = diagnostic.severity === "warning" && globalThis.parent !== globalThis.window;
+  host.hidden = diagnostic.severity === "warning" && studioOwned();
   const view = renderedViewIdentity();
-  const message: ViewSyncPendingMessage | ViewErrorMessage = {
-    type:
-      diagnostic.severity === "warning"
-        ? "marimo-studio:view-sync-pending"
-        : "marimo-studio:view-error",
+  const identity = {
     runtime: view.runtime,
+    ...documentLifecycleEnvelope(),
     diagnostic: toBrowserDiagnostic(diagnostic),
     view: diagnostic.view,
   };
-  globalThis.parent.postMessage(message, globalThis.location.origin);
+  let message: ViewSyncPendingMessage | ViewErrorMessage;
+  if (diagnostic.severity === "warning") {
+    message = { ...identity, type: "marimo-studio:view-sync-pending" };
+  } else {
+    const error: ViewErrorMessage = {
+      ...identity,
+      type: "marimo-studio:view-error",
+      revision: view.revision,
+      sessionId: view.sessionId ?? null,
+    };
+    message = error;
+  }
+  postToStudioParent(message);
+};
+
+const publishReady = (): void => {
+  const view = renderedViewIdentity();
+  const ready = {
+    type: "marimo-studio:view-ready",
+    runtime: view.runtime,
+    ...documentLifecycleEnvelope(),
+    view: view.view,
+    revision: view.revision,
+  } satisfies ViewReadyMessage;
+  const message = view.sessionId === undefined ? ready : { ...ready, sessionId: view.sessionId };
+  postToStudioParent(message);
+};
+
+const publishCommittedViewError = (): void => {
+  const diagnostic = renderedViewDiagnostics().find(({ severity }) => severity === "error");
+  if (!diagnostic) {
+    return;
+  }
+  const view = renderedViewIdentity();
+  const message: ViewErrorMessage = {
+    type: "marimo-studio:view-error",
+    runtime: view.runtime,
+    ...documentLifecycleEnvelope(),
+    diagnostic: toBrowserDiagnostic(diagnostic),
+    revision: view.revision,
+    sessionId: view.sessionId ?? null,
+    view: view.view,
+  };
+  postToStudioParent(message);
 };
 
 const publish = (snapshot: ReadinessSnapshot, previous: ReadinessSnapshot): void => {
@@ -68,36 +119,47 @@ const publish = (snapshot: ReadinessSnapshot, previous: ReadinessSnapshot): void
     );
   }
   if (snapshot.page === "ready" && previous.page !== "ready") {
-    const view = renderedViewIdentity();
-    const ready = {
-      type: "marimo-studio:view-ready",
-      runtime: view.runtime,
-      view: view.view,
-      revision: view.revision,
-    } satisfies ViewReadyMessage;
-    const message = view.sessionId === undefined ? ready : { ...ready, sessionId: view.sessionId };
-    globalThis.parent.postMessage(message, globalThis.location.origin);
+    publishReady();
+  }
+  if (
+    snapshot.page === "error" &&
+    previous.page !== "error" &&
+    snapshot.runtimeDiagnostic === undefined &&
+    snapshot.presentationDiagnostic === undefined
+  ) {
+    publishCommittedViewError();
   }
 };
 
 const evaluate = (): void => {
-  const presentationStates = Array.from(
-    document.querySelectorAll<HTMLElement>('[data-marimo-diagnostic-scope="presentation"]'),
-    (host) => host.dataset.state ?? "connecting",
-  );
-  readiness.setHosts([...projectionHosts.states(), ...presentationStates]);
+  readiness.setHosts([...projectionHosts.states(), ...(viewStyleDiagnostic() ? ["error"] : [])]);
 };
 
 export const refreshRenderedView = (): void => {
   evaluate();
 };
 
+export const announceRenderedViewReady = (): void => {
+  if (readiness.snapshot().page === "ready") {
+    publishReady();
+  }
+};
+
 const notifyRenderedViewChanged = (): void => {
   const activeGeneration = generation;
+  if (pendingEvaluation === activeGeneration) {
+    return;
+  }
+  pendingEvaluation = activeGeneration;
   queueMicrotask(() => {
-    if (activeGeneration === generation) {
-      evaluate();
+    if (pendingEvaluation !== activeGeneration) {
+      return;
     }
+    pendingEvaluation = undefined;
+    if (activeGeneration !== generation) {
+      return;
+    }
+    evaluate();
   });
 };
 
@@ -132,6 +194,14 @@ export const startRenderedViewObserver = (updateQuery: (query: string) => Promis
       return readiness.ready();
     },
     diagnostics: renderedViewDiagnostics,
+    identity: () => {
+      const config = getRuntimeConfig();
+      return {
+        projectionRevision: config.projectionRevision,
+        revision: config.revision,
+      };
+    },
+    projections: renderedProjectionInstances,
     updateQuery,
   };
   stopReadinessChanges = readiness.subscribe(publish);
@@ -148,6 +218,7 @@ export const startRenderedViewObserver = (updateQuery: (query: string) => Promis
 
 export const stopRenderedViewObserver = (): void => {
   generation += 1;
+  pendingEvaluation = undefined;
   observer?.disconnect();
   observer = undefined;
   stopProjectionChanges?.();

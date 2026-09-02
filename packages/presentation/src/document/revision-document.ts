@@ -1,32 +1,75 @@
-import htmx, { type HtmxSwapSpecification } from "htmx.org";
+import htmx from "htmx.org";
 
-import { projectionHosts } from "../projections/host-runtime.ts";
+import { projectionHosts, type StagedHostPreservation } from "../projections/host-runtime.ts";
+import { clearProjectionBindingStale } from "../projections/staleness.ts";
 import {
   commitRuntimeConfig,
   fetchRuntimeConfigForRevision,
   getRuntimeConfig,
   getSupportUrl,
   readResponseError,
+  requireMatchingPresentationRevision,
   RuntimeConfigRequestError,
   setSupportUrl,
 } from "../runtime-config/index.ts";
 import { stageViewStyles, type StagedViewStyles } from "../view-styles/runtime.ts";
 import { documentBase, resolveDocumentBase } from "./base.ts";
-import { sameShellPresentation, type ShellTarget } from "./refresh-state.ts";
+import { samePresentationRevision, type PresentationTarget } from "./presentation-refresh.ts";
+import { presentationRefreshUrl, presentationRenewalSupportUrl } from "./refresh-url.ts";
 import { requiresDocumentReload } from "./scripts.ts";
+import { morphAuthoredShell, sameProjectionHostTopology } from "./shell-morph.ts";
 import { abortError, PageStyles, type StagedStyles } from "./styles.ts";
 
+type RevisionHistoryMode = "push" | "replace";
+
+const commitHistory = (mode: RevisionHistoryMode, url: string): void => {
+  if (mode === "push") {
+    globalThis.history.pushState(globalThis.history.state, "", url);
+  } else {
+    globalThis.history.replaceState(globalThis.history.state, "", url);
+  }
+};
+
+const scrollToFragment = (url: string): void => {
+  const hash = new URL(url, globalThis.location.href).hash;
+  if (!hash) {
+    return;
+  }
+  let identifier = hash.slice(1);
+  try {
+    identifier = decodeURIComponent(identifier);
+  } catch {
+    // The browser retains malformed fragments as authored URL state.
+  }
+  const target = document.getElementById(identifier) ?? document.getElementsByName(identifier)[0];
+  try {
+    target?.scrollIntoView();
+  } catch {
+    return;
+  }
+};
+
 export interface DocumentRevisionCommit {
-  target: ShellTarget;
+  target: PresentationTarget;
   supportChanged: boolean;
   reloadDocument: boolean;
 }
 
 export class DocumentRevisionAdapter {
   private readonly styles = new PageStyles();
-  private documentUrl = globalThis.location.href;
+  private documentUrl: string;
+  private authoredShell: string;
 
-  constructor(private readonly previewSessionId: string) {
+  constructor(
+    private readonly presentationSessionId: string,
+    private readonly runtimeSessionId: string,
+  ) {
+    this.documentUrl = presentationRefreshUrl(
+      getRuntimeConfig(),
+      globalThis.location.href,
+      runtimeSessionId,
+    );
+    this.authoredShell = document.querySelector<HTMLElement>("#app-shell")?.outerHTML ?? "";
     this.styles.mark(document);
   }
 
@@ -38,15 +81,13 @@ export class DocumentRevisionAdapter {
     this.styles.abort();
   }
 
-  refreshStylesheets(): Promise<void> {
-    return this.styles.refresh(this.documentUrl);
-  }
-
   async replace(
     nextDocumentUrl: string,
     nextSupportUrl: string,
     signal: AbortSignal,
-    onTarget: (target: ShellTarget) => void,
+    onTarget: (target: PresentationTarget) => void,
+    historyMode: RevisionHistoryMode = "replace",
+    historyUrl = nextDocumentUrl,
   ): Promise<DocumentRevisionCommit> {
     let target = {
       documentUrl: nextDocumentUrl,
@@ -55,10 +96,16 @@ export class DocumentRevisionAdapter {
     onTarget(target);
     let stagedStyles: StagedStyles | undefined;
     let stagedViewStyles: StagedViewStyles | undefined;
+    let stagedHosts: StagedHostPreservation | undefined;
+    let previousShell: HTMLElement | undefined;
+    let shellMorphed = false;
     try {
       const response = await fetch(nextDocumentUrl, {
         cache: "no-store",
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+          "Marimo-Studio-Preview-Session-Id": this.presentationSessionId,
+        },
         signal,
       });
       const discoveredSupportUrl = response.headers.get("Marimo-Studio-Support-Url");
@@ -72,7 +119,7 @@ export class DocumentRevisionAdapter {
       if (!response.ok) {
         const detail = await readResponseError(
           response,
-          `Shell refresh failed with ${response.status}`,
+          `Presentation refresh failed with ${response.status}`,
         );
         throw new RuntimeConfigRequestError(
           detail.message,
@@ -91,40 +138,91 @@ export class DocumentRevisionAdapter {
         );
       }
       const nextConfig = await fetchRuntimeConfigForRevision(
-        target.supportUrl,
+        presentationRenewalSupportUrl(nextDocumentUrl, target.supportUrl),
         revision,
         signal,
         getRuntimeConfig().runtime.id,
-        this.previewSessionId,
+        this.presentationSessionId,
+        this.runtimeSessionId,
       );
+      await this.requireCurrentRevision(nextDocumentUrl, nextConfig, signal);
       if (
-        sameShellPresentation(
+        samePresentationRevision(
           this.currentPresentation(),
           this.targetPresentation(target, nextConfig.revision),
         )
       ) {
-        await response.body?.cancel();
+        await response.arrayBuffer();
+        const previousSupportUrl = getSupportUrl();
+        const previousConfig = getRuntimeConfig();
+        const previousHistoryUrl = globalThis.location.href;
+        try {
+          setSupportUrl(target.supportUrl);
+          commitRuntimeConfig(nextConfig);
+          commitHistory(historyMode, historyUrl);
+        } catch (error) {
+          setSupportUrl(previousSupportUrl);
+          try {
+            commitRuntimeConfig(previousConfig);
+          } catch {
+            // Runtime config assignment precedes listener notification.
+          }
+          globalThis.history.replaceState(globalThis.history.state, "", previousHistoryUrl);
+          throw error;
+        }
+        if (nextConfig.projectionRevision !== previousConfig.projectionRevision) {
+          clearProjectionBindingStale(nextConfig.projectionRevision);
+        }
+        scrollToFragment(historyUrl);
         this.documentUrl = nextDocumentUrl;
-        return { target, supportChanged: false, reloadDocument: false };
+        return {
+          target,
+          supportChanged: previousSupportUrl !== target.supportUrl,
+          reloadDocument: false,
+        };
       }
 
       const nextDocument = new DOMParser().parseFromString(await response.text(), "text/html");
       this.styles.mark(nextDocument);
-      if (requiresDocumentReload(document, nextDocument)) {
+      const current = document.querySelector<HTMLElement>("#app-shell");
+      const parsedNext = nextDocument.querySelector<HTMLElement>("#app-shell");
+      if (!current || !parsedNext) {
+        throw new Error("Presentation refresh requires #app-shell");
+      }
+      const nextAuthoredShell = parsedNext.outerHTML;
+      const shellChanged = this.authoredShell !== nextAuthoredShell;
+      if (requiresDocumentReload(document, nextDocument, shellChanged)) {
         return {
           target,
           supportChanged: getSupportUrl() !== target.supportUrl,
           reloadDocument: true,
         };
       }
-      const current = document.querySelector<HTMLElement>("#app-shell");
-      const next = nextDocument.querySelector<HTMLElement>("#app-shell");
-      if (!current || !next) {
-        throw new Error("Shell refresh requires #app-shell");
-      }
+      const projectionChanged =
+        getRuntimeConfig().projectionRevision !== nextConfig.projectionRevision;
       projectionHosts.prepare(nextDocument);
+      const next = document.importNode(parsedNext, true);
+      const morphShell =
+        shellChanged && !projectionChanged && sameProjectionHostTopology(current, next);
+      if (shellChanged && !projectionChanged && !morphShell) {
+        return {
+          target,
+          supportChanged: getSupportUrl() !== target.supportUrl,
+          reloadDocument: true,
+        };
+      }
       stagedViewStyles = await stageViewStyles(next);
       stagedStyles = await this.styles.stage(nextDocument, nextDocumentUrl, signal);
+      if (shellChanged && !morphShell) {
+        stagedHosts = projectionHosts.stagePreservation(next, document);
+      }
+      if (morphShell) {
+        const clonedShell = current.cloneNode(true);
+        if (!(clonedShell instanceof HTMLElement)) {
+          throw new Error("Unable to snapshot the current presentation shell");
+        }
+        previousShell = clonedShell;
+      }
       if (signal.aborted) {
         throw abortError();
       }
@@ -139,25 +237,58 @@ export class DocumentRevisionAdapter {
         setSupportUrl(target.supportUrl);
         commitRuntimeConfig(nextConfig);
         document.title = nextDocument.title;
-        globalThis.history.replaceState(globalThis.history.state, "", nextDocumentUrl);
         documentBase.set(nextBase);
-        this.swap(current, next);
-        projectionHosts.preserve(next, document);
         stagedStyles.commit();
         stagedViewStyles.commit();
+        if (morphShell) {
+          morphAuthoredShell(current, next);
+          shellMorphed = true;
+        } else if (stagedHosts) {
+          this.swap(current, next, stagedHosts);
+        }
+        commitHistory(historyMode, historyUrl);
       } catch (error) {
-        setSupportUrl(previousSupportUrl);
-        commitRuntimeConfig(previousConfig);
-        document.title = previousTitle;
-        globalThis.history.replaceState(globalThis.history.state, "", previousDocumentUrl);
-        documentBase.set(previousBase);
-        stagedStyles.discard();
-        stagedViewStyles.discard();
+        const rollbackErrors: unknown[] = [];
+        const restore = (operation: () => void) => {
+          try {
+            operation();
+          } catch (rollbackError) {
+            rollbackErrors.push(rollbackError);
+          }
+        };
+        if (shellMorphed && previousShell) {
+          const shell = previousShell;
+          restore(() => morphAuthoredShell(current, shell));
+        }
+        restore(() => stagedHosts?.rollback());
+        restore(() => stagedViewStyles?.rollback());
+        restore(() => stagedStyles?.rollback());
+        restore(() => setSupportUrl(previousSupportUrl));
+        restore(() => commitRuntimeConfig(previousConfig));
+        restore(() => {
+          document.title = previousTitle;
+        });
+        restore(() =>
+          globalThis.history.replaceState(globalThis.history.state, "", previousDocumentUrl),
+        );
+        restore(() => documentBase.set(previousBase));
+        if (rollbackErrors.length > 0) {
+          throw new AggregateError(
+            [error, ...rollbackErrors],
+            "Presentation commit and rollback failed",
+          );
+        }
         throw error;
       }
+      stagedHosts?.finalize();
+      stagedViewStyles.finalize();
+      stagedStyles.finalize();
       this.documentUrl = nextDocumentUrl;
+      this.authoredShell = nextAuthoredShell;
       stagedStyles = undefined;
       stagedViewStyles = undefined;
+      stagedHosts = undefined;
+      scrollToFragment(historyUrl);
       return {
         target,
         supportChanged: previousSupportUrl !== target.supportUrl,
@@ -166,6 +297,7 @@ export class DocumentRevisionAdapter {
     } finally {
       stagedStyles?.discard();
       stagedViewStyles?.discard();
+      stagedHosts?.discard();
     }
   }
 
@@ -177,7 +309,7 @@ export class DocumentRevisionAdapter {
     };
   }
 
-  private targetPresentation(target: ShellTarget, revision: string) {
+  private targetPresentation(target: PresentationTarget, revision: string) {
     return {
       documentUrl: new URL(target.documentUrl, globalThis.location.href).href,
       supportUrl: new URL(target.supportUrl, globalThis.location.href).href,
@@ -185,12 +317,47 @@ export class DocumentRevisionAdapter {
     };
   }
 
-  private swap(current: HTMLElement, next: HTMLElement): void {
-    const swap: HtmxSwapSpecification = {
-      swapStyle: "outerHTML",
-      swapDelay: 0,
-      settleDelay: 0,
-    };
-    htmx.swap(current, next.outerHTML, swap);
+  private async requireCurrentRevision(
+    documentUrl: string,
+    config: ReturnType<typeof getRuntimeConfig>,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const response = await fetch(documentUrl, {
+      cache: "no-store",
+      headers: {
+        "Marimo-Studio-Preview-Session-Id": this.presentationSessionId,
+      },
+      method: "HEAD",
+      signal,
+    });
+    if (!response.ok) {
+      const detail = await readResponseError(
+        response,
+        `Presentation revision check failed with ${response.status}`,
+      );
+      throw new RuntimeConfigRequestError(
+        detail.message,
+        detail.code,
+        detail.transient,
+        detail.hint,
+      );
+    }
+    requireMatchingPresentationRevision(response.headers.get("Marimo-Studio-Revision"), config);
+  }
+
+  private swap(current: HTMLElement, next: HTMLElement, hosts: StagedHostPreservation): void {
+    current.before(next);
+    try {
+      hosts.commit();
+    } catch (error) {
+      next.remove();
+      throw error;
+    }
+    current.remove();
+    try {
+      htmx.process(next);
+    } catch {
+      // The committed document remains usable when optional htmx setup fails.
+    }
   }
 }

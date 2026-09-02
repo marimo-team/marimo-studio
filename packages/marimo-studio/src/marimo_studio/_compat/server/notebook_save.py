@@ -15,16 +15,15 @@ from marimo._session.extensions.types import EventAwareExtension
 from marimo._session.notebook.file_manager import AppFileManager
 from marimo._session.session import Session, SessionImpl
 
-from marimo_studio._capabilities import (
-    NotebookSourcePolicy,
-    SaveCell,
-    ServerLocation,
-    SourceTransformSession,
-)
 from marimo_studio._compat.patch import CallbackCloseHandle
 from marimo_studio._compat.server.gateway import location_handle
 from marimo_studio._compat.server.session_state import session_matches_notebook
-from marimo_studio.errors import CompatibilityError
+from marimo_studio._server.ports import (
+    NotebookSourcePolicy,
+    SourceTransformSession,
+)
+from marimo_studio._server.records import SaveCell, ServerLocation
+from marimo_studio.errors._internal import CompatibilityError
 
 _SaveFile = Callable[..., str]
 
@@ -261,6 +260,3 @@ class PrivateNotebookSaveTransform:
                 if transforms is not None and transforms.remove(self._owner):
                     _MANAGERS.pop(manager, None)
             self._managers.clear()
-
-
-__all__ = ["PrivateNotebookSaveTransform"]

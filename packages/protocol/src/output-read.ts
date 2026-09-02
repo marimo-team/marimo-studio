@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import type { JsonValue } from "./runtime-config.ts";
 
+import { projectionRequestSchema } from "./projections.ts";
+import { ownRecordSchema } from "./records.ts";
 import { valueReadErrorSchema } from "./value-read.ts";
 
 export const MAX_OUTPUT_SELECTORS = 100;
@@ -9,13 +11,25 @@ export const MAX_OUTPUT_SELECTORS = 100;
 export const outputReadRequestSchema = z
   .object({
     revision: z.string().min(1),
-    selectors: z.array(z.string()).max(MAX_OUTPUT_SELECTORS),
-    activeSelectors: z.array(z.string()).max(MAX_OUTPUT_SELECTORS),
+    projections: z.array(projectionRequestSchema).max(MAX_OUTPUT_SELECTORS),
+    activeProjections: z.array(projectionRequestSchema).max(MAX_OUTPUT_SELECTORS),
   })
   .refine(
-    ({ selectors, activeSelectors }) =>
-      selectors.every((selector) => activeSelectors.includes(selector)),
-    { message: "Every requested selector must also be active.", path: ["selectors"] },
+    ({ projections, activeProjections }) => {
+      const active = new Set(
+        activeProjections.map(
+          (projection) =>
+            `${projection.siteId}\u0000${projection.instanceId}\u0000${projection.target}`,
+        ),
+      );
+      return projections.every((projection) =>
+        active.has(`${projection.siteId}\u0000${projection.instanceId}\u0000${projection.target}`),
+      );
+    },
+    {
+      message: "Every requested projection must also be active.",
+      path: ["projections"],
+    },
   );
 
 export const renderedOutputSchema = z
@@ -36,8 +50,8 @@ export const renderedOutputSchema = z
   );
 
 export const outputReadResponseSchema = z.object({
-  outputs: z.record(z.string(), renderedOutputSchema),
-  errors: z.record(z.string(), valueReadErrorSchema),
+  outputs: ownRecordSchema(z.string(), renderedOutputSchema),
+  errors: ownRecordSchema(z.string(), valueReadErrorSchema),
 });
 
 export type OutputReadRequest = z.infer<typeof outputReadRequestSchema>;

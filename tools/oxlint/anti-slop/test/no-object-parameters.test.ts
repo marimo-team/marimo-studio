@@ -25,6 +25,7 @@ ruleTester.run("anti-slop/no-object-parameters", noObjectParametersRule, {
     "interface Owner { readonly id: string } function consume(value: object & Pick<Owner, 'id'>) {}",
     "type Pick<Owner, Key> = { readonly owner: Owner; readonly key: Key }; function consume(value: object & Pick<{ readonly id: string }, never>) {}",
     "import type { Pick } from './owner'; function consume(value: object & Pick<{ readonly id: string }, never>) {}",
+    "type Identity<Value> = Value; function consume<Value>(value: Identity<Value>) {}",
   ],
   invalid: [
     {
@@ -134,6 +135,22 @@ ruleTester.run("anti-slop/no-object-parameters", noObjectParametersRule, {
     },
     {
       code: "type Item = object; type Result<Input> = Input extends (Input extends Array<infer Item> ? string[] : string) ? (value: Item) => void : never;",
+      errors: [error],
+    },
+    {
+      code: "function consume(...values: object) {}",
+      errors: [error],
+    },
+    {
+      code: "function consume(value: object = {}) {}",
+      errors: [error],
+    },
+    {
+      code: "class Reader { constructor(public value: object) {} }",
+      errors: [error],
+    },
+    {
+      code: "type Identity<Value = object> = Value; function consume(value: Identity) {}",
       errors: [error],
     },
   ],

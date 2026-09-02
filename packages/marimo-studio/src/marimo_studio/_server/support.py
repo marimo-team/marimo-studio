@@ -2,56 +2,83 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
+from functools import partial
 
 from starlette.requests import Request
 from starlette.responses import (
-    HTMLResponse,
     JSONResponse,
     Response,
     StreamingResponse,
 )
+from starlette.types import Receive, Scope, Send
 
-from marimo_studio import _assets
-from marimo_studio._capabilities import (
-    ExistingSessionAttachment,
-    KernelProjectionHost,
-    ServerContext,
-    ServerGateway,
-    SessionState,
+import marimo_studio._delivery.assets as _assets
+from marimo_studio._delivery.urls import (
+    ACTIVE_VIEW_QUERY_PARAM,
+    EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
+    SERVER_INSTANCE_QUERY_PARAM,
+    STUDIO_CLIENT_QUERY_PARAM,
+    WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM,
+    WORKSPACE_STREAM_QUERY_PARAM,
 )
-from marimo_studio._html import cell_host, render
-from marimo_studio._server.agent_api import (
-    activate_view_response,
+from marimo_studio._processes.ownership import (
+    propagate_cancellation,
+    settle_ownership,
+)
+from marimo_studio._processes.provider_operation import run_provider_operation
+from marimo_studio._server.agent.api import (
     activation_ack_response,
+    active_view_handoff_response,
     agent_connection_response,
-    analyze_views_response,
+    show_view_response,
+    validate_views_response,
 )
-from marimo_studio._server.auth import (
-    authentication_required_response,
-    has_read_access,
-)
-from marimo_studio._server.browser_agent import (
+from marimo_studio._server.agent.browser import (
     browser_observation_response,
     browser_observations_response,
 )
-from marimo_studio._server.dev import change_events
+from marimo_studio._server.auth import (
+    authentication_required_response,
+    forbidden_response,
+    has_edit_access,
+    has_read_access,
+)
+from marimo_studio._server.auth import error_response as auth_error_response
+from marimo_studio._server.development.routes import change_events
 from marimo_studio._server.files import file_response
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.notebook_scope import NotebookScope
-from marimo_studio._server.projection_api import (
+from marimo_studio._server.ports import (
+    ExistingSessionAttachment,
+    ServerGateway,
+    SessionState,
+)
+from marimo_studio._server.presentation.capability import PresentationCapability
+from marimo_studio._server.presentation.ports import KernelProjectionHost
+from marimo_studio._server.presentation.projection_routes import (
     outputs_response,
     values_response,
 )
-from marimo_studio._server.query_api import query_response
-from marimo_studio._server.runtime_config_api import runtime_config_response
-from marimo_studio._server.runtimes import RuntimeRegistry
+from marimo_studio._server.presentation.query_routes import query_response
+from marimo_studio._server.records import ServerContext
+from marimo_studio._server.runtime.catalog import RuntimeRegistry
+from marimo_studio._server.runtime.routes import runtime_config_response
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.studio.document import studio_bootstrap_payload
-from marimo_studio._server.studio_api import (
+from marimo_studio._server.studio.editor_capability import (
+    editor_binding_capability_matches,
+)
+from marimo_studio._server.studio.event_capability import (
+    workspace_events_capability_matches,
+)
+from marimo_studio._server.studio.routes import (
     create_view_response,
     delete_view_response,
+    project_response,
     source_response,
+    view_inventory_payload,
 )
 from marimo_studio._server.workspace_lifecycle import (
     Invalid,
@@ -60,13 +87,75 @@ from marimo_studio._server.workspace_lifecycle import (
     Unconfigured,
     WorkspaceLifecycle,
 )
-from marimo_studio._urls import (
-    ACTIVE_VIEW_QUERY_PARAM,
-    SERVER_INSTANCE_QUERY_PARAM,
-    STUDIO_CLIENT_QUERY_PARAM,
-)
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
+
+
+class StreamingResponseCleanupError(RuntimeError):
+    """Report a body-owner failure observed during response teardown."""
+
+    def __init__(self, errors: tuple[Exception, ...]) -> None:
+        self.errors = errors
+        super().__init__(
+            "Streaming response cleanup failed: "
+            + ", ".join(str(error) for error in errors)
+        )
+
+
+class _OwnedStreamingResponse(StreamingResponse):
+    """Close an async body iterator whenever response delivery ends."""
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        stream = asyncio.create_task(self.stream_response(send))
+        disconnect = asyncio.create_task(self.listen_for_disconnect(receive))
+        observed: set[asyncio.Task[None]] = set()
+        try:
+            completed, _pending = await asyncio.wait(
+                (stream, disconnect),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if stream in completed:
+                observed.add(stream)
+                await stream
+            if disconnect in completed:
+                observed.add(disconnect)
+                await disconnect
+        finally:
+            stream.cancel()
+            disconnect.cancel()
+            results, cancellation = await settle_ownership(
+                asyncio.gather(stream, disconnect, return_exceptions=True)
+            )
+            errors = tuple(
+                result
+                for task, result in zip(
+                    (stream, disconnect),
+                    results,
+                    strict=True,
+                )
+                if task not in observed and isinstance(result, Exception)
+            )
+            if errors:
+                error = StreamingResponseCleanupError(errors)
+                if cancellation is not None:
+                    raise error from cancellation
+                raise error
+            propagate_cancellation(cancellation)
+        if self.background is not None:
+            await self.background()
+
+    async def stream_response(self, send: Send) -> None:
+        try:
+            await super().stream_response(send)
+        finally:
+            close = getattr(self.body_iterator, "aclose", None)
+            if close is not None:
+                await close()
+
+
+def _manifest_source_view(support_path: str) -> str | None:
+    match = re.fullmatch(r"/views/([^/]+)/source/view\.toml", support_path)
+    return match.group(1) if match is not None else None
 
 
 async def support_response(
@@ -81,19 +170,35 @@ async def support_response(
     sessions: ExistingSessionAttachment,
     projections: KernelProjectionHost,
     runtimes: RuntimeRegistry,
+    presentation_capability: PresentationCapability | None = None,
+    presentation_view: str | None = None,
 ) -> Response:
     """Dispatch one namespaced Studio support request."""
     if support_path.startswith("/assets/"):
-        return file_response(
+        return await file_response(
             _assets.runtime_assets_path(),
             support_path.removeprefix("/assets/"),
         )
-    if not has_read_access(request.scope):
+    if presentation_capability is None and not has_read_access(request.scope):
         return authentication_required_response()
     if support_path == "/status" and request.method == "GET":
         return _status_response(lifecycle)
-    if isinstance(lifecycle, Invalid):
-        return _lifecycle_error_response(lifecycle.error)
+    if (
+        support_path == "/views"
+        and request.method == "GET"
+        and isinstance(lifecycle, Invalid)
+        and lifecycle.definition is not None
+    ):
+        return JSONResponse(
+            await run_provider_operation(
+                partial(
+                    view_inventory_payload,
+                    lifecycle.definition,
+                    None,
+                )
+            ),
+            headers=NO_STORE,
+        )
     workspace = lifecycle.workspace if isinstance(lifecycle, Ready) else None
     if support_path == "/dev/events" and request.method == "GET" and context.dev:
         return events_response(
@@ -101,40 +206,58 @@ async def support_response(
             workspace,
             context=context,
             notebook_scope=notebook_scope,
+            view_name=presentation_view,
             server=server,
         )
+    if isinstance(lifecycle, Invalid):
+        manifest_view = _manifest_source_view(support_path)
+        if lifecycle.definition is not None and manifest_view is not None:
+            return await source_response(
+                request,
+                lifecycle.definition,
+                manifest_view,
+                "view.toml",
+                context.server_token,
+                notebook_scope.development,
+            )
+        return _lifecycle_error_response(lifecycle.error)
     if support_path == "/bootstrap" and request.method == "GET":
         if not isinstance(lifecycle, Ready):
             return _workspace_pending_response(lifecycle)
-        return _bootstrap_response(request, context, lifecycle.workspace, runtimes)
+        return _bootstrap_response(
+            request,
+            context,
+            lifecycle.workspace,
+            runtimes,
+            session_state,
+        )
     if not isinstance(lifecycle, (NeedsView, Ready)):
         return Response(status_code=404)
     definition = lifecycle.definition
     if support_path == "/views":
         if request.method == "GET":
             return JSONResponse(
-                {
-                    "schema": 1,
-                    "default_view": definition.default_view,
-                    "views": list(workspace.views) if workspace is not None else [],
-                },
+                await run_provider_operation(
+                    partial(
+                        view_inventory_payload,
+                        definition,
+                        workspace,
+                    )
+                ),
                 headers=NO_STORE,
             )
         return await create_view_response(
             request,
             definition,
-            workspace.views if workspace is not None else (),
-            context.base_url,
             context.server_token,
-            context.routing_query,
         )
     if isinstance(lifecycle, NeedsView):
         return _lifecycle_error_response(lifecycle.error)
     assert workspace is not None
     if support_path == "/agent/connection":
         return agent_connection_response(request, context, workspace)
-    if support_path == "/analyze":
-        return await analyze_views_response(
+    if support_path == "/validate":
+        return await validate_views_response(
             request,
             context,
             workspace,
@@ -161,6 +284,15 @@ async def support_response(
             notebook_scope,
             int(raw_generation),
         )
+    if support_path.startswith("/active-view-handoffs/"):
+        operation_id = support_path.removeprefix("/active-view-handoffs/")
+        return await active_view_handoff_response(
+            request,
+            context,
+            workspace,
+            notebook_scope,
+            operation_id,
+        )
     if support_path == "/query" and request.method == "POST":
         return await query_response(
             request,
@@ -181,6 +313,7 @@ async def support_response(
             sessions=sessions,
             projections=projections,
             runtimes=runtimes,
+            presentation_capability=presentation_capability,
         )
     return Response(status_code=404)
 
@@ -215,16 +348,7 @@ def _status_response(
 
 
 def _lifecycle_error_response(error: MarimoStudioError) -> JSONResponse:
-    return JSONResponse(
-        {
-            "error": error.code,
-            "message": error.public_message(),
-            **error.diagnostic_details(),
-            **({"hint": error.public_hint} if error.public_hint else {}),
-        },
-        status_code=error.status_code,
-        headers=NO_STORE,
-    )
+    return auth_error_response(error)
 
 
 def _workspace_pending_response(lifecycle: Unconfigured | NeedsView) -> JSONResponse:
@@ -245,6 +369,7 @@ def _bootstrap_response(
     context: ServerContext,
     studio: StudioWorkspace,
     runtimes: RuntimeRegistry,
+    session_state: SessionState,
 ) -> Response:
     client_id = request.query_params.get(STUDIO_CLIENT_QUERY_PARAM)
     if client_id is None or re.fullmatch(r"[A-Za-z0-9_-]{16,128}", client_id) is None:
@@ -260,6 +385,25 @@ def _bootstrap_response(
         context.server_token
     ):
         return Response(status_code=204, headers=NO_STORE)
+    native_session_id = request.query_params.get("session_id")
+    if (
+        not isinstance(native_session_id, str)
+        or not session_state.is_session_id(native_session_id)
+        or not editor_binding_capability_matches(
+            request.query_params.get(EDITOR_BINDING_CAPABILITY_QUERY_PARAM),
+            context,
+            client_id,
+            native_session_id,
+        )
+    ):
+        return JSONResponse(
+            {
+                "error": "invalid-editor-binding",
+                "message": "The Studio editor binding capability is invalid.",
+            },
+            status_code=403,
+            headers=NO_STORE,
+        )
     requested = request.query_params.get(ACTIVE_VIEW_QUERY_PARAM)
     selected = requested if requested in studio.views else studio.default_view
     return JSONResponse(
@@ -273,6 +417,7 @@ def _bootstrap_response(
             context.routing_query,
             runtimes.options,
             client_id,
+            native_session_id,
         ),
         headers=NO_STORE,
     )
@@ -290,6 +435,7 @@ async def _view_response(
     sessions: ExistingSessionAttachment,
     projections: KernelProjectionHost,
     runtimes: RuntimeRegistry,
+    presentation_capability: PresentationCapability | None = None,
 ) -> Response:
     presentation = notebook_scope.presentation
     view_name, separator, route = relative.partition("/")
@@ -299,9 +445,11 @@ async def _view_response(
             studio,
             view_name,
             context.server_token,
+            presentation,
+            notebook_scope.development,
         )
-    if route == "activate":
-        return await activate_view_response(
+    if route == "show":
+        return await show_view_response(
             request,
             context,
             studio,
@@ -323,9 +471,17 @@ async def _view_response(
     if route == "observation":
         return await browser_observation_response(
             request,
+            context,
             view_name,
             notebook_scope,
-            context.server_token,
+            runtimes,
+        )
+    if route == "project":
+        return await project_response(
+            request,
+            studio,
+            view_name,
+            notebook_scope.development,
         )
     if route.startswith("source/"):
         return await source_response(
@@ -334,6 +490,7 @@ async def _view_response(
             view_name,
             route.removeprefix("source/"),
             context.server_token,
+            notebook_scope.development,
         )
     if route == "config" and request.method == "GET":
         return await runtime_config_response(
@@ -345,6 +502,8 @@ async def _view_response(
             sessions=session_state,
             attachment=sessions,
             runtimes=runtimes,
+            session_ids=notebook_scope.session_ids,
+            presentation_capability=presentation_capability,
         )
     if route == "values" and request.method == "POST":
         return await values_response(
@@ -353,6 +512,12 @@ async def _view_response(
             presentation,
             view_name,
             projections,
+            session_state,
+            authorized_revision=(
+                presentation_capability.revision
+                if presentation_capability is not None
+                else None
+            ),
         )
     if route == "outputs" and request.method == "POST":
         return await outputs_response(
@@ -361,21 +526,13 @@ async def _view_response(
             presentation,
             view_name,
             projections,
+            session_state,
+            authorized_revision=(
+                presentation_capability.revision
+                if presentation_capability is not None
+                else None
+            ),
         )
-    snapshot = await presentation.latest_snapshot_async(view_name)
-    resolved = snapshot.resolved
-    view = resolved.views[view_name]
-    if route.startswith("cells/") and request.method == "GET":
-        alias = route.removeprefix("cells/")
-        if "/" in alias or (
-            alias not in resolved.aliases and alias not in view.cell_aliases
-        ):
-            return JSONResponse(
-                {"error": "unknown-cell", "message": f"Unknown cell {alias!r}."},
-                status_code=404,
-                headers=NO_STORE,
-            )
-        return HTMLResponse(render(cell_host(alias)), headers=NO_STORE)
     return Response(status_code=404)
 
 
@@ -398,11 +555,8 @@ def events_response(
         if view_name is None
         else None
     )
-    active_view = (
-        request.query_params.get(ACTIVE_VIEW_QUERY_PARAM)
-        if client_id is not None
-        else None
-    )
+    if client_id is not None and not has_edit_access(request.scope):
+        return forbidden_response()
     if (
         client_id is not None
         and re.fullmatch(r"[A-Za-z0-9_-]{16,128}", client_id) is None
@@ -411,6 +565,45 @@ def events_response(
             {
                 "error": "invalid-browser-client",
                 "message": "The Studio browser client identifier is invalid.",
+            },
+            status_code=400,
+            headers=NO_STORE,
+        )
+    if client_id is not None and not workspace_events_capability_matches(
+        request.query_params.get(WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM),
+        context,
+        client_id,
+    ):
+        return JSONResponse(
+            {
+                "error": "workspace-events-forbidden",
+                "message": "The Studio workspace event capability is invalid.",
+            },
+            status_code=403,
+            headers=NO_STORE,
+        )
+    active_view = (
+        request.query_params.get(ACTIVE_VIEW_QUERY_PARAM)
+        if client_id is not None
+        else None
+    )
+    stream_value = (
+        request.query_params.get(WORKSPACE_STREAM_QUERY_PARAM)
+        if client_id is not None
+        else None
+    )
+    stream_generation = (
+        int(stream_value)
+        if stream_value is not None
+        and re.fullmatch(r"[1-9][0-9]{0,15}", stream_value) is not None
+        and int(stream_value) <= 9_007_199_254_740_991
+        else None
+    )
+    if client_id is not None and stream_generation is None:
+        return JSONResponse(
+            {
+                "error": "invalid-browser-connection",
+                "message": "The Studio browser connection generation is invalid.",
             },
             status_code=400,
             headers=NO_STORE,
@@ -424,7 +617,7 @@ def events_response(
             status_code=404,
             headers=NO_STORE,
         )
-    return StreamingResponse(
+    return _OwnedStreamingResponse(
         change_events(
             studio,
             view_name,
@@ -432,7 +625,9 @@ def events_response(
             clients=notebook_scope.clients,
             agents=notebook_scope.agents,
             client_id=client_id,
+            stream_generation=stream_generation,
             active_view=active_view,
+            development=notebook_scope.development,
         ),
         media_type="text/event-stream",
         headers={**NO_STORE, "X-Accel-Buffering": "no"},

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from starlette.types import Scope
 
-from marimo_studio._agent_transport import StudioServerConnection
+from marimo_studio._browser_client.transport import StudioServerConnection
 from marimo_studio._compat.code_mode import (
+    active_notebook,
     attach_code_mode_session,
     code_mode_connection,
 )
@@ -14,11 +17,11 @@ from marimo_studio._compat.code_mode import (
 class PrivateCodeModeBridge:
     """Adapt code-mode request state for the tested Marimo layout."""
 
-    def attach_session(self, scope: Scope) -> Scope:
-        return attach_code_mode_session(scope)
+    def attach_session(self, scope: Scope, notebook: Path) -> Scope:
+        return attach_code_mode_session(scope, notebook)
+
+    def active_notebook(self) -> Path:
+        return active_notebook()
 
     def connection(self) -> StudioServerConnection:
         return code_mode_connection()
-
-
-__all__ = ["PrivateCodeModeBridge"]

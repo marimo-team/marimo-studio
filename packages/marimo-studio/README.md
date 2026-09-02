@@ -1,44 +1,58 @@
-<p align="center">
-  <a href="https://marimo-team.github.io/marimo-studio/">
-    <img alt="A Marimo notebook and a custom operations view in Marimo Studio" src="https://marimo-team.github.io/marimo-studio/og.png" width="1100">
-  </a>
-</p>
+# Marimo Studio
 
-<p align="center"><strong>Tune your notebook for every audience.</strong></p>
+Marimo Studio builds custom reports, apps, and presentations from one
+[marimo](https://marimo.io/) notebook. Keep the analysis in Python, then shape
+each view with HTML, [React](https://react.dev/),
+[Svelte](https://svelte.dev/), or the browser libraries your work needs.
 
-Marimo Studio turns one reactive, reproducible
-[marimo](https://marimo.io/) notebook into custom web views for different
-audiences. The notebook owns data access, transformations, metrics, controls,
-and domain decisions. Each view owns page structure, styles, and browser logic
-in ordinary HTML, CSS, and JavaScript files. Coding agents can inspect and edit
-those files while the analytical logic continues to evolve in one place.
+Marimo Studio 0.1 is experimental. Pin Studio and third-party view providers in
+saved projects.
 
-From a repository checkout, open the revenue forecast in Studio:
+## Create your first view
+
+Open a notebook in an environment that contains Studio:
 
 ```console
-uvx --with marimo-studio marimo edit examples/analysis.py --sandbox
+uvx --with marimo-studio==0.1.0 marimo edit analysis.py --sandbox
 ```
 
-Choose **Build** to work on the notebook and view together. Serve the finished
-view with the same Marimo application:
+`uvx` is [uv](https://docs.astral.sh/uv/)'s temporary command runner. It creates
+an isolated Python environment for this invocation.
+
+Add a displayable cell and save the notebook. Studio opens the first-view
+screen. Create a view named `dashboard`, then choose **Develop** to edit the
+notebook, view source, and rendered Preview together.
+
+For terminal-first setup with an existing saved notebook, run:
 
 ```console
-uvx --with marimo-studio marimo run examples/analysis.py --sandbox
+uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard --target analysis.py
 ```
 
-Studio runs inside Marimo and uses its kernels, sessions, authentication,
-routing, controls, and output renderers. Select complete cell output, one
-Python object rendered by Marimo, or a JSON-compatible browser value:
+Saving Source builds a new immutable artifact. A failed build reports the source
+problem and keeps the current artifact available.
 
-```html
-<marimo-cell name="controls"></marimo-cell>
-<marimo-output value="revenue_table"></marimo-output>
-<time mo-value="report.updated_at"></time>
-```
+## Choose a runtime
 
-Read the [Marimo Studio documentation](https://marimo-team.github.io/marimo-studio/)
-to create views, project notebook results, automate view authoring, and choose a
-runtime.
+- The **Python runtime** uses a server-side marimo session and can access local
+  files, databases, credentials, and native packages.
+- The **Browser runtime** runs the saved notebook in a
+  [Pyodide](https://pyodide.org/) worker. Pyodide is a Python distribution
+  compiled for the browser. The browser receives notebook source and must be
+  able to fetch its dependencies and data.
+
+## Continue
+
+- [Start here](https://marimo-team.github.io/marimo-studio/guide/)
+- [Examples](https://marimo-team.github.io/marimo-studio/examples/)
+- [Run or export a view](https://marimo-team.github.io/marimo-studio/guide/run-and-share)
+- [Reference](https://marimo-team.github.io/marimo-studio/reference/)
+- [Compatibility and support](https://marimo-team.github.io/marimo-studio/reference/compatibility)
+- [Troubleshooting](https://marimo-team.github.io/marimo-studio/guide/troubleshooting)
+- [Security](https://github.com/marimo-team/marimo-studio/blob/main/SECURITY.md)
+
+Use [GitHub Issues](https://github.com/marimo-team/marimo-studio/issues) for
+public bug reports and support requests.
 
 ## License
 

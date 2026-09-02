@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import secrets
 from collections.abc import Sequence
 from pathlib import Path
 from urllib.parse import urlencode
@@ -15,27 +18,56 @@ from starlette.responses import (
     Response,
 )
 
-from marimo_studio._capabilities import ServerContext, SessionReplay, SessionState
-from marimo_studio._server.headers import DOCUMENT_HEADERS
-from marimo_studio._server.presentation import NotebookPresentation
-from marimo_studio._server.presentation_payload import (
-    presentation_support_url,
-    render_presentation_document,
-)
-from marimo_studio._server.server_instance import server_instance_id
-from marimo_studio._server.studio import (
-    repair_document,
-    studio_document,
-    waiting_document,
-)
-from marimo_studio._urls import (
+from marimo_studio._delivery.urls import (
+    DOCUMENT_LIFECYCLE_QUERY_PARAM,
+    DOCUMENT_REPLAY_QUERY_PARAM,
+    EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
+    PRESENTATION_RENEWAL_QUERY_PARAM,
+    PRIVATE_QUERY_KEYS,
     SERVER_INSTANCE_QUERY_PARAM,
+    STUDIO_CLIENT_QUERY_PARAM,
     SUPPORT_PATH,
+    WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM,
     public_url,
     studio_url,
     view_url,
     with_notebook_query,
     with_query,
+)
+from marimo_studio._server.agent.clients import StudioClientRegistry
+from marimo_studio._server.headers import DOCUMENT_HEADERS, EDIT_DOCUMENT_HEADERS
+from marimo_studio._server.ports import SessionReplay, SessionState
+from marimo_studio._server.presentation.capability import (
+    PRESENTATION_RESPONSE_HEADERS,
+    presentation_renewal_url,
+    presentation_revision_url,
+)
+from marimo_studio._server.presentation.isolation import (
+    PRESENTATION_SANDBOX,
+    isolated_presentation_document,
+    isolation_content_security_policy,
+)
+from marimo_studio._server.presentation.ownership import (
+    studio_frame_identity,
+    studio_owned_request,
+)
+from marimo_studio._server.presentation.payload import (
+    presentation_support_url,
+    render_presentation_document,
+)
+from marimo_studio._server.presentation.service import NotebookPresentation
+from marimo_studio._server.presentation.session import (
+    PresentationSession,
+    valid_presentation_replay,
+)
+from marimo_studio._server.presentation.session_ids import SessionIdAllocator
+from marimo_studio._server.records import ServerContext
+from marimo_studio._server.runtime.catalog import RuntimeRegistry
+from marimo_studio._server.server_instance import server_instance_id
+from marimo_studio._server.studio import (
+    repair_document,
+    studio_document,
+    waiting_document,
 )
 from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
@@ -61,11 +93,7 @@ def page_redirect(request: Request, relative: str, page: bool) -> Response | Non
     """Canonicalize page routes with a trailing slash."""
     if not page or relative in {"", "/"} or relative.endswith("/"):
         return None
-    target = (
-        request.url.path.removesuffix("index.html")
-        if relative.endswith("/index.html")
-        else request.url.path + "/"
-    )
+    target = request.url.path + "/"
     if request.url.query:
         target += f"?{request.url.query}"
     return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
@@ -100,6 +128,19 @@ def authored_document_redirect(
     return RedirectResponse(target, status_code=307, headers=DOCUMENT_HEADERS)
 
 
+def _replay_storage_scope(
+    context: ServerContext,
+) -> str:
+    payload = "\0".join(
+        (
+            "marimo-studio-wrapper-replay-v1",
+            context.file_key,
+            context.base_url,
+        )
+    ).encode()
+    return hmac.new(context.server_token.encode(), payload, hashlib.sha256).hexdigest()
+
+
 async def document_response(
     request: Request,
     context: ServerContext,
@@ -108,32 +149,154 @@ async def document_response(
     view_name: str,
     *,
     sessions: SessionState,
+    clients: StudioClientRegistry,
     replay: SessionReplay,
+    runtimes: RuntimeRegistry,
     marimo_version: str,
+    presentation_session: PresentationSession,
+    trusted_shell: bool = True,
 ) -> Response:
     """Render one custom view document against the active Marimo server."""
     if request.method not in {"GET", "HEAD"}:
         return Response(status_code=405)
-    if context.mode == "edit" and not sessions.has_notebook_session(context):
-        return _waiting_response()
+    client_id: str | None = None
+    if context.mode == "edit":
+        if not sessions.has_notebook_session(context):
+            return _waiting_response(
+                request,
+                context,
+                view_name,
+                presentation_session,
+                head=request.method == "HEAD",
+            )
+        client_id = request.query_params.get(STUDIO_CLIENT_QUERY_PARAM)
+        if client_id is not None:
+            session_id = await clients.session_for_client(client_id)
+            if (
+                session_id is None
+                or not sessions.exists(context, session_id)
+                or not sessions.ensure_started(context, session_id)
+            ):
+                return _waiting_response(
+                    request,
+                    context,
+                    view_name,
+                    presentation_session,
+                    head=request.method == "HEAD",
+                )
     selected = None if context.mode == "run" and relative in {"", "/"} else view_name
-    snapshot = await presentation.snapshot_async(selected)
+    snapshot = (
+        await presentation.display_snapshot_async(view_name)
+        if context.mode == "edit"
+        else await presentation.snapshot_async(selected, profile="production")
+    )
+    runtime, _ = runtimes.select(
+        snapshot.resolved.workspace,
+        context,
+        request.query_params.get("runtime"),
+    )
+    runtime_explicit = request.query_params.get("runtime") is not None
+    frame_identity = studio_frame_identity(request) if context.mode == "edit" else None
+    if frame_identity is not None and frame_identity[0] != client_id:
+        frame_identity = None
+    replaying = False
+    if context.mode == "run" and request.query_params.getlist(
+        DOCUMENT_REPLAY_QUERY_PARAM
+    ):
+        replaying = runtime.id == "server" and valid_presentation_replay(
+            request,
+            context,
+            presentation_session,
+            sessions,
+            preserve_session=snapshot.resolved.workspace.preserve_session,
+        )
+        if not replaying:
+            return JSONResponse(
+                {
+                    "error": "presentation-replay-unavailable",
+                    "message": "The stored presentation session is unavailable.",
+                    "transient": False,
+                },
+                status_code=409,
+                headers=DOCUMENT_HEADERS,
+            )
     if context.mode == "run":
         replay.configure(context, snapshot.resolved.workspace.preserve_session)
+    headers = {
+        **DOCUMENT_HEADERS,
+        "Marimo-Studio-Revision": snapshot.revision,
+        "Marimo-Studio-Support-Url": presentation_support_url(
+            context,
+            snapshot,
+            presentation_session.session_id,
+            presentation_session.runtime_session_id,
+        ),
+    }
+    if request.method == "HEAD":
+        return Response(headers=headers)
+    isolated = trusted_shell and not (
+        context.mode == "edit" and studio_owned_request(request)
+    )
+    if isolated:
+        nonce = secrets.token_urlsafe(18)
+        shell_headers = {
+            **headers,
+            "Content-Security-Policy": isolation_content_security_policy(nonce),
+            "Cross-Origin-Opener-Policy": "same-origin",
+        }
+        return HTMLResponse(
+            isolated_presentation_document(
+                child_url=_presentation_document_url(
+                    request,
+                    context,
+                    snapshot.view_name,
+                    presentation_session,
+                ),
+                internal_root_url=presentation_revision_url(
+                    context,
+                    snapshot,
+                    presentation_session.session_id,
+                    runtime_session_id=presentation_session.runtime_session_id,
+                ),
+                public_root_url=public_url(context.base_url, "/"),
+                routing_query=urlencode(context.routing_query),
+                view_name=snapshot.view_name,
+                views=tuple(snapshot.resolved.workspace.views),
+                private_query_keys=tuple(sorted(PRIVATE_QUERY_KEYS)),
+                replay_enabled=(
+                    context.mode == "run"
+                    and snapshot.resolved.workspace.preserve_session
+                    and runtime.id == "server"
+                ),
+                replay_scope=(
+                    _replay_storage_scope(context) if context.mode == "run" else None
+                ),
+                runtime=runtime.id,
+                runtime_explicit=runtime_explicit,
+                title_text=f"{snapshot.view_name} view",
+                nonce=nonce,
+            ),
+            headers=shell_headers,
+        )
+    runtime_headers = dict(headers)
+    if context.mode == "edit":
+        runtime_headers.update(PRESENTATION_RESPONSE_HEADERS)
+        runtime_headers["Content-Security-Policy"] = f"sandbox {PRESENTATION_SANDBOX}"
     return HTMLResponse(
         render_presentation_document(
             snapshot,
             context,
             marimo_version=marimo_version,
+            runtime=runtime.id,
+            runtime_explicit=runtime_explicit,
+            replay=replaying,
+            renewal_token=presentation_session.renewal_token,
+            session_id=presentation_session.session_id,
+            runtime_session_id=presentation_session.runtime_session_id,
+            client_id=frame_identity[0] if frame_identity is not None else None,
+            lifecycle_id=frame_identity[1] if frame_identity is not None else None,
         ),
-        headers={
-            **DOCUMENT_HEADERS,
-            "Marimo-Studio-Revision": snapshot.revision,
-            "Marimo-Studio-Support-Url": presentation_support_url(
-                context,
-                snapshot.view_name,
-            ),
-        },
+        headers=runtime_headers,
     )
 
 
@@ -143,6 +306,8 @@ def studio_response(
     studio: StudioWorkspace,
     selected: str,
     runtimes: tuple[tuple[str, str], ...],
+    sessions: SessionState,
+    session_ids: SessionIdAllocator,
 ) -> Response:
     """Render the edit workspace for one selected view."""
     if context.mode != "edit":
@@ -153,8 +318,10 @@ def studio_response(
         return PlainTextResponse(
             f"Unknown view {selected!r}",
             status_code=404,
-            headers=DOCUMENT_HEADERS,
+            headers=EDIT_DOCUMENT_HEADERS,
         )
+    client_id = secrets.token_urlsafe(18)
+    native_session_id = _editor_session_id(request, context, sessions, session_ids)
     return HTMLResponse(
         studio_document(
             studio.notebook,
@@ -164,11 +331,13 @@ def studio_response(
             request.query_params.multi_items(),
             context.routing_query,
             runtimes,
+            client_id,
+            native_session_id,
             state="ready",
             config=studio,
             selected=selected,
         ),
-        headers=DOCUMENT_HEADERS,
+        headers=EDIT_DOCUMENT_HEADERS,
     )
 
 
@@ -177,12 +346,16 @@ def initialization_response(
     context: ServerContext,
     definition: StudioDefinition,
     runtimes: tuple[tuple[str, str], ...],
+    sessions: SessionState,
+    session_ids: SessionIdAllocator,
 ) -> Response:
     """Render the authenticated first-view initializer in edit mode."""
     if context.mode != "edit":
         return Response(status_code=404)
     if request.method not in {"GET", "HEAD"}:
         return Response(status_code=405)
+    client_id = secrets.token_urlsafe(18)
+    native_session_id = _editor_session_id(request, context, sessions, session_ids)
     return HTMLResponse(
         studio_document(
             definition.notebook,
@@ -192,10 +365,13 @@ def initialization_response(
             request.query_params.multi_items(),
             context.routing_query,
             runtimes,
+            client_id,
+            native_session_id,
             state="needs-view",
             default_view=definition.default_view,
+            generation=definition.config_generation,
         ),
-        headers=DOCUMENT_HEADERS,
+        headers=EDIT_DOCUMENT_HEADERS,
     )
 
 
@@ -204,12 +380,16 @@ def unconfigured_response(
     context: ServerContext,
     notebook: Path,
     runtimes: tuple[tuple[str, str], ...],
+    sessions: SessionState,
+    session_ids: SessionIdAllocator,
 ) -> Response:
     """Render the stable editor host before Studio is configured."""
     if context.mode != "edit":
         return Response(status_code=404)
     if request.method not in {"GET", "HEAD"}:
         return Response(status_code=405)
+    client_id = secrets.token_urlsafe(18)
+    native_session_id = _editor_session_id(request, context, sessions, session_ids)
     return HTMLResponse(
         studio_document(
             notebook,
@@ -219,10 +399,33 @@ def unconfigured_response(
             request.query_params.multi_items(),
             context.routing_query,
             runtimes,
+            client_id,
+            native_session_id,
             state="unconfigured",
         ),
-        headers=DOCUMENT_HEADERS,
+        headers=EDIT_DOCUMENT_HEADERS,
     )
+
+
+def _editor_session_id(
+    request: Request,
+    context: ServerContext,
+    sessions: SessionState,
+    session_ids: SessionIdAllocator,
+) -> str:
+    requested = request.query_params.get("session_id")
+    if (
+        request.query_params.get(DOCUMENT_REPLAY_QUERY_PARAM) == "1"
+        and requested is not None
+        and sessions.exists(context, requested)
+        and sessions.matches_creation_query(
+            context,
+            requested,
+            request.query_params.multi_items(),
+        )
+    ):
+        return requested
+    return session_ids.allocate(context, sessions)
 
 
 def error_response(
@@ -235,6 +438,10 @@ def error_response(
     structured: bool,
     server_token: str,
     routing_query: Sequence[tuple[str, str]] = (),
+    presentation_events_url: str | None = None,
+    lifecycle_id: int | None = None,
+    runtime: str = "server",
+    view_name: str = "",
 ) -> Response:
     """Translate a domain error for the requested page or support route."""
     code = getattr(error, "code", "configuration-error")
@@ -277,7 +484,8 @@ def error_response(
                 message,
                 hint,
                 with_query(
-                    public_url(base_url, f"{SUPPORT_PATH}/dev/events"),
+                    presentation_events_url
+                    or public_url(base_url, f"{SUPPORT_PATH}/dev/events"),
                     (
                         *routing_query,
                         (
@@ -286,6 +494,10 @@ def error_response(
                         ),
                     ),
                 ),
+                code=code,
+                lifecycle_id=lifecycle_id,
+                runtime=runtime,
+                view=view_name,
             ),
             status_code=status_code,
             headers=headers,
@@ -298,9 +510,71 @@ def error_response(
     )
 
 
-def _waiting_response() -> Response:
+def _waiting_response(
+    request: Request,
+    context: ServerContext,
+    view_name: str,
+    presentation_session: PresentationSession,
+    *,
+    head: bool = False,
+) -> Response:
+    headers = {**DOCUMENT_HEADERS, "Retry-After": "1"}
+    if head:
+        return Response(status_code=202, headers=headers)
     return HTMLResponse(
-        waiting_document(),
+        waiting_document(
+            refresh_url=_presentation_document_url(
+                request,
+                context,
+                view_name,
+                presentation_session,
+            ),
+            lifecycle_id=_positive_int(
+                request.query_params.get(DOCUMENT_LIFECYCLE_QUERY_PARAM)
+            ),
+            runtime=request.query_params.get("runtime", "server"),
+            view=view_name,
+        ),
         status_code=202,
-        headers={**DOCUMENT_HEADERS, "Retry-After": "1"},
+        headers=headers,
+    )
+
+
+def _presentation_document_url(
+    request: Request,
+    context: ServerContext,
+    view_name: str,
+    presentation_session: PresentationSession,
+) -> str:
+    return with_query(
+        presentation_renewal_url(
+            context,
+            view_name,
+            presentation_session.session_id,
+            presentation_session.runtime_session_id,
+            f"/{view_name}/",
+        ),
+        (
+            *(
+                (key, value)
+                for key, value in request.query_params.multi_items()
+                if key
+                not in {
+                    "access_token",
+                    EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
+                    PRESENTATION_RENEWAL_QUERY_PARAM,
+                    "session_id",
+                    WORKSPACE_EVENTS_CAPABILITY_QUERY_PARAM,
+                }
+            ),
+            ("session_id", presentation_session.runtime_session_id),
+        ),
+    )
+
+
+def _positive_int(value: str | None) -> int | None:
+    return (
+        int(value)
+        if value is not None and value.isdecimal() and int(value) > 0
+        else None
     )

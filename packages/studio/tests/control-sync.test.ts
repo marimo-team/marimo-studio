@@ -41,21 +41,39 @@ class MemoryEndpoint implements ControlEndpoint {
 
 class DeferredApplyEndpoint extends MemoryEndpoint {
   private readonly pending: Array<{
+    reject: (error: Error) => void;
     resolve: () => void;
     updates: readonly ControlUpdate[];
   }> = [];
 
   override apply(updates: readonly ControlUpdate[]): Promise<void> {
     this.applied.push(updates);
-    return new Promise((resolve) => {
-      this.pending.push({ resolve, updates });
+    return new Promise((resolve, reject) => {
+      this.pending.push({ reject, resolve, updates });
     });
+  }
+
+  rejectNext(error = new Error("control write failed")): void {
+    this.pending.shift()?.reject(error);
   }
 
   resolveNext(): void {
     const pending = this.pending.shift();
     pending?.updates.forEach((update) => this.values.set(update.objectId, update.value));
     pending?.resolve();
+  }
+}
+
+class RecoveringEndpoint extends MemoryEndpoint {
+  failures = 0;
+
+  override async apply(updates: readonly ControlUpdate[]): Promise<void> {
+    if (this.failures > 0) {
+      this.failures -= 1;
+      this.applied.push(updates);
+      throw new Error("control write failed");
+    }
+    await super.apply(updates);
   }
 }
 
@@ -106,6 +124,27 @@ describe("control state synchronization", () => {
     sync.dispose();
   });
 
+  it("skips controls that already match during initial synchronization", async () => {
+    const editor = new MemoryEndpoint(
+      { objectId: "live-controls-0", value: 1 },
+      { objectId: "live-controls-1", value: 2 },
+    );
+    const preview = new MemoryEndpoint(
+      { objectId: "wasm-controls-0", value: 1 },
+      { objectId: "wasm-controls-1", value: 0 },
+    );
+
+    const sync = await synchronizeControlEndpoints({
+      editor,
+      preview,
+      editorControls: { cells: { controls: "live-controls" } },
+      previewControls: { cells: { controls: "wasm-controls" } },
+    });
+
+    expect(preview.applied).toEqual([[{ objectId: "wasm-controls-1", value: 2 }]]);
+    sync.dispose();
+  });
+
   it("serializes initial and live editor writes and keeps the latest value", async () => {
     const editor = new MemoryEndpoint({ objectId: "live-control-0", value: "Initial" });
     const preview = new DeferredApplyEndpoint({
@@ -153,6 +192,86 @@ describe("control state synchronization", () => {
     await vi.waitFor(() => expect(editor.applied).toHaveLength(2));
     expect(editor.applied[1]).toEqual([{ objectId: "live-control-0", value: "Latest" }]);
     editor.resolveNext();
+    sync.dispose();
+  });
+
+  it("retains a failed write and recovers with the newest control value", async () => {
+    const editor = new MemoryEndpoint({ objectId: "live-control-0", value: "Initial" });
+    const preview = new RecoveringEndpoint({ objectId: "wasm-control-0", value: "Preview" });
+    const statuses: string[] = [];
+    const sync = await synchronizeControlEndpoints({
+      editor,
+      preview,
+      editorControls: { cells: { controls: "live-control" } },
+      previewControls: { cells: { controls: "wasm-control" } },
+      onStatus: (status) => statuses.push(status.phase),
+    });
+    preview.failures = 1;
+
+    editor.emit({ objectId: "live-control-0", value: "Failed" });
+    await vi.waitFor(() => expect(statuses.at(-1)).toBe("degraded"));
+    editor.emit({ objectId: "live-control-0", value: "Latest" });
+    await vi.waitFor(() => expect(preview.values.get("wasm-control-0")).toBe("Latest"));
+    await vi.waitFor(() => expect(statuses.at(-1)).toBe("ready"));
+
+    expect(statuses.slice(-2)).toEqual(["degraded", "ready"]);
+    expect(preview.applied.slice(-2)).toEqual([
+      [{ objectId: "wasm-control-0", value: "Failed" }],
+      [{ objectId: "wasm-control-0", value: "Latest" }],
+    ]);
+    sync.dispose();
+  });
+
+  it("recovers after every failed control object is synchronized", async () => {
+    const editor = new MemoryEndpoint(
+      { objectId: "live-control-a", value: "A0" },
+      { objectId: "live-control-b", value: "B0" },
+      { objectId: "live-control-x", value: "X0" },
+    );
+    const preview = new DeferredApplyEndpoint(
+      { objectId: "wasm-control-a", value: "A0" },
+      { objectId: "wasm-control-b", value: "B0" },
+      { objectId: "wasm-control-x", value: "X0" },
+    );
+    const statuses: string[] = [];
+    const sync = await synchronizeControlEndpoints({
+      editor,
+      preview,
+      editorControls: { cells: { controls: "live-control" } },
+      previewControls: { cells: { controls: "wasm-control" } },
+      onStatus: (status) => statuses.push(status.phase),
+    });
+
+    editor.emit({ objectId: "live-control-x", value: "X1" });
+    editor.emit({ objectId: "live-control-a", value: "A1" });
+    editor.emit({ objectId: "live-control-b", value: "B1" });
+    preview.resolveNext();
+    await vi.waitFor(() => expect(preview.applied).toHaveLength(2));
+    expect(preview.applied[1]).toEqual([
+      { objectId: "wasm-control-a", value: "A1" },
+      { objectId: "wasm-control-b", value: "B1" },
+    ]);
+
+    editor.emit({ objectId: "live-control-a", value: "A2" });
+    preview.rejectNext();
+    await vi.waitFor(() => expect(preview.applied).toHaveLength(3));
+    expect(preview.applied[2]).toEqual([{ objectId: "wasm-control-a", value: "A2" }]);
+    preview.resolveNext();
+    await Promise.resolve();
+
+    expect(statuses).toEqual(["degraded"]);
+    await vi.waitFor(() => expect(preview.applied).toHaveLength(4));
+    expect(preview.applied[3]).toEqual([{ objectId: "wasm-control-b", value: "B1" }]);
+    preview.resolveNext();
+    await vi.waitFor(() => expect(statuses).toEqual(["degraded", "ready"]));
+
+    editor.emit({ objectId: "live-control-b", value: "B2" });
+    preview.rejectNext();
+    await vi.waitFor(() => expect(statuses).toEqual(["degraded", "ready", "degraded"]));
+    await vi.waitFor(() => expect(preview.applied).toHaveLength(6));
+    expect(preview.applied[5]).toEqual([{ objectId: "wasm-control-b", value: "B2" }]);
+    preview.resolveNext();
+    await vi.waitFor(() => expect(statuses).toEqual(["degraded", "ready", "degraded", "ready"]));
     sync.dispose();
   });
 

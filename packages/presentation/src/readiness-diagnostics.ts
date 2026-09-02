@@ -10,13 +10,15 @@ import type {
 
 interface DiagnosticSources {
   configured: readonly ProjectionDiagnostic[];
-  presentation?: PresentationDiagnostic;
+  hosts: readonly HTMLElement[];
+  presentation: readonly PresentationDiagnostic[];
   runtime?: RuntimeDiagnostic;
   view: string;
 }
 
 export const collectStudioDiagnostics = ({
   configured,
+  hosts,
   presentation,
   runtime,
   view,
@@ -24,9 +26,7 @@ export const collectStudioDiagnostics = ({
   const configuredKeys = new Set(
     configured.map((diagnostic) => `${diagnostic.code}\u0000${diagnostic.target}`),
   );
-  const hosts = Array.from(
-    document.querySelectorAll<HTMLElement>("[data-marimo-diagnostic-code]"),
-  ).flatMap((host): Array<HostDiagnostic | PresentationDiagnostic> => {
+  const hostDiagnostics = hosts.flatMap((host): HostDiagnostic[] => {
     const code = host.dataset.marimoDiagnosticCode;
     const message = host.dataset.marimoDiagnosticMessage;
     let target = host.getAttribute("mo-value") ?? "";
@@ -37,18 +37,6 @@ export const collectStudioDiagnostics = ({
     }
     if (!code || !message || configuredKeys.has(`${code}\u0000${target}`)) {
       return [];
-    }
-    if (host.dataset.marimoDiagnosticScope === "presentation") {
-      return [
-        {
-          scope: "presentation",
-          code,
-          severity: "error",
-          message,
-          hint: host.dataset.marimoDiagnosticHint ?? "",
-          view,
-        },
-      ];
     }
     return [
       {
@@ -62,12 +50,7 @@ export const collectStudioDiagnostics = ({
       },
     ];
   });
-  return [
-    ...configured,
-    ...hosts,
-    ...(runtime ? [{ ...runtime }] : []),
-    ...(presentation ? [{ ...presentation }] : []),
-  ];
+  return [...configured, ...hostDiagnostics, ...(runtime ? [{ ...runtime }] : []), ...presentation];
 };
 
 export const toBrowserDiagnostics = (
@@ -82,7 +65,7 @@ export const toBrowserDiagnostics = (
       code: "browser-diagnostics-truncated",
       severity: "error",
       message: `${omitted} additional browser diagnostics were omitted.`,
-      hint: "Fix repeated rendered-view errors, then rerun the analysis.",
+      hint: "Fix repeated rendered-view errors, then rerun validation.",
       view: diagnostics[0]?.view ?? "unknown",
       scope: "presentation",
     });

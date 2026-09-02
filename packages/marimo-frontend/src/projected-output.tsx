@@ -16,6 +16,7 @@ import { store } from "@marimo-team/frontend/unstable_internal/core/state/jotai"
 import { VirtualFileTracker } from "@marimo-team/frontend/unstable_internal/core/static/virtual-file-tracker";
 import { useLayoutEffect } from "react";
 
+import { suppressReplacedControlValues } from "./embedded-control-state";
 import { reconcileProjectedOutputState } from "./projected-output-state";
 
 export interface ProjectedOutputUpdate {
@@ -111,6 +112,7 @@ export const reconcileProjectedOutput = (output: ProjectedOutputUpdate): void =>
         cell_id: ownerCellId,
         output: cellOutput,
       }),
+    (objectIds) => suppressReplacedControlValues(UI_ELEMENT_REGISTRY, objectIds),
   );
 };
 

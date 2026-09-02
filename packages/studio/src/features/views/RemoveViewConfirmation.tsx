@@ -5,6 +5,7 @@ interface RemoveViewConfirmationProps {
   confirmRef: RefObject<HTMLButtonElement | null>;
   error?: string;
   label: string;
+  replacementDefault?: string;
   view: string;
   onCancel: () => void;
   onRemove: () => void;
@@ -15,6 +16,7 @@ export const RemoveViewConfirmation = ({
   confirmRef,
   error,
   label,
+  replacementDefault,
   view,
   onCancel,
   onRemove,
@@ -26,15 +28,20 @@ export const RemoveViewConfirmation = ({
   >
     <strong id="studio-remove-view-title">Remove view?</strong>
     <p className="studio-remove-view-detail">
-      This deletes the HTML, CSS, and static files for <strong>{view}</strong>.
+      This permanently deletes the <strong>{view}</strong> view and its files.
     </p>
+    {replacementDefault ? (
+      <p className="studio-remove-view-detail">
+        <strong>{replacementDefault}</strong> will open at the notebook's main URL afterward.
+      </p>
+    ) : null}
     {error ? (
       <p className="studio-form-message" data-state="error" role="alert">
         {error}
       </p>
     ) : null}
     <div className="studio-form-actions">
-      <button type="button" className="studio-control" onClick={onCancel}>
+      <button type="button" className="studio-control" disabled={busy} onClick={onCancel}>
         Cancel
       </button>
       <button

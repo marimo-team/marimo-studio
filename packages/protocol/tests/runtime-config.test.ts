@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "vite-plus/test";
 
 import {
@@ -7,6 +8,7 @@ import {
   type JsonValue,
   type RuntimeConfig,
 } from "../src/runtime-config.ts";
+import { symbolicRuntimeFields } from "./fixtures.ts";
 
 const diagnostic = {
   code: "cell-not-found",
@@ -17,7 +19,7 @@ const diagnostic = {
   projection: "cell",
   target: "summary",
   source: {
-    path: "/workspace/__marimo__/studio/notebook/dashboard/index.html",
+    path: "src/index.html",
     line: 18,
     column: 7,
   },
@@ -26,23 +28,18 @@ const diagnostic = {
 const baseRuntimeConfig = {
   schema: 1,
   revision: "presentation-revision",
+  projectionRevision: "a".repeat(64),
   view: "dashboard",
   views: ["dashboard", "executive"],
   runtime: {
     id: "server",
     instance: "server-instance",
-    available: ["server", "wasm"],
     data: {
       fileKey: "/workspace/notebook.py",
-      serverToken: "server-token",
+      capabilityToken: "presentation-capability",
       serverInstance: "server-instance",
       preserveSession: false,
       url: "/proxy/app/",
-    },
-    controls: {
-      cells: {
-        "cell:v1:semantic": "MJUe",
-      },
     },
   },
   rootUrl: "/proxy/app/",
@@ -50,21 +47,7 @@ const baseRuntimeConfig = {
   documentRootUrl: "/proxy/app/",
   supportUrl: "/proxy/app/_marimo-studio/views/dashboard",
   showCellLogs: true,
-  cellBindings: {
-    plot: { kind: "name", value: "plot" },
-  },
-  valueBindings: {
-    "context.label": {
-      variable: "context",
-      cell: { kind: "id", value: "context-cell-id" },
-    },
-  },
-  outputBindings: {
-    "context.table": {
-      variable: "context",
-      cell: { kind: "id", value: "context-cell-id" },
-    },
-  },
+  ...symbolicRuntimeFields,
   diagnostics: [diagnostic],
   appConfig: {},
   userConfig: {},
@@ -81,22 +64,136 @@ const runtimeConfig = (overrides: RuntimeConfigOverrides = {}) => ({
 });
 
 test("runtime configuration accepts the browser contract", () => {
-  assert.deepEqual(parseRuntimeConfig(runtimeConfig()), baseRuntimeConfig);
-  assert.deepEqual(parseRuntimeConfig(runtimeConfig({ ignored: true })), baseRuntimeConfig);
+  const parsed = parseRuntimeConfig(runtimeConfig());
+  assert.deepEqual(JSON.parse(JSON.stringify(parsed)), baseRuntimeConfig);
+  assert.equal(Object.getPrototypeOf(parsed.projectionTargets.cells), null);
+  assert.equal(Object.getPrototypeOf(parsed.projectionTargets.variables), null);
+  assert.equal(Object.getPrototypeOf(parsed.runtimeBindings.cellRefs), null);
   assert.equal(parseRuntimeConfig(runtimeConfig({ showCellLogs: false })).showCellLogs, false);
-  const { showCellLogs: _, ...legacyRuntimeConfig } = runtimeConfig();
-  assert.equal(parseRuntimeConfig(legacyRuntimeConfig).showCellLogs, true);
+});
+
+test("cell mounts accept native names and configured aliases", () => {
+  const targets = ["_summary", "résumé", "report-name"];
+  const parsed = parseRuntimeConfig(
+    runtimeConfig({
+      mounts: [
+        {
+          ...symbolicRuntimeFields.mounts[0],
+          allowedTargets: targets,
+        },
+      ],
+    }),
+  );
+
+  assert.deepEqual(parsed.mounts[0]?.allowedTargets, targets);
+});
+
+test("runtime configuration accepts the Python delivery fixture", () => {
+  const fixture = JSON.parse(
+    readFileSync(new URL("../fixtures/runtime-config.json", import.meta.url), "utf8"),
+  );
+
+  assert.deepEqual(JSON.parse(JSON.stringify(parseRuntimeConfig(fixture))), fixture);
+});
+
+test("runtime configuration preserves prototype-named projection targets", () => {
+  const names = ["__proto__", "constructor"];
+  const refs = names.map((_, index) => `cell:v1:prototype-${index}`);
+  const parsed = parseRuntimeConfig(
+    runtimeConfig({
+      projectionTargets: {
+        cells: Object.fromEntries(
+          names.map((name, index) => [
+            name,
+            {
+              status: "ready",
+              producer: refs[index],
+              dependencyClosure: [refs[index]],
+            },
+          ]),
+        ),
+        variables: Object.fromEntries(
+          names.map((name, index) => [
+            name,
+            {
+              status: "ready",
+              producer: refs[index],
+              dependencyClosure: [refs[index]],
+            },
+          ]),
+        ),
+      },
+      runtimeBindings: {
+        cellRefs: Object.fromEntries(refs.map((ref, index) => [ref, `runtime-${index}`])),
+      },
+    }),
+  );
+
+  names.forEach((name, index) => {
+    assert.equal(Object.hasOwn(parsed.projectionTargets.cells, name), true);
+    assert.deepEqual(parsed.projectionTargets.cells[name], {
+      status: "ready",
+      producer: refs[index],
+      dependencyClosure: [refs[index]],
+    });
+    assert.equal(Object.hasOwn(parsed.projectionTargets.variables, name), true);
+  });
 });
 
 test("runtime configuration rejects malformed contracts", () => {
-  const malformed = [
-    runtimeConfig({ cellBindings: { plot: { kind: "index", value: "plot" } } }),
+  const malformed: JsonValue[] = [
+    runtimeConfig({ projectionRevision: "not-a-sha256-digest" }),
+    runtimeConfig({
+      mounts: [
+        {
+          ...symbolicRuntimeFields.mounts[0],
+          allowedTargets: [],
+        },
+      ],
+    }),
+    runtimeConfig({
+      mounts: [{ ...symbolicRuntimeFields.mounts[0], id: "SITE" }],
+    }),
+    runtimeConfig({
+      mounts: [
+        {
+          ...symbolicRuntimeFields.mounts[0],
+          source: { path: ".ARTIFACTS/site.tsx", line: 1, column: 1 },
+        },
+      ],
+    }),
+    runtimeConfig({
+      mounts: [
+        {
+          ...symbolicRuntimeFields.mounts[0],
+          allowedTargets: [" plot "],
+        },
+      ],
+    }),
+    runtimeConfig({
+      mounts: [
+        {
+          ...symbolicRuntimeFields.mounts[0],
+          allowedTargets: ["_"],
+        },
+      ],
+    }),
     runtimeConfig({ view: "missing" }),
     runtimeConfig({ runtime: { ...baseRuntimeConfig.runtime, id: "WASM" } }),
+    runtimeConfig({ ignored: true }),
     runtimeConfig({
-      runtime: { ...baseRuntimeConfig.runtime, id: "custom", available: ["server"] },
+      runtime: { ...baseRuntimeConfig.runtime, unexpected: true },
+    }),
+    runtimeConfig({
+      diagnostics: [{ ...diagnostic, unexpected: true }],
+    }),
+    runtimeConfig({
+      diagnostics: [{ ...diagnostic, source: { ...diagnostic.source, unexpected: true } }],
     }),
   ];
+
+  const { showCellLogs: _, ...withoutLogPreference } = runtimeConfig();
+  malformed.push(withoutLogPreference);
 
   malformed.forEach((config) => assert.throws(() => parseRuntimeConfig(config)));
 });
@@ -107,9 +204,28 @@ test("mount configuration validates injected document data", () => {
     version: "test-version",
     revision: "presentation-revision",
     runtime: "server",
+    runtimeExplicit: false,
+    replay: false,
   };
 
   assert.deepEqual(parseMountConfig(mount), mount);
-  assert.throws(() => parseMountConfig({ ...mount, revision: 42 }));
-  assert.throws(() => parseMountConfig({ ...mount, runtime: "WebAssembly" }));
+  const owned = {
+    ...mount,
+    clientId: "client-123456789",
+    lifecycleId: 7,
+    runtimeSessionId: "s_abc123",
+    renewalToken: "d.valid",
+    replay: true,
+  };
+  assert.deepEqual(parseMountConfig(owned), owned);
+  assert.throws(() => parseMountConfig({ ...mount, lifecycleId: 0 }));
+  assert.throws(() => parseMountConfig({ ...mount, runtimeSessionId: "forged" }));
+  assert.throws(() => parseMountConfig({ ...mount, clientId: "client-123456789" }));
+  assert.throws(() => parseMountConfig({ ...mount, lifecycleId: 7 }));
+  assert.throws(() =>
+    parseMountConfig({ ...mount, runtime: "wasm", runtimeSessionId: "s_abc123" }),
+  );
+  assert.throws(() => parseMountConfig({ ...mount, replay: true }));
+  assert.throws(() => parseMountConfig({ ...mount, renewalToken: "forged" }));
+  assert.throws(() => parseMountConfig({ ...mount, unexpected: true }));
 });

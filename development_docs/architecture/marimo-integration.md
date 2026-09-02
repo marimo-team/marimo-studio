@@ -1,469 +1,377 @@
 # Marimo integration
 
-Marimo owns the application process and notebook runtime. Studio asks that
-platform for a bounded set of capabilities, then expresses the rest of the
-product in Studio-owned records and policy.
+Marimo remains the notebook process, reactive runtime, editor, session system,
+and output renderer. Studio depends on those capabilities through owned ports
+and pinned adapters. Product policy imports ports. Private `marimo._*` imports
+stay inside `_compat`.
 
-This boundary supports two goals at once:
+See the [canonical ownership map](../architecture.md#ownership) for package
+responsibilities.
 
-- Studio can use the Marimo platform beyond its current public extension
-  surface.
-- A later Marimo extension point can replace one adapter without redistributing
-  private Marimo mechanics through Studio policy.
+## Boundary map
 
-## Boundary shape
+```text
+Studio product policy
+  -> feature-owned ports
+  -> _composition.py
+  -> _compat adapters
+  -> pinned Marimo release
 
-```mermaid
-flowchart LR
-    subgraph consumers[Studio policy]
-        workspace[_workspace]
-        server[_server]
-        agents[agents and analysis]
-        export[static export]
-        cli[_cli]
-    end
-
-    subgraph contracts[Studio contracts]
-        records[Stable records]
-        ports[_capabilities.py ports]
-    end
-
-    subgraph composition[Process composition]
-        roots[_composition.py]
-        lifecycle[Closeable lifecycle]
-    end
-
-    subgraph compatibility[Pinned release adapters]
-        python[_compat]
-        browser[packages/marimo-frontend]
-        guard[release, signature,<br/>fingerprint, and asset checks]
-    end
-
-    marimo[Marimo process, server,<br/>kernel, and frontend]
-
-    consumers --> records
-    consumers --> ports
-    roots --> ports
-    roots --> lifecycle
-    roots --> python
-    browser --> marimo
-    python --> guard
-    guard --> marimo
+Presentation browser code
+  -> packages/marimo-frontend named facade
+  -> prepared pinned Marimo frontend source
 ```
 
-The opaque `ServerHandle` and stable `ServerLocation`, `ServerContext`,
-`StaticNotebook`, `BrowserRuntimeProjection`, and projection result records
-prevent Marimo session, graph, request, and runtime objects from escaping into
-Studio policy.
+This boundary lets an upstream change replace one adapter while workspace,
+provider, artifact, projection, browser, and agent policy stay stable.
 
-## Process composition roots
+## Product capabilities backed by Marimo
 
-`_composition.py` constructs the capability set at the process boundary.
+| Studio capability           | Marimo behavior                                          | Studio owner                                       |
+| --------------------------- | -------------------------------------------------------- | -------------------------------------------------- |
+| Static notebook graph       | Compile cells, names, definitions, references, and edges | `StaticNotebookLoader` adapter                     |
+| Native cell projections     | Existing cell results and control lifecycle              | Runtime cell adapter                               |
+| Rich output projections     | Formatter output, widgets, files, and cleanup            | `KernelProjectionHost` and projected-output facade |
+| Live values                 | Kernel value reads and browser serialization             | Kernel values adapter                              |
+| Server preview              | Existing application and session                         | Server gateway and session adapters                |
+| WebAssembly preview         | Browser notebook source and worker runtime               | `BrowserRuntimeProjector` and frontend facade      |
+| Notebook editing            | Native editor document                                   | Studio workspace frame                             |
+| Save-time alias maintenance | Notebook persistence boundary                            | `NotebookSaveTransform`                            |
+| Query and controls          | Session transport and peer state                         | Query and control adapters                         |
+| Static export               | Browser runtime source and configuration                 | Export adapters                                    |
 
-| Root                                 | Capabilities constructed                                                                                                                                                             | Consumer                                                 |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
-| `create_server_adapters()`           | Server gateway, session state, existing-session attachment, replay, save transformation, kernel projections, peer command relay, browser projection, code-mode bridge, and lifecycle | `PresentationMiddleware`                                 |
-| `create_tooling_adapters()`          | Static notebook loader, live runner, environment flags, and code-mode bridge                                                                                                         | inspection, checks, agents, and CLI environment re-entry |
-| `create_export_adapters()`           | Browser runtime projector and static runtime configuration                                                                                                                           | `export_view`                                            |
-| `programmatic_middleware()`          | A configured Marimo application wrapper for one notebook                                                                                                                             | `create_asgi_app`                                        |
-| `kernel_lifespan()`                  | Kernel-side value, output, query, and cached-cell integration                                                                                                                        | Marimo kernel lifespan entry point                       |
-| `create_browser_runtime_projector()` | One release-validated browser notebook projector                                                                                                                                     | server previews and static export                        |
+## Python ports
 
-Each root validates the pinned release before constructing a private adapter.
-The server root installs process-scoped behavior when the Marimo lifespan
-starts. Tooling and export roots construct the smaller capability set needed by
-their process.
+Feature packages define records and ports that use Studio nouns:
 
-## Port inventory
+- `_notebook/ports.py` owns static inspection, runtime probes, and environment flags.
+- `_server/ports.py` owns Marimo server and session adapters.
+- `_server/presentation/ports.py` owns kernel projection behavior.
+- `_delivery/ports.py` and `_delivery/browser_ports.py` own export and browser projection.
+- `_browser_client/ports.py` owns the code-mode bridge. `_composition.py` constructs
+  separate notebook loader, runtime probe, environment flag, and code-mode
+  adapters.
 
-### Server ports
+Composition keeps tooling adapters independent and groups coupled server and
+export lifecycles into process-facing bundles.
 
-| Port                        | Studio asks for                                                                                     | Product feature enabled                                                                          | Complexity contained                                                                           |
-| --------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `ServerGateway`             | Resolve base URL, mode, notebook, file key, request context, relative path, and shutdown state      | Studio works inside Marimo's edit, run, file-router, and nested ASGI modes                       | Private ASGI state and session-manager objects stay out of routing policy                      |
-| `SessionState`              | Validate session IDs, check session existence, and inspect live cells                               | Live projections bind to current cell IDs                                                        | Session lookup details stay behind an opaque handle                                            |
-| `ExistingSessionAttachment` | Attach one consumer to one exact existing session                                                   | The Server preview shares the editor kernel, outputs, controls, and anywidget models             | Kiosk connection behavior and consumer attachment are release-specific                         |
-| `SessionReplay`             | Mark a server document for reconnect to its current session                                         | A configured run-mode refresh can preserve the browser's kernel state                            | Reconnect selection and routing parameters remain adapter-owned                                |
-| `NotebookSaveTransform`     | Install one source transformation at Marimo's durable save boundary                                 | Cell aliases follow live notebook edits and deletions                                            | Marimo persistence and session-extension ordering remain adapter-owned                         |
-| `PeerCommandRelay`          | Relay authorized commands among consumers of one session                                            | A native control update reaches the editor and prepared Server preview before kernel application | Session event and broadcast mechanics remain adapter-owned                                     |
-| `KernelProjectionHost`      | Read selected values, render selected objects, and synchronize query state through a kernel session | `mo-value`, `<marimo-output>`, and preview query synchronization use the active notebook kernel  | Function calls, queue messages, UI registries, virtual files, and cleanup remain adapter-owned |
-| `BrowserRuntimeProjector`   | Derive browser notebook code and selector records                                                   | WebAssembly preview and static export run the same notebook through Marimo's Pyodide runtime     | Notebook rewriting and browser selector plumbing remain adapter-owned                          |
-| `CodeModeBridge`            | Attach code-mode session context and expose authenticated Studio server coordinates                 | Code-mode agents activate and analyze the exact notebook workspace                               | Callback credentials and session metadata remain adapter-owned                                 |
-| `AdapterLifecycle`          | Install and release process-scoped integrations                                                     | Several Marimo applications can share a process without leaving patches or extensions behind     | Registration order, reference counting, rollback, and cleanup stay centralized                 |
+### Tooling factories
 
-### Tooling and export ports
+- `create_static_notebook_loader()`
+- `create_runtime_probe()`
+- `create_environment_flag_builder()`
+- `create_code_mode_bridge()`
 
-| Port                        | Studio asks for                                                                                 | Product feature enabled                                                                     | Complexity contained                                                                               |
-| --------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `StaticNotebookLoader`      | Compile cells, graph relationships, source spans, and app config without evaluating cell bodies | `inspect`, static checks, cell binding, and agent planning                                  | Marimo notebook parsing and graph APIs remain adapter-owned                                        |
-| `LiveNotebookRunner`        | Execute selected cells and values in an owned headless session                                  | Runtime checks and the runtime stage of agent analysis                                      | Session creation, dependency execution, output capture, deadlines, and teardown stay adapter-owned |
-| `EnvironmentFlagBuilder`    | Build the `uv` arguments for notebook and project metadata                                      | CLI commands run in the notebook's declared environment                                     | Marimo's inline dependency conventions remain adapter-owned                                        |
-| `StaticRuntimeConfigLoader` | Resolve user and override configuration for a static browser runtime                            | Static export applies the same Marimo behavior as a browser runtime served from the process | Private configuration loaders remain adapter-owned                                                 |
+Each caller constructs the one adapter it consumes.
 
-## Adapter inventory and private seams
+### Server composition
 
-The private seams are explicit maintenance obligations. `_compat/layout.py`
-records the expected release, callable signatures, and source fingerprints for
-the symbols whose behavior the adapters depend on.
+The server bundle groups Marimo gateway, session, persistence, projection,
+peer, browser-runtime, code-mode, and lifecycle adapters. The ASGI middleware
+receives one bundle per application composition. Feature modules depend on
+their narrow ports, while `_composition.py` owns the concrete bundle shape.
 
-### 1. Server context translation
+### `ExportAdapters`
 
-`PrivateServerGateway` reads Marimo's ASGI state, session manager, file router,
-mode, base URL, configuration managers, and token state. It returns an opaque
-handle plus Studio records.
+- `BrowserRuntimeProjector`
+- `StaticRuntimeConfigLoader`
 
-- **User benefit:** Studio participates in Marimo authentication, file routing,
-  nested mounting, and native route delegation.
-- **Upgrade surface:** `SessionManager` construction and session lookup shape.
-- **Containment:** route handlers receive `ServerContext` and never reach into
-  Marimo state directly.
+Static export uses this bundle to add a browser notebook runtime to a
+production view artifact.
 
-### 2. Existing-session attachment
+Keep ports shaped around Studio operations. A port should return stable
+records and lifecycle handles, not private Marimo objects.
 
-`PrivateExistingSessionAttachment` registers exact session attachments and
-wraps `SessionConnector._connect_kiosk` for Studio preview consumers.
+## Composition roots
 
-- **User benefit:** the Server preview and native editor share one kernel and
-  its live output resources.
-- **Upgrade surface:** WebSocket kiosk connection and session selection.
-- **Containment:** the preview asks `attach(context, consumer_id, session_id)`.
-  It does not construct or select a Marimo session.
+`_composition.py` validates the pinned release before constructing adapters:
 
-### 3. Session replay
+- separate tooling factories for notebook loading, runtime probing,
+  environment flags, and code mode
+- `create_server_adapters()` for ASGI presentation and live sessions
+- `create_export_adapters()` for static export
+- `create_browser_runtime_projector()` for WebAssembly runtime material
+- `kernel_lifespan()` for kernel-side projection support
+- `programmatic_middleware()` for programmatic notebook serving
 
-`PrivateSessionReplay` records the documents that allow replay and wraps
-Marimo's reconnect path.
+Feature modules import these factories or the ports they return. They do not
+construct `_compat` implementations directly.
 
-- **User benefit:** a manual run-mode refresh can return to the current server
-  kernel when `preserve_session = true`.
-- **Upgrade surface:** reconnect query parameters and
-  `SessionConnector._reconnect_session`.
-- **Containment:** Studio configuration exposes one Boolean policy. The adapter
-  owns the reconnect mechanism and its reversible registration.
+## Pinned release identity
 
-### 4. Notebook save transformation
+`_compat/release.json` records:
 
-`PrivateNotebookSaveTransform` installs a source-transform extension at
-Marimo's notebook persistence boundary. `CellAliasSourcePolicy` supplies the
-Studio rule that updates semantic references.
+- Supported Marimo version
+- Upstream tag commit
+- Private Python layout fingerprints
+- Browser frontend source identity
 
-- **User benefit:** aliases remain attached to the intended cell during a live
-  editing session.
-- **Upgrade surface:** `AppFileManager._save_file`, serialized notebook cells,
-  session attach and detach events, and durable write ordering.
-- **Containment:** Studio alias policy and Marimo persistence mechanics live in
-  separate modules and meet through `NotebookSourcePolicy`.
+`validate_marimo_release()` checks the installed distribution before a private
+adapter runs. Browser asset metadata records the same version and commit.
 
-### 5. Peer command relay
+The Python pin, release manifest, prepared frontend checkout, generated browser
+assets, and adapter tests form one compatibility unit.
 
-`PrivatePeerCommandRelay` subscribes to session events and relays supported
-control commands to the other consumers attached to that session.
+## Static notebook inspection
 
-- **User benefit:** a native control stays visually aligned between the editor
-  and Server preview while the kernel remains the reactive authority.
-- **Upgrade surface:** session events, command notification serialization,
-  extension registration, and room broadcast.
-- **Containment:** server policy calls `enable(location)`. It does not inspect
-  Marimo command classes.
+The private notebook adapter compiles the saved notebook and returns
+`StaticNotebook`:
 
-### 6. Kernel projection host
-
-The kernel lifespan registers guarded functions for value reads, rich-output
-formatting, and query synchronization. `PrivateKernelProjectionHost` invokes
-those functions through the current Marimo session.
-
-- **User benefit:** a view can read a selected Python value or render a selected
-  object through Marimo's native formatter while retaining reactive ownership.
-- **Upgrade surface:** runtime context, function calls, UI element IDs, cell
-  lifecycle disposal, virtual files, cached cell restoration, and kernel
-  queues.
-- **Containment:** server routes exchange `ValueReadResult`,
-  `OutputRenderResult`, and `ProjectionUnavailable` records. Kernel objects stay
-  inside `_compat/kernel_values`.
-
-The output renderer allocates a stable presentation cell owner for each
-consumer and selector. It releases controls, functions, virtual files, and
-other formatter-created resources when the final owner disappears.
-
-### 7. Browser runtime projection
-
-`PrivateBrowserRuntimeProjector` derives a browser notebook from the saved
-source and the selected value and output references. Server preview payloads
-and static export use this same projector.
-
-- **User benefit:** the WebAssembly runtime evaluates the view's required
-  notebook graph in Marimo's Pyodide worker.
-- **Upgrade surface:** Marimo notebook source conventions, browser runtime
-  metadata, selector bridges, and cached UI compatibility.
-- **Containment:** callers receive `BrowserRuntimeProjection` with code,
-  selector specs, version, commit, and instance identity.
-
-### 8. Static notebook inspection and live execution
-
-The static loader adapts Marimo's notebook compiler and dependency graph into
-`StaticNotebook`. The live runner creates an owned headless session, evaluates
-the selected dependency closure, captures bounded output, and closes the
-session.
-
-- **User benefit:** inspection stays side-effect free until the user requests a
-  runtime check. Runtime checks evaluate the actual notebook environment.
-- **Upgrade surface:** notebook graph APIs, session creation, execution
-  requests, output messages, and cached cells.
-- **Containment:** `_workspace` depends on `NotebookInspector` and
-  `RuntimeProber` protocols. Commands do not import the concrete runner.
-
-### 9. Code mode and programmatic hosting
-
-`PrivateCodeModeBridge` adapts callback credentials and the active session for
-agent operations. Programmatic middleware configures a Marimo run application
-for `create_asgi_app`.
-
-- **User benefit:** an agent inside Marimo can target its own Studio tab, and a
-  Python service can mount a configured notebook as an ASGI application.
-- **Upgrade surface:** code-mode callback state, server configuration managers,
-  and Marimo's programmatic application surface.
-- **Containment:** public APIs expose `StudioServerConnection` and `ASGIApp`
-  contracts.
-
-### 10. Environment and static configuration
-
-The environment adapter translates notebook metadata into `uv` flags. The
-static configuration adapter resolves Marimo user configuration and overrides
-for browser export.
-
-- **User benefit:** commands use the notebook's declared dependencies, and an
-  exported view receives the configured runtime behavior.
-- **Upgrade surface:** inline dependency metadata and private config loaders.
-- **Containment:** callers work with lists of command arguments or
-  `StaticRuntimeConfig` records.
-
-## Server request and session lifecycle
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Browser
-    participant Marimo as Marimo ASGI app
-    participant Middleware as Studio middleware
-    participant Gateway as ServerGateway
-    participant Scope as NotebookScope
-    participant Session as Marimo session
-    participant View as Presentation document
-
-    Browser->>Marimo: Request native or Studio URL
-    Marimo->>Middleware: Authenticated ASGI scope
-    Middleware->>Gateway: Resolve base URL, mode, and notebook
-
-    alt Marimo-owned route
-        Middleware->>Marimo: Delegate unchanged
-        Marimo-->>Browser: Native response
-    else Studio route
-        Middleware->>Scope: Resolve notebook-scoped services
-        Scope->>View: Capture or select presentation revision
-        opt Server preview joins editor
-            Middleware->>Session: Attach preview consumer to exact session
-        end
-        View-->>Middleware: Document or runtime record
-        Middleware-->>Browser: Authenticated Studio response
-    end
+```python
+StaticNotebook(
+    cells=(
+        StaticCell(
+            runtime_id="...",
+            code="...",
+            name="filters",
+            definitions=("selected_artist",),
+            references=("df",),
+            parents=(...),
+            children=(...),
+            source=SourceSpan(...),
+        ),
+    ),
+    app_config={...},
+)
 ```
 
-`PresentationMiddleware` delegates before handling. It recognizes the Marimo
-base URL and mode, lets native editor and WebSocket requests continue through
-Marimo, then handles the Studio landing page, authored documents, view assets,
-and support routes for a resolved notebook.
+Studio converts this to `NotebookSpec` and then `NotebookSymbolGraph`. Static
+inspection compiles notebook structure and avoids running cell bodies.
 
-Each canonical notebook path receives one `NotebookScope`:
+Native cell names enter the cell target namespace. Configured aliases are
+resolved against semantic `CellRef` values and join the same namespace.
+Variable definitions and references become producer, consumer, upstream, and
+downstream graph edges.
 
-| Service                | State owned                                                                                            | User capability                                                              |
-| ---------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| `NotebookPresentation` | Source discovery, immutable snapshots, and bounded revision history                                    | coherent live refresh and exact-revision evidence                            |
-| `StudioClientRegistry` | Browser presence, editor session binding, active view, binding generations, and query operation claims | exact tab targeting, preview attachment, and loop-free query synchronization |
-| `AgentCoordinator`     | Targeted activation and observation operations                                                         | an agent can wait for the intended tab and rendered revision                 |
+## Semantic and runtime cell identity
 
-The registry reuses a scope for repeated requests to the same canonical
-notebook. Marimo application shutdown closes every agent coordinator and client
-registry, then closes every installed adapter. Cleanup attempts each owned
-resource and reports the first failure after all attempts complete.
+`CellRef` identifies a notebook cell from stable semantic source information.
+Marimo runtime IDs identify one compiled or live runtime instance.
 
-## Execution matrix
+```text
+provider target
+  -> NotebookSymbolGraph
+  -> semantic CellRef
+  -> runtime-specific cell ID
+```
 
-| Context              | Notebook owner                | Runtime state                          | Studio responsibility                                                                                          |
-| -------------------- | ----------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Native edit frame    | Marimo editor session         | One Python kernel                      | Bind the editor session to its containing Studio browser                                                       |
-| Server preview       | The same editor session       | Attached consumer of the editor kernel | Project the selected view and relay supported peer controls                                                    |
-| WebAssembly preview  | Marimo Pyodide runtime        | Separate worker and notebook instance  | Supply derived notebook code, map semantic cell identities, and synchronize compatible control and query state |
-| Server run mode      | Marimo run server             | One isolated kernel per browser        | Select the view, configure replay policy, and project that session                                             |
-| WebAssembly run mode | Marimo Pyodide runtime        | One worker per browser                 | Supply the selected view and browser notebook record                                                           |
-| Static export        | Exported browser assets       | One worker when the page opens         | Package the view, notebook, assets, runtime record, and static fragments                                       |
-| Runtime check        | Owned headless Marimo session | Bounded child process and session      | Execute selected dependencies, capture evidence, then terminate the owned boundary                             |
+`ResolvedStudio.runtime_cell_refs()` maps semantic refs to runtime IDs. For a
+Server runtime it matches the current live session snapshot. For WebAssembly it
+uses the inspected notebook runtime IDs embedded in the projection.
 
-## Release validation
+Keep semantic resolution ahead of runtime mapping. Browser requests and saved
+view source should never depend on a transient runtime ID.
 
-`_compat/release.json` is the release identity shared by Python and browser
-integration. Python dependency declarations pin the same Marimo version. The
-frontend adapter prepares the commit behind that tag. Browser build metadata
-records both values.
+## Server gateway and routing
 
-`_compat/layout.py` validates:
+`ServerGateway` translates Marimo ASGI state into `ServerLocation` and
+`ServerContext` records:
 
-- The installed Marimo distribution version.
-- Callable parameter shape for selected private symbols.
-- Source fingerprints for every recorded private contract.
-- The private capabilities used by server context, existing-session
-  attachment, replay, save transformation, session extensions, cached-cell
-  repair, kernel projections, peer relay, and live execution.
+- Canonical notebook path and file-routing key
+- Base URL and route query
+- Edit or run mode
+- User and override configuration
+- Process-bound server token
+- Opaque server handle
 
-Browser runtime construction also validates the packaged asset version and
-commit. `marimo-studio check --format json` exposes the required and observed
-identities so a person or agent can diagnose a mismatched installation.
+`PresentationMiddleware` consumes those records and delegates native Marimo
+paths before dispatching Studio work. Read [Server routing and
+security](server-routing-and-security.md) for route recognition, workspace
+lifecycle, authentication, presentation capabilities, iframe isolation, and
+native-session admission.
 
-### Upgrade the pinned Marimo release
+## Notebook-scoped services
 
-Set `MARIMO_RELEASE` to the target tag and capture the configured version before
-editing the release manifest:
+`NotebookScopeRegistry` creates one `NotebookScope` per canonical notebook:
+
+```text
+NotebookScope
+  -> NotebookPresentation
+  -> StudioClientRegistry
+  -> AgentCoordinator
+  -> build and artifact activity for that notebook
+```
+
+ASGI lifespan closure releases agent requests, browser clients, provider
+workers, artifact pins, and notebook-scoped handles. Each close operation is
+idempotent and preserves the first failure while attempting remaining cleanup.
+
+## Server session integration
+
+The Server runtime projects into an existing Marimo session.
+
+`SessionState` answers whether a session exists and returns a live cell
+snapshot. `ExistingSessionAttachment` attaches a preview or agent consumer to
+that exact session. `SessionReplay` records documents whose reconnects should
+resume the session.
+
+The runtime configuration includes a process-bound server instance and a
+runtime instance digest. Browser requests also carry the current session ID.
+The server rejects requests whose revision, runtime, or session identity does
+not match the selected presentation.
+
+## Kernel projection host
+
+`KernelProjectionHost` supplies three operations:
+
+- Read value selector specifications
+- Render output selector specifications with active-owner state
+- Synchronize query parameters into the session
+
+Studio resolves projection requests before calling this port. The adapter
+receives selector specifications derived from the notebook graph and source
+site. For each request, the server signs the producer and every semantic
+`CellRef` and live cell ID in its dependency closure. The kernel validates that
+complete binding immediately before it reads a value or renders an output. It
+recomputes the current live closure and requires the same ordered `CellRef` and
+runtime ID pairs. An edit inside the closure, including a newly resolved
+upstream producer, makes a retained presentation stale. An edit in an
+independent branch leaves the capability valid.
+
+The adapter owns Marimo kernel calls, output formatting, virtual files,
+widgets, and resource cleanup.
+
+Projected output ownership is explicit. A selector stays active while its
+final presentation owner remains mounted. Value reads can share one kernel
+request across several hosts.
+
+## WebAssembly runtime projection
+
+`BrowserRuntimeProjector` builds `BrowserRuntimeProjection` from the saved
+notebook source. The record includes:
+
+- Runtime instance identity
+- Pinned Marimo version and commit
+- Browser notebook code
+- Compiled execution cells
+- Projection bootstrap cell ID
+
+The browser worker loads the saved notebook into Marimo with automatic cell
+execution disabled. Python precomputes each available target, producer, and
+dependency closure from the notebook graph and artifact mount declarations.
+The runtime checks mounted requests against those records, schedules required
+cells through Marimo's cell queue, and attaches each host to its worker cell.
+Dynamic retargeting schedules newly required cells while the worker and its
+executed state remain mounted.
+
+The dependency closure drives execution and remains symbolic evidence for
+inspection and validation. An independent branch with incompatible code does
+not block a view that never mounts that branch.
+
+Browser runtime assets come from `packages/marimo-frontend` and the browser
+build. The projector checks that their release metadata matches the Python
+adapter release.
+
+## Frontend facade
+
+`packages/marimo-frontend` exposes named capabilities around upstream source:
+
+- Embedded runtime
+- Cell presentation
+- Projected output
+- Session bootstrap
+- Control endpoint
+- Theme frame
+- Vite preparation
+
+Presentation imports these names. Upstream atoms, stores, providers,
+registries, transports, aliases, and source paths remain inside the facade.
+
+Stateful facade capabilities return explicit dispose or close handles. The
+presentation projection owner decides when to release them.
+
+## Notebook persistence
+
+`NotebookSaveTransform` installs a source policy at Marimo's durable save
+boundary. The policy can update configured aliases when semantic cell refs
+change and commits its metadata update after the notebook write succeeds.
+
+Native named cells need no configured binding. Example notebooks and primary
+authoring workflows should use native names. Alias APIs remain available for
+anonymous cells and explicit product naming.
+
+Keep save transformation scoped to the attached notebook session. Session
+detach or adapter shutdown closes its policy handle.
+
+The editor bridge treats a successful first save as a session handoff from the
+temporary `__new__*` file key to the saved notebook. It requests Studio reload
+through that exact native session after the saved path exists. Read [Product
+and workspace](product-and-workspace.md#first-save) for the complete lifecycle.
+
+Notebook document transactions pause active presentations before durable
+mutation, then settle after the matching save and presentation build. The
+Preview owner coordinates that barrier. Marimo remains the durable notebook
+writer. Read [Product and workspace](product-and-workspace.md#notebook-mutation-admission)
+for the mutation state machine.
+
+## Controls, query, and peer state
+
+Controls are Marimo runtime resources projected into a view. Their state stays
+with the runtime instance that owns them. Runtime switching reconnects hosts to
+the selected instance.
+
+Query synchronization uses explicit operation IDs so editor, preview, and
+history updates can identify their own echoes. Peer command adapters relay
+authorized control state between consumers of one session.
+
+## Private adapter lifecycle
+
+`_PrivateAdapterLifecycle` opens server integrations as one ordered group. A
+partial startup closes handles already opened. ASGI shutdown closes notebook
+scopes before the application-owned adapter group. The process-wide
+presentation-authorization patch is installed by the Marimo entry point and
+closes through `atexit` when the Python process exits.
+
+Use explicit lifecycle verbs:
+
+- Install a process patch.
+- Attach a consumer to a session.
+- Mount a runtime.
+- Register a replay document.
+- Detach a consumer.
+- Close a patch or session adapter.
+- Dispose a browser resource.
+
+Avoid global mutation outside an installed handle.
+
+## Upgrade the pinned release
+
+A Marimo upgrade changes one compatibility unit:
+
+1. Update the exact Python requirement and lockfile.
+2. Update `_compat/release.json` version, commit, and private fingerprints.
+3. Inspect upstream implementations used by every `_compat` adapter.
+4. Update private adapter tests and behavior probes.
+5. Prepare the exact frontend source.
+6. Rebuild browser assets and verify build metadata.
+7. Run Python, frontend, Server, WebAssembly, export, and package gates.
+8. Exercise bundled Vanilla, React, and Svelte views in a live browser.
+
+Use a clean local Marimo checkout at the configured commit with:
 
 ```console
-MARIMO_REPOSITORY=https://github.com/marimo-team/marimo.git
-: "${MARIMO_RELEASE:?Set MARIMO_RELEASE to the target Marimo tag}"
-PREVIOUS_MARIMO_VERSION="$(
-  uv run python -c \
-    'from marimo_studio._compat.layout import MARIMO_VERSION; print(MARIMO_VERSION)'
-)"
+export MARIMO_REPO=/path/to/marimo
+make setup
 ```
 
-Resolve the target tag to its commit in a current Marimo checkout:
+Keep `MARIMO_REPO` set while running frontend gates. The prepared source
+metadata must match the release manifest.
 
-```console
-git -C /path/to/marimo fetch \
-  "$MARIMO_REPOSITORY" "refs/tags/$MARIMO_RELEASE"
-MARIMO_COMMIT="$(
-  git -C /path/to/marimo rev-parse 'FETCH_HEAD^{commit}'
-)"
-printf '%s\n' "$MARIMO_COMMIT"
-```
+## Test the boundary
 
-Record that version and commit in `_compat/release.json`. Update the exact
-Marimo pins in the root and package `pyproject.toml` files, then resolve and
-install the Python environment:
+Add tests at the narrowest owner and at the live seam:
 
-```console
-uv lock
-uv sync --locked
-```
+| Contract                      | Focused evidence                | Live evidence                                          |
+| ----------------------------- | ------------------------------- | ------------------------------------------------------ |
+| Static notebook graph         | Adapter and symbol graph tests  | Named targets resolve in the provider runtime fixture  |
+| Semantic-to-runtime mapping   | Cell-ref matching tests         | Session reconnect and WebAssembly mount                |
+| Kernel values and outputs     | Port and adapter tests          | Native controls, tables, plots, widgets, and downloads |
+| Session attachment and replay | Lifecycle tests                 | Run-mode reconnect and preview reload                  |
+| Save transform                | Source policy tests             | Notebook edit and durable save                         |
+| Browser projector             | Execution catalog tests         | WebAssembly closure selection and dynamic retargeting  |
+| Frontend facade               | Package tests                   | Browser build and runtime acceptance                   |
+| Release identity              | Fingerprint and metadata checks | Isolated wheel installation                            |
 
-Search the maintained source set for stale release references:
-
-```console
-rg -n -F "$PREVIOUS_MARIMO_VERSION" \
-  README.md pyproject.toml uv.lock packages apps docs development_docs examples
-```
-
-The search should return no release references after the manifests, notebooks,
-fixtures, and version-specific prose are current.
-
-Inspect the installed private contracts before changing an adapter:
-
-```console
-uv run python -m marimo_studio._compat.layout
-uv run pytest \
-  packages/marimo-studio/tests/test_compatibility.py \
-  -q
-```
-
-The snapshot reports each capability, symbol, callable shape, and source
-fingerprint. Compare every changed symbol with the tagged Marimo source. Update
-a fingerprint when the adapter's required behavior and callable shape still
-hold. A changed signature, missing symbol, or changed lifecycle requires an
-edit in the owning `_compat` adapter and its contract tests.
-
-Exercise the frontend facade against the same release commit:
-
-```console
-pnpm --filter @marimo-studio/marimo-frontend test
-make build
-```
-
-The frontend preparation step checks out the commit from
-`_compat/release.json`, installs that source workspace, and records its identity
-in generated browser metadata. Finish the upgrade through every shipped
-boundary:
-
-```console
-make check
-make e2e
-make package
-```
-
-An upgrade that preserves the product boundary changes release identity,
-dependency pins, private contract fingerprints, narrow adapters, adapter tests,
-and generated notebook metadata. Documentation names the supported release
-through `_compat/release.json` or package metadata and changes when the upgrade
-workflow or behavior changes. Marimo-specific behavior stays within `_compat`,
-`_composition.py`, or `packages/marimo-frontend`. Changes in workspace policy,
-server policy, presentation, or Studio UI require a boundary review before the
-upgrade is complete.
-
-## Reversible integration lifecycle
-
-`ReversiblePatch` reference-counts one attribute replacement. It rejects a
-competing replacement while Studio owns the seam and restores the original
-attribute when the final handle closes. `CompositeCloseHandle` closes in
-reverse installation order and retains failed handles for a later retry.
-
-```mermaid
-sequenceDiagram
-    participant Marimo as Marimo lifespan
-    participant Middleware as PresentationMiddleware
-    participant Adapters as AdapterLifecycle
-    participant Scopes as NotebookScopeRegistry
-
-    Marimo->>Middleware: lifespan.startup
-    Middleware->>Adapters: open()
-    Adapters-->>Middleware: composite close handle
-    Middleware-->>Marimo: delegate lifespan
-    Marimo->>Middleware: shutdown or startup failure
-    Middleware->>Scopes: close every notebook scope
-    Middleware->>Adapters: close in reverse order
-    Middleware-->>Marimo: complete or first cleanup failure
-```
-
-Lifecycle ownership is part of the port contract. A private adaptation that
-registers a callback, patch, extension, consumer, function, or process must
-return or join a handle whose release boundary is explicit.
-
-## Upstreaming a capability
-
-Treat the port as the durable product requirement and the private adapter as
-the current Marimo mechanism.
-
-1. State the required behavior in a Studio-owned port and stable records.
-2. Protect the behavior through the consumer boundary and a focused adapter
-   conformance test.
-3. Design the Marimo extension point around the general platform capability,
-   including lifecycle and error behavior.
-4. Add a native adapter for the public Marimo API at the composition root.
-5. Run the same consumer and conformance tests against the native adapter.
-6. Remove the private imports, patch, layout fingerprints, and release-specific
-   test fixtures that the native adapter replaced.
-
-An upstream change is clean when `_workspace`, `_server`, agents, export, and
-browser policy remain unchanged. If those consumers must absorb Marimo objects
-or release details, the port is too shallow or the product policy still lives
-inside the adapter.
-
-## Change and validation map
-
-| Change                                   | Primary owner                                                   | Validation                                                                |
-| ---------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Marimo server state or route integration | `ServerGateway` adapter                                         | adapter contract tests, native route delegation tests, hosted acceptance  |
-| Session attachment or replay             | existing-session or replay adapter                              | reversible patch tests, session tests, run-mode reload acceptance         |
-| Notebook save integration                | save adapter and alias policy                                   | source-transform tests, persistence tests, live edit acceptance           |
-| Kernel value or output behavior          | kernel projection host                                          | kernel adapter tests, projection tests, Server and WebAssembly acceptance |
-| Browser notebook derivation              | browser projector                                               | projector tests, server/export parity tests, `make build`                 |
-| Release upgrade                          | release manifest, layout contracts, exact pins, frontend source | compatibility tests, `make build`, `make e2e`, `make package`             |
-| Adapter lifecycle                        | patch primitives and server lifespan                            | repeated-open tests, competing-owner tests, failure cleanup tests         |
-
-Continue with [Browser runtime and authoring](browser-runtime-and-authoring.md)
-for the document, frame, projection, and frontend adapter lifecycles built on
-these Python capabilities.
+Run `make build` and `make e2e` after changing Marimo integration. Run
+`make package` when the release manifest, browser assets, entry points, or
+distribution contents change.

@@ -12,12 +12,14 @@ import {
   getMountConfig,
   getSupportUrl,
   hasRuntimeConfig,
-  requestedRuntimeId,
   type ProjectionDiagnostic,
 } from "../runtime-config/index.ts";
+import { documentLifecycleEnvelope } from "./document-lifecycle-id.ts";
+import { postToStudioParent } from "./parent-bridge.ts";
+import { studioOwned } from "./studio-ownership.ts";
 
 const runtimeId = (): string =>
-  hasRuntimeConfig() ? getRuntimeConfig().runtime.id : requestedRuntimeId(getMountConfig().runtime);
+  hasRuntimeConfig() ? getRuntimeConfig().runtime.id : getMountConfig().runtime;
 
 export const supportView = (supportUrl = getSupportUrl()): string => {
   try {
@@ -42,14 +44,15 @@ export const showDiagnostic = (
   }
   host.dataset.state = state;
   host.setAttribute("role", state === "waiting" ? "status" : "alert");
-  host.hidden = state === "waiting" && globalThis.parent !== globalThis.window;
+  host.hidden = state === "waiting" && studioOwned();
   const message: ViewSyncPendingMessage | ViewErrorMessage = {
     type: state === "waiting" ? "marimo-studio:view-sync-pending" : "marimo-studio:view-error",
     runtime: runtimeId(),
+    ...documentLifecycleEnvelope(),
     diagnostic: toBrowserDiagnostic(detail),
     view: detail.view,
   };
-  globalThis.parent.postMessage(message, globalThis.location.origin);
+  postToStudioParent(message);
 };
 
 export const clearDiagnostic = (): void => {
@@ -66,10 +69,11 @@ export const notifyDiagnostics = (
   const message: ViewDiagnosticsMessage = {
     type: "marimo-studio:view-diagnostics",
     runtime: runtimeId(),
+    ...documentLifecycleEnvelope(),
     view,
     diagnostics: toBrowserDiagnostics(diagnostics),
   };
-  globalThis.parent.postMessage(message, globalThis.location.origin);
+  postToStudioParent(message);
 };
 
 const diagnosticHost = (): HTMLElement => {

@@ -12,17 +12,43 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	exit 1
 fi
 
-export UV_NO_CONFIG=1
-
-for ((attempt = 1; attempt <= 18; attempt++)); do
-	if RELEASE_VERSION="$version" uv run \
+probe_version() {
+	uv run \
 		--no-cache \
 		--no-project \
 		--isolated \
 		--default-index https://pypi.org/simple \
 		--with "marimo-studio==$version" \
-		python -c "import os; from importlib.metadata import version; import marimo_studio; from marimo_studio._assets import runtime_assets_path; assert version('marimo-studio') == os.environ['RELEASE_VERSION']; p = runtime_assets_path(); assert (p / 'runtime.js').is_file()"; then
-		exit 0
+		python -c "from importlib.metadata import version; assert version('marimo-studio') == '$version'"
+}
+
+verify_base() {
+	uv run \
+		--no-cache \
+		--no-project \
+		--isolated \
+		--default-index https://pypi.org/simple \
+		--with "marimo-studio==$version" \
+		python scripts/verify-installed-package.py --expected-version "$version"
+}
+
+verify_deno() {
+	uv run \
+		--no-cache \
+		--no-project \
+		--isolated \
+		--default-index https://pypi.org/simple \
+		--with "marimo-studio[deno]==$version" \
+		python scripts/verify-installed-package.py \
+		--expected-version "$version" \
+		--deno
+}
+
+published=0
+for ((attempt = 1; attempt <= 18; attempt++)); do
+	if probe_version; then
+		published=1
+		break
 	fi
 
 	printf 'PyPI verification attempt %s of 18 did not verify %s\n' "$attempt" "$version"
@@ -31,5 +57,10 @@ for ((attempt = 1; attempt <= 18; attempt++)); do
 	fi
 done
 
-printf 'ERROR: PyPI did not verify marimo-studio %s within three minutes\n' "$version" >&2
-exit 1
+if [[ "$published" -ne 1 ]]; then
+	printf 'ERROR: PyPI did not publish marimo-studio %s within three minutes\n' "$version" >&2
+	exit 1
+fi
+
+verify_base
+verify_deno

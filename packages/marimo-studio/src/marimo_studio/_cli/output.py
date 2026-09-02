@@ -8,22 +8,39 @@ import shlex
 import subprocess
 from typing import Any
 
+from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._cli.diagnostics import diagnostics
 from marimo_studio._cli.print import echo, green, light_blue, red, yellow
-from marimo_studio._workspace.models import BindingResult, ViewSetupResult
-from marimo_studio.activation import ViewActivationResult
-from marimo_studio.analysis import AnalysisReport
-from marimo_studio.export import StaticExportResult
-from marimo_studio.inspect import InspectionResult
-from marimo_studio.overview import StudioOverview
-from marimo_studio.types import CheckResult
-from marimo_studio.workspace import ViewRemovalResult
+from marimo_studio._delivery.export import StaticExportResult
+from marimo_studio._notebook.inspection import InspectionResult
+from marimo_studio._validation.records import ValidationReport
+from marimo_studio._views.api import ViewRemovalResult
+from marimo_studio._views.overview import StudioOverview
+from marimo_studio._views.records import ViewDocument, ViewInspection, ViewSetupResult
+from marimo_studio._workspace.models import BindingResult
 
 
 def _shell_command(arguments: list[str]) -> str:
     if os.name == "nt":
         return subprocess.list2cmdline(arguments)
     return shlex.join(arguments)
+
+
+def _uvx_command(
+    requirements: tuple[str, ...],
+    arguments: list[str],
+    *,
+    executable_requirement: str | None = None,
+) -> str:
+    command = ["uvx"]
+    if executable_requirement is not None:
+        command.extend(["--from", executable_requirement])
+    for requirement in requirements:
+        if requirement == executable_requirement:
+            continue
+        command.extend(["--with", requirement])
+    command.extend(arguments)
+    return _shell_command(command)
 
 
 def echo_error(message: str) -> None:
@@ -33,7 +50,7 @@ def echo_error(message: str) -> None:
 
 def echo_json(value: Any) -> None:
     """Write a deterministic JSON result to stdout."""
-    echo(json.dumps(value, indent=2, sort_keys=True))
+    diagnostics().write_result(json.dumps(value, indent=2, sort_keys=True))
 
 
 def _echo_next_command(action: str, command: str) -> None:
@@ -49,42 +66,120 @@ def _echo_next_command(action: str, command: str) -> None:
 
 def render_view_setup(result: ViewSetupResult) -> None:
     """Write a view setup result in human text."""
-    verb = "Would add" if result.dry_run else "Added"
+    verb = "Would create" if result.dry_run else "Created"
     echo(f"{green(verb)} view {result.name} at {result.root}")
     for path in result.created:
         echo(f"  {light_blue('create')} {path}")
     for path in result.updated:
         echo(f"  {light_blue('update')} {path}")
-    if not result.dry_run:
-        command = _shell_command(["marimo", "edit", str(result.notebook), "--sandbox"])
-        _echo_next_command("edit", command)
+    render_view_next_command(result)
 
 
-def render_overview(result: StudioOverview) -> None:
+def render_view_next_command(result: ViewSetupResult) -> None:
+    """Show the next command after a completed view creation."""
+    if result.dry_run:
+        return
+    command = _uvx_command(
+        result.launch_requirements,
+        [
+            "marimo",
+            "edit",
+            str(result.notebook),
+            "--sandbox",
+        ],
+    )
+    _echo_next_command("edit", command)
+
+
+def render_view_inspection(result: ViewInspection) -> None:
+    """Write view authoring state in human text."""
+    echo(result.view)
+    echo(f"  {light_blue('provider')} {result.provider}")
+    echo(f"  build {result.freshness}")
+    echo(f"  {light_blue('documents')}")
+    for document in result.documents:
+        echo(
+            f"    {document.access:<4} {document.language:<18} "
+            f"{document.path.as_posix()}"
+        )
+    echo(f"  {light_blue('diagnostics')}")
+    for diagnostic in result.diagnostics:
+        source = (
+            f" · {diagnostic.path}:{diagnostic.line}:{diagnostic.column}"
+            if diagnostic.path is not None
+            else ""
+        )
+        echo(
+            f"    {diagnostic.severity} {diagnostic.code}: {diagnostic.message}{source}"
+        )
+        if diagnostic.hint:
+            echo(f"      {light_blue('repair')} {diagnostic.hint}")
+    if not result.diagnostics:
+        echo("    none")
+    if result.build is not None:
+        echo(
+            f"  {light_blue('published')} {result.build.profile} "
+            f"{result.build.revision}"
+        )
+
+
+def render_status(result: StudioOverview) -> None:
     """Write Studio workspace state in human text."""
     echo(f"{result.notebook} · {result.state}")
     if result.config_path is not None:
-        echo(f"  {light_blue('config')} {result.config_path}")
+        source = f" {result.config_source}" if result.config_source is not None else ""
+        echo(f"  {light_blue('config')}{source} {result.config_path}")
     if result.default_runtime is not None:
         echo(f"  {light_blue('runtime')} {result.default_runtime}")
+    if result.runtimes:
+        echo(f"  {light_blue('runtimes')} {', '.join(result.runtimes)}")
+    if result.bindings:
+        echo(f"  {light_blue('aliases')}")
+        for alias, ref in sorted(result.bindings.items()):
+            echo(f"    {alias} {ref}")
     for view in result.views:
         suffix = " (default)" if view.default else ""
         echo(f"  {light_blue(view.name)}{suffix}\n    {view.path}")
     if result.state == "unconfigured":
-        command = _shell_command(["marimo-studio", "view", "add", str(result.notebook)])
-        _echo_next_command("create", command)
-    elif result.state == "needs-view" and result.default_view is not None:
-        command = _shell_command(
+        command = _uvx_command(
+            result.launch_requirements,
             [
                 "marimo-studio",
                 "view",
-                "add",
+                "create",
+                "dashboard",
+                "--target",
                 str(result.notebook),
-                "--name",
-                result.default_view,
-            ]
+            ],
+            executable_requirement=result.launch_requirements[0],
         )
         _echo_next_command("create", command)
+    elif result.state == "needs-view" and result.default_view is not None:
+        command = _uvx_command(
+            result.launch_requirements,
+            [
+                "marimo-studio",
+                "view",
+                "create",
+                result.default_view,
+                "--target",
+                str(result.notebook),
+            ],
+            executable_requirement=result.launch_requirements[0],
+        )
+        _echo_next_command("create", command)
+
+
+def render_view_document(document: ViewDocument) -> None:
+    """Write one revision-bound source document."""
+    echo(f"{document.path.as_posix()} · {document.revision}")
+    echo(document.content)
+
+
+def render_document_write(document: ViewDocument) -> None:
+    """Write a completed source mutation."""
+    echo(f"{green('Updated')} {document.path.as_posix()}")
+    echo(f"  {light_blue('revision')} {document.revision}")
 
 
 def render_view_removal(result: ViewRemovalResult) -> None:
@@ -93,9 +188,9 @@ def render_view_removal(result: ViewRemovalResult) -> None:
     echo(f"  {light_blue('default')} {result.default_view}")
 
 
-def render_view_activation(result: ViewActivationResult) -> None:
-    """Write a completed browser view activation in human text."""
-    echo(f"{green('Activated')} view {result.view} in {result.client_id}")
+def render_view_show(result: ShowResult) -> None:
+    """Write a completed browser view selection in human text."""
+    echo(f"{green('Showing')} view {result.view} in {result.client_id}")
     echo(f"  {light_blue('session')} {result.session_id}")
 
 
@@ -104,7 +199,15 @@ def render_static_export(result: StaticExportResult) -> None:
     echo(f"{green('Exported')} {result.view} to {result.output}")
     echo(f"  {light_blue('open')} {result.entrypoint}")
     command = _shell_command(
-        ["python", "-m", "http.server", "--directory", str(result.output)]
+        [
+            "python",
+            "-m",
+            "http.server",
+            "--bind",
+            "127.0.0.1",
+            "--directory",
+            str(result.output),
+        ]
     )
     echo(f"  {light_blue('serve')} {command}")
 
@@ -159,7 +262,7 @@ def render_inspection(result: InspectionResult) -> None:
                 echo(f"     error: {runtime_cell.errors[0]}")
     if runtime is not None:
         values = runtime.values
-        echo(f"\n{light_blue('JSON values')}")
+        echo(f"\n{light_blue('Values')}")
         for name, value in values.values.items():
             echo(f"  {name} = {_json_preview(value)}")
         if not values.values:
@@ -170,15 +273,21 @@ def render_inspection(result: InspectionResult) -> None:
                 echo(f"  {name}: {error.code}: {error.message}")
 
 
-def render_checks(results: tuple[CheckResult, ...]) -> None:
-    """Write check results in human text."""
+def _render_check(record: object) -> None:
+    if not isinstance(record, dict):
+        return
+    status = record.get("status")
+    name = record.get("name")
+    message = record.get("message")
+    if status not in {"pass", "warn", "fail"}:
+        return
+    if not isinstance(name, str) or not isinstance(message, str):
+        return
     styles = {"pass": green, "warn": yellow, "fail": red}
-    for result in results:
-        status = styles[result.status](f"{result.status.upper():<4}")
-        echo(f"{status} {result.name}: {result.message}")
-        if result.details is None:
-            continue
-        source = result.details.get("source")
+    echo(f"{styles[status](f'{status.upper():<4}')} {name}: {message}")
+    details = record.get("details")
+    if isinstance(details, dict):
+        source = details.get("source")
         if isinstance(source, dict):
             path = source.get("path")
             line = source.get("line")
@@ -188,28 +297,44 @@ def render_checks(results: tuple[CheckResult, ...]) -> None:
                 if isinstance(column, int):
                     location += f":{column}"
                 echo(f"     {location}")
-        hint = result.details.get("hint")
+        hint = details.get("hint")
         if isinstance(hint, str):
             echo(f"     {hint}")
 
 
-def render_analysis(report: AnalysisReport) -> None:
-    """Write an agent analysis report in human text."""
-    state = green("HANDOFF READY") if report.handoff_ready else red("NEEDS REPAIR")
+def render_validation(report: ValidationReport) -> None:
+    """Write progressive validation evidence in human text."""
+    state = green("READY") if report.ok else red("NEEDS REPAIR")
     echo(f"{state} {report.notebook}")
-    echo(f"  {light_blue('views')} {', '.join(report.views)}")
-    render_checks(report.static_checks)
-    if report.runtime_skipped is not None:
-        echo(f"{yellow('SKIP')} runtime: {report.runtime_skipped}")
-    else:
-        render_checks(report.runtime_checks)
-    for observation in report.browser_observations:
-        style = green if observation.state == "ready" else red
-        echo(f"{style(observation.state.upper()):<4} browser:{observation.view}")
-        if observation.message:
-            echo(f"     {observation.message}")
-    if report.actions:
+    echo(f"  {light_blue('level')} {report.level}")
+    if report.view is not None:
+        echo(f"  {light_blue('view')} {report.view}")
+    for stage in ("static", "runtime"):
+        evidence = report.evidence.get(stage)
+        if not isinstance(evidence, dict):
+            continue
+        checks = evidence.get("checks")
+        if isinstance(checks, list):
+            for check in checks:
+                _render_check(check)
+    browser = report.evidence.get("browser")
+    if isinstance(browser, dict):
+        observations = browser.get("observations")
+        if isinstance(observations, list):
+            for observation in observations:
+                if not isinstance(observation, dict):
+                    continue
+                state_name = observation.get("state")
+                view = observation.get("view")
+                if not isinstance(state_name, str) or not isinstance(view, str):
+                    continue
+                style = green if state_name == "ready" else red
+                echo(f"{style(state_name.upper()):<4} browser:{view}")
+                message = observation.get("message")
+                if isinstance(message, str) and message:
+                    echo(f"     {message}")
+    if report.issues:
         echo(f"\n{light_blue('Repair queue')}")
-        for action in report.actions:
-            target = f" [{action.view}]" if action.view else ""
-            echo(f"  {action.severity.upper()} {action.code}{target}: {action.advice}")
+        for issue in report.issues:
+            target = f" [{issue.view}]" if issue.view else ""
+            echo(f"  {issue.severity.upper()} {issue.code}{target}: {issue.advice}")

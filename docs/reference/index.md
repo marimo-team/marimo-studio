@@ -1,24 +1,40 @@
 ---
 title: Reference
-description: Exact contracts for Studio view documents, agent and Python APIs, commands, configuration, and runtimes.
+description: Exact commands, configuration, projection, Python, provider, compatibility, limit, identity, and error contracts.
 ---
 
 # Reference
 
-Use the reference pages for exact names, signatures, defaults, data shapes,
-events, errors, side effects, and lifecycle behavior.
+Use these pages to look up an exact Marimo Studio contract. The [guide](../guide/index.md)
+owns task workflows and developed examples.
 
-| Need                                                                 | Reference                                  |
-| -------------------------------------------------------------------- | ------------------------------------------ |
-| Author HTML projections, browser modules, loading states, and styles | [View document API](view-document.md)      |
-| Inspect, activate, and analyze views through Marimo code mode        | [Agent API](agent-api.md)                  |
-| Inspect, create, analyze, or export from the terminal                | [CLI](cli.md)                              |
-| Configure views, runtimes, sessions, logs, and aliases               | [Notebook configuration](configuration.md) |
-| Compare server, browser, and static execution                        | [Runtime behavior](runtimes.md)            |
-| Inspect notebook structure or compose a run-mode ASGI application    | [Python API](python-api.md)                |
+## Product contracts
 
-::: tip Looking for a workflow?
-Start with [Create your first view](../guide/getting-started.md) for the complete
-authoring workflow. Read the [Overview](../overview.md) for the notebook, view,
-projection, and runtime model.
-:::
+| Contract                                                   | Reference                                        |
+| ---------------------------------------------------------- | ------------------------------------------------ |
+| Commands, output, and exit status                          | [CLI](cli.md)                                    |
+| Notebook settings, view projects, and saved files          | [Configuration](configuration.md)                |
+| Cells, rendered outputs, live values, and DOM events       | [Notebook result projections](projections.md)    |
+| Provider keys, starters, and built-in options              | [Built-in view providers](built-in-providers.md) |
+| Revisions, generations, runtime instances, and state names | [Identities and state](identities.md)            |
+| File, projection, payload, and timeout boundaries          | [Limits](limits.md)                              |
+| Machine output and expected failures                       | [Errors and JSON](errors-and-json.md)            |
+| Supported releases and execution environments              | [Compatibility and support](compatibility.md)    |
+
+## Extension contracts
+
+| Contract                                                          | Reference                            |
+| ----------------------------------------------------------------- | ------------------------------------ |
+| Saved-workspace, code-mode, inspection, and ASGI APIs             | [Python API](python-api.md)          |
+| Third-party provider registration, inspection, and build protocol | [View provider API](provider-api.md) |
+
+## Terms
+
+A **view** is one named presentation of a saved notebook. Its **view project**
+contains authored frontend source and `view.toml`. A **view provider** inspects
+that source and builds an immutable browser **artifact**. Studio combines the
+artifact with a notebook runtime to create a **presentation** in Preview or run
+mode.
+
+See [Identities and state](identities.md) for the complete term and identity
+map.

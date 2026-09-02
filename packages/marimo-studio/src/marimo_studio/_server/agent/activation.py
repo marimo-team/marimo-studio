@@ -1,0 +1,240 @@
+"""Coordinate acknowledged view activation in one Studio browser."""
+
+from __future__ import annotations
+
+import asyncio
+from enum import Enum
+
+from marimo_studio._server.agent.clients import PeerStatus, PeerTarget
+from marimo_studio._server.agent.events import ViewActivation
+from marimo_studio._server.agent.store import (
+    ActivationAcknowledgement,
+    AgentOperationStore,
+    coordinator_closed_error,
+)
+from marimo_studio.errors import AgentRequestError
+
+
+class ActivationAckOutcome(str, Enum):
+    APPLIED = "applied"
+    RETRYABLE = "retryable"
+    REJECTED = "rejected"
+
+
+class ActivationCoordinator:
+    def __init__(self, store: AgentOperationStore) -> None:
+        self._store = store
+
+    async def activate(self, target: PeerTarget, view: str) -> ViewActivation:
+        if not self._store.clients.matches(target, require_connected=True):
+            raise AgentRequestError(
+                "browser-client-unavailable",
+                "The Studio browser disconnected before view activation.",
+                status_code=409,
+            )
+        if target.session_id is None:
+            raise AgentRequestError(
+                "browser-session-changed",
+                "The Studio browser has no active Marimo session.",
+                status_code=409,
+            )
+        async with self._store.condition:
+            self._store.require_open()
+            if self._store.has_operation(target.client_id):
+                raise AgentRequestError(
+                    "browser-operation-in-progress",
+                    "This Studio browser is already handling an agent request.",
+                    status_code=409,
+                )
+            activation = ViewActivation(
+                generation=self._store.next_generation(),
+                binding_generation=target.binding_generation,
+                active_view_generation=target.active_view_generation,
+                client_id=target.client_id,
+                session_id=target.session_id,
+                view=view,
+            )
+            self._store.activations[target.client_id] = activation
+            self._store.condition.notify_all()
+        async with self._store.condition:
+            self._store.require_open()
+            if not self._matches(activation, require_connected=True):
+                self._store.activations.pop(target.client_id, None)
+                self._store.condition.notify_all()
+                raise AgentRequestError(
+                    "browser-session-changed",
+                    "The Studio browser changed Marimo sessions before "
+                    "activation began.",
+                    status_code=409,
+                )
+        return activation
+
+    async def acknowledge(
+        self,
+        client_id: str,
+        generation: int,
+        view: str,
+    ) -> ActivationAckOutcome:
+        async with self._store.condition:
+            self._store.require_open()
+            activation = self._store.activations.get(client_id)
+            acknowledged = self._store.acknowledged_activations.get(client_id)
+            if (
+                activation is None
+                and acknowledged is not None
+                and acknowledged.activation.generation == generation
+                and acknowledged.activation.view == view
+            ):
+                target = await self._store.clients.target_for_client(client_id)
+                return (
+                    ActivationAckOutcome.APPLIED
+                    if target is not None
+                    and target.session_id == acknowledged.activation.session_id
+                    and target.binding_generation
+                    == acknowledged.activation.binding_generation
+                    and target.active_view == view
+                    and target.active_view_generation
+                    == acknowledged.active_view_generation
+                    else ActivationAckOutcome.REJECTED
+                )
+            if (
+                activation is None
+                or activation.generation != generation
+                or activation.view != view
+            ):
+                return ActivationAckOutcome.REJECTED
+            target = self._target(activation)
+            committed = await self._store.clients.commit_active_view(target, view)
+            if committed is None:
+                return (
+                    ActivationAckOutcome.RETRYABLE
+                    if self._store.clients.status(
+                        target,
+                        require_connected=True,
+                    )
+                    is PeerStatus.UNAVAILABLE
+                    else ActivationAckOutcome.REJECTED
+                )
+            if (
+                committed.session_id != activation.session_id
+                or committed.binding_generation != activation.binding_generation
+            ):
+                return ActivationAckOutcome.REJECTED
+            self._store.acknowledged_activations[client_id] = ActivationAcknowledgement(
+                activation=activation,
+                active_view_generation=committed.active_view_generation,
+            )
+            self._store.condition.notify_all()
+            return ActivationAckOutcome.APPLIED
+
+    async def wait(self, activation: ViewActivation, timeout: float) -> None:
+        timed_out = False
+        closed = False
+        async with self._store.condition:
+            try:
+                await asyncio.wait_for(
+                    self._store.condition.wait_for(lambda: self._finished(activation)),
+                    timeout,
+                )
+            except asyncio.TimeoutError:
+                timed_out = not self._finished(activation)
+            except asyncio.CancelledError:
+                self._clear(activation)
+                raise
+            closed = self._store.closed
+            self._clear(activation)
+        if closed:
+            raise coordinator_closed_error()
+        status = self._store.clients.status(self._target(activation))
+        if status is PeerStatus.REBOUND:
+            raise AgentRequestError(
+                "browser-session-changed",
+                "The Studio browser changed Marimo sessions during view activation.",
+                status_code=409,
+            )
+        if status is PeerStatus.UNAVAILABLE:
+            raise AgentRequestError(
+                "browser-client-unavailable",
+                "The Studio browser disconnected during view activation.",
+                status_code=409,
+            )
+        if timed_out:
+            code = (
+                "activation-timeout"
+                if self._store.clients.matches(
+                    self._target(activation),
+                    require_connected=True,
+                )
+                else "browser-client-unavailable"
+            )
+            message = (
+                "Studio did not confirm the requested active view."
+                if code == "activation-timeout"
+                else "The Studio browser disconnected during view activation."
+            )
+            raise AgentRequestError(code, message, status_code=409)
+        target = await self._store.clients.target_for_client(activation.client_id)
+        if target is None or target.active_view != activation.view:
+            raise AgentRequestError(
+                "browser-view-changed",
+                "The active Studio view changed during view activation.",
+                status_code=409,
+            )
+
+    def pending_for(
+        self,
+        client_id: str,
+        delivered: int | None,
+    ) -> ViewActivation | None:
+        activation = self._store.activations.get(client_id)
+        acknowledged = self._store.acknowledged_activations.get(client_id)
+        if (
+            activation is None
+            or (
+                acknowledged is not None
+                and activation.generation == acknowledged.activation.generation
+            )
+            or activation.generation == delivered
+            or not self._matches(activation)
+        ):
+            return None
+        return activation
+
+    def _finished(self, activation: ViewActivation) -> bool:
+        acknowledged = self._store.acknowledged_activations.get(activation.client_id)
+        return (
+            self._store.closed
+            or self._store.activations.get(activation.client_id) != activation
+            or not self._matches(activation)
+            or (
+                acknowledged is not None
+                and acknowledged.activation.generation >= activation.generation
+            )
+        )
+
+    def _clear(self, activation: ViewActivation) -> None:
+        if self._store.activations.get(activation.client_id) == activation:
+            self._store.activations.pop(activation.client_id, None)
+            self._store.condition.notify_all()
+
+    def _matches(
+        self,
+        activation: ViewActivation,
+        *,
+        require_connected: bool = False,
+    ) -> bool:
+        return self._store.clients.activation_matches(
+            self._target(activation),
+            activation.view,
+            require_connected=require_connected,
+        )
+
+    @staticmethod
+    def _target(activation: ViewActivation) -> PeerTarget:
+        return PeerTarget(
+            client_id=activation.client_id,
+            session_id=activation.session_id,
+            binding_generation=activation.binding_generation,
+            active_view=None,
+            active_view_generation=activation.active_view_generation,
+        )

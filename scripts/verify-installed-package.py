@@ -1,0 +1,353 @@
+"""Verify the installed Marimo Studio distribution contract."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import importlib.util
+import json
+import os
+import subprocess
+import sys
+from hashlib import sha256
+from importlib import resources
+from importlib.metadata import distribution, version
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import agent_plugins
+import marimo_studio
+import marimo_studio.agent as studio_agent
+import marimo_studio.authoring as studio_authoring
+import tomlkit
+from marimo_studio._delivery.assets import runtime_assets_path
+from marimo_studio._release_checks import (
+    verify_browser_assets,
+    verify_distribution_metadata,
+)
+
+_DISTRIBUTION = "marimo-studio"
+_ENTRY_POINTS = {
+    ("console_scripts", "marimo-studio"),
+    ("marimo.agent.capability", "studio"),
+    ("marimo.kernel.lifespan", "marimo-studio"),
+    ("marimo.server.asgi.middleware", "marimo-studio"),
+    ("marimo_studio.view_provider", "react"),
+    ("marimo_studio.view_provider", "svelte"),
+    ("marimo_studio.view_provider", "vanilla"),
+}
+_NOTEBOOK = """import marimo
+
+app = marimo.App()
+
+@app.cell
+def result():
+    result = "ready"
+    result
+    return (result,)
+
+if __name__ == "__main__":
+    app.run()
+"""
+
+
+def _arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Verify one installed Marimo Studio distribution.",
+    )
+    parser.add_argument(
+        "--deno", action="store_true", help="Build React and Svelte views."
+    )
+    parser.add_argument(
+        "--expected-version", help="Require this installed package version."
+    )
+    parser.add_argument(
+        "--expected-plugin-digests",
+        type=Path,
+        help="Compare installed Agent Plugin files with this digest map.",
+    )
+    return parser.parse_args()
+
+
+def _verify_entry_points() -> None:
+    installed = distribution(_DISTRIBUTION)
+    points = {(point.group, point.name): point for point in installed.entry_points}
+    if set(points) != _ENTRY_POINTS:
+        missing = sorted(_ENTRY_POINTS - set(points))
+        extra = sorted(set(points) - _ENTRY_POINTS)
+        raise AssertionError(
+            f"Installed entry points differ: missing={missing}, extra={extra}"
+        )
+    for point in points.values():
+        point.load()
+
+
+def _verify_public_imports(notebook: Path) -> None:
+    program = """
+from importlib import resources
+from dataclasses import fields
+from inspect import signature
+import marimo_studio
+import marimo_studio.agent
+import marimo_studio.authoring
+import marimo_studio.asgi
+import marimo_studio.errors
+import marimo_studio.view_providers
+import agent_plugins
+
+assert callable(marimo_studio.create_asgi_app)
+assert callable(marimo_studio.agent.current_workspace)
+assert callable(marimo_studio.authoring.open_workspace)
+assert marimo_studio.agent.View is not marimo_studio.authoring.View
+assert marimo_studio.agent.Workspace is not marimo_studio.authoring.Workspace
+assert hasattr(marimo_studio.agent.View, "show")
+assert not hasattr(marimo_studio.authoring.View, "show")
+assert callable(marimo_studio.asgi.app)
+assert resources.files("marimo_studio").joinpath("py.typed").is_file()
+assert set(marimo_studio.__all__) == {
+    "STUDIO_RESULT_SELECTOR", "ASGIApp", "NotebookSpec", "create_asgi_app",
+    "inspect_notebook",
+}
+assert set(marimo_studio.agent.__all__) == {
+    "ValidationIssue", "ValidationReport", "View", "ShowResult", "Workspace",
+    "agent_plugin", "agent_skill", "current_workspace",
+}
+assert set(marimo_studio.authoring.__all__) == {
+    "BindingResult", "InspectionResult", "OutputRenderResult", "ProviderDiagnostic",
+    "ProviderReport", "RenderedOutput", "RuntimeCell", "RuntimeOutput", "RuntimeProbe",
+    "Starter", "StaticExportResult", "StudioDiagnostic", "StudioOverview",
+    "ValidationIssue", "ValidationReport", "ValueReadError", "ValueReadResult", "View",
+    "ViewBuild", "ViewDocument", "ViewInspection", "ViewOverview", "ViewRemovalResult",
+    "Workspace", "doctor", "open_workspace",
+}
+assert set(marimo_studio.view_providers.__all__) == {
+    "PROVIDER_API_VERSION", "BuildProfile", "BuildRequest", "BuildResult",
+    "CellConfigSpec", "CellKind", "CellRef", "CellSpec", "DocumentAccess",
+    "InspectionRequest", "JsonValue", "MountDeclaration", "NotebookSpec", "ProjectDiagnostic",
+    "ProjectInput", "ProjectInputKind", "ProjectInspection", "ProjectionKind",
+    "ProviderAvailability", "ProviderCancellation", "ProviderCommandResult",
+    "ProviderInfo", "ProviderRunner", "ProviderStarter", "SourceDocument",
+    "SourceLocation", "SourceSpan", "StarterCellTarget", "StarterContext",
+    "StarterPlan", "ViewProject", "ViewProvider",
+    "mount_attribute",
+}
+assert set(marimo_studio.errors.__all__) == {
+    "AgentRequestError", "BindingError", "CapabilityInputError", "ConfigurationError",
+    "DependencyError", "LastViewError", "MarimoStudioError", "NotebookSourceError",
+    "ProtocolError", "ProviderNotFoundError", "RuntimeConfigTooLargeError",
+    "RuntimeSelectionError", "RuntimeTimeoutError", "SourceConflictError",
+    "SourceEncodingError", "SourceNotFoundError", "SourceTooLargeError",
+    "SourceValidationError", "StaticExportError", "ViewDeletionError", "ViewExistsError",
+    "ViewGenerationConflictError", "ViewInUseError", "ViewNotFoundError", "ViewProjectError",
+    "WorkspaceGenerationConflictError", "WorkspaceMutationError",
+}
+providers = marimo_studio.view_providers
+assert tuple(signature(providers.ViewProvider.create).parameters) == (
+    "self", "starter", "context",
+)
+assert tuple(field.name for field in fields(providers.StarterCellTarget)) == (
+    "cell", "target",
+)
+assert tuple(field.name for field in fields(providers.StarterContext)) == (
+    "view_name", "notebook_name", "notebook", "cell_targets",
+)
+assert tuple(field.name for field in fields(providers.StarterPlan)) == (
+    "files", "cell_targets",
+)
+assert tuple(field.name for field in fields(providers.CellConfigSpec)) == (
+    "column", "disabled", "hide_code",
+)
+assert tuple(field.name for field in fields(providers.CellSpec)) == (
+    "ref", "runtime_id", "index", "kind", "name", "source", "code_sha256",
+    "preview", "definitions", "references", "upstream", "downstream", "config",
+    "has_output_expression", "may_display_output", "markdown", "code",
+)
+assert tuple(field.name for field in fields(providers.NotebookSpec)) == (
+    "path", "revision", "cells", "app_config",
+)
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", program],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "MARIMO_STUDIO_NOTEBOOK": str(notebook)},
+    )
+    if completed.returncode != 0:
+        raise AssertionError(
+            "Installed public imports failed in a fresh process:\n"
+            f"{completed.stdout}{completed.stderr}"
+        )
+
+
+def _verify_agent_plugin(expected_path: Path | None) -> None:
+    installed = distribution(_DISTRIBUTION)
+    files = installed.files or ()
+    selected = [item for item in files if ".agent-plugin/" in str(item)]
+    relative = [str(item).split(".agent-plugin/", 1)[1] for item in selected]
+    if len(relative) != len(set(relative)):
+        raise AssertionError("Installed Agent Plugin contains duplicate paths")
+    actual = {
+        path: sha256(Path(str(installed.locate_file(item))).read_bytes()).hexdigest()
+        for path, item in zip(relative, selected, strict=True)
+    }
+    required = {
+        "plugin.json",
+        "skills/marimo-studio/SKILL.md",
+        "skills/marimo-studio/agents/openai.yaml",
+    }
+    if not required.issubset(actual):
+        raise AssertionError(
+            "Missing installed Agent Plugin resources: "
+            f"{sorted(required.difference(actual))}"
+        )
+    if expected_path is not None:
+        expected = json.loads(expected_path.read_text(encoding="utf-8"))
+        if actual != expected:
+            raise AssertionError(
+                "Installed Agent Plugin bytes differ from the source map"
+            )
+    plugin = agent_plugins.locate(_DISTRIBUTION)
+    if plugin.manifest.name != _DISTRIBUTION:
+        raise AssertionError(
+            f"Agent Plugin discovery returned {plugin.manifest.name!r}"
+        )
+    skill = studio_agent.agent_skill()
+    if studio_agent.agent_plugin() != plugin or skill not in plugin.skills:
+        raise AssertionError("Studio agent discovery returned another Agent Plugin")
+    if {item.path.name for item in plugin.skills} != {"marimo-studio"}:
+        raise AssertionError(
+            "Agent Plugin discovery returned an unexpected skill catalog"
+        )
+    if str(skill / "SKILL.md") not in (studio_agent.__doc__ or ""):
+        raise AssertionError("Studio agent help omits its installed Agent Skill")
+
+
+def _validate_cli(notebook: Path, view: str) -> None:
+    completed = subprocess.run(
+        [
+            "marimo-studio",
+            "validate",
+            view,
+            "--target",
+            str(notebook),
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise AssertionError(completed.stderr)
+    payload = json.loads(completed.stdout)
+    if payload.get("ok") is not True:
+        raise AssertionError(f"Installed CLI validation failed: {payload}")
+
+
+def _verify_views(*, deno: bool) -> None:
+    async def verify() -> None:
+        with TemporaryDirectory() as directory:
+            notebook = Path(directory) / "installed_check.py"
+            notebook.write_text(_NOTEBOOK, encoding="utf-8")
+            workspace = studio_authoring.open_workspace(notebook)
+            catalog = {item.id: item for item in await workspace.starters()}
+            expected = {
+                "marimo-studio/react:default",
+                "marimo-studio/react:reveal",
+                "marimo-studio/svelte:default",
+                "marimo-studio/vanilla:default",
+            }
+            if set(catalog) != expected:
+                raise AssertionError(
+                    f"Unexpected installed starter catalog: {sorted(catalog)}"
+                )
+            if not deno:
+                vanilla_starter = catalog["marimo-studio/vanilla:default"]
+                if not vanilla_starter.availability.available:
+                    raise AssertionError("Installed Vanilla starter is unavailable")
+                vanilla = await workspace.create_view(
+                    "dashboard",
+                    starter=vanilla_starter,
+                )
+                _verify_public_imports(notebook)
+                if importlib.util.find_spec("deno") is not None:
+                    raise AssertionError(
+                        "The base installation includes the Deno runtime"
+                    )
+                manifest = tomlkit.parse((await vanilla.read("view.toml")).content)
+                if dict(manifest) != {
+                    "schema": 1,
+                    "provider": "marimo-studio/vanilla",
+                }:
+                    raise AssertionError(
+                        f"Unexpected installed view manifest: {manifest}"
+                    )
+                await vanilla.build()
+                if (await vanilla.inspect()).build is None:
+                    raise AssertionError(
+                        "Installed Vanilla build did not produce a page"
+                    )
+                _validate_cli(notebook, "dashboard")
+                return
+            for view_name, identity in (
+                ("react", "marimo-studio/react:default"),
+                ("slides", "marimo-studio/react:reveal"),
+                ("svelte", "marimo-studio/svelte:default"),
+            ):
+                availability = catalog[identity].availability
+                if not availability.available:
+                    raise AssertionError(
+                        f"Installed {identity} starter is unavailable: "
+                        f"{availability.reason or 'no reason reported'}"
+                    )
+                view = await workspace.create_view(
+                    view_name,
+                    starter=catalog[identity],
+                )
+                await view.build()
+                if (await view.inspect()).build is None:
+                    raise AssertionError(
+                        f"Installed {identity} build did not produce a page"
+                    )
+
+    asyncio.run(verify())
+
+
+def main() -> None:
+    args = _arguments()
+    installed_version = version(_DISTRIBUTION)
+    if args.expected_version is not None and installed_version != args.expected_version:
+        raise AssertionError(
+            f"Installed version {installed_version} does not match {args.expected_version}"
+        )
+    if (
+        not callable(marimo_studio.create_asgi_app)
+        or not callable(studio_agent.current_workspace)
+        or not callable(studio_authoring.open_workspace)
+    ):
+        raise TypeError("Installed Python APIs are unavailable")
+    _verify_entry_points()
+    _verify_agent_plugin(args.expected_plugin_digests)
+    verify_distribution_metadata(_DISTRIBUTION)
+    release = json.loads(
+        resources.files("marimo_studio._compat")
+        .joinpath("release.json")
+        .read_text(encoding="utf-8")
+    )
+    verify_browser_assets(runtime_assets_path(), release)
+    _verify_views(deno=args.deno)
+    print(
+        json.dumps(
+            {
+                "deno": args.deno,
+                "package": _DISTRIBUTION,
+                "version": installed_version,
+                "verified": True,
+            },
+            sort_keys=True,
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()

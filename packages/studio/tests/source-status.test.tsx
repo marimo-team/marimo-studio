@@ -14,7 +14,7 @@ describe("source status", () => {
 
   test("derives current source state while settling each external update", async () => {
     vi.useFakeTimers();
-    const first = { name: "index.html", phase: "external" } satisfies SourceState;
+    const first = { path: "src/App.tsx", phase: "external" } satisfies SourceState;
     const initialProps: SourceStatusProps = { state: first };
     const { result, rerender } = renderHook(
       ({ state }: SourceStatusProps) => useSourceStatus(state),
@@ -23,14 +23,14 @@ describe("source status", () => {
 
     expect(result.current).toEqual({ message: "Updated from disk", phase: "external" });
     await act(() => vi.advanceTimersByTimeAsync(1_800));
-    expect(result.current).toEqual({ message: "Saved ✓", phase: "saved" });
+    expect(result.current).toEqual({ message: "Saved", phase: "saved" });
 
-    const second = { name: "index.html", phase: "external" } satisfies SourceState;
+    const second = { path: "src/App.tsx", phase: "external" } satisfies SourceState;
     rerender({ state: second });
     expect(result.current).toEqual({ message: "Updated from disk", phase: "external" });
 
     rerender({
-      state: { name: "index.html", phase: "error", message: "Could not read source" },
+      state: { path: "src/App.tsx", phase: "error", message: "Could not read source" },
     });
     expect(result.current).toEqual({ message: "Could not read source", phase: "error" });
   });

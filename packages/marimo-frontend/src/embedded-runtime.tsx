@@ -15,10 +15,15 @@ import type { SessionId } from "./session-bootstrap.ts";
 
 import { retainUnmountedControlValues } from "./embedded-control-state.ts";
 import { parseEmbeddedJsonValue } from "./embedded-json.ts";
-import { createEmbeddedRuntimeMount, createTransportInitializer } from "./embedded-runtime-core.ts";
+import {
+  bindModelValueSenderToPage,
+  createEmbeddedRuntimeMount,
+  createTransportInitializer,
+} from "./embedded-runtime-core.ts";
 import { EmbeddedRuntimeViewComponent } from "./embedded-runtime-view.tsx";
 import { currentSessionId } from "./session-bootstrap.ts";
 import {
+  type CellId,
   flattenTopLevelNotebookCells,
   RuntimeState,
   useCellActions,
@@ -62,7 +67,10 @@ import {
   viewStateAtom,
   WebSocketState,
 } from "./upstream/runtime.ts";
+import { terminatePresentationWasmWorker } from "./wasm-worker-owner.ts";
 import "./upstream/style.ts";
+
+export { terminatePresentationWasmWorker } from "./wasm-worker-owner.ts";
 
 export type EmbeddedConnectionState = "NOT_STARTED" | "CONNECTING" | "OPEN" | "CLOSING" | "CLOSED";
 
@@ -115,6 +123,7 @@ type TransportURLTransform = (url: URL) => URL;
 
 export interface EmbeddedServerTransport {
   readonly kind: "server";
+  readonly presentationSessionId: string;
   readonly serverToken: string;
   readonly transformTransportURL: TransportURLTransform;
   readonly url: string;
@@ -122,16 +131,29 @@ export interface EmbeddedServerTransport {
 
 export interface EmbeddedWasmTransport {
   readonly kind: "wasm";
+  readonly autoInstantiate: boolean;
   readonly code: string;
   readonly filename: string;
   readonly url: string;
   readonly version: string;
-  waitForReady(workerInitialized: Promise<void>, invoke: EmbeddedFunction): void | Promise<void>;
+  waitForReady(
+    workerInitialized: Promise<void>,
+    invoke: EmbeddedFunction,
+    executeCells: EmbeddedCellExecutor,
+  ): void | Promise<void>;
 }
+
+export interface EmbeddedExecutableCell {
+  readonly id: string;
+  readonly code: string;
+}
+
+export type EmbeddedCellExecutor = (cells: readonly EmbeddedExecutableCell[]) => Promise<void>;
 
 export type EmbeddedTransport = EmbeddedServerTransport | EmbeddedWasmTransport;
 
 export interface MountEmbeddedRuntimeOptions {
+  readonly autoInstantiate: boolean;
   readonly exposeSession: boolean;
   readonly initialMode: "edit" | "read";
   readonly presentation: EmbeddedPresentationConfig;
@@ -146,6 +168,7 @@ export interface EmbeddedRuntimeHandle {
   readonly initialized: Promise<void>;
   readonly invoke: EmbeddedFunction;
   readonly sessionId: SessionId;
+  updateServerTransport(transport: EmbeddedServerTransport): void;
   update(presentation: EmbeddedPresentationConfig): void;
   dispose(): void;
 }
@@ -174,6 +197,7 @@ const EmbeddedRuntimeProviders = ({ children }: { children: ReactNode }) => (
 );
 
 let pluginsInitialized = false;
+let serverRuntimeConfig: { url: string; lazy: false; serverToken: string } | undefined;
 
 const initializeMovablePlugins = (): void => {
   const registry = globalThis.customElements;
@@ -200,6 +224,7 @@ const initializeMovablePlugins = (): void => {
 };
 
 const initializeEmbeddedRuntime = (): void => {
+  serverRuntimeConfig = undefined;
   retainUnmountedControlValues(UI_ELEMENT_REGISTRY);
   if (!pluginsInitialized) {
     initializeMovablePlugins();
@@ -250,9 +275,9 @@ const embeddedRuntimeKernel: EmbeddedRuntimeKernel<EmbeddedNotebook> = {
     RuntimeState.INSTANCE.stop();
   },
   useCellActions,
-  useConnection({ sessionId, setCells }) {
+  useConnection({ autoInstantiate, sessionId, setCells }) {
     return useMarimoKernelConnection({
-      autoInstantiate: true,
+      autoInstantiate,
       setCells,
       sessionId,
     }).connection;
@@ -263,24 +288,66 @@ const embeddedRuntimeKernel: EmbeddedRuntimeKernel<EmbeddedNotebook> = {
 
 const transportHost: EmbeddedTransportHost = {
   activateServerRequests() {
-    store.set(requestClientAtom, createErrorToastingRequests(createNetworkRequests()));
+    const previous = store.get(requestClientAtom);
+    const network = createNetworkRequests();
+    const modelValues = bindModelValueSenderToPage(network.sendModelValue);
+    const requests = createErrorToastingRequests({
+      ...network,
+      sendModelValue: modelValues.send,
+    });
+    store.set(requestClientAtom, requests);
+    let active = true;
+    return () => {
+      if (!active) {
+        return;
+      }
+      active = false;
+      modelValues.dispose();
+      if (store.get(requestClientAtom) === requests) {
+        store.set(requestClientAtom, previous);
+      }
+    };
   },
   prepareServer(transport) {
-    store.set(runtimeConfigAtom, {
-      url: transport.url,
-      lazy: false,
-      serverToken: transport.serverToken,
-    });
+    if (serverRuntimeConfig === undefined) {
+      serverRuntimeConfig = {
+        url: transport.url,
+        lazy: false,
+        serverToken: transport.serverToken,
+      };
+      store.set(runtimeConfigAtom, serverRuntimeConfig);
+    } else {
+      serverRuntimeConfig.url = transport.url;
+      serverRuntimeConfig.serverToken = transport.serverToken;
+    }
     return getRuntimeManager();
   },
   prepareWasm(transport) {
+    if (!transport.autoInstantiate) {
+      const config = store.get(userConfigAtom);
+      store.set(userConfigAtom, {
+        ...config,
+        runtime: { ...config.runtime, auto_instantiate: false },
+      });
+    }
     store.set(codeAtom, transport.code);
     store.set(filenameAtom, transport.filename);
     store.set(marimoVersionAtom, transport.version);
     store.set(runtimeConfigAtom, { url: transport.url, lazy: false, serverToken: "" });
-    const workerInitialized = PyodideBridge.INSTANCE.initialized.promise;
+    const bridge = PyodideBridge.INSTANCE;
     store.set(requestClientAtom, resolveRequestClient());
-    return workerInitialized;
+    return bridge.initialized.promise;
+  },
+  releaseWasm: terminatePresentationWasmWorker,
+  async executeWasmCells(cells) {
+    const cellIds = cells.map((cell) => {
+      // SAFETY: This ID was compiled from the Marimo source loaded into this worker.
+      return cell.id as CellId;
+    });
+    await PyodideBridge.INSTANCE.sendRun({
+      cellIds,
+      codes: cells.map((cell) => cell.code),
+    });
   },
 };
 
@@ -293,11 +360,12 @@ const embeddedRuntimeHost: EmbeddedRuntimeHost = {
   createRenderer(element) {
     const root = createRoot(element);
     const renderer: EmbeddedRuntimeRenderer = {
-      render(initialized, renderView, sessionId) {
+      render(initialized, renderView, sessionId, autoInstantiate) {
         root.render(
           <EmbeddedRuntimeProviders>
             <EmbeddedRuntimeViewComponent
               initialized={initialized}
+              autoInstantiate={autoInstantiate}
               kernel={embeddedRuntimeKernel}
               render={renderView}
               sessionId={sessionId}

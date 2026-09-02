@@ -27,9 +27,24 @@ if [[ "v$package_version" != "$GITHUB_REF_NAME" ]]; then
 	exit 1
 fi
 
+release_notes=".github/release-notes/$GITHUB_REF_NAME.md"
+if [[ ! -s "$release_notes" ]]; then
+	error "Release notes are missing or empty: $release_notes"
+	exit 1
+fi
+
 if [[ "$(git cat-file -t "$GITHUB_REF")" != tag ]]; then
 	error "Release tag $GITHUB_REF_NAME must be annotated"
 	exit 1
 fi
 
-git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+release_commit="$(git rev-list -n 1 "$GITHUB_REF")"
+if [[ "$release_commit" != "$GITHUB_SHA" ]]; then
+	error "Release workflow SHA $GITHUB_SHA does not match tag commit $release_commit"
+	exit 1
+fi
+if ! git merge-base --is-ancestor "$release_commit" origin/main; then
+	error "Release commit $release_commit is not on origin/main. Fetch origin/main and tag a merged commit."
+	exit 1
+fi
+./scripts/require-release-checks.sh "$release_commit"

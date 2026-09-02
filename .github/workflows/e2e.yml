@@ -14,8 +14,21 @@ concurrency:
 
 jobs:
   e2e:
+    name: Browser suite (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux 1/2 + packages
+            shard: 1/2
+            port_offset: 100
+            packages: true
+          - name: Linux 2/2
+            shard: 2/2
+            port_offset: 200
+            packages: false
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,37 +44,97 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --locked --group e2e
 
-      - name: Set up Socket Firewall
-        uses: socketdev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
         with:
-          mode: firewall-free
+          prepare-marimo-frontend: "true"
 
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
-        with:
-          node-version-file: .node-version
-          version: 0.2.4
-          cache: true
-          sfw: true
-          run-install: |
-            - args: ["--frozen-lockfile"]
-
-      - name: Enable pnpm
-        run: corepack enable pnpm
+      - name: Build browser assets
+        run: make build
 
       - name: Install Chromium
-        run: pnpm --filter @marimo-studio/e2e install-browser
+        run: make _browser-install
 
-      - name: Run browser acceptance
-        run: make e2e
+      - name: Run browser shard
+        env:
+          MARIMO_STUDIO_E2E_PORT_OFFSET: ${{ matrix.port_offset }}
+        run: >-
+          pnpm --filter @marimo-studio/e2e exec playwright test
+          --shard=${{ matrix.shard }}
+
+      - name: Test provider browser contracts
+        if: matrix.packages
+        run: pnpm --filter @marimo-studio/e2e e2e:providers
+
+      - name: Test the installed wheel in Chromium
+        if: matrix.packages
+        run: pnpm --filter @marimo-studio/e2e e2e:installed
 
       - name: Upload browser report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.port_offset }}
           path: |
             apps/e2e/playwright-report/
+            apps/e2e/playwright-report-installed/
+            apps/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  windows-e2e:
+    name: Windows browser contracts
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          prune-cache: false
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: uv sync --locked --group e2e
+
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+
+      - name: Prepare the pinned Marimo frontend
+        run: pnpm --filter @marimo-studio/marimo-frontend prepare:upstream
+
+      - name: Build browser assets
+        run: pnpm exec vp run --filter @marimo-studio/browser build
+
+      - name: Install Chromium
+        run: pnpm --filter @marimo-studio/e2e exec playwright install chromium
+
+      - name: Test Windows process and request ownership
+        run: pnpm --filter @marimo-studio/e2e test
+
+      - name: Test Windows view and shutdown lifecycles
+        run: pnpm --filter @marimo-studio/e2e e2e:windows
+
+      - name: Test Windows provider runtimes
+        run: pnpm --filter @marimo-studio/e2e e2e:windows:providers
+
+      - name: Test the installed wheel in Chromium
+        run: pnpm --filter @marimo-studio/e2e e2e:installed
+
+      - name: Upload Windows browser report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-playwright-report
+          path: |
+            apps/e2e/playwright-report/
+            apps/e2e/playwright-report-installed/
             apps/e2e/test-results/
           if-no-files-found: ignore
           retention-days: 7

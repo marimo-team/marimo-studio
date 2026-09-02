@@ -1,4 +1,3 @@
-import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 import type { RefCallback } from "react";
 
 import type { SourceController } from "../source-editor/controller.ts";
@@ -10,20 +9,13 @@ import { SurfacePane } from "./SurfacePane.tsx";
 import { PositionedEditorFrame, PreviewFrame } from "./TrustedFrame.tsx";
 
 interface WorkspaceProps {
-  bootstrap: StudioBootstrap;
   editorFrame: HTMLIFrameElement;
-  frameRef: (runtime: string) => RefCallback<HTMLIFrameElement>;
+  frameRef: (frameId: string) => RefCallback<HTMLIFrameElement>;
   source: SourceController;
   workspace: WorkspaceModel;
 }
 
-export const Workspace = ({
-  bootstrap,
-  editorFrame,
-  frameRef,
-  source,
-  workspace,
-}: WorkspaceProps) => {
+export const Workspace = ({ editorFrame, frameRef, source, workspace }: WorkspaceProps) => {
   const { actions, currentView, geometry, preview, ref, resizing } = workspace;
   const layoutSnapshot = workspace.layout;
   const notebookRectangle = geometry.layout.panes.get("notebook");
@@ -58,7 +50,7 @@ export const Workspace = ({
         </SurfacePane>
 
         <SurfacePane
-          label="HTML & CSS"
+          label="Source"
           surface="source"
           rectangle={sourceRectangle}
           tree={layoutSnapshot.tree}
@@ -77,16 +69,18 @@ export const Workspace = ({
           onArrange={actions.arrangePane}
         >
           <div className="studio-pane-content">
-            {bootstrap.runtimes.map((runtime) => {
-              const active = preview.runtime === runtime.id;
+            {preview.frames.map((frame) => {
               return (
                 <PreviewFrame
-                  key={runtime.id}
-                  runtime={runtime.id}
-                  frameRef={frameRef(runtime.id)}
+                  key={frame.id}
+                  runtime={frame.runtime}
+                  view={frame.view}
+                  primary={frame.primary}
+                  frameRef={frameRef(frame.id)}
                   src="about:blank"
-                  title={`${currentView} custom view using ${runtime.id}`}
-                  active={active}
+                  title={`${frame.view ?? currentView} custom view using ${frame.runtime}`}
+                  active={frame.active}
+                  interactive={frame.interactive}
                 />
               );
             })}

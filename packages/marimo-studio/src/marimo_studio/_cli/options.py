@@ -5,10 +5,37 @@ from pathlib import Path
 
 import click
 
-from marimo_studio._runtime_limits import (
+from marimo_studio._processes.limits import (
     DEFAULT_RUNTIME_TIMEOUT,
     MAX_RUNTIME_TIMEOUT,
 )
+
+
+class OwnerGenerationType(click.ParamType[str]):
+    """Parse one opaque SHA-256 workspace owner generation."""
+
+    name = "generation"
+
+    def convert(
+        self,
+        value: object,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> str:
+        if (
+            isinstance(value, str)
+            and len(value) == 64
+            and all(character in "0123456789abcdef" for character in value)
+        ):
+            return value
+        self.fail(
+            "must be a 64-character lowercase hexadecimal string",
+            param,
+            ctx,
+        )
+
+
+owner_generation_type = OwnerGenerationType()
 
 
 def finite_timeout(
@@ -22,14 +49,6 @@ def finite_timeout(
     return value
 
 
-output_format_option = click.option(
-    "--format",
-    "output_format",
-    type=click.Choice(("text", "json")),
-    default="text",
-    show_default=True,
-    help="Set the result format.",
-)
 runtime_timeout_option = click.option(
     "--runtime-timeout",
     type=click.FloatRange(min=0, max=MAX_RUNTIME_TIMEOUT),
@@ -61,8 +80,12 @@ def server_option(*, required: bool = False):
     )
 
 
-target_argument = click.argument(
-    "target",
-    required=False,
+target_option = click.option(
+    "--target",
     type=click.Path(path_type=Path),
+    help=(
+        "Select a notebook, project directory, or pyproject.toml. "
+        "Defaults to the current Studio configuration."
+    ),
 )
+view_name_argument = click.argument("view_name", metavar="VIEW")

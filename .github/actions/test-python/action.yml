@@ -1,0 +1,28 @@
+name: Test Python
+description: Run one repository-owned Python test profile.
+
+inputs:
+  profile:
+    description: Python test profile to run.
+    required: true
+  python-version:
+    description: Python version to test.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up uv and Python
+      uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: uv.lock
+        python-version: ${{ inputs.python-version }}
+
+    - name: Run Python test profile
+      shell: bash
+      run: >-
+        ./scripts/python-test.sh
+        --profile "${{ inputs.profile }}"
+        --python "${{ inputs.python-version }}"
+        -- -rs

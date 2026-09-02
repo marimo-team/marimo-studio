@@ -15,7 +15,7 @@
       "projection": "value",
       "target": "summary.total",
       "source": {
-        "path": "views/dashboard/index.html",
+        "path": "index.html",
         "line": 12,
         "column": 9
       }
@@ -27,6 +27,19 @@
   "requestId": "request-dashboard",
   "sequence": 3,
   "query": "region=emea",
+  "projectionInstances": [
+    {
+      "mountId": "site-593e452b070ef4ae593dd9f0f7f4457cc52f3ca2a56583b3d11deb08913d1e7e",
+      "instanceId": "projection-1",
+      "target": "summary.total",
+      "runtimeCellId": null,
+      "phase": "error",
+      "error": {
+        "code": "missing-variable",
+        "message": "summary is unavailable."
+      }
+    }
+  ],
   "runtimeStatus": {
     "runtime": "server",
     "view": "dashboard",
@@ -45,7 +58,7 @@
           "projection": "value",
           "target": "summary.total",
           "source": {
-            "path": "views/dashboard/index.html",
+            "path": "index.html",
             "line": 12,
             "column": 9
           }
@@ -79,7 +92,7 @@
             "projection": "value",
             "target": "summary.total",
             "source": {
-              "path": "views/dashboard/index.html",
+              "path": "index.html",
               "line": 12,
               "column": 9
             }

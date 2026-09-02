@@ -1,181 +1,120 @@
 ---
-title: Run, export, and share
-description: Serve Studio views through Marimo or export a compatible notebook as a static WebAssembly site.
+title: Run or export a view
+description: Run a view with the Python or Browser runtime, or export the Browser runtime as a static directory.
 ---
 
-# Run, export, and share
+# Run or export a view
 
-Studio uses Marimo's application server for finished views. Choose the runtime
-from the notebook's dependencies, data access, and hosting environment.
+Runtime chooses where notebook code executes. Delivery chooses how visitors
+receive the view.
 
-| Destination    | Runtime            | Result                                                                     |
-| -------------- | ------------------ | -------------------------------------------------------------------------- |
-| Python server  | Server             | Marimo executes the notebook in one isolated kernel per browser            |
-| Browser client | WebAssembly        | Pyodide executes the notebook in one worker per browser                    |
-| Static host    | WebAssembly export | A directory contains the view, notebook source, and browser runtime assets |
+| Studio menu         | Config ID | Notebook execution                                                                                                                 |
+| ------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Python runtime**  | `server`  | A Marimo session with server files, databases, credentials, native packages, and [anywidgets](https://anywidget.dev/)              |
+| **Browser runtime** | `wasm`    | A [Pyodide](https://pyodide.org/) worker that runs Python through [WebAssembly](https://webassembly.org/) in the visitor's browser |
 
-## Check the deployed path
+`marimo run` serves either configured runtime from a live process.
+`marimo-studio view export` writes a static Browser runtime directory.
 
-Run the check in the environment you plan to serve:
+An [anywidget](https://anywidget.dev/) is a custom browser interface connected
+to a Python model.
 
-```console
-uvx marimo-studio check analysis.py --runtime
-```
+## Configure available runtimes
 
-The check executes projected cells and reads referenced Python values. It can
-perform their file, network, database, and data access.
-
-## Serve through Marimo <Badge type="info" text="Server" />
-
-Start the configured notebook with Marimo:
-
-```console
-uv run --with marimo-studio \
-  marimo run analysis.py \
-  --sandbox \
-  --headless \
-  --host 0.0.0.0 \
-  --port 8000
-```
-
-The default view opens at `/`. A view named `report` opens at `/report/`.
-Each browser receives an isolated Marimo run session, so its controls, widgets,
-downloads, and reactive updates use that browser's Python kernel.
-
-Check the authenticated workspace lifecycle at `/_marimo-studio/status`:
-
-```json
-{
-  "schema": 1,
-  "state": "ready",
-  "default_view": "dashboard",
-  "views": ["dashboard"]
-}
-```
-
-`state` is `needs-view` while a definition awaits its first view and `error`
-when configuration cannot materialize a workspace. Run-mode document requests
-return a structured repair response in both cases.
-
-::: warning Keep each browser on its kernel process
-Use one worker for a standalone deployment. A multi-worker platform needs
-sticky routing so each browser returns to the process that owns its kernel.
-:::
-
-### Protect the endpoint
-
-Use Marimo's token settings when clients can reach the process directly:
-
-```console
-uv run --with marimo-studio \
-  marimo run analysis.py \
-  --sandbox \
-  --headless \
-  --host 0.0.0.0 \
-  --port 8000 \
-  --token-password-file /run/secrets/marimo-token
-```
-
-The file contains the token required to open the app. Run
-`marimo run --help` in the deployment environment for current CORS, session,
-and server options.
-
-### Run from a locked project
-
-Add `marimo-studio` to the project dependencies, commit `uv.lock`, and run
-Marimo from that environment:
-
-```console
-uv sync --frozen
-uv run marimo run analysis.py \
-  --headless \
-  --host 0.0.0.0 \
-  --port 8000
-```
-
-Marimo discovers Studio when the process starts.
-
-### Serve beneath a proxy path
-
-Set Marimo's public path with `--base-url`:
-
-```console
-uv run --with marimo-studio \
-  marimo run analysis.py \
-  --sandbox \
-  --headless \
-  --base-url /proxy/workspace-42
-```
-
-Forward the complete path through the reverse proxy. Keep view assets relative
-to `index.html` so styles, modules, images, and imports resolve beneath that
-base URL.
-
-::: details Preserve a server session across refreshes
-
-Enable session preservation when a manual server-runtime refresh should return
-the browser to its current run-mode kernel:
-
-```toml [pyproject.toml]
+```toml
 [tool.marimo-studio]
 default = "dashboard"
-preserve_session = true
-```
-
-The session remains available while the serving Marimo process retains it.
-Route reconnecting requests to that process.
-:::
-
-## Run the notebook in the browser <Badge type="tip" text="WebAssembly" />
-
-Select the WebAssembly runtime for a notebook whose dependencies and data
-sources work in Pyodide:
-
-```toml [pyproject.toml]
-[tool.marimo-studio]
-default = "dashboard"
-runtime = "wasm"
+runtime = "server"
 runtimes = ["server", "wasm"]
 ```
 
-The default URL now runs the notebook in the browser. Add `?runtime=server` to
-select the server runtime for one browser. With `runtime = "server"`, use
-`?runtime=wasm` for the browser runtime.
+`runtime` chooses the default. `runtimes` controls the choices shown in Studio
+and accepted through `?runtime=`.
 
-WebAssembly clients receive the notebook source and install compatible PEP 723
-dependencies in Pyodide.
+Use the Python runtime for native packages, private files, databases, or server
+credentials. Use the Browser runtime when the notebook and its data can run in
+Pyodide and the visitor should compute locally. Its packages and data sources
+must be reachable from that browser.
 
-::: warning Browser clients receive notebook source
-Keep credentials and server-side secrets out of a WebAssembly view. The
-browser also needs network access to every external dataset the notebook reads.
+::: warning Browser visitors receive notebook source
+The Browser runtime receives the saved notebook, compatible dependencies, and
+public files. Keep credentials and server-owned code in the Python runtime.
+Each external dataset must be reachable from the visitor's browser.
 :::
 
-## Export a static site <Badge type="warning" text="Public source" />
+## Run a live view locally
 
-Export one view, then serve the generated directory over HTTP:
+Use the launch requirements printed by `view create`. A notebook whose view
+uses the default 0.1.0 provider runs with:
 
 ```console
-uvx marimo-studio export analysis.py \
-  --view dashboard \
-  --output dist/dashboard
-python -m http.server --directory dist/dashboard
+uv run --with marimo-studio==0.1.0 marimo run analysis.py \
+  --sandbox \
+  --headless \
+  --host 127.0.0.1 \
+  --port 8000
 ```
 
-The page starts the notebook in a Pyodide worker and renders the selected view.
-The output contains the view files, notebook source, Studio browser assets,
-the notebook's `public/` directory, and static HTMX cell fragments.
+The default view opens at `http://127.0.0.1:8000/`. A view named `report`
+opens at `http://127.0.0.1:8000/report/`.
 
-Upload the complete directory to the static host. Use `--force` after reviewing
-an existing output directory that should be replaced.
+Run `marimo-studio status --target analysis.py --json` when a project uses
+additional view providers. Its `launch_requirements` list contains the Studio
+and provider environment required by `marimo run`. Reviewing status can
+resolve, install, and import provider packages declared by the project.
 
-::: warning Review the public export boundary
-The exported notebook source is public to site visitors. Its dependencies must
-install in Pyodide, and external data must be reachable from the browser.
-Named Iconify icons also load from the Iconify API unless the view uses inline
-SVG.
+Use [Deploy a live Python view](deploy.md) before exposing the process to other
+clients.
+
+## Export a static Browser runtime view
+
+Build and export the production profile:
+
+```console
+marimo-studio view export dashboard \
+  --target analysis.py \
+  --output dist/dashboard
+```
+
+Serve the complete directory over HTTP:
+
+```console
+python -m http.server --bind 127.0.0.1 --directory dist/dashboard
+```
+
+Open `http://127.0.0.1:8000/`. The export contains the production artifact,
+Browser runtime integration, saved notebook source, and notebook `public/`
+files. Upload the complete directory and keep its relative paths intact.
+
+::: warning Review the export before publishing
+The notebook source and `public/` files are visible to visitors. Authored
+JavaScript, notebook code, widgets, and rendered output execute in the visitor's
+browser. Studio places the provider-authored page in a sandboxed iframe with an
+opaque origin, so it cannot read the hosting origin's cookies, storage, or
+same-origin server data. Origin-sensitive browser APIs and cross-origin requests
+observe that opaque origin.
 :::
 
-[Notebook configuration](../reference/configuration.md) defines runtime
-defaults. [CLI reference](../reference/cli.md#export) defines export options
-and exit behavior. [Runtime behavior](../reference/runtimes.md) compares the
-execution and session contracts.
+The Browser runtime fetches Pyodide, packages, runtime metadata, and any remote
+view dependencies over the network. Allow their script, worker, connection,
+font, image, and data origins in the hosting
+[Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP).
+A static export is a relocatable HTTP directory, not an offline bundle.
+
+Use `--force` after reviewing an existing destination that should be replaced.
+Studio stages the export before replacing that directory.
+
+## Export the analytical notebook
+
+Create a static record of notebook code and captured output:
+
+```console
+mkdir -p dist/notebook
+marimo export html analysis.py \
+  --sandbox \
+  --output dist/notebook/index.html
+```
+
+Use this document when visitors should read the analysis as it ran during the
+export. Use a Studio Browser runtime export when they should change controls and
+recompute dependent notebook cells.

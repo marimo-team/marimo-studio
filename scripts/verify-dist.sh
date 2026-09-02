@@ -11,199 +11,133 @@ wheels=(
 )
 sdists=("$root"/dist/marimo_studio-*.tar.gz)
 
-if [[ "${#wheels[@]}" -ne 2 ]]; then
-	printf 'ERROR: Expected the release wheel and one wheel rebuilt from the source distribution\n' >&2
-	exit 1
-fi
-if [[ "${#sdists[@]}" -ne 1 ]]; then
-	printf 'ERROR: Expected one source distribution\n' >&2
+if [[ ${#wheels[@]} -ne 2 || ${#sdists[@]} -ne 1 ]]; then
+	printf 'ERROR: Expected one wheel, one source distribution, and one rebuilt wheel\n' >&2
 	exit 1
 fi
 
-STUDIO_SDIST="${sdists[0]}" uv run --frozen python - <<'PY'
-from hashlib import sha256
-from pathlib import Path
-from tarfile import open as open_tar
-import os
+direct_wheel="${wheels[0]}"
+rebuilt_wheel="${wheels[1]}"
+if ! cmp -s "$direct_wheel" "$rebuilt_wheel"; then
+	printf 'ERROR: Direct and source-rebuilt wheels differ\n' >&2
+	exit 1
+fi
 
-import agent_plugins
-
-source_root = Path.cwd()
-plan = agent_plugins.build_plan(source_root / "packages" / "marimo-studio")
-expected = {
-    mapping.target.as_posix(): sha256(mapping.source.read_bytes()).hexdigest()
-    for mapping in plan.files
-}
-with open_tar(os.environ["STUDIO_SDIST"], "r:gz") as archive:
-    members = [
-        member
-        for member in archive.getmembers()
-        if member.isfile() and "/.agent-plugin/" in member.name
-    ]
-    paths = [member.name.split("/.agent-plugin/", 1)[1] for member in members]
-    assert len(paths) == len(set(paths))
-    packaged = {
-        path: sha256(archive.extractfile(member).read()).hexdigest()
-        for path, member in zip(paths, members, strict=True)
-    }
-assert packaged == expected
-PY
-
-uv run --frozen python - "${wheels[@]}" <<'PY'
-from hashlib import sha256
-from pathlib import Path
-from sys import argv
-from zipfile import ZipFile
-
-import agent_plugins
-
-source_root = Path.cwd()
-plan = agent_plugins.build_plan(source_root / "packages" / "marimo-studio")
-expected = {
-    mapping.target.as_posix(): sha256(mapping.source.read_bytes()).hexdigest()
-    for mapping in plan.files
-}
-for wheel in map(Path, argv[1:]):
-    with ZipFile(wheel) as archive:
-        members = [
-            name
-            for name in archive.namelist()
-            if ".agent-plugin/" in name and not name.endswith("/")
-        ]
-        paths = [name.split(".agent-plugin/", 1)[1] for name in members]
-        assert len(paths) == len(set(paths))
-        packaged = {
-            path: sha256(archive.read(name)).hexdigest()
-            for path, name in zip(paths, members, strict=True)
-        }
-    assert packaged == expected
-PY
-
-export UV_NO_CONFIG=1
-
-for wheel in "${wheels[@]}"; do
-	uv run --no-project --isolated --no-cache --with "$wheel" python - <<'PY'
-from importlib.metadata import distribution
-from hashlib import sha256
-from pathlib import Path
-from types import SimpleNamespace
-import pydoc
-import json
-import shutil
-import subprocess
-import tempfile
-
-import agent_plugins
-import marimo._code_mode as code_mode
-import marimo_studio
-import marimo_studio.agent as studio_agent
-from marimo_studio._assets import runtime_assets_path
-
-assert marimo_studio.__name__ == "marimo_studio"
-dist = distribution("marimo-studio")
-entry_points = {(entry.group, entry.name) for entry in dist.entry_points}
-assert "agent-plugins==0.1.0" in (dist.requires or ())
-assert distribution("agent-plugins").version == "0.1.0"
-assert ("console_scripts", "marimo-studio") in entry_points
-assert ("marimo.server.asgi.middleware", "marimo-studio") in entry_points
-assert ("marimo.kernel.lifespan", "marimo-studio") in entry_points
-assert ("marimo.agent.capability", "studio") in entry_points
-assert code_mode.capabilities()["studio"] == "marimo_studio.agent"
-
-plugin = studio_agent.agent_plugin()
-skill = studio_agent.agent_skill()
-assert plugin.manifest.name == "marimo-studio"
-assert plugin.path.name == f"marimo_studio-{dist.version}.agent-plugin"
-assert skill in plugin.skills
-assert (skill / "SKILL.md").is_file()
-assert (skill / "agents" / "openai.yaml").is_file()
-assert skill.frontmatter.splitlines()[0] == "name: marimo-studio"
-help_text = pydoc.render_doc(studio_agent)
-assert str(plugin.path) in help_text
-assert str(skill / "SKILL.md") in help_text
-
-source_root = Path.cwd()
-plan = agent_plugins.build_plan(source_root / "packages" / "marimo-studio")
-expected_plugin = {
-    mapping.target.as_posix(): sha256(mapping.source.read_bytes()).hexdigest()
-    for mapping in plan.files
-}
-installed_plugin = {
-    path.relative_to(plugin.path).as_posix(): sha256(path.read_bytes()).hexdigest()
-    for path in plugin.files
-}
-assert installed_plugin == expected_plugin
-assert {
-    path.relative_to(skill.path).as_posix()
-    for path in skill.files
-} == {
-    path.relative_to(source_root / "skills" / "marimo-studio").as_posix()
-    for path in (source_root / "skills" / "marimo-studio").rglob("*")
-    if path.is_file()
-}
-
-located = subprocess.run(
-    ["agent-plugins", "locate", "marimo-studio"],
-    check=True,
-    capture_output=True,
-    text=True,
-)
-assert Path(located.stdout.strip()).resolve() == plugin.path.resolve()
-listed = subprocess.run(
-    ["agent-plugins", "list", "--json"],
-    check=True,
-    capture_output=True,
-    text=True,
-)
-studio_listing = next(
-    item for item in json.loads(listed.stdout)
-    if item["distribution"] == "marimo-studio"
-)
-assert studio_listing == {
-    "distribution": "marimo-studio",
-    "root": str(plugin.path),
-    "skills": [str(skill / "SKILL.md")],
-}
-
-with tempfile.TemporaryDirectory() as directory:
-    notebook = Path(directory) / "analysis.py"
-    shutil.copy(source_root / "apps" / "e2e" / "fixtures" / "plain.py", notebook)
-    context = SimpleNamespace(globals={"__file__": str(notebook)})
-
-    def command(*arguments):
-        completed = subprocess.run(
-            ["marimo-studio", *arguments, "--format", "json"],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        return json.loads(completed.stdout)
-
-    assert command("overview", str(notebook)) == studio_agent.overview(context).to_dict()
-    assert command("inspect", str(notebook)) == studio_agent.inspect(context).to_dict()
-    studio_agent.ensure_view(context, "dashboard")
-    assert command("overview", str(notebook)) == studio_agent.overview(context).to_dict()
-
-assets = runtime_assets_path()
-for filename in (
-    "runtime.js",
-    "runtime.css",
-    "dev-reload.js",
-    "studio.js",
-    "studio.css",
-    "build-meta.json",
-):
-    assert (assets / filename).is_file(), filename
-
-assert any((assets / "assets").glob("*worker*.js")), "WebAssembly worker asset"
-assert any((assets / "chunks").glob("*.js")), "browser runtime chunks"
-
-result = subprocess.run(
-    ["marimo-studio", "--version"],
-    check=True,
-    capture_output=True,
-    text=True,
-)
-assert result.stdout.strip() == f"marimo-studio, version {dist.version}"
-PY
+for archive in "${wheels[@]}" "${sdists[@]}"; do
+	if [[ "$(wc -c <"$archive")" -gt $((8 * 1024 * 1024)) ]]; then
+		printf 'ERROR: Distribution exceeds the 8 MiB release budget: %s\n' "$archive" >&2
+		exit 1
+	fi
 done
+
+plugin_digests="$root/dist/agent-plugin-digests.json"
+uv run --frozen python - "$plugin_digests" "${wheels[@]}" "${sdists[@]}" <<'PY'
+from hashlib import sha256
+from email.parser import BytesParser
+import json
+from pathlib import Path
+from packaging.requirements import Requirement
+from packaging.specifiers import SpecifierSet
+from packaging.utils import canonicalize_name
+from tarfile import open as open_tar
+from zipfile import ZipFile
+import sys
+
+digest_path = Path(sys.argv[1])
+archives = tuple(Path(value) for value in sys.argv[2:])
+
+root = Path.cwd()
+sources = (
+    root / "plugin.json",
+    *(path for path in sorted((root / "skills" / "marimo-studio").rglob("*")) if path.is_file()),
+)
+expected = {
+    source.relative_to(root).as_posix(): sha256(source.read_bytes()).hexdigest()
+    for source in sources
+}
+package_root = root / "packages" / "marimo-studio"
+license_sources = {
+    "LICENSE": package_root / "LICENSE",
+}
+license_bytes = {name: source.read_bytes() for name, source in license_sources.items()}
+
+
+def packaged(files, read, archive):
+    names = [name for name in files if not name.endswith("/")]
+    if len(names) != len(set(names)):
+        raise AssertionError(f"Distribution contains duplicate paths: {archive}")
+    selected = [name for name in names if ".agent-plugin/" in name]
+    relative = [name.split(".agent-plugin/", 1)[1] for name in selected]
+    if len(relative) != len(set(relative)):
+        raise AssertionError(f"Agent Plugin contains duplicate paths: {archive}")
+    return {
+        path: sha256(read(name)).hexdigest()
+        for path, name in zip(relative, selected, strict=True)
+    }
+
+
+def verify_metadata(source, archive):
+    metadata = BytesParser().parsebytes(source)
+    if metadata["License-Expression"] != "Apache-2.0":
+        raise AssertionError(f"Distribution has the wrong license expression: {archive}")
+    if set(metadata.get_all("License-File") or ()) != set(license_sources):
+        raise AssertionError(f"Distribution has the wrong license files: {archive}")
+    if SpecifierSet(metadata["Requires-Python"] or "") != SpecifierSet(">=3.10,<3.15"):
+        raise AssertionError(f"Distribution has the wrong Python requirement: {archive}")
+    requirements = [Requirement(value) for value in metadata.get_all("Requires-Dist") or ()]
+    by_name = {}
+    for requirement in requirements:
+        by_name.setdefault(canonicalize_name(requirement.name), []).append(requirement)
+    for name, specifier in {
+        "agent-plugins": "==0.1.1",
+        "tree-sitter": "==0.25.2",
+        "tree-sitter-javascript": "==0.25.0",
+    }.items():
+        selected = by_name.get(canonicalize_name(name), [])
+        if len(selected) != 1 or str(selected[0].specifier) != specifier:
+            raise AssertionError(f"Distribution has the wrong {name} requirement: {archive}")
+
+
+for path in archives:
+    if path.suffix == ".whl":
+        with ZipFile(path) as archive:
+            names = archive.namelist()
+            actual = packaged(names, archive.read, path)
+            metadata_name = next(name for name in names if name.endswith(".dist-info/METADATA"))
+            metadata_root = metadata_name.removesuffix("METADATA")
+            verify_metadata(archive.read(metadata_name), path)
+            for relative, expected_bytes in license_bytes.items():
+                packaged_bytes = archive.read(f"{metadata_root}licenses/{relative}")
+                if packaged_bytes != expected_bytes:
+                    raise AssertionError(f"Wheel license differs for {relative}: {path}")
+    else:
+        with open_tar(path, "r:gz") as archive:
+            members = [member for member in archive.getmembers() if member.isfile()]
+            names = [member.name for member in members]
+            by_name = {member.name: member for member in members}
+
+            def read(name):
+                stream = archive.extractfile(by_name[name])
+                if stream is None:
+                    raise AssertionError(f"Archive file is unreadable: {name}")
+                return stream.read()
+
+            actual = packaged(names, read, path)
+            distribution_root = names[0].split("/", 1)[0]
+            verify_metadata(read(f"{distribution_root}/PKG-INFO"), path)
+            for relative, expected_bytes in license_bytes.items():
+                packaged_bytes = read(f"{distribution_root}/{relative}")
+                if packaged_bytes != expected_bytes:
+                    raise AssertionError(f"Source license differs for {relative}: {path}")
+    if actual != expected:
+        raise AssertionError(
+            f"Agent Plugin bytes differ in {path}: "
+            f"missing={sorted(expected.keys() - actual.keys())}, "
+            f"extra={sorted(actual.keys() - expected.keys())}, "
+            f"changed={sorted(key for key in expected.keys() & actual.keys() if expected[key] != actual[key])}"
+        )
+
+digest_path.write_text(json.dumps(expected, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+
+./scripts/verify-installed-wheel.sh "$root/dist"

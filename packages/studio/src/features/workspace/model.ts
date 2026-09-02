@@ -69,13 +69,10 @@ export const notebookLayout = (): LayoutNode => pane("notebook");
 
 export const previewLayout = (): LayoutNode => pane("preview");
 
-export const codeLayout = (): LayoutNode =>
+export const sourceLayout = (): LayoutNode =>
   split("source-preview", "x", pane("source"), pane("preview"));
 
-export const defaultWorkspaceLayout = (): LayoutNode =>
-  split("notebook-preview", "x", pane("notebook"), pane("preview"));
-
-export const newViewLayout = (): LayoutNode =>
+const threeSurfaceLayout = (): LayoutNode =>
   split(
     "notebook-authoring",
     "x",
@@ -83,20 +80,22 @@ export const newViewLayout = (): LayoutNode =>
     split("source-preview", "y", pane("source"), pane("preview")),
   );
 
+export const developLayout = (): LayoutNode => threeSurfaceLayout();
+
 export const layoutForMode = (
   mode: StudioMode,
-  code: LayoutNode,
+  source: LayoutNode,
   workspace: LayoutNode,
 ): LayoutNode => {
   switch (mode) {
-    case "split":
-      return defaultWorkspaceLayout();
+    case "develop":
+      return developLayout();
     case "notebook":
       return notebookLayout();
     case "preview":
       return previewLayout();
-    case "code":
-      return code;
+    case "source":
+      return source;
     case "workspace":
       return workspace;
   }

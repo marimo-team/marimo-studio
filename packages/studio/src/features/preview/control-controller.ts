@@ -5,9 +5,10 @@ import type { fetchRuntimeControls } from "./control-remote.ts";
 import {
   type ControlFrameConnector,
   type ControlSync,
+  type ControlSyncStatus,
   synchronizeControlEndpoints,
 } from "./control-sync.ts";
-import { previewFrameApi } from "./frame-api.ts";
+import { connectFrameControlBridge } from "./frame-bridge.ts";
 
 const RETRY_DELAYS = [100, 250, 500, 1_000, 2_000, 5_000] as const;
 const ATTEMPT_TIMEOUT_MS = 3_000;
@@ -18,7 +19,9 @@ interface ControlControllerOptions {
   preview: HTMLIFrameElement;
   supportUrl: () => string;
   connect?: ControlFrameConnector;
+  connectPreview?: typeof connectFrameControlBridge;
   fetchControls: typeof fetchRuntimeControls;
+  status?: (status: ControlSyncStatus, revision: string, sessionId: string | undefined) => void;
 }
 
 interface AttemptSignal {
@@ -26,42 +29,63 @@ interface AttemptSignal {
   dispose(): void;
 }
 
+interface ControlRequest {
+  controller: AbortController;
+  editorSessionId: string | undefined;
+  phase: "loading" | "synchronizing";
+  previewSessionId: string | undefined;
+  revision: string;
+}
+
 const controlSetupError = (cause: unknown): Error =>
   cause instanceof Error ? cause : new Error(String(cause));
 
 export class PreviewControlController {
   private sync: ControlSync | undefined;
+  private syncRequest: ControlRequest | undefined;
   private revision: string | undefined;
-  private sessionId: string | undefined;
-  private request:
-    | { controller: AbortController; revision: string; sessionId: string | undefined }
-    | undefined;
+  private editorSessionId: string | undefined;
+  private previewSessionId: string | undefined;
+  private request: ControlRequest | undefined;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private retryAttempt = 0;
 
   constructor(private readonly options: ControlControllerOptions) {}
 
-  begin(revision: string, sessionId: string | undefined): void {
+  begin(
+    revision: string,
+    previewSessionId: string | undefined,
+    editorSessionId: string | undefined,
+  ): void {
     if (!this.options.connect || this.options.runtime === DEFAULT_RUNTIME_ID) {
       return;
     }
     if (
-      (this.sync && this.revision === revision && this.sessionId === sessionId) ||
-      (this.request?.revision === revision && this.request.sessionId === sessionId)
+      (this.sync &&
+        this.revision === revision &&
+        this.previewSessionId === previewSessionId &&
+        this.editorSessionId === editorSessionId) ||
+      (this.request?.revision === revision &&
+        this.request.previewSessionId === previewSessionId &&
+        this.request.editorSessionId === editorSessionId)
     ) {
       return;
     }
     this.stop();
-    void this.start(revision, sessionId);
+    void this.start(revision, previewSessionId, editorSessionId);
   }
 
   stop(): void {
-    this.request?.controller.abort();
+    if (this.request?.phase === "synchronizing") {
+      this.request.controller.abort();
+    }
     this.request = undefined;
     this.sync?.dispose();
     this.sync = undefined;
+    this.syncRequest = undefined;
     this.revision = undefined;
-    this.sessionId = undefined;
+    this.editorSessionId = undefined;
+    this.previewSessionId = undefined;
     if (this.retryTimer !== undefined) {
       clearTimeout(this.retryTimer);
       this.retryTimer = undefined;
@@ -69,47 +93,64 @@ export class PreviewControlController {
     this.retryAttempt = 0;
   }
 
-  private async start(revision: string, sessionId: string | undefined): Promise<void> {
+  private async start(
+    revision: string,
+    previewSessionId: string | undefined,
+    editorSessionId: string | undefined,
+  ): Promise<void> {
     if (!this.options.connect || this.sync || this.request) {
       return;
     }
-    if (!sessionId) {
+    if (!editorSessionId) {
       this.schedule(
         revision,
-        sessionId,
+        previewSessionId,
+        editorSessionId,
         new Error("The Marimo editor session is still connecting"),
       );
       return;
     }
     const controller = new AbortController();
-    const request = { controller, revision, sessionId };
+    const request: ControlRequest = {
+      controller,
+      editorSessionId,
+      phase: "loading",
+      previewSessionId,
+      revision,
+    };
     const attempt = attemptSignal(controller.signal);
     this.request = request;
     let retry = false;
     let failure: Error | undefined;
     try {
-      await previewReady(this.options.preview, attempt.signal);
-      if (attempt.signal.aborted || this.request !== request) {
-        return;
-      }
       const supportUrl = this.options.supportUrl();
       const [editorConfig, previewConfig] = await Promise.all([
-        this.options.fetchControls(supportUrl, DEFAULT_RUNTIME_ID, sessionId, attempt.signal),
-        this.options.fetchControls(supportUrl, this.options.runtime, sessionId, attempt.signal),
+        this.options.fetchControls(supportUrl, DEFAULT_RUNTIME_ID, editorSessionId, attempt.signal),
+        this.options.fetchControls(
+          supportUrl,
+          this.options.runtime,
+          editorSessionId,
+          attempt.signal,
+        ),
       ]);
       if (attempt.signal.aborted || this.request !== request) {
         return;
       }
+      request.phase = "synchronizing";
       if (editorConfig.revision !== revision || editorConfig.revision !== previewConfig.revision) {
         retry = true;
         failure = new Error("Control configuration revisions have not converged");
         return;
       }
-      if (!editorConfig.controls || !previewConfig.controls) {
-        return;
-      }
       const editor = this.options.connect(this.options.editor);
-      const preview = this.options.connect(this.options.preview);
+      const preview = (this.options.connectPreview ?? connectFrameControlBridge)(
+        this.options.preview,
+        {
+          revision,
+          runtime: this.options.runtime,
+          sessionId: previewSessionId,
+        },
+      );
       if (!editor || !preview) {
         editor?.dispose();
         preview?.dispose();
@@ -123,34 +164,49 @@ export class PreviewControlController {
         editorControls: editorConfig.controls,
         previewControls: previewConfig.controls,
         signal: attempt.signal,
+        onStatus: (status) => {
+          if (this.request === request || this.syncRequest === request) {
+            this.options.status?.(status, revision, previewSessionId);
+          }
+        },
       });
       if (attempt.signal.aborted || this.request !== request) {
         sync.dispose();
         return;
       }
       this.sync = sync;
+      this.syncRequest = request;
       this.revision = revision;
-      this.sessionId = sessionId;
+      this.editorSessionId = editorSessionId;
+      this.previewSessionId = previewSessionId;
+      this.retryAttempt = 0;
+      this.options.status?.({ phase: "ready" }, revision, previewSessionId);
     } catch (cause) {
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && this.request === request) {
         retry = true;
         failure = controlSetupError(cause);
       }
     } finally {
       attempt.dispose();
-      if (this.request === request) {
+      const ownsRequest = this.request === request;
+      if (ownsRequest) {
         this.request = undefined;
       }
-      if (retry && !controller.signal.aborted) {
-        this.schedule(revision, sessionId, failure);
+      if (retry && ownsRequest && !controller.signal.aborted) {
+        this.schedule(revision, previewSessionId, editorSessionId, failure);
       }
     }
   }
 
-  private schedule(revision: string, sessionId: string | undefined, failure?: Error): void {
+  private schedule(
+    revision: string,
+    previewSessionId: string | undefined,
+    editorSessionId: string | undefined,
+    failure?: Error,
+  ): void {
     if (this.retryTimer !== undefined || this.retryAttempt >= RETRY_DELAYS.length) {
       if (failure !== undefined && this.retryAttempt >= RETRY_DELAYS.length) {
-        console.warn("Marimo control state could not be synchronized", failure);
+        this.options.status?.({ phase: "degraded", error: failure }, revision, previewSessionId);
       }
       return;
     }
@@ -158,18 +214,10 @@ export class PreviewControlController {
     this.retryAttempt += 1;
     this.retryTimer = setTimeout(() => {
       this.retryTimer = undefined;
-      void this.start(revision, sessionId);
+      void this.start(revision, previewSessionId, editorSessionId);
     }, delay);
   }
 }
-
-const previewReady = async (frame: HTMLIFrameElement, signal: AbortSignal): Promise<void> => {
-  const studio = previewFrameApi(frame);
-  if (!studio) {
-    return;
-  }
-  await abortable(studio.ready(), signal);
-};
 
 const attemptSignal = (lifecycle: AbortSignal): AttemptSignal => {
   const controller = new AbortController();
@@ -190,18 +238,4 @@ const attemptSignal = (lifecycle: AbortSignal): AttemptSignal => {
       lifecycle.removeEventListener("abort", cancel);
     },
   };
-};
-
-const abortable = async <T>(operation: Promise<T>, signal: AbortSignal): Promise<T> => {
-  signal.throwIfAborted();
-  let cancel = () => {};
-  const aborted = new Promise<never>((_resolve, reject) => {
-    cancel = () => reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
-    signal.addEventListener("abort", cancel, { once: true });
-  });
-  try {
-    return await Promise.race([operation, aborted]);
-  } finally {
-    signal.removeEventListener("abort", cancel);
-  }
 };

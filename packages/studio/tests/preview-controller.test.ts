@@ -1,92 +1,166 @@
-import type { JsonValue, RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
+import type { BrowserDiagnostic } from "@marimo-studio/protocol/browser-observations";
 
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
-import type { ControlEndpoint } from "../src/features/preview/control-sync.ts";
+import type { ControlEndpoint, ControlUpdate } from "../src/features/preview/control-sync.ts";
+import type { EditorQuerySyncResult } from "../src/features/preview/query-remote.ts";
 
 import { PreviewController } from "../src/features/preview/controller.ts";
-import { PreviewDeck } from "../src/features/preview/deck.ts";
+import { emptyProjectionEvidence } from "./fixtures.ts";
+import {
+  createFrameBridgeSource,
+  installFrameBridge,
+  sendFrameControlUpdate,
+} from "./frame-bridge-test-support.ts";
+import {
+  controlEndpoint,
+  controller,
+  dispatchPreviewMessage,
+  dispatchPreviewRefreshHandshake,
+  frame,
+  runtimeConfig,
+} from "./preview-test-support.ts";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+  document.body.replaceChildren();
+});
 
-const frame = (readyState: DocumentReadyState): HTMLIFrameElement => {
-  const element = document.createElement("iframe");
-  Object.defineProperty(element, "contentDocument", {
+it("forwards authored navigation intent without mutating query state", () => {
+  const editor = frame("complete");
+  const preview = frame("complete");
+  const previewWindow = { postMessage: vi.fn() };
+  Object.defineProperty(preview, "contentWindow", {
     configurable: true,
-    value: { readyState },
+    value: previewWindow,
   });
-  Object.defineProperty(element, "contentWindow", {
-    configurable: true,
-    value: null,
-  });
-  element.src = "/loaded";
-  return element;
-};
-
-const controller = (
-  runtime: string,
-  editor: HTMLIFrameElement,
-  preview: HTMLIFrameElement,
-  viewUrl: (view: string, runtime: string) => string,
-  report = vi.fn(),
-) =>
-  new PreviewController(
+  const syncQuery = vi.fn();
+  const navigate = vi.fn(async () => false);
+  const server = new PreviewController(
     "dashboard",
-    runtime,
+    "server",
     editor,
     preview,
-    viewUrl,
+    (view, runtime) => `/${view}?runtime=${runtime}`,
     (view) => `/support/${view}`,
-    vi.fn(),
+    syncQuery,
     vi.fn(async () => "accepted" as const),
+    navigate,
     vi.fn(),
+  );
+
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:navigate-view",
+    runtime: "server",
+    lifecycleId: 1,
+    view: "report",
+    query: "?file=analysis.py&region=emea",
+    hash: "#details",
+  });
+
+  expect(syncQuery).not.toHaveBeenCalled();
+  expect(navigate).toHaveBeenCalledWith("report", {
+    query: "?file=analysis.py&region=emea",
+    hash: "#details",
+  });
+  server.dispose();
+});
+
+it("ignores wrapper-local replay hints", () => {
+  const editor = frame("complete");
+  const preview = frame("complete");
+  const previewWindow = { postMessage: vi.fn() };
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: previewWindow,
+  });
+  const syncQuery = vi.fn();
+  const navigate = vi.fn();
+  const report = vi.fn();
+  const server = new PreviewController(
+    "dashboard",
+    "server",
+    editor,
+    preview,
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+    (view) => `/support/${view}`,
+    syncQuery,
+    vi.fn(async () => "accepted" as const),
+    navigate,
     report,
   );
 
-const dispatchPreviewMessage = <Source>(source: Source, data: JsonValue): void => {
-  const event = new MessageEvent("message", {
+  const replay = new MessageEvent("message", {
     origin: globalThis.location.origin,
-    data,
-  });
-  Object.defineProperty(event, "source", { value: source });
-  globalThis.dispatchEvent(event);
-};
-
-const runtimeConfig = (runtime: string) =>
-  ({
-    schema: 1,
-    revision: "revision-1",
-    view: "dashboard",
-    views: ["dashboard"],
-    runtime: {
-      id: runtime,
-      instance: `${runtime}-instance`,
-      available: ["server", "wasm"],
-      data: {},
-      controls: { cells: {} },
+    data: {
+      type: "marimo-studio:replay-document",
+      runtime: "server",
+      lifecycleId: 1,
+      view: "dashboard",
+      url: "/_marimo-studio/presentation/d.token/dashboard/",
     },
-    rootUrl: "/",
-    publicRootUrl: "/",
-    documentRootUrl: "/",
-    supportUrl: "/support/dashboard",
-    showCellLogs: true,
-    cellBindings: {},
-    valueBindings: {},
-    outputBindings: {},
-    diagnostics: [],
-    appConfig: {},
-    userConfig: {},
-    configOverrides: {},
-    editorSessionId: "s_123456",
-    dev: true,
-    mode: "edit",
-  }) satisfies RuntimeConfig;
+  });
+  Object.defineProperty(replay, "source", { value: previewWindow });
+  globalThis.dispatchEvent(replay);
 
-const controlEndpoint = (): ControlEndpoint => ({
-  snapshot: () => [],
-  subscribe: () => () => {},
-  apply: vi.fn(async () => {}),
-  dispose: vi.fn(),
+  expect(syncQuery).not.toHaveBeenCalled();
+  expect(navigate).not.toHaveBeenCalled();
+  expect(report).not.toHaveBeenCalled();
+  server.dispose();
+});
+
+it("preserves document identity through same-view navigation", () => {
+  const editor = frame("complete");
+  const preview = frame("complete");
+  const previewWindow = {
+    postMessage: vi.fn(),
+  };
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: previewWindow,
+  });
+  const syncQuery = vi.fn();
+  const syncEditorQuery = vi.fn(async () => "accepted" as const);
+  const report = vi.fn();
+  const server = new PreviewController(
+    "dashboard",
+    "server",
+    editor,
+    preview,
+    (view, runtime, navigation) =>
+      `https://studio.test/${view}/?region=emea&marimo_studio_client=client-1&marimo_server_instance=server-1&runtime=${runtime}${navigation?.hash ?? ""}`,
+    (view) => `/support/${view}`,
+    syncQuery,
+    syncEditorQuery,
+    vi.fn(),
+    report,
+    undefined,
+    undefined,
+    { query: "?region=emea", hash: "" },
+    undefined,
+    7,
+  );
+  const previewSource = preview.src;
+
+  server.navigateWithinView({ query: "?region=emea", hash: "#details" });
+
+  expect(syncEditorQuery).not.toHaveBeenCalled();
+  expect(syncQuery).not.toHaveBeenCalled();
+  expect(preview.src).toBe(previewSource);
+  expect(report).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      url: expect.stringContaining("marimo_studio_client=client-1"),
+    }),
+  );
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:query-change",
+    runtime: "server",
+    lifecycleId: 7,
+    query: "?region=americas",
+  });
+  expect(syncQuery).toHaveBeenCalledWith("?region=americas");
+  server.dispose();
 });
 
 it("accepts sessionless WASM readiness from the rendered view", () => {
@@ -101,25 +175,69 @@ it("accepts sessionless WASM readiness from the rendered view", () => {
     report,
   );
 
-  globalThis.dispatchEvent(
-    new MessageEvent("message", {
-      origin: globalThis.location.origin,
-      data: {
-        type: "marimo-studio:view-ready",
-        runtime: "wasm",
-        view: "dashboard",
-        revision: "revision-1",
-      },
-    }),
-  );
+  dispatchPreviewMessage(null, {
+    type: "marimo-studio:view-ready",
+    runtime: "wasm",
+    lifecycleId: 1,
+    view: "dashboard",
+    revision: "revision-1",
+  });
 
   expect(report).toHaveBeenLastCalledWith(
     expect.objectContaining({
-      status: { message: "Live", state: "ready", title: "" },
+      status: { diagnostics: [], message: "Live", state: "ready" },
     }),
   );
   wasm.dispose();
 });
+
+it.each(["load-first", "message-first"] as const)(
+  "lets a self-polling waiting document own slow startup when %s",
+  async (order) => {
+    vi.useFakeTimers();
+    const editor = frame("complete");
+    const preview = frame("complete");
+    const server = controller(
+      "server",
+      editor,
+      preview,
+      (view, runtime) => `/${view}?runtime=${runtime}`,
+    );
+    const source = preview.src;
+
+    const loaded = () => preview.dispatchEvent(new Event("load"));
+    const waiting = () =>
+      dispatchPreviewMessage(null, {
+        type: "marimo-studio:receiver-waiting",
+        runtime: "server",
+        lifecycleId: 1,
+        view: "dashboard",
+      });
+    if (order === "load-first") {
+      loaded();
+      waiting();
+    } else {
+      waiting();
+      loaded();
+    }
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(preview.src).toBe(source);
+    expect(preview.dataset.previewLifecycleId).toBe("1");
+
+    dispatchPreviewMessage(null, {
+      type: "marimo-studio:receiver-unready",
+      runtime: "server",
+      lifecycleId: 1,
+      view: "dashboard",
+    });
+    preview.dispatchEvent(new Event("load"));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(Number(preview.dataset.previewLifecycleId)).toBeGreaterThan(1);
+    expect(preview.src).not.toBe(source);
+    server.dispose();
+  },
+);
 
 it("starts WASM control synchronization from an active rendered-view session", async () => {
   const fetch = vi.fn<typeof globalThis.fetch>();
@@ -128,6 +246,14 @@ it("starts WASM control synchronization from an active rendered-view session", a
   vi.stubGlobal("fetch", fetch);
   const editor = frame("loading");
   const preview = frame("complete");
+  const previewWindow = createFrameBridgeSource();
+  installFrameBridge(preview, previewWindow, {
+    lifecycleId: 1,
+    revision: "revision-1",
+    runtime: "wasm",
+    sessionId: null,
+    view: "dashboard",
+  });
   const connect = vi.fn(() => controlEndpoint());
   const wasm = new PreviewController(
     "dashboard",
@@ -143,383 +269,229 @@ it("starts WASM control synchronization from an active rendered-view session", a
     undefined,
     connect,
   );
+  wasm.editorSessionChanged("s_editor1", false);
 
-  globalThis.dispatchEvent(
-    new MessageEvent("message", {
-      origin: globalThis.location.origin,
-      data: {
-        type: "marimo-studio:view-ready",
-        runtime: "wasm",
-        view: "dashboard",
-        revision: "revision-1",
-        sessionId: "s_123456",
-      },
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-ready",
+    runtime: "wasm",
+    lifecycleId: 1,
+    view: "dashboard",
+    revision: "revision-1",
+  });
+
+  await vi.waitFor(() => expect(connect).toHaveBeenCalledOnce());
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(
+    fetch.mock.calls.every(
+      ([, init]) => new Headers(init?.headers).get("Marimo-Session-Id") === "s_editor1",
+    ),
+  ).toBe(true);
+  wasm.dispose();
+});
+
+it("suspends hidden WASM ownership and reactivates the same document", async () => {
+  const config = (runtime: "server" | "wasm") => ({
+    ...runtimeConfig(runtime),
+    runtimeBindings: { cellRefs: { controls: `${runtime}-cell` } },
+  });
+  const fetch = vi
+    .fn<typeof globalThis.fetch>()
+    .mockResolvedValueOnce(Response.json(config("server")))
+    .mockResolvedValueOnce(Response.json(config("wasm")))
+    .mockResolvedValueOnce(Response.json(config("server")))
+    .mockResolvedValueOnce(Response.json(config("wasm")));
+  vi.stubGlobal("fetch", fetch);
+  const editor = frame("loading");
+  const preview = frame("complete");
+  const previewWindow = createFrameBridgeSource();
+  const bridgeIdentity = {
+    lifecycleId: 1,
+    revision: "revision-1",
+    runtime: "wasm",
+    sessionId: null,
+    view: "dashboard",
+  } as const;
+  installFrameBridge(preview, previewWindow, bridgeIdentity);
+  const hiddenEditorApply = vi.fn(async () => {});
+  const editorEndpoint = (apply: ControlEndpoint["apply"]): ControlEndpoint => ({
+    snapshot: () => [],
+    subscribe: () => () => {},
+    apply,
+    dispose: vi.fn(),
+  });
+  const hidden = editorEndpoint(hiddenEditorApply);
+  const reactivated = editorEndpoint(vi.fn(async () => {}));
+  const connect = vi
+    .fn<() => ControlEndpoint | undefined>()
+    .mockReturnValueOnce(hidden)
+    .mockReturnValueOnce(reactivated);
+  const syncQuery = vi.fn();
+  const syncEditorQuery = vi.fn(async () => "accepted" as const);
+  const recordObservation = vi.fn(async () => undefined);
+  const wasm = new PreviewController(
+    "dashboard",
+    "wasm",
+    editor,
+    preview,
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+    (view) => `/support/${view}`,
+    syncQuery,
+    syncEditorQuery,
+    vi.fn(),
+    vi.fn(),
+    recordObservation,
+    connect,
+    { query: "?canonical=1", hash: "" },
+  );
+  wasm.editorSessionChanged("s_editor1", false);
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:receiver-ready",
+    runtime: "wasm",
+    lifecycleId: 1,
+    view: "dashboard",
+    revision: "revision-1",
+  });
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-ready",
+    runtime: "wasm",
+    lifecycleId: 1,
+    view: "dashboard",
+    revision: "revision-1",
+  });
+  await vi.waitFor(() => expect(connect).toHaveBeenCalledOnce());
+  wasm.requestObservation({
+    schema: 1,
+    requestId: "hidden-observation",
+    view: "dashboard",
+    runtime: "wasm",
+    runtimeInstance: "wasm-instance",
+    revision: "revision-1",
+  });
+  const documentSource = preview.src;
+  const lifecycleId = preview.dataset.previewLifecycleId;
+
+  wasm.deactivate();
+  sendFrameControlUpdate(previewWindow, bridgeIdentity, {
+    objectId: "wasm-cell-control-0",
+    value: 9,
+  });
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:query-change",
+    runtime: "wasm",
+    lifecycleId: 1,
+    query: "?hidden=1",
+  });
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-observation",
+    lifecycleId: 1,
+    requestId: "hidden-observation",
+    view: "dashboard",
+    runtime: "wasm",
+    runtimeInstance: "wasm-instance",
+    revision: "revision-1",
+    state: "ready",
+    diagnostics: [],
+    sessionId: null,
+    query: "?hidden=1",
+    ...emptyProjectionEvidence,
+  });
+  await Promise.resolve();
+
+  expect(hiddenEditorApply).not.toHaveBeenCalled();
+  expect(syncQuery).not.toHaveBeenCalled();
+  expect(syncEditorQuery).not.toHaveBeenCalled();
+  expect(recordObservation).not.toHaveBeenCalled();
+  expect(hidden.dispose).toHaveBeenCalledOnce();
+
+  const warmActivation = wasm.activate({ query: "?canonical=1", hash: "" });
+  dispatchPreviewRefreshHandshake(previewWindow, {
+    runtime: "wasm",
+    lifecycleId: 1,
+    view: "dashboard",
+    revision: "revision-1",
+  });
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:view-ready",
+    runtime: "wasm",
+    lifecycleId: 1,
+    view: "dashboard",
+    revision: "revision-1",
+  });
+  const activation = Promise.race([
+    warmActivation,
+    new Promise<never>((_resolve, reject) =>
+      setTimeout(() => reject(new Error("Warm WASM activation did not settle")), 1_000),
+    ),
+  ]);
+  await expect(activation).resolves.toBe(true);
+  await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(2));
+  expect(preview.src).toBe(documentSource);
+  expect(preview.dataset.previewLifecycleId).toBe(lifecycleId);
+  expect(previewWindow.postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "marimo-studio:frame-query-apply",
+      query: "?canonical=1",
+    }),
+    "*",
+  );
+
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:query-change",
+    runtime: "wasm",
+    lifecycleId: 1,
+    query: "?active=1",
+  });
+  await vi.waitFor(() => expect(syncEditorQuery).toHaveBeenCalledOnce());
+  expect(syncQuery).toHaveBeenCalledWith("?active=1");
+  wasm.dispose();
+});
+
+it("reports a live control failure and clears it after retry", async () => {
+  vi.useFakeTimers();
+  const fetch = vi.fn<typeof globalThis.fetch>();
+  fetch.mockResolvedValueOnce(
+    Response.json({
+      ...runtimeConfig("server"),
+      runtimeBindings: { cellRefs: { controls: "server-cell" } },
     }),
   );
-
-  await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(2));
-  expect(fetch).toHaveBeenCalledTimes(2);
-  expect(fetch.mock.calls.map(([, init]) => init?.headers)).toEqual([
-    { "Marimo-Session-Id": "s_123456" },
-    { "Marimo-Session-Id": "s_123456" },
-  ]);
-  wasm.dispose();
-});
-
-it("reloads every preview after its editor session binding changes", () => {
-  const editor = frame("loading");
-  const serverFrame = frame("complete");
-  const wasmFrame = frame("complete");
-  const viewUrl = vi.fn((view: string, runtime: string) => `/${view}?runtime=${runtime}`);
-  const server = controller("server", editor, serverFrame, viewUrl);
-  const wasm = controller("wasm", editor, wasmFrame, viewUrl);
-  expect(viewUrl).toHaveBeenCalledTimes(2);
-
-  editor.dispatchEvent(new Event("load"));
-  expect(viewUrl).toHaveBeenCalledTimes(2);
-  editor.dispatchEvent(new Event("load"));
-  expect(viewUrl).toHaveBeenCalledTimes(2);
-
-  server.editorSessionChanged();
-  wasm.editorSessionChanged();
-
-  expect(viewUrl).toHaveBeenCalledTimes(4);
-  expect(serverFrame.src).toContain("runtime=server");
-  expect(wasmFrame.src).toContain("runtime=wasm");
-  server.dispose();
-  wasm.dispose();
-});
-
-it("refreshes every attached preview on demand", () => {
-  const editor = frame("loading");
-  const serverFrame = frame("complete");
-  const wasmFrame = frame("complete");
-  const serverWindow = { dispatchEvent: vi.fn(), postMessage: vi.fn() };
-  const wasmWindow = { dispatchEvent: vi.fn(), postMessage: vi.fn() };
-  Object.defineProperty(serverFrame, "contentWindow", {
-    configurable: true,
-    value: serverWindow,
-  });
-  Object.defineProperty(wasmFrame, "contentWindow", {
-    configurable: true,
-    value: wasmWindow,
-  });
-  const viewUrl = vi.fn((view: string, runtime: string) => `/${view}?runtime=${runtime}`);
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    runtimes: ["server", "wasm"],
-    viewUrl,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
-  });
-  deck.attach(
-    editor,
-    new Map([
-      ["server", serverFrame],
-      ["wasm", wasmFrame],
-    ]),
+  fetch.mockResolvedValueOnce(
+    Response.json({
+      ...runtimeConfig("wasm"),
+      runtimeBindings: { cellRefs: { controls: "wasm-cell" } },
+    }),
   );
-  deck.switchRuntime("wasm");
-  expect(viewUrl).toHaveBeenCalledTimes(4);
-  for (const [runtime, source] of [
-    ["server", serverWindow],
-    ["wasm", wasmWindow],
-  ] as const) {
-    dispatchPreviewMessage(source, {
-      type: "marimo-studio:view-ready",
-      runtime,
-      view: "dashboard",
-      revision: "revision-1",
-    });
-    expect(deck.runtimeDiagnostics(runtime)?.current.phase).toBe("ready");
-  }
-
-  deck.reload();
-
-  expect(viewUrl).toHaveBeenCalledTimes(6);
-  expect(serverFrame.src).toContain("runtime=server");
-  expect(wasmFrame.src).toContain("runtime=wasm");
-  expect(deck.runtimeDiagnostics("server")).toMatchObject({
-    revision: null,
-    current: { phase: "connecting", diagnostics: [] },
+  vi.stubGlobal("fetch", fetch);
+  let emitEditor: ((update: ControlUpdate) => void) | undefined;
+  const editorEndpoint: ControlEndpoint = {
+    snapshot: () => [],
+    subscribe: (listener) => {
+      emitEditor = listener;
+      return () => {};
+    },
+    apply: vi.fn(async () => {}),
+    dispose: vi.fn(),
+  };
+  let controlAttempt = 0;
+  const previewWindow = createFrameBridgeSource((message) => {
+    if (message.type === "marimo-studio:frame-control-apply" && controlAttempt++ === 0) {
+      return "preview kernel unavailable";
+    }
   });
-  expect(deck.runtimeDiagnostics("wasm")).toMatchObject({
-    revision: null,
-    current: { phase: "connecting", diagnostics: [] },
-  });
-  deck.dispose();
-});
-
-it("reconciles source changes across the rendered preview lifecycle", () => {
-  const editor = frame("complete");
   const preview = frame("complete");
-  const postMessage = vi.fn();
-  const previewWindow = { postMessage };
-  Object.defineProperty(preview, "contentWindow", {
-    configurable: true,
-    value: previewWindow,
-  });
-  const server = controller(
-    "server",
-    editor,
-    preview,
-    (view, runtime) => `/${view}?runtime=${runtime}`,
-  );
-
-  server.sourceChanged("runtime");
-
-  expect(postMessage).not.toHaveBeenCalled();
-  const ready = new MessageEvent("message", {
-    origin: globalThis.location.origin,
-    data: {
-      type: "marimo-studio:receiver-ready",
-      runtime: "server",
-      view: "dashboard",
-    },
-  });
-  Object.defineProperty(ready, "source", { value: previewWindow });
-  globalThis.dispatchEvent(ready);
-
-  expect(postMessage).toHaveBeenCalledWith(
-    {
-      type: "marimo-studio:source-change",
-      runtime: "server",
-      view: "dashboard",
-      kind: "html",
-    },
-    globalThis.location.origin,
-  );
-  expect(server.runtimeStatus().current.phase).toBe("synchronizing");
-  postMessage.mockClear();
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-ready",
-    runtime: "server",
-    view: "dashboard",
+  installFrameBridge(preview, previewWindow, {
+    lifecycleId: 1,
     revision: "revision-1",
-    sessionId: "s_123456",
-  });
-
-  server.sourceChanged("css");
-
-  expect(postMessage).toHaveBeenCalledWith(
-    {
-      type: "marimo-studio:source-change",
-      runtime: "server",
-      view: "dashboard",
-      kind: "css",
-    },
-    globalThis.location.origin,
-  );
-  postMessage.mockClear();
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:receiver-unready",
-    runtime: "server",
+    runtime: "wasm",
+    sessionId: null,
     view: "dashboard",
   });
-  const disconnected = server.runtimeStatus();
-  expect(disconnected.revision).toBeNull();
-  expect(disconnected.sessionId).toBeNull();
-  expect(disconnected.transitions.find(({ phase }) => phase === "ready")).toMatchObject({
-    revision: "revision-1",
-    sessionId: "s_123456",
-  });
-  postMessage.mockClear();
-  globalThis.dispatchEvent(ready);
-
-  expect(postMessage).toHaveBeenCalledWith(
-    {
-      type: "marimo-studio:source-change",
-      runtime: "server",
-      view: "dashboard",
-      kind: "html",
-    },
-    globalThis.location.origin,
-  );
-  server.dispose();
-});
-
-it("reconciles source after a soft view switch commits", () => {
-  const editor = frame("complete");
-  const preview = frame("complete");
-  const postMessage = vi.fn();
-  const previewWindow = { postMessage };
-  Object.defineProperty(preview, "contentWindow", {
-    configurable: true,
-    value: previewWindow,
-  });
-  const server = controller(
-    "server",
-    editor,
-    preview,
-    (view, runtime) => `/${view}?runtime=${runtime}`,
-  );
-  const dispatch = (data: JsonValue) => dispatchPreviewMessage(previewWindow, data);
-  dispatch({
-    type: "marimo-studio:receiver-ready",
-    runtime: "server",
-    view: "dashboard",
-  });
-  dispatch({
-    type: "marimo-studio:view-ready",
-    runtime: "server",
-    view: "dashboard",
-    revision: "revision-1",
-    sessionId: "s_123456",
-  });
-  postMessage.mockClear();
-
-  server.switchView("report");
-  server.sourceChanged("css");
-
-  expect(postMessage).toHaveBeenCalledOnce();
-  expect(postMessage).toHaveBeenCalledWith(
-    expect.objectContaining({ type: "marimo-studio:switch-view", view: "report" }),
-    globalThis.location.origin,
-  );
-  dispatch({
-    type: "marimo-studio:view-ready",
-    runtime: "server",
-    view: "report",
-    revision: "revision-2",
-    sessionId: "s_123456",
-  });
-
-  expect(postMessage).toHaveBeenLastCalledWith(
-    {
-      type: "marimo-studio:source-change",
-      runtime: "server",
-      view: "report",
-      kind: "html",
-    },
-    globalThis.location.origin,
-  );
-  server.dispose();
-});
-
-it("compares the stream baseline with the rendered revision", () => {
-  const editor = frame("complete");
-  const preview = frame("complete");
-  const postMessage = vi.fn();
-  const previewWindow = { postMessage };
-  Object.defineProperty(preview, "contentWindow", {
-    configurable: true,
-    value: previewWindow,
-  });
-  const server = controller(
-    "server",
-    editor,
-    preview,
-    (view, runtime) => `/${view}?runtime=${runtime}`,
-  );
-  server.sourceBaseline("revision-1");
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:receiver-ready",
-    runtime: "server",
-    view: "dashboard",
-  });
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-ready",
-    runtime: "server",
-    view: "dashboard",
-    revision: "revision-1",
-    sessionId: "s_123456",
-  });
-
-  expect(postMessage).not.toHaveBeenCalled();
-
-  server.sourceBaseline("revision-2");
-
-  expect(postMessage).toHaveBeenCalledWith(
-    {
-      type: "marimo-studio:source-change",
-      runtime: "server",
-      view: "dashboard",
-      kind: "html",
-    },
-    globalThis.location.origin,
-  );
-  server.dispose();
-});
-
-it("retains a cleared preview diagnostic in runtime history", () => {
-  const editor = frame("complete");
-  const preview = frame("complete");
-  const previewWindow = { postMessage: vi.fn() };
-  Object.defineProperty(preview, "contentWindow", {
-    configurable: true,
-    value: previewWindow,
-  });
-  const server = controller(
-    "server",
-    editor,
-    preview,
-    (view, runtime) => `/${view}?runtime=${runtime}`,
-  );
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:receiver-ready",
-    runtime: "server",
-    view: "dashboard",
-  });
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-ready",
-    runtime: "server",
-    view: "dashboard",
-    revision: "revision-1",
-    sessionId: "s_123456",
-  });
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-diagnostics",
-    runtime: "server",
-    view: "dashboard",
-    diagnostics: [
-      {
-        code: "value-stale",
-        severity: "warning",
-        message: "The projected value is stale.",
-        hint: "Wait for the notebook to finish running.",
-        view: "dashboard",
-        scope: "projection",
-        projection: "value",
-        target: "summary.total",
-      },
-    ],
-  });
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-diagnostics",
-    runtime: "server",
-    view: "dashboard",
-    diagnostics: [],
-  });
-
-  const report = server.runtimeStatus();
-  expect(report.current.phase).toBe("ready");
-  expect(report.transitions.map(({ phase }) => phase)).toEqual([
-    "connecting",
-    "ready",
-    "degraded",
-    "ready",
-  ]);
-  expect(report.transitions[2]?.diagnostics[0]?.code).toBe("value-stale");
-  server.dispose();
-});
-
-it("ignores superseded observation replies before updating runtime identity", () => {
-  const editor = frame("complete");
-  const preview = frame("complete");
-  const previewWindow = { postMessage: vi.fn() };
-  Object.defineProperty(preview, "contentWindow", {
-    configurable: true,
-    value: previewWindow,
-  });
+  const connect = vi.fn<() => ControlEndpoint | undefined>().mockReturnValue(editorEndpoint);
   const report = vi.fn();
-  const record = vi.fn(async () => undefined);
-  const server = new PreviewController(
+  const wasm = new PreviewController(
     "dashboard",
-    "server",
-    editor,
+    "wasm",
+    frame("loading"),
     preview,
     (view, runtime) => `/${view}?runtime=${runtime}`,
     (view) => `/support/${view}`,
@@ -527,118 +499,153 @@ it("ignores superseded observation replies before updating runtime identity", ()
     vi.fn(async () => "accepted" as const),
     vi.fn(),
     report,
-    record,
+    undefined,
+    connect,
   );
-  server.requestObservation({
-    schema: 1,
-    requestId: "stale-request",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "stale-instance",
-    revision: "revision-1",
-  });
-  server.requestObservation({
-    schema: 1,
-    requestId: "current-request",
-    view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "current-instance",
-    revision: "revision-2",
-  });
-  report.mockClear();
+  wasm.editorSessionChanged("s_editor1", false);
 
   dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-observation",
-    requestId: "stale-request",
+    type: "marimo-studio:view-ready",
+    runtime: "wasm",
+    lifecycleId: 1,
     view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "stale-instance",
     revision: "revision-1",
-    state: "ready",
-    diagnostics: [],
-    sessionId: "s_stale1",
-    query: "",
   });
+  await vi.waitFor(() => expect(connect).toHaveBeenCalledOnce());
 
-  expect(report).not.toHaveBeenCalled();
-  expect(preview.dataset.sessionId).toBeUndefined();
-  expect(server.runtimeStatus()).toMatchObject({
-    revision: null,
-    sessionId: null,
-    current: { phase: "connecting" },
-  });
+  emitEditor?.({ objectId: "server-cell-control-0", value: 4 });
+  await vi.waitFor(() =>
+    expect(report).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        runtimeStatus: expect.objectContaining({
+          current: expect.objectContaining({
+            phase: "degraded",
+            diagnostics: [expect.objectContaining({ code: "control-sync-failed" })],
+          }),
+        }),
+      }),
+    ),
+  );
+  await vi.advanceTimersByTimeAsync(100);
+  await vi.waitFor(() =>
+    expect(report).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        runtimeStatus: expect.objectContaining({
+          current: expect.objectContaining({ phase: "ready", diagnostics: [] }),
+        }),
+      }),
+    ),
+  );
 
-  dispatchPreviewMessage(previewWindow, {
-    type: "marimo-studio:view-observation",
-    requestId: "current-request",
+  wasm.dispose();
+});
+
+it("reports a query failure and clears it after the editor recovers", async () => {
+  vi.useFakeTimers();
+  const syncEditorQuery = vi
+    .fn<
+      (
+        query: string,
+        operationId: string,
+        writeGeneration: number,
+        signal: AbortSignal,
+      ) => Promise<EditorQuerySyncResult>
+    >()
+    .mockRejectedValueOnce(new Error("editor query unavailable"))
+    .mockResolvedValueOnce("accepted");
+  const report = vi.fn();
+  const server = new PreviewController(
+    "dashboard",
+    "wasm",
+    frame("loading"),
+    frame("complete"),
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+    (view) => `/support/${view}`,
+    vi.fn(),
+    syncEditorQuery,
+    vi.fn(),
+    report,
+  );
+  vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  dispatchPreviewMessage(null, {
+    type: "marimo-studio:view-ready",
+    runtime: "wasm",
+    lifecycleId: 1,
     view: "dashboard",
-    runtime: "server",
-    runtimeInstance: "current-instance",
-    revision: "revision-2",
-    state: "ready",
-    diagnostics: [],
-    sessionId: "s_current2",
-    query: "",
+    revision: "revision-1",
   });
 
-  expect(preview.dataset.sessionId).toBe("s_current2");
-  expect(server.runtimeStatus()).toMatchObject({
-    revision: "revision-2",
-    sessionId: "s_current2",
-    current: { phase: "ready" },
+  dispatchPreviewMessage(null, {
+    type: "marimo-studio:query-change",
+    runtime: "wasm",
+    lifecycleId: 1,
+    query: "?region=apac",
   });
-  expect(record).toHaveBeenCalledTimes(1);
-  expect(record).toHaveBeenCalledWith(expect.objectContaining({ requestId: "current-request" }));
+  await vi.waitFor(() =>
+    expect(
+      report.mock.calls.some(([state]) =>
+        state.runtimeStatus.current.diagnostics.some(
+          (diagnostic: BrowserDiagnostic) => diagnostic.code === "query-sync-failed",
+        ),
+      ),
+    ).toBe(true),
+  );
+  await vi.advanceTimersByTimeAsync(1_000);
+  await vi.waitFor(() =>
+    expect(report).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        runtimeStatus: expect.objectContaining({
+          current: expect.objectContaining({ phase: "ready", diagnostics: [] }),
+        }),
+      }),
+    ),
+  );
+
+  expect(syncEditorQuery).toHaveBeenCalledTimes(2);
   server.dispose();
 });
 
-it("reloads attached previews once for each newer editor binding", () => {
-  const editor = frame("loading");
-  const serverFrame = frame("complete");
-  const wasmFrame = frame("complete");
-  const viewUrl = vi.fn((view: string, runtime: string) => `/${view}?runtime=${runtime}`);
-  const deck = new PreviewDeck({
-    initialView: "dashboard",
-    initialRuntime: "server",
-    runtimes: ["server", "wasm"],
-    viewUrl,
-    supportUrl: (view) => `/support/${view}`,
-    syncQuery: vi.fn(),
-    syncEditorQuery: vi.fn(async () => "accepted" as const),
-    navigate: vi.fn(),
+it("restores the committed query after an editor-session reload interrupts dispatch", async () => {
+  let resolveDispatch!: (result: EditorQuerySyncResult) => void;
+  const dispatched = new Promise<EditorQuerySyncResult>((resolve) => {
+    resolveDispatch = resolve;
   });
-  deck.attach(
-    editor,
-    new Map([
-      ["server", serverFrame],
-      ["wasm", wasmFrame],
-    ]),
+  const syncEditorQuery = vi
+    .fn<
+      (
+        query: string,
+        operationId: string,
+        writeGeneration: number,
+        signal: AbortSignal,
+      ) => Promise<EditorQuerySyncResult>
+    >()
+    .mockReturnValueOnce(dispatched)
+    .mockResolvedValue("accepted");
+  const server = new PreviewController(
+    "dashboard",
+    "server",
+    frame("loading"),
+    frame("complete"),
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+    (view) => `/support/${view}`,
+    vi.fn(),
+    syncEditorQuery,
+    vi.fn(),
+    vi.fn(),
+    undefined,
+    undefined,
+    { query: "?region=emea", hash: "" },
   );
-  deck.switchRuntime("wasm");
-  expect(viewUrl).toHaveBeenCalledTimes(4);
 
-  deck.editorSessionChanged({
-    schema: 1,
-    generation: 7,
-    sessionId: "s_initial",
-    replaced: false,
-  });
-  deck.editorSessionChanged({
-    schema: 1,
-    generation: 6,
-    sessionId: "s_stale",
-    replaced: false,
-  });
-  expect(viewUrl).toHaveBeenCalledTimes(4);
+  const navigation = server.synchronizeNavigationQuery("?region=apac");
+  const operationId = syncEditorQuery.mock.calls[0]?.[1];
+  server.editorSessionChanged();
+  await expect(navigation).resolves.toBe(false);
+  server.editorQueryChanged("?region=apac", operationId, true);
+  expect(syncEditorQuery).toHaveBeenCalledOnce();
+  resolveDispatch("accepted");
+  await vi.waitFor(() => expect(syncEditorQuery).toHaveBeenCalledTimes(2));
 
-  deck.editorSessionChanged({
-    schema: 1,
-    generation: 8,
-    sessionId: "s_reconnected",
-    replaced: true,
-  });
-  expect(viewUrl).toHaveBeenCalledTimes(6);
-  expect(serverFrame.src).toContain("runtime=server");
-  expect(wasmFrame.src).toContain("runtime=wasm");
-  deck.dispose();
+  expect(syncEditorQuery.mock.calls[1]?.[0]).toBe("?region=emea");
+  server.dispose();
 });

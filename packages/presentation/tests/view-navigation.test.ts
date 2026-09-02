@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "vite-plus/test";
 
-import { viewNavigationForUrl } from "../src/document/view-navigation.ts";
+import {
+  viewHistoryNavigationForUrl,
+  viewNavigationForUrl,
+} from "../src/document/view-navigation.ts";
 
-const selection = (href: string, currentView = "novice") =>
+const selection = (href: string, currentView = "novice", runtimeExplicit = false) =>
   viewNavigationForUrl({
     href,
     origin: "https://example.test",
     publicRootUrl: "/proxy/token/",
     documentRootUrl: "/proxy/token/",
     publicQuery: "",
+    trustedRuntime: { id: "server", explicit: runtimeExplicit },
     views: ["novice", "intermediate", "expert"],
     currentView,
   });
@@ -23,6 +27,19 @@ const authoredSelection = (path: string) =>
     publicRootUrl: "/proxy/token/?file=analysis.py",
     documentRootUrl: new URL(authoredRoot).pathname,
     publicQuery: "?region=eu",
+    trustedRuntime: { id: "server", explicit: false },
+    views: ["novice", "expert"],
+    currentView: "novice",
+  });
+
+const relativeSelection = (href: string) =>
+  viewNavigationForUrl({
+    href,
+    origin: "https://example.test",
+    publicRootUrl: "/proxy/token/?file=analysis.py",
+    documentRootUrl: new URL(authoredRoot).pathname,
+    publicQuery: "?region=eu",
+    trustedRuntime: { id: "server", explicit: false },
     views: ["novice", "expert"],
     currentView: "novice",
   });
@@ -78,6 +95,107 @@ test("authored routes navigate through their public notebook URL", () => {
   for (const [path, expected] of cases) {
     assert.deepEqual(authoredSelection(path), expected);
   }
+});
+
+test("relative authored links resolve from the current public view", () => {
+  assert.deepEqual(relativeSelection("#details"), {
+    view: "novice",
+    current: true,
+    documentUrl: "https://example.test/proxy/token/novice/?file=analysis.py&region=eu#details",
+  });
+  assert.deepEqual(relativeSelection("?region=us"), {
+    view: "novice",
+    current: true,
+    documentUrl: "https://example.test/proxy/token/novice/?file=analysis.py&region=us",
+  });
+  assert.deepEqual(relativeSelection("../expert/"), {
+    view: "expert",
+    current: false,
+    documentUrl: "https://example.test/proxy/token/expert/?file=analysis.py&region=eu",
+  });
+  assert.deepEqual(relativeSelection("../expert/index.html"), {
+    view: "expert",
+    current: false,
+    documentUrl: "https://example.test/proxy/token/expert/?file=analysis.py&region=eu",
+  });
+  assert.equal(relativeSelection("./assets/report.csv"), undefined);
+});
+
+test("authored runtime and private transport state cannot replace trusted navigation", () => {
+  assert.deepEqual(
+    selection(
+      "https://example.test/proxy/token/expert/?region=eu&runtime=wasm" +
+        "&access_token=forged&file=forged.py&session_id=s_forged" +
+        "&marimo_studio_client=forged&marimo_studio_lifecycle=99" +
+        "&marimo_studio_resume=1",
+    ),
+    {
+      view: "expert",
+      current: false,
+      documentUrl: "https://example.test/proxy/token/expert/?region=eu",
+    },
+  );
+  assert.deepEqual(
+    selection("https://example.test/proxy/token/expert/?region=eu&runtime=wasm", "novice", true),
+    {
+      view: "expert",
+      current: false,
+      documentUrl: "https://example.test/proxy/token/expert/?region=eu&runtime=server",
+    },
+  );
+  assert.deepEqual(
+    selection("https://example.test/proxy/token/expert/?region=eu", "novice", true),
+    {
+      view: "expert",
+      current: false,
+      documentUrl: "https://example.test/proxy/token/expert/?region=eu&runtime=server",
+    },
+  );
+});
+
+test("history navigation canonicalizes runtime before restore or query reload", () => {
+  const historyNavigation = (href: string, mountedDocumentUrl: string, runtimeExplicit = false) =>
+    viewHistoryNavigationForUrl({
+      href,
+      origin: "https://example.test",
+      publicRootUrl: "/proxy/token/",
+      documentRootUrl: "/proxy/token/",
+      publicQuery: "?region=apac",
+      trustedRuntime: { id: "server", explicit: runtimeExplicit },
+      views: ["novice", "expert"],
+      currentView: "novice",
+      mountedDocumentUrl,
+    });
+
+  assert.deepEqual(
+    historyNavigation(
+      "https://example.test/proxy/token/expert/?region=apac&runtime=wasm",
+      "https://example.test/_marimo-studio/presentation/revision/novice/?region=apac",
+    ),
+    {
+      navigation: {
+        view: "expert",
+        current: false,
+        documentUrl: "https://example.test/proxy/token/expert/?region=apac",
+      },
+      publicQueryChanged: false,
+    },
+  );
+  assert.deepEqual(
+    historyNavigation(
+      "https://example.test/proxy/token/expert/?region=apac&runtime=wasm",
+      "https://example.test/_marimo-studio/presentation/revision/novice/?region=emea",
+      true,
+    ),
+    {
+      navigation: {
+        view: "expert",
+        current: false,
+        documentUrl: "https://example.test/proxy/token/expert/?region=apac&runtime=server",
+      },
+      publicQueryChanged: true,
+    },
+  );
 });
 
 test("view navigation leaves other links to the browser", () => {

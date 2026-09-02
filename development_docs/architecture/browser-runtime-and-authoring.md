@@ -1,510 +1,517 @@
 # Browser runtime and authoring
 
-The browser workspace contains two long-lived documents:
+The browser composes two documents. The native Marimo editor remains the
+notebook surface. A Studio presentation document renders one immutable view
+artifact with a selected runtime. The Studio workspace arranges Notebook,
+Source, and Preview surfaces around those documents.
 
-- The Studio document composes the notebook editor, source editor, preview
-  frames, navigation, and agent events.
-- A presentation document owns one authored view, one selected runtime, and the
-  cell, output, and value projections mounted into that view.
+See the [canonical ownership map](../architecture.md#ownership) for package
+responsibilities and [Identities and state](identities-and-state.md) for
+revision, generation, session, and readiness terms.
 
-Keeping these documents separate lets a finished view run without the authoring
-workspace while the workspace can retain several runtime frames and switch
-which one is visible.
+## Package ownership
 
-## Package direction
+| Package                    | Owns                                                                                    |
+| -------------------------- | --------------------------------------------------------------------------------------- |
+| `packages/protocol`        | Zod schemas and inferred transport records                                              |
+| `packages/runtime`         | Runtime registration plus mount, update, query, and disposal session interface          |
+| `packages/presentation`    | Artifact document, revision transaction, projections, styles, navigation, and readiness |
+| `packages/studio`          | Notebook, Source, Preview, view inventory, and workspace controllers                    |
+| `packages/marimo-frontend` | Named adapters around unstable Marimo frontend modules                                  |
+| `apps/browser`             | Final browser composition                                                               |
+| `apps/e2e`                 | Live Marimo and Chromium acceptance                                                     |
 
-```mermaid
-flowchart TB
-    browser[apps/browser<br/>entry-point composition]
-    studio[packages/studio<br/>authoring workspace]
-    presentation[packages/presentation<br/>authored view lifecycle]
-    facade[packages/marimo-frontend<br/>Marimo frontend adapters]
-    runtime[packages/runtime<br/>runtime SPI]
-    protocol[packages/protocol<br/>validated records]
-    marimo[Marimo frontend source]
+Protocol performs no I/O. Runtime imports protocol and performs no Marimo,
+React, or browser I/O. Presentation imports runtime, protocol, and named Marimo
+frontend adapters. Studio imports protocol and stays independent of
+presentation implementation.
 
-    browser --> studio
-    browser --> presentation
-    presentation --> runtime
-    presentation --> facade
-    presentation --> protocol
-    studio --> protocol
-    runtime --> protocol
-    facade --> marimo
+Within Studio, source follows `app -> features -> shared`. Feature slices
+import no app module. Shared primitives import no app or feature module.
+
+## Browser documents
+
+```text
+Marimo editor document
+  owns notebook editing and live session
+
+Studio workspace document
+  owns navigation, panes, Source, and preview frames
+
+Presentation document
+  owns one artifact shell and projection hosts
 ```
 
-The root Vite configuration enforces these directions. `packages/protocol`
-performs no network, filesystem, document object model, or window I/O.
-`packages/runtime` performs no Marimo, React, or browser I/O. Studio feature
-slices do not import presentation or Marimo frontend code.
+The workspace keeps a bounded cache of preview frames keyed by runtime and
+view. Frames remain mounted while the user changes workspace modes so runtime
+state survives pane rearrangement, view switching, and runtime switching.
 
-## Semantic inventory
+## Runtime document assembly
 
-### 1. Browser protocol records
+`render_presentation_document()` starts from the artifact entry document and
+injects Studio runtime assets, support URL, presentation revision, selected
+runtime, notebook filename, and development flags.
 
-`packages/protocol` owns Zod schemas and inferred TypeScript types for bootstrap
-records, runtime configuration, source events, view inventory, preview
-messages, query state, value reads, output reads, development events, and
-browser observations.
+The authored document must contain one complete `head`, one complete `body`,
+and one `#app-shell`. Studio owns runtime markup around that shell.
 
-- **User capability:** server and browser agree on which notebook, view,
-  runtime, revision, session, and request a message describes.
-- **Complexity carried:** untrusted JSON must be validated before it affects
-  navigation, runtime state, source writes, or agent evidence.
-- **Maintenance surface:** protocol schema, Python producer, every browser
-  consumer, fixtures, and producer-consumer contract tests.
+The document base points at the selected artifact revision. Relative scripts,
+styles, dynamic imports, images, fonts, workers, and local fetches resolve
+inside one immutable public file tree.
 
-### 2. Runtime service-provider interface
+Runtime configuration carries:
 
-`packages/runtime` defines the complete browser runtime interface:
+- Presentation revision, projection revision, and selected view
+- Selected runtime and runtime instance
+- Runtime-specific connection or worker data
+- Precomputed projection targets and dependency closures
+- Artifact mount declarations
+- Projection policy and semantic-to-runtime cell bindings
+- Projection diagnostics
+- Marimo app, user, and override configuration
+- Development and mode state
 
-```ts
-interface PresentationRuntime {
-  readonly id: string;
-  mount(context: RuntimeContext, data: Readonly<Record<string, unknown>>): Promise<RuntimeSession>;
-}
+Studio bootstrap carries the runtime catalog used by authoring controls.
 
-interface RuntimeSession {
-  readonly id: string;
-  readonly sessionId?: string;
-  update(config: RuntimeConfig): "applied" | "reload";
-  updateQuery(query: string): Promise<void>;
-  dispose(): void;
-}
+`_delivery/runtime_config.py` serializes this record for live Server and static
+export delivery. The shared JSON fixture is parsed by the Zod protocol tests.
+
+The presentation revision identifies the exact page snapshot used for browser
+requests and evidence. The projection revision identifies the notebook,
+runtime, mounts, targets, bindings, policy, and diagnostics that own projected
+state. A stylesheet or non-projection markup edit advances the presentation
+revision while retaining live values, outputs, controls, and cell portals.
+
+## Presentation revision transaction
+
+`PresentationRevisionController` owns the browser transaction that replaces an
+artifact document, runtime configuration, styles, or selected view.
+
+```text
+begin readiness generation
+  -> cancel prior transition
+  -> fetch candidate document
+  -> read presentation revision
+  -> fetch matching runtime configuration
+  -> parse candidate document
+  -> prepare projection hosts
+  -> stage view styles and linked stylesheets
+  -> commit support URL and runtime configuration
+  -> update authored markup around stable projection hosts
+  -> reload when projection host placement changes
+  -> commit styles and document base
+  -> mark ready
 ```
 
-- **User capability:** a view can select Server or WebAssembly while the
-  authored document and projection lifecycle remain the same.
-- **Complexity carried:** runtime-specific transport, mounting, update, query,
-  and disposal details stay behind one document-scoped session.
-- **Maintenance surface:** `packages/runtime`, runtime registry composition,
-  Server and WebAssembly implementations, and runtime conformance tests.
+Failure discards staged state and keeps the current document mounted. A script
+change that requires browser evaluation triggers a full document reload. A
+runtime-only change updates runtime configuration. A stylesheet-only artifact
+change can refresh linked styles while preserving the shell.
 
-### 3. Presentation bootstrap
+The controller owns cancellation, rollback, readiness, and failure diagnostics
+as one transaction. `BrowserSessionReplay` owns browser-side server-session
+replay state and gives the controller preserved reload URLs and session memory
+through a narrow port.
 
-`packages/presentation/src/main.ts` establishes relative URL behavior,
-restores runtime selection, starts query observation, prepares session replay,
-loads runtime configuration, registers projection hosts, initializes view
-styles, mounts the selected runtime, and installs page teardown.
+## Projection host runtime
 
-- **User capability:** a view can run as a Studio preview, a standalone Marimo
-  route, or a static export with the same authored document contract.
-- **Complexity carried:** base URL, runtime selection, transient session
-  readiness, style generation, host registration, and teardown must occur in a
-  fixed order.
-- **Maintenance surface:** presentation bootstrap, runtime configuration store,
-  session startup, integration tests, and live run-mode acceptance.
+`ProjectionHostRuntime` registers and coordinates three host families:
 
-### 4. Presentation revision transaction
+- `<marimo-cell name="...">`
+- `<marimo-output value="...">`
+- Elements carrying `mo-value="..."`
 
-`PresentationRevisionController` is the transaction owner for navigation and
-development refresh. It cancels a superseded generation, marks readiness as
-loading, stages the document and runtime configuration, commits or rolls back,
-updates the mounted runtime, preserves a session when a page reload is needed,
-and publishes terminal readiness.
+Each artifact host carries a provider-injected source-site ID. The runtime
+assigns an instance ID when the host connects, resolves its current target,
+and releases ownership when the host disconnects or changes targets.
 
-- **User capability:** HTML, CSS, view navigation, and notebook changes update
-  one coherent page while a failed refresh leaves the last valid view visible.
-- **Complexity carried:** asynchronous fetches can complete out of order. A
-  runtime may apply new configuration in place or require a reload. Scripts
-  require the browser's full document lifecycle.
-- **Maintenance surface:** `document/revision-controller.ts`,
-  `document/revision-document.ts`, `document/revision-runtime.ts`, development
-  reload, navigation, and revision transaction tests.
+Host adapters participate in:
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Author
-    participant Source as View source
-    participant Server as Studio support routes
-    participant Revision as PresentationRevisionController
-    participant Document as DocumentRevisionAdapter
-    participant Runtime as RuntimeSession
-    participant Hosts as ProjectionHostRuntime
-    participant Ready as ReadinessController
+- Custom-element registration
+- Candidate document preparation
+- Source-site and target observation
+- Mount and disconnect
+- Preservation across document swaps
+- Readiness contribution
+- Projection-instance observations
 
-    Author->>Source: Save HTML, CSS, module, or notebook
-    Source->>Server: Publish source or runtime change
-    Server-->>Revision: Development event with revision
-    Revision->>Ready: Begin new generation
-    Revision->>Document: Stage document and styles
-    Revision->>Server: Fetch exact runtime configuration
-    Server-->>Revision: Matching view revision and bindings
+Read [Symbolic projections](symbolic-projections.md) for authorization,
+resolution, duplicate ownership, quotas, and evidence.
 
-    alt Scripted document or runtime requests reload
-        Revision->>Document: Preserve replay URL and reload page
-    else In-place transition
-        Revision->>Document: Commit authored shell and styles
-        Revision->>Hosts: Preserve live projection owners
-        Revision->>Runtime: Apply matching configuration
-        Runtime-->>Ready: Runtime and projection state
-        Ready-->>Author: Ready or actionable diagnostic
-    end
+## Protocol ownership
+
+`packages/protocol` owns serialization. Each lane has one producer and one
+consumer boundary:
+
+| Lane               | Records                                                                           | Owner transition                                     |
+| ------------------ | --------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Server bootstrap   | `StudioBootstrap`, `RuntimeConfig`, `MountConfig`                                 | Python delivery to the presentation document         |
+| View project       | `ViewProject`, `SourceDocument`, `ViewBuildState`                                 | Python Source services to Studio controllers         |
+| Development events | Project, build, presentation, views, session, activation, and observation records | Server event coordinator to Studio features          |
+| Preview messages   | Revision, readiness, navigation, query, diagnostic, and observation messages      | Presentation document and Preview controller         |
+| Frame bridge       | Control, query, resize, and acknowledgement records                               | Studio workspace and the selected presentation frame |
+| Projection reads   | Value and output requests and responses                                           | Presentation hosts and revision-bound server routes  |
+| Browser evidence   | `BrowserObservation` and `RuntimeStatusReport`                                    | Presentation observer to agent coordination          |
+
+Zod schemas parse browser input at the receiving boundary. Python producers
+emit schema 1 records with the same field meanings. Add malformed, stale, and
+oversized cases when a field controls mutation, resource ownership,
+authorization, or evidence.
+
+Runtime configuration and projection reads are separate lanes. Committing a
+runtime configuration selects the current projection revision. Each value or
+output read still carries that projection identity and can receive a transient
+stale-binding response.
+
+## Runtime SPI
+
+`packages/runtime` defines the small lifecycle shared by Server and
+WebAssembly:
+
+```text
+register runtime ID
+  -> mount RuntimeContext and runtime data
+  -> update complete RuntimeConfig
+  -> update public query
+  -> dispose
 ```
 
-### 5. Document mutation adapter
-
-`DocumentRevisionAdapter` owns mutations to the authored shell, `<base>`,
-stylesheets, document title and metadata, browser history, support URL, and
-runtime configuration for one transaction.
-
-- **User capability:** regular relative links and assets continue to resolve
-  when a view runs under a named route or nested deployment path.
-- **Complexity carried:** the document must preserve runtime-owned nodes while
-  replacing author-owned nodes and must restore the previous state on failure.
-- **Maintenance surface:** document base, styles, scripts, view navigation,
-  document revision tests, and nested-base browser acceptance.
-
-### 6. Refresh classification
-
-The source lifecycle distinguishes changes by browser consequence:
-
-| Change                                    | Browser operation                                      | User result                                                                        |
-| ----------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| CSS                                       | Refresh matching stylesheets and runtime configuration | Visual changes appear while runtime and document state remain mounted              |
-| Scriptless HTML                           | Replace the staged `#app-shell`                        | Structure changes while the runtime root and live projection owners remain mounted |
-| Scripted HTML or JavaScript module        | Reload the view document                               | The browser reevaluates the module graph through its regular lifecycle             |
-| Notebook, alias, or runtime configuration | Refresh runtime configuration                          | Cell and selector bindings update against the new notebook revision                |
-| Invalid staged document or response       | Roll back and publish a diagnostic                     | The last valid shell remains visible for repair                                    |
-
-### 7. Projection host runtime
-
-`ProjectionHostRuntime` composes cell, rich-output, and JSON-value host adapters.
-It registers custom elements, connects live value bindings, prepares staged
-documents, transfers preserved owners into the committed document, publishes
-host changes, and contributes projection states to readiness.
-
-- **User capability:** all three projection forms participate in the same
-  document refresh and readiness model.
-- **Complexity carried:** each projection keeps its own selector semantics and
-  rendering implementation while joining one host lifecycle.
-- **Maintenance surface:** `projections/host-runtime.ts`, host adapters, change
-  notifications, readiness tests, and live projection acceptance.
-
-### 8. Complete cell projection
-
-`<marimo-cell>` maps a configured alias or native cell name to the selected
-runtime cell ID. React portals render Marimo's console and output presentation
-inside the authored host.
-
-- **User capability:** a view receives the complete cell result, including
-  imperative output, logs when enabled, errors, tables, plots, controls,
-  downloads, and widgets.
-- **Complexity carried:** output may be loading, stale, ready, missing, or
-  failed. A host must preserve the last output during reactive reruns and reject
-  duplicate projection owners.
-- **Maintenance surface:** `cells`, `runtime/cells`, the cell-presentation
-  frontend adapter, output policy tests, and Server and WebAssembly acceptance.
-
-### 9. Native rich-output projection
-
-`<marimo-output>` asks the selected runtime to resolve one value reference and
-format the resulting Python object through Marimo's native output registry.
-The frontend adapter renders the result as a synthetic presentation cell.
-
-- **User capability:** a DataFrame, plot, Markdown object, control, download,
-  or widget can appear independently from the defining cell's complete output.
-- **Complexity carried:** the defining notebook cell remains reactive while the
-  presentation cell owns formatter-created controls, functions, virtual files,
-  and output resources until the final rendered owner releases them.
-- **Maintenance surface:** `outputs`, `runtime/outputs`, Python kernel output
-  bridge, projected-output frontend adapter, resource lifetime tests, and rich
-  output acceptance.
-
-### 10. JSON value projection
-
-`mo-value` resolves a bounded value reference and publishes a JSON snapshot
-through element text, the `marimoValue` property, and update or error events.
-Every runtime-bound value host also receives the current runtime cell ID,
-matching the producer metadata on cell and rich-output hosts. This metadata is
-derived from the runtime binding and changes with that binding.
-
-Studio exports `LENS_TARGET_SELECTOR` as its projection-host selection policy.
-Lens consumes that CSS selector and the generic runtime cell metadata, while
-Studio retains ownership of its custom elements and authored binding syntax.
-
-- **User capability:** authored JavaScript can consume typed notebook data
-  through regular document events and properties.
-- **Complexity carried:** JSON `null`, unavailable `undefined`, loading, stale,
-  unchanged encodings, size limits, event ordering, and nested selector errors
-  remain distinct.
-- **Maintenance surface:** `values`, `runtime/values`, value protocol, Python
-  selector bridge, browser API tests, and the view document reference.
-
-### 11. Readiness and diagnostics
-
-`ReadinessController` reduces runtime, presentation, and projection host state.
-The rendered-view observer probes the committed page, publishes
-`window.marimoStudio`, updates root data attributes, and sends parent-frame
-messages. The agent observer owns one exact observation request.
-
-`RuntimeDiagnostics` turns preview lifecycle messages into a structured report
-for each prepared runtime. The report holds the current phase and diagnostics,
-plus the latest 32 distinct transitions. Each transition retains up to 20
-diagnostics and records whether more were present. `PreviewDeck.runtimeDiagnostics()`
-returns the report for internal consumers. Browser observations carry the same
-report through the existing agent analysis path.
-
-| Phase           | Runtime condition                                | Indicator           |
-| --------------- | ------------------------------------------------ | ------------------- |
-| `connecting`    | The preview receiver or runtime transport starts | Pulsing blue        |
-| `synchronizing` | The selected view sources or notebook update     | Pulsing blue        |
-| `ready`         | The rendered view settled with no diagnostics    | Green               |
-| `degraded`      | The rendered view is live with diagnostics       | Orange with summary |
-| `failed`        | The preview requires a repair action             | Red                 |
-
-- **User capability:** browser modules can wait for a settled view, Studio can
-  show a specific runtime condition, and agents can inspect current and recent
-  diagnostic evidence.
-- **Complexity carried:** retained stale content can remain visible while a
-  generation is loading. The report deduplicates repeated states and bounds
-  diagnostic history. A terminal error in one projection must identify that host
-  while healthy regions remain rendered.
-- **Maintenance surface:** readiness reducer, rendered observer, agent observer,
-  preview runtime diagnostics, protocol records, browser API tests, and agent
-  analysis acceptance.
-
-### 12. Scoped view styles
-
-Presentation generates UnoCSS Wind4 utilities from classes in `#app-shell` and
-scopes those rules before Marimo-owned output. Authored `app.css` continues to
-use the regular cascade.
-
-- **User capability:** authors can use responsive utility classes for the page
-  while native Marimo tables, plots, controls, and widgets retain their own
-  styles.
-- **Complexity carried:** dynamic classes, CSS `@scope` support, semantic theme
-  variables, generated rule replacement, and runtime output boundaries must
-  remain explicit.
-- **Maintenance surface:** `view-styles`, foundation CSS, generator tests,
-  rendered desktop and narrow checks, and documentation examples.
-
-### 13. Studio application composition
-
-`createStudioServices` creates the layout, source, view, preview, and workspace
-event controllers. `app/` owns coordination across features. Features expose
-typed controller ports and import no app module. `shared/` imports no app or
-feature module.
-
-- **User capability:** navigation, authoring, preview, view management, and
-  agent operations behave as one workspace.
-- **Complexity carried:** cross-feature actions need one coordinator instead of
-  feature-to-feature imports and event cycles.
-- **Maintenance surface:** `packages/studio/src/app`, feature controller ports,
-  import-boundary checks, and Studio package tests.
-
-### 14. Workspace modes and pane layout
-
-The layout controller composes three surfaces: native notebook, view source,
-and preview. Presets provide Notebook, Build, Preview, and HTML & CSS modes. A
-custom workspace can add, remove, move, resize, equalize, and restore panes.
-Per-view layout state is stored under the workspace identity.
-
-- **User capability:** the same view can be edited as notebook-first,
-  side-by-side, preview-first, source-first, or a saved custom arrangement.
-- **Complexity carried:** minimum pane sizes, split geometry, compact layout,
-  keyboard and pointer resizing, per-view persistence, and hidden-surface
-  activity must agree.
-- **Maintenance surface:** `features/workspace`, navigation model, responsive
-  CSS, geometry tests, storage tests, and responsive browser acceptance.
-
-### 15. Stable editor and preview frames
-
-The workspace creates the native editor frame and one frame for each prepared
-preview runtime. Mode, layout, and visibility changes hide or rearrange frames
-instead of remounting them. The preview deck starts a runtime when needed and
-retains its controller and frame.
-
-- **User capability:** changing workspace mode preserves editor state, Server
-  kernel attachment, WebAssembly worker state, controls, and runtime-local
-  widgets.
-- **Complexity carried:** a hidden frame still owns resources and can publish
-  events. Disposal, view switching, runtime switching, resize, and session
-  replacement must target every mounted frame exactly once.
-- **Maintenance surface:** `features/preview/deck.ts`, workspace frame
-  components, preview controller tests, and runtime lifecycle acceptance.
-
-### 16. Source editor and external edits
-
-The source controller owns one synchronized document for `index.html` and one
-for `app.css`. Each buffer autosaves after a short pause using its loaded
-revision. The workspace event stream announces disk changes, and the source
-controller reconciles the affected buffers against their loaded revisions.
-
-- **User capability:** authors can edit in the browser or an external editor.
-  Clean buffers refresh from disk. Dirty buffers expose Compare, Use disk, and
-  Keep mine actions.
-- **Complexity carried:** writes, event delivery, reads, view switches, and
-  autosave timers can race. The controller tracks generations and source
-  versions before applying any result.
-- **Maintenance surface:** `features/source-editor`, source protocol and server
-  routes, synchronization tests, and external-edit acceptance.
-
-### 17. View transitions
-
-`ViewController` owns inventory and mutations. `ViewTransition` prepares source
-for the target, commits layout and preview changes, updates history, and cancels
-a superseded selection. Removal adds ordered source flush and successor
-preparation.
-
-- **User capability:** selecting or removing a view preserves valid source and
-  workspace state.
-- **Complexity carried:** inventory can change externally, an edit can block a
-  transition, and several selection requests can overlap.
-- **Maintenance surface:** `features/views`, Studio view APIs, transition tests,
-  and live multi-view acceptance.
-
-### 18. Workspace event coordination
-
-`WorkspaceEventCoordinator` owns one server-sent event stream for source
-changes, inventory, agent activation, browser observation, and editor-session
-binding. It routes source changes to the source controller and prepared preview
-frames, then acknowledges a completed targeted activation.
-
-The stream-ready event carries the current presentation revision. Each preview
-compares that baseline with its rendered revision and refreshes when they differ.
-Preview documents report when their receiver enters and leaves the page, so
-changes that cross a document navigation are replayed after the next receiver
-starts.
-
-The Studio document, editor frame, preview frames, and event stream carry a
-hashed server-instance identifier. A restarted process rejects stale session
-connections before session allocation and returns HTTP 204 for stale event
-streams. [`EventSource` treats that response as terminal](https://html.spec.whatwg.org/dev/server-sent-events.html),
-which releases the browser connection for the current Studio document.
-
-- **User capability:** external view creation appears in the workspace, and a
-  coding agent can select and inspect the exact tab attached to its session.
-- **Complexity carried:** stream multiplexing, server identity, reconnect
-  generations, current view, session replacement, and acknowledgement ordering
-  must stay aligned.
-- **Maintenance surface:** `app/workspace-event-coordinator.ts`, development
-  event protocol, server event routes, unit tests, and agent acceptance.
-
-### 19. Query synchronization
-
-The editor frame, selected preview, Studio URL, and kernel query state exchange
-the public notebook query. Private Studio routing keys are filtered. Operation
-IDs make editor updates idempotent and prevent feedback loops.
-
-- **User capability:** a view that uses `mo.query_params()` sees the same public
-  query when the author changes it in the editor or another prepared runtime.
-- **Complexity carried:** history writes do not always emit browser events.
-  Server-runtime and WebAssembly updates take different paths. A session may be
-  connecting and require bounded retry.
-- **Maintenance surface:** protocol query helpers, presentation query observer,
-  Studio query controller, server query API, kernel query adapter, and
-  cross-runtime acceptance.
-
-### 20. Native control synchronization
-
-The preview controller connects control endpoints for the editor and prepared
-runtime. It maps runtime cell IDs through semantic cell identities and
-synchronizes JSON-compatible native Marimo control values. Writes coalesce by
-object ID.
-
-- **User capability:** matching native controls show the same selected value in
-  the editor, Server preview, and WebAssembly preview while each runtime reruns
-  its own reactive graph.
-- **Complexity carried:** controls must be constructed in the same order in
-  corresponding cells. Non-JSON values and runtime-local anywidget models stay
-  with their owner. Initial snapshots and concurrent writes need deterministic
-  ordering.
-- **Maintenance surface:** preview control controller, control endpoint adapter,
-  Python peer relay, cell binding records, unit tests, and control acceptance.
-
-### 21. Marimo frontend facade
-
-`packages/marimo-frontend` is the quarantine for imports from Marimo's
-unstable browser modules. It exposes named capabilities to presentation and
-Studio:
-
-| Adapter             | Contract exposed to Studio                               | Marimo complexity contained                                                          |
-| ------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `embedded-runtime`  | `mountEmbeddedRuntime(options)` and one closeable handle | provider composition, transport, notebook connection, theme, functions, and disposal |
-| `cell-presentation` | render one runtime cell through native components        | console, staleness, and output presentation policy                                   |
-| `projected-output`  | retain and render one native formatted output            | synthetic cell state, UI elements, virtual files, and final-owner cleanup            |
-| `session-bootstrap` | choose or preflight the session before runtime mount     | Marimo browser session singleton ordering                                            |
-| `control-endpoint`  | expose native control snapshot, subscription, and apply  | Marimo control registries and multi-owner brokerage                                  |
-| `theme-frame`       | synchronize frame theme state                            | Marimo theme atoms and same-origin frame behavior                                    |
-| `vite`              | prepare aliases and build inputs                         | pinned upstream source layout and worker assets                                      |
-
-- **User capability:** native Marimo rendering and runtime behavior appear in a
-  custom document while Studio imports a small facade.
-- **Complexity carried:** provider trees, stores, registries, workers, atoms,
-  and source aliases change with the pinned Marimo frontend.
-- **Maintenance surface:** facade capability tests, exact-release source
-  preparation, `make build`, packaged asset metadata, and live acceptance.
-
-### 22. Server-only real-time collaboration boundary
-
-The browser composition installs Marimo real-time collaboration support for the
-Server runtime and keeps the WebAssembly runtime independent.
-
-- **User capability:** the Server view follows the collaboration semantics of
-  its Marimo session while a browser worker remains an isolated notebook.
-- **Complexity carried:** collaboration providers and transport exist only for
-  the runtime that owns a server session.
-- **Maintenance surface:** `server-only-rtc.ts`, embedded runtime composition,
-  provider tests, and Server runtime acceptance.
-
-### 23. Browser build and asset identity
-
-`apps/browser` registers the Server and WebAssembly runtime implementations,
-injects Studio frame adapters, and builds the runtime, development reload, and
-Studio entry points. The build records the Marimo version and commit in
-`build-meta.json`.
-
-- **User capability:** the Python package carries the complete browser runtime
-  needed by edit, run, and export workflows.
-- **Complexity carried:** shared chunks, worker files, prepared upstream source,
-  CSS, browser entry points, and Python package assets must describe the same
-  release.
-- **Maintenance surface:** `apps/browser`, Vite configuration, frontend source
-  preparation, `_assets.py`, `make build`, and distribution verification.
-
-## Lifetime map
-
-```mermaid
-flowchart TD
-    studio[Studio application handle]
-    editor[Native editor frame]
-    deck[PreviewDeck]
-    server[Server preview frame and session consumer]
-    wasm[WebAssembly preview frame and Pyodide worker]
-    presentation[Presentation revision controller]
-    runtime[Selected RuntimeSession]
-    projections[Projection host owners]
-
-    studio --> editor
-    studio --> deck
-    deck --> server
-    deck --> wasm
-    server --> presentation
-    wasm --> presentation
-    presentation --> runtime
-    presentation --> projections
+`PresentationRuntime.mount()` returns a `RuntimeSession` with `id`, optional
+native `sessionId`, `update()`, `updateQuery()`, and `dispose()`. `update()`
+returns `applied` or `reload`. A later mount cancels and disposes an earlier
+mount that resolves out of order.
+
+Presentation owns projection host connection, control synchronization, frame
+bridging, navigation, readiness, and document transactions. Runtime
+implementations can compose those presentation services behind their session
+handle, but those services are not part of the runtime interface.
+
+### Server
+
+The Server runtime connects projection instances to one existing Marimo
+session. It maps semantic `CellRef` values to live runtime cell IDs, reads
+values through the kernel host, renders rich outputs, and relays controls and
+query state.
+
+### WebAssembly
+
+The WebAssembly runtime starts a browser worker from saved notebook source and
+the pinned Marimo frontend. It instantiates the notebook graph, executes the
+projection bootstrap cell, and keeps automatic notebook execution disabled.
+Studio resolves each mounted host to a semantic producer and dependency
+closure, then submits the required cells through Marimo's serialized execution
+queue. A target change schedules newly required cells. An unmount cancels work
+that is still waiting for its queue slot.
+
+The worker instance and executed cells survive artifact and site revisions
+whose runtime instance remains unchanged. Independent notebook branches stay
+dormant until a mounted target resolves to them.
+
+Python runtime providers return one runtime projection with instance identity,
+runtime data, and semantic cell bindings. The browser commits runtime
+configuration before connecting projection hosts and mounting the selected
+runtime session.
+
+## Studio workspace model
+
+The workspace has three surfaces:
+
+| Surface  | Content                               |
+| -------- | ------------------------------------- |
+| Notebook | Native Marimo editor frame            |
+| Source   | Provider-discovered project documents |
+| Preview  | Selected artifact and runtime frame   |
+
+Notebook, Develop, and Preview form the primary mode navigation. Source is an
+additional selectable mode in the workspace menu:
+
+- Notebook
+- Develop
+- Preview
+- Source
+
+Develop shows Notebook, Source, and Preview. A newly created view uses the authoring
+layout with Notebook beside stacked Source and Preview. Source shows Source and
+Preview. The **Open saved layout** workspace action restores the persisted layout,
+which can place any surface beside another.
+
+`LayoutController` owns layout trees, pane placement, split ratios, compact
+state, per-view persistence, and arranging. The render layer reads controller
+snapshots and performs no layout policy.
+
+## Dynamic Source catalog
+
+The Source feature receives a `ViewProject` browser record from the project
+endpoint. The record contains provider, documents, diagnostics, and
+published artifact state.
+
+One horizontally scrollable tab strip displays `SourceDocumentSpec` order.
+Each tab exposes:
+
+- Project-relative path
+- Provider language ID
+- Edit or read access
+- Loaded, saving, external, conflict, or error state
+- Source-located provider or build diagnostic
+
+The full relative path is the accessible name and tooltip. A provider label
+can supply compact visible text.
+
+Keyboard behavior:
+
+- Left and Right select adjacent tabs.
+- Home selects the first document.
+- End selects the final document.
+- The selected tab scrolls into view.
+- `Cmd+S` and `Ctrl+S` save an editable document.
+
+The controller remembers one active path per view. It selects the first
+editable document when the stored path disappears, then falls back to the
+first document.
+
+## Editor languages
+
+`SourceEditor` accepts provider language IDs. The shipped CodeMirror modes load
+on demand for:
+
+- HTML
+- CSS
+- JavaScript
+- TypeScript
+- JSX
+- TSX
+
+JSON, Markdown, Svelte, text, TOML, XML, and unknown language IDs use plain
+text. Read-only documents support navigation, selection, search, and copy while
+suppressing edits and saves.
+
+Language support is presentation policy. Providers report language IDs and
+remain independent of CodeMirror.
+
+## Source synchronization
+
+`SyncedSource` owns one document buffer and revision:
+
+```text
+load with ETag
+  -> edit
+  -> debounce
+  -> PUT with If-Match
+  -> commit new ETag
 ```
 
-The Studio application owns the frames. Each frame owns one presentation
-lifecycle. The presentation owns its selected runtime session and projection
-host connections. A projected rich output can also own Marimo resources in the
-kernel and frontend. Disposal follows this tree from leaves to root.
+An [ETag](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/ETag)
+identifies one saved revision. The
+[`If-Match`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/If-Match)
+request condition commits a write when that revision is still current.
 
-## Change and validation map
+An external change triggers a read. Clean buffers accept disk content. Dirty
+buffers compare local and remote content and enter conflict state when the
+contents differ.
 
-| Change                                   | Primary owner                                     | Required evidence                                                               |
-| ---------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Browser record                           | `packages/protocol`                               | schema tests, Python producer test, every consumer test                         |
-| Runtime mount or update                  | `packages/runtime` and runtime implementation     | runtime tests, presentation integration, live Server and WebAssembly acceptance |
-| HTML, CSS, module, or navigation refresh | presentation document transaction                 | staged commit and rollback tests, development reload acceptance                 |
-| Cell, output, or value host              | owning projection adapter                         | host tests, readiness tests, both runtime profiles in acceptance                |
-| Workspace layout or mode                 | Studio workspace feature                          | geometry and storage tests, desktop and narrow browser inspection               |
-| Source conflict                          | Studio source feature and Python source API       | revision race tests and external editor acceptance                              |
-| Query or control sync                    | preview controller plus server or facade endpoint | loop, retry, identity, and cross-runtime acceptance                             |
-| Marimo frontend integration              | `packages/marimo-frontend`                        | facade tests, exact-release preparation, `make build`, and browser acceptance   |
+Conflict actions are:
 
-[Frontend workspace](../frontend.md) gives the package commands and source
-preparation workflow. [Agents and delivery](agents-and-delivery.md) describes
-how the browser observer becomes current handoff evidence.
+- Use the saved content and revision.
+- Keep local content and save against the acknowledged remote revision.
+
+The Source controller keeps pending or conflicted buffers visible when a
+provider catalog changes. It disposes clean buffers that leave the catalog.
+
+## Native editor session
+
+The Studio host assigns one browser client ID and one native editor session,
+then signs the pair for the notebook, base URL, edit mode, and server instance.
+`StudioClientRegistry` retains one live session per client and one client per
+session. Reconnecting the same pair is idempotent. A live client or session
+presented with another partner fails before native connection.
+
+An editor-root reload may omit `session_id`. The server resolves the session
+from the retained client binding and returns a no-store redirect to the same
+session. The registry gives an accepted pair a `SessionBindingLease`. Native
+connector admission checks that lease again before attaching to an existing
+session or creating a fresh one. Binding rejection and disconnect-grace
+reclamation invalidate the lease, so delayed connector work cannot claim stale
+authority.
+
+## View switching
+
+`ViewTransition` commits the latest requested view after current authoring state
+is safe to leave:
+
+```text
+flush current editable documents
+  -> synchronize authored query state
+  -> select the verified publication in preview frames
+  -> commit route and layout
+  -> inspect the selected ViewProject
+  -> load its active Source document
+  -> refresh when validation publishes another revision
+```
+
+A failed save or unresolved conflict stops the transition before preview state
+changes. Target inspection and source-read failures remain attached to the
+selected Source session. A newer selection cancels an older in-flight
+transition.
+
+A browser-owned selection stages the preview, then acquires an active-view
+handoff before committing `ViewController.current`. The handoff makes the
+browser unavailable to agent work during the commit gap. Rollback restores the
+previous preview and releases the same handoff operation. When release cannot
+be confirmed, `WorkspaceEventCoordinator` reconnects a higher-generation
+stream for the still-committed view and waits for its authoritative baseline.
+
+Reactivating the current view can reload prepared runtime frames while
+preserving the view and workspace selection.
+
+## Workspace events
+
+The `change` event has four kinds:
+
+- `project` carries source changes to the Source controller.
+- `build` asks Source to reconcile provider diagnostics and build state. Build
+  records use `unbuilt`, `building`, `published`, `stale`, or `failed`.
+- `presentation` asks Source to reconcile and tells Preview that a new
+  presentation revision is available.
+- `views` refreshes the view inventory.
+
+The initial `ready` event refreshes inventory, reconciles Source, and gives
+Preview its presentation baseline. Separate `activate`, `observe`, and
+`session` events carry agent requests and editor session bindings.
+
+The event URL carries a client-scoped capability signed for the notebook, base
+URL, edit mode, and server instance. The server validates the capability,
+client, stream generation, and active view before reserving client state.
+
+Stream replacement has two phases on both sides. The server reserves a
+candidate lease while it prepares the source subscription and presentation
+baseline, then promotes the highest valid generation before sending `ready`.
+The browser keeps the current `EventSource` authoritative until the candidate
+sends `ready`, then installs its baseline and closes the previous stream.
+Callbacks from stale generations cannot change workspace state.
+
+## Preview deck
+
+`PreviewDeck` owns stable physical slots and resolves them by `(runtime, view)`.
+Server has three least-recently-used slots. WebAssembly has one. Returning to a
+warm key reuses its iframe, document, runtime instance, controller, navigation,
+and diagnostics. Eviction disposes the controller and resets the iframe.
+
+Each occupied slot owns one `PreviewController`. Its `PreviewAdmission` is the
+authoritative owner of receiver identity, candidate and ready identity,
+presentation baseline, build barrier, refresh handshake, admitted revision,
+and view phase. Readiness requires the exact receiver revision to match the
+admitted ready revision after the build and refresh gates settle. Reactivating
+a warm slot revokes cached readiness until that handshake completes.
+
+The deck also coordinates:
+
+- Current view and runtime
+- Document and support URLs
+- Presentation revision
+- Projection revision
+- Runtime status and diagnostics
+- Editor session binding
+- Presentation build and revision baseline
+- Query and control synchronization
+- Browser observation requests
+
+Inactive controllers keep reconciling revision state while active side effects,
+controls, query writes, retries, and observations stay with the selected slot.
+
+## Query synchronization
+
+`PreviewQueryController` assigns every editor mutation an operation ID and a
+page-global `writeGeneration`. Retries keep the same identity. A new controller
+continues above the page's previous generation.
+
+The server claims the operation against the current browser client, Marimo
+session, and binding generation. It marks lower write generations superseded,
+rejects conflicting identities, and acquires one active mutation fence before
+calling the kernel. Each mutation fence is keyed by client ID, native session
+ID, and binding generation. Binding rejection waits for the current lease's
+fence. A new native incarnation rotates the binding generation and receives an
+independent fence. Closing or settling an older incarnation releases work by
+its old key, so it cannot block or cancel the current lease. Server commit
+revalidates the exact binding identity.
+
+The kernel command carries a server signature over the notebook, session,
+operation, query fingerprint, binding generation, write generation, and
+deadline. The kernel independently verifies that identity and returns
+`applied`, `superseded`, or `expired`. Its generation order and the server's
+binding revalidation prevent late or retried writes from committing against a
+newer editor binding.
+
+## Navigation
+
+Authored links can navigate within one artifact, change query or hash state, or
+select another named view. The presentation adapter resolves links against the
+artifact-qualified document base and delegates named view changes to Studio.
+
+For a named view link, Studio flushes current edits and synchronizes the target
+query before committing the view, query, and hash to browser history. Preview
+selects the verified publication while Source hydrates the target catalog.
+
+Browser history stores canonical public view URLs. `BrowserSessionReplay`
+indexes a native Server session by file key, page path, and the canonical public
+query recorded when the session is first remembered. Canonicalization sorts
+public keys, retains repeated values in request order, and excludes private
+routing keys. Reload and direct document navigation offer the session when the
+target has that query. The replay marker and session parameter leave the
+visible URL after the runtime opens.
+
+`PrivateSessionReplay` owns the reversible Marimo server patch and the
+application's registered notebook sessions. The application lifespan installs
+and closes that owner. Server replay admission independently compares the
+request's canonical public query with the native session's creation metadata.
+Unavailable, invalid, or mismatched metadata fails the match, so the redirect
+allocates a fresh presentation and runtime pair. An admitted session remains
+bound to the notebook, view, presentation session, and runtime session.
+
+## Readiness and diagnostics
+
+Presentation readiness combines:
+
+- Artifact document transition
+- Runtime configuration
+- Runtime mount
+- Projection instances
+- Style generation
+- Current browser diagnostics
+
+A presentation reaches ready when the current revision has committed and each
+mounted projection instance is healthy. Runtime failures describe mounted
+instances.
+
+Diagnostics include view, runtime, revision, scope, source location, target,
+and recovery hint where available.
+
+## Responsive behavior
+
+Each surface has a minimum usable size. When the saved layout exceeds the
+available bounds, Studio switches to a compact single-surface presentation and
+keeps the selected surface in stored state.
+
+Validate desktop and narrow layouts for:
+
+- Source tab overflow and selected-tab visibility
+- Read-only badges and diagnostics
+- Pane resizing and divider keyboard behavior
+- Preview and editor frame sizing
+- Compact surface navigation
+- Long paths and provider names
+- Conflict controls
+
+## Test the boundary
+
+Test browser behavior at three levels:
+
+1. Pure model, parser, and controller tests.
+2. Composed document, runtime, or workspace tests.
+3. Live Server and WebAssembly acceptance.
+
+Required cross-boundary cases include dynamic source catalogs, read-only
+documents, external conflicts, failed builds with a retained preview, artifact
+revision transitions, React and Svelte projection instances, runtime
+switching, view switching, session reconnect, query and control synchronization,
+closure-selected WebAssembly execution, static-export branch isolation, and
+desktop and narrow layout inspection.

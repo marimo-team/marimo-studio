@@ -1,0 +1,152 @@
+"""Named-view interface over shared authoring operations."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
+from typing import Literal, TypeVar
+
+from marimo_studio._authoring.ports import WorkspaceHandle
+from marimo_studio._authoring.validation import validate as validate_workspace
+from marimo_studio._authoring.view import (
+    build_view,
+    export_view,
+    inspect_view,
+    read_document,
+    remove_view,
+    write_document,
+)
+from marimo_studio._delivery.export import StaticExportResult
+from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
+from marimo_studio._validation.records import ValidationReport
+from marimo_studio._views.api import ViewRemovalResult
+from marimo_studio._views.records import ViewBuild, ViewDocument, ViewInspection
+from marimo_studio.errors import WorkspaceGenerationConflictError
+from marimo_studio.view_providers import BuildProfile
+
+_View = TypeVar("_View", bound="View")
+
+
+@dataclass(frozen=True, init=False)
+class View:
+    """One named view in a notebook-bound workspace."""
+
+    workspace: WorkspaceHandle
+    name: str
+    catalog_generation: str | None
+    generation: str | None
+
+    def __init__(self, *_args: object, **_kwargs: object) -> None:
+        raise TypeError("Create views through a Studio authoring workspace")
+
+    @classmethod
+    def _create(
+        cls: type[_View],
+        workspace: WorkspaceHandle,
+        name: str,
+        *,
+        catalog_generation: str | None,
+        generation: str | None,
+    ) -> _View:
+        view = object.__new__(cls)
+        object.__setattr__(view, "workspace", workspace)
+        object.__setattr__(view, "name", name)
+        object.__setattr__(view, "catalog_generation", catalog_generation)
+        object.__setattr__(view, "generation", generation)
+        return view
+
+    async def inspect(self) -> ViewInspection:
+        """Inspect source documents, diagnostics, and build state."""
+        return await inspect_view(
+            self.workspace.notebook,
+            self.name,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
+        )
+
+    async def read(self, path: str | PurePosixPath) -> ViewDocument:
+        """Read one document with its current content revision."""
+        return await read_document(
+            self.workspace.notebook,
+            self.name,
+            path,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
+        )
+
+    async def write(
+        self,
+        path: str | PurePosixPath,
+        content: str,
+        *,
+        expected_revision: str,
+    ) -> ViewDocument:
+        """Conditionally replace one editable document."""
+        return await write_document(
+            self.workspace.notebook,
+            self.name,
+            path,
+            content,
+            expected_revision=expected_revision,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
+        )
+
+    async def build(
+        self,
+        *,
+        profile: BuildProfile = "development",
+    ) -> ViewBuild:
+        """Build this view and return the resulting page revision."""
+        return await build_view(
+            self.workspace.notebook,
+            self.name,
+            profile=profile,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
+        )
+
+    async def validate(
+        self,
+        *,
+        level: Literal["static", "runtime"] = "static",
+        runtime_timeout: float = DEFAULT_RUNTIME_TIMEOUT,
+    ) -> ValidationReport:
+        """Validate saved source or isolated notebook execution."""
+        return await validate_workspace(
+            self.workspace.notebook,
+            level=level,
+            view=self.name,
+            runtime_timeout=runtime_timeout,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
+        )
+
+    async def export(
+        self,
+        output: str | Path,
+        *,
+        force: bool = False,
+    ) -> StaticExportResult:
+        """Export this view as a static WebAssembly site."""
+        return await export_view(
+            self.workspace.notebook,
+            self.name,
+            output,
+            force=force,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
+        )
+
+    async def remove(self) -> ViewRemovalResult:
+        """Remove this view and return the remaining workspace identity."""
+        if self.catalog_generation is None or self.generation is None:
+            raise WorkspaceGenerationConflictError()
+        result = await remove_view(
+            self.workspace.notebook,
+            self.name,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
+        )
+        self.workspace._capture_catalog_generation(result.catalog_generation)
+        return result

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import marimo
 
-from marimo_studio.agent_models import (
+from marimo_studio._validation.evidence import (
     RuntimeStatusReport,
     RuntimeStatusSnapshot,
     RuntimeStatusTransition,
@@ -15,10 +15,12 @@ from marimo_studio.agent_models import (
 def ready_runtime_status(
     view: str,
     revision: str,
-    session_id: str = "s_123456",
+    session_id: str | None = "s_123456",
+    *,
+    runtime: str = "server",
 ) -> RuntimeStatusReport:
     return RuntimeStatusReport(
-        runtime="server",
+        runtime=runtime,
         view=view,
         revision=revision,
         session_id=session_id,
@@ -64,6 +66,38 @@ def empty_notebook_source() -> str:
         "\n"
         f'__generated_with = "{marimo.__version__}"\n'
         "app = marimo.App()\n"
+        "\n"
+        "\n"
+        'if __name__ == "__main__":\n'
+        "    app.run()\n"
+    )
+
+
+def no_display_notebook_source() -> str:
+    return (
+        "import marimo\n"
+        "\n"
+        f'__generated_with = "{marimo.__version__}"\n'
+        'app = marimo.App(app_title="No display results")\n'
+        "\n"
+        "\n"
+        "@app.cell\n"
+        "def producer():\n"
+        "    value = 1\n"
+        "    return (value,)\n"
+        "\n"
+        "\n"
+        "@app.cell\n"
+        "def consumer(value):\n"
+        "    hidden = value * 2\n"
+        "    hidden;\n"
+        "    return (hidden,)\n"
+        "\n"
+        "\n"
+        "@app.cell(disabled=True)\n"
+        "def disabled_output():\n"
+        '    "Disabled output"\n'
+        "    return\n"
         "\n"
         "\n"
         'if __name__ == "__main__":\n'

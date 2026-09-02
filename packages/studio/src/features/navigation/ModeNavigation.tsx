@@ -12,10 +12,10 @@ import { closeParentMenu } from "./menu.ts";
 import { OVERFLOW_MODES, PRIMARY_MODES, selectedMode } from "./model.ts";
 
 const MODE_ICONS = {
-  code: Code2Icon,
+  develop: PanelsTopLeftIcon,
   notebook: NotebookTabsIcon,
   preview: EyeIcon,
-  split: PanelsTopLeftIcon,
+  source: Code2Icon,
 } as const satisfies Readonly<Record<Exclude<StudioMode, "workspace">, LucideIcon>>;
 
 const NAVIGATION_VARIANTS = {

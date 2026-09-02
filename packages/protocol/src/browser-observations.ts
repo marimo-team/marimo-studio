@@ -1,6 +1,12 @@
 import { z } from "zod";
 
+import {
+  MAX_ACTIVE_PROJECTION_INSTANCES,
+  observedProjectionInstanceSchema,
+  projectionInstanceIsReady,
+} from "./projections";
 import { runtimeIdSchema } from "./runtime-config";
+import { viewNameSchema } from "./views.ts";
 
 export const browserDiagnosticSchema = z
   .object({
@@ -8,7 +14,7 @@ export const browserDiagnosticSchema = z
     severity: z.enum(["warning", "error"]),
     message: z.string(),
     hint: z.string(),
-    view: z.string().min(1),
+    view: viewNameSchema,
     scope: z.string().min(1),
     projection: z.enum(["cell", "value", "output"]).optional(),
     target: z.string().optional(),
@@ -59,8 +65,8 @@ export const runtimeStatusSnapshotSchema = z
 
 export const runtimeStatusTransitionSchema = z
   .object({
-    sequence: z.int().nonnegative(),
-    observedAt: z.int().nonnegative(),
+    sequence: z.int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    observedAt: z.int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     revision: z.string().min(1).nullable(),
     sessionId: z.string().min(1).nullable(),
     phase: runtimeStatusPhaseSchema,
@@ -91,7 +97,7 @@ export const runtimeStatusTransitionSchema = z
 export const runtimeStatusReportSchema = z
   .object({
     runtime: runtimeIdSchema,
-    view: z.string().min(1),
+    view: viewNameSchema,
     revision: z.string().min(1).nullable(),
     sessionId: z.string().min(1).nullable(),
     current: runtimeStatusSnapshotSchema,
@@ -142,7 +148,7 @@ export const runtimeStatusReportSchema = z
 export const browserObservationSchema = z
   .object({
     schema: z.literal(1),
-    view: z.string().min(1),
+    view: viewNameSchema,
     runtime: runtimeIdSchema,
     revision: z.string().min(1),
     state: z.enum(["ready", "loading", "error"]),
@@ -151,12 +157,33 @@ export const browserObservationSchema = z
     runtimeInstance: z.string().min(1),
     sessionId: z.string().min(1).nullable(),
     requestId: z.string().min(1),
-    sequence: z.int().nonnegative(),
+    sequence: z.int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     query: z.string(),
+    projectionInstances: z
+      .array(observedProjectionInstanceSchema)
+      .max(MAX_ACTIVE_PROJECTION_INSTANCES + 1),
     runtimeStatus: runtimeStatusReportSchema,
   })
   .strict()
   .superRefine((observation, context) => {
+    const instanceIds = observation.projectionInstances.map((instance) => instance.instanceId);
+    if (new Set(instanceIds).size !== instanceIds.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Projection instance identifiers must be unique",
+        path: ["projectionInstances"],
+      });
+    }
+    if (
+      observation.state === "ready" &&
+      !observation.projectionInstances.every(projectionInstanceIsReady)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Ready browser observations require every projection instance to be ready",
+        path: ["projectionInstances"],
+      });
+    }
     const status = observation.runtimeStatus;
     const matches =
       status.runtime === observation.runtime &&

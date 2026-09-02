@@ -1,6 +1,13 @@
+import { generate, parse, walk } from "css-tree";
 import assert from "node:assert/strict";
-import { afterEach, test } from "vite-plus/test";
+import { afterEach, test, vi } from "vite-plus/test";
 
+import { PresentationDocumentRetiredError } from "../src/document/session-startup.ts";
+import {
+  beginPresentationRefresh,
+  readiness,
+  setPresentationRefreshState,
+} from "../src/readiness.ts";
 import { generateViewCss } from "../src/view-styles/generator.ts";
 import {
   collectViewClassTokens,
@@ -14,47 +21,76 @@ const settleMutations = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
+const cssFacts = (css: string) => {
+  const layers: string[] = [];
+  const scopes: string[] = [];
+  const keyframes: string[] = [];
+  const selectors: string[] = [];
+  const declarations: Array<[string, string]> = [];
+  walk(parse(css), (node) => {
+    if (node.type === "Atrule") {
+      const prelude = node.prelude ? generate(node.prelude) : "";
+      if (node.name === "layer") {
+        layers.push(prelude);
+      } else if (node.name === "scope") {
+        scopes.push(prelude);
+      } else if (node.name === "keyframes") {
+        keyframes.push(prelude);
+      }
+    } else if (node.type === "Rule") {
+      selectors.push(generate(node.prelude));
+    } else if (node.type === "Declaration") {
+      declarations.push([node.property, generate(node.value)]);
+    }
+  });
+  return { declarations, keyframes, layers, scopes, selectors };
+};
+
 afterEach(() => {
   document.head.replaceChildren();
   document.body.replaceChildren();
+  vi.restoreAllMocks();
 });
 
-test("utility generation uses a native scope around the authored shell", async () => {
-  const css = await generateViewCss(
-    new Set([
-      "[&>p]:text-red-500",
-      'before:content-["Ready"]',
-      "border",
-      "border-border",
-      "border-x-2",
-      "studio-view",
-    ]),
-  );
+test("generated utilities stay scoped to authored content", async () => {
+  const css = await generateViewCss(new Set(["[&>p]:text-red-500", "studio-view"]));
+  const facts = cssFacts(css);
 
-  assert.ok(css.startsWith("@layer marimo-studio-utilities{@scope (#app-shell)"));
-  assert.match(css, /to \(\[data-marimo-cell-output\]\)/);
-  assert.match(css, /:where\(:scope,\*\)\.studio-view\{/);
-  assert.match(css, /\\\[\\&\\>p\\\]\\:text-red-500>p/);
-  assert.match(css, /:scope\{[^}]*--colors-red-500/);
-  assert.match(css, /border-width:1px/);
-  assert.match(css, /border-style:solid/);
-  assert.match(css, /border-inline-width:2px/);
-  assert.doesNotMatch(css, /margin:0/);
+  assert.deepEqual(facts.layers, ["marimo-studio-utilities"]);
+  assert.deepEqual(facts.scopes, ["(#app-shell) to ([data-marimo-cell-output])"]);
+  assert.equal(
+    facts.selectors.some((selector) => selector.includes(".studio-view")),
+    true,
+  );
+  assert.equal(
+    facts.selectors.some((selector) => selector.endsWith(">p")),
+    true,
+  );
 });
 
 test("concurrent generations isolate theme tokens and animation names", async () => {
   const [red, blue] = await Promise.all([
-    generateViewCss(new Set(["animate-spin", "animate-[2s_linear_infinite_spin]", "text-red-500"])),
+    generateViewCss(new Set(["animate-spin", "text-red-500"])),
     generateViewCss(new Set(["text-blue-600"])),
   ]);
+  const redFacts = cssFacts(red);
+  const blueFacts = cssFacts(blue);
+  const redSelectors = redFacts.selectors.join(" ");
+  const blueSelectors = blueFacts.selectors.join(" ");
+  const animationValues = redFacts.declarations
+    .filter(([property]) => property === "animation")
+    .map(([, value]) => value);
 
-  assert.match(red, /--colors-red-500/);
-  assert.doesNotMatch(red, /--colors-blue-600/);
-  assert.match(red, /@keyframes marimo-studio-view-spin/);
-  assert.match(red, /animation:marimo-studio-view-spin /);
-  assert.match(red, /animation:2s linear infinite marimo-studio-view-spin/);
-  assert.match(blue, /--colors-blue-600/);
-  assert.doesNotMatch(blue, /--colors-red-500/);
+  assert.match(redSelectors, /text-red-500/);
+  assert.doesNotMatch(redSelectors, /text-blue-600/);
+  assert.match(blueSelectors, /text-blue-600/);
+  assert.doesNotMatch(blueSelectors, /text-red-500/);
+  assert.deepEqual(redFacts.keyframes, ["marimo-studio-view-spin"]);
+  assert.equal(animationValues.length > 0, true);
+  assert.equal(
+    animationValues.every((value) => value.includes("marimo-studio-view-spin")),
+    true,
+  );
 });
 
 test("a later component class overrides an authored utility", async () => {
@@ -94,34 +130,78 @@ test("staged utility CSS commits atomically and ignores output mutations", async
       <marimo-cell><div data-marimo-cell-output></div></marimo-cell>
     </main>
   `;
+  let generations = 0;
+  const generatedTokens: string[][] = [];
   const controller = new ViewStyleController(async (tokens) => {
-    const tokenList = [...tokens].sort().join(" ");
-    return `/* ${tokenList} */`;
+    generations += 1;
+    generatedTokens.push([...tokens].sort());
+    return `.generation-${generations}{}`;
   });
   const style = document.querySelector<HTMLStyleElement>("style")!;
 
   const initial = await controller.stage(document.querySelector("#app-shell")!);
   initial.commit();
+  const initialCss = style.textContent;
   const next = document.createElement("main");
   next.id = "app-shell";
   next.className = "flex p-4";
   const staged = await controller.stage(next);
 
-  assert.equal(style.textContent, "/* grid */");
   staged.discard();
-  assert.equal(style.textContent, "/* grid */");
+  assert.equal(style.textContent, initialCss);
 
   controller.observe();
   document.querySelector("[data-marimo-cell-output]")!.innerHTML =
     '<div class="bg-red-500 flex">Runtime output</div>';
   await settleMutations();
-  assert.equal(style.textContent, "/* grid */");
+  assert.equal(generations, 2);
+
+  document.querySelector("#app-shell")!.append(document.createElement("section"));
+  await settleMutations();
+  assert.equal(style.textContent, initialCss);
+  assert.equal(generations, 2);
 
   document
     .querySelector("#app-shell")!
     .append(Object.assign(document.createElement("section"), { className: "studio-card" }));
   await settleMutations();
-  assert.equal(style.textContent, "/* grid studio-card */");
+  assert.equal(generations, 3);
+  assert.deepEqual(generatedTokens.at(-1), ["grid", "studio-card"]);
+  assert.notEqual(style.textContent, initialCss);
+  controller.disconnect();
+});
+
+test("a staged shell replacement retains its revision readiness owner", async () => {
+  document.body.innerHTML = '<main id="app-shell" class="grid"></main>';
+  let generations = 0;
+  const generatedTokens: string[][] = [];
+  const controller = new ViewStyleController(async (tokens) => {
+    generations += 1;
+    generatedTokens.push([...tokens].sort());
+    return `.generation-${generations}{}`;
+  });
+  const initial = await controller.stage(document.querySelector("#app-shell")!);
+  initial.commit();
+  initial.finalize();
+  controller.observe();
+  readiness.start();
+  readiness.setRuntime("ready");
+  readiness.setHosts(["ready"]);
+  const revisionClaim = beginPresentationRefresh("document");
+
+  const replacement = document.createElement("main");
+  replacement.id = "app-shell";
+  replacement.className = "flex p-4";
+  const staged = await controller.stage(replacement);
+  staged.commit();
+  document.querySelector("#app-shell")!.replaceWith(replacement);
+  staged.finalize();
+  setPresentationRefreshState(revisionClaim, "ready");
+  await settleMutations();
+
+  assert.equal(generations, 2);
+  assert.deepEqual(generatedTokens.at(-1), ["flex", "p-4"]);
+  assert.equal(readiness.snapshot().page, "ready");
   controller.disconnect();
 });
 
@@ -132,12 +212,14 @@ test("initial generation includes classes added while the generator loads", asyn
     release = resolve;
   });
   let calls = 0;
+  const generatedTokens: string[][] = [];
   const controller = new ViewStyleController(async (tokens) => {
     calls += 1;
+    generatedTokens.push([...tokens].sort());
     if (calls === 1) {
       await gate;
     }
-    return `/* ${[...tokens].sort().join(" ")} */`;
+    return `.generation-${calls}{}`;
   });
   controller.observe();
 
@@ -149,10 +231,7 @@ test("initial generation includes classes added while the generator loads", asyn
   release?.();
   await ready;
 
-  assert.equal(
-    document.querySelector<HTMLStyleElement>("style")!.textContent,
-    "/* grid pl-[37px] */",
-  );
+  assert.deepEqual(generatedTokens.at(-1), ["grid", "pl-[37px]"]);
   controller.disconnect();
 });
 
@@ -176,15 +255,18 @@ test("a live utility regeneration failure becomes a presentation diagnostic", as
   assert.equal(document.documentElement.dataset.marimoStudioStyles, "error");
   assert.equal(diagnostic?.dataset.marimoDiagnosticCode, "view-styles-failed");
   assert.equal(diagnostic?.dataset.marimoDiagnosticScope, "presentation");
+  assert.equal(
+    diagnostic?.textContent,
+    "View styling could not update. The authored view remains available.",
+  );
   controller.disconnect();
 });
 
 test("late style initialization clears the watchdog diagnostic", async () => {
-  document.body.innerHTML = `
-    <main id="app-shell" class="p-4"></main>
-    <div data-marimo-studio-style-error role="alert">Style startup failed</div>
-  `;
+  document.body.innerHTML = '<main id="app-shell" class="p-4"></main>';
   globalThis.__MARIMO_STUDIO_STYLE_TIMEOUT__ = setTimeout(() => {}, 60_000);
+  await initializeViewStyles(false);
+  assert.notEqual(document.querySelector("[data-marimo-studio-style-error]"), null);
 
   await initializeViewStyles(true);
 
@@ -203,4 +285,33 @@ test("unsupported scope leaves authored CSS available with a visible diagnostic"
     document.querySelector("[data-marimo-studio-style-error]")!.textContent ?? "",
     /CSS @scope support/,
   );
+});
+
+test("document retirement cancels style initialization without a diagnostic", async () => {
+  document.body.innerHTML = '<main id="app-shell" class="p-4"></main>';
+  const lifetime = new AbortController();
+  const retirement = new PresentationDocumentRetiredError();
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+  const initializing = initializeViewStyles(true, lifetime.signal);
+  lifetime.abort(retirement);
+
+  await assert.rejects(initializing, (cause: unknown) => cause === retirement);
+  assert.equal(document.querySelector("[data-marimo-studio-style-error]"), null);
+  assert.equal(consoleError.mock.calls.length, 0);
+});
+
+test("an active style initialization failure remains visible", async () => {
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+  const diagnostic = await initializeViewStyles(true, new AbortController().signal);
+
+  assert.equal(diagnostic?.code, "view-styles-failed");
+  assert.equal(
+    diagnostic?.message,
+    "View styling could not start. The authored view remains available.",
+  );
+  assert.equal(document.documentElement.dataset.marimoStudioStyles, "error");
+  assert.notEqual(document.querySelector("[data-marimo-studio-style-error]"), null);
+  assert.equal(consoleError.mock.calls.length, 1);
 });

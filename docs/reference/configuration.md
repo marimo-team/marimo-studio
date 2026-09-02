@@ -1,147 +1,256 @@
 ---
-title: Notebook configuration
-description: Configure Studio views, runtimes, session refreshes, projected logs, and cell aliases.
+title: Configuration
+description: Configure the notebook, default view, runtimes, aliases, view projects, provider options, and saved files.
 ---
 
-# Notebook configuration
+# Configuration
 
-Studio reads configuration from the notebook's PEP 723 metadata or from a
-project `pyproject.toml`. Use `marimo-studio view add` to create the initial
-configuration and `marimo-studio bind` to manage cell aliases.
+Studio reads one `[tool.marimo-studio]` table from the notebook's
+[PEP 723](https://peps.python.org/pep-0723/) block, which stores Python script
+dependencies and tool configuration inside the script, or from a containing
+`pyproject.toml`. The two forms are mutually exclusive for one notebook. When
+both files configure the same notebook, Studio reports both paths and requires
+one configuration source.
 
-::: info Configuration can precede view source
-Configuration defines a Studio workspace before view source exists. Opening a
-configured notebook in `marimo edit` presents an authenticated initializer when
-the view directory is empty. The initializer creates the configured `default`
-view and opens its authoring workspace.
-:::
+Both locations use [TOML](https://toml.io/en/), a configuration format built
+from named tables and typed values.
 
-## Configure one notebook
+## Notebook settings
 
-`view add` stores notebook-local settings in the PEP 723 block:
+Creating the first view can add these settings to a standalone notebook:
 
-```python [analysis.py]
+```python
 # /// script
-# requires-python = ">=3.10"
-# dependencies = [
-#   "marimo-studio",
-# ]
+# requires-python = ">=3.10,<3.15"
+# dependencies = ["marimo-studio==0.1.0"]
 #
 # [tool.marimo-studio]
 # default = "dashboard"
-# runtime = "server"
-# runtimes = ["server", "wasm"]
-# preserve_session = false
-# show_cell_logs = false
-#
-# [tool.marimo-studio.cells]
-# summary = { ref = "cell:v1:<semantic-sha256>:<layout-sha256>:0" }
 # ///
 ```
 
-| Field              | Type     | Default     | Behavior                                                               |
-| ------------------ | -------- | ----------- | ---------------------------------------------------------------------- |
-| `default`          | String   | Required    | Select the view served at `/`                                          |
-| `runtime`          | String   | `"server"`  | Select the runtime when a view URL has no override                     |
-| `runtimes`         | String[] | `[runtime]` | Permit runtimes in run mode                                            |
-| `preserve_session` | Boolean  | `false`     | Reconnect a manual server-runtime refresh to its current kernel        |
-| `show_cell_logs`   | Boolean  | `true`      | Render cell standard output and standard error in projected cell hosts |
-| `cells`            | Table    | Empty       | Store aliases shared by every view                                     |
+| Field                   | Type                           | Default     | Behavior                                                                       |
+| ----------------------- | ------------------------------ | ----------- | ------------------------------------------------------------------------------ |
+| `default`               | string                         | Required    | Names the view served at `/`                                                   |
+| `runtime`               | `"server"` or `"wasm"`         | `"server"`  | Chooses the notebook runtime when the URL has no valid override                |
+| `runtimes`              | non-empty array of runtime IDs | `[runtime]` | Lists the distinct runtimes people may select. It must contain `runtime`       |
+| `preserve_session`      | boolean                        | `false`     | Reconnects an eligible Python runtime refresh to its matching notebook session |
+| `show_cell_logs`        | boolean                        | `true`      | Includes stdout and stderr in complete-cell projections                        |
+| `cells`                 | table                          | Empty       | Stores stable aliases for existing notebook cells                              |
+| `provider_dependencies` | array of requirements          | Omitted     | Inline PEP 723 ownership record for third-party requirements that Studio added |
 
-`runtime` must appear in `runtimes`. Runtime IDs follow the same lowercase
-letters, numbers, and hyphens pattern as view names.
+For a standalone notebook, view creation pins the installed Studio version.
+React and Svelte add the `deno` extra to that exact Studio requirement. An
+installed third-party provider adds its exact distribution version to
+`dependencies`.
 
-Set `show_cell_logs = false` when a projected page should exclude text written
-through `print`, Python logging, and warnings. Primary cell results, media,
-input prompts, and structured Marimo errors continue to render.
+Studio records each third-party requirement it introduced in
+`provider_dependencies`. Static WebAssembly removes a still-owned exact
+requirement from the browser notebook dependency list. A requirement remains
+when it predates view creation, the user later changes it, or the notebook
+imports the distribution directly.
 
-Set `preserve_session = true` when a manual refresh of a server-runtime page
-should return the browser to its current run-mode kernel. The serving Marimo
-process must still retain that session, and reconnecting requests must reach
-the same process.
+`server` selects the Python runtime. `wasm` selects the Browser runtime. Runtime
+selection and delivery are separate choices. `marimo run` serves a live
+presentation. `marimo-studio view export` packages a static Browser runtime
+site.
 
-## Configure a project
+`preserve_session` applies to Python run-mode sessions. Studio reuses a session
+when the saved notebook, public URL path, canonical public query, and replay
+scope still match. A changed identity starts another session.
 
-A managed project can place the same settings in `pyproject.toml`:
+Studio caps the complete Browser runtime configuration at 16 MiB of UTF-8 JSON. A
+`runtime-config-too-large` diagnostic means that record exceeded the boundary.
+Notebook source and broad projection declarations are common contributors. Use
+finite projection targets or reduce the saved notebook source before retrying.
 
-```toml [pyproject.toml]
+See [Notebook result projections](projections.md) for runtime-visible result
+contracts and [Limits](limits.md#runtime-payloads) for payload boundaries.
+
+## Project settings
+
+A Python project can keep the same settings in `pyproject.toml`:
+
+```toml
 [project]
 name = "analysis"
 version = "0.1.0"
-dependencies = ["marimo-studio"]
+dependencies = ["marimo-studio==0.1.0"]
 
 [tool.marimo-studio]
 notebook = "analysis.py"
 default = "dashboard"
 runtime = "server"
 runtimes = ["server", "wasm"]
-preserve_session = false
-show_cell_logs = false
-
-[tool.marimo-studio.cells]
-summary = { ref = "cell:v1:<semantic-sha256>:<layout-sha256>:0" }
 ```
 
-`notebook` is required in project configuration and resolves relative to
-`pyproject.toml`. View files still live beside that notebook under
-`__marimo__/studio/`.
+`notebook` is required in project configuration. It resolves relative to
+`pyproject.toml` and must stay within that project directory. Project
+configuration accepts the common fields in the notebook table and rejects
+`provider_dependencies`. Add Studio and view provider requirements through the
+project's dependency workflow.
 
-## Resolve a target
+## Provider environments
 
-When a command receives a notebook path, Studio checks:
+Python `dependencies` are the executable environment contract. For
+`provider = "acme-views/report"`, the notebook or project must declare an active
+`acme-views` dependency. `status`, `view create`, `view inspect`, `view read`,
+`view write`, `view build`, `view export`, and `validate` resolve that metadata
+before importing the provider.
 
-1. PEP 723 metadata in that notebook.
-2. The nearest parent `pyproject.toml` whose `notebook` field resolves to it.
+Keep the `uv` executable available. Studio re-enters the target environment
+through `uv` when the current process does not satisfy the resolved Studio and
+provider requirements.
 
-Notebook metadata wins when both sources identify the same notebook. A
-conflict reports both configured paths.
+`provider_dependencies` records the exact entries Studio introduced. Static
+WebAssembly cleanup uses that ownership record when removing an owned provider
+requirement.
 
-When a command receives a directory or no target, Studio looks for one
-configured notebook in that directory and for project configuration in its
-parent chain. Pass the notebook path when a directory contains more than one
-configured notebook.
+When a Studio or provider requirement has an environment marker, Studio
+evaluates it against the interpreter that starts the command. Mutually exclusive
+markers select one active branch. An inactive branch contributes neither its
+extras nor its direct source. Start the CLI with a Python version accepted by
+the notebook and project `requires-python` constraints.
 
-## Locate view source
+Active declarations for one distribution must select one coherent source and
+version. Compatible ranges may accompany one exact pin. Studio rejects
+conflicting exact pins, different direct URLs, a direct URL combined with a
+version range, and multiple differing ranges with no exact selection. Pin the
+provider or align those ranges before retrying.
 
-Views for `analysis.py` live at:
+## View projects
+
+Views for `analysis.py` live beside the notebook:
 
 ```text
-__marimo__/studio/analysis/<view-name>/
+__marimo__/studio/analysis/
+  .gitignore
+  .owners/
+    dashboard.toml
+  dashboard/
+    view.toml
+    index.html
+    style.css
+    main.js
 ```
 
-Every immediate child directory with an `index.html` is a view. The directory
-name is also its run-mode route.
+A new Vanilla view creates `index.html` and `AGENTS.md` as editable Source
+documents. Directly referenced local `style.css` and `main.js` files also enter
+the Vanilla Source catalog. Other providers declare their own Source documents
+and build inputs. See [Built-in view providers](built-in-providers.md) for the
+initial project shapes and options.
 
-Studio reports a configured notebook with zero views as `needs-view`. A
-workspace becomes `ready` when at least one view exists and `default` names one
-of those views.
+`view.toml` records the view provider that inspects and builds the view project:
 
-The default starter files are:
-
-```text
-index.html
-app.css
+```toml
+schema = 1
+provider = "marimo-studio/vanilla"
 ```
 
-Add JavaScript modules, images, fonts, and nested asset directories beside
-them. Relative URLs resolve from the authored file that references them.
+A view provider can accept explicit options:
 
-## Manage cell aliases
+```toml
+schema = 1
+provider = "acme-views/report"
 
-The `cells` table maps an alias to a stable cell reference. Create and update
-these entries through the CLI:
+[options]
+entrypoint = "web/report.html"
+```
+
+`schema` must equal `1`. `provider` must be a valid installed provider key.
+`options` must contain JSON-compatible TOML scalars, arrays, or tables with
+finite numbers. Unknown top-level fields fail configuration loading.
+
+Studio Source writes can update `options` and preserve the current provider
+key. Create another view with the desired starter to change frontend stacks.
+An external `view.toml` edit invalidates an in-flight Source mutation and
+requires fresh provider inspection.
+
+Studio maintains each view incarnation in `.owners/<view-name>.toml`. Keep the
+`.owners` directory with the workspace. A valid project copied or renamed to a
+new view name receives a fresh owner when Studio discovers it. Removing a view
+through Studio records the absent name before that name can be reused.
+
+Use Studio create and remove operations for same-name replacement. Existing
+workspace and view handles reject the replacement through their observed
+generations. [Identities and state](identities.md#ownership-generations)
+defines those tokens.
+
+The selected view provider validates `[options]` and reports unsupported values
+beside `view.toml`.
+
+View names start with a lowercase letter and contain lowercase letters, digits,
+or hyphens. A name may use at most 240 UTF-8 bytes. Studio rejects reserved
+route names and Windows device names. A directory becomes a view when it
+contains a valid `view.toml`. Studio adopts an externally created view directory
+by writing its owner record under the catalog lock.
+
+## Source documents and build inputs
+
+Provider inspection returns two separate allowlists:
+
+| List             | Purpose                                                                     |
+| ---------------- | --------------------------------------------------------------------------- |
+| Source documents | Ordered UTF-8 files visible in Source with `edit` or `read` access          |
+| Build inputs     | Exact files and bounded directories copied into an immutable build snapshot |
+
+Studio adds editable `view.toml` to the Source catalog through its
+provider-independent manifest path. View providers include that file in the
+build input set and keep it out of their `editor_documents` records.
+
+A Source path uses forward slashes, starts at the view project root, and cannot
+contain `.` or `..` segments. It must name a contained regular file. Source
+writes reject symlinks, invalid UTF-8, files larger than
+64 MiB, read-only documents, stale revisions, and stale workspace or view
+generations.
+
+## Build profiles
+
+`development` and `production` maintain independent build attempts and retained
+artifacts:
+
+| Profile       | Used by                                 |
+| ------------- | --------------------------------------- |
+| `development` | Studio Preview and authoring inspection |
+| `production`  | Run mode and static export              |
+
+A failed replacement keeps the last successful artifact for the same profile
+available. See [Identities and state](identities.md#build-freshness) for the
+authoring status values.
+
+## Saved and generated files
+
+Commit `.owners/`, `view.toml`, Source documents, build inputs, frontend
+configuration, and dependency lockfiles. Studio writes replaceable build state
+beneath each view's `.artifacts/` directory and cross-process locks beneath the
+workspace `.locks/` directory. The workspace `.gitignore` excludes both
+generated paths.
+
+Delete one view's `.artifacts/` directory when its generated state needs a
+clean rebuild. The next build recreates it from saved source.
+
+## Cell aliases
+
+Native marimo cell names resolve directly. Give an existing anonymous cell a
+stable name when view source needs to reference it:
 
 ```console
-uvx marimo-studio bind analysis.py --cell 12 --as summary
+marimo-studio notebook bind summary --target analysis.py --cell 12
 ```
 
-Native Marimo cell names require no alias. During an active `marimo edit`
-session, a configured alias follows its cell as the cell moves or its Python
-meaning changes. Edits made while the notebook is closed resolve across
-formatting and comment changes. Reinspect and bind with `--overwrite` when an
-offline edit changes the cell's meaning or makes the match ambiguous. Deleting
-a cell removes its configured aliases when the notebook is saved.
+Studio stores aliases under `[tool.marimo-studio.cells]` and makes them
+available to every view. View creation adds collision-free aliases for
+anonymous cells placed by the selected starter.
 
-[CLI reference](cli.md) defines command output and exit codes. [Run, export,
-and share](../guide/run-and-share.md) explains how runtime settings affect
-deployment.
+## Rename a notebook
+
+The notebook filename stem must fit one portable cross-platform filename. It
+also determines the view directory. Rename both in the same change:
+
+```console
+mv analysis.py revenue.py
+mv __marimo__/studio/analysis __marimo__/studio/revenue
+```
+
+For project settings, update `tool.marimo-studio.notebook` as part of that
+change.

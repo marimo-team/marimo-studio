@@ -1,12 +1,15 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "marimo-studio",
+#     "marimo-studio"
 # ]
 #
 # [tool.marimo-studio]
 # default = "dashboard"
 # preserve_session = false
+#
+# [tool.marimo-studio.cells]
+#
 # ///
 
 import marimo

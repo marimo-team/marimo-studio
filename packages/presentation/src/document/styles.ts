@@ -8,8 +8,18 @@ const PAGE_STYLE_SELECTOR =
   `style[${PAGE_STYLE_ATTRIBUTE}]:not([${STAGED_STYLE_ATTRIBUTE}])`;
 const STYLESHEET_LOAD_TIMEOUT_MS = 10_000;
 
+const publishTheme = (): void => {
+  try {
+    notifyPageTheme();
+  } catch (error) {
+    console.error("marimo-studio page theme update failed", error);
+  }
+};
+
 export interface StagedStyles {
   commit(): void;
+  rollback(): void;
+  finalize(): void;
   discard(): void;
 }
 
@@ -55,6 +65,7 @@ export class PageStyles {
         throw abortError();
       }
       staged.commit();
+      staged.finalize();
       staged = undefined;
     } finally {
       staged?.discard();
@@ -86,7 +97,27 @@ export class PageStyles {
         return { clone, media };
       },
     );
-    const discard = () => staged.forEach(({ clone }) => clone.remove());
+    const markers = current.map(() => document.createComment("marimo-studio-page-style"));
+    let committed = false;
+    const rollback = () => {
+      staged.forEach(({ clone }) => clone.remove());
+      current.forEach((element, index) => {
+        const marker = markers[index];
+        if (marker.parentNode) {
+          marker.replaceWith(element);
+        }
+      });
+      committed = false;
+      publishTheme();
+    };
+    const discard = () => {
+      if (committed) {
+        rollback();
+        return;
+      }
+      staged.forEach(({ clone }) => clone.remove());
+      markers.forEach((marker) => marker.remove());
+    };
     if (signal.aborted) {
       throw abortError();
     }
@@ -108,7 +139,7 @@ export class PageStyles {
     }
     return {
       commit: () => {
-        current.forEach((element) => element.remove());
+        current.forEach((element, index) => element.replaceWith(markers[index]));
         staged.forEach(({ clone, media }) => {
           clone.removeAttribute(STAGED_STYLE_ATTRIBUTE);
           if (media === null) {
@@ -117,8 +148,11 @@ export class PageStyles {
             clone.setAttribute("media", media);
           }
         });
-        notifyPageTheme();
+        committed = true;
+        publishTheme();
       },
+      rollback,
+      finalize: () => markers.forEach((marker) => marker.remove()),
       discard,
     };
   }

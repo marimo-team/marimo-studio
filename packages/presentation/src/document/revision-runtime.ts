@@ -38,6 +38,7 @@ const controllerReady = new Promise<PresentationRevisionController>((resolve) =>
 
 export const createPresentationRevisions = (
   sessionId: SessionId,
+  presentationSessionId: string,
   browserSessionReplay: BrowserSessionReplay,
 ): PresentationRevisionController => {
   if (activeController) {
@@ -53,8 +54,7 @@ export const createPresentationRevisions = (
   };
   activeSessionId = sessionId;
   activeController = new PresentationRevisionController(
-    new DocumentRevisionAdapter(sessionId),
-    sessionId,
+    new DocumentRevisionAdapter(presentationSessionId, sessionId),
     {
       applyRuntime: () => updateConfiguredRuntime(getRuntimeConfig()),
       reloadDocument: (url) => globalThis.location.assign(url),

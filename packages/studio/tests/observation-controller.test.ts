@@ -11,6 +11,7 @@ import { expect, it, vi } from "vite-plus/test";
 import type { RenderedBrowserObservation } from "../src/features/preview/observation-remote.ts";
 
 import { PreviewObservationController } from "../src/features/preview/observation-controller.ts";
+import { emptyProjectionEvidence } from "./fixtures.ts";
 
 const request: ObserveViewRequest = {
   schema: 1,
@@ -26,12 +27,14 @@ const observation = (state: "loading" | "ready"): ViewObservationMessage => ({
   requestId: request.requestId,
   view: request.view,
   runtime: request.runtime,
+  lifecycleId: 1,
   runtimeInstance: request.runtimeInstance,
   revision: request.revision,
   state,
   diagnostics: [],
   sessionId: "s_123456",
   query: "region=emea",
+  ...emptyProjectionEvidence,
 });
 
 const acceptObservation = (message: ViewObservationMessage): RuntimeStatusReport => {
@@ -62,14 +65,30 @@ const acceptObservation = (message: ViewObservationMessage): RuntimeStatusReport
   };
 };
 
+const previewHost = () => {
+  const preview = document.createElement("iframe");
+  const postMessage = vi.fn();
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: { postMessage },
+  });
+  return { preview, postMessage };
+};
+
 it("keeps an observation request until terminal evidence is recorded", async () => {
-  document.body.innerHTML = "<iframe></iframe>";
-  const preview = document.querySelector("iframe")!;
-  const postMessage = vi.spyOn(preview.contentWindow!, "postMessage");
+  const { preview, postMessage } = previewHost();
   const record = vi.fn(async (_value: RenderedBrowserObservation) => undefined);
   const controller = new PreviewObservationController("server", preview, acceptObservation, record);
 
-  controller.request(request);
+  controller.request(request, 1);
+  expect(postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "marimo-studio:observe-view",
+      lifecycleId: 1,
+      requestId: request.requestId,
+    }),
+    "*",
+  );
   controller.receive(observation("loading"));
   await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(1));
   expect(record).toHaveBeenLastCalledWith(
@@ -97,16 +116,14 @@ it("keeps an observation request until terminal evidence is recorded", async () 
 });
 
 it("releases terminal evidence after its bounded upload fails", async () => {
-  document.body.innerHTML = "<iframe></iframe>";
-  const preview = document.querySelector("iframe")!;
-  const postMessage = vi.spyOn(preview.contentWindow!, "postMessage");
+  const { preview, postMessage } = previewHost();
   const record = vi.fn(async (_value: RenderedBrowserObservation) => {
     throw new Error("network unavailable");
   });
   const controller = new PreviewObservationController("server", preview, acceptObservation, record);
   const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-  controller.request(request);
+  controller.request(request, 1);
   controller.receive(observation("ready"));
   await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(1));
   await vi.waitFor(() => expect(warning).toHaveBeenCalledTimes(1));
@@ -116,9 +133,7 @@ it("releases terminal evidence after its bounded upload fails", async () => {
 });
 
 it("does not resend a request while terminal evidence is uploading", async () => {
-  document.body.innerHTML = "<iframe></iframe>";
-  const preview = document.querySelector("iframe")!;
-  const postMessage = vi.spyOn(preview.contentWindow!, "postMessage");
+  const { preview, postMessage } = previewHost();
   let finishUpload!: () => void;
   const record = vi.fn(
     async (_value: RenderedBrowserObservation) =>
@@ -128,7 +143,7 @@ it("does not resend a request while terminal evidence is uploading", async () =>
   );
   const controller = new PreviewObservationController("server", preview, acceptObservation, record);
 
-  controller.request(request);
+  controller.request(request, 1);
   controller.receive(observation("ready"));
   await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(1));
   controller.post();
@@ -144,31 +159,28 @@ it("does not resend a request while terminal evidence is uploading", async () =>
 });
 
 it("a new observation request supersedes stale browser work", () => {
-  document.body.innerHTML = "<iframe></iframe>";
-  const preview = document.querySelector("iframe")!;
-  const postMessage = vi.spyOn(preview.contentWindow!, "postMessage");
+  const { preview, postMessage } = previewHost();
   const controller = new PreviewObservationController("server", preview, acceptObservation);
 
-  controller.request({ ...request, requestId: "stale-request", revision: "revision-1" });
-  controller.request({ ...request, requestId: "current-request", revision: "revision-2" });
+  controller.request({ ...request, requestId: "stale-request", revision: "revision-1" }, 1);
+  controller.request({ ...request, requestId: "current-request", revision: "revision-2" }, 2);
   postMessage.mockClear();
   controller.post();
 
   expect(postMessage).toHaveBeenCalledTimes(1);
   expect(postMessage).toHaveBeenCalledWith(
     expect.objectContaining({ requestId: "current-request", revision: "revision-2" }),
-    globalThis.location.origin,
+    "*",
   );
 });
 
 it("drops superseded replies before accepting their runtime state", () => {
-  document.body.innerHTML = "<iframe></iframe>";
-  const preview = document.querySelector("iframe")!;
+  const { preview } = previewHost();
   const accept = vi.fn(acceptObservation);
   const controller = new PreviewObservationController("server", preview, accept);
 
-  controller.request({ ...request, requestId: "stale-request", revision: "revision-1" });
-  controller.request({ ...request, requestId: "current-request", revision: "revision-2" });
+  controller.request({ ...request, requestId: "stale-request", revision: "revision-1" }, 1);
+  controller.request({ ...request, requestId: "current-request", revision: "revision-2" }, 2);
   controller.receive({
     ...observation("ready"),
     requestId: "stale-request",
@@ -179,9 +191,12 @@ it("drops superseded replies before accepting their runtime state", () => {
 
   const current = {
     ...observation("ready"),
+    lifecycleId: 2,
     requestId: "current-request",
     revision: "revision-2",
   };
+  controller.receive({ ...current, lifecycleId: 1 });
+  expect(accept).not.toHaveBeenCalled();
   controller.receive(current);
 
   expect(accept).toHaveBeenCalledTimes(1);

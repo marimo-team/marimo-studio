@@ -2,49 +2,69 @@ import type { ValueReadError } from "@marimo-studio/protocol/value-read";
 
 import { z } from "zod";
 
+import type { DecodedValue, MarimoValue } from "./codecs.ts";
+
+import { syncProjectionHostAttributes } from "../cells/host.ts";
+import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
 import { notifyProjectionChanged } from "../projections/changes.ts";
+import { PROJECTION_SITE_ATTRIBUTE, projectionRequestForHost } from "../projections/identity.ts";
+import { applyProjectionMetadata, resetProjectionHostMetadata } from "../projections/instances.ts";
+import {
+  createProjectionResolutionContext,
+  type ProjectionResolutionContext,
+  type ResolvedProjection,
+  type RuntimeProjectionRequest as ProjectionRequest,
+  resolveHostProjection,
+} from "../projections/resolution.ts";
 import {
   getRuntimeConfig,
+  getRuntimeProjectionConfig,
   type JsonValue,
   type ProjectionDiagnostic,
-  subscribeRuntimeConfig,
-  type ValueBindingConfig,
+  subscribeRuntimeProjectionConfig,
 } from "../runtime-config/index.ts";
 import { type ValuePhase, ValueStates } from "./state.ts";
 
 const ATTRIBUTE = "mo-value";
 const ATTRIBUTE_SELECTOR = `[${ATTRIBUTE}]`;
+const PRESERVED_ID_PREFIX = "marimo-studio-value-";
 const textValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 const hosts = new Set<HTMLElement>();
 const renderedValues = new WeakMap<
   HTMLElement,
-  { readonly selector: string; readonly fingerprint: string }
+  { readonly codec: DecodedValue["codec"]; readonly selector: string; readonly fingerprint: string }
 >();
-interface ProjectedValue {
-  readonly fingerprint: string;
+type ProjectedValue = DecodedValue & {
   readonly text: string;
-  readonly value: JsonValue;
-}
+};
 
 const cachedValues = new Map<string, ProjectedValue>();
-const hostValues = new WeakMap<HTMLElement, JsonValue>();
+const hostValues = new WeakMap<HTMLElement, MarimoValue>();
 const preparedHosts = new WeakSet<HTMLElement>();
 const hostSelectors = new WeakMap<HTMLElement, string>();
+interface HostProjection {
+  readonly projection: ResolvedProjection;
+  readonly projectionRevision: string;
+}
+
+let hostProjections = new WeakMap<HTMLElement, HostProjection>();
 const runtimeCellIds = new Map<string, string>();
+const projectionListeners = new Set<() => void>();
+let projectionSnapshot: readonly ValueHostProjection[] = [];
 const states = new ValueStates();
-let bindings: Record<string, ValueBindingConfig> = {};
+let cacheProjectionRevision: string | undefined;
 let observer: MutationObserver | undefined;
 let unsubscribeConfig: (() => void) | undefined;
 let configurePending = false;
 let started = false;
 
 export interface MarimoValueHost extends HTMLElement {
-  readonly marimoValue: JsonValue | undefined;
+  readonly marimoValue: MarimoValue | undefined;
 }
 
 export interface MarimoValueUpdatedDetail {
   readonly selector: string;
-  readonly value: JsonValue;
+  readonly value: MarimoValue;
 }
 
 export interface MarimoValueErrorDetail {
@@ -52,6 +72,13 @@ export interface MarimoValueErrorDetail {
   readonly code: string;
   readonly message: string;
   readonly hint?: string;
+}
+
+export interface ValueHostProjection {
+  readonly host: HTMLElement;
+  readonly projection: ResolvedProjection;
+  readonly request: ProjectionRequest;
+  readonly projectionRevision: string;
 }
 
 declare global {
@@ -89,8 +116,52 @@ const clearHostValue = (host: HTMLElement): void => {
   hostValues.delete(host);
 };
 
-const setHostValue = (host: HTMLElement, value: JsonValue): JsonValue => {
-  const snapshot = structuredClone(value);
+interface ValuePresentation {
+  readonly snapshot: (value: DecodedValue) => MarimoValue;
+  readonly text: (value: DecodedValue) => string;
+}
+
+const jsonText = (value: JsonValue): string => {
+  if (value === null) {
+    return "";
+  }
+  const textValue = textValueSchema.safeParse(value);
+  return textValue.success ? String(textValue.data) : JSON.stringify(value);
+};
+
+const valuePresentations = {
+  "json-v1": {
+    snapshot: (decoded) => {
+      if (decoded.codec !== "json-v1") {
+        throw new Error("JSON presentation received another value codec");
+      }
+      return structuredClone(decoded.value);
+    },
+    text: (decoded) => {
+      if (decoded.codec !== "json-v1") {
+        throw new Error("JSON presentation received another value codec");
+      }
+      return jsonText(decoded.value);
+    },
+  },
+  "arrow-ipc-v1": {
+    snapshot: (decoded) => {
+      if (decoded.codec !== "arrow-ipc-v1") {
+        throw new Error("Arrow presentation received another value codec");
+      }
+      return decoded.value;
+    },
+    text: (decoded) => {
+      if (decoded.codec !== "arrow-ipc-v1") {
+        throw new Error("Arrow presentation received another value codec");
+      }
+      return `${decoded.value.numRows} rows × ${decoded.value.numCols} columns`;
+    },
+  },
+} satisfies Record<DecodedValue["codec"], ValuePresentation>;
+
+const setHostValue = (host: HTMLElement, projection: ProjectedValue): MarimoValue => {
+  const snapshot = valuePresentations[projection.codec].snapshot(projection);
   hostValues.set(prepareHost(host), snapshot);
   return snapshot;
 };
@@ -99,14 +170,68 @@ const selectorFor = (host: HTMLElement): string => {
   return host.getAttribute(ATTRIBUTE)?.trim() ?? "";
 };
 
-const bindingFor = (host: HTMLElement): ValueBindingConfig | undefined => {
-  return bindings[selectorFor(host)];
+const prepareValueHost = (host: HTMLElement): void => {
+  if (!isArtifactProjectionHost(host)) {
+    return;
+  }
+  const siteId = host.getAttribute(PROJECTION_SITE_ATTRIBUTE)?.trim();
+  if (!siteId) {
+    return;
+  }
+  if (!host.id) {
+    const id = `${PRESERVED_ID_PREFIX}${siteId}`;
+    const existing = host.ownerDocument.getElementById(id);
+    if (existing === null || existing === host) {
+      host.id = id;
+    }
+  }
+  if (host.id) {
+    host.setAttribute("data-hx-preserve", "");
+  }
 };
 
-const diagnosticFor = (selector: string): ProjectionDiagnostic | undefined => {
+export const prepareValueHosts = (root: ParentNode): void => {
+  root.querySelectorAll<HTMLElement>(ATTRIBUTE_SELECTOR).forEach(prepareValueHost);
+};
+
+export const syncPreservedValueHosts = (source: ParentNode, live: Document): void => {
+  source
+    .querySelectorAll<HTMLElement>(`${ATTRIBUTE_SELECTOR}[data-hx-preserve][id]`)
+    .forEach((host) => {
+      if (!isArtifactProjectionHost(host)) {
+        return;
+      }
+      const preserved = live.getElementById(host.id);
+      if (preserved?.localName === host.localName && preserved !== host) {
+        syncProjectionHostAttributes(preserved, host);
+      }
+    });
+};
+
+const diagnosticFor = (selector: string, siteId?: string): ProjectionDiagnostic | undefined => {
   return getRuntimeConfig().diagnostics.find(
-    (diagnostic) => diagnostic.projection === "value" && diagnostic.target === selector,
+    (diagnostic) =>
+      diagnostic.projection === "value" &&
+      diagnostic.target === selector &&
+      (diagnostic.siteId === undefined || diagnostic.siteId === siteId),
   );
+};
+
+const publishHostProjections = (): void => {
+  projectionSnapshot = Array.from(hosts).flatMap((host) => {
+    const current = hostProjections.get(host);
+    return current === undefined
+      ? []
+      : [
+          {
+            host,
+            projection: current.projection,
+            request: current.projection.request,
+            projectionRevision: current.projectionRevision,
+          },
+        ];
+  });
+  projectionListeners.forEach((listener) => listener());
 };
 
 const clearHostDiagnostic = (host: HTMLElement) => {
@@ -135,6 +260,46 @@ const clearHostDiagnostic = (host: HTMLElement) => {
     host.textContent = "";
     delete host.dataset.marimoStudioValueFallback;
   }
+};
+
+const resetValueHost = (host: HTMLElement): void => {
+  clearHostDiagnostic(host);
+  resetProjectionHostMetadata(host);
+  renderedValues.delete(host);
+  clearHostValue(host);
+  host.textContent = "";
+  setState(host, "connecting");
+};
+
+const selectorHasOwner = (selector: string): boolean =>
+  Array.from(hosts).some((host) => {
+    const current = hostProjections.get(host);
+    return (
+      current?.projectionRevision === cacheProjectionRevision &&
+      current?.projection.request.target === selector
+    );
+  });
+
+const evictUnownedSelector = (selector: string | undefined): void => {
+  if (selector === undefined || selectorHasOwner(selector)) {
+    return;
+  }
+  cachedValues.delete(selector);
+  runtimeCellIds.delete(selector);
+  states.clear(selector);
+};
+
+const synchronizeProjectionRevision = (projectionRevision: string): void => {
+  if (cacheProjectionRevision === projectionRevision) {
+    return;
+  }
+  cacheProjectionRevision = projectionRevision;
+  cachedValues.clear();
+  runtimeCellIds.clear();
+  states.clearAll();
+  hostProjections = new WeakMap();
+  hosts.forEach(resetValueHost);
+  publishHostProjections();
 };
 
 const setState = (host: HTMLElement, state: ValuePhase): boolean => {
@@ -192,9 +357,7 @@ const failHost = (host: HTMLElement, error: ValueReadError, diagnostic?: Project
   }
 };
 
-const clearProjectedValue = (host: HTMLElement, selector: string) => {
-  cachedValues.delete(selector);
-  states.clear(selector);
+const clearProjectedValue = (host: HTMLElement) => {
   renderedValues.delete(host);
   clearHostValue(host);
   const config = getRuntimeConfig();
@@ -212,17 +375,10 @@ const visit = (node: Node, callback: (host: HTMLElement) => void) => {
   node.querySelectorAll<HTMLElement>(ATTRIBUTE_SELECTOR).forEach(callback);
 };
 
-const projectValue = (value: JsonValue): ProjectedValue => {
-  const fingerprint = JSON.stringify(value);
-  if (value === null) {
-    return { fingerprint, text: "", value };
-  }
-  const textValue = textValueSchema.safeParse(value);
-  if (textValue.success) {
-    return { fingerprint, text: String(textValue.data), value };
-  }
-  return { fingerprint, text: fingerprint, value };
-};
+const projectValue = (decoded: DecodedValue): ProjectedValue => ({
+  ...decoded,
+  text: valuePresentations[decoded.codec].text(decoded),
+});
 
 const renderHost = (
   host: HTMLElement,
@@ -233,14 +389,23 @@ const renderHost = (
   clearHostDiagnostic(host);
   const rendered = renderedValues.get(host);
   const changed =
-    rendered?.selector !== selector || rendered.fingerprint !== projection.fingerprint;
-  const snapshot = setHostValue(host, projection.value);
+    rendered?.selector !== selector ||
+    rendered.codec !== projection.codec ||
+    rendered.fingerprint !== projection.fingerprint;
   if (!changed) {
+    if (projection.codec === "json-v1") {
+      setHostValue(host, projection);
+    }
     setState(host, phase);
     return;
   }
+  const snapshot = setHostValue(host, projection);
   host.textContent = projection.text;
-  renderedValues.set(host, { selector, fingerprint: projection.fingerprint });
+  renderedValues.set(host, {
+    codec: projection.codec,
+    selector,
+    fingerprint: projection.fingerprint,
+  });
   setState(host, "ready");
   const detail: MarimoValueUpdatedDetail = { selector, value: snapshot };
   host.dispatchEvent(
@@ -255,32 +420,51 @@ const renderHost = (
   }
 };
 
-const connectHost = (host: HTMLElement) => {
+const connectHost = (
+  host: HTMLElement,
+  context: ProjectionResolutionContext = createProjectionResolutionContext(
+    getRuntimeProjectionConfig(),
+    document,
+  ),
+) => {
+  if (!isArtifactProjectionHost(host)) {
+    return;
+  }
+  prepareValueHost(host);
   prepareHost(host);
   hosts.add(host);
   const selector = selectorFor(host);
   hostSelectors.set(host, selector);
-  const binding = bindingFor(host);
-  if (!binding) {
+  const config = getRuntimeProjectionConfig();
+  synchronizeProjectionRevision(config.projectionRevision);
+  const request = projectionRequestForHost(host, "value", selector);
+  const resolution = resolveHostProjection(config, host, request, context);
+  applyProjectionMetadata(host, resolution);
+  if (!resolution.ok) {
+    hostProjections.delete(host);
     delete host.dataset.marimoSelector;
     delete host.dataset.marimoVariable;
     delete host.dataset.runtimeCellId;
-    const diagnostic = diagnosticFor(selector);
-    clearProjectedValue(host, selector);
+    const diagnostic = diagnosticFor(selector, request.siteId);
+    clearProjectedValue(host);
     failHost(
       host,
       {
-        code: diagnostic?.code ?? "unknown-selector",
-        message: diagnostic?.message ?? `Unknown selector ${JSON.stringify(selector)}`,
+        code: diagnostic?.code ?? resolution.error.code,
+        message: diagnostic?.message ?? resolution.error.message,
       },
       diagnostic,
     );
+    evictUnownedSelector(selector);
+    publishHostProjections();
     return;
   }
+  const projection = resolution.value;
+  hostProjections.set(host, { projection, projectionRevision: config.projectionRevision });
   clearHostDiagnostic(host);
   host.dataset.marimoSelector = selector;
-  host.dataset.marimoVariable = binding.variable;
-  const runtimeCellId = runtimeCellIds.get(selector);
+  host.dataset.marimoVariable = projection.variable ?? "";
+  const runtimeCellId = projection.runtimeCellId ?? runtimeCellIds.get(selector);
   if (runtimeCellId) {
     host.dataset.runtimeCellId = runtimeCellId;
   } else {
@@ -296,26 +480,28 @@ const connectHost = (host: HTMLElement) => {
     clearHostValue(host);
     setState(host, state.phase);
   }
+  publishHostProjections();
 };
 
 const disconnectHost = (host: HTMLElement) => {
+  const selector = hostSelectors.get(host);
   hosts.delete(host);
+  hostProjections.delete(host);
+  evictUnownedSelector(selector);
+  resetValueHost(host);
+  publishHostProjections();
 };
 
 const releaseHost = (host: HTMLElement) => {
-  disconnectHost(host);
-  if (renderedValues.delete(host)) {
-    host.textContent = "";
+  if (!hosts.has(host)) {
+    return;
   }
+  disconnectHost(host);
   hostValues.delete(host);
   hostSelectors.delete(host);
   if (preparedHosts.delete(host)) {
     Reflect.deleteProperty(host, "marimoValue");
   }
-  clearHostDiagnostic(host);
-  delete host.dataset.marimoSelector;
-  delete host.dataset.marimoVariable;
-  delete host.dataset.runtimeCellId;
   delete host.dataset.state;
   host.removeAttribute("aria-busy");
   notifyProjectionChanged();
@@ -326,15 +512,16 @@ const reconcileHosts = () => {
     return;
   }
   hosts.forEach((host) => {
-    if (!host.isConnected || !host.matches(ATTRIBUTE_SELECTOR)) {
-      disconnectHost(host);
+    if (!host.isConnected || !host.matches(ATTRIBUTE_SELECTOR) || !isArtifactProjectionHost(host)) {
+      releaseHost(host);
     }
   });
-  visit(document.documentElement, connectHost);
+  const context = createProjectionResolutionContext(getRuntimeProjectionConfig(), document);
+  visit(document.documentElement, (host) => connectHost(host, context));
 };
 
 const configure = () => {
-  bindings = getRuntimeConfig().valueBindings;
+  synchronizeProjectionRevision(getRuntimeProjectionConfig().projectionRevision);
   if (configurePending) {
     return;
   }
@@ -345,13 +532,14 @@ const configure = () => {
   });
 };
 
-export const startValueBindings = () => {
+export const startValueHosts = () => {
   started = true;
-  bindings = getRuntimeConfig().valueBindings;
   reconcileHosts();
   observer?.disconnect();
   observer = new MutationObserver((records) => {
+    const context = createProjectionResolutionContext(getRuntimeProjectionConfig(), document);
     const changedHosts = new Set<HTMLElement>();
+    const movedHosts = new Set<HTMLElement>();
     for (const record of records) {
       if (record.type === "attributes") {
         if (record.target instanceof HTMLElement) {
@@ -359,47 +547,83 @@ export const startValueBindings = () => {
         }
         continue;
       }
-      record.removedNodes.forEach((node) => visit(node, disconnectHost));
-      record.addedNodes.forEach((node) => visit(node, connectHost));
+      record.removedNodes.forEach((node) => visit(node, (host) => movedHosts.add(host)));
+      record.addedNodes.forEach((node) => visit(node, (host) => movedHosts.add(host)));
     }
+    movedHosts.forEach((host) => {
+      const connected =
+        host.isConnected && host.matches(ATTRIBUTE_SELECTOR) && isArtifactProjectionHost(host);
+      if (connected && !hosts.has(host)) {
+        connectHost(host, context);
+      } else if (!connected && hosts.has(host)) {
+        releaseHost(host);
+      }
+    });
     changedHosts.forEach((host) => {
-      if (!host.isConnected) {
-        disconnectHost(host);
+      if (!host.isConnected || !isArtifactProjectionHost(host)) {
+        releaseHost(host);
         return;
       }
       const attribute = host.getAttribute(ATTRIBUTE);
       const nextSelector = attribute === null ? null : attribute.trim();
-      if (nextSelector === hostSelectors.get(host)) {
+      const nextSiteId = host.getAttribute(PROJECTION_SITE_ATTRIBUTE)?.trim() ?? "";
+      const current = hostProjections.get(host)?.projection.request;
+      if (nextSelector === hostSelectors.get(host) && nextSiteId === current?.siteId) {
         return;
       }
       releaseHost(host);
       if (nextSelector !== null) {
-        connectHost(host);
+        connectHost(host, context);
       }
     });
   });
   observer.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: [ATTRIBUTE],
+    attributeFilter: [ATTRIBUTE, PROJECTION_SITE_ATTRIBUTE],
     childList: true,
     subtree: true,
   });
   unsubscribeConfig?.();
-  unsubscribeConfig = subscribeRuntimeConfig(configure);
+  unsubscribeConfig = subscribeRuntimeProjectionConfig(configure);
 };
 
-export const stopValueBindings = () => {
+export const stopValueHosts = () => {
   started = false;
   observer?.disconnect();
   observer = undefined;
   unsubscribeConfig?.();
   unsubscribeConfig = undefined;
-  hosts.forEach((host) => delete host.dataset.runtimeCellId);
+  hosts.forEach((host) => {
+    resetValueHost(host);
+    delete host.dataset.state;
+    host.removeAttribute("aria-busy");
+  });
   hosts.clear();
+  hostProjections = new WeakMap();
+  publishHostProjections();
   runtimeCellIds.clear();
+  cachedValues.clear();
+  states.clearAll();
+  cacheProjectionRevision = undefined;
 };
 
-export const setValueRuntimeCell = (selectors: readonly string[], cellId: string | null): void => {
+export const getValueHostProjections = (): readonly ValueHostProjection[] => projectionSnapshot;
+
+export const getValueHosts = (): readonly HTMLElement[] => Array.from(hosts);
+
+export const subscribeValueHostProjections = (listener: () => void): (() => void) => {
+  projectionListeners.add(listener);
+  return () => projectionListeners.delete(listener);
+};
+
+export const setValueRuntimeCell = (
+  selectors: readonly string[],
+  cellId: string | null,
+  projectionRevision: string,
+): void => {
+  if (projectionRevision !== cacheProjectionRevision) {
+    return;
+  }
   selectors.forEach((selector) => {
     if (cellId) {
       runtimeCellIds.set(selector, cellId);
@@ -417,7 +641,10 @@ export const setValueRuntimeCell = (selectors: readonly string[], cellId: string
   });
 };
 
-export const markValuePending = (selector: string) => {
+export const markValuePending = (selector: string, projectionRevision: string) => {
+  if (projectionRevision !== cacheProjectionRevision || !selectorHasOwner(selector)) {
+    return;
+  }
   const state = states.pending(selector, cachedValues.has(selector));
   hosts.forEach((host) => {
     if (selectorFor(host) === selector) {
@@ -426,7 +653,14 @@ export const markValuePending = (selector: string) => {
   });
 };
 
-export const markValueError = (selector: string, error: ValueReadError) => {
+export const markValueError = (
+  selector: string,
+  error: ValueReadError,
+  projectionRevision: string,
+) => {
+  if (projectionRevision !== cacheProjectionRevision || !selectorHasOwner(selector)) {
+    return;
+  }
   cachedValues.delete(selector);
   states.clear(selector);
   states.failed(selector, error);
@@ -441,8 +675,28 @@ export const markValueError = (selector: string, error: ValueReadError) => {
   });
 };
 
-export const applyValues = (values: Record<string, JsonValue>) => {
+export const applyValues = (values: Record<string, DecodedValue>, projectionRevision: string) => {
+  if (projectionRevision !== cacheProjectionRevision) {
+    return;
+  }
   for (const [selector, value] of Object.entries(values)) {
+    if (!selectorHasOwner(selector)) {
+      continue;
+    }
+    if (
+      !cachedValues.has(selector) &&
+      cachedValues.size >= getRuntimeConfig().projectionPolicy.maxUniqueValueTargets
+    ) {
+      markValueError(
+        selector,
+        {
+          code: "projection-value-target-limit",
+          message: "The active value cache reached its configured target limit.",
+        },
+        projectionRevision,
+      );
+      continue;
+    }
     const projection = projectValue(value);
     cachedValues.set(selector, projection);
     states.resolved(selector);

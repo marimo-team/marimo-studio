@@ -26,11 +26,11 @@ from marimo._session.extensions.types import EventAwareExtension
 from marimo._session.session import Session, SessionImpl
 from marimo._types.ids import ConsumerId
 
-from marimo_studio._capabilities import ServerLocation
 from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
 from marimo_studio._compat.patch import CallbackCloseHandle
 from marimo_studio._compat.server.gateway import location_handle
 from marimo_studio._compat.server.session_state import session_matches_notebook
+from marimo_studio._server.records import ServerLocation
 
 
 class _PeerCommandRelayExtension(EventAwareExtension):
@@ -208,6 +208,3 @@ def _peer_notifications(request: CommandMessage) -> tuple[NotificationMessage, .
             ),
         ),
     )
-
-
-__all__ = ["PrivatePeerCommandRelay"]

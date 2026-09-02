@@ -6,8 +6,8 @@ from collections.abc import Callable, Iterable
 from threading import Lock
 from typing import Any
 
-from marimo_studio._capabilities import CloseHandle
-from marimo_studio.errors import CompatibilityError
+from marimo_studio._server.ports import CloseHandle
+from marimo_studio.errors._internal import CompatibilityError
 
 
 class CallbackCloseHandle:
@@ -106,6 +106,3 @@ class ReversiblePatch:
             self._users = 0
             self._original = None
             self._replacement = None
-
-
-__all__ = ["CallbackCloseHandle", "CompositeCloseHandle", "ReversiblePatch"]

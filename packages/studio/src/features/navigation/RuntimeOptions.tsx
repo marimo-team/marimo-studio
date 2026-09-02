@@ -18,10 +18,12 @@ const runtimeIcon = (runtime: string): LucideIcon => {
 
 export const RuntimeOptions = ({
   current,
+  disabled,
   runtimes,
   onSelect,
 }: {
   current: string;
+  disabled: boolean;
   runtimes: readonly StudioRuntime[];
   onSelect: (runtime: string) => void;
 }) => (
@@ -34,6 +36,7 @@ export const RuntimeOptions = ({
           type="button"
           className="studio-runtime-option"
           aria-pressed={runtime.id === current}
+          disabled={disabled}
           onClick={(event) => {
             onSelect(runtime.id);
             closeParentMenu(event.currentTarget);

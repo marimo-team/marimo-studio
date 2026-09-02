@@ -1,4 +1,8 @@
-import { jsonValueSchema, type RuntimeControls } from "@marimo-studio/protocol/runtime-config";
+import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
+
+export interface RuntimeCellMap {
+  cells: Readonly<Record<string, string>>;
+}
 
 export interface ControlUpdate {
   objectId: string;
@@ -18,6 +22,11 @@ export interface ControlSync {
   dispose(): void;
 }
 
+export interface ControlSyncStatus {
+  phase: "ready" | "degraded";
+  error?: Error;
+}
+
 interface CellIdentity {
   semantic: string;
   runtime: string;
@@ -31,21 +40,36 @@ interface WriteWaiter {
 
 const controlWriteError = (cause: unknown): Error =>
   cause instanceof Error ? cause : new Error(String(cause));
+const CONTROL_RETRY_DELAYS = [100, 250, 500, 1_000, 2_000, 5_000] as const;
 
 class ControlWriter {
   private readonly pending = new Map<string, ControlUpdate>();
+  private readonly failed = new Map<string, ControlUpdate>();
   private readonly waiters: WriteWaiter[] = [];
   private version = 0;
   private pendingVersion = 0;
   private running = false;
   private disposed = false;
+  private retryAttempt = 0;
+  private retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(private readonly endpoint: ControlEndpoint) {}
+  constructor(
+    private readonly endpoint: ControlEndpoint,
+    private readonly failedWrite: (error: Error) => void,
+    private readonly recovered: () => void,
+  ) {}
 
   write(updates: readonly ControlUpdate[]): Promise<void> {
     if (this.disposed || updates.length === 0) {
       return Promise.resolve();
     }
+    if (this.retryTimer !== undefined) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = undefined;
+    }
+    this.failed.forEach((update, objectId) => this.pending.set(objectId, update));
+    this.failed.clear();
+    this.retryAttempt = 0;
     const version = ++this.version;
     this.pendingVersion = version;
     updates.forEach((update) => this.pending.set(update.objectId, update));
@@ -62,6 +86,11 @@ class ControlWriter {
     }
     this.disposed = true;
     this.pending.clear();
+    this.failed.clear();
+    if (this.retryTimer !== undefined) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = undefined;
+    }
     this.waiters.splice(0).forEach(({ resolve }) => resolve());
   }
 
@@ -82,10 +111,22 @@ class ControlWriter {
         try {
           await this.endpoint.apply(updates);
         } catch (cause) {
-          this.settle(version, controlWriteError(cause));
+          const error = controlWriteError(cause);
+          updates.forEach((update) => {
+            if (!this.pending.has(update.objectId)) {
+              this.failed.set(update.objectId, update);
+            }
+          });
+          this.settle(version, error);
+          this.failedWrite(error);
+          this.scheduleRetry();
           continue;
         }
+        this.retryAttempt = 0;
         this.settle(version);
+        if (this.pending.size === 0 && this.failed.size === 0 && this.retryTimer === undefined) {
+          this.recovered();
+        }
       }
     } finally {
       this.running = false;
@@ -106,9 +147,30 @@ class ControlWriter {
       }
     });
   }
+
+  private scheduleRetry(): void {
+    if (this.disposed || this.retryTimer !== undefined || this.failed.size === 0) {
+      return;
+    }
+    const delay = CONTROL_RETRY_DELAYS[this.retryAttempt];
+    if (delay === undefined) {
+      return;
+    }
+    this.retryAttempt += 1;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      this.failed.forEach((update, objectId) => {
+        if (!this.pending.has(objectId)) {
+          this.pending.set(objectId, update);
+        }
+      });
+      this.failed.clear();
+      this.start();
+    }, delay);
+  }
 }
 
-const cellsByRuntimeId = (controls: RuntimeControls): readonly CellIdentity[] =>
+const cellsByRuntimeId = (controls: RuntimeCellMap): readonly CellIdentity[] =>
   Object.entries(controls.cells)
     .map(([semantic, runtime]) => ({ semantic, runtime }))
     .sort((left, right) => right.runtime.length - left.runtime.length);
@@ -142,31 +204,46 @@ export const synchronizeControlEndpoints = async ({
   editorControls,
   previewControls,
   signal,
+  onStatus,
 }: {
   editor: ControlEndpoint;
   preview: ControlEndpoint;
-  editorControls: RuntimeControls;
-  previewControls: RuntimeControls;
+  editorControls: RuntimeCellMap;
+  previewControls: RuntimeCellMap;
   signal?: AbortSignal;
+  onStatus?: (status: ControlSyncStatus) => void;
 }): Promise<ControlSync> => {
   const editorCells = cellsByRuntimeId(editorControls);
   const previewCells = cellsByRuntimeId(previewControls);
-  const editorWriter = new ControlWriter(editor);
-  const previewWriter = new ControlWriter(preview);
+  const failures = new Set<"editor" | "preview">();
+  const writer = (direction: "editor" | "preview", endpoint: ControlEndpoint) =>
+    new ControlWriter(
+      endpoint,
+      (error) => {
+        failures.add(direction);
+        onStatus?.({ phase: "degraded", error });
+      },
+      () => {
+        if (!failures.delete(direction)) {
+          return;
+        }
+        if (failures.size === 0) {
+          onStatus?.({ phase: "ready" });
+        }
+      },
+    );
+  const editorWriter = writer("editor", editor);
+  const previewWriter = writer("preview", preview);
   const editorToPreview = (update: ControlUpdate) => {
     const translated = translate(update, editorCells, previewControls.cells);
     if (translated) {
-      void previewWriter.write([translated]).catch((error) => {
-        console.warn("Marimo preview control update failed", error);
-      });
+      void previewWriter.write([translated]).catch(() => {});
     }
   };
   const previewToEditor = (update: ControlUpdate) => {
     const translated = translate(update, previewCells, editorControls.cells);
     if (translated) {
-      void editorWriter.write([translated]).catch((error) => {
-        console.warn("Marimo editor control update failed", error);
-      });
+      void editorWriter.write([translated]).catch(() => {});
     }
   };
 
@@ -191,10 +268,17 @@ export const synchronizeControlEndpoints = async ({
     dispose();
     return sync;
   }
+  const previewSnapshot = new Map(
+    preview.snapshot().map((update) => [update.objectId, update.value]),
+  );
   const initial = editor
     .snapshot()
     .map((update) => translate(update, editorCells, previewControls.cells))
-    .filter((update): update is ControlUpdate => update !== undefined);
+    .filter(
+      (update): update is ControlUpdate =>
+        update !== undefined &&
+        JSON.stringify(previewSnapshot.get(update.objectId)) !== JSON.stringify(update.value),
+    );
   const initialApply = abortable(previewWriter.write(initial), signal);
   signal?.addEventListener("abort", dispose, { once: true });
   try {

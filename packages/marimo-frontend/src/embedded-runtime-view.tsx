@@ -26,6 +26,7 @@ export type EmbeddedRequestClient = Pick<
 >;
 
 interface EmbeddedConnectionInput {
+  readonly autoInstantiate: boolean;
   readonly sessionId: SessionId;
   readonly setCells: EmbeddedCellActions["setCells"];
 }
@@ -67,11 +68,13 @@ const useInitialization = (initialized: Promise<void>): EmbeddedInitialization =
 };
 
 export const EmbeddedRuntimeViewComponent = <Notebook,>({
+  autoInstantiate,
   initialized,
   kernel,
   render,
   sessionId,
 }: {
+  autoInstantiate: boolean;
   initialized: Promise<void>;
   kernel: EmbeddedRuntimeKernel<Notebook>;
   render: (runtime: EmbeddedRuntimeView) => ReactNode;
@@ -87,7 +90,7 @@ export const EmbeddedRuntimeViewComponent = <Notebook,>({
     return () => kernel.stopRuntime();
   }, [kernel, sendComponentValues]);
 
-  const connection = kernel.useConnection({ setCells, sessionId });
+  const connection = kernel.useConnection({ autoInstantiate, setCells, sessionId });
   const cells = useMemo(() => kernel.flattenCells(notebook), [kernel, notebook]);
   const submitStdin = useCallback(
     (cellId: string, text: string, outputIndex: number) => {
