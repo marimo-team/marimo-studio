@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Studio embed host</title>
+  </head>
+  <body>
+    <iframe title="Embedded Studio" allow="fullscreen"></iframe>
+    <script>
+      const target = new URL(location.href).searchParams.get("target");
+      if (target) document.querySelector("iframe").src = target;
+    </script>
+  </body>
+</html>

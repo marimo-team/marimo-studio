@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { cp, mkdir, rm } from "node:fs/promises";
+import { resolve } from "node:path";
 
 import { copyFixtureProviderPackage } from "./fixture-provider-package.mjs";
 import { e2eNetwork } from "./network.mjs";
@@ -22,12 +23,13 @@ import { PreparationProcessOwner } from "./preparation-process.mjs";
 import { captureProcessOutput, stopNotebookProcess, waitForServer } from "./server-process.mjs";
 
 const outputs = new WeakMap();
-const startServer = (args) => {
+const startServer = (args, environment = {}) => {
   const child = spawn("uv", ["run", "--frozen", "--group", "e2e", "marimo", "edit", ...args], {
     cwd: repositoryDirectory,
     detached: process.platform !== "win32",
     env: {
       ...process.env,
+      ...environment,
       PYTHONUNBUFFERED: "1",
       XDG_CONFIG_HOME: configDirectory,
     },
@@ -168,6 +170,10 @@ try {
     },
   );
   preparation.requireActive();
+  await cp(
+    resolve(fixtureDirectory, "embed-host.html"),
+    resolve(staticExportDirectory, "embed-host.html"),
+  );
 
   hosted = track(
     startServer([
@@ -220,16 +226,21 @@ try {
   ]);
   preparation.requireActive();
   primary = track(
-    startServer([
-      workspaceDirectory,
-      "--no-sandbox",
-      "--headless",
-      "--no-token",
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(e2eNetwork.main.studio.port),
-    ]),
+    startServer(
+      [
+        workspaceDirectory,
+        "--no-sandbox",
+        "--headless",
+        "--no-token",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(e2eNetwork.main.studio.port),
+      ],
+      {
+        MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS: `http://localhost:${e2eNetwork.main.exported.port}`,
+      },
+    ),
   );
   await Promise.all(closures);
 } catch (error) {
