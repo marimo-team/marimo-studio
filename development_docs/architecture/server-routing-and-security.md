@@ -51,12 +51,12 @@ a native route, or Studio cannot prove ownership of the requested route.
 
 Every routed notebook resolves to one state:
 
-| State                   | Record         | Edit-mode response                                              | Run-mode response                       |
-| ----------------------- | -------------- | --------------------------------------------------------------- | --------------------------------------- |
-| Unconfigured            | `Unconfigured` | Native editor host at `/`, first-view application at `/studio/` | Marimo route or configuration error     |
-| Configured with no view | `NeedsView`    | First-view application                                          | `workspace-not-initialized`             |
-| Ready                   | `Ready`        | Studio, Source, Preview, and support routes                     | Default or named presentation           |
-| Invalid                 | `Invalid`      | Repair document and structured support errors                   | Structured or plain configuration error |
+| State                   | Record         | Edit-mode response                                                                                                  | Run-mode response                       |
+| ----------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Unconfigured            | `Unconfigured` | `/`: Studio-hosted native editor (`studio`) or native Marimo editor (`marimo`). `/studio/`: first-view application. | Marimo route or configuration error     |
+| Configured with no view | `NeedsView`    | First-view application                                                                                              | `workspace-not-initialized`             |
+| Ready                   | `Ready`        | Studio, Source, Preview, and support routes                                                                         | Default or named presentation           |
+| Invalid                 | `Invalid`      | Repair document and structured support errors                                                                       | Structured or plain configuration error |
 
 `WorkspaceLifecycleResolver` coalesces filesystem resolution off the event
 loop. Shutdown cancels the current resolution task and closes the notebook
