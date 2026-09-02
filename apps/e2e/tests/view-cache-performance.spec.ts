@@ -138,7 +138,6 @@ test("reloads a cached sibling after notebook state changes", async ({
   await writeWorkspaceFile(reportPath, projectedReport);
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
-  await editorModelRecovery.recovered(page);
   const abandonedHandoffs = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin,
     method: "POST",
@@ -180,5 +179,7 @@ test("reloads a cached sibling after notebook state changes", async ({
   await recoverResponseTransition(dashboardProjectRefresh);
   await recoverRequestAbort(abandonedHandoffs);
   replacedWorkspaceStreams.recovered();
+  await editorModelRecovery.ready(page);
   await retireWorkspacePage(page, browserDiagnostics);
+  editorModelRecovery.recovered();
 });

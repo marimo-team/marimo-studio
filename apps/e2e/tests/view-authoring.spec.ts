@@ -415,8 +415,9 @@ test("publishes visible edits from each built-in source model", async ({
   });
 
   await expect(page.getByRole("status", { name: "Source document status" })).toHaveText("Saved");
-  await editorModelRecovery.recovered(page);
+  await editorModelRecovery.ready(page);
   await retireWorkspacePage(page, browserDiagnostics);
+  editorModelRecovery.recovered();
   await recoverRequestAbort(completedSourceWrites);
 });
 
@@ -601,7 +602,6 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
   });
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
-  await editorModelRecovery.recovered(page);
   await initialWorkspaceStream;
 
   await page.getByLabel("Switch view").click();
@@ -647,6 +647,9 @@ test("creates a view and removes its files", async ({ browserDiagnostics, page }
   await recoverRequestAbort(abandonedHandoffs);
   await recoverRequestAbort(supersededDashboardRenewal);
   await recoverWorkspaceEventStream(replacedWorkspaceStreams);
+  await editorModelRecovery.ready(page);
+  await retireWorkspacePage(page, browserDiagnostics);
+  editorModelRecovery.recovered();
 });
 
 test.describe("touch input", () => {
@@ -660,7 +663,6 @@ test.describe("touch input", () => {
     await addWorkspaceView(workspaceNotebookPath, "report");
     await page.goto(studioEntryUrl);
     await waitForPreview(page);
-    await editorModelRecovery.recovered(page);
     await page.getByLabel("Switch view").tap();
     await page.getByLabel("Remove report view").tap();
 
@@ -670,6 +672,9 @@ test.describe("touch input", () => {
     );
     await page.getByRole("button", { name: "Cancel" }).tap();
     await expect(page.getByLabel("Remove report view")).toBeFocused();
+    await editorModelRecovery.ready(page);
+    await retireWorkspacePage(page, browserDiagnostics);
+    editorModelRecovery.recovered();
   });
 });
 

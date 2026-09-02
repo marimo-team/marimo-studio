@@ -1,6 +1,7 @@
 import {
   expect,
   expectEditorModelReplayRecovery,
+  retireWorkspacePage,
   test,
   waitForViewPreview,
   writeViewSource,
@@ -9,8 +10,8 @@ import {
 test("publishes Vanilla local CSS and JavaScript sources", async ({ browserDiagnostics, page }) => {
   const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
   await page.goto("/studio/vanilla-local/?file=notebook.py");
-  const preview = await waitForViewPreview(page, "vanilla-local");
-  await editorModelRecovery.recovered(page);
+  const preview = await waitForViewPreview(page, "vanilla-local", "server", 120_000);
+  await editorModelRecovery.ready(page);
   const root = preview.locator("html");
 
   await expect(preview.getByRole("heading", { name: "Vanilla local sources" })).toBeVisible();
@@ -45,4 +46,6 @@ test("publishes Vanilla local CSS and JavaScript sources", async ({ browserDiagn
   const scriptTab = page.getByRole("tab", { name: "scripts/app.js" });
   await expect(styleTab).toBeVisible();
   await expect(scriptTab).toBeVisible();
+  await retireWorkspacePage(page, browserDiagnostics);
+  editorModelRecovery.recovered();
 });

@@ -248,12 +248,12 @@ export const expectEditorModelReplayRecovery = (diagnostics: BrowserDiagnostics)
     required: false,
   });
   return {
-    recovered: async (page: Page): Promise<void> => {
+    ready: async (page: Page): Promise<void> => {
       await expect(editorFrame(page).getByRole("button", { name: "Widget count: 7" })).toBeVisible({
         timeout: PREVIEW_TIMEOUT,
       });
-      recovery.recovered();
     },
+    recovered: recovery.recovered,
   };
 };
 
