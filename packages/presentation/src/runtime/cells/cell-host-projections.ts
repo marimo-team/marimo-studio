@@ -1,11 +1,11 @@
 import type { MarimoCellElement } from "../../cells/host";
 import type { CellIndex } from "../../cells/index";
+import type { ProjectionHostBinding } from "../../projections/resolution";
 import type { RuntimeConfig } from "../../runtime-config/index";
 import type { RuntimeCell } from "../runtime-cell";
 import type { CellDiagnostic } from "./cell-projection";
 
 import { projectionRequestForHost } from "../../projections/identity";
-import { applyProjectionMetadata } from "../../projections/instances";
 import {
   createProjectionResolutionContext,
   resolveHostProjection,
@@ -25,7 +25,12 @@ const getHostId = (host: MarimoCellElement): number => {
 };
 
 export type CellHostProjection =
-  | { key: number; kind: "duplicate"; host: MarimoCellElement }
+  | {
+      key: number;
+      kind: "duplicate";
+      host: MarimoCellElement;
+      binding: ProjectionHostBinding;
+    }
   | {
       key: number;
       kind: "cell";
@@ -35,6 +40,7 @@ export type CellHostProjection =
       developer: boolean;
       diagnostic?: CellDiagnostic;
       host: MarimoCellElement;
+      binding: ProjectionHostBinding;
       showCellLogs: boolean;
     };
 
@@ -51,7 +57,6 @@ export const projectCellHosts = (
       projectionRequestForHost(host, "cell", host.cellName),
       context,
     );
-    applyProjectionMetadata(host, resolution);
     return { host, resolution };
   });
   const primaryHosts = new Map<string, MarimoCellElement>();
@@ -64,8 +69,14 @@ export const projectCellHosts = (
 
   return resolved.map(({ host, resolution }) => {
     const key = getHostId(host);
+    const binding = { projectionRevision: config.projectionRevision, resolution };
     if (resolution.ok && primaryHosts.get(resolution.value.producer) !== host) {
-      return { key, kind: "duplicate", host };
+      return {
+        binding,
+        key,
+        kind: "duplicate",
+        host,
+      };
     }
     const diagnostic = resolution.ok
       ? config.diagnostics.find(
@@ -81,6 +92,7 @@ export const projectCellHosts = (
         };
     const runtimeCellId = resolution.ok ? resolution.value.runtimeCellId : undefined;
     return {
+      binding,
       key,
       kind: "cell",
       projectionKey: resolution.ok

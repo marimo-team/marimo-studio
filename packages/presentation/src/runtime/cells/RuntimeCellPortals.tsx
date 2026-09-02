@@ -25,11 +25,18 @@ export const RuntimeCellPortals = ({
 
   return projections.map((projection) => {
     if (projection.kind === "duplicate") {
-      return <DuplicateCellPortal key={projection.key} host={projection.host} />;
+      return (
+        <DuplicateCellPortal
+          key={projection.key}
+          binding={projection.binding}
+          host={projection.host}
+        />
+      );
     }
     return (
       <CellPortal
         key={projection.key}
+        binding={projection.binding}
         host={projection.host}
         cell={projection.cell}
         projectionPresent={projection.projectionPresent}

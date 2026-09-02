@@ -34,9 +34,6 @@ export const projectionInstanceId = (host: Element): string => {
   }
   const created = `projection-${nextInstanceId++}`;
   instanceIds.set(host, created);
-  if (host instanceof HTMLElement) {
-    host.dataset.marimoStudioInstance = created;
-  }
   return created;
 };
 

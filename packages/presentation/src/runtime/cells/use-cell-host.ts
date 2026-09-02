@@ -1,10 +1,12 @@
 import { useLayoutEffect } from "react";
 
 import type { MarimoCellElement } from "../../cells/host";
+import type { ProjectionHostBinding } from "../../projections/resolution";
 import type { RuntimeCell } from "../runtime-cell";
 import type { CellProjection } from "./cell-projection";
 
 import { setCellHostState } from "../../cells/host";
+import { applyProjectionMetadata, resetProjectionHostMetadata } from "../../projections/instances";
 
 const setDatasetValue = (dataset: DOMStringMap, name: string, value: string | undefined): void => {
   if (value === undefined || value === "") {
@@ -16,10 +18,12 @@ const setDatasetValue = (dataset: DOMStringMap, name: string, value: string | un
 
 export const useCellHost = (
   host: MarimoCellElement,
+  binding: ProjectionHostBinding,
   cell: RuntimeCell | undefined,
   projection: CellProjection,
 ): void => {
   useLayoutEffect(() => {
+    applyProjectionMetadata(host, binding.resolution, binding.projectionRevision);
     setDatasetValue(host.dataset, "runtimeCellId", cell?.id);
     setDatasetValue(host.dataset, "outputMime", projection.outputMime);
     setDatasetValue(host.dataset, "outputMimes", projection.outputMimes);
@@ -34,5 +38,6 @@ export const useCellHost = (
       message: projection.diagnostic?.message,
       hint: projection.diagnostic?.hint,
     });
-  }, [cell?.id, host, projection]);
+    return () => resetProjectionHostMetadata(host);
+  }, [binding, cell?.id, host, projection]);
 };
