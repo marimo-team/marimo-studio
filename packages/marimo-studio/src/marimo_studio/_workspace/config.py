@@ -473,7 +473,7 @@ def materialize_studio_workspace(
             set(views),
             refresh_names=lambda: set(discover_views(definition.view_root)),
         )
-    except ConditionalWriteError as error:
+    except (ConditionalWriteError, FileNotFoundError) as error:
         raise WorkspaceGenerationConflictError() from error
     if owner_names != set(views):
         views = discover_views(definition.view_root)
