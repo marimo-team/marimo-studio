@@ -139,7 +139,7 @@ describe("documentation source integrity", () => {
     expect(new Set(siteRoutes)).toEqual(new Set(files.map(routeForFile)));
   });
 
-  it("resolves local heading fragments", async () => {
+  it("resolves local links and heading fragments", async () => {
     const markdown = await markdownRenderer;
     const pageAnchors = new Map(
       files.map((file) => [
@@ -163,14 +163,18 @@ describe("documentation source integrity", () => {
         );
       for (const link of links) {
         const href = link.attrGet("href") ?? "";
-        if (!href.includes("#")) {
-          continue;
-        }
-        if (/^(?:[a-z]+:|\/\/)/i.test(href)) {
+        if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(href)) {
           continue;
         }
         const target = resolveTarget(sourceFile, href);
-        if (!target?.endsWith(".md")) {
+        if (target === undefined) {
+          failures.push(`${relative(docsRoot, sourceFile)}: missing local target ${href}`);
+          continue;
+        }
+        if (!href.includes("#")) {
+          continue;
+        }
+        if (!target.endsWith(".md")) {
           continue;
         }
         const fragment = decodeURIComponent(href.split("#")[1]?.split("?")[0] ?? "");
