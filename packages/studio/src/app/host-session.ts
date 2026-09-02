@@ -7,6 +7,18 @@ import {
 import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 
 type SessionStorage = Pick<Storage, "getItem" | "setItem">;
+const unavailableSessionStorage: SessionStorage = {
+  getItem: () => null,
+  setItem: () => undefined,
+};
+
+export const resolveHostSessionStorage = (read: () => SessionStorage): SessionStorage => {
+  try {
+    return read();
+  } catch {
+    return unavailableSessionStorage;
+  }
+};
 
 export const readHostSessionConfig = (
   root: Pick<Document, "querySelector"> = document,
@@ -87,12 +99,12 @@ export const studioHostUrl = (
 };
 
 export const handoffHostSession = (config: HostSessionConfig): void => {
-  globalThis.location.replace(
-    hostSessionHandoffUrl(config, globalThis.location.href, globalThis.sessionStorage),
-  );
+  const storage = resolveHostSessionStorage(() => globalThis.sessionStorage);
+  globalThis.location.replace(hostSessionHandoffUrl(config, globalThis.location.href, storage));
 };
 
 export const initializeStudioHostSession = (config: HostSessionConfig): void => {
-  const target = studioHostUrl(config, globalThis.location.href, globalThis.sessionStorage);
+  const storage = resolveHostSessionStorage(() => globalThis.sessionStorage);
+  const target = studioHostUrl(config, globalThis.location.href, storage);
   globalThis.history.replaceState(globalThis.history.state, "", target);
 };

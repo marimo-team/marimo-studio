@@ -4,7 +4,11 @@ import {
 } from "@marimo-studio/protocol/host-session";
 import { describe, expect, it } from "vite-plus/test";
 
-import { hostSessionHandoffUrl, studioHostUrl } from "../src/app/host-session.ts";
+import {
+  hostSessionHandoffUrl,
+  resolveHostSessionStorage,
+  studioHostUrl,
+} from "../src/app/host-session.ts";
 
 const capability = "a".repeat(64);
 const retainedCapability = "b".repeat(64);
@@ -51,7 +55,7 @@ describe("host session navigation", () => {
     const sessionStorage = storage(JSON.stringify({ session: "wrong", capability: "wrong" }));
 
     const target = hostSessionHandoffUrl(
-      config("reset"),
+      config("native"),
       "https://example.test/?marimo_studio_resume=1",
       sessionStorage,
     );
@@ -68,12 +72,19 @@ describe("host session navigation", () => {
     {
       transition: "native" as const,
       handoff: retainedCapability,
+      session: "s_654321",
     },
     {
       transition: "complete" as const,
       handoff: null,
+      session: "s_654321",
     },
-  ])("applies the $transition private-query policy", ({ transition, handoff }) => {
+    {
+      transition: "reset" as const,
+      handoff: capability,
+      session: "s_123456",
+    },
+  ])("applies the $transition private-query policy", ({ transition, handoff, session }) => {
     const sessionStorage = storage(
       JSON.stringify({ schema: 1, session: "s_654321", capability: retainedCapability }),
     );
@@ -84,7 +95,7 @@ describe("host session navigation", () => {
       sessionStorage,
     );
 
-    expect(target.searchParams.get("session_id")).toBe("s_654321");
+    expect(target.searchParams.get("session_id")).toBe(session);
     expect(target.searchParams.get("marimo_studio_handoff")).toBe(handoff);
     expect(target.searchParams.has("marimo_studio_resume")).toBe(false);
   });
@@ -100,6 +111,17 @@ describe("host session navigation", () => {
     };
 
     const target = hostSessionHandoffUrl(config("native"), "https://example.test/", deniedStorage);
+
+    expect(target.searchParams.get("session_id")).toBe("s_123456");
+    expect(target.searchParams.get("marimo_studio_handoff")).toBe(capability);
+  });
+
+  it("continues when the browser denies access to its session storage", () => {
+    const sessionStorage = resolveHostSessionStorage(() => {
+      throw new Error("denied");
+    });
+
+    const target = hostSessionHandoffUrl(config("native"), "https://example.test/", sessionStorage);
 
     expect(target.searchParams.get("session_id")).toBe("s_123456");
     expect(target.searchParams.get("marimo_studio_handoff")).toBe(capability);
