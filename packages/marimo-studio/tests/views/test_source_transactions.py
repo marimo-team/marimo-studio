@@ -8,13 +8,14 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
-from threading import Barrier, Event
+from threading import Barrier, Event, get_ident
 
 import pytest
 
 import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._views.sources as sources_module
 import marimo_studio._workspace.config as workspace_config
+import marimo_studio._workspace.mutation_lock as mutation_lock_module
 from marimo_studio._artifacts.inputs import (
     ProjectRevisionSnapshot,
     project_revision,
@@ -104,12 +105,22 @@ def test_source_commit_holds_the_catalog_owner_through_replacement(
     studio = _studio(notebook_path)
     current = read_source(studio, "dashboard", SOURCE_PATH)
     replace_file = secure_files.SecureDirectory.replace_file_if_identity
-    mutation_started = Event()
+    catalog_waiting = Event()
     mutation_finished = Event()
     sibling = None
+    owner_thread = get_ident()
+    mutation_lock = mutation_lock_module._mutation_lock
+
+    @contextmanager
+    def observed_mutation_lock(view_root: Path, filename: str) -> Iterator[None]:
+        if filename == ".catalog.lock" and get_ident() != owner_thread:
+            catalog_waiting.set()
+        with mutation_lock(view_root, filename):
+            yield
+
+    monkeypatch.setattr(mutation_lock_module, "_mutation_lock", observed_mutation_lock)
 
     def create_sibling() -> None:
-        mutation_started.set()
         prepare_view(notebook_path, "executive")
         mutation_finished.set()
 
@@ -118,8 +129,7 @@ def test_source_commit_holds_the_catalog_owner_through_replacement(
         def replace_while_sibling_waits(*args, **kwargs):
             nonlocal sibling
             sibling = executor.submit(create_sibling)
-            assert mutation_started.wait(timeout=2)
-            assert not mutation_finished.wait(timeout=0.2)
+            assert catalog_waiting.wait(timeout=2)
             return replace_file(*args, **kwargs)
 
         monkeypatch.setattr(

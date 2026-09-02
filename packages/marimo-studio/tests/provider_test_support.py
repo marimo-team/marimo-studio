@@ -9,7 +9,7 @@ from typing import Any, cast
 
 import pytest
 
-import marimo_studio._views.create as workspace_setup_module
+import marimo_studio._views.creation_plan as creation_plan_module
 import marimo_studio.view_providers._host as providers_module
 from marimo_studio._artifacts.inputs import project_input_paths
 from marimo_studio._artifacts.paths import artifact_root
@@ -237,4 +237,4 @@ def install_registry(
     registry: ProviderRegistry,
 ) -> None:
     monkeypatch.setattr(providers_module, "_REGISTRY", registry)
-    monkeypatch.setattr(workspace_setup_module, "provider_registry", lambda: registry)
+    monkeypatch.setattr(creation_plan_module, "provider_registry", lambda: registry)

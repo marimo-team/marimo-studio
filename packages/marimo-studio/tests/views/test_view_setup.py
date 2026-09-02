@@ -5,6 +5,7 @@ import re
 import shutil
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from threading import Barrier
 
@@ -13,6 +14,7 @@ import pytest
 
 import marimo_studio._filesystem.secure as secure_files
 import marimo_studio._views.create as create_module
+import marimo_studio._views.creation_plan as creation_plan_module
 import marimo_studio._workspace.transactions as workspace_transactions
 from marimo_studio import inspect_notebook
 from marimo_studio._views.api import create_view, prepare_view
@@ -168,7 +170,16 @@ def test_first_view_publishes_a_complete_workspace_to_readers(
     )
 
 
-def test_repeated_and_dry_run_setup_report_file_changes(
+def test_dry_run_and_committed_setup_report_the_same_plan(
+    notebook_path: Path,
+) -> None:
+    preview = prepare_view(notebook_path, dry_run=True)
+    created = prepare_view(notebook_path)
+
+    assert replace(preview, workspace=created.workspace, dry_run=False) == created
+
+
+def test_repeated_and_dry_run_setup_report_no_file_changes(
     notebook_path: Path,
 ) -> None:
     created = prepare_view(notebook_path)
@@ -533,7 +544,7 @@ def test_existing_view_inspection_runs_outside_mutation_locks(
     inspections = 0
     workspace_lock = create_module.workspace_catalog_lock
     view_lock = create_module.view_mutation_lock
-    inspect = create_module.inspect_view_project_sync
+    inspect = creation_plan_module.inspect_view_project_sync
 
     @contextmanager
     def observed_workspace_lock(view_root: Path):
@@ -566,7 +577,7 @@ def test_existing_view_inspection_runs_outside_mutation_locks(
     )
     monkeypatch.setattr(create_module, "view_mutation_lock", observed_view_lock)
     monkeypatch.setattr(
-        create_module,
+        creation_plan_module,
         "inspect_view_project_sync",
         observed_inspection,
     )
