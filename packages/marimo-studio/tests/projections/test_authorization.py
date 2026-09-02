@@ -23,6 +23,8 @@ from marimo_studio._compat.kernel_values.authorization import (
 from marimo_studio._compat.kernel_values.authorization_key import (
     initialize_projection_authorization_key,
     projection_authorization_key,
+    sign_kernel_authorization,
+    verify_kernel_authorization,
 )
 from marimo_studio._compat.kernel_values.host import _bind_live_projections
 from marimo_studio._compat.kernel_values.kernel import _current_projection_specs
@@ -165,6 +167,21 @@ class _Graph:
             found.add(current)
             pending.extend(self.parents.get(current, ()))
         return found
+
+
+def test_kernel_authorization_uses_canonical_json() -> None:
+    initialize_projection_authorization_key()
+    first = {"operation": "value", "arguments": {"target": "café", "index": 1}}
+    reordered = {"arguments": {"index": 1, "target": "café"}, "operation": "value"}
+
+    authorization = sign_kernel_authorization(first)
+
+    assert authorization == sign_kernel_authorization(reordered)
+    assert verify_kernel_authorization(authorization, reordered)
+    assert not verify_kernel_authorization(
+        authorization,
+        {**reordered, "operation": "output"},
+    )
 
 
 @pytest.mark.native_process
