@@ -77,8 +77,9 @@ if (await isFile(indexPath)) {
   }
 
   const socialImage = "https://marimo-team.github.io/marimo-studio/og.png";
+  const openGraphImageTag = index.match(/<meta\b[^>]*\bproperty="og:image"[^>]*>/)?.[0];
   check(
-    index.includes(`property="og:image" content="${socialImage}"`),
+    openGraphImageTag?.includes(`content="${socialImage}"`) ?? false,
     `Missing Open Graph image: ${socialImage}`,
   );
   check(await isFile(join(distDir, "og.png")), "Missing published Open Graph image: /og.png");
