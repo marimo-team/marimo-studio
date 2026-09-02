@@ -25,8 +25,8 @@ from marimo_studio._compat.server.editor_runtime import (
     _protect_editor_query_parameters,
     _serialize_document_transactions,
 )
-from marimo_studio._server.editor_bridge import _editor_document_send
-from marimo_studio._server.security import parse_allowed_embed_origins
+from marimo_studio._server.headers import edit_document_send
+from marimo_studio._server.security import SecurityPolicy, parse_allowed_embed_origins
 from marimo_studio._views.api import prepare_view
 from marimo_studio.errors import ProtocolError
 
@@ -70,7 +70,7 @@ def test_editor_document_framing_preserves_existing_content_policy() -> None:
     async def send(message: Message) -> None:
         sent.append(message)
 
-    protected_send = _editor_document_send(send)
+    protected_send = edit_document_send(send, SecurityPolicy())
 
     async def exercise() -> None:
         await protected_send(
@@ -112,7 +112,7 @@ def test_editor_document_framing_adds_configured_origins() -> None:
     policy = parse_allowed_embed_origins(
         "http://localhost:55021,https://notebooks.example.com"
     )
-    protected_send = _editor_document_send(send, policy)
+    protected_send = edit_document_send(send, policy)
 
     async def exercise() -> None:
         await protected_send(

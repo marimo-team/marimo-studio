@@ -111,6 +111,8 @@ class SessionState(Protocol):
         self,
         context: ServerContext,
         session_id: str,
+        *,
+        host_handoff: str | None = None,
     ) -> bool: ...
 
     def matches_creation_query(
@@ -127,6 +129,12 @@ class SessionState(Protocol):
         context: ServerContext,
         session_id: str,
     ) -> EditorSessionIdentity | None: ...
+
+    def release_editor_identity(
+        self,
+        context: ServerContext,
+        session_id: str,
+    ) -> bool: ...
 
     def retry_startup(
         self,

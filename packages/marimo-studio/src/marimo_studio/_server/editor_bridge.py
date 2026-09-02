@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import re
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Literal
@@ -21,7 +22,7 @@ from marimo_studio._delivery.urls import (
     STUDIO_CLIENT_QUERY_PARAM,
 )
 from marimo_studio._server.auth import has_edit_access
-from marimo_studio._server.headers import NO_STORE, frame_ancestors_policy
+from marimo_studio._server.headers import NO_STORE, edit_document_send
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
 from marimo_studio._server.ports import (
     DocumentTransactionEvidence,
@@ -47,6 +48,7 @@ from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.studio.editor_capability import (
     editor_binding_capability_matches,
 )
+from marimo_studio._server.studio.session_handoff import HostSessionTicket
 from marimo_studio._workspace import discover_studio
 from marimo_studio.errors import MarimoStudioError
 
@@ -80,6 +82,7 @@ async def delegate_editor_request(
     relative: str,
     mode: str,
     security_policy: SecurityPolicy = DEFAULT_SECURITY_POLICY,
+    host_session_active: Callable[[ServerContext, str], bool] | None = None,
 ) -> bool:
     """Delegate one editor or code-mode request and report whether it matched."""
     editor_target = native_editor_target(relative)
@@ -123,6 +126,7 @@ async def delegate_editor_request(
                 bind_session=native_transport or editor_root,
                 expected_server_instance=server_instance_id(context.server_token),
                 lifetime_owner=lifetime_owner,
+                host_session_active=host_session_active,
             )
             binding_required = (
                 native_transport
@@ -186,7 +190,7 @@ async def delegate_editor_request(
                     location.notebook,
                 )
         delegated_send = (
-            _editor_document_send(send, security_policy)
+            edit_document_send(send, security_policy)
             if scope["type"] == "http" and editor_root
             else send
         )
@@ -254,6 +258,7 @@ async def delegate_editor_request(
             return False
         session_id = request.headers.get("Marimo-Session-Id")
         location = await server.location(request)
+        request_base_url = server.base_url(scope)
         status: int | None = None
 
         async def track_response(message: Message) -> None:
@@ -265,30 +270,29 @@ async def delegate_editor_request(
 
         await app(scope, receive, track_response)
         if status is not None and 200 <= status < 300 and session_id is not None:
-            if location is None:
-                location = await server.session_location(request, session_id)
+            saved_location = await server.session_location(request, session_id)
+            if saved_location is not None:
+                location = saved_location
             if location is not None and await asyncio.to_thread(
                 location.notebook.is_file
             ):
-                sessions.request_studio_reload(server.context(location), session_id)
+                context = server.context(location)
+                sessions.request_studio_reload(
+                    context,
+                    session_id,
+                    host_handoff=HostSessionTicket.issue(
+                        context,
+                        session_id,
+                        request.query_params.multi_items(),
+                        public_base_url=(
+                            context.base_url
+                            if request_base_url is None
+                            else request_base_url
+                        ),
+                    ).capability,
+                )
         return True
     return False
-
-
-def _editor_document_send(
-    send: Send,
-    security_policy: SecurityPolicy = DEFAULT_SECURITY_POLICY,
-) -> Send:
-    content_security_policy = frame_ancestors_policy(security_policy).encode()
-
-    async def protected_send(message: Message) -> None:
-        if message["type"] == "http.response.start":
-            headers = list(message.get("headers", ()))
-            headers.append((b"content-security-policy", content_security_policy))
-            message = {**message, "headers": headers}
-        await send(message)
-
-    return protected_send
 
 
 async def _bind_editor_session(
@@ -300,6 +304,7 @@ async def _bind_editor_session(
     bind_session: bool,
     expected_server_instance: str,
     lifetime_owner: object,
+    host_session_active: Callable[[ServerContext, str], bool] | None = None,
 ) -> EditorBinding:
     if not has_edit_access(connection.scope):
         return EditorBinding("invalid")
@@ -323,6 +328,8 @@ async def _bind_editor_session(
             return EditorBinding("absent")
         session_id = retained.session_id
     if not sessions.is_session_id(session_id):
+        return EditorBinding("invalid")
+    if host_session_active is not None and host_session_active(context, session_id):
         return EditorBinding("invalid")
     if not editor_binding_capability_matches(
         capability,

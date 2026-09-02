@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import os
 import re
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from functools import partial
@@ -29,6 +29,7 @@ from marimo_studio._compat.server.gateway import context_handle
 from marimo_studio._delivery.urls import (
     DOCUMENT_REPLAY_QUERY_PARAM,
     EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
+    HOST_SESSION_HANDOFF_QUERY_PARAM,
     PRIVATE_QUERY_KEYS,
     STUDIO_CLIENT_QUERY_PARAM,
 )
@@ -41,12 +42,15 @@ from marimo_studio._processes.ownership import (
 )
 from marimo_studio._server.ports import EditorSessionIdentity, SessionOwner
 from marimo_studio._server.presentation.ports import ProjectionUnavailable
+from marimo_studio._server.query import (
+    CanonicalPublicQuery,
+    canonical_public_query,
+)
 from marimo_studio._server.records import ServerContext
 from marimo_studio.errors._internal import RuntimeStartupError, RuntimeSyncError
 
 _SESSION_PATTERN = re.compile(r"s_[a-z0-9]{6}")
 _NATIVE_INSTANTIATION_TIMEOUT_SECONDS = 30.0
-CanonicalPublicQuery = tuple[tuple[str, tuple[str, ...]], ...]
 
 
 @dataclass(frozen=True)
@@ -60,17 +64,6 @@ class _LiveCellCapture:
 
 def _is_session_id(value: object) -> bool:
     return isinstance(value, str) and _SESSION_PATTERN.fullmatch(value) is not None
-
-
-def _canonical_public_query(
-    query: Iterable[tuple[str, str]],
-) -> CanonicalPublicQuery:
-    values: dict[str, list[str]] = {}
-    for key, value in query:
-        if key in PRIVATE_QUERY_KEYS:
-            continue
-        values.setdefault(key, []).append(value)
-    return tuple((key, tuple(values[key])) for key in sorted(values))
 
 
 def _session_creation_query(session: object) -> CanonicalPublicQuery | None:
@@ -103,7 +96,7 @@ def _session_creation_query(session: object) -> CanonicalPublicQuery | None:
             items.extend((key, item) for item in text_values)
             continue
         return None
-    return _canonical_public_query(items)
+    return canonical_public_query(items)
 
 
 def session_creation_query_matches(
@@ -112,7 +105,7 @@ def session_creation_query_matches(
 ) -> bool:
     """Match public query semantics against native session creation metadata."""
     expected = _session_creation_query(session)
-    return expected is not None and expected == _canonical_public_query(query)
+    return expected is not None and expected == canonical_public_query(query)
 
 
 def current_session(context: ServerContext, session_id: str) -> Session | None:
@@ -342,6 +335,8 @@ class PrivateSessionState:
         self,
         context: ServerContext,
         session_id: str,
+        *,
+        host_handoff: str | None = None,
     ) -> bool:
         """Reload a newly named notebook through its Studio-owned document."""
         session = current_session(context, session_id)
@@ -351,6 +346,14 @@ class PrivateSessionState:
             QueryParamsSetNotification("session_id", session_id),
             from_consumer_id=None,
         )
+        if host_handoff is not None:
+            session.notify(
+                QueryParamsSetNotification(
+                    HOST_SESSION_HANDOFF_QUERY_PARAM,
+                    host_handoff,
+                ),
+                from_consumer_id=None,
+            )
         session.notify(
             QueryParamsSetNotification(DOCUMENT_REPLAY_QUERY_PARAM, "1"),
             from_consumer_id=None,
@@ -412,6 +415,31 @@ class PrivateSessionState:
         if client_id is None or capability is None:
             return None
         return EditorSessionIdentity(client_id, capability)
+
+    def release_editor_identity(
+        self,
+        context: ServerContext,
+        session_id: str,
+    ) -> bool:
+        """Release the Studio client recorded on a native session."""
+        session = current_session(context, session_id)
+        manager = getattr(session, "_kernel_manager", None)
+        metadata = getattr(manager, "app_metadata", None)
+        if metadata is None:
+            metadata = getattr(manager, "_app_metadata", None)
+        query = getattr(metadata, "query_params", None)
+        if not isinstance(query, MutableMapping):
+            return False
+        present = any(
+            key in query
+            for key in {
+                EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
+                STUDIO_CLIENT_QUERY_PARAM,
+            }
+        )
+        query.pop(EDITOR_BINDING_CAPABILITY_QUERY_PARAM, None)
+        query.pop(STUDIO_CLIENT_QUERY_PARAM, None)
+        return present
 
     def retry_startup(
         self,

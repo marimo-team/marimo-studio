@@ -114,14 +114,45 @@ def test_first_save_requests_session_resume_before_reload(
     assert PrivateSessionState().request_studio_reload(
         cast(Any, object()),
         "s_123456",
+        host_handoff="a" * 64,
     )
 
-    first, second, third = notifications
+    first, second, third, fourth = notifications
     assert isinstance(first, QueryParamsSetNotification)
     assert (first.key, first.value) == ("session_id", "s_123456")
     assert isinstance(second, QueryParamsSetNotification)
-    assert (second.key, second.value) == ("marimo_studio_resume", "1")
-    assert isinstance(third, ReloadNotification)
+    assert (second.key, second.value) == ("marimo_studio_handoff", "a" * 64)
+    assert isinstance(third, QueryParamsSetNotification)
+    assert (third.key, third.value) == ("marimo_studio_resume", "1")
+    assert isinstance(fourth, ReloadNotification)
+
+
+def test_native_host_releases_the_recorded_editor_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    query = {
+        "marimo_studio_client": ["browser-client"],
+        "marimo_studio_editor": ["editor-capability"],
+        "region": ["emea"],
+    }
+    session = SimpleNamespace(
+        _kernel_manager=SimpleNamespace(
+            app_metadata=SimpleNamespace(query_params=query),
+        )
+    )
+    monkeypatch.setattr(
+        session_state_module,
+        "current_session",
+        lambda _context, _session_id: session,
+    )
+
+    released = PrivateSessionState().release_editor_identity(
+        cast(Any, object()),
+        "s_123456",
+    )
+
+    assert released is True
+    assert query == {"region": ["emea"]}
 
 
 def test_live_cell_capture_materializes_off_its_event_loop_owner(
