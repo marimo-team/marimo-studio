@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import errno
 import os
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
@@ -11,49 +10,13 @@ from marimo_studio._artifacts.paths import (
     artifact_root,
     assert_secure_path,
 )
+from marimo_studio._filesystem.file_lock import (
+    acquire_file_lock,
+    release_file_lock,
+)
 from marimo_studio._filesystem.secure import secure_directory
 from marimo_studio.errors import ConfigurationError
 from marimo_studio.view_providers import ViewProject
-
-
-def acquire_file_lock(descriptor: int, *, blocking: bool) -> bool:
-    if os.name == "nt":
-        import msvcrt
-
-        mode = msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK
-        while True:
-            os.lseek(descriptor, 0, os.SEEK_SET)
-            try:
-                msvcrt.locking(descriptor, mode, 1)
-            except OSError as error:
-                if not blocking:
-                    return False
-                if error.errno != errno.EDEADLK:
-                    raise
-            else:
-                return True
-
-    import fcntl
-
-    flags = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
-    try:
-        fcntl.flock(descriptor, flags)
-    except BlockingIOError:
-        return False
-    return True
-
-
-def release_file_lock(descriptor: int) -> None:
-    if os.name == "nt":
-        import msvcrt
-
-        os.lseek(descriptor, 0, os.SEEK_SET)
-        msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
-        return
-
-    import fcntl
-
-    fcntl.flock(descriptor, fcntl.LOCK_UN)
 
 
 @contextmanager
@@ -91,10 +54,6 @@ def _view_lock(
         raise ConfigurationError(f"Could not open {label}: {lock_path}") from error
     acquired = False
     try:
-        descriptor_stat = os.fstat(descriptor)
-        if os.name == "nt" and descriptor_stat.st_size == 0:
-            os.write(descriptor, b"\0")
-            os.fsync(descriptor)
         acquired = acquire_file_lock(descriptor, blocking=blocking)
         yield acquired
     finally:
