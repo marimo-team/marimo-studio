@@ -158,7 +158,7 @@ Treat a Marimo upgrade as an integration change before a version bump. Follow
 The release manifest, installed Marimo distribution, prepared frontend commit,
 and generated browser assets must identify the same release.
 
-## First public release preflight
+## 0.1.0 release preflight
 
 Before tagging `v0.1.0`, verify the external repository and publishing settings
 once. These settings live outside Git and `scripts/release.sh`. Record the

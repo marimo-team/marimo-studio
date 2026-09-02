@@ -12,6 +12,7 @@ FORMAT_PATHS := README.md AGENTS.md .github apps development_docs docs examples 
 TYPECHECK_PATHS := apps/browser apps/docs/.vitepress apps/docs/scripts apps/e2e packages/presentation packages/protocol packages/runtime packages/studio packages/marimo-frontend/scripts packages/marimo-frontend/src vite.config.ts
 DENO_PROVIDER_ROOTS := $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/_deno $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_react $(PY_PACKAGE)/src/marimo_studio/view_providers/_bundled/deno_svelte
 DENO_PROVIDER_LINT_SOURCES := $(shell find $(DENO_PROVIDER_ROOTS) -type f \( -name '*.ts' -o -name '*.tsx' \) ! -name '*.d.ts' | sort)
+PYTHON_BUILD_CONSTRAINTS = $(UV) export --frozen --package marimo-studio --only-group marimo-studio-build --no-emit-workspace --no-annotate --no-header
 
 .PHONY: help setup format lint typecheck python-test frontend-test test check build
 .PHONY: e2e e2e-ui docs-examples docs-build docs-serve package
@@ -93,9 +94,13 @@ docs-serve: _frontend-ready build ## Serve documentation through Portless.
 
 package: build ## Build and validate the wheel and source distribution.
 	rm -rf "$(DIST_DIR)"
-	$(UV) build --package marimo-studio --out-dir "$(DIST_DIR)"
+	$(UV) build --package marimo-studio \
+		--build-constraints <($(PYTHON_BUILD_CONSTRAINTS)) --require-hashes \
+		--out-dir "$(DIST_DIR)"
 	mkdir -p "$(DIST_DIR)/from-sdist"
-	$(UV) build --wheel "$(DIST_DIR)"/*.tar.gz --out-dir "$(DIST_DIR)/from-sdist"
+	$(UV) build --wheel "$(DIST_DIR)"/*.tar.gz \
+		--build-constraints <($(PYTHON_BUILD_CONSTRAINTS)) --require-hashes \
+		--out-dir "$(DIST_DIR)/from-sdist"
 	$(UV) run --frozen --group release twine check \
 		"$(DIST_DIR)"/*.whl \
 		"$(DIST_DIR)"/*.tar.gz \
