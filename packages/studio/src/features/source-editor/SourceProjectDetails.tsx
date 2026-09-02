@@ -16,6 +16,7 @@ import {
 import type { ProjectInspection } from "./session.ts";
 
 import { MenuChevron } from "../../shared/ui/icons.tsx";
+import { useDisclosureMenu } from "../../shared/useDisclosureMenu.ts";
 
 const BUILD_DISPLAY = {
   unbuilt: { label: "Not built", icon: CircleDashedIcon },
@@ -56,6 +57,7 @@ export const SourceProjectDetails = ({
   diagnostic?: ProjectDiagnostic;
   inspection: ProjectInspection;
 }) => {
+  const menu = useDisclosureMenu();
   const phase = inspection.phase === "ready" ? build.phase : inspection.phase;
   const { icon: BuildIcon, label } = BUILD_DISPLAY[phase];
   let relationship: string;
@@ -69,20 +71,15 @@ export const SourceProjectDetails = ({
   return (
     <>
       <details
+        ref={menu.detailsRef}
         className="studio-menu studio-source-details"
+        data-studio-disclosure-menu
         data-phase={phase}
-        onKeyDown={(event) => {
-          if (event.key !== "Escape" || !event.currentTarget.open) {
-            return;
-          }
-          event.preventDefault();
-          const details = event.currentTarget;
-          const trigger = details.querySelector("summary");
-          details.removeAttribute("open");
-          globalThis.requestAnimationFrame(() => trigger?.focus());
-        }}
+        onKeyDown={menu.onKeyDown}
+        onToggle={menu.onToggle}
       >
         <summary
+          ref={menu.triggerRef}
           className="studio-control studio-menu-trigger studio-source-details-trigger"
           aria-label={`View build details, ${label}`}
           tabIndex={0}
