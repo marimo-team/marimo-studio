@@ -279,6 +279,7 @@ test("publishes visible edits from each built-in source model", async ({
   page,
 }) => {
   test.setTimeout(600_000);
+  const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
   await addWorkspaceView(workspaceNotebookPath, "html-view", "marimo-studio/vanilla:default");
   await addWorkspaceView(workspaceNotebookPath, "react-view", "marimo-studio/react:default");
   await addWorkspaceView(workspaceNotebookPath, "svelte-view", "marimo-studio/svelte:default");
@@ -315,7 +316,6 @@ test("publishes visible edits from each built-in source model", async ({
   for (const candidate of cases) {
     const candidatePage = await page.context().newPage();
     await test.step(`${candidate.view} edit`, async () => {
-      const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
       try {
         await candidatePage.goto(`/studio/${candidate.view}/?file=notebook.py`);
         const preview = await waitForViewPreview(candidatePage, candidate.view, "server", 120_000);
@@ -324,7 +324,6 @@ test("publishes visible edits from each built-in source model", async ({
           labeledSlider(preview.locator('marimo-cell[name="controls"]'), /^Scale/),
         ).toBeVisible();
         await expect(preview.getByRole("button", { name: "Widget count: 7" })).toBeVisible();
-        await editorModelRecovery.recovered(candidatePage);
 
         const sourceTab = candidatePage.getByRole("tab", { name: candidate.path });
         if (!(await sourceTab.isVisible())) {
@@ -416,6 +415,7 @@ test("publishes visible edits from each built-in source model", async ({
   });
 
   await expect(page.getByRole("status", { name: "Source document status" })).toHaveText("Saved");
+  await editorModelRecovery.recovered(page);
   await retireWorkspacePage(page, browserDiagnostics);
   await recoverRequestAbort(completedSourceWrites);
 });
