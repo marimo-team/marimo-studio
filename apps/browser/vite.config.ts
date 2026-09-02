@@ -39,6 +39,7 @@ export default defineConfig({
       input: {
         runtime: join(packageRoot, "src", "runtime.ts"),
         "dev-reload": entrypoint("@marimo-studio/presentation/dev-reload"),
+        "host-session-handoff": join(packageRoot, "src", "host-session-handoff.ts"),
         studio: join(packageRoot, "src", "studio.ts"),
       },
       output: {
