@@ -209,7 +209,7 @@ test("publishes complete projects during concurrent starter creation", async ({
   const supersededRenewal = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
   const supersededWorkspaceGenerations = browserDiagnostics.expectResponse({
     status: 409,
-    path: /^\/_marimo-studio\/presentation\/[^/]+\/dashboard\/$/,
+    path: /^\/_marimo-studio\/presentation\/[^/]+\/(?:dashboard\/|_marimo-studio\/views\/dashboard\/config)$/,
     error: "workspace-generation-conflict",
     count: candidates.length,
     required: false,
