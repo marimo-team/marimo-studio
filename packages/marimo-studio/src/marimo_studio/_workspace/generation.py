@@ -37,6 +37,11 @@ def directory_generation(path: Path) -> str:
     return _digest(owner)
 
 
+def unconfigured_catalog_generation(notebook: Path) -> str:
+    """Return the catalog identity for an absent Studio configuration."""
+    return _digest(("unconfigured", notebook.resolve()))
+
+
 def view_generation(project: ViewProject) -> str:
     """Return the current incarnation of one named view project."""
     return view_name_generation(project.root.parent, project.name)
