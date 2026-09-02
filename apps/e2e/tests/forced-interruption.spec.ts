@@ -5,13 +5,13 @@ import { resolve } from "node:path";
 import { z } from "zod";
 
 import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.mjs";
+import { e2eNetwork } from "../scripts/network.mjs";
 import { fixtureDirectory } from "../scripts/paths.mjs";
 import { processGroupIsRunning } from "../scripts/process-group.mjs";
 import { readStudioBootstrap } from "./authoring-test-support.ts";
 import { waitForViewPreview } from "./fixture.ts";
 import {
   type NotebookServer,
-  availablePort,
   closeFailedNotebookServer,
   startNotebookServer,
   stopNotebookServer,
@@ -54,7 +54,7 @@ test("forced runner shutdown drains every open native notebook session", async (
   const workspace = resolve(root, "workspace");
   await cp(fixtureDirectory, workspace, { recursive: true });
   await copyFixtureProviderPackage(workspace);
-  const port = await availablePort();
+  const port = e2eNetwork.main.forcedInterruption.port;
   const server = startNotebookServer({
     authentication: ["--no-token"],
     command: "edit",
@@ -120,7 +120,7 @@ test("run-mode shutdown drains an active kernel through process lifespan", async
       "# preserve_session = true",
     ),
   );
-  const port = await availablePort();
+  const port = e2eNetwork.main.runInterruption.port;
   const server = startNotebookServer({
     authentication: ["--token-password", "run-access-token"],
     command: "run",

@@ -28,6 +28,9 @@ export const createE2ENetwork = (source = "0") => {
       recovery: endpoint(4_324, portOffset),
       collaboration: endpoint(4_325, portOffset),
       collaborationPeer: endpoint(4_326, portOffset),
+      forcedInterruption: endpoint(4_327, portOffset),
+      runInterruption: endpoint(4_328, portOffset),
+      hostSession: endpoint(4_329, portOffset),
     }),
     provider: Object.freeze({
       live: endpoint(4_331, portOffset),
