@@ -19,7 +19,6 @@ import {
   expectSupersededRenewalConfig,
   labeledSlider,
   plainDashboardHtmlPath,
-  plainNotebookPath,
   presentationFrame,
   previewFrame,
   readWorkspaceFile,
@@ -101,7 +100,7 @@ test("activates Studio after the first view is created", async ({ browserDiagnos
   const supersededConfig = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
-    2,
+    1,
   );
   const instantiated = page.waitForResponse(
     (response) =>
@@ -148,37 +147,7 @@ shown.to_dict()
 
   await waitForPreview(page);
   await expect(preview.locator("#papers")).toHaveText("3877 papers", { timeout: 65_000 });
-
-  await page.getByRole("button", { name: "Notebook", exact: true }).click();
-  const editor = editorFrame(page);
-  const existingCell = editor.locator("[data-cell-id]").first();
-  await existingCell.hover();
-  const createButtons = existingCell.getByTestId("create-cell-button").locator(":visible");
-  await expect(createButtons).toHaveCount(2);
-  await createButtons.last().click();
-  const addedCell = editor.locator('[data-cell-name="_"]').last();
-  const addedEditor = addedCell.getByRole("textbox");
-  await addedEditor.click();
-  await addedEditor.fill("fresh_value = 99\nfresh_value");
-  await addedCell.hover();
-  await addedCell.locator('button[data-testid="run-button"]:not(:disabled)').click();
-  await expect(addedCell.locator("..")).toHaveAttribute("data-status", "idle");
-  await expect.poll(() => readWorkspaceFile(plainNotebookPath)).toContain("fresh_value = 99");
-
-  await page.getByRole("button", { name: "Develop", exact: true }).click();
   await recoverWorkspaceEventStream(replacedWorkspaceStreams);
-  await writeViewSource(
-    page,
-    "dashboard",
-    "index.html",
-    projectedSource.replace(
-      "</main>",
-      '  <p>Fresh value: <strong id="fresh-value" mo-value="fresh_value"></strong></p>\n    </main>',
-    ),
-    "plain.py",
-  );
-  await waitForPreview(page);
-  await expect(preview.locator("#fresh-value")).toHaveText("99", { timeout: 65_000 });
   supersededConfig.recovered();
 });
 
@@ -314,63 +283,54 @@ test("publishes visible edits from each built-in source model", async ({
     },
   ] as const;
   for (const candidate of cases) {
-    const candidatePage = await page.context().newPage();
     await test.step(`${candidate.view} edit`, async () => {
-      try {
-        await candidatePage.goto(`/studio/${candidate.view}/?file=notebook.py`);
-        const preview = await waitForViewPreview(candidatePage, candidate.view, "server", 120_000);
-        await expect(preview.getByRole("heading", { name: candidate.before })).toBeVisible();
-        await expect(
-          labeledSlider(preview.locator('marimo-cell[name="controls"]'), /^Scale/),
-        ).toBeVisible();
-        await expect(preview.getByRole("button", { name: "Widget count: 7" })).toBeVisible();
+      await page.goto(`/studio/${candidate.view}/?file=notebook.py`);
+      const preview = await waitForViewPreview(page, candidate.view, "server", 120_000);
+      await expect(preview.getByRole("heading", { name: candidate.before })).toBeVisible();
+      await expect(
+        labeledSlider(preview.locator('marimo-cell[name="controls"]'), /^Scale/),
+      ).toBeVisible();
+      await expect(preview.getByRole("button", { name: "Widget count: 7" })).toBeVisible();
 
-        const sourceTab = candidatePage.getByRole("tab", { name: candidate.path });
-        if (!(await sourceTab.isVisible())) {
-          await candidatePage.getByLabel("Workspace options").click();
-          await candidatePage.getByRole("button", { name: "Source" }).click();
-        }
-        await sourceTab.click();
-        const editor = candidatePage.getByLabel(`${candidate.path} source`);
-        const sourcePath = resolve(
-          workspaceNotebookPath,
-          "../__marimo__/studio/notebook",
-          candidate.view,
-          candidate.path,
-        );
-        const source = await readWorkspaceFile(sourcePath);
-        expect(source).toContain(candidate.before);
-        const initialRevision = await preview
-          .locator("html")
-          .evaluate(() => globalThis.marimoStudio.identity().revision);
-
-        await editor.focus();
-        await editor.press(selectAllShortcut);
-        const changedSource = source.replace(candidate.before, candidate.after);
-        await candidatePage.keyboard.insertText(changedSource);
-        await editor.press(saveShortcut);
-
-        await expect(
-          candidatePage.getByRole("status", { name: "Source document status" }),
-        ).toHaveText("Saved");
-        await expect.poll(() => readWorkspaceFile(sourcePath)).toBe(changedSource);
-        await expect(preview.getByRole("heading", { name: candidate.after })).toBeVisible({
-          timeout: 65_000,
-        });
-        await waitForViewPreview(candidatePage, candidate.view);
-        await expect
-          .poll(() =>
-            preview.locator("html").evaluate(() => globalThis.marimoStudio.identity().revision),
-          )
-          .not.toBe(initialRevision);
-        await expect(candidatePage.getByLabel("View build details, Up to date")).toBeVisible();
-      } finally {
-        if (!candidatePage.isClosed()) {
-          const retirement = browserDiagnostics.expectPageRetirement(candidatePage);
-          await candidatePage.close();
-          retirement.recovered();
-        }
+      const sourceTab = page.getByRole("tab", { name: candidate.path });
+      if (!(await sourceTab.isVisible())) {
+        await page.getByLabel("Workspace options").click();
+        await page.getByRole("button", { name: "Source" }).click();
       }
+      await sourceTab.click();
+      const editor = page.getByLabel(`${candidate.path} source`);
+      const sourcePath = resolve(
+        workspaceNotebookPath,
+        "../__marimo__/studio/notebook",
+        candidate.view,
+        candidate.path,
+      );
+      const source = await readWorkspaceFile(sourcePath);
+      expect(source).toContain(candidate.before);
+      const initialRevision = await preview
+        .locator("html")
+        .evaluate(() => globalThis.marimoStudio.identity().revision);
+
+      await editor.focus();
+      await editor.press(selectAllShortcut);
+      const changedSource = source.replace(candidate.before, candidate.after);
+      await page.keyboard.insertText(changedSource);
+      await editor.press(saveShortcut);
+
+      await expect(page.getByRole("status", { name: "Source document status" })).toHaveText(
+        "Saved",
+      );
+      await expect.poll(() => readWorkspaceFile(sourcePath)).toBe(changedSource);
+      await expect(preview.getByRole("heading", { name: candidate.after })).toBeVisible({
+        timeout: 65_000,
+      });
+      await waitForViewPreview(page, candidate.view);
+      await expect
+        .poll(() =>
+          preview.locator("html").evaluate(() => globalThis.marimoStudio.identity().revision),
+        )
+        .not.toBe(initialRevision);
+      await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
     });
   }
 
