@@ -524,6 +524,72 @@ def test_projection_revision_survives_nonprojection_artifact_changes(
     assert first["projectionRevision"] == second["projectionRevision"]
 
 
+def test_unsigned_runtime_routes_reject_retained_revisions(
+    notebook_path: Path,
+) -> None:
+    studio = _configured(notebook_path)
+    document = studio.views["dashboard"].root / "index.html"
+    app = _marimo_app(studio.notebook)
+    server_token = str(_session_manager(app).skew_protection_token)
+    headers = {"Marimo-Server-Token": server_token}
+
+    with TestClient(app) as client:
+        retained = client.get("/_marimo-studio/views/dashboard/config").json()
+        document.write_text(
+            document.read_text(encoding="utf-8").replace(
+                "</body>",
+                "<p>Current presentation</p></body>",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        current = client.get("/_marimo-studio/views/dashboard/config").json()
+        current_config = client.get(
+            "/_marimo-studio/views/dashboard/config",
+            params={"revision": current["revision"]},
+        )
+        retained_config = client.get(
+            "/_marimo-studio/views/dashboard/config",
+            params={"revision": retained["revision"]},
+        )
+        current_reads = [
+            client.post(
+                f"/_marimo-studio/views/dashboard/{route}",
+                json={
+                    "revision": current["revision"],
+                    "projections": [],
+                    "activeProjections": [],
+                },
+                headers=headers,
+            )
+            for route in ("values", "outputs")
+        ]
+        retained_reads = [
+            client.post(
+                f"/_marimo-studio/views/dashboard/{route}",
+                json={
+                    "revision": retained["revision"],
+                    "projections": [],
+                    "activeProjections": [],
+                },
+                headers=headers,
+            )
+            for route in ("values", "outputs")
+        ]
+
+    assert retained["revision"] != current["revision"]
+    assert current_config.status_code == 200
+    assert current_config.json()["revision"] == current["revision"]
+    assert retained_config.status_code == 409
+    assert retained_config.json()["error"] == "presentation-revision-unavailable"
+    for response in current_reads:
+        assert response.status_code == 409
+        assert response.json()["error"] == "missing-session"
+    for response in retained_reads:
+        assert response.status_code == 409
+        assert response.json()["error"] == "presentation-revision-unavailable"
+
+
 def test_server_runtime_instance_changes_with_transport_token(
     notebook_path: Path,
 ) -> None:
