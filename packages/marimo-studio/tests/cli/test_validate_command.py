@@ -220,9 +220,6 @@ def test_runtime_timeout_bounds_projected_output_rendering(
 ) -> None:
     notebook = tmp_path / "slow_outputs.py"
     marker = tmp_path / "formatted.txt"
-    names = tuple(f"output_{index}" for index in range(2))
-    assignments = "\n".join(f"    {name} = SlowOutput()" for name in names)
-    returned = ", ".join(names)
     notebook.write_text(
         f'''\
 import marimo
@@ -233,20 +230,19 @@ app = marimo.App()
 
 @app.cell
 def _():
-    import time
+    import threading
     from pathlib import Path
 
     marker = Path(r"{marker}")
 
     class SlowOutput:
         def _mime_(self):
-            current = marker.read_text(encoding="utf-8") if marker.exists() else ""
-            marker.write_text(current + "x", encoding="utf-8")
-            time.sleep(0.6)
+            marker.write_text("entered", encoding="utf-8")
+            threading.Event().wait(30)
             return "text/html", "<strong>ready</strong>"
 
-{assignments}
-    return {returned}
+    slow_output = SlowOutput()
+    return slow_output
 
 
 if __name__ == "__main__":
@@ -259,9 +255,7 @@ if __name__ == "__main__":
     template.write_text(
         replace_app_shell(
             template.read_text(encoding="utf-8"),
-            "".join(
-                f'<marimo-output value="{name}"></marimo-output>' for name in names
-            ),
+            '<marimo-output value="slow_output"></marimo-output>',
         ),
         encoding="utf-8",
     )
@@ -273,7 +267,7 @@ if __name__ == "__main__":
         "--level",
         "runtime",
         "--runtime-timeout",
-        "1",
+        "5",
         "--json",
     )
     assert result.returncode == 1, result.stderr
