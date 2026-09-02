@@ -7,7 +7,7 @@ import { e2eNetwork } from "../scripts/network.mjs";
 import { fixtureDirectory } from "../scripts/paths.mjs";
 import { executeCodeMode, studioEditorSessionId } from "./authoring-test-support.ts";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
-import { editorFrame } from "./fixture.ts";
+import { editorFrame, waitForPreview } from "./fixture.ts";
 import {
   closeFailedNotebookServer,
   startNotebookServer,
@@ -88,18 +88,21 @@ import marimo_studio.agent as studio_agent
 view = studio_agent.current_workspace().view("dashboard")
 shown = await view.show()
 shown.to_dict()
-`,
+      `,
     );
+    await waitForPreview(page);
 
     const direct = await context.newPage();
     await direct.goto(`${server.serverUrl}/studio/dashboard/?file=notebook.py`);
     await expect(editorFrame(direct).locator("[data-cell-id]").first()).toBeVisible();
+    await waitForPreview(direct);
     const directSessionId = await studioEditorSessionId(direct);
     await direct.goto(`${server.serverUrl}/?file=notebook.py`);
     await expect(direct.locator("[data-cell-id]").first()).toBeVisible();
     await direct.goto(`${server.serverUrl}/studio/dashboard/?file=notebook.py`);
     expect(await studioEditorSessionId(direct)).toBe(directSessionId);
     await expect(editorFrame(direct).locator("[data-cell-id]").first()).toBeVisible();
+    await waitForPreview(direct);
     replacedWorkspaceStream.recovered();
     await direct.close();
 
