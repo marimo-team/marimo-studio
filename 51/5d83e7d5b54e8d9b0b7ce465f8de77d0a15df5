@@ -1,0 +1,59 @@
+apps/e2e/tests/provider-runtime.spec.ts
+  s_af5d583a28e9c5::t_5a626e06abd9ec 126-128
+  s_af5d583a28e9c5::t_274e3d9b4b4453 187,191
+apps/e2e/tests/starter-edge-cases.spec.ts
+  s_af5d583a28e9c5::t_6c7368a5c20c73 13,209,266
+  s_af5d583a28e9c5::t_5a626e06abd9ec 60-61,64
+apps/e2e/tests/collaboration.spec.ts
+  s_af5d583a28e9c5::t_4fc668c2ba9c34 8-9,95-98
+apps/e2e/tests/replay.spec.ts
+  s_af5d583a28e9c5::t_5a626e06abd9ec 267-269,271-293
+  s_af5d583a28e9c5::t_99a235f6a67da2 1,181,331
+apps/e2e/tests/view-authoring.spec.ts
+  s_af5d583a28e9c5::t_4fc668c2ba9c34 10,137
+  s_af5d583a28e9c5::t_165bf95358ca3f 93-95
+apps/e2e/tests/wire-values.spec.ts
+  s_af5d583a28e9c5::t_7578b92d0d28c1 108,111-114,128-129,131,137,139
+  s_af5d583a28e9c5::t_8e5f99eb892144 136
+  s_af5d583a28e9c5::t_f41efa178b4ec1 74-81
+apps/e2e/tests/authoring-test-support.ts
+  s_af5d583a28e9c5::t_d958432f557eb6 2
+  s_af5d583a28e9c5::t_2eacffd2dbfb3d 1,70-75,78-82
+apps/e2e/tests/runtime.spec.ts
+  s_af5d583a28e9c5::t_fd0e972a2f9559 31-47,458,498,516,539
+apps/e2e/tests/forced-interruption.spec.ts
+  s_af5d583a28e9c5::t_2745f5e7ef3b55 47,51,59
+  s_af5d583a28e9c5::t_165bf95358ca3f 9,57-58,60-61,116,174
+  s_af5d583a28e9c5::t_325ab86dad215b 103,163
+  s_af5d583a28e9c5::t_4fc668c2ba9c34 11,89
+apps/e2e/tests/authoring.spec.ts
+  s_af5d583a28e9c5::t_7f36ab3eb782b4 13,484,594,634
+  s_af5d583a28e9c5::t_2d9ce2faa01df3 363-364
+  s_af5d583a28e9c5::t_5a626e06abd9ec 365,367-374
+apps/e2e/tests/history.spec.ts
+  s_af5d583a28e9c5::t_5a626e06abd9ec 128-129,133,138,191-192
+  s_af5d583a28e9c5::t_0353b617f7f0c1 183-186
+  s_af5d583a28e9c5::t_53c4314bb6e91c 402-408,410-412
+  s_af5d583a28e9c5::t_d958432f557eb6 1
+apps/e2e/tests/view-cache-performance.spec.ts
+  s_af5d583a28e9c5::t_27bd7934a0fa1d 1,60,66,75-84,87,91,97,101-114,154,177,179
+  s_af5d583a28e9c5::t_165bf95358ca3f 72
+apps/e2e/tests/stale-results.spec.ts
+  s_af5d583a28e9c5::t_4fc668c2ba9c34 5,100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "515d83e7d5b54e8d9b0b7ce465f8de77d0a15df5",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

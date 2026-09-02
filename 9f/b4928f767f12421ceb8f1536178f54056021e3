@@ -1,0 +1,33 @@
+examples/__marimo__/studio/earthquakes/briefing/src/briefing-data.ts
+  s_af5d583a28e9c5::t_1f9b547ed7499d 106-115
+examples/__marimo__/studio/earthquakes/briefing/DESIGN.md
+  s_af5d583a28e9c5::t_1f9b547ed7499d 56
+examples/__marimo__/studio/earthquakes/briefing/src/style.css
+  s_af5d583a28e9c5::t_1f9b547ed7499d 477,484,526,530
+examples/__marimo__/studio/earthquakes/briefing/src/lib/use-marimo-value.ts
+  s_af5d583a28e9c5::t_1f9b547ed7499d 94
+examples/__marimo__/studio/earthquakes/briefing/AGENTS.md
+  s_af5d583a28e9c5::t_1f9b547ed7499d 23-28
+examples/__marimo__/studio/earthquakes/operations/src/operations-data.ts
+  s_af5d583a28e9c5::t_1f9b547ed7499d 52
+examples/__marimo__/studio/earthquakes/operations/src/lib/use-marimo-value.ts
+  s_af5d583a28e9c5::t_1f9b547ed7499d 94
+examples/__marimo__/studio/earthquakes/operations/src/index.html
+  s_af5d583a28e9c5::t_1f9b547ed7499d 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9fb4928f767f12421ceb8f1536178f54056021e3",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+examples/__marimo__/studio/occupancy/monitor/DESIGN.md
+  s_af5d583a28e9c5::t_810d2020321227 112-118
+examples/__marimo__/studio/athletes/field/DESIGN.md
+  s_af5d583a28e9c5::t_ab1e74a548f51e 15,17-18
+examples/__marimo__/studio/occupancy/model-review/AGENTS.md
+  s_af5d583a28e9c5::t_2c69fa6712d859 64-65
+  s_af5d583a28e9c5::t_810d2020321227 55-56,59,62-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7be76f8a92c0e271910b0e01b7d464bc3604ecf1",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

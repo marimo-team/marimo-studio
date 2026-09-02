@@ -1,0 +1,20 @@
+.github/actions/setup-js/action.yml
+  s_af5d583a28e9c5::t_395f71efdb7407 18
+  s_af5d583a28e9c5::t_a1da1fc2017dde 14,21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9f5e38ea9093b76080aa76dc8007d94e3ba9e921",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

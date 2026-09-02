@@ -1,0 +1,33 @@
+docs/reference/runtimes.md
+  ai_agent 99
+docs/guide/notebook-results.md
+  ai_agent 78,84-85
+docs/guide/authoring-options.md
+  ai_agent 15,21-22,58
+docs/guide/coding-agents.md
+  ai_agent 14,16,20,128-132,135
+docs/reference/provider-api.md
+  ai_agent 216
+docs/guide/views.md
+  ai_agent 12-13,35-36,46,66
+docs/guide/live-authoring.md
+  ai_agent 47,84
+docs/guide/run-and-share.md
+  ai_agent 23-24,34,190-191
+docs/reference/configuration.md
+  ai_agent 116
+docs/guide/getting-started.md
+  ai_agent 11,59,68-69,79
+docs/reference/view-project.md
+  ai_agent 57,71
+docs/reference/projections.md
+  ai_agent 98-99
+docs/examples/nga.md
+  ai_agent 52-53,60-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b376448235be85180bd74f97940b8b7751195fe2",
+  "prompts": {}
+}

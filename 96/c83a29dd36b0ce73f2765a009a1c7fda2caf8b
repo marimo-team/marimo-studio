@@ -1,0 +1,37 @@
+skills/marimo-studio/SKILL.md
+  s_3a442c2e920601::t_514d668f76d228 212-213
+  s_3a442c2e920601::t_4520f3c54aaa9b 225-227
+  s_3a442c2e920601::t_a91b49b7e2f8ed 300
+  s_3a442c2e920601::t_c64e3f8255d1f2 90,92-93,192-193,207,230-231
+  s_3a442c2e920601::t_b4501d40c3f86c 210-211,214-224,228-229,232-238
+  s_3a442c2e920601::t_e5f46049309cd3 246-247,253-256
+  s_3a442c2e920601::t_972770fa5c89a7 240-245,248-252,257-271,273-285,290-299,301-307
+  s_3a442c2e920601::t_0221f1cc9b334b 79-81,85-88,337-340,371-373
+  s_3a442c2e920601::t_62745a25157a05 124-126,163-170
+  s_603582714fc273::t_a59dfae36d7e05 286-289
+  s_3a442c2e920601::t_4eeae7d674d7d8 91,94-123,127-162,171-191,194-195,209,239,309,327
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "96c83a29dd36b0ce73f2765a009a1c7fda2caf8b",
+  "prompts": {},
+  "sessions": {
+    "s_3a442c2e920601": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04743-4bdd-76c2-aab1-953e5ae6216e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_603582714fc273": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a047fd-a702-7c31-b24e-05657b524792",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

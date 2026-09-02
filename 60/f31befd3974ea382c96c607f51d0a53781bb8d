@@ -1,0 +1,78 @@
+packages/marimo-studio/tests/server/test_editor_runtime_assets.py
+  s_af5d583a28e9c5::t_c6d34261426daf 113-115,119-120,534,537,640,642,650,687-699,705,713-714
+  s_af5d583a28e9c5::t_b9d50f57c43986 718-721
+packages/marimo-studio/tests/server/test_development_deletion.py
+  s_af5d583a28e9c5::t_dc0a94b5119006 50
+packages/marimo-studio/tests/server/test_projection_api.py
+  s_af5d583a28e9c5::t_433ead13d2df44 456-457,505-506,559,595-596
+packages/marimo-studio/tests/server/test_runtime_config.py
+  s_af5d583a28e9c5::t_f792edd48b6a94 78-79,248-249,352-353
+packages/marimo-studio/tests/views/test_config_snapshot.py
+  s_af5d583a28e9c5::t_f3ad103cc865b7 102-104
+packages/marimo-studio/tests/server/test_delivery_directory_routes.py
+  s_af5d583a28e9c5::t_bec5ec6a2bae41 327,329-333,337-342,345,348
+packages/marimo-studio/tests/server/test_kiosk_sessions.py
+  s_af5d583a28e9c5::t_fb9cc326ba0519 321,329,337-346
+packages/marimo-studio/tests/views/test_transaction_paths.py
+  s_af5d583a28e9c5::t_cb93f0cb006422 22,32,60,65-67,79-90,92
+  s_af5d583a28e9c5::t_0f0d88070cf406 34
+packages/marimo-studio/tests/views/test_workspace_deletion_lifecycle.py
+  s_af5d583a28e9c5::t_f3ad103cc865b7 512,538
+  s_af5d583a28e9c5::t_216ba9933f1bbe 281,289,302,557,569,591
+packages/marimo-studio/tests/server/test_project_watcher.py
+  s_af5d583a28e9c5::t_dc0a94b5119006 646-647,659,663,737-738,748
+  s_af5d583a28e9c5::t_4f3b9f9ddf6db3 21-25,648,660,664,739,749
+packages/marimo-studio/tests/server/test_presentation_replay_renewal.py
+  s_af5d583a28e9c5::t_433ead13d2df44 447-448
+packages/marimo-studio/tests/server/test_source_request_body.py
+  s_af5d583a28e9c5::t_d9f09c191e7726 128-129,131-133
+packages/marimo-studio/tests/views/test_view_setup.py
+  s_af5d583a28e9c5::t_216ba9933f1bbe 77-79,83,484
+  s_af5d583a28e9c5::t_f3ad103cc865b7 43-46,91,389-392,397,411,413,418,432,434-437,442,817
+  s_af5d583a28e9c5::t_0f0d88070cf406 576
+packages/marimo-studio/tests/server/test_development_cleanup.py
+  s_af5d583a28e9c5::t_dc0a94b5119006 53,72,84,98
+packages/marimo-studio/tests/server/test_view_deletion_routes.py
+  s_af5d583a28e9c5::t_433ead13d2df44 95,171-175,241-242
+  s_af5d583a28e9c5::t_234cd1976897f3 396-399
+packages/marimo-studio/tests/server/test_request_body.py
+  s_af5d583a28e9c5::t_25fb453a08fcaf 115,118
+packages/marimo-studio/tests/views/test_project_manifest.py
+  s_af5d583a28e9c5::t_0f0d88070cf406 32-36,43-46
+packages/marimo-studio/tests/server/test_view_activation.py
+  s_af5d583a28e9c5::t_fb9cc326ba0519 77,90-100,103,105-108
+packages/marimo-studio/tests/server/test_presentation_transport.py
+  s_af5d583a28e9c5::t_68e6da97216d8b 182
+  s_af5d583a28e9c5::t_ba05055dc39c1a 145,160
+packages/marimo-studio/tests/views/test_source_manifest.py
+  s_af5d583a28e9c5::t_0f0d88070cf406 16,23,26
+packages/marimo-studio/tests/views/test_workspace_catalog.py
+  s_af5d583a28e9c5::t_0f0d88070cf406 146
+packages/marimo-studio/tests/server/test_view_mutations.py
+  s_af5d583a28e9c5::t_433ead13d2df44 407-408
+  s_af5d583a28e9c5::t_003431ab75add0 178,188,208-212
+packages/marimo-studio/tests/server/test_presentation_runtime.py
+  s_af5d583a28e9c5::t_aa0339befc6e86 280-281
+  s_af5d583a28e9c5::t_433ead13d2df44 111-112,114-116
+packages/marimo-studio/tests/views/test_source_changes.py
+  s_af5d583a28e9c5::t_93a4c090ffc7ae 26
+  s_af5d583a28e9c5::t_0f0d88070cf406 137,143,148-149,151,154,171-175,186,346,355,357-365,367-368,370
+packages/marimo-studio/tests/server/test_access_policy.py
+  s_af5d583a28e9c5::t_336e1db865f89c 160-163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "60f31befd3974ea382c96c607f51d0a53781bb8d",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

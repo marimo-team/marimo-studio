@@ -1,0 +1,76 @@
+skills/marimo-studio/SKILL.md
+  s_998da4a43afb66::t_8da34754c5a0fc 14-23,25-28,141-148
+  s_998da4a43afb66::t_ca5c566897e750 38-39,64-66
+  s_05a22edb36c8a6::t_f1d2554d307ce9 68-72,153-154,216-220
+  s_998da4a43afb66::t_4a96b364a142df 13
+  s_998da4a43afb66::t_bc93f873c274cf 24
+  s_998da4a43afb66::t_09a8a5272e1e01 149-150
+  s_998da4a43afb66::t_3a555a45e187ec 135-140
+docs/guide/coding-agents.md
+  s_05a22edb36c8a6::t_f1d2554d307ce9 50-53,130-132,151-154
+skills/marimo-studio/references/analysis-and-handoff.md
+  s_05a22edb36c8a6::t_f1d2554d307ce9 18-24,129,176-178
+  s_05a22edb36c8a6::t_d4a42b682bb13f 121-128,130
+development_docs/architecture/agents-and-delivery.md
+  s_05a22edb36c8a6::t_05103d34721b28 100-101
+  s_05a22edb36c8a6::t_f1d2554d307ce9 88-92
+packages/studio/src/features/preview/controller.ts
+  s_05a22edb36c8a6::t_a455b3f4caedfd 383
+apps/e2e/tests/authoring.spec.ts
+  s_05a22edb36c8a6::t_9d2d1bdeda07e5 324-328,348-381
+packages/marimo-studio/src/marimo_studio/agent.py
+  s_05a22edb36c8a6::t_f1d2554d307ce9 248,253-255
+  s_998da4a43afb66::t_ca5c566897e750 60-64,249-251
+skills/marimo-studio/references/view-authoring.md
+  s_998da4a43afb66::t_3a555a45e187ec 83-99
+  s_998da4a43afb66::t_8da34754c5a0fc 5-6,50,119-124,175-177,183-185,187-189,191-193,195-198,201-202
+  s_998da4a43afb66::t_715b3021b4cb90 203-204
+  s_998da4a43afb66::t_09a8a5272e1e01 51-53
+docs/reference/cli.md
+  s_05a22edb36c8a6::t_f1d2554d307ce9 131-137
+packages/studio/tests/preview-controller.test.ts
+  s_05a22edb36c8a6::t_224581264cd240 197-198
+  s_05a22edb36c8a6::t_a455b3f4caedfd 240
+  s_05a22edb36c8a6::t_e15800f465979a 193-196,207-226,239,241-244,253-255
+  s_05a22edb36c8a6::t_be612461b4769e 199-206,227-238,245-252
+packages/studio/tests/workspace-event-coordinator.test.ts
+  s_05a22edb36c8a6::t_b0b14ee7be9e8e 178-179
+  s_05a22edb36c8a6::t_60e1cb045b63b0 146
+  s_05a22edb36c8a6::t_a455b3f4caedfd 72,160,176-177
+  s_05a22edb36c8a6::t_e15800f465979a 159,161-175
+packages/studio/src/features/preview/deck.ts
+  s_05a22edb36c8a6::t_6c57a085d9c354 131-132
+  s_05a22edb36c8a6::t_a455b3f4caedfd 129-130
+packages/studio/src/app/workspace-event-coordinator.ts
+  s_05a22edb36c8a6::t_c2624add8037a4 163-165
+  s_05a22edb36c8a6::t_a455b3f4caedfd 30,175
+  s_05a22edb36c8a6::t_6c57a085d9c354 166,168,174
+docs/reference/agent-api.md
+  s_05a22edb36c8a6::t_f1d2554d307ce9 166-175,182
+skills/marimo-studio/references/capabilities.json
+  s_05a22edb36c8a6::t_f1d2554d307ce9 190
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9c6574eb8e3456150a40b50baee09a15ab9ef947",
+  "prompts": {},
+  "sessions": {
+    "s_05a22edb36c8a6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01a03-b25f-7d22-a48e-d5483e95e2ae",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_998da4a43afb66": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01a17-8133-7070-a933-9a9bc377b843",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

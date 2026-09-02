@@ -1,0 +1,26 @@
+packages/marimo-studio/src/marimo_studio/_compat/server/presentation_auth.py
+  s_af5d583a28e9c5::t_ba1ce68895ae5f 10-14,139-149
+packages/marimo-studio/tests/marimo_compat/test_usage.py
+  s_af5d583a28e9c5::t_de6efa1f61607d 8,10,129-141
+packages/marimo-studio/src/marimo_studio/_compat/server/usage.py
+  s_af5d583a28e9c5::t_ba1ce68895ae5f 69,71-72
+packages/marimo-studio/tests/marimo_compat/test_presentation_auth.py
+  s_af5d583a28e9c5::t_50da39bdf59b64 11
+  s_af5d583a28e9c5::t_de6efa1f61607d 4,77-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d41428f05b7b84134f97e7660b2dc08dc7634a74",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,185 @@
+packages/presentation/src/runtime/outputs/use-output-projection.ts
+  s_9189dcd8cc1eb7::t_b5e25f0d904be6 7,59,79
+  s_9189dcd8cc1eb7::t_01a052f252757e 21,64
+packages/marimo-frontend/tests/session-bootstrap.test.ts
+  s_9189dcd8cc1eb7::t_534113eb1a7ddc 38
+  s_9189dcd8cc1eb7::t_0ef622cb465a7f 1-14,16-37,39-44
+  s_9189dcd8cc1eb7::t_54d4e4cce09609 15
+packages/presentation/src/runtime-config/remote.ts
+  s_9189dcd8cc1eb7::t_c28aa217191c47 87,90-95,152,156-163,191,199
+packages/marimo-frontend/tests/embedded-runtime.test.ts
+  s_9189dcd8cc1eb7::t_81f025fc595b08 261-323
+  s_9189dcd8cc1eb7::t_7ddc57624099ae 82-85,327-332
+  s_9189dcd8cc1eb7::t_e61415ce526e9a 9-10
+  s_9189dcd8cc1eb7::t_c793f5fd7cf7ad 8,11,189,251,333,359,365,390
+  s_9189dcd8cc1eb7::t_4ecefa7c41790c 1-7,12-81,86-181,184-188,190-234,236-250,252-256,259-260,324-326,334-347,349-358,360-364,366-379,381-389,391
+  s_9189dcd8cc1eb7::t_534113eb1a7ddc 182-183,235,257-258,348,380
+packages/presentation/src/projections/RuntimeProjections.tsx
+  s_9189dcd8cc1eb7::t_abe6a1fea52926 4,15,21,23
+packages/presentation/src/runtime/wasm.ts
+  s_9189dcd8cc1eb7::t_e9e53dbed9be50 24,50,104-110
+  s_9189dcd8cc1eb7::t_32af7334b9b047 5-6,19,27,35,37,51-77,84-100,103,111,115,117
+packages/presentation/src/runtime/session/use-runtime-cells.ts
+  s_9189dcd8cc1eb7::t_e76475b43facd8 54,56
+  s_9189dcd8cc1eb7::t_6912173bbd6137 3
+  s_9189dcd8cc1eb7::t_abe6a1fea52926 1,8-12,15-20,23-27,39,43,51
+packages/presentation/src/runtime-config/index.ts
+  s_9189dcd8cc1eb7::t_ac9de60b72092b 19,27-28
+packages/marimo-frontend/tests/source.test.mjs
+  s_9189dcd8cc1eb7::t_2dc8f2c76a11d3 61,69
+  s_9189dcd8cc1eb7::t_3cbc7ac4ad1c12 75,77,90-91
+  s_9189dcd8cc1eb7::t_e39636f282d1ba 76
+  s_9189dcd8cc1eb7::t_a582f6e09281e3 78-89
+  s_9189dcd8cc1eb7::t_c954f1f30944ed 9-14,138-141
+packages/presentation/src/runtime/outputs/ProjectedOutput.tsx
+  s_9189dcd8cc1eb7::t_1977a677c97e54 6
+packages/presentation/src/runtime/cells/CellOutput.tsx
+  s_9189dcd8cc1eb7::t_7b11b708652e5a 1,15-21
+packages/presentation/tests/transport.test.ts
+  s_9189dcd8cc1eb7::t_e39636f282d1ba 25-26
+  s_9189dcd8cc1eb7::t_32af7334b9b047 4
+  s_9189dcd8cc1eb7::t_066b2a7b6bcfee 6-9,11-12,14,23,30,32
+packages/presentation/tests/session-startup.test.ts
+  s_9189dcd8cc1eb7::t_0ef622cb465a7f 3-77
+  s_9189dcd8cc1eb7::t_54d4e4cce09609 1-2
+packages/presentation/src/runtime/values/use-runtime-value.ts
+  s_9189dcd8cc1eb7::t_b5e25f0d904be6 6,32,53
+apps/browser/src/studio.ts
+  s_9189dcd8cc1eb7::t_dd7c944d3695d7 1,10
+packages/presentation/src/document/revision-runtime.ts
+  s_9189dcd8cc1eb7::t_54d4e4cce09609 3
+  s_9189dcd8cc1eb7::t_dd5edb42c4369c 1,7,32-71
+tsconfig.json
+  s_9189dcd8cc1eb7::t_6912173bbd6137 24-26
+packages/marimo-frontend/tests/control-endpoint.test.ts
+  s_9189dcd8cc1eb7::t_4fa7fa193eef0a 3-9,43-57,59,63,66,68,82,84,96,98,114-144,146-147
+  s_9189dcd8cc1eb7::t_54d4e4cce09609 10
+  s_9189dcd8cc1eb7::t_32d54ac10e2b94 1-2,11-42,58,60-62,64-65,67,69-81,83,85-95,97,99-113,145,148-149
+packages/presentation/src/runtime/values/RuntimeValues.tsx
+  s_9189dcd8cc1eb7::t_b5e25f0d904be6 5,20
+packages/presentation/src/document/session-preservation.ts
+  s_9189dcd8cc1eb7::t_c7cd8a0fa027bf 1,50,129-137,163-168
+packages/marimo-frontend/src/cell-presentation.tsx
+  s_9189dcd8cc1eb7::t_8cc1d2f6d583c3 1-77
+packages/marimo-frontend/src/control-endpoint.ts
+  s_9189dcd8cc1eb7::t_03da0ff3384d44 1-14,16-21,23-38,40-41
+packages/presentation/tests/value-cell-model.test.ts
+  s_9189dcd8cc1eb7::t_3d4cf5c610d5b3 11,13-14,38,40-41
+packages/marimo-frontend/src/projected-output.tsx
+  s_9189dcd8cc1eb7::t_f4b60fdf517f07 21,29,64-69,71-80,95,98,102-105,123-130
+  s_9189dcd8cc1eb7::t_7159f3d7913e59 109,111
+  s_9189dcd8cc1eb7::t_1274ad535337cd 81
+packages/marimo-frontend/package.json
+  s_9189dcd8cc1eb7::t_4ecefa7c41790c 18
+  s_9189dcd8cc1eb7::t_1171ef365de050 8,10,12
+  s_9189dcd8cc1eb7::t_03da0ff3384d44 9
+packages/presentation/src/runtime/outputs/use-output-lifecycle.ts
+  s_9189dcd8cc1eb7::t_b5e25f0d904be6 4,16,24
+packages/presentation/src/runtime/transport.ts
+  s_9189dcd8cc1eb7::t_7a6f269022b529 5
+  s_9189dcd8cc1eb7::t_e39636f282d1ba 3-4
+packages/presentation/src/runtime/values/RuntimeValueCell.tsx
+  s_9189dcd8cc1eb7::t_b5e25f0d904be6 2,18
+packages/marimo-frontend/src/session-bootstrap.ts
+  s_9189dcd8cc1eb7::t_154ffda1b12764 4-10,12-28,30-35
+  s_9189dcd8cc1eb7::t_d579c9a9e5f7f8 1-3,29
+  s_9189dcd8cc1eb7::t_54d4e4cce09609 11
+packages/presentation/src/runtime/cell-state.ts
+  s_9189dcd8cc1eb7::t_e9e53dbed9be50 3
+  s_9189dcd8cc1eb7::t_b5e25f0d904be6 4-12
+packages/marimo-frontend/src/control-endpoint-core.ts
+  s_9189dcd8cc1eb7::t_03da0ff3384d44 1-42,96-113,115-162,164-166
+  s_9189dcd8cc1eb7::t_b967decb355900 59-62
+  s_9189dcd8cc1eb7::t_d8cf43db770afa 43-58,63-95,114,163
+packages/marimo-frontend/src/upstream/runtime.ts
+  s_9189dcd8cc1eb7::t_a875976b31802d 4-6
+packages/marimo-frontend/src/embedded-runtime.tsx
+  s_9189dcd8cc1eb7::t_e76475b43facd8 10,181
+  s_9189dcd8cc1eb7::t_def8bd52bdf21b 296,299
+  s_9189dcd8cc1eb7::t_7159f3d7913e59 188,198-199,201-209
+  s_9189dcd8cc1eb7::t_a875976b31802d 4-5,11,32,42-43,60-63,75-91,94-109,112-125,127-130,133,137-145,151-152,174,180,182-184,200,210,222,259,268-274,276,278-285,290,300-325,328-336,340,365,368-371,373-396,419-430,433-436,443,445-454,462-464,466-470,472-482,484-485,488
+  s_9189dcd8cc1eb7::t_4cd5e10b10bb98 1-3,6-9,12-31,33-41,44-48,50-54,56-59,64-74,92-93,110-111,134-136,146-150,153-154,156-173,175,177-179,185-186,189-197,211-214,219,223-224,228,257-258,260-263,326-327,337-339,341-349,351,353-364,366-367,372,489-490
+  s_9189dcd8cc1eb7::t_e9e53dbed9be50 55,187
+  s_9189dcd8cc1eb7::t_e39636f282d1ba 352
+  s_9189dcd8cc1eb7::t_81f025fc595b08 397-418,437-442,455-461,465,471,483,486-487
+  s_9189dcd8cc1eb7::t_4691a371232ca7 126,131-132
+  s_9189dcd8cc1eb7::t_534113eb1a7ddc 215-218,220-221,225-227,229-256,264-267,275,277,286-289,291-295,297-298,431-432,444
+  s_9189dcd8cc1eb7::t_c793f5fd7cf7ad 155,176
+  s_9189dcd8cc1eb7::t_49f8dc7ea60747 49
+  s_9189dcd8cc1eb7::t_3d4cf5c610d5b3 350
+packages/presentation/src/runtime/outputs/OutputPortal.tsx
+  s_9189dcd8cc1eb7::t_01a052f252757e 68
+  s_9189dcd8cc1eb7::t_b5e25f0d904be6 10,54
+packages/presentation/src/runtime/outputs/RuntimeOutputs.tsx
+  s_9189dcd8cc1eb7::t_b5e25f0d904be6 5,41
+packages/presentation/src/runtime/runtime.tsx
+  s_9189dcd8cc1eb7::t_e9e53dbed9be50 17-19,54
+  s_9189dcd8cc1eb7::t_c20f20f28c48bf 11
+  s_9189dcd8cc1eb7::t_20fcdc9da44a65 10
+  s_9189dcd8cc1eb7::t_7ade022c26f670 9
+  s_9189dcd8cc1eb7::t_abe6a1fea52926 5-8,20,29,31-32,40-53,55-57,61,66,69-70
+  s_9189dcd8cc1eb7::t_32af7334b9b047 21,30
+packages/presentation/src/main.ts
+  s_9189dcd8cc1eb7::t_4951d82ce16184 3,9-11,82-84,94,96-103,105-106,108-111,119-121
+  s_9189dcd8cc1eb7::t_f7c9d875155a44 95,104,107,117
+packages/presentation/tests/session-preservation.test.ts
+  s_9189dcd8cc1eb7::t_0ef622cb465a7f 73,90-91,99,106,138,150
+apps/e2e/tests/recovery.spec.ts
+  s_9189dcd8cc1eb7::t_7d238b06aacbc5 196,199,201,204,210-212,214-216,218-222,225,227
+  s_9189dcd8cc1eb7::t_11ac86f134fe1b 3-5,21-83,87-88,102,113-114,116-117,190,192-193,197-198,200,202-203,205-206,213,217,223-224,226
+  s_9189dcd8cc1eb7::t_d2117734a967ff 84,89-93,95-101,103-112,115
+  s_9189dcd8cc1eb7::t_da7bd1ebd5b299 85-86,94
+  s_9189dcd8cc1eb7::t_91da408dc3a163 15,183-189,191,194-195
+  s_9189dcd8cc1eb7::t_5556b45781f91f 207-209
+packages/marimo-frontend/src/vite.ts
+  s_9189dcd8cc1eb7::t_a875976b31802d 33-36
+packages/presentation/src/document/session-startup.ts
+  s_9189dcd8cc1eb7::t_da2fa738c3f58e 1-15,18-38
+  s_9189dcd8cc1eb7::t_f3d933c348a2b1 16-17
+packages/presentation/src/dev-reload.ts
+  s_9189dcd8cc1eb7::t_e5d81cf6b34409 8,19,46,192-228,230-231
+packages/marimo-frontend/scripts/source.mjs
+  s_9189dcd8cc1eb7::t_36efab15c7ccef 2,19-20,22-26
+  s_9189dcd8cc1eb7::t_a536117a946881 21
+  s_9189dcd8cc1eb7::t_c954f1f30944ed 88-96,172-176,183
+packages/presentation/tests/output-portal.test.ts
+  s_9189dcd8cc1eb7::t_93de7bb1295da9 85,163
+packages/presentation/src/runtime/runtime-cell.ts
+  s_9189dcd8cc1eb7::t_7b11b708652e5a 1,3
+packages/presentation/src/runtime/runtime-configuration.ts
+  s_9189dcd8cc1eb7::t_92645b4acb6fc3 8
+  s_9189dcd8cc1eb7::t_f231d51086769c 9
+  s_9189dcd8cc1eb7::t_b5e25f0d904be6 14-23
+packages/marimo-frontend/src/embedded-control-state.ts
+  s_9189dcd8cc1eb7::t_dc319fcb1a7387 15
+  s_9189dcd8cc1eb7::t_e76475b43facd8 1-14,16-28
+apps/e2e/tests/authoring.spec.ts
+  s_9189dcd8cc1eb7::t_48893e69889074 570
+  s_9189dcd8cc1eb7::t_79b1f09a945f00 572-578,588,592-593
+  s_9189dcd8cc1eb7::t_739be6809d18b1 601
+  s_9189dcd8cc1eb7::t_7bfb736a2fb23a 567-569,571,580,589-591,594-595,597,599
+packages/marimo-frontend/tests/embedded-control-state.test.ts
+  s_9189dcd8cc1eb7::t_e76475b43facd8 1-48
+packages/presentation/src/runtime/server.ts
+  s_9189dcd8cc1eb7::t_abe6a1fea52926 28-32,35,42
+  s_9189dcd8cc1eb7::t_e9e53dbed9be50 38-41
+  s_9189dcd8cc1eb7::t_7a6f269022b529 6
+packages/presentation/src/runtime/cells/cell-projection.ts
+  s_9189dcd8cc1eb7::t_7b11b708652e5a 1-4,118,129-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "113c58cda5f7d91227d8453424a70c9c219b139c",
+  "prompts": {},
+  "sessions": {
+    "s_9189dcd8cc1eb7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fefb7-2c6b-7ee3-abc7-f46a25a4a7c3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

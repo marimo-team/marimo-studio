@@ -1,0 +1,32 @@
+development_docs/releasing.md
+  s_af5d583a28e9c5::t_c24983296a3d11 107
+packages/marimo-studio/src/marimo_studio/_release_checks/__init__.py
+  s_af5d583a28e9c5::t_1162096236566c 5
+apps/browser/vite.config.ts
+  s_af5d583a28e9c5::t_1162096236566c 18,20
+packages/marimo-studio/src/marimo_studio/_release_checks/distribution_metadata.py
+  s_af5d583a28e9c5::t_1162096236566c 1-11,13-25,27,29-39
+  s_af5d583a28e9c5::t_3ae7cc5262c814 12,26,40-50
+  s_af5d583a28e9c5::t_c0bff7724fc609 28
+packages/marimo-studio/tests/delivery/test_export_bundle.py
+  s_af5d583a28e9c5::t_8d02c24e3299f3 122-124,229-231,233-235
+  s_af5d583a28e9c5::t_a4e3c6e5d17500 468-472
+  s_af5d583a28e9c5::t_f3437a5d18b2ab 51-54
+  s_af5d583a28e9c5::t_5c1d96b95aa931 5,7,37-50,55-70,119,225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "15a563e227db603bccc688b1df220b611a75c7c7",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

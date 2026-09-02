@@ -1,0 +1,42 @@
+packages/marimo-studio/src/marimo_studio/_server/presentation/isolation.py
+  s_af5d583a28e9c5::t_086af9b9dfbdf9 87
+packages/protocol/src/preview-messages.ts
+  s_af5d583a28e9c5::t_03801254578357 114-118
+  s_af5d583a28e9c5::t_ba00611513c5ed 273-276,320
+packages/marimo-studio/src/marimo_studio/_server/studio/waiting.py
+  s_af5d583a28e9c5::t_2f2732f7000fa9 23-41,113,125-127
+apps/e2e/tests/forced-interruption.spec.ts
+  s_af5d583a28e9c5::t_8de3326ce49acc 81-87
+packages/protocol/tests/preview-messages.test.ts
+  s_af5d583a28e9c5::t_03801254578357 147-151
+packages/marimo-studio/tests/server/test_runtime_config.py
+  s_af5d583a28e9c5::t_10c4369a561f72 339
+  s_af5d583a28e9c5::t_3e3d3de7a47c3a 15,330-338
+packages/marimo-studio/tests/server/test_presentation_transport.py
+  s_af5d583a28e9c5::t_2f2732f7000fa9 173
+packages/studio/src/features/preview/controller.ts
+  s_af5d583a28e9c5::t_03801254578357 631,633-634
+  s_af5d583a28e9c5::t_2f2732f7000fa9 96,623,632,636,807-812,947
+packages/studio/tests/preview-controller.test.ts
+  s_af5d583a28e9c5::t_c80f318b0854cc 197-206,223,225-226,238
+  s_af5d583a28e9c5::t_10c4369a561f72 227-235,237
+  s_af5d583a28e9c5::t_2f2732f7000fa9 194-196,208-222,239-240
+  s_af5d583a28e9c5::t_03801254578357 207,224,241
+  s_af5d583a28e9c5::t_63c4a6615c8998 236
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "532c7a22456cdaf7e6e52d9dcdfa1e64d926bf96",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

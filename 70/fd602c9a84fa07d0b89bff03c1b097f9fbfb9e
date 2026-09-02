@@ -1,0 +1,13 @@
+apps/e2e/scripts/run-installed-package.mjs
+  ai_agent 1,4,10-12,35-50,68,82-83,86-90,107-117
+scripts/verify-installed-package.py
+  ai_agent 96-97,129-130,134-135,146-169
+apps/e2e/playwright.installed.config.ts
+  ai_agent 8-9,28,33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "70fd602c9a84fa07d0b89bff03c1b097f9fbfb9e",
+  "prompts": {}
+}

@@ -1,0 +1,33 @@
+development_docs/architecture/product-and-workspace.md
+  ai_agent 44-45
+development_docs/architecture/agents-and-delivery.md
+  ai_agent 15-18,25-27,38-41,43
+skills/marimo-studio/SKILL.md
+  ai_agent 21,39,41,55,133-138,141,164-165
+development_docs/releasing.md
+  ai_agent 211-212
+development_docs/architecture.md
+  ai_agent 33-36
+development_docs/architecture/marimo-integration.md
+  ai_agent 51
+development_docs/architecture/view-providers-and-artifacts.md
+  s_a43478d5345041::t_171e73212fae98 19
+skills/marimo-studio/references/view-authoring.md
+  ai_agent 9-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2c9b57c97adfd72d6270a630669529eee32f6516",
+  "prompts": {},
+  "sessions": {
+    "s_a43478d5345041": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a041df-db54-71d2-85a7-8654dad51411",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

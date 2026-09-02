@@ -1,0 +1,9 @@
+scripts/require-release-checks.sh
+  ai_agent 1-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e2e55f8bec9eae5224649297c5b822a25f6e585a",
+  "prompts": {}
+}

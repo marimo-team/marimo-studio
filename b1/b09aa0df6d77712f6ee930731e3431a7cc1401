@@ -1,0 +1,21 @@
+packages/studio/src/features/navigation/ModeNavigation.tsx
+  s_77c7fa5e40f24c::t_3d2ee071ae7f24 47,64
+packages/studio/src/features/navigation/navigation.css
+  s_77c7fa5e40f24c::t_3d2ee071ae7f24 70,73,76,78-79,84-89,95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b1b09aa0df6d77712f6ee930731e3431a7cc1401",
+  "prompts": {},
+  "sessions": {
+    "s_77c7fa5e40f24c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe720-c827-7eb0-9849-933c9305ded5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

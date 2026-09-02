@@ -1,0 +1,52 @@
+.github/workflows/ci.yml
+  s_77c7fa5e40f24c::t_abc2df6df38f38 23,48
+docs/guide/getting-started.md
+  s_77c7fa5e40f24c::t_abc2df6df38f38 11
+packages/marimo-studio/tests/test_workspace.py
+  s_77c7fa5e40f24c::t_abc2df6df38f38 257,301,323
+  s_77c7fa5e40f24c::t_176754fb5ed4e1 314
+packages/marimo-studio/src/marimo_studio/_workspace/config.py
+  s_77c7fa5e40f24c::t_abc2df6df38f38 11,13
+  s_77c7fa5e40f24c::t_c49973179df1cc 5,10,12
+packages/marimo-studio/tests/helpers.py
+  s_77c7fa5e40f24c::t_abc2df6df38f38 46
+docs/reference/configuration.md
+  s_77c7fa5e40f24c::t_abc2df6df38f38 25
+packages/marimo-studio/tests/test_environment.py
+  s_77c7fa5e40f24c::t_abc2df6df38f38 68,98,221
+examples/analysis.py
+  s_77c7fa5e40f24c::t_abc2df6df38f38 2
+packages/marimo-studio/src/marimo_studio/_compat/kernel_values/session.py
+  s_77c7fa5e40f24c::t_176754fb5ed4e1 312
+packages/marimo-studio/src/marimo_studio/_workspace/environment.py
+  s_77c7fa5e40f24c::t_c49973179df1cc 11,13
+  s_77c7fa5e40f24c::t_abc2df6df38f38 12,14
+examples/nga_collection.py
+  s_77c7fa5e40f24c::t_abc2df6df38f38 2
+apps/e2e/fixtures-hosted/notebook.py
+  s_77c7fa5e40f24c::t_abc2df6df38f38 2
+packages/marimo-studio/pyproject.toml
+  s_77c7fa5e40f24c::t_abc2df6df38f38 7,14,38
+README.md
+  s_77c7fa5e40f24c::t_abc2df6df38f38 162
+apps/e2e/fixtures/notebook.py
+  s_77c7fa5e40f24c::t_abc2df6df38f38 2
+packages/marimo-studio/src/marimo_studio/_compat/runtime_probe.py
+  s_77c7fa5e40f24c::t_176754fb5ed4e1 157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f03edabb5102b676f871a6893bb04619af15f6df",
+  "prompts": {},
+  "sessions": {
+    "s_77c7fa5e40f24c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe720-c827-7eb0-9849-933c9305ded5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

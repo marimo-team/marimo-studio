@@ -1,0 +1,25 @@
+packages/marimo-frontend/tests/embedded-runtime.test.ts
+  s_af5d583a28e9c5::t_3337aac9f326b6 45,802-824,829-839,841-848,850-852,854-875
+  s_af5d583a28e9c5::t_a1538eee769147 825-828,840,849,853
+apps/e2e/tests/starter-edge-cases.spec.ts
+  s_af5d583a28e9c5::t_3337aac9f326b6 11,17,215,271
+packages/marimo-frontend/src/embedded-runtime.tsx
+  s_af5d583a28e9c5::t_3337aac9f326b6 227,312-322
+  s_af5d583a28e9c5::t_7e2b5b3cc6c069 200
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6a0c676734208d7a55c6803e2e43827944c9a098",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

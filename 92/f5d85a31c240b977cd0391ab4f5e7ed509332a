@@ -1,0 +1,173 @@
+packages/protocol/src/browser-observations.ts
+  s_6c4e4d914645f2::t_39d63682fc56f7 39-58,70-89
+  s_6c4e4d914645f2::t_36e3f8d5271fa3 103-104,107
+  s_6c4e4d914645f2::t_2fdeecda7b3e26 26-38,59-63,66-69,90-102,105-106,108-122,140-141,156,158-172,198,201-204
+  s_6c4e4d914645f2::t_382fd8678b8c92 64-65,129-130,178-195
+  s_6c4e4d914645f2::t_a3a6930e9a6801 123,126-128,133-139
+  s_6c4e4d914645f2::t_19674f6ffd2165 173
+  s_6c4e4d914645f2::t_53e6f9d42ea382 125,132
+  s_6c4e4d914645f2::t_c7e565093b6fc2 124,131
+  s_6c4e4d914645f2::t_723ad80b5c7350 174-177,196-197
+development_docs/architecture/browser-runtime-and-authoring.md
+  s_6c4e4d914645f2::t_7bebdf01932759 235-241,249,251-252,254-256,258-259
+  s_6c4e4d914645f2::t_e6152a5afd7f5c 242,246-248
+  s_6c4e4d914645f2::t_d781ee001fb077 245
+  s_6c4e4d914645f2::t_289b64dcf83fe6 244
+skills/marimo-studio/SKILL.md
+  s_6c4e4d914645f2::t_02dec5c8b2205c 394-406
+packages/protocol/fixtures/browser-observation.json
+  s_6c4e4d914645f2::t_356df1789b78f3 59-60,68-69
+  s_6c4e4d914645f2::t_4c583619f85cec 29-58,61-67,70-91
+apps/e2e/tests/runtime.spec.ts
+  s_6c4e4d914645f2::t_4c8965fd33ed06 14-20,24-26,28-61
+  s_6c4e4d914645f2::t_c78c4a0f903eda 21-23,27
+packages/studio/src/features/preview/runtime-diagnostics.ts
+  s_6c4e4d914645f2::t_713f6a6af544a6 93-98
+  s_6c4e4d914645f2::t_e6152a5afd7f5c 102,105
+  s_6c4e4d914645f2::t_ec367d64619c58 31-41,89,128,134-135
+  s_6c4e4d914645f2::t_5661840aa38bac 24-29,100-101,103-104,109-110
+  s_6c4e4d914645f2::t_ea9f8ad701f93a 90-92
+  s_6c4e4d914645f2::t_cd898afb104229 55,65-68,70
+  s_6c4e4d914645f2::t_e138100ceba060 42-53,117,122-124
+  s_6c4e4d914645f2::t_c2da1852d77061 1-23,30,54,56-64,69,71-88,99,106-108,111-116,118-121,125-127,129-133,136-142
+packages/studio/src/features/preview/deck.ts
+  s_6c4e4d914645f2::t_e6152a5afd7f5c 1
+  s_6c4e4d914645f2::t_e138100ceba060 15,153-158
+  s_6c4e4d914645f2::t_c580a46e8a07ef 16,42-50,70-73,110-113,152
+packages/studio/src/features/navigation/RuntimeStatus.tsx
+  s_6c4e4d914645f2::t_a58fd98fa67b51 1-12
+packages/protocol/fixtures/browser-observation-invalid.json
+  s_6c4e4d914645f2::t_4c583619f85cec 13-14,21-34
+  s_6c4e4d914645f2::t_601afed76d48e3 15-20
+packages/marimo-studio/src/marimo_studio/_agent_browser_protocol.py
+  s_6c4e4d914645f2::t_8acd10a94ec705 185-192
+  s_6c4e4d914645f2::t_94fb41bf5a1050 336-337,345-346,353-354,367-368
+  s_6c4e4d914645f2::t_d6de5fd77c3895 107-108,113,193-198,279-295
+  s_6c4e4d914645f2::t_db588ca6db4d8c 331
+  s_6c4e4d914645f2::t_533bc304c1bce1 265-266
+  s_6c4e4d914645f2::t_9b1b949810e50b 6,258
+  s_6c4e4d914645f2::t_9616afc86f0ff9 105-106,206
+  s_6c4e4d914645f2::t_f1980108b453e7 13-16,21-27,66,80-84,99-101,121,140,157-162,177-184,215-257,259-260,271-278,296-309,312-330,332-335,338-344,347-352,355-358,361-366,369-372
+  s_6c4e4d914645f2::t_19674f6ffd2165 268
+  s_6c4e4d914645f2::t_1107ae1f488188 310-311,359-360
+  s_6c4e4d914645f2::t_386a5cd011c2d8 261-264,267,269-270
+packages/marimo-studio/tests/test_analysis.py
+  s_6c4e4d914645f2::t_16d9e55a0dd7ea 18-19,108,286,360-363,409-412
+packages/studio/tests/preview-controller.test.ts
+  s_6c4e4d914645f2::t_2ab5a735288d47 384-445
+  s_6c4e4d914645f2::t_6c416b2afade24 232
+  s_6c4e4d914645f2::t_100b4bb362bd7c 259-265
+packages/marimo-studio/tests/helpers.py
+  s_6c4e4d914645f2::t_4fe90fe392a1ab 8-35,38-41
+  s_6c4e4d914645f2::t_f168b23ce8e707 36-37
+packages/marimo-studio/src/marimo_studio/agent_models.py
+  s_6c4e4d914645f2::t_a17c76af0b60de 6,27-37
+  s_6c4e4d914645f2::t_6d86a92eafe7c5 306-311
+  s_6c4e4d914645f2::t_94fb41bf5a1050 93-94,102-103
+  s_6c4e4d914645f2::t_a4bf424c76ccec 121-166,305
+  s_6c4e4d914645f2::t_9616afc86f0ff9 303-304
+  s_6c4e4d914645f2::t_bf28a10993f82b 20-26,73-92,95-101,104-120,167-177,195,214-219,448-451
+packages/studio/tests/runtime-diagnostics.test.ts
+  s_6c4e4d914645f2::t_e6152a5afd7f5c 6,44
+  s_6c4e4d914645f2::t_4c583619f85cec 1-4,7-43,45-49,87-97,120
+  s_6c4e4d914645f2::t_41a73904f55740 5,98-99,101-111,117-119
+  s_6c4e4d914645f2::t_a56228c4f3efbe 50-86
+  s_6c4e4d914645f2::t_e138100ceba060 100,112-116
+  s_6c4e4d914645f2::t_f633ea71b2680a 121-138
+  s_6c4e4d914645f2::t_9df407cd348026 139-167
+packages/studio/tests/observation-controller.test.ts
+  s_6c4e4d914645f2::t_356df1789b78f3 40-41
+  s_6c4e4d914645f2::t_4d21bf0bfde109 59-61
+  s_6c4e4d914645f2::t_8d2b729fcf2cf0 30-39,42-48,54,78,101,122
+packages/studio/src/features/preview/status.ts
+  s_6c4e4d914645f2::t_e6152a5afd7f5c 36
+  s_6c4e4d914645f2::t_82da036683adc5 27-33
+  s_6c4e4d914645f2::t_c2da1852d77061 1-5,20-26,34-35,37-50
+packages/presentation/src/rendered-view-observer.ts
+  s_6c4e4d914645f2::t_0a16197476d1fc 10,56
+packages/protocol/src/preview-messages.ts
+  s_6c4e4d914645f2::t_e6152a5afd7f5c 3
+  s_6c4e4d914645f2::t_95dd5e96c5eab0 62,77
+  s_6c4e4d914645f2::t_3a1eca127f7dc0 96,99-100,109-114
+  s_6c4e4d914645f2::t_0a16197476d1fc 7,56,68,118
+  s_6c4e4d914645f2::t_4b5c08ae2641b6 97,101-103,107-108
+packages/presentation/src/document/status.ts
+  s_6c4e4d914645f2::t_0a16197476d1fc 49
+  s_6c4e4d914645f2::t_246a78119e34cb 70
+apps/e2e/tests/recovery.spec.ts
+  s_6c4e4d914645f2::t_b7d11e6e1e663d 356-360
+packages/studio/src/features/navigation/navigation.css
+  s_6c4e4d914645f2::t_a58fd98fa67b51 120,126,131,136,155,231
+packages/studio/src/features/preview/observation-controller.ts
+  s_6c4e4d914645f2::t_72841c6cf07b28 1,21,76
+packages/marimo-studio/tests/test_agents.py
+  s_6c4e4d914645f2::t_16d9e55a0dd7ea 22
+  s_6c4e4d914645f2::t_e6152a5afd7f5c 132-135
+packages/studio/src/features/preview/controller.ts
+  s_6c4e4d914645f2::t_7dd8d07edb8cd6 40-42,477
+  s_6c4e4d914645f2::t_72841c6cf07b28 96-101
+  s_6c4e4d914645f2::t_4c6a2d47d7728a 2-5,30,32,37,57,81-82,85-86
+  s_6c4e4d914645f2::t_7f58e4617a7338 141-144
+  s_6c4e4d914645f2::t_538972d1191cb2 253-256,268-271,387-390
+  s_6c4e4d914645f2::t_e6152a5afd7f5c 479,482
+  s_6c4e4d914645f2::t_7a87f05980a0c3 121-124,484
+  s_6c4e4d914645f2::t_5d314912d3ea81 310,321,326,331,344,356
+  s_6c4e4d914645f2::t_6a701cc9082fb3 335-340,346-349,351-354
+  s_6c4e4d914645f2::t_ed374061cb99cc 439-446,449-456,467-471,474-476,480-481,483,485-487,491-504
+  s_6c4e4d914645f2::t_d781ee001fb077 173
+  s_6c4e4d914645f2::t_aaaad865743228 120
+packages/marimo-studio/tests/test_agent_protocol.py
+  s_6c4e4d914645f2::t_62f6a3313c8f86 125-127
+  s_6c4e4d914645f2::t_12a31dd6e08c4a 356-361
+  s_6c4e4d914645f2::t_548470df55d510 211-213
+  s_6c4e4d914645f2::t_01bfd7c2691d8b 46-47
+  s_6c4e4d914645f2::t_f7c75d758c0635 128-134
+  s_6c4e4d914645f2::t_e6152a5afd7f5c 158-160,401-414
+  s_6c4e4d914645f2::t_3d9d47647e0320 122-124,423
+  s_6c4e4d914645f2::t_9325d1a5124ff0 190-191
+  s_6c4e4d914645f2::t_21643af2c04118 315-346
+  s_6c4e4d914645f2::t_5c889d68a267cc 246-247,249
+  s_6c4e4d914645f2::t_f168b23ce8e707 109-110
+  s_6c4e4d914645f2::t_9262f81281775c 367-368,370
+  s_6c4e4d914645f2::t_16d9e55a0dd7ea 27-29,161
+  s_6c4e4d914645f2::t_9b1b949810e50b 248,369
+  s_6c4e4d914645f2::t_2562524a5a6ef2 192-210,225-228
+  s_6c4e4d914645f2::t_c2644f68faaa38 20-22,93-108,111-113
+  s_6c4e4d914645f2::t_e03906e3934857 30-45,48-54,304,458
+packages/studio/tests/agent-remotes.test.ts
+  s_6c4e4d914645f2::t_d2c8f2eb03ce8f 37,42,49,54,82,85-89,125,160,199,241,243-247
+  s_6c4e4d914645f2::t_8d2b729fcf2cf0 38-41,43-46,50-53,55
+  s_6c4e4d914645f2::t_356df1789b78f3 47-48
+packages/protocol/tests/preview-messages.test.ts
+  s_6c4e4d914645f2::t_050a38ba4c7b3a 8-16,125,131,169,175,184-189
+packages/studio/src/features/navigation/RuntimeMenu.tsx
+  s_6c4e4d914645f2::t_a58fd98fa67b51 8,36
+packages/studio/src/features/navigation/WorkspaceMenu.tsx
+  s_6c4e4d914645f2::t_a58fd98fa67b51 19,65
+packages/marimo-studio/tests/test_agent_browser_api.py
+  s_6c4e4d914645f2::t_e03906e3934857 290-294,299-302,305,307-310
+  s_6c4e4d914645f2::t_16d9e55a0dd7ea 26,457-460,610,679-682
+  s_6c4e4d914645f2::t_01bfd7c2691d8b 303-304
+  s_6c4e4d914645f2::t_dbf12ab5467a22 226-233,283,295-298,306
+packages/studio/tests/studio-app.test.tsx
+  s_6c4e4d914645f2::t_ae5f22e63c77ca 12,15,164-192
+  s_6c4e4d914645f2::t_a66f67bee3491b 276-280
+packages/presentation/src/readiness-diagnostics.ts
+  s_6c4e4d914645f2::t_0a16197476d1fc 78,92-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "92f5d85a31c240b977cd0391ab4f5e7ed509332a",
+  "prompts": {},
+  "sessions": {
+    "s_6c4e4d914645f2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01518-a473-7073-8e86-60d1cfa1bdda",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

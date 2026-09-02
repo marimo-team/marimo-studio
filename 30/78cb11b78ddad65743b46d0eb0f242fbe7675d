@@ -1,0 +1,24 @@
+apps/e2e/unit/notebook-server.test.ts
+  s_af5d583a28e9c5::t_e59dcc6a5f8257 236-249,271,509
+  s_af5d583a28e9c5::t_c7ad60a060fb9f 314,368,549,592,625
+  s_af5d583a28e9c5::t_0667663400e33e 31,33,293,341,499,533,574,609
+apps/e2e/unit/preparation-process.test.ts
+  s_af5d583a28e9c5::t_aa1662edf95e8f 12,30-32
+  s_af5d583a28e9c5::t_0667663400e33e 13,67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3078cb11b78ddad65743b46d0eb0f242fbe7675d",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

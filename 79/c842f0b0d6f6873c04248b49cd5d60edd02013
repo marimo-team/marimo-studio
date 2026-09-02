@@ -1,0 +1,76 @@
+examples/__marimo__/studio/earthquakes/briefing/src/components/BriefingVisuals.tsx
+  s_8f21e6de40a018::t_b01d0e467244f9 35-37,43-47,55-58,60-64,66,109-115,126-128
+  s_8f21e6de40a018::t_8df7fbf996fb5a 1,3-13,15-20,22-34,38-42,48-54,67,82-85,87-108,116-125,129-175
+  s_8f21e6de40a018::t_881200f1ffa751 21,59,65,68-81,86
+  s_8f21e6de40a018::t_43d35506e9634e 2,14
+examples/__marimo__/studio/earthquakes/briefing/DESIGN.md
+  s_8f21e6de40a018::t_8df7fbf996fb5a 114-120
+examples/__marimo__/studio/earthquakes/briefing/deno.json
+  s_8f21e6de40a018::t_8df7fbf996fb5a 17-19
+examples/earthquakes.py
+  s_8f21e6de40a018::t_8df7fbf996fb5a 191-201
+examples/__marimo__/studio/earthquakes/operations/src/components/EventMap.tsx
+  s_8f21e6de40a018::t_75232c6e2b351d 16,23,144-147,151-155
+  s_8f21e6de40a018::t_0c82757d0601c3 148-150
+examples/__marimo__/studio/earthquakes/briefing/src/App.tsx
+  s_8f21e6de40a018::t_3a51a4d83a31df 73-77,111-114,119-123
+  s_8f21e6de40a018::t_19af3f31d419c7 115-118
+  s_8f21e6de40a018::t_63fb51c4e16f08 138
+examples/__marimo__/studio/earthquakes/briefing/src/style.css
+  s_8f21e6de40a018::t_b01d0e467244f9 323-329
+  s_8f21e6de40a018::t_19af3f31d419c7 1061
+  s_8f21e6de40a018::t_d90b1888440c65 551,557,561-565,587
+  s_8f21e6de40a018::t_1f61b31f049268 1155-1162,1271-1275,1324-1328,1402-1405,1426-1428
+  s_8f21e6de40a018::t_3c8171d8ee6a56 1284-1287
+  s_8f21e6de40a018::t_63fb51c4e16f08 260-265,351-352,354,356-358,362-364,366-368,370-371,373-377,379,381-382,610-611,619-621,626-669,813-835,837-842,962-964,968-1009,1016,1023-1028,1146-1154,1163-1186,1234-1237,1299-1323,1350,1354-1355
+  s_8f21e6de40a018::t_f43c6bf555efd1 716-746,1216-1217,1221,1264-1270,1371-1385,1411-1412,1416
+  s_8f21e6de40a018::t_69340b47ea4f3d 747-781,792,794,843-859,861-878
+  s_8f21e6de40a018::t_97b9bab886bfd9 42-103,1062-1073,1441-1445
+  s_8f21e6de40a018::t_881200f1ffa751 341,344,346-348
+  s_8f21e6de40a018::t_3a79a7b84c6c5c 477,494-495,536-550,552-556,558-560,566-586,588-596
+  s_8f21e6de40a018::t_a70eec6e40cdcf 280-322,330-340,342-343,345,349-350,353,355,359-361,365,369,372,378,380
+examples/__marimo__/studio/earthquakes/operations/src/App.tsx
+  s_8f21e6de40a018::t_5a8e0e213cf935 79-82,134,142,146
+  s_8f21e6de40a018::t_0c82757d0601c3 50-51
+examples/__marimo__/studio/earthquakes/briefing/src/components/BriefingPrimitives.tsx
+  s_8f21e6de40a018::t_21045f5ffd2309 1-4,30-41,46-57,61-82,86-91,93-95,97-100
+  s_8f21e6de40a018::t_d90b1888440c65 42-45,58-60,83-85,96
+examples/__marimo__/studio/earthquakes/operations/src/style.css
+  s_8f21e6de40a018::t_0c82757d0601c3 215
+  s_8f21e6de40a018::t_2bee4cce945e31 123-127,179-180,216-220,267-292,425-519,791
+examples/__marimo__/studio/earthquakes/story/index.html
+  s_8f21e6de40a018::t_69101b5b75536d 14-184,186-194,203,211-299,301-302,305-313,316-317,320-331,335,337-340,342,346,348-351,353,452,454-464,476-481,483-484,496-501,503-506,534,549-556,568-576,579-582,585-603,605,635-636,647-648,650-665,667-674,676-679,681-689,691,693-695,697-698,700-724,726-741,746-748
+  s_8f21e6de40a018::t_0792c2d94f38a6 606-608,612,614-615,617-634
+  s_8f21e6de40a018::t_b977396b019320 359-361
+  s_8f21e6de40a018::t_88daa6e0a694dc 374-378,383-387
+  s_8f21e6de40a018::t_7bf12d6a7459fa 185,195-202,204-210,343,345,465-475,485-495,507-513,515-522,524-533,535-548,557-567,577-578,583-584,604,637-646,649,696,742-745
+examples/__marimo__/studio/earthquakes/operations/src/components/EventDetails.tsx
+  s_8f21e6de40a018::t_0c82757d0601c3 32-37,76-78,86-89
+  s_8f21e6de40a018::t_7b81de75a9583d 10,17,29-31,38-40,64,67,83-85,90-92
+examples/__marimo__/studio/earthquakes/briefing/src/components/BriefingSlides.tsx
+  s_8f21e6de40a018::t_d90b1888440c65 12,58,153-161
+  s_8f21e6de40a018::t_63fb51c4e16f08 32-39,201-206,210-213,217-220,313-334,365,378-408,412,421,426
+  s_8f21e6de40a018::t_8f8fc8dcc48cc0 40-57,59-62,259-262,335
+  s_8f21e6de40a018::t_f43c6bf555efd1 101,258,263-277,350,415-417
+  s_8f21e6de40a018::t_ffaa66107c1f95 207-209,214-216
+examples/__marimo__/studio/earthquakes/briefing/deno.lock
+  ai_agent 5-7,10-12,27-53,69-126,153-155
+examples/__marimo__/studio/earthquakes/briefing/src/briefing-data.ts
+  s_8f21e6de40a018::t_8df7fbf996fb5a 31-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "79c842f0b0d6f6873c04248b49cd5d60edd02013",
+  "prompts": {},
+  "sessions": {
+    "s_8f21e6de40a018": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05679-3c8f-7032-9094-04881ac6c0d0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

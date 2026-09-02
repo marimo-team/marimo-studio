@@ -1,0 +1,35 @@
+packages/marimo-frontend/tests/control-endpoint.test.ts
+  s_af5d583a28e9c5::t_dde7013d49fd23 176-179,182-185,191
+  s_af5d583a28e9c5::t_2096f025b9e5f0 318-319,321
+  s_af5d583a28e9c5::t_3d55621720003e 170-175,180-181,186-190,192-204
+packages/marimo-frontend/tests/embedded-control-state.test.ts
+  s_af5d583a28e9c5::t_ca6d869cb2d1ab 155,170-173
+packages/marimo-frontend/src/radix-compose-refs.ts
+  s_af5d583a28e9c5::t_ddff32117e6930 37,41
+  s_af5d583a28e9c5::t_b5363e9abb8cc2 38,42
+packages/marimo-frontend/tests/radix-compose-refs.test.tsx
+  s_af5d583a28e9c5::t_3d55621720003e 4,13-14,16-23,25
+  s_af5d583a28e9c5::t_f433ad1b9df2fe 34,36,40
+  s_af5d583a28e9c5::t_ddff32117e6930 15
+packages/marimo-frontend/src/control-endpoint-core.ts
+  s_af5d583a28e9c5::t_b5363e9abb8cc2 108,121-161,184,188-190
+  s_af5d583a28e9c5::t_93ac17ef226b93 186
+packages/marimo-frontend/src/embedded-control-state.ts
+  s_af5d583a28e9c5::t_b5363e9abb8cc2 34,47-49,78-82,108-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e17eb76e9cb55bea0c11580604c3111e677aa1fd",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

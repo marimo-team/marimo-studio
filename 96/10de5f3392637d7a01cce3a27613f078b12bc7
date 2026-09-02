@@ -1,0 +1,20 @@
+packages/marimo-studio/tests/marimo_compat/test_session_cache.py
+  s_c61c953fd9c921::t_355689dcac65fb 28,224-225
+  s_c61c953fd9c921::t_89bd4487739ed8 96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9610de5f3392637d7a01cce3a27613f078b12bc7",
+  "prompts": {},
+  "sessions": {
+    "s_c61c953fd9c921": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a041f0-5a0a-7410-bae2-6241bc0182bf",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

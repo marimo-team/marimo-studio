@@ -1,0 +1,28 @@
+docs/reference/agent-api.md
+  s_75bc15cab3ac40::t_119d5082b730a3 22-23,173-175,179,181
+development_docs/architecture/agents-and-delivery.md
+  s_75bc15cab3ac40::t_a3b19186435dc6 96-99
+  s_75bc15cab3ac40::t_119d5082b730a3 90-95,104
+docs/guide/coding-agents.md
+  s_75bc15cab3ac40::t_39b1dcb953878d 51-54
+development_docs/architecture/marimo-integration.md
+  s_75bc15cab3ac40::t_45d0525c840981 84
+development_docs/architecture/product-and-workspace.md
+  s_75bc15cab3ac40::t_ede16f6f7f5cc8 67,72,76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7bf658400426ae5290e0e3f43e61e2c5ad20c1df",
+  "prompts": {},
+  "sessions": {
+    "s_75bc15cab3ac40": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01a41-e5e9-7792-9290-f94dc3dadb00",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

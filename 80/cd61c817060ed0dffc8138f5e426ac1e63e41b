@@ -1,0 +1,21 @@
+packages/marimo-studio/tests/providers/test_deno_react.py
+  s_af5d583a28e9c5::t_ee0a128661ed85 8,214-216,370
+packages/marimo-studio/tests/providers/test_deno_svelte.py
+  s_af5d583a28e9c5::t_ee0a128661ed85 6,196,271
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "80cd61c817060ed0dffc8138f5e426ac1e63e41b",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
