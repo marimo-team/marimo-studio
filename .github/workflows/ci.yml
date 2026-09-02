@@ -13,8 +13,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      dependency_inputs: ${{ steps.filter.outputs.dependency_inputs }}
+      distribution: ${{ steps.filter.outputs.distribution }}
+      frontend_contracts: ${{ steps.filter.outputs.frontend_contracts }}
+      installed_distribution: ${{ steps.filter.outputs.installed_distribution }}
+      python_contracts: ${{ steps.filter.outputs.python_contracts }}
+      quality: ${{ steps.filter.outputs.quality }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Classify changed files
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: .github/filters.yml
+          predicate-quantifier: some-with-excludes
+
   quality:
     name: Quality
+    needs: changes
+    if: needs.changes.outputs.quality == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -44,14 +72,106 @@ jobs:
       - name: Type-check
         run: make typecheck
 
+  python-standard:
+    name: Standard Python contracts
+    needs: changes
+    if: needs.changes.outputs.python_contracts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Test standard Python contracts
-        run: ./scripts/python-test.sh --profile standard --python 3.12
+        uses: ./.github/actions/test-python
+        with:
+          profile: standard
+          python-version: "3.12"
+
+  frontend:
+    name: Frontend contracts
+    needs: changes
+    if: needs.changes.outputs.frontend_contracts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python dependencies
+        run: uv sync --locked
+
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+        with:
+          prepare-marimo-frontend: "true"
 
       - name: Test frontend
         run: make frontend-test
 
+  dependency-audit:
+    name: Dependency audit
+    needs: changes
+    if: needs.changes.outputs.dependency_inputs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install Python dependencies
+        run: uv sync --locked
+
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+
       - name: Audit locked dependencies
         run: make audit
+
+  package:
+    name: Package
+    needs: changes
+    if: needs.changes.outputs.distribution == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: uv sync --locked
+
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+        with:
+          prepare-marimo-frontend: "true"
 
       - name: Build package
         run: make package
@@ -68,6 +188,8 @@ jobs:
 
   python-compat:
     name: Supported Python ${{ matrix.python-version }} (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.python_contracts == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
@@ -92,6 +214,8 @@ jobs:
 
   native-process:
     name: Native process ownership (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.python_contracts == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -112,6 +236,8 @@ jobs:
 
   deno:
     name: Deno providers (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.python_contracts == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -132,7 +258,10 @@ jobs:
 
   installed-package:
     name: Installed package and provider (${{ matrix.os }})
-    needs: quality
+    needs: [changes, package]
+    if: >-
+      needs.changes.outputs.installed_distribution == 'true' &&
+      needs.package.result == 'success'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:

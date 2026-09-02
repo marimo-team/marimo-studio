@@ -14,7 +14,89 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      documentation: ${{ steps.filter.outputs.documentation }}
+      pages: ${{ steps.filter.outputs.pages }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Classify changed files
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: .github/filters.yml
+          predicate-quantifier: some-with-excludes
+
+  documentation:
+    name: Documentation contracts
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.documentation == 'true' ||
+      needs.changes.outputs.pages == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+
+      - name: Check documentation formatting
+        run: >-
+          pnpm exec vp fmt --check
+          README.md
+          AGENTS.md
+          CLAUDE.md
+          CONTRIBUTING.md
+          LICENSE
+          SECURITY.md
+          .github/release-notes
+          apps/docs
+          development_docs
+          docs
+          examples
+          packages/marimo-studio/README.md
+          skills/marimo-studio
+
+      - name: Lint documentation sources
+        run: pnpm exec vp lint apps/docs
+
+      - name: Type-check documentation sources
+        run: >-
+          pnpm exec vp check --no-fmt --no-lint
+          apps/docs/.vitepress
+          apps/docs/scripts
+
+      - name: Set up uv and Python
+        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true'
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          python-version: "3.12"
+
+      - name: Test documented Python contracts
+        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true'
+        run: >-
+          ./scripts/python-test.sh --profile standard --python 3.12 --
+          packages/marimo-studio/tests/cli/test_documentation_examples.py
+
   build:
+    needs: [changes, documentation]
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
