@@ -1,10 +1,11 @@
 import { fileURLToPath } from "node:url";
 
+import { createMainShardPortOffsets, E2E_PORT_OFFSET_ENV } from "./network.mjs";
 import { appDirectory } from "./paths.mjs";
 import { PreparationCancelled, PreparationProcessOwner } from "./preparation-process.mjs";
 
-const shardCount = 3;
-const portStride = 100;
+const shardPortOffsets = createMainShardPortOffsets(process.env[E2E_PORT_OFFSET_ENV]);
+const shardCount = shardPortOffsets.length;
 const playwrightCli = fileURLToPath(import.meta.resolve("@playwright/test/cli"));
 const forwardedArgs = process.argv.slice(2);
 if (forwardedArgs[0] === "--") forwardedArgs.shift();
@@ -22,7 +23,7 @@ const stop = (signal) => {
   if (stopping) return;
   stopping = true;
   exitCode = signalExitCodes[signal] ?? 1;
-  void preparation.stop(signal).catch((error) => {
+  void preparation.stopLeaders(signal).catch((error) => {
     console.error(error);
     exitCode = 1;
   });
@@ -35,7 +36,7 @@ for (const [signal, handler] of signalHandlers) {
 }
 
 try {
-  await Promise.all(
+  const outcomes = await Promise.allSettled(
     Array.from({ length: shardCount }, (_, index) => {
       const shard = index + 1;
       return preparation.run(
@@ -46,13 +47,20 @@ try {
           cwd: appDirectory,
           env: {
             ...process.env,
-            MARIMO_STUDIO_E2E_PORT_OFFSET: String(shard * portStride),
+            [E2E_PORT_OFFSET_ENV]: String(shardPortOffsets[index]),
           },
           stdio: "inherit",
         },
       );
     }),
   );
+  for (const outcome of outcomes) {
+    if (outcome.status === "fulfilled") continue;
+    if (!(stopping && outcome.reason instanceof PreparationCancelled)) {
+      console.error(outcome.reason);
+    }
+    if (!stopping) exitCode = 1;
+  }
 } catch (error) {
   if (!(stopping && error instanceof PreparationCancelled)) {
     console.error(error);

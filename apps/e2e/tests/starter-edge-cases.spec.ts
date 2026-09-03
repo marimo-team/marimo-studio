@@ -6,12 +6,9 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import {
-  addWorkspaceView,
-  buildWorkspaceView,
   captureProjectionRefresh,
   expect,
   expectSupersededRenewalConfig,
-  exportWorkspaceView,
   labeledSlider,
   noDisplayStaticExportUrl,
   recoverRequestAbort,
@@ -68,13 +65,18 @@ const expectEmptyPreview = async (page: Page, candidate: (typeof noDisplayCases)
 test("builds and renders every starter when no cell may display output", async ({
   browserDiagnostics,
   page,
+  studioCli,
 }) => {
   test.setTimeout(240_000);
   for (const candidate of noDisplayCases) {
-    await addWorkspaceView(workspaceNoDisplayNotebookPath, candidate.view, candidate.starter);
-    await buildWorkspaceView(candidate.view, workspaceNoDisplayNotebookPath);
+    await studioCli.addWorkspaceView(
+      workspaceNoDisplayNotebookPath,
+      candidate.view,
+      candidate.starter,
+    );
+    await studioCli.buildWorkspaceView(candidate.view, workspaceNoDisplayNotebookPath);
   }
-  await exportWorkspaceView(
+  await studioCli.exportWorkspaceView(
     "empty-html",
     workspaceNoDisplayNotebookPath,
     workspaceNoDisplayStaticExportPath,
@@ -127,6 +129,7 @@ test("builds and renders every starter when no cell may display output", async (
 test("keeps the active preview usable after a manifestless creation conflict", async ({
   browserDiagnostics,
   page,
+  studioCli,
 }) => {
   const supersededPresentation = browserDiagnostics.expectRequestFailure({
     origin: studioOrigin,
@@ -156,7 +159,7 @@ test("keeps the active preview usable after a manifestless creation conflict", a
   await writeFile(sentinel, "foreign-content", "utf8");
 
   await expect(
-    addWorkspaceView(workspaceNotebookPath, "blocked", "marimo-studio/vanilla:default"),
+    studioCli.addWorkspaceView(workspaceNotebookPath, "blocked", "marimo-studio/vanilla:default"),
   ).rejects.toThrow(/exists without required view\.toml|directory changed/);
   expect(await readFile(sentinel, "utf8")).toBe("foreign-content");
   expect(await preview.locator("html").evaluate(() => globalThis.marimoStudio.identity())).toEqual(
@@ -166,7 +169,11 @@ test("keeps the active preview usable after a manifestless creation conflict", a
   await expect(preview.locator('strong[mo-value="metric"]')).toContainText("21");
 
   await rm(conflict, { recursive: true });
-  await addWorkspaceView(workspaceNotebookPath, "blocked", "marimo-studio/vanilla:default");
+  await studioCli.addWorkspaceView(
+    workspaceNotebookPath,
+    "blocked",
+    "marimo-studio/vanilla:default",
+  );
   await page.getByLabel("Switch view").click();
   await page.getByRole("button", { name: "blocked", exact: true }).click();
   const recovered = await waitForPreview(page);
@@ -183,6 +190,7 @@ test("keeps the active preview usable after a manifestless creation conflict", a
 test("publishes complete projects during concurrent starter creation", async ({
   browserDiagnostics,
   page,
+  studioCli,
 }) => {
   test.setTimeout(180_000);
   const candidates = [
@@ -192,7 +200,11 @@ test("publishes complete projects during concurrent starter creation", async ({
     ["race-svelte-2", "marimo-studio/svelte:default"],
   ] as const;
   const existingViews = new Set(["dashboard", "vanilla-local", "deno-seed"]);
-  await addWorkspaceView(workspaceNotebookPath, "deno-seed", "marimo-studio/react:default");
+  await studioCli.addWorkspaceView(
+    workspaceNotebookPath,
+    "deno-seed",
+    "marimo-studio/react:default",
+  );
   const supersededPresentations = browserDiagnostics.expectRequestFailure({
     origin: studioOrigin,
     method: "GET",
@@ -217,7 +229,9 @@ test("publishes complete projects during concurrent starter creation", async ({
   });
   let complete = false;
   const creation = Promise.all(
-    candidates.map(([view, starter]) => addWorkspaceView(workspaceNotebookPath, view, starter)),
+    candidates.map(([view, starter]) =>
+      studioCli.addWorkspaceView(workspaceNotebookPath, view, starter),
+    ),
   ).finally(() => {
     complete = true;
   });

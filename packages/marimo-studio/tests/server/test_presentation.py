@@ -30,6 +30,7 @@ from marimo_studio.errors._internal import RuntimeSyncError
 from marimo_studio.view_providers import BuildProfile
 
 from ..app_helpers import configured
+from ..async_test_support import wait_for_event
 
 
 class _Watcher:
@@ -261,8 +262,11 @@ def test_development_event_and_snapshot_share_one_typed_publication(
     presentation = NotebookPresentation(studio.notebook, development=coordinator)
     started = Event()
     release = Event()
+    second_waiter = asyncio.Event()
     calls = 0
+    waiters = 0
     native_publish = presentation_service.publish_presentation
+    coordinate_publication = coordinator.publish
 
     def publish(*args: Any, **kwargs: Any):
         nonlocal calls
@@ -273,6 +277,15 @@ def test_development_event_and_snapshot_share_one_typed_publication(
 
     monkeypatch.setattr(development_routes, "_publish_presentation", publish)
     monkeypatch.setattr(presentation_service, "publish_presentation", publish)
+
+    async def observed_publication(*args: Any, **kwargs: Any):
+        nonlocal waiters
+        waiters += 1
+        if waiters == 2:
+            second_waiter.set()
+        return await coordinate_publication(*args, **kwargs)
+
+    monkeypatch.setattr(coordinator, "publish", observed_publication)
 
     async def exercise() -> None:
         try:
@@ -287,7 +300,7 @@ def test_development_event_and_snapshot_share_one_typed_publication(
             )
             assert await asyncio.to_thread(started.wait, 1)
             snapshot = asyncio.create_task(presentation.snapshot_async("dashboard"))
-            await asyncio.sleep(0.05)
+            await wait_for_event(second_waiter)
             release.set()
             event_result, snapshot_result = await asyncio.gather(event, snapshot)
 

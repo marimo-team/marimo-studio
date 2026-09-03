@@ -155,10 +155,14 @@ distribution:
   - *browser_assets
   - "skills/marimo-studio/**"
   - "apps/e2e/fixtures-provider/provider/**"
+  - "scripts/check-release.sh"
+  - "scripts/release.sh"
+  - "scripts/require-release-checks.sh"
   - "scripts/verify-dist.sh"
   - "scripts/verify-installed-wheel.sh"
   - "scripts/verify-installed-package.py"
   - "scripts/verify-external-provider.py"
+  - "scripts/verify-pypi.sh"
   - "scripts/verify-provider-bootstrap.py"
   - "scripts/write-dist-checksums.py"
 

@@ -9,8 +9,6 @@ import {
   studioEditorSessionId,
 } from "./authoring-test-support.ts";
 import {
-  addCollaborativeView,
-  addWorkspaceView,
   collaborativeDashboardHtmlPath,
   collaborativeStudioEntryUrl,
   dashboardHtmlPath,
@@ -90,13 +88,17 @@ const readDashboardSource = async (page: Page): Promise<string> => {
   return response.text();
 };
 
-test("keeps two tabs isolated inside one notebook scope", async ({ browserDiagnostics, page }) => {
+test("keeps two tabs isolated inside one notebook scope", async ({
+  browserDiagnostics,
+  page,
+  studioCli,
+}) => {
   const replacedEventStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
     3,
   );
   const supersededRenewalConfig = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
-  await addWorkspaceView(workspaceNotebookPath, "report");
+  await studioCli.addWorkspaceView(workspaceNotebookPath, "report");
   await page.goto(studioEntryUrl);
   const firstPreview = await waitForPreview(page);
   const second = await page.context().newPage();
@@ -224,9 +226,10 @@ test("shares publication and recovery across two Studio sessions", async ({
   browserDiagnostics,
   collaborativeWorkspace: _collaborativeWorkspace,
   page,
+  studioCli,
 }, testInfo) => {
   test.setTimeout(180_000);
-  await addCollaborativeView("report");
+  await studioCli.addCollaborativeView("report");
   const firstServer = startNotebookServer({
     command: "edit",
     target: collaborativeNotebookPath,

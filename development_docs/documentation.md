@@ -124,8 +124,8 @@ after changing site metadata or build plugins.
 `main`. A `main` build receives the base path from GitHub Pages, uploads
 `apps/docs/.vitepress/dist`, then deploys that exact artifact.
 
-Pull requests prove the production build. Deployment occurs from `main` after
-the build job succeeds.
+Pull requests prove the documentation source and root-based site build. A
+`main` build verifies the Pages base path before deployment.
 
 ## Version parity
 

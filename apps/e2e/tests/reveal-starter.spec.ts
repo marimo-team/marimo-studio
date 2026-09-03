@@ -1,6 +1,4 @@
 import {
-  addWorkspaceView,
-  buildWorkspaceView,
   expect,
   labeledSlider,
   presentationFrame,
@@ -9,10 +7,10 @@ import {
   workspaceNotebookPath,
 } from "./fixture.ts";
 
-test("creates, projects into, and navigates a Reveal.js deck", async ({ page }) => {
+test("creates, projects into, and navigates a Reveal.js deck", async ({ page, studioCli }) => {
   test.setTimeout(180_000);
-  await addWorkspaceView(workspaceNotebookPath, "slides", "marimo-studio/react:reveal");
-  await buildWorkspaceView("slides");
+  await studioCli.addWorkspaceView(workspaceNotebookPath, "slides", "marimo-studio/react:reveal");
+  await studioCli.buildWorkspaceView("slides");
 
   await page.goto("/studio/slides/?file=notebook.py");
   const preview = await waitForPreview(page);

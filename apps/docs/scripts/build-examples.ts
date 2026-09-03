@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rename, rm, stat } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { documentationExampleFamilies } from "../examples.ts";
+import { publishExamples } from "./example-publication.ts";
 
 interface ExportResult {
   entrypoint: string;
@@ -154,34 +155,6 @@ const exportNotebook = async (
   }
 };
 
-const publish = async (stagingRoot: string): Promise<void> => {
-  const previousRoot = join(cacheRoot, `docs-examples-previous-${process.pid}`);
-  await rm(previousRoot, { force: true, recursive: true });
-
-  let movedPrevious = false;
-  try {
-    await rename(destinationRoot, previousRoot);
-    movedPrevious = true;
-  } catch (error) {
-    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
-      throw error;
-    }
-  }
-
-  try {
-    await rename(stagingRoot, destinationRoot);
-  } catch (error) {
-    if (movedPrevious) {
-      await rename(previousRoot, destinationRoot);
-    }
-    throw error;
-  }
-
-  if (movedPrevious) {
-    await rm(previousRoot, { force: true, recursive: true });
-  }
-};
-
 const main = async (): Promise<void> => {
   await mkdir(cacheRoot, { recursive: true });
   const stagingRoot = await mkdtemp(join(cacheRoot, "docs-examples-"));
@@ -210,7 +183,11 @@ const main = async (): Promise<void> => {
       }
     }
 
-    await publish(stagingRoot);
+    await publishExamples({
+      destination: destinationRoot,
+      previous: join(cacheRoot, `docs-examples-previous-${process.pid}`),
+      staging: stagingRoot,
+    });
     console.log(
       `Exported ${documentationExampleFamilies.length} static notebooks and ${documentationExampleFamilies.reduce((count, family) => count + family.views.length, 0)} live documentation views.`,
     );

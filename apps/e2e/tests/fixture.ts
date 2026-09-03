@@ -8,10 +8,8 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
-import { execFile as execFileCallback } from "node:child_process";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { promisify } from "node:util";
 import { z } from "zod";
 
 import { prepareCollaborativeWorkspace } from "../scripts/collaborative-workspace.mjs";
@@ -25,7 +23,6 @@ import {
   notebookPath,
   noDisplayNotebookPath,
   noDisplayStaticExportDirectory,
-  repositoryDirectory,
   workspaceDirectory,
 } from "../scripts/paths.mjs";
 import {
@@ -39,6 +36,7 @@ import {
   type WorkspaceEventStreamCapture,
 } from "./browser-diagnostics.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
+import { StudioCli } from "./studio-cli.ts";
 
 export {
   expectSupersededRenewalConfig,
@@ -59,13 +57,11 @@ export {
   type WorkspaceEventStreamCapture,
 } from "./browser-diagnostics.ts";
 
-const execFile = promisify(execFileCallback);
 const dashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/notebook/dashboard");
 const collaborativeDashboardDirectory = resolve(
   collaborativeWorkspaceDirectory,
   "__marimo__/studio/notebook/dashboard",
 );
-const collaborativeNotebookPath = resolve(collaborativeWorkspaceDirectory, "notebook.py");
 const plainDashboardDirectory = resolve(workspaceDirectory, "__marimo__/studio/plain/dashboard");
 const plainReportDirectory = resolve(workspaceDirectory, "__marimo__/studio/plain/report");
 const removeTree = (path: string) =>
@@ -105,15 +101,6 @@ export const collaborativeStudioEntryUrl = `${e2eNetwork.main.collaboration.orig
 export const staticExportUrl = `${e2eNetwork.main.exported.origin}/src/index.html`;
 export const noDisplayStaticExportUrl = `${e2eNetwork.main.exported.origin}/no-display/index.html`;
 
-const workspaceCheckSchema = z.object({ ok: z.boolean() });
-const workspaceShowSchema = z.object({
-  schema: z.literal(1),
-  notebook: z.string(),
-  view: z.string(),
-  generation: z.number().int().positive(),
-  client_id: z.string(),
-  session_id: z.string(),
-});
 const sessionAdminBootstrapSchema = z.object({
   serverToken: z.string(),
   urls: z.object({ views: z.string() }),
@@ -167,64 +154,6 @@ export const hostedWorkspaceNotebookPath = hostedNotebookPath;
 
 export const readWorkspaceFile = (path: string) => readFile(path, "utf8");
 export const writeWorkspaceFile = (path: string, content: string) => writeFile(path, content);
-
-const runStudioCli = (args: string[]) =>
-  execFile("uv", ["run", "--frozen", "--group", "e2e", "marimo-studio", ...args], {
-    cwd: repositoryDirectory,
-  });
-
-export const bindWorkspaceCell = (alias: string, cell: number) =>
-  runStudioCli([
-    "notebook",
-    "bind",
-    alias,
-    "--target",
-    workspaceNotebookPath,
-    "--cell",
-    String(cell),
-  ]);
-
-export const addWorkspaceView = (target: string, name: string, starter?: string) =>
-  runStudioCli([
-    "view",
-    "create",
-    name,
-    "--target",
-    target,
-    ...(starter ? ["--starter", starter] : []),
-  ]);
-
-export const buildWorkspaceView = (name: string, target = workspaceNotebookPath) =>
-  runStudioCli(["view", "build", name, "--target", target, "--profile", "development"]);
-
-export const exportWorkspaceView = (name: string, target: string, output: string) =>
-  runStudioCli(["view", "export", name, "--target", target, "--output", output]);
-
-export const addCollaborativeView = (name: string) =>
-  runStudioCli(["view", "create", name, "--target", collaborativeNotebookPath]);
-
-export const activateWorkspaceView = async (view: string, browserClient?: string) => {
-  const args = [
-    "view",
-    "show",
-    view,
-    "--target",
-    workspaceNotebookPath,
-    "--server",
-    `${studioOrigin}?file=notebook.py`,
-    "--json",
-  ];
-  if (browserClient) {
-    args.push("--browser-client", browserClient);
-  }
-  const { stdout } = await runStudioCli(args);
-  return workspaceShowSchema.parse(JSON.parse(stdout));
-};
-
-export const checkWorkspace = async (): Promise<boolean> => {
-  const { stdout } = await runStudioCli(["validate", "--target", workspaceNotebookPath, "--json"]);
-  return workspaceCheckSchema.parse(JSON.parse(stdout)).ok;
-};
 
 declare global {
   var __e2eRuntimeMarker: string | undefined;
@@ -632,7 +561,16 @@ export const test = base.extend<{
   browserDiagnostics: BrowserDiagnosticsScope;
   collaborativeWorkspace: void;
   pyodideAssets: void;
+  studioCli: StudioCli;
 }>({
+  studioCli: async ({ browserName: _browserName }, use) => {
+    const studioCli = new StudioCli();
+    try {
+      await use(studioCli);
+    } finally {
+      await studioCli.close();
+    }
+  },
   collaborativeWorkspace: async ({ browserName: _browserName }, use) => {
     await prepareCollaborativeWorkspace();
     await use();

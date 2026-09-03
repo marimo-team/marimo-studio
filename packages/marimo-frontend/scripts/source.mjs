@@ -10,6 +10,9 @@ import { readMarimoSource } from "./metadata.mjs";
 const exec = promisify(execFile);
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = resolve(packageRoot, "../..");
+const corepackPackagePath = fileURLToPath(import.meta.resolve("corepack/package.json"));
+const corepackPackage = JSON.parse(readFileSync(corepackPackagePath, "utf8"));
+const corepackExecutable = resolve(dirname(corepackPackagePath), corepackPackage.bin.corepack);
 const cacheRoot = join(packageRoot, ".cache");
 const checkout = join(cacheRoot, "marimo");
 const metadataPath = join(cacheRoot, "source.json");
@@ -59,14 +62,11 @@ const run = (command, args, cwd) =>
 
 export const pnpmInvocation = (
   args,
-  { platform = process.platform, commandInterpreter = process.env.ComSpec } = {},
-) =>
-  platform === "win32"
-    ? {
-        command: commandInterpreter || "cmd.exe",
-        args: ["/d", "/s", "/c", "corepack", "pnpm", ...args],
-      }
-    : { command: "corepack", args: ["pnpm", ...args] };
+  { nodeExecutable = process.execPath, corepackExecutable: corepackCli = corepackExecutable } = {},
+) => ({
+  command: nodeExecutable,
+  args: [corepackCli, "pnpm", ...args],
+});
 
 const runPnpm = async (args, cwd) => {
   const invocation = pnpmInvocation(args);

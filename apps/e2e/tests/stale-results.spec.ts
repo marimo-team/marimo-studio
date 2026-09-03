@@ -4,9 +4,6 @@ import { e2eNetwork } from "../scripts/network.mjs";
 import { collaborativeWorkspaceDirectory } from "../scripts/paths.mjs";
 import { studioClientId } from "./authoring-test-support.ts";
 import {
-  addCollaborativeView,
-  addWorkspaceView,
-  buildWorkspaceView,
   collaborativeCreatedViewHtmlPath,
   expect,
   labeledSlider,
@@ -54,8 +51,9 @@ test("cancels one client's held old-view request without changing the peer view"
   browserDiagnostics,
   collaborativeWorkspace: _collaborativeWorkspace,
   page,
+  studioCli,
 }) => {
-  await addCollaborativeView("report");
+  await studioCli.addCollaborativeView("report");
   const reportPath = collaborativeCreatedViewHtmlPath("report");
   const reportSource = await readWorkspaceFile(reportPath);
   await writeWorkspaceFile(
@@ -205,13 +203,14 @@ test("cancels one client's held old-view request without changing the peer view"
 test("cancels a held old-view request without changing current or cached view state", async ({
   browserDiagnostics,
   page,
+  studioCli,
 }) => {
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
     5,
   );
-  await addWorkspaceView(workspaceNotebookPath, "slow-report");
-  await addWorkspaceView(workspaceNotebookPath, "next-report");
+  await studioCli.addWorkspaceView(workspaceNotebookPath, "slow-report");
+  await studioCli.addWorkspaceView(workspaceNotebookPath, "next-report");
   await writeWorkspaceFile(
     workspaceCreatedViewHtmlPath("slow-report"),
     valueReportSource("Slow kernel report"),
@@ -220,8 +219,8 @@ test("cancels a held old-view request without changing current or cached view st
     workspaceCreatedViewHtmlPath("next-report"),
     valueReportSource("Next kernel report"),
   );
-  await buildWorkspaceView("slow-report");
-  await buildWorkspaceView("next-report");
+  await studioCli.buildWorkspaceView("slow-report");
+  await studioCli.buildWorkspaceView("next-report");
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   const completedHandoffs = browserDiagnostics.expectRequestAbort({

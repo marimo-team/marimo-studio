@@ -1,7 +1,6 @@
 import { chromium, expect as playwrightExpect, test as playwrightTest } from "@playwright/test";
 
 import {
-  addWorkspaceView,
   dashboardHtmlPath,
   expect,
   labeledSlider,
@@ -273,13 +272,14 @@ playwrightTest("keeps the preserved wrapper nonblank across back-forward restora
 test("keeps direct view history hot and starts a fresh session for a new public query", async ({
   browserDiagnostics,
   page,
+  studioCli,
 }) => {
   const notebook = await readWorkspaceFile(workspaceNotebookPath);
   await writeWorkspaceFile(
     workspaceNotebookPath,
     notebook.replace("# preserve_session = false", "# preserve_session = true"),
   );
-  await addWorkspaceView(workspaceNotebookPath, "report");
+  await studioCli.addWorkspaceView(workspaceNotebookPath, "report");
   const dashboard = await readWorkspaceFile(dashboardHtmlPath);
   await writeWorkspaceFile(
     dashboardHtmlPath,

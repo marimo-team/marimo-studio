@@ -3,6 +3,7 @@
 # dependencies = [
 #     "marimo==0.24.0",
 #     "polars==1.33.1",
+#     "tzdata==2026.3",
 # ]
 #
 # [tool.marimo-studio]
