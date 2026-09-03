@@ -28,7 +28,6 @@ python_inputs: &python_inputs
 
 frontend_inputs: &frontend_inputs
   - *ci_control
-  - ".node-version"
   - "package.json"
   - "pnpm-lock.yaml"
   - "pnpm-workspace.yaml"
@@ -67,7 +66,6 @@ browser_product: &browser_product
 
 browser_infra: &browser_infra
   - *browser_control
-  - ".node-version"
   - ".python-version"
   - "package.json"
   - "pnpm-lock.yaml"
@@ -109,7 +107,6 @@ pages:
   - "skills/marimo-studio/**"
   - "examples/**"
   - *browser_product
-  - ".node-version"
   - ".python-version"
   - "package.json"
   - "pnpm-lock.yaml"
@@ -142,7 +139,6 @@ frontend_contracts:
 
 distribution:
   - *ci_control
-  - ".node-version"
   - ".python-version"
   - "package.json"
   - "pnpm-lock.yaml"
@@ -168,7 +164,6 @@ distribution:
 
 installed_distribution:
   - *ci_control
-  - ".node-version"
   - ".python-version"
   - "package.json"
   - "pnpm-lock.yaml"

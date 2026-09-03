@@ -1,5 +1,5 @@
 name: Set up JavaScript workspace
-description: Install the pinned Node.js toolchain and locked pnpm workspace.
+description: Install the supported Node.js toolchain and locked pnpm workspace.
 
 inputs:
   prepare-marimo-frontend:
@@ -20,7 +20,7 @@ runs:
     - name: Set up Vite+
       uses: voidzero-dev/setup-vp@1b32467adbe183473499fd9d5d372c3ed9641754 # v1.18.0
       with:
-        node-version-file: .node-version
+        node-version-file: package.json
         version: 0.2.4
         cache: true
         sfw: true
