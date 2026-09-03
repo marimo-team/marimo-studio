@@ -13,8 +13,8 @@ artifact, projection, and runtime ownership boundaries.
 ## Set up
 
 The repository uses Python, `uv`, Node.js, pnpm, Deno, and Chromium. Their
-supported versions are pinned in `pyproject.toml`, `.node-version`,
-`package.json`, and the lockfiles.
+supported versions are declared in `pyproject.toml`, `package.json`, and the
+lockfiles.
 
 ```console
 make setup
