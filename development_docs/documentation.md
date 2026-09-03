@@ -80,9 +80,15 @@ Serve the same source locally with:
 make docs-serve
 ```
 
-The development server runs at `http://127.0.0.1:4173/` with an empty
-deployment base. Inspect the landing page, changed pages, navigation, search,
-code blocks, tables, examples, and local links at desktop and narrow widths.
+[Portless](https://portless.sh/) assigns the VitePress server an available port
+and exposes it at `https://docs.marimo-studio.localhost/`. Linked Git worktrees
+receive a branch prefix, so each running workspace has its own URL. Use the URL
+printed by `make docs-serve`. On its first HTTPS run, Portless may request local
+administrator access to bind port 443 and trust its local certificate authority.
+
+The development server uses an empty deployment base. Inspect the landing page,
+changed pages, navigation, search, code blocks, tables, examples, and local
+links at desktop and narrow widths.
 
 Run `make docs-examples` when iterating on exported example inputs. Run
 `make build` first when presentation or Browser runtime assets changed.

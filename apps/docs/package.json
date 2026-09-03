@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "pnpm test && pnpm examples:build && vitepress build && pnpm verify",
-    "dev": "pnpm examples:build && vitepress dev --host 127.0.0.1 --port 4173 --strictPort",
+    "dev": "portless",
+    "dev:server": "pnpm examples:build && vitepress dev",
     "examples:build": "node scripts/build-examples.ts",
     "preview": "vitepress preview --host 127.0.0.1 --port 4173 --strictPort",
     "test": "vp test scripts/source-integrity.test.ts",
@@ -14,11 +15,16 @@
   "devDependencies": {
     "@iconify/vue": "catalog:",
     "@types/node": "catalog:",
+    "portless": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:",
     "vitepress": "catalog:",
     "vitepress-plugin-llms": "1.13.2",
     "vue": "catalog:"
+  },
+  "portless": {
+    "name": "docs.marimo-studio",
+    "script": "dev:server"
   }
 }

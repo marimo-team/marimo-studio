@@ -88,7 +88,7 @@ docs-examples: _frontend-ready build ## Export examples for the documentation si
 docs-build: _frontend-ready build ## Build the VitePress documentation.
 	$(VP) run --filter @marimo-studio/docs build
 
-docs-serve: _frontend-ready build ## Serve documentation at http://127.0.0.1:4173/.
+docs-serve: _frontend-ready build ## Serve documentation through Portless.
 	BASE_PATH= $(VP) run --filter @marimo-studio/docs dev
 
 package: build ## Build and validate the wheel and source distribution.

@@ -40,6 +40,11 @@ const llmsPlugins = llmstxt({
 const viteConfig: UserConfig["vite"] = {
   plugins: llmsPlugins,
   publicDir,
+  server: {
+    host: "127.0.0.1",
+    port: Number(process.env.PORT ?? 4173),
+    strictPort: true,
+  },
 };
 export default defineConfig({
   base: basePath ? `${basePath}/` : "/",
