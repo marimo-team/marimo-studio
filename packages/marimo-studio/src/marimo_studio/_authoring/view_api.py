@@ -21,6 +21,7 @@ from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.records import ValidationReport
 from marimo_studio._views.api import ViewRemovalResult
 from marimo_studio._views.records import ViewBuild, ViewDocument, ViewInspection
+from marimo_studio._workspace.ownership import ObservedViewOwner, PresentViewOwner
 from marimo_studio.errors import WorkspaceGenerationConflictError
 from marimo_studio.view_providers import BuildProfile
 
@@ -33,8 +34,7 @@ class View:
 
     workspace: WorkspaceHandle
     name: str
-    catalog_generation: str | None
-    generation: str | None
+    _owner: ObservedViewOwner | None
 
     def __init__(self, *_args: object, **_kwargs: object) -> None:
         raise TypeError("Create views through a Studio authoring workspace")
@@ -45,15 +45,23 @@ class View:
         workspace: WorkspaceHandle,
         name: str,
         *,
-        catalog_generation: str | None,
-        generation: str | None,
+        owner: ObservedViewOwner | None,
     ) -> _View:
         view = object.__new__(cls)
         object.__setattr__(view, "workspace", workspace)
         object.__setattr__(view, "name", name)
-        object.__setattr__(view, "catalog_generation", catalog_generation)
-        object.__setattr__(view, "generation", generation)
+        object.__setattr__(view, "_owner", owner)
         return view
+
+    @property
+    def catalog_generation(self) -> str | None:
+        """Return the catalog generation captured by this handle."""
+        return self._owner.catalog_generation if self._owner is not None else None
+
+    @property
+    def generation(self) -> str | None:
+        """Return the captured generation when the view was present."""
+        return self._owner.view_generation if self._owner is not None else None
 
     async def inspect(self) -> ViewInspection:
         """Inspect source documents, diagnostics, and build state."""
@@ -140,13 +148,13 @@ class View:
 
     async def remove(self) -> ViewRemovalResult:
         """Remove this view and return the remaining workspace identity."""
-        if self.catalog_generation is None or self.generation is None:
+        if not isinstance(self._owner, PresentViewOwner):
             raise WorkspaceGenerationConflictError()
         result = await remove_view(
             self.workspace.notebook,
             self.name,
-            expected_catalog_generation=self.catalog_generation,
-            expected_generation=self.generation,
+            expected_catalog_generation=self._owner.catalog_generation,
+            expected_generation=self._owner.view_generation,
         )
         self.workspace._capture_catalog_generation(result.catalog_generation)
         return result

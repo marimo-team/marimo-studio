@@ -362,12 +362,7 @@ export class WorkspaceEventCoordinator {
     let acknowledged = false;
     const connectionGeneration = this.connectionGeneration;
     try {
-      acknowledged = await this.activate(
-        request.view,
-        request.generation,
-        reloadActive,
-        owner.signal,
-      );
+      acknowledged = await this.activate(request, reloadActive, owner.signal);
     } finally {
       clearTimeout(timeout);
       this.activationInFlight.delete(request.generation);
@@ -386,11 +381,11 @@ export class WorkspaceEventCoordinator {
   }
 
   private async activate(
-    view: string,
-    generation: number,
+    request: ActiveViewRequest,
     reloadActive: boolean,
     signal: AbortSignal,
   ): Promise<boolean> {
+    const { generation, view } = request;
     const previousView = this.options.views.getSnapshot().current;
     let selected = false;
     try {
@@ -422,7 +417,7 @@ export class WorkspaceEventCoordinator {
       if (!this.isCurrentActivation(generation, signal)) {
         return false;
       }
-      await this.options.acknowledge(generation, view, signal);
+      await this.options.acknowledge(request, signal);
       return this.isCurrentActivation(generation, signal);
     } catch (error) {
       if (

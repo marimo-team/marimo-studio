@@ -13,14 +13,12 @@ validated.
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 
 from marimo_studio._compat.kernel_values.authorization_key import (
-    projection_authorization_key,
+    sign_kernel_authorization,
+    verify_kernel_authorization,
 )
 from marimo_studio._notebook.records import CellRef
 from marimo_studio._projections.resolution import ResolvedProjection
@@ -150,17 +148,6 @@ def _payload(
     return value
 
 
-def _signature(payload: dict[str, object]) -> str:
-    encoded = json.dumps(
-        payload,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hmac.new(projection_authorization_key(), encoded, hashlib.sha256).hexdigest()
-
-
 def authorized_value_arguments(
     revision: str,
     projections: tuple[BoundProjection, ...],
@@ -187,7 +174,7 @@ def authorized_value_arguments(
         "projections": records,
         "active_projections": active,
         "consumer_id": consumer_id,
-        "authorization": _signature(payload),
+        "authorization": sign_kernel_authorization(payload),
     }
 
 
@@ -212,7 +199,7 @@ def authorized_output_arguments(
         "projections": records,
         "active_projections": active,
         "consumer_id": consumer_id,
-        "authorization": _signature(payload),
+        "authorization": sign_kernel_authorization(payload),
     }
 
 
@@ -437,7 +424,7 @@ def verify_value_ownership_arguments(
         active_projections=list(active_projections),
         consumer_id=consumer_id,
     )
-    if not hmac.compare_digest(authorization, _signature(payload)):
+    if not verify_kernel_authorization(authorization, payload):
         raise ProjectionAuthorizationError("Projection authorization is invalid.")
     return _authorized_projections(specifications, bindings), _authorized_projections(
         active, active_bindings
@@ -483,7 +470,7 @@ def verify_output_arguments(
         active_projections=list(active_projections),
         consumer_id=consumer_id,
     )
-    if not hmac.compare_digest(authorization, _signature(payload)):
+    if not verify_kernel_authorization(authorization, payload):
         raise ProjectionAuthorizationError("Projection authorization is invalid.")
     return _authorized_projections(specifications, bindings), _authorized_projections(
         active, active_bindings

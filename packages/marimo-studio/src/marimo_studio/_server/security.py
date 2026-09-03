@@ -11,6 +11,8 @@ from urllib.parse import urlsplit
 from marimo_studio.errors import ConfigurationError
 
 ALLOWED_EMBED_ORIGINS_ENV = "MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS"
+_ALLOWED_EMBED_ORIGINS_MAX_BYTES = 4096
+_ALLOWED_EMBED_ORIGINS_MAX_ENTRIES = 32
 _HOST_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", re.IGNORECASE)
 
 
@@ -29,12 +31,41 @@ DEFAULT_SECURITY_POLICY = SecurityPolicy()
 
 def parse_allowed_embed_origins(value: str) -> SecurityPolicy:
     """Return a security policy from the configured comma-separated origins."""
-    if value == "":
+    raw_origins = () if value == "" else tuple(value.split(","))
+    return _security_policy(
+        raw_origins,
+        encoded=value,
+    )
+
+
+def _security_policy(
+    raw_origins: tuple[str, ...],
+    *,
+    encoded: str,
+) -> SecurityPolicy:
+    count = len(raw_origins)
+    if count > _ALLOWED_EMBED_ORIGINS_MAX_ENTRIES:
+        raise ConfigurationError(
+            f"{ALLOWED_EMBED_ORIGINS_ENV} contains {count} origin entries. "
+            f"Maximum is {_ALLOWED_EMBED_ORIGINS_MAX_ENTRIES}."
+        )
+    try:
+        encoded_bytes = len(encoded.encode("utf-8"))
+    except UnicodeError as error:
+        raise ConfigurationError(
+            f"{ALLOWED_EMBED_ORIGINS_ENV} contains invalid Unicode"
+        ) from error
+    if encoded_bytes > _ALLOWED_EMBED_ORIGINS_MAX_BYTES:
+        raise ConfigurationError(
+            f"{ALLOWED_EMBED_ORIGINS_ENV} contains {encoded_bytes} UTF-8 bytes. "
+            f"Maximum is {_ALLOWED_EMBED_ORIGINS_MAX_BYTES}."
+        )
+    if not raw_origins:
         return DEFAULT_SECURITY_POLICY
 
     origins: list[Origin] = []
     seen: set[str] = set()
-    for raw_origin in value.split(","):
+    for raw_origin in raw_origins:
         try:
             origin = _canonical_origin(raw_origin)
         except (UnicodeError, ValueError) as error:

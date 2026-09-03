@@ -19,6 +19,10 @@ from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._browser_client.validation_protocol import (
     parse_validation_evidence as parse_validation_evidence,
 )
+from marimo_studio._workspace.ownership import (
+    ObservedViewOwner,
+    observed_view_owner,
+)
 from marimo_studio.errors import CapabilityInputError, ProtocolError
 
 
@@ -28,6 +32,7 @@ class ViewShowRequest:
 
     view: str
     browser_client: str | None = None
+    owner: ObservedViewOwner | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.view, str) or not self.view:
@@ -44,16 +49,36 @@ class ViewShowRequest:
                 "browser_client",
                 "browser_client must be a non-empty string or null",
             )
+        if self.owner is not None:
+            _require_owner_generation(
+                "catalog_generation",
+                self.owner.catalog_generation,
+            )
+            if self.owner.view_generation is not None:
+                _require_owner_generation(
+                    "view_generation",
+                    self.owner.view_generation,
+                )
 
     def to_dict(self) -> dict[str, object]:
-        return {"schema": 1, "browser_client": self.browser_client}
+        payload: dict[str, object] = {
+            "schema": 1,
+            "browser_client": self.browser_client,
+        }
+        if self.owner is not None:
+            payload["catalog_generation"] = self.owner.catalog_generation
+            payload["view_generation"] = self.owner.view_generation
+        return payload
 
     @classmethod
     def from_dict(cls, view: str, payload: object) -> ViewShowRequest:
         schema = payload.get("schema") if isinstance(payload, dict) else None
+        required = {"schema", "browser_client"}
+        allowed = {*required, "catalog_generation", "view_generation"}
         if (
             not isinstance(payload, dict)
-            or set(payload) != {"schema", "browser_client"}
+            or not required.issubset(payload)
+            or not set(payload).issubset(allowed)
             or not isinstance(schema, int)
             or isinstance(schema, bool)
             or schema != 1
@@ -63,7 +88,32 @@ class ViewShowRequest:
                 "request",
                 "The show request must contain schema and browser_client",
             )
-        return cls(view=view, browser_client=payload.get("browser_client"))
+        has_catalog_owner = "catalog_generation" in payload
+        has_view_owner = "view_generation" in payload
+        if has_catalog_owner != has_view_owner:
+            missing = (
+                "catalog_generation" if not has_catalog_owner else "view_generation"
+            )
+            raise CapabilityInputError(
+                "invalid-show-request",
+                missing,
+                "catalog_generation and view_generation must be provided together",
+            )
+        owner = None
+        if has_catalog_owner:
+            catalog_generation = payload.get("catalog_generation")
+            view_generation = payload.get("view_generation")
+            _require_owner_generation("catalog_generation", catalog_generation)
+            if view_generation is not None:
+                _require_owner_generation("view_generation", view_generation)
+            assert isinstance(catalog_generation, str)
+            assert isinstance(view_generation, str) or view_generation is None
+            owner = observed_view_owner(catalog_generation, view_generation)
+        return cls(
+            view=view,
+            browser_client=payload.get("browser_client"),
+            owner=owner,
+        )
 
 
 def parse_connection_token(payload: dict[str, Any], notebook: Path) -> str:
@@ -126,3 +176,16 @@ def _nonempty(value: object) -> bool:
 
 def _nonnegative_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _require_owner_generation(field: str, generation: object) -> None:
+    if (
+        not isinstance(generation, str)
+        or len(generation) != 64
+        or any(character not in "0123456789abcdef" for character in generation)
+    ):
+        raise CapabilityInputError(
+            "invalid-show-request",
+            field,
+            f"{field} must be a 64-character lowercase hexadecimal string",
+        )

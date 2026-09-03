@@ -1,12 +1,27 @@
-import { parseActivationAckResponse } from "@marimo-studio/protocol/development-events";
+import {
+  parseActivationAckResponse,
+  type ActiveViewRequest,
+} from "@marimo-studio/protocol/development-events";
 import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 export type AcknowledgeViewActivation = (
-  generation: number,
-  view: string,
+  activation: ActiveViewRequest,
   signal: AbortSignal,
 ) => Promise<void>;
+
+interface ActivationAcknowledgement {
+  readonly schema: 1;
+  readonly clientId: string;
+  readonly view: string;
+}
+
+type ActivationAcknowledgementRequest =
+  | ActivationAcknowledgement
+  | (ActivationAcknowledgement & {
+      readonly catalogGeneration: string;
+      readonly viewGeneration: string | null;
+    });
 
 export class ViewActivationAcknowledgementError extends Error {
   constructor(
@@ -101,11 +116,25 @@ const acknowledge = async (
 
 export const createViewActivationRemote =
   (agentUrl: string, serverToken: string, clientId: string): AcknowledgeViewActivation =>
-  async (generation, view, signal) => {
+  async (activation, signal) => {
+    const owner = activation.owner;
+    const acknowledgement = {
+      schema: 1,
+      clientId,
+      view: activation.view,
+    } as const;
+    const request: ActivationAcknowledgementRequest =
+      owner === undefined
+        ? acknowledgement
+        : {
+            ...acknowledgement,
+            catalogGeneration: owner.catalogGeneration,
+            viewGeneration: owner.kind === "present" ? owner.viewGeneration : null,
+          };
     await acknowledge(
-      appendUrlPath(agentUrl, `activations/${generation}/ack`, globalThis.location.href),
+      appendUrlPath(agentUrl, `activations/${activation.generation}/ack`, globalThis.location.href),
       serverToken,
-      JSON.stringify({ schema: 1, clientId, view }),
+      JSON.stringify(request),
       signal,
     );
   };

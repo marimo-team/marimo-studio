@@ -123,6 +123,17 @@ test("development event parsers reject malformed browser contracts", () => {
   assert.equal(parsePresentationChange('{"kind":"presentation"}'), undefined);
   assert.equal(parsePresentationBaseline('{"schema":1,"view":"dashboard"}'), undefined);
   assert.equal(parseActiveViewRequest('{"schema":1,"view":""}'), undefined);
+  assert.equal(
+    parseActiveViewRequest(
+      JSON.stringify({
+        schema: 1,
+        generation: 1,
+        view: "report",
+        catalogGeneration: "a".repeat(64),
+      }),
+    ),
+    undefined,
+  );
   assert.equal(parseActivationAckResponse({ schema: 1, outcome: "unknown" }), undefined);
   assert.equal(
     parseEditorSessionBinding(
@@ -163,6 +174,45 @@ test("development event parsers reject malformed browser contracts", () => {
     [retained],
   );
   assert.deepEqual(parseSourceChanges("invalid"), []);
+});
+
+test("active view requests discriminate absent and present owners", () => {
+  const catalogGeneration = "a".repeat(64);
+  const viewGeneration = "b".repeat(64);
+  assert.deepEqual(
+    parseActiveViewRequest(
+      JSON.stringify({
+        schema: 1,
+        generation: 1,
+        view: "report",
+        catalogGeneration,
+        viewGeneration: null,
+      }),
+    ),
+    {
+      schema: 1,
+      generation: 1,
+      view: "report",
+      owner: { kind: "absent", catalogGeneration },
+    },
+  );
+  assert.deepEqual(
+    parseActiveViewRequest(
+      JSON.stringify({
+        schema: 1,
+        generation: 2,
+        view: "report",
+        catalogGeneration,
+        viewGeneration,
+      }),
+    ),
+    {
+      schema: 1,
+      generation: 2,
+      view: "report",
+      owner: { kind: "present", catalogGeneration, viewGeneration },
+    },
+  );
 });
 
 test("editor document mutations require the exact bounded schema", () => {

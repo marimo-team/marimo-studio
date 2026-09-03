@@ -108,7 +108,7 @@ export const setup = (
   };
   const source = { reconcile: vi.fn(), externalChanges: vi.fn() };
   const acknowledge = vi.fn(
-    async (_generation: number, _view: string, _signal: AbortSignal) => undefined,
+    async (_activation: ActiveViewRequest, _signal: AbortSignal) => undefined,
   );
   if (failFirstActivation) {
     acknowledge.mockRejectedValueOnce(new Error("temporary acknowledgement failure"));

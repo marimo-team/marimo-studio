@@ -23,7 +23,7 @@ it("acknowledges an activation with its browser identity", async () => {
     "browser-client-1234",
   );
 
-  await acknowledge(9, "report", new AbortController().signal);
+  await acknowledge({ schema: 1, generation: 9, view: "report" }, new AbortController().signal);
 
   expect(fetch).toHaveBeenCalledWith(
     expect.stringContaining("/_marimo-studio/activations/9/ack"),
@@ -33,6 +33,80 @@ it("acknowledges an activation with its browser identity", async () => {
         schema: 1,
         clientId: "browser-client-1234",
         view: "report",
+      }),
+    }),
+  );
+});
+
+it("binds an activation acknowledgement to its observed view owner", async () => {
+  const fetch = vi.fn<JsonFetch>(async () =>
+    Response.json({ schema: 1, outcome: "applied" }, { status: 200 }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const acknowledge = createViewActivationRemote(
+    "/_marimo-studio",
+    "server-token",
+    "browser-client-1234",
+  );
+
+  await acknowledge(
+    {
+      schema: 1,
+      generation: 10,
+      view: "report",
+      owner: {
+        kind: "present",
+        catalogGeneration: "a".repeat(64),
+        viewGeneration: "b".repeat(64),
+      },
+    },
+    new AbortController().signal,
+  );
+
+  expect(fetch).toHaveBeenCalledWith(
+    expect.stringContaining("/_marimo-studio/activations/10/ack"),
+    expect.objectContaining({
+      body: JSON.stringify({
+        schema: 1,
+        clientId: "browser-client-1234",
+        view: "report",
+        catalogGeneration: "a".repeat(64),
+        viewGeneration: "b".repeat(64),
+      }),
+    }),
+  );
+});
+
+it("acknowledges a catalog-owned absent view name", async () => {
+  const fetch = vi.fn<JsonFetch>(async () =>
+    Response.json({ schema: 1, outcome: "applied" }, { status: 200 }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const acknowledge = createViewActivationRemote(
+    "/_marimo-studio",
+    "server-token",
+    "browser-client-1234",
+  );
+
+  await acknowledge(
+    {
+      schema: 1,
+      generation: 11,
+      view: "report",
+      owner: { kind: "absent", catalogGeneration: "a".repeat(64) },
+    },
+    new AbortController().signal,
+  );
+
+  expect(fetch).toHaveBeenCalledWith(
+    expect.stringContaining("/_marimo-studio/activations/11/ack"),
+    expect.objectContaining({
+      body: JSON.stringify({
+        schema: 1,
+        clientId: "browser-client-1234",
+        view: "report",
+        catalogGeneration: "a".repeat(64),
+        viewGeneration: null,
       }),
     }),
   );
@@ -65,7 +139,7 @@ it("retries when an activation acknowledgement body stalls", async () => {
   );
 
   const owner = new AbortController();
-  const acknowledged = acknowledge(11, "report", owner.signal);
+  const acknowledged = acknowledge({ schema: 1, generation: 11, view: "report" }, owner.signal);
   await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
   await vi.advanceTimersByTimeAsync(10_100);
   await acknowledged;
@@ -89,7 +163,10 @@ it("retries an activation acknowledgement while the browser binding settles", as
     "browser-client-1234",
   );
 
-  const acknowledged = acknowledge(12, "report", new AbortController().signal);
+  const acknowledged = acknowledge(
+    { schema: 1, generation: 12, view: "report" },
+    new AbortController().signal,
+  );
   await vi.advanceTimersByTimeAsync(100);
   await acknowledged;
 
@@ -107,9 +184,9 @@ it("does not retry a rejected activation acknowledgement", async () => {
     "browser-client-1234",
   );
 
-  await expect(acknowledge(13, "report", new AbortController().signal)).rejects.toMatchObject({
-    outcome: "rejected",
-  });
+  await expect(
+    acknowledge({ schema: 1, generation: 13, view: "report" }, new AbortController().signal),
+  ).rejects.toMatchObject({ outcome: "rejected" });
 
   expect(fetch).toHaveBeenCalledOnce();
 });
@@ -126,7 +203,10 @@ it("reports uncertainty when every acknowledgement response is lost", async () =
     "browser-client-1234",
   );
 
-  const result = acknowledge(14, "report", new AbortController().signal);
+  const result = acknowledge(
+    { schema: 1, generation: 14, view: "report" },
+    new AbortController().signal,
+  );
   const rejected = expect(result).rejects.toBeInstanceOf(ViewActivationAcknowledgementError);
   await vi.runAllTimersAsync();
   await rejected;

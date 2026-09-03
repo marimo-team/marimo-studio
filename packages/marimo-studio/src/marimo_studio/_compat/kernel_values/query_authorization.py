@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
 import math
 from pathlib import Path
 
 from marimo_studio._compat.kernel_values.authorization_key import (
-    projection_authorization_key,
+    sign_kernel_authorization,
+    verify_kernel_authorization,
 )
 
 
@@ -33,17 +31,6 @@ def _payload(
         "sessionId": session_id,
         "notebook": notebook,
     }
-
-
-def _signature(payload: dict[str, object]) -> str:
-    encoded = json.dumps(
-        payload,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return hmac.new(projection_authorization_key(), encoded, hashlib.sha256).hexdigest()
 
 
 def authorized_query_arguments(
@@ -74,7 +61,7 @@ def authorized_query_arguments(
         "query_generation": query_generation,
         "deadline": deadline,
         "session_id": session_id,
-        "authorization": _signature(payload),
+        "authorization": sign_kernel_authorization(payload),
     }
 
 
@@ -109,4 +96,4 @@ def verify_query_authorization(args: object, notebook: Path) -> bool:
         session_id=session_id,
         notebook=str(notebook),
     )
-    return hmac.compare_digest(authorization, _signature(payload))
+    return verify_kernel_authorization(authorization, payload)

@@ -79,11 +79,15 @@ async def values_response(
             status_code=400,
             headers=NO_STORE,
         )
-    if authorized_revision is not None and revision != authorized_revision:
-        return _capability_revision_forbidden()
-    snapshot = presentation.snapshot_for_revision(view_name, revision)
-    if snapshot is None:
-        return _revision_unavailable()
+    snapshot = await _projection_snapshot(
+        presentation,
+        context,
+        view_name,
+        revision,
+        authorized_revision,
+    )
+    if isinstance(snapshot, JSONResponse):
+        return snapshot
     try:
         requested = _resolve_requests(snapshot, projections_value, kind="value")
         active = _resolve_requests(snapshot, active_value, kind="value")
@@ -180,11 +184,15 @@ async def outputs_response(
             status_code=400,
             headers=NO_STORE,
         )
-    if authorized_revision is not None and revision != authorized_revision:
-        return _capability_revision_forbidden()
-    snapshot = presentation.snapshot_for_revision(view_name, revision)
-    if snapshot is None:
-        return _revision_unavailable()
+    snapshot = await _projection_snapshot(
+        presentation,
+        context,
+        view_name,
+        revision,
+        authorized_revision,
+    )
+    if isinstance(snapshot, JSONResponse):
+        return snapshot
     try:
         requested = _resolve_requests(snapshot, projections_value, kind="output")
         active = _resolve_requests(snapshot, active_value, kind="output")
@@ -270,6 +278,28 @@ def _resolve_requests(
                 "One presentation may mount one owner for each output target.",
             )
     return resolved
+
+
+async def _projection_snapshot(
+    presentation: NotebookPresentation,
+    context: ServerContext,
+    view_name: str,
+    revision: str,
+    authorized_revision: str | None,
+) -> PresentationSnapshot | JSONResponse:
+    if authorized_revision is not None:
+        if revision != authorized_revision:
+            return _capability_revision_forbidden()
+        snapshot = presentation.snapshot_for_revision(view_name, revision)
+    else:
+        current = await presentation.snapshot_async(
+            view_name,
+            profile="development" if context.mode == "edit" else "production",
+        )
+        snapshot = current if revision == current.revision else None
+    if snapshot is None:
+        return _revision_unavailable()
+    return snapshot
 
 
 async def _runtime_cell_refs(

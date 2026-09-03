@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 
 from starlette.requests import Request
@@ -41,7 +42,13 @@ from marimo_studio._validation.progressive import (
     validate_progressively,
 )
 from marimo_studio._validation.runtime_process import check_runtime_studio_isolated
+from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio._workspace.ownership import (
+    ObservedViewOwner,
+    observed_view_owner,
+    require_view_owner,
+)
 from marimo_studio.errors import (
     CapabilityInputError,
     MarimoStudioError,
@@ -110,6 +117,7 @@ async def show_view_response(
         return error_response(error)
 
     try:
+        require_view_owner(studio, view_name, activation_request.owner)
         result = await run_while_connected(
             request,
             activate_studio_view(
@@ -119,6 +127,7 @@ async def show_view_response(
                 sessions,
                 view_name,
                 target,
+                owner=activation_request.owner,
             ),
         )
     except RequestDisconnected:
@@ -134,6 +143,7 @@ async def show_view_response(
 async def activation_ack_response(
     request: Request,
     context: ServerContext,
+    studio: StudioWorkspace,
     notebook_scope: NotebookScope,
     generation: int,
 ) -> Response:
@@ -149,9 +159,12 @@ async def activation_ack_response(
     except JSONBodyError as error:
         return json_body_error_response(error)
     schema = body.get("schema") if isinstance(body, dict) else None
+    required = {"schema", "clientId", "view"}
+    allowed = {*required, "catalogGeneration", "viewGeneration"}
     if (
         not isinstance(body, dict)
-        or set(body) != {"schema", "clientId", "view"}
+        or not required.issubset(body)
+        or not set(body).issubset(allowed)
         or not isinstance(schema, int)
         or isinstance(schema, bool)
         or schema != 1
@@ -159,10 +172,44 @@ async def activation_ack_response(
         or not _nonempty(body.get("view"))
     ):
         return _invalid_payload("invalid-activation-ack")
+    has_catalog_owner = "catalogGeneration" in body
+    has_view_owner = "viewGeneration" in body
+    catalog_generation = body.get("catalogGeneration")
+    view_generation = body.get("viewGeneration")
+    if (
+        has_catalog_owner != has_view_owner
+        or (has_catalog_owner and not _owner_generation(catalog_generation))
+        or (view_generation is not None and not _owner_generation(view_generation))
+    ):
+        return _invalid_payload("invalid-activation-ack")
+    owner: ObservedViewOwner | None = None
+    if has_catalog_owner:
+        assert isinstance(catalog_generation, str)
+        assert isinstance(view_generation, str) or view_generation is None
+        owner = observed_view_owner(catalog_generation, view_generation)
+        acknowledged_view = body["view"]
+        assert isinstance(acknowledged_view, str)
+        try:
+            current = await asyncio.to_thread(load_studio, studio.config_path)
+            require_view_owner(current, acknowledged_view, owner)
+        except MarimoStudioError as error:
+            await notebook_scope.agents.reject_activation(
+                body["clientId"],
+                generation,
+                body["view"],
+                error,
+                owner=owner,
+            )
+            return JSONResponse(
+                {"schema": 1, "outcome": ActivationAckOutcome.REJECTED.value},
+                status_code=409,
+                headers=NO_STORE,
+            )
     outcome = await notebook_scope.agents.acknowledge_activation(
         body["clientId"],
         generation,
         body["view"],
+        owner=owner,
     )
     return JSONResponse(
         {"schema": 1, "outcome": outcome.value},
@@ -322,3 +369,11 @@ def _invalid_payload(code: str) -> JSONResponse:
 
 def _nonempty(value: object) -> bool:
     return isinstance(value, str) and bool(value)
+
+
+def _owner_generation(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )

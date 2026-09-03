@@ -758,7 +758,15 @@ def test_view_show_targets_the_attached_browser(
     )
     view = studio_agent.current_workspace().view("dashboard")
 
-    async def show(studio, _connection, name):
+    async def show(
+        studio,
+        _connection,
+        name,
+        *,
+        owner,
+    ):
+        assert owner.catalog_generation == view.catalog_generation
+        assert owner.view_generation == view.generation
         return ShowResult(
             notebook=studio.notebook,
             view=name,
@@ -776,3 +784,31 @@ def test_view_show_targets_the_attached_browser(
 
     assert result.view == "dashboard"
     assert result.generation == 2
+
+
+def test_view_show_rejects_a_name_created_after_the_handle_was_captured(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asyncio.run(_workspace(notebook_path).create_view("dashboard"))
+    connection = StudioServerConnection(
+        "http://localhost:2718",
+        session_id="s_123456",
+    )
+    monkeypatch.setattr(
+        "marimo_studio._composition.create_code_mode_bridge",
+        lambda: SimpleNamespace(
+            active_notebook=lambda: notebook_path.resolve(),
+            connection=lambda: connection,
+        ),
+    )
+    stale = studio_agent.current_workspace().view("report")
+
+    asyncio.run(_workspace(notebook_path).create_view("report"))
+    monkeypatch.setattr(
+        "marimo_studio._browser_client.client.request_view_show",
+        lambda *_args, **_kwargs: pytest.fail("stale handle activated a new view"),
+    )
+
+    with pytest.raises(ViewGenerationConflictError):
+        asyncio.run(stale.show())

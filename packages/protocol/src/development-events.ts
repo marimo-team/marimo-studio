@@ -74,20 +74,60 @@ export const parsePresentationChange = (
   return result.success ? { view: result.data.view, revision: result.data.revision } : undefined;
 };
 
-const activeViewSchema = z
-  .object({
-    schema: z.literal(1),
-    generation: z.int().nonnegative(),
-    view: viewNameSchema,
-  })
-  .strict();
+const ownerGenerationSchema = z.string().regex(/^[a-f0-9]{64}$/);
+const activeViewBaseSchema = z.object({
+  schema: z.literal(1),
+  generation: z.int().nonnegative(),
+  view: viewNameSchema,
+});
+const activeViewSchema = z.union([
+  activeViewBaseSchema.strict(),
+  activeViewBaseSchema
+    .extend({ catalogGeneration: ownerGenerationSchema, viewGeneration: z.null() })
+    .strict(),
+  activeViewBaseSchema
+    .extend({ catalogGeneration: ownerGenerationSchema, viewGeneration: ownerGenerationSchema })
+    .strict(),
+]);
 const activeViewCodec = jsonCodec(activeViewSchema);
 
-export type ActiveViewRequest = z.infer<typeof activeViewSchema>;
+export type ViewActivationOwner =
+  | { readonly kind: "absent"; readonly catalogGeneration: string }
+  | {
+      readonly kind: "present";
+      readonly catalogGeneration: string;
+      readonly viewGeneration: string;
+    };
+
+export interface ActiveViewRequest {
+  readonly schema: 1;
+  readonly generation: number;
+  readonly view: string;
+  readonly owner?: ViewActivationOwner;
+}
 
 export const parseActiveViewRequest = (source: string): ActiveViewRequest | undefined => {
   const result = activeViewCodec.safeDecode(source);
-  return result.success ? result.data : undefined;
+  if (!result.success) {
+    return undefined;
+  }
+  const request = result.data;
+  if (!("catalogGeneration" in request)) {
+    return request;
+  }
+  return {
+    schema: request.schema,
+    generation: request.generation,
+    view: request.view,
+    owner:
+      request.viewGeneration === null
+        ? { kind: "absent", catalogGeneration: request.catalogGeneration }
+        : {
+            kind: "present",
+            catalogGeneration: request.catalogGeneration,
+            viewGeneration: request.viewGeneration,
+          },
+  };
 };
 
 const editorSessionBindingSchema = z

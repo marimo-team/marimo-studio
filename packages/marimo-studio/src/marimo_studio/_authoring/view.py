@@ -30,6 +30,7 @@ from marimo_studio._views.sources import (
 from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.config import load_studio_definition
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio._workspace.ownership import ObservedViewOwner
 from marimo_studio._workspace.project_manifest import VIEW_MANIFEST_PATH
 from marimo_studio.errors import (
     ProtocolError,
@@ -203,12 +204,19 @@ async def show_view(
     notebook: Path,
     view: str,
     connection: StudioServerConnection | None,
+    *,
+    owner: ObservedViewOwner | None = None,
 ) -> ShowResult:
     """Show one view in the Studio tab bound to ``connection``."""
     if connection is None:
         raise ProtocolError("Showing a view requires an attached Studio browser.")
     studio = await asyncio.to_thread(load_studio, notebook)
-    return await show_browser_view(studio, connection, view)
+    return await show_browser_view(
+        studio,
+        connection,
+        view,
+        owner=owner,
+    )
 
 
 async def export_view(

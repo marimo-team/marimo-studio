@@ -114,15 +114,14 @@ async def runtime_config_response(
             )
             if snapshot is None:
                 return _revision_unavailable()
-    elif requested_revision is None:
-        snapshot = await presentation.snapshot_async(
+    else:
+        current = await presentation.snapshot_async(
             view_name,
             profile="development" if context.mode == "edit" else "production",
         )
-    else:
-        snapshot = presentation.snapshot_for_revision(view_name, requested_revision)
-        if snapshot is None:
+        if requested_revision is not None and requested_revision != current.revision:
             return _revision_unavailable()
+        snapshot = current
     if client_id is not None:
         lookup_session_id = await clients.session_for_client(client_id)
         if lookup_session_id is None:

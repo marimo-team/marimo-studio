@@ -1,8 +1,12 @@
+import type { BrowserContext } from "@playwright/test";
+
 import { e2eNetwork } from "../scripts/network.mjs";
+import { workspaceDirectory } from "../scripts/paths.mjs";
 import {
   dashboardHtmlPath,
   dashboardManifestPath,
   expect,
+  observeBrowserContext,
   presentationFrame,
   previewFrame,
   readWorkspaceFile,
@@ -15,6 +19,11 @@ import {
   writeDashboardSource,
   writeWorkspaceFile,
 } from "./fixture.ts";
+import {
+  startNotebookServer,
+  stopNotebookServer,
+  waitForNotebookServer,
+} from "./notebook-server.ts";
 
 test("allows a configured parent origin and blocks an unlisted parent", async ({
   browserDiagnostics,
@@ -55,6 +64,58 @@ test("allows a configured parent origin and blocks an unlisted parent", async ({
     blocked.recovered();
   } finally {
     await unlisted.close();
+  }
+});
+
+test("embeds Studio through an authenticated Marimo session", async ({ browser }) => {
+  const token = "studio-embed-token";
+  const parentOrigin = `http://localhost:${e2eNetwork.main.exported.port}`;
+  const server = startNotebookServer({
+    command: "edit",
+    target: workspaceDirectory,
+    port: e2eNetwork.main.recovery.port,
+    authentication: ["--token-password", token],
+    environment: { MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS: parentOrigin },
+  });
+  const studioUrl = new URL(
+    "/?file=notebook.py",
+    `http://localhost:${e2eNetwork.main.recovery.port}`,
+  );
+  studioUrl.searchParams.set("access_token", token);
+  let context: BrowserContext | undefined;
+  let diagnostics: ReturnType<typeof observeBrowserContext> | undefined;
+
+  try {
+    context = await browser.newContext();
+    diagnostics = observeBrowserContext(context);
+    const page = await context.newPage();
+    await waitForNotebookServer(server, `${server.serverUrl}/health`);
+    const authenticated = await page.request.get(studioUrl.href);
+    expect(authenticated.ok()).toBe(true);
+
+    studioUrl.searchParams.delete("access_token");
+    const target = new URLSearchParams({ target: studioUrl.href });
+    await page.goto(`${parentOrigin}/embed-host.html?${target}`);
+    const embedded = page.frameLocator('iframe[title="Embedded Studio"]');
+    await expect(embedded.locator("#marimo-studio-host")).toBeAttached();
+    await expect(
+      embedded
+        .frameLocator('iframe[title="Marimo editor"]')
+        .getByRole("button", { name: "Widget count: 7" }),
+    ).toBeVisible();
+  } finally {
+    try {
+      if (diagnostics !== undefined) {
+        await diagnostics.close();
+        expect(diagnostics.messages, "unexpected authenticated embed diagnostics").toEqual([]);
+      }
+    } finally {
+      try {
+        await context?.close();
+      } finally {
+        await stopNotebookServer(server);
+      }
+    }
   }
 });
 

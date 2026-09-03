@@ -191,7 +191,11 @@ export const StudioHost = ({
     () => createViewRemote(host.urls.views, host.serverToken),
     [host.serverToken, host.urls.views],
   );
-  const catalog = useMemo(() => new StarterCatalogController(() => views.list()), [views]);
+  const initialCatalogGeneration = host.state === "needs-view" ? host.generation : "";
+  const catalog = useMemo(
+    () => new StarterCatalogController(() => views.list(), [], "", initialCatalogGeneration),
+    [initialCatalogGeneration, views],
+  );
   const catalogSnapshot = useControllerSnapshot(catalog);
 
   useEffect(() => {
@@ -358,8 +362,16 @@ export const StudioHost = ({
           selectedStarter?.availability.action ?? "Choose an available starting option.",
         );
       }
-      const view =
-        createdView ?? (await views.create(host.defaultView, starter, host.generation)).name;
+      let view = createdView;
+      if (!view) {
+        try {
+          view = (await views.create(host.defaultView, starter, catalogSnapshot.generation)).name;
+        } catch (cause) {
+          catalog.invalidate();
+          await catalog.refresh();
+          throw cause;
+        }
+      }
       setCreatedView(view);
       await openWorkspace(view);
     } catch (cause) {

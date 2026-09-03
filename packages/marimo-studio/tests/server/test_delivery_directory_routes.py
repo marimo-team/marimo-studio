@@ -191,6 +191,61 @@ def test_directory_support_routes_keep_notebook_identity(tmp_path: Path) -> None
     )
 
 
+def test_presentation_capability_binds_public_files_to_its_notebook(
+    tmp_path: Path,
+) -> None:
+    first = tmp_path / "first.py"
+    second = tmp_path / "nested" / "second.py"
+    second.parent.mkdir()
+    first.write_text(notebook_source(tmp_path / "first-output"), encoding="utf-8")
+    second.write_text(notebook_source(tmp_path / "second-output"), encoding="utf-8")
+    _configured(first)
+    _configured(second)
+    first_public = first.parent / "public"
+    first_public.mkdir()
+    first_public.joinpath("secret.txt").write_text(
+        "first notebook",
+        encoding="utf-8",
+    )
+    second_public = second.parent / "public"
+    second_public.mkdir()
+    second_public.joinpath("secret.txt").write_text(
+        "second notebook",
+        encoding="utf-8",
+    )
+    app = _marimo_app(first, token="test-token")
+    _session_manager(app).workspace = DirectoryWorkspace(
+        str(tmp_path),
+        include_markdown=False,
+    )
+
+    with TestClient(app) as authenticated:
+        login = authenticated.get(
+            "/",
+            params={"access_token": "test-token", "file": "first.py"},
+            follow_redirects=False,
+        )
+        authenticated.get(login.headers["location"], follow_redirects=False)
+        config = authenticated.get(
+            "/_marimo-studio/views/dashboard/config?file=first.py"
+        ).json()
+        capability_root = config["runtime"]["data"]["url"]
+
+    with TestClient(app) as anonymous:
+        direct = anonymous.get(
+            "/public/secret.txt?file=first.py",
+            headers={"X-Notebook-Id": "nested/second.py"},
+        )
+        delegated = anonymous.get(
+            f"{capability_root}public/secret.txt?file=first.py",
+            headers={"X-Notebook-Id": "nested/second.py"},
+        )
+
+    assert direct.status_code == 401
+    assert delegated.status_code == 200
+    assert delegated.text == "first notebook"
+
+
 def test_mounted_directory_routes_preserve_notebook_identity(tmp_path: Path) -> None:
 
     notebook = tmp_path / "nested" / "analysis.py"

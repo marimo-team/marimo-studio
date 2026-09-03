@@ -27,6 +27,7 @@ from marimo_studio._processes.limits import runtime_process_timeout
 from marimo_studio._validation.evidence import BrowserObservation, ValidationEvidence
 from marimo_studio._validation.progressive import ValidationRequest
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio._workspace.ownership import ObservedViewOwner, require_view_owner
 from marimo_studio.errors import AgentRequestError, CapabilityInputError, ProtocolError
 
 _STATIC_VALIDATION_BUDGET = 15.0
@@ -66,14 +67,18 @@ async def show_view(
     studio: StudioWorkspace,
     connection: StudioServerConnection,
     name: str,
+    *,
+    owner: ObservedViewOwner | None = None,
 ) -> ShowResult:
     """Select a configured view in one connected Studio browser."""
+    require_view_owner(studio, name, owner)
     return await request_view_show(
         connection,
         studio.notebook,
         ViewShowRequest(
             view=name,
             browser_client=connection.browser_client or None,
+            owner=owner,
         ),
     )
 

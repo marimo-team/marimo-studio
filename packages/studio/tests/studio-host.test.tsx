@@ -66,6 +66,17 @@ const createViewBodySchema = z
   })
   .strict();
 
+const viewGenerationConflictResponse = () =>
+  Response.json(
+    {
+      error: "view-generation-conflict",
+      message: "The view catalog changed before this view was created.",
+      hint: "Retry with the current view choices.",
+      transient: true,
+    },
+    { status: 409 },
+  );
+
 class EventSourceStub {
   addEventListener(): void {}
   close(): void {}
@@ -236,6 +247,134 @@ it("retries first-view authoring options after a transient inventory failure", a
   expect(inventories).toBe(2);
   expect(editorFrame.parentElement).toBe(frameHost);
   frameHost.remove();
+});
+
+it("refreshes first-view ownership after a create conflict", async () => {
+  vi.stubGlobal("EventSource", EventSourceStub);
+  const initialGeneration = viewGeneration(10);
+  const replacementGeneration = viewGeneration(11);
+  const catalogGenerations = [initialGeneration, replacementGeneration, replacementGeneration];
+  const submittedGenerations: string[] = [];
+  let inventories = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const source = input instanceof Request ? input.url : String(input);
+      const url = new URL(source, globalThis.location.href);
+      if (!init?.method && url.pathname.endsWith("/_marimo-studio/views")) {
+        const generation = catalogGenerations[inventories] ?? replacementGeneration;
+        inventories += 1;
+        return Response.json({
+          ...viewList([], "dashboard", [starter]),
+          generation,
+        });
+      }
+      if (init?.method === "POST" && url.pathname.endsWith("/_marimo-studio/views")) {
+        const body = createViewBodySchema.parse(await new Request(url, init).json());
+        submittedGenerations.push(body.catalog_generation);
+        return viewGenerationConflictResponse();
+      }
+      throw new Error(`Unexpected request ${init?.method ?? "GET"} ${url}`);
+    }),
+  );
+  const editorFrame = document.createElement("iframe");
+  const user = userEvent.setup();
+
+  render(
+    <StudioHost
+      host={{ ...host, generation: viewGeneration(9) }}
+      editorFrame={editorFrame}
+      publishBootstrap={vi.fn()}
+      brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
+    />,
+  );
+
+  await user.click(await screen.findByRole("button", { name: "Create dashboard" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "The view catalog changed before this view was created.",
+  );
+  expect(inventories).toBe(2);
+
+  await user.click(screen.getByRole("button", { name: "Create dashboard" }));
+  await vi.waitFor(() => expect(submittedGenerations).toHaveLength(2));
+
+  expect(submittedGenerations).toEqual([initialGeneration, replacementGeneration]);
+  expect(inventories).toBe(3);
+});
+
+it("replaces an in-flight catalog retry after a create conflict", async () => {
+  vi.stubGlobal("EventSource", EventSourceStub);
+  const initialGeneration = viewGeneration(20);
+  const staleGeneration = viewGeneration(21);
+  const currentGeneration = viewGeneration(22);
+  const retryInventory = deferred<Response>();
+  const submittedGenerations: string[] = [];
+  let inventories = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const source = input instanceof Request ? input.url : String(input);
+      const url = new URL(source, globalThis.location.href);
+      if (!init?.method && url.pathname.endsWith("/_marimo-studio/views")) {
+        inventories += 1;
+        if (inventories === 1) {
+          return Response.json({
+            ...viewList([], "dashboard", [starter]),
+            generation: initialGeneration,
+          });
+        }
+        if (inventories === 2) {
+          return Response.json(
+            { error: "temporary", message: "Authoring options are temporarily unavailable." },
+            { status: 503 },
+          );
+        }
+        if (inventories === 3) {
+          return retryInventory.promise;
+        }
+        return Response.json({
+          ...viewList([], "dashboard", [starter]),
+          generation: currentGeneration,
+        });
+      }
+      if (init?.method === "POST" && url.pathname.endsWith("/_marimo-studio/views")) {
+        const body = createViewBodySchema.parse(await new Request(url, init).json());
+        submittedGenerations.push(body.catalog_generation);
+        return viewGenerationConflictResponse();
+      }
+      throw new Error(`Unexpected request ${init?.method ?? "GET"} ${url}`);
+    }),
+  );
+  const editorFrame = document.createElement("iframe");
+  const user = userEvent.setup();
+
+  render(
+    <StudioHost
+      host={{ ...host, generation: viewGeneration(19) }}
+      editorFrame={editorFrame}
+      publishBootstrap={vi.fn()}
+      brand={{ marks: { dark: "dark.svg", light: "light.svg" } }}
+    />,
+  );
+
+  await user.click(await screen.findByRole("button", { name: "Create dashboard" }));
+  await user.click(await screen.findByRole("button", { name: "Retry view choices" }));
+  await vi.waitFor(() => expect(inventories).toBe(3));
+
+  await user.click(screen.getByRole("button", { name: "Create dashboard" }));
+  await vi.waitFor(() => expect(submittedGenerations).toHaveLength(2));
+  await vi.waitFor(() => expect(inventories).toBe(4));
+  retryInventory.resolve(
+    Response.json({
+      ...viewList([], "dashboard", [starter]),
+      generation: staleGeneration,
+    }),
+  );
+
+  await user.click(await screen.findByRole("button", { name: "Create dashboard" }));
+  await vi.waitFor(() => expect(submittedGenerations).toHaveLength(3));
+
+  expect(submittedGenerations).toEqual([initialGeneration, initialGeneration, currentGeneration]);
 });
 
 it("shows first-view starter documents and unavailable recovery", async () => {

@@ -11,6 +11,7 @@ from marimo_studio._server.notebook_scope import NotebookScope
 from marimo_studio._server.ports import SessionState
 from marimo_studio._server.records import ServerContext
 from marimo_studio._workspace.models import StudioWorkspace
+from marimo_studio._workspace.ownership import ObservedViewOwner
 from marimo_studio.errors import AgentRequestError, ViewNotFoundError
 
 _CLIENT_CONNECT_TIMEOUT = 1.0
@@ -36,6 +37,8 @@ async def activate_studio_view(
     sessions: SessionState,
     view_name: str,
     target: ViewTarget,
+    *,
+    owner: ObservedViewOwner | None = None,
 ) -> ShowResult:
     """Activate one view for a session or selected browser client."""
     if view_name not in studio.views:
@@ -49,6 +52,7 @@ async def activate_studio_view(
             sessions,
             view_name,
             target.session_id,
+            owner=owner,
         )
 
     browser = await notebook_scope.clients.select_target(client_id=target.client_id)
@@ -65,6 +69,7 @@ async def activate_studio_view(
         view_name,
         browser,
         session_id,
+        owner=owner,
     )
 
 
@@ -75,6 +80,8 @@ async def _activate_session_view(
     sessions: SessionState,
     view_name: str,
     session_id: str,
+    *,
+    owner: ObservedViewOwner | None,
 ) -> ShowResult:
     if not sessions.exists(context, session_id):
         raise AgentRequestError(
@@ -93,6 +100,7 @@ async def _activate_session_view(
             view_name,
             target,
             session_id,
+            owner=owner,
         )
 
     retained = await notebook_scope.clients.binding_for_session(session_id)
@@ -115,8 +123,14 @@ async def _activate_connected_view(
     view_name: str,
     target: PeerTarget,
     session_id: str,
+    *,
+    owner: ObservedViewOwner | None,
 ) -> ShowResult:
-    activation = await notebook_scope.agents.activate(target, view_name)
+    activation = await notebook_scope.agents.activate(
+        target,
+        view_name,
+        owner=owner,
+    )
     await notebook_scope.agents.wait_for_activation(
         activation,
         VIEW_ACTIVATION_TIMEOUT,

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from marimo_studio._workspace.ownership import ObservedViewOwner
+
 
 @dataclass(frozen=True)
 class ViewActivation:
@@ -13,6 +15,7 @@ class ViewActivation:
     client_id: str
     session_id: str
     view: str
+    owner: ObservedViewOwner | None = None
 
 
 @dataclass(frozen=True)

@@ -444,6 +444,7 @@ def error_response(
     *,
     base_url: str,
     dev: bool,
+    edit_mode: bool,
     structured: bool,
     server_token: str,
     routing_query: Sequence[tuple[str, str]] = (),
@@ -476,10 +477,10 @@ def error_response(
             status_code=status_code,
             headers={"Cache-Control": "no-store"},
         )
-    headers = {
-        **(edit_document_headers(security_policy) if dev else DOCUMENT_HEADERS),
-        "Marimo-Studio-Error": code,
-    }
+    document_headers = (
+        edit_document_headers(security_policy) if edit_mode else DOCUMENT_HEADERS
+    )
+    headers = {**document_headers, "Marimo-Studio-Error": code}
     if hint:
         headers["Marimo-Studio-Hint"] = hint
     if transient:

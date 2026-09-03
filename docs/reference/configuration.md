@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Configure server entry, the notebook, default view, runtimes, aliases, view projects, provider options, and saved files.
+description: Configure server entry, embedding, the notebook, default view, runtimes, aliases, view projects, provider options, and saved files.
 ---
 
 # Configuration
@@ -126,6 +126,23 @@ runtimes = ["server", "wasm"]
 configuration accepts the common fields in the notebook table and rejects
 `provider_dependencies`. Add Studio and view provider requirements through the
 project's dependency workflow.
+
+## Process settings
+
+`MARIMO_STUDIO_ALLOWED_EMBED_ORIGINS` controls which cross-origin parent
+documents may frame the Studio edit workspace. Pass a comma-separated list of
+exact HTTP or HTTPS origins. When the variable is unset or empty, Studio keeps
+the Content Security Policy `frame-ancestors` directive at `'self'`.
+
+Studio accepts at most 32 origin entries and 4,096 UTF-8 bytes. It normalizes
+host casing, default ports, and an optional trailing slash, then removes
+duplicates. An invalid or oversized value stops server startup.
+
+This setting changes framing policy. It does not grant request access or bypass
+Marimo authentication. Allow only parent origins whose pages you trust to
+present Studio controls. See [Embed the Studio edit
+workspace](../guide/deploy.md#embed-the-studio-edit-workspace) for the deployment
+command and clickjacking boundary.
 
 ## Provider environments
 

@@ -153,6 +153,16 @@ class WorkspaceClientEventProducer:
                         "schema": 1,
                         "generation": activation.generation,
                         "view": activation.view,
+                        **(
+                            {
+                                "catalogGeneration": (
+                                    activation.owner.catalog_generation
+                                ),
+                                "viewGeneration": activation.owner.view_generation,
+                            }
+                            if activation.owner is not None
+                            else {}
+                        ),
                     },
                 )
             )
