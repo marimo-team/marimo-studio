@@ -102,6 +102,10 @@ export default defineConfig({
       pattern: `${repository}/edit/main/docs/:path`,
       text: "Edit this page on GitHub",
     },
+    footer: {
+      message:
+        'marimo-studio is a collaboration of <a class="studio-footer-link" href="https://marimo.io/">Marimo Team</a>, <a class="studio-footer-link" href="https://ivia.ethz.ch/">ETH Zurich IVIA Lab</a>, and <a class="studio-footer-link" href="https://dig.cmu.edu/team">CMU Data Interaction Group</a>',
+    },
     logo: {
       alt: "Marimo Studio",
       dark: "/brand/marimo-studio-lockup-horizontal-dark.svg",
