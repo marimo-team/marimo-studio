@@ -16,6 +16,7 @@ from click.testing import CliRunner
 import marimo_studio
 import marimo_studio.agent as studio_agent
 import marimo_studio.authoring as studio_authoring
+import marimo_studio.view_providers as studio_view_providers
 from marimo_studio._artifacts.repository import validate_document
 from marimo_studio._cli import cli
 from marimo_studio._views.inspection import inspection_request
@@ -36,6 +37,7 @@ from ..provider_test_support import (
 def _documentation_paths() -> tuple[Path, ...]:
     paths = {
         Path("README.md"),
+        *Path(".github/release-notes").glob("*.md"),
         Path("packages/marimo-studio/README.md"),
         *Path("docs").rglob("*.md"),
         *Path("skills/marimo-studio").rglob("*.md"),
@@ -55,10 +57,18 @@ def _python_block(document: str, heading: str) -> str:
 def _studio_cli_arguments(arguments: tuple[str, ...]) -> tuple[str, ...] | None:
     if arguments[:1] == ("marimo-studio",):
         return arguments[1:]
-    if arguments[:2] == ("uvx", "marimo-studio"):
-        return arguments[2:]
-    if arguments[:3] == ("uv", "run", "marimo-studio"):
-        return arguments[3:]
+    if arguments[:1] == ("uvx",):
+        try:
+            executable = arguments.index("marimo-studio", 1)
+        except ValueError:
+            return None
+        return arguments[executable + 1 :]
+    if arguments[:2] == ("uv", "run"):
+        try:
+            executable = arguments.index("marimo-studio", 2)
+        except ValueError:
+            return None
+        return arguments[executable + 1 :]
     return None
 
 
@@ -282,3 +292,12 @@ def test_python_reference_covers_the_public_api() -> None:
 
     for name, module in modules.items():
         assert _api_symbols(source, name) == set(module.__all__)
+
+
+def test_provider_reference_names_every_public_symbol() -> None:
+    source = Path("docs/reference/provider-api.md").read_text(encoding="utf-8")
+    documented = {
+        name for name in studio_view_providers.__all__ if f"`{name}`" in source
+    }
+
+    assert documented == set(studio_view_providers.__all__)
