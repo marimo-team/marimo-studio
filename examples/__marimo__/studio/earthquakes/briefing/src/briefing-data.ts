@@ -1,3 +1,5 @@
+export type TemporalValue = Date | string | number | bigint;
+
 export type EventSummary = {
   events: number;
   felt_reports: number;
@@ -8,48 +10,104 @@ export type EventSummary = {
 };
 
 export type WeeklySummary = {
-  source_events: number;
-  qualified_events: number;
-  maximum_magnitude: number;
   felt_reports: number;
-  tsunami_flags: number;
-  period_start: string;
+  generated_at: string;
+  maximum_magnitude: number;
   period_end: string;
+  period_start: string;
+  qualified_events: number;
+  source_events: number;
+  source_title: string;
+  source_url: string;
+  tsunami_flags: number;
 };
-
-export type TemporalValue = Date | string | number | bigint;
 
 export type DailyActivity = {
   day: TemporalValue;
   events: number;
+  felt_reports: number;
   maximum_magnitude: number;
+  median_magnitude: number;
 };
 
-export type StrongEvent = {
+export type EarthquakeEvent = {
   felt: number | null;
   id: string;
   latitude: number;
   longitude: number;
   magnitude: number;
   place: string;
+  selected: boolean;
+  significance: number;
+  status: string;
   time: TemporalValue;
   tsunami: boolean;
+  url: string;
+};
+
+export type MagnitudeScaling = {
+  amplitude_ratio: number;
+  difference: number;
+  energy_ratio: number;
+  maximum_magnitude: number;
+  reference_magnitude: number;
+};
+
+export type FrequencyPoint = {
+  events: number;
+  fitted_log10_events: number;
+  log10_events: number;
+  magnitude: number;
+};
+
+export type FrequencyModel = {
+  b_value: number;
+  fit_maximum: number;
+  fit_minimum: number;
+  fit_observations: number;
+  intercept: number;
+  r_squared: number;
+};
+
+export type FrequencySelection = {
+  fitted_events: number;
+  magnitude: number;
+  observed_events: number;
+};
+
+export type SeismicAnalysis = {
+  activity: DailyActivity[];
+  events: EarthquakeEvent[];
+  frequency: {
+    curve: FrequencyPoint[];
+    model: FrequencyModel;
+    selected: FrequencySelection;
+  };
+  magnitude_scaling: MagnitudeScaling;
+  selection: EventSummary;
+  strongest: EarthquakeEvent[];
+  weekly: WeeklySummary;
 };
 
 export type BriefingModel = {
   activity: DailyActivity[];
+  analysis?: SeismicAnalysis;
+  events: EarthquakeEvent[];
   maximumDailyCount: number;
   maximumDailyMagnitude: number;
   peakActivity?: DailyActivity;
   peakKey?: string;
-  primaryEvent?: StrongEvent;
-  strongest: StrongEvent[];
-  summary?: EventSummary;
-  weekly?: WeeklySummary;
+  primaryEvent?: EarthquakeEvent;
+  selectedEvents: EarthquakeEvent[];
+  strongest: EarthquakeEvent[];
 };
 
 export const integer = new Intl.NumberFormat("en-US");
 
+const compact = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 1,
+  notation: "compact",
+});
 const monthDay = new Intl.DateTimeFormat("en", {
   month: "short",
   day: "numeric",
@@ -125,25 +183,28 @@ export const concisePlace = (place: string) => {
 };
 
 export const feltLabel = (value: number | null) =>
-  value === null ? "No felt reports" : `${integer.format(value)} felt reports`;
+  value === null || value === 0
+    ? "No felt reports"
+    : `${integer.format(value)} felt reports`;
 
-export const createBriefingModel = ({
-  activity,
-  strongest,
-  summary,
-  weekly,
-}: {
-  activity: DailyActivity[];
-  strongest: StrongEvent[];
-  summary?: EventSummary;
-  weekly?: WeeklySummary;
-}): BriefingModel => {
+export const formatRatio = (value: number) =>
+  value >= 10_000 ? compact.format(value) : integer.format(Math.round(value));
+
+export const createBriefingModel = (
+  analysis?: SeismicAnalysis,
+): BriefingModel => {
+  const activity = analysis?.activity ?? [];
+  const events = analysis?.events ?? [];
+  const strongest = analysis?.strongest.slice(0, 6) ?? [];
+  const selectedEvents = events.filter((event) => event.selected);
   const peakActivity = activity.length === 0
     ? undefined
     : activity.reduce((peak, row) => row.events > peak.events ? row : peak);
 
   return {
     activity,
+    analysis,
+    events,
     maximumDailyCount: Math.max(1, ...activity.map((row) => row.events)),
     maximumDailyMagnitude: Math.max(
       0,
@@ -152,8 +213,7 @@ export const createBriefingModel = ({
     peakActivity,
     peakKey: peakActivity ? String(peakActivity.day) : undefined,
     primaryEvent: strongest[0],
+    selectedEvents,
     strongest,
-    summary,
-    weekly,
   };
 };

@@ -3,78 +3,46 @@
 import { Deck } from "@revealjs/react";
 import "reveal.js/reveal.css";
 import { useMemo } from "react";
+import { createBriefingModel, type SeismicAnalysis } from "./briefing-data.ts";
 import {
-  createBriefingModel,
-  type DailyActivity,
-  type EventSummary,
-  type StrongEvent,
-  type WeeklySummary,
-} from "./briefing-data.ts";
-import {
+  CatalogSlide,
   CoverSlide,
-  ExecutiveSlide,
-  HandoffSlide,
-  OperatingPictureSlide,
+  FrequencySlide,
+  ImpactSlide,
+  MagnitudeSlide,
+  SelectionSlide,
   TempoSlide,
-  WatchlistSlide,
 } from "./components/BriefingSlides.tsx";
-import { type MarimoTable, useMarimoValue } from "./lib/use-marimo-value.ts";
+import { useMarimoValue } from "./lib/use-marimo-value.ts";
 
 const deckConfig = {
-  autoAnimateDuration: 0.85,
-  autoAnimateEasing: "cubic-bezier(0.77, 0, 0.175, 1)",
+  autoAnimateDuration: 0.8,
+  autoAnimateEasing: "cubic-bezier(0.22, 1, 0.36, 1)",
   center: false,
   controls: true,
   controlsTutorial: false,
   hash: false,
-  height: "100%",
-  margin: 0.025,
+  height: 810,
+  margin: 0.02,
   progress: true,
   scrollActivationWidth: 0,
   showSlideNumber: "all",
   slideNumber: "c/t",
   transition: "fade",
   transitionSpeed: "fast",
-  width: "100%",
+  width: 1440,
 } as const;
 
 export const App = () => {
-  const summaryProjection = useMarimoValue<EventSummary>("event_summary");
-  const weeklyProjection = useMarimoValue<WeeklySummary>("weekly_summary");
-  const activityProjection = useMarimoValue<MarimoTable<DailyActivity>>(
-    "daily_activity",
-  );
-  const eventsProjection = useMarimoValue<MarimoTable<StrongEvent>>(
-    "strongest_events",
-  );
-
-  const activity = useMemo(
-    () => activityProjection.value?.toArray() ?? [],
-    [activityProjection.value],
-  );
-  const strongest = useMemo(
-    () => eventsProjection.value?.toArray().slice(0, 5) ?? [],
-    [eventsProjection.value],
+  const analysisProjection = useMarimoValue<SeismicAnalysis>(
+    "seismic_analysis",
   );
   const model = useMemo(
-    () =>
-      createBriefingModel({
-        activity,
-        strongest,
-        summary: summaryProjection.value,
-        weekly: weeklyProjection.value,
-      }),
-    [activity, strongest, summaryProjection.value, weeklyProjection.value],
+    () => createBriefingModel(analysisProjection.value),
+    [analysisProjection.value],
   );
-  const projectionError = summaryProjection.error ||
-    weeklyProjection.error ||
-    activityProjection.error ||
-    eventsProjection.error;
-  const loading = !projectionError &&
-    (summaryProjection.value === undefined ||
-      weeklyProjection.value === undefined ||
-      activityProjection.value === undefined ||
-      eventsProjection.value === undefined);
+  const loading = analysisProjection.value === undefined &&
+    !analysisProjection.error;
 
   return (
     <>
@@ -82,60 +50,36 @@ export const App = () => {
         aria-hidden="true"
         className="value-host"
         hidden
-        mo-value="event_summary"
-        ref={summaryProjection.hostRef}
-      />
-      <span
-        aria-hidden="true"
-        className="value-host"
-        hidden
-        mo-value="weekly_summary"
-        ref={weeklyProjection.hostRef}
-      />
-      <span
-        aria-hidden="true"
-        className="value-host"
-        hidden
-        mo-value="daily_activity"
-        ref={activityProjection.hostRef}
-      />
-      <span
-        aria-hidden="true"
-        className="value-host"
-        hidden
-        mo-value="strongest_events"
-        ref={eventsProjection.hostRef}
+        mo-value="seismic_analysis"
+        ref={analysisProjection.hostRef}
       />
 
-      <main className="deck-shell">
+      <main className="deck-shell" aria-busy={loading}>
         {loading
           ? (
             <div className="briefing-loader" role="status">
-              <span className="briefing-loader-sheet" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-                <i />
-              </span>
-              Preparing weekly briefing
+              <span className="loader-seismogram" aria-hidden="true" />
+              Preparing the seismic lesson
             </div>
           )
           : null}
-        {projectionError
+        {analysisProjection.error
           ? (
             <p className="deck-error" role="alert">
-              Briefing data could not be loaded. Reload the page to retry.
+              The seismic analysis could not be loaded. Reload the page to
+              retry.
             </p>
           )
           : null}
 
         <Deck className="studio-deck" config={deckConfig}>
           <CoverSlide model={model} />
-          <ExecutiveSlide model={model} />
+          <MagnitudeSlide model={model} />
+          <SelectionSlide model={model} />
+          <CatalogSlide model={model} />
           <TempoSlide model={model} />
-          <OperatingPictureSlide model={model} />
-          <WatchlistSlide model={model} />
-          <HandoffSlide model={model} />
+          <FrequencySlide model={model} />
+          <ImpactSlide model={model} />
         </Deck>
       </main>
     </>

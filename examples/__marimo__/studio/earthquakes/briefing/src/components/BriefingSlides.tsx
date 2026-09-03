@@ -1,438 +1,474 @@
 import { Slide } from "@revealjs/react";
 import {
   type BriefingModel,
-  concisePlace,
   feltLabel,
   formatDay,
   formatPeriod,
+  formatRatio,
   formatTime,
   integer,
 } from "../briefing-data.ts";
 import { ActivityBars, Metric } from "./BriefingPrimitives.tsx";
-import { EventGlobe, MagnitudeLadder, ScopeGauge } from "./BriefingVisuals.tsx";
+import {
+  EventAtlas,
+  FrequencyMagnitudePlot,
+  ImpactScatter,
+} from "./BriefingVisuals.tsx";
 
-const autoAnimate = {
+const tempoAutoAnimate = {
   autoAnimate: true,
-  autoAnimateId: "weekly-tempo",
-  autoAnimateDuration: 0.85,
-  autoAnimateEasing: "cubic-bezier(0.77, 0, 0.175, 1)",
+  autoAnimateDuration: 0.8,
+  autoAnimateEasing: "cubic-bezier(0.22, 1, 0.36, 1)",
+  autoAnimateId: "catalog-tempo",
   autoAnimateUnmatched: true,
 } as const;
 
 export const CoverSlide = ({ model }: { model: BriefingModel }) => (
-  <Slide
-    className="cover-slide"
-    backgroundColor="#111111"
-    transition="fade"
-  >
+  <Slide className="cover-slide">
     <div className="briefing-slide cover">
-      <p className="deck-kicker">
-        USGS · Global M2.5+ · {formatPeriod(model.weekly)}
-      </p>
-      <div className="cover-body">
-        <div className="cover-title">
-          <h1>Weekly seismic situation update</h1>
-          <p className="deck-lede">
-            Global activity, felt reports, tsunami flags, and events for the
-            next duty team.
-          </p>
-        </div>
-        <div className="cover-visual">
-          <EventGlobe events={model.strongest} />
-          <dl className="cover-readout" aria-label="Weekly briefing summary">
-            <div>
-              <dt>Events reviewed</dt>
-              <dd>
-                {model.weekly
-                  ? integer.format(model.weekly.qualified_events)
-                  : "…"}
-              </dd>
-            </div>
-            <div>
-              <dt>Largest event</dt>
-              <dd>M{model.weekly?.maximum_magnitude.toFixed(1) ?? "…"}</dd>
-            </div>
-            <div>
-              <dt>Felt reports</dt>
-              <dd>
-                {model.weekly ? integer.format(model.weekly.felt_reports) : "…"}
-              </dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-      <footer className="cover-meta">
-        <span>Duty handover</span>
-        <span>
-          {model.weekly
-            ? `${integer.format(model.weekly.source_events)} source events`
-            : "Weekly source record"}
-        </span>
-      </footer>
-    </div>
-  </Slide>
-);
-
-export const ExecutiveSlide = ({ model }: { model: BriefingModel }) => (
-  <Slide {...autoAnimate}>
-    <div className="briefing-slide executive">
-      <header className="slide-header">
-        <p className="deck-kicker">01 · Executive assessment</p>
-        <h2>
-          {model.primaryEvent
-            ? `A magnitude ${
-              model.primaryEvent.magnitude.toFixed(1)
-            } event near ${
-              concisePlace(model.primaryEvent.place)
-            } drove the week’s response priorities.`
-            : "The largest event drove the week’s response priorities."}
-        </h2>
-      </header>
-
-      <div className="executive-frame">
-        <div className="executive-metrics">
-          <Metric
-            label="source events"
-            value={model.weekly
-              ? integer.format(model.weekly.source_events)
-              : "…"}
-          />
-          <Metric
-            label="M2.5+ events"
-            value={model.weekly
-              ? integer.format(model.weekly.qualified_events)
-              : "…"}
-          />
-          <Metric
-            label="maximum magnitude"
-            value={model.weekly?.maximum_magnitude.toFixed(1) ?? "…"}
-          />
-          <Metric
-            label="felt reports"
-            value={model.weekly
-              ? integer.format(model.weekly.felt_reports)
-              : "…"}
-          />
-        </div>
-
-        <div className="tempo-card">
-          <div className="tempo-card-heading">
-            <h3 data-id="weekly-tempo-title">Weekly rhythm</h3>
-            <span>
-              {model.weekly
-                ? `${model.weekly.tsunami_flags} tsunami flags`
-                : "Loading"}
-            </span>
-          </div>
-          <ActivityBars
-            activity={model.activity}
-            compact
-            maximum={model.maximumDailyCount}
-            peakKey={model.peakKey}
-          />
-        </div>
-      </div>
-
-      <footer className="slide-footer">
-        USGS weekly record · {formatPeriod(model.weekly)}
-      </footer>
-    </div>
-  </Slide>
-);
-
-export const TempoSlide = ({ model }: { model: BriefingModel }) => (
-  <Slide {...autoAnimate}>
-    <div className="briefing-slide tempo-detail">
-      <header className="slide-header">
-        <p className="deck-kicker">02 · Weekly rhythm</p>
-        <h2 data-id="weekly-tempo-title">Weekly rhythm</h2>
-        <p className="slide-intro">
-          {model.peakActivity
-            ? `Volume peaked on ${formatDay(model.peakActivity.day)} with ${
-              integer.format(model.peakActivity.events)
-            } recorded events. Daily magnitude reached M${
-              model.maximumDailyMagnitude.toFixed(1)
-            } on ${
-              formatDay(
-                model.activity.find((row) =>
-                  row.maximum_magnitude === model.maximumDailyMagnitude
-                )?.day ?? model.peakActivity.day,
-              )
-            }.`
-            : "Daily activity is loading."}
+      <div className="cover-copy">
+        <p className="deck-kicker deck-kicker-light">
+          USGS weekly catalog · {formatPeriod(model.analysis?.weekly)}
         </p>
-      </header>
-
-      <ActivityBars
-        activity={model.activity}
-        maximum={model.maximumDailyCount}
-        peakKey={model.peakKey}
-      />
-
-      <footer className="slide-footer slide-footer-split">
-        <span>
-          {model.peakActivity
-            ? `Peak activity · ${formatDay(model.peakActivity.day)} · ${
-              integer.format(model.peakActivity.events)
-            } events`
-            : "Peak activity loading"}
-        </span>
-        <span>
-          Largest daily maximum · M{model.maximumDailyMagnitude.toFixed(1)}
-        </span>
-      </footer>
-    </div>
-  </Slide>
-);
-
-export const OperatingPictureSlide = (
-  { model }: { model: BriefingModel },
-) => (
-  <Slide>
-    <div className="briefing-slide operating-picture">
-      <header className="slide-header">
-        <p className="deck-kicker">03 · Operating picture</p>
-        <h2>Set the review cut for the current handover.</h2>
-      </header>
-
-      <div className="operating-frame">
-        <div className="control-block">
-          <span className="frame-label">Review filters</span>
-          <div className="control-layout">
-            <marimo-cell name="event_controls" />
-            <aside className="baseline-card">
-              <span>Full-week baseline</span>
-              <strong>
-                {model.weekly
-                  ? `${
-                    integer.format(model.weekly.source_events)
-                  } source events`
-                  : "Weekly record loading"}
-              </strong>
-              <p>
-                {model.weekly
-                  ? `${
-                    integer.format(model.weekly.qualified_events)
-                  } met the published threshold · ${model.weekly.tsunami_flags} tsunami flags`
-                  : "Loading threshold and impact totals"}
-              </p>
-            </aside>
-          </div>
-        </div>
-
-        <div
-          className={model.summary?.tsunami_flags
-            ? "selected-situation selected-situation-alert"
-            : "selected-situation"}
-          aria-live="polite"
-          aria-label="Selected review cut"
-          role="region"
-        >
-          <div className="selected-heading">
-            <span className="frame-label">Selected review cut</span>
-            <strong>
-              M{model.summary?.minimum_magnitude.toFixed(1) ?? "…"}+ ·{" "}
-              {model.summary?.status.toLowerCase() ?? "loading"}
-            </strong>
-          </div>
-          <div className="selected-metrics">
-            <Metric
-              label="selected events"
-              value={model.summary ? integer.format(model.summary.events) : "…"}
-            />
-            <Metric
-              label="maximum magnitude"
-              value={model.summary?.maximum_magnitude.toFixed(1) ?? "…"}
-            />
-            <Metric
-              label="felt reports"
-              value={model.summary
-                ? integer.format(model.summary.felt_reports)
-                : "…"}
-            />
-            <Metric
-              label="tsunami flags"
-              value={model.summary?.tsunami_flags ?? "…"}
-            />
-          </div>
-          <div className="scope-row" aria-label="Selected scope comparison">
-            <ScopeGauge
-              selected={model.summary?.events ?? 0}
-              total={model.weekly?.source_events ?? 0}
-            />
-            <span>
-              <strong>
-                {model.summary && model.weekly
-                  ? integer.format(
-                    model.weekly.source_events - model.summary.events,
-                  )
-                  : "…"}
-              </strong>
-              events outside the cut
-            </span>
-            <span>
-              <strong>{model.summary?.tsunami_flags ?? "…"}</strong>
-              tsunami flags retained
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <footer className="slide-footer">
-        Full week · {model.weekly
-          ? `${integer.format(model.weekly.source_events)} events · Maximum M${
-            model.weekly.maximum_magnitude.toFixed(1)
-          }`
-          : "Loading weekly totals"}
-      </footer>
-    </div>
-  </Slide>
-);
-
-export const WatchlistSlide = ({ model }: { model: BriefingModel }) => (
-  <Slide>
-    <div className="briefing-slide watchlist-slide">
-      <header className="slide-header">
-        <p className="deck-kicker">04 · Priority watchlist</p>
-        <h2>
-          {model.primaryEvent
-            ? `M ${model.primaryEvent.magnitude.toFixed(1)} near ${
-              concisePlace(model.primaryEvent.place)
-            } leads the watch sequence.`
-            : "Priority events are loading."}
-        </h2>
-      </header>
-
-      <div className="watch-layout">
-        <article className="watch-feature">
-          <span className="frame-label">Primary event</span>
-          <strong className="feature-magnitude">
-            M {model.primaryEvent?.magnitude.toFixed(1) ?? "…"}
-          </strong>
-          <h3>{model.primaryEvent?.place ?? "Loading event record"}</h3>
-          <dl className="watch-facts">
-            <div>
-              <dt>Recorded</dt>
-              <dd>
-                {model.primaryEvent
-                  ? formatTime(model.primaryEvent.time)
-                  : "Loading"}
-              </dd>
-            </div>
-            <div>
-              <dt>Impact signal</dt>
-              <dd>
-                {model.primaryEvent
-                  ? feltLabel(model.primaryEvent.felt)
-                  : "Loading"}
-              </dd>
-            </div>
-            <div>
-              <dt>Watch position</dt>
-              <dd>01 of {model.strongest.length || "…"}</dd>
-            </div>
-          </dl>
-          <MagnitudeLadder events={model.strongest} />
-          {model.primaryEvent?.tsunami
-            ? <span className="event-alert">Tsunami flag</span>
-            : null}
-        </article>
-
-        <ol className="watch-list">
-          {model.strongest.slice(1).map((event, index) => (
-            <li key={event.id}>
-              <span className="watch-rank">
-                {String(index + 2).padStart(2, "0")}
-              </span>
-              <strong>M {event.magnitude.toFixed(1)}</strong>
-              <span className="watch-place">{event.place}</span>
-              <small>
-                {formatTime(event.time)} · {feltLabel(event.felt)}
-                {event.tsunami ? " · Tsunami flag" : ""}
-              </small>
-            </li>
-          ))}
+        <h1>Reading one week of earthquakes</h1>
+        <p className="deck-lede">
+          Compare logarithmic scale, event frequency, and the choices hidden
+          inside a data filter.
+        </p>
+        <ol className="cover-questions" aria-label="Lesson questions">
+          <li>
+            <span>01</span> How much larger is a larger earthquake?
+          </li>
+          <li>
+            <span>02</span> What changes when we move the threshold?
+          </li>
+          <li>
+            <span>03</span> Why do the strongest events become rare?
+          </li>
         </ol>
       </div>
-
-      <footer className="slide-footer">
-        Ranked by magnitude, then source significance.
-      </footer>
+      <div className="cover-atlas">
+        <EventAtlas events={model.events} />
+        <dl className="cover-readout" aria-label="Weekly catalog summary">
+          <div>
+            <dt>Source records</dt>
+            <dd>
+              {model.analysis
+                ? integer.format(model.analysis.weekly.source_events)
+                : "…"}
+            </dd>
+          </div>
+          <div>
+            <dt>Largest event</dt>
+            <dd>
+              M{model.analysis?.weekly.maximum_magnitude.toFixed(1) ?? "…"}
+            </dd>
+          </div>
+          <div>
+            <dt>Time span</dt>
+            <dd>7 days</dd>
+          </div>
+        </dl>
+      </div>
     </div>
   </Slide>
 );
 
-export const HandoffSlide = ({ model }: { model: BriefingModel }) => (
-  <Slide>
-    <div className="briefing-slide handoff-slide">
-      <header className="slide-header">
-        <p className="deck-kicker">05 · Duty handover</p>
-        <h2>
-          Keep the largest event on watch. Escalate new impact signals.
-        </h2>
-      </header>
+export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
+  const weekly = model.analysis?.weekly;
+  const belowThreshold = weekly
+    ? weekly.source_events - weekly.qualified_events
+    : 0;
 
-      <div className="handoff-layout">
-        <div className="conclusion-card">
-          <marimo-cell name="conclusion" />
-          <div className="handoff-watch">
-            <span className="frame-label">Lead watch</span>
-            <strong>
-              {model.primaryEvent
-                ? `M${model.primaryEvent.magnitude.toFixed(1)} · ${
-                  concisePlace(model.primaryEvent.place)
-                }`
-                : "Lead event loading"}
-            </strong>
-            <p>
-              {model.primaryEvent
-                ? `${formatTime(model.primaryEvent.time)} · ${
-                  feltLabel(model.primaryEvent.felt)
-                }`
-                : "Waiting for event details"}
+  return (
+    <Slide
+      {...tempoAutoAnimate}
+    >
+      <div className="briefing-slide catalog-slide">
+        <header className="slide-header">
+          <p className="deck-kicker">03 · From record to evidence</p>
+          <h2>A catalog is a measurement lens.</h2>
+          <p className="slide-intro">
+            Before interpreting a pattern, separate the published feed, the
+            numerical rule, and the question the learner will answer.
+          </p>
+        </header>
+
+        <div className="catalog-layout">
+          <div className="catalog-sequence">
+            <article className="catalog-step">
+              <span>Published feed</span>
+              <strong>
+                {weekly ? integer.format(weekly.source_events) : "…"}
+              </strong>
+              <p>records in the fixed USGS weekly snapshot</p>
+            </article>
+            <article className="catalog-step fragment" data-fragment-index="0">
+              <span>Numerical rule</span>
+              <strong>
+                {weekly ? integer.format(weekly.qualified_events) : "…"}
+              </strong>
+              <p>records satisfy the computed M2.5+ threshold</p>
+            </article>
+            <article
+              className="catalog-step catalog-step-accent fragment"
+              data-fragment-index="1"
+            >
+              <span>Interpretation</span>
+              <strong>{formatPeriod(weekly)}</strong>
+              <p>one bounded observation window for linked comparisons</p>
+            </article>
+            <p className="catalog-footnote fragment" data-fragment-index="1">
+              {belowThreshold === 1
+                ? "One stored value is M2.45, which rounds to the feed’s published M2.5 threshold."
+                : `${belowThreshold} source records sit below the numerical M2.5 cut.`}
             </p>
           </div>
-          <div className="handoff-metrics">
-            <Metric
-              label="events in cut"
-              value={model.summary ? integer.format(model.summary.events) : "…"}
-            />
-            <Metric
-              label="maximum magnitude"
-              value={model.summary?.maximum_magnitude.toFixed(1) ?? "…"}
-            />
-            <Metric
-              label="tsunami flags"
-              value={model.summary?.tsunami_flags ?? "…"}
+
+          <div className="catalog-tempo-card">
+            <div className="figure-heading">
+              <h3 data-id="weekly-tempo-title">Seven days of activity</h3>
+              <small>events + maximum magnitude</small>
+            </div>
+            <ActivityBars
+              activity={model.activity}
+              compact
+              maximum={model.maximumDailyCount}
+              peakKey={model.peakKey}
             />
           </div>
-        </div>
-        <div className="handoff-actions">
-          <article>
-            <strong className="action-index" aria-hidden="true">01</strong>
-            <span>Monitor</span>
-            <p>
-              Review updates for {model.primaryEvent
-                ? concisePlace(model.primaryEvent.place)
-                : "the lead event"} and nearby activity.
-            </p>
-          </article>
-          <article>
-            <strong className="action-index" aria-hidden="true">02</strong>
-            <span>Escalate</span>
-            <p>Any new tsunami flag or sharp rise in felt reports.</p>
-          </article>
-          <article>
-            <strong className="action-index" aria-hidden="true">03</strong>
-            <span>Follow-up</span>
-            <p>Operations for event follow-up. Story for broader context.</p>
-          </article>
         </div>
       </div>
+    </Slide>
+  );
+};
 
-      <footer className="slide-footer">
-        Source event links remain available for the next duty team.
-      </footer>
-    </div>
-  </Slide>
-);
+export const TempoSlide = ({ model }: { model: BriefingModel }) => {
+  const magnitudePeak = model.activity.find((row) =>
+    row.maximum_magnitude === model.maximumDailyMagnitude
+  );
+
+  return (
+    <Slide
+      {...tempoAutoAnimate}
+    >
+      <div className="briefing-slide tempo-slide">
+        <header className="slide-header slide-header-split">
+          <div>
+            <p className="deck-kicker">04 · Time</p>
+            <h2 data-id="weekly-tempo-title">
+              Count and size tell different stories.
+            </h2>
+          </div>
+          <p className="slide-intro">
+            Event volume describes catalog tempo. The daily maximum isolates the
+            strongest event recorded on each day.
+          </p>
+        </header>
+
+        <ActivityBars
+          activity={model.activity}
+          maximum={model.maximumDailyCount}
+          peakKey={model.peakKey}
+        />
+
+        <div className="tempo-findings">
+          <Metric
+            detail="highest daily count"
+            label={model.peakActivity ? formatDay(model.peakActivity.day) : "…"}
+            value={model.peakActivity
+              ? integer.format(model.peakActivity.events)
+              : "…"}
+          />
+          <Metric
+            detail="largest daily maximum"
+            label={magnitudePeak ? formatDay(magnitudePeak.day) : "…"}
+            value={`M${model.maximumDailyMagnitude.toFixed(1)}`}
+          />
+          <blockquote>
+            “Most events” and “largest event” are separate analytical claims.
+          </blockquote>
+        </div>
+      </div>
+    </Slide>
+  );
+};
+
+export const MagnitudeSlide = ({ model }: { model: BriefingModel }) => {
+  const scaling = model.analysis?.magnitude_scaling;
+
+  return (
+    <Slide>
+      <div className="briefing-slide magnitude-slide">
+        <header className="slide-header slide-header-split">
+          <div>
+            <p className="deck-kicker">01 · Scale</p>
+            <h2>Magnitude is logarithmic, not linear.</h2>
+          </div>
+          <p className="slide-intro">
+            Compare the week’s M{scaling?.maximum_magnitude.toFixed(1) ?? "…"}
+            {" "}
+            event with any reference magnitude. The equations translate their
+            difference into recorded amplitude and approximate energy ratios.
+          </p>
+        </header>
+
+        <div className="magnitude-layout">
+          <div className="notebook-lab">
+            <div className="lab-heading">
+              <span>Reference magnitude</span>
+              <small>Choose a comparison</small>
+            </div>
+            <marimo-cell
+              name="magnitude_reference_control"
+              onKeyDown={(event) => event.stopPropagation()}
+            />
+            <marimo-cell name="magnitude_comparison" />
+          </div>
+
+          <div className="ratio-proof" aria-live="polite">
+            <div className="ratio-equation">
+              <span>Magnitude difference</span>
+              <strong>ΔM = {scaling?.difference.toFixed(1) ?? "…"}</strong>
+            </div>
+            <div className="ratio-result ratio-result-amplitude">
+              <span>Recorded amplitude</span>
+              <strong>
+                {scaling ? formatRatio(scaling.amplitude_ratio) : "…"}×
+              </strong>
+              <small>
+                10<sup>ΔM</sup>
+              </small>
+            </div>
+            <div className="ratio-result ratio-result-energy">
+              <span>Released energy, approximate</span>
+              <strong>
+                {scaling ? formatRatio(scaling.energy_ratio) : "…"}×
+              </strong>
+              <small>
+                10<sup>1.5ΔM</sup>
+              </small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Slide>
+  );
+};
+
+export const FrequencySlide = ({ model }: { model: BriefingModel }) => {
+  const frequency = model.analysis?.frequency;
+  const fit = frequency?.model;
+  const selected = frequency?.selected;
+
+  return (
+    <Slide>
+      <div className="briefing-slide frequency-slide">
+        <header className="slide-header slide-header-split">
+          <div>
+            <p className="deck-kicker">05 · Frequency</p>
+            <h2>As magnitude rises, event counts fall.</h2>
+          </div>
+          <p className="slide-intro">
+            A logarithmic count axis turns multiplicative change into distance.
+            The near-linear section is summarized by a descriptive
+            frequency–magnitude fit.
+          </p>
+        </header>
+
+        <div className="frequency-layout">
+          <FrequencyMagnitudePlot
+            curve={frequency?.curve ?? []}
+            fitMaximum={fit?.fit_maximum ?? 6}
+            fitMinimum={fit?.fit_minimum ?? 3}
+            selectedMagnitude={selected?.magnitude ?? 4.5}
+          />
+          <aside className="frequency-notes">
+            <div className="frequency-control-panel">
+              <div className="lab-heading">
+                <span>Choose a magnitude cut</span>
+                <small>Explore the fitted range</small>
+              </div>
+              <marimo-cell
+                name="frequency_threshold_control"
+                onKeyDown={(event) => event.stopPropagation()}
+              />
+              <div className="frequency-cut-summary" aria-live="polite">
+                <span>
+                  M{selected?.magnitude.toFixed(1) ?? "…"} and above
+                </span>
+                <dl>
+                  <div>
+                    <dt>Observed</dt>
+                    <dd>
+                      {selected
+                        ? integer.format(selected.observed_events)
+                        : "…"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Fit estimate</dt>
+                    <dd>
+                      {selected
+                        ? integer.format(Math.round(selected.fitted_events))
+                        : "…"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+            <marimo-cell name="frequency_magnitude_relation" />
+            <dl className="fit-readout">
+              <div>
+                <dt>Estimated b</dt>
+                <dd>{fit?.b_value.toFixed(2) ?? "…"}</dd>
+              </div>
+              <div>
+                <dt>Fit R²</dt>
+                <dd>{fit?.r_squared.toFixed(2) ?? "…"}</dd>
+              </div>
+              <div>
+                <dt>Fit range</dt>
+                <dd>
+                  M{fit?.fit_minimum.toFixed(1) ??
+                    "…"}–{fit?.fit_maximum.toFixed(1) ?? "…"}
+                </dd>
+              </div>
+            </dl>
+            <p className="method-caveat">
+              One global week · descriptive fit.
+            </p>
+          </aside>
+        </div>
+      </div>
+    </Slide>
+  );
+};
+
+export const SelectionSlide = ({ model }: { model: BriefingModel }) => {
+  const summary = model.analysis?.selection;
+  const total = model.analysis?.weekly.source_events ?? 0;
+  const share = total > 0 && summary ? summary.events / total : 0;
+
+  return (
+    <Slide>
+      <div className="briefing-slide selection-slide">
+        <header className="slide-header slide-header-split">
+          <div>
+            <p className="deck-kicker">02 · Selection</p>
+            <h2>A threshold redraws the population.</h2>
+          </div>
+          <p className="slide-intro">
+            Adjust the threshold to define which records enter the comparison.
+            Muted points preserve the full catalog while the selected set
+            updates.
+          </p>
+        </header>
+
+        <div className="selection-layout">
+          <aside className="selection-controls">
+            <div className="lab-heading">
+              <span>Define the population</span>
+              <small>Adjust the threshold</small>
+            </div>
+            <marimo-cell
+              name="event_controls"
+              onKeyDown={(event) => event.stopPropagation()}
+            />
+            <div className="selection-summary" aria-live="polite">
+              <span>Current analytical set</span>
+              <strong>{summary ? integer.format(summary.events) : "…"}</strong>
+              <p>
+                M{summary?.minimum_magnitude.toFixed(1) ?? "…"}+ ·{" "}
+                {summary?.status.toLowerCase() ?? "loading"}
+              </p>
+              <div className="selection-share">
+                <span style={{ width: `${share * 100}%` }} />
+              </div>
+              <small>
+                {Math.round(share * 100)}% of source records retained
+              </small>
+            </div>
+            <dl className="selection-facts">
+              <div>
+                <dt>Largest selected</dt>
+                <dd>M{summary?.maximum_magnitude.toFixed(1) ?? "…"}</dd>
+              </div>
+              <div>
+                <dt>Felt reports</dt>
+                <dd>{summary ? integer.format(summary.felt_reports) : "…"}</dd>
+              </div>
+              <div>
+                <dt>Tsunami flags</dt>
+                <dd>{summary?.tsunami_flags ?? "…"}</dd>
+              </div>
+            </dl>
+          </aside>
+
+          <div className="selection-map">
+            <EventAtlas events={model.events} variant="selection" />
+          </div>
+        </div>
+      </div>
+    </Slide>
+  );
+};
+
+export const ImpactSlide = ({ model }: { model: BriefingModel }) => {
+  const mostFelt = model.events.reduce<
+    (typeof model.events)[number] | undefined
+  >(
+    (current, event) =>
+      !current || (event.felt ?? 0) > (current.felt ?? 0) ? event : current,
+    undefined,
+  );
+
+  return (
+    <Slide>
+      <div className="briefing-slide impact-slide">
+        <header className="slide-header slide-header-split">
+          <div>
+            <p className="deck-kicker">06 · Consequence</p>
+            <h2>Magnitude and observed impact are not interchangeable.</h2>
+          </div>
+          <p className="slide-intro">
+            Magnitude describes the earthquake. Felt reports describe a human
+            response shaped by exposure, access, and reporting behavior.
+          </p>
+        </header>
+
+        <div className="impact-layout">
+          <ImpactScatter events={model.events} />
+          <aside className="event-casebook">
+            <article>
+              <span>Largest event</span>
+              <strong>
+                M{model.primaryEvent?.magnitude.toFixed(1) ?? "…"}
+              </strong>
+              <h3>{model.primaryEvent?.place ?? "Loading event"}</h3>
+              <p>
+                {model.primaryEvent
+                  ? `${formatTime(model.primaryEvent.time)} · ${
+                    feltLabel(model.primaryEvent.felt)
+                  }`
+                  : "Event context loading"}
+              </p>
+            </article>
+            <article>
+              <span>Most reported</span>
+              <strong>{integer.format(mostFelt?.felt ?? 0)}</strong>
+              <h3>{mostFelt?.place ?? "Loading event"}</h3>
+              <p>
+                {mostFelt
+                  ? `M${mostFelt.magnitude.toFixed(1)} · ${
+                    formatTime(mostFelt.time)
+                  }`
+                  : "Event context loading"}
+              </p>
+            </article>
+          </aside>
+        </div>
+      </div>
+    </Slide>
+  );
+};

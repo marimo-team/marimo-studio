@@ -134,7 +134,7 @@ export const documentationExampleFamilies = [
   {
     notebook: "examples/earthquakes.py",
     slug: "earthquakes",
-    summary: "A story, operations map, and briefing deck share one weekly seismic model.",
+    summary: "A seismic story, operations map, and interactive lesson share one weekly USGS model.",
     title: "Earthquake watch",
     views: [
       {
@@ -155,7 +155,7 @@ export const documentationExampleFamilies = [
       {
         key: "briefing",
         kind: "slides",
-        label: "Briefing",
+        label: "Interactive lesson",
         technologies: [
           documentationTechnologies.react,
           documentationTechnologies.revealJs,
