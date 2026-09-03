@@ -1,0 +1,19 @@
+development_docs/releasing.md
+  s_5d3e5afc5ceae4::t_903bb6201be6c8 161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6bbff34784772f9d037b7e39d4ea83ed165e855a",
+  "prompts": {},
+  "sessions": {
+    "s_5d3e5afc5ceae4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061e5-1e88-75a2-80ad-e82619d57701",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
