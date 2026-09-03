@@ -419,6 +419,47 @@ Reconsider the projection kind before changing notebook code to make a
 projection host render. Presentation requirements stay in the view when the
 notebook already defines the intended value.
 
+### Mount Lens in a Studio view
+
+[Marimo Lens](https://marimo-team.github.io/marimo-lens/) lets a person mark a
+rendered result or authored page region and give that exact surface to a
+code-mode agent. Install `marimo-lens` in the notebook environment, then define
+one Lens value with Studio's projection-host selector:
+
+```python
+from marimo_lens import Lens
+from marimo_studio import STUDIO_RESULT_SELECTOR
+
+studio_lens = Lens(
+    dom_selector=f"{STUDIO_RESULT_SELECTOR}, [data-lens-target]",
+)
+None
+```
+
+The final `None` keeps the Lens dock on the projected Studio surface. Rendering
+`studio_lens` as the notebook cell output also mounts a notebook dock.
+
+Project the value once in each view that should collect feedback. Mark bounded
+authored regions whose copy, layout, or styling can receive feedback:
+
+```html
+<marimo-output value="studio_lens"></marimo-output>
+
+<header data-lens-target>
+  <h1>Quarterly revenue</h1>
+</header>
+```
+
+`STUDIO_RESULT_SELECTOR` covers connected `marimo-cell`, `marimo-output`, and
+`mo-value` hosts. The additional selector covers authored view source. Keep the
+selector focused on meaningful page regions.
+
+Use the packaged Marimo Lens skill for the feedback lifecycle. Pass the
+captured `SelectionReference` to Lens activity and reveal calls. Use its
+`cells` as notebook provenance. For a DOM target, use `documentPath`,
+`domSelector`, and the active Studio view to locate the owning source document,
+then build, show, and validate that view before resolving the selection.
+
 ## Build, show, and verify
 
 Build after editing view source:
