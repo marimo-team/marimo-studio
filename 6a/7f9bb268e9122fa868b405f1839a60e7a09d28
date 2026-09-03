@@ -1,0 +1,19 @@
+packages/marimo-studio/tests/server/test_security_policy.py
+  s_5d3e5afc5ceae4::t_4a44f8cf8a08ab 91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6a7f9bb268e9122fa868b405f1839a60e7a09d28",
+  "prompts": {},
+  "sessions": {
+    "s_5d3e5afc5ceae4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061e5-1e88-75a2-80ad-e82619d57701",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
