@@ -1,0 +1,19 @@
+examples/earthquakes.py
+  s_5d3e5afc5ceae4::t_ef41d6fb21ddb0 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c8bc8b533db0d4982c594fc75150b829bcec783e",
+  "prompts": {},
+  "sessions": {
+    "s_5d3e5afc5ceae4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061e5-1e88-75a2-80ad-e82619d57701",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    }
+  }
+}
