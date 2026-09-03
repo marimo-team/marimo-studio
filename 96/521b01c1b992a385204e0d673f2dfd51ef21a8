@@ -1,0 +1,19 @@
+packages/marimo-studio/src/marimo_studio/_server/presentation/projection_routes.py
+  s_5d3e5afc5ceae4::t_7783ef933eb8b2 82,89-90,187,194-195,289,292,301-302
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "96521b01c1b992a385204e0d673f2dfd51ef21a8",
+  "prompts": {},
+  "sessions": {
+    "s_5d3e5afc5ceae4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061e5-1e88-75a2-80ad-e82619d57701",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
