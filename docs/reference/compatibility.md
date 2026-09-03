@@ -5,10 +5,10 @@ description: Supported Python, Marimo, Deno, uv, browser, runtime, release, prov
 
 # Compatibility and support
 
-Marimo Studio 0.1.0 is the first public release. The notebook-to-view workflow,
-projection elements, and last-successful build behavior are supported product
-contracts. Before 1.0, CLI, Python, provider, and saved configuration contracts
-may change between minor releases.
+Marimo Studio 0.1.0 begins the first documented compatibility line. The
+notebook-to-view workflow, projection elements, and last-successful build
+behavior are supported product contracts. Before 1.0, CLI, Python, provider,
+and saved configuration contracts may change between minor releases.
 
 Pin Studio and third-party view providers in saved notebooks and deployed
 projects:
@@ -16,6 +16,54 @@ projects:
 ```toml
 dependencies = ["marimo-studio==0.1.0"]
 ```
+
+## Upgrade from 0.0.6
+
+Version 0.1.0 introduces explicit view manifests and a notebook-bound authoring
+API. Update saved view projects and automation before opening them with 0.1.0.
+
+Add this `view.toml` to each existing 0.0.6 view directory:
+
+```toml
+schema = 1
+provider = "marimo-studio/vanilla"
+```
+
+Keep the existing `index.html` and any CSS or JavaScript files it references.
+Then run `marimo-studio status --target analysis.py`. Studio discovers the view,
+assigns its owner record, and reports its Source documents. Commit `view.toml`
+and the generated `.owners/` records with the view project.
+
+Update command and Python callers with these replacements:
+
+| 0.0.6 contract                                                                 | 0.1.0 replacement                                                                |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `marimo-studio inspect TARGET --display`                                       | `marimo-studio notebook inspect --target TARGET --output-expressions`            |
+| `marimo-studio bind TARGET --cell 12 --as summary`                             | `marimo-studio notebook bind summary --target TARGET --cell 12`                  |
+| `marimo-studio view add TARGET --name report`                                  | `marimo-studio view create report --target TARGET`                               |
+| `marimo-studio view list TARGET`                                               | `marimo-studio status --target TARGET`                                           |
+| `marimo-studio view remove TARGET --name report`                               | `marimo-studio view remove report --target TARGET`                               |
+| `marimo-studio check TARGET --view report --runtime`                           | `marimo-studio validate report --target TARGET --level runtime`                  |
+| `marimo-studio analyze TARGET --view report --server URL`                      | `marimo-studio validate report --target TARGET --level browser --server URL`     |
+| `marimo-studio export TARGET --view report --output dist/report`               | `marimo-studio view export report --target TARGET --output dist/report`          |
+| `--format json --diagnostics jsonl`                                            | `--json`                                                                         |
+| Functions in `marimo_studio.agents`                                            | `marimo_studio.agent.current_workspace()` and its `Workspace` or `View` methods  |
+| Saved-workspace helpers in `marimo_studio.workspace`, `checks`, and `export`   | `marimo_studio.authoring.open_workspace()` and its `Workspace` or `View` methods |
+| `CellConfigSpec`, `CellRef`, `CellSpec`, and `SourceSpan` from `marimo_studio` | Import these provider-facing records from `marimo_studio.view_providers`         |
+
+Notebook-local `[tool.marimo-studio]` configuration and project
+`pyproject.toml` configuration are mutually exclusive for one notebook. Keep
+one configuration source before running the upgraded commands.
+
+After updating the workspace, run:
+
+```console
+marimo-studio status --target analysis.py
+marimo-studio validate --target analysis.py --level runtime
+```
+
+Runtime validation executes the complete notebook with the current user's
+filesystem, environment, and network authority. Run it for trusted notebooks.
 
 ## Supported environment
 
@@ -30,7 +78,7 @@ dependencies = ["marimo-studio==0.1.0"]
 Server execution can use the packages, files, databases, and credentials
 available to its Python environment. Browser execution requires
 [Pyodide](https://pyodide.org/)-compatible packages and data sources the visitor
-can reach. [Run or publish a view](../guide/run-and-share.md) defines those
+can reach. [Run or export a view](../guide/run-and-share.md) defines those
 runtime and delivery boundaries.
 
 ## Runtime and delivery matrix

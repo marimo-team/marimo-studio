@@ -141,8 +141,9 @@ UI object reset identifiers.
 
 Describes one installed starter through `id`, `title`, `summary`, `provider`,
 the initial Source document plan in `documents`, and current `availability`.
-The complete created file set is returned by a dry-run creation operation, not
-by this catalog record.
+Run `marimo-studio view create VIEW --target PATH --dry-run` to inspect the
+complete created file set before committing it. `Workspace.create_view()`
+creates the view directly.
 
 ### `BindingResult`
 
@@ -184,11 +185,11 @@ await view.remove() -> ViewRemovalResult
 Studio editor. A stale revision raises `SourceConflictError` and preserves the
 newer file.
 
-`write()`, `build()`, `validate()`, and `export()` verify the handle's catalog
-and view generation. A same-name replacement raises
-`ViewGenerationConflictError` before source or artifact publication changes.
-`export()` checks again before replacing its destination, including when
-`force=True`.
+`show()`, `write()`, `build()`, `validate()`, and `export()` verify the handle's
+catalog and view generation. A same-name replacement raises
+`ViewGenerationConflictError` before browser activation, source writes, or
+artifact publication. `export()` checks again before replacing its destination,
+including when `force=True`.
 
 `build()` returns the artifact revision produced by the selected development or
 production build. The profiles maintain independent publications. A failed

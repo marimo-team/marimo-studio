@@ -97,7 +97,8 @@ export const EventMap = ({
                 latitude={event.latitude}
                 anchor="center"
               >
-                <span
+                <button
+                  type="button"
                   className={`event-marker${
                     event.tsunami
                       ? " event-marker-alert"
@@ -105,17 +106,20 @@ export const EventMap = ({
                       ? " event-marker-major"
                       : ""
                   }${event.id === selectedEvent?.id ? " is-selected" : ""}`}
-                  title={`M ${
+                  aria-label={`Select M ${
                     formatMagnitude(
                       event.magnitude,
                     )
                   }, ${event.place}`}
+                  aria-pressed={event.id === selectedEvent?.id}
                   style={{
                     width: `${markerSize}px`,
                     height: `${markerSize}px`,
                   }}
                   onMouseEnter={() => setHoveredId(event.id)}
                   onMouseLeave={() => setHoveredId(null)}
+                  onFocus={() => setHoveredId(event.id)}
+                  onBlur={() => setHoveredId(null)}
                   onClick={(clickEvent) => {
                     clickEvent.stopPropagation();
                     onSelect(event.id);
