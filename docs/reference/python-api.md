@@ -455,6 +455,23 @@ CSS selector for complete cells, rendered outputs, and values that Studio has
 connected to their notebook producers. Browser tools can use it to target
 rendered notebook results.
 
+Pass the selector to [Marimo Lens](https://marimo-team.github.io/marimo-lens/)
+when Lens should collect feedback from Studio projections. Compose explicitly
+authored page regions into the same selector:
+
+```python
+from marimo_lens import Lens
+from marimo_studio import STUDIO_RESULT_SELECTOR
+
+studio_lens = Lens(
+    dom_selector=f"{STUDIO_RESULT_SELECTOR}, [data-lens-target]",
+)
+```
+
+Render `studio_lens` through `<marimo-output value="studio_lens">` in the view.
+Lens reads each projection's current producer identity from Studio's runtime
+metadata.
+
 ### `ASGIApp`
 
 Protocol for the asynchronous `scope`, `receive`, and `send` callable returned
