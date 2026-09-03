@@ -1,6 +1,6 @@
 ---
 title: Earthquake watch
-description: Compare a story, operations map, and briefing deck backed by one weekly earthquake notebook.
+description: Compare a story, operations map, and interactive lesson backed by one weekly earthquake notebook.
 sidebar: false
 aside: false
 outline: false
@@ -11,8 +11,9 @@ pageClass: studio-example-page
 
 [`earthquakes.py`](https://github.com/marimo-team/marimo-studio/blob/main/examples/earthquakes.py)
 loads a fixed USGS weekly feed with [Polars](https://pola.rs/), a dataframe
-library for Python. It defines magnitude and review controls, a filtered event
-table, daily activity, weekly totals, and a priority watchlist.
+library for Python. It computes daily activity, a logarithmic magnitude
+comparison, a descriptive frequency–magnitude fit, filtered event membership,
+and one shared `seismic_analysis` value.
 
 ## Compare the views
 
@@ -22,12 +23,15 @@ Scroll **Story** to move through the map sequence. In **Operations**, raise the
 minimum magnitude. The map, priority list, and summary update from the same
 reactive filter.
 
-In **Briefing**, move to the operating-picture slide and change the control.
-The dependent measures update inside the [Reveal.js](https://revealjs.com/)
-presentation.
+In **Interactive lesson**, use the comparison slider to recompute the amplitude and
+energy ratios. Then change the catalog filter and watch the selected count and
+epicenter map update inside the [Reveal.js](https://revealjs.com/)
+presentation. On the frequency slide, move the magnitude threshold to compare
+the observed cumulative count with the descriptive fit. Press <kbd>Esc</kbd> to
+open the Reveal overview.
 
-Open **Notebook** to trace the filter from its Marimo control to the tables and
-summaries consumed by all three views.
+Open **Notebook** to inspect the equations, fitted values, and reactive controls
+that supply the three views.
 
 ## Run locally
 
@@ -50,7 +54,7 @@ add browser network requests.
 - [Notebook](https://github.com/marimo-team/marimo-studio/blob/main/examples/earthquakes.py)
 - [Scrollytelling story](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/story)
 - [Operations map](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/operations)
-- [Briefing deck](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/briefing)
+- [Interactive lesson](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/earthquakes/briefing)
 
-Reveal.js keeps navigation, fragments, overview, and keyboard controls inside
-the briefing presentation.
+Reveal.js supplies navigation, fragments, Auto-Animate, overview mode, slide
+numbers, and keyboard controls inside the presentation.

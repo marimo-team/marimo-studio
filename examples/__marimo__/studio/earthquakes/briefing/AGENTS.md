@@ -1,118 +1,76 @@
-# Reveal.js React starter instructions
+# Reveal.js React view instructions
 
 Follow the Marimo Studio skill for notebook ownership, projection selection,
-view lifecycle, and validation. This file covers the Reveal.js project supplied
-by this starter.
+view lifecycle, and validation. This file covers the Reveal.js project in the
+`briefing` view.
 
 ## Project intent
 
-Build a six-slide weekly seismic situation update for a duty-team handover.
-Follow the Seismic Proof Sheet in `DESIGN.md`: an achromatic Chronicle-style
-grid with color confined to data. Keep one operational claim or decision per
-slide and retain `scrollActivationWidth: 0` for Studio's isolated frame.
+Build the seven-slide interactive earthquake lesson described in `DESIGN.md`. The deck
+teaches one scientific argument from a fixed USGS weekly catalog. Place the
+magnitude and selection experiments directly after the cover, then develop the
+catalog, time, frequency, and impact sequence. Keep one claim and one dominant
+evidence frame per slide.
 
 ## Compose the deck
 
-`src/App.tsx` owns the `Deck`, projection subscriptions, and ordered slide
-component list. Keep the argument readable as cover, executive assessment,
-weekly rhythm, operating picture, priority watchlist, and duty handover.
-`src/components/BriefingSlides.tsx` owns those six slide components.
-`src/components/BriefingPrimitives.tsx` owns repeated metrics and rhythm bars.
+`src/App.tsx` owns the `Deck`, the `seismic_analysis` subscription, Reveal
+plugins, and the ordered slide list. `src/components/BriefingSlides.tsx` owns
+the seven lesson slides. `src/components/BriefingPrimitives.tsx` owns repeated
+metrics and the daily activity view.
+`src/components/BriefingVisuals.tsx` owns the epicenter field,
+frequency–magnitude plot, and magnitude-to-impact scatter plot.
 `src/briefing-data.ts` owns projected value types and pure display formatting.
 
-`src/App.tsx` mounts the `mo-value` hosts for `weekly_summary`,
-`event_summary`, `daily_activity`, and `strongest_events`.
-`src/components/BriefingSlides.tsx` mounts `event_controls` and `conclusion` in
-the slides that render them. Place the selected `event_summary` metrics
-immediately after `event_controls` so the active review cut is visible on the
-same slide.
+The deck mounts `magnitude_reference_control`, `magnitude_comparison`,
+`event_controls`, `frequency_threshold_control`, and
+`frequency_magnitude_relation` as native notebook cells. Keep `seismic_analysis`
+as the atomic JSON projection so the charts and readouts receive one coherent
+notebook revision. Keep slide-specific teaching copy in `BriefingSlides.tsx`.
 
-Use Reveal Auto-Animate between the executive assessment and weekly rhythm
-slides. Give the pair the same `autoAnimateId`, then keep stable `data-id`
-attributes on the rhythm heading, chart, columns, and bars. The compact chart
-must expand into the detailed chart while preserving the same data marks.
-
-Use `div` or `article` for semantic regions inside a `Slide`. Reveal treats a
-nested `section` as a vertical slide and creates a full-frame background for
-it. Use `Stack` when the deck intentionally needs vertical navigation.
-
-Pass Reveal configuration through `Deck.config`. Register plugins through
-`Deck.plugins` when the deck first mounts. Keep the plugin array stable because
-Reveal initializes plugins once for each deck instance.
+## Use Reveal
 
 Keep `scrollActivationWidth: 0` in the deck configuration. Reveal's automatic
 narrow scroll view reads `sessionStorage`, which is unavailable inside Studio's
-isolated presentation frame. Slide mode scales to narrow frames and remains
-available in Server, WebAssembly, and static delivery.
+isolated presentation frame.
 
-Use percentage width and height in `Deck.config` so the authored slide grid
-owns its available frame at every viewport. Keep every visible element inside
-the current slide at 1440×1000, 1280×720, and 390×844. Measure the present
-section and its visible descendants in the browser. Repair the layout when any
-edge crosses the section bounds or the section scroll size exceeds its client
-size.
+Use the same `autoAnimateId` and stable `data-id` attributes on the catalog and
+time slides. Daily bars and maximum-magnitude marks should expand while
+preserving visual identity. Use fragments to pace the record-to-evidence
+sequence.
 
-Import `reveal.js/reveal.css` for the structural styles. Keep the deck's visual
-system in `src/style.css`, including typography, spacing, colors, controls, and
-progress treatment. Preserve full-height sizing for `html`, `body`,
-`#app-shell`, and `.reveal`.
+Use `div`, `article`, and `aside` for regions inside a `Slide`. Reveal treats a
+nested `section` as a vertical slide. Introduce a `Stack` when vertical
+navigation is an explicit part of the lesson.
 
-## Place notebook results on slides
+Set `Deck.config` to `width: 1440` and `height: 810`. Reveal scales the fixed
+16:9 canvas uniformly inside the available Studio presentation area. Keep slide
+geometry in fixed units and avoid viewport breakpoints that reflow the authored
+composition. Preserve full-height sizing for `html`, `body`, `#app-shell`, and
+`.reveal`.
 
-`src/marimo-studio.d.ts` types the Studio custom elements and attributes. Keep
-its reference at the top of `src/App.tsx`.
+Place Reveal's slide number at the top right and its navigation controls at the
+bottom right. Keep visible slide copy focused on scientific questions,
+quantities, methods, and evidence. Put implementation guidance in this file or
+`DESIGN.md`.
 
-Place a cell or output directly inside a `Slide` after selecting a target from
-the notebook:
+## Preserve the scientific contract
 
-```tsx
-<Slide>
-  <h2>Regional performance</h2>
-  <marimo-output value="regional_chart" />
-</Slide>
-```
-
-Use `src/lib/use-marimo-value.ts` when a React component consumes a notebook
-value or eager dataframe:
-
-```tsx
-import { type MarimoTable, useMarimoValue } from "./lib/use-marimo-value.ts";
-
-type Row = { region: string; revenue: number };
-
-const { hostRef, value: rows } =
-  useMarimoValue<MarimoTable<Row>>("regional_rows");
-
-return (
-  <Slide>
-    <span ref={hostRef} hidden mo-value="regional_rows" />
-    <strong>{rows?.numRows ?? 0} regions</strong>
-  </Slide>
-);
-```
-
-Keep every projection host in authored TSX so Studio can inspect and authorize
-its target. Treat `MarimoTable` as immutable. Use `getChild()`, `select()`, and
-`toColumns()` for columnar work, and call `toArray()` when a component needs row
-objects.
-
-## Add dependencies
-
-Run Deno's package manager from the view root so it updates `deno.json` and
-`deno.lock` together:
-
-```console
-deno add --frozen=false --save-exact npm:reveal.js@6.0.1
-```
-
-Keep `minimumDependencyAge` and the frozen lockfile policy intact. Commit both
-files after an intentional dependency update.
+The notebook owns equations, thresholds, fitted values, summaries, and event
+membership. View code may format and arrange projected records. Keep the
+frequency–magnitude fit described as a seven-day global teaching example. Keep
+magnitude and felt reports as distinct measures. Map labels identify
+epicenters and source records, not tectonic boundaries.
 
 ## Validate the presentation
 
-Build through Marimo Studio, then inspect the rendered deck in a browser. Check
-keyboard and control navigation, the Auto-Animate transition, notebook results,
-slide numbering, and narrow viewport behavior. Exercise the event controls and
-confirm that the selected metrics and handover note react in the same browser
-session. The Studio build verifies types and packages the deck before
-publishing it.
+Build through Marimo Studio. Export the WebAssembly site and exercise all three
+Marimo controls in the browser. Check horizontal navigation, fragments,
+Auto-Animate, overview mode, progress, slide numbering, and keyboard focus.
+
+Measure the present slide and its visible descendants at 1440×1000, 1280×720,
+and 390×844. Confirm the rendered slide retains a 16:9 ratio and the same
+internal geometry at each size. Repair any boundary crossing or scroll
+overflow. Inspect every slide after fonts and notebook cells finish loading,
+then confirm the selected count, map marks, frequency marker, and magnitude
+ratios update from the same browser session.

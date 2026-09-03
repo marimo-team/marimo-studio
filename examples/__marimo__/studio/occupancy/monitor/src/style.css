@@ -136,10 +136,16 @@ h1 {
   font-size: 0.82rem;
 }
 
+.control-bar-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  width: min(100%, 39rem);
+}
+
 .control-bar marimo-cell {
   display: block;
-  width: min(100%, 19rem);
-  min-width: 14rem;
+  min-width: 0;
 }
 
 .metrics {
@@ -185,6 +191,89 @@ h1 {
 
 .metrics article.attention strong {
   color: var(--anomaly);
+}
+
+.daily-profile {
+  margin-top: 1rem;
+  padding: 1rem 1.25rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.daily-heading,
+.daily-strip,
+.daily-strip article > div {
+  display: flex;
+  align-items: center;
+}
+
+.daily-heading {
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+}
+
+.daily-heading h2,
+.daily-heading p {
+  margin-bottom: 0;
+}
+
+.daily-heading h2 {
+  font-size: 1.15rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+.daily-heading > p,
+.daily-strip span,
+.daily-strip small {
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 0.65rem;
+}
+
+.daily-strip {
+  gap: 0.5rem;
+}
+
+.daily-strip article {
+  flex: 1;
+  min-width: 0;
+  padding: 0.7rem;
+  border: 1px solid var(--line-light);
+  background: var(--canvas);
+}
+
+.daily-strip article > div {
+  gap: 0.4rem;
+  justify-content: space-between;
+}
+
+.daily-strip strong {
+  font-family: var(--mono-font);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.daily-track {
+  display: block;
+  height: 0.25rem;
+  margin-block: 0.55rem 0.45rem;
+  overflow: hidden;
+  background: var(--line-light);
+}
+
+.daily-track i {
+  display: block;
+  height: 100%;
+  background: var(--forest);
+}
+
+.daily-strip small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .is-loading .metrics strong,
@@ -352,6 +441,7 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
   .monitor-header,
   .control-bar,
   .chart-heading,
+  .daily-heading,
   footer {
     align-items: flex-start;
     flex-direction: column;
@@ -361,12 +451,22 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
     min-width: 0;
   }
 
+  .control-bar-controls,
   .control-bar marimo-cell {
     width: 100%;
     min-width: 0;
   }
 
+  .control-bar-controls {
+    grid-template-columns: 1fr;
+  }
+
   .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .daily-strip {
+    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -377,6 +477,10 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
   }
 
   .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-strip {
     grid-template-columns: 1fr;
   }
 
