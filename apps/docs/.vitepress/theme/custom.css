@@ -173,6 +173,30 @@ body {
   padding-bottom: 96px;
 }
 
+.VPFooter .studio-footer-link {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--vp-c-text-3);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  transition:
+    color 160ms ease,
+    text-decoration-color 160ms ease;
+}
+
+.VPFooter .studio-footer-link:hover,
+.VPFooter .studio-footer-link:focus-visible {
+  color: var(--vp-c-brand-1);
+  text-decoration-color: currentcolor;
+}
+
+.VPFooter .studio-footer-link:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--vp-c-brand-soft);
+  outline-offset: 3px;
+}
+
 .vp-doc h1,
 .vp-doc h2,
 .vp-doc h3 {
