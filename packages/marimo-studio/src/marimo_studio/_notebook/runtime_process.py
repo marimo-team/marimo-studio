@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import sys
-import tempfile
 from pathlib import Path
 
 from marimo_studio._notebook.runtime_protocol import (
@@ -11,15 +9,12 @@ from marimo_studio._notebook.runtime_protocol import (
     encode_runtime_request,
 )
 from marimo_studio._notebook.source_generation import NotebookSourceGeneration
-from marimo_studio._processes.async_command import run_supervised_command
+from marimo_studio._processes.isolated_module import run_isolated_module_request
 from marimo_studio._processes.limits import (
     DEFAULT_RUNTIME_TIMEOUT,
     runtime_process_timeout,
 )
-from marimo_studio._processes.response_file import (
-    ProcessResponseError,
-    read_process_response,
-)
+from marimo_studio._processes.response_file import ProcessResponseError
 from marimo_studio._processes.supervisor import (
     ProcessCleanupError,
     ProcessResult,
@@ -51,38 +46,32 @@ async def probe_runtime_isolated(
         value_max_bytes=value_max_bytes,
         source_generation=source_generation,
     )
-    with tempfile.TemporaryDirectory(prefix="marimo-studio-runtime-") as root:
-        request_path = Path(root) / "request.json"
-        response_path = Path(root) / "response.json"
-        request_path.write_bytes(request)
-        try:
-            result = await run_supervised_command(
-                [
-                    sys.executable,
-                    "-m",
-                    "marimo_studio._notebook.runtime_worker",
-                    str(request_path),
-                    str(response_path),
-                ],
-                runtime_process_timeout(timeout),
-            )
-        except ProcessCleanupError:
-            raise
-        except OSError as error:
-            raise ProtocolError(
-                f"Isolated notebook runtime could not start: {error}"
-            ) from error
-        return _decode_process_result(
-            result,
-            response_path=response_path,
-            timeout=timeout,
+    try:
+        outcome = await run_isolated_module_request(
+            "marimo_studio._notebook.runtime_worker",
+            request,
+            runtime_process_timeout(timeout),
+            prefix="marimo-studio-runtime-",
         )
+    except ProcessCleanupError:
+        raise
+    except ProcessResponseError as error:
+        raise ProtocolError(f"Isolated notebook runtime {error}") from error
+    except OSError as error:
+        raise ProtocolError(
+            f"Isolated notebook runtime could not start: {error}"
+        ) from error
+    return _decode_process_result(
+        outcome.process,
+        response=outcome.response,
+        timeout=timeout,
+    )
 
 
 def _decode_process_result(
     result: ProcessResult,
     *,
-    response_path: Path,
+    response: bytes | None,
     timeout: float,
 ) -> RuntimeProbe:
     if result.timed_out:
@@ -95,8 +84,5 @@ def _decode_process_result(
         raise ProtocolError(
             f"Isolated notebook runtime {process_returncode_message(result.returncode)}"
         )
-    try:
-        payload = read_process_response(response_path)
-    except ProcessResponseError as error:
-        raise ProtocolError(f"Isolated notebook runtime {error}") from error
-    return decode_runtime_response(payload)
+    assert response is not None
+    return decode_runtime_response(response)

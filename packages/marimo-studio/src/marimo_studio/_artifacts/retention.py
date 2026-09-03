@@ -29,11 +29,7 @@ from types import TracebackType
 from typing import BinaryIO
 
 from marimo_studio._artifacts.codec import profile_state
-from marimo_studio._artifacts.lock import (
-    acquire_file_lock,
-    artifact_lock,
-    release_file_lock,
-)
+from marimo_studio._artifacts.lock import artifact_lock
 from marimo_studio._artifacts.paths import (
     artifact_paths,
     artifact_root,
@@ -49,6 +45,10 @@ from marimo_studio._artifacts.repository import (
     read_published_artifact,
     revision_root,
     write_profile_state,
+)
+from marimo_studio._filesystem.file_lock import (
+    acquire_file_lock,
+    release_file_lock,
 )
 from marimo_studio._filesystem.secure import secure_directory
 from marimo_studio._workspace.mutation_lock import (

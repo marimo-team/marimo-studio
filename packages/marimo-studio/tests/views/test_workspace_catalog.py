@@ -227,24 +227,46 @@ def test_workspace_lock_rejects_a_replaced_lockfile_after_acquisition(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     view_root = tmp_path / "views"
-    acquire = mutation_locks._acquire
+    acquire = mutation_locks._acquire_file_lock
     replaced = False
 
-    def acquire_then_replace(descriptor: int) -> None:
+    def acquire_then_replace(descriptor: int, *, blocking: bool) -> bool:
         nonlocal replaced
-        acquire(descriptor)
+        acquired = acquire(descriptor, blocking=blocking)
         lock = view_root / ".locks" / ".catalog.lock"
         lock.unlink()
         lock.write_text("replacement", encoding="utf-8")
         replaced = True
+        return acquired
 
-    monkeypatch.setattr(mutation_locks, "_acquire", acquire_then_replace)
+    monkeypatch.setattr(
+        mutation_locks,
+        "_acquire_file_lock",
+        acquire_then_replace,
+    )
 
     with (
         pytest.raises(ConfigurationError, match="changed before acquisition"),
         workspace_catalog_lock(view_root),
     ):
         pytest.fail("replaced lockfile must not be trusted")
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="Windows prevents removal while the lock is held"
+)
+def test_workspace_lock_reports_a_removed_control_directory_while_held(
+    tmp_path: Path,
+) -> None:
+    view_root = tmp_path / "views"
+
+    with (
+        pytest.raises(ConfigurationError, match="changed while held") as raised,
+        workspace_catalog_lock(view_root),
+    ):
+        shutil.rmtree(view_root / ".locks")
+
+    assert isinstance(raised.value.__cause__, FileNotFoundError)
 
 
 @pytest.mark.skipif(
@@ -255,20 +277,21 @@ def test_workspace_lock_blocks_replacement_while_held_on_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     view_root = tmp_path / "views"
-    acquire = mutation_locks._acquire
+    acquire = mutation_locks._acquire_file_lock
     blocked = False
 
-    def acquire_then_attempt_replacement(descriptor: int) -> None:
+    def acquire_then_attempt_replacement(descriptor: int, *, blocking: bool) -> bool:
         nonlocal blocked
-        acquire(descriptor)
+        acquired = acquire(descriptor, blocking=blocking)
         lock = view_root / ".locks" / ".catalog.lock"
         with pytest.raises(PermissionError):
             lock.unlink()
         blocked = True
+        return acquired
 
     monkeypatch.setattr(
         mutation_locks,
-        "_acquire",
+        "_acquire_file_lock",
         acquire_then_attempt_replacement,
     )
 

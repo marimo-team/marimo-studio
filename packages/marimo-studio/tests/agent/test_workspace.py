@@ -465,7 +465,7 @@ def test_view_inspection_propagates_notebook_resolution_errors(
         asyncio.run(view.inspect())
 
 
-def test_view_build_cancellation_closes_a_late_lease(
+def test_view_build_cancellation_drains_worker_before_return(
     notebook_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -474,11 +474,7 @@ def test_view_build_cancellation_closes_a_late_lease(
     started = threading.Event()
     cancelled = threading.Event()
     release = threading.Event()
-    closed = threading.Event()
-
-    class Lease:
-        def close(self) -> None:
-            closed.set()
+    finished = threading.Event()
 
     def build(*_args, **_kwargs):
         control = current_provider_cancellation()
@@ -487,24 +483,29 @@ def test_view_build_cancellation_closes_a_late_lease(
         started.set()
         try:
             assert release.wait(timeout=2)
-            return Lease()
+            return object()
         finally:
             unregister()
+            finished.set()
 
-    monkeypatch.setattr("marimo_studio._views.build.publish_view", build)
+    monkeypatch.setattr(
+        "marimo_studio._views.build._build_view_project_result_sync",
+        build,
+    )
 
     async def exercise() -> None:
         task = asyncio.create_task(view.build())
         assert await asyncio.to_thread(started.wait, 1)
         task.cancel()
         assert await asyncio.to_thread(cancelled.wait, 1)
+        assert not task.done()
         release.set()
         with pytest.raises(asyncio.CancelledError):
             await task
 
     asyncio.run(exercise())
 
-    assert closed.is_set()
+    assert finished.is_set()
 
 
 def test_view_write_cancellation_drains_atomic_commit_before_return(

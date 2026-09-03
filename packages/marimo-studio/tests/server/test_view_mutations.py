@@ -550,6 +550,46 @@ def test_project_read_retries_transient_workspace_generations(
     assert settled == 1
 
 
+def test_project_read_recovers_when_the_owner_catalog_disappears(
+    notebook_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    studio = _configured(notebook_path)
+    app = _marimo_app(studio.notebook)
+    _edit_mode(app)
+    owners = studio.view_root / ".owners"
+    load = studio_api_module.load_studio
+    iterdir = Path.iterdir
+    armed = False
+    removed = False
+
+    def remove_owners_after_observation(path: Path):
+        nonlocal removed
+        entries = iterdir(path)
+        if armed and path == owners and not removed:
+            removed = True
+            shutil.rmtree(owners)
+        return entries
+
+    def raced_load(target: str | Path):
+        nonlocal armed
+        armed = True
+        try:
+            return load(target)
+        finally:
+            armed = False
+
+    monkeypatch.setattr(Path, "iterdir", remove_owners_after_observation)
+    monkeypatch.setattr(studio_api_module, "load_studio", raced_load)
+
+    with TestClient(app) as client:
+        response = client.get("/_marimo-studio/views/dashboard/project")
+
+    assert response.status_code == 200
+    assert removed
+    assert owners.joinpath("dashboard.toml").is_file()
+
+
 def test_source_put_rejects_a_same_content_recreated_view(
     notebook_path: Path,
 ) -> None:

@@ -39,17 +39,20 @@ def test_active_commit_finishes_before_provider_cancellation() -> None:
     commit_started = Event()
     release_commit = Event()
     cancel_started = Event()
-    cancelled = Event()
-    unregister = control.cancellation.register(cancelled.set)
+    transitions: list[str] = []
+    unregister = control.cancellation.register(lambda: transitions.append("cancelled"))
 
     def commit() -> None:
+        transitions.append("commit-started")
         commit_started.set()
         if not release_commit.wait(timeout=2):
             raise RuntimeError("commit was not released")
+        transitions.append("commit-finished")
 
     def cancel() -> None:
         cancel_started.set()
         control.cancellation.cancel()
+        transitions.append("cancel-finished")
 
     try:
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -57,10 +60,14 @@ def test_active_commit_finishes_before_provider_cancellation() -> None:
             assert commit_started.wait(timeout=2)
             cancelling = executor.submit(cancel)
             assert cancel_started.wait(timeout=2)
-            assert not cancelled.wait(timeout=0.05)
             release_commit.set()
             assert committing.result(timeout=2)
             cancelling.result(timeout=2)
-        assert cancelled.wait(timeout=2)
+        assert transitions == [
+            "commit-started",
+            "commit-finished",
+            "cancelled",
+            "cancel-finished",
+        ]
     finally:
         unregister()

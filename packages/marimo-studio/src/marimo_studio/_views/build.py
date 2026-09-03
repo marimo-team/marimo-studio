@@ -658,23 +658,17 @@ def build_view_project_sync(
         )
 
 
-async def build_view_project(
+def _build_view_project_result_sync(
     project: ViewProject,
     *,
-    profile: BuildProfile = "development",
-    expected_generation: str | None = None,
+    profile: BuildProfile,
+    expected_generation: str | None,
 ) -> ViewBuild:
-    """Build one view and return detached publication metadata."""
-    lease = await run_provider_operation(
-        partial(
-            build_view_project_sync,
-            project,
-            profile=profile,
-            expected_generation=expected_generation,
-        ),
-        discard=lambda late_lease: late_lease.close(),
-    )
-    with lease:
+    with build_view_project_sync(
+        project,
+        profile=profile,
+        expected_generation=expected_generation,
+    ) as lease:
         artifact = lease.artifact
         from marimo_studio._artifacts.repository import read_artifact_state
 
@@ -685,3 +679,20 @@ async def build_view_project(
             revision=artifact.artifact_revision,
             issues=build.diagnostics,
         )
+
+
+async def build_view_project(
+    project: ViewProject,
+    *,
+    profile: BuildProfile = "development",
+    expected_generation: str | None = None,
+) -> ViewBuild:
+    """Build one view and return detached publication metadata."""
+    return await run_provider_operation(
+        partial(
+            _build_view_project_result_sync,
+            project,
+            profile=profile,
+            expected_generation=expected_generation,
+        ),
+    )

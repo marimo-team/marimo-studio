@@ -9,8 +9,14 @@ from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from weakref import WeakValueDictionary
 
+from marimo_studio._filesystem.file_lock import (
+    acquire_file_lock as _acquire_file_lock,
+)
+from marimo_studio._filesystem.file_lock import (
+    release_file_lock as _release_file_lock,
+)
 from marimo_studio._filesystem.io import reject_mutable_symlinks
-from marimo_studio._filesystem.secure import secure_directory
+from marimo_studio._filesystem.secure import SecureDirectory, secure_directory
 from marimo_studio._workspace.models import VIEW_PATTERN
 from marimo_studio.errors import ConfigurationError
 
@@ -41,30 +47,18 @@ def _held_paths() -> set[Path]:
     return _HELD.paths
 
 
-def _acquire(descriptor: int) -> None:
-    if os.name == "nt":
-        import msvcrt
-
-        os.lseek(descriptor, 0, os.SEEK_SET)
-        msvcrt.locking(descriptor, msvcrt.LK_LOCK, 1)
-        return
-
-    import fcntl
-
-    fcntl.flock(descriptor, fcntl.LOCK_EX)
-
-
-def _release(descriptor: int) -> None:
-    if os.name == "nt":
-        import msvcrt
-
-        os.lseek(descriptor, 0, os.SEEK_SET)
-        msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
-        return
-
-    import fcntl
-
-    fcntl.flock(descriptor, fcntl.LOCK_UN)
+def _require_lock_owner(
+    filesystem: SecureDirectory,
+    lock_path: Path,
+    expected: tuple[int, int, int],
+    phase: str,
+) -> None:
+    try:
+        current = filesystem.file_owner(lock_path)
+    except OSError as error:
+        raise ConfigurationError(f"View mutation lock {phase}: {lock_path}") from error
+    if current != expected:
+        raise ConfigurationError(f"View mutation lock {phase}: {lock_path}")
 
 
 @contextmanager
@@ -93,28 +87,28 @@ def _mutation_lock(view_root: Path, filename: str) -> Iterator[None]:
             ) from error
         acquired = False
         try:
-            descriptor_state = os.fstat(descriptor)
-            if os.name == "nt" and descriptor_state.st_size == 0:
-                os.write(descriptor, b"\0")
-                os.fsync(descriptor)
-            _acquire(descriptor)
+            _acquire_file_lock(descriptor, blocking=True)
             acquired = True
             lock_state = os.fstat(descriptor)
             lock_owner = (lock_state.st_dev, lock_state.st_ino, lock_state.st_mode)
-            if filesystem.file_owner(lock_path) != lock_owner:
-                raise ConfigurationError(
-                    f"View mutation lock changed before acquisition: {lock_path}"
-                )
+            _require_lock_owner(
+                filesystem,
+                lock_path,
+                lock_owner,
+                "changed before acquisition",
+            )
             held.add(lock_path)
             yield
-            if filesystem.file_owner(lock_path) != lock_owner:
-                raise ConfigurationError(
-                    f"View mutation lock changed while held: {lock_path}"
-                )
+            _require_lock_owner(
+                filesystem,
+                lock_path,
+                lock_owner,
+                "changed while held",
+            )
         finally:
             held.discard(lock_path)
             if acquired:
-                _release(descriptor)
+                _release_file_lock(descriptor)
             os.close(descriptor)
             owner.close()
 
