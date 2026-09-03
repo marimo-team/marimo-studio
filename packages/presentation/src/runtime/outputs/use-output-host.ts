@@ -1,10 +1,12 @@
 import { useLayoutEffect } from "react";
 
 import type { MarimoOutputElement } from "../../outputs/host";
+import type { ProjectionHostBinding } from "../../projections/resolution";
 import type { ValueCellModel } from "../values/value-cell-model";
 import type { OutputDiagnostic, OutputProjection } from "./use-output-projection";
 
 import { setOutputHostState } from "../../outputs/host";
+import { applyProjectionMetadata, resetProjectionHostMetadata } from "../../projections/instances";
 
 const setDataset = (host: HTMLElement, name: string, value: string | undefined) => {
   if (value) {
@@ -15,6 +17,7 @@ const setDataset = (host: HTMLElement, name: string, value: string | undefined) 
 };
 
 export const useOutputHost = ({
+  binding,
   projectionVariable,
   failure,
   host,
@@ -25,6 +28,7 @@ export const useOutputHost = ({
   runtimeCellId,
   selector,
 }: {
+  binding: ProjectionHostBinding;
   projectionVariable: string | undefined;
   failure: OutputDiagnostic | undefined;
   host: MarimoOutputElement;
@@ -43,6 +47,7 @@ export const useOutputHost = ({
   const hasProjection = projection !== undefined;
 
   useLayoutEffect(() => {
+    applyProjectionMetadata(host, binding.resolution, binding.projectionRevision);
     setDataset(host, "marimoSelector", selector);
     setDataset(host, "marimoVariable", projectionVariable);
     setDataset(host, "runtimeCellId", runtimeCellId);
@@ -72,7 +77,9 @@ export const useOutputHost = ({
     } else {
       setOutputHostState(host, "loading", detail);
     }
+    return () => resetProjectionHostMetadata(host);
   }, [
+    binding,
     projectionVariable,
     failureCode,
     failureHint,

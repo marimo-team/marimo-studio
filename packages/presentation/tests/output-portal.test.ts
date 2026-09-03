@@ -9,7 +9,7 @@ import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vite-plus/te
 
 import type { MarimoOutputElement } from "../src/outputs/host";
 import type { OutputReader } from "../src/outputs/reader";
-import type { ResolvedProjection } from "../src/projections/resolution";
+import type { ProjectionHostBinding, ResolvedProjection } from "../src/projections/resolution";
 
 import { indexCells } from "../src/cells/index";
 import { morphAuthoredShell } from "../src/document/shell-morph";
@@ -91,6 +91,11 @@ const resolvedOutput = (
   };
 };
 
+const outputBinding = (projection: ResolvedProjection): ProjectionHostBinding => ({
+  resolution: { ok: true, value: projection },
+  projectionRevision: "projection-revision-a",
+});
+
 test("retries a preserved output after a presentation refresh aborts its read", async () => {
   document.body.innerHTML = '<marimo-output value="report"></marimo-output><div id="root"></div>';
   const host = document.querySelector<MarimoOutputElement>("marimo-output")!;
@@ -117,8 +122,7 @@ test("retries a preserved output after a presentation refresh aborts its read", 
     root.render(
       createElement(OutputPortal, {
         activeProjections: [projectionRequest("report", "output")],
-        projection: resolvedOutput(),
-        resolutionFailure: undefined,
+        binding: outputBinding(resolvedOutput()),
         connectionState: "OPEN",
         developer: true,
         host,
@@ -167,8 +171,7 @@ test("keeps readiness stale until the requested source version mounts", async ()
     .mockImplementationOnce(() => second);
   const props: Omit<ComponentProps<typeof OutputPortal>, "cell"> = {
     activeProjections: [projectionRequest("report", "output")],
-    projection: resolvedOutput(),
-    resolutionFailure: undefined,
+    binding: outputBinding(resolvedOutput()),
     connectionState: "OPEN",
     developer: true,
     host,
@@ -258,11 +261,10 @@ test("keys output reads by semantic projection identity", async () => {
       root.render(
         createElement(OutputPortal, {
           activeProjections: [request],
-          projection: {
+          binding: outputBinding({
             ...resolvedOutput(request.target, producer, sourceCellId, request.target),
             request,
-          },
-          resolutionFailure: undefined,
+          }),
           connectionState: "OPEN",
           developer: true,
           host,
@@ -329,9 +331,8 @@ test("clears prior projection metadata when its producer changes", async () => {
     .fn<OutputReader>()
     .mockImplementationOnce(() => first)
     .mockImplementationOnce(() => second);
-  const props: Omit<ComponentProps<typeof OutputPortal>, "projection" | "cell"> = {
+  const props: Omit<ComponentProps<typeof OutputPortal>, "binding" | "cell"> = {
     activeProjections: [projectionRequest("report", "output")],
-    resolutionFailure: undefined,
     connectionState: "OPEN",
     developer: true,
     host,
@@ -343,7 +344,7 @@ test("clears prior projection metadata when its producer changes", async () => {
     root.render(
       createElement(OutputPortal, {
         ...props,
-        projection: resolvedOutput("first", "cell:v1:first", "source-cell"),
+        binding: outputBinding(resolvedOutput("first", "cell:v1:first", "source-cell")),
         cell: runtimeCell(1),
       }),
     );
@@ -361,7 +362,7 @@ test("clears prior projection metadata when its producer changes", async () => {
     root.render(
       createElement(OutputPortal, {
         ...props,
-        projection: resolvedOutput("second", "cell:v1:second", "next-cell"),
+        binding: outputBinding(resolvedOutput("second", "cell:v1:second", "next-cell")),
         cell: runtimeCell(1, "next-cell"),
       }),
     );
@@ -481,6 +482,12 @@ test("reads ready rich output hosts in one bounded batch", async () => {
     expect(document.querySelector('[value="figure"]')?.getAttribute("data-state")).toBe("ready");
   });
 
+  const report = document.querySelector<HTMLElement>('[value="report"]')!;
+  expect(report.dataset.marimoStudioInstance).toMatch(/^projection-\d+$/);
+  expect(report.dataset.marimoProducerRef).toBe("cell:v1:report");
+  expect(report.dataset.marimoProjectionKind).toBe("output");
+  expect(report.dataset.marimoProjectionTarget).toBe("report");
+
   const reads = readOutputs.mock.calls
     .map(([request]) => request)
     .filter((request) => request.projections.length > 0);
@@ -490,6 +497,10 @@ test("reads ready rich output hosts in one bounded batch", async () => {
     "report",
   ]);
   await act(async () => root.unmount());
+  expect(report.dataset.marimoStudioInstance).toBeUndefined();
+  expect(report.dataset.marimoProducerRef).toBeUndefined();
+  expect(report.dataset.marimoProjectionKind).toBeUndefined();
+  expect(report.dataset.marimoProjectionTarget).toBeUndefined();
 });
 
 test("keeps a sibling output ready when one split leaf exceeds the response budget", async () => {
@@ -571,8 +582,9 @@ test.each(["__proto__", "constructor"])(
               siteId: "site:output:prototype",
             },
           ],
-          projection: resolvedOutput(selector, `cell:v1:${selector}`, "source-cell", selector),
-          resolutionFailure: undefined,
+          binding: outputBinding(
+            resolvedOutput(selector, `cell:v1:${selector}`, "source-cell", selector),
+          ),
           connectionState: "OPEN",
           developer: true,
           host,
@@ -608,8 +620,9 @@ test("treats inherited output response properties as absent", async () => {
             siteId: "site:output:prototype",
           },
         ],
-        projection: resolvedOutput(selector, `cell:v1:${selector}`, "source-cell", selector),
-        resolutionFailure: undefined,
+        binding: outputBinding(
+          resolvedOutput(selector, `cell:v1:${selector}`, "source-cell", selector),
+        ),
         connectionState: "OPEN",
         developer: true,
         host,

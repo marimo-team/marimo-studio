@@ -100,5 +100,5 @@ test("synchronizes the canonical public query before authorizing projection exec
     },
   });
   expect(authorizeProjections).toHaveBeenCalledWith(invoke, config, owner.signal);
-  queryWriter.dispose();
+  await queryWriter.dispose();
 });

@@ -82,6 +82,9 @@ export const runtimeConfig = (overrides: Partial<RuntimeConfig> = {}): RuntimeCo
 export const projectionRuntimeConfig = (
   requests: readonly RuntimeProjectionRequest[],
 ): RuntimeConfig => {
+  const cells = Array.from(
+    new Set(requests.filter((request) => request.kind === "cell").map((request) => request.target)),
+  );
   const variables = Array.from(
     new Set(
       requests
@@ -92,7 +95,16 @@ export const projectionRuntimeConfig = (
   return runtimeConfig({
     projectionRevision: projectionRevisionFor(JSON.stringify(requests)),
     projectionTargets: {
-      cells: {},
+      cells: Object.fromEntries(
+        cells.map((cell) => [
+          cell,
+          {
+            status: "ready",
+            producer: `cell:v1:${cell}`,
+            dependencyClosure: [`cell:v1:${cell}`],
+          },
+        ]),
+      ),
       variables: Object.fromEntries(
         variables.map((variable) => [
           variable,
@@ -112,7 +124,7 @@ export const projectionRuntimeConfig = (
     })),
     runtimeBindings: {
       cellRefs: Object.fromEntries(
-        variables.map((variable) => [`cell:v1:${variable}`, `${variable}-cell`]),
+        [...cells, ...variables].map((target) => [`cell:v1:${target}`, `${target}-cell`]),
       ),
     },
   });

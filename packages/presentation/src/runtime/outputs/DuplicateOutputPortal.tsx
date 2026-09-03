@@ -2,11 +2,20 @@ import { useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 
 import type { MarimoOutputElement } from "../../outputs/host";
+import type { ProjectionHostBinding } from "../../projections/resolution";
 
 import { setOutputHostState } from "../../outputs/host";
+import { applyProjectionMetadata, resetProjectionHostMetadata } from "../../projections/instances";
 
-export const DuplicateOutputPortal = ({ host }: { host: MarimoOutputElement }) => {
+export const DuplicateOutputPortal = ({
+  binding,
+  host,
+}: {
+  binding: ProjectionHostBinding;
+  host: MarimoOutputElement;
+}) => {
   useLayoutEffect(() => {
+    applyProjectionMetadata(host, binding.resolution, binding.projectionRevision);
     const message = `Output ${JSON.stringify(host.valueSelector)} is mounted twice.`;
     const hint = "Keep one host for each projected output.";
     host.dataset.marimoSelector = host.valueSelector;
@@ -23,11 +32,9 @@ export const DuplicateOutputPortal = ({ host }: { host: MarimoOutputElement }) =
       hint,
     });
     return () => {
-      delete host.dataset.marimoDiagnosticCode;
-      delete host.dataset.marimoDiagnosticMessage;
-      delete host.dataset.marimoDiagnosticHint;
+      resetProjectionHostMetadata(host);
     };
-  }, [host]);
+  }, [binding, host]);
 
   return createPortal(
     <div className="marimo-cell-error" role="alert">

@@ -3,12 +3,19 @@ import { CheckIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import type { ViewController } from "./controller.ts";
 
 import { MenuChevron } from "../../shared/ui/icons.tsx";
+import { useDisclosureMenu } from "../../shared/useDisclosureMenu.ts";
 import { CreateViewForm } from "./CreateViewForm.tsx";
 import { RemoveViewConfirmation } from "./RemoveViewConfirmation.tsx";
 import { useViewMenu } from "./useViewMenu.ts";
 
 export const ViewMenu = ({ controller }: { controller: ViewController }) => {
   const model = useViewMenu(controller);
+  const menu = useDisclosureMenu({
+    detailsRef: model.refs.menu,
+    dismissible: !model.snapshot.creating && !model.snapshot.deleting,
+    onToggle: model.actions.toggled,
+    triggerRef: model.refs.trigger,
+  });
   const statusMessage = model.snapshot.removeMessage ?? model.snapshot.selectionMessage;
   const panels = {
     create: (
@@ -122,20 +129,15 @@ export const ViewMenu = ({ controller }: { controller: ViewController }) => {
   return (
     <>
       <details
-        ref={model.refs.menu}
+        ref={menu.detailsRef}
         className="studio-menu studio-view-menu"
+        data-studio-disclosure-menu
         data-panel={model.panel}
-        onToggle={(event) => model.actions.toggled(event.currentTarget.open)}
-        onKeyDown={(event) => {
-          if (event.key !== "Escape" || model.snapshot.creating || model.snapshot.deleting) {
-            return;
-          }
-          event.preventDefault();
-          model.actions.closeMenu();
-        }}
+        onToggle={menu.onToggle}
+        onKeyDown={menu.onKeyDown}
       >
         <summary
-          ref={model.refs.trigger}
+          ref={menu.triggerRef}
           className="studio-control studio-menu-trigger"
           aria-label={`Switch view: ${model.snapshot.current}`}
           aria-disabled={model.snapshot.creating || model.snapshot.deleting}

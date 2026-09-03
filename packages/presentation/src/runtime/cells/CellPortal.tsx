@@ -2,6 +2,7 @@ import { memo } from "react";
 import { createPortal } from "react-dom";
 
 import type { MarimoCellElement } from "../../cells/host";
+import type { ProjectionHostBinding } from "../../projections/resolution";
 import type { RuntimeCell, SubmitStdin } from "../runtime-cell";
 import type { CellDiagnostic } from "./cell-projection";
 
@@ -13,6 +14,7 @@ import { useCellProjection } from "./use-cell-projection";
 interface CellPortalProps {
   projectionKey?: string;
   projectionPresent: boolean;
+  binding: ProjectionHostBinding;
   cell: RuntimeCell | undefined;
   developer: boolean;
   diagnostic?: CellDiagnostic;
@@ -25,6 +27,7 @@ interface CellPortalProps {
 export const CellPortal = memo(function CellPortal({
   projectionKey,
   projectionPresent,
+  binding,
   cell,
   developer,
   diagnostic,
@@ -42,7 +45,7 @@ export const CellPortal = memo(function CellPortal({
     runtimeReady,
     showCellLogs,
   });
-  useCellHost(host, cell, projection);
+  useCellHost(host, binding, cell, projection);
 
   if (!cell) {
     if (!runtimeReady || projection.delivery === "waiting") {

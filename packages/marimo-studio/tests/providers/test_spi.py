@@ -18,6 +18,7 @@ from marimo_studio.view_providers import (
     MountDeclaration,
     ProjectDiagnostic,
     ProjectInput,
+    ProviderAvailability,
     ProviderInfo,
     SourceDocument,
     SourceLocation,
@@ -80,6 +81,41 @@ def test_provider_info_contains_only_discovery_contracts() -> None:
         "summary": "Builds report frontends.",
         "api_version": PROVIDER_API_VERSION,
     }
+
+
+@pytest.mark.parametrize(
+    ("reported", "expected_reason", "expected_action"),
+    (
+        (
+            ProviderAvailability(False),
+            "The provider reported that it is unavailable.",
+            "Repair the provider installation or choose another provider.",
+        ),
+        (
+            ProviderAvailability(False, reason="The executable is missing."),
+            "The executable is missing.",
+            "Repair the provider installation or choose another provider.",
+        ),
+        (
+            ProviderAvailability(False, action="Install the provider executable."),
+            "The provider reported that it is unavailable.",
+            "Install the provider executable.",
+        ),
+    ),
+)
+def test_unavailable_provider_records_have_actionable_recovery(
+    reported: ProviderAvailability,
+    expected_reason: str,
+    expected_action: str,
+) -> None:
+    provider = ProviderStub("example/html", "html")
+    cast(Any, provider).availability = lambda _project=None: reported
+    installed = ProviderRegistry((candidate("html", provider),)).get("test-html/html")
+
+    availability = installed.availability()
+
+    assert availability.reason == expected_reason
+    assert availability.action == expected_action
 
 
 def test_project_inspection_separates_editor_documents_from_build_inputs() -> None:

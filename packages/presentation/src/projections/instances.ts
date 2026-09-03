@@ -10,6 +10,7 @@ import {
   projectionTargetForHost,
 } from "./identity";
 import { createProjectionResolutionContext, resolveHostProjection } from "./resolution";
+import { notifyProjectionResolutionStale } from "./staleness.ts";
 
 const STATES: readonly ObservedProjectionInstance["phase"][] = [
   "connecting",
@@ -28,6 +29,7 @@ const SYMBOLIC_METADATA = [
   "data-marimo-projection-kind",
   "data-marimo-projection-target",
   "data-marimo-projection-variable",
+  "data-marimo-studio-instance",
 ] as const;
 
 const RUNTIME_METADATA = [
@@ -73,18 +75,27 @@ export const mountedResolvedProjections = (
       projectionRequestForHost(host, kind, projectionTargetForHost(host, kind)),
       context,
     );
-    applyProjectionMetadata(host, resolution);
+    applyProjectionMetadata(host, resolution, config.projectionRevision);
     return resolution.ok ? [resolution.value] : [];
   });
 };
 
-export const applyProjectionMetadata = (host: Element, resolution: ProjectionResolution): void => {
+export const applyProjectionMetadata = (
+  host: Element,
+  resolution: ProjectionResolution,
+  projectionRevision: string,
+): void => {
   if (!(host instanceof HTMLElement)) {
     return;
   }
   clearAttributes(host, SYMBOLIC_METADATA);
+  const request = resolution.ok ? resolution.value.request : resolution.error;
+  host.dataset.marimoStudioInstance = request.instanceId;
   if (!resolution.ok) {
     return;
+  }
+  if (resolution.value.bindingsStale) {
+    notifyProjectionResolutionStale(projectionRevision);
   }
   host.dataset.marimoProducerRef = resolution.value.producer;
   host.dataset.marimoProjectionKind = resolution.value.request.kind;
@@ -110,7 +121,7 @@ export const renderedProjectionInstances = (
     const target = projectionTargetForHost(host, kind);
     const request = projectionRequestForHost(host, kind, target);
     const resolution = resolveHostProjection(config, host, request, context);
-    applyProjectionMetadata(host, resolution);
+    applyProjectionMetadata(host, resolution, config.projectionRevision);
     if (!resolution.ok) {
       return {
         mountId: request.siteId || null,

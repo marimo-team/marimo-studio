@@ -370,36 +370,39 @@ export const App = () => (
     assert diagnostic.source.path == PurePosixPath("src/App.tsx")
 
 
-@pytest.mark.parametrize(
-    ("entrypoint", "code"),
-    (
-        ("src/custom.html", "react-entrypoint-unsupported"),
-        ("../outside.html", "provider-options-invalid"),
-    ),
-)
-def test_react_inspection_reports_one_entrypoint_contract_diagnostic(
+def test_react_inspection_rejects_undeclared_entrypoint_option(
     tmp_path: Path,
-    entrypoint: str,
-    code: str,
 ) -> None:
-    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
-    if entrypoint == "src/custom.html":
-        (root / "src" / "custom.html").write_text(
-            (root / "src" / "index.html").read_text(encoding="utf-8"),
-            encoding="utf-8",
-        )
+    _root, project = _project(tmp_path, react_provider, "marimo-studio/react")
     project = replace(
         project,
-        options={**project.options, "entrypoint": entrypoint},
+        options={**project.options, "entrypoint": "src/index.html"},
     )
 
     inspection = _inspect(provider_registry().get(project.provider), project)
 
-    assert [item.code for item in inspection.diagnostics].count(code) == 1
+    assert [
+        item.message
+        for item in inspection.diagnostics
+        if item.code == "provider-options-invalid"
+    ] == ["marimo-studio/react received undeclared option 'entrypoint'"]
     assert all(
         document.path.as_posix() != "view.toml"
         for document in inspection.editor_documents
     )
+
+
+def test_react_inspection_requires_fixed_entry_document(tmp_path: Path) -> None:
+    root, project = _project(tmp_path, react_provider, "marimo-studio/react")
+    (root / "src" / "index.html").unlink()
+
+    inspection = _inspect(provider_registry().get(project.provider), project)
+
+    assert [
+        item.message
+        for item in inspection.diagnostics
+        if item.code == "project-input-missing"
+    ] == ["marimo-studio/react requires src/index.html."]
 
 
 @pytest.mark.skipif(

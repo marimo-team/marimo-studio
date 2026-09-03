@@ -2,6 +2,7 @@ import type { PaneActionResult } from "./controller.ts";
 import type { LayoutNode, Surface } from "./model.ts";
 
 import { MenuChevron } from "../../shared/ui/icons.tsx";
+import { useDisclosureMenu } from "../../shared/useDisclosureMenu.ts";
 import { PLACEMENTS, SURFACE_LABELS } from "./pane-actions.ts";
 import { usePaneMenu } from "./usePaneMenu.ts";
 
@@ -13,6 +14,7 @@ interface PaneMenuProps {
 
 export const PaneMenu = ({ target, tree, onApply }: PaneMenuProps) => {
   const model = usePaneMenu(target, tree, onApply);
+  const menu = useDisclosureMenu({ detailsRef: model.menu });
   const arrangeSection =
     model.peers.length > 0 ? (
       <>
@@ -36,8 +38,15 @@ export const PaneMenu = ({ target, tree, onApply }: PaneMenuProps) => {
     ) : null;
 
   return (
-    <details ref={model.menu} className="studio-menu studio-pane-menu">
+    <details
+      ref={menu.detailsRef}
+      className="studio-menu studio-pane-menu"
+      data-studio-disclosure-menu
+      onKeyDown={menu.onKeyDown}
+      onToggle={menu.onToggle}
+    >
       <summary
+        ref={menu.triggerRef}
         className="studio-control studio-menu-trigger studio-pane-menu-trigger"
         aria-label={`Arrange ${target} pane`}
       >

@@ -81,6 +81,8 @@ _MAX_MOUNT_BYTES = 1024 * 1024
 _MAX_DIAGNOSTICS = 512
 _MAX_DIAGNOSTIC_BYTES = 1024 * 1024
 _MAX_SAFE_INTEGER = (1 << 53) - 1
+_UNAVAILABLE_REASON = "The provider reported that it is unavailable."
+_UNAVAILABLE_ACTION = "Repair the provider installation or choose another provider."
 
 
 def _is_manifest(path: PurePosixPath) -> bool:
@@ -294,6 +296,12 @@ class ProviderConformance:
         ):
             if item is not None:
                 _text(item, self.key, field)
+        if not value.available:
+            return replace(
+                value,
+                reason=value.reason or _UNAVAILABLE_REASON,
+                action=value.action or _UNAVAILABLE_ACTION,
+            )
         return value
 
     def validate_starters(self, value: object) -> tuple[ProviderStarter, ...]:

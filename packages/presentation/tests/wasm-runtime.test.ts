@@ -4,7 +4,14 @@ import type { RuntimeInvoke } from "../src/runtime/runtime.tsx";
 import type { FunctionResult } from "../src/values/wasm.ts";
 
 import { createWasmInitialization } from "../src/runtime/initialization";
+import { createObservedDeferred } from "../src/runtime/observed-deferred.ts";
 import { createWasmQueryWriter } from "../src/runtime/wasm-query.ts";
+
+vi.stubGlobal("matchMedia", () => ({
+  matches: false,
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+}));
 
 const deferred = () => {
   let resolve = () => {};
@@ -16,6 +23,18 @@ const deferred = () => {
 
 describe("WebAssembly runtime initialization", () => {
   afterEach(() => vi.useRealTimers());
+
+  it.each([
+    ["early disposal", new DOMException("The runtime was disposed.", "AbortError")],
+    ["startup failure", new Error("The WebAssembly projection bridge failed to initialize.")],
+  ])("keeps %s observable by a later readiness waiter", async (_case, failure) => {
+    const readiness = createObservedDeferred<void>();
+
+    readiness.reject(failure);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await expect(readiness.promise).rejects.toBe(failure);
+  });
 
   it("retains dependency-heavy startup while the worker keeps progressing", async () => {
     vi.useFakeTimers();
@@ -143,7 +162,7 @@ describe("WebAssembly query synchronization", () => {
       { generation: 1, query: { region: "emea" } },
       { generation: 3, query: { region: "americas" } },
     ]);
-    writer.dispose();
+    await writer.dispose();
   });
 
   it("stops retrying when the runtime is disposed", async () => {
@@ -160,10 +179,27 @@ describe("WebAssembly query synchronization", () => {
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledOnce());
 
     owner.abort(new DOMException("The runtime was disposed.", "AbortError"));
-    writer.dispose();
+    await writer.dispose();
     rejectInvoke(new Error("RPC request timed out."));
 
     await expect(updating).rejects.toMatchObject({ name: "AbortError" });
+    expect(invoke).toHaveBeenCalledOnce();
+  });
+
+  it("settles an active update when its transport does not cooperate with disposal", async () => {
+    const invoke = vi.fn<RuntimeInvoke>(() => new Promise(() => {}));
+    const owner = new AbortController();
+    const writer = createWasmQueryWriter(owner.signal);
+    const updating = writer.write(invoke, "?region=emea");
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledOnce());
+    let closed = false;
+    const disposing = writer.dispose().then(() => {
+      closed = true;
+    });
+
+    await expect(updating).rejects.toMatchObject({ name: "AbortError" });
+    await expect(disposing).resolves.toBeUndefined();
+    expect(closed).toBe(true);
     expect(invoke).toHaveBeenCalledOnce();
   });
 });

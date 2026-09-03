@@ -439,7 +439,7 @@ const connectHost = (
   synchronizeProjectionRevision(config.projectionRevision);
   const request = projectionRequestForHost(host, "value", selector);
   const resolution = resolveHostProjection(config, host, request, context);
-  applyProjectionMetadata(host, resolution);
+  applyProjectionMetadata(host, resolution, config.projectionRevision);
   if (!resolution.ok) {
     hostProjections.delete(host);
     delete host.dataset.marimoSelector;

@@ -16,7 +16,6 @@ import { z } from "zod";
 import { ownRecordValue } from "../records.ts";
 import { isArtifactProjectionHost } from "./artifact-host.ts";
 import { projectionKindForHost, projectionTargetForHost } from "./identity.ts";
-import { notifyProjectionResolutionStale } from "./staleness.ts";
 
 export interface SelectorPathStep {
   readonly kind: "attribute" | "item";
@@ -51,6 +50,11 @@ export interface ProjectionResolutionFailure {
 export type ProjectionResolution =
   | { readonly ok: true; readonly value: ResolvedProjection }
   | { readonly ok: false; readonly error: ProjectionResolutionFailure };
+
+export interface ProjectionHostBinding {
+  readonly resolution: ProjectionResolution;
+  readonly projectionRevision: string;
+}
 
 type ProjectionFailure = Extract<ProjectionResolution, { readonly ok: false }>;
 
@@ -389,9 +393,6 @@ export const resolveHostProjection = (
   const resolved = resolveProjection(config, request, context);
   if (!resolved.ok) {
     return resolved;
-  }
-  if (resolved.value.bindingsStale) {
-    notifyProjectionResolutionStale(config.projectionRevision);
   }
   const activeIndex = context.activeIndex(host);
   if (activeIndex === undefined || activeIndex >= config.projectionPolicy.maxActiveInstances) {

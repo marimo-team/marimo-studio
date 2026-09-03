@@ -211,9 +211,11 @@ provider = "acme-views/report"
 entrypoint = "web/report.html"
 ```
 
-`schema` must equal `1`. `provider` must be a valid installed provider key.
-`options` must contain JSON-compatible TOML scalars, arrays, or tables with
-finite numbers. Unknown top-level fields fail configuration loading.
+`schema` must equal `1`. Loading the manifest validates `provider` as a
+canonical provider key. Inspection, build, and authoring operations require a
+matching installed provider registration. `options` must contain
+JSON-compatible TOML scalars, arrays, or tables with finite numbers. Unknown
+top-level fields fail configuration loading.
 
 Studio Source writes can update `options` and preserve the current provider
 key. Create another view with the desired starter to change frontend stacks.
@@ -248,9 +250,10 @@ Provider inspection returns two separate allowlists:
 | Source documents | Ordered UTF-8 files visible in Source with `edit` or `read` access          |
 | Build inputs     | Exact files and bounded directories copied into an immutable build snapshot |
 
-Studio adds editable `view.toml` to the Source catalog through its
-provider-independent manifest path. View providers include that file in the
-build input set and keep it out of their `editor_documents` records.
+The browser Source panel lists the provider's `editor_documents`. Python
+`View.inspect()` and CLI `view inspect` prepend editable `view.toml` through
+Studio's provider-independent manifest path. View providers include that file
+in the build input set and keep it out of their `editor_documents` records.
 
 A Source path uses forward slashes, starts at the view project root, and cannot
 contain `.` or `..` segments. It must name a contained regular file. Source

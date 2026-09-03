@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { RuntimeInvoke } from "./runtime";
 
-import { functionResultSchema } from "../values/wasm";
+import { functionResultSchema, waitForWasmCaller } from "../values/wasm";
 import { retryWasmRpc, WASM_PROJECTION_NAMESPACE } from "../wasm-rpc";
 
 const acknowledgementSchema = z.strictObject({
@@ -18,13 +18,16 @@ const synchronize = async (
   signal: AbortSignal,
 ): Promise<void> => {
   const result = functionResultSchema.parse(
-    await retryWasmRpc(
-      () =>
-        invoke({
-          namespace: WASM_PROJECTION_NAMESPACE,
-          functionName: "sync_query",
-          args: { query: notebookQueryValues(query), generation },
-        }),
+    await waitForWasmCaller(
+      retryWasmRpc(
+        () =>
+          invoke({
+            namespace: WASM_PROJECTION_NAMESPACE,
+            functionName: "sync_query",
+            args: { query: notebookQueryValues(query), generation },
+          }),
+        signal,
+      ),
       signal,
     ),
   );
@@ -49,11 +52,18 @@ interface PendingQueryUpdate {
   readonly waiters: QueryWaiter[];
 }
 
-export const createWasmQueryWriter = (signal: AbortSignal) => {
+export const createWasmQueryWriter = (ownerSignal: AbortSignal) => {
   let generation = 0;
   let running = false;
+  let active: PendingQueryUpdate | undefined;
   let pending: PendingQueryUpdate | undefined;
   let disposed = false;
+  const disposal = new AbortController();
+  const signal = AbortSignal.any([ownerSignal, disposal.signal]);
+  let resolveClosed = () => {};
+  const closed = new Promise<void>((resolve) => {
+    resolveClosed = resolve;
+  });
 
   const drain = async (): Promise<void> => {
     if (running || disposed) {
@@ -64,6 +74,7 @@ export const createWasmQueryWriter = (signal: AbortSignal) => {
       while (!disposed && pending) {
         const update = pending;
         pending = undefined;
+        active = update;
         try {
           signal.throwIfAborted();
           await synchronize(update.invoke, update.query, update.generation, signal);
@@ -74,10 +85,17 @@ export const createWasmQueryWriter = (signal: AbortSignal) => {
               ? error
               : new Error(String(error));
           update.waiters.forEach(({ reject }) => reject(failure));
+        } finally {
+          if (active === update) {
+            active = undefined;
+          }
         }
       }
     } finally {
       running = false;
+      if (disposed) {
+        resolveClosed();
+      }
     }
   };
 
@@ -99,15 +117,21 @@ export const createWasmQueryWriter = (signal: AbortSignal) => {
       void drain();
       return operation;
     },
-    dispose(): void {
-      if (disposed) {
-        return;
+    dispose(): Promise<void> {
+      if (!disposed) {
+        disposed = true;
+        const error =
+          ownerSignal.reason ?? new DOMException("The runtime was disposed.", "AbortError");
+        disposal.abort(error);
+        active?.waiters.forEach(({ reject }) => reject(error));
+        pending?.waiters.forEach(({ reject }) => reject(error));
+        active = undefined;
+        pending = undefined;
+        if (!running) {
+          resolveClosed();
+        }
       }
-      disposed = true;
-      pending?.waiters.forEach(({ reject }) =>
-        reject(signal.reason ?? new DOMException("The runtime was disposed.", "AbortError")),
-      );
-      pending = undefined;
+      return closed;
     },
   };
 };

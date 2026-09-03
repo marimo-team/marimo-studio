@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import type { MarimoOutputElement } from "../../outputs/host";
 import type { OutputReader } from "../../outputs/reader";
 import type {
-  ProjectionResolutionFailure,
+  ProjectionHostBinding,
   ResolvedProjection,
   RuntimeProjectionRequest as ProjectionRequest,
 } from "../../projections/resolution";
@@ -19,8 +19,7 @@ import { useOutputHost } from "./use-output-host";
 import { type OutputDiagnostic, useOutputProjection } from "./use-output-projection";
 
 const structuralOutputFailure = (
-  projection: ResolvedProjection | undefined,
-  resolutionFailure: ProjectionResolutionFailure | undefined,
+  binding: ProjectionHostBinding,
   diagnostic: ProjectionDiagnostic | undefined,
   modelFailure: "defining-cell-error" | "runtime-cell-not-received" | undefined,
   selector: string,
@@ -28,18 +27,11 @@ const structuralOutputFailure = (
   if (diagnostic) {
     return diagnostic;
   }
-  if (resolutionFailure) {
+  if (!binding.resolution.ok) {
     return {
-      code: resolutionFailure.code,
-      message: resolutionFailure.message,
+      code: binding.resolution.error.code,
+      message: binding.resolution.error.message,
       hint: "Fix the projection target at its reported source site.",
-    };
-  }
-  if (!projection) {
-    return {
-      code: "unknown-selector",
-      message: `Output ${JSON.stringify(selector)} is unavailable.`,
-      hint: "Define the value or update this projection.",
     };
   }
   return modelFailure ? valueCellFailure(modelFailure, selector) : undefined;
@@ -47,8 +39,7 @@ const structuralOutputFailure = (
 
 export const OutputPortal = ({
   activeProjections,
-  projection,
-  resolutionFailure,
+  binding,
   cell,
   connectionState,
   developer,
@@ -58,8 +49,7 @@ export const OutputPortal = ({
   runtimeReady,
 }: {
   activeProjections: ProjectionRequest[];
-  projection: ResolvedProjection | undefined;
-  resolutionFailure: ProjectionResolutionFailure | undefined;
+  binding: ProjectionHostBinding;
   cell: RuntimeCell | undefined;
   connectionState: RuntimeConnectionState;
   developer: boolean;
@@ -68,6 +58,9 @@ export const OutputPortal = ({
   readOutputs: OutputReader;
   runtimeReady: boolean;
 }) => {
+  const projection: ResolvedProjection | undefined = binding.resolution.ok
+    ? binding.resolution.value
+    : undefined;
   const selector = host.valueSelector;
   const deliveryTimedOut = useDeliveryTimeout(
     runtimeReady && projection !== undefined && cell === undefined && diagnostic === undefined,
@@ -78,13 +71,7 @@ export const OutputPortal = ({
   const projectionIdentity = projection
     ? `${projection.variable ?? ""}\u0000${projection.producer}`
     : undefined;
-  const structuralFailure = structuralOutputFailure(
-    projection,
-    resolutionFailure,
-    diagnostic,
-    model.failure,
-    selector,
-  );
+  const structuralFailure = structuralOutputFailure(binding, diagnostic, model.failure, selector);
   const projectionState = useOutputProjection({
     activeProjections,
     request: projection?.request,
@@ -98,6 +85,7 @@ export const OutputPortal = ({
   });
   const effectiveFailure = structuralFailure ?? projectionState.failure;
   useOutputHost({
+    binding,
     projectionVariable: projection?.variable ?? undefined,
     failure: effectiveFailure,
     host,

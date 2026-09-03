@@ -2,12 +2,12 @@ import { useMemo, useSyncExternalStore } from "react";
 
 import type { CellIndex } from "../../cells/index";
 import type { OutputReader } from "../../outputs/reader";
+import type { ProjectionHostBinding } from "../../projections/resolution";
 import type { RuntimeConnectionState } from "../cell-state";
 import type { RuntimeCell } from "../runtime-cell";
 
 import { getOutputHosts, subscribeOutputHosts } from "../../outputs/host";
 import { projectionRequestForHost } from "../../projections/identity";
-import { applyProjectionMetadata } from "../../projections/instances";
 import {
   createProjectionResolutionContext,
   resolveHostProjection,
@@ -58,16 +58,21 @@ export const RuntimeOutputs = ({
         projectionRequestForHost(host, "output", host.valueSelector),
         context,
       );
-      applyProjectionMetadata(host, resolution);
-      return { host, resolution };
+      const binding: ProjectionHostBinding = {
+        resolution,
+        projectionRevision: projectionConfig.projectionRevision,
+      };
+      return { binding, host };
     });
     const primary = new Map<string, (typeof hosts)[number]>();
-    resolved.forEach(({ host, resolution }) => {
+    resolved.forEach(({ binding, host }) => {
+      const { resolution } = binding;
       if (resolution.ok && !primary.has(resolution.value.request.target)) {
         primary.set(resolution.value.request.target, host);
       }
     });
-    const active = resolved.flatMap(({ host, resolution }) => {
+    const active = resolved.flatMap(({ binding, host }) => {
+      const { resolution } = binding;
       if (!resolution.ok || primary.get(resolution.value.request.target) !== host) {
         return [];
       }
@@ -89,9 +94,10 @@ export const RuntimeOutputs = ({
     runtimeReady,
   });
 
-  return resolvedHosts.map(({ host, resolution }) => {
+  return resolvedHosts.map(({ binding, host }) => {
+    const { resolution } = binding;
     if (resolution.ok && primaryHosts.get(resolution.value.request.target) !== host) {
-      return <DuplicateOutputPortal key={hostId(host)} host={host} />;
+      return <DuplicateOutputPortal binding={binding} key={hostId(host)} host={host} />;
     }
     const diagnostic = projectionConfig.diagnostics.find(
       (item) =>
@@ -106,8 +112,7 @@ export const RuntimeOutputs = ({
       <OutputPortal
         key={hostId(host)}
         activeProjections={activeProjections}
-        projection={projection}
-        resolutionFailure={resolution.ok ? undefined : resolution.error}
+        binding={binding}
         cell={runtimeId === undefined ? undefined : cells.byId.get(runtimeId)}
         connectionState={connectionState}
         developer={projectionConfig.dev || projectionConfig.mode === "edit"}
