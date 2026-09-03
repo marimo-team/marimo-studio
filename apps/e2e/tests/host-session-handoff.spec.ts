@@ -7,7 +7,7 @@ import { e2eNetwork } from "../scripts/network.mjs";
 import { fixtureDirectory } from "../scripts/paths.mjs";
 import { executeCodeMode, studioEditorSessionId } from "./authoring-test-support.ts";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
-import { editorFrame, waitForPreview } from "./fixture.ts";
+import { editorFrame, recoverWorkspaceEventStream, waitForPreview } from "./fixture.ts";
 import {
   closeFailedNotebookServer,
   startNotebookServer,
@@ -51,10 +51,9 @@ test("preserves an untitled native session through save and Studio entry", async
     text: /^Failed to handle request: getUsageStats TypeError: Failed to fetch$/,
     required: false,
   });
-  const replacedWorkspaceStream = diagnostics.expectWorkspaceEventStreamReplacement(
-    `${server.serverUrl}/_marimo-studio/dev/events`,
-    2,
-  );
+  const workspaceStreamUrl = `${server.serverUrl}/_marimo-studio/dev/events`;
+  const studioWorkspaceStream =
+    diagnostics.expectWorkspaceEventStreamReplacement(workspaceStreamUrl);
   let diagnosticsClosed = false;
   let stopped = false;
   try {
@@ -88,8 +87,11 @@ test("preserves an untitled native session through save and Studio entry", async
     await page.getByRole("button", { name: "Create dashboard" }).click();
     await expect(page).toHaveURL(`${server.serverUrl}/studio/dashboard/?file=host-save.py`);
     expect(await studioEditorSessionId(page)).toBe(sessionId);
+    const editor = editorFrame(page);
+    await expect(editor.locator("[data-cell-id]").first()).toBeVisible();
+    await recoverWorkspaceEventStream(studioWorkspaceStream);
     await executeCodeMode(
-      editorFrame(page),
+      editor,
       "host-save.py",
       sessionId,
       `
@@ -102,6 +104,8 @@ shown.to_dict()
     );
     await waitForPreview(page);
 
+    const directWorkspaceStream =
+      diagnostics.expectWorkspaceEventStreamReplacement(workspaceStreamUrl);
     const direct = await context.newPage();
     await direct.goto(`${server.serverUrl}/studio/dashboard/?file=notebook.py`);
     await expect(editorFrame(direct).locator("[data-cell-id]").first()).toBeVisible();
@@ -113,7 +117,7 @@ shown.to_dict()
     expect(await studioEditorSessionId(direct)).toBe(directSessionId);
     await expect(editorFrame(direct).locator("[data-cell-id]").first()).toBeVisible();
     await waitForPreview(direct);
-    replacedWorkspaceStream.recovered();
+    await recoverWorkspaceEventStream(directWorkspaceStream);
     await direct.close();
 
     filenameFallback.recovered();
