@@ -16,6 +16,7 @@ from marimo_studio.errors import ConfigurationError, ViewNotFoundError
 from marimo_studio.errors._internal import WorkspaceInitializationError
 from marimo_studio.view_providers import ViewProject
 
+DEFAULT_VIEW_NAME = "dashboard"
 PYPROJECT_NAME = "pyproject.toml"
 MARIMO_DIRECTORY = "__marimo__"
 STUDIO_DIRECTORY = "studio"

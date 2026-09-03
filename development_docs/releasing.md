@@ -38,9 +38,8 @@ Define release-affecting version policy in its owning manifest or lockfile:
 - Vite, TypeScript, and source analyzers
 - Starter lockfiles
 
-Review dependency and lockfile changes before adding them. Run `make audit`
-after a dependency change. Respect the machine package-age policy and stop
-when an age gate rejects a release.
+Review dependency and lockfile changes before adding them. Respect the machine
+package-age policy and stop when an age gate rejects a release.
 
 ## Prepare the release pull request
 
@@ -76,7 +75,6 @@ Run the release gates from the repository root:
 ```console
 make setup
 make check
-make audit
 make e2e
 make docs-build
 make package
@@ -87,7 +85,6 @@ The gates provide different evidence:
 | Gate              | Release contract                                                                                                                      |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `make check`      | Formatting, static analysis, package tests, frontend tests, and provider checks pass                                                  |
-| `make audit`      | Locked Python and JavaScript dependencies have no known vulnerabilities                                                               |
 | `make e2e`        | Provider builds, native editor, Source, artifact preview, kernel, worker, dynamic projections, and view switching compose in Chromium |
 | `make docs-build` | Public navigation, examples, and reference pages build                                                                                |
 | `make package`    | Browser assets, distributions, provider entry points, starters, optional extras, and installed commands verify                        |

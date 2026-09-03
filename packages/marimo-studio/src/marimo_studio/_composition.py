@@ -40,6 +40,7 @@ from marimo_studio._server.ports import (
     CloseHandle,
     ServerAdapters,
 )
+from marimo_studio._server.route_policy import StudioRoutePolicy
 from marimo_studio._server.security import (
     ALLOWED_EMBED_ORIGINS_ENV,
     SecurityPolicy,
@@ -219,6 +220,8 @@ def create_export_adapters() -> ExportAdapters:
 def programmatic_middleware(
     notebook: Path,
     security_policy: SecurityPolicy | None = None,
+    *,
+    route_policy: StudioRoutePolicy | None = None,
 ) -> ASGIMiddlewareFactory:
     """Construct the Marimo middleware for one programmatic notebook."""
     validate_marimo_release()
@@ -228,6 +231,7 @@ def programmatic_middleware(
         notebook,
         create_server_adapters,
         security_policy if security_policy is not None else create_security_policy(),
+        route_policy=route_policy,
     )
 
 

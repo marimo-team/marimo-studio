@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 
 from marimo_studio._delivery.urls import STUDIO_PATH, SUPPORT_PATH, authored_file_key
+from marimo_studio._server.route_policy import StudioRoutePolicy
 from marimo_studio._workspace.models import (
     RESERVED_VIEW_ASSET_NAMES,
     RESERVED_VIEW_NAMES,
@@ -64,8 +65,8 @@ def could_handle(relative: str, mode: str) -> bool:
     if relative in {"", "/"} and mode in {"edit", "run"}:
         return True
     parts = relative.strip("/").split("/")
-    if mode == "edit" and parts[0] == STUDIO_PATH.strip("/"):
-        return len(parts) in {1, 2}
+    if is_studio_route(relative, mode):
+        return True
     return (
         len(parts) >= 1
         and VIEW_PATTERN.fullmatch(parts[0]) is not None
@@ -125,6 +126,23 @@ def studio_view(relative: str, studio: StudioWorkspace, mode: str) -> str | None
     return None
 
 
+def is_studio_route(relative: str, mode: str) -> bool:
+    """Return whether a path is an explicit Studio authoring entry."""
+    parts = relative.strip("/").split("/")
+    return (
+        mode == "edit" and parts[0] == STUDIO_PATH.strip("/") and len(parts) in {1, 2}
+    )
+
+
 def is_studio_landing(relative: str, mode: str) -> bool:
     """Return whether the request should enter the edit workspace."""
     return mode == "edit" and relative in {"", "/"}
+
+
+def delegates_edit_root(
+    relative: str,
+    mode: str,
+    policy: StudioRoutePolicy,
+) -> bool:
+    """Return whether edit root belongs to the native Marimo application."""
+    return mode == "edit" and relative in {"", "/"} and policy.edit_root == "marimo"

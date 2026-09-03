@@ -157,7 +157,8 @@ def test_view_creation_rejects_mismatched_body_length_without_mutation(
     response = asyncio.run(
         create_view_response(
             request,
-            definition,
+            definition.notebook,
+            definition.config_generation,
             "server-token",
         )
     )

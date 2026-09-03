@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { z } from "zod";
 
 import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.mjs";
+import { e2eNetwork } from "../scripts/network.mjs";
 import { fixtureDirectory } from "../scripts/paths.mjs";
 import { processGroupIsRunning } from "../scripts/process-group.mjs";
 import { readStudioBootstrap } from "./authoring-test-support.ts";
@@ -31,19 +31,6 @@ const MULTI_SESSION_SHUTDOWN_TIMEOUT = 15_000;
 const MULTI_SESSION_PREVIEW_TIMEOUT = process.platform === "win32" ? 180_000 : 65_000;
 const MULTI_SESSION_TEST_TIMEOUT = process.platform === "win32" ? 300_000 : 150_000;
 
-const availablePort = async (): Promise<number> => {
-  const server = createServer();
-  await new Promise<void>((resolveListen, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolveListen);
-  });
-  const address = z.object({ port: z.number().int().positive() }).parse(server.address());
-  await new Promise<void>((resolveClose, reject) => {
-    server.close((error) => (error === undefined ? resolveClose() : reject(error)));
-  });
-  return address.port;
-};
-
 const serverIsReachable = async (port: number): Promise<boolean> => {
   try {
     const response = await fetch(`http://127.0.0.1:${port}`);
@@ -67,7 +54,7 @@ test("forced runner shutdown drains every open native notebook session", async (
   const workspace = resolve(root, "workspace");
   await cp(fixtureDirectory, workspace, { recursive: true });
   await copyFixtureProviderPackage(workspace);
-  const port = await availablePort();
+  const port = e2eNetwork.main.forcedInterruption.port;
   const server = startNotebookServer({
     authentication: ["--no-token"],
     command: "edit",
@@ -133,7 +120,7 @@ test("run-mode shutdown drains an active kernel through process lifespan", async
       "# preserve_session = true",
     ),
   );
-  const port = await availablePort();
+  const port = e2eNetwork.main.runInterruption.port;
   const server = startNotebookServer({
     authentication: ["--token-password", "run-access-token"],
     command: "run",

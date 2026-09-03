@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/main.tsx",
+    "./host-session": "./src/app/host-session.ts",
     "./style.css": "./src/style.css"
   },
   "scripts": {

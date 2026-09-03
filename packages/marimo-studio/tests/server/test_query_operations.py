@@ -48,6 +48,41 @@ def test_query_claim_rejects_a_rejected_session_binding() -> None:
     asyncio.run(exercise())
 
 
+def test_suspended_session_binding_rejects_query_work() -> None:
+    async def exercise() -> None:
+        clients = StudioClientRegistry()
+        client_id = "browser-client-1234"
+        session_id = "s_123456"
+        await _connect(clients, client_id)
+        binding = await bind_native_session(clients, session_id, client_id)
+        claim = await clients.claim_query_operation(
+            client_id,
+            "query-before-transfer",
+            session_id,
+            "fingerprint",
+            0,
+        )
+        assert claim is not None
+
+        assert await clients.suspend_session_for_host(session_id) is binding
+        assert (
+            await clients.claim_query_operation(
+                client_id,
+                "query-during-transfer",
+                session_id,
+                "other-fingerprint",
+                1,
+            )
+            is None
+        )
+        assert not await clients.acquire_query_mutation(claim)
+        assert not await clients.commit_query_operation(claim)
+
+        await clients.close()
+
+    asyncio.run(exercise())
+
+
 def test_query_operation_commits_only_for_the_current_binding() -> None:
     async def exercise() -> None:
         clients = StudioClientRegistry()
@@ -225,7 +260,7 @@ def test_native_session_close_releases_its_deferred_query_owner() -> None:
         await closed
 
         assert terminal.cancelled()
-        assert not binding.current
+        assert binding.phase == "retired"
         assert await clients.binding_for_client(client_id) is None
         await clients.close()
 
@@ -282,7 +317,7 @@ def test_stale_native_close_releases_only_its_binding_incarnation() -> None:
         assert first_deferred.done()
         assert not second_terminal.done()
         assert not second_deferred.done()
-        assert second.current
+        assert second.phase == "active"
         assert await clients.session_for_client(client_id) == session_id
 
         second_closed = clients.native_session_closed(second)

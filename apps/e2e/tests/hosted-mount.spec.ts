@@ -1,6 +1,7 @@
 import { viewProjectSchema } from "@marimo-studio/protocol/view-project";
 import { readFile } from "node:fs/promises";
 
+import { studioEditorSessionId } from "./authoring-test-support.ts";
 import {
   editorSlider,
   expect,
@@ -22,7 +23,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
 }) => {
   const replacedWorkspaceStream = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     `${baseUrl}/_marimo-studio/dev/events`,
-    1,
+    2,
   );
   const interruptedDocumentTransaction = browserDiagnostics.expectRequestFailure({
     origin: hostedOrigin,
@@ -46,8 +47,21 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     )
     .toBe(303);
 
+  const nativeInstantiation = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.endsWith("/api/kernel/instantiate") &&
+      response.ok(),
+  );
   await page.goto(`${baseUrl}/?access_token=${accessToken}`);
   await expect(page).toHaveURL(`${baseUrl}/`);
+  await expect(page.locator("[data-cell-id]").first()).toBeVisible();
+  await expect(page.locator("#marimo-studio-host")).toHaveCount(0);
+  const nativeSessionId = (await nativeInstantiation).request().headers()["marimo-session-id"];
+  expect(nativeSessionId).toMatch(/^s_[a-z0-9]{6}$/);
+
+  await page.goto(`${baseUrl}/studio/`);
+  await expect(page).toHaveURL(`${baseUrl}/studio/`);
   await expect(page.getByRole("heading", { name: "Create the first view" })).toBeVisible();
   await expect(page.locator('iframe[title="Marimo editor"]')).toHaveAttribute("inert", "");
   await expect(page.locator('iframe[title="Marimo editor"]')).toHaveAttribute(
@@ -98,6 +112,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     .selectOption("marimo-studio/vanilla:default");
   await page.getByRole("button", { name: "Create dashboard" }).click();
   await expect(page).toHaveURL(`${baseUrl}/studio/dashboard/`);
+  expect(await studioEditorSessionId(page)).toBe(nativeSessionId);
   await expect(page.getByLabel("Switch view")).toContainText("dashboard");
 
   const after = await page.evaluate(async (url) => {
@@ -111,6 +126,11 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
     views: ["dashboard"],
   });
 
+  await waitForPreview(page);
+  await page.goto(`${baseUrl}/`);
+  await expect(page.locator("[data-cell-id]").first()).toBeVisible();
+  await page.goto(`${baseUrl}/studio/dashboard/`);
+  expect(await studioEditorSessionId(page)).toBe(nativeSessionId);
   const preview = await waitForPreview(page);
   const replacement = await readFile(hostedViewFixturePath, "utf8");
   const serverToken = await studioServerToken(page);
@@ -190,6 +210,7 @@ test("initializes and runs Studio through an authenticated hosted mount", async 
   await waitForPreview(page);
   await expect(preview.getByRole("heading", { name: "Hosted mount lifecycle" })).toBeVisible();
   await expect(value).toHaveText("63");
+
   await recoverRequestAbort(supersededConfigRead);
   await recoverRequestAbort(abandonedSourceWrite);
   interruptedDocumentTransaction.recovered();

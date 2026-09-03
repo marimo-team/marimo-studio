@@ -8,7 +8,7 @@ from enum import Enum
 from marimo_studio.errors import AgentRequestError
 
 from .query_operations import QueryOperationState
-from .session_bindings import SessionBindingLease
+from .session_bindings import SessionBindingLease, resolve_session_binding
 
 
 @dataclass(frozen=True)
@@ -428,12 +428,17 @@ class WorkspacePresence:
         )
 
     def _effective_session(self, client_id: str, client: LiveClient) -> str | None:
+        lease = client.binding_lease
         return (
-            client.session_id
-            if client.session_id is not None
-            and client.binding_lease is not None
-            and client.binding_lease.current
-            and client.binding_lease.native_claim is not None
-            and self._session_clients.get(client.session_id) == client_id
+            lease.session_id
+            if lease is not None
+            and resolve_session_binding(
+                self.clients,
+                self._session_clients,
+                lease,
+                "active",
+            )
+            is not None
+            and lease.native_claim is not None
             else None
         )

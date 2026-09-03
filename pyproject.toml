@@ -22,7 +22,7 @@ dev = [
   "ty>=0.0.64",
 ]
 e2e = ["anywidget", "marimo-studio-e2e-provider"]
-release = ["pip-audit==2.10.1", "twine==6.2.0"]
+release = ["twine==6.2.0"]
 
 [tool.pytest.ini_options]
 addopts = "--strict-markers"

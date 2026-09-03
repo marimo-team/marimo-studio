@@ -36,11 +36,13 @@ Configuration or project failures enter `invalid` from any discovery step. The
 edit application keeps a repair surface available for incomplete states. Run
 mode requires a ready workspace before it serves a named view.
 
-An unconfigured notebook opens the first-view application. The create request
-plans the starter against the saved notebook, commits the complete view
-project, writes configuration, then reloads Studio from the resulting ready
-workspace. A configuration that already names a default view but has no
-discoverable `view.toml` enters `needs-view` and uses the same create path.
+An unconfigured notebook exposes the first-view application at `/studio/`.
+The default edit root keeps the native editor host available until Studio is
+configured. The create request plans the starter against the saved notebook,
+commits the complete view project, writes configuration, then reloads Studio
+from the resulting ready workspace. A configuration that already names a
+default view but has no discoverable `view.toml` enters `needs-view` and uses
+the same create path.
 
 The Studio host treats a bootstrap response as a snapshot. If another client
 creates the first view before the request commits, the host refreshes lifecycle

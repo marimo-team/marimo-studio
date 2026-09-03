@@ -1,8 +1,9 @@
 # Server routing and security
 
 `PresentationMiddleware` selects Studio routes after Marimo has supplied a
-base URL, mode, notebook location, and authentication state. Requests outside
-Studio's route space continue to Marimo unchanged.
+base URL, mode, notebook location, and authentication state. `StudioRoutePolicy`
+selects the owner of edit-mode `/` when the middleware is composed. Requests
+outside Studio's route space continue to Marimo unchanged.
 
 See the [canonical ownership map](../architecture.md#ownership) for package
 responsibilities and [Identities and state](identities-and-state.md) for the
@@ -15,6 +16,10 @@ files, and native editor routes. Studio owns named view documents, immutable
 artifact routes, Source and authoring routes, runtime support routes, and the
 trusted wrapper around provider-authored pages.
 
+The outer host owns initial-surface navigation. The default route policy gives
+edit `/` to Studio. The explicit-host policy delegates edit `/` to Marimo and
+keeps `/studio/` as the Studio authoring entry.
+
 Route recognition is read-only. Handlers acquire notebook scopes, sessions,
 leases, and mutation owners after a path, mode, method, authentication state,
 and signed capability have selected one operation.
@@ -26,6 +31,7 @@ Requests pass through these decisions:
 ```text
 ASGI scope
   -> Marimo base URL and mode
+  -> edit-root route policy
   -> signed presentation capability
   -> native editor delegation
   -> Studio static runtime assets
@@ -36,20 +42,21 @@ ASGI scope
   -> ready or repair handler
 ```
 
-The middleware delegates when Marimo cannot resolve a notebook, the mode is
-unknown, the path belongs to a native route, or Studio cannot prove ownership
-of the requested route.
+The explicit-host policy delegates edit `/` before capability resolution,
+notebook location, or notebook-scope allocation. The middleware also delegates
+when Marimo cannot resolve a notebook, the mode is unknown, the path belongs to
+a native route, or Studio cannot prove ownership of the requested route.
 
 ## Workspace lifecycle
 
 Every routed notebook resolves to one state:
 
-| State                   | Record         | Edit-mode response                            | Run-mode response                       |
-| ----------------------- | -------------- | --------------------------------------------- | --------------------------------------- |
-| Unconfigured            | `Unconfigured` | First-view application                        | Marimo route or configuration error     |
-| Configured with no view | `NeedsView`    | First-view application                        | `workspace-not-initialized`             |
-| Ready                   | `Ready`        | Studio, Source, Preview, and support routes   | Default or named presentation           |
-| Invalid                 | `Invalid`      | Repair document and structured support errors | Structured or plain configuration error |
+| State                   | Record         | Edit-mode response                                                                                                  | Run-mode response                       |
+| ----------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Unconfigured            | `Unconfigured` | `/`: Studio-hosted native editor (`studio`) or native Marimo editor (`marimo`). `/studio/`: first-view application. | Marimo route or configuration error     |
+| Configured with no view | `NeedsView`    | First-view application                                                                                              | `workspace-not-initialized`             |
+| Ready                   | `Ready`        | Studio, Source, Preview, and support routes                                                                         | Default or named presentation           |
+| Invalid                 | `Invalid`      | Repair document and structured support errors                                                                       | Structured or plain configuration error |
 
 `WorkspaceLifecycleResolver` coalesces filesystem resolution off the event
 loop. Shutdown cancels the current resolution task and closes the notebook
@@ -60,6 +67,7 @@ scope.
 | Route family                                      | Owner                           | Authority                                                                 |
 | ------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- |
 | `/studio/` and `/studio/<view>/`                  | Studio authoring document       | Edit mode and Marimo read access                                          |
+| Edit-mode `/`                                     | Studio or native Marimo         | Composition-time `StudioRoutePolicy` and Marimo authentication            |
 | `/<view>/` and run-mode `/`                       | Presentation delivery           | Marimo read access plus presentation session assignment                   |
 | `/<view>/_marimo-studio/artifacts/<revision>/...` | Artifact server                 | Read access or matching revision capability plus artifact lease           |
 | `/_marimo-studio/views/<view>/...`                | Support router                  | Route-specific read, edit, server-token, client, and revision checks      |
@@ -85,6 +93,21 @@ view, source, and presentation identities narrow the individual operation.
 An access token in the query triggers a redirect through Marimo authentication
 before Studio serves a document. Structured support requests receive
 `authentication-required` when read access is absent.
+
+## Host entry
+
+The installed entry point reads `MARIMO_STUDIO_EDIT_ROOT` once and constructs a
+`StudioRoutePolicy`. `studio` preserves automatic Studio entry. `marimo`
+delegates edit `/` and leaves run-mode routing unchanged. Programmatic
+middleware composition receives the same immutable policy record.
+
+Host entry validates the signed session, notebook owner, and canonical public
+query before native Marimo resumes an existing session. Native, Studio,
+handoff, and repair documents receive the configured `frame-ancestors` policy.
+
+[Product and workspace](product-and-workspace.md#first-save) owns first-view and
+first-save behavior. [Browser runtime and authoring](browser-runtime-and-authoring.md#native-editor-session)
+owns browser-client transfer and `NativeSessionAdmission`.
 
 ## Presentation capabilities
 

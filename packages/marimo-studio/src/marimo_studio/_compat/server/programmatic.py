@@ -33,6 +33,7 @@ from marimo_studio._processes.ownership import (
 )
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._server.ports import ServerAdapters
+from marimo_studio._server.route_policy import StudioRoutePolicy
 from marimo_studio._server.security import SecurityPolicy
 from marimo_studio.errors import ProtocolError
 
@@ -496,10 +497,12 @@ class _ProgrammaticMiddleware:
         notebook: Path,
         adapter_factory: _AdapterFactory,
         security_policy: SecurityPolicy,
+        route_policy: StudioRoutePolicy | None,
     ) -> None:
         self.notebook = notebook
         self.adapter_factory = adapter_factory
         self.security_policy = security_policy
+        self.route_policy = route_policy
 
     def __call__(self, app: ASGIApp) -> ASGIApp:
         state = getattr(app, "state", None)
@@ -517,6 +520,7 @@ class _ProgrammaticMiddleware:
             app,
             self.adapter_factory,
             self.security_policy,
+            self.route_policy,
         )
         return _ProgrammaticApp(
             self.notebook,
@@ -546,6 +550,7 @@ def _presentation_middleware(
     app: ASGIApp,
     adapter_factory: _AdapterFactory,
     security_policy: SecurityPolicy,
+    route_policy: StudioRoutePolicy | None,
 ) -> _PresentationApplication:
     build = getattr(app, "build_middleware_stack", None)
     if not callable(build):
@@ -564,11 +569,11 @@ def _presentation_middleware(
         raise ProtocolError("Marimo did not install one presentation middleware")
     index, entry = matches[0]
     capture = _PresentationCapture(entry.cls)
-    entries[index] = Middleware(
-        capture,
-        *entry.args,
-        **{**entry.kwargs, "security_policy": security_policy},
-    )
+    kwargs = dict(entry.kwargs)
+    kwargs["security_policy"] = security_policy
+    if route_policy is not None:
+        kwargs["route_policy"] = route_policy
+    entries[index] = Middleware(capture, *entry.args, **kwargs)
     cast(Any, app).middleware_stack = build()
     if capture.presentation is None:
         raise ProtocolError("Marimo did not build the presentation middleware")
@@ -646,9 +651,16 @@ def programmatic_middleware(
     notebook: Path,
     adapter_factory: _AdapterFactory,
     security_policy: SecurityPolicy,
+    *,
+    route_policy: StudioRoutePolicy | None = None,
 ) -> _ProgrammaticMiddleware:
     """Bind notebook configuration and its public mount to a Marimo app."""
-    return _ProgrammaticMiddleware(notebook, adapter_factory, security_policy)
+    return _ProgrammaticMiddleware(
+        notebook,
+        adapter_factory,
+        security_policy,
+        route_policy,
+    )
 
 
 def own_programmatic_lifespans(app: ASGIApp) -> ASGIApp:

@@ -10,6 +10,7 @@ from pathlib import Path
 REQUIRED_ASSETS = {
     "build-meta.json",
     "entry-manifest.json",
+    "host-session-handoff.js",
     "runtime.css",
     "runtime.js",
     "studio.css",
@@ -23,7 +24,12 @@ MAX_STARTUP_GRAPH_BYTES = 6_500 * 1024
 MAX_STARTUP_GRAPH_GZIP_BYTES = 2_200 * 1024
 MAX_STUDIO_STARTUP_BYTES = 1_300 * 1024
 MAX_STUDIO_STARTUP_GZIP_BYTES = 375 * 1024
-BROWSER_ENTRIES = {"dev-reload.js", "runtime.js", "studio.js"}
+BROWSER_ENTRIES = {
+    "dev-reload.js",
+    "host-session-handoff.js",
+    "runtime.js",
+    "studio.js",
+}
 BROWSER_ENTRY_STYLES = {
     "runtime.js": ("runtime.css",),
     "studio.js": ("studio.css",),

@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Generic, Protocol, TypeVar
+from typing import Generic, Literal, Protocol, TypeVar
+
+BindingPhase = Literal["active", "suspended", "retired"]
 
 
 @dataclass(frozen=True)
@@ -21,7 +23,7 @@ class SessionBindingLease:
     session_id: str
     binding_generation: int
     native_claim: object | None = None
-    current: bool = True
+    phase: BindingPhase = "active"
     rejection_task: asyncio.Task[None] | None = None
 
 
@@ -48,6 +50,25 @@ class BindingClient(Protocol):
 BindingClientT = TypeVar("BindingClientT", bound=BindingClient)
 
 
+def resolve_session_binding(
+    clients: Mapping[str, BindingClientT],
+    session_clients: Mapping[str, str],
+    lease: SessionBindingLease,
+    phase: BindingPhase,
+) -> BindingClientT | None:
+    """Resolve one exact lease in its expected lifecycle phase."""
+    client = clients.get(lease.client_id)
+    return (
+        client
+        if lease.phase == phase
+        and client is not None
+        and client.binding_lease is lease
+        and client.session_id == lease.session_id
+        and session_clients.get(lease.session_id) == lease.client_id
+        else None
+    )
+
+
 class SessionBindings(Generic[BindingClientT]):
     """Mutate binding records while the registry owns serialization."""
 
@@ -63,7 +84,7 @@ class SessionBindings(Generic[BindingClientT]):
     def close(self) -> None:
         for client in self._clients.values():
             if client.binding_lease is not None:
-                client.binding_lease.current = False
+                client.binding_lease.phase = "retired"
 
     def bind(
         self,
@@ -74,15 +95,16 @@ class SessionBindings(Generic[BindingClientT]):
         new_incarnation: bool,
     ) -> BindingUpdate:
         current = client.binding_lease
+        if current is not None and self._resolve(current, "suspended") is not None:
+            return BindingUpdate(None)
         if (
             client.session_id == session_id
-            and self._session_clients.get(session_id) == client_id
             and current is not None
-            and current.current
+            and self._resolve(current, "active") is not None
         ):
             if not new_incarnation or current.native_claim is None:
                 return BindingUpdate(current)
-            current.current = False
+            current.phase = "retired"
             client.binding_generation = self._next_generation()
             client.binding_count += 1
             client.binding_lease = SessionBindingLease(
@@ -114,12 +136,31 @@ class SessionBindings(Generic[BindingClientT]):
         client = self._exact_client(lease)
         if client is None:
             return False
-        lease.current = False
+        lease.phase = "retired"
         self._session_clients.pop(lease.session_id)
         client.session_id = None
         client.binding_lease = None
         client.binding_generation = self._next_generation()
         return True
+
+    def suspend(self, lease: SessionBindingLease) -> bool:
+        """Reserve an exact binding while its native host takes ownership."""
+        client = self._resolve(lease, "active")
+        if client is None:
+            return False
+        lease.phase = "suspended"
+        return True
+
+    def restore(self, lease: SessionBindingLease) -> bool:
+        """Restore the same binding after native admission fails."""
+        if self._resolve(lease, "suspended") is None:
+            return False
+        lease.phase = "active"
+        return True
+
+    def suspended(self, lease: SessionBindingLease) -> bool:
+        """Return whether the exact binding awaits transfer settlement."""
+        return self._resolve(lease, "suspended") is not None
 
     def current(self, lease: SessionBindingLease) -> bool:
         return self._exact_client(lease) is not None
@@ -137,7 +178,7 @@ class SessionBindings(Generic[BindingClientT]):
         if lease.native_claim is None:
             lease.native_claim = native_claim
             return BindingUpdate(lease, changed=True)
-        lease.current = False
+        lease.phase = "retired"
         client.binding_generation = self._next_generation()
         client.binding_count += 1
         client.binding_lease = SessionBindingLease(
@@ -152,7 +193,7 @@ class SessionBindings(Generic[BindingClientT]):
         client = self._exact_client(lease)
         if client is None:
             return False
-        lease.current = False
+        lease.phase = "retired"
         self._session_clients.pop(lease.session_id)
         client.session_id = None
         client.binding_lease = None
@@ -162,49 +203,44 @@ class SessionBindings(Generic[BindingClientT]):
     def for_session(self, session_id: str) -> ClientBinding | None:
         client_id = self._session_clients.get(session_id)
         client = self._clients.get(client_id) if client_id is not None else None
+        lease = client.binding_lease if client is not None else None
+        resolved = self._resolve(lease, "active") if lease is not None else None
         if (
             client_id is None
-            or client is None
-            or client.session_id != session_id
-            or client.binding_lease is None
-            or not client.binding_lease.current
-            or client.binding_lease.native_claim is None
+            or lease is None
+            or resolved is None
+            or lease.native_claim is None
         ):
             return None
         return ClientBinding(
             client_id=client_id,
             session_id=session_id,
-            connected=self._is_connected(client),
+            connected=self._is_connected(resolved),
         )
 
     def for_client(self, client_id: str) -> ClientBinding | None:
         client = self._clients.get(client_id)
-        if (
-            client is None
-            or client.session_id is None
-            or client.binding_lease is None
-            or not client.binding_lease.current
-            or self._session_clients.get(client.session_id) != client_id
-        ):
+        lease = client.binding_lease if client is not None else None
+        resolved = self._resolve(lease, "active") if lease is not None else None
+        if lease is None or resolved is None:
             return None
         return ClientBinding(
             client_id=client_id,
-            session_id=client.session_id,
-            connected=self._is_connected(client),
+            session_id=lease.session_id,
+            connected=self._is_connected(resolved),
         )
 
     def session_for_client(self, client_id: str) -> str | None:
         client = self._clients.get(client_id)
+        lease = client.binding_lease if client is not None else None
         if (
             client is not None
+            and lease is not None
+            and self._resolve(lease, "active") is not None
             and self._is_connected(client)
-            and client.session_id is not None
-            and client.binding_lease is not None
-            and client.binding_lease.current
-            and client.binding_lease.native_claim is not None
-            and self._session_clients.get(client.session_id) == client_id
+            and lease.native_claim is not None
         ):
-            return client.session_id
+            return lease.session_id
         return None
 
     def retained_generations(self) -> dict[str, int]:
@@ -218,7 +254,7 @@ class SessionBindings(Generic[BindingClientT]):
         if client is None:
             return
         if client.binding_lease is not None:
-            client.binding_lease.current = False
+            client.binding_lease.phase = "retired"
             client.binding_lease = None
         if (
             client.session_id is not None
@@ -233,15 +269,18 @@ class SessionBindings(Generic[BindingClientT]):
         )
 
     def _exact_client(self, lease: SessionBindingLease) -> BindingClientT | None:
-        client = self._clients.get(lease.client_id)
-        return (
-            client
-            if lease.current
-            and client is not None
-            and client.binding_lease is lease
-            and client.session_id == lease.session_id
-            and self._session_clients.get(lease.session_id) == lease.client_id
-            else None
+        return self._resolve(lease, "active")
+
+    def _resolve(
+        self,
+        lease: SessionBindingLease,
+        phase: BindingPhase,
+    ) -> BindingClientT | None:
+        return resolve_session_binding(
+            self._clients,
+            self._session_clients,
+            lease,
+            phase,
         )
 
     def _next_generation(self) -> int:

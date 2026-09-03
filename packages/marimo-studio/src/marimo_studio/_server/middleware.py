@@ -23,6 +23,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 import marimo_studio._delivery.assets as _assets
 from marimo_studio._delivery.urls import (
     DOCUMENT_REPLAY_QUERY_PARAM,
+    STUDIO_PATH,
     SUPPORT_PATH,
 )
 from marimo_studio._server.auth import (
@@ -34,14 +35,13 @@ from marimo_studio._server.editor_bridge import delegate_editor_request
 from marimo_studio._server.files import (
     file_response,
 )
+from marimo_studio._server.host_integration import HostEntryHandler
 from marimo_studio._server.lifecycle_handler import (
     LifecycleRoute,
     LifecycleRouteHandler,
 )
 from marimo_studio._server.notebook_scope import NotebookScopeRegistry
-from marimo_studio._server.pages import (
-    authentication_redirect,
-)
+from marimo_studio._server.pages import authentication_redirect
 from marimo_studio._server.ports import ServerAdapters
 from marimo_studio._server.presentation.access import (
     PresentationCapabilityHandler,
@@ -60,6 +60,10 @@ from marimo_studio._server.presentation.session import (
 from marimo_studio._server.ready_handler import (
     ReadyWorkspaceHandler,
     ReadyWorkspaceRoute,
+)
+from marimo_studio._server.route_policy import (
+    DEFAULT_STUDIO_ROUTE_POLICY,
+    StudioRoutePolicy,
 )
 from marimo_studio._server.routing import (
     authored_view_route,
@@ -99,11 +103,20 @@ class PresentationMiddleware:
         app: ASGIApp,
         adapter_factory: Callable[[], ServerAdapters],
         security_policy: SecurityPolicy = DEFAULT_SECURITY_POLICY,
+        route_policy: StudioRoutePolicy = DEFAULT_STUDIO_ROUTE_POLICY,
     ) -> None:
         self.app = app
         self._security_policy = security_policy
         self._adapters = adapter_factory()
+        self._route_policy = route_policy
         self._notebooks = NotebookScopeRegistry()
+        self._host_entry = HostEntryHandler(
+            route_policy,
+            security_policy,
+            self._adapters.server,
+            self._adapters.session_state,
+            self._notebooks,
+        )
         self._capabilities = PresentationCapabilityHandler(
             app,
             self._adapters.server,
@@ -141,6 +154,11 @@ class PresentationMiddleware:
                 await self._notebooks.close()
             except BaseException as error:
                 failure = error
+            try:
+                self._host_entry.close()
+            except BaseException as error:
+                if failure is None:
+                    failure = error
             try:
                 await self._runtimes.close()
             except BaseException as error:
@@ -201,6 +219,15 @@ class PresentationMiddleware:
         if mode is None:
             await self.app(scope, receive, send)
             return
+        if await self._host_entry.serve(
+            self.app,
+            scope,
+            receive,
+            send,
+            relative=relative,
+            mode=mode,
+        ):
+            return
         capability = await self._capabilities.resolve(
             scope,
             receive,
@@ -232,6 +259,7 @@ class PresentationMiddleware:
             security_policy=self._security_policy,
             relative=relative,
             mode=mode,
+            host_session_active=self._host_entry.session_active,
         ):
             return
         if scope["type"] != "http":
@@ -413,6 +441,7 @@ class PresentationMiddleware:
             and authored is None
             and selected_studio is None
             and selected_asset is None
+            and relative.strip("/").split("/")[0] != STUDIO_PATH.strip("/")
         ):
             if (
                 context.mode == "run"

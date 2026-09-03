@@ -28,7 +28,13 @@ from marimo_studio._server.records import ServerContext, ServerLocation
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
 from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._server.support import support_response
-from marimo_studio._server.workspace_lifecycle import Invalid, NeedsView, Unconfigured
+from marimo_studio._server.workspace_lifecycle import (
+    Invalid,
+    NeedsView,
+    Unconfigured,
+)
+from marimo_studio._workspace.generation import unconfigured_catalog_generation
+from marimo_studio._workspace.models import DEFAULT_VIEW_NAME
 from marimo_studio.errors import MarimoStudioError
 
 PendingLifecycle = Unconfigured | NeedsView | Invalid
@@ -87,7 +93,7 @@ class LifecycleRouteHandler:
             )
             if redirect is not None:
                 response = redirect
-            elif isinstance(lifecycle, Unconfigured):
+            elif isinstance(lifecycle, Unconfigured) and route.landing:
                 response = unconfigured_response(
                     route.request,
                     route.context,
@@ -97,11 +103,25 @@ class LifecycleRouteHandler:
                     route.notebook_scope.session_ids,
                     self._security_policy,
                 )
+            elif isinstance(lifecycle, Unconfigured):
+                response = initialization_response(
+                    route.request,
+                    route.context,
+                    lifecycle.notebook,
+                    DEFAULT_VIEW_NAME,
+                    unconfigured_catalog_generation(lifecycle.notebook),
+                    self._runtimes.options,
+                    self._adapters.session_state,
+                    route.notebook_scope.session_ids,
+                    self._security_policy,
+                )
             else:
                 response = initialization_response(
                     route.request,
                     route.context,
-                    lifecycle.definition,
+                    lifecycle.definition.notebook,
+                    lifecycle.definition.default_view,
+                    lifecycle.definition.config_generation,
                     self._runtimes.configured_options(lifecycle.definition.runtimes),
                     self._adapters.session_state,
                     route.notebook_scope.session_ids,
@@ -166,6 +186,7 @@ class LifecycleRouteHandler:
             ),
             lifecycle_id=request_lifecycle_id(route.request),
             runtime=route.request.query_params.get("runtime", "server"),
+            security_policy=self._security_policy,
             view_name=route.request_view,
         )
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from functools import partial
+from pathlib import Path
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, Response
@@ -55,7 +56,12 @@ from marimo_studio._workspace.config import (
     materialize_studio_workspace_after_conflict,
     validate_view_name,
 )
-from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
+from marimo_studio._workspace.generation import unconfigured_catalog_generation
+from marimo_studio._workspace.models import (
+    DEFAULT_VIEW_NAME,
+    StudioDefinition,
+    StudioWorkspace,
+)
 from marimo_studio._workspace.project_manifest import (
     VIEW_MANIFEST_PATH,
 )
@@ -84,10 +90,11 @@ def _owner_generation(value: object) -> str | None:
 
 async def create_view_response(
     request: Request,
-    definition: StudioDefinition,
+    notebook: Path,
+    current_catalog_generation: str,
     server_token: str,
 ) -> Response:
-    """Create a named view from an authenticated Studio definition."""
+    """Create a named view from an authenticated workspace owner."""
     if request.method != "POST":
         return Response(status_code=405)
     if not has_edit_access(request.scope):
@@ -145,6 +152,8 @@ async def create_view_response(
             status_code=400,
             headers=NO_STORE,
         )
+    if catalog_generation != current_catalog_generation:
+        return error_response(WorkspaceGenerationConflictError())
     try:
         validate_view_name(name)
     except MarimoStudioError as error:
@@ -157,10 +166,10 @@ async def create_view_response(
         await run_provider_operation(
             partial(
                 create_view,
-                definition.notebook,
+                notebook,
                 name,
                 starter=starter,
-                expected_catalog_generation=catalog_generation,
+                expected_catalog_generation=current_catalog_generation,
             )
         )
     except MarimoStudioError as error:
@@ -278,6 +287,26 @@ def view_inventory_payload(
             if workspace is not None
             else []
         ),
+        "starters": (
+            list(starter_records)
+            if starter_records is not None
+            else [item.to_dict() for item in starters()]
+        ),
+    }
+
+
+def unconfigured_view_inventory_payload(
+    notebook: Path,
+    *,
+    starter_records: tuple[dict[str, object], ...] | None = None,
+) -> dict[str, object]:
+    """Return the first-view catalog for an unconfigured notebook."""
+    return {
+        "schema": 1,
+        "generation": unconfigured_catalog_generation(notebook),
+        "default_view": DEFAULT_VIEW_NAME,
+        "default_starter": DEFAULT_STARTER_ID,
+        "views": [],
         "starters": (
             list(starter_records)
             if starter_records is not None

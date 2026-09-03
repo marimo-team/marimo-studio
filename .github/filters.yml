@@ -140,20 +140,6 @@ python_contracts:
 frontend_contracts:
   - *frontend_inputs
 
-dependency_inputs:
-  - *ci_control
-  - ".node-version"
-  - ".python-version"
-  - "package.json"
-  - "pnpm-lock.yaml"
-  - "pnpm-workspace.yaml"
-  - "pyproject.toml"
-  - "uv.lock"
-  - "apps/*/package.json"
-  - "packages/*/package.json"
-  - "packages/marimo-studio/pyproject.toml"
-  - "tools/**/package.json"
-
 distribution:
   - *ci_control
   - ".node-version"

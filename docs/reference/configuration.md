@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Configure the notebook, default view, runtimes, aliases, view projects, provider options, and saved files.
+description: Configure server entry, the notebook, default view, runtimes, aliases, view projects, provider options, and saved files.
 ---
 
 # Configuration
@@ -14,6 +14,43 @@ one configuration source.
 
 Both locations use [TOML](https://toml.io/en/), a configuration format built
 from named tables and typed values.
+
+## Edit root ownership
+
+Studio opens at edit-mode `/` by default. An embedding host can keep the native
+Marimo editor at `/` and expose Studio through `/studio/`:
+
+```console
+MARIMO_STUDIO_EDIT_ROOT=marimo marimo edit analysis.py --headless
+```
+
+`MARIMO_STUDIO_EDIT_ROOT` accepts two values:
+
+| Value    | Edit `/`                  | Edit `/studio/`            | Run `/`                     |
+| -------- | ------------------------- | -------------------------- | --------------------------- |
+| `studio` | Studio entry, the default | Studio authoring workspace | Default Studio presentation |
+| `marimo` | Native Marimo editor      | Studio authoring workspace | Default Studio presentation |
+
+The setting is process configuration. Apply it before Marimo loads the Studio
+server extension. A direct `/studio/` request can create the first view, then
+opens Source, Preview, and the embedded native editor.
+
+Opening `/studio/` creates a Studio browser client and binds the native editor
+session retained by that browser tab. Enter Studio before calling `view.show()`
+from code mode. A remote agent can select a connected Studio browser client.
+Navigating the outer document between `/` and `/studio/` releases and restores
+the binding around the same native session when the server still retains it and
+the public notebook query matches. Studio allocates a new session after the old
+session closes or the public query changes. The handoff uses
+[`sessionStorage`](https://developer.mozilla.org/docs/Web/API/Window/sessionStorage),
+the browser's tab-scoped storage API. The embedding frame must permit
+same-origin storage.
+
+Authentication, public base paths, WebSockets, and framing remain server and
+reverse-proxy concerns. A host must forward the complete configured Marimo base
+path, including `/studio/`, `/_marimo-studio/`, named views, revision-qualified
+artifacts, native HTTP routes, and WebSockets. Its framing policy must admit the
+outer host, the Studio document, and Studio's nested native editor.
 
 ## Notebook settings
 
@@ -31,7 +68,7 @@ Creating the first view can add these settings to a standalone notebook:
 
 | Field                   | Type                           | Default     | Behavior                                                                       |
 | ----------------------- | ------------------------------ | ----------- | ------------------------------------------------------------------------------ |
-| `default`               | string                         | Required    | Names the view served at `/`                                                   |
+| `default`               | string                         | Required    | Selects the initial Studio workspace view and the view served at run-mode `/`  |
 | `runtime`               | `"server"` or `"wasm"`         | `"server"`  | Chooses the notebook runtime when the URL has no valid override                |
 | `runtimes`              | non-empty array of runtime IDs | `[runtime]` | Lists the distinct runtimes people may select. It must contain `runtime`       |
 | `preserve_session`      | boolean                        | `false`     | Reconnects an eligible Python runtime refresh to its matching notebook session |

@@ -22,6 +22,7 @@ from marimo_studio._delivery.urls import (
     DOCUMENT_LIFECYCLE_QUERY_PARAM,
     DOCUMENT_REPLAY_QUERY_PARAM,
     EDITOR_BINDING_CAPABILITY_QUERY_PARAM,
+    HOST_SESSION_HANDOFF_QUERY_PARAM,
     PRESENTATION_RENEWAL_QUERY_PARAM,
     PRIVATE_QUERY_KEYS,
     SERVER_INSTANCE_QUERY_PARAM,
@@ -70,7 +71,10 @@ from marimo_studio._server.studio import (
     studio_document,
     waiting_document,
 )
-from marimo_studio._workspace.models import StudioDefinition, StudioWorkspace
+from marimo_studio._server.studio.session_handoff import (
+    host_session_handoff_capability_matches,
+)
+from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
 
 
@@ -326,10 +330,7 @@ def studio_response(
     native_session_id = _editor_session_id(request, context, sessions, session_ids)
     return HTMLResponse(
         studio_document(
-            studio.notebook,
-            context.base_url,
-            context.server_token,
-            context.file_key,
+            context,
             request.query_params.multi_items(),
             context.routing_query,
             runtimes,
@@ -346,7 +347,9 @@ def studio_response(
 def initialization_response(
     request: Request,
     context: ServerContext,
-    definition: StudioDefinition,
+    notebook: Path,
+    default_view: str,
+    generation: str,
     runtimes: tuple[tuple[str, str], ...],
     sessions: SessionState,
     session_ids: SessionIdAllocator,
@@ -361,18 +364,15 @@ def initialization_response(
     native_session_id = _editor_session_id(request, context, sessions, session_ids)
     return HTMLResponse(
         studio_document(
-            definition.notebook,
-            context.base_url,
-            context.server_token,
-            context.file_key,
+            context,
             request.query_params.multi_items(),
             context.routing_query,
             runtimes,
             client_id,
             native_session_id,
             state="needs-view",
-            default_view=definition.default_view,
-            generation=definition.config_generation,
+            default_view=default_view,
+            generation=generation,
         ),
         headers=edit_document_headers(security_policy),
     )
@@ -396,10 +396,7 @@ def unconfigured_response(
     native_session_id = _editor_session_id(request, context, sessions, session_ids)
     return HTMLResponse(
         studio_document(
-            notebook,
-            context.base_url,
-            context.server_token,
-            context.file_key,
+            context,
             request.query_params.multi_items(),
             context.routing_query,
             runtimes,
@@ -418,17 +415,25 @@ def _editor_session_id(
     session_ids: SessionIdAllocator,
 ) -> str:
     requested = request.query_params.get("session_id")
-    if (
-        request.query_params.get(DOCUMENT_REPLAY_QUERY_PARAM) == "1"
-        and requested is not None
-        and sessions.exists(context, requested)
-        and sessions.matches_creation_query(
+    if request.query_params.get(DOCUMENT_REPLAY_QUERY_PARAM) == "1" and (
+        requested is not None and sessions.is_session_id(requested)
+    ):
+        query = request.query_params.multi_items()
+        if sessions.exists(context, requested) and sessions.matches_creation_query(
             context,
             requested,
-            request.query_params.multi_items(),
-        )
-    ):
-        return requested
+            query,
+        ):
+            return requested
+        if sessions.ownership(
+            context, requested
+        ) == "unclaimed" and host_session_handoff_capability_matches(
+            request.query_params.get(HOST_SESSION_HANDOFF_QUERY_PARAM),
+            context,
+            requested,
+            query,
+        ):
+            return requested
     return session_ids.allocate(context, sessions)
 
 
@@ -445,6 +450,7 @@ def error_response(
     presentation_events_url: str | None = None,
     lifecycle_id: int | None = None,
     runtime: str = "server",
+    security_policy: SecurityPolicy,
     view_name: str = "",
 ) -> Response:
     """Translate a domain error for the requested page or support route."""
@@ -470,7 +476,10 @@ def error_response(
             status_code=status_code,
             headers={"Cache-Control": "no-store"},
         )
-    headers = {**DOCUMENT_HEADERS, "Marimo-Studio-Error": code}
+    headers = {
+        **(edit_document_headers(security_policy) if dev else DOCUMENT_HEADERS),
+        "Marimo-Studio-Error": code,
+    }
     if hint:
         headers["Marimo-Studio-Hint"] = hint
     if transient:

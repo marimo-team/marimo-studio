@@ -9,6 +9,8 @@ from marimo_studio._composition import (
     own_programmatic_lifespans,
     programmatic_middleware,
 )
+from marimo_studio._server.route_policy import StudioRoutePolicy
+from marimo_studio._server.security import SecurityPolicy
 from marimo_studio._views.api import bind_cell, prepare_view
 from marimo_studio._views.build import build_view_project_sync
 from marimo_studio._workspace import load_studio
@@ -72,6 +74,8 @@ def marimo_app(
     path: str = "/",
     token: str = "",
     programmatic: bool = False,
+    route_policy: StudioRoutePolicy | None = None,
+    security_policy: SecurityPolicy | None = None,
     skew_protection: bool = False,
 ) -> Any:
     app = (
@@ -83,7 +87,17 @@ def marimo_app(
         .with_app(
             path=path,
             root=str(notebook),
-            middleware=([programmatic_middleware(notebook)] if programmatic else None),
+            middleware=(
+                [
+                    programmatic_middleware(
+                        notebook,
+                        security_policy,
+                        route_policy=route_policy,
+                    )
+                ]
+                if programmatic
+                else None
+            ),
         )
         .build()
     )

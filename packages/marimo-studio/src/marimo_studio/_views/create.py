@@ -53,8 +53,9 @@ from marimo_studio._workspace.config_snapshot import (
     WorkspaceConfigSnapshot,
     snapshot_workspace_config,
 )
+from marimo_studio._workspace.generation import unconfigured_catalog_generation
 from marimo_studio._workspace.metadata import configured_notebook_source
-from marimo_studio._workspace.models import StudioDefinition
+from marimo_studio._workspace.models import DEFAULT_VIEW_NAME, StudioDefinition
 from marimo_studio._workspace.mutation_lock import (
     view_mutation_lock,
     workspace_catalog_lock,
@@ -408,7 +409,9 @@ def _prepare_view_locked(
         config_snapshot.config_identity if config_snapshot is not None else None
     )
     _require_notebook_config_identity(config_snapshot, saved_notebook)
-    selected = name or (studio.default_view if studio is not None else "dashboard")
+    selected = name or (
+        studio.default_view if studio is not None else DEFAULT_VIEW_NAME
+    )
     validate_view_name(selected)
     if (
         fail_if_exists
@@ -765,7 +768,9 @@ def prepare_view(
         config_snapshot.config_identity if config_snapshot is not None else None
     )
     _require_notebook_config_identity(config_snapshot, saved_notebook)
-    selected = name or (studio.default_view if studio is not None else "dashboard")
+    selected = name or (
+        studio.default_view if studio is not None else DEFAULT_VIEW_NAME
+    )
     validate_view_name(selected)
     if (
         fail_if_exists
@@ -842,15 +847,18 @@ def prepare_view(
         locked_studio = discover_studio_definition(notebook_path)
         if expected_catalog_generation is not None:
             if locked_studio is None:
-                raise WorkspaceGenerationConflictError()
-            try:
-                current_generation = load_studio(notebook_path).catalog_generation
-            except WorkspaceInitializationError:
-                current_generation = locked_studio.config_generation
+                current_generation = unconfigured_catalog_generation(notebook_path)
+            else:
+                try:
+                    current_generation = load_studio(notebook_path).catalog_generation
+                except WorkspaceInitializationError:
+                    current_generation = locked_studio.config_generation
             if current_generation != expected_catalog_generation:
                 raise WorkspaceGenerationConflictError()
         locked_selected = name or (
-            locked_studio.default_view if locked_studio is not None else "dashboard"
+            locked_studio.default_view
+            if locked_studio is not None
+            else DEFAULT_VIEW_NAME
         )
         validate_view_name(locked_selected)
         locked_default = (

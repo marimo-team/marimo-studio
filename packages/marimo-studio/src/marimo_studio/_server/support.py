@@ -78,6 +78,7 @@ from marimo_studio._server.studio.routes import (
     delete_view_response,
     project_response,
     source_response,
+    unconfigured_view_inventory_payload,
     view_inventory_payload,
 )
 from marimo_studio._server.workspace_lifecycle import (
@@ -87,6 +88,7 @@ from marimo_studio._server.workspace_lifecycle import (
     Unconfigured,
     WorkspaceLifecycle,
 )
+from marimo_studio._workspace.generation import unconfigured_catalog_generation
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
 
@@ -231,6 +233,28 @@ async def support_response(
             runtimes,
             session_state,
         )
+    if (
+        context.mode == "edit"
+        and support_path == "/views"
+        and isinstance(lifecycle, Unconfigured)
+    ):
+        generation = unconfigured_catalog_generation(lifecycle.notebook)
+        if request.method == "GET":
+            return JSONResponse(
+                await run_provider_operation(
+                    partial(
+                        unconfigured_view_inventory_payload,
+                        lifecycle.notebook,
+                    )
+                ),
+                headers=NO_STORE,
+            )
+        return await create_view_response(
+            request,
+            lifecycle.notebook,
+            generation,
+            context.server_token,
+        )
     if not isinstance(lifecycle, (NeedsView, Ready)):
         return Response(status_code=404)
     definition = lifecycle.definition
@@ -246,9 +270,15 @@ async def support_response(
                 ),
                 headers=NO_STORE,
             )
+        generation = (
+            workspace.catalog_generation
+            if workspace is not None
+            else definition.config_generation
+        )
         return await create_view_response(
             request,
-            definition,
+            definition.notebook,
+            generation,
             context.server_token,
         )
     if isinstance(lifecycle, NeedsView):

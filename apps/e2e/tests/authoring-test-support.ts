@@ -1,6 +1,5 @@
-import type { Page } from "@playwright/test";
-
 import { studioBootstrapSchema } from "@marimo-studio/protocol/studio-bootstrap";
+import { expect, type FrameLocator, type Page } from "@playwright/test";
 import { z } from "zod";
 
 export const saveShortcut = process.platform === "darwin" ? "Meta+s" : "Control+s";
@@ -85,6 +84,31 @@ export const studioEditorSessionId = async (page: Page): Promise<string> => {
     throw new Error("Studio bootstrap editor URL is missing its session ID");
   }
   return sessionId;
+};
+
+export const executeCodeMode = async (
+  editor: FrameLocator,
+  file: string,
+  sessionId: string,
+  code: string,
+): Promise<void> => {
+  const result = await editor.locator("html").evaluate(
+    async (_, request) => {
+      const query = new URLSearchParams({ file: request.file });
+      const response = await fetch(`api/kernel/execute?${query}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Marimo-Session-Id": request.sessionId,
+        },
+        body: JSON.stringify({ code: request.code }),
+      });
+      return { ok: response.ok, text: await response.text() };
+    },
+    { code, file, sessionId },
+  );
+  expect(result.ok, result.text).toBe(true);
+  expect(result.text).toContain('"success": true');
 };
 
 export const readBrowserValidation = (source: string) => {

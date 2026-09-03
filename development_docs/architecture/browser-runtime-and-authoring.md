@@ -333,6 +333,13 @@ session or creating a fresh one. Binding rejection and disconnect-grace
 reclamation invalidate the lease, so delayed connector work cannot claim stale
 authority.
 
+An explicit embedding host can replace the complete browser document between
+native `/` and `/studio/`. A tab-scoped preflight retains the native session in
+`sessionStorage`. Studio signs a first unclaimed handoff, validates an existing
+session against the notebook and public query, then suspends the Studio client
+binding while native Marimo reconnects. `NativeSessionAdmission` commits the
+transfer after reconnect or restores the same binding after rejection.
+
 ## View switching
 
 `ViewTransition` commits the latest requested view after current authoring state

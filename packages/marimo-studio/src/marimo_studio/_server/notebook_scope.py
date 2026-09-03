@@ -22,6 +22,8 @@ from marimo_studio._server.workspace_lifecycle import WorkspaceLifecycleResolver
 
 if TYPE_CHECKING:
     from marimo_studio._server.development.ports import ProjectWatcherFactory
+    from marimo_studio._server.ports import SessionState
+    from marimo_studio._server.records import ServerContext
 
 
 @dataclass(frozen=True)
@@ -129,6 +131,20 @@ class NotebookScopeRegistry:
 
     def contains(self, notebook: Path) -> bool:
         return Path(os.path.abspath(notebook)) in self._scopes
+
+    def lookup(self, notebook: Path) -> NotebookScope | None:
+        """Return an existing scope without creating one."""
+        return self._scopes.get(Path(os.path.abspath(notebook)))
+
+    def allocate_session_id(
+        self,
+        context: ServerContext,
+        sessions: SessionState,
+    ) -> str:
+        """Allocate a native session without creating a notebook scope."""
+        if self._closed:
+            raise RuntimeError("Notebook scope registry is closed")
+        return self._session_ids.allocate(context, sessions)
 
     async def close(self) -> None:
         self._closed = True

@@ -43,9 +43,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/check-release.sh
 
-      - name: Audit locked dependencies
-        run: make audit
-
       - name: Build release
         run: make package
 

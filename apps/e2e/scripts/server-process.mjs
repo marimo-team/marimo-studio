@@ -108,7 +108,15 @@ export const verifyNotebookProcessOutput = async (closed, output, timeout = 5_00
 };
 
 export const stopNotebookProcess = async (
-  { authToken = "", child, output = () => String(), port, processGroupId = child.pid, serverUrl },
+  {
+    authToken = "",
+    child,
+    output = () => String(),
+    port,
+    processGroupId = child.pid,
+    serverUrl,
+    studioEntry = "",
+  },
   { shutdown, signal = "SIGTERM", timeout = 5_000 },
 ) => {
   if (shutdown !== "studio" && shutdown !== "run" && shutdown !== "process") {
@@ -136,7 +144,7 @@ export const stopNotebookProcess = async (
   let stopped = false;
   if (shutdown === "studio") {
     try {
-      await requestStudioShutdown(serverUrl, authToken, timeout);
+      await requestStudioShutdown(serverUrl, authToken, timeout, studioEntry);
       stopped = await waitForStop({ child, port, processGroupId }, timeout);
     } catch (error) {
       shutdownError = error;

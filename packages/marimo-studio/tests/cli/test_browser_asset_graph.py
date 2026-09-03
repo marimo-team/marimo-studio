@@ -28,6 +28,11 @@ def test_first_load_budget_follows_transitive_static_imports(tmp_path: Path) -> 
             "assets": ["assets/brand.svg"],
             "dynamicImports": [source_editor],
         },
+        "host-session": {
+            "file": "host-session-handoff.js",
+            "isEntry": True,
+            "imports": ["shared"],
+        },
         "dev": {"file": "dev-reload.js", "isEntry": True, "imports": ["shared"]},
         "shared": {"file": "chunks/shared.js", "imports": ["leaf"]},
         "leaf": {"file": "chunks/leaf.js"},
@@ -47,6 +52,7 @@ def test_first_load_budget_follows_transitive_static_imports(tmp_path: Path) -> 
         "studio.js",
         "studio.css",
         "dev-reload.js",
+        "host-session-handoff.js",
         "chunks/shared.js",
         "chunks/leaf.js",
         "chunks/session.js",
@@ -80,6 +86,11 @@ def test_first_load_budget_follows_transitive_static_imports(tmp_path: Path) -> 
         "runtime.js": {
             "runtime.js",
             "runtime.css",
+            "chunks/shared.js",
+            "chunks/leaf.js",
+        },
+        "host-session-handoff.js": {
+            "host-session-handoff.js",
             "chunks/shared.js",
             "chunks/leaf.js",
         },
