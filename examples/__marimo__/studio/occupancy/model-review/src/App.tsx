@@ -6,7 +6,7 @@ import {
   ThresholdCurve,
   type ThresholdMetric,
 } from "./components/ThresholdCurve.tsx";
-import { type MarimoTable, useMarimoValue } from "./lib/use-marimo-value.ts";
+import { useMarimoValue } from "./lib/use-marimo-value.ts";
 
 const Metric = ({ label, value }: { label: string; value?: string }) => (
   <article className="metric">
@@ -14,6 +14,20 @@ const Metric = ({ label, value }: { label: string; value?: string }) => (
     <strong>{value ?? "…"}</strong>
   </article>
 );
+
+type ScopeSummary = {
+  readonly scope_label: string;
+  readonly observations: number;
+  readonly occupied: number;
+};
+
+type OccupancyAnalysis = {
+  readonly summary: ScopeSummary;
+  readonly model: ThresholdMetric & {
+    readonly curve: ThresholdMetric[];
+    readonly errors: ErrorCase[];
+  };
+};
 
 const ConfusionCounts = ({ summary }: { summary?: ThresholdMetric }) => (
   <article
@@ -64,37 +78,21 @@ const ConfusionCounts = ({ summary }: { summary?: ThresholdMetric }) => (
 );
 
 export const App = () => {
-  const metrics = useMarimoValue<MarimoTable<ThresholdMetric>>(
-    "threshold_metrics",
-  );
-  const summary = useMarimoValue<ThresholdMetric>("model_summary");
-  const errors = useMarimoValue<MarimoTable<ErrorCase>>("error_cases");
-  const curve = metrics.value?.toArray() ?? [];
-  const errorRows = errors.value?.toArray() ?? [];
-  const unavailable = metrics.error || summary.error || errors.error;
-  const loading = !unavailable && (metrics.value === undefined ||
-    summary.value === undefined ||
-    errors.value === undefined);
+  const analysis = useMarimoValue<OccupancyAnalysis>("occupancy_analysis");
+  const scope = analysis.value?.summary;
+  const model = analysis.value?.model;
+  const curve = model?.curve ?? [];
+  const errorRows = model?.errors ?? [];
+  const unavailable = analysis.error;
+  const loading = !unavailable && analysis.value === undefined;
 
   return (
     <>
       <span
-        ref={metrics.hostRef}
+        ref={analysis.hostRef}
         aria-hidden="true"
         hidden
-        mo-value="threshold_metrics"
-      />
-      <span
-        ref={summary.hostRef}
-        aria-hidden="true"
-        hidden
-        mo-value="model_summary"
-      />
-      <span
-        ref={errors.hostRef}
-        aria-hidden="true"
-        hidden
-        mo-value="error_cases"
+        mo-value="occupancy_analysis"
       />
 
       <main className="review" aria-busy={loading}>
@@ -117,8 +115,8 @@ export const App = () => {
             <h1>Threshold behavior and training errors</h1>
           </div>
           <p className="method-note">
-            Transparent score: 70% normalized light and 30% normalized CO₂. The
-            selected operating point is shown against the full threshold sweep.
+            Each scope uses its own light and CO₂ normalization. The score
+            weights normalized light at 70% and normalized CO₂ at 30%.
           </p>
         </header>
 
@@ -133,27 +131,39 @@ export const App = () => {
         <section className="control-strip" aria-labelledby="threshold-heading">
           <div>
             <p className="section-index">01 / Operating point</p>
-            <h2 id="threshold-heading">Choose the occupancy threshold</h2>
+            <h2 id="threshold-heading">Choose scope and threshold</h2>
+            <p className="scope-note" aria-live="polite">
+              {scope
+                ? `${scope.scope_label} · ${
+                  scope.observations.toLocaleString("en")
+                } readings`
+                : "Loading observation scope"}
+            </p>
           </div>
-          <marimo-cell name="threshold_control" />
+          <div className="control-strip-controls">
+            <marimo-cell name="analysis_scope_control" />
+            <marimo-cell name="threshold_control" />
+          </div>
         </section>
 
         <section className="metric-grid" aria-label="Current threshold metrics">
           <Metric
             label="Threshold"
-            value={summary.value?.threshold.toFixed(2)}
+            value={model?.threshold.toFixed(2)}
           />
           <Metric
             label="In-sample accuracy"
-            value={summary.value && formatRate(summary.value.accuracy)}
+            value={model && formatRate(model.accuracy)}
           />
           <Metric
             label="In-sample precision"
-            value={summary.value && formatRate(summary.value.precision)}
+            value={model && formatRate(model.precision)}
           />
           <Metric
             label="In-sample recall"
-            value={summary.value && formatRate(summary.value.recall)}
+            value={model && scope
+              ? scope.occupied > 0 ? formatRate(model.recall) : "n/a"
+              : undefined}
           />
         </section>
 
@@ -170,18 +180,19 @@ export const App = () => {
               <p>The vertical marker shows the selected threshold.</p>
             </div>
             <ThresholdCurve
-              current={summary.value?.threshold}
+              current={model?.threshold}
               metrics={curve}
+              showRecall={(scope?.occupied ?? 0) > 0}
             />
           </article>
 
-          <ConfusionCounts summary={summary.value} />
+          <ConfusionCounts summary={model} />
         </section>
 
         <ErrorEvidence
           rows={errorRows}
-          total={summary.value
-            ? summary.value.false_positive + summary.value.false_negative
+          total={model
+            ? model.false_positive + model.false_negative
             : undefined}
         />
         <footer className="source-note">

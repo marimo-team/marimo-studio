@@ -22,11 +22,23 @@ type SensorRow = {
 };
 
 type OccupancySummary = {
+  scope_label: string;
   observations: number;
   occupied: number;
   occupancy_rate: number;
+  reading_interval_minutes: number;
+  estimated_occupied_hours: number;
   metric: string;
   anomalies: number;
+};
+
+type DailyRoomRow = {
+  day: string;
+  observations: number;
+  occupancy_rate: number;
+  mean_co2: number;
+  peak_co2: number;
+  mean_temperature: number;
 };
 
 use([
@@ -43,11 +55,15 @@ let chartElement: HTMLDivElement;
 let chart: ECharts | undefined;
 let series = $state.raw<MarimoTable<SensorRow> | undefined>();
 let summary = $state<OccupancySummary | undefined>();
+let daily = $state.raw<MarimoTable<DailyRoomRow> | undefined>();
 let latest = $state<SensorRow | undefined>();
 let seriesError = $state(false);
 let summaryError = $state(false);
+let dailyError = $state(false);
+let dailyRows = $derived(daily?.toArray() ?? []);
 let loading = $derived(
-  !seriesError && !summaryError && (series === undefined || summary === undefined),
+  !seriesError && !summaryError && !dailyError &&
+    (series === undefined || summary === undefined || daily === undefined),
 );
 
 const formatNumber = new Intl.NumberFormat(undefined, {
@@ -59,6 +75,11 @@ const formatTime = new Intl.DateTimeFormat(undefined, {
   day: "numeric",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: "UTC",
+});
+const formatDay = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
 });
 
 const unitFor = (metric: string) =>
@@ -99,6 +120,7 @@ const renderChart = () => {
       animationDuration: matchMedia("(prefers-reduced-motion: reduce)").matches
         ? 0
         : 240,
+      useUTC: true,
       aria: { enabled: true },
       color: ["#1c3a13", "#8a9385", "#546b43"],
       grid: { left: 18, right: 18, top: 48, bottom: 28, containLabel: true },
@@ -238,6 +260,22 @@ onMount(() => {
   }}
 ></span>
 
+<span
+  aria-hidden="true"
+  hidden
+  mo-value="daily_room_profile"
+  use:observeMarimoValue={{
+    selector: "daily_room_profile",
+    onValue: (value: MarimoTable<DailyRoomRow>) => {
+      daily = value;
+      dailyError = false;
+    },
+    onError: () => {
+      dailyError = true;
+    },
+  }}
+></span>
+
 <main class="monitor-shell" class:is-loading={loading} aria-busy={loading}>
   <header class="monitor-header">
     <div>
@@ -248,9 +286,14 @@ onMount(() => {
         deviations.
       </p>
     </div>
-    <div class="status" aria-label="Dataset status">
+    <div
+      class="status"
+      aria-label="Dataset status"
+      aria-live="polite"
+      role="status"
+    >
       <span class="status-dot"></span>
-      <span>Historical telemetry</span>
+      <span>{summary?.scope_label ?? "Historical telemetry"}</span>
       {#if summary}
         <strong>{formatInteger.format(summary.observations)} readings</strong>
       {/if}
@@ -259,10 +302,13 @@ onMount(() => {
 
   <section class="control-bar" aria-labelledby="signal-heading">
     <div>
-      <p class="section-label" id="signal-heading">Signal under review</p>
-      <p>Choose a room signal.</p>
+      <p class="section-label" id="signal-heading">Analysis controls</p>
+      <p>Choose an observation scope and room signal.</p>
     </div>
-    <marimo-cell name="metric_control"></marimo-cell>
+    <div class="control-bar-controls">
+      <marimo-cell name="analysis_scope_control"></marimo-cell>
+      <marimo-cell name="metric_control"></marimo-cell>
+    </div>
   </section>
 
   <section class="metrics" aria-label="Occupancy monitor summary">
@@ -289,7 +335,7 @@ onMount(() => {
       </strong>
       <small>
         {summary
-          ? `${formatInteger.format(summary.occupied)} recorded`
+          ? `${formatInteger.format(summary.occupied)} recorded · ${formatNumber.format(summary.estimated_occupied_hours)} h estimated`
           : "Calculating rate"}
       </small>
     </article>
@@ -304,6 +350,33 @@ onMount(() => {
           : "Reviewing signal"}
       </small>
     </article>
+  </section>
+
+  <section class="daily-profile" aria-labelledby="daily-heading">
+    <div class="daily-heading">
+      <div>
+        <p class="section-label">Room use profile</p>
+        <h2 id="daily-heading">Daily occupancy</h2>
+      </div>
+      <p>Share of recorded minutes marked occupied</p>
+    </div>
+    <div class="daily-strip">
+      {#each dailyRows as day (day.day)}
+        <article>
+          <div>
+            <span>{formatDay.format(new Date(`${day.day}T00:00:00`))}</span>
+            <strong>{(day.occupancy_rate * 100).toFixed(0)}%</strong>
+          </div>
+          <span class="daily-track" aria-hidden="true">
+            <i style={`width: ${day.occupancy_rate * 100}%`}></i>
+          </span>
+          <small>{formatNumber.format(day.mean_co2)} ppm mean CO₂</small>
+        </article>
+      {/each}
+    </div>
+    {#if dailyError}
+      <p class="summary-error" role="alert">Daily room use is unavailable.</p>
+    {/if}
   </section>
 
   <section class="chart-panel" aria-labelledby="trend-heading">

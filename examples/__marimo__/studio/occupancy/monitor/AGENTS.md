@@ -7,16 +7,18 @@ this starter.
 ## Project intent
 
 Build a calm room-operations monitor for facilities staff. Use Svelte and Apache
-ECharts for the selected sensor series. Mount the native `metric_control` cell
-and consume `selected_sensor_series` and `occupancy_summary`. Follow the
+ECharts for the selected sensor series. Mount the native
+`analysis_scope_control` and `metric_control` cells, then consume
+`selected_sensor_series`, `occupancy_summary`, and `daily_room_profile`. Follow the
 Botanical Instrument Panel in `DESIGN.md`: warm parchment, forest ink, lime
 status punctuation, flat surfaces, and reduced-motion support.
 
 ## Use the supplied Studio integration
 
-`src/App.svelte` mounts `metric_control` and observes `selected_sensor_series`
-and `occupancy_summary`. ECharts receives the projected series after the
-notebook reacts to a control change.
+`src/App.svelte` mounts `analysis_scope_control` and `metric_control`, then
+observes `selected_sensor_series`, `occupancy_summary`, and
+`daily_room_profile`. ECharts receives the projected series after the notebook
+reacts to either control.
 
 - `src/app.d.ts` adds Studio attributes to Svelte's element types.
 - `src/lib/marimo-value.ts` supplies the `observeMarimoValue` action. Attach it

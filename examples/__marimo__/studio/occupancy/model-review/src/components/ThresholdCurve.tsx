@@ -36,14 +36,18 @@ export const formatRate = (value: number) => rate.format(value);
 export const ThresholdCurve = ({
   current,
   metrics,
+  showRecall = true,
 }: {
   current?: number;
   metrics: ThresholdMetric[];
+  showRecall?: boolean;
 }) => (
   <div
     className="chart"
     role="img"
-    aria-label="In-sample accuracy, precision, and recall by occupancy threshold"
+    aria-label={showRecall
+      ? "In-sample accuracy, precision, and recall by occupancy threshold"
+      : "In-sample accuracy and precision by occupancy threshold. Recall is unavailable for this scope."}
   >
     {metrics.length > 0
       ? (
@@ -106,15 +110,19 @@ export const ThresholdCurve = ({
               dot={false}
               isAnimationActive={false}
             />
-            <Line
-              type="monotone"
-              dataKey="recall"
-              stroke="#7b8e72"
-              strokeDasharray="2 4"
-              strokeWidth={2.5}
-              dot={false}
-              isAnimationActive={false}
-            />
+            {showRecall
+              ? (
+                <Line
+                  type="monotone"
+                  dataKey="recall"
+                  stroke="#7b8e72"
+                  strokeDasharray="2 4"
+                  strokeWidth={2.5}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              )
+              : null}
           </LineChart>
         </ResponsiveContainer>
       )

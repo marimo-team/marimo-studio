@@ -42,6 +42,11 @@ export const documentationTechnologies = {
     name: "React",
     projectUrl: "https://github.com/facebook/react",
   },
+  reactPdf: {
+    description: "A React renderer for composing PDF documents in the browser or on a server.",
+    name: "React PDF",
+    projectUrl: "https://github.com/diegomura/react-pdf",
+  },
   recharts: {
     description: "A composable charting library built with React.",
     name: "Recharts",
@@ -162,7 +167,8 @@ export const documentationExampleFamilies = [
   {
     notebook: "examples/occupancy.py",
     slug: "occupancy",
-    summary: "A live monitor and model review share one room-sensor model.",
+    summary:
+      "A reactive scope updates one room-sensor model across a live monitor, model review, and A4 field report.",
     title: "Building occupancy",
     views: [
       {
@@ -176,6 +182,12 @@ export const documentationExampleFamilies = [
         kind: "report",
         label: "Model review",
         technologies: [documentationTechnologies.react, documentationTechnologies.recharts],
+      },
+      {
+        key: "pdf-report",
+        kind: "report",
+        label: "PDF report",
+        technologies: [documentationTechnologies.react, documentationTechnologies.reactPdf],
       },
     ],
   },
