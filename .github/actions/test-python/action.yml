@@ -23,7 +23,7 @@ runs:
       shell: bash
       run: |
         parallel=()
-        if [[ "${{ inputs.profile }}" != "supported-python" ]]; then
+        if [[ "${{ runner.os }}" != "Linux" && "${{ inputs.profile }}" != "supported-python" ]]; then
           parallel+=(--parallel)
         fi
         ./scripts/python-test.sh \
