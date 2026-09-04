@@ -1,6 +1,5 @@
 import { MarimoValueInputEvent } from "@marimo-team/frontend/unstable_internal/core/dom/events";
 import { getUIElementObjectId } from "@marimo-team/frontend/unstable_internal/core/dom/ui-element";
-import { jsonObjectSchema } from "@marimo-team/portable-json/zod";
 
 import type {
   ControlBinding,
@@ -13,7 +12,7 @@ import type { EmbeddedJsonValue } from "./embedded-json.ts";
 import type { UIElementId } from "./upstream/controls.ts";
 
 import { parseControlBindings } from "./control-endpoint-core.ts";
-import { parseEmbeddedJsonValue } from "./embedded-json.ts";
+import { jsonObjectSchema, parseEmbeddedJsonValue } from "./embedded-json.ts";
 import { UI_ELEMENT_REGISTRY } from "./upstream/controls.ts";
 
 export interface PreparedControlInput {

@@ -6,12 +6,12 @@ import type { RuntimeContext } from "@marimo-studio/runtime";
 import type { NotebookExport, OpenExportOptions } from "@marimo-team/marimo-export";
 import type { PreparedPublicationRefreshOptions } from "@marimo-team/marimo-export/prepared";
 
+import { parseJsonValue } from "@marimo-studio/presentation/json";
 import {
   PreparedPublicationRefresh,
   PreparedStateController,
 } from "@marimo-team/marimo-export/prepared";
 
-import type { AuthoredProjectionHosts } from "./hosts.ts";
 import type { ZeroPythonRuntimeData } from "./metadata.ts";
 import type { ZeroPythonProjectionLoaders } from "./projections.ts";
 
@@ -52,20 +52,17 @@ export interface StudioPreparedComposition {
 }
 
 export const createStudioPreparedComposition = (options: {
-  readonly commitInstance: (instance: string) => void;
   readonly root: HTMLElement;
   readonly context: () => {
     readonly config: RuntimeConfig;
     readonly data: ZeroPythonRuntimeData;
-    readonly hosts: AuthoredProjectionHosts;
   };
   readonly dependencies: ZeroPythonRuntimeDependencies;
   readonly isDisposed: () => boolean;
 }): StudioPreparedComposition => {
   const source = new StudioPreparedManifestSource(() => {
-    const { config, data, hosts } = options.context();
+    const { config, data } = options.context();
     return {
-      hosts,
       planDigest: data.planDigest,
       view: config.view,
     };
@@ -81,7 +78,6 @@ export const createStudioPreparedComposition = (options: {
     }),
     source,
     options.dependencies.loaders,
-    options.commitInstance,
   );
   const state = new PreparedStateController(renderer);
   interactions = new StudioPreparedInteractions(state, options.isDisposed);
@@ -134,7 +130,7 @@ const refreshOptions = (
 };
 
 export const presentationConfig = (config: RuntimeConfig) => ({
-  appConfig: config.appConfig,
-  configOverrides: config.configOverrides,
-  userConfig: config.userConfig,
+  appConfig: parseJsonValue(config.appConfig),
+  configOverrides: parseJsonValue(config.configOverrides),
+  userConfig: parseJsonValue(config.userConfig),
 });

@@ -1,10 +1,8 @@
 import type { PreparedExportManifest } from "@marimo-team/marimo-export/prepared";
 
+import { losslessRecordSchema } from "@marimo-studio/presentation/json";
 import { parsePreparedExportManifest } from "@marimo-team/marimo-export/prepared";
-import { losslessRecordSchema } from "@marimo-team/portable-json/zod";
 import { z } from "zod";
-
-import type { AuthoredProjectionHosts } from "./hosts.ts";
 
 import { ZeroPythonRuntimeError } from "./errors.ts";
 
@@ -61,7 +59,6 @@ export interface StudioPreparedManifest {
 }
 
 export interface StudioPreparedContext {
-  readonly hosts: AuthoredProjectionHosts;
   readonly planDigest: string;
   readonly view: string;
 }

@@ -1,7 +1,8 @@
-import { losslessRecordSchema } from "@marimo-team/portable-json/zod";
 import { z } from "zod";
 
 import type { UIElementRegistry as MarimoUIElementRegistry } from "./upstream/controls.ts";
+
+import { losslessRecordSchema } from "./embedded-json.ts";
 
 type ControlValue = Parameters<MarimoUIElementRegistry["set"]>[1];
 type ControlMessage = Parameters<MarimoUIElementRegistry["broadcastMessage"]>[1];
@@ -191,7 +192,6 @@ export const connectControlEndpoint = (
       applying = false;
     }
   };
-  const releaseRegistrations = subscribeRegistrations(registry, notify);
   const apply = async (updates: readonly ControlUpdate[]): Promise<void> => {
     const accepted: ControlUpdate[] = [];
     const created: string[] = [];

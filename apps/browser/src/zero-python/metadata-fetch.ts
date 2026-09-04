@@ -1,4 +1,4 @@
-import { parsePortableJson } from "@marimo-team/portable-json";
+import { parseJson } from "@marimo-studio/presentation/json";
 
 import type { StudioPreparedManifest } from "./metadata-records.ts";
 
@@ -41,7 +41,7 @@ export const fetchStudioPreparedManifest = async (
   const bytes = await readManifestBytes(response, signal);
   try {
     const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    return parseStudioPreparedManifest(parsePortableJson(text));
+    return parseStudioPreparedManifest(parseJson(text));
   } catch (error) {
     if (error instanceof ZeroPythonRuntimeError) {
       throw error;

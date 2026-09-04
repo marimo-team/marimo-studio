@@ -4,9 +4,8 @@ import type {
 } from "@marimo-studio/presentation/runtime-state";
 import type { ExportState } from "@marimo-team/marimo-export";
 import type { PreparedStateSnapshot } from "@marimo-team/marimo-export/prepared";
-import type { JsonObject } from "@marimo-team/portable-json";
 
-import { portableJsonObject } from "@marimo-team/portable-json";
+import { parseJsonObject, type JsonObject } from "@marimo-studio/presentation/json";
 
 export interface StudioPreparedStateApiSource {
   snapshot(): PreparedStateSnapshot;
@@ -25,7 +24,7 @@ export class StudioPreparedStateApi {
       inputs: () => this.#publication().state.inputs,
       states: () => stateDescriptions(this.#publication().notebookExport.states()),
       update: (patch: Parameters<RuntimeStateApi["update"]>[0]) =>
-        this.source.updateInputs(portableJsonObject(patch, "state patch")),
+        this.source.updateInputs(parseJsonObject(patch)),
     });
     globalThis.marimoStudio.state = api;
     this.#installed = api;

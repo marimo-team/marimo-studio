@@ -1,13 +1,12 @@
 import type { PreparedControlInput } from "@marimo-studio/presentation/prepared-projections";
 import type { PreparedStateController } from "@marimo-team/marimo-export/prepared";
-import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
 
+import { parseJsonObject, type JsonObject, type JsonValue } from "@marimo-studio/presentation/json";
 import { isNotebookExportError } from "@marimo-team/marimo-export";
 import {
   preparedControlInputPatch,
   resolvePreparedQuerySelection,
 } from "@marimo-team/marimo-export/prepared";
-import { portableJsonObject } from "@marimo-team/portable-json";
 
 export class StudioPreparedInteractions {
   #revisionInputs: JsonObject | undefined;
@@ -42,11 +41,10 @@ export class StudioPreparedInteractions {
       return;
     }
     const inputNames = new Set(publication.notebookExport.inputNames);
-    const retained = portableJsonObject(
+    const retained = parseJsonObject(
       Object.fromEntries(
         Object.entries(this.#revisionInputs).filter(([name]) => inputNames.has(name)),
       ),
-      "retained revision inputs",
     );
     try {
       await this.state.updateInputs(retained, signal);
@@ -66,7 +64,7 @@ export class StudioPreparedInteractions {
     const current = this.state.snapshot();
     const base =
       this.#revisionInputs ?? current.pendingInputs ?? current.current?.state.inputs ?? {};
-    this.#revisionInputs = portableJsonObject({ ...base, ...patch }, "revision state patch");
+    this.#revisionInputs = parseJsonObject({ ...base, ...patch });
   }
 
   async updateQuery(query: string, signal: AbortSignal): Promise<void> {

@@ -12,9 +12,10 @@
     "@marimo-studio/presentation": "workspace:*",
     "@marimo-studio/runtime": "workspace:*",
     "@marimo-studio/studio": "workspace:*",
-    "@marimo-team/marimo-export": "link:../../../../marimo-export/packages/browser",
-    "@marimo-team/portable-json": "link:../../../../marimo-export/packages/portable-json",
+    "@marimo-team/marimo-export": "catalog:",
+    "@uwdata/flechette": "catalog:",
     "htmx.org": "catalog:",
+    "lz4js": "0.2.0",
     "zod": "catalog:"
   },
   "devDependencies": {

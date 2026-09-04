@@ -15,6 +15,7 @@ const buildMetadataSchema = z.object({
     commit: z.string().min(1),
     patchSha256: z.string().min(1),
   }),
+  marimoExport: z.object({ version: z.string().min(1) }),
   htmx: z.object({ version: z.string().min(1) }),
 });
 
@@ -42,6 +43,9 @@ export const buildMetadata = (): Plugin => ({
   apply: "build",
   async generateBundle() {
     const marimo = await readMarimoSource();
+    const marimoExport = await readPackageManifest(
+      import.meta.resolve("@marimo-team/marimo-export/package.json"),
+    );
     const htmx = await readPackageManifest(import.meta.resolve("htmx.org"));
     const metadata = buildMetadataSchema.parse({
       marimo: {
@@ -50,6 +54,7 @@ export const buildMetadata = (): Plugin => ({
         commit: marimo.commit,
         patchSha256: marimo.patchSha256,
       },
+      marimoExport: { version: marimoExport.version },
       htmx: { version: htmx.version },
     });
     this.emitFile({

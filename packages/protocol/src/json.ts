@@ -1,25 +1,27 @@
-import { parsePortableJson } from "@marimo-team/portable-json";
 import { z } from "zod";
 
-export {
-  MAX_JSON_DEPTH,
-  MAX_JSON_VALUES,
-  type JsonObject,
-  type JsonValue,
-} from "@marimo-team/portable-json";
-export {
-  jsonObjectSchema,
-  jsonValueSchema,
-  losslessRecordSchema,
-} from "@marimo-team/portable-json/zod";
-export { parsePortableJson };
+import { ownRecordSchema } from "./records.ts";
+import { jsonValueSchema, type JsonValue } from "./runtime-config.ts";
+
+export { jsonValueSchema, type JsonValue } from "./runtime-config.ts";
+
+export type JsonObject = Readonly<Record<string, JsonValue>>;
+
+export const jsonObjectSchema: z.ZodType<JsonObject> = ownRecordSchema(z.string(), jsonValueSchema);
+
+export const losslessRecordSchema = ownRecordSchema;
+
+export const parseJsonValue = <Value>(value: Value): JsonValue => jsonValueSchema.parse(value);
+
+export const parseJsonObject = <Value>(value: Value): JsonObject => jsonObjectSchema.parse(value);
+
+export const parseJson = (source: string): JsonValue => parseJsonValue(JSON.parse(source));
 
 export const jsonCodec = <T extends z.core.$ZodType>(schema: T) =>
   z.codec(z.string(), schema, {
     decode: (source, context) => {
       try {
-        // SAFETY: The codec's output schema validates the parsed portable value immediately.
-        return parsePortableJson(source) as z.input<T>;
+        return JSON.parse(source);
       } catch (error: unknown) {
         context.issues.push({
           code: "invalid_format",

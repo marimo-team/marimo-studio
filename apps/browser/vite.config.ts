@@ -16,7 +16,11 @@ export default defineConfig({
   css: {
     postcss: marimo.postcss,
   },
-  plugins: [...marimo.plugins, buildMetadata()],
+  plugins: [
+    ...marimo.plugins,
+    buildMetadata(),
+    entryClosures({ entries: ["runtime"], fileName: "entry-closures.runtime.json" }),
+  ],
   worker: {
     plugins: () => marimo.workerPlugins(),
   },
