@@ -80,9 +80,19 @@ marimo-studio view export dashboard \
   --output dist/dashboard
 ```
 
-Python executes while the command runs. Visitors receive the production view
-artifact, runtime configuration, notebook `public/` files, and prepared
-outputs. The directory contains neither notebook source nor a Python runtime.
+Python executes while the command runs.
+
+::: tip Publish without sharing Python source
+The Prepared runtime keeps the Python notebook and cell source on the machine
+that runs the export. The static directory contains the production view,
+prepared outputs, runtime metadata, and files placed in the notebook's
+`public/` directory. The browser reads that publication without starting
+Python. Cell names, IDs, and code hashes remain as provenance, while notebook
+source and cell bodies are not serialized into the export.
+
+See [marimo-export](https://github.com/marimo-team/marimo-export) for the
+publication format and browser reader.
+:::
 
 Each Zero-Python export uses the authored notebook's `__marimo__/cache/`
 directory. [Marimo's native cell cache](https://docs.marimo.io/api/caching/)

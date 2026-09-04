@@ -238,6 +238,11 @@ visitor's browser. `--prepare-timeout` bounds Zero-Python preparation and
 defaults to 30 seconds. Studio rejects `--prepare-timeout` with
 `--runtime wasm` before resolving the target or building the provider artifact.
 
+Zero-Python keeps Python notebook and cell source on the build machine. Its
+publication retains cell names, IDs, and code hashes as provenance. Projected
+outputs and files under the notebook's `public/` directory are included in the
+static directory.
+
 The result contains the runtime, exact entry file, file count, and Zero-Python
 cache activity. Authored hits and misses come directly from marimo-export's
 observation of Marimo's native cell-cache decisions. `--force` replaces an

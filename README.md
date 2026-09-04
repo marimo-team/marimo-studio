@@ -110,14 +110,11 @@ notebook
   -> rendered view
 ```
 
-Each view keeps its own source and build while reusing results from the same
-notebook. Use the Python runtime when the notebook needs server files,
-databases, credentials, or native packages. Use the Browser runtime when the
-notebook and its data can run in [Pyodide](https://pyodide.org/), a Python
-distribution compiled for the browser. Browser execution and static exports
-can contain the saved notebook source. Static export uses the Prepared runtime
-by default. It computes finite input states during export and publishes the
-view with verified results and no visitor-side Python runtime.
+One notebook can publish several named views, each with its own source, build,
+and runtime. Choose Python for server-backed views, Browser for views that run
+with [Pyodide](https://pyodide.org/) in the browser, or Prepared for static
+publishing from precomputed results. Prepared exports keep the Python notebook
+source on the build machine.
 
 ## Learn and operate
 
