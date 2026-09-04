@@ -1,0 +1,187 @@
+packages/protocol/src/studio-bootstrap.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 6-9,71,76
+packages/protocol/src/runtime-selection.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1
+packages/studio/tests/control-sync.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 3-7,54,90-91,95,99,115-118
+packages/protocol/src/output-read.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 39
+packages/studio/tests/query-controller.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 38,104,127,492,514,534
+apps/browser/src/zero-python/controller.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 12-13,29,34,41,48
+packages/studio/src/app/workspace-event-coordinator.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 57-58
+packages/studio/src/features/preview/runtime.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 5,7-9
+packages/runtime/src/index.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 11-13,19,25,29-30,38-39,41-44,49-50,52
+packages/presentation/src/document/session-startup.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-2,39,49-50
+apps/browser/package.json
+  s_20c77aba16eeb4::t_60afcd4e1a759e 7-9
+packages/presentation/src/prepared/records.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 13-14,16,27,66-76
+packages/studio/src/features/preview/query-controller.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 2,75,133
+apps/browser/tests/zero-python-projections.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 12,14,128-137,150-178,212-247
+packages/presentation/src/prepared/theme.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-23
+packages/presentation/src/prepared/controller.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 17,22,44,103-104,125-126
+packages/presentation/tests/prepared-fixture.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 8,12,20-35,37-45,47
+packages/presentation/src/view-styles/runtime.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 78,162
+packages/studio/src/features/source-editor/controller.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 80,82,90
+packages/presentation/tests/session-startup.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 19
+packages/studio/src/features/preview/control-remote.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 17-18,22,25-26,28-29,31
+packages/presentation/src/document/styles.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 57
+apps/browser/tests/zero-python-fixture.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 19,30,34,43-54,212-220,246-247
+packages/presentation/src/runtime/runtime-configuration.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 6,11,18,21
+packages/protocol/tests/runtime-config.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 35
+packages/presentation/tests/prepared-widgets.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 118-127,156-165
+packages/studio/tests/control-controller.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 4,6,12-18,21,33-42
+packages/marimo-frontend/tests/control-endpoint.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 387,390
+packages/presentation/src/static.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-66
+packages/studio/src/features/preview/deck.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 139,208,486
+packages/studio/src/features/preview/controller.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 106,159,596,727
+packages/presentation/src/prepared/transaction.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 13,194
+packages/studio/src/app/useStudioServices.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 6
+packages/presentation/src/prepared/index.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 3
+packages/studio/tests/preview-controller.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 244-245,260
+packages/studio/src/features/preview/control-sync.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 7-10,252,259-264,266
+packages/presentation/tests/server-outputs.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 37
+packages/studio/tests/control-remote.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 14,17-20
+packages/presentation/tests/prepared-projections.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 32-41,234,311,357,403,872-874
+packages/presentation/src/values/hosts.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 685-699
+packages/presentation/tests/runtime-config.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 31
+packages/marimo-frontend/src/upstream/prepared-cells.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-9
+packages/presentation/src/rendered-view-observer.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 9
+packages/presentation/tests/value-hosts.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 59
+packages/studio/src/features/views/controller.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 182
+packages/presentation/src/document/events.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 121
+packages/studio/src/features/views/transition.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 73
+packages/marimo-frontend/src/projected-output.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 19-20
+packages/presentation/tests/runtime-coordinator.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 37,44-51,59,62,71-77,84,89,94-100,105
+apps/browser/src/zero-python.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1,6
+packages/studio/tests/studio-app.test.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 85,489-491
+packages/marimo-frontend/src/embedded-runtime.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 3-4,16,32,34,36,40,44-45,47,49-52,57-58,60-63,66-67,87-91,117-120,219-220,222,358-359,365,373,383
+packages/runtime/tests/registry.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 11,14
+packages/presentation/src/runtime/outputs/ProjectedOutput.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 5-7
+packages/presentation/src/runtime/cells/CellPortal.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 75
+packages/marimo-frontend/src/cell-presentation.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 3-4,11,27,56,80,129
+packages/presentation/tests/session-preservation.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 27
+packages/presentation/src/rendered-view-state.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 64
+packages/presentation/src/document/session-preservation.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 44
+apps/browser/src/zero-python/mount.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 14,28,36,42-52
+packages/marimo-frontend/scripts/source.mjs
+  s_20c77aba16eeb4::t_60afcd4e1a759e 20-25,285-299,369,396,405
+packages/presentation/src/document/revision-controller.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 30,206-214
+packages/presentation/src/document/revision-document.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 199
+packages/presentation/src/outputs/remote.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 42
+packages/presentation/src/wasm-rpc.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 13
+apps/browser/src/zero-python/runtime.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 7,13
+packages/studio/src/features/source-editor/sync.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 246
+packages/presentation/src/runtime-config/remote.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 87,128,130
+packages/presentation/src/document/revision-runtime.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-3,8,32,59
+packages/protocol/tests/output-read.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 84-85,90,96
+packages/studio/src/features/preview/control-controller.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1,3,17,83,164-165
+apps/browser/tests/static-prepared-smoke.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 17,20,24
+packages/presentation/src/prepared/resources.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 4,9,147-150,197,200,213-214
+packages/studio/src/app/StudioApp.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 4
+packages/presentation/src/runtime/catalog.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 7,16,23-24
+packages/presentation/tests/frame-runtime-bridge.test.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 49-51,55,172-174,178,294-296,300
+packages/presentation/package.json
+  s_20c77aba16eeb4::t_60afcd4e1a759e 13-14
+packages/presentation/src/runtime/runtime.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 71-72,79,102-103
+packages/presentation/src/runtime/coordinator.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 16,22-29,32-33,36-38,40,43,45
+packages/studio/src/app/services.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 4,60,249
+packages/marimo-frontend/tests/source.test.mjs
+  s_20c77aba16eeb4::t_60afcd4e1a759e 2
+apps/browser/src/runtime.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 2,7
+apps/browser/entry-closures.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 62,114-117,135
+packages/presentation/src/main.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 349,401-402
+packages/studio/src/features/navigation/RuntimeOptions.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 6,8-10,12,14,32,48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f710aadf2daa72368784ab8c08db09413caf9aaa",
+  "prompts": {},
+  "sessions": {
+    "s_20c77aba16eeb4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c13-86fa-7803-9086-c7549e61faab",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
