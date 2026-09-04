@@ -16,6 +16,7 @@ _PREPARE_TIMEOUT = 120.0
 
 
 @pytest.mark.native_process
+@pytest.mark.xdist_group("managed-export")
 def test_export_command_reports_the_static_entrypoint(
     notebook_path: Path,
     tmp_path: Path,
@@ -49,7 +50,6 @@ def test_export_command_reports_the_static_entrypoint(
     assert output.joinpath("index.html").is_file()
 
 
-@pytest.mark.native_process
 def test_export_completion_command_serves_on_loopback(
     notebook_path: Path,
     tmp_path: Path,
@@ -67,8 +67,8 @@ def test_export_completion_command_serves_on_loopback(
             str(notebook_path),
             "--output",
             str(output),
-            "--prepare-timeout",
-            str(_PREPARE_TIMEOUT),
+            "--runtime",
+            "wasm",
         ],
     )
 
@@ -121,6 +121,7 @@ def test_wasm_export_rejects_prepare_timeout_before_resolving_target(
 
 
 @pytest.mark.native_process
+@pytest.mark.xdist_group("managed-export")
 def test_agent_view_exports_the_same_static_bundle(
     notebook_path: Path,
     tmp_path: Path,

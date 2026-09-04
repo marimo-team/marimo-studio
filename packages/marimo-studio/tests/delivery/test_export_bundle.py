@@ -132,38 +132,8 @@ def test_export_view_writes_a_complete_static_bundle(
 
 
 @pytest.mark.native_process
-def test_zero_python_export_combines_the_view_and_prepared_publication(
-    notebook_path: Path,
-    tmp_path: Path,
-) -> None:
-    configure_export_view(notebook_path)
-    output = tmp_path / "prepared-site"
-
-    result = export_view(
-        notebook_path,
-        output,
-        runtime="zero-python",
-        prepare_timeout=_PREPARE_TIMEOUT,
-    )
-
-    support = output / "_marimo-studio" / "views" / "dashboard"
-    config = json.loads(support.joinpath("config").read_text(encoding="utf-8"))
-    manifest = json.loads(
-        support.joinpath("zero-python/current").read_text(encoding="utf-8")
-    )
-    instance = manifest["prepared"]["instance"]
-    assert result.runtime == "zero-python"
-    assert result.cache_activity is not None
-    assert result.entrypoint.is_file()
-    assert config["runtime"]["id"] == "zero-python"
-    assert config["runtime"]["instance"] == instance
-    assert support.joinpath("zero-python", instance, "index.json").is_file()
-    assert output.joinpath("_marimo-studio/assets/zero-python.js").is_file()
-    assert not output.joinpath("_marimo-studio/assets/runtime.js").exists()
-
-
-@pytest.mark.native_process
-def test_zero_python_export_reuses_the_prepared_generation(
+@pytest.mark.xdist_group("managed-export")
+def test_zero_python_export_combines_view_and_reuses_publication(
     notebook_path: Path,
     tmp_path: Path,
 ) -> None:
@@ -171,7 +141,7 @@ def test_zero_python_export_reuses_the_prepared_generation(
     first_output = tmp_path / "prepared-site-first"
     repeated_output = tmp_path / "prepared-site-repeated"
 
-    export_view(
+    result = export_view(
         notebook_path,
         first_output,
         runtime="zero-python",
@@ -183,21 +153,27 @@ def test_zero_python_export_reuses_the_prepared_generation(
         runtime="zero-python",
         prepare_timeout=_PREPARE_TIMEOUT,
     )
-    first_manifest = json.loads(
-        first_output.joinpath(
-            "_marimo-studio/views/dashboard/zero-python/current"
-        ).read_text(encoding="utf-8")
+
+    support = first_output / "_marimo-studio" / "views" / "dashboard"
+    config = json.loads(support.joinpath("config").read_text(encoding="utf-8"))
+    manifest = json.loads(
+        support.joinpath("zero-python/current").read_text(encoding="utf-8")
     )
     repeated_manifest = json.loads(
         repeated_output.joinpath(
             "_marimo-studio/views/dashboard/zero-python/current"
         ).read_text(encoding="utf-8")
     )
-
-    assert (
-        repeated_manifest["prepared"]["instance"]
-        == first_manifest["prepared"]["instance"]
-    )
+    instance = manifest["prepared"]["instance"]
+    assert result.runtime == "zero-python"
+    assert result.cache_activity is not None
+    assert result.entrypoint.is_file()
+    assert config["runtime"]["id"] == "zero-python"
+    assert config["runtime"]["instance"] == instance
+    assert support.joinpath("zero-python", instance, "index.json").is_file()
+    assert first_output.joinpath("_marimo-studio/assets/zero-python.js").is_file()
+    assert not first_output.joinpath("_marimo-studio/assets/runtime.js").exists()
+    assert repeated_manifest["prepared"]["instance"] == instance
 
 
 def test_wasm_export_rejects_prepare_timeout_before_loading_target(
@@ -288,7 +264,6 @@ def test_export_public_assets_reject_symlink_swaps(
     assert not output.exists()
 
 
-@pytest.mark.native_process
 def test_export_preserves_nested_vanilla_local_sources(
     notebook_path: Path,
     tmp_path: Path,
@@ -325,8 +300,7 @@ def test_export_preserves_nested_vanilla_local_sources(
     result = export_view(
         notebook_path,
         output,
-        runtime="zero-python",
-        prepare_timeout=_PREPARE_TIMEOUT,
+        runtime="wasm",
     )
 
     config = json.loads(
