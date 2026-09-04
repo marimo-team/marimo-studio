@@ -1,0 +1,98 @@
+development_docs/documentation.md
+  s_d95c58d522c4a6::t_ac8ec0fcd2dd6e 56
+  s_d95c58d522c4a6::t_f6dbe12236e274 5-6
+  s_d95c58d522c4a6::t_94f5de9c82119d 1-3,7-9,21-55,57-151
+  s_d95c58d522c4a6::t_e146a6abb05b0c 4
+  s_d95c58d522c4a6::t_f815f132960a2e 10-20
+development_docs/architecture/errors-and-diagnostics.md
+  s_d95c58d522c4a6::t_f815f132960a2e 15-24,40-41,44-50
+  s_d95c58d522c4a6::t_94f5de9c82119d 1-14,25-39,51-65,67-81,83-163
+  s_d95c58d522c4a6::t_e46230f39e09ef 66
+  s_d95c58d522c4a6::t_4c84f82237720e 42-43
+  s_d95c58d522c4a6::t_1ffb027e960f09 82
+development_docs/architecture/marimo-integration.md
+  s_d95c58d522c4a6::t_a90082508d9d96 321-323
+  s_d95c58d522c4a6::t_75ba75e1bcb3b3 177-181,296-305
+development_docs/architecture/view-providers-and-artifacts.md
+  s_d95c58d522c4a6::t_f815f132960a2e 192-198
+  s_d95c58d522c4a6::t_40f85d0b267833 182
+  s_d95c58d522c4a6::t_4c818f3ae5a2cc 7-8,147-149,159-181,183-191,199-215,236-247,253-254
+development_docs/architecture/browser-runtime-and-authoring.md
+  s_d95c58d522c4a6::t_4a8ea2d824119c 303-307
+  s_d95c58d522c4a6::t_d159e1172450f3 17,141-145,155-165,168,172-175,179-188,210,212-213
+  s_d95c58d522c4a6::t_43f164a0f99c46 9-10
+  s_d95c58d522c4a6::t_f815f132960a2e 146-154
+development_docs/architecture/agents-and-delivery.md
+  s_d95c58d522c4a6::t_f2e2c2135389b9 49-52,112-114
+development_docs/architecture/product-and-workspace.md
+  s_d95c58d522c4a6::t_a90082508d9d96 136-141,147-154
+  s_d95c58d522c4a6::t_f917a811de3447 7-8,25-56,60,130,142-146,159-175,217-219
+  s_d95c58d522c4a6::t_6d9df472087c19 57-59
+development_docs/architecture/provider-environments.md
+  s_d95c58d522c4a6::t_f815f132960a2e 52-56
+  s_d95c58d522c4a6::t_078f1b7646ae35 66-67
+  s_d95c58d522c4a6::t_251991a85c352d 3-6,26-28,106-108
+  s_d95c58d522c4a6::t_94f5de9c82119d 1-2,7-25,29,32-35,40-51,57-65,68-105,109-153
+  s_d95c58d522c4a6::t_8cb91d90bd5a16 30-31,36-39
+development_docs/architecture/identities-and-state.md
+  s_d95c58d522c4a6::t_94f5de9c82119d 1-22,34-43,45,61-95,103-112,121-167
+  s_d95c58d522c4a6::t_4c84f82237720e 28-29,44,49
+  s_d95c58d522c4a6::t_17689967dc21da 55
+  s_d95c58d522c4a6::t_f815f132960a2e 23-27,30-33,46-48,50-54,56-60,96-102,113-120
+development_docs/architecture/symbolic-projections.md
+  s_d95c58d522c4a6::t_251991a85c352d 71-73
+  s_d95c58d522c4a6::t_078f1b7646ae35 62-64
+  s_d95c58d522c4a6::t_7864f414ad33c7 70,76-79
+development_docs/architecture/server-routing-and-security.md
+  s_d95c58d522c4a6::t_f815f132960a2e 47-52,60-61,63-68,93-96
+  s_d95c58d522c4a6::t_94ef5c00418864 62,77-78
+  s_d95c58d522c4a6::t_94f5de9c82119d 1-46,53-59,69-76,79-92,97-121,125-150,154-168
+  s_d95c58d522c4a6::t_a90082508d9d96 151-153
+  s_d95c58d522c4a6::t_9633575b332ec9 122-124
+development_docs/README.md
+  s_d95c58d522c4a6::t_f815f132960a2e 24-26,28-29,31-32,34,244-248,250
+  s_d95c58d522c4a6::t_b716e07e33334c 36
+  s_d95c58d522c4a6::t_b4d453e66d0363 47-57
+  s_d95c58d522c4a6::t_f6dbe12236e274 70-71
+  s_d95c58d522c4a6::t_e146a6abb05b0c 43-46,58-60
+  s_d95c58d522c4a6::t_078f1b7646ae35 74-76
+  s_d95c58d522c4a6::t_fe1c77485a9386 27,30,33,35,39-41,194-196,249
+development_docs/frontend.md
+  s_d95c58d522c4a6::t_f6dbe12236e274 3-7,72-73,167
+  s_d95c58d522c4a6::t_078f1b7646ae35 20,276-279
+  s_d95c58d522c4a6::t_d9444778803dbd 29-30,285-287,291
+  s_d95c58d522c4a6::t_f815f132960a2e 288-290,292
+  s_d95c58d522c4a6::t_a2c3f539b09019 18-19,21-27,160-166
+development_docs/architecture.md
+  s_d95c58d522c4a6::t_f815f132960a2e 19-40,42,44-47,49-51
+  s_d95c58d522c4a6::t_adb4a0b02a2578 41
+  s_af5d583a28e9c5::t_d3a4b248c35e02 43
+  s_d95c58d522c4a6::t_47057ed8e2de93 48,60,68-72,77-78,119,121,124,126
+development_docs/releasing.md
+  s_d95c58d522c4a6::t_4a8ea2d824119c 16-17
+  s_d95c58d522c4a6::t_844c81a917976e 59-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4608ff142939e850a8c46e777fcbdaf9e00078fa",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_d95c58d522c4a6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e6d-3a01-7030-831c-ac56142a7df9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

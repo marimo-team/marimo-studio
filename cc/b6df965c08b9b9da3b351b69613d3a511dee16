@@ -1,0 +1,9 @@
+apps/docs/.vitepress/config.mts
+  ai_agent 1-2,10,15-40,58-82,86-94,151,163,170,177,193,198,203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ccb6df965c08b9b9da3b351b69613d3a511dee16",
+  "prompts": {}
+}

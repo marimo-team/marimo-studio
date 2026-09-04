@@ -1,0 +1,28 @@
+packages/presentation/src/runtime/observed-deferred.ts
+  s_5d3e5afc5ceae4::t_4acb94e1e7bb58 1
+  s_5d3e5afc5ceae4::t_d8f281c69bbfe3 2-16
+packages/presentation/src/runtime/wasm.ts
+  s_5d3e5afc5ceae4::t_d8f281c69bbfe3 22,104-105,107-108,179,189,195,207,221,256,258-259
+packages/presentation/tests/wasm-delivery.test.ts
+  s_5d3e5afc5ceae4::t_d8f281c69bbfe3 103
+packages/presentation/tests/wasm-runtime.test.ts
+  s_5d3e5afc5ceae4::t_d8f281c69bbfe3 1,7,31,33,36,165,182,196,201
+packages/presentation/src/runtime/wasm-query.ts
+  s_5d3e5afc5ceae4::t_d8f281c69bbfe3 120-132,134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8e39bf810e4a2a22f08b74fec6bd1def75846f3c",
+  "prompts": {},
+  "sessions": {
+    "s_5d3e5afc5ceae4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061e5-1e88-75a2-80ad-e82619d57701",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,54 @@
+packages/marimo-studio/src/marimo_studio/_server/query.py
+  s_949640492e0581::t_e459c21a3b7e54 1-20
+packages/marimo-studio/src/marimo_studio/_server/headers.py
+  s_949640492e0581::t_e459c21a3b7e54 3-4,27-35,37-43,60,62-66
+  s_949640492e0581::t_92890f411d6a46 36,44-59,61
+packages/marimo-studio/tests/server/test_editor_runtime_assets.py
+  s_949640492e0581::t_ae49348a0805f6 29
+  s_949640492e0581::t_92890f411d6a46 28,73,115
+packages/marimo-studio/src/marimo_studio/_compat/server/session_state.py
+  s_949640492e0581::t_e459c21a3b7e54 45-48,99,108
+  s_949640492e0581::t_ec4e1e7dc5ae6b 9,32,338-339,349-356,419-442
+packages/marimo-studio/src/marimo_studio/_server/studio/session_handoff.py
+  s_949640492e0581::t_1a1b1539b22c18 17-20,179-182,184,186-192
+  s_949640492e0581::t_5fe729f3124828 15-16,21-27,130-131,195-295
+  s_949640492e0581::t_5a32ac8c558338 38-44,49,63,79-80,82,88-89,100-102,115,121,125-128
+  s_949640492e0581::t_8a9ae978f2b2ce 13,35
+  s_949640492e0581::t_3d2e1d8a417f97 183,185
+  s_949640492e0581::t_ec4e1e7dc5ae6b 1-8,11-12,14,29-34,36-37,45-48,50-62,64-78,81,83-87,90-99,103-114,117-120,122-124,129,296-320,323-324,326
+  s_949640492e0581::t_1c79219a8eee2a 10
+  s_949640492e0581::t_3d1da33b7965dd 132-178,193-194,321-322,325
+  s_949640492e0581::t_e459c21a3b7e54 9,28
+  s_949640492e0581::t_83b167347ba34f 116
+packages/marimo-studio/src/marimo_studio/_server/editor_bridge.py
+  s_949640492e0581::t_e459c21a3b7e54 25,193
+  s_949640492e0581::t_e9d41185f01a21 51,283-284,287,292
+  s_949640492e0581::t_ec4e1e7dc5ae6b 8,85,129,261,273-275,279-282,285-286,288-291,293,307,332
+  s_949640492e0581::t_6b8a777b93367b 333
+packages/marimo-studio/tests/server/test_host_session_handoff.py
+  s_949640492e0581::t_ec4e1e7dc5ae6b 1-2,4-9,11-21,23-30,33-34,36-61,63-92
+  s_949640492e0581::t_c412d1201c92e6 3,10,22,31-32,35,62
+packages/marimo-studio/tests/marimo_compat/test_session_state.py
+  s_949640492e0581::t_ec4e1e7dc5ae6b 117,120,124-155
+packages/marimo-studio/src/marimo_studio/_delivery/urls.py
+  s_949640492e0581::t_ec4e1e7dc5ae6b 20,36
+packages/marimo-studio/src/marimo_studio/_server/ports.py
+  s_949640492e0581::t_ec4e1e7dc5ae6b 114-115,133-137
+  s_949640492e0581::t_b03ca27cd757b3 138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "dc4bed750557433accc01dfd708a2f0f4312b198",
+  "prompts": {},
+  "sessions": {
+    "s_949640492e0581": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0625c-4ec0-7bc2-bdbf-98937598ea56",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,38 @@
+apps/e2e/unit/network.test.ts
+  s_af5d583a28e9c5::t_57a139686b9d29 41,44
+  s_af5d583a28e9c5::t_dc371dd196e9c9 50
+  s_af5d583a28e9c5::t_a3c311da8b26ac 51-58
+  s_af5d583a28e9c5::t_6933ad33d4a1cf 7,24-31,34,39-40,42-43
+  s_af5d583a28e9c5::t_bfa0d16ad2e000 13-23
+apps/e2e/scripts/installed-package-network.mjs
+  s_af5d583a28e9c5::t_8d67dfbe9bed13 6,15-17
+apps/e2e/scripts/check-browser.mjs
+  s_af5d583a28e9c5::t_8d67dfbe9bed13 3-4,7
+apps/e2e/scripts/browser.mjs
+  s_af5d583a28e9c5::t_8d67dfbe9bed13 3-16
+apps/e2e/scripts/paths.mjs
+  s_af5d583a28e9c5::t_8d67dfbe9bed13 31,36
+apps/e2e/playwright.installed.config.ts
+  s_af5d583a28e9c5::t_8d67dfbe9bed13 49
+apps/e2e/unit/browser.test.ts
+  s_af5d583a28e9c5::t_1c3bbf0e6c6501 9-11
+  s_af5d583a28e9c5::t_57a139686b9d29 1-8,12-13
+apps/e2e/scripts/serve-installed-package.mjs
+  s_af5d583a28e9c5::t_8d67dfbe9bed13 2,294-297
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "62ca3c177d01e0e31d6f65313d4e763badfe78f0",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

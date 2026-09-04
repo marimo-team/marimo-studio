@@ -1,0 +1,78 @@
+packages/studio/tests/editor-document-mutation.test.ts
+  s_af5d583a28e9c5::t_db68a875b2b187 5,84-95
+packages/studio/tests/preview-controller.test.ts
+  s_af5d583a28e9c5::t_ddae4357c0f194 284-288
+packages/studio/tests/preview-test-support.ts
+  s_af5d583a28e9c5::t_dfd64be83dff44 42
+  s_af5d583a28e9c5::t_6bc6c4c32aee8e 150-165
+  s_af5d583a28e9c5::t_08fd820e7f25cc 43-53
+  s_af5d583a28e9c5::t_1c23ec8862d1eb 9
+packages/studio/tests/activation-remote.test.ts
+  s_af5d583a28e9c5::t_bbd84f54cb930f 3
+packages/studio/tests/source-controller.test.ts
+  s_af5d583a28e9c5::t_ddae4357c0f194 519,525
+packages/studio/tests/active-view-handoff.test.ts
+  s_af5d583a28e9c5::t_afcd61120bc4b3 283-284
+  s_af5d583a28e9c5::t_c6d7035e31bc2f 391
+  s_af5d583a28e9c5::t_a21a3b5cf12fd8 119-122
+  s_af5d583a28e9c5::t_126ad497a67688 29-32,87-90
+  s_af5d583a28e9c5::t_9d13f0351ba54b 282
+packages/studio/tests/control-controller.test.ts
+  s_af5d583a28e9c5::t_df8b5f05e0d50a 61
+packages/studio/tests/preview-deck-reconciliation.test.ts
+  s_af5d583a28e9c5::t_f70e9815df0222 8,455
+packages/studio/tests/preview-deck-editor-reload.test.ts
+  s_af5d583a28e9c5::t_77ff682d6c40ab 11,27,62,126,206
+  s_af5d583a28e9c5::t_08fd820e7f25cc 7,207
+packages/studio/tests/preview-deck-cache.test.ts
+  s_af5d583a28e9c5::t_1d7b02a506efe2 190-191,290-292
+  s_af5d583a28e9c5::t_e18c678a9f0fcd 9,109-112,192-195,302-305
+  s_af5d583a28e9c5::t_b57dbb5cb6d6ba 281,284
+  s_af5d583a28e9c5::t_14fc7845373e6d 13,36,108,301,412
+  s_af5d583a28e9c5::t_9d13f0351ba54b 473-546
+packages/studio/tests/preview-deck-observation.test.ts
+  s_af5d583a28e9c5::t_cb007c863dca8f 15,133,201
+packages/studio/tests/preview-deck-session.test.ts
+  s_af5d583a28e9c5::t_f70e9815df0222 7,33
+packages/studio/tests/view-starter-catalog.test.tsx
+  s_af5d583a28e9c5::t_df96d7b2195bbf 106
+packages/studio/tests/workspace-event-coordinator.test.ts
+  s_af5d583a28e9c5::t_afcd61120bc4b3 154,156
+packages/studio/tests/studio-view-handoff.test.ts
+  s_af5d583a28e9c5::t_afcd61120bc4b3 171,420,426,428,436
+  s_af5d583a28e9c5::t_9d13f0351ba54b 167,170
+  s_af5d583a28e9c5::t_84dda05e5d548d 168
+packages/studio/tests/query-controller.test.ts
+  s_af5d583a28e9c5::t_9d13f0351ba54b 140-166,272-296
+  s_af5d583a28e9c5::t_3b91cd1c83e18a 169,191,213,234,300,310,377,473
+  s_af5d583a28e9c5::t_1c23ec8862d1eb 551
+  s_af5d583a28e9c5::t_9d0264a2f3073a 9-10
+  s_af5d583a28e9c5::t_aea9b7f82bc9ef 323,349,403,440,489,510,531
+  s_af5d583a28e9c5::t_0b5c535163d5f7 101,124
+packages/studio/tests/preview-deck.test.ts
+  s_af5d583a28e9c5::t_a21a3b5cf12fd8 374-393
+  s_af5d583a28e9c5::t_08fd820e7f25cc 8,65
+  s_af5d583a28e9c5::t_d771ee7fa0bfeb 429,505,532,562,592,623
+  s_af5d583a28e9c5::t_692e45ac34930b 12,58,154,184,223,285
+packages/studio/tests/observation-controller.test.ts
+  s_af5d583a28e9c5::t_f32c1c68634ce4 68,70-77,79,119,136,162,178
+  s_af5d583a28e9c5::t_d1cf3ea291dcd2 69
+packages/studio/tests/studio-app.test.tsx
+  s_af5d583a28e9c5::t_864b01e1d9bad6 17,60,575
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "fc00e06a5648b3bce0becf55b4cef32b08e951b8",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

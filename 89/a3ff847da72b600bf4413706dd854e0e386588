@@ -1,0 +1,258 @@
+examples/__marimo__/studio/occupancy/pdf-report/src/report/theme.ts
+  s_a14bd505a91cd1::t_ce13e3b991ba31 19-33,45,48-50
+  s_a14bd505a91cd1::t_c3390e9a522f2f 14-18
+  s_a14bd505a91cd1::t_0b2802d7bfab48 52-71
+  s_a14bd505a91cd1::t_f0fc2b2cc8d865 1-13,34-36,38-44,46-47,51
+  s_a14bd505a91cd1::t_2ddf5e90c08f70 37
+examples/__marimo__/studio/occupancy/pdf-report/src/report/OccupancyReport.tsx
+  s_a14bd505a91cd1::t_c1d6c807cfe980 1,4,6-10,37-38,42-54
+  s_a14bd505a91cd1::t_35f09d960756f0 5,15,19,23,32
+  s_a14bd505a91cd1::t_c3390e9a522f2f 11-14,16-18,20-22,24-31,33-36
+  s_a14bd505a91cd1::t_8eb8d6a09b818f 39-40
+  s_a14bd505a91cd1::t_b89bbd4266dfc4 2-3,41
+examples/__marimo__/studio/occupancy/pdf-report/src/index.html
+  s_a14bd505a91cd1::t_8a31d34c07b3a3 1-5,12-17
+  s_a14bd505a91cd1::t_ee32b8627b86d8 11
+  s_a14bd505a91cd1::t_0bee4f765c1b29 6-10
+examples/__marimo__/studio/occupancy/pdf-report/src/marimo-studio.d.ts
+  s_a14bd505a91cd1::t_8a31d34c07b3a3 1-24
+examples/__marimo__/studio/occupancy/pdf-report/public/fonts/HANKEN-GROTESK-LICENSE.txt
+  s_a14bd505a91cd1::t_9a72e6027ad95b 1-93
+examples/occupancy.py
+  s_a14bd505a91cd1::t_c1ef2ae7aec094 174,192-199,201-203,205,207-221,225-227,229-235,239-246,251-256,266-268,279-280
+  s_a14bd505a91cd1::t_838a826c336590 94
+  s_a14bd505a91cd1::t_5494a6e1e9887e 402-404,406-411,413-425,430-439
+  s_a14bd505a91cd1::t_78af0303fc5573 126-127
+  s_a14bd505a91cd1::t_1778aca3992bbd 391-393,395-397
+  s_a14bd505a91cd1::t_a0d92fa999ef03 399
+  s_a14bd505a91cd1::t_17b54e630d36e9 75-93,95-120,144,146,175-178,180,204,206,222-224,247-248,317-321
+  s_a14bd505a91cd1::t_ff768a75af4f0c 200
+  s_a14bd505a91cd1::t_3b1c8124adfa85 257
+  s_a14bd505a91cd1::t_23b62793fa362e 53,55-56,169-172,179,181-184,228,249-250,258-265,269-272,276-278,281-287,355-363,405,412,426-429
+  s_a14bd505a91cd1::t_90bd77c4c074bb 394
+  s_a14bd505a91cd1::t_b3f69784d317b5 236-238,273-275
+  s_a14bd505a91cd1::t_f145623e03054b 444-448,456
+examples/__marimo__/studio/occupancy/model-review/src/style.css
+  s_a14bd505a91cd1::t_8678f4cb1f6f94 175-189,437
+examples/__marimo__/studio/occupancy/pdf-report/AGENTS.md
+  s_a14bd505a91cd1::t_266d931093579c 33-34
+  s_a14bd505a91cd1::t_b3ccb9d54cf6de 10-14,70-72
+  s_a14bd505a91cd1::t_6d96ef825c8a39 15-16
+  s_a14bd505a91cd1::t_8eb8d6a09b818f 19-21
+  s_a14bd505a91cd1::t_b559c9cc76e386 25,30-32
+  s_a14bd505a91cd1::t_fddd5fd904bd0b 36-39
+  s_a14bd505a91cd1::t_410dcf6f8acf8a 22-24,35
+  s_a14bd505a91cd1::t_8a31d34c07b3a3 1-8,40,45-69,74-127
+  s_a14bd505a91cd1::t_3343fb62060ebb 41-44
+  s_a14bd505a91cd1::t_315a2401d4bb6c 73
+  s_a14bd505a91cd1::t_0bee4f765c1b29 9,17-18
+  s_a14bd505a91cd1::t_bdd32b122f71bd 26-29
+examples/__marimo__/studio/occupancy/monitor/src/style.css
+  s_a14bd505a91cd1::t_35ee449d14a47e 196-278
+  s_a14bd505a91cd1::t_412409650ef22c 444,467-471,483
+  s_a14bd505a91cd1::t_8678f4cb1f6f94 139-145,148,454,460-461
+examples/__marimo__/studio/occupancy/pdf-report/src/main.tsx
+  s_a14bd505a91cd1::t_8a31d34c07b3a3 1-12
+examples/__marimo__/studio/occupancy/pdf-report/src/ReportViewer.tsx
+  s_a14bd505a91cd1::t_9b47443898f963 9
+  s_a14bd505a91cd1::t_f145623e03054b 11-15,129-131
+  s_a14bd505a91cd1::t_71f9f2cfdc6ab6 17,25
+  s_a14bd505a91cd1::t_3d680371daa00d 3-8,18-24,61,69-72,79,82-83,97-98,109,137-142
+  s_a14bd505a91cd1::t_ae6ac3c93d3398 10
+  s_a14bd505a91cd1::t_5af9ded677c522 117-118,122-123
+  s_a14bd505a91cd1::t_f0b3434f055853 119-121
+  s_a14bd505a91cd1::t_7ef19fcf325267 30
+  s_a14bd505a91cd1::t_3e7fc6965d7777 73-74,78
+  s_a14bd505a91cd1::t_ef037bb841cd8b 2,31,35-36,96,101-104,108,110-111,134-136
+  s_a14bd505a91cd1::t_d8fafd84641277 1,16,26-29,32-34,37-60,62-68,80-81,84-95,99-100,105-107,112-116,124-128,132-133
+  s_a14bd505a91cd1::t_0cf12de85841d2 75-77,143
+examples/__marimo__/studio/occupancy/pdf-report/src/report/ModelVisuals.tsx
+  s_a14bd505a91cd1::t_c3390e9a522f2f 12,168-169,255
+  s_a14bd505a91cd1::t_8eb8d6a09b818f 24-25,29-30,179-182,211,213,216-217,219-220,222-223,225,228-229,231,234,277-279
+  s_a14bd505a91cd1::t_b8bd80b79dd188 27,47,55,57,197-203
+  s_a14bd505a91cd1::t_305b0e09398112 18-23,26,28,32-34,36-38,40-41,43-46,48-52,54,56,58,65-75,82-84,97-106,112-121,127-145,154-167,170-175,177-178,183-193
+  s_a14bd505a91cd1::t_d166231f2ad1ff 39,244,256-257,264
+  s_a14bd505a91cd1::t_c4e2bbbfa298e7 1-10,64,85
+  s_a14bd505a91cd1::t_2c86b9633e4108 76-81
+  s_a14bd505a91cd1::t_72b20d74daea27 212,214-215,218,221,224,226-227,230,232-233,247-248,254,265
+  s_a14bd505a91cd1::t_5568483a36801f 11,13-17,31,35,42,53,59-63,86-96,107-111,122-126,146-153,176,194-196,204-210,235-243,245-246,249-253,258-263,266-276,280-292
+apps/docs/examples.ts
+  s_a14bd505a91cd1::t_c2a42fd1da1b4e 46,188
+  s_a14bd505a91cd1::t_0bee4f765c1b29 45,47-49,170-171,186-187
+examples/__marimo__/studio/occupancy/pdf-report/src/report/types.ts
+  s_a14bd505a91cd1::t_cb37c7c1e982ef 8-9,20-21,38,53,85-90,93-97,106
+  s_a14bd505a91cd1::t_efcc4524224388 12-13,15-17,19,22-25,64,67-68,73
+  s_a14bd505a91cd1::t_4f6e6d6c92c5c8 18,50
+  s_a14bd505a91cd1::t_f0fc2b2cc8d865 1-3,5,7,10-11,26-37,39-49,51-52,54-63,65-66,69-72,74-84,91-92,98-105,107-108
+  s_a14bd505a91cd1::t_78af0303fc5573 4,14
+  s_a14bd505a91cd1::t_928f72afd25273 6
+examples/__marimo__/studio/occupancy/model-review/src/components/ThresholdCurve.tsx
+  s_a14bd505a91cd1::t_f145623e03054b 39,43,48-50,113-125
+examples/__marimo__/studio/occupancy/.owners/pdf-report.toml
+  s_a14bd505a91cd1::t_8a31d34c07b3a3 1-3
+examples/__marimo__/studio/occupancy/pdf-report/src/lib/use-marimo-value.ts
+  s_a14bd505a91cd1::t_8a31d34c07b3a3 1-109
+examples/__marimo__/studio/occupancy/pdf-report/src/report/ReportFrame.tsx
+  s_a14bd505a91cd1::t_e1c71bfc192f18 8
+  s_a14bd505a91cd1::t_f0fc2b2cc8d865 1-6,11-64
+  s_a14bd505a91cd1::t_1861838180199c 9-10
+  s_a14bd505a91cd1::t_22a80c2a9b478e 7
+examples/__marimo__/studio/occupancy/pdf-report/src/install-report-fonts.ts
+  s_a14bd505a91cd1::t_fddd5fd904bd0b 1-46
+examples/__marimo__/studio/occupancy/model-review/src/App.tsx
+  s_a14bd505a91cd1::t_8678f4cb1f6f94 18-20,22-23,134-135,140-145
+  s_a14bd505a91cd1::t_f145623e03054b 21,139,166
+  s_a14bd505a91cd1::t_cb37c7c1e982ef 118-119,165
+  s_a14bd505a91cd1::t_edcec9cf06c430 9,24-31,81-87,92,95,136-138,152,156,160,164,183,185,189,194-195
+examples/__marimo__/studio/occupancy/pdf-report/public/pdf.worker.min.mjs
+  s_a14bd505a91cd1::t_9ed18bdbb86081 1-28
+examples/__marimo__/studio/occupancy/model-review/AGENTS.md
+  s_a14bd505a91cd1::t_10a654f98da605 10,18
+  s_a14bd505a91cd1::t_b3ccb9d54cf6de 11-14,19-20
+examples/__marimo__/studio/occupancy/pdf-report/DESIGN.md
+  s_a14bd505a91cd1::t_87a18c08bde655 43
+  s_a14bd505a91cd1::t_0bee4f765c1b29 1-13,17-32,35-38,40-42,47,53,70-75,80,85-86
+  s_a14bd505a91cd1::t_6d96ef825c8a39 39,55-57,59-60,62-69,88-90
+  s_a14bd505a91cd1::t_55d3d341988a99 51-52
+  s_a14bd505a91cd1::t_10a654f98da605 54,58
+  s_a14bd505a91cd1::t_410dcf6f8acf8a 14-16,44-46,91-92
+  s_a14bd505a91cd1::t_bdd32b122f71bd 81-84
+  s_a14bd505a91cd1::t_8eb8d6a09b818f 33-34
+  s_a14bd505a91cd1::t_72b20d74daea27 48-50,76-79
+  s_a14bd505a91cd1::t_024cfad7147a48 61
+  s_a14bd505a91cd1::t_63225ae3523ddc 93
+  s_a14bd505a91cd1::t_2065af9c4faa77 87
+examples/__marimo__/studio/occupancy/pdf-report/src/install-node-events.ts
+  s_a14bd505a91cd1::t_ee32b8627b86d8 1-19
+examples/__marimo__/studio/occupancy/pdf-report/public/fonts/NEWSREADER-LICENSE.txt
+  s_a14bd505a91cd1::t_9a72e6027ad95b 1-93
+examples/__marimo__/studio/occupancy/pdf-report/src/style.css
+  s_a14bd505a91cd1::t_c2f8e29d642430 357-376
+  s_a14bd505a91cd1::t_6c2c8c3638e9ea 10-11,29,48,51-55,70,73,79,81,87,92-94,96-97,99,102,108,115,125,127,132-134
+  s_a14bd505a91cd1::t_3610d2379ce641 6,159-162,202-219
+  s_a14bd505a91cd1::t_8678f4cb1f6f94 40,90-91,95,98,100-101,103-105,109-114,116,121-124,126,128-131,135-137,336,339-341,343-347,350-351
+  s_a14bd505a91cd1::t_5d974cbe3c6950 237-244,247-255
+  s_a14bd505a91cd1::t_989c2666f39728 140,142-147,150-158,163-165,169-170,176,184,188-189,194,263,324,332,337-338,342,348-349,352-353
+  s_a14bd505a91cd1::t_8a31d34c07b3a3 1,13-14,26-27,65-66,74-77,177-178,225,265-266,268,381
+  s_a14bd505a91cd1::t_132c1d88a73bd5 179-183,185-187,190-193,195-201,220-221
+  s_a14bd505a91cd1::t_b8eed99bcd4a71 117
+  s_a14bd505a91cd1::t_a6d8dd6ca06ab0 3,71-72,80,106-107,118-120,230-231,245-246
+  s_a14bd505a91cd1::t_0bee4f765c1b29 2,4-5,7-9,12,15-25,28,30-39,41-47,49-50,56-64,67-69,78,82-86,88-89,138-139,141,148-149,166-168,171-175,222-224,226-229,232-236,256-262,264,267,269-323,325-331,333-335,354-356,377-380
+examples/__marimo__/studio/occupancy/pdf-report/scripts/sync-fonts.ts
+  s_a14bd505a91cd1::t_28d7aa8fd420a3 1,4,7,10,13,16
+  s_a14bd505a91cd1::t_3343fb62060ebb 2-3,5-6,8-9,11-12,14-15,17-38
+examples/__marimo__/studio/occupancy/pdf-report/src/App.tsx
+  s_a14bd505a91cd1::t_0cf12de85841d2 87-88,91,119,122-123,126-127
+  s_a14bd505a91cd1::t_f0fc2b2cc8d865 4-5,8,18,33-41,52,55,82-83,115,130,136,141,194-196
+  s_a14bd505a91cd1::t_8a31d34c07b3a3 1-2,42-43
+  s_a14bd505a91cd1::t_131c8845e3a60d 68
+  s_a14bd505a91cd1::t_b6ba22fed1aefd 7
+  s_a14bd505a91cd1::t_b8bd80b79dd188 61-65,70-79,84-86,89-90,92-114,116-118,120-121,124-125,128-129,131-135,137-140,142-144
+  s_a14bd505a91cd1::t_efcc4524224388 9-14,16-17,44,54
+  s_a14bd505a91cd1::t_cb37c7c1e982ef 15,29,163-164,169
+  s_a14bd505a91cd1::t_ee3da8ab67885d 3,6,19-28,30-32,45-51,53,56-60,66-67,69,80-81,145-162,165-168,170-193
+examples/__marimo__/studio/occupancy/monitor/src/App.svelte
+  s_a14bd505a91cd1::t_359f20500c0037 35-43,58,62-63,65-66,79-82
+  s_a14bd505a91cd1::t_54ca83a5b1e854 78,123,289-294
+  s_a14bd505a91cd1::t_6b3be2871c3f18 263-278
+  s_a14bd505a91cd1::t_c02dc49bfeafc4 355-381
+  s_a14bd505a91cd1::t_cb37c7c1e982ef 29-30,338
+  s_a14bd505a91cd1::t_8678f4cb1f6f94 25,296,305-310
+examples/__marimo__/studio/occupancy/pdf-report/src/report/styles.ts
+  s_a14bd505a91cd1::t_f0fc2b2cc8d865 1-2,4-13,15-27,30-34,36-54,59-61,63-95,98-103,105-124,127-137,140-148,154-155,160-162
+  s_a14bd505a91cd1::t_c3390e9a522f2f 3,14,28-29,35,55-58,62,96-97,104,125-126,138-139,149-153,156-159
+examples/__marimo__/studio/occupancy/pdf-report/src/report/OccupancyVisuals.tsx
+  s_a14bd505a91cd1::t_5568483a36801f 2,4-21,23,51-54,125,152,192,195,237-239,243-260,262-304
+  s_a14bd505a91cd1::t_f2e4f46af460eb 83,91,115,144,147,169,178,190
+  s_a14bd505a91cd1::t_8eb8d6a09b818f 240-242
+  s_a14bd505a91cd1::t_72b20d74daea27 22,32,261
+  s_a14bd505a91cd1::t_3b1c8124adfa85 24-31,33-38
+  s_a14bd505a91cd1::t_0e6b80aebbf085 43-47
+  s_a14bd505a91cd1::t_281e37a4c826f5 55-82,84-90,92-100,102,104-114,116,118-124,127-143,145-146,148-151,153-168,170-177,179,181-189,191,193-194,196-231,233-236
+  s_a14bd505a91cd1::t_73e3d6a355fa74 101,103,117,180,232
+  s_a14bd505a91cd1::t_72c624c16ca97f 126
+  s_a14bd505a91cd1::t_78af0303fc5573 1,39-42,48-50
+  s_a14bd505a91cd1::t_c3390e9a522f2f 3
+examples/__marimo__/studio/occupancy/pdf-report/deno.json
+  s_a14bd505a91cd1::t_8a31d34c07b3a3 1-15,21-25,29,31-32,34-35
+  s_a14bd505a91cd1::t_0c98066ab45e82 16-17
+  s_a14bd505a91cd1::t_08d1a2eb8865ee 19
+  s_a14bd505a91cd1::t_28d7aa8fd420a3 30,33
+  s_a14bd505a91cd1::t_29fe6a82f48717 18
+  s_a14bd505a91cd1::t_9950041d8249e1 20
+  s_a14bd505a91cd1::t_3343fb62060ebb 26-28
+examples/__marimo__/studio/occupancy/pdf-report/view.toml
+  s_a14bd505a91cd1::t_8a31d34c07b3a3 1-2
+examples/__marimo__/studio/occupancy/pdf-report/src/report/ModelPage.tsx
+  s_a14bd505a91cd1::t_c1ee9d40d2ae7f 89,94,105,119,132,169,180
+  s_a14bd505a91cd1::t_8eb8d6a09b818f 4-8,37-39,62,72-77,91,93,137,140,147-148,150-153
+  s_a14bd505a91cd1::t_0e6b80aebbf085 10
+  s_a14bd505a91cd1::t_73285345915905 3
+  s_a14bd505a91cd1::t_72b20d74daea27 64-66,90,139,146,154,171-173,175,181-183
+  s_a14bd505a91cd1::t_961e988f387655 92
+  s_a14bd505a91cd1::t_b3f69784d317b5 98-100
+  s_a14bd505a91cd1::t_0b2802d7bfab48 44,61
+  s_a14bd505a91cd1::t_d166231f2ad1ff 48,145
+  s_a14bd505a91cd1::t_c1d6c807cfe980 1-2,9,11-32,34-36,40-43,45-47,49-52,63,67-71,78-85,87-88,103-104,106,111,117-118,120-121,128,130-131,133-136,141-144,157-158,163-168,170,176-179,184-187
+  s_a14bd505a91cd1::t_d61d272dcb53bf 33
+  s_a14bd505a91cd1::t_f145623e03054b 129
+  s_a14bd505a91cd1::t_a222873a25d981 86,112-116,174
+  s_a14bd505a91cd1::t_efa90bcc83a0bd 101-102,122-124,138
+  s_a14bd505a91cd1::t_8dcef02d442f7b 107-110,125-127,155-156,159-162
+  s_a14bd505a91cd1::t_cb37c7c1e982ef 95-97
+  s_a14bd505a91cd1::t_c3390e9a522f2f 53-60,149
+examples/__marimo__/studio/occupancy/pdf-report/src/report/EnvironmentPage.tsx
+  s_a14bd505a91cd1::t_c3390e9a522f2f 6-12,182,225
+  s_a14bd505a91cd1::t_b3f69784d317b5 231-233
+  s_a14bd505a91cd1::t_319f8328b8b080 21-24,68,79,162
+  s_a14bd505a91cd1::t_de88e151aa2b47 120,133-135
+  s_a14bd505a91cd1::t_8eb8d6a09b818f 27-28,30-40,44-45,48-49,53-54,89-91,94-95,98,111-112,163,165,173-174,177,188,212,217-218
+  s_a14bd505a91cd1::t_3b1c8124adfa85 18-20,113-114,116-117,237-239
+  s_a14bd505a91cd1::t_efa90bcc83a0bd 144-146
+  s_a14bd505a91cd1::t_8dcef02d442f7b 96-97
+  s_a14bd505a91cd1::t_0f86b36abc141d 29
+  s_a14bd505a91cd1::t_c1d6c807cfe980 1-2,4-5,13-17,25-26,46-47,76-78,80,85-86,88,106-110,136-137,153-154,205,208-209
+  s_a14bd505a91cd1::t_72b20d74daea27 50-52,55-67,69-75,81-84,87,92-93,119,123-125,129-130,142-143,158-159,169,220
+  s_a14bd505a91cd1::t_73285345915905 3
+  s_a14bd505a91cd1::t_cb37c7c1e982ef 115,234
+  s_a14bd505a91cd1::t_c1ee9d40d2ae7f 118
+  s_a14bd505a91cd1::t_bde4fc252ec1a1 121,127-128,131-132,138,147-152,155-157,160-161,164,166-168,170-172,175-176,178-181,183-187,189-204,206-207,210-211,213-216,219,221-224,226-230,235-236
+  s_a14bd505a91cd1::t_0e6b80aebbf085 41-43
+  s_a14bd505a91cd1::t_b519a7b4d97b82 122,126
+  s_a14bd505a91cd1::t_0c67fac7a25eca 99-105
+  s_a14bd505a91cd1::t_88b535486879f4 139-141
+examples/__marimo__/studio/occupancy/pdf-report/src/report/ExecutivePage.tsx
+  s_a14bd505a91cd1::t_cb37c7c1e982ef 17-20,66-67,71
+  s_a14bd505a91cd1::t_72b20d74daea27 24,37,39,44,62,75,84,114,118,121,123,126,132,135,137,139-140,142,144
+  s_a14bd505a91cd1::t_8eb8d6a09b818f 26-29,32-33,42,61,63-65,68-70,76-78,89-98,101-106
+  s_a14bd505a91cd1::t_73285345915905 3
+  s_a14bd505a91cd1::t_c3390e9a522f2f 30-31
+  s_a14bd505a91cd1::t_b519a7b4d97b82 38,40-41
+  s_a14bd505a91cd1::t_319f8328b8b080 56
+  s_a14bd505a91cd1::t_78af0303fc5573 35
+  s_a14bd505a91cd1::t_88b535486879f4 122,124-125,136,138,141,143
+  s_a14bd505a91cd1::t_d61d272dcb53bf 107
+  s_a14bd505a91cd1::t_0e6b80aebbf085 36
+  s_a14bd505a91cd1::t_c1d6c807cfe980 1-2,4-15,21-22,25,34,43,49-55,57-60,79-83,85-88,99-100,108-113,115-117,119,127-131,133,145-152
+  s_a14bd505a91cd1::t_a222873a25d981 16,72-74,120,134
+  s_a14bd505a91cd1::t_b3f69784d317b5 45-48
+  s_a14bd505a91cd1::t_c1ee9d40d2ae7f 23
+examples/__marimo__/studio/occupancy/monitor/AGENTS.md
+  s_a14bd505a91cd1::t_10a654f98da605 10-12,18-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "89a3ff847da72b600bf4413706dd854e0e386588",
+  "prompts": {},
+  "sessions": {
+    "s_a14bd505a91cd1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06396-0431-7f30-8061-711d77feee48",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+examples/__marimo__/studio/occupancy/model-review/src/lib/use-marimo-value.ts
+  s_af5d583a28e9c5::t_810d2020321227 2,82,85-87,108
+examples/__marimo__/studio/occupancy/monitor/src/lib/marimo-value.ts
+  s_af5d583a28e9c5::t_810d2020321227 105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2d6fafdc7b538cf2685e38fe913ff07dd5e37485",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

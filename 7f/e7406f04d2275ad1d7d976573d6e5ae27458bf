@@ -1,0 +1,740 @@
+packages/marimo-studio/src/marimo_studio/_authoring/workspace_api.py
+  s_3ed49af76056f9::t_acf7446bd08bb2 44-45,47,147-149,152
+  s_3ed49af76056f9::t_d43dde50888138 28,134,138
+  s_3ed49af76056f9::t_b03a12c5219a08 8,33,51,54
+  s_3ed49af76056f9::t_af12d0c7032647 22-26,76,87
+  s_3ed49af76056f9::t_71a111cabd850b 46
+packages/marimo-studio/tests/views/test_workspace_lifecycle.py
+  s_3ed49af76056f9::t_87172c5f1ef969 350-368
+packages/marimo-studio/tests/artifacts/test_recovery.py
+  s_3ed49af76056f9::t_7f4837781de09a 118,125
+apps/e2e/tests/runtime.spec.ts
+  s_3ed49af76056f9::t_c80ad9b7cb4028 183,187-188,191
+  s_3ed49af76056f9::t_d714be15817039 174,189-190
+  s_3ed49af76056f9::t_a34657f4c574b6 59
+  s_3ed49af76056f9::t_0708054ebd738c 60,68-69,182,207-208,233-234,243-244,258-259,268-269,283-284,302-303,312-313,326-327,340-341,356-357,388-389,408-409
+packages/studio/src/features/source-editor/controller.ts
+  s_3ed49af76056f9::t_c21d4c0ab31cd3 203-204,207-208
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/__init__.py
+  s_3a442c2e920601::t_197c4c31aa7081 45
+  s_3ed49af76056f9::t_918b492af0927e 46,116
+packages/studio/src/features/views/remote.ts
+  s_3ed49af76056f9::t_d9daeecafdfb4f 49,63
+  s_3ed49af76056f9::t_b48a17216a9f24 34
+packages/presentation/src/document/session-preservation.ts
+  s_3ed49af76056f9::t_918b492af0927e 93
+apps/e2e/fixtures-provider/provider/fixture_provider/report.py
+  s_3ed49af76056f9::t_918b492af0927e 49
+packages/studio/src/features/views/RemoveViewConfirmation.tsx
+  s_3ed49af76056f9::t_6e93ade56fa1e8 29,31
+  s_3ed49af76056f9::t_e4327550e4d143 8,19,33-37
+packages/studio/src/features/navigation/navigation.css
+  s_3ed49af76056f9::t_4bf26034e82301 239,241,245-261,263-267,273-274
+  s_3ed49af76056f9::t_b48a17216a9f24 262,272
+  s_3ed49af76056f9::t_d714be15817039 268-271,275
+packages/marimo-studio/src/marimo_studio/_notebook/records.py
+  s_3ed49af76056f9::t_af12d0c7032647 8,63,182,200-205,215-227
+apps/e2e/tests/authoring-test-support.ts
+  s_3ed49af76056f9::t_4ca8d9b46d1afa 42,81-82
+  s_3ed49af76056f9::t_3fa31823ceeed3 40,43
+packages/studio/src/features/workspace/model.ts
+  s_3ed49af76056f9::t_30bf358a823f33 83,91-92
+packages/studio/src/app/workspace-event-coordinator.ts
+  s_3ed49af76056f9::t_30bf358a823f33 406
+apps/e2e/tests/collaboration.spec.ts
+  s_3ed49af76056f9::t_1319d08726c646 260
+  s_3ed49af76056f9::t_4163a021eefbda 289
+  s_3ed49af76056f9::t_ba4c95d625d1ce 90,92,95,154
+  s_3ed49af76056f9::t_ffbd01cbe69336 69,79,145
+packages/marimo-studio/src/marimo_studio/_browser_client/client.py
+  s_3ed49af76056f9::t_c679f1bef0b9c3 17,40,69
+  s_3ed49af76056f9::t_37b3ab13136042 81,84-85
+  s_3ed49af76056f9::t_8016f5d29c45ef 11,36,39,44,57,71,74
+  s_3ed49af76056f9::t_b8cd0b584a1c8f 27-28,32,86,90,98,106,111,113,115,121,127
+  s_3ed49af76056f9::t_5ce4785a85fe3b 46,65
+  s_3ed49af76056f9::t_6f83a058e7d9e5 51,59,61
+packages/marimo-studio/src/marimo_studio/_validation/evidence.py
+  s_3ed49af76056f9::t_37b3ab13136042 277,280,307
+  s_3ed49af76056f9::t_c81b6dfb491709 273,278,319,325,420,435-436,447-448
+packages/marimo-studio/src/marimo_studio/view_providers/_host/conformance.py
+  s_3ed49af76056f9::t_918b492af0927e 56
+apps/docs/scripts/verify-build.ts
+  s_3ed49af76056f9::t_26856ee78779be 5
+  s_3ed49af76056f9::t_d423f1da1b909f 91
+docs/reference/python-api.md
+  s_3ed49af76056f9::t_945dfd4fe00b7c 22,34,71,94,108,125,143,160,177,195,227,242
+  s_3ed49af76056f9::t_af12d0c7032647 42,60-61
+  s_3ed49af76056f9::t_d2eebd0ba386e7 3,8-10,12-14,17,19-21,23-33,35-41,43-55,58-59,62-70,72-93,95-107,109-124,126-142,144-151,153,156,162,167,169-171,173-176,179-192,194,197-202,205,207-219,228-235,237-239,243-244,246-248,250-256,258,260-286,288-291
+  s_3ed49af76056f9::t_3bf875c3402381 155,157
+  s_3ed49af76056f9::t_c679f1bef0b9c3 178,193,196
+  s_3ed49af76056f9::t_088c3ebdbec66f 164-165
+  s_3ed49af76056f9::t_de594646c9d031 152,161
+packages/studio/src/features/preview/deck.ts
+  s_3ed49af76056f9::t_d9daeecafdfb4f 150,156
+packages/marimo-studio/src/marimo_studio/_cli/commands/status.py
+  s_3ed49af76056f9::t_9daa895c904a37 22
+  s_3ed49af76056f9::t_834f77394d2a68 11,13,21,24
+  s_3ed49af76056f9::t_10c41823e94494 20
+packages/marimo-studio/src/marimo_studio/_validation/records.py
+  s_3ed49af76056f9::t_37b3ab13136042 11,62
+  s_3ed49af76056f9::t_b8cd0b584a1c8f 74
+  s_3ed49af76056f9::t_c81b6dfb491709 28,38,53,60-61,68-69,83
+packages/marimo-studio/src/marimo_studio/__init__.py
+  s_3ed49af76056f9::t_5ce4785a85fe3b 11
+  s_3ed49af76056f9::t_5d77d8d6b517bf 10,23,47
+  s_3ed49af76056f9::t_b03a12c5219a08 12-13
+  s_3ed49af76056f9::t_d83a7da6587d44 21
+packages/marimo-studio/tests/artifacts/test_integrity.py
+  s_3ed49af76056f9::t_7f4837781de09a 571
+packages/marimo-studio/tests/agent/test_client_connection.py
+  s_3ed49af76056f9::t_945dfd4fe00b7c 199
+  s_3ed49af76056f9::t_8016f5d29c45ef 17,211,214,244,250
+  s_3ed49af76056f9::t_ffbd01cbe69336 221
+packages/studio/tests/view-transition.test.ts
+  s_3ed49af76056f9::t_b8f399b4bb31f2 30,58,63,148,172,174
+packages/marimo-studio/src/marimo_studio/_validation/progressive.py
+  s_3ed49af76056f9::t_c81b6dfb491709 1,66,82,104,147,162,165,177,224,240,242-243,245,250,252,257,268,273,282,290,292,294,306,308,310,321
+  s_3ed49af76056f9::t_37b3ab13136042 2-65,67-81,83-103,105-146,148-161,163-164,166-176,178-223,225-239,241,244,246-249,251,253-256,258-267,269-272,274-281,283-289,291,293,295-305,307,309,311-320,322-390
+docs/examples/nga.md
+  s_3ed49af76056f9::t_407c0718ef4d49 2-3,6,8-9,16-17,24-25,27-29,31,33,41-42,54-66,68-69
+  s_3ed49af76056f9::t_26856ee78779be 11-15
+packages/marimo-studio/src/marimo_studio/_authoring/view.py
+  s_3ed49af76056f9::t_c679f1bef0b9c3 10,102
+  s_3ed49af76056f9::t_5ce4785a85fe3b 9,80,91,107
+  s_3ed49af76056f9::t_dba0dd967d265e 19,90
+  s_3ed49af76056f9::t_c8644d5cc21f5b 98,103,105
+packages/studio/src/features/preview/controller.ts
+  s_3ed49af76056f9::t_d9daeecafdfb4f 467,484,873
+packages/marimo-studio/src/marimo_studio/authoring/__init__.py
+  s_3ed49af76056f9::t_acf7446bd08bb2 1-19
+packages/marimo-studio/src/marimo_studio/_cli/commands/starters.py
+  s_3ed49af76056f9::t_834f77394d2a68 11,18,21
+  s_3ed49af76056f9::t_9daa895c904a37 1,19
+  s_3ed49af76056f9::t_10c41823e94494 17
+apps/e2e/tests/view-cache-performance.spec.ts
+  s_3ed49af76056f9::t_5351d2fd25a50b 70-71
+  s_3ed49af76056f9::t_ba4c95d625d1ce 69
+packages/marimo-studio/tests/artifacts/test_build_lifecycle.py
+  s_3a442c2e920601::t_d33690bdc9d516 224,243,251
+  s_3ed49af76056f9::t_6b709d2cc72bac 89
+README.md
+  s_3ed49af76056f9::t_ad8cef93530a38 33-34
+  s_3ed49af76056f9::t_51113f65cab431 7-16,19-32,35-61,64-68,70-77,79-92,95-96,99-102,104-105
+  s_3ed49af76056f9::t_23f31120e9e577 69
+packages/marimo-studio/pyproject.toml
+  s_3ed49af76056f9::t_ac338ccff6ae79 77
+packages/marimo-studio/tests/agent/test_request_lifecycle.py
+  s_3ed49af76056f9::t_93ff012c39b0a4 141,356
+  s_3ed49af76056f9::t_8016f5d29c45ef 310
+  s_3ed49af76056f9::t_be72de789169ca 269,304
+  s_3ed49af76056f9::t_10f2ad650f3254 113,337
+  s_3ed49af76056f9::t_37b3ab13136042 150,364
+packages/marimo-studio/tests/server/test_live_clients.py
+  s_3ed49af76056f9::t_0a00ae8f0922cc 72-74
+packages/marimo-studio/tests/agent/test_browser_validation_http.py
+  s_3ed49af76056f9::t_ed6919b994228f 74
+  s_3ed49af76056f9::t_93ff012c39b0a4 60,127,132,164,170,189,195
+  s_3ed49af76056f9::t_3fa31823ceeed3 1-59,61-73,75-126,128-131,133-163,165-169,171-188,190-194,196
+packages/studio/src/features/source-editor/sync.ts
+  s_3ed49af76056f9::t_c21d4c0ab31cd3 356,364
+packages/marimo-studio/src/marimo_studio/_server/agent/api.py
+  s_3ed49af76056f9::t_b8cd0b584a1c8f 243,255,265,270,285,287,298
+  s_3ed49af76056f9::t_37b3ab13136042 235,296
+  s_3ed49af76056f9::t_8016f5d29c45ef 10,73,94,100
+  s_3ed49af76056f9::t_6f83a058e7d9e5 102
+  s_3ed49af76056f9::t_594e16b156f118 39-42,299-301
+packages/marimo-studio/src/marimo_studio/_server/presentation/capability.py
+  s_3ed49af76056f9::t_3163c7ac616194 407
+packages/marimo-studio/src/marimo_studio/_cli/commands/notebook.py
+  s_3ed49af76056f9::t_10c41823e94494 70,124
+  s_3ed49af76056f9::t_af12d0c7032647 62-68,102
+  s_3ed49af76056f9::t_834f77394d2a68 18,80,107,131,146
+  s_3ed49af76056f9::t_dcebf049470db4 33,78
+  s_3ed49af76056f9::t_9daa895c904a37 39
+packages/marimo-studio/src/marimo_studio/_cli/diagnostics.py
+  s_3ed49af76056f9::t_75ba1eb4362e70 229,273-279
+  s_3ed49af76056f9::t_b009c7cad8f426 232-233,235,243,246-247,249-250,256-259,261-262,429
+packages/marimo-studio/tests/cli/test_cli_diagnostics.py
+  s_3ed49af76056f9::t_30f7fa476729e0 115-117,121
+  s_3ed49af76056f9::t_be72de789169ca 320,329,346
+  s_3ed49af76056f9::t_3e2870175b01f6 294-296
+  s_3ed49af76056f9::t_139a482cdf7823 101,174,217,285,335,369
+  s_3ed49af76056f9::t_ed6919b994228f 118,198
+packages/studio/src/features/source-editor/SourceProjectDetails.tsx
+  s_3ed49af76056f9::t_d9daeecafdfb4f 45,65
+  s_3ed49af76056f9::t_0ed4aaa95ec38d 35,38,41,43-44,99
+  s_3ed49af76056f9::t_24a32adea8496a 97
+  s_3ed49af76056f9::t_6e93ade56fa1e8 32,87,96,109
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_svelte/__init__.py
+  s_3ed49af76056f9::t_918b492af0927e 45,132
+  s_3a442c2e920601::t_197c4c31aa7081 44
+packages/studio/tests/preview-deck-cache.test.ts
+  s_3ed49af76056f9::t_6b709d2cc72bac 293
+packages/marimo-studio/src/marimo_studio/_cli/main.py
+  s_3ed49af76056f9::t_9daa895c904a37 37
+  s_3ed49af76056f9::t_b009c7cad8f426 70
+docs/guide/coding-agents.md
+  s_3ed49af76056f9::t_d6681a73da5a66 2-3,6,8-18,24,30,32,35-37,50-52,58,60,62-65,67-68,76-78,80,83-84,87-89,91,93,100,103-104,106,108-109,115-117,120-122,124-126
+  s_3ed49af76056f9::t_04138affa27cad 27-29
+  s_3ed49af76056f9::t_af12d0c7032647 39-49
+  s_3ed49af76056f9::t_3bf875c3402381 21,23,97,99,112,114
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/analyzer.ts
+  s_3ed49af76056f9::t_918b492af0927e 403
+packages/studio/src/features/views/useViewMenu.ts
+  s_3ed49af76056f9::t_e4327550e4d143 38,55,265,281-284
+packages/studio/tests/workspace.test.ts
+  s_3ed49af76056f9::t_b8f399b4bb31f2 46,197,214
+  s_3ed49af76056f9::t_6b709d2cc72bac 181
+  s_3ed49af76056f9::t_7717d0df9127c5 6,26,44,65,73,86,125,171,184,191,199,209,216,223
+  s_3ed49af76056f9::t_26856ee78779be 95-100
+packages/marimo-studio/src/marimo_studio/_server/agent/workspace_presence.py
+  s_3ed49af76056f9::t_0a00ae8f0922cc 278-279,281
+packages/marimo-studio/tests/providers/test_spi.py
+  s_3ed49af76056f9::t_6b709d2cc72bac 80
+  s_3a442c2e920601::t_7cf761c9363714 281
+docs/reference/configuration.md
+  s_3ed49af76056f9::t_f214da3b1ad707 2-3,6,8-11,13,15,36-37,39,41,56-61,63-69,71-72,79,89-90,92-94,96,98-101,103-104,106-109,112,115-116,118,120-121,124-125,128-129
+  s_3ed49af76056f9::t_26856ee78779be 27-34
+packages/marimo-studio/src/marimo_studio/_browser_client/protocol.py
+  s_3ed49af76056f9::t_c679f1bef0b9c3 18,85,114
+  s_3ed49af76056f9::t_6f83a058e7d9e5 27,64,104,113
+  s_3ed49af76056f9::t_8016f5d29c45ef 26,35,43,52,62,81
+  s_3ed49af76056f9::t_37b3ab13136042 19
+  s_3ed49af76056f9::t_b8cd0b584a1c8f 20
+packages/marimo-studio/src/marimo_studio/_server/presentation/activation.py
+  s_3ed49af76056f9::t_c679f1bef0b9c3 8,39,78,118,124
+packages/studio/tests/source-pane.test.tsx
+  s_3ed49af76056f9::t_ba4c95d625d1ce 478-479,514,518
+  s_3a442c2e920601::t_e22b7eed377e29 487
+  s_3ed49af76056f9::t_24a32adea8496a 4,251,445,480,482-483,485-486,490,519-520
+  s_3ed49af76056f9::t_fbb54bd1812ca3 484
+  s_3ed49af76056f9::t_dbae5cec65e782 197
+packages/marimo-studio/src/marimo_studio/_cli/commands/view_source.py
+  s_3ed49af76056f9::t_b48a17216a9f24 41
+  s_3ed49af76056f9::t_834f77394d2a68 16,39,43,58,62,93,105
+  s_3ed49af76056f9::t_10c41823e94494 35,53,86
+  s_3ed49af76056f9::t_9daa895c904a37 1,60,95
+packages/marimo-studio/src/marimo_studio/_cli/commands/view_create.py
+  s_3ed49af76056f9::t_9daa895c904a37 38,49,68,76
+  s_3ed49af76056f9::t_10c41823e94494 41,69
+  s_3ed49af76056f9::t_d29c1301e01dd8 12,77
+  s_3ed49af76056f9::t_75ba1eb4362e70 20,60
+  s_3ed49af76056f9::t_834f77394d2a68 47,58,74,88
+packages/marimo-studio/src/marimo_studio/_server/runtime/catalog.py
+  s_3ed49af76056f9::t_4bf26034e82301 92,175
+packages/studio/src/features/views/StarterCatalogNotice.tsx
+  s_3ed49af76056f9::t_6e93ade56fa1e8 17,23,28
+packages/marimo-studio/tests/marimo_compat/test_session_state.py
+  s_c3f4e0f4c29a7d::t_beb5c8bae96fb6 3,26-54
+packages/marimo-studio/src/marimo_studio/_artifacts/publication.py
+  s_3a442c2e920601::t_34c2c95ba7e28f 155
+packages/studio/src/features/navigation/ModeNavigation.tsx
+  s_3ed49af76056f9::t_30bf358a823f33 15
+packages/marimo-studio/tests/notebook/test_inspection.py
+  s_3ed49af76056f9::t_af12d0c7032647 160-175
+packages/marimo-studio/tests/views/test_projection_resolution.py
+  s_3a442c2e920601::t_3d60c22ab50afe 121
+packages/marimo-studio/tests/providers/test_setup.py
+  s_3ed49af76056f9::t_6b709d2cc72bac 110
+apps/docs/.vitepress/config.mts
+  s_3ed49af76056f9::t_e3a159a8ac885b 17,93,95,98-100,105,107,110-111,114-115,118
+skills/marimo-studio/SKILL.md
+  s_3a442c2e920601::t_2473cc10fbb854 124,167,201-202,207-212
+  s_3ed49af76056f9::t_3bf875c3402381 24,26,187,189,198,200
+  s_3a442c2e920601::t_06f44c556a5ae1 181-182
+  s_3a442c2e920601::t_609596ef12da6e 126-128,130
+  s_3ed49af76056f9::t_2262d3bcb02bd8 53,55-59
+  s_3a442c2e920601::t_9b2ca30aa1b68e 100
+  s_3a442c2e920601::t_fc9eb2d4a2bdfb 40-42,159
+  s_3ed49af76056f9::t_57b9ea15b9c8da 4-6,9,11,13-15,17,19,21,23,27-28,30-32,34-37,43-47,50-52,63,102,104,106-108,110-111,114,119-120,122,144,150,171-180,184,186,188,190-197,199,203-206,213-229,231-232,234,236-238
+docs/guide/work-in-studio.md
+  s_3ed49af76056f9::t_07d0bbd88734c3 45-46
+  s_3ed49af76056f9::t_4c27ccd858bd80 1-44,47-70
+packages/marimo-studio/src/marimo_studio/_server/studio/document.py
+  s_3ed49af76056f9::t_e4327550e4d143 90
+packages/marimo-studio/tests/server/test_access_policy.py
+  s_3ed49af76056f9::t_10f2ad650f3254 74,129
+  s_3ed49af76056f9::t_be72de789169ca 78,146
+packages/marimo-studio/tests/agent/test_client_evidence.py
+  s_3ed49af76056f9::t_3fa31823ceeed3 48,96,104,243,295
+  s_3ed49af76056f9::t_10f2ad650f3254 32,81,215
+  s_3ed49af76056f9::t_37b3ab13136042 12,38,59,65,86,106,112,220,253,260,273,305,312
+apps/e2e/tests/fixture.ts
+  s_3ed49af76056f9::t_6b709d2cc72bac 93
+  s_3ed49af76056f9::t_de594646c9d031 92,201
+  s_3ed49af76056f9::t_139a482cdf7823 195
+  s_3ed49af76056f9::t_be72de789169ca 189
+  s_3ed49af76056f9::t_26856ee78779be 205
+apps/e2e/fixtures-provider/provider/fixture_provider/web.py
+  s_3ed49af76056f9::t_918b492af0927e 55
+  s_3ed49af76056f9::t_3163c7ac616194 106,155
+scripts/verify-example-artifacts.py
+  s_3ed49af76056f9::t_139a482cdf7823 67
+packages/studio/src/features/views/views.css
+  s_3ed49af76056f9::t_95d0d2eb9a4288 80,96-99
+apps/e2e/tests/view-authoring.spec.ts
+  s_3ed49af76056f9::t_6ab0a3099cc997 664
+  s_3ed49af76056f9::t_3bf875c3402381 118,122
+  s_3ed49af76056f9::t_1b8d19dbd53723 665-667
+  s_3ed49af76056f9::t_ba4c95d625d1ce 312,340,380,387,394,414,424,503-504,506,609-611,613,631,637,661-662,669,705,708-709,714
+  s_3ed49af76056f9::t_de594646c9d031 124-125
+  s_3ed49af76056f9::t_fbb54bd1812ca3 633
+packages/studio/src/features/source-editor/SourceConflict.tsx
+  s_3ed49af76056f9::t_659391b136b7a8 31,44
+  s_3ed49af76056f9::t_07d0bbd88734c3 48
+  s_3ed49af76056f9::t_6e93ade56fa1e8 21
+  s_3ed49af76056f9::t_c21d4c0ab31cd3 8-9,43,47
+  s_3ed49af76056f9::t_26856ee78779be 12-17,61
+packages/marimo-studio/src/marimo_studio/_server/support.py
+  s_3ed49af76056f9::t_37b3ab13136042 36,260
+  s_3ed49af76056f9::t_6f83a058e7d9e5 451
+  s_3ed49af76056f9::t_93ff012c39b0a4 259
+  s_3ed49af76056f9::t_8016f5d29c45ef 452
+apps/e2e/tests/stale-results.spec.ts
+  s_3ed49af76056f9::t_ba4c95d625d1ce 167,183,231,233,238,240,244,246,298,300,325,327
+  s_3ed49af76056f9::t_ffbd01cbe69336 160
+packages/marimo-studio/src/marimo_studio/_cli/commands/validate.py
+  s_3ed49af76056f9::t_10c41823e94494 60
+  s_3ed49af76056f9::t_834f77394d2a68 69,115
+  s_3ed49af76056f9::t_e666ec8a64c373 107,109-113,119
+  s_3ed49af76056f9::t_9daa895c904a37 71
+packages/studio/src/features/navigation/RuntimeMenu.tsx
+  s_3ed49af76056f9::t_4bf26034e82301 46
+packages/marimo-studio/tests/agent/test_protocol.py
+  s_3ed49af76056f9::t_93ff012c39b0a4 286,321
+  s_3ed49af76056f9::t_8016f5d29c45ef 358,382
+  s_3ed49af76056f9::t_594e16b156f118 260
+  s_3ed49af76056f9::t_490a2f65999488 345,347,356,359,374,379,381
+  s_3ed49af76056f9::t_4e21c2facd29f7 62,122,137
+  s_3ed49af76056f9::t_37b3ab13136042 67,70,173,227,288,327
+  s_3ed49af76056f9::t_10f2ad650f3254 119,171
+  s_3ed49af76056f9::t_3fa31823ceeed3 99,128,131,142,148,168,199,250,256-257,281,283,298,302-303,307-308,315,337,341-342
+packages/marimo-studio/tests/server/test_view_mutations.py
+  s_3ed49af76056f9::t_6b709d2cc72bac 167,285
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/_deno/analysis.py
+  s_3ed49af76056f9::t_918b492af0927e 160
+packages/marimo-studio/src/marimo_studio/_browser_client/records.py
+  s_3ed49af76056f9::t_c679f1bef0b9c3 10
+  s_3ed49af76056f9::t_6f83a058e7d9e5 21
+  s_3ed49af76056f9::t_c8644d5cc21f5b 1,11
+packages/marimo-studio/src/marimo_studio/_compat/server/existing_session.py
+  s_c3f4e0f4c29a7d::t_e9bc74e3df8eba 11,261
+packages/marimo-studio/tests/agent/test_client_transport.py
+  s_3ed49af76056f9::t_93ff012c39b0a4 34,82,113,158,168,179,223,345
+packages/studio/src/features/preview/status.ts
+  s_3ed49af76056f9::t_4bf26034e82301 7,13-14,32,35,37,39,41,43
+packages/studio/src/features/workspace/storage.ts
+  s_3ed49af76056f9::t_30bf358a823f33 1,23,25
+  s_3ed49af76056f9::t_918b492af0927e 52
+packages/studio/src/app/services.ts
+  s_3ed49af76056f9::t_918b492af0927e 44
+  s_3ed49af76056f9::t_e4327550e4d143 141
+packages/studio/src/app/StudioHost.tsx
+  s_3ed49af76056f9::t_6e93ade56fa1e8 358,391,393-394,402,421
+packages/marimo-studio/tests/server/test_delivery_directory_routes.py
+  s_3ed49af76056f9::t_6b709d2cc72bac 185
+development_docs/architecture.md
+  s_3ed49af76056f9::t_ac338ccff6ae79 27,34
+  s_3ed49af76056f9::t_26856ee78779be 35-36
+packages/marimo-studio/tests/views/test_inspect.py
+  s_3ed49af76056f9::t_82048e8f6dad90 61
+  s_3ed49af76056f9::t_594e16b156f118 62
+  s_3ed49af76056f9::t_490a2f65999488 63
+  s_3ed49af76056f9::t_cb3dfefba4f9f0 60
+packages/marimo-studio/src/marimo_studio/_validation/issues.py
+  s_3ed49af76056f9::t_c81b6dfb491709 1,13,53,69-70,75,96,110,152
+  s_3ed49af76056f9::t_37b3ab13136042 2-12,14-52,54-68,71-74,76-95,97-109,111-151,153-165
+docs/reference/provider-api.md
+  s_3a442c2e920601::t_d2737bf10ea947 84-86
+  s_3ed49af76056f9::t_271b85921f044d 2-3,6,8-9,11-22,29-30,33,57-58,60-61,63,65-68,70-72,74,76,78-82,92-93,95,97-99,101-103,105-107,116,132-133,138,179-188
+  s_3a442c2e920601::t_06f412d8a745e9 88-90
+packages/studio/src/app/responsive.css
+  s_3ed49af76056f9::t_30bf358a823f33 77,84,91
+packages/marimo-studio/src/marimo_studio/_authoring/current_api.py
+  s_3ed49af76056f9::t_b03a12c5219a08 1-75
+packages/marimo-studio/tests/agent/test_progressive_validation.py
+  s_3ed49af76056f9::t_37b3ab13136042 1-55,57-63,65-67,69-114,116-119,121-171,173-204,208-210,212,214-221,223-271,273-278,281,283-321,325-326,328-338,341-374,377-384,386-413,415-417,419-490,492-548,551-603,606-653,658-664,668
+  s_3ed49af76056f9::t_10f2ad650f3254 56,68,172,385,491
+  s_3ed49af76056f9::t_594e16b156f118 205-207,322-324,656,665-667
+  s_3ed49af76056f9::t_93ff012c39b0a4 64,327
+  s_3ed49af76056f9::t_3fa31823ceeed3 115,120,211,213,222,272,279-280,282,339-340,375-376,414,418,549-550,604-605,654-655,657,669-670
+packages/studio/src/features/views/StarterPlan.tsx
+  s_3ed49af76056f9::t_6e93ade56fa1e8 5
+apps/e2e/tests/presentation-security.spec.ts
+  s_3ed49af76056f9::t_ba4c95d625d1ce 159
+packages/marimo-studio/src/marimo_studio/_server/agent/browser.py
+  s_3ed49af76056f9::t_3fa31823ceeed3 289,330
+packages/marimo-studio/src/marimo_studio/_server/studio/routes.py
+  s_3ed49af76056f9::t_918b492af0927e 133
+packages/studio/src/features/navigation/WorkspaceMenu.tsx
+  s_3ed49af76056f9::t_7e0a84ad3fb69e 66
+scripts/verify-installed-package.py
+  s_3ed49af76056f9::t_b03a12c5219a08 107-110
+  s_3ed49af76056f9::t_02914b481d1c22 98,106,114-115,121-123,313,334,347-348,350-351
+  s_3ed49af76056f9::t_1536b4c9f9c7a9 278
+  s_3ed49af76056f9::t_cb3dfefba4f9f0 311,332
+  s_3ed49af76056f9::t_de594646c9d031 105,118-119,349
+  s_3ed49af76056f9::t_139a482cdf7823 260
+  s_3ed49af76056f9::t_b7abf72b84b137 22
+packages/marimo-studio/tests/marimo_compat/test_environment.py
+  s_3ed49af76056f9::t_945dfd4fe00b7c 113
+  s_3ed49af76056f9::t_139a482cdf7823 99,118
+packages/marimo-studio/src/marimo_studio/_authoring/view_api.py
+  s_3ed49af76056f9::t_d43dde50888138 10,89-90
+  s_3ed49af76056f9::t_dba0dd967d265e 23,74
+  s_3ed49af76056f9::t_420abaa3d5f1a8 37
+  s_3ed49af76056f9::t_81e94f8ae199b3 75
+  s_3ed49af76056f9::t_5ce4785a85fe3b 47
+  s_3ed49af76056f9::t_b03a12c5219a08 7,21,26,40,85,88
+packages/marimo-studio/tests/cli/test_view_commands.py
+  s_3ed49af76056f9::t_594e16b156f118 59-65,108-112,151-156,708-713
+  s_3ed49af76056f9::t_69a0ee192197cf 859
+  s_3ed49af76056f9::t_ad03faa08b34bf 942-944
+  s_3ed49af76056f9::t_c679f1bef0b9c3 18,592
+  s_3ed49af76056f9::t_cb3dfefba4f9f0 445
+  s_3ed49af76056f9::t_6b709d2cc72bac 179,216
+  s_3ed49af76056f9::t_490a2f65999488 583,589,602,623,632,644
+  s_3ed49af76056f9::t_be72de789169ca 601,608,637,667
+  s_3ed49af76056f9::t_139a482cdf7823 135,146,165,208,229,289,392,432,462,482,527,566,612,757,783,825,903,933
+  s_3ed49af76056f9::t_fe1c9cb94bb07d 74,116,173-174,177-178,184,213,234,300,443,467,488,530,622,717,762,787,830
+  s_3ed49af76056f9::t_8ef9fe471ec961 115
+packages/marimo-studio/tests/agent/test_browser_activation_observation.py
+  s_3ed49af76056f9::t_be72de789169ca 246,253,268
+  s_3ed49af76056f9::t_8016f5d29c45ef 259,270
+docs/guide/views.md
+  s_3ed49af76056f9::t_5ffdd426cdd2d0 2-3,6,8-9,16-17,19,21-23,25-26,28,30,37-38,40,46-48,50-52
+packages/studio/src/features/views/transition.ts
+  s_3ed49af76056f9::t_30bf358a823f33 3
+packages/studio/src/features/source-editor/session.ts
+  s_3ed49af76056f9::t_c21d4c0ab31cd3 165,171,185,187
+scripts/verify-external-provider.py
+  s_3ed49af76056f9::t_cb3dfefba4f9f0 63,80
+  s_3ed49af76056f9::t_b7abf72b84b137 14
+  s_3ed49af76056f9::t_1536b4c9f9c7a9 54
+packages/marimo-studio/src/marimo_studio/_views/inspect.py
+  s_3ed49af76056f9::t_81e94f8ae199b3 42,46-47,65
+  s_3ed49af76056f9::t_dba0dd967d265e 43
+packages/studio/tests/preview-deck.test.ts
+  s_3ed49af76056f9::t_24a32adea8496a 695
+development_docs/releasing.md
+  s_3ed49af76056f9::t_ac338ccff6ae79 211-212
+packages/marimo-studio/src/marimo_studio/_authoring/workspace.py
+  s_3ed49af76056f9::t_af12d0c7032647 14-18,58,69,79
+skills/marimo-studio/agents/openai.yaml
+  s_3ed49af76056f9::t_6a198065989b8e 3-4
+packages/marimo-studio/src/marimo_studio/agent/__init__.py
+  s_3ed49af76056f9::t_c679f1bef0b9c3 8
+  s_3ed49af76056f9::t_3ef47651c446d9 9,14
+  s_3ed49af76056f9::t_2d4a1bf5870df7 13
+  s_3ed49af76056f9::t_29cdd0e85831c1 6
+  s_3ed49af76056f9::t_b03a12c5219a08 3-5
+  s_3ed49af76056f9::t_71a111cabd850b 1,18
+apps/e2e/tests/hosted-mount.spec.ts
+  s_3ed49af76056f9::t_958f4b0c7b4685 83-85
+  s_3ed49af76056f9::t_ba4c95d625d1ce 38,88
+apps/e2e/scripts/serve-installed-package.mjs
+  s_3ed49af76056f9::t_26856ee78779be 170
+  s_3ed49af76056f9::t_139a482cdf7823 159
+packages/studio/src/features/navigation/model.ts
+  s_3ed49af76056f9::t_30bf358a823f33 11,37,40-41,45
+  s_3ed49af76056f9::t_4bf26034e82301 55,57
+plugin.json
+  s_3ed49af76056f9::t_23f31120e9e577 4
+packages/marimo-studio/src/marimo_studio/_browser_client/validation_protocol.py
+  s_3ed49af76056f9::t_37b3ab13136042 2-13,15-21,23-33,35-45,47,49-50,52-68,70-81,83-85,87-91,93-104,106-114,116,118-126,128-135,137,139-168
+  s_3ed49af76056f9::t_b8cd0b584a1c8f 1,14,22,34,46,48,51,69,82,86,92,105,115,117,127,136,138
+packages/marimo-studio/tests/server/test_view_activation.py
+  s_3ed49af76056f9::t_8016f5d29c45ef 9,31,36,42
+packages/studio/tests/source-sync.test.ts
+  s_3ed49af76056f9::t_c21d4c0ab31cd3 169,422,429,447,468
+docs/guide/run-and-share.md
+  s_3ed49af76056f9::t_26856ee78779be 10-14
+  s_3ed49af76056f9::t_c9b900534f8900 2-3,6,8,16-17,19,21,24,32-33,35-36,38,40,43,51-53,55-56,59,65,67,69-70,72,79-80,82-85,88,90,93,99-106,109-114
+packages/marimo-studio/src/marimo_studio/_validation/runtime_process.py
+  s_3ed49af76056f9::t_3fa31823ceeed3 250,253
+scripts/check_python_architecture.py
+  s_3ed49af76056f9::t_279a0f0b98e31a 23-26,191-198
+packages/marimo-studio/tests/agent/test_workspace.py
+  s_3ed49af76056f9::t_1536b4c9f9c7a9 37,169,445
+  s_3ed49af76056f9::t_42e559a2476b86 442
+  s_3ed49af76056f9::t_b03a12c5219a08 432-439
+  s_3ed49af76056f9::t_3fa31823ceeed3 210-211,503,513
+  s_3ed49af76056f9::t_30f7fa476729e0 52-55,57,59,245-246,440
+  s_3ed49af76056f9::t_594e16b156f118 506-508
+  s_3ed49af76056f9::t_cb3dfefba4f9f0 127
+  s_3ed49af76056f9::t_3bf875c3402381 475,533,555
+  s_3ed49af76056f9::t_c679f1bef0b9c3 24,56,558
+  s_3ed49af76056f9::t_b7abf72b84b137 15,36
+  s_3ed49af76056f9::t_37b3ab13136042 479-480
+  s_3ed49af76056f9::t_de594646c9d031 58,420
+  s_3ed49af76056f9::t_898f055123267c 557,567-568
+  s_3ed49af76056f9::t_be72de789169ca 539,571
+docs/guide/getting-started.md
+  s_3ed49af76056f9::t_1a5239a8aaf06f 2-3,6,8-9,15-16,22-23,25-27,29,31,33,35-38,40-42,45,47-50,53-55,57-58,60,62,68,70-71
+packages/studio/tests/preview-controller-mutation.test.ts
+  s_3ed49af76056f9::t_ba4c95d625d1ce 121
+packages/marimo-studio/src/marimo_studio/_compat/server/notebook_save.py
+  s_c3f4e0f4c29a7d::t_e9bc74e3df8eba 215,219
+docs/reference/cli.md
+  s_3ed49af76056f9::t_ee099e1920d888 2-3,6,8-15,18-26,28-30,32-34,36,38-39,42-44,46,48-49,52-53,55-56,58,60-63,66-73,75-77,79,81-82,85-88,90-91,94,96,98-99,102-104,106,108-109,112-116,118-120,122-124,126-128,130,132-133,136-140,142,144-145,148-154,156-159,165-167,172-174
+  s_3ed49af76056f9::t_b48a17216a9f24 155,168-171
+  s_3ed49af76056f9::t_af12d0c7032647 57
+  s_3ed49af76056f9::t_26856ee78779be 160-164,175-185
+packages/studio/tests/runtime-diagnostics.test.ts
+  s_3ed49af76056f9::t_24a32adea8496a 94
+packages/studio/tests/controller-lifecycle.test.ts
+  s_3ed49af76056f9::t_b8f399b4bb31f2 368,622
+  s_3ed49af76056f9::t_dbae5cec65e782 568
+  s_3ed49af76056f9::t_6b709d2cc72bac 129,193,296
+packages/marimo-studio/README.md
+  s_3ed49af76056f9::t_51113f65cab431 1,3-5,7,14-15,17-23
+packages/protocol/tests/studio-bootstrap.test.ts
+  s_3ed49af76056f9::t_a41148687bb5f2 8,11
+packages/protocol/tests/responses.test.ts
+  s_3ed49af76056f9::t_6b709d2cc72bac 29,53
+docs/index.md
+  s_3ed49af76056f9::t_2b444e61abcd29 3,5,8-9,16,19,22-23,28,31-32,34,37,40-43,49-50,55,57,59-66,70-72,74,76-77,85-86,88,90-92,94-95
+  s_3ed49af76056f9::t_ad8cef93530a38 68
+packages/studio/tests/view-starter-catalog.test.tsx
+  s_3ed49af76056f9::t_ba4c95d625d1ce 32-33,76-77
+  s_3ed49af76056f9::t_fbb54bd1812ca3 38
+packages/marimo-studio/src/marimo_studio/view_providers/_records.py
+  s_3ed49af76056f9::t_918b492af0927e 20
+packages/studio/tests/workspace-event-activation.test.ts
+  s_3ed49af76056f9::t_b8f399b4bb31f2 34,56,217,275
+development_docs/architecture/agents-and-delivery.md
+  s_3ed49af76056f9::t_3bf875c3402381 12,14
+  s_3ed49af76056f9::t_c9534b5ccb1c8c 20
+  s_3ed49af76056f9::t_ac338ccff6ae79 21,26,41,96
+packages/studio/src/features/workspace/schema.ts
+  s_3ed49af76056f9::t_26856ee78779be 23
+  s_3ed49af76056f9::t_918b492af0927e 89
+packages/marimo-studio/tests/agent/test_validation_isolation.py
+  s_3ed49af76056f9::t_594e16b156f118 460-462
+  s_3ed49af76056f9::t_93ff012c39b0a4 265
+  s_3ed49af76056f9::t_1536b4c9f9c7a9 123,170,284,348,405
+  s_3ed49af76056f9::t_c274464feaf880 119,217,232,277,280,311,317,319,341,375,382,384,395,401,445,453,455,472
+  s_3ed49af76056f9::t_139a482cdf7823 252
+  s_3ed49af76056f9::t_3fa31823ceeed3 213,331,336,392
+  s_3ed49af76056f9::t_b7abf72b84b137 19
+  s_3ed49af76056f9::t_ed6919b994228f 393,397-398,466,469-470,474
+  s_3ed49af76056f9::t_37b3ab13136042 16
+  s_3ed49af76056f9::t_42e559a2476b86 394,468
+packages/marimo-studio/src/marimo_studio/_views/build.py
+  s_3ed49af76056f9::t_81e94f8ae199b3 653-654
+  s_3ed49af76056f9::t_dba0dd967d265e 57,635,650
+packages/marimo-studio/src/marimo_studio/_authoring/validation.py
+  s_3ed49af76056f9::t_420abaa3d5f1a8 15-18
+  s_3ed49af76056f9::t_b8cd0b584a1c8f 64
+  s_3ed49af76056f9::t_34499af0cbed01 61,63,67
+  s_3ed49af76056f9::t_37b3ab13136042 10,52,70,86
+apps/docs/.vitepress/routes.ts
+  s_3ed49af76056f9::t_1812adf50862b9 3,8-9,13-14,19,24-29,35-36,42-43
+packages/studio/tests/studio-host.test.tsx
+  s_3ed49af76056f9::t_dbae5cec65e782 254
+  s_3ed49af76056f9::t_24a32adea8496a 32,35
+  s_3ed49af76056f9::t_6b709d2cc72bac 290
+  s_3ed49af76056f9::t_fbb54bd1812ca3 215
+  s_3ed49af76056f9::t_ba4c95d625d1ce 217,253,256,331,346
+development_docs/architecture/browser-runtime-and-authoring.md
+  s_3ed49af76056f9::t_1319d08726c646 274
+packages/marimo-studio/src/marimo_studio/_validation/__init__.py
+  s_3ed49af76056f9::t_34499af0cbed01 10-14
+packages/marimo-studio/src/marimo_studio/_compat/server/peer_state.py
+  s_c3f4e0f4c29a7d::t_e9bc74e3df8eba 121-122
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/vanilla/__init__.py
+  s_3ed49af76056f9::t_918b492af0927e 202
+packages/studio/src/features/navigation/RuntimeStatus.tsx
+  s_3ed49af76056f9::t_4bf26034e82301 10-15,27,34-38
+  s_3ed49af76056f9::t_b48a17216a9f24 16-26,28-33
+packages/marimo-studio/tests/delivery/test_export_cli.py
+  s_3ed49af76056f9::t_fe1c9cb94bb07d 37
+  s_3ed49af76056f9::t_b7abf72b84b137 9
+  s_3ed49af76056f9::t_1536b4c9f9c7a9 78
+  s_3ed49af76056f9::t_139a482cdf7823 32
+packages/studio/tests/view-mutation-ownership.test.tsx
+  s_3ed49af76056f9::t_6b709d2cc72bac 233
+  s_3ed49af76056f9::t_ba4c95d625d1ce 40-41,43-45,47-48,71,74,79,85,118,120,152,154-155,158-159,185,187-188,218,220-222,226,228,268,270-271,276,278
+  s_3ed49af76056f9::t_24a32adea8496a 192,272
+  s_3ed49af76056f9::t_acb87fe7ce0231 42
+apps/e2e/unit/authoring-test-support.test.ts
+  s_3ed49af76056f9::t_4ca8d9b46d1afa 22
+  s_3ed49af76056f9::t_10f2ad650f3254 3,21
+  s_3ed49af76056f9::t_26856ee78779be 25-27
+  s_3ed49af76056f9::t_3fa31823ceeed3 7
+packages/studio/tests/studio-app.test.tsx
+  s_3ed49af76056f9::t_ba4c95d625d1ce 602
+  s_3ed49af76056f9::t_7717d0df9127c5 16,627
+  s_3ed49af76056f9::t_b48a17216a9f24 99,109-110
+  s_3ed49af76056f9::t_24a32adea8496a 106,108,111,606,611
+  s_3ed49af76056f9::t_6b709d2cc72bac 46,115,117
+  s_3ed49af76056f9::t_b8f399b4bb31f2 391
+packages/marimo-studio/src/marimo_studio/_cli/commands/doctor.py
+  s_3ed49af76056f9::t_10c41823e94494 18
+  s_3ed49af76056f9::t_834f77394d2a68 11,19,22
+  s_3ed49af76056f9::t_d29c1301e01dd8 24-33
+  s_3ed49af76056f9::t_9daa895c904a37 20
+packages/marimo-studio/tests/views/test_view_setup.py
+  s_3ed49af76056f9::t_6b709d2cc72bac 88
+packages/studio/tests/preview-controller.test.ts
+  s_3ed49af76056f9::t_24a32adea8496a 188
+packages/studio/tests/source-controller.test.ts
+  s_3ed49af76056f9::t_c21d4c0ab31cd3 291,625,782
+packages/marimo-studio/src/marimo_studio/_workspace/config.py
+  s_3ed49af76056f9::t_b25c303b6e84ca 137-151,185-187,203-206,342-343,349-350
+  s_3ed49af76056f9::t_87172c5f1ef969 175-180
+packages/marimo-studio/src/marimo_studio/_compat/server/session_state.py
+  s_c3f4e0f4c29a7d::t_dbbb4da9352604 6,11,107,117,120-125,265
+packages/studio/tests/source-conflict.test.tsx
+  s_3ed49af76056f9::t_1319d08726c646 51-54,64-65,72,74-75
+  s_3ed49af76056f9::t_c21d4c0ab31cd3 37-38
+  s_3ed49af76056f9::t_fbb54bd1812ca3 23
+  s_3ed49af76056f9::t_4163a021eefbda 73
+  s_3ed49af76056f9::t_24a32adea8496a 15,24,70
+apps/e2e/scripts/serve-providers.mjs
+  s_3ed49af76056f9::t_139a482cdf7823 171
+packages/marimo-studio/tests/cli/test_validate_command.py
+  s_3ed49af76056f9::t_139a482cdf7823 33,57,84,245,283
+  s_3ed49af76056f9::t_be72de789169ca 163
+packages/marimo-studio/src/marimo_studio/_views/records.py
+  s_3ed49af76056f9::t_dba0dd967d265e 153
+  s_3ed49af76056f9::t_81e94f8ae199b3 154,158-159,166-167,223,233
+  s_3ed49af76056f9::t_918b492af0927e 63,115
+  s_3ed49af76056f9::t_5ce4785a85fe3b 1,216
+packages/marimo-studio/src/marimo_studio/_cli/__init__.py
+  s_3ed49af76056f9::t_6150052c34403d 5-6
+apps/e2e/tests/authoring.spec.ts
+  s_3ed49af76056f9::t_9c1450f506aefd 460
+  s_3ed49af76056f9::t_93ff012c39b0a4 626,650
+  s_3ed49af76056f9::t_3fa31823ceeed3 647,677
+  s_3ed49af76056f9::t_4ca8d9b46d1afa 8,637
+  s_3ed49af76056f9::t_ba4c95d625d1ce 93,97,419,491,596,609
+  s_3ed49af76056f9::t_0708054ebd738c 401
+  s_3ed49af76056f9::t_eb9e1f78e9a9a9 403,410
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_svelte/analyzer.ts
+  s_3ed49af76056f9::t_918b492af0927e 668
+docs/guide/notebook-results.md
+  s_3ed49af76056f9::t_8e067efce40846 2-3,6,8-9,11,17-18,20-23,29-30,36-39,45-47,49-50,52,54,56-62,64,66-68,70,72,74-80,83-99,102,105-106,112-113,115-117
+packages/protocol/src/views.ts
+  s_3ed49af76056f9::t_918b492af0927e 61
+packages/marimo-studio/tests/cli/test_public_surface.py
+  s_3ed49af76056f9::t_f849b84dc6d61d 9,12-23,25-28,34-47
+  s_3ed49af76056f9::t_b03a12c5219a08 24,48-54
+  s_3ed49af76056f9::t_26856ee78779be 31-33
+packages/marimo-studio/tests/cli/test_documentation_examples.py
+  s_3ed49af76056f9::t_1536b4c9f9c7a9 198
+  s_3ed49af76056f9::t_6a436b598b8d72 7,16-17,294-335
+  s_3ed49af76056f9::t_945dfd4fe00b7c 186-190
+packages/marimo-studio/src/marimo_studio/_compat/server/session_replay.py
+  s_c3f4e0f4c29a7d::t_e9bc74e3df8eba 40-46
+packages/marimo-studio/src/marimo_studio/_cli/commands/view_delivery.py
+  s_3ed49af76056f9::t_834f77394d2a68 14,46,56,73,91,114,125
+  s_3ed49af76056f9::t_9daa895c904a37 1,75,116
+  s_3ed49af76056f9::t_b48a17216a9f24 48
+  s_3ed49af76056f9::t_c8644d5cc21f5b 12,25,62,68,85,94
+  s_3ed49af76056f9::t_81e94f8ae199b3 49,57,59
+  s_3ed49af76056f9::t_10c41823e94494 41,67,108
+packages/studio/src/features/views/controller.ts
+  s_3ed49af76056f9::t_d9daeecafdfb4f 115,125,298
+  s_3ed49af76056f9::t_b48a17216a9f24 222,284
+  s_3ed49af76056f9::t_30bf358a823f33 295,322
+  s_3ed49af76056f9::t_6e93ade56fa1e8 189,204,271,308,324
+  s_3ed49af76056f9::t_e4327550e4d143 18,64,68,479
+packages/studio/src/features/views/ViewMenu.tsx
+  s_3ed49af76056f9::t_6e93ade56fa1e8 46-47,82-83,102,126
+  s_3ed49af76056f9::t_eb6cdaa686db28 49-54,66
+  s_3ed49af76056f9::t_e4327550e4d143 37,75
+development_docs/README.md
+  s_3ed49af76056f9::t_ac338ccff6ae79 32
+packages/marimo-studio/tests/server/test_runtime_config.py
+  s_3ed49af76056f9::t_898f055123267c 41
+  s_3ed49af76056f9::t_17bda86d36ecfa 62-63
+packages/marimo-studio/tests/notebook/test_cell_refs.py
+  s_3ed49af76056f9::t_82048e8f6dad90 7
+packages/studio/src/features/source-editor/SourcePane.tsx
+  s_3ed49af76056f9::t_6e93ade56fa1e8 74
+  s_3ed49af76056f9::t_d9daeecafdfb4f 32,61
+  s_3ed49af76056f9::t_c21d4c0ab31cd3 192-193
+packages/protocol/src/studio-bootstrap.ts
+  s_3ed49af76056f9::t_e4327550e4d143 16,59-63
+packages/marimo-studio/src/marimo_studio/_notebook/inspection.py
+  s_3ed49af76056f9::t_af12d0c7032647 138,147,164,174
+packages/studio/src/features/views/CreateViewForm.tsx
+  s_3ed49af76056f9::t_6e93ade56fa1e8 53
+packages/marimo-studio/tests/marimo_compat/test_capability_parity.py
+  s_3ed49af76056f9::t_37b3ab13136042 19,187,204-205,207,211,223-224,227-228,268
+  s_3ed49af76056f9::t_fe1c9cb94bb07d 41
+  s_3ed49af76056f9::t_3fa31823ceeed3 197
+  s_3ed49af76056f9::t_c679f1bef0b9c3 22,285
+  s_3ed49af76056f9::t_10f2ad650f3254 181
+  s_3ed49af76056f9::t_26856ee78779be 242-243
+  s_3ed49af76056f9::t_29cdd0e85831c1 322-324
+  s_3ed49af76056f9::t_be72de789169ca 279,327,350,399,410
+  s_3ed49af76056f9::t_1536b4c9f9c7a9 29
+  s_3ed49af76056f9::t_594e16b156f118 33-39
+  s_3ed49af76056f9::t_490a2f65999488 155-156,163
+  s_3ed49af76056f9::t_af12d0c7032647 82,95-96
+  s_3ed49af76056f9::t_b7abf72b84b137 15
+  s_3ed49af76056f9::t_8016f5d29c45ef 16,300,314,339,342
+  s_3ed49af76056f9::t_6b709d2cc72bac 57
+  s_3ed49af76056f9::t_30f7fa476729e0 118
+  s_3ed49af76056f9::t_3bf875c3402381 241,392
+  s_3ed49af76056f9::t_c9534b5ccb1c8c 302,315
+  s_3ed49af76056f9::t_139a482cdf7823 416
+packages/marimo-studio/src/marimo_studio/_cli/commands/view.py
+  s_3ed49af76056f9::t_9daa895c904a37 13
+  s_3ed49af76056f9::t_c8644d5cc21f5b 6,21
+packages/marimo-studio/src/marimo_studio/_cli/output.py
+  s_3ed49af76056f9::t_c8644d5cc21f5b 149-150
+  s_3ed49af76056f9::t_c679f1bef0b9c3 11,148
+  s_3ed49af76056f9::t_3fa31823ceeed3 293
+  s_3ed49af76056f9::t_e666ec8a64c373 264,295-297
+  s_3ed49af76056f9::t_75ba1eb4362e70 58-66
+packages/marimo-studio/src/marimo_studio/_validation/service.py
+  s_3ed49af76056f9::t_3fa31823ceeed3 125,130,134,173,183,201,204,281,287
+  s_3ed49af76056f9::t_34499af0cbed01 11
+apps/e2e/tests/catalog-invalidation.spec.ts
+  s_3ed49af76056f9::t_acb87fe7ce0231 60
+  s_3ed49af76056f9::t_ba4c95d625d1ce 49-50,52,54,59,61
+packages/marimo-studio/src/marimo_studio/_artifacts/codec.py
+  s_3ed49af76056f9::t_918b492af0927e 376,407
+docs/guide/frontend-options.md
+  s_3ed49af76056f9::t_e52f7944a103d8 1-72
+packages/studio/src/features/workspace/controller.ts
+  s_3ed49af76056f9::t_30bf358a823f33 6,30,32,43,61,64,66
+  s_3ed49af76056f9::t_7717d0df9127c5 121
+packages/studio/tests/studio-test-support.ts
+  s_3ed49af76056f9::t_a41148687bb5f2 6,10-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7fe7406f04d2275ad1d7d976573d6e5ae27458bf",
+  "prompts": {},
+  "sessions": {
+    "s_3a442c2e920601": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04743-4bdd-76c2-aab1-953e5ae6216e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_3ed49af76056f9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a046fc-6c32-7422-bc69-808a6f5ea434",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_c3f4e0f4c29a7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0470e-cf04-7ed3-bb2f-562472250623",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+packages/studio/tests/controller-lifecycle.test.ts
+  s_831fb50e3307b2::t_0eb64253b5ae5f 138
+  s_831fb50e3307b2::t_a705efea17677a 140,145,162-169,173-179
+packages/studio/src/features/views/controller.ts
+  s_831fb50e3307b2::t_4593b279602b2e 45-49,56,430,453-455,458-478,509
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "fb0e9012b6517f19a5835360c2efcc94d980954e",
+  "prompts": {},
+  "sessions": {
+    "s_831fb50e3307b2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a060c9-a2fc-7162-9b01-8b2a91d07b45",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

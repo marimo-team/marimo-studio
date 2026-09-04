@@ -1,0 +1,11 @@
+.github/workflows/e2e.yml
+  ai_agent 17,57-107
+apps/e2e/package.json
+  ai_agent 11-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6566c97120afe5dc345526f0efd7ffd9337576b5",
+  "prompts": {}
+}

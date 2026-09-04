@@ -1,0 +1,19 @@
+apps/e2e/tests/host-session-handoff.spec.ts
+  s_949640492e0581::t_b6aefe89e14739 44-53,121-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "515cf94e28f1322112b1833c351ca5ee3669749e",
+  "prompts": {},
+  "sessions": {
+    "s_949640492e0581": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0625c-4ec0-7bc2-bdbf-98937598ea56",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

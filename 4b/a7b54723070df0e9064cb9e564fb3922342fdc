@@ -1,0 +1,19 @@
+examples/__marimo__/studio/athletes/field/style.css
+  s_ce1ae10d5c03a8::t_8d146c2fb0ec75 250
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4ba7b54723070df0e9064cb9e564fb3922342fdc",
+  "prompts": {},
+  "sessions": {
+    "s_ce1ae10d5c03a8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05c0e-7cda-7671-b439-c80e9713ff25",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

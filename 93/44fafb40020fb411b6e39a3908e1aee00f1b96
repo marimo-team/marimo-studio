@@ -1,0 +1,20 @@
+development_docs/architecture/server-routing-and-security.md
+  s_949640492e0581::t_54f2b38bd3a1b6 54-55,57-59
+  s_949640492e0581::t_258140a008fafc 56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9344fafb40020fb411b6e39a3908e1aee00f1b96",
+  "prompts": {},
+  "sessions": {
+    "s_949640492e0581": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0625c-4ec0-7bc2-bdbf-98937598ea56",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

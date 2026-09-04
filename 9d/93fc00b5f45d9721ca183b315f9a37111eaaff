@@ -1,0 +1,46 @@
+packages/marimo-studio/src/marimo_studio/errors/__init__.py
+  s_3a442c2e920601::t_34c2c95ba7e28f 67,73-74,84
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_react/analyzer.ts
+  s_3a442c2e920601::t_e22c03998113f3 11-18,203,207,215,219,230,234,252,256,268,272,300,308,312,324,328,379-381,385
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/vanilla/__init__.py
+  s_3a442c2e920601::t_34c2c95ba7e28f 282-286
+packages/marimo-studio/tests/providers/test_deno_svelte.py
+  s_3a442c2e920601::t_8f7d21c3f4052b 109-119,121,125-126,194-202
+  s_3a442c2e920601::t_4bcc07b8b7c7dc 108
+  s_3a442c2e920601::t_468c34b95b5b43 120,122-124
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/deno_svelte/analyzer.ts
+  s_3a442c2e920601::t_e22c03998113f3 16-23,34,466,470,478,482,495,499,515,519,531,535,554,562,566,605-607,611
+packages/marimo-studio/tests/providers/test_vanilla.py
+  s_3a442c2e920601::t_468c34b95b5b43 87-91,101-105,114-115,117,119-122
+  s_3a442c2e920601::t_d45b2cf8b1a54e 92-100,106-113,116,118,123-124
+packages/marimo-studio/tests/providers/test_deno_react.py
+  s_3a442c2e920601::t_8f7d21c3f4052b 107-124,148,150-151,212-220
+  s_3a442c2e920601::t_468c34b95b5b43 126-131,133-147,149
+  s_3a442c2e920601::t_609596ef12da6e 125,132
+packages/marimo-studio/src/marimo_studio/view_providers/_document.py
+  s_3a442c2e920601::t_34c2c95ba7e28f 16-21,382,385,392,395,410,413,426,429
+packages/marimo-studio/tests/views/test_runtime_validation.py
+  s_3a442c2e920601::t_d33690bdc9d516 17,77-83,131-133,142-146
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/_deno/analyzers/projection-diagnostics.ts
+  s_3a442c2e920601::t_609596ef12da6e 17-20,24-26,34-36,44-46,50-51,57-58
+  s_3a442c2e920601::t_e22c03998113f3 1-16,21-23,27-33,37-43,47-49,52-56,59-66
+packages/marimo-studio/src/marimo_studio/_validation/runtime.py
+  s_3a442c2e920601::t_609596ef12da6e 249,261,274-276
+  s_3a442c2e920601::t_51443b37bbe519 229-232,237,243,260,262-273
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9d93fc00b5f45d9721ca183b315f9a37111eaaff",
+  "prompts": {},
+  "sessions": {
+    "s_3a442c2e920601": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04743-4bdd-76c2-aab1-953e5ae6216e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

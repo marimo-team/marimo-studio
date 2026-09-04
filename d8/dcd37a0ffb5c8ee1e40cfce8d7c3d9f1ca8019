@@ -1,0 +1,27 @@
+scripts/verify-dist.sh
+  s_ae58f4b15d79f2::t_7ea3284e2bb1a9 92
+uv.lock
+  ai_agent 27,1277
+pyproject.toml
+  s_ae58f4b15d79f2::t_7ea3284e2bb1a9 15
+packages/marimo-studio/pyproject.toml
+  s_ae58f4b15d79f2::t_7ea3284e2bb1a9 11,105
+packages/marimo-studio/src/marimo_studio/_release_checks/distribution_metadata.py
+  s_ae58f4b15d79f2::t_7ea3284e2bb1a9 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d8dcd37a0ffb5c8ee1e40cfce8d7c3d9f1ca8019",
+  "prompts": {},
+  "sessions": {
+    "s_ae58f4b15d79f2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0625a-4c0b-7963-9d67-6acc4c444fcb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

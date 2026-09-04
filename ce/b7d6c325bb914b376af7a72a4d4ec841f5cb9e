@@ -1,0 +1,23 @@
+packages/marimo-studio/src/marimo_studio/_filesystem/_secure_tree.py
+  s_c61c953fd9c921::t_645fd4c5f8e61c 139-148,183
+packages/marimo-studio/tests/views/test_transactions.py
+  s_c61c953fd9c921::t_d06665599bfda1 30-53
+packages/marimo-studio/tests/server/test_view_mutations.py
+  s_c61c953fd9c921::t_c3aa7c69c5d74f 559
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ceb7d6c325bb914b376af7a72a4d4ec841f5cb9e",
+  "prompts": {},
+  "sessions": {
+    "s_c61c953fd9c921": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a041f0-5a0a-7410-bae2-6241bc0182bf",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

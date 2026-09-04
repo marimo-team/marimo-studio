@@ -1,0 +1,26 @@
+packages/studio/src/features/source-editor/SourceEditor.tsx
+  s_af5d583a28e9c5::t_169a173d3a297d 58-60,62-64,66-68,70-73,75
+  s_af5d583a28e9c5::t_63c4a6615c8998 61
+  s_af5d583a28e9c5::t_d0dfd1705cf4f2 65,69,74,76,91,108-109,113,115-116,170,251,312
+  s_af5d583a28e9c5::t_450aaa1480a64d 298
+packages/studio/tests/source-pane.test.tsx
+  s_af5d583a28e9c5::t_450aaa1480a64d 335
+  s_af5d583a28e9c5::t_169a173d3a297d 339-367
+  s_af5d583a28e9c5::t_d0dfd1705cf4f2 311-334,336-338
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "59a55904510f44b3d50adcea867e8d3a5f8115b6",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

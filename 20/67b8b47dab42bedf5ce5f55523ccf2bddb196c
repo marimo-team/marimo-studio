@@ -1,0 +1,54 @@
+packages/marimo-studio/src/marimo_studio/_delivery/app.py
+  s_bbc04320cadf5a::t_0a9563dedd728a 11,21,32
+packages/marimo-studio/src/marimo_studio/_entrypoints.py
+  s_bbc04320cadf5a::t_0a9563dedd728a 9
+  s_bbc04320cadf5a::t_93e85f21e7b3c7 27
+  s_bbc04320cadf5a::t_67ed4159dab8fd 5,15,17-20
+packages/marimo-studio/src/marimo_studio/_compat/server/programmatic.py
+  s_bbc04320cadf5a::t_0a9563dedd728a 36,494-499,502,516-520,548,567-571,648,651
+packages/marimo-studio/src/marimo_studio/_server/middleware.py
+  s_bbc04320cadf5a::t_0a9563dedd728a 75,101,104,121,126,232
+packages/marimo-studio/src/marimo_studio/_server/editor_bridge.py
+  s_bbc04320cadf5a::t_0a9563dedd728a 24,45,82,189,278-283,287
+packages/marimo-studio/tests/server/test_security_policy.py
+  s_bbc04320cadf5a::t_4256d6af785f4c 143,146-147
+  s_bbc04320cadf5a::t_cfadafd5e45d63 3-6,132-142,144-145,148-155
+  s_bbc04320cadf5a::t_dbc479a425044b 94
+  s_bbc04320cadf5a::t_5ebfb89a9b5d1d 99-100
+  s_bbc04320cadf5a::t_67ed4159dab8fd 156-183
+  s_bbc04320cadf5a::t_0a9563dedd728a 1-2,7-93,95-98,101-131
+packages/marimo-studio/src/marimo_studio/_server/security.py
+  s_bbc04320cadf5a::t_5ebfb89a9b5d1d 130,137-152
+  s_bbc04320cadf5a::t_dbc479a425044b 107-109
+  s_bbc04320cadf5a::t_0a9563dedd728a 1-105,111-129,131-136
+packages/marimo-studio/src/marimo_studio/_composition.py
+  s_bbc04320cadf5a::t_0a9563dedd728a 16,43-47,153-157,221,227-231
+packages/marimo-studio/src/marimo_studio/_server/headers.py
+  s_bbc04320cadf5a::t_0a9563dedd728a 3-4,11-24
+packages/marimo-studio/tests/server/test_editor_routes.py
+  s_bbc04320cadf5a::t_0a9563dedd728a 218-240
+packages/marimo-studio/src/marimo_studio/_server/pages.py
+  s_bbc04320cadf5a::t_0a9563dedd728a 38,66,312,323,342,353,377,388,410
+packages/marimo-studio/src/marimo_studio/_server/lifecycle_handler.py
+  s_bbc04320cadf5a::t_0a9563dedd728a 29,62,67,98,108
+packages/marimo-studio/tests/server/test_editor_runtime_assets.py
+  s_bbc04320cadf5a::t_0a9563dedd728a 29,106-133
+packages/marimo-studio/src/marimo_studio/_server/ready_handler.py
+  s_bbc04320cadf5a::t_0a9563dedd728a 45,81,85,158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2067b8b47dab42bedf5ce5f55523ccf2bddb196c",
+  "prompts": {},
+  "sessions": {
+    "s_bbc04320cadf5a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06210-b348-7c13-81f3-5501a7f1794d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

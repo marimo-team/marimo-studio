@@ -1,0 +1,53 @@
+apps/e2e/tests/collaboration.spec.ts
+  s_5d3e5afc5ceae4::t_baf1d7b9d0514f 91-95,101,229,232
+apps/e2e/tests/stale-results.spec.ts
+  s_5d3e5afc5ceae4::t_5602471b17a2d0 54,56,206,212-213,222-223
+apps/e2e/tests/authoring.spec.ts
+  s_5d3e5afc5ceae4::t_431f876354a091 41,43,173,176,225,467,469,488,560,573,595
+apps/e2e/scripts/marimo_edit.py
+  s_5d3e5afc5ceae4::t_9f7a9f4315e5a3 1-34,36-46
+  s_5d3e5afc5ceae4::t_f89f2693ef5a34 35
+apps/e2e/tests/view-authoring.spec.ts
+  s_5d3e5afc5ceae4::t_baf1d7b9d0514f 219,222-237
+apps/e2e/tests/fixture.ts
+  s_5d3e5afc5ceae4::t_5174607799fb16 39,564,566-573,586
+apps/e2e/tests/history.spec.ts
+  s_5d3e5afc5ceae4::t_baf1d7b9d0514f 275,282
+apps/e2e/tests/studio-cli.ts
+  s_5d3e5afc5ceae4::t_eea17d05268709 40,58,69
+  s_5d3e5afc5ceae4::t_5174607799fb16 1-3,5-25,27-39,41-57,59-68,70-82
+  s_5d3e5afc5ceae4::t_942482d8e59e57 4,26
+apps/e2e/scripts/preparation-process.mjs
+  s_5d3e5afc5ceae4::t_affd9c459d7079 153
+  s_5d3e5afc5ceae4::t_a32e0a2942ebbe 274
+  s_5d3e5afc5ceae4::t_08d64c43523888 25-29,31,34-152,154-196,198-199,203-205,208-209,213,215,219,222-224,227-231,233-248,251,295-301,303,305,307,314-316,327-331
+apps/e2e/unit/marimo-edit.test.ts
+  s_5d3e5afc5ceae4::t_f89f2693ef5a34 52-74
+  s_5d3e5afc5ceae4::t_9f7a9f4315e5a3 1-51
+apps/e2e/tests/starter-edge-cases.spec.ts
+  s_5d3e5afc5ceae4::t_5602471b17a2d0 68,72-77,79,132,172-176,193,203-207,232-234
+  s_5d3e5afc5ceae4::t_affd9c459d7079 162
+apps/e2e/tests/view-cache-performance.spec.ts
+  s_5d3e5afc5ceae4::t_baf1d7b9d0514f 83,86,136,140
+apps/e2e/tests/reveal-starter.spec.ts
+  s_5d3e5afc5ceae4::t_baf1d7b9d0514f 10,13
+  s_5d3e5afc5ceae4::t_affd9c459d7079 12
+apps/e2e/scripts/serve.mjs
+  s_5d3e5afc5ceae4::t_9f7a9f4315e5a3 3,27-37,257
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ae8be3e0eeb0c555ddb90bad059618c10c1d4c6b",
+  "prompts": {},
+  "sessions": {
+    "s_5d3e5afc5ceae4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061e5-1e88-75a2-80ad-e82619d57701",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

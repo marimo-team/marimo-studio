@@ -1,0 +1,36 @@
+.github/workflows/ci.yml
+  s_f806f9fed90898::t_7db9feeff2a0d7 16-22,29-41,44,191,217,239
+  s_f806f9fed90898::t_e9e0e4c7919b6e 23-25,27-28,45,75-86,88-117,122-145,149-174,192,218,240
+  s_f806f9fed90898::t_fc083bb0899aec 26,261-264
+.github/workflows/e2e.yml
+  s_f806f9fed90898::t_341f32a09cd335 23-27,44,90-105,108-116,118-135,137,141,148,156-172,177-180,213,217,221
+  s_f806f9fed90898::t_e5e2d0efb3eb5c 51,106-107,117
+  s_f806f9fed90898::t_7db9feeff2a0d7 16-22,28-40,43,176
+.github/workflows/pages.yml
+  s_f806f9fed90898::t_17779aa856d085 62-65
+  s_f806f9fed90898::t_126b8e15c8d555 17-61,66-96,98-99
+.github/filters.yml
+  s_f806f9fed90898::t_716dcc642bfe3c 123-124,130,132,134
+  s_f806f9fed90898::t_17779aa856d085 46,61-63,66,90-93,125-128,173,196,206,210
+  s_f806f9fed90898::t_656db2b488405a 1-45,47-60,64-65,67-89,94-121,133,135-172,174-182,203-205,207-209,211-229,231-243,245-249,251-255,257-260,262-268
+  s_f806f9fed90898::t_fc083bb0899aec 183-195,197-202
+  s_f806f9fed90898::t_3cce7139d1a5af 230,244,250,261
+  s_f806f9fed90898::t_7db9feeff2a0d7 122,129,131
+  s_f806f9fed90898::t_0e192b70f347fb 256
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7f84dcfe0bd64b5220fffaed08767405a83aed38",
+  "prompts": {},
+  "sessions": {
+    "s_f806f9fed90898": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a060c6-2762-7270-819c-b0954d038c89",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

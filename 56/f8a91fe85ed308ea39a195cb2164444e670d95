@@ -1,0 +1,32 @@
+development_docs/architecture/product-and-workspace.md
+  s_949640492e0581::t_ec4e1e7dc5ae6b 39-45
+docs/reference/configuration.md
+  s_949640492e0581::t_ec4e1e7dc5ae6b 3,18-54,71
+development_docs/architecture/browser-runtime-and-authoring.md
+  s_949640492e0581::t_bb7f463c0297ed 339-341
+  s_949640492e0581::t_ec4e1e7dc5ae6b 336-338,342
+docs/reference/index.md
+  s_949640492e0581::t_ec4e1e7dc5ae6b 13-22
+development_docs/architecture/server-routing-and-security.md
+  s_949640492e0581::t_ec4e1e7dc5ae6b 4-6,19-22,34,45-48,54-59,70,98-103,107
+  s_949640492e0581::t_2fd7ee4c46ef5d 97,104-106,108-110
+development_docs/architecture/marimo-integration.md
+  s_949640492e0581::t_ec4e1e7dc5ae6b 74,76
+  s_949640492e0581::t_2fd7ee4c46ef5d 75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "56f8a91fe85ed308ea39a195cb2164444e670d95",
+  "prompts": {},
+  "sessions": {
+    "s_949640492e0581": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0625c-4ec0-7bc2-bdbf-98937598ea56",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

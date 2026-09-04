@@ -1,0 +1,21 @@
+.gitattributes
+  s_af5d583a28e9c5::t_7a18d82b3f7e8e 1
+apps/browser/license-texts/2c5e86fa106ba6a35652db103b937f0a9d96887b5d718a9eb956379c2ce8c66b.txt
+  s_af5d583a28e9c5::t_636aef76a5df19 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b6566d5d9c05655ddc028f0c401c4cca19d4e144",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+apps/e2e/tests/vanilla-local-sources.spec.ts
+  s_af5d583a28e9c5::t_eb72e3f65a6952 31-33
+  s_af5d583a28e9c5::t_8cf963f5435446 41-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4b133bb08c5f5e3f99294339ccde85c1bacadc77",
+  "prompts": {},
+  "sessions": {
+    "s_af5d583a28e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05964-915c-71f1-b86a-af276af15ff3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
