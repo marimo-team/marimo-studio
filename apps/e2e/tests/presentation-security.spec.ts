@@ -119,7 +119,10 @@ test("embeds Studio through an authenticated Marimo session", async ({ browser }
   }
 });
 
-test("keeps standalone navigation inside server-authored route authority", async ({ page }) => {
+test("keeps standalone navigation inside server-authored route authority", async ({
+  browserDiagnostics,
+  page,
+}) => {
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   const opened = page.context().waitForEvent("page");
@@ -177,6 +180,13 @@ test("keeps standalone navigation inside server-authored route authority", async
     const navigated = popout.waitForURL(
       (url) => url.pathname.endsWith("/dashboard/") && url.searchParams.get("region") === "apac",
     );
+    const supersededPresentation = browserDiagnostics.expectRequestAbort({
+      origin: studioOrigin,
+      method: "GET",
+      path: /^\/_marimo-studio\/presentation\/[^/]+\/dashboard\/$/,
+      count: 1,
+      required: false,
+    });
     await navigate("dashboard", `?${privateQuery}`, "#proof");
     await navigated;
 
@@ -190,6 +200,7 @@ test("keeps standalone navigation inside server-authored route authority", async
       await presentation.locator("html").evaluate(() => globalThis.__MARIMO_MOUNT_CONFIG__.runtime),
     ).toBe("server");
     expect(target.hash).toBe("#proof");
+    await recoverRequestAbort(supersededPresentation);
   } finally {
     await popout.close();
   }

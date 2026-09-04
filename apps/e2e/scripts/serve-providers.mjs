@@ -191,6 +191,8 @@ const prepare = async () => {
       providerNotebookPath,
       "--output",
       output,
+      "--runtime",
+      "wasm",
     ]);
   }
   preparation.requireActive();

@@ -68,6 +68,17 @@ test("preserves an untitled native session through save and Studio entry", async
     await page.goto(`${server.serverUrl}/?file=__new__s_host01`);
     const sessionId = (await instantiated).request().headers()["marimo-session-id"];
     expect(sessionId).toMatch(/^s_[a-z0-9]{6}$/);
+    const resumedNativeSession = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        response.request().method() === "GET" &&
+        url.pathname === "/" &&
+        url.searchParams.get("file") === "host-save.py" &&
+        url.searchParams.get("session_id") === sessionId &&
+        !url.searchParams.has("marimo_studio_handoff") &&
+        response.ok()
+      );
+    });
 
     const cell = page.locator("[data-cell-id]").first();
     await cell.getByRole("textbox").fill("saved = True\nsaved");
@@ -78,6 +89,7 @@ test("preserves an untitled native session through save and Studio entry", async
     await page.getByPlaceholder("filename").fill("host-save.py");
     await page.getByText("Save as: host-save.py", { exact: true }).click();
 
+    await resumedNativeSession;
     await expect(page).toHaveURL(`${server.serverUrl}/?file=host-save.py`);
     await expect(page.locator("#marimo-studio-host")).toHaveCount(0);
     await expect(page.locator(".cm-content").first()).toContainText("saved = True");

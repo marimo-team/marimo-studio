@@ -319,6 +319,5 @@ test("restores a value host after its notebook value returns", async ({
       staleProjectionReads.recovered();
       pendingRuntimeSync.recovered();
     }
-    await stopServer(server.process);
   }
 });
