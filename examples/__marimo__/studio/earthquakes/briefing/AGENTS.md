@@ -22,11 +22,13 @@ metrics and the daily activity view.
 frequency–magnitude plot, and magnitude-to-impact scatter plot.
 `src/briefing-data.ts` owns projected value types and pure display formatting.
 
-The deck mounts `magnitude_reference_control`, `magnitude_comparison`,
-`event_controls`, `frequency_threshold_control`, and
-`frequency_magnitude_relation` as native notebook cells. Keep `seismic_analysis`
-as the atomic JSON projection so the charts and readouts receive one coherent
-notebook revision. Keep slide-specific teaching copy in `BriefingSlides.tsx`.
+The deck consumes `seismic_analysis` as one atomic JSON projection. The
+notebook supplies the complete catalog, magnitude-comparison relation, and
+frequency relation. React owns the lesson's magnitude, catalog, and frequency
+controls. It selects notebook-computed rows and filters the projected event
+records for presentation, so every interaction is available in Server,
+WebAssembly, and Zero-Python delivery. Keep slide-specific teaching copy in
+`BriefingSlides.tsx`.
 
 ## Use Reveal
 
@@ -64,9 +66,10 @@ epicenters and source records, not tectonic boundaries.
 
 ## Validate the presentation
 
-Build through Marimo Studio. Export the WebAssembly site and exercise all three
-Marimo controls in the browser. Check horizontal navigation, fragments,
-Auto-Animate, overview mode, progress, slide numbering, and keyboard focus.
+Build through Marimo Studio. Export the Zero-Python and WebAssembly sites.
+Exercise both lesson sliders and the catalog controls in the browser. Check
+horizontal navigation, fragments, Auto-Animate, overview mode, progress, slide
+numbering, and keyboard focus.
 
 Measure the present slide and its visible descendants at 1440×1000, 1280×720,
 and 390×844. Confirm the rendered slide retains a 16:9 ratio and the same

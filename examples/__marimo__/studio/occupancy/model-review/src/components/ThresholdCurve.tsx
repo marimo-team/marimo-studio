@@ -39,7 +39,7 @@ export const ThresholdCurve = ({
   showRecall = true,
 }: {
   current?: number;
-  metrics: ThresholdMetric[];
+  metrics: readonly ThresholdMetric[];
   showRecall?: boolean;
 }) => (
   <div

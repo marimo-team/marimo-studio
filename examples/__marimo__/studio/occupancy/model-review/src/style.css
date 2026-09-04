@@ -202,6 +202,39 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
   animation: model-copy-pulse 1.35s ease-in-out infinite;
 }
 
+.threshold-control {
+  display: grid;
+  min-width: 0;
+  gap: 0.7rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.threshold-control > span {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.threshold-control strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.threshold-control output {
+  font-family: var(--mono-font);
+  font-variant-numeric: tabular-nums;
+}
+
+.threshold-control input {
+  width: 100%;
+  accent-color: var(--moss);
+}
+
 @keyframes model-ledger-pulse {
   0%,
   100% {
@@ -431,6 +464,11 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
   .control-strip,
   .control-strip-controls {
     grid-template-columns: 1fr;
+  }
+
+  #marimo-studio-cell-analysis_scope_control marimo-dropdown::part(control) {
+    width: calc(100% - 6.5rem);
+    min-width: 0;
   }
 }
 

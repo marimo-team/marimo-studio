@@ -7,17 +7,20 @@ this starter.
 ## Project intent
 
 Build a concise model-review page for analysts and facilities managers. Use
-Recharts for the threshold curve, mount the native `analysis_scope_control` and
-`threshold_control` cells, and consume the notebook-owned
-`occupancy_analysis` snapshot. Keep the page readable as a printable review
-artifact. Follow the Parchment Evidence Ledger in `DESIGN.md`, and label the
-threshold metrics as in-sample training evidence.
+Recharts for the threshold curve, mount the native `analysis_scope_control`
+cell, and consume the notebook-owned `occupancy_analysis` snapshot. The
+snapshot contains the complete finite threshold sweep for the selected scope.
+Keep threshold selection in React so changing the operating point selects
+notebook-computed evidence immediately. Keep the page readable as a printable
+review artifact. Follow the Parchment Evidence Ledger in `DESIGN.md`, and label
+the threshold metrics as in-sample training evidence.
 
 ## Use the supplied Studio integration
 
-`src/App.tsx` mounts `analysis_scope_control` and `threshold_control`, then
-observes `occupancy_analysis`. React owns the scope readout, threshold chart,
-confusion counts, and error-evidence table.
+`src/App.tsx` mounts `analysis_scope_control`, observes `occupancy_analysis`,
+and selects a threshold from its `model.evidence` rows. React owns the scope
+readout, threshold control, threshold chart, confusion counts, and
+error-evidence table.
 
 - `src/marimo-studio.d.ts` types the Studio custom elements and attributes for
   React. Keep the reference at the top of `src/App.tsx`. Extend application

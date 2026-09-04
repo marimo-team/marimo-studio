@@ -246,53 +246,6 @@ textarea {
   line-height: 1.25;
 }
 
-/* Native Marimo outputs */
-
-marimo-cell {
-  display: block;
-  min-width: 0;
-  color: var(--ink);
-  text-align: left;
-  --marimo-cell-font: var(--sans);
-  --marimo-cell-heading-font: var(--serif);
-  --marimo-cell-monospace-font: var(--mono);
-  --marimo-cell-background: transparent;
-  --marimo-cell-foreground: var(--ink);
-  --marimo-cell-surface: var(--paper);
-  --marimo-cell-muted: var(--bone);
-  --marimo-cell-muted-foreground: var(--muted);
-  --marimo-cell-border-color: var(--line);
-  --marimo-cell-accent: var(--cobalt);
-  --marimo-cell-radius: 2px;
-  --marimo-cell-shadow: none;
-}
-
-marimo-cell[name="magnitude_reference_control"] {
-  --marimo-cell-skeleton-height: 5rem;
-}
-
-marimo-cell[name="frequency_threshold_control"] {
-  --marimo-cell-skeleton-height: 4rem;
-}
-
-marimo-cell[name="magnitude_comparison"],
-marimo-cell[name="frequency_magnitude_relation"] {
-  --marimo-cell-skeleton-height: 10rem;
-}
-
-marimo-cell[name="event_controls"] {
-  --marimo-cell-skeleton-height: 8rem;
-}
-
-marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]):empty::before {
-  content: "";
-  display: block;
-  min-height: var(--marimo-cell-skeleton-height, 6rem);
-  border: 1px solid var(--line);
-  background: var(--bone);
-  animation: skeleton-pulse 1.25s ease-in-out infinite;
-}
-
 /* Cover */
 
 .briefing-slide.cover {
@@ -843,8 +796,86 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
   align-self: center;
 }
 
-.notebook-lab marimo-cell + marimo-cell {
-  padding-top: 8px;
+.lesson-range {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px 18px;
+  align-items: center;
+}
+
+.lesson-range output {
+  min-width: 4.6rem;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 34px;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.lesson-range input {
+  width: 100%;
+  accent-color: var(--cobalt);
+}
+
+.lesson-range input:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 5px;
+}
+
+.lesson-range-bounds {
+  display: flex;
+  grid-column: 2;
+  justify-content: space-between;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.lesson-range-compact output {
+  font-size: 27px;
+}
+
+.lesson-select {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.lesson-select > span {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.lesson-select select {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+.lesson-select select:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 3px;
+}
+
+.lesson-equations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-family: var(--serif);
+  font-size: 20px;
 }
 
 .ratio-proof {
@@ -1117,10 +1148,6 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
   gap: 14px;
   padding: 22px 24px;
   background: var(--bone);
-}
-
-.selection-controls marimo-cell {
-  padding-bottom: 8px;
 }
 
 .selection-summary {

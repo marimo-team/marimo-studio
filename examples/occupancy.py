@@ -9,7 +9,7 @@
 # default = "monitor"
 # preserve_session = false
 # runtime = "server"
-# runtimes = ["server", "wasm"]
+# runtimes = ["server", "wasm", "zero-python"]
 # show_cell_logs = false
 #
 # [tool.marimo-studio.cells]
@@ -118,6 +118,28 @@ def select_observations(analysis_scope, pl, readings):
     return scope_label, scoped_readings
 
 
+@app.cell
+def summarize_scope(pl, scope_label, scoped_readings):
+    _occupied_readings = scoped_readings.select(pl.col("Occupancy").sum()).item()
+    _reading_interval_minutes = scoped_readings.select(
+        pl.col("date").diff().dt.total_seconds().median() / 60
+    ).item()
+    scope_summary = {
+        "room": "Room 01",
+        "scope_label": scope_label,
+        "period_start": scoped_readings["date"].min().strftime("%Y-%m-%d %H:%M"),
+        "period_end": scoped_readings["date"].max().strftime("%Y-%m-%d %H:%M"),
+        "observations": scoped_readings.height,
+        "occupied": _occupied_readings,
+        "occupancy_rate": scoped_readings.select(pl.col("Occupancy").mean()).item(),
+        "reading_interval_minutes": float(_reading_interval_minutes),
+        "estimated_occupied_hours": float(
+            _occupied_readings * _reading_interval_minutes / 60
+        ),
+    }
+    return (scope_summary,)
+
+
 @app.cell(hide_code=True)
 def monitor_context(mo):
     mo.md("""
@@ -141,7 +163,7 @@ def metric_control(mo):
 
 
 @app.cell
-def sensor_analysis(metric, pl, scope_label, scoped_readings):
+def sensor_analysis(metric, pl, scope_summary, scoped_readings):
     selected_sensor_series = (
         scoped_readings.select(
             "date",
@@ -166,22 +188,8 @@ def sensor_analysis(metric, pl, scope_label, scoped_readings):
         .select("date", "Occupancy", "metric", "value", "baseline", "anomaly")
     )
     current_window = selected_sensor_series.tail(180)
-    _occupied_readings = scoped_readings.select(pl.col("Occupancy").sum()).item()
-    _reading_interval_minutes = scoped_readings.select(
-        pl.col("date").diff().dt.total_seconds().median() / 60
-    ).item()
     occupancy_summary = {
-        "room": "Room 01",
-        "scope_label": scope_label,
-        "period_start": scoped_readings["date"].min().strftime("%Y-%m-%d %H:%M"),
-        "period_end": scoped_readings["date"].max().strftime("%Y-%m-%d %H:%M"),
-        "observations": scoped_readings.height,
-        "occupied": _occupied_readings,
-        "occupancy_rate": scoped_readings.select(pl.col("Occupancy").mean()).item(),
-        "reading_interval_minutes": float(_reading_interval_minutes),
-        "estimated_occupied_hours": float(
-            _occupied_readings * _reading_interval_minutes / 60
-        ),
+        **scope_summary,
         "metric": metric.value,
         "anomalies": selected_sensor_series.filter(pl.col("anomaly")).height,
     }
@@ -314,7 +322,7 @@ def threshold_control(mo):
 
 
 @app.cell
-def score_model(pl, scoped_readings, threshold):
+def model_sweep(pl, scoped_readings):
     light_max = scoped_readings.select(pl.col("Light").quantile(0.99)).item()
     co2_min = scoped_readings["CO2"].min()
     co2_max = scoped_readings.select(pl.col("CO2").quantile(0.99)).item()
@@ -348,18 +356,69 @@ def score_model(pl, scoped_readings, threshold):
             "false_negative": _fn,
         }
 
+    def error_evidence(_threshold):
+        _prediction_rows = (
+            scored.with_columns(
+                (pl.col("score") >= _threshold).cast(pl.Int8).alias("predicted")
+            )
+            .with_columns(
+                pl.when((pl.col("predicted") == 1) & (pl.col("Occupancy") == 1))
+                .then(pl.lit("true positive"))
+                .when((pl.col("predicted") == 0) & (pl.col("Occupancy") == 0))
+                .then(pl.lit("true negative"))
+                .when((pl.col("predicted") == 1) & (pl.col("Occupancy") == 0))
+                .then(pl.lit("false positive"))
+                .otherwise(pl.lit("false negative"))
+                .cast(pl.Categorical)
+                .alias("outcome")
+            )
+            .select(
+                "date",
+                "Temperature",
+                "Humidity",
+                "Light",
+                "CO2",
+                "Occupancy",
+                "score",
+                "predicted",
+                "outcome",
+            )
+        )
+        return (
+            _prediction_rows.filter(pl.col("Occupancy") != pl.col("predicted"))
+            .with_columns(
+                (pl.col("score") - _threshold).abs().alias("distance"),
+                pl.col("date").dt.strftime("%Y-%m-%dT%H:%M:%S"),
+            )
+            .sort("distance", descending=True)
+        )
+
     thresholds = [round(0.1 + 0.05 * index, 2) for index in range(17)]
     threshold_metrics = pl.DataFrame(
         [evaluate(_threshold) for _threshold in thresholds]
     )
+    model_evidence = [
+        {
+            **evaluate(_threshold),
+            "errors": error_evidence(_threshold).head(14).to_dicts(),
+        }
+        for _threshold in thresholds
+    ]
+    model_normalization = {
+        "light_min": 0.0,
+        "light_max": float(light_max),
+        "co2_min": float(co2_min),
+        "co2_max": float(co2_max),
+    }
+    threshold_metrics
+    return model_evidence, model_normalization, scored, threshold_metrics
+
+
+@app.cell
+def selected_model(model_normalization, pl, scored, threshold):
     model_summary = {
-        **evaluate(threshold.value),
-        "normalization": {
-            "light_min": 0.0,
-            "light_max": float(light_max),
-            "co2_min": float(co2_min),
-            "co2_max": float(co2_max),
-        },
+        "threshold": threshold.value,
+        "normalization": model_normalization,
     }
     prediction_rows = (
         scored.with_columns(
@@ -395,8 +454,30 @@ def score_model(pl, scoped_readings, threshold):
         )
         .sort("distance", descending=True)
     )
-    threshold_metrics
-    return model_summary, ranked_model_errors, threshold_metrics
+    _true_positive = prediction_rows.filter(
+        (pl.col("predicted") == 1) & (pl.col("Occupancy") == 1)
+    ).height
+    _true_negative = prediction_rows.filter(
+        (pl.col("predicted") == 0) & (pl.col("Occupancy") == 0)
+    ).height
+    _false_positive = prediction_rows.filter(
+        (pl.col("predicted") == 1) & (pl.col("Occupancy") == 0)
+    ).height
+    _false_negative = prediction_rows.filter(
+        (pl.col("predicted") == 0) & (pl.col("Occupancy") == 1)
+    ).height
+    model_summary.update(
+        {
+            "accuracy": (_true_positive + _true_negative) / prediction_rows.height,
+            "precision": _true_positive / max(_true_positive + _false_positive, 1),
+            "recall": _true_positive / max(_true_positive + _false_negative, 1),
+            "true_positive": _true_positive,
+            "true_negative": _true_negative,
+            "false_positive": _false_positive,
+            "false_negative": _false_negative,
+        }
+    )
+    return model_summary, ranked_model_errors
 
 
 @app.cell
@@ -405,21 +486,17 @@ def occupancy_analysis_snapshot(
     daily_occupancy_peak,
     daily_room_profile,
     hourly_room_profile,
-    model_summary,
-    occupancy_summary,
-    pl,
-    ranked_model_errors,
+    model_evidence,
+    model_normalization,
     sensor_separation_peak,
     sensor_profiles,
-    threshold_metrics,
+    scope_summary,
 ):
     occupancy_analysis = {
         "selection": {
             "scope": analysis_scope.value,
-            "metric": occupancy_summary["metric"],
-            "threshold": model_summary["threshold"],
         },
-        "summary": occupancy_summary,
+        "summary": scope_summary,
         "hourly_room_profile": hourly_room_profile.to_dicts(),
         "daily_room_profile": daily_room_profile.to_dicts(),
         "sensor_profiles": sensor_profiles.to_dicts(),
@@ -428,11 +505,9 @@ def occupancy_analysis_snapshot(
             "widest_sensor_separation": sensor_separation_peak,
         },
         "model": {
-            **model_summary,
-            "curve": threshold_metrics.to_dicts(),
-            "errors": ranked_model_errors.with_columns(
-                pl.col("date").dt.strftime("%Y-%m-%dT%H:%M:%S")
-            ).to_dicts(),
+            "default_threshold": 0.5,
+            "normalization": model_normalization,
+            "evidence": model_evidence,
         },
     }
     occupancy_analysis["summary"]

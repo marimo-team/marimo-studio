@@ -478,8 +478,34 @@
       --marimo-cell-skeleton-height: 4rem;
     }
 
-    marimo-output[value="selected_roster"] {
-      --marimo-cell-skeleton-height: 28rem;
+    .roster-table {
+      min-height: 28rem;
+      margin-top: 2rem;
+      overflow-x: auto;
+    }
+
+    .roster-table table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .roster-table th,
+    .roster-table td {
+      padding: 0.7rem 0.8rem;
+      border-bottom: 1px solid #d8d5cb;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .roster-table th {
+      position: sticky;
+      top: 0;
+      background: var(--surface);
+      font-family: var(--display-font);
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
 
     :where([mo-value]):is(:not([data-state]), [data-state="connecting"], [data-state="loading"]):empty::before,
@@ -692,7 +718,13 @@
               <span>Medal leaders first.</span>
             </p>
           </div>
-          <marimo-output value="selected_roster"></marimo-output>
+          <div
+            class="roster-table"
+            id="roster-table"
+            data-state="loading"
+            aria-busy="true"
+          ></div>
+          <span id="roster-data" hidden mo-value="selected_roster"></span>
         </article>
 
         <article class="ranking-panel" aria-labelledby="sports-title">
@@ -741,12 +773,42 @@
     <script>
     const sportsSource = document.querySelector("#top-sports-data");
     const sportsChart = document.querySelector("#sports-chart");
+    const rosterSource = document.querySelector("#roster-data");
+    const rosterTable = document.querySelector("#roster-table");
     const countFormat = new Intl.NumberFormat("en-US");
     const chartNode = (tag, className, text) => {
       const node = document.createElement(tag);
       if (className) node.className = className;
       if (text !== undefined) node.textContent = text;
       return node;
+    };
+    const renderRoster = (value) => {
+      const rows = typeof value?.toArray === "function" ? value.toArray() : [];
+      const columns = [
+        ["name", "Athlete"],
+        ["nationality", "Nation"],
+        ["sport", "Sport"],
+        ["sex", "Sex"],
+        ["age", "Age"],
+        ["gold", "Gold"],
+        ["silver", "Silver"],
+        ["bronze", "Bronze"],
+      ];
+      const table = chartNode("table");
+      const head = chartNode("thead");
+      const headRow = chartNode("tr");
+      columns.forEach(([, label]) => headRow.append(chartNode("th", "", label)));
+      head.append(headRow);
+      const body = chartNode("tbody");
+      rows.forEach((row) => {
+        const tableRow = chartNode("tr");
+        columns.forEach(([key]) => tableRow.append(chartNode("td", "", row[key] ?? "")));
+        body.append(tableRow);
+      });
+      table.append(head, body);
+      rosterTable.dataset.state = "ready";
+      rosterTable.removeAttribute("aria-busy");
+      rosterTable.replaceChildren(table);
     };
     const chartMessage = (text, role) => {
       const message = chartNode("p", "chart-message", text);
@@ -835,6 +897,17 @@
     });
     if (sportsSource.marimoValue !== undefined) {
       renderSportsChart(sportsSource.marimoValue);
+    }
+    rosterSource.addEventListener("marimo-value-updated", (event) => {
+      renderRoster(event.detail.value);
+    });
+    rosterSource.addEventListener("marimo-value-error", () => {
+      rosterTable.dataset.state = "error";
+      rosterTable.removeAttribute("aria-busy");
+      rosterTable.textContent = "The selected roster could not be loaded.";
+    });
+    if (rosterSource.marimoValue !== undefined) {
+      renderRoster(rosterSource.marimoValue);
     }
     </script>
   </body>

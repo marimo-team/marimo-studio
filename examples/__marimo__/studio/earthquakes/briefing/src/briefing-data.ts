@@ -55,6 +55,7 @@ export type MagnitudeScaling = {
 
 export type FrequencyPoint = {
   events: number;
+  fitted_events: number;
   fitted_log10_events: number;
   log10_events: number;
   magnitude: number;
@@ -69,22 +70,18 @@ export type FrequencyModel = {
   r_squared: number;
 };
 
-export type FrequencySelection = {
-  fitted_events: number;
-  magnitude: number;
-  observed_events: number;
-};
-
 export type SeismicAnalysis = {
   activity: DailyActivity[];
   events: EarthquakeEvent[];
   frequency: {
     curve: FrequencyPoint[];
+    default_magnitude: number;
     model: FrequencyModel;
-    selected: FrequencySelection;
   };
-  magnitude_scaling: MagnitudeScaling;
-  selection: EventSummary;
+  magnitude: {
+    comparisons: MagnitudeScaling[];
+    default_reference: number;
+  };
   strongest: EarthquakeEvent[];
   weekly: WeeklySummary;
 };
@@ -98,8 +95,12 @@ export type BriefingModel = {
   peakActivity?: DailyActivity;
   peakKey?: string;
   primaryEvent?: EarthquakeEvent;
-  selectedEvents: EarthquakeEvent[];
   strongest: EarthquakeEvent[];
+};
+
+export type CatalogSelection = {
+  events: EarthquakeEvent[];
+  summary: EventSummary;
 };
 
 export const integer = new Intl.NumberFormat("en-US");
@@ -190,13 +191,72 @@ export const feltLabel = (value: number | null) =>
 export const formatRatio = (value: number) =>
   value >= 10_000 ? compact.format(value) : integer.format(Math.round(value));
 
+export const magnitudeScalingAt = (
+  values: readonly MagnitudeScaling[],
+  reference: number,
+) =>
+  values.reduce<MagnitudeScaling | undefined>((nearest, value) => {
+    if (nearest === undefined) return value;
+    return Math.abs(value.reference_magnitude - reference) <
+        Math.abs(nearest.reference_magnitude - reference)
+      ? value
+      : nearest;
+  }, undefined);
+
+export const frequencyPointAt = (
+  values: readonly FrequencyPoint[],
+  magnitude: number,
+) =>
+  values.reduce<FrequencyPoint | undefined>((nearest, value) => {
+    if (nearest === undefined) return value;
+    return Math.abs(value.magnitude - magnitude) <
+        Math.abs(nearest.magnitude - magnitude)
+      ? value
+      : nearest;
+  }, undefined);
+
+export const selectCatalog = (
+  events: readonly EarthquakeEvent[],
+  minimumMagnitude: number,
+  status: string,
+): CatalogSelection => {
+  const selected = events.filter((event) =>
+    event.magnitude >= minimumMagnitude &&
+    (status === "All statuses" || event.status === status)
+  );
+  const selectedIds = new Set(selected.map((event) => event.id));
+  const summary: EventSummary = {
+    events: selected.length,
+    felt_reports: selected.reduce(
+      (total, event) => total + (event.felt ?? 0),
+      0,
+    ),
+    maximum_magnitude: selected.reduce(
+      (maximum, event) => Math.max(maximum, event.magnitude),
+      0,
+    ),
+    minimum_magnitude: minimumMagnitude,
+    status,
+    tsunami_flags: selected.reduce(
+      (total, event) => total + Number(event.tsunami),
+      0,
+    ),
+  };
+  return {
+    events: events.map((event) => ({
+      ...event,
+      selected: selectedIds.has(event.id),
+    })),
+    summary,
+  };
+};
+
 export const createBriefingModel = (
   analysis?: SeismicAnalysis,
 ): BriefingModel => {
   const activity = analysis?.activity ?? [];
   const events = analysis?.events ?? [];
   const strongest = analysis?.strongest.slice(0, 6) ?? [];
-  const selectedEvents = events.filter((event) => event.selected);
   const peakActivity = activity.length === 0
     ? undefined
     : activity.reduce((peak, row) => row.events > peak.events ? row : peak);
@@ -213,7 +273,6 @@ export const createBriefingModel = (
     peakActivity,
     peakKey: peakActivity ? String(peakActivity.day) : undefined,
     primaryEvent: strongest[0],
-    selectedEvents,
     strongest,
   };
 };

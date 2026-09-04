@@ -10,7 +10,7 @@
 # default = "story"
 # preserve_session = false
 # runtime = "server"
-# runtimes = ["server", "wasm"]
+# runtimes = ["server", "wasm", "zero-python"]
 # show_cell_logs = false
 #
 # [tool.marimo-studio.cells]
@@ -180,17 +180,33 @@ def magnitude_reference_control(events, mo):
 
 
 @app.cell
-def magnitude_comparison(comparison_magnitude, events, mo):
-    _reference = float(comparison_magnitude.value)
+def magnitude_reference_values(events):
+    _minimum = 2.5
     _maximum = float(events["magnitude"].max())
-    _difference = _maximum - _reference
-    magnitude_scaling = {
-        "reference_magnitude": _reference,
-        "maximum_magnitude": _maximum,
-        "difference": _difference,
-        "amplitude_ratio": 10**_difference,
-        "energy_ratio": 10 ** (1.5 * _difference),
-    }
+    _steps = int(round((_maximum - _minimum) * 10))
+    magnitude_comparisons = []
+    for _step in range(_steps + 1):
+        _reference = round(_minimum + 0.1 * _step, 1)
+        _difference = _maximum - _reference
+        magnitude_comparisons.append(
+            {
+                "reference_magnitude": _reference,
+                "maximum_magnitude": _maximum,
+                "difference": _difference,
+                "amplitude_ratio": 10**_difference,
+                "energy_ratio": 10 ** (1.5 * _difference),
+            }
+        )
+    return (magnitude_comparisons,)
+
+
+@app.cell
+def magnitude_comparison(comparison_magnitude, magnitude_comparisons, mo):
+    _reference = float(comparison_magnitude.value)
+    magnitude_scaling = min(
+        magnitude_comparisons,
+        key=lambda _row: abs(_row["reference_magnitude"] - _reference),
+    )
     mo.vstack(
         [
             mo.md(r"""
@@ -201,7 +217,8 @@ def magnitude_comparison(comparison_magnitude, events, mo):
             \]
             """),
             mo.md(f"""
-            Comparing **M{_maximum:.1f}** with **M{_reference:.1f}** gives
+            Comparing **M{magnitude_scaling["maximum_magnitude"]:.1f}** with
+            **M{magnitude_scaling["reference_magnitude"]:.1f}** gives
             **{magnitude_scaling["amplitude_ratio"]:,.0f}×** the recorded
             amplitude and approximately
             **{magnitude_scaling["energy_ratio"]:,.0f}×** the released energy.
@@ -307,32 +324,25 @@ def frequency_magnitude_relation(events, math, mo, pl):
             )
 
     _fit_rows = [
-        _row
-        for _row in _rows
-        if _row["magnitude"] >= 3.0 and _row["events"] >= 5
+        _row for _row in _rows if _row["magnitude"] >= 3.0 and _row["events"] >= 5
     ]
     _mean_magnitude = sum(_row["magnitude"] for _row in _fit_rows) / len(_fit_rows)
     _mean_log_count = sum(_row["log10_events"] for _row in _fit_rows) / len(_fit_rows)
-    _variance = sum(
-        (_row["magnitude"] - _mean_magnitude) ** 2 for _row in _fit_rows
+    _variance = sum((_row["magnitude"] - _mean_magnitude) ** 2 for _row in _fit_rows)
+    _slope = (
+        sum(
+            (_row["magnitude"] - _mean_magnitude)
+            * (_row["log10_events"] - _mean_log_count)
+            for _row in _fit_rows
+        )
+        / _variance
     )
-    _slope = sum(
-        (_row["magnitude"] - _mean_magnitude)
-        * (_row["log10_events"] - _mean_log_count)
-        for _row in _fit_rows
-    ) / _variance
     _intercept = _mean_log_count - _slope * _mean_magnitude
     _residual = sum(
-        (
-            _row["log10_events"]
-            - (_intercept + _slope * _row["magnitude"])
-        )
-        ** 2
+        (_row["log10_events"] - (_intercept + _slope * _row["magnitude"])) ** 2
         for _row in _fit_rows
     )
-    _total = sum(
-        (_row["log10_events"] - _mean_log_count) ** 2 for _row in _fit_rows
-    )
+    _total = sum((_row["log10_events"] - _mean_log_count) ** 2 for _row in _fit_rows)
     frequency_model = {
         "intercept": _intercept,
         "b_value": -_slope,
@@ -341,11 +351,17 @@ def frequency_magnitude_relation(events, math, mo, pl):
         "fit_maximum": _fit_rows[-1]["magnitude"],
         "fit_observations": len(_fit_rows),
     }
-    magnitude_exceedance = pl.DataFrame(_rows).with_columns(
-        (
-            pl.lit(frequency_model["intercept"])
-            - pl.lit(frequency_model["b_value"]) * pl.col("magnitude")
-        ).alias("fitted_log10_events")
+    magnitude_exceedance = (
+        pl.DataFrame(_rows)
+        .with_columns(
+            (
+                pl.lit(frequency_model["intercept"])
+                - pl.lit(frequency_model["b_value"]) * pl.col("magnitude")
+            ).alias("fitted_log10_events")
+        )
+        .with_columns(
+            (pl.lit(10.0) ** pl.col("fitted_log10_events")).alias("fitted_events")
+        )
     )
     mo.vstack(
         [
@@ -390,7 +406,7 @@ def frequency_threshold_summary(frequency_threshold, magnitude_exceedance, mo):
     frequency_selection = {
         "magnitude": float(_point["magnitude"]),
         "observed_events": int(_point["events"]),
-        "fitted_events": 10 ** float(_point["fitted_log10_events"]),
+        "fitted_events": float(_point["fitted_events"]),
     }
     mo.md(f"""
     At **M{frequency_selection["magnitude"]:.1f}+**, the catalog contains
@@ -403,19 +419,15 @@ def frequency_threshold_summary(frequency_threshold, magnitude_exceedance, mo):
 @app.cell
 def catalog_analysis(
     daily_activity,
-    event_summary,
     events,
-    filtered_events,
     frequency_model,
-    frequency_selection,
+    magnitude_comparisons,
     magnitude_exceedance,
-    magnitude_scaling,
     mo,
     pl,
     strongest_events,
     weekly_summary,
 ):
-    _selected_ids = filtered_events["id"].to_list()
     _event_locations = (
         events.select(
             "id",
@@ -432,27 +444,27 @@ def catalog_analysis(
         )
         .with_columns(
             pl.col("time").dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            pl.col("id").is_in(_selected_ids).alias("selected"),
+            pl.lit(False).alias("selected"),
         )
         .sort("magnitude", descending=True)
     )
-    _daily_rows = daily_activity.with_columns(
-        pl.col("day").cast(pl.String)
-    ).to_dicts()
+    _daily_rows = daily_activity.with_columns(pl.col("day").cast(pl.String)).to_dicts()
     _strongest_rows = strongest_events.with_columns(
         pl.col("time").dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     ).to_dicts()
     seismic_analysis = {
         "weekly": weekly_summary,
-        "selection": event_summary,
         "activity": _daily_rows,
         "events": _event_locations.to_dicts(),
         "strongest": _strongest_rows,
-        "magnitude_scaling": magnitude_scaling,
+        "magnitude": {
+            "default_reference": 4.0,
+            "comparisons": magnitude_comparisons,
+        },
         "frequency": {
+            "default_magnitude": 4.5,
             "model": frequency_model,
             "curve": magnitude_exceedance.to_dicts(),
-            "selected": frequency_selection,
         },
     }
     mo.md(f"""
@@ -460,7 +472,7 @@ def catalog_analysis(
 
     **{weekly_summary["source_events"]} events**, **{len(_daily_rows)} daily
     observations**, and **{len(magnitude_exceedance)} magnitude thresholds** are
-    collected with the reactive subset and magnitude comparison in
+    collected with the complete magnitude and frequency relations in
     `seismic_analysis`.
     """)
     return (seismic_analysis,)

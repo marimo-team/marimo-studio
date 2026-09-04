@@ -95,9 +95,10 @@ reserved for section indices, table headers, timestamps, and measurement units.
 
 ## Layout
 
-Use one centered paper sheet with a two-column masthead. The threshold control
-and four metrics form the opening ledger. The curve and confusion table share a
-two-column evidence band, followed by the horizontally scrollable error table.
+Use one centered paper sheet with a two-column masthead. The scope and threshold
+controls and four metrics form the opening ledger. The curve and confusion table
+share a two-column evidence band, followed by the horizontally scrollable error
+table.
 Print mode retains the same hierarchy on A4 landscape.
 
 ## Elevation & Depth
