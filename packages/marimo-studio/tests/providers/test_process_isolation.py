@@ -813,7 +813,7 @@ def test_external_provider_runtime_validation_owns_the_complete_runtime_tree(
                 timeout=timeout,
             )
         )
-        deadline = asyncio.get_running_loop().time() + 8
+        deadline = asyncio.get_running_loop().time() + _PROCESS_START_TIMEOUT
         while not marker.is_file() and not validation.done():
             if asyncio.get_running_loop().time() >= deadline:
                 raise AssertionError("Runtime process tree did not start")
