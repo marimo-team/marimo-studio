@@ -1,0 +1,19 @@
+.gitattributes
+  s_20c77aba16eeb4::t_6b8a8328f8bae5 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "49e4de6264140db38c838d6ab5468b84f6d47102",
+  "prompts": {},
+  "sessions": {
+    "s_20c77aba16eeb4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c13-86fa-7803-9086-c7549e61faab",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
