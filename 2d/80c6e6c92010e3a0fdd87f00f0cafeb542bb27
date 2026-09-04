@@ -1,0 +1,93 @@
+packages/marimo-studio/tests/prepared/test_compiler.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-87
+packages/marimo-studio/src/marimo_studio/_compat/kernel_values/kernel.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 16-18,134,274-275
+packages/marimo-studio/src/marimo_studio/_compat/server/gateway.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 17,86-99
+examples/__marimo__/studio/occupancy/monitor/states.yaml
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-12
+packages/marimo-studio/src/marimo_studio/_server/prepared_views.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 8,22-24,33-34,60-61,85-89,92,100-125,131-138,164-170,178,208-212
+packages/marimo-studio/src/marimo_studio/_server/records.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 22,37
+packages/marimo-studio/src/marimo_studio/_server/agent/observation.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 120,153-164,167-168,170
+packages/marimo-studio/src/marimo_studio/_server/presentation/capability.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 75-76,327-330
+packages/marimo-studio/tests/conftest.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 11-14,20-26
+packages/marimo-studio/src/marimo_studio/_server/ready_handler.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 155
+packages/marimo-studio/src/marimo_studio/_server/runtime/routes.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 33,39-79
+examples/__marimo__/studio/earthquakes/operations/states.yaml
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-54
+packages/marimo-studio/tests/views/test_workspace_configuration.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 91-108,110
+packages/marimo-studio/src/marimo_studio/_server/prepared_view_models.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 12-13,21,28-34,72
+packages/marimo-studio/src/marimo_studio/_server/zero_python_api.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 20
+packages/marimo-studio/src/marimo_studio/_prepared/state_space.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-59
+packages/marimo-studio/src/marimo_studio/_server/support.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 49,68-72,96,235,239,449,467,545-546
+examples/__marimo__/studio/occupancy/model-review/states.yaml
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-7
+packages/marimo-studio/tests/prepared/__init__.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1
+examples/__marimo__/studio/athletes/field/states.yaml
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-33
+packages/marimo-studio/tests/marimo_compat/test_kernel_bridge.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 486-540
+packages/marimo-studio/tests/server/test_zero_python_runtime.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-89
+packages/marimo-studio/src/marimo_studio/errors/__init__.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 183-203,466-468
+packages/marimo-studio/src/marimo_studio/_prepared/compiler.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-142
+packages/marimo-studio/src/marimo_studio/_workspace/config.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 70,122-123
+packages/marimo-studio/src/marimo_studio/_server/runtime/catalog.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 27,39,356-431,469-480,494,499,577,580-582
+examples/__marimo__/studio/occupancy/pdf-report/states.yaml
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-7
+packages/marimo-studio/src/marimo_studio/_prepared/__init__.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1
+packages/marimo-studio/src/marimo_studio/_server/notebook_scope.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 19,36-40,67,96-97
+packages/marimo-studio/src/marimo_studio/_server/development/source_changes.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 17,57,88,106-107,180-186,199-200,246,249
+packages/marimo-studio/src/marimo_studio/_server/middleware.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 129
+packages/marimo-studio/src/marimo_studio/_prepared/cleanup.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-23
+packages/marimo-studio/src/marimo_studio/_prepared/resolve.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-115
+packages/marimo-studio/src/marimo_studio/_server/publication_runtime.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 5-11,13,18-20,23-30,45,61-63,87,89,104,106,108-111,113-117,122
+packages/marimo-studio/tests/prepared/test_state_space.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-166
+packages/marimo-studio/src/marimo_studio/_server/studio/document.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 62,94-96,99-100,233
+packages/marimo-studio/src/marimo_studio/_server/control_config_api.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1,5,11-12,15-19,34,52-53,55,58-60,62-72,80-81
+examples/__marimo__/studio/athletes/overview/states.yaml
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2d80c6e6c92010e3a0fdd87f00f0cafeb542bb27",
+  "prompts": {},
+  "sessions": {
+    "s_20c77aba16eeb4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c13-86fa-7803-9086-c7549e61faab",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
