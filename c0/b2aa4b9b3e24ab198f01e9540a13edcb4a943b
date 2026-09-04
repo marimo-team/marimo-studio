@@ -1,0 +1,53 @@
+examples/__marimo__/studio/earthquakes/briefing/src/components/BriefingSlides.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 2,10,12-13,202-207,231-259,295-301,321-322,331-348,357,399-404,407-411,434-463,495-498
+examples/__marimo__/studio/earthquakes/briefing/AGENTS.md
+  s_20c77aba16eeb4::t_60afcd4e1a759e 25-31,69-72
+examples/__marimo__/studio/earthquakes/briefing/src/style.css
+  s_20c77aba16eeb4::t_60afcd4e1a759e 799-878
+examples/__marimo__/studio/occupancy/model-review/src/style.css
+  s_20c77aba16eeb4::t_60afcd4e1a759e 205-237,468-471
+examples/earthquakes.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 13,183-184,186-209,220-221,327,331-338,342,345,354-364,409,424,447,451,460-463,465,475
+examples/__marimo__/studio/occupancy/pdf-report/src/report/types.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 93-98
+examples/__marimo__/studio/occupancy/model-review/DESIGN.md
+  s_20c77aba16eeb4::t_60afcd4e1a759e 98-101
+examples/__marimo__/studio/occupancy/pdf-report/src/App.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 14,28,151-154,173-176
+examples/__marimo__/studio/athletes/overview/index.html
+  s_20c77aba16eeb4::t_60afcd4e1a759e 481-508,721-727,776-777,785-812,901-910
+examples/__marimo__/studio/occupancy/model-review/src/components/ErrorEvidence.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 34
+examples/__marimo__/studio/occupancy/pdf-report/AGENTS.md
+  s_20c77aba16eeb4::t_60afcd4e1a759e 72-74
+examples/__marimo__/studio/occupancy/model-review/src/App.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 10,27-37,41-63,114,116-120,181
+examples/__marimo__/studio/earthquakes/briefing/DESIGN.md
+  s_20c77aba16eeb4::t_60afcd4e1a759e 71-76
+examples/occupancy.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 12,121-142,166,192,325,359-395,400-418,420-421,457-480,489-490,493,499,508-510
+examples/athletes.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 12
+examples/__marimo__/studio/earthquakes/briefing/src/briefing-data.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 58,78,81-84,101-105,194-252
+examples/__marimo__/studio/occupancy/model-review/src/components/ThresholdCurve.tsx
+  s_20c77aba16eeb4::t_60afcd4e1a759e 42
+examples/__marimo__/studio/occupancy/model-review/AGENTS.md
+  s_20c77aba16eeb4::t_60afcd4e1a759e 10-16,20-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c0b2aa4b9b3e24ab198f01e9540a13edcb4a943b",
+  "prompts": {},
+  "sessions": {
+    "s_20c77aba16eeb4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c13-86fa-7803-9086-c7549e61faab",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
