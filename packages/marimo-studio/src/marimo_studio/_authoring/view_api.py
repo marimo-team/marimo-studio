@@ -16,7 +16,11 @@ from marimo_studio._authoring.view import (
     remove_view,
     write_document,
 )
-from marimo_studio._delivery.export import StaticExportResult
+from marimo_studio._delivery.export import (
+    DEFAULT_STATIC_RUNTIME,
+    StaticExportResult,
+    StaticRuntime,
+)
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.records import ValidationReport
 from marimo_studio._views.api import ViewRemovalResult
@@ -134,14 +138,18 @@ class View:
         self,
         output: str | Path,
         *,
+        runtime: StaticRuntime = DEFAULT_STATIC_RUNTIME,
         force: bool = False,
+        prepare_timeout: float | None = None,
     ) -> StaticExportResult:
-        """Export this view as a static WebAssembly site."""
+        """Export this view through a selected static runtime."""
         return await export_view(
             self.workspace.notebook,
             self.name,
             output,
+            runtime=runtime,
             force=force,
+            prepare_timeout=prepare_timeout,
             expected_catalog_generation=self.catalog_generation,
             expected_generation=self.generation,
         )

@@ -36,7 +36,7 @@ def test_export_supports_a_max_component_destination(
         output.mkdir()
         output.joinpath("previous.txt").write_text("previous", encoding="utf-8")
 
-    result = export_view(notebook_path, output, force=force)
+    result = export_view(notebook_path, output, runtime="wasm", force=force)
 
     assert result.output == output
     assert output.joinpath("index.html").is_file()
@@ -48,7 +48,7 @@ def test_export_supports_a_max_component_destination(
 def _existing_export(notebook: Path, tmp_path: Path) -> Path:
     configure_export_view(notebook)
     output = tmp_path / "site"
-    export_view(notebook, output)
+    export_view(notebook, output, runtime="wasm")
     return output
 
 
@@ -72,7 +72,7 @@ def test_export_view_preserves_a_destination_created_during_generation(
     monkeypatch.setattr(export_module, "_commit_bundle", create_destination)
 
     with pytest.raises(StaticExportError, match="Output changed"):
-        export_view(notebook_path, output)
+        export_view(notebook_path, output, runtime="wasm")
 
     assert output.joinpath("concurrent.txt").read_text(encoding="utf-8") == "keep"
 
@@ -105,7 +105,7 @@ def test_export_rejects_an_absent_output_after_its_parent_is_replaced(
     monkeypatch.setattr(export_module, "_commit_bundle", replace_parent)
 
     with pytest.raises(StaticExportError, match="Output parent changed"):
-        export_view(notebook_path, output)
+        export_view(notebook_path, output, runtime="wasm")
 
     assert not (outside / "site").exists()
     assert not (retired / "site").exists()
@@ -157,7 +157,7 @@ def test_forced_export_preserves_a_destination_changed_during_generation(
     monkeypatch.setattr(export_module, "_commit_bundle", change_destination)
 
     with pytest.raises(StaticExportError, match="Output changed"):
-        export_view(notebook_path, output, force=True)
+        export_view(notebook_path, output, runtime="wasm", force=True)
 
     assert entrypoint.read_bytes() == concurrent
 
@@ -190,6 +190,7 @@ def test_forced_export_preserves_destination_when_view_owner_changes_before_comm
         export_view(
             notebook_path,
             output,
+            runtime="wasm",
             force=True,
             expected_catalog_generation=studio.catalog_generation,
             expected_generation=studio.view_generations["dashboard"],
@@ -222,7 +223,7 @@ def test_forced_export_keeps_recovery_when_destination_is_reclaimed(
     monkeypatch.setattr(output_module, "directory_identity", reclaim_destination)
 
     with pytest.raises(StaticExportError, match="previous output is preserved"):
-        export_view(notebook_path, output, force=True)
+        export_view(notebook_path, output, runtime="wasm", force=True)
 
     assert output.joinpath("concurrent.txt").read_text(encoding="utf-8") == "keep"
     recoveries = tuple(tmp_path.glob(".marimo-studio-export-recovery-*"))
@@ -251,7 +252,7 @@ def test_forced_export_retries_an_occupied_recovery_name(
         ),
     )
 
-    export_view(notebook_path, output, force=True)
+    export_view(notebook_path, output, runtime="wasm", force=True)
 
     assert first.joinpath("sentinel.txt").read_text(encoding="utf-8") == "keep"
     assert output.joinpath("index.html").is_file()
@@ -293,7 +294,7 @@ def test_forced_export_restores_output_after_replacement_failures(
         with monkeypatch.context() as patch:
             patch.setattr(output_module, attribute, failure)
             with pytest.raises(StaticExportError, match=message):
-                export_view(notebook_path, output, force=True)
+                export_view(notebook_path, output, runtime="wasm", force=True)
 
         assert output.joinpath("index.html").read_bytes() == expected, attribute
 
@@ -354,9 +355,9 @@ def test_export_view_replaces_an_existing_bundle_only_with_force(
     output.joinpath("stale.txt").write_text("stale", encoding="utf-8")
 
     with pytest.raises(StaticExportError, match="Pass --force"):
-        export_view(notebook_path, output)
+        export_view(notebook_path, output, runtime="wasm")
 
-    export_view(notebook_path, output, force=True)
+    export_view(notebook_path, output, runtime="wasm", force=True)
     assert not output.joinpath("stale.txt").exists()
     assert output.joinpath("index.html").is_file()
 
@@ -376,7 +377,7 @@ def test_export_rejects_an_existing_output_before_build(
     monkeypatch.setattr(export_module, "publish_view", unexpected_build)
 
     with pytest.raises(StaticExportError, match="Pass --force"):
-        export_view(notebook_path, output)
+        export_view(notebook_path, output, runtime="wasm")
 
 
 def test_export_reports_a_non_directory_output_parent(
@@ -388,7 +389,11 @@ def test_export_reports_a_non_directory_output_parent(
     parent.write_text("file", encoding="utf-8")
 
     with pytest.raises(StaticExportError, match="secure static export parent"):
-        export_view(notebook_path, parent / "child" / "site")
+        export_view(
+            notebook_path,
+            parent / "child" / "site",
+            runtime="wasm",
+        )
 
 
 def test_forced_export_protects_authored_namespaces(notebook_path: Path) -> None:
@@ -409,6 +414,7 @@ def test_forced_export_protects_authored_namespaces(notebook_path: Path) -> None
                 notebook_path,
                 output,
                 view="dashboard",
+                runtime="wasm",
                 force=True,
             )
         except StaticExportError as error:

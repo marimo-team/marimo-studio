@@ -197,6 +197,13 @@ def render_view_show(result: ShowResult) -> None:
 def render_static_export(result: StaticExportResult) -> None:
     """Write a static export result in human text."""
     echo(f"{green('Exported')} {result.view} with {result.runtime} to {result.output}")
+    if result.cache_activity is not None:
+        activity = result.cache_activity
+        echo(
+            f"  {light_blue('marimo cache')} "
+            f"{activity.authored_hits} authored hits, "
+            f"{activity.authored_misses} authored misses"
+        )
     echo(f"  {light_blue('open')} {result.entrypoint}")
     command = _shell_command(
         [

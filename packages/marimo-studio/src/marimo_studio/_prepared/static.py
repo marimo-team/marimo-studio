@@ -1,4 +1,4 @@
-"""Prepare one Studio view through the public marimo-export SDK."""
+"""Prepare one immutable Studio presentation through marimo-export."""
 
 from __future__ import annotations
 
@@ -12,19 +12,16 @@ from marimo_export.errors import MarimoExportError
 from marimo_export.manifest import prepared_manifest_bytes
 from marimo_export.wire import canonical_json_sha256
 
-from marimo_studio._cleanup import attempt_cleanup
-from marimo_studio._server.prepared_view_spec import (
-    _compile_saved,
-    _load_saved_spec,
-)
-from marimo_studio._server.studio.view_compiler import (
-    CompiledExportView,
-    compile_export_view,
+from marimo_studio._prepared.cleanup import attempt_cleanup
+from marimo_studio._prepared.compiler import CompiledExportView, compile_export_view
+from marimo_studio._prepared.state_space import (
+    StateSpaceSource,
+    load_state_space_source,
 )
 from marimo_studio.errors import PublicationError
 
 if TYPE_CHECKING:
-    from marimo_studio._server.presentation import PresentationSnapshot
+    from marimo_studio._server.presentation.service import PresentationSnapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,7 +30,8 @@ class StaticPublication:
     projections: Mapping[str, Mapping[str, str]]
     view: str
     plan_digest: str
-    owner: PreparedExport
+    state_space_source: StateSpaceSource
+    _repository: ExportRepository
 
     @property
     def instance(self) -> str:
@@ -48,8 +46,6 @@ class StaticPublication:
         return self.prepared.plan.document_sha256
 
     def manifest(self, export_url: str) -> dict[str, object]:
-        """Return Studio metadata around one core prepared-export manifest."""
-
         manifest: dict[str, object] = {
             "schema": "marimo-studio.prepared.v1",
             "prepared": self.prepared.manifest(
@@ -65,6 +61,14 @@ class StaticPublication:
         }
         prepared_manifest_bytes(manifest)
         return manifest
+
+    def close(self) -> None:
+        try:
+            self.prepared.close()
+        except BaseException as error:
+            attempt_cleanup(error, self._repository.close)
+            raise
+        self._repository.close()
 
 
 class StaticPublicationSource(Protocol):
@@ -90,14 +94,21 @@ class _PreparedPublicationSource:
         timeout: float = 30.0,
     ) -> StaticPublication:
         prepared: PreparedExport | None = None
+        repository: ExportRepository | None = None
+        project = snapshot.resolved.views[snapshot.view_name].view
+        state_space_source = load_state_space_source(project.root)
         try:
-            compiled = _compiled_export_view(snapshot)
+            compiled = _compiled_export_view(snapshot, state_space_source)
+            state_space_source.require_current()
+            repository = ExportRepository.open()
             prepared = prepare(
                 snapshot.resolved.workspace.notebook,
                 spec=compiled.spec,
+                repository=repository,
                 timeout=timeout,
             )
             prepared.open().verify()
+            state_space_source.require_current()
             projections = _projections(compiled)
             publication = StaticPublication(
                 prepared=prepared,
@@ -106,16 +117,21 @@ class _PreparedPublicationSource:
                 plan_digest=canonical_json_sha256(
                     {
                         "inputs": list(prepared.plan.inputs),
+                        "state_space": state_space_source.digest,
                         "projections": projections,
                     }
                 ),
-                owner=prepared,
+                state_space_source=state_space_source,
+                _repository=repository,
             )
             prepared = None
+            repository = None
             return publication
         except BaseException as error:
             if prepared is not None:
                 attempt_cleanup(error, prepared.close)
+            if repository is not None:
+                attempt_cleanup(error, repository.close)
             if isinstance(error, (MarimoExportError, OSError, PublicationError)):
                 raise RuntimeError(str(error)) from error
             raise
@@ -123,10 +139,15 @@ class _PreparedPublicationSource:
 
 def _compiled_export_view(
     snapshot: PresentationSnapshot,
+    state_space_source: StateSpaceSource,
 ) -> CompiledExportView:
-    baseline = compile_export_view(snapshot)
-    saved = _load_saved_spec(snapshot)
-    return baseline if saved is None else _compile_saved(snapshot, saved)
+    state_space = state_space_source.state_space
+    return compile_export_view(
+        snapshot.resolved,
+        snapshot.view_name,
+        snapshot.mounts,
+        state_space=state_space,
+    )
 
 
 def _projections(compiled: CompiledExportView) -> dict[str, dict[str, str]]:
@@ -138,8 +159,6 @@ def _projections(compiled: CompiledExportView) -> dict[str, dict[str, str]]:
 
 
 def publication_source() -> StaticPublicationSource:
-    """Construct the public SDK adapter for static prepared exports."""
-
     return _PreparedPublicationSource()
 
 

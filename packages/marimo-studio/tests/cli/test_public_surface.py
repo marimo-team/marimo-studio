@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import get_type_hints
+from typing import get_args, get_type_hints
 
 import click
 
@@ -60,6 +60,7 @@ def test_authoring_exports_public_records_with_resolvable_annotations() -> None:
         "RuntimeProbe",
         "Starter",
         "StaticExportResult",
+        "StaticRuntime",
         "StudioDiagnostic",
         "StudioOverview",
         "ValidationIssue",
@@ -77,8 +78,9 @@ def test_authoring_exports_public_records_with_resolvable_annotations() -> None:
         "open_workspace",
     }
     assert records == set(studio_authoring.__all__)
-    for name in records:
+    for name in records - {"StaticRuntime"}:
         get_type_hints(getattr(studio_authoring, name))
+    assert set(get_args(studio_authoring.StaticRuntime)) == {"zero-python", "wasm"}
 
 
 def test_expected_errors_are_public() -> None:
@@ -93,6 +95,9 @@ def test_expected_errors_are_public() -> None:
         "NotebookSourceError",
         "ProtocolError",
         "ProviderNotFoundError",
+        "PublicationError",
+        "PublicationLimitError",
+        "PublicationUnavailableError",
         "RuntimeConfigTooLargeError",
         "RuntimeSelectionError",
         "RuntimeTimeoutError",

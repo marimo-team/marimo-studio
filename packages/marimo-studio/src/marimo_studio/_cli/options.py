@@ -41,9 +41,11 @@ owner_generation_type = OwnerGenerationType()
 def finite_timeout(
     _context: click.Context,
     _parameter: click.Parameter,
-    value: float,
-) -> float:
-    """Reject non-finite Click float values."""
+    value: float | None,
+) -> float | None:
+    """Reject non-finite Click float values while preserving an omitted option."""
+    if value is None:
+        return None
     if not math.isfinite(value):
         raise click.BadParameter("must be a finite number")
     return value

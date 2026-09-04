@@ -217,7 +217,13 @@ def create_code_mode_bridge() -> CodeModeBridge:
 
 def create_export_adapters() -> ExportAdapters:
     """Construct Marimo adapters for static browser export."""
-    return ExportAdapters(browser=create_browser_runtime_projector())
+    validate_marimo_release()
+    from marimo_studio._compat.static_export import static_runtime_config
+
+    return ExportAdapters(
+        browser=create_browser_runtime_projector(),
+        runtime_config=static_runtime_config,
+    )
 
 
 def programmatic_middleware(

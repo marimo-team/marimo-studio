@@ -9,7 +9,11 @@ from pathlib import Path, PurePosixPath
 from marimo_studio._browser_client.client import show_view as show_browser_view
 from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._browser_client.transport import StudioServerConnection
-from marimo_studio._delivery.export import StaticExportResult
+from marimo_studio._delivery.export import (
+    DEFAULT_STATIC_RUNTIME,
+    StaticExportResult,
+    StaticRuntime,
+)
 from marimo_studio._delivery.export import export_view as export_view_bundle
 from marimo_studio._processes.provider_operation import run_provider_operation
 from marimo_studio._views.api import ViewRemovalResult
@@ -224,18 +228,22 @@ async def export_view(
     view: str,
     output: str | Path,
     *,
+    runtime: StaticRuntime = DEFAULT_STATIC_RUNTIME,
     force: bool = False,
+    prepare_timeout: float | None = None,
     expected_catalog_generation: str | None = None,
     expected_generation: str | None = None,
 ) -> StaticExportResult:
-    """Export one production view as a static WebAssembly site."""
+    """Export one production view through a selected static runtime."""
     return await run_provider_operation(
         partial(
             export_view_bundle,
             notebook,
             output,
             view=view,
+            runtime=runtime,
             force=force,
+            prepare_timeout=prepare_timeout,
             expected_catalog_generation=expected_catalog_generation,
             expected_generation=expected_generation,
         )

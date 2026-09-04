@@ -17,6 +17,7 @@ from marimo_studio._cli.environment import provider_bootstrap_required
 from marimo_studio._cli.help import ColoredCommand
 from marimo_studio._cli.options import (
     browser_client_option,
+    finite_timeout,
     server_option,
     target_option,
     view_name_argument,
@@ -31,6 +32,7 @@ from marimo_studio._cli.targets import (
     resolve_environment_target,
     resolve_notebook,
 )
+from marimo_studio._delivery.export import DEFAULT_STATIC_RUNTIME, StaticRuntime
 from marimo_studio.errors import ProtocolError
 from marimo_studio.view_providers import BuildProfile
 
@@ -124,22 +126,49 @@ def show(
     required=True,
     help="Write the static site to this directory.",
 )
+@click.option(
+    "--runtime",
+    type=click.Choice(("zero-python", "wasm")),
+    default=DEFAULT_STATIC_RUNTIME,
+    show_default=True,
+    help=(
+        "zero-python prepares configured notebook states during export. wasm runs "
+        "notebook Python in each visitor's browser."
+    ),
+)
 @click.option("--force", is_flag=True, help="Replace an existing output directory.")
+@click.option(
+    "--prepare-timeout",
+    type=click.FloatRange(min=0, min_open=True),
+    callback=finite_timeout,
+    default=None,
+    metavar="SECONDS",
+    help=(
+        "Seconds to wait for Zero-Python notebook preparation. Defaults to 30 "
+        "seconds when omitted."
+    ),
+)
 @json_option
 def export(
     view_name: str,
     target: Path | None,
     output: Path,
+    runtime: StaticRuntime,
     force: bool,
+    prepare_timeout: float | None,
     json_output: bool,
 ) -> None:
-    """Export one view as a static WebAssembly site.
+    """Export one view as a static site.
 
     When needed, Studio reruns the command through uv with requirements derived
     from the target's saved views and Python metadata. uv may resolve and install
     packages before provider code loads. Reviewed provider code then runs with
     the current user's filesystem, environment, and network authority.
     """
+    if runtime == "wasm" and prepare_timeout is not None:
+        raise click.UsageError(
+            "--prepare-timeout is only valid with --runtime zero-python."
+        )
     notebook = resolve_notebook(target)
     _bootstrap_provider_environment(target, notebook)
     result = asyncio.run(
@@ -147,7 +176,9 @@ def export(
             notebook,
             view_name,
             output,
+            runtime=runtime,
             force=force,
+            prepare_timeout=prepare_timeout,
         )
     )
     if json_output:

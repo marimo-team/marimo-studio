@@ -7,6 +7,7 @@ from marimo_studio._authoring.workspace_api import Workspace as Workspace
 from marimo_studio._authoring.workspace_api import doctor as doctor
 from marimo_studio._authoring.workspace_api import open_workspace as open_workspace
 from marimo_studio._delivery.export import StaticExportResult as StaticExportResult
+from marimo_studio._delivery.export import StaticRuntime as StaticRuntime
 from marimo_studio._notebook.records import InspectionResult as InspectionResult
 from marimo_studio._projections.runtime_records import (
     OutputRenderResult as OutputRenderResult,
@@ -43,6 +44,7 @@ __all__ = [
     "RuntimeProbe",
     "Starter",
     "StaticExportResult",
+    "StaticRuntime",
     "StudioDiagnostic",
     "StudioOverview",
     "ValidationIssue",
