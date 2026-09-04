@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -261,6 +262,37 @@ def test_entrypoint_middleware_uses_the_environment_policy() -> None:
     )
 
     assert completed.stdout.strip() == json.dumps(["https://notebooks.example.com"])
+
+
+def test_entrypoint_middleware_passes_export_owned_requests_to_marimo() -> None:
+    environment = {
+        **os.environ,
+        "MARIMO_EXPORT_OWNED_SESSION": "1",
+        ALLOWED_EMBED_ORIGINS_ENV: "invalid-origin",
+    }
+    script = textwrap.dedent(
+        """
+        import asyncio
+
+        from marimo_studio._entrypoints import server_middleware
+
+        async def marimo(scope, receive, send):
+            del receive, send
+            print(scope["path"])
+
+        app = server_middleware.cls(marimo, **server_middleware.kwargs)
+        asyncio.run(app({"type": "http", "path": "/api/sessions"}, None, None))
+        """
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        env=environment,
+        text=True,
+    )
+
+    assert completed.stdout.strip() == "/api/sessions"
 
 
 def test_invalid_environment_configuration_fails_marimo_startup_concisely(
