@@ -15,6 +15,7 @@ import {
   studioEntryUrl,
   studioOrigin,
   test,
+  type RequestAbortCapture,
   waitForPreview,
   writeDashboardSource,
   writeWorkspaceFile,
@@ -148,6 +149,7 @@ test("keeps standalone navigation inside server-authored route authority", async
       },
       { view, query, hash },
     );
+  let supersededPresentation: RequestAbortCapture | undefined;
 
   try {
     const original = popout.url();
@@ -180,7 +182,7 @@ test("keeps standalone navigation inside server-authored route authority", async
     const navigated = popout.waitForURL(
       (url) => url.pathname.endsWith("/dashboard/") && url.searchParams.get("region") === "apac",
     );
-    const supersededPresentation = browserDiagnostics.expectRequestAbort({
+    supersededPresentation = browserDiagnostics.expectRequestAbort({
       origin: studioOrigin,
       method: "GET",
       path: /^\/_marimo-studio\/presentation\/[^/]+\/dashboard\/$/,
@@ -200,9 +202,11 @@ test("keeps standalone navigation inside server-authored route authority", async
       await presentation.locator("html").evaluate(() => globalThis.__MARIMO_MOUNT_CONFIG__.runtime),
     ).toBe("server");
     expect(target.hash).toBe("#proof");
-    await recoverRequestAbort(supersededPresentation);
   } finally {
     await popout.close();
+    if (supersededPresentation !== undefined) {
+      await recoverRequestAbort(supersededPresentation);
+    }
   }
 });
 
