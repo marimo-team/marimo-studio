@@ -20,15 +20,16 @@ and one shared `seismic_analysis` value.
 <StudioExample family="earthquakes" />
 
 Scroll **Story** to move through the map sequence. In **Operations**, raise the
-minimum magnitude. The map, priority list, and summary update from the same
-reactive filter.
+minimum magnitude. The map, priority list, and summary resolve from 138 states
+prepared from the notebook's magnitude and review-status controls.
 
 In **Interactive lesson**, use the comparison slider to recompute the amplitude and
 energy ratios. Then change the catalog filter and watch the selected count and
 epicenter map update inside the [Reveal.js](https://revealjs.com/)
 presentation. On the frequency slide, move the magnitude threshold to compare
-the observed cumulative count with the descriptive fit. Press <kbd>Esc</kbd> to
-open the Reveal overview.
+the observed cumulative count with the descriptive fit. The two lesson sliders
+select notebook-computed rows in the browser, while the catalog controls filter
+the projected weekly records. Press <kbd>Esc</kbd> to open the Reveal overview.
 
 Open **Notebook** to inspect the equations, fitted values, and reactive controls
 that supply the three views.

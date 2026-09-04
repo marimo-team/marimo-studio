@@ -49,9 +49,8 @@ Use `marimo-output` when marimo should choose the native renderer:
 <marimo-output value="selected_roster"></marimo-output>
 ```
 
-The Rio athletes report uses this host for the filtered Polars table. It uses
-`mo-value="top_sports"` separately so browser JavaScript can draw the
-participation chart.
+The host stores marimo's rendered output in a Prepared export. Use `mo-value`
+when browser code should receive the underlying portable value.
 
 Output selectors can traverse attributes, dictionary keys, and list items:
 
@@ -112,8 +111,9 @@ or passing it to a column-oriented library. Call `toArray()` at a consumer that
 needs row objects.
 
 The Browser runtime requires browser-compatible dataframe and Arrow writer
-packages. Materialize lazy or remote queries in the notebook before projecting
-them.
+packages. Prepared export writes eager dataframes through marimo's cache as
+Arrow IPC before the static directory is published. Materialize lazy or remote
+queries in the notebook before projecting them.
 
 ## Use dynamic projection targets deliberately
 
@@ -135,7 +135,9 @@ authorization on the host:
 
 `data-marimo-allow="*"` permits that source location to request any valid
 target of the same projection kind. Use it at the narrowest dynamic host. A
-computed target without the declaration fails provider inspection.
+computed target without the declaration fails provider inspection. Prepared
+export requires finite projection targets and rejects wildcard mounts. Use
+`--runtime wasm` when a static view must choose arbitrary targets at runtime.
 
 ## Name and validate targets
 

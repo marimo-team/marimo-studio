@@ -87,10 +87,11 @@ requirement from the browser notebook dependency list. A requirement remains
 when it predates view creation, the user later changes it, or the notebook
 imports the distribution directly.
 
-`server` selects the Python runtime. `wasm` selects the Browser runtime. Runtime
-selection and delivery are separate choices. `marimo run` serves a live
-presentation. `marimo-studio view export` packages a static Browser runtime
-site.
+`server` selects the Python runtime. `wasm` selects the Browser runtime. Add
+`zero-python` to `runtimes` to preview prepared states in the Studio editor.
+`runtime` must remain `server` or `wasm` because it also governs `marimo run`.
+`marimo-studio view export` uses the Prepared runtime by default and accepts
+`--runtime wasm` for a static Browser runtime site.
 
 `preserve_session` applies to Python run-mode sessions. Studio reuses a session
 when the saved notebook, public URL path, canonical public query, and replay
@@ -234,6 +235,29 @@ defines those tokens.
 
 The selected view provider validates `[options]` and reports unsupported values
 beside `view.toml`.
+
+## Prepared state space
+
+A view project can declare its finite input state space in `states.yaml`.
+The file uses marimo-export's public `StateSpace` contract. Zero-Python export
+executes those states and packages the projected results:
+
+```yaml
+schema: marimo-export.states.v1
+default_state: matrix-000000
+matrix:
+  threshold: [0.25, 0.5, 0.75]
+```
+
+`states` maps stable state names to complete or sparse input mappings. `matrix`
+maps each input to a non-empty array of accepted frontend values and expands
+their Cartesian product into `matrix-000000`, `matrix-000001`, and subsequent
+states. `default_state` must name one expanded or explicit state.
+
+The state space accepts portable JSON values, rejects duplicate keys and YAML
+aliases, and caps the expanded set at 10,000 states. A view with no
+`states.yaml` prepares its current baseline. Controls in a prepared static view
+can select the states present in that publication.
 
 View names start with a lowercase letter and contain lowercase letters, digits,
 or hyphens. A name may use at most 240 UTF-8 bytes. Studio rejects reserved

@@ -35,8 +35,8 @@ you need to do.
 
 - [Navigate and preserve state](navigation-and-sessions.md) covers view URLs,
   query parameters, fragments, history, and Python session replay.
-- [Run or export a view](run-and-share.md) compares Python and Browser runtimes
-  with static delivery.
+- [Run or export a view](run-and-share.md) compares Python, Browser, and
+  Prepared runtimes with static delivery.
 - [Deploy a live Python view](deploy.md) covers authenticated serving,
   application servers, reverse proxies, and health checks.
 - [Troubleshoot Studio](troubleshooting.md) routes common failures to a focused

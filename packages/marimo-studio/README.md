@@ -40,6 +40,9 @@ problem and keeps the current artifact available.
   [Pyodide](https://pyodide.org/) worker. Pyodide is a Python distribution
   compiled for the browser. The browser receives notebook source and must be
   able to fetch its dependencies and data.
+- The **Prepared runtime** computes finite input states during static export
+  and serves verified results to the view. Visitors receive the view and its
+  prepared outputs with no Python runtime.
 
 ## Continue
 

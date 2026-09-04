@@ -18,9 +18,9 @@ profiles. One notebook backs all three views.
 
 <StudioExample family="athletes" />
 
-In **Report**, change **Sport**. The native Marimo control reruns its dependent
-cell. Four `mo-value` totals, the rendered `selected_roster`, and the
-browser-drawn `top_sports` chart update from that result.
+In **Report**, change **Sport**. The native Marimo control selects one of 29
+prepared notebook states. Four `mo-value` totals, the browser-drawn roster, and
+the `top_sports` chart update from that result.
 
 In **Explorer**, select a sport bar or brush an age range.
 [Mosaic](https://uwdata.github.io/mosaic/) coordinates that browser-side
@@ -28,7 +28,8 @@ selection while the notebook remains the source of the complete athlete table.
 
 In **Field briefing**, move through the roster as a four-chapter
 [Three.js](https://threejs.org/) 3D presentation. The same records regroup by
-sport, medal status, height, weight, and age.
+sport, medal status, height, weight, and age. Its sport control uses the same
+29 prepared states as Report.
 
 Open **Notebook** to inspect the controls and Polars operations in their
 analytical context.

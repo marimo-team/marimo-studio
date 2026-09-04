@@ -19,21 +19,22 @@ threshold sweep.
 
 <StudioExample family="occupancy" />
 
-In **Monitor**, change **Signal**. Marimo recomputes the selected series while
-[ECharts](https://echarts.apache.org/) renders the trend, baseline, anomalies,
-and current summary together.
+In **Monitor**, choose an observation scope and signal. The controls resolve 12
+prepared combinations while [ECharts](https://echarts.apache.org/) renders the
+trend, baseline, anomalies, and current summary together.
 
-In **Model review**, move the threshold. Accuracy, precision, recall, the curve
-marker, confusion counts, and error evidence update from the same notebook
-score. [Recharts](https://recharts.org/) renders the threshold curve as a React
-component.
+In **Model review**, choose one of three prepared scopes and move the threshold
+across 17 notebook-computed operating points. Threshold changes update
+accuracy, precision, recall, the curve marker, confusion counts, and error
+evidence in the browser. [Recharts](https://recharts.org/) renders the threshold
+curve as a React component.
 
-In **PDF report**, change the room, lookback period, or threshold. The printable
-A4 report updates its operating summary, environment trends, and model evidence
-through [React PDF](https://react-pdf.org/), a React renderer for PDF documents.
+In **PDF report**, choose one of the three prepared scopes. The React view
+composes the notebook-owned room profile and model evidence into an A4 report,
+then generates the downloadable PDF in the browser.
 
-Open **Notebook** to inspect the rolling calculations and threshold evaluation
-that all three views present.
+Open **Notebook** to inspect the rolling calculations, room profiles, and
+threshold evaluation that all three views present.
 
 ## Run locally
 
@@ -56,5 +57,5 @@ browser, and its Python packages on an uncached run.
 - [Model review](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/model-review)
 - [PDF field report](https://github.com/marimo-team/marimo-studio/tree/main/examples/__marimo__/studio/occupancy/pdf-report)
 
-All three views keep statistical definitions in the notebook. Their component code
-formats and presents those results for separate decisions.
+All three views keep statistical definitions in the notebook. Their component
+code formats and presents those results for separate decisions.
