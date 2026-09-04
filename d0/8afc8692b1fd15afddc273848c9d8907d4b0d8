@@ -1,0 +1,47 @@
+packages/marimo-studio/src/marimo_studio/_cli/commands/view_delivery.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 20,35,129-138,140-150,156,158,161,168-171,179,181
+packages/marimo-studio/tests/delivery/test_export_output.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 39,51,75,108,160,193,226,255,297,358,360,380,392-396,417
+packages/marimo-studio/src/marimo_studio/_delivery/export.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1,5-7,21,29-32,63,92-94,103,107,119,123-125,172,180,204,215,257,264-375,383-384,395-399,483-486,499-504,538-557,592-593,597-620,624-632,637-644,651-659,670,681-711,719,721,725-728,730,745-749,765-766,780-800,803-828,830-836,838-840,842-876,881,885
+packages/marimo-studio/tests/cli/test_public_surface.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 3,63,81,83,98-100
+packages/marimo-studio/tests/delivery/test_export_cli.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 40-41,73-111
+packages/marimo-studio/src/marimo_studio/_delivery/export_output.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 39-44,59
+packages/marimo-studio/src/marimo_studio/_cli/options.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 44-48
+packages/marimo-studio/src/marimo_studio/_authoring/view.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 12-16,231,233,237,244,246
+packages/marimo-studio/src/marimo_studio/_authoring/view_api.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 19-23,141,143,145,150,152
+packages/marimo-studio/src/marimo_studio/_prepared/static.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 1-169
+packages/marimo-studio/src/marimo_studio/_composition.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 220-226
+packages/marimo-studio/src/marimo_studio/_cli/output.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 200-206
+packages/marimo-studio/src/marimo_studio/authoring/__init__.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 10,47
+packages/marimo-studio/src/marimo_studio/_delivery/html.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 71-72,96-105,192-193,228-229
+packages/marimo-studio/tests/delivery/test_export_bundle.py
+  s_20c77aba16eeb4::t_60afcd4e1a759e 4,8,92,132-218,266,305,359,391,416,456,461,482,507,549,589,610
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d08afc8692b1fd15afddc273848c9d8907d4b0d8",
+  "prompts": {},
+  "sessions": {
+    "s_20c77aba16eeb4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c13-86fa-7803-9086-c7549e61faab",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
