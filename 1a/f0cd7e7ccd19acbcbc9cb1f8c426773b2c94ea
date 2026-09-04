@@ -1,0 +1,70 @@
+apps/browser/src/zero-python/projections.ts
+  s_20c77aba16eeb4::t_a4fe4b498b6fd4 19
+  s_20c77aba16eeb4::t_0f1235628b77f8 21,77
+  s_20c77aba16eeb4::t_60afcd4e1a759e 2-7,15-18,20,30-32,38-40,45-76,78-94,107-113
+packages/protocol/src/runtime-config.ts
+  s_20c77aba16eeb4::t_079cf58840a88e 17
+packages/marimo-frontend/src/control-endpoint-core.ts
+  s_20c77aba16eeb4::t_0bc66359fc2cf9 5
+apps/browser/src/zero-python/state-api.ts
+  s_20c77aba16eeb4::t_079cf58840a88e 27
+  s_20c77aba16eeb4::t_a4fe4b498b6fd4 8
+apps/browser/src/zero-python/metadata-fetch.ts
+  s_20c77aba16eeb4::t_a4fe4b498b6fd4 1
+  s_20c77aba16eeb4::t_079cf58840a88e 44
+apps/browser/src/zero-python/metadata-records.ts
+  s_20c77aba16eeb4::t_a4fe4b498b6fd4 3
+packages/presentation/package.json
+  s_20c77aba16eeb4::t_4261e38640dfc7 8
+packages/marimo-frontend/src/prepared-controls.ts
+  s_20c77aba16eeb4::t_0bc66359fc2cf9 15
+packages/marimo-frontend/src/embedded-json.ts
+  s_20c77aba16eeb4::t_0bc66359fc2cf9 1,3-9,11-18,20-55
+  s_20c77aba16eeb4::t_60afcd4e1a759e 57
+packages/protocol/src/json.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 24
+  s_20c77aba16eeb4::t_c423243cf86e0d 10
+  s_20c77aba16eeb4::t_079cf58840a88e 3-9,11-18
+pyproject.toml
+  s_20c77aba16eeb4::t_079cf58840a88e 105
+packages/presentation/src/runtime-state.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 2,4-15
+  s_20c77aba16eeb4::t_079cf58840a88e 1
+packages/marimo-studio/pyproject.toml
+  s_20c77aba16eeb4::t_079cf58840a88e 15
+packages/presentation/src/json.ts
+  s_20c77aba16eeb4::t_4261e38640dfc7 3-13
+apps/browser/build-metadata.ts
+  s_20c77aba16eeb4::t_6872a10cfc5d3e 18,46-48,57
+apps/browser/src/zero-python/interactions.ts
+  s_20c77aba16eeb4::t_079cf58840a88e 44,67
+  s_20c77aba16eeb4::t_108eac04792a9b 4
+apps/browser/vite.config.ts
+  s_20c77aba16eeb4::t_60afcd4e1a759e 19-23
+pnpm-workspace.yaml
+  s_20c77aba16eeb4::t_079cf58840a88e 14,79
+apps/browser/package.json
+  s_20c77aba16eeb4::t_60afcd4e1a759e 16
+packages/protocol/package.json
+  s_20c77aba16eeb4::t_079cf58840a88e 12
+apps/browser/src/zero-python/composition.ts
+  s_20c77aba16eeb4::t_0f1235628b77f8 133-135
+  s_20c77aba16eeb4::t_a4fe4b498b6fd4 9
+  s_20c77aba16eeb4::t_60afcd4e1a759e 64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1af0cd7e7ccd19acbcbc9cb1f8c426773b2c94ea",
+  "prompts": {},
+  "sessions": {
+    "s_20c77aba16eeb4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c13-86fa-7803-9086-c7549e61faab",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
