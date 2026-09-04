@@ -75,6 +75,9 @@ jobs:
       - name: Lint documentation sources
         run: pnpm exec vp lint apps/docs
 
+      - name: Lint example frontend sources
+        run: pnpm exec oxlint examples --no-ignore
+
       - name: Type-check documentation sources
         run: >-
           pnpm exec vp check --no-fmt --no-lint

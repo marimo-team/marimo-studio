@@ -197,17 +197,16 @@ export const createAthleteExplorer = async ({
   hosts.scatter.replaceChildren(
     describePlot(
       vg.plot(
-        vg.dot(vg.from(TABLE_NAME, { filterBy: filters }), {
+        vg.raster(vg.from(TABLE_NAME, { filterBy: filters }), {
           x: "weight",
           y: "height",
           fill: "sex",
-          r: 3,
-          fillOpacity: 0.34,
-          strokeOpacity: 0.12,
-          tip: true,
+          bandwidth: 0,
+          pixelSize: 2,
         }),
         vg.intervalXY({
           as: body,
+          pixelSize: 2,
           brush: {
             fill: "#fc5200",
             fillOpacity: 0.12,
@@ -215,10 +214,11 @@ export const createAthleteExplorer = async ({
             strokeWidth: 1.5,
           },
         }),
-        vg.highlight({ by: body, opacity: 0.08 }),
         vg.xyDomain(vg.Fixed),
         vg.colorDomain(["female", "male"]),
         vg.colorRange(["#fc5200", "#39434d"]),
+        vg.opacityDomain([0, 3]),
+        vg.opacityClamp(true),
         vg.xLabel("Weight (kg)"),
         vg.yLabel("Height (m)"),
         vg.xGrid(true),
@@ -227,8 +227,8 @@ export const createAthleteExplorer = async ({
         vg.height(430),
         vg.margins({ top: 20, right: 20, bottom: 45, left: 54 }),
       ),
-      "Athlete height and weight scatter plot",
-      "Each point is an athlete. Color distinguishes sex. Drag to filter the other charts.",
+      "Athlete height and weight density plot",
+      "Pixel opacity shows local athlete density. Color distinguishes sex. Drag to filter the other charts.",
     ),
   );
 
