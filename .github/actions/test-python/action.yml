@@ -21,8 +21,13 @@ runs:
 
     - name: Run Python test profile
       shell: bash
-      run: >-
-        ./scripts/python-test.sh
-        --profile "${{ inputs.profile }}"
-        --python "${{ inputs.python-version }}"
-        -- -rs
+      run: |
+        parallel=()
+        if [[ "${{ inputs.profile }}" != "supported-python" ]]; then
+          parallel+=(--parallel)
+        fi
+        ./scripts/python-test.sh \
+          --profile "${{ inputs.profile }}" \
+          --python "${{ inputs.python-version }}" \
+          "${parallel[@]}" \
+          -- -rs
