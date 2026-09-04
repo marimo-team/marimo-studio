@@ -36,7 +36,12 @@ def directory_identity(
     return filesystem.directory_tree_identity(path, max_entries=100_000)
 
 
-def validate_output(output: Path, studio: StudioWorkspace) -> Path:
+def validate_output(
+    output: Path,
+    studio: StudioWorkspace,
+    *,
+    protected_sources: tuple[Path, ...] = (),
+) -> Path:
     expanded = output.expanduser()
     if expanded.is_symlink():
         raise StaticExportError(f"Output is a symlink: {expanded}")
@@ -51,6 +56,7 @@ def validate_output(output: Path, studio: StudioWorkspace) -> Path:
         studio.notebook.parent / "public",
         *(project.root for project in studio.views.values()),
         _assets.runtime_assets_path(),
+        *protected_sources,
     ]
     for source in protected:
         source = source.resolve()

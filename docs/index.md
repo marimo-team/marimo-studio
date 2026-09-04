@@ -56,7 +56,7 @@ features:
       width: "24"
       height: "24"
     title: Choose where Python runs
-    details: Use the Python runtime for server resources or the Browser runtime for WebAssembly and static export.
+    details: Use Python for server resources, WebAssembly for browser execution, or Prepared export for finite static states.
     link: ./guide/run-and-share
     linkText: Compare runtimes
 ---

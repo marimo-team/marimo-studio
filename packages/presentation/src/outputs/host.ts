@@ -126,6 +126,9 @@ export const prepareOutputHost = (host: Element) => {
   if (!selector) {
     return;
   }
+  if (host.hasAttribute("aria-label") && !host.hasAttribute("role")) {
+    host.setAttribute("role", "group");
+  }
   if (!host.id) {
     const id = `${PRESERVED_ID_PREFIX}${encodeURIComponent(selector)}`;
     const existing = host.ownerDocument.getElementById(id);
@@ -152,6 +155,7 @@ export const syncPreservedOutputHosts = (source: ParentNode, live: Document): vo
     const preserved = live.getElementById(host.id);
     if (preserved?.localName === "marimo-output" && preserved !== host) {
       syncProjectionHostAttributes(preserved, host);
+      prepareOutputHost(preserved);
     }
   });
 };

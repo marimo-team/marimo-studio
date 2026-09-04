@@ -35,10 +35,11 @@ provider, artifact, projection, browser, and agent policy stay stable.
 | Live values                 | Kernel value reads and browser serialization             | Kernel values adapter                              |
 | Server preview              | Existing application and session                         | Server gateway and session adapters                |
 | WebAssembly preview         | Browser notebook source and worker runtime               | `BrowserRuntimeProjector` and frontend facade      |
+| Prepared static view        | Cache-backed values and rendered snapshots               | marimo-export and `_prepared`                      |
 | Notebook editing            | Native editor document                                   | Studio workspace frame                             |
 | Save-time alias maintenance | Notebook persistence boundary                            | `NotebookSaveTransform`                            |
 | Query and controls          | Session transport and peer state                         | Query and control adapters                         |
-| Static export               | Browser runtime source and configuration                 | Export adapters                                    |
+| Static export               | Browser runtime or prepared publication                  | `_delivery` and `_prepared`                        |
 
 ## Python ports
 
@@ -79,8 +80,30 @@ Route handlers read no process environment.
 - `BrowserRuntimeProjector`
 - `StaticRuntimeConfigLoader`
 
-Static export uses this bundle to add a browser notebook runtime to a
-production view artifact.
+WebAssembly export uses this bundle to add a browser notebook runtime to a
+production view artifact. Prepared export compiles the provider's immutable
+mount declarations into a marimo-export specification, resolves finite input
+states through the cache-backed producer, and publishes its verified result
+index beside the artifact. Static exports open marimo-export's configured
+persistent repository. Exact producer, output-plan, and state-space identities
+therefore reuse one prepared generation across commands and documentation
+builds.
+
+`states.yaml` uses the public `marimo_export.StateSpace` schema. Studio reads
+the file through its secure filesystem boundary, then marimo-export validates
+and expands the state space. Studio infers `OutputSpec` values from the view's
+projection mounts and combines both parts into one `ExportSpec`.
+
+The managed producer gives Marimo the authored notebook path as its logical
+runtime filename. Marimo therefore reads and writes the notebook's shared
+`__marimo__/cache/` directory even though execution uses a guarded source copy
+and Studio stages portable outputs through the export repository. The export
+repository retains verified materializations. Marimo's native cache owns
+computation reuse. A second view can request another output plan over the same
+states and restore matching authored cells from those native entries. Its
+distinct projection leaves produce new receipts once, then remain reusable as
+prepared states. `StaticExportResult.cache_activity` exposes the native authored
+and projection dispositions reported by marimo-export.
 
 Keep ports shaped around Studio operations. A port should return stable
 records and lifecycle handles, not private Marimo objects.

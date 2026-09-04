@@ -86,6 +86,8 @@ const exportView = async (
     notebook,
     "--output",
     output,
+    "--prepare-timeout",
+    "900",
     "--json",
   ]);
   // SAFETY: The same-worktree CLI owns schema 1. The checks below bind its
@@ -99,7 +101,7 @@ const exportView = async (
 
   if (
     result.schema !== 1 ||
-    result.runtime !== "wasm" ||
+    result.runtime !== "zero-python" ||
     result.view !== view ||
     result.files < 1 ||
     resolve(result.entrypoint) !== resolve(entrypoint) ||

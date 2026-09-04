@@ -1,23 +1,58 @@
 import { z } from "zod";
 
 export type EmbeddedJsonValue =
-  | null
-  | boolean
-  | number
   | string
+  | number
+  | boolean
+  | null
   | readonly EmbeddedJsonValue[]
   | { readonly [key: string]: EmbeddedJsonValue };
 
-const embeddedJsonValueSchema: z.ZodType<EmbeddedJsonValue> = z.lazy(() =>
+const recordInputSchema = z.custom<object>(
+  (value) =>
+    value !== null &&
+    Object(value) === value &&
+    !Array.isArray(value) &&
+    [Object.prototype, null].includes(Object.getPrototypeOf(value)),
+  { error: "Expected an object record" },
+);
+
+export const losslessRecordSchema = <
+  KeySchema extends z.ZodType<string>,
+  ValueSchema extends z.ZodType,
+>(
+  keySchema: KeySchema,
+  valueSchema: ValueSchema,
+) =>
+  recordInputSchema.transform<Record<string, z.output<ValueSchema>>>((input, context) => {
+    const output: Record<string, z.output<ValueSchema>> = Object.create(null);
+    let valid = true;
+    for (const [key, value] of Object.entries(input)) {
+      const parsedKey = keySchema.safeParse(key);
+      const parsedValue = valueSchema.safeParse(value);
+      if (!parsedKey.success || !parsedValue.success) {
+        valid = false;
+        context.addIssue({ code: "custom", input: value, path: [key], message: "Invalid entry" });
+        continue;
+      }
+      output[parsedKey.data] = parsedValue.data;
+    }
+    return valid ? output : z.NEVER;
+  });
+
+export const jsonValueSchema: z.ZodType<EmbeddedJsonValue> = z.lazy(() =>
   z.union([
-    z.null(),
-    z.boolean(),
-    z.number(),
     z.string(),
-    z.array(embeddedJsonValueSchema),
-    z.record(z.string(), embeddedJsonValueSchema),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    jsonObjectSchema,
   ]),
 );
 
-export const parseEmbeddedJsonValue = (value: z.input<typeof embeddedJsonValueSchema>) =>
-  embeddedJsonValueSchema.parse(value);
+export const jsonObjectSchema: z.ZodType<Readonly<Record<string, EmbeddedJsonValue>>> =
+  losslessRecordSchema(z.string(), jsonValueSchema);
+
+export const parseEmbeddedJsonValue = <Value>(value: Value): EmbeddedJsonValue =>
+  jsonValueSchema.parse(value);

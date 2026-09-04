@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +19,36 @@ from marimo_studio._workspace import load_studio
 from marimo_studio._workspace.models import StudioWorkspace
 
 from .helpers import replace_app_shell
+
+
+class _BootstrapParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self._reading = False
+        self.parts: list[str] = []
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        self._reading = tag == "script" and dict(attrs).get("id") == (
+            "marimo-studio-bootstrap"
+        )
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "script":
+            self._reading = False
+
+    def handle_data(self, data: str) -> None:
+        if self._reading:
+            self.parts.append(data)
+
+
+def studio_bootstrap(document: str) -> dict[str, Any]:
+    parser = _BootstrapParser()
+    parser.feed(document)
+    return json.loads("".join(parser.parts))
 
 
 def set_shell(studio: StudioWorkspace, view_name: str, content: str) -> None:

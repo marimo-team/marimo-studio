@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
+from typing import cast
 from urllib.parse import urlsplit
 
 import pytest
@@ -32,6 +34,8 @@ from marimo_studio.view_providers import BuildProfile, ViewProject
 from ..artifact_test_support import add_provider_outputs
 from ..helpers import replace_app_shell
 from .export_test_support import configure_export_view
+
+_PREPARE_TIMEOUT = 120.0
 
 
 class _DocumentResources(HTMLParser):
@@ -87,7 +91,7 @@ def test_export_view_writes_a_complete_static_bundle(
     )
     output = tmp_path / "site"
 
-    result = export_view(notebook_path, output)
+    result = export_view(notebook_path, output, runtime="wasm")
 
     config = json.loads(
         output.joinpath("_marimo-studio/views/dashboard/config").read_text(
@@ -125,6 +129,86 @@ def test_export_view_writes_a_complete_static_bundle(
     )
     assert output.joinpath("_marimo-studio/assets/runtime.js").is_file()
     assert output.joinpath(".nojekyll").is_file()
+
+
+@pytest.mark.native_process
+@pytest.mark.xdist_group("managed-export")
+def test_zero_python_export_combines_view_and_reuses_publication(
+    notebook_path: Path,
+    tmp_path: Path,
+) -> None:
+    configure_export_view(notebook_path)
+    first_output = tmp_path / "prepared-site-first"
+    repeated_output = tmp_path / "prepared-site-repeated"
+
+    result = export_view(
+        notebook_path,
+        first_output,
+        runtime="zero-python",
+        prepare_timeout=_PREPARE_TIMEOUT,
+    )
+    export_view(
+        notebook_path,
+        repeated_output,
+        runtime="zero-python",
+        prepare_timeout=_PREPARE_TIMEOUT,
+    )
+
+    support = first_output / "_marimo-studio" / "views" / "dashboard"
+    config = json.loads(support.joinpath("config").read_text(encoding="utf-8"))
+    manifest = json.loads(
+        support.joinpath("zero-python/current").read_text(encoding="utf-8")
+    )
+    repeated_manifest = json.loads(
+        repeated_output.joinpath(
+            "_marimo-studio/views/dashboard/zero-python/current"
+        ).read_text(encoding="utf-8")
+    )
+    instance = manifest["prepared"]["instance"]
+    assert result.runtime == "zero-python"
+    assert result.cache_activity is not None
+    assert result.entrypoint.is_file()
+    assert config["runtime"]["id"] == "zero-python"
+    assert config["runtime"]["instance"] == instance
+    assert support.joinpath("zero-python", instance, "index.json").is_file()
+    assert first_output.joinpath("_marimo-studio/assets/zero-python.js").is_file()
+    assert not first_output.joinpath("_marimo-studio/assets/runtime.js").exists()
+    assert repeated_manifest["prepared"]["instance"] == instance
+
+
+def test_wasm_export_rejects_prepare_timeout_before_loading_target(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match="prepare_timeout is only valid when runtime is 'zero-python'",
+    ):
+        export_view(
+            tmp_path / "missing.py",
+            tmp_path / "site",
+            runtime="wasm",
+            prepare_timeout=10,
+        )
+
+
+@pytest.mark.parametrize(
+    "prepare_timeout",
+    (True, 0, -1, math.nan, math.inf, "30"),
+)
+def test_zero_python_export_rejects_invalid_prepare_timeout_before_loading_target(
+    tmp_path: Path,
+    prepare_timeout: object,
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match="prepare_timeout must be a finite positive number",
+    ):
+        export_view(
+            tmp_path / "missing.py",
+            tmp_path / "site",
+            runtime="zero-python",
+            prepare_timeout=cast(float | None, prepare_timeout),
+        )
 
 
 @pytest.mark.skipif(
@@ -174,7 +258,7 @@ def test_export_public_assets_reject_symlink_swaps(
     output = tmp_path / "site"
 
     with pytest.raises(StaticExportError, match="static export source"):
-        export_view(notebook_path, output)
+        export_view(notebook_path, output, runtime="wasm")
 
     assert swapped
     assert not output.exists()
@@ -213,7 +297,11 @@ def test_export_preserves_nested_vanilla_local_sources(
     )
     output = tmp_path / "site"
 
-    result = export_view(notebook_path, output)
+    result = export_view(
+        notebook_path,
+        output,
+        runtime="wasm",
+    )
 
     config = json.loads(
         output.joinpath("_marimo-studio/views/dashboard/config").read_text(
@@ -267,7 +355,7 @@ def test_export_rejects_unlisted_artifact_files(
     output = tmp_path / "site"
 
     with pytest.raises(StaticExportError, match="file tree"):
-        export_view(notebook_path, output)
+        export_view(notebook_path, output, runtime="wasm")
 
     assert not output.exists()
 
@@ -299,7 +387,7 @@ def test_export_rejects_artifact_tampering_during_copy(
     output = tmp_path / "site"
 
     with pytest.raises(StaticExportError, match="sources changed"):
-        export_view(notebook_path, output)
+        export_view(notebook_path, output, runtime="wasm")
 
     assert tampered
     assert not output.exists()
@@ -324,7 +412,7 @@ def test_export_surfaces_provider_process_cleanup_failure(
         ProcessCleanupError,
         match="export provider process survived",
     ):
-        export_view(notebook_path, tmp_path / "site")
+        export_view(notebook_path, tmp_path / "site", runtime="wasm")
 
 
 def test_export_revision_changes_with_runtime_configuration(
@@ -364,12 +452,12 @@ def test_export_revision_changes_with_runtime_configuration(
         ),
     )
     output = tmp_path / "site"
-    export_view(notebook_path, output)
+    export_view(notebook_path, output, runtime="wasm")
     config_path = output / "_marimo-studio/views/dashboard/config"
     before = json.loads(config_path.read_text(encoding="utf-8"))
 
     theme["value"] = "dark"
-    export_view(notebook_path, output, force=True)
+    export_view(notebook_path, output, runtime="wasm", force=True)
     after = json.loads(config_path.read_text(encoding="utf-8"))
 
     assert before["userConfig"] == {"display": {"theme": "light"}}
@@ -390,7 +478,7 @@ def test_static_export_enforces_the_shared_encoded_byte_budget(
     monkeypatch.setattr(runtime_config_module, "RUNTIME_CONFIG_MAX_BYTES", 1)
 
     with pytest.raises(RuntimeConfigTooLargeError) as raised:
-        export_view(notebook_path, output)
+        export_view(notebook_path, output, runtime="wasm")
 
     assert raised.value.size > 1
     assert raised.value.limit == 1
@@ -415,7 +503,7 @@ def test_export_rejects_browser_release_drift_before_creating_output(
     )
 
     with pytest.raises(CompatibilityError, match="browser runtime"):
-        export_view(notebook_path, output)
+        export_view(notebook_path, output, runtime="wasm")
 
     assert not output.exists()
 
@@ -457,7 +545,7 @@ def test_export_uses_the_composed_browser_projection(
         ),
     )
 
-    export_view(notebook_path, output)
+    export_view(notebook_path, output, runtime="wasm")
 
     config = json.loads(
         output.joinpath("_marimo-studio/views/dashboard/config").read_text(
@@ -497,7 +585,7 @@ def test_export_view_rejects_view_assets_that_collide_with_generated_paths(
     entry.write_text(entry.read_text(encoding="utf-8") + "\n", encoding="utf-8")
 
     with pytest.raises(StaticExportError, match=message):
-        export_view(notebook_path, tmp_path / "site")
+        export_view(notebook_path, tmp_path / "site", runtime="wasm")
 
     assert not (tmp_path / "site").exists()
 
@@ -518,7 +606,7 @@ def test_export_view_reports_unresolved_projections_before_writing(
     output = tmp_path / "site"
 
     with pytest.raises(StaticExportError, match="unresolved projections") as error:
-        export_view(notebook_path, output)
+        export_view(notebook_path, output, runtime="wasm")
 
     assert (
         f"marimo-studio validate dashboard --target {notebook_path} --level static"

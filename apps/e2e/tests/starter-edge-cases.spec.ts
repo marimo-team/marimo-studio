@@ -106,21 +106,9 @@ test("builds and renders every starter when no cell may display output", async (
 
   const staticPage = await page.context().newPage();
   await staticPage.goto(noDisplayStaticExportUrl);
-  await expect
-    .poll(
-      () =>
-        staticPage
-          .locator("html")
-          .evaluate(async () => {
-            if (!globalThis.marimoStudio) return false;
-            await globalThis.marimoStudio.ready();
-            return true;
-          })
-          .catch(() => false),
-      { timeout: 65_000 },
-    )
-    .toBe(true);
-  await expect(staticPage.getByRole("heading", { name: "Empty Html" })).toBeVisible();
+  await expect(staticPage.getByRole("heading", { name: "Empty Html" })).toBeVisible({
+    timeout: 65_000,
+  });
   await staticPage.close();
   await retireWorkspacePage(page, browserDiagnostics);
   supersededPresentations.recovered();

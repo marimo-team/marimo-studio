@@ -198,7 +198,10 @@ export default defineConfig({
             {
               patterns: [
                 "@marimo-studio/*",
-                "@marimo-team/*",
+                "@marimo-team/frontend",
+                "@marimo-team/frontend/*",
+                "@marimo-team/marimo-export",
+                "@marimo-team/marimo-export/*",
                 "htmx.org",
                 "jotai",
                 "node:*",

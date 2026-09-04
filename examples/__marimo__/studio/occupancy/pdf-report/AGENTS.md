@@ -69,8 +69,9 @@ Use the supplied declarations as the type contract. A custom-element type error
 indicates a missing declaration reference or an invalid attribute.
 
 Subscribe to `occupancy_analysis` as one projection. It commits the summary,
-profiles, sensor comparisons, threshold curve, and ranked errors together so a
-reactive change composes one notebook generation.
+profiles, sensor comparisons, and finite threshold evidence together so a
+scope change composes one notebook generation. Build the report from the
+declared default threshold in that snapshot.
 
 Eager dataframes arrive as a shared `MarimoTable` backed by Flechette. Use
 [https://github.com/uwdata/flechette](https://github.com/uwdata/flechette) as

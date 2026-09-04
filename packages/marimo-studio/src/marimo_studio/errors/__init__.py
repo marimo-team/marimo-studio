@@ -180,6 +180,27 @@ class StaticExportError(ConfigurationError):
     code = "static-export-error"
 
 
+class PublicationError(MarimoStudioError):
+    """A Zero-Python publication could not be prepared."""
+
+    code = "zero-python-publication-error"
+    status_code = 409
+
+
+class PublicationUnavailableError(PublicationError):
+    """A Zero-Python runtime has no publication for the selected view."""
+
+    code = "zero-python-publication-unavailable"
+    transient = True
+
+
+class PublicationLimitError(PublicationError):
+    """Prepared publication data exceeds its safe bound."""
+
+    code = "zero-python-state-limit"
+    status_code = 413
+
+
 class RuntimeSelectionError(MarimoStudioError):
     """A requested presentation runtime is unavailable."""
 
@@ -442,6 +463,9 @@ __all__ = [
     "NotebookSourceError",
     "ProtocolError",
     "ProviderNotFoundError",
+    "PublicationError",
+    "PublicationLimitError",
+    "PublicationUnavailableError",
     "RuntimeConfigTooLargeError",
     "RuntimeSelectionError",
     "RuntimeTimeoutError",

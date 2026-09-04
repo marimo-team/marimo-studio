@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite-plus";
 
 import { buildMetadata } from "./build-metadata.ts";
+import { entryClosures } from "./entry-closures.ts";
 
 const packageRoot = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = resolve(packageRoot, "../..");
@@ -15,7 +16,11 @@ export default defineConfig({
   css: {
     postcss: marimo.postcss,
   },
-  plugins: [...marimo.plugins, buildMetadata()],
+  plugins: [
+    ...marimo.plugins,
+    buildMetadata(),
+    entryClosures({ entries: ["runtime"], fileName: "entry-closures.runtime.json" }),
+  ],
   worker: {
     plugins: () => marimo.workerPlugins(),
   },

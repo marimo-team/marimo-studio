@@ -87,6 +87,7 @@ def _verify_public_imports(notebook: Path) -> None:
 from importlib import resources
 from dataclasses import fields
 from inspect import signature
+from typing import get_args
 import marimo_studio
 import marimo_studio.agent
 import marimo_studio.authoring
@@ -115,11 +116,12 @@ assert set(marimo_studio.agent.__all__) == {
 assert set(marimo_studio.authoring.__all__) == {
     "BindingResult", "InspectionResult", "OutputRenderResult", "ProviderDiagnostic",
     "ProviderReport", "RenderedOutput", "RuntimeCell", "RuntimeOutput", "RuntimeProbe",
-    "Starter", "StaticExportResult", "StudioDiagnostic", "StudioOverview",
+    "Starter", "StaticExportResult", "StaticRuntime", "StudioDiagnostic", "StudioOverview",
     "ValidationIssue", "ValidationReport", "ValueReadError", "ValueReadResult", "View",
     "ViewBuild", "ViewDocument", "ViewInspection", "ViewOverview", "ViewRemovalResult",
     "Workspace", "doctor", "open_workspace",
 }
+assert set(get_args(marimo_studio.authoring.StaticRuntime)) == {"zero-python", "wasm"}
 assert set(marimo_studio.view_providers.__all__) == {
     "PROVIDER_API_VERSION", "BuildProfile", "BuildRequest", "BuildResult",
     "CellConfigSpec", "CellKind", "CellRef", "CellSpec", "DocumentAccess",
@@ -134,7 +136,8 @@ assert set(marimo_studio.view_providers.__all__) == {
 assert set(marimo_studio.errors.__all__) == {
     "AgentRequestError", "BindingError", "CapabilityInputError", "ConfigurationError",
     "DependencyError", "LastViewError", "MarimoStudioError", "NotebookSourceError",
-    "ProtocolError", "ProviderNotFoundError", "RuntimeConfigTooLargeError",
+    "ProtocolError", "ProviderNotFoundError", "PublicationError", "PublicationLimitError",
+    "PublicationUnavailableError", "RuntimeConfigTooLargeError",
     "RuntimeSelectionError", "RuntimeTimeoutError", "SourceConflictError",
     "SourceEncodingError", "SourceNotFoundError", "SourceTooLargeError",
     "SourceValidationError", "StaticExportError", "ViewDeletionError", "ViewExistsError",
@@ -316,6 +319,14 @@ def _verify_views(*, deno: bool) -> None:
 def main() -> None:
     args = _arguments()
     installed_version = version(_DISTRIBUTION)
+    marimo_export = distribution("marimo-export")
+    marimo_export_version = marimo_export.version
+    if marimo_export_version != "0.0.2":
+        raise AssertionError(
+            f"Installed marimo-export version is {marimo_export_version}, expected 0.0.2"
+        )
+    if marimo_export.read_text("direct_url.json") is not None:
+        raise AssertionError("Installed marimo-export came from a direct source")
     if args.expected_version is not None and installed_version != args.expected_version:
         raise AssertionError(
             f"Installed version {installed_version} does not match {args.expected_version}"
@@ -340,6 +351,7 @@ def main() -> None:
         json.dumps(
             {
                 "deno": args.deno,
+                "marimo_export": marimo_export_version,
                 "package": _DISTRIBUTION,
                 "version": installed_version,
                 "verified": True,

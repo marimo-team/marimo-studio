@@ -177,7 +177,13 @@ await view.validate(
     level: Literal["static", "runtime"] = "static",
     runtime_timeout: float = 60.0,
 ) -> ValidationReport
-await view.export(output, *, force=False) -> StaticExportResult
+await view.export(
+    output,
+    *,
+    runtime: StaticRuntime = "zero-python",
+    force: bool = False,
+    prepare_timeout: float | None = None,
+) -> StaticExportResult
 await view.remove() -> ViewRemovalResult
 ```
 
@@ -190,6 +196,13 @@ catalog and view generation. A same-name replacement raises
 `ViewGenerationConflictError` before browser activation, source writes, or
 artifact publication. `export()` checks again before replacing its destination,
 including when `force=True`.
+
+`export()` writes one static runtime. `runtime="zero-python"` prepares the
+configured notebook states during export. `runtime="wasm"` packages notebook
+source for execution through Pyodide in each visitor's browser.
+`prepare_timeout` bounds Zero-Python preparation and uses 30 seconds when
+omitted. Passing `prepare_timeout` with `runtime="wasm"` raises `ValueError`
+before Studio loads the workspace or builds the provider artifact.
 
 `build()` returns the artifact revision produced by the selected development or
 production build. The profiles maintain independent publications. A failed
@@ -226,11 +239,19 @@ state](identities.md#build-freshness) for freshness values.
 Names one source or build issue with a stable code, severity, repair hint, and
 optional source location.
 
+### `StaticRuntime`
+
+`Literal["zero-python", "wasm"]`. The value selects the single notebook runtime
+written into a static export.
+
 ### `StaticExportResult`
 
-Contains `notebook`, `view`, `output`, provider artifact `document`, and `files`.
-The `entrypoint` property resolves `output / document`. `to_dict()` also emits
-`runtime: "wasm"` and the resolved `entrypoint` path.
+Contains `notebook`, `view`, selected `runtime`, `output`, provider artifact
+`document`, `files`, and `cache_activity`. A Zero-Python result carries
+marimo-export's authored and projection cache dispositions. A WebAssembly
+result sets `cache_activity` to `None`. The `entrypoint` property resolves
+`output / document`. `to_dict()` emits the same fields plus the resolved
+`entrypoint` path.
 
 ### `ViewRemovalResult`
 
@@ -523,7 +544,7 @@ surfaces. Nested notebook records are documented under `NotebookSpec` and
 | `ViewInspection`     | `view`, `provider`, `documents`, `diagnostics`, `freshness`, `build`                                                                                                      |
 | `ViewBuild`          | `view`, `profile`, `revision`, `issues`                                                                                                                                   |
 | `ViewRemovalResult`  | `notebook`, `view`, `default_view`, `views`, `catalog_generation`                                                                                                         |
-| `StaticExportResult` | `notebook`, `view`, `output`, `document`, `files` and computed `entrypoint`                                                                                               |
+| `StaticExportResult` | `notebook`, `view`, `runtime`, `output`, `document`, `files`, `cache_activity` and computed `entrypoint`                                                                  |
 
 `StudioOverview.state` is `unconfigured`, `needs-view`, or `ready`.
 `ViewInspection.freshness` is `current`, `stale`, `unbuilt`, `building`, or

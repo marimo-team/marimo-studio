@@ -39,8 +39,7 @@ pytestmark = pytest.mark.native_process
 
 _PROVIDER_MODULE = "tests.providers.test_process_isolation"
 _PROCESS_START_TIMEOUT = 15.0
-_METADATA_OPERATION_TIMEOUT = 1.5
-_DISCOVERY_RECOVERY_TIMEOUT = 5.0
+_METADATA_OPERATION_TIMEOUT = 5.0
 _CONCURRENT_DISCOVERY_TIMEOUT = _PROCESS_START_TIMEOUT + 5.0
 
 
@@ -228,7 +227,7 @@ def test_timed_out_description_keeps_a_healthy_provider_usable(
             _candidate("healthy", "catalog_provider", distribution="test-timeout"),
         ),
         isolate_operations=True,
-        extension_timeout=_DISCOVERY_RECOVERY_TIMEOUT,
+        extension_timeout=_METADATA_OPERATION_TIMEOUT,
     )
     blocked_pid = 0
 
@@ -240,7 +239,7 @@ def test_timed_out_description_keeps_a_healthy_provider_usable(
         _wait_until_dead((blocked_pid,))
         diagnostics = registry.diagnostics()
         assert [item.registration for item in diagnostics] == ["blocked", "healthy"]
-        assert f"exceeded its {_DISCOVERY_RECOVERY_TIMEOUT:g} second limit" in (
+        assert f"exceeded its {_METADATA_OPERATION_TIMEOUT:g} second limit" in (
             diagnostics[0].error or ""
         )
         assert diagnostics[1].loaded

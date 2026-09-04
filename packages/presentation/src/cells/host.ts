@@ -231,6 +231,9 @@ export const prepareCellHost = (host: Element) => {
   if (!name) {
     return;
   }
+  if (host.hasAttribute("aria-label") && !host.hasAttribute("role")) {
+    host.setAttribute("role", "group");
+  }
   if (!host.id) {
     const id = `${PRESERVED_ID_PREFIX}${name}`;
     const existing = host.ownerDocument.getElementById(id);
@@ -278,6 +281,7 @@ export const syncPreservedCellHosts = (source: ParentNode, live: Document): void
     const preserved = live.getElementById(host.id);
     if (preserved?.localName === "marimo-cell" && preserved !== host) {
       syncProjectionHostAttributes(preserved, host);
+      prepareCellHost(preserved);
     }
   });
 };

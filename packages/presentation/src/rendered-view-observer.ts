@@ -6,6 +6,7 @@ import type {
 import type { ObservedProjectionInstance } from "@marimo-studio/protocol/projections";
 
 import type { RuntimeDiagnostic, StudioDiagnostic } from "./diagnostics.ts";
+import type { RuntimeStateApi } from "./runtime-state.ts";
 
 import { documentLifecycleEnvelope } from "./document/document-lifecycle-id.ts";
 import { postToStudioParent } from "./document/parent-bridge.ts";
@@ -24,6 +25,7 @@ interface MarimoStudioApi {
   identity: () => { readonly projectionRevision: string; readonly revision: string };
   projections: () => readonly ObservedProjectionInstance[];
   updateQuery: (query: string) => Promise<void>;
+  state?: RuntimeStateApi;
 }
 
 let observer: MutationObserver | undefined;

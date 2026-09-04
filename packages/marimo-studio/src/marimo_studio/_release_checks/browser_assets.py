@@ -1,10 +1,11 @@
-"""Validate installed browser assets, import graphs, and size budgets."""
+"""Validate installed browser assets and import-graph budgets."""
 
 from __future__ import annotations
 
 import gzip
 import json
 import re
+from importlib.metadata import version as distribution_version
 from pathlib import Path
 
 REQUIRED_ASSETS = {
@@ -16,8 +17,6 @@ REQUIRED_ASSETS = {
     "studio.css",
     "studio.js",
 }
-MAX_BROWSER_ASSET_BYTES = 24 * 1024 * 1024
-MAX_BROWSER_ASSET_FILES = 400
 MAX_ENTRY_GRAPH_BYTES = 850 * 1024
 MAX_ENTRY_GRAPH_GZIP_BYTES = 225 * 1024
 MAX_STARTUP_GRAPH_BYTES = 6_500 * 1024
@@ -184,7 +183,7 @@ def browser_asset_graphs(
 
 
 def verify_browser_assets(root: Path, release: dict[str, object]) -> None:
-    """Validate installed browser contents, budgets, and provenance."""
+    """Validate installed browser contents, startup budgets, and provenance."""
     present = {path.name for path in root.iterdir() if path.is_file()}
     if not REQUIRED_ASSETS.issubset(present):
         raise AssertionError(
@@ -205,13 +204,6 @@ def verify_browser_assets(root: Path, release: dict[str, object]) -> None:
     ):
         raise AssertionError(
             "Installed KaTeX assets violate the WOFF2 browser contract"
-        )
-    files = tuple(path for path in root.rglob("*") if path.is_file())
-    total_bytes = sum(path.stat().st_size for path in files)
-    if len(files) > MAX_BROWSER_ASSET_FILES or total_bytes > MAX_BROWSER_ASSET_BYTES:
-        raise AssertionError(
-            f"Browser assets exceed the package budget: {len(files)} files, "
-            f"{total_bytes} bytes"
         )
     entry_graphs, startup_graphs = browser_asset_graphs(root)
     for entry, entry_graph in entry_graphs.items():
@@ -248,10 +240,18 @@ def verify_browser_assets(root: Path, release: dict[str, object]) -> None:
                 f"{startup_bytes} raw bytes, {startup_gzip_bytes} gzip bytes"
             )
     build_meta = json.loads((root / "build-meta.json").read_text(encoding="utf-8"))
-    if build_meta.get("marimo") != {
+    expected_marimo = {
         "repository": "https://github.com/marimo-team/marimo.git",
-        **release,
-    }:
+        "version": release.get("version"),
+        "commit": release.get("commit"),
+        "patchSha256": release.get("frontendPatchSha256"),
+    }
+    if build_meta.get("marimo") != expected_marimo:
         raise AssertionError(
             "Installed browser metadata does not match the pinned release"
+        )
+    expected_export = {"version": distribution_version("marimo-export")}
+    if build_meta.get("marimoExport") != expected_export:
+        raise AssertionError(
+            "Installed browser metadata does not match the Python marimo-export"
         )

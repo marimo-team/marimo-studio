@@ -129,7 +129,16 @@ try {
   await preparation.run(
     "install marimo-studio wheel",
     "uv",
-    ["pip", "install", "--python", python, wheel],
+    [
+      "pip",
+      "install",
+      "--python",
+      python,
+      "--no-cache",
+      "--exclude-newer-package",
+      "marimo-export=false",
+      wheel,
+    ],
     { cwd: temporaryRoot, stdio: "inherit" },
   );
   preparation.requireActive();
@@ -146,6 +155,20 @@ try {
   delete environment.PYTHONPATH;
   delete environment.UV_PROJECT_ENVIRONMENT;
   delete environment.VIRTUAL_ENV;
+  await preparation.run(
+    "verify published marimo-export installation",
+    python,
+    [
+      "-c",
+      [
+        "from importlib.metadata import distribution, version",
+        "assert version('marimo-export') == '0.0.2'",
+        "assert distribution('marimo-export').read_text('direct_url.json') is None",
+      ].join("; "),
+    ],
+    { cwd: workspaceDirectory, env: environment, stdio: "inherit" },
+  );
+  preparation.requireActive();
   await preparation.run(
     "create installed Vanilla view",
     studio,
@@ -183,6 +206,8 @@ try {
       notebookPath,
       "--output",
       staticDirectory,
+      "--runtime",
+      "wasm",
       "--json",
     ],
     { cwd: workspaceDirectory, env: environment, stdio: "inherit" },

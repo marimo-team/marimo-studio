@@ -83,16 +83,17 @@ runtime and delivery boundaries.
 
 ## Runtime and delivery matrix
 
-| Delivery             | Python runtime | Browser runtime |
-| -------------------- | -------------- | --------------- |
-| Studio Preview       | Supported      | Supported       |
-| Live run-mode server | Supported      | Supported       |
-| Static export        | Not applicable | Supported       |
+| Delivery             | Python `server` | Browser `wasm` | Prepared `zero-python` |
+| -------------------- | --------------- | -------------- | ---------------------- |
+| Studio Preview       | Supported       | Supported      | Supported in edit mode |
+| Live run-mode server | Supported       | Supported      | Not applicable         |
+| Static export        | Not applicable  | Supported      | Default                |
 
-Static exports are HTTP directories. They contain the saved notebook source,
-production artifact, Browser runtime, runtime configuration, and notebook
-public files. Imported packages, remote data, fonts, maps, and other browser
-resources retain their own network and cross-origin requirements.
+Static exports are HTTP directories. A Prepared export contains the production
+artifact, runtime configuration, notebook public files, and precomputed
+projection results. A Browser export also contains saved notebook source and
+runs it through Pyodide. Imported packages, remote data, fonts, maps, and other
+browser resources retain their own network and cross-origin requirements.
 
 ## Deployment boundary
 

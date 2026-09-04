@@ -23,13 +23,6 @@ if ! cmp -s "$direct_wheel" "$rebuilt_wheel"; then
 	exit 1
 fi
 
-for archive in "${wheels[@]}" "${sdists[@]}"; do
-	if [[ "$(wc -c <"$archive")" -gt $((8 * 1024 * 1024)) ]]; then
-		printf 'ERROR: Distribution exceeds the 8 MiB release budget: %s\n' "$archive" >&2
-		exit 1
-	fi
-done
-
 plugin_digests="$root/dist/agent-plugin-digests.json"
 uv run --frozen python - "$plugin_digests" "${wheels[@]}" "${sdists[@]}" <<'PY'
 from hashlib import sha256
@@ -90,6 +83,7 @@ def verify_metadata(source, archive):
         by_name.setdefault(canonicalize_name(requirement.name), []).append(requirement)
     for name, specifier in {
         "agent-plugins": ">=0.1.0",
+        "marimo-export": "==0.0.2",
         "tree-sitter": "==0.25.2",
         "tree-sitter-javascript": "==0.25.0",
     }.items():

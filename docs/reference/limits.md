@@ -36,9 +36,10 @@ or artifact contract. Artifact validation also rejects reserved routes, a
 missing entry document, and a document without one `head`, one `body`, and one
 `#app-shell`.
 
-Static export combines the artifact with Studio runtime assets, notebook source,
-and notebook public files. Each copied tree is checked against the artifact
-file budget before the staged directory can replace the destination.
+Static export combines the artifact with Studio runtime assets and notebook
+public files. Prepared export adds verified output assets. WebAssembly export
+adds notebook source. Each copied tree is checked against the artifact file
+budget before the staged directory can replace the destination.
 
 ## Projection declarations
 
@@ -55,7 +56,7 @@ file budget before the staged directory can replace the destination.
 
 `allowed_targets=None` represents a dynamic mount and avoids enumerating its
 target set during inspection. Runtime policy still applies to active instances
-and unique targets.
+and unique targets. Prepared export requires finite targets on every mount.
 
 ## Active presentation projections
 
@@ -82,9 +83,11 @@ target.
 | One rendered output request set       |   100 selectors | Capability or protocol error |
 | Browser client response               | 5,000,000 bytes | Live request failure         |
 
-Runtime configuration contains saved notebook source, projection declarations,
-runtime bindings, and presentation settings. Prefer finite projection targets
-and reduce notebook source when the record reaches 16 MiB.
+WebAssembly runtime configuration contains saved notebook source, projection
+declarations, runtime bindings, and presentation settings. Prepared runtime
+configuration contains the publication identity and manifest URL. Prefer
+finite projection targets and reduce notebook source when a WebAssembly record
+reaches 16 MiB.
 
 ## Provider records
 
@@ -109,6 +112,7 @@ provider API](provider-api.md) defines the record responsibilities.
 | ------------------------------------------------------------------ | ----------: | -----------------------------------------------------------------------------: |
 | Runtime inspection and validation                                  |  60 seconds |                                                          0 through 300 seconds |
 | Browser validation wait                                            |  10 seconds |                                                          0 through 300 seconds |
+| Prepared export                                                    |  30 seconds |                                                              Positive duration |
 | Provider runner command                                            | 120 seconds | Finite positive duration within the request's shared 120-second command budget |
 | Third-party provider metadata, availability, and starter discovery |  10 seconds |                                             Fixed extension-operation deadline |
 

@@ -11,21 +11,22 @@ content. Generations identify replaceable owners and incarnations.
 
 ## Product terms
 
-| Term            | Contract                                                                                                                                                   |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Notebook        | Saved Marimo Python file that owns data, computation, controls, and reactive behavior                                                                      |
-| View            | Stable name and route for one presentation of a notebook                                                                                                   |
-| View project    | Directory containing `view.toml`, authored frontend source, and provider configuration for one view                                                        |
-| Source document | UTF-8 text file authorized by provider inspection or the Studio-owned `view.toml`                                                                          |
-| Build input     | File or bounded directory included in the immutable snapshot used by a build                                                                               |
-| View provider   | Installed Python extension that offers starters, inspects a view project, and builds browser files                                                         |
-| Provider key    | Durable `distribution/registration` identity stored in `view.toml`                                                                                         |
-| Starter         | Creation-time choice that produces initial view project files                                                                                              |
-| Artifact        | Validated immutable browser file tree produced by one build profile                                                                                        |
-| Presentation    | One artifact combined with notebook source, runtime configuration, projections, and browser session state                                                  |
-| Preview         | Studio surface that renders the current development presentation                                                                                           |
-| Python runtime  | Notebook execution in a server-side Marimo session. Its configuration ID is `server`                                                                       |
-| Browser runtime | Notebook execution in a browser worker through [WebAssembly](https://webassembly.org/) and [Pyodide](https://pyodide.org/). Its configuration ID is `wasm` |
+| Term             | Contract                                                                                                                                                   |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Notebook         | Saved Marimo Python file that owns data, computation, controls, and reactive behavior                                                                      |
+| View             | Stable name and route for one presentation of a notebook                                                                                                   |
+| View project     | Directory containing `view.toml`, authored frontend source, and provider configuration for one view                                                        |
+| Source document  | UTF-8 text file authorized by provider inspection or the Studio-owned `view.toml`                                                                          |
+| Build input      | File or bounded directory included in the immutable snapshot used by a build                                                                               |
+| View provider    | Installed Python extension that offers starters, inspects a view project, and builds browser files                                                         |
+| Provider key     | Durable `distribution/registration` identity stored in `view.toml`                                                                                         |
+| Starter          | Creation-time choice that produces initial view project files                                                                                              |
+| Artifact         | Validated immutable browser file tree produced by one build profile                                                                                        |
+| Presentation     | One artifact combined with notebook source, runtime configuration, projections, and browser session state                                                  |
+| Preview          | Studio surface that renders the current development presentation                                                                                           |
+| Python runtime   | Notebook execution in a server-side Marimo session. Its configuration ID is `server`                                                                       |
+| Browser runtime  | Notebook execution in a browser worker through [WebAssembly](https://webassembly.org/) and [Pyodide](https://pyodide.org/). Its configuration ID is `wasm` |
+| Prepared runtime | Browser rendering from verified outputs computed during export. Its static runtime ID is `zero-python`                                                     |
 
 Source documents and build inputs are separate allowlists. A read-only lockfile
 can affect a build without accepting Source writes. An editable guidance file

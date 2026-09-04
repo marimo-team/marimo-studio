@@ -1,6 +1,6 @@
 ---
 title: Run or export a view
-description: Run a view with the Python or Browser runtime, or export the Browser runtime as a static directory.
+description: Run a view with Python or WebAssembly, or export prepared results as a static directory.
 ---
 
 # Run or export a view
@@ -13,8 +13,9 @@ receive the view.
 | **Python runtime**  | `server`  | A Marimo session with server files, databases, credentials, native packages, and [anywidgets](https://anywidget.dev/)              |
 | **Browser runtime** | `wasm`    | A [Pyodide](https://pyodide.org/) worker that runs Python through [WebAssembly](https://webassembly.org/) in the visitor's browser |
 
-`marimo run` serves either configured runtime from a live process.
-`marimo-studio view export` writes a static Browser runtime directory.
+`marimo run` serves either configured runtime from a live process. Static
+export defaults to the Prepared runtime, which executes Python during export
+and serves verified notebook results to the view.
 
 An [anywidget](https://anywidget.dev/) is a custom browser interface connected
 to a Python model.
@@ -25,11 +26,13 @@ to a Python model.
 [tool.marimo-studio]
 default = "dashboard"
 runtime = "server"
-runtimes = ["server", "wasm"]
+runtimes = ["server", "wasm", "zero-python"]
 ```
 
 `runtime` chooses the default. `runtimes` controls the choices shown in Studio
-and accepted through `?runtime=`.
+and accepted through `?runtime=`. `zero-python` adds a Prepared preview in the
+editor. A live run-mode server accepts `server` and `wasm`, so the default must
+be one of those two runtimes.
 
 Use the Python runtime for native packages, private files, databases, or server
 credentials. Use the Browser runtime when the notebook and its data can run in
@@ -66,14 +69,84 @@ resolve, install, and import provider packages declared by the project.
 Use [Deploy a live Python view](deploy.md) before exposing the process to other
 clients.
 
-## Export a static Browser runtime view
+## Export a prepared static view
 
-Build and export the production profile:
+Build the production profile and prepare every projected result for the
+default input state:
 
 ```console
 marimo-studio view export dashboard \
   --target analysis.py \
   --output dist/dashboard
+```
+
+Python executes while the command runs.
+
+::: tip Publish without sharing Python source
+The Prepared runtime keeps the Python notebook and cell source on the machine
+that runs the export. The static directory contains the production view,
+prepared outputs, runtime metadata, and files placed in the notebook's
+`public/` directory. The browser reads that publication without starting
+Python. Cell names, IDs, and code hashes remain as provenance, while notebook
+source and cell bodies are not serialized into the export.
+
+See [marimo-export](https://github.com/marimo-team/marimo-export) for the
+publication format and browser reader.
+:::
+
+Each Zero-Python export uses the authored notebook's `__marimo__/cache/`
+directory. [Marimo's native cell cache](https://docs.marimo.io/api/caching/)
+decides which authored cells can be restored across states, views, and later
+export commands. marimo-export retains the resulting portable states in its
+configured export repository. An exact later export can reuse that prepared
+generation before starting the notebook. Set `MARIMO_EXPORT_REPOSITORY` to
+choose the repository directory.
+
+The repository stores verified portable publications. Marimo remains the
+owner of computation cache keys, invalidation, serialization, and restoration.
+Use `mo.watch.file` in an upstream notebook cell when a result depends on file
+contents that can change independently of notebook source.
+
+Add `states.yaml` to the view project when visitors can change notebook
+controls. The file declares the view's prepared state space. `matrix` expands
+the Cartesian product of its accepted frontend values:
+
+```yaml
+schema: marimo-export.states.v1
+default_state: matrix-000000
+matrix:
+  minimum_magnitude: [2.5, 3.0, 4.0]
+  review_status:
+    - [All statuses]
+    - [reviewed]
+```
+
+The example prepares six states. Sliders accept numbers. A marimo dropdown's
+frontend value is a one-item array, as shown for `review_status`. Use `states`
+when the valid combinations are not a Cartesian product:
+
+```yaml
+schema: marimo-export.states.v1
+default_state: overview
+states:
+  overview:
+    minimum_magnitude: 2.5
+    review_status: [All statuses]
+  reviewed:
+    minimum_magnitude: 4.0
+    review_status: [reviewed]
+```
+
+State keys name notebook inputs that affect the view's finite projection
+targets. Studio rejects dynamic `data-marimo-allow="*"` mounts, non-portable
+input values, duplicate matrix values, and policies larger than 10,000 states.
+Raise `--prepare-timeout` when preparing a large state set:
+
+```console
+marimo-studio view export dashboard \
+  --target analysis.py \
+  --output dist/dashboard \
+  --prepare-timeout 600
 ```
 
 Serve the complete directory over HTTP:
@@ -82,27 +155,41 @@ Serve the complete directory over HTTP:
 python -m http.server --bind 127.0.0.1 --directory dist/dashboard
 ```
 
-Open `http://127.0.0.1:8000/`. The export contains the production artifact,
-Browser runtime integration, saved notebook source, and notebook `public/`
-files. Upload the complete directory and keep its relative paths intact.
+Open `http://127.0.0.1:8000/`. Upload the complete directory and keep its
+relative paths intact.
 
-::: warning Review the export before publishing
-The notebook source and `public/` files are visible to visitors. Authored
-JavaScript, notebook code, widgets, and rendered output execute in the visitor's
-browser. Studio places the provider-authored page in a sandboxed iframe with an
-opaque origin, so it cannot read the hosting origin's cookies, storage, or
-same-origin server data. Origin-sensitive browser APIs and cross-origin requests
-observe that opaque origin.
+::: warning Review executable browser content before publishing
+Notebook `public/` files and prepared outputs are visible to visitors. Authored
+JavaScript, widgets, and rendered output execute in the visitor's browser.
+Studio places the provider-authored page in a sandboxed iframe with an opaque
+origin, so it cannot read the hosting origin's cookies, storage, or same-origin
+server data. Origin-sensitive browser APIs and cross-origin requests observe
+that opaque origin.
 :::
 
-The Browser runtime fetches Pyodide, packages, runtime metadata, and any remote
-view dependencies over the network. Allow their script, worker, connection,
-font, image, and data origins in the hosting
+Remote view dependencies keep their network requirements. Allow their script,
+connection, font, image, and data origins in the hosting
 [Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP).
 A static export is a relocatable HTTP directory, not an offline bundle.
 
 Use `--force` after reviewing an existing destination that should be replaced.
 Studio stages the export before replacing that directory.
+
+## Export the WebAssembly runtime
+
+Use `--runtime wasm` when visitors should run notebook code and recompute input
+states that were not prepared during export:
+
+```console
+marimo-studio view export dashboard \
+  --target analysis.py \
+  --output dist/dashboard \
+  --runtime wasm
+```
+
+The WebAssembly export contains saved notebook source and starts Python through
+Pyodide in each visitor's browser. Its packages, data sources, scripts,
+workers, and remote assets must be reachable from that browser.
 
 ## Export the analytical notebook
 
@@ -116,5 +203,5 @@ marimo export html analysis.py \
 ```
 
 Use this document when visitors should read the analysis as it ran during the
-export. Use a Studio Browser runtime export when they should change controls and
-recompute dependent notebook cells.
+export. Use a Studio Prepared export for a finite set of interactive states or
+a WebAssembly export for visitor-side Python execution.

@@ -99,7 +99,7 @@ jobs:
     needs: [changes, documentation]
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     permissions:
       contents: read
       pages: read

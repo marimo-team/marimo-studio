@@ -117,7 +117,15 @@ for (const family of documentationExampleFamilies) {
     const root = join(distDir, "examples", family.slug, view.key);
     const entrypoint = join(root, "index.html");
     const config = join(root, "_marimo-studio", "views", view.key, "config");
-    const runtime = join(root, "_marimo-studio", "assets", "runtime.js");
+    const runtime = join(root, "_marimo-studio", "assets", "zero-python.js");
+    const preparedManifest = join(
+      root,
+      "_marimo-studio",
+      "views",
+      view.key,
+      "zero-python",
+      "current",
+    );
     const noJekyll = join(root, ".nojekyll");
 
     if (!(await isFile(entrypoint))) {
@@ -126,9 +134,24 @@ for (const family of documentationExampleFamilies) {
     }
     check(await isFile(config), `Missing live example config: ${family.slug}/${view.key}`);
     check(await isFile(runtime), `Missing live example runtime: ${family.slug}/${view.key}`);
+    check(
+      await isFile(preparedManifest),
+      `Missing prepared example manifest: ${family.slug}/${view.key}`,
+    );
     check(await isFile(noJekyll), `Missing live example .nojekyll: ${family.slug}/${view.key}`);
 
     const document = await readFile(entrypoint, "utf8");
+    if (await isFile(config)) {
+      // SAFETY: The same-worktree CLI owns this config and the runtime field is
+      // checked before it contributes to build acceptance.
+      const runtimeConfig = JSON.parse(await readFile(config, "utf8")) as {
+        runtime?: { id?: string };
+      };
+      check(
+        runtimeConfig.runtime?.id === "zero-python",
+        `Invalid live example runtime: ${family.slug}/${view.key}`,
+      );
+    }
     check(
       document.includes('<base href="./">'),
       `Missing relative document base: ${family.slug}/${view.key}`,

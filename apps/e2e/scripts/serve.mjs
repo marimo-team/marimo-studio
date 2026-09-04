@@ -173,6 +173,8 @@ try {
       lazyNotebookPath,
       "--output",
       staticExportDirectory,
+      "--runtime",
+      "wasm",
     ],
     {
       cwd: repositoryDirectory,

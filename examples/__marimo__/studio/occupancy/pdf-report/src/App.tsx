@@ -9,9 +9,9 @@ import { OccupancyReport } from "./report/OccupancyReport.tsx";
 import type {
   DailyReading,
   HourlyReading,
-  ModelReport,
   OccupancyReportData,
   OccupancySummary,
+  PreparedModel,
   RoomProfileSummary,
   SensorProfile,
 } from "./report/types.ts";
@@ -19,15 +19,13 @@ import type {
 interface OccupancyAnalysis {
   readonly selection: {
     readonly scope: string;
-    readonly metric: string;
-    readonly threshold: number;
   };
   readonly summary: OccupancySummary;
   readonly hourly_room_profile: readonly HourlyReading[];
   readonly daily_room_profile: readonly DailyReading[];
   readonly sensor_profiles: readonly SensorProfile[];
   readonly profile_summary: RoomProfileSummary;
-  readonly model: ModelReport;
+  readonly model: PreparedModel;
 }
 
 const LoadingReport = () => (
@@ -150,6 +148,10 @@ export const App = () => {
   const report = useMemo<OccupancyReportData | undefined>(() => {
     const value = analysis.value;
     if (value === undefined) return undefined;
+    const selectedModel = value.model.evidence.find((row) =>
+      Math.abs(row.threshold - value.model.default_threshold) < 0.001
+    );
+    if (selectedModel === undefined) return undefined;
 
     return {
       room: value.summary.room,
@@ -168,8 +170,10 @@ export const App = () => {
       sensors: value.sensor_profiles,
       profile_summary: value.profile_summary,
       model: {
-        ...value.model,
-        errors: value.model.errors.slice(0, 6),
+        ...selectedModel,
+        normalization: value.model.normalization,
+        curve: value.model.evidence,
+        errors: selectedModel.errors.slice(0, 6),
       },
     };
   }, [analysis.value]);

@@ -68,6 +68,8 @@ def runtime_head(
     client_id: str | None = None,
     lifecycle_id: int | None = None,
     runtime_session_id: str | None = None,
+    runtime_entry: str = "runtime.js",
+    runtime_styles: tuple[str, ...] = ("runtime.css",),
 ) -> Renderable:
     mount_config = json.dumps(
         {
@@ -91,13 +93,16 @@ def runtime_head(
     ).replace("<", "\\u003c")
     return fragment[
         node_list(
-            link(
-                {
-                    "data-marimo-studio-runtime": True,
-                    "rel": "stylesheet",
-                    "crossorigin": "anonymous",
-                    "href": f"{assets_url}/runtime.css",
-                }
+            *(
+                link(
+                    {
+                        "data-marimo-studio-runtime": True,
+                        "rel": "stylesheet",
+                        "crossorigin": "anonymous",
+                        "href": f"{assets_url}/{stylesheet}",
+                    }
+                )
+                for stylesheet in runtime_styles
             ),
             script({"data-marimo-studio-runtime": True})[
                 Markup(
@@ -111,7 +116,7 @@ def runtime_head(
                 {
                     "data-marimo-studio-runtime": True,
                     "type": "module",
-                    "src": f"{assets_url}/runtime.js",
+                    "src": f"{assets_url}/{runtime_entry}",
                 }
             ),
             dev
@@ -184,6 +189,8 @@ def runtime_document(
     client_id: str | None = None,
     lifecycle_id: int | None = None,
     runtime_session_id: str | None = None,
+    runtime_entry: str = "runtime.js",
+    runtime_styles: tuple[str, ...] = ("runtime.css",),
 ) -> str:
     """Inject one presentation runtime into an authored view document."""
     parser = HTMLDocumentParser()
@@ -218,6 +225,8 @@ def runtime_document(
                 client_id=client_id,
                 lifecycle_id=lifecycle_id,
                 runtime_session_id=runtime_session_id,
+                runtime_entry=runtime_entry,
+                runtime_styles=runtime_styles,
             )
         )
         + "\n"

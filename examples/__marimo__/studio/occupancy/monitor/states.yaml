@@ -1,0 +1,12 @@
+schema: marimo-export.states.v1
+default_state: matrix-000000
+matrix:
+  analysis_scope:
+    - [Complete record]
+    - [Weekdays · 07:00–19:00]
+    - [Off-hours + weekends]
+  metric:
+    - [CO2]
+    - [Light]
+    - [Temperature]
+    - [Humidity]

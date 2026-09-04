@@ -75,7 +75,11 @@ done
 group="test"
 pytest_args=(pytest)
 if [[ "$parallel" == "true" ]]; then
-    pytest_args+=(-n auto --maxprocesses=8 --dist worksteal)
+    distribution="worksteal"
+    if [[ "$profile" == "all" || "$profile" == "native" ]]; then
+        distribution="loadgroup"
+    fi
+    pytest_args+=(-n auto --maxprocesses=8 --dist "$distribution")
 fi
 case "$profile" in
     all)

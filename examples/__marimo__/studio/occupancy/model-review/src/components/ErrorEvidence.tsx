@@ -31,7 +31,7 @@ export const ErrorEvidence = ({
   rows,
   total,
 }: {
-  rows: ErrorCase[];
+  rows: readonly ErrorCase[];
   total?: number;
 }) => (
   <section className="error-section" aria-labelledby="errors-heading">

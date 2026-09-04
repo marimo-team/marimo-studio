@@ -127,7 +127,8 @@ Export:
 
 1. Selects or builds the production publication.
 2. Copies its complete browser file tree.
-3. Adds the packaged runtime and notebook source.
+3. Adds either a prepared result publication or the WebAssembly runtime and
+   notebook source.
 4. Writes the destination through a staging directory.
 5. Atomically installs the completed export.
 

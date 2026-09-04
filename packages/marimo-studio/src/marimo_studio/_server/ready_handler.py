@@ -152,7 +152,7 @@ class ReadyWorkspaceHandler:
                         route.context,
                         workspace,
                         route.selected_studio,
-                        self._runtimes.configured_options(workspace.runtimes),
+                        self._runtimes.options_for(workspace, route.context),
                         self._adapters.session_state,
                         route.notebook_scope.session_ids,
                         self._security_policy,

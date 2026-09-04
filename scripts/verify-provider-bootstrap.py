@@ -104,6 +104,9 @@ async def _prepare(root: Path) -> None:
         source["path"] = str(path.resolve())
         sources[name] = source
     uv["sources"] = sources
+    age_exclusions = tomlkit.inline_table()
+    age_exclusions["marimo-export"] = False
+    uv["exclude-newer-package"] = age_exclusions
     tool["uv"] = uv
     document["tool"] = tool
     (root / "pyproject.toml").write_text(tomlkit.dumps(document), encoding="utf-8")
@@ -302,6 +305,8 @@ def _verify(root: Path) -> None:
         str(notebook),
         "--output",
         str(output),
+        "--runtime",
+        "wasm",
     )
     entrypoint = exported.get("entrypoint")
     if (

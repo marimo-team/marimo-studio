@@ -86,6 +86,7 @@ def _location(notebook: Path, manager: _Manager) -> ServerLocation:
         notebook=notebook.resolve(),
         file_key=str(notebook),
         base_url="",
+        internal_url=None,
         mode="edit",
         routing_query=(),
         handle=ServerHandle(

@@ -226,13 +226,28 @@ Remote server URLs must use HTTPS. HTTP is accepted for loopback hosts such as
 ## `marimo-studio view export`
 
 ```text
-marimo-studio view export VIEW --output DIRECTORY [--target PATH] [--force] [--json]
+marimo-studio view export VIEW --output DIRECTORY [--target PATH]
+  [--runtime zero-python|wasm] [--prepare-timeout SECONDS] [--force] [--json]
 ```
 
-Builds the production profile and writes a Browser runtime site. The result
-contains the exact entry file and file count. `--force` replaces an existing
-output directory after Studio confirms that it still matches the directory
-observed before the build.
+Builds the production profile and writes a static site. `--runtime zero-python`
+is the default. It executes the notebook during export and packages prepared
+outputs for the view's finite projection targets and configured input states.
+`--runtime wasm` packages notebook source for execution through Pyodide in the
+visitor's browser. `--prepare-timeout` bounds Zero-Python preparation and
+defaults to 30 seconds. Studio rejects `--prepare-timeout` with
+`--runtime wasm` before resolving the target or building the provider artifact.
+
+Zero-Python keeps Python notebook and cell source on the build machine. Its
+publication retains cell names, IDs, and code hashes as provenance. Projected
+outputs and files under the notebook's `public/` directory are included in the
+static directory.
+
+The result contains the runtime, exact entry file, file count, and Zero-Python
+cache activity. Authored hits and misses come directly from marimo-export's
+observation of Marimo's native cell-cache decisions. `--force` replaces an
+existing output directory after Studio confirms that it still matches the
+directory observed before the build.
 
 Studio rejects a symlink destination, a filesystem root, the user's home
 directory, and any destination that contains, equals, or sits within an export
@@ -240,11 +255,12 @@ source. It stages and verifies the complete directory before an atomic
 replacement. When replacement fails after moving an existing destination,
 the error reports its recovery directory.
 
-The exported directory contains the production artifact, Browser runtime,
-saved notebook source, runtime configuration, notebook `public/` files, and a
-`.nojekyll` marker. Serve the directory over HTTP. Browser package imports,
-remote data, fonts, maps, and other view dependencies still require the network
-access expected by the authored notebook and frontend.
+The Zero-Python directory contains the production artifact, prepared result
+index and assets, runtime configuration, notebook `public/` files, and a
+`.nojekyll` marker. The WebAssembly directory also contains saved notebook
+source. Serve either directory over HTTP. Browser package imports, remote data,
+fonts, maps, and other view dependencies keep the network access expected by
+the authored frontend.
 
 ## `marimo-studio view remove`
 

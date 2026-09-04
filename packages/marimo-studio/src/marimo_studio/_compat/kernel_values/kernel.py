@@ -13,7 +13,9 @@ from types import TracebackType
 from typing import Any
 from uuid import uuid4
 
-from marimo_studio._compat.cached_cells import keep_cached_cells_compatible
+from marimo_export.integration import is_owned_session, keep_cached_cells_compatible
+from marimo_export.observations import ObservationLedger, install_observation_ledger
+
 from marimo_studio._compat.kernel_values.authorization import (
     STALE_PROJECTION_BINDING_MESSAGE,
     AuthorizedProjections,
@@ -129,7 +131,7 @@ class _CachedCellCompatibility:
         self._release: Callable[[], None] | None = None
 
     def activate(self) -> None:
-        if self._release is None:
+        if self._release is None and not is_owned_session():
             self._release = keep_cached_cells_compatible()
 
     def close(self) -> None:
@@ -176,6 +178,14 @@ class _EnteredKernelLifespan:
     ) -> bool | None:
         if self._failure is not None or self._closed:
             return False
+        return await self._close(exc_type, exc_value, traceback)
+
+    async def _close(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> bool | None:
         self._closed = True
         try:
             return await self._lifespan.__aexit__(exc_type, exc_value, traceback)
@@ -250,6 +260,8 @@ class _KernelBridgeLifespan:
         self._query_operations: dict[str, tuple[str, tuple[int, int]]] = {}
         self._cached_cells = _CachedCellCompatibility()
         self._entered_lifespan: _EnteredKernelLifespan | None = None
+        self._observation_ledger: ObservationLedger | None = None
+        self._observation_ledger_release: Callable[[], None] | None = None
 
     def _activate(
         self,
@@ -259,18 +271,62 @@ class _KernelBridgeLifespan:
     ) -> bool:
         if self._output_renderer is not None:
             return True
-        if inspection is None:
-            try:
-                if discover_studio_definition(filename) is None:
-                    return False
-            except (OSError, UnicodeError, ConfigurationError):
-                return False
-        output_renderer = KernelOutputRenderer(context)
+        if is_owned_session():
+            return False
         try:
+            configured = discover_studio_definition(filename) is not None
+        except (OSError, UnicodeError, ConfigurationError):
+            configured = False
+        if inspection is None and not configured:
+            return False
+        output_renderer = KernelOutputRenderer(context)
+        observation_ledger: ObservationLedger | None = None
+        observation_ledger_release: Callable[[], None] | None = None
+        try:
+            from marimo._session.model import SessionMode
+
+            records_observations = (
+                configured
+                and inspection is None
+                and getattr(context, "session_mode", None) == SessionMode.EDIT
+                and not is_owned_session()
+            )
+            if records_observations:
+                observation_ledger = ObservationLedger(filename)
             self._cached_cells.activate()
-        except BaseException:
-            output_renderer.close()
+            if observation_ledger is not None:
+                observation_ledger_release = install_observation_ledger(
+                    context,
+                    observation_ledger,
+                )
+        except BaseException as error:
+            cleanup_error: BaseException | None = None
+            if observation_ledger_release is not None:
+                try:
+                    observation_ledger_release()
+                except BaseException as cleanup:
+                    cleanup_error = cleanup
+            if observation_ledger is not None:
+                try:
+                    observation_ledger.close()
+                except BaseException as cleanup:
+                    if cleanup_error is None:
+                        cleanup_error = cleanup
+            try:
+                self._cached_cells.close()
+            except BaseException as cleanup:
+                if cleanup_error is None:
+                    cleanup_error = cleanup
+            try:
+                output_renderer.close()
+            except BaseException as cleanup:
+                if cleanup_error is None:
+                    cleanup_error = cleanup
+            if cleanup_error is not None:
+                raise error from cleanup_error
             raise
+        self._observation_ledger = observation_ledger
+        self._observation_ledger_release = observation_ledger_release
         self._output_renderer = output_renderer
         self._value_encoder = ValueEncoder(context)
         return True
@@ -310,6 +366,24 @@ class _KernelBridgeLifespan:
             except BaseException as cleanup_error:
                 raise error from cleanup_error
             raise
+
+    def _enter_after_filename(
+        self,
+        context: Any,
+        function_type: Any,
+        cell_id_type: Any,
+    ) -> bool:
+        if context.filename is None:
+            return False
+        try:
+            self._enter(context, function_type, cell_id_type)
+        except BaseException as error:
+            try:
+                self._close()
+            except BaseException as cleanup_error:
+                raise error from cleanup_error
+            raise
+        return True
 
     def _enter(
         self,
@@ -632,7 +706,8 @@ class _KernelBridgeLifespan:
             try:
                 self._output_renderer.close()
             except BaseException as error:
-                failure = error
+                if failure is None:
+                    failure = error
             else:
                 self._output_renderer = None
         if self._registry is not None:

@@ -94,7 +94,11 @@ def studio_bootstrap_payload(
         "runtimes": [
             {"id": runtime_id, "label": label} for runtime_id, label in runtimes
         ],
-        "defaultRuntime": config.default_runtime,
+        "defaultRuntime": (
+            config.default_runtime
+            if config.default_runtime in {runtime_id for runtime_id, _label in runtimes}
+            else runtimes[0][0]
+        ),
         "urls": {
             "editor": editor_url(
                 base_url,

@@ -79,6 +79,17 @@ Deno-backed providers use the exact executable supplied by the Python package
 extra. Their frontend dependency versions and lockfiles belong to the view
 project or packaged starter that consumes them.
 
+### Update marimo-export
+
+Studio pins the Python `marimo-export` package and the
+`@marimo-team/marimo-export` npm package to one published version. The root uv
+configuration and pnpm workspace exempt those packages from the release-age
+delay so a coordinated release can be tested immediately.
+
+Update both version pins, then refresh `uv.lock` and `pnpm-lock.yaml` together.
+Review the registry URLs, hashes, and integrity values before running
+`make check`, `make package`, and `make e2e`.
+
 ## Work in one owning slice
 
 Use the smallest loop that proves the changed contract:
@@ -122,8 +133,11 @@ Python policy -> Studio ports -> _compat adapters -> Marimo
               -> ViewProvider -> view_providers._bundled
               -> artifact store
 
+Studio prepared state space -> public marimo-export Python SDK
+
 apps/browser -> presentation -> runtime -> protocol
              -> studio -----------------> protocol
+             -> marimo-export prepared browser API
 presentation -> marimo-frontend --------> Marimo frontend
 
 Studio app -> features -> shared

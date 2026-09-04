@@ -1,0 +1,808 @@
+diff --git a/frontend/src/components/ui/native-select.tsx b/frontend/src/components/ui/native-select.tsx
+index 31236f3be..551d49f88 100644
+--- a/frontend/src/components/ui/native-select.tsx
++++ b/frontend/src/components/ui/native-select.tsx
+@@ -6,7 +6,7 @@ import { cn } from "@/utils/cn";
+ import { Events } from "@/utils/events";
+ 
+ export const selectStyles = cva(
+-  "flex h-6 w-fit mb-1 items-center justify-between rounded-sm bg-background px-2 text-sm font-prose ring-offset-background placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer",
++  "flex min-h-11 w-fit mb-1 items-center justify-between rounded-sm bg-background px-2 text-sm font-prose ring-offset-background placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer",
+   {
+     variants: {
+       variant: {
+@@ -30,6 +30,7 @@ const NativeSelect = React.forwardRef<
+     onClick={Events.stopPropagation()}
+     className={cn(selectStyles({}), className)}
+     {...props}
++    part="control"
+   >
+     {children}
+   </select>
+diff --git a/frontend/src/components/ui/slider.tsx b/frontend/src/components/ui/slider.tsx
+index c721bfeb5..6b633b9f9 100644
+--- a/frontend/src/components/ui/slider.tsx
++++ b/frontend/src/components/ui/slider.tsx
+@@ -19,64 +19,85 @@ const Slider = React.forwardRef<
+   React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> & {
+     valueMap: (sliderValue: number) => number;
+   }
+->(({ className, valueMap, ...props }, ref) => {
+-  const [open, openActions] = useBoolean(false);
+-  const { locale } = useLocale();
++>(
++  (
++    {
++      className,
++      valueMap,
++      "aria-label": ariaLabel,
++      "aria-labelledby": ariaLabelledBy,
++      ...props
++    },
++    ref,
++  ) => {
++    const [open, openActions] = useBoolean(false);
++    const { locale } = useLocale();
+ 
+-  return (
+-    <SliderPrimitive.Root
+-      ref={ref}
+-      className={cn(
+-        "relative flex touch-none select-none hover:cursor-pointer",
+-        "data-[orientation=horizontal]:w-full data-[orientation=horizontal]:items-center",
+-        "data-[orientation=vertical]:h-full data-[orientation=vertical]:justify-center",
+-        "data-disabled:cursor-not-allowed",
+-        className,
+-      )}
+-      {...props}
+-    >
+-      <SliderPrimitive.Track
+-        data-testid="track"
++    return (
++      <SliderPrimitive.Root
++        ref={ref}
+         className={cn(
+-          "relative grow overflow-hidden rounded-full bg-slate-200 dark:bg-accent/60",
+-          "data-[orientation=horizontal]:h-2 data-[orientation=horizontal]:w-full",
+-          "data-[orientation=vertical]:h-full data-[orientation=vertical]:w-2",
++          "relative flex touch-none select-none hover:cursor-pointer",
++          "data-[orientation=horizontal]:w-full data-[orientation=horizontal]:items-center",
++          "data-[orientation=vertical]:h-full data-[orientation=vertical]:justify-center",
++          "data-disabled:cursor-not-allowed",
++          className,
+         )}
++        {...props}
++        part="control"
+       >
+-        <SliderPrimitive.Range
+-          data-testid="range"
++        <SliderPrimitive.Track
++          data-testid="track"
++          part="track"
+           className={cn(
+-            "absolute bg-blue-500 dark:bg-primary",
+-            "data-[orientation=horizontal]:h-full",
+-            "data-[orientation=vertical]:w-full",
+-            "data-disabled:opacity-50",
++            "relative grow overflow-hidden rounded-full bg-slate-200 dark:bg-accent/60",
++            "data-[orientation=horizontal]:h-2 data-[orientation=horizontal]:w-full",
++            "data-[orientation=vertical]:h-full data-[orientation=vertical]:w-2",
+           )}
+-        />
+-      </SliderPrimitive.Track>
+-      <TooltipProvider>
+-        <TooltipRoot delayDuration={0} open={open}>
+-          <TooltipTrigger asChild={true}>
+-            <SliderPrimitive.Thumb
+-              data-testid="thumb"
+-              className="block h-4 w-4 rounded-full shadow-xs-solid border border-blue-500 dark:border-primary dark:bg-accent bg-white hover:bg-blue-300 focus:bg-blue-300 transition-colors focus-visible:outline-hidden data-disabled:pointer-events-none data-disabled:opacity-50"
+-              onFocus={openActions.setTrue}
+-              onBlur={openActions.setFalse}
+-              onMouseEnter={openActions.setTrue}
+-              onMouseLeave={openActions.setFalse}
+-            />
+-          </TooltipTrigger>
+-          <TooltipPortal>
+-            {props.value != null && props.value.length === 1 && (
+-              <TooltipContent key={props.value[0]}>
+-                {prettyScientificNumber(valueMap(props.value[0]), { locale })}
+-              </TooltipContent>
++        >
++          <SliderPrimitive.Range
++            data-testid="range"
++            className={cn(
++              "absolute bg-blue-500 dark:bg-primary",
++              "data-[orientation=horizontal]:h-full",
++              "data-[orientation=vertical]:w-full",
++              "data-disabled:opacity-50",
+             )}
+-          </TooltipPortal>
+-        </TooltipRoot>
+-      </TooltipProvider>
+-    </SliderPrimitive.Root>
+-  );
+-});
++          />
++        </SliderPrimitive.Track>
++        <TooltipProvider>
++          <TooltipRoot delayDuration={0} open={open}>
++            <TooltipTrigger asChild={true}>
++              <SliderPrimitive.Thumb
++                data-testid="thumb"
++                part="thumb"
++                aria-label={ariaLabel}
++                aria-labelledby={ariaLabelledBy}
++                className="group relative flex h-11 w-11 items-center justify-center rounded-full focus-visible:outline-hidden data-disabled:pointer-events-none data-disabled:opacity-50"
++                onFocus={openActions.setTrue}
++                onBlur={openActions.setFalse}
++                onMouseEnter={openActions.setTrue}
++                onMouseLeave={openActions.setFalse}
++              >
++                <span
++                  aria-hidden="true"
++                  className="block h-4 w-4 rounded-full shadow-xs-solid border border-blue-500 dark:border-primary dark:bg-accent bg-white group-hover:bg-blue-300 group-focus:bg-blue-300 transition-colors"
++                />
++              </SliderPrimitive.Thumb>
++            </TooltipTrigger>
++            <TooltipPortal>
++              {props.value != null && props.value.length === 1 && (
++                <TooltipContent key={props.value[0]}>
++                  {prettyScientificNumber(valueMap(props.value[0]), { locale })}
++                </TooltipContent>
++              )}
++            </TooltipPortal>
++          </TooltipRoot>
++        </TooltipProvider>
++      </SliderPrimitive.Root>
++    );
++  },
++);
+ Slider.displayName = SliderPrimitive.Root.displayName;
+ 
+ export { Slider };
+diff --git a/frontend/src/plugins/core/__test__/registerReactComponent.test.ts b/frontend/src/plugins/core/__test__/registerReactComponent.test.ts
+index a285a7229..a870bb3db 100644
+--- a/frontend/src/plugins/core/__test__/registerReactComponent.test.ts
++++ b/frontend/src/plugins/core/__test__/registerReactComponent.test.ts
+@@ -122,6 +122,22 @@ describe("connectedCallback - light DOM nesting detection", () => {
+     el.remove();
+   });
+ 
++  test("preserves the mounted React root during a state-preserving move", () => {
++    const tag = uniqueTag("move");
++    registerReactComponent(makePlugin(tag));
++    const el = document.createElement(tag) as HTMLElement & {
++      connectedMoveCallback(): void;
++    };
++    document.body.append(el);
++    expect(createRootSpy).toHaveBeenCalledTimes(1);
++
++    el.connectedMoveCallback();
++
++    expect(createRootSpy).toHaveBeenCalledTimes(1);
++    expect(mockRoot.unmount).not.toHaveBeenCalled();
++    el.remove();
++  });
++
+   test("mounts when nested inside a regular (non-marimo) element", () => {
+     const tag = uniqueTag("in-div");
+     registerReactComponent(makePlugin(tag));
+diff --git a/frontend/src/plugins/core/registerReactComponent.tsx b/frontend/src/plugins/core/registerReactComponent.tsx
+index 60af78236..5a17ca0d4 100644
+--- a/frontend/src/plugins/core/registerReactComponent.tsx
++++ b/frontend/src/plugins/core/registerReactComponent.tsx
+@@ -384,6 +384,10 @@ export function registerReactComponent<T>(plugin: IPlugin<T, unknown>): void {
+       });
+     }
+ 
++    connectedMoveCallback() {
++      // moveBefore preserves the mounted React root and plugin-local state.
++    }
++
+     disconnectedCallback() {
+       this.observer.disconnect();
+       this.root?.unmount();
+diff --git a/frontend/src/plugins/impl/SliderPlugin.tsx b/frontend/src/plugins/impl/SliderPlugin.tsx
+index 08ecebc6e..84c26e345 100644
+--- a/frontend/src/plugins/impl/SliderPlugin.tsx
++++ b/frontend/src/plugins/impl/SliderPlugin.tsx
+@@ -3,6 +3,7 @@ import { type JSX, useEffect, useId, useMemo, useState } from "react";
+ import { useLocale } from "react-aria";
+ import { z } from "zod";
+ import { NumberField } from "@/components/ui/number-field";
++import { HTMLCellId } from "@/core/cells/ids";
+ import { cn } from "@/utils/cn";
+ import { clamp } from "@/utils/math";
+ import {
+@@ -57,10 +58,15 @@ export class SliderPlugin implements IPlugin<T, Data> {
+       }
+       return sliderValue;
+     };
++    const accessibleName =
++      HTMLCellId.findElementThroughShadowDOMs(props.host)
++        ?.getAttribute("aria-label")
++        ?.trim() || undefined;
+ 
+     return (
+       <SliderComponent
+         {...props.data}
++        accessibleName={accessibleName}
+         value={props.value}
+         setValue={props.setValue}
+         valueMap={valueMap}
+@@ -70,6 +76,7 @@ export class SliderPlugin implements IPlugin<T, Data> {
+ }
+ 
+ interface SliderProps extends Data {
++  accessibleName?: string;
+   value: T;
+   setValue: Setter<T>;
+   valueMap: (sliderValue: number) => number;
+@@ -136,6 +143,7 @@ function computeStepsConfig(steps: T[] | null): StepsConfig | null {
+ }
+ 
+ const SliderComponent = ({
++  accessibleName,
+   label,
+   setValue,
+   value,
+@@ -152,6 +160,7 @@ const SliderComponent = ({
+   disabled,
+ }: SliderProps): JSX.Element => {
+   const id = useId();
++  const labelId = `${id}-label`;
+   const { locale } = useLocale();
+ 
+   // Hold internal value
+@@ -222,6 +231,7 @@ const SliderComponent = ({
+   const sliderElement = (
+     <Labeled
+       label={label}
++      labelId={label ? labelId : undefined}
+       id={id}
+       align={orientation === "horizontal" ? "left" : "top"}
+       fullWidth={fullWidth}
+@@ -236,6 +246,10 @@ const SliderComponent = ({
+       >
+         <Slider
+           id={id}
++          aria-label={accessibleName ?? (label ? undefined : "Slider")}
++          aria-labelledby={
++            accessibleName ? undefined : label ? labelId : undefined
++          }
+           className={cn(
+             "relative flex items-center select-none",
+             !fullWidth && "data-[orientation=horizontal]:w-36 ",
+diff --git a/frontend/src/plugins/impl/__tests__/DropdownPlugin.test.tsx b/frontend/src/plugins/impl/__tests__/DropdownPlugin.test.tsx
+index d0b3fb840..f8e17b2bd 100644
+--- a/frontend/src/plugins/impl/__tests__/DropdownPlugin.test.tsx
++++ b/frontend/src/plugins/impl/__tests__/DropdownPlugin.test.tsx
+@@ -123,7 +123,9 @@ describe("DropdownPlugin", () => {
+         functions: {},
+       };
+       render(plugin.render(props));
+-      expect(screen.getByTestId("marimo-plugin-dropdown")).toBeInTheDocument();
++      const dropdown = screen.getByTestId("marimo-plugin-dropdown");
++      expect(dropdown).toHaveAttribute("part", "control");
++      expect(dropdown).toHaveClass("min-h-11");
+     });
+ 
+     it("filters options based on search input and handles selection", async () => {
+diff --git a/frontend/src/plugins/impl/__tests__/SliderPlugin.test.tsx b/frontend/src/plugins/impl/__tests__/SliderPlugin.test.tsx
+index c67866976..beb65b63f 100644
+--- a/frontend/src/plugins/impl/__tests__/SliderPlugin.test.tsx
++++ b/frontend/src/plugins/impl/__tests__/SliderPlugin.test.tsx
+@@ -11,17 +11,25 @@ import { SliderPlugin } from "../SliderPlugin";
+ 
+ vi.mock("@/components/ui/slider", () => ({
+   Slider: ({
++    "aria-label": ariaLabel,
++    "aria-labelledby": ariaLabelledBy,
+     disabled,
+     onValueChange,
+     onValueCommit,
+     value,
+   }: {
++    "aria-label"?: string;
++    "aria-labelledby"?: string;
+     disabled?: boolean;
+     onValueChange?: (value: number[]) => void;
+     onValueCommit?: (value: number[]) => void;
+     value: number[];
+   }) => (
+-    <div>
++    <div
++      aria-label={ariaLabel}
++      aria-labelledby={ariaLabelledBy}
++      data-testid="slider-control"
++    >
+       <button
+         aria-label="Slider change"
+         disabled={disabled}
+@@ -52,18 +60,22 @@ describe("SliderPlugin", () => {
+ 
+   const createProps = ({
+     debounce,
++    host,
+     includeInput,
++    label = "Test Slider",
+     setValue,
+   }: {
+     debounce: boolean;
++    host?: HTMLElement;
+     includeInput: boolean;
++    label?: string | null;
+     setValue: ReturnType<typeof vi.fn>;
+   }): IPluginProps<
+     number,
+     z.infer<typeof SliderPlugin.prototype.validator>
+   > => {
+     return {
+-      host: document.createElement("div"),
++      host: host ?? document.createElement("div"),
+       value: 5,
+       setValue,
+       data: {
+@@ -71,7 +83,7 @@ describe("SliderPlugin", () => {
+         start: 0,
+         stop: 10,
+         step: 1,
+-        label: "Test Slider",
++        label,
+         debounce,
+         orientation: "horizontal" as const,
+         showValue: false,
+@@ -126,6 +138,85 @@ describe("SliderPlugin", () => {
+     });
+   };
+ 
++  it("names the slider thumb from a rendered HTML and Math label", async () => {
++    const plugin = new SliderPlugin();
++    const label =
++      '<strong>Loss</strong> <span class="math">λ<sub>2</sub></span>';
++    const props = createProps({
++      debounce: false,
++      includeInput: false,
++      label,
++      setValue: vi.fn(),
++    });
++
++    const { getByTestId } = render(plugin.render(props));
++    const control = getByTestId("slider-control");
++    const labelId = control.getAttribute("aria-labelledby");
++    expect(labelId).not.toBeNull();
++    expect(control).not.toHaveAttribute("aria-label", label);
++    expect(document.getElementById(labelId ?? "")?.textContent).toBe("Loss λ2");
++
++    const { Slider: ActualSlider } = await vi.importActual<
++      typeof import("@/components/ui/slider")
++    >("@/components/ui/slider");
++    const actual = render(
++      <ActualSlider
++        aria-labelledby={labelId ?? undefined}
++        max={10}
++        min={0}
++        onValueChange={() => {}}
++        value={[5]}
++        valueMap={(value) => value}
++      />,
++    );
++    const thumb = actual.getByRole("slider");
++    expect(thumb).toHaveAttribute("aria-labelledby", labelId);
++    expect(thumb).not.toHaveAttribute("aria-label", label);
++    expect(thumb).toHaveAccessibleName(/Loss.*λ.*2/u);
++  });
++
++  it("uses the authored projection host label before the notebook label", async () => {
++    const plugin = new SliderPlugin();
++    const cell = document.createElement("div");
++    cell.id = "cell-projected-slider";
++    cell.setAttribute("aria-label", "Number of neighbors k");
++    const shadowHost = document.createElement("div");
++    const shadow = shadowHost.attachShadow({ mode: "open" });
++    const host = document.createElement("marimo-slider");
++    shadow.append(host);
++    cell.append(shadowHost);
++    document.body.append(cell);
++    const props = createProps({
++      debounce: false,
++      host,
++      includeInput: false,
++      label: "<strong>Notebook</strong> <span>k</span>",
++      setValue: vi.fn(),
++    });
++
++    const { getByTestId } = render(plugin.render(props));
++    const control = getByTestId("slider-control");
++    expect(control).toHaveAttribute("aria-label", "Number of neighbors k");
++    expect(control).not.toHaveAttribute("aria-labelledby");
++
++    const { Slider: ActualSlider } = await vi.importActual<
++      typeof import("@/components/ui/slider")
++    >("@/components/ui/slider");
++    const actual = render(
++      <ActualSlider
++        aria-label={control.getAttribute("aria-label") ?? undefined}
++        max={10}
++        min={0}
++        onValueChange={() => {}}
++        value={[5]}
++        valueMap={(value) => value}
++      />,
++    );
++    expect(actual.getByRole("slider")).toHaveAccessibleName(
++      "Number of neighbors k",
++    );
++  });
++
+   it("slider triggers setValue immediately when debounce is false", () => {
+     const plugin = new SliderPlugin();
+     const setValue = vi.fn();
+diff --git a/frontend/src/plugins/impl/anywidget/__tests__/model.test.ts b/frontend/src/plugins/impl/anywidget/__tests__/model.test.ts
+index 4f4ab9cf7..abbd99528 100644
+--- a/frontend/src/plugins/impl/anywidget/__tests__/model.test.ts
++++ b/frontend/src/plugins/impl/anywidget/__tests__/model.test.ts
+@@ -100,6 +100,24 @@ describe("Model", () => {
+ 
+       expect(callback).not.toHaveBeenCalled();
+     });
++
++    it("snapshots complete model state without sharing mutable values", () => {
++      const binary = new DataView(Uint8Array.of(1, 2).buffer);
++      const state = new Model<ModelState>(
++        { foo: { nested: "before" }, binary },
++        createMockComm(),
++      );
++
++      const snapshot = getMarimoInternal(state).snapshotState();
++      state.set("browserOnly", "draft");
++      state.get("foo").nested = "after";
++
++      expect(snapshot).toEqual({
++        foo: { nested: "before" },
++        binary: expect.any(DataView),
++      });
++      expect(snapshot.binary).not.toBe(binary);
++    });
+   });
+ 
+   describe("save_changes", () => {
+diff --git a/frontend/src/plugins/impl/anywidget/__tests__/registry.test.ts b/frontend/src/plugins/impl/anywidget/__tests__/registry.test.ts
+index 8007998d2..d5c8f4cfe 100644
+--- a/frontend/src/plugins/impl/anywidget/__tests__/registry.test.ts
++++ b/frontend/src/plugins/impl/anywidget/__tests__/registry.test.ts
+@@ -98,7 +98,7 @@ describe("WidgetRegistry models", () => {
+   it("should delete models", async () => {
+     const model = new Model<ModelState>({ count: 0 }, createMockComm());
+     registry.setModel(testId, model);
+-    registry.delete(testId);
++    await registry.delete(testId);
+     await expect(registry.getModel(testId)).rejects.toThrow();
+   });
+ 
+@@ -344,10 +344,74 @@ describe("WidgetRegistry.getWidget", () => {
+     // Let the import resolve and initialize start.
+     await new Promise((r) => setTimeout(r, 0));
+ 
+-    registry.delete(testId);
++    await registry.delete(testId);
+     await expect(pending).rejects.toThrow(/binding destroyed/);
+   });
+ 
++  it("does not initialize an unresolved module after the entry is deleted", async () => {
++    const initialize = vi.fn();
++    let resolveModule!: (module: object) => void;
++    getModuleSpy.mockReturnValue(
++      new Promise((resolve) => {
++        resolveModule = resolve;
++      }),
++    );
++    const model = new Model<ModelState>({ count: 0 }, createMockComm());
++    registry.setModel(testId, model);
++    registry.setSpec(testId, SPEC);
++    const pending = registry.getWidget(testId);
++    pending.catch(() => undefined);
++    await vi.waitFor(() => expect(getModuleSpy).toHaveBeenCalledOnce());
++
++    let deleted = false;
++    const deletion = registry.delete(testId).then(() => {
++      deleted = true;
++    });
++    await vi.waitFor(() => expect(deleted).toBe(true), { timeout: 100 });
++
++    resolveModule({
++      default: {
++        initialize,
++        render: vi.fn(),
++      },
++    });
++    await expect(pending).rejects.toThrow(/binding destroyed/);
++    expect(initialize).not.toHaveBeenCalled();
++    await deletion;
++  });
++
++  it("does not initialize an async factory after generation replacement", async () => {
++    const registry = new WidgetRegistry(50, () => true);
++    const firstInitialize = vi.fn();
++    const secondInitialize = vi.fn();
++    let resolveFactory!: (widget: object) => void;
++    const firstFactory = vi.fn(
++      () =>
++        new Promise<object>((resolve) => {
++          resolveFactory = resolve;
++        }),
++    );
++    const secondSpec: EsmSpec = { url: "./@file/10-widget-v2.js", hash: "hash-2" };
++    getModuleSpy.mockImplementation(async ({ jsUrl }) => ({
++      default:
++        jsUrl === SPEC.url
++          ? firstFactory
++          : { initialize: secondInitialize, render: vi.fn() },
++    }));
++    registry.setModel(testId, new Model<ModelState>({ count: 0 }, createMockComm()));
++    registry.setSpec(testId, SPEC);
++    const pending = registry.getWidget(testId);
++    await vi.waitFor(() => expect(firstFactory).toHaveBeenCalledOnce());
++
++    registry.setSpec(testId, secondSpec);
++    resolveFactory({ initialize: firstInitialize, render: vi.fn() });
++
++    await expect(pending).resolves.toBeDefined();
++    expect(firstInitialize).not.toHaveBeenCalled();
++    expect(secondInitialize).toHaveBeenCalledOnce();
++    await registry.delete(testId);
++  });
++
+   it("destroys the generation on a close message", async () => {
+     const initCleanup = vi.fn();
+     const widgetDef = {
+@@ -672,7 +736,7 @@ describe("WidgetRegistry runtime styles", () => {
+       controller.abort();
+       expect(root.querySelector("style")).toBeNull();
+     } finally {
+-      registry.delete(id);
++      await registry.delete(id);
+       getModuleSpy.mockRestore();
+     }
+   });
+diff --git a/frontend/src/plugins/impl/anywidget/model.ts b/frontend/src/plugins/impl/anywidget/model.ts
+index 9941ed4f8..c2c486354 100644
+--- a/frontend/src/plugins/impl/anywidget/model.ts
++++ b/frontend/src/plugins/impl/anywidget/model.ts
+@@ -28,6 +28,8 @@ export interface MarimoComm<T> {
+ const marimoSymbol = Symbol("marimo");
+ 
+ interface MarimoInternalApi<T extends ModelState> {
++  /** Return an isolated snapshot of the complete browser model state. */
++  snapshotState: () => T;
+   /**
+    * Update model state and emit change events for any differences.
+    */
+@@ -85,6 +87,7 @@ export class Model<T extends ModelState> implements AnyModel<T> {
+    * Access via getMarimoInternal().
+    */
+   [marimoSymbol]: MarimoInternalApi<T> = {
++    snapshotState: () => structuredClone(this.#data),
+     updateAndEmitDiffs: (value: T) => this.#updateAndEmitDiffs(value),
+     emitCustomMessage: (
+       message: CustomMessage,
+diff --git a/frontend/src/plugins/impl/anywidget/registry.ts b/frontend/src/plugins/impl/anywidget/registry.ts
+index 041ae03ea..9c5f79b06 100644
+--- a/frontend/src/plugins/impl/anywidget/registry.ts
++++ b/frontend/src/plugins/impl/anywidget/registry.ts
+@@ -55,7 +55,12 @@ export class WidgetRegistry implements WidgetResolver {
+         createHost: (signal) => createHost(this, signal),
+         onModelTimeout: () => {
+           if (this.#runtimes.get(key) === nextRuntime) {
+-            nextRuntime.dispose();
++            void nextRuntime.dispose().catch((error: unknown) => {
++              Logger.error(
++                "[anywidget] Failed to retire timed-out model",
++                error,
++              );
++            });
+             this.#runtimes.delete(key);
+           }
+         },
+@@ -125,13 +130,13 @@ export class WidgetRegistry implements WidgetResolver {
+    * Tear down everything known about `key`: the model's lifecycle
+    * signal and the current generation.
+    */
+-  delete(key: WidgetModelId): void {
++  async delete(key: WidgetModelId): Promise<void> {
+     const runtime = this.#runtimes.get(key);
+     if (!runtime) {
+       return;
+     }
+-    runtime.dispose();
+     this.#runtimes.delete(key);
++    await runtime.dispose();
+   }
+ }
+ 
+@@ -241,7 +246,7 @@ export async function handleWidgetMessage(
+     }
+ 
+     case "close":
+-      registry.delete(modelId); // aborts the model's signal, destroys the binding
++      await registry.delete(modelId); // aborts the model's signal, destroys the binding
+       return;
+ 
+     case "update": {
+diff --git a/frontend/src/plugins/impl/anywidget/runtime.ts b/frontend/src/plugins/impl/anywidget/runtime.ts
+index 9e5121dcb..38fa93142 100644
+--- a/frontend/src/plugins/impl/anywidget/runtime.ts
++++ b/frontend/src/plugins/impl/anywidget/runtime.ts
+@@ -14,6 +14,7 @@ interface Generation {
+   hash: string;
+   controller: AbortController;
+   promise: Promise<WidgetBinding<ModelState>>;
++  binding?: WidgetBinding<ModelState>;
+ }
+ 
+ interface RuntimeView {
+@@ -58,6 +59,7 @@ export class WidgetRuntime {
+   #esmSpec: EsmSpec | undefined;
+   #generation: Generation | undefined;
+   #generationCleanup = Promise.resolve();
++  #disposal: Promise<void> | undefined;
+   #css = "";
+ 
+   constructor(key: WidgetModelId, options: WidgetRuntimeOptions) {
+@@ -202,18 +204,27 @@ export class WidgetRuntime {
+     spec: EsmSpec;
+     model: Model<ModelState>;
+     controller: AbortController;
++    isCurrent: () => boolean;
+   }): Promise<WidgetBinding<ModelState>> {
+-    const { spec, model, controller } = options;
++    const { spec, model, controller, isCurrent } = options;
++    const requireCurrent = () => {
++      if (controller.signal.aborted || !isCurrent()) {
++        throw new Error("[anywidget] binding destroyed");
++      }
++    };
+     const mod = await WIDGET_DEF_REGISTRY.getModule({
+       jsUrl: spec.url,
+       jsHash: spec.hash,
+       kernelAuthored: true,
+     });
+-    const widget = resolveAnyWidget(mod, spec.url);
+-    if (!widget) {
++    requireCurrent();
++    const definition = resolveAnyWidget(mod, spec.url);
++    if (!definition) {
+       WIDGET_DEF_REGISTRY.invalidate(spec.hash);
+       throw getInvalidAnyWidgetModuleError(mod, spec.url);
+     }
++    const widget = typeof definition === "function" ? await definition() : definition;
++    requireCurrent();
+     return WidgetBinding.create({
+       widgetDef: widget,
+       model,
+@@ -224,11 +235,23 @@ export class WidgetRuntime {
+ 
+   #startGeneration(spec: EsmSpec, model: Model<ModelState>): Generation {
+     const controller = new AbortController();
+-    const generation: Generation = {
++    let generation!: Generation;
++    generation = {
+       hash: spec.hash,
+       controller,
+-      promise: this.#createBinding({ spec, model, controller }),
++      promise: this.#createBinding({
++        spec,
++        model,
++        controller,
++        isCurrent: () => this.#generation === generation,
++      }),
+     };
++    void generation.promise.then(
++      (binding) => {
++        generation.binding = binding;
++      },
++      () => undefined,
++    );
+     generation.promise.catch(() => {
+       if (this.#generation === generation) {
+         this.#generation = undefined;
+@@ -263,22 +286,30 @@ export class WidgetRuntime {
+   }
+ 
+   #queueGenerationCleanup(generation: Generation): Promise<void> {
+-    // Abort immediately so pending initialize/render hooks see cancellation,
+-    // but serialize their settled cleanup before replacement DOM is rendered.
++    // Abort immediately so pending initialize/render hooks see cancellation.
++    // Module imports cannot observe this signal, so unresolved imports detach
++    // and destroy their binding asynchronously if they settle later.
+     generation.controller.abort();
+-    const cleanup = this.#generationCleanup.then(async () => {
+-      try {
+-        const binding = await generation.promise;
+-        await binding.destroy();
+-      } catch {
+-        // A generation aborted during import/initialize has no binding to
+-        // settle. Late initialize cleanup is handled by WidgetBinding.create.
+-      }
+-    });
++    const cleanup = this.#generationCleanup.then(() => this.#destroyGeneration(generation));
+     this.#generationCleanup = cleanup;
+     return cleanup;
+   }
+ 
++  #destroyGeneration(generation: Generation): Promise<void> {
++    if (generation.binding) {
++      return generation.binding.destroy();
++    }
++    void generation.promise.then(
++      (binding) => {
++        void binding.destroy().catch((error: unknown) => {
++          Logger.error("[WidgetRuntime] Error destroying detached generation", error);
++        });
++      },
++      () => undefined,
++    );
++    return Promise.resolve();
++  }
++
+   async #renderView(
+     view: RuntimeView,
+     requestedGeneration?: Generation,
+@@ -341,10 +372,12 @@ export class WidgetRuntime {
+     view.signal.addEventListener("abort", release, { once: true });
+   }
+ 
+-  dispose(): void {
+-    if (this.#controller.signal.aborted) {
+-      return;
+-    }
++  dispose(): Promise<void> {
++    this.#disposal ??= this.#dispose();
++    return this.#disposal;
++  }
++
++  async #dispose(): Promise<void> {
+     Logger.debug(`[WidgetRuntime] Disposing model=${this.#key}`);
+     if (this.#modelTimeout) {
+       clearTimeout(this.#modelTimeout);
+@@ -363,6 +396,7 @@ export class WidgetRuntime {
+       mount.dispose();
+     }
+     this.#styleMounts.clear();
++    await this.#generationCleanup;
+   }
+ }
+ 
+diff --git a/frontend/src/plugins/impl/common/labeled.tsx b/frontend/src/plugins/impl/common/labeled.tsx
+index a469a80f5..ee16a7a64 100644
+--- a/frontend/src/plugins/impl/common/labeled.tsx
++++ b/frontend/src/plugins/impl/common/labeled.tsx
+@@ -9,6 +9,7 @@ interface Props {
+   label: string | null | undefined;
+   className?: string;
+   labelClassName?: string;
++  labelId?: string;
+   id?: string;
+   fullWidth?: boolean;
+   /**
+@@ -27,6 +28,7 @@ export const Labeled: React.FC<PropsWithChildren<Props>> = ({
+   align = "left",
+   className,
+   labelClassName,
++  labelId,
+   fullWidth,
+   id,
+ }) => {
+@@ -45,7 +47,11 @@ export const Labeled: React.FC<PropsWithChildren<Props>> = ({
+ 
+   const labelElement = (
+     <div part="label" className="inline-flex items-center m-0 p-0">
+-      <Label htmlFor={id} className={cn("font-prose", labelClassName)}>
++      <Label
++        id={labelId}
++        htmlFor={id}
++        className={cn("font-prose", labelClassName)}
++      >
+         {renderHTML({ html: label })}
+       </Label>
+     </div>

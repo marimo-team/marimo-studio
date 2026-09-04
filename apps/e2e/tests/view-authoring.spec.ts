@@ -42,6 +42,14 @@ test("routes directory notebooks by Studio configuration", async ({ browserDiagn
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
     1,
   );
+  const retiredPlainHealth = browserDiagnostics.expectRequestFailure({
+    origin: studioOrigin,
+    method: "GET",
+    path: /^\/_marimo-studio\/editor\/health$/,
+    count: 1,
+    errorText: "net::ERR_ABORTED",
+    required: false,
+  });
   await page.goto("/");
   const plainUrl = await page
     .getByRole("treeitem", { name: /plain\.py/ })
@@ -63,7 +71,8 @@ test("routes directory notebooks by Studio configuration", async ({ browserDiagn
     (await waitForPreview(page)).getByRole("heading", { name: "Studio browser fixture" }),
   ).toBeVisible();
   directoryLandingFilenameFallback.recovered();
-  replacedWorkspaceStream.recovered();
+  retiredPlainHealth.recovered();
+  await recoverWorkspaceEventStream(replacedWorkspaceStream);
 });
 
 test("activates Studio after the first view is created", async ({ browserDiagnostics, page }) => {

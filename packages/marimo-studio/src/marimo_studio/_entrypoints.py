@@ -6,7 +6,9 @@ from collections.abc import Mapping
 from typing import cast
 
 import click
+from marimo_export.integration import is_owned_session
 from starlette.middleware import Middleware
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from marimo_studio._composition import (
     create_security_policy,
@@ -19,6 +21,21 @@ from marimo_studio._server.route_policy import EditRootOwner, StudioRoutePolicy
 from marimo_studio.errors import ConfigurationError
 
 EDIT_ROOT_ENV = "MARIMO_STUDIO_EDIT_ROOT"
+
+
+class _OwnedSessionMiddleware:
+    """Leave marimo-export's managed server on its native route surface."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(
+        self,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+    ) -> None:
+        await self._app(scope, receive, send)
 
 
 def route_policy_from_environment(
@@ -34,17 +51,20 @@ def route_policy_from_environment(
         ) from error
 
 
-try:
-    _security_policy = create_security_policy()
-    _route_policy = route_policy_from_environment(os.environ)
-except (ConfigurationError, RuntimeError) as error:
-    raise click.ClickException(str(error)) from None
-_presentation_authorization_handle = install_presentation_authorization()
-atexit.register(_presentation_authorization_handle.close)
+if is_owned_session():
+    server_middleware = Middleware(_OwnedSessionMiddleware)
+else:
+    try:
+        _security_policy = create_security_policy()
+        _route_policy = route_policy_from_environment(os.environ)
+    except (ConfigurationError, RuntimeError) as error:
+        raise click.ClickException(str(error)) from None
+    _presentation_authorization_handle = install_presentation_authorization()
+    atexit.register(_presentation_authorization_handle.close)
 
-server_middleware = Middleware(
-    PresentationMiddleware,
-    adapter_factory=create_server_adapters,
-    security_policy=_security_policy,
-    route_policy=_route_policy,
-)
+    server_middleware = Middleware(
+        PresentationMiddleware,
+        adapter_factory=create_server_adapters,
+        security_policy=_security_policy,
+        route_policy=_route_policy,
+    )

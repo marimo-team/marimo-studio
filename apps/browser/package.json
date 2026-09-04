@@ -4,19 +4,25 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm check:upstream && vp build",
-    "check:upstream": "pnpm --filter @marimo-studio/marimo-frontend check:upstream"
+    "build": "pnpm check:upstream && vp build && vp build --config vite.zero-python.config.ts && node merge-entry-closures.mjs",
+    "check:upstream": "pnpm --filter @marimo-studio/marimo-frontend check:upstream",
+    "test": "vp test"
   },
   "dependencies": {
     "@marimo-studio/marimo-frontend": "workspace:*",
     "@marimo-studio/presentation": "workspace:*",
     "@marimo-studio/runtime": "workspace:*",
     "@marimo-studio/studio": "workspace:*",
+    "@marimo-team/marimo-export": "catalog:",
+    "@uwdata/flechette": "catalog:",
     "htmx.org": "catalog:",
+    "lz4js": "0.2.0",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "jsdom": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:"

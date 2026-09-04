@@ -9,7 +9,7 @@
 # default = "overview"
 # preserve_session = false
 # runtime = "server"
-# runtimes = ["server", "wasm"]
+# runtimes = ["server", "wasm", "zero-python"]
 # show_cell_logs = false
 #
 # [tool.marimo-studio.cells]

@@ -1,1 +1,2 @@
 apps/browser/license-texts/*.txt text eol=lf whitespace=-blank-at-eof
+packages/marimo-frontend/patches/*.patch text eol=lf

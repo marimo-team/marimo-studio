@@ -12,6 +12,7 @@ dependencies = [
   "click>=8.2",
   "htpy>=26.5.1,<27",
   "marimo==0.24.0",
+  "marimo-export==0.0.2",
   "markupsafe>=3",
   "packaging>=25",
   "tomli>=2; python_version < '3.11'",

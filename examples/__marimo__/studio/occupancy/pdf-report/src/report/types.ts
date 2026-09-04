@@ -19,8 +19,6 @@ export interface OccupancySummary {
   readonly occupancy_rate: number;
   readonly reading_interval_minutes: number;
   readonly estimated_occupied_hours: number;
-  readonly metric: string;
-  readonly anomalies: number;
 }
 
 export interface HourlyReading {
@@ -90,6 +88,14 @@ export interface ModelReport {
   };
   readonly curve: readonly ThresholdPoint[];
   readonly errors: readonly ReportError[];
+}
+
+export type ModelEvidence = Omit<ModelReport, "curve" | "normalization">;
+
+export interface PreparedModel {
+  readonly default_threshold: number;
+  readonly normalization: ModelReport["normalization"];
+  readonly evidence: readonly ModelEvidence[];
 }
 
 export interface RoomProfileSummary {

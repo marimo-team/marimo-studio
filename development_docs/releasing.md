@@ -115,13 +115,15 @@ The base installation verifies:
   from a base installation for view creation, status, source inspection,
   reading and writing, static validation, production build, and static export
 
+Installed-wheel verification resolves the exact `marimo-export` version
+declared by Studio from PyPI and rejects direct-source metadata. The browser
+build records the npm package version, and package verification compares it
+with the installed Python distribution.
+
 The package gate also enforces these release budgets:
 
 | Artifact                            |    Budget |
 | ----------------------------------- | --------: |
-| Wheel or source distribution        |     8 MiB |
-| Browser asset files                 |       400 |
-| Browser asset bytes                 |    24 MiB |
 | Entry static-import graph           |   850 KiB |
 | Gzipped entry static-import graph   |   225 KiB |
 | Server or WebAssembly startup graph | 6,500 KiB |

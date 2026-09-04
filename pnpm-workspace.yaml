@@ -11,6 +11,7 @@ publicHoistPattern:
 catalogMode: prefer
 
 catalog:
+  "@marimo-team/marimo-export": 0.0.2
   "@playwright/test": 1.61.1
   "@codemirror/lang-css": ^6.3.1
   "@codemirror/lang-html": ^6.4.9
@@ -33,6 +34,7 @@ catalog:
   react: ^19.2.4
   react-dom: ^19.2.4
   typescript: ^6.0.3
+  tsx: 4.21.0
   vite: npm:@voidzero-dev/vite-plus-core@0.3.0
   vite-plus: 0.3.0
   vitepress: 2.0.0-alpha.19
@@ -74,4 +76,4 @@ trustPolicyExclude:
 onlyBuiltDependencies: []
 minimumReleaseAgeExclude:
   - nanoid@3.3.18
-  - "@marimo-team/*"
+  - "@marimo-team/marimo-export"

@@ -1,0 +1,7 @@
+{
+  "schema": "marimo-studio.projection-host-boundary.v1",
+  "character": "é",
+  "maximum_utf8_bytes": 1024,
+  "valid_repetitions": 512,
+  "invalid_suffix": "a"
+}

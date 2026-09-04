@@ -25,6 +25,7 @@ export {
   useRequestClient,
 } from "@marimo-team/frontend/unstable_internal/core/network/requests";
 export { createNetworkRequests } from "@marimo-team/frontend/unstable_internal/core/network/requests-network";
+export { createStaticRequests } from "@marimo-team/frontend/unstable_internal/core/network/requests-static";
 export { createErrorToastingRequests } from "@marimo-team/frontend/unstable_internal/core/network/requests-toasting";
 export { resolveRequestClient } from "@marimo-team/frontend/unstable_internal/core/network/resolve";
 export {

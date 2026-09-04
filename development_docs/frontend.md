@@ -45,6 +45,7 @@ pnpm --filter @marimo-studio/runtime test
 pnpm --filter @marimo-studio/presentation test
 pnpm --filter @marimo-studio/studio test
 pnpm --filter @marimo-studio/marimo-frontend test
+pnpm --filter @marimo-studio/browser test
 ```
 
 Run browser type and import-boundary checks from the repository root:
@@ -79,7 +80,10 @@ Root `vite.config.ts` enforces these imports:
 - Protocol imports no Studio package and performs no network, filesystem,
   document object model, or window I/O.
 - Runtime imports protocol and performs no Marimo, React, or browser I/O.
+- Protocol and the Marimo frontend facade import portable JSON validation.
 - Presentation imports protocol, runtime, and named Marimo frontend adapters.
+- `apps/browser/src/zero-python` imports public marimo-export prepared
+  capabilities and Studio's runtime and prepared-presentation contracts.
 - Studio imports protocol and stays independent of presentation and Marimo
   frontend code.
 - Marimo frontend imports no Studio package.
@@ -238,6 +242,7 @@ imports named facade capabilities:
 - `embedded-runtime`
 - `cell-presentation`
 - `projected-output`
+- `prepared-presentation`
 - `session-bootstrap`
 - `control-endpoint`
 - `theme-frame`
@@ -269,9 +274,11 @@ MARIMO_REPO=/path/to/marimo make setup
 packages/marimo-studio/src/marimo_studio/_static/browser/
 ```
 
-The output contains `runtime.js`, `dev-reload.js`, `studio.js`, their CSS,
-shared chunks, worker assets, and `build-meta.json`. Build metadata records the
-Marimo version and release commit.
+The output contains `runtime.js`, `zero-python.js`, `dev-reload.js`, `studio.js`,
+their CSS, transitive entry closures, shared chunks, worker assets, and
+`build-meta.json`. Build metadata records the Marimo version and release commit.
+The Python entry-closure record reports its exact file count and total bytes so
+package checks can apply an explicit delivery budget.
 
 Studio targets evergreen browsers with
 [WOFF2](https://www.w3.org/TR/WOFF2/) compressed web-font support. The build

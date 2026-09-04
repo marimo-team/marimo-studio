@@ -119,7 +119,10 @@ test("embeds Studio through an authenticated Marimo session", async ({ browser }
   }
 });
 
-test("keeps standalone navigation inside server-authored route authority", async ({ page }) => {
+test("keeps standalone navigation inside server-authored route authority", async ({
+  browserDiagnostics,
+  page,
+}) => {
   await page.goto(studioEntryUrl);
   await waitForPreview(page);
   const opened = page.context().waitForEvent("page");
@@ -145,6 +148,13 @@ test("keeps standalone navigation inside server-authored route authority", async
       },
       { view, query, hash },
     );
+  const supersededPresentation = browserDiagnostics.expectRequestFailure({
+    origin: studioOrigin,
+    method: "GET",
+    path: /^\/_marimo-studio\/presentation\/[^/]+\/dashboard\/$/,
+    errorText: "net::ERR_ABORTED",
+    required: false,
+  });
 
   try {
     const original = popout.url();
@@ -192,6 +202,7 @@ test("keeps standalone navigation inside server-authored route authority", async
     expect(target.hash).toBe("#proof");
   } finally {
     await popout.close();
+    supersededPresentation.recovered();
   }
 });
 

@@ -106,16 +106,15 @@ uvx --from marimo-studio==0.1.0 marimo-studio view create dashboard --target ana
 notebook
   -> named view project
   -> validated artifact
-  -> Python or Browser runtime
+  -> Python, Browser, or Prepared runtime
   -> rendered view
 ```
 
-Each view keeps its own source and build while reusing results from the same
-notebook. Use the Python runtime when the notebook needs server files,
-databases, credentials, or native packages. Use the Browser runtime when the
-notebook and its data can run in [Pyodide](https://pyodide.org/), a Python
-distribution compiled for the browser. Browser execution and static exports
-contain the saved notebook source.
+One notebook can publish several named views, each with its own source, build,
+and runtime. Choose Python for server-backed views, Browser for views that run
+with [Pyodide](https://pyodide.org/) in the browser, or Prepared for static
+publishing from precomputed results. Prepared exports keep the Python notebook
+source on the build machine.
 
 ## Learn and operate
 

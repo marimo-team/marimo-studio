@@ -88,7 +88,26 @@ def test_notebook_configuration_controls_presentation_options(
     assert studio.default_runtime == "wasm"
     assert studio.runtimes == ("server", "wasm")
 
+    def enable_prepared(config: MutableMapping[str, object]) -> None:
+        config["runtime"] = "wasm"
+        config["runtimes"] = ["server", "wasm", "zero-python"]
+
+    update_notebook_config(notebook_path, enable_prepared)
+    prepared = load_studio(notebook_path)
+    assert prepared.default_runtime == "wasm"
+    assert prepared.runtimes == ("server", "wasm", "zero-python")
+
+    def default_to_prepared(config: MutableMapping[str, object]) -> None:
+        config["runtime"] = "zero-python"
+
+    update_notebook_config(notebook_path, default_to_prepared)
+    with pytest.raises(
+        ConfigurationError, match="runtime must be one of: server, wasm"
+    ):
+        load_studio(notebook_path)
+
     def invalidate_session(config: MutableMapping[str, object]) -> None:
+        config["runtime"] = "wasm"
         config["preserve_session"] = "yes"
 
     update_notebook_config(notebook_path, invalidate_session)

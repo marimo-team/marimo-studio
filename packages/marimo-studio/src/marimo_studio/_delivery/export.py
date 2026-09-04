@@ -1,10 +1,10 @@
-"""Export one view as a self-contained WebAssembly site.
+"""Export one view as a prepared or WebAssembly static site.
 
 Static export combines a production artifact, saved notebook source, packaged
 Studio browser runtime, notebook public files, and the same mount and runtime
-configuration used by live delivery. The exported page executes notebook logic
-in a browser worker and can render the authored cells, values, outputs, and
-controls without a Python server.
+configuration used by live delivery. A prepared export reads notebook results
+computed during export. A WebAssembly export executes notebook logic in a
+browser worker.
 
 Studio verifies artifact membership, reserved routes, case-insensitive path
 collisions, source and configuration stability, runtime release identity, and
@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import stat
 import unicodedata
@@ -25,6 +26,10 @@ from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Literal
+
+from marimo_export.manifest import prepared_manifest_bytes
+from marimo_export.progress import CacheActivity
 
 import marimo_studio._delivery.assets as _assets
 from marimo_studio._artifacts.inputs import project_revision
@@ -55,6 +60,7 @@ from marimo_studio._filesystem.secure import (
     SecureDirectory,
     secure_directory,
 )
+from marimo_studio._prepared.static import StaticPublication, publication_source
 from marimo_studio._processes.provider_operation import raise_process_cleanup
 from marimo_studio._projections.resolution import (
     projection_policy,
@@ -82,8 +88,10 @@ from marimo_studio.errors import (
 )
 from marimo_studio.view_providers._host import provider_registry
 
-RUNTIME_ID = "wasm"
 SUPPORT_ROOT = Path("_marimo-studio")
+StaticRuntime = Literal["zero-python", "wasm"]
+DEFAULT_STATIC_RUNTIME: StaticRuntime = "zero-python"
+DEFAULT_PREPARE_TIMEOUT = 30.0
 
 
 @dataclass(frozen=True)
@@ -92,9 +100,11 @@ class StaticExportResult:
 
     notebook: Path
     view: str
+    runtime: StaticRuntime
     output: Path
     document: PurePosixPath
     files: int
+    cache_activity: CacheActivity | None
 
     @property
     def entrypoint(self) -> Path:
@@ -106,10 +116,13 @@ class StaticExportResult:
             "schema": 1,
             "notebook": str(self.notebook),
             "view": self.view,
-            "runtime": RUNTIME_ID,
+            "runtime": self.runtime,
             "output": str(self.output),
             "entrypoint": str(self.entrypoint),
             "files": self.files,
+            "cache_activity": (
+                None if self.cache_activity is None else self.cache_activity.to_dict()
+            ),
         }
 
 
@@ -156,7 +169,7 @@ def _projection_error(resolved: ResolvedStudio, view_name: str) -> None:
     )
 
 
-def _runtime_config(
+def _wasm_runtime_config(
     adapters: ExportAdapters,
     studio: StudioWorkspace,
     resolved: ResolvedStudio,
@@ -164,7 +177,7 @@ def _runtime_config(
     artifact: ViewArtifact,
     document: str,
     notebook_source: str,
-) -> tuple[str, bytes]:
+) -> tuple[str, bytes, _assets.BrowserEntryClosure]:
     projection = adapters.browser.project(
         studio.notebook,
         notebook_source,
@@ -188,7 +201,7 @@ def _runtime_config(
     projection_revision = runtime_projection_revision(
         source_revision=source_revision,
         view=view_name,
-        runtime_id=RUNTIME_ID,
+        runtime_id="wasm",
         runtime_instance=projection.instance,
         mounts=mounts,
         projection_targets=targets,
@@ -199,7 +212,7 @@ def _runtime_config(
     inputs = RuntimeConfigInputs(
         view=view_name,
         views=(view_name,),
-        runtime_id=RUNTIME_ID,
+        runtime_id="wasm",
         runtime_instance=projection.instance,
         runtime_data=projection.runtime_data(),
         root_url=root_prefix,
@@ -241,14 +254,125 @@ def _runtime_config(
         assets_url=f"{root_prefix}{SUPPORT_ROOT.as_posix()}/assets",
         dev=False,
         revision=revision,
-        runtime=RUNTIME_ID,
+        runtime="wasm",
         runtime_explicit=False,
         replay=False,
         renewal_token=None,
         filename="notebook.py",
         marimo_version=projection.version,
     )
-    return rendered, encode_runtime_config(config)
+    return (
+        rendered,
+        encode_runtime_config(config),
+        _assets.browser_entry_closure("runtime"),
+    )
+
+
+def _zero_python_runtime_config(
+    adapters: ExportAdapters,
+    studio: StudioWorkspace,
+    resolved: ResolvedStudio,
+    view_name: str,
+    artifact: ViewArtifact,
+    document: str,
+    notebook_source: str,
+    publication: StaticPublication,
+) -> tuple[str, bytes, bytes, _assets.BrowserEntryClosure]:
+    cell_refs = resolved.runtime_cell_refs(None)
+    document_parent = artifact.document.parent
+    root_prefix = (
+        "./"
+        if document_parent == PurePosixPath(".")
+        else "../" * len(document_parent.parts)
+    )
+    support_url = f"{root_prefix}{SUPPORT_ROOT.as_posix()}/views/{view_name}"
+    mounts = tuple(site.to_dict() for site in artifact.mounts)
+    targets = projection_targets(resolved.symbols, artifact.mounts)
+    policy = projection_policy()
+    projection_revision = runtime_projection_revision(
+        source_revision=_digest(
+            notebook_source,
+            studio.config_path.read_text(encoding="utf-8"),
+            publication.state_space_source.digest,
+        ),
+        view=view_name,
+        runtime_id="zero-python",
+        runtime_instance=publication.instance,
+        mounts=mounts,
+        projection_targets=targets,
+        projection_policy=policy,
+        runtime_cell_refs=cell_refs,
+        diagnostics=(),
+    )
+    marimo_config = adapters.runtime_config(studio.notebook)
+    inputs = RuntimeConfigInputs(
+        view=view_name,
+        views=(view_name,),
+        runtime_id="zero-python",
+        runtime_instance=publication.instance,
+        runtime_data={
+            "manifestUrl": f"{support_url}/zero-python/current",
+            "planDigest": publication.plan_digest,
+        },
+        root_url=root_prefix,
+        public_root_url=root_prefix,
+        document_root_url=root_prefix,
+        support_url=support_url,
+        projection_revision=projection_revision,
+        show_cell_logs=studio.show_cell_logs,
+        projection_targets=targets,
+        mounts=mounts,
+        projection_policy=policy,
+        runtime_cell_refs=cell_refs,
+        diagnostics=(),
+        app_config=resolved.notebook.app_config,
+        user_config=marimo_config.user,
+        config_overrides=marimo_config.overrides,
+        dev=False,
+        mode="run",
+    )
+    runtime_fields = inputs.to_dict(revision="")
+    runtime_fields.pop("revision")
+    revision = _digest(
+        view_name,
+        document,
+        artifact.artifact_revision,
+        publication.instance,
+        json.dumps(
+            runtime_fields,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
+    )
+    config = inputs.to_dict(revision=revision)
+    closure = _assets.browser_entry_closure("zero-python")
+    runtime_root = _assets.runtime_assets_path()
+    entry = closure.script.relative_to(runtime_root).as_posix()
+    styles = tuple(path.relative_to(runtime_root).as_posix() for path in closure.styles)
+    rendered = runtime_document(
+        document,
+        root_url="./",
+        support_url=support_url,
+        assets_url=f"{root_prefix}{SUPPORT_ROOT.as_posix()}/assets",
+        dev=False,
+        revision=revision,
+        runtime="zero-python",
+        runtime_explicit=False,
+        replay=False,
+        renewal_token=None,
+        filename="notebook.py",
+        marimo_version=_assets.runtime_marimo_version(),
+        runtime_entry=entry,
+        runtime_styles=styles,
+    )
+    manifest = publication.manifest(f"./{publication.instance}/")
+    return (
+        rendered,
+        encode_runtime_config(config),
+        prepared_manifest_bytes(manifest),
+        closure,
+    )
 
 
 def _asset_files(
@@ -256,6 +380,8 @@ def _asset_files(
     destination: Path,
     owner: str,
     consume: Callable[[_AssetCopy, bytes], None],
+    *,
+    include: frozenset[PurePosixPath] | None = None,
 ) -> list[_AssetCopy]:
     assets: list[_AssetCopy] = []
     budget = FileBudgetTracker(ARTIFACT_OUTPUT_BUDGET, owner.capitalize())
@@ -266,6 +392,11 @@ def _asset_files(
             )
             for path, expected_size in files:
                 relative = path.relative_to(filesystem.root)
+                if (
+                    include is not None
+                    and PurePosixPath(relative.as_posix()) not in include
+                ):
+                    continue
                 budget.add(relative.as_posix(), expected_size)
                 descriptor = filesystem.open_file(path)
                 try:
@@ -349,6 +480,10 @@ def _asset_plan(
     studio: StudioWorkspace,
     view_name: str,
     lease: ArtifactLease,
+    *,
+    closure: _assets.BrowserEntryClosure | None,
+    publication: StaticPublication | None,
+    include_config: bool,
     filesystem: SecureDirectory | None = None,
 ) -> tuple[_AssetCopy, ...]:
     artifact = lease.artifact
@@ -360,8 +495,13 @@ def _asset_plan(
     generated = [
         (Path(*artifact.document.parts), "the generated view document"),
         (Path(".nojekyll"), "the generated site marker"),
-        (support / "config", "the generated runtime configuration"),
     ]
+    if include_config:
+        generated.append((support / "config", "the generated runtime configuration"))
+    if publication is not None:
+        generated.append(
+            (support / "zero-python" / "current", "the prepared runtime manifest")
+        )
     files: dict[tuple[str, ...], tuple[str, Path]] = {}
     directories: dict[tuple[str, ...], tuple[str, Path]] = {}
     for destination, owner in generated:
@@ -395,12 +535,26 @@ def _asset_plan(
                 raise RuntimeError("Static export asset has no captured payload")
         copies.append(asset)
 
-    _asset_files(
-        _assets.runtime_assets_path(),
-        SUPPORT_ROOT / "assets",
-        "the Studio runtime",
-        accept,
-    )
+    if closure is not None:
+        runtime_root = _assets.runtime_assets_path()
+        closure_paths = (closure.script, *closure.styles, *closure.assets)
+        _asset_files(
+            runtime_root,
+            SUPPORT_ROOT / "assets",
+            "the Studio runtime",
+            accept,
+            include=frozenset(
+                PurePosixPath(path.relative_to(runtime_root).as_posix())
+                for path in closure_paths
+            ),
+        )
+    if publication is not None:
+        _asset_files(
+            publication.path,
+            support / "zero-python" / publication.instance,
+            f"prepared publication {publication.instance!r}",
+            accept,
+        )
     for item in artifact.files:
         if item.path == artifact.document:
             continue
@@ -435,40 +589,74 @@ def _write_bundle(
     notebook_source: str,
     notebook_stamp: tuple[int, int, int, int],
     config_stamp: tuple[int, int, int, int],
+    runtime: StaticRuntime,
+    publication: StaticPublication | None,
 ) -> int:
     output = filesystem.root
     artifact = lease.artifact
-    rendered, config = _runtime_config(
-        adapters,
-        studio,
-        resolved,
-        view_name,
-        artifact,
-        document,
-        notebook_source,
-    )
+    manifest: bytes | None = None
+    if runtime == "wasm":
+        rendered, config, closure = _wasm_runtime_config(
+            adapters,
+            studio,
+            resolved,
+            view_name,
+            artifact,
+            document,
+            notebook_source,
+        )
+    elif publication is None:
+        rendered, config, closure = document, None, None
+    else:
+        rendered, config, manifest, closure = _zero_python_runtime_config(
+            adapters,
+            studio,
+            resolved,
+            view_name,
+            artifact,
+            document,
+            notebook_source,
+            publication,
+        )
     support = output / SUPPORT_ROOT
     view_support = support / "views" / view_name
 
-    assets = _asset_plan(studio, view_name, lease, filesystem)
+    assets = _asset_plan(
+        studio,
+        view_name,
+        lease,
+        closure=closure,
+        publication=publication,
+        include_config=config is not None,
+        filesystem=filesystem,
+    )
 
     entrypoint = output.joinpath(*artifact.document.parts)
     filesystem.ensure_parent(entrypoint)
     filesystem.atomic_write(entrypoint, rendered.encode(), mode=0o644)
-    config_path = view_support / "config"
-    filesystem.ensure_parent(config_path)
-    filesystem.atomic_write(
-        config_path,
-        config,
-        mode=0o644,
-    )
+    if config is not None:
+        config_path = view_support / "config"
+        filesystem.ensure_parent(config_path)
+        filesystem.atomic_write(config_path, config, mode=0o644)
+    if manifest is not None:
+        manifest_path = view_support / "zero-python" / "current"
+        filesystem.ensure_parent(manifest_path)
+        filesystem.atomic_write(manifest_path, manifest, mode=0o644)
     filesystem.atomic_write(output / ".nojekyll", b"", mode=0o644)
     try:
         lease.verify()
         project = provider_registry().validate_project(studio.views[view_name])
         inspection = inspect_view_project_sync(project)
         stable = (
-            assets == _asset_plan(studio, view_name, lease)
+            assets
+            == _asset_plan(
+                studio,
+                view_name,
+                lease,
+                closure=closure,
+                publication=publication,
+                include_config=config is not None,
+            )
             and artifact.project_revision
             == project_revision(
                 project,
@@ -479,6 +667,7 @@ def _write_bundle(
             and notebook_source == studio.notebook.read_text(encoding="utf-8")
             and notebook_stamp == _file_stamp(studio.notebook)
             and config_stamp == _file_stamp(studio.config_path)
+            and (publication is None or _publication_current(publication))
         )
     except (OSError, MarimoStudioError) as error:
         raise_process_cleanup(error)
@@ -489,7 +678,37 @@ def _write_bundle(
             "Run the export again."
         )
     filesystem.ensure_attached()
-    return len(assets) + 3
+    return len(assets) + 2 + int(config is not None) + int(manifest is not None)
+
+
+def _publication_current(publication: StaticPublication) -> bool:
+    try:
+        publication.prepared.open().verify()
+        publication.state_space_source.require_current()
+    except (OSError, RuntimeError, MarimoStudioError):
+        return False
+    return True
+
+
+def _resolve_prepare_timeout(
+    runtime: StaticRuntime,
+    prepare_timeout: float | None,
+) -> float | None:
+    if runtime == "wasm":
+        if prepare_timeout is not None:
+            raise ValueError(
+                "prepare_timeout is only valid when runtime is 'zero-python'"
+            )
+        return None
+    value = DEFAULT_PREPARE_TIMEOUT if prepare_timeout is None else prepare_timeout
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value <= 0
+    ):
+        raise ValueError("prepare_timeout must be a finite positive number")
+    return float(value)
 
 
 def export_view(
@@ -497,12 +716,18 @@ def export_view(
     output: str | Path,
     *,
     view: str | None = None,
+    runtime: StaticRuntime = DEFAULT_STATIC_RUNTIME,
     force: bool = False,
+    prepare_timeout: float | None = None,
     expected_catalog_generation: str | None = None,
     expected_generation: str | None = None,
 ) -> StaticExportResult:
-    """Export one configured view as an HTTP-hosted WebAssembly site."""
+    """Export one configured view through a selected static runtime."""
+    if runtime not in {"zero-python", "wasm"}:
+        raise ValueError("runtime must be 'zero-python' or 'wasm'")
+    resolved_prepare_timeout = _resolve_prepare_timeout(runtime, prepare_timeout)
     adapters = create_export_adapters()
+    prepared_source = publication_source()
     studio = load_studio(target)
     notebook_stamp = _file_stamp(studio.notebook)
     config_stamp = _file_stamp(studio.config_path)
@@ -517,7 +742,11 @@ def export_view(
         and studio.catalog_generation != expected_catalog_generation
     ):
         raise WorkspaceGenerationConflictError()
-    destination = _validate_output(Path(output), studio)
+    destination = _validate_output(
+        Path(output),
+        studio,
+        protected_sources=(prepared_source.protected_root(studio.notebook),),
+    )
     if destination.exists() and not force:
         raise StaticExportError(
             f"Output already exists: {destination}. Pass --force to replace it."
@@ -533,6 +762,8 @@ def export_view(
         raise
     except MarimoStudioError as error:
         raise StaticExportError(str(error)) from error
+    publication: StaticPublication | None = None
+    cache_activity: CacheActivity | None = None
     with lease:
         artifact = lease.artifact
         try:
@@ -546,56 +777,110 @@ def export_view(
             published_mounts={selected: artifact.mounts},
         )
         _projection_error(resolved, selected)
-        with _output_filesystem(destination) as filesystem:
-            output_target = _target(filesystem, destination, force=force)
-            staging_root = _temporary_directory(
-                filesystem,
-                "export",
+        if runtime == "zero-python" and artifact.mounts:
+            from marimo_studio._server.presentation.service import PresentationSnapshot
+
+            source_revision = _digest(
+                notebook_source,
+                studio.config_path.read_text(encoding="utf-8"),
             )
-            staged = staging_root / "bundle"
-            filesystem.create_directory(staged)
+            snapshot = PresentationSnapshot(
+                resolved=resolved,
+                view_name=selected,
+                artifact=artifact,
+                document=document,
+                notebook_source=notebook_source,
+                source_revision=source_revision,
+                symbols=resolved.symbols,
+                mounts=artifact.mounts,
+                revision=_digest(
+                    selected,
+                    source_revision,
+                    artifact.artifact_revision,
+                ),
+            )
             try:
-                with secure_directory(staged) as bundle_files:
-                    files = _write_bundle(
-                        bundle_files,
-                        adapters,
-                        studio,
-                        resolved,
-                        selected,
-                        lease,
-                        document,
-                        notebook_source,
-                        notebook_stamp,
-                        config_stamp,
-                    )
-                with (
-                    workspace_catalog_lock(studio.view_root),
-                    view_mutation_lock(studio.view_root, selected),
-                ):
-                    current = load_studio(target)
-                    current_generation = current.view_generations.get(selected)
-                    if (
-                        expected_generation is not None
-                        and current_generation != expected_generation
-                    ):
-                        raise ViewGenerationConflictError(
+                assert resolved_prepare_timeout is not None
+                publication = prepared_source.resolve(
+                    snapshot,
+                    timeout=resolved_prepare_timeout,
+                )
+                cache_activity = publication.prepared.cache_activity
+            except (OSError, RuntimeError, MarimoStudioError) as error:
+                raise StaticExportError(
+                    f"Could not prepare the Zero-Python publication: {error}"
+                ) from error
+        try:
+            with _output_filesystem(destination) as filesystem:
+                output_target = _target(filesystem, destination, force=force)
+                staging_root = _temporary_directory(
+                    filesystem,
+                    "export",
+                )
+                staged = staging_root / "bundle"
+                filesystem.create_directory(staged)
+                try:
+                    with secure_directory(staged) as bundle_files:
+                        files = _write_bundle(
+                            bundle_files,
+                            adapters,
+                            studio,
+                            resolved,
                             selected,
-                            current_generation,
+                            lease,
+                            document,
+                            notebook_source,
+                            notebook_stamp,
+                            config_stamp,
+                            runtime,
+                            publication,
                         )
-                    if (
-                        expected_catalog_generation is not None
-                        and current.catalog_generation != expected_catalog_generation
+                    with (
+                        workspace_catalog_lock(studio.view_root),
+                        view_mutation_lock(studio.view_root, selected),
                     ):
-                        raise WorkspaceGenerationConflictError()
-                    _commit_bundle(staged, output_target)
-            finally:
-                with suppress(OSError):
-                    filesystem.remove_tree(staging_root)
+                        current = load_studio(target)
+                        current_generation = current.view_generations.get(selected)
+                        if (
+                            expected_generation is not None
+                            and current_generation != expected_generation
+                        ):
+                            raise ViewGenerationConflictError(
+                                selected,
+                                current_generation,
+                            )
+                        if (
+                            expected_catalog_generation is not None
+                            and current.catalog_generation
+                            != expected_catalog_generation
+                        ):
+                            raise WorkspaceGenerationConflictError()
+                        if (
+                            notebook_stamp != _file_stamp(current.notebook)
+                            or config_stamp != _file_stamp(current.config_path)
+                            or (
+                                publication is not None
+                                and not _publication_current(publication)
+                            )
+                        ):
+                            raise StaticExportError(
+                                "The static export sources changed before publication. "
+                                "Run the export again."
+                            )
+                        _commit_bundle(staged, output_target)
+                finally:
+                    with suppress(OSError):
+                        filesystem.remove_tree(staging_root)
+        finally:
+            if publication is not None:
+                publication.close()
 
     return StaticExportResult(
         notebook=studio.notebook,
         view=selected,
+        runtime=runtime,
         output=destination,
         document=artifact.document,
         files=files,
+        cache_activity=cache_activity,
     )

@@ -9,6 +9,7 @@
     "./errors": "./src/errors.ts",
     "./frame-bridge": "./src/frame-bridge.ts",
     "./host-session": "./src/host-session.ts",
+    "./json": "./src/json.ts",
     "./output-read": "./src/output-read.ts",
     "./preview-messages": "./src/preview-messages.ts",
     "./provider-catalog": "./src/provider-catalog.ts",

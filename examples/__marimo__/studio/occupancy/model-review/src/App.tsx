@@ -7,6 +7,7 @@ import {
   type ThresholdMetric,
 } from "./components/ThresholdCurve.tsx";
 import { useMarimoValue } from "./lib/use-marimo-value.ts";
+import { useState } from "react";
 
 const Metric = ({ label, value }: { label: string; value?: string }) => (
   <article className="metric">
@@ -23,11 +24,42 @@ type ScopeSummary = {
 
 type OccupancyAnalysis = {
   readonly summary: ScopeSummary;
-  readonly model: ThresholdMetric & {
-    readonly curve: ThresholdMetric[];
-    readonly errors: ErrorCase[];
+  readonly model: {
+    readonly default_threshold: number;
+    readonly evidence: readonly (ThresholdMetric & {
+      readonly errors: readonly ErrorCase[];
+    })[];
+    readonly normalization: {
+      readonly light_min: number;
+      readonly light_max: number;
+      readonly co2_min: number;
+      readonly co2_max: number;
+    };
   };
 };
+
+const ThresholdControl = ({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (threshold: number) => void;
+}) => (
+  <label className="threshold-control">
+    <span>
+      <strong>Occupancy threshold</strong>
+      <output>{value.toFixed(2)}</output>
+    </span>
+    <input
+      type="range"
+      min="0.1"
+      max="0.9"
+      step="0.05"
+      value={value}
+      onChange={(event) => onChange(event.currentTarget.valueAsNumber)}
+    />
+  </label>
+);
 
 const ConfusionCounts = ({ summary }: { summary?: ThresholdMetric }) => (
   <article
@@ -79,9 +111,13 @@ const ConfusionCounts = ({ summary }: { summary?: ThresholdMetric }) => (
 
 export const App = () => {
   const analysis = useMarimoValue<OccupancyAnalysis>("occupancy_analysis");
+  const [threshold, setThreshold] = useState(0.5);
   const scope = analysis.value?.summary;
-  const model = analysis.value?.model;
-  const curve = model?.curve ?? [];
+  const modelData = analysis.value?.model;
+  const curve = modelData?.evidence ?? [];
+  const model = curve.find((row) =>
+    Math.abs(row.threshold - threshold) < 0.001
+  );
   const errorRows = model?.errors ?? [];
   const unavailable = analysis.error;
   const loading = !unavailable && analysis.value === undefined;
@@ -142,7 +178,7 @@ export const App = () => {
           </div>
           <div className="control-strip-controls">
             <marimo-cell name="analysis_scope_control" />
-            <marimo-cell name="threshold_control" />
+            <ThresholdControl value={threshold} onChange={setThreshold} />
           </div>
         </section>
 

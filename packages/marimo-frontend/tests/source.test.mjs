@@ -108,6 +108,7 @@ test("source metadata validates the prepared checkout contract", () => {
     decodeMarimoSource(
       JSON.stringify({
         commit: "abc123",
+        patchSha256: "a".repeat(64),
         path: "/tmp/marimo",
         repository: "https://github.com/marimo-team/marimo.git",
         version: "1.2.3",
@@ -116,6 +117,7 @@ test("source metadata validates the prepared checkout contract", () => {
     ),
   ).toEqual({
     commit: "abc123",
+    patchSha256: "a".repeat(64),
     path: "/tmp/marimo",
     repository: "https://github.com/marimo-team/marimo.git",
     version: "1.2.3",
@@ -156,6 +158,7 @@ test("the package exposes capability facades", async () => {
       "./cell-presentation",
       "./control-endpoint",
       "./embedded-runtime",
+      "./prepared-presentation",
       "./projected-output",
       "./session-bootstrap",
       "./theme-frame",
@@ -516,6 +519,27 @@ test("checkout preparation repairs ownership, dirt, and readiness", async () => 
   await writeFile(join(checkout, "tracked.txt"), "changed\n");
   expect(await isPreparedOwnedCheckout(preparation)).toBe(false);
 }, 15_000);
+
+test("an owned clone leaves its local source checkout unchanged", async () => {
+  const source = await createRepository("source\n");
+  const checkout = await temporaryDirectory("marimo-studio-local-clone-");
+
+  await prepareOwnedCheckout({
+    path: checkout,
+    repository: source.path,
+    commit: source.commit,
+  });
+  await writeFile(join(checkout, "tracked.txt"), "owned change\n");
+  await prepareOwnedCheckout({
+    path: checkout,
+    repository: source.path,
+    commit: source.commit,
+  });
+
+  expect(await git(source.path, "status", "--porcelain=v1", "--untracked-files=all")).toBe("");
+  expect(await readFile(join(source.path, "tracked.txt"), "utf8")).toBe("source\n");
+  expect(await readFile(join(checkout, "tracked.txt"), "utf8")).toBe("source\n");
+});
 
 test("a local source must match the tagged release commit", async () => {
   const source = await createRepository("release\n");

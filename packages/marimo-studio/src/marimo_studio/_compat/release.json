@@ -1,4 +1,5 @@
 {
   "version": "0.24.0",
-  "commit": "854f7f2910b4bb4b6aebe650efc1f83ad40d9bef"
+  "commit": "854f7f2910b4bb4b6aebe650efc1f83ad40d9bef",
+  "frontendPatchSha256": "2838c3d1f0be4dbc2d0cef943017d5497f5655adc24e7c65a9e977e38909d478"
 }

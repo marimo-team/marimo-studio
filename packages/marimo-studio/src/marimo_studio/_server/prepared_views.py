@@ -1,0 +1,227 @@
+"""Compile Studio views for the public prepared-publication controller."""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable, Mapping
+from pathlib import Path
+from threading import RLock
+from typing import Protocol
+
+from marimo_export import ExportRepository, PreparedExport
+from marimo_export.errors import CaptureLimitError, MarimoExportError
+from marimo_export.prepared import PreparedAsset
+from marimo_export.publication import (
+    PreparedPublicationCandidate,
+    PreparedPublicationController,
+)
+from marimo_export.repository import RepositoryLimitError
+from marimo_export.sessions import Client, connect
+from marimo_export.wire import canonical_json_sha256
+
+from marimo_studio._prepared.cleanup import attempt_cleanup
+from marimo_studio._prepared.compiler import CompiledExportView
+from marimo_studio._prepared.resolve import resolve_prepared_view
+from marimo_studio._server.prepared_view_models import (
+    PreparedView,
+    PreparedViewMetadata,
+    PreparedViewRequest,
+)
+from marimo_studio.errors import PublicationError, PublicationLimitError
+
+_ROUTE_GRACE_SECONDS = 60.0
+_PreparedViewKey = tuple[str, str, str, str]
+_PreparedRouteKey = tuple[str, str, str]
+
+
+class Connector(Protocol):
+    def __call__(
+        self,
+        server: str,
+        *,
+        server_token: str | None = None,
+        timeout: float = 30.0,
+    ) -> Client: ...
+
+
+class PreparedViewRegistry:
+    """Adapt Studio view keys and capture metadata to prepared publications."""
+
+    def __init__(
+        self,
+        notebook: Path,
+        *,
+        repository: ExportRepository | None = None,
+        connector: Connector = connect,
+        route_grace_seconds: float = _ROUTE_GRACE_SECONDS,
+    ) -> None:
+        self.notebook = notebook.resolve()
+        self._connector = connector
+        self._lock = RLock()
+        self._current_keys: dict[_PreparedRouteKey, _PreparedViewKey] = {}
+        self._publications: PreparedPublicationController[
+            _PreparedViewKey,
+            PreparedViewMetadata,
+        ] = PreparedPublicationController(
+            repository=repository,
+            supersession_key=lambda key: key[:2],
+            route_key=lambda key: key[0],
+            route_grace_seconds=route_grace_seconds,
+        )
+
+    @property
+    def active(self) -> bool:
+        return self._publications.active
+
+    async def prepare(self, request: PreparedViewRequest) -> PreparedView:
+        prepared = await self._publications.prepare(
+            request.key,
+            lambda repository, cancelled: self._prepare(
+                request,
+                repository,
+                cancelled,
+            ),
+        )
+        selected = PreparedView(prepared)
+        request.state_space_source.require_current()
+        with self._lock:
+            self._current_keys[request.key[:3]] = request.key
+        return selected
+
+    def current(self, view: str, binding_id: str, revision: str) -> PreparedView | None:
+        return self._selected((view, binding_id, revision), poll=False)
+
+    def poll_current(
+        self,
+        view: str,
+        binding_id: str,
+        revision: str,
+    ) -> PreparedView | None:
+        return self._selected((view, binding_id, revision), poll=True)
+
+    def _selected(
+        self,
+        route: _PreparedRouteKey,
+        *,
+        poll: bool,
+    ) -> PreparedView | None:
+        with self._lock:
+            key = self._current_keys.get(route)
+        if key is None:
+            return None
+        prepared = (
+            self._publications.poll(key) if poll else self._publications.current(key)
+        )
+        if prepared is None:
+            return None
+        selected = PreparedView(prepared)
+        try:
+            selected.request.state_space_source.require_current()
+        except PublicationError:
+            with self._lock:
+                if self._current_keys.get(route) == key:
+                    self._current_keys.pop(route, None)
+            return None
+        return selected
+
+    def release_binding(self, binding_id: str, view: str | None = None) -> None:
+        for key in self._publications.keys:
+            if key[1] == binding_id and (view is None or key[0] == view):
+                self._publications.release(key)
+        with self._lock:
+            removed = tuple(
+                route
+                for route in self._current_keys
+                if route[1] == binding_id and (view is None or route[0] == view)
+            )
+            for route in removed:
+                self._current_keys.pop(route, None)
+
+    async def publication_asset(
+        self,
+        view: str,
+        instance: str,
+        relative: str,
+    ) -> PreparedAsset | None:
+        return self._publications.asset(view, instance, relative)
+
+    async def close(self) -> None:
+        await self._publications.close()
+
+    def _prepare(
+        self,
+        request: PreparedViewRequest,
+        repository: ExportRepository,
+        cancelled: Callable[[], bool],
+    ) -> PreparedPublicationCandidate[PreparedViewMetadata]:
+        prepared: PreparedExport | None = None
+        try:
+            with self._connector(
+                request.server,
+                server_token=request.server_token,
+            ) as client:
+                session = client.session(request.session_id)
+                request.state_space_source.require_current()
+                resolved = resolve_prepared_view(
+                    request.snapshot,
+                    request.state_space_source,
+                    session,
+                    repository,
+                )
+                if cancelled():
+                    raise asyncio.CancelledError
+                prepared = session.capture(
+                    spec=resolved.compiled.spec,
+                    repository=repository,
+                    cancelled=cancelled,
+                )
+                request.state_space_source.require_current()
+            metadata = _prepared_view_metadata(
+                request,
+                prepared,
+                resolved.compiled,
+                resolved.selected_inputs,
+            )
+            return PreparedPublicationCandidate(prepared=prepared, metadata=metadata)
+        except BaseException as error:
+            if prepared is not None:
+                attempt_cleanup(error, prepared.close)
+            if isinstance(error, (CaptureLimitError, RepositoryLimitError)):
+                raise PublicationLimitError(str(error)) from error
+            if isinstance(error, MarimoExportError):
+                raise PublicationError(str(error)) from error
+            raise
+
+
+def _prepared_view_metadata(
+    request: PreparedViewRequest,
+    prepared: PreparedExport,
+    compiled: CompiledExportView,
+    selected_inputs: Mapping[str, object] | None,
+) -> PreparedViewMetadata:
+    projections = {
+        "cells": dict(compiled.bindings.cells),
+        "outputs": dict(compiled.bindings.outputs),
+        "values": dict(compiled.bindings.values),
+    }
+    digest = canonical_json_sha256(
+        {
+            "inputs": list(prepared.plan.inputs),
+            "state_space": request.state_space_source.digest,
+            "projections": projections,
+        }
+    )
+    return PreparedViewMetadata(
+        request=request,
+        projections=projections,
+        selected_inputs=selected_inputs,
+        plan_digest=digest,
+    )
+
+
+__all__ = [
+    "Connector",
+    "PreparedView",
+    "PreparedViewRegistry",
+    "PreparedViewRequest",
+]

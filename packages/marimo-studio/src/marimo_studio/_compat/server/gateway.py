@@ -14,6 +14,7 @@ from starlette.requests import Request
 from starlette.types import Scope
 from starlette.websockets import WebSocket
 
+from marimo_studio._delivery.urls import public_url
 from marimo_studio._server.records import (
     ServerContext,
     ServerHandle,
@@ -82,6 +83,22 @@ def _server_uses_file_routing(scope: Scope) -> bool:
     return manager is not None and manager.workspace.get_unique_file_key() is None
 
 
+def _internal_server_url(scope: Scope, base_url: str) -> str | None:
+    server = scope.get("server")
+    if server is None:
+        return None
+    host, port = server
+    if not isinstance(host, str) or not host or not isinstance(port, int) or port <= 0:
+        return None
+    host = host.strip("[]")
+    if host == "0.0.0.0":
+        host = "127.0.0.1"
+    elif host == "::":
+        host = "::1"
+    authority = f"[{host}]" if ":" in host else host
+    return f"http://{authority}:{port}{public_url(base_url, '/')}"
+
+
 async def _server_location(
     request: Request | WebSocket,
     selected_file: str | None = None,
@@ -120,10 +137,12 @@ async def _server_location(
         mode = "edit"
     else:
         return None
+    base_url = effective_base_url(scope, str(getattr(state, "base_url", "")))
     return ServerLocation(
         notebook=notebook,
         file_key=str(file_key),
-        base_url=effective_base_url(scope, str(getattr(state, "base_url", ""))),
+        base_url=base_url,
+        internal_url=_internal_server_url(scope, base_url),
         mode=mode,
         routing_query=((("file", str(file_key)),) if unique_file is None else ()),
         handle=ServerHandle(
@@ -176,6 +195,7 @@ def _server_context(location: ServerLocation) -> ServerContext:
         notebook=location.notebook,
         file_key=location.file_key,
         base_url=location.base_url,
+        internal_url=location.internal_url,
         mode=location.mode,
         dev=location.mode == "edit"
         or bool(getattr(handle.session_manager, "watch", False)),

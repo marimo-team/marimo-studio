@@ -314,8 +314,15 @@ const setState = (host: HTMLElement, state: ValuePhase): boolean => {
   return previous !== state;
 };
 
-const failHost = (host: HTMLElement, error: ValueReadError, diagnostic?: ProjectionDiagnostic) => {
-  clearHostValue(host);
+const failHost = (
+  host: HTMLElement,
+  error: ValueReadError,
+  diagnostic?: ProjectionDiagnostic,
+  retainValue = false,
+) => {
+  if (!retainValue) {
+    clearHostValue(host);
+  }
   const hint = diagnostic?.hint || error.hint;
   host.dataset.marimoError = error.message;
   host.dataset.marimoErrorCode = error.code;
@@ -671,6 +678,21 @@ export const markValueError = (
       host.textContent = config.dev || config.mode === "edit" ? "Unavailable" : "";
       host.dataset.marimoStudioValueFallback = "";
       failHost(host, error);
+    }
+  });
+};
+
+export const markValueRetainedError = (
+  selector: string,
+  error: ValueReadError,
+  projectionRevision: string,
+): void => {
+  if (projectionRevision !== cacheProjectionRevision || !selectorHasOwner(selector)) {
+    return;
+  }
+  hosts.forEach((host) => {
+    if (selectorFor(host) === selector) {
+      failHost(host, error, undefined, true);
     }
   });
 };

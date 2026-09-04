@@ -24,6 +24,7 @@ from marimo_studio._server.presentation.capability import (
     presentation_revision_capability,
     presentation_revision_url,
 )
+from marimo_studio._server.publication_runtime import PublicationRuntimeProjector
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.runtime.wasm_work import WasmProjectionWork
 from marimo_studio._server.server_instance import server_instance_id
@@ -35,6 +36,7 @@ from marimo_studio.errors import RuntimeSelectionError
 from marimo_studio.errors._internal import RuntimeSyncError
 
 if TYPE_CHECKING:
+    from marimo_studio._server.notebook_scope import NotebookScopeRegistry
     from marimo_studio._server.presentation.service import PresentationSnapshot
 
 
@@ -351,6 +353,82 @@ class WasmRuntime:
         )
 
 
+class ZeroPythonRuntime:
+    id = "zero-python"
+    label = "Prepared"
+
+    def __init__(self, notebooks: NotebookScopeRegistry) -> None:
+        self._notebooks = notebooks
+        self._closed = False
+
+    async def close(self) -> None:
+        self._closed = True
+
+    def _require_open(self) -> None:
+        if self._closed:
+            raise RuntimeSyncError("Zero-Python runtime projection is shutting down.")
+
+    async def project(
+        self,
+        snapshot: PresentationSnapshot,
+        context: ServerContext,
+        session_id: str | None,
+        binding_id: str | None = None,
+        presentation_session_id: str | None = None,
+        runtime_session_id: str | None = None,
+    ) -> RuntimeProjection:
+        del runtime_session_id
+        self._require_open()
+        publications = self._notebooks.get(context.notebook).publications
+        if publications is None:
+            raise RuntimeSyncError("Zero-Python publication ownership is unavailable.")
+        prepared = await PublicationRuntimeProjector(publications).project(
+            snapshot,
+            context,
+            "edit" if context.mode == "edit" else "read",
+            session_id,
+            binding_id,
+            presentation_session_id,
+        )
+        self._require_open()
+        return RuntimeProjection(
+            runtime_id=self.id,
+            instance=prepared.instance,
+            data=prepared.data,
+            cell_refs=snapshot.resolved.runtime_cell_refs(None),
+        )
+
+    async def project_evidence(
+        self,
+        snapshot: PresentationSnapshot,
+        context: ServerContext,
+        session_id: str | None,
+        binding_id: str | None = None,
+        presentation_session_id: str | None = None,
+        runtime_session_id: str | None = None,
+    ) -> RuntimeEvidenceProjection:
+        projection = await self.project(
+            snapshot,
+            context,
+            session_id,
+            binding_id,
+            presentation_session_id,
+            runtime_session_id,
+        )
+        bindings = projection.cell_refs
+        return RuntimeEvidenceProjection(
+            runtime_id=projection.runtime_id,
+            instance=projection.instance,
+            data=projection.data,
+            cell_refs=bindings,
+            current_cell_refs={
+                cell.runtime_id: str(cell.ref)
+                for cell in snapshot.resolved.notebook.cells
+            },
+            dependency_closures=_static_dependency_closures(snapshot, bindings),
+        )
+
+
 class RuntimeRegistry:
     """Resolve immutable runtime providers by public runtime ID."""
 
@@ -388,6 +466,18 @@ class RuntimeRegistry:
     def options(self) -> tuple[tuple[str, str], ...]:
         return tuple((provider.id, provider.label) for provider in self._providers)
 
+    def options_for(
+        self,
+        studio: StudioWorkspace,
+        context: ServerContext,
+    ) -> tuple[tuple[str, str], ...]:
+        available = set(self.available(studio, context))
+        return tuple(
+            (provider.id, provider.label)
+            for provider in self._providers
+            if provider.id in available
+        )
+
     def configured_options(
         self,
         runtime_ids: tuple[str, ...],
@@ -401,11 +491,12 @@ class RuntimeRegistry:
     def available(
         self,
         studio: StudioWorkspace,
-        _context: ServerContext,
+        context: ServerContext,
     ) -> tuple[str, ...]:
         return tuple(
             runtime_id
             for runtime_id, _label in self.configured_options(studio.runtimes)
+            if context.mode == "edit" or runtime_id != "zero-python"
         )
 
     def select(
@@ -483,6 +574,9 @@ class RuntimeRegistry:
 def create_runtime_registry(
     sessions: SessionState,
     browser: BrowserRuntimeProjector,
+    notebooks: NotebookScopeRegistry,
 ) -> RuntimeRegistry:
     """Construct Studio runtime policy from the Marimo adapter bundle."""
-    return RuntimeRegistry((ServerRuntime(sessions), WasmRuntime(browser)))
+    return RuntimeRegistry(
+        (ServerRuntime(sessions), WasmRuntime(browser), ZeroPythonRuntime(notebooks))
+    )

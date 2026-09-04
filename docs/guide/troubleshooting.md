@@ -138,6 +138,18 @@ marimo-studio view build dashboard \
 marimo-studio validate dashboard --target analysis.py
 ```
 
+For a Prepared export, check that every projection mount has finite targets and
+that `states.yaml` uses accepted frontend values. Increase
+`--prepare-timeout` when the configured state set needs more than 30 seconds
+to execute:
+
+```console
+marimo-studio view export dashboard \
+  --target analysis.py \
+  --output dist/dashboard \
+  --prepare-timeout 600
+```
+
 Review an existing output directory before using `--force`. Serve the complete
 export over HTTP and keep its relative paths intact.
 

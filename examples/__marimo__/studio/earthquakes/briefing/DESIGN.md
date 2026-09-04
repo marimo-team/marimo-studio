@@ -68,12 +68,12 @@ Each slide states one claim and places the evidence beside that claim.
 
 ## Analytical ownership
 
-The notebook computes `seismic_analysis`, the magnitude comparison, the
-descriptive frequency–magnitude fit, and the selected point on that fit. The
-view formats that analytical value into maps, plots, annotations, and
-explanatory cases. The magnitude, event-filter, and frequency-threshold cells
-remain native Marimo controls, so Server and WebAssembly delivery run the same
-reactive computations.
+The notebook computes `seismic_analysis`, the complete magnitude-comparison
+relation, and the descriptive frequency–magnitude curve. The view formats that
+analytical value into maps, plots, annotations, and explanatory cases. React
+selects rows from the two complete relations for the scale and frequency
+experiments and filters the projected catalog for the selection experiment.
+The same browser interaction runs in every delivery environment.
 
 ## Sequence
 

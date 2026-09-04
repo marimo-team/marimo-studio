@@ -14,7 +14,7 @@ export type JsonValue =
   | number
   | boolean
   | null
-  | JsonValue[]
+  | readonly JsonValue[]
   | { readonly [key: string]: JsonValue };
 
 export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>

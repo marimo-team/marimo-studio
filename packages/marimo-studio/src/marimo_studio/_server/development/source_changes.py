@@ -14,6 +14,7 @@ from marimo_studio._artifacts.inputs import project_revision
 from marimo_studio._artifacts.limits import PROJECT_INPUT_BUDGET
 from marimo_studio._artifacts.paths import artifact_root, digest_secure_file
 from marimo_studio._filesystem.tree import bounded_tree_entries
+from marimo_studio._prepared.state_space import state_space_path
 from marimo_studio._processes.cancellation import current_provider_cancellation
 from marimo_studio._processes.provider_operation import raise_process_cleanup
 from marimo_studio._server.development.ports import ProjectWatchPlan
@@ -53,6 +54,7 @@ class SourceChangeProducer:
         self._input_id: str | None = None
         self._inspection_error: Exception | None = None
         self._manifest_stamp: _FileStamp = "missing"
+        self._state_space_stamp: _FileStamp = "missing"
         self._scope_files: tuple[Path, ...] = ()
         self._roots: tuple[Path, ...] = ()
         self._excluded_roots: tuple[Path, ...] = ()
@@ -83,6 +85,7 @@ class SourceChangeProducer:
         files.update(self._scope_files)
         if self._project is not None:
             files.add(self._project.manifest)
+            files.add(state_space_path(self._project.root))
         return ProjectWatchPlan(
             files=tuple(sorted((path.absolute() for path in files), key=str)),
             roots=tuple(sorted((path.absolute() for path in self._roots), key=str)),
@@ -100,6 +103,8 @@ class SourceChangeProducer:
         return (
             project is not None
             and _optional_stamp(project.manifest) == self._manifest_stamp
+            and _optional_stamp(state_space_path(project.root))
+            == self._state_space_stamp
             and bool(self._catalog_stamps)
             and all(
                 _stat_stamp(path) == stamp
@@ -172,6 +177,13 @@ class SourceChangeProducer:
             self._excluded_roots,
         )
         changed = _changed_keys(self._tree, current)
+        state_space_stamp = (
+            _optional_stamp(state_space_path(self._project.root))
+            if self._project is not None
+            else "missing"
+        )
+        state_space_change = state_space_stamp != self._state_space_stamp
+        self._state_space_stamp = state_space_stamp
         if changed:
             project = self._project
             files = tuple(
@@ -183,6 +195,8 @@ class SourceChangeProducer:
             return SourceChange(kind="project", files=files)
 
         if notebook_change:
+            return SourceChange(kind="project", files=())
+        if state_space_change:
             return SourceChange(kind="project", files=())
         return None
 
@@ -229,8 +243,10 @@ class SourceChangeProducer:
         self._catalog_stamps = {}
         if project is None:
             self._manifest_stamp = "missing"
+            self._state_space_stamp = "missing"
             return
         self._manifest_stamp = _optional_stamp(project.manifest)
+        self._state_space_stamp = _optional_stamp(state_space_path(project.root))
         self._reinspect_project()
 
     def _reinspect_project(

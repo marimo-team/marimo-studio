@@ -1,4 +1,4 @@
-import type { CellId } from "@marimo-team/frontend/unstable_internal/core/cells/ids";
+import type { CellId, UIElementId } from "@marimo-team/frontend/unstable_internal/core/cells/ids";
 import type { CellOutput } from "@marimo-team/frontend/unstable_internal/core/kernel/messages";
 
 import { cellDomProps } from "@marimo-team/frontend/unstable_internal/components/editor/common";
@@ -16,13 +16,23 @@ import { store } from "@marimo-team/frontend/unstable_internal/core/state/jotai"
 import { VirtualFileTracker } from "@marimo-team/frontend/unstable_internal/core/static/virtual-file-tracker";
 import { useLayoutEffect } from "react";
 
+import type { EmbeddedJsonValue } from "./embedded-json.ts";
+
 import { suppressReplacedControlValues } from "./embedded-control-state";
 import { reconcileProjectedOutputState } from "./projected-output-state";
 
+export interface MarimoCellOutputSnapshot {
+  readonly channel: CellOutput["channel"];
+  readonly mimetype: string;
+  readonly data: EmbeddedJsonValue;
+  readonly timestamp?: number;
+}
+
 export interface ProjectedOutputUpdate {
   ownerCellId: string;
+  channel?: CellOutput["channel"];
   mimetype: string;
-  data: string;
+  data: EmbeddedJsonValue;
   timestamp: number;
   resetUiObjectIds: readonly string[];
 }
@@ -54,6 +64,16 @@ const outputMimetypes = {
   "video/mpeg": true,
 } as const satisfies Record<CellOutput["mimetype"], true>;
 
+const outputChannels = {
+  "marimo-error": true,
+  media: true,
+  output: true,
+  pdb: true,
+  stderr: true,
+  stdin: true,
+  stdout: true,
+} as const satisfies Record<CellOutput["channel"], true>;
+
 const isCellId = (value: string): value is CellId => value.length > 0;
 
 const parseCellId = (value: string): CellId => {
@@ -66,21 +86,43 @@ const parseCellId = (value: string): CellId => {
 const isOutputMimetype = (value: string): value is CellOutput["mimetype"] =>
   Object.hasOwn(outputMimetypes, value);
 
-const toCellOutput = (output: ProjectedOutputUpdate): CellOutput => {
+const isOutputChannel = (value: string): value is CellOutput["channel"] =>
+  Object.hasOwn(outputChannels, value);
+
+export const toMarimoCellOutput = (output: MarimoCellOutputSnapshot): CellOutput => {
+  const channel: string = output.channel;
+  if (!isOutputChannel(channel)) {
+    throw new Error(`Marimo cannot render projected output channel ${channel}`);
+  }
   if (!isOutputMimetype(output.mimetype)) {
     throw new Error(`Marimo cannot render projected output type ${output.mimetype}`);
   }
-  return {
-    channel: "output",
+  const cellOutput: CellOutput = {
+    channel,
+    mimetype: output.mimetype,
+    // SAFETY: Prepared data is JSON-validated and the matching Marimo MIME type is checked above.
+    data: structuredClone(output.data) as CellOutput["data"],
+  };
+  if (output.timestamp !== undefined) {
+    cellOutput.timestamp = output.timestamp;
+  }
+  return cellOutput;
+};
+
+const toCellOutput = (output: ProjectedOutputUpdate): CellOutput =>
+  toMarimoCellOutput({
+    channel: output.channel ?? "output",
     mimetype: output.mimetype,
     data: output.data,
     timestamp: output.timestamp,
-  };
-};
+  });
 
 const ensureProjectedOutputOwner = (ownerCellId: CellId, executionTime: number): void => {
   store.set(notebookAtom, (state) => {
-    if (state.cellData[ownerCellId] && state.cellRuntime[ownerCellId]) {
+    if (
+      Object.hasOwn(state.cellData, ownerCellId) &&
+      Object.hasOwn(state.cellRuntime, ownerCellId)
+    ) {
       return state;
     }
     return {
@@ -116,6 +158,22 @@ export const reconcileProjectedOutput = (output: ProjectedOutputUpdate): void =>
   );
 };
 
+export const releaseProjectedOutputResources = (
+  ownerCellIdValue: string,
+  resetUiObjectIds: readonly string[],
+): void => {
+  const ownerCellId = parseCellId(ownerCellIdValue);
+  const ownerPrefix = `${ownerCellId}-`;
+  if (resetUiObjectIds.some((objectId) => !objectId.startsWith(ownerPrefix))) {
+    throw new Error("A projected output may reset only UI objects owned by its projection.");
+  }
+  resetUiObjectIds.forEach((objectId) =>
+    // SAFETY: The owner-prefix check above establishes Marimo's UIElementId shape.
+    UI_ELEMENT_REGISTRY.entries.delete(objectId as UIElementId),
+  );
+  VirtualFileTracker.INSTANCE.removeForCellId(ownerCellId);
+};
+
 const ownerReferences = new Map<CellId, number>();
 
 const retainProjectedOutputOwner = (ownerCellId: CellId): void => {
@@ -143,17 +201,12 @@ const releaseProjectedOutputOwner = (ownerCellId: CellId): void => {
   });
 };
 
-export const ProjectedOutputArea = ({
-  output,
-  stale,
-}: {
-  output: ProjectedOutputUpdate;
-  stale: boolean;
-}) => {
-  const ownerCellId = parseCellId(output.ownerCellId);
-  const projectedOutput = toCellOutput(output);
+export const useProjectedOutputOwner = (ownerCellIdValue: string, timestamp: number): boolean => {
+  const ownerCellId = parseCellId(ownerCellIdValue);
   const notebook = useNotebook();
-  const registered = Boolean(notebook.cellData[ownerCellId] && notebook.cellRuntime[ownerCellId]);
+  const registered =
+    Object.hasOwn(notebook.cellData, ownerCellId) &&
+    Object.hasOwn(notebook.cellRuntime, ownerCellId);
 
   useLayoutEffect(() => {
     retainProjectedOutputOwner(ownerCellId);
@@ -162,16 +215,38 @@ export const ProjectedOutputArea = ({
 
   useLayoutEffect(() => {
     if (!registered) {
-      ensureProjectedOutputOwner(ownerCellId, output.timestamp);
+      ensureProjectedOutputOwner(ownerCellId, timestamp);
     }
-  }, [output.timestamp, ownerCellId, registered]);
+  }, [timestamp, ownerCellId, registered]);
+
+  return registered;
+};
+
+export const ProjectedOutputArea = ({
+  accessibleName,
+  output,
+  stale,
+}: {
+  accessibleName?: string;
+  output: ProjectedOutputUpdate;
+  stale: boolean;
+}) => {
+  const ownerCellId = parseCellId(output.ownerCellId);
+  const projectedOutput = toCellOutput(output);
+  const registered = useProjectedOutputOwner(ownerCellId, output.timestamp);
 
   if (!registered) {
     return null;
   }
 
   return (
-    <div className="marimo" data-marimo-cell-output="" {...cellDomProps(ownerCellId, "_")}>
+    <div
+      aria-label={accessibleName}
+      className="marimo"
+      data-marimo-cell-output=""
+      role="group"
+      {...cellDomProps(ownerCellId, "_")}
+    >
       <OutputArea
         allowExpand={false}
         cellId={ownerCellId}
