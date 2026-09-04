@@ -60,7 +60,7 @@ typecheck: _frontend-ready ## Type-check Python and TypeScript sources.
 	$(VP) check --no-fmt --no-lint $(TYPECHECK_PATHS)
 
 python-test: ## Run the complete Python test profile for this environment.
-	./scripts/python-test.sh --profile all
+	./scripts/python-test.sh --profile all --parallel
 
 frontend-test: _frontend-ready ## Run JavaScript and TypeScript tests.
 	$(VP) run -r test

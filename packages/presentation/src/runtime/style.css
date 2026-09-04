@@ -47,10 +47,10 @@
 }
 
 :where([mo-value]):is(
-  :not([data-state]),
-  [data-state="connecting"],
-  [data-state="loading"]
-):empty::before {
+    :not([data-state]),
+    [data-state="connecting"],
+    [data-state="loading"]
+  ):empty::before {
   background: var(--marimo-value-skeleton-color, color-mix(in srgb, currentColor 11%, transparent));
   block-size: var(--marimo-value-skeleton-height, 0.72em);
   border-radius: var(--marimo-value-skeleton-radius, 2px);
@@ -81,10 +81,10 @@
 }
 
 :where(marimo-cell, marimo-output):is(
-  :not(:defined),
-  [data-state="connecting"],
-  [data-state="loading"]
-):empty::before {
+    :not(:defined),
+    [data-state="connecting"],
+    [data-state="loading"]
+  ):empty::before {
   --_marimo-cell-skeleton-color: var(
     --marimo-cell-skeleton-color,
     color-mix(in srgb, currentColor 11%, transparent)

@@ -49,12 +49,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Linux 1/2
-            shard: 1/2
+          - name: Linux 1/3
+            shard: 1/3
             port_offset: 100
-          - name: Linux 2/2
-            shard: 2/2
+          - name: Linux 2/3
+            shard: 2/3
             port_offset: 200
+          - name: Linux 3/3
+            shard: 3/3
+            port_offset: 300
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

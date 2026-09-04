@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./scripts/python-test.sh [--profile PROFILE] [--python VERSION] [-- PYTEST_ARGS...]
+Usage: ./scripts/python-test.sh [--profile PROFILE] [--python VERSION] [--parallel] [-- PYTEST_ARGS...]
 
 Run a repository-owned Python test profile.
 
@@ -17,6 +17,7 @@ Profiles:
 Options:
   --profile PROFILE  Select a profile. Default: all
   --python VERSION   Use a frozen, isolated environment for VERSION.
+  --parallel         Distribute tests across up to eight workers.
   -h, --help         Show this help.
 
 Everything after -- is forwarded to pytest. Unrecognized arguments are also
@@ -24,6 +25,7 @@ forwarded, so focused paths and pytest flags work without --.
 
 Examples:
   ./scripts/python-test.sh --profile all
+  ./scripts/python-test.sh --profile all --parallel
   ./scripts/python-test.sh --profile standard -x
   ./scripts/python-test.sh --profile supported-python --python 3.13
   ./scripts/python-test.sh --profile native -- packages/marimo-studio/tests/server/test_session_startup.py
@@ -32,6 +34,7 @@ EOF
 
 profile="all"
 python_version=""
+parallel=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -51,6 +54,10 @@ while [[ $# -gt 0 ]]; do
             python_version="$2"
             shift 2
             ;;
+        --parallel)
+            parallel=true
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -67,6 +74,9 @@ done
 
 group="test"
 pytest_args=(pytest)
+if [[ "$parallel" == "true" ]]; then
+    pytest_args+=(-n auto --maxprocesses=8 --dist worksteal)
+fi
 case "$profile" in
     all)
         ;;
