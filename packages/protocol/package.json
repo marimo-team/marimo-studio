@@ -16,7 +16,6 @@
     "./projections": "./src/projections.ts",
     "./query": "./src/query.ts",
     "./runtime-config": "./src/runtime-config.ts",
-    "./runtime-descriptor": "./src/runtime-descriptor.ts",
     "./runtime-selection": "./src/runtime-selection.ts",
     "./source-documents": "./src/source-documents.ts",
     "./source-events": "./src/source-events.ts",

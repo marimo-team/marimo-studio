@@ -1,6 +1,5 @@
 import type {
   JsonObject,
-  JsonValue,
   MarimoCellChannel,
   MarimoCellOutput,
   MarimoCellSnapshot,
@@ -11,8 +10,10 @@ import type {
   MarimoReplayResources,
 } from "@marimo-team/marimo-export";
 
+import type { DecodedValue } from "../values/codecs.ts";
+
 export type PreparedJsonPrimitive = string | number | boolean | null;
-export type PreparedJsonValue = JsonValue;
+export type PreparedJsonValue = Extract<DecodedValue, { readonly codec: "json-v1" }>["value"];
 export type PreparedJsonObject = JsonObject;
 export type PreparedOutputChannel = MarimoCellChannel;
 export type PreparedCellOutput = MarimoCellOutput;
@@ -23,7 +24,7 @@ export type PreparedProjectionResources = MarimoReplayResources;
 
 export interface PreparedValueSnapshot {
   readonly selector: string;
-  readonly value: JsonValue;
+  readonly value: DecodedValue;
 }
 
 export type PreparedOutputSnapshot = MarimoOutputSnapshot & {
@@ -62,7 +63,17 @@ const requireUnique = (values: readonly string[], label: string): void => {
 export const immutablePreparedSnapshot = (
   value: PreparedProjectionSnapshot,
 ): PreparedProjectionSnapshot => {
-  const snapshot: PreparedProjectionSnapshot = structuredClone(value);
+  const snapshot: PreparedProjectionSnapshot = {
+    values: value.values.map(({ selector, value: decoded }) => ({
+      selector,
+      value:
+        decoded.codec === "json-v1"
+          ? { ...decoded, value: structuredClone(decoded.value) }
+          : decoded,
+    })),
+    outputs: structuredClone(value.outputs),
+    cells: structuredClone(value.cells),
+  };
   requireUnique(
     snapshot.values.map((item) => item.selector),
     "value selectors",

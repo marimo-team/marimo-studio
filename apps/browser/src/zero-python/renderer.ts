@@ -14,7 +14,6 @@ export class StudioPreparedRenderer implements PreparedStatePort {
     private readonly renderer: PreparedProjectionHandle,
     private readonly source: StudioPreparedManifestSource,
     private readonly loaders: ZeroPythonProjectionLoaders,
-    private readonly commitInstance: (instance: string) => void,
   ) {}
 
   async apply(change: PreparedStateChange, signal: AbortSignal): Promise<void> {
@@ -29,13 +28,11 @@ export class StudioPreparedRenderer implements PreparedStatePort {
     await this.renderer.replace(snapshot, { signal });
     this.renderer.updateControlBindings(change.next.notebookExport.controlBindings);
     this.source.remember(change.next.notebookExport);
-    this.commitInstance(change.next.notebookExport.identity);
   }
 
   async restore(publication: PreparedStateChange["next"]): Promise<void> {
     await this.renderer.restore();
     this.renderer.updateControlBindings(publication.notebookExport.controlBindings);
-    this.commitInstance(publication.notebookExport.identity);
   }
 
   checkpoint(): PreparedProjectionCheckpoint {

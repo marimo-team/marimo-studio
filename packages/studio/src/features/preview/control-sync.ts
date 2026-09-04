@@ -4,13 +4,10 @@ export interface RuntimeCellMap {
   cells: Readonly<Record<string, string>>;
 }
 
-import type {
-  ControlEndpoint,
-  ControlEvent,
-  ControlSource,
-  ControlSync,
-  ControlUpdate,
-} from "./control-types.ts";
+export interface ControlUpdate {
+  objectId: string;
+  value: unknown;
+}
 
 export interface ControlEndpoint {
   snapshot(): readonly ControlUpdate[];
@@ -248,262 +245,25 @@ export const synchronizeControlEndpoints = async ({
     if (translated) {
       void editorWriter.write([translated]).catch(() => {});
     }
-    return pending.source === "editor"
-      ? translation.editorFromBinding(pending.binding, pending.update)
-      : translation.previewFromBinding(pending.binding, pending.update);
-  };
-  const retainUnmatched = (source: ControlSource): boolean =>
-    structuredTranslation && source === "preview";
-  const writer = (source: ControlSource): ControlWriter =>
-    source === "editor" ? previewWriter : editorWriter;
-  const sourceWriter = (source: ControlSource): ControlWriter =>
-    source === "editor" ? editorWriter : previewWriter;
-  const observeWrite = (source: ControlSource, operation: Promise<void>): void => {
-    const observed = source === "editor" ? observedPreviewWrite : observedEditorWrite;
-    if (observed === operation) {
-      return;
-    }
-    if (source === "editor") {
-      observedPreviewWrite = operation;
-    } else {
-      observedEditorWrite = operation;
-    }
-    void operation.then(
-      () => {
-        if (source === "editor" && observedPreviewWrite === operation) {
-          observedPreviewWrite = undefined;
-        }
-        if (source === "preview" && observedEditorWrite === operation) {
-          observedEditorWrite = undefined;
-        }
-      },
-      (error: Error) => {
-        if (source === "editor" && observedPreviewWrite === operation) {
-          observedPreviewWrite = undefined;
-        }
-        if (source === "preview" && observedEditorWrite === operation) {
-          observedEditorWrite = undefined;
-        }
-        if (!disposed) {
-          quarantine(source);
-          buffer.requireSnapshot(source, true);
-        }
-        console.warn("Marimo peer control update failed", error);
-      },
-    );
-  };
-  const route = (source: ControlSource, update: ControlEvent): void => {
-    if (!sourceWriter(source).observe(update)) {
-      return;
-    }
-    if (quarantined) {
-      const value = jsonValueSchema.safeParse(update.value);
-      if (value.success) {
-        buffer.add(source, update, value.data, binding(source, update.objectId));
-      }
-      return;
-    }
-    const translated = translate(source, update);
-    observeWrite(source, writer(source).write(translated));
-  };
-  const editorToPreview = (update: ControlEvent) => {
-    route("editor", update);
-  };
-  const previewToEditor = (update: ControlEvent) => {
-    route("preview", update);
   };
 
   const stopEditor = editor.subscribe(editorToPreview);
   const stopPreview = preview.subscribe(previewToEditor);
+  let disposed = false;
   const dispose = () => {
     if (disposed) {
       return;
     }
     disposed = true;
-    const failures: unknown[] = [];
-    const cleanup = (action: () => void): void => {
-      try {
-        action();
-      } catch (error) {
-        failures.push(error);
-      }
-    };
     signal?.removeEventListener("abort", dispose);
-    buffer.clear();
-    sources.clear();
-    observedEditorWrite = undefined;
-    observedPreviewWrite = undefined;
-    cleanup(stopEditorTopology);
-    cleanup(stopPreviewTopology);
-    cleanup(stopEditor);
-    cleanup(stopPreview);
-    cleanup(() => editorWriter.dispose());
-    cleanup(() => previewWriter.dispose());
-    cleanup(() => editor.dispose());
-    cleanup(() => preview.dispose());
-    if (failures.length === 1) {
-      throw failures[0];
-    }
-    if (failures.length > 1) {
-      throw new AggregateError(failures, "Control synchronization cleanup failed");
-    }
+    stopEditor();
+    stopPreview();
+    editorWriter.dispose();
+    previewWriter.dispose();
+    editor.dispose();
+    preview.dispose();
   };
-  const endpointControls = (
-    endpoint: ControlEndpoint,
-    configured: RuntimeControls,
-  ): RuntimeControls => {
-    const bindings = endpoint.controlBindings?.();
-    if (sources.size > 0) {
-      if (bindings === undefined || configured.bindings === undefined) {
-        return configured;
-      }
-      return runtimeControlsSchema.parse({
-        bindings: Object.fromEntries([
-          ...Object.entries(bindings),
-          ...Object.entries(configured.bindings),
-        ]),
-      });
-    }
-    return bindings === undefined ? configured : runtimeControlsSchema.parse({ bindings });
-  };
-  const reconcileSnapshot = async (
-    source: ControlSource,
-    generation: number,
-    snapshot: readonly ControlUpdate[],
-  ): Promise<boolean | undefined> => {
-    let chunk: ControlUpdate[] = [];
-    let chunkBytes = 0;
-    let complete = true;
-    const flush = async (): Promise<void> => {
-      if (chunk.length === 0) {
-        return;
-      }
-      const current = chunk;
-      chunk = [];
-      chunkBytes = 0;
-      await writer(source).write(current);
-    };
-    for (const update of snapshot) {
-      if (generation !== topologyGeneration) {
-        return undefined;
-      }
-      if (!jsonValueSchema.safeParse(update.value).success) {
-        continue;
-      }
-      const translatedUpdates = translate(source, update);
-      if (translatedUpdates.length === 0) {
-        if (hasSource(source, update.objectId) && retainUnmatched(source)) {
-          complete = false;
-        }
-        continue;
-      }
-      for (const translated of translatedUpdates) {
-        const value = jsonValueSchema.safeParse(translated.value);
-        if (!value.success) {
-          continue;
-        }
-        const bytes = controlUpdateBytes(translated.objectId, value.data);
-        if (
-          chunk.length > 0 &&
-          (chunk.length >= MAX_BUFFERED_CONTROLS || chunkBytes + bytes > MAX_BUFFERED_CONTROL_BYTES)
-        ) {
-          await flush();
-        }
-        chunk.push({ objectId: translated.objectId, value: structuredClone(value.data) });
-        chunkBytes += bytes;
-        if (chunk.length >= MAX_BUFFERED_CONTROLS || chunkBytes >= MAX_BUFFERED_CONTROL_BYTES) {
-          await flush();
-        }
-      }
-    }
-    await flush();
-    return generation === topologyGeneration ? complete : undefined;
-  };
-  const sync: ControlSync = {
-    dispose,
-    invalidateControls(source) {
-      quarantine(source);
-      if (source !== undefined) {
-        buffer.requireSnapshot(source, true);
-      }
-    },
-    isQuarantined: () => quarantined,
-    quarantineVersion: () => topologyGeneration,
-    quarantinedSources: () => new Set(sources),
-    updateControls(controls = {}) {
-      const update = controlUpdates.then(async () => {
-        if (disposed) {
-          return;
-        }
-        configuredEditorControls = controls.editor ?? configuredEditorControls;
-        configuredPreviewControls = controls.preview ?? configuredPreviewControls;
-        const nextEditorControls = endpointControls(editor, configuredEditorControls);
-        const nextPreviewControls = endpointControls(preview, configuredPreviewControls);
-        if (!controlContractsCompatible(nextEditorControls, nextPreviewControls)) {
-          throw new Error("Control endpoints do not share a synchronization contract");
-        }
-        const nextTranslation = createControlTranslation(nextEditorControls, nextPreviewControls);
-        const generation = topologyGeneration;
-        translation = nextTranslation;
-        structuredTranslation =
-          nextEditorControls.bindings !== undefined && nextPreviewControls.bindings !== undefined;
-        const pendingSources = buffer.snapshotSources();
-        for (const source of pendingSources) {
-          const endpoint = source === "editor" ? editor : preview;
-          const snapshot = endpoint.snapshot();
-          buffer.snapshotCaptured(source);
-          let complete: boolean | undefined;
-          try {
-            complete = await reconcileSnapshot(source, generation, snapshot);
-          } catch (error) {
-            buffer.requireSnapshot(source, true);
-            throw error;
-          }
-          if (complete === undefined) {
-            buffer.requireSnapshot(source, true);
-            return;
-          }
-          if (!complete) {
-            buffer.requireSnapshot(source, true);
-          }
-        }
-
-        const updateCount = buffer.updateCount();
-        for (let index = 0; index < updateCount; index += 1) {
-          if (generation !== topologyGeneration) {
-            return;
-          }
-          const pending = buffer.takeOldest();
-          if (pending === undefined) {
-            break;
-          }
-          const translated = translateBuffered(pending);
-          if (translated.length === 0) {
-            if (
-              (pending.binding !== undefined ||
-                hasSource(pending.source, pending.update.objectId)) &&
-              retainUnmatched(pending.source)
-            ) {
-              buffer.retain(pending);
-            }
-            continue;
-          }
-          try {
-            await writer(pending.source).write(translated);
-          } catch (error) {
-            buffer.retain(pending);
-            throw error;
-          }
-        }
-        if (generation === topologyGeneration && !buffer.hasWork()) {
-          quarantined = false;
-          sources.clear();
-        }
-      });
-      controlUpdates = update.catch(() => {});
-      return update;
-    },
-  };
+  const sync = { dispose };
   if (signal?.aborted) {
     dispose();
     return sync;

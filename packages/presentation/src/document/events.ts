@@ -88,9 +88,6 @@ export class DevelopmentEvents {
     };
     source.addEventListener("ready", () => current(onReady));
     source.addEventListener("change", (event) => {
-      if (this.source !== source) {
-        return;
-      }
       if (!(event instanceof MessageEvent)) {
         return;
       }
@@ -121,7 +118,7 @@ export const bindViewSwitches = (callback: (request: SwitchViewMessage) => void)
     const request = parsePreviewMessage(event.data);
     if (
       request?.type === "marimo-studio:switch-view" &&
-      (!hasRuntimeConfig() || request.runtime === getRuntimeConfig().runtime.descriptor.id)
+      (!hasRuntimeConfig() || request.runtime === getRuntimeConfig().runtime.id)
     ) {
       setActiveDocumentLifecycleId(request.lifecycleId);
       callback(request);

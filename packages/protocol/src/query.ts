@@ -1,5 +1,4 @@
 export const QUERY_OPERATION_QUERY_PARAM = "marimo_studio_query_operation";
-export const PRESENTATION_REVISION_QUERY_PARAM = "marimo_studio_revision";
 export const SERVER_INSTANCE_QUERY_PARAM = "marimo_studio_server";
 export const DOCUMENT_LIFECYCLE_QUERY_PARAM = "marimo_studio_lifecycle";
 export const STUDIO_CLIENT_QUERY_PARAM = "marimo_studio_client";

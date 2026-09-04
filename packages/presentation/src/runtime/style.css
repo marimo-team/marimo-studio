@@ -205,31 +205,10 @@
 
 :where(marimo-cell, marimo-output) :where(.console-output-area) {
   border-radius: 0;
-  display: grid;
   gap: 0;
   max-height: none;
   overflow: visible;
   padding: 0;
-}
-
-:where(marimo-cell, marimo-output) :where(.marimo-projected-stdin) {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-:where(marimo-cell, marimo-output) :where(.marimo-projected-stdin-input) {
-  background: var(--marimo-cell-surface, Canvas);
-  border: 1px solid var(--marimo-cell-border-color, currentColor);
-  border-radius: var(--marimo-cell-radius, 3px);
-  color: var(--marimo-cell-foreground, inherit);
-  min-block-size: 44px;
-  padding-inline: 0.75rem;
-}
-
-:where(marimo-cell, marimo-output) :where(.marimo-projected-stdin-response) {
-  color: var(--marimo-cell-accent, currentColor);
 }
 
 :where(marimo-cell, marimo-output) :where(marimo-tex) {

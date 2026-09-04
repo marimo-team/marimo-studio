@@ -3,7 +3,7 @@ import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
 import { type RefCallback, useCallback, useEffect, useMemo, useState } from "react";
 
-import type { ControlFrameConnector } from "../features/preview/control-types.ts";
+import type { ControlFrameConnector } from "../features/preview/control-sync.ts";
 import type { StudioServices } from "./services.ts";
 
 import { errorMessage } from "../shared/errors.ts";

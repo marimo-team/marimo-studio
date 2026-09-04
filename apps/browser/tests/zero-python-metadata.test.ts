@@ -107,7 +107,6 @@ describe("Studio prepared metadata", () => {
     const context = {
       view: "dashboard",
       planDigest: "3".repeat(64),
-      hosts: { values: ["metric"], outputs: ["chart"], cells: ["summary"] },
     };
 
     expect(() =>
@@ -163,7 +162,6 @@ describe("Studio prepared metadata", () => {
         {
           view: "dashboard",
           planDigest: "3".repeat(64),
-          hosts: { values: ["metric"], outputs: [], cells: [] },
         },
         notebookExport,
         notebookExport.identity,
@@ -175,7 +173,6 @@ describe("Studio prepared metadata", () => {
         {
           view: "dashboard",
           planDigest: "3".repeat(64),
-          hosts: { values: ["headline"], outputs: [], cells: [] },
         },
         notebookExport,
         notebookExport.identity,
@@ -204,7 +201,6 @@ describe("Studio prepared metadata", () => {
         {
           view: "dashboard",
           planDigest: "3".repeat(64),
-          hosts: { values: [], outputs: [], cells: ["headline", "summary"] },
         },
         notebookExport,
         notebookExport.identity,
@@ -220,11 +216,6 @@ describe("Studio prepared metadata", () => {
       () => ({
         view: "dashboard",
         planDigest: "3".repeat(64),
-        hosts: {
-          cells: [],
-          outputs: [],
-          values: [],
-        },
       }),
       fetcher,
     );
@@ -245,7 +236,6 @@ describe("Studio prepared metadata", () => {
       () => ({
         view: "dashboard",
         planDigest: "3".repeat(64),
-        hosts: { cells: [], outputs: [], values: [] },
       }),
       async () => new Response(JSON.stringify(studioManifest(stale, stale.defaultState.inputs))),
     );
@@ -268,7 +258,6 @@ describe("Studio prepared metadata", () => {
       () => ({
         view: "dashboard",
         planDigest: "3".repeat(64),
-        hosts: { cells: [], outputs: [], values: [] },
       }),
       async () => new Response(JSON.stringify(manifest)),
     );
@@ -290,7 +279,6 @@ describe("Studio prepared metadata", () => {
       () => ({
         view: "dashboard",
         planDigest: "3".repeat(64),
-        hosts: { cells: [], outputs: [], values: [] },
       }),
       async () => new Response(JSON.stringify(manifest)),
     );

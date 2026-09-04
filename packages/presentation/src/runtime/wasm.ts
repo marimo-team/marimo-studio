@@ -96,7 +96,6 @@ const requestValues = async (
 export const mountWasmRuntime = (
   context: RuntimeContext,
   initialData: WasmRuntimeData,
-  mountRuntime: typeof mountSharedRuntime = mountSharedRuntime,
 ): RuntimeSession => {
   let data = initialData;
   let presentation = context.presentation;

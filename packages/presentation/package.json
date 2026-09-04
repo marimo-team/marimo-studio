@@ -10,7 +10,8 @@
     "./runtime": "./src/main.ts",
     "./runtime-state": "./src/runtime-state.ts",
     "./runtimes": "./src/runtime/catalog.ts",
-    "./session-replay": "./src/document/session-preservation.ts"
+    "./session-replay": "./src/document/session-preservation.ts",
+    "./static-runtime": "./src/static.ts"
   },
   "scripts": {
     "check:upstream": "pnpm --filter @marimo-studio/marimo-frontend check:upstream",

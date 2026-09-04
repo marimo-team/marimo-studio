@@ -14,11 +14,12 @@ import {
 } from "@marimo-studio/marimo-frontend/prepared-presentation";
 import { PreparedWidgetGraph } from "@marimo-team/marimo-export/loader/anywidget";
 
-import type { PreparedJsonValue, PreparedProjectionSnapshot } from "./records.ts";
+import type { PreparedProjectionSnapshot } from "./records.ts";
 import type { PreparedOutputOwners, PreparedResources } from "./resources.ts";
 
 import { getCellHosts, setCellHostState } from "../cells/host.ts";
 import { getOutputHosts, setOutputHostState } from "../outputs/host.ts";
+import { getRuntimeConfig } from "../runtime-config/index.ts";
 import { markValuePending, markValueRetainedError } from "../values/hosts.ts";
 import { immutablePreparedSnapshot } from "./records.ts";
 import { prepareProjectionResources } from "./resources.ts";
@@ -40,10 +41,7 @@ export interface MountPreparedProjectionsOptions {
   readonly theme: PreparedThemeSource;
 }
 
-export interface PreparedControlInput {
-  readonly objectId: string;
-  readonly value: PreparedJsonValue;
-}
+export type PreparedControlInput = MarimoPreparedControlInput;
 
 export type PreparedControlBindings = MarimoControlBindings;
 
@@ -102,7 +100,8 @@ const immutableControlBindings = (bindings: PreparedControlBindings): PreparedCo
 };
 
 const markPending = (snapshot: PreparedProjectionSnapshot): void => {
-  snapshot.values.forEach(({ selector }) => markValuePending(selector));
+  const revision = getRuntimeConfig().projectionRevision;
+  snapshot.values.forEach(({ selector }) => markValuePending(selector, revision));
   for (const host of getOutputHosts()) {
     setOutputHostState(host, host.hasChildNodes() ? "stale" : "loading", {
       selector: host.valueSelector,
@@ -123,7 +122,8 @@ const failure = (error: Error): ValueReadError => ({
 
 const markFailure = (snapshot: PreparedProjectionSnapshot, error: Error): void => {
   const detail = failure(error);
-  snapshot.values.forEach(({ selector }) => markValueRetainedError(selector, detail));
+  const revision = getRuntimeConfig().projectionRevision;
+  snapshot.values.forEach(({ selector }) => markValueRetainedError(selector, detail, revision));
   for (const host of getOutputHosts()) {
     host.dataset.marimoDiagnosticCode = detail.code;
     host.dataset.marimoDiagnosticMessage = detail.message;

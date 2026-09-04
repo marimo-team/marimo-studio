@@ -1,6 +1,6 @@
 export { createPreparedModelGraph, mountPreparedProjections } from "./controller.tsx";
 export { PreparedProjectionCapabilityError } from "./errors.ts";
-export { pageThemeSource as presentationThemeSource } from "../runtime/runtime-configuration.ts";
+export { presentationThemeSource } from "./theme.ts";
 export type {
   MountPreparedProjectionsOptions,
   PreparedControlBindings,

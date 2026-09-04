@@ -682,6 +682,21 @@ export const markValueError = (
   });
 };
 
+export const markValueRetainedError = (
+  selector: string,
+  error: ValueReadError,
+  projectionRevision: string,
+): void => {
+  if (projectionRevision !== cacheProjectionRevision || !selectorHasOwner(selector)) {
+    return;
+  }
+  hosts.forEach((host) => {
+    if (selectorFor(host) === selector) {
+      failHost(host, error, undefined, true);
+    }
+  });
+};
+
 export const applyValues = (values: Record<string, DecodedValue>, projectionRevision: string) => {
   if (projectionRevision !== cacheProjectionRevision) {
     return;

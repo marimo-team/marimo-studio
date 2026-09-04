@@ -10,7 +10,6 @@ import { RuntimeStatus } from "../src/features/navigation/RuntimeStatus.tsx";
 import { Toolbar } from "../src/features/navigation/Toolbar.tsx";
 import { previewStatus } from "../src/features/preview/status.ts";
 import { ViewController } from "../src/features/views/controller.ts";
-import { ViewMenu } from "../src/features/views/ViewMenu.tsx";
 import { LayoutController } from "../src/features/workspace/controller.ts";
 import { Divider } from "../src/features/workspace/Divider.tsx";
 import { computeLayout, developLayout } from "../src/features/workspace/model.ts";
@@ -83,7 +82,7 @@ describe("Studio shell", () => {
   it("explains a degraded runtime with its diagnostic", () => {
     render(
       <RuntimeStatus
-        status={previewStatus(serverRuntime, {
+        status={previewStatus("server", {
           phase: "degraded",
           diagnostics: [
             {
@@ -487,15 +486,9 @@ describe("Studio shell", () => {
     const request = vi.fn(async () => new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", request);
     let finishSource!: () => void;
-    const sourcePending = new Promise<Readonly<Record<"index.html" | "app.css", string>>>(
-      (resolve) => {
-        finishSource = () =>
-          resolve({
-            "index.html": bootstrap.sourceRevisions["index.html"],
-            "app.css": bootstrap.sourceRevisions["app.css"],
-          });
-      },
-    );
+    const sourcePending = new Promise<void>((resolve) => {
+      finishSource = resolve;
+    });
     const services = createStudioServices(bootstrap, undefined, {
       schema: 1,
       generation: 12,

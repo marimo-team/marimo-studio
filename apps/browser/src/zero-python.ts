@@ -1,6 +1,6 @@
-import { startPresentation } from "@marimo-studio/presentation/runtime";
+import { startStaticPresentation } from "@marimo-studio/presentation/static-runtime";
 import { createRuntimeRegistry } from "@marimo-studio/runtime";
 
 import { zeroPythonRuntime } from "./zero-python/runtime.ts";
 
-startPresentation(createRuntimeRegistry([zeroPythonRuntime]));
+startStaticPresentation(createRuntimeRegistry([zeroPythonRuntime]));

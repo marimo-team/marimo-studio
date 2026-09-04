@@ -26,10 +26,6 @@ export const bindRuntimeQueryHistory = (
   };
 };
 
-interface StandaloneQuerySyncOptions {
-  readonly applyInitial?: boolean;
-}
-
 export const startQuerySync = (): void => {
   const physicallyFramed = globalThis.parent !== globalThis.window;
   if (!studioOwned() && !physicallyFramed) {
@@ -59,44 +55,4 @@ export const startQuerySync = (): void => {
   };
   globalThis.addEventListener("popstate", notify);
   notify();
-};
-
-export const startStandaloneQuerySync = async (
-  updateQuery: (query: string) => Promise<void>,
-  options: StandaloneQuerySyncOptions = {},
-): Promise<() => void> => {
-  const frame = globalThis.frameElement;
-  if (frame?.localName === "iframe" && frame.hasAttribute("data-preview-frame")) {
-    return () => {};
-  }
-  const apply = () => updateQuery(publicNotebookQuery(globalThis.location.search));
-  const applyLater = () => {
-    void apply().catch((error) => {
-      console.warn("Standalone Zero-Python query update failed", error);
-    });
-  };
-  if (options.applyInitial !== false) {
-    await apply();
-  }
-  const pushState = globalThis.history.pushState.bind(globalThis.history);
-  const replaceState = globalThis.history.replaceState.bind(globalThis.history);
-  globalThis.history.pushState = (...arguments_) => {
-    pushState(...arguments_);
-    applyLater();
-  };
-  globalThis.history.replaceState = (...arguments_) => {
-    replaceState(...arguments_);
-    applyLater();
-  };
-  globalThis.addEventListener("popstate", applyLater);
-  let running = true;
-  return () => {
-    if (!running) {
-      return;
-    }
-    running = false;
-    globalThis.history.pushState = pushState;
-    globalThis.history.replaceState = replaceState;
-    globalThis.removeEventListener("popstate", applyLater);
-  };
 };

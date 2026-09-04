@@ -15,13 +15,6 @@ import {
 
 export type { SourceDocumentSnapshot, SourceSnapshot } from "./session.ts";
 
-export interface PreparedSourceView {
-  readonly view: string;
-  readonly revisions: Readonly<Record<SourceName, string>>;
-  commit(): boolean;
-  cancel(): void;
-}
-
 type Listener = () => void;
 
 interface LoadedSourceSession {
@@ -84,9 +77,9 @@ export class SourceController {
 
   readonly getSnapshot = (): SourceSnapshot => this.snapshot;
 
-  async start(): Promise<Readonly<Record<SourceName, string>>> {
+  async start(): Promise<void> {
     if (this.started || this.disposed) {
-      return this.revisions();
+      return;
     }
     this.started = true;
     await this.loadCurrentSession();
@@ -94,7 +87,7 @@ export class SourceController {
 
   selectView(view: string): void {
     if (this.disposed) {
-      return this.revisions();
+      return;
     }
     if (view === this.view) {
       if (!this.session) {
@@ -113,7 +106,6 @@ export class SourceController {
     if (this.started) {
       void this.loadCurrentSession();
     }
-    return this.revisions();
   }
 
   replaceView(view: string): void {

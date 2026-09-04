@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm check:upstream && vp build",
-    "check:upstream": "pnpm --filter @marimo-studio/marimo-frontend check:upstream"
+    "build": "pnpm check:upstream && vp build && vp build --config vite.zero-python.config.ts && node merge-entry-closures.mjs",
+    "check:upstream": "pnpm --filter @marimo-studio/marimo-frontend check:upstream",
+    "test": "vp test"
   },
   "dependencies": {
     "@marimo-studio/marimo-frontend": "workspace:*",

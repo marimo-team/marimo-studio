@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { Provider } from "jotai";
+import { Suspense } from "react";
 import { createRoot } from "react-dom/client";
 
 import type { EmbeddedJsonValue } from "./embedded-json.ts";
@@ -9,9 +11,9 @@ import type {
   EmbeddedTransportHost,
 } from "./embedded-runtime-core.ts";
 import type { EmbeddedRuntimeKernel } from "./embedded-runtime-view.tsx";
-import type { MarimoPresentationConfig, MarimoThemeSource } from "./presentation-shell.tsx";
 import type { SessionId } from "./session-bootstrap.ts";
 
+import { retainUnmountedControlValues } from "./embedded-control-state.ts";
 import { parseEmbeddedJsonValue } from "./embedded-json.ts";
 import {
   bindModelValueSenderToPage,
@@ -19,12 +21,6 @@ import {
   createTransportInitializer,
 } from "./embedded-runtime-core.ts";
 import { EmbeddedRuntimeViewComponent } from "./embedded-runtime-view.tsx";
-import {
-  configureMarimoPresentation,
-  configureMarimoTheme,
-  initializeMarimoPresentation,
-  MarimoPresentationProviders,
-} from "./presentation-shell.tsx";
 import { currentSessionId } from "./session-bootstrap.ts";
 import {
   type CellId,
@@ -33,24 +29,42 @@ import {
   useCellActions,
   useNotebook,
 } from "./upstream/cells.ts";
+import { UI_ELEMENT_REGISTRY } from "./upstream/controls.ts";
 import {
+  appConfigAtom,
   codeAtom,
+  configOverridesAtom,
   connectionAtom,
   createErrorToastingRequests,
   createNetworkRequests,
-  createStaticRequests,
+  ErrorBoundary,
   filenameAtom,
   FUNCTIONS_REGISTRY,
   getRuntimeManager,
+  initialModeAtom,
+  initializePlugins,
   KernelStartupErrorModal,
+  LocaleProvider,
   marimoVersionAtom,
+  ModalProvider,
+  parseAppConfig,
+  parseConfigOverrides,
+  parseUserConfig,
   PyodideBridge,
   requestClientAtom,
   resolveRequestClient,
   runtimeConfigAtom,
+  slotsController,
+  SlotzProvider,
   store,
+  ThemeProvider,
+  Toaster,
+  TooltipProvider,
+  TracebackModalContainer,
   useMarimoKernelConnection,
   useRequestClient,
+  userConfigAtom,
+  viewStateAtom,
   WebSocketState,
 } from "./upstream/runtime.ts";
 import { terminatePresentationWasmWorker } from "./wasm-worker-owner.ts";
@@ -70,7 +84,11 @@ export type EmbeddedInitialization =
 
 export type { EmbeddedJsonValue };
 
-export type EmbeddedPresentationConfig = MarimoPresentationConfig;
+export interface EmbeddedPresentationConfig {
+  appConfig: EmbeddedJsonValue;
+  configOverrides: EmbeddedJsonValue;
+  userConfig: EmbeddedJsonValue;
+}
 
 export interface EmbeddedFunctionRequest {
   readonly namespace: string;
@@ -82,7 +100,6 @@ export type EmbeddedFunctionResult = EmbeddedJsonValue;
 
 export type EmbeddedFunction = (
   request: EmbeddedFunctionRequest,
-  signal?: AbortSignal,
 ) => Promise<EmbeddedFunctionResult>;
 
 export type EmbeddedRuntimeCell = ReturnType<typeof flattenTopLevelNotebookCells>[number];
@@ -97,7 +114,10 @@ export interface EmbeddedRuntimeView {
   readonly submitStdin: (cellId: string, text: string, outputIndex: number) => void;
 }
 
-export type EmbeddedThemeSource = MarimoThemeSource;
+export interface EmbeddedThemeSource {
+  current(): "light" | "dark" | undefined;
+  subscribe(listener: () => void): () => void;
+}
 
 type TransportURLTransform = (url: URL) => URL;
 
@@ -196,9 +216,10 @@ const initializeMovablePlugins = (): void => {
     define(name, constructor, options);
   };
   try {
-    return parseEmbeddedJsonValue(await Promise.race([operation, aborted]));
+    initializePlugins();
+    pluginsInitialized = true;
   } finally {
-    signal.removeEventListener("abort", abort);
+    registry.define = define;
   }
 };
 
@@ -334,14 +355,14 @@ const initializeTransport = createTransportInitializer(transportHost, invoke);
 
 const embeddedRuntimeHost: EmbeddedRuntimeHost = {
   invoke,
-  configurePresentation: configureMarimoPresentation,
-  configureTheme: configureMarimoTheme,
+  configurePresentation,
+  configureTheme,
   createRenderer(element) {
     const root = createRoot(element);
     const renderer: EmbeddedRuntimeRenderer = {
       render(initialized, renderView, sessionId, autoInstantiate) {
         root.render(
-          <MarimoPresentationProviders runtimeOverlays={<KernelStartupErrorModal />}>
+          <EmbeddedRuntimeProviders>
             <EmbeddedRuntimeViewComponent
               initialized={initialized}
               autoInstantiate={autoInstantiate}
@@ -349,7 +370,7 @@ const embeddedRuntimeHost: EmbeddedRuntimeHost = {
               render={renderView}
               sessionId={sessionId}
             />
-          </MarimoPresentationProviders>,
+          </EmbeddedRuntimeProviders>,
         );
       },
       dispose() {
@@ -359,10 +380,7 @@ const embeddedRuntimeHost: EmbeddedRuntimeHost = {
     return renderer;
   },
   currentSessionId,
-  deactivateRequests() {
-    store.set(requestClientAtom, createStaticRequests());
-  },
-  initialize: initializeMarimoPresentation,
+  initialize: initializeEmbeddedRuntime,
   initializeTransport,
   setConnecting() {
     store.set(connectionAtom, { state: WebSocketState.CONNECTING });

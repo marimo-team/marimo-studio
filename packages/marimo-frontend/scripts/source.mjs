@@ -17,6 +17,12 @@ const corepackExecutable = resolve(dirname(corepackPackagePath), corepackPackage
 const cacheRoot = join(packageRoot, ".cache");
 const checkout = join(cacheRoot, "marimo");
 const metadataPath = join(cacheRoot, "source.json");
+const patchManifestPath = resolve(packageRoot, "patches/marimo-frontend.json");
+const patchManifest = JSON.parse(readFileSync(patchManifestPath, "utf8"));
+const patchPath = resolve(packageRoot, "patches", patchManifest.file);
+const patchContents = readFileSync(patchPath);
+const comparablePatch = (value) =>
+  value.toString("utf8").replace(/^index [\da-f]+\.\.[\da-f]+(?: \d+)?\n/gmu, "");
 const environmentRoot = resolve(
   workspaceRoot,
   process.env.UV_PROJECT_ENVIRONMENT?.trim() || ".venv",
@@ -276,6 +282,21 @@ export const isPreparedOwnedCheckout = async ({ path, repository, commit }) => {
   }
 };
 
+const isPreparedPatchedCheckout = async ({ path, repository, commit }) => {
+  try {
+    if (!(await exists(join(path, ".git"))) || (await remoteUrl(path)) !== repository) {
+      return false;
+    }
+    if ((await capture("git", ["rev-parse", "HEAD"], path)) !== commit) {
+      return false;
+    }
+    await assertMarimoPatch(path);
+    return isWorkspaceInstalled(path);
+  } catch {
+    return false;
+  }
+};
+
 const reusableOwnedSource = async (version) => {
   try {
     const source = await readMarimoSource();
@@ -345,7 +366,7 @@ export const prepareMarimoSource = async () => {
   }
 
   await assertMarimoCommit(path);
-  await assertCleanCheckout(path);
+  await assertMarimoPatch(path);
   const commit = await capture("git", ["rev-parse", "HEAD"], path);
   const source = {
     commit,
@@ -372,6 +393,7 @@ export const assertPreparedMarimoSource = async () => {
   const expectedPath = configured ? resolve(configured) : checkout;
   if (
     source.commit !== expectedCommit ||
+    source.patchSha256 !== expectedPatchSha256 ||
     source.path !== expectedPath ||
     source.repository !== repository ||
     source.version !== expectedVersion
@@ -380,7 +402,7 @@ export const assertPreparedMarimoSource = async () => {
   }
 
   await assertMarimoCommit(source.path);
-  await assertCleanCheckout(source.path);
+  await assertMarimoPatch(source.path);
   if (!configured && (await remoteUrl(source.path)) !== repository) {
     throw new Error("The prepared Marimo checkout has an unexpected origin");
   }

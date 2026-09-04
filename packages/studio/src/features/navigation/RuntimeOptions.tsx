@@ -3,14 +3,15 @@ import type { StudioRuntime } from "@marimo-studio/protocol/studio-bootstrap";
 import { AppWindowIcon, CircleHelpIcon, ServerIcon, type LucideIcon } from "lucide-react";
 
 import { closeParentMenu } from "./menu.ts";
+import { runtimeDescription } from "./model.ts";
 
-const runtimeIcon = (runtime: StudioRuntime): LucideIcon => {
-  switch (runtime.execution) {
-    case "kernel":
+const runtimeIcon = (runtime: string): LucideIcon => {
+  switch (runtime) {
+    case "server":
       return ServerIcon;
-    case "worker":
+    case "wasm":
       return AppWindowIcon;
-    case "prepared":
+    default:
       return CircleHelpIcon;
   }
 };
@@ -28,7 +29,7 @@ export const RuntimeOptions = ({
 }) => (
   <>
     {runtimes.map((runtime) => {
-      const Icon = runtimeIcon(runtime);
+      const Icon = runtimeIcon(runtime.id);
       return (
         <button
           key={runtime.id}
@@ -44,7 +45,7 @@ export const RuntimeOptions = ({
           <Icon className="studio-runtime-icon" aria-hidden />
           <span className="studio-runtime-copy">
             <strong>{runtime.label}</strong>
-            <span>{runtime.description}</span>
+            <span>{runtimeDescription(runtime.id)}</span>
           </span>
           <span className="studio-runtime-check" aria-hidden="true">
             ✓

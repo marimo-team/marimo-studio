@@ -3,7 +3,6 @@ import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
 import {
   notebookRouteQuery,
-  PRESENTATION_REVISION_QUERY_PARAM,
   publicNotebookQuery,
   SERVER_INSTANCE_QUERY_PARAM,
   STUDIO_CLIENT_QUERY_PARAM,

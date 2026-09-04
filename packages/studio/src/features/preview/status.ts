@@ -2,7 +2,6 @@ import type {
   BrowserDiagnostic,
   RuntimeStatusSnapshot,
 } from "@marimo-studio/protocol/browser-observations";
-import type { RuntimeDescriptor } from "@marimo-studio/protocol/runtime-descriptor";
 
 export interface PreviewStatus {
   diagnostics: readonly BrowserDiagnostic[];
@@ -44,9 +43,3 @@ export const previewStatus = (runtime: string, status: RuntimeStatusSnapshot): P
       return { diagnostics, message: "Needs repair", state: "error" };
   }
 };
-
-export const previewStartingStatus = (runtime: RuntimeDescriptor): PreviewStatus => ({
-  message: previewStartingMessage(runtime),
-  state: "loading",
-  title: "",
-});

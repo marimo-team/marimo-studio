@@ -24,7 +24,7 @@ const config = (preserveSession: boolean, mode: RuntimeConfig["mode"] = "run"): 
   view: "dashboard",
   views: ["dashboard"],
   runtime: {
-    descriptor: serverRuntime.descriptor,
+    id: "server",
     instance: "server-instance",
     data: {
       fileKey: "/workspace/analysis.py",

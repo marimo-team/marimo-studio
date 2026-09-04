@@ -29,7 +29,16 @@ import {
 } from "./prepared-fixture.ts";
 
 const snapshot = (label: string): PreparedProjectionSnapshot => ({
-  values: [{ selector: "report", value: { label, total: 42 } }],
+  values: [
+    {
+      selector: "report",
+      value: {
+        codec: "json-v1",
+        fingerprint: `sha256:${"a".repeat(64)}`,
+        value: { label, total: 42 },
+      },
+    },
+  ],
   outputs: [
     {
       schema: "marimo.output.v1",
@@ -222,7 +231,7 @@ test("prepared projections render values, native outputs, and a complete cell", 
   commitRuntimeConfig(config);
   document.body.innerHTML = `
     <div id="runtime"></div>
-    <span id="value" mo-value="report"></span>
+    <span id="value" data-marimo-studio-site="value-report" mo-value="report"></span>
     <marimo-output value="report.output" aria-label="Report projection"></marimo-output>
     <marimo-output value="report.bundle"></marimo-output>
     <marimo-output value="report.failure"></marimo-output>
@@ -299,7 +308,7 @@ test("prepared generations replace hosts and retain the last good result", async
   commitRuntimeConfig(config);
   document.body.innerHTML = `
     <div id="runtime"></div>
-    <span id="value" mo-value="report"></span>
+    <span id="value" data-marimo-studio-site="value-report" mo-value="report"></span>
     <marimo-output value="report.output"></marimo-output>
     <marimo-cell name="summary"></marimo-cell>
   `;
@@ -345,7 +354,7 @@ test("prepared model commit is the supersession linearization point", async () =
   commitRuntimeConfig(config);
   document.body.innerHTML = `
     <div id="runtime"></div>
-    <span id="value" mo-value="report"></span>
+    <span id="value" data-marimo-studio-site="value-report" mo-value="report"></span>
   `;
   projectionHosts.connect();
   let releaseCommit = () => {};
@@ -391,7 +400,7 @@ test("failed model commit releases resources introduced by the rejected snapshot
   commitRuntimeConfig(config);
   document.body.innerHTML = `
     <div id="runtime"></div>
-    <span id="value" mo-value="report"></span>
+    <span id="value" data-marimo-studio-site="value-report" mo-value="report"></span>
   `;
   projectionHosts.connect();
   const failure = new Error("model commit failed");
@@ -860,8 +869,9 @@ test("prepared checkpoints restore the committed projection and controls", async
   const rendered = injected.render.mock.lastCall?.[0];
   assert.ok(isValidElement<{ snapshot: PreparedProjectionSnapshot }>(rendered));
   assert.deepEqual(rendered.props.snapshot.values[0]?.value, {
-    label: "checkpoint-one",
-    total: 42,
+    codec: "json-v1",
+    fingerprint: `sha256:${"a".repeat(64)}`,
+    value: { label: "checkpoint-one", total: 42 },
   });
   assert.deepEqual(injected.updateControlBindings.mock.lastCall?.[0], firstBindings);
 

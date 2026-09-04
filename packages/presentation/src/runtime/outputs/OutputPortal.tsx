@@ -112,7 +112,6 @@ export const OutputPortal = ({
   }
   return createPortal(
     <ProjectedOutput
-      accessibleName={host.getAttribute("aria-label")?.trim() || undefined}
       output={projectionState.projection.output}
       stale={
         projectionState.pending || model.phase !== "ready" || !projectionState.projectionCurrent

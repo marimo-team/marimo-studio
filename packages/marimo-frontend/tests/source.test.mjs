@@ -1,14 +1,5 @@
 import { execFile } from "node:child_process";
-import {
-  access,
-  appendFile,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -17,13 +8,10 @@ import { transformWithOxc } from "vite";
 import { afterEach, expect, test } from "vite-plus/test";
 
 import { decodeMarimoSource } from "../scripts/metadata.mjs";
-import { withPreparationLock } from "../scripts/prepare.mjs";
 import {
   assertCleanCheckout,
   assertMarimoCommit,
-  assertMarimoPatch,
   expectedCommit,
-  expectedPatchSha256,
   isPreparedOwnedCheckout,
   pnpmInvocation,
   prepareOwnedCheckout,

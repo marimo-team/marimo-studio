@@ -6,6 +6,7 @@ import type {
 import type { ObservedProjectionInstance } from "@marimo-studio/protocol/projections";
 
 import type { RuntimeDiagnostic, StudioDiagnostic } from "./diagnostics.ts";
+import type { RuntimeStateApi } from "./runtime-state.ts";
 
 import { documentLifecycleEnvelope } from "./document/document-lifecycle-id.ts";
 import { postToStudioParent } from "./document/parent-bridge.ts";
@@ -17,18 +18,6 @@ import { type ReadinessSnapshot, readiness, type RuntimeConnectionState } from "
 import { renderedViewDiagnostics, renderedViewIdentity } from "./rendered-view-state.ts";
 import { getRuntimeConfig } from "./runtime-config/index.ts";
 import { viewStyleDiagnostic } from "./view-styles/runtime.ts";
-
-export interface RuntimeStateDescription {
-  readonly fingerprint: string;
-  readonly aliases: readonly string[];
-  readonly inputs: Readonly<Record<string, JsonValue>>;
-}
-
-export interface RuntimeStateApi {
-  inputs(): Readonly<Record<string, JsonValue>>;
-  states(): readonly RuntimeStateDescription[];
-  update(patch: Readonly<Record<string, JsonValue>>): Promise<void>;
-}
 
 interface MarimoStudioApi {
   ready: () => Promise<void>;

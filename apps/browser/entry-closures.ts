@@ -59,6 +59,7 @@ const ENTRY_NAMES = ["runtime", "zero-python"] as const;
 // Static browser entries are self-contained. Add an external here only with a
 // matching deployment contract and regression.
 const EXPLICIT_EXTERNAL_BUNDLE_REFERENCES: ReadonlySet<string> = new Set();
+const PRUNED_KATEX_FONT = /^assets\/KaTeX_.+\.(?:ttf|woff)$/u;
 const FORBIDDEN_ZERO_PYTHON_MODULES = [
   /\/runtime\/(?:server|transport|wasm)\.ts$/u,
   /\/values\/(?:remote|wasm)\.ts$/u,
@@ -110,6 +111,10 @@ const bundleReference = (
   if (EXPLICIT_EXTERNAL_BUNDLE_REFERENCES.has(path)) {
     return undefined;
   }
+  // The Marimo build removes legacy KaTeX fonts after Vite records CSS asset metadata.
+  if (kind === "asset" && PRUNED_KATEX_FONT.test(path)) {
+    return undefined;
+  }
   throw new Error(
     `Browser entry closure owner ${JSON.stringify(owner)} ${kind} ${JSON.stringify(path)} has no emitted bundle record`,
   );
@@ -127,8 +132,7 @@ const isCssOnlyFacade = (chunk: BrowserChunk): boolean => {
 };
 
 const isRuntimeZeroPythonImplementationModule = (moduleId: string): boolean =>
-  (moduleId.includes("/marimo-export/") &&
-    !moduleId.includes("/marimo-export/packages/portable-json/")) ||
+  (moduleId.includes("/marimo-export/") && !moduleId.includes("/packages/portable-json/")) ||
   /\/apps\/browser\/src\/zero-python\/(?!runtime\.ts$)/u.test(moduleId);
 
 const containsRuntimeZeroPythonImplementation = (chunk: BrowserChunk): boolean =>

@@ -10,29 +10,11 @@ export const isWasmRpcTimeout = (cause: unknown): boolean =>
 
 export const retryWasmRpc = <T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> =>
   retry({
-    operation: async () => await abortable(operation(), signal),
+    operation,
     delays: RPC_RETRY_DELAYS,
     retryWhen: isWasmRpcTimeout,
     signal,
   });
-
-const abortable = async <T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> => {
-  if (!signal) {
-    return await operation;
-  }
-  signal.throwIfAborted();
-  let abort = () => {};
-  const aborted = new Promise<never>((_resolve, reject) => {
-    abort = () =>
-      reject(signal.reason ?? new DOMException("The request was aborted", "AbortError"));
-    signal.addEventListener("abort", abort, { once: true });
-  });
-  try {
-    return await Promise.race([operation, aborted]);
-  } finally {
-    signal.removeEventListener("abort", abort);
-  }
-};
 
 export const awaitWasmStartup = <T>(startup: Promise<T>): Promise<T> => {
   const ignoreWorkerDeadline = (event: PromiseRejectionEvent) => {

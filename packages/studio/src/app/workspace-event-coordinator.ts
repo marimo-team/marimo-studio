@@ -14,7 +14,6 @@ import {
   parsePresentationBaseline,
   parseSourceChanges,
   type SourceFileChange,
-  type SourceName,
 } from "@marimo-studio/protocol/source-events";
 
 import type { ViewLanding, ViewSelectionOwner } from "../features/views/transition.ts";
@@ -55,10 +54,8 @@ interface WorkspacePreviewPort {
 }
 
 interface WorkspaceSourcePort {
-  reconcile(): Promise<Readonly<Record<SourceName, string>>>;
-  externalChanges(
-    changes: readonly SourceFileChange[],
-  ): Promise<Readonly<Record<SourceName, string>>>;
+  reconcile(): void;
+  externalChanges(changes: readonly SourceFileChange[]): void;
 }
 
 interface WorkspaceEventCoordinatorOptions {
@@ -96,7 +93,6 @@ export class WorkspaceEventCoordinator {
   private notebookMutationGeneration: number | undefined;
   private started = false;
   private disposed = false;
-  private sourceOperations: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: WorkspaceEventCoordinatorOptions) {
     this.currentView = options.views.getSnapshot().current;
@@ -224,8 +220,6 @@ export class WorkspaceEventCoordinator {
       }
       operation();
     };
-    const isCurrent = () =>
-      !this.disposed && this.events === events && generation === this.connectionGeneration;
     events.addEventListener("ready", (event) =>
       pending(() => {
         if (this.pendingEvents === events) {

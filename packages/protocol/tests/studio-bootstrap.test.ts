@@ -2,18 +2,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { parseStudioBootstrap } from "../src/studio-bootstrap.ts";
 
-const serverRuntime = {
-  id: "server",
-  label: "Server",
-  description: "Uses the notebook kernel",
-  execution: "kernel",
-  projections: { cell: true, output: true, value: true },
-  controls: "peer",
-  query: "reactive",
-  preparation: "primary",
-  session: "shared",
-};
-
 const payload = {
   schema: 1,
   notebook: { name: "analysis.py" },
@@ -46,9 +34,6 @@ describe("Studio bootstrap", () => {
   it("rejects selected views and runtimes outside their declared lists", () => {
     expect(() => parseStudioBootstrap({ ...payload, selectedView: "missing" })).toThrow();
     expect(() => parseStudioBootstrap({ ...payload, defaultRuntime: "wasm" })).toThrow();
-    expect(() =>
-      parseStudioBootstrap({ ...payload, availableRuntimes: ["server", "wasm"] }),
-    ).toThrow();
   });
 
   it("rejects duplicate view and runtime identities", () => {

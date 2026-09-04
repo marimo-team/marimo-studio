@@ -9,7 +9,9 @@ import type {
   OutputLoader,
 } from "@marimo-team/marimo-export";
 
+import { getMarimoDataSource } from "@marimo-studio/marimo-frontend/arrow-table";
 import { NotebookExportError } from "@marimo-team/marimo-export";
+import { tableFromArrays, tableToIPC } from "@uwdata/flechette";
 import { expect, it } from "vite-plus/test";
 
 import {
@@ -123,7 +125,16 @@ it("adds authored host bindings to canonical export snapshots", async () => {
     new AbortController().signal,
   );
 
-  expect(snapshot.values).toEqual([{ selector: "metric", value: { ready: true } }]);
+  expect(snapshot.values).toEqual([
+    {
+      selector: "metric",
+      value: {
+        codec: "json-v1",
+        fingerprint: `sha256:${base.fingerprint}`,
+        value: { ready: true },
+      },
+    },
+  ]);
   expect(snapshot.outputs[0]).toMatchObject({
     schema: "marimo.output.v1",
     selector: "chart",
@@ -134,6 +145,35 @@ it("adds authored host bindings to canonical export snapshots", async () => {
     alias: "summary",
     cell: { id: "cell-1" },
   });
+});
+
+it("preserves verified Arrow bytes and table behavior for Studio values", async () => {
+  const table = tableFromArrays({ sport: ["Fencing", "Rowing"], athletes: [44, 51] });
+  const bytes = tableToIPC(table, { format: "file" });
+  if (bytes === null) throw new Error("Expected an in-memory Arrow file.");
+  const digest = "b".repeat(64);
+  const notebookExport = notebookExportFixture({
+    inputs: [{ sport: "All sports" }],
+    outputNames: [projectionNames.value],
+    output: (state, name) => arrowOutput(state, name, bytes, digest),
+  });
+
+  const snapshot = await loadPreparedProjectionSnapshot(
+    notebookExport.defaultState,
+    { values: { athlete_facts: projectionNames.value }, outputs: {}, cells: {} },
+    createZeroPythonProjectionLoaders(),
+    new AbortController().signal,
+  );
+  const projected = snapshot.values[0]?.value;
+  expect(projected?.codec).toBe("arrow-ipc-v1");
+  if (projected?.codec !== "arrow-ipc-v1") throw new Error("Expected an Arrow value.");
+  expect(projected.value.toArray()).toEqual([
+    { sport: "Fencing", athletes: 44 },
+    { sport: "Rowing", athletes: 51 },
+  ]);
+  const source = getMarimoDataSource(projected.value);
+  expect(source?.fingerprint).toBe(`sha256:${digest}`);
+  expect(source?.bytes).toEqual(bytes);
 });
 
 type FixtureLoad = (
@@ -168,4 +208,41 @@ const output = (state: ExportState, name: string, fixtureLoad: FixtureLoad): Exp
     },
   };
   return result;
+};
+
+const arrowOutput = (
+  state: ExportState,
+  name: string,
+  bytes: Uint8Array,
+  digest: string,
+): ExportOutput => {
+  const descriptor = {
+    codec: "apache.arrow.file.v1" as const,
+    mediaType: "application/vnd.apache.arrow.file" as const,
+    provenance: { pythonType: "polars.dataframe.frame.DataFrame" },
+    asset: { sha256: digest, size: bytes.byteLength },
+  };
+  const mediaType = {
+    raw: descriptor.mediaType,
+    essence: descriptor.mediaType,
+    type: "application",
+    subtype: "vnd.apache.arrow.file",
+    parameters: new Map<string, string>(),
+  };
+  return {
+    state,
+    name,
+    codec: descriptor.codec,
+    mediaType,
+    descriptor,
+    async load<C extends OutputCodec, T>(loader: OutputLoader<C, T>, options?: LoadOptions) {
+      // SAFETY: This output advertises the Arrow codec and invokes its selected Arrow loader.
+      return await (loader as OutputLoader<"apache.arrow.file.v1", T>).load({
+        descriptor,
+        mediaType,
+        payload: bytes,
+        signal: options?.signal,
+      });
+    },
+  };
 };

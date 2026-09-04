@@ -1,25 +1,24 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
 import type { fetchRuntimeControls } from "../src/features/preview/control-remote.ts";
+import type { ControlEndpoint } from "../src/features/preview/control-sync.ts";
 
-import { changed, createControlController, endpoint } from "./control-controller-fixture.ts";
-import { wasmRuntime } from "./runtime-fixtures.ts";
+import { PreviewControlController } from "../src/features/preview/control-controller.ts";
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
+const endpoint = (): ControlEndpoint => ({
+  snapshot: () => [],
+  subscribe: () => () => {},
+  apply: vi.fn(async () => {}),
+  dispose: vi.fn(),
+});
+
 it("retries a bounded control setup against the active editor session", async () => {
   vi.useFakeTimers();
-  const stalled = (
-    _support: string,
-    _runtime: string,
-    _session: string,
-    _revision: string,
-    _client: string,
-    _etag?: string,
-    signal?: AbortSignal,
-  ) =>
+  const stalled = (_support: string, _runtime: string, _session: string, signal?: AbortSignal) =>
     new Promise<never>((_resolve, reject) => {
       signal?.addEventListener(
         "abort",
@@ -31,22 +30,16 @@ it("retries a bounded control setup against the active editor session", async ()
     .fn<typeof fetchRuntimeControls>()
     .mockImplementationOnce(stalled)
     .mockImplementationOnce(stalled)
-    .mockResolvedValueOnce(
-      changed({
-        schema: 1,
-        revision: "revision-1",
-        runtime: "editor",
-        controls: { bindings: {} },
-      }),
-    )
-    .mockResolvedValueOnce(
-      changed({
-        schema: 1,
-        revision: "revision-1",
-        runtime: "wasm",
-        controls: { bindings: {} },
-      }),
-    );
+    .mockResolvedValueOnce({
+      revision: "revision-1",
+      runtime: "server",
+      controls: { cells: {} },
+    })
+    .mockResolvedValueOnce({
+      revision: "revision-1",
+      runtime: "wasm",
+      controls: { cells: {} },
+    });
   const connect = vi.fn(() => endpoint());
   const status = vi.fn();
   const controller = new PreviewControlController({

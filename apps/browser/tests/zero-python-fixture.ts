@@ -16,7 +16,7 @@ import { vi } from "vite-plus/test";
 
 import type { ZeroPythonRuntimeDependencies } from "../src/zero-python/composition.ts";
 
-import { ZERO_PYTHON_RUNTIME_DESCRIPTOR } from "../src/zero-python/runtime.ts";
+import { ZERO_PYTHON_RUNTIME_ID } from "../src/zero-python/runtime.ts";
 
 export const projectionNames = {
   value: "value:doubled",
@@ -27,10 +27,11 @@ export const projectionNames = {
 export const runtimeConfig = (): RuntimeContext["presentation"] => ({
   schema: 1,
   revision: "revision-1",
+  projectionRevision: "4".repeat(64),
   view: "dashboard",
   views: ["dashboard"],
   runtime: {
-    descriptor: ZERO_PYTHON_RUNTIME_DESCRIPTOR,
+    id: ZERO_PYTHON_RUNTIME_ID,
     instance: "1".repeat(64),
     data: { manifestUrl: "https://example.test/current", planDigest: "3".repeat(64) },
   },
@@ -39,9 +40,18 @@ export const runtimeConfig = (): RuntimeContext["presentation"] => ({
   documentRootUrl: "/dashboard/",
   supportUrl: "/dashboard/support/",
   showCellLogs: true,
-  cellBindings: {},
-  valueBindings: {},
-  outputBindings: {},
+  projectionTargets: { cells: {}, variables: {} },
+  mounts: [],
+  projectionPolicy: {
+    maxActiveInstances: 512,
+    maxUniqueCellTargets: 256,
+    maxUniqueOutputTargets: 100,
+    maxUniqueValueTargets: 100,
+    maxTargetBytes: 4096,
+    maxPathSteps: 64,
+    maxInstanceIdBytes: 256,
+  },
+  runtimeBindings: { cellRefs: {} },
   diagnostics: [],
   appConfig: {},
   userConfig: {},
@@ -199,7 +209,15 @@ export const runtimeDependencies = (
     ),
     openExport: vi.fn(async () => notebookExport),
     loaders: {
-      value: { codec: "marimo.json.v1", accepts: () => true, load: () => null },
+      scalar: { codec: "marimo.scalar.v1", accepts: () => true, load: () => null },
+      json: { codec: "marimo.json.v1", accepts: () => true, load: () => null },
+      arrow: {
+        codec: "apache.arrow.file.v1",
+        accepts: () => true,
+        load: () => {
+          throw new Error("Empty fixture does not load Arrow projections.");
+        },
+      },
       output: {
         codec: "marimo.output.v1",
         accepts: () => true,
@@ -225,6 +243,8 @@ export const installMarimoStudioGlobal = (): void => {
   globalThis.marimoStudio = {
     ready: async () => {},
     diagnostics: () => [],
+    identity: () => ({ projectionRevision: "4".repeat(64), revision: "revision-1" }),
+    projections: () => [],
     updateQuery: async () => {},
   };
 };

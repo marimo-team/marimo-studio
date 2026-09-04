@@ -80,55 +80,20 @@ test("output responses preserve prototype-named selectors as own records", () =>
   selectors.forEach((selector) => assert.equal(Object.hasOwn(absent.outputs, selector), false));
 });
 
-test("output responses preserve MIME bundles and structured errors", () => {
-  const response = {
-    outputs: {
-      chart: {
-        ownerCellId: "__marimo_studio_output_chart",
-        mimetype: "application/vnd.marimo+mimebundle",
-        data: {
-          "application/json": { series: [1, 2, 3] },
-          "text/plain": "1, 2, 3",
-        },
-        timestamp: 1,
-        resetUiObjectIds: [],
-      },
-      failure: {
-        ownerCellId: "__marimo_studio_output_failure",
-        mimetype: "application/vnd.marimo+error",
-        data: [
-          {
-            type: "exception",
-            msg: "division by zero",
-            exception_type: "ZeroDivisionError",
-            raising_cell: "cell-1",
-          },
-        ],
-        timestamp: 2,
-        resetUiObjectIds: [],
-      },
-    },
-    errors: {},
-  };
-
-  assert.deepEqual(parseOutputReadResponse(response), response);
-});
-
 test("output responses reject malformed native records", () => {
-  assert.equal(
-    outputReadResponseSchema.safeParse({
+  assert.throws(() =>
+    parseOutputReadResponse({
       outputs: {
         df: {
           ownerCellId: "__marimo_studio_output_df",
           mimetype: "text/html",
-          data: undefined,
+          data: {},
           timestamp: "now",
           resetUiObjectIds: [],
         },
       },
       errors: {},
-    }).success,
-    false,
+    }),
   );
 });
 

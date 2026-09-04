@@ -1,13 +1,11 @@
 import type { ActiveViewRequest } from "@marimo-studio/protocol/development-events";
 import type { StudioBootstrap } from "@marimo-studio/protocol/studio-bootstrap";
 
-import type { ControlFrameConnector } from "../features/preview/control-types.ts";
-import type { PreparedSourceView } from "../features/source-editor/controller.ts";
+import type { ControlFrameConnector } from "../features/preview/control-sync.ts";
 
 import { PreviewDeck } from "../features/preview/deck.ts";
 import { createBrowserObservationRemote } from "../features/preview/observation-remote.ts";
 import { syncEditorQuery } from "../features/preview/query-remote.ts";
-import { createRuntimeAvailabilityRemote } from "../features/preview/runtime-remote.ts";
 import { initialPreviewRuntime } from "../features/preview/runtime.ts";
 import { SourceController } from "../features/source-editor/controller.ts";
 import { ViewController } from "../features/views/controller.ts";
@@ -41,11 +39,8 @@ export const createStudioServices = (
   bootstrap: StudioBootstrap,
   connectControlFrame?: ControlFrameConnector,
   initialActivation?: ActiveViewRequest,
-  recoverView?: (view: string) => void,
 ): StudioServices => {
   const routes = new StudioRoutes(bootstrap);
-  const recover =
-    recoverView ?? ((view: string) => globalThis.location.assign(routes.studio(view)));
   const storagePrefix = `marimo-studio:workspace-layout:v1:${bootstrap.workspaceId}`;
   const runtimeIds = bootstrap.runtimes.map((runtime) => runtime.id);
   const layout = new LayoutController(storagePrefix, bootstrap.selectedView);
@@ -62,7 +57,7 @@ export const createStudioServices = (
   const preview = new PreviewDeck({
     initialView: bootstrap.selectedView,
     initialRuntime: initialPreviewRuntime({
-      available: initialRuntimes,
+      available: runtimeIds,
       configured: bootstrap.defaultRuntime,
     }),
     initialNavigation: routes.currentNavigation(),
@@ -251,23 +246,7 @@ export const createStudioServices = (
       });
       void views.ensureStarterCatalog();
       workspaceEvents.start(initialActivation);
-      const revisions = await source.start();
-      if (disposed) {
-        return;
-      }
-      if (
-        Object.values(revisions).every(Boolean) &&
-        (revisions["index.html"] !== bootstrap.sourceRevisions["index.html"] ||
-          revisions["app.css"] !== bootstrap.sourceRevisions["app.css"])
-      ) {
-        const availability = await preview.prepareView(bootstrap.selectedView, revisions);
-        preview.switchView(
-          bootstrap.selectedView,
-          availability.runtimes,
-          revisions,
-          availability.revision,
-        );
-      }
+      await source.start();
     },
     close,
     dispose() {

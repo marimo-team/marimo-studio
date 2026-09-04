@@ -46,9 +46,13 @@ test("uses distinct frame generations when randomUUID is unavailable", async () 
   vi.stubGlobal("parent", parent);
   const applyControls = vi.fn<ControlEndpoint["apply"]>(async () => {});
   const endpoint: ControlEndpoint = {
+    controlBindings: () => undefined,
+    subscribeControlBindings: () => () => {},
+    subscribeTopology: () => () => {},
     snapshot: () => [],
     subscribe: () => () => {},
     apply: applyControls,
+    applyLocal: applyControls,
     dispose: vi.fn(),
   };
   const updateRuntimeQuery = vi.fn(async (_query: string) => {});
@@ -165,9 +169,13 @@ test("opaque WASM frames synchronize controls and navigation through document id
   const disposeControls = vi.fn<ControlEndpoint["dispose"]>();
   const updateQuery = vi.fn<(query: string) => Promise<void>>(async () => {});
   const endpoint: ControlEndpoint = {
+    controlBindings: () => undefined,
+    subscribeControlBindings: () => () => {},
+    subscribeTopology: () => () => {},
     snapshot: () => [{ objectId: "wasm-control", value: 1 }],
     subscribe: () => () => {},
     apply: applyControls,
+    applyLocal: applyControls,
     dispose: disposeControls,
   };
   globalThis.__MARIMO_MOUNT_CONFIG__ = {
@@ -283,9 +291,13 @@ test("acquires a control endpoint that becomes available after bridge startup", 
   const apply = vi.fn<ControlEndpoint["apply"]>(async () => {});
   const dispose = vi.fn<ControlEndpoint["dispose"]>();
   const endpoint: ControlEndpoint = {
+    controlBindings: () => undefined,
+    subscribeControlBindings: () => () => {},
+    subscribeTopology: () => () => {},
     snapshot: () => [{ objectId: "wasm-control", value: 1 }],
     subscribe: () => () => {},
     apply,
+    applyLocal: apply,
     dispose,
   };
   const connect = vi.fn<() => ControlEndpoint | undefined>();

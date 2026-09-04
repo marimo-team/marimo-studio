@@ -384,10 +384,10 @@ describe("Control endpoint", () => {
     expect(registry.registerInstance).toBe(original);
 
     const replacement = endpoint(registry, async () => null);
-    const updates: ControlUpdate[] = [];
+    const updates: ControlEvent[] = [];
     replacement.subscribe((update) => updates.push(update));
     registry.registerInstance("slider-0", controlElement(7));
-    expect(updates).toEqual([{ objectId: "slider-0", value: 7 }]);
+    expect(updates).toEqual([{ objectId: "slider-0", value: 7, origin: "registration" }]);
     replacement.dispose();
   });
 });

@@ -10,6 +10,7 @@ import { createElement } from "react";
 import type { PreparedCellOutput, PreparedProjectionSnapshot } from "./records.ts";
 import type { PreparedOutputOwners, PreparedResources } from "./resources.ts";
 
+import { getRuntimeConfig } from "../runtime-config/index.ts";
 import { applyValues } from "../values/hosts.ts";
 import { PreparedProjectionCapabilityError } from "./errors.ts";
 import { PreparedProjectionPortals } from "./portals.tsx";
@@ -190,7 +191,7 @@ const commitSnapshot = (
         timestamp,
       }),
     );
-    applyValues(preparedValueRecord(snapshot));
+    applyValues(preparedValueRecord(snapshot), getRuntimeConfig().projectionRevision);
     return { owners: nextOwners, uiStage, rollback };
   } catch (error) {
     const cleanupErrors: Error[] = [];

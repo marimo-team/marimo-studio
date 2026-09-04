@@ -84,7 +84,7 @@ export const fetchRuntimeConfig = async (
   const clientId = mount.clientId;
   if (clientId) {
     url.searchParams.set("marimo_studio_client", clientId);
-    if (requiresPreviewSession && !previewSessionId) {
+    if (!previewSessionId) {
       throw new RuntimeConfigRequestError(
         "The Studio preview session is not initialized.",
         "preview-session-unavailable",
@@ -125,9 +125,9 @@ export const fetchRuntimeConfig = async (
     throw new RuntimeConfigRequestError(detail.message, detail.code, detail.transient, detail.hint);
   }
   const config = parseRuntimeConfig(await responseJson(response));
-  if (config.runtime.descriptor.id !== runtime) {
+  if (config.runtime.id !== runtime) {
     throw new RuntimeConfigRequestError(
-      `The server selected ${JSON.stringify(config.runtime.descriptor.id)} instead of ${JSON.stringify(runtime)}.`,
+      `The server selected ${JSON.stringify(config.runtime.id)} instead of ${JSON.stringify(runtime)}.`,
       "runtime-selection-mismatch",
       false,
     );
@@ -144,7 +144,6 @@ export const fetchRuntimeConfigWithRetry = async (
   previewSessionId?: string,
   revision?: string,
   runtimeSessionId?: string,
-  requiresPreviewSession = true,
 ): Promise<RuntimeConfig> =>
   retry({
     operation: () =>
@@ -184,7 +183,6 @@ export const fetchRuntimeConfigForRevision = async (
   runtime = DEFAULT_RUNTIME_ID,
   previewSessionId?: string,
   runtimeSessionId?: string,
-  requiresPreviewSession = true,
 ): Promise<RuntimeConfig> => {
   const config = await fetchRuntimeConfigWithRetry(
     supportUrl,
@@ -193,7 +191,6 @@ export const fetchRuntimeConfigForRevision = async (
     previewSessionId,
     documentRevision,
     runtimeSessionId,
-    requiresPreviewSession,
   );
   requireMatchingPresentationRevision(documentRevision, config);
   return config;

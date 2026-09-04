@@ -25,7 +25,6 @@ export const validateStudioPreparedManifest = (
   if (expectedInstance !== undefined && metadata.prepared.instance !== expectedInstance) {
     invalid("The prepared export instance does not match the selected runtime instance.");
   }
-  validateProjectionBindings(metadata.projections, context.hosts);
   if (notebookExport === undefined) {
     return;
   }
@@ -38,25 +37,6 @@ export const validateStudioPreparedManifest = (
     notebookExport.outputNames.some((name) => !mapped.has(name))
   ) {
     invalid("The prepared projections do not cover the immutable export output set.");
-  }
-};
-
-const validateProjectionBindings = (
-  projections: StudioProjectionBindings,
-  hosts: StudioPreparedContext["hosts"],
-): void => {
-  const actual = {
-    cells: Object.keys(projections.cells).sort(),
-    outputs: Object.keys(projections.outputs).sort(),
-    values: Object.keys(projections.values).sort(),
-  };
-  const expected = {
-    cells: [...hosts.cells].sort(),
-    outputs: [...hosts.outputs].sort(),
-    values: [...hosts.values].sort(),
-  };
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    invalid("The prepared projections do not cover the authored view hosts.");
   }
 };
 

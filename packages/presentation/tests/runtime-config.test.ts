@@ -28,7 +28,7 @@ const baseRuntimeConfig = {
   view: "dashboard",
   views: ["dashboard", "executive"],
   runtime: {
-    descriptor: serverRuntime.descriptor,
+    id: "server",
     instance: "server-instance",
     data: {
       fileKey: "/workspace/notebook.py",

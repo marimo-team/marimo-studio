@@ -27,15 +27,9 @@ export interface PresentationRevisionPolicy {
 }
 
 export interface PresentationRevisionOptions extends PresentationRevisionPolicy {
-  beginRuntimeRevision(signal: AbortSignal): Promise<PresentationRuntimeRevision>;
+  applyRuntime(): "applied" | "pending" | "reload";
   reloadDocument(url: string): void;
   reloadRuntime(): void;
-}
-
-export interface PresentationRuntimeRevision {
-  apply(): Promise<"applied" | "pending" | "reload">;
-  commit(): Promise<void>;
-  rollback(): Promise<void>;
 }
 
 export interface SessionReplayPort {
@@ -146,29 +140,6 @@ export class PresentationRevisionController {
           reloadPending = true;
           this.options.reloadDocument(this.sessionReplay.preservedUrl(historyUrl));
           return commit;
-        } catch (error) {
-          const failures: unknown[] = [error];
-          try {
-            commit?.rollback();
-          } catch (rollbackError) {
-            failures.push(rollbackError);
-          }
-          if (previousConfig) {
-            try {
-              commitRuntimeConfig(previousConfig);
-            } catch (rollbackError) {
-              failures.push(rollbackError);
-            }
-          }
-          try {
-            await runtime.rollback();
-          } catch (rollbackError) {
-            failures.push(rollbackError);
-          }
-          if (failures.length > 1) {
-            throw new AggregateError(failures, "Presentation revision and rollback failed.");
-          }
-          throw error;
         }
         if (this.options.applyRuntime() === "reload") {
           reloadPending = true;
@@ -231,14 +202,16 @@ export class PresentationRevisionController {
     const readinessClaim = beginPresentationRefresh("document");
     const projectionClaim = projectionReadGate.begin();
     let operation = initialOperation;
-    const previous = this.settlement;
     this.active = controller;
-    const execute = async (): Promise<T | undefined> => {
-      await previous;
-      if (this.disposed || controller.signal.aborted) {
-        if (this.active === controller) {
-          this.active = undefined;
-        }
+    try {
+      const result = await task(controller.signal, (target) => {
+        operation = { ...operation, target };
+      });
+      if (
+        this.disposed ||
+        controller.signal.aborted ||
+        operationGeneration !== this.operationGeneration
+      ) {
         return undefined;
       }
       setPresentationRefreshState(readinessClaim, "ready");

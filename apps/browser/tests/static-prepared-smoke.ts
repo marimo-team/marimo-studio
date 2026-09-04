@@ -14,14 +14,14 @@ if (configSource === undefined || manifestSource === undefined) {
   throw new Error("Pass the static runtime config and prepared manifest paths.");
 }
 
-// SAFETY: The descriptor and data fields are checked before use.
+// SAFETY: The runtime fields are checked before use.
 const config = JSON.parse(await readFile(configSource, "utf8")) as {
   readonly runtime?: {
-    readonly descriptor?: { readonly id?: unknown };
+    readonly id?: unknown;
     readonly data?: unknown;
   };
 };
-if (config.runtime?.descriptor?.id !== "zero-python") {
+if (config.runtime?.id !== "zero-python") {
   throw new Error("The static runtime config must select Zero-Python.");
 }
 const runtime = parseZeroPythonRuntimeData(config.runtime.data);
@@ -42,11 +42,6 @@ validateStudioPreparedManifest(
   {
     view: metadata.view,
     planDigest: runtime.planDigest,
-    hosts: {
-      cells: Object.keys(metadata.projections.cells),
-      outputs: Object.keys(metadata.projections.outputs),
-      values: Object.keys(metadata.projections.values),
-    },
   },
   publication.notebookExport,
   metadata.prepared.instance,

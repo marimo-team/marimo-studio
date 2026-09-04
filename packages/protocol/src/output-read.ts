@@ -8,13 +8,6 @@ import { valueReadErrorSchema } from "./value-read.ts";
 
 export const MAX_OUTPUT_SELECTORS = 100;
 
-export const renderedCellOutputSchema = z.object({
-  channel: z.enum(["marimo-error", "media", "output", "pdb", "stderr", "stdin", "stdout"]),
-  mimetype: z.string().min(1),
-  data: jsonValueSchema,
-  timestamp: z.number().optional(),
-});
-
 export const outputReadRequestSchema = z
   .object({
     revision: z.string().min(1),
@@ -43,7 +36,7 @@ export const renderedOutputSchema = z
   .object({
     ownerCellId: z.string().min(1),
     mimetype: z.string().min(1),
-    data: jsonValueSchema,
+    data: z.string(),
     timestamp: z.number(),
     resetUiObjectIds: z.array(z.string().min(1)),
   })
@@ -63,7 +56,6 @@ export const outputReadResponseSchema = z.object({
 
 export type OutputReadRequest = z.infer<typeof outputReadRequestSchema>;
 export type OutputReadResponse = z.infer<typeof outputReadResponseSchema>;
-export type RenderedCellOutput = z.infer<typeof renderedCellOutputSchema>;
 export type RenderedOutput = z.infer<typeof renderedOutputSchema>;
 
 export const parseOutputReadResponse = (value: JsonValue): OutputReadResponse => {

@@ -138,7 +138,6 @@ class RuntimeRendererDouble implements EmbeddedRuntimeRenderer {
   }
 
   dispose(): void {
-    this.host.disposalEvents.push("renderer");
     this.disposeCalls += 1;
     this.root.unmount();
   }
@@ -162,7 +161,6 @@ class RuntimeHostDouble implements EmbeddedRuntimeHost {
   readonly themeCalls = new Array<ThemeCall>();
   readonly invoke: EmbeddedFunction = vi.fn(async () => functionResult);
   readonly initializeTransport = createTransportInitializer(this.transport, this.invoke);
-  readonly disposalEvents: string[] = [];
   connectingCalls = 0;
   initializeCalls = 0;
   renderError: Error | undefined;
@@ -190,10 +188,6 @@ class RuntimeHostDouble implements EmbeddedRuntimeHost {
 
   currentSessionId(): SessionId {
     return testSessionId();
-  }
-
-  deactivateRequests(): void {
-    this.disposalEvents.push("requests");
   }
 
   initialize(): void {
@@ -418,7 +412,6 @@ test("mounts, updates, and disposes the server runtime through one handle", asyn
   expect(target.childElementCount).toBe(0);
   expect(theme.listeners.size).toBe(0);
   expect(host.renderer?.disposeCalls).toBe(1);
-  expect(host.disposalEvents).toEqual(["requests", "renderer"]);
   expect(globalThis.__MARIMO_STUDIO_SESSION_ID__).toBe("s_before");
   expect(host.transport.runtime.getWsURL).toBe(originalGetWsURL);
   expect(host.transport.runtime.getSseURL).toBe(originalGetSseURL);

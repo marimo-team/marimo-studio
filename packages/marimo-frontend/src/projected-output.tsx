@@ -16,6 +16,8 @@ import { store } from "@marimo-team/frontend/unstable_internal/core/state/jotai"
 import { VirtualFileTracker } from "@marimo-team/frontend/unstable_internal/core/static/virtual-file-tracker";
 import { useLayoutEffect } from "react";
 
+import type { EmbeddedJsonValue } from "./embedded-json.ts";
+
 import { suppressReplacedControlValues } from "./embedded-control-state";
 import { reconcileProjectedOutputState } from "./projected-output-state";
 

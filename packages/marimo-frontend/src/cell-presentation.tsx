@@ -1,13 +1,14 @@
 import { useState } from "react";
 
+import type { flattenTopLevelNotebookCells } from "./upstream/cells.ts";
+
 import {
   cellDomProps,
-  type flattenTopLevelNotebookCells,
   OutputArea,
   OutputRenderer,
   outputIsLoading,
   outputIsStale,
-} from "./upstream/cells.ts";
+} from "./upstream/prepared-cells.ts";
 
 type UpstreamCell = ReturnType<typeof flattenTopLevelNotebookCells>[number];
 
@@ -23,7 +24,7 @@ export const cellOutputIsStale = (cell: RuntimeCell, edited: boolean): boolean =
   outputIsStale(cell, edited);
 
 interface ProjectedCellPresentationProps {
-  accessibleName: string;
+  accessibleName?: string;
   cellId: CellId;
   cellName: string;
   consoleOutputs: CellConsoleOutput[];
@@ -52,7 +53,7 @@ export const ProjectedCellPresentation = ({
 
   return (
     <div
-      aria-label={accessibleName}
+      aria-label={accessibleName ?? cellName}
       className="marimo"
       data-marimo-cell-output=""
       data-marimo-presentation="projected-cell"
@@ -76,7 +77,7 @@ export const ProjectedCellPresentation = ({
                 <OutputRenderer cellId={cellId} message={consoleOutput} />
                 {outputIndex === pendingStdin ? (
                   <input
-                    aria-label={`${accessibleName} input`}
+                    aria-label={`${accessibleName ?? cellName} input`}
                     autoComplete="off"
                     autoFocus={true}
                     className="marimo-projected-stdin-input"
@@ -125,7 +126,7 @@ export const CellPresentation = ({
   stale,
   onSubmitStdin,
 }: {
-  accessibleName: string;
+  accessibleName?: string;
   cell: RuntimeCell;
   consoleOutputs: CellConsoleOutput[];
   loading: boolean;

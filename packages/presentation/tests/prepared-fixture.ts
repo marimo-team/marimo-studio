@@ -2,25 +2,14 @@ import type { RuntimeConfig } from "@marimo-studio/protocol/runtime-config";
 
 import type { PreparedProjectionResources } from "../src/prepared/index.ts";
 
-const descriptor = {
-  id: "prepared",
-  label: "Prepared",
-  description: "Prepared notebook results",
-  execution: "prepared",
-  projections: { cell: true, output: true, value: true },
-  controls: "state",
-  query: "state",
-  preparation: "on-select",
-  session: "none",
-} as const;
-
 export const preparedRuntimeConfig = {
   schema: 1,
   revision: "prepared-revision",
+  projectionRevision: "a".repeat(64),
   view: "dashboard",
   views: ["dashboard"],
   runtime: {
-    descriptor,
+    id: "zero-python",
     instance: "prepared-instance",
     data: {},
   },
@@ -28,14 +17,34 @@ export const preparedRuntimeConfig = {
   publicRootUrl: "/",
   documentRootUrl: "/",
   supportUrl: "/_marimo-studio/views/dashboard",
-  cellBindings: {},
-  valueBindings: {
-    report: {
-      variable: "report",
-      cell: { kind: "id", value: "report-cell" },
+  projectionTargets: {
+    cells: {},
+    variables: {
+      report: {
+        status: "ready",
+        producer: "cell:v1:report",
+        dependencyClosure: ["cell:v1:report"],
+      },
     },
   },
-  outputBindings: {},
+  mounts: [
+    {
+      id: "value-report",
+      kind: "value",
+      source: { path: "index.html", line: 1, column: 1 },
+      allowedTargets: ["report"],
+    },
+  ],
+  projectionPolicy: {
+    maxActiveInstances: 512,
+    maxUniqueCellTargets: 256,
+    maxUniqueOutputTargets: 100,
+    maxUniqueValueTargets: 100,
+    maxTargetBytes: 4096,
+    maxPathSteps: 64,
+    maxInstanceIdBytes: 256,
+  },
+  runtimeBindings: { cellRefs: { "cell:v1:report": "report-cell" } },
   diagnostics: [],
   appConfig: {},
   userConfig: {},

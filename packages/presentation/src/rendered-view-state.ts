@@ -61,7 +61,7 @@ export const renderedViewIdentity = (): RenderedViewIdentity => {
   if (hasRuntimeConfig()) {
     const config = getRuntimeConfig();
     return {
-      runtime: config.runtime.descriptor.id,
+      runtime: config.runtime.id,
       view: config.view,
       revision: config.revision,
       runtimeInstance: config.runtime.instance,

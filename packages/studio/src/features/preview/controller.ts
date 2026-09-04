@@ -88,7 +88,6 @@ export class PreviewController {
   private queryPhase: QuerySyncStatus["phase"] = "ready";
   private activationsInProgress = 0;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
-  private disposed = false;
   private readonly retrySchedule = new RetrySchedule();
   private editorSessionId: string | undefined;
   private navigation: ViewNavigationIntent;
@@ -104,8 +103,7 @@ export class PreviewController {
 
   constructor(
     initialView: string,
-    private readonly runtime: RuntimeDescriptor,
-    controlPeer: string | undefined,
+    private readonly runtime: string,
     private readonly editor: HTMLIFrameElement,
     private readonly preview: HTMLIFrameElement,
     private readonly viewUrl: (
@@ -149,7 +147,6 @@ export class PreviewController {
     };
     this.controls = new PreviewControlController({
       runtime,
-      peerRuntime: controlPeer,
       editor,
       preview,
       supportUrl: () => this.supportUrl(this.view),
@@ -159,7 +156,7 @@ export class PreviewController {
         this.controlStatusChanged(status, revision, sessionId),
     });
     this.observations = new PreviewObservationController(
-      runtime.id,
+      runtime,
       preview,
       (message) => this.acceptObservation(message),
       recordObservation,
@@ -596,7 +593,7 @@ export class PreviewController {
       message.type === "marimo-studio:restore-fragment" ||
       message.type === "marimo-studio:receiver-admitted" ||
       message.type === "marimo-studio:observe-view" ||
-      message.runtime !== this.runtime.id
+      message.runtime !== this.runtime
     ) {
       return;
     }
@@ -727,7 +724,7 @@ export class PreviewController {
     }
     const message: SwitchViewMessage = {
       type: "marimo-studio:switch-view",
-      runtime: this.runtime.id,
+      runtime: this.runtime,
       view: this.view,
       lifecycleId: this.activeLifecycleId,
       documentUrl: previewDocumentUrl(

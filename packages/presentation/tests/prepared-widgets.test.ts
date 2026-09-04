@@ -115,7 +115,16 @@ const widgetOutput = (selector: string, ownerCellId: string, modelId: string, ke
 };
 
 const widgetSnapshot = (label: string): PreparedProjectionSnapshot => ({
-  values: [{ selector: "report", value: { label } }],
+  values: [
+    {
+      selector: "report",
+      value: {
+        codec: "json-v1",
+        fingerprint: `sha256:${"a".repeat(64)}`,
+        value: { label },
+      },
+    },
+  ],
   outputs: [
     widgetOutput(
       "widget.first",
@@ -144,7 +153,16 @@ const checkpointSnapshot = (
   const controlOwner = `prepared-checkpoint-${label}-control`;
   const controlId = projectionUiId(controlOwner, controlDigest, "slider");
   return {
-    values: [{ selector: "report", value: { label } }],
+    values: [
+      {
+        selector: "report",
+        value: {
+          codec: "json-v1",
+          fingerprint: `sha256:${"a".repeat(64)}`,
+          value: { label },
+        },
+      },
+    ],
     outputs: [
       widgetOutput("checkpoint.widget", widgetOwner, modelId, label),
       {

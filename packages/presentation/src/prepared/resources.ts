@@ -1,10 +1,12 @@
 import type {
   PreparedModelLifecycleNotification as MarimoModelLifecycleNotification,
   PreparedModelResources as MarimoPreparedModelResources,
+  PreparedPresentationHandle,
 } from "@marimo-studio/marimo-frontend/prepared-presentation";
 
 import { jsonValueSchema, type JsonValue } from "@marimo-studio/protocol/runtime-config";
 
+import type { DecodedValue } from "../values/codecs.ts";
 import type {
   PreparedModelLifecycleNotification,
   PreparedProjectionResources,
@@ -142,7 +144,10 @@ const modelRecords = (
     model_id,
   }));
 
-export type PreparedResources = ReturnType<typeof prepareProjectionResources> & {
+type PreparedUiValues = Parameters<PreparedPresentationHandle["uiValues"]["stage"]>[0];
+
+export type PreparedResources = Omit<ReturnType<typeof prepareProjectionResources>, "uiValues"> & {
+  readonly uiValues: PreparedUiValues;
   readonly modelCheckpoint?: MarimoPreparedModelResources;
 };
 
@@ -189,9 +194,10 @@ export const prepareProjectionResources = (snapshot: PreparedProjectionSnapshot)
     modelNotifications: modelRecords(
       [...modelNotifications.values()].map(({ notification }) => notification),
     ),
+    // SAFETY: jsonValueSchema validates a subset of EmbeddedJsonValue.
     uiValues: Object.fromEntries(
       [...uiValues.entries()].map(([objectId, { value }]) => [objectId, value]),
-    ),
+    ) as PreparedUiValues,
   };
 };
 
@@ -204,10 +210,5 @@ export const modelResources = ({
 
 export const preparedValueRecord = (
   snapshot: PreparedProjectionSnapshot,
-): Record<string, JsonValue> =>
-  Object.fromEntries(
-    snapshot.values.map(({ selector, value }): [string, JsonValue] => [
-      selector,
-      jsonValueSchema.parse(value),
-    ]),
-  );
+): Record<string, DecodedValue> =>
+  Object.fromEntries(snapshot.values.map(({ selector, value }) => [selector, value]));
