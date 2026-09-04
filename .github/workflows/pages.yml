@@ -100,6 +100,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      MARIMO_EXPORT_REPOSITORY: ${{ github.workspace }}/.cache/marimo-export-repository
     permissions:
       contents: read
       pages: read
@@ -109,6 +111,14 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Restore prepared notebook states
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.MARIMO_EXPORT_REPOSITORY }}
+          key: marimo-export-v1-${{ runner.os }}-${{ hashFiles('uv.lock') }}-${{ github.sha }}
+          restore-keys: |
+            marimo-export-v1-${{ runner.os }}-${{ hashFiles('uv.lock') }}-
 
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
