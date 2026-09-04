@@ -35,6 +35,8 @@ from ..artifact_test_support import add_provider_outputs
 from ..helpers import replace_app_shell
 from .export_test_support import configure_export_view
 
+_PREPARE_TIMEOUT = 120.0
+
 
 class _DocumentResources(HTMLParser):
     def __init__(self) -> None:
@@ -129,6 +131,7 @@ def test_export_view_writes_a_complete_static_bundle(
     assert output.joinpath(".nojekyll").is_file()
 
 
+@pytest.mark.native_process
 def test_zero_python_export_combines_the_view_and_prepared_publication(
     notebook_path: Path,
     tmp_path: Path,
@@ -136,7 +139,12 @@ def test_zero_python_export_combines_the_view_and_prepared_publication(
     configure_export_view(notebook_path)
     output = tmp_path / "prepared-site"
 
-    result = export_view(notebook_path, output, runtime="zero-python")
+    result = export_view(
+        notebook_path,
+        output,
+        runtime="zero-python",
+        prepare_timeout=_PREPARE_TIMEOUT,
+    )
 
     support = output / "_marimo-studio" / "views" / "dashboard"
     config = json.loads(support.joinpath("config").read_text(encoding="utf-8"))
@@ -154,6 +162,7 @@ def test_zero_python_export_combines_the_view_and_prepared_publication(
     assert not output.joinpath("_marimo-studio/assets/runtime.js").exists()
 
 
+@pytest.mark.native_process
 def test_zero_python_export_reuses_the_prepared_generation(
     notebook_path: Path,
     tmp_path: Path,
@@ -162,8 +171,18 @@ def test_zero_python_export_reuses_the_prepared_generation(
     first_output = tmp_path / "prepared-site-first"
     repeated_output = tmp_path / "prepared-site-repeated"
 
-    export_view(notebook_path, first_output, runtime="zero-python")
-    export_view(notebook_path, repeated_output, runtime="zero-python")
+    export_view(
+        notebook_path,
+        first_output,
+        runtime="zero-python",
+        prepare_timeout=_PREPARE_TIMEOUT,
+    )
+    export_view(
+        notebook_path,
+        repeated_output,
+        runtime="zero-python",
+        prepare_timeout=_PREPARE_TIMEOUT,
+    )
     first_manifest = json.loads(
         first_output.joinpath(
             "_marimo-studio/views/dashboard/zero-python/current"
@@ -269,6 +288,7 @@ def test_export_public_assets_reject_symlink_swaps(
     assert not output.exists()
 
 
+@pytest.mark.native_process
 def test_export_preserves_nested_vanilla_local_sources(
     notebook_path: Path,
     tmp_path: Path,
@@ -302,7 +322,12 @@ def test_export_preserves_nested_vanilla_local_sources(
     )
     output = tmp_path / "site"
 
-    result = export_view(notebook_path, output, runtime="zero-python")
+    result = export_view(
+        notebook_path,
+        output,
+        runtime="zero-python",
+        prepare_timeout=_PREPARE_TIMEOUT,
+    )
 
     config = json.loads(
         output.joinpath("_marimo-studio/views/dashboard/config").read_text(

@@ -4,6 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 import marimo_studio.authoring as studio_authoring
@@ -11,7 +12,10 @@ from marimo_studio._cli import cli
 
 from .export_test_support import configure_export_view
 
+_PREPARE_TIMEOUT = 120.0
 
+
+@pytest.mark.native_process
 def test_export_command_reports_the_static_entrypoint(
     notebook_path: Path,
     tmp_path: Path,
@@ -29,6 +33,8 @@ def test_export_command_reports_the_static_entrypoint(
             str(notebook_path),
             "--output",
             str(output),
+            "--prepare-timeout",
+            str(_PREPARE_TIMEOUT),
             "--json",
         ],
     )
@@ -43,6 +49,7 @@ def test_export_command_reports_the_static_entrypoint(
     assert output.joinpath("index.html").is_file()
 
 
+@pytest.mark.native_process
 def test_export_completion_command_serves_on_loopback(
     notebook_path: Path,
     tmp_path: Path,
@@ -60,6 +67,8 @@ def test_export_completion_command_serves_on_loopback(
             str(notebook_path),
             "--output",
             str(output),
+            "--prepare-timeout",
+            str(_PREPARE_TIMEOUT),
         ],
     )
 
@@ -111,6 +120,7 @@ def test_wasm_export_rejects_prepare_timeout_before_resolving_target(
     assert not output.exists()
 
 
+@pytest.mark.native_process
 def test_agent_view_exports_the_same_static_bundle(
     notebook_path: Path,
     tmp_path: Path,
@@ -119,7 +129,7 @@ def test_agent_view_exports_the_same_static_bundle(
     output = tmp_path / "agent-site"
     view = studio_authoring.open_workspace(notebook_path).view("dashboard")
 
-    result = asyncio.run(view.export(output))
+    result = asyncio.run(view.export(output, prepare_timeout=_PREPARE_TIMEOUT))
 
     assert result.view == "dashboard"
     assert result.entrypoint == output / "index.html"
