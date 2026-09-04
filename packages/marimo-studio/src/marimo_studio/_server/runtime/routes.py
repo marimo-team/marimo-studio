@@ -30,11 +30,53 @@ from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
+from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import RuntimeConfigTooLargeError
 from marimo_studio.errors._internal import RuntimeSyncError
 
 _CLIENT_PATTERN = re.compile(r"[A-Za-z0-9_-]{16,128}")
 _PREVIEW_SESSION_HEADER = "Marimo-Studio-Preview-Session-Id"
+
+
+async def available_runtime_options(
+    context: ServerContext,
+    presentation: NotebookPresentation,
+    studio: StudioWorkspace,
+    view_name: str,
+    runtimes: RuntimeRegistry,
+) -> tuple[tuple[tuple[str, str], ...], str]:
+    """Return runtimes compatible with one current presentation snapshot."""
+    snapshot = await presentation.snapshot_async(view_name)
+    available = list(runtimes.options_for(studio, context))
+    if any(site.allowed_targets is None for site in snapshot.mounts):
+        available = [item for item in available if item[0] != "zero-python"]
+    return tuple(available), snapshot.revision
+
+
+async def runtime_availability_response(
+    request: Request,
+    context: ServerContext,
+    presentation: NotebookPresentation,
+    studio: StudioWorkspace,
+    view_name: str,
+    runtimes: RuntimeRegistry,
+) -> JSONResponse:
+    available, revision = await available_runtime_options(
+        context,
+        presentation,
+        studio,
+        view_name,
+        runtimes,
+    )
+    return JSONResponse(
+        {
+            "schema": 1,
+            "view": view_name,
+            "runtimes": [runtime_id for runtime_id, _label in available],
+            "revision": revision,
+        },
+        headers=NO_STORE,
+    )
 
 
 async def runtime_config_response(

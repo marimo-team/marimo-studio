@@ -291,7 +291,6 @@ async def document_response(
         render_presentation_document(
             snapshot,
             context,
-            runtime=provider.descriptor.id,
             marimo_version=marimo_version,
             runtime=runtime.id,
             runtime_explicit=runtime_explicit,
@@ -340,9 +339,6 @@ def studio_response(
             state="ready",
             config=studio,
             selected=selected,
-            available_runtimes=available_runtimes,
-            source_revisions=source_revisions,
-            presentation_revision=presentation_revision,
         ),
         headers=edit_document_headers(security_policy),
     )

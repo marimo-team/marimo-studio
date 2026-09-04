@@ -483,6 +483,61 @@ default = "dashboard"
     assert cache_releases == [True]
 
 
+def test_kernel_lifespan_leaves_export_owned_kernel_untouched(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._runtime import context as runtime_context
+    from marimo._runtime.context import kernel_context as kernel_context_module
+
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+    tmp_path.joinpath("pyproject.toml").write_text(
+        """\
+[tool.marimo-studio]
+notebook = "notebook.py"
+default = "dashboard"
+""",
+        encoding="utf-8",
+    )
+    cache_activations: list[bool] = []
+    current = _native_output_context()
+    current.filename = str(notebook)
+    current._kernel = SimpleNamespace()
+    monkeypatch.setattr(runtime_context, "get_context", lambda: current)
+    monkeypatch.setattr(
+        kernel_context_module,
+        "KernelRuntimeContext",
+        type(current),
+    )
+    monkeypatch.setattr(kernel_values_module, "is_owned_session", lambda: True)
+
+    def activate_cache_compatibility() -> Any:
+        cache_activations.append(True)
+        return lambda: None
+
+    monkeypatch.setattr(
+        kernel_values_module,
+        "keep_cached_cells_compatible",
+        activate_cache_compatibility,
+    )
+    lifespan = _KernelBridgeLifespan()
+
+    async def exercise() -> None:
+        async with lifespan:
+            assert lifespan._output_renderer is None
+            assert lifespan._value_encoder is None
+            assert lifespan._observation_ledger is None
+
+    try:
+        with current.install():
+            asyncio.run(exercise())
+    finally:
+        current.virtual_file_registry.shutdown()
+
+    assert cache_activations == []
+
+
 def test_kernel_query_sync_labels_its_echo_and_preserves_private_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

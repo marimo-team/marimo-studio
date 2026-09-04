@@ -254,12 +254,6 @@ async def observe_views(
             "Browser validation requires one source revision for every view.",
             status_code=400,
         )
-    if session_id is not None and not sessions.is_session_id(session_id):
-        raise AgentRequestError(
-            "unknown-session",
-            "The Marimo session does not belong to this notebook.",
-            status_code=409,
-        )
     if client_id is None and session_id is not None:
         target = await notebook_scope.clients.wait_for_session_target(
             session_id,

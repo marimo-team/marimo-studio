@@ -1,29 +1,21 @@
-"""Resolve one Studio view into an explicit notebook export specification."""
+"""Compose Studio's state space with compiler-owned prepared outputs."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Protocol, cast
 
-from marimo_export import ExportPlan, ExportRepository, ExportSpec
-from marimo_export.wire import portable_json, state_fingerprint
+from marimo_export import ExportPlan, ExportRepository, ExportSpec, StateSpace
+from marimo_export.wire import JsonValue, portable_json, state_fingerprint
 
-from marimo_studio._server.presentation import PresentationSnapshot
-from marimo_studio._server.studio.view_compiler import (
-    CompiledExportView,
-    JsonValue,
-    compile_export_view,
-)
+from marimo_studio._prepared.compiler import CompiledExportView, compile_export_view
+from marimo_studio._prepared.state_space import StateSpaceSource
+from marimo_studio._server.presentation.service import PresentationSnapshot
 from marimo_studio.errors import PublicationError
-
-_SAVED_SPEC = "export.yaml"
 
 
 class PreparedSession(Protocol):
-    """Public marimo-export session operations used by Studio."""
-
     def plan(
         self,
         *,
@@ -42,62 +34,38 @@ class ResolvedPreparedView:
 
 def resolve_prepared_view(
     snapshot: PresentationSnapshot,
+    state_space_source: StateSpaceSource,
     session: PreparedSession,
     repository: ExportRepository,
 ) -> ResolvedPreparedView:
-    """Resolve saved states or observed live states for one compiled view."""
-
-    baseline = compile_export_view(snapshot)
-    saved = _load_saved_spec(snapshot)
-    initial = _compile_saved(snapshot, saved) if saved is not None else baseline
-    plan = session.plan(spec=initial.spec, repository=repository)
+    """Resolve configured or observed states for one immutable presentation."""
+    state_space = state_space_source.state_space
+    compiled = compile_export_view(
+        snapshot.resolved,
+        snapshot.view_name,
+        snapshot.mounts,
+        state_space=state_space,
+    )
+    plan = session.plan(spec=compiled.spec, repository=repository)
     observed = session.observe_inputs()
     values = getattr(observed, "values", None)
     if not isinstance(values, Mapping):
         raise PublicationError("The live Marimo session returned invalid input values.")
     current = _project_inputs(values, plan.inputs)
     repository.record_observation(plan, current)
-    if saved is not None:
+    if state_space is not None:
         selected = current if _contains_state(plan, current) else None
-        return ResolvedPreparedView(initial, selected)
+        return ResolvedPreparedView(compiled, selected)
     states = _observed_states(plan, current)
     return ResolvedPreparedView(
-        compile_export_view(snapshot, states=states, default_state="baseline"),
+        compile_export_view(
+            snapshot.resolved,
+            snapshot.view_name,
+            snapshot.mounts,
+            state_space=StateSpace(default_state="baseline", states=states),
+        ),
         current,
     )
-
-
-def _load_saved_spec(snapshot: PresentationSnapshot) -> ExportSpec | None:
-    root = snapshot.resolved.views[snapshot.view_name].view.root
-    source = root / _SAVED_SPEC
-    if not source.exists() and not source.is_symlink():
-        return None
-    if source.is_symlink() or not source.is_file():
-        raise PublicationError(f"The saved export specification is invalid: {source}")
-    return ExportSpec.from_file(source)
-
-
-def _compile_saved(
-    snapshot: PresentationSnapshot,
-    saved: ExportSpec,
-) -> CompiledExportView:
-    compiled = compile_export_view(
-        snapshot,
-        states=_portable_states(saved.states),
-        default_state=saved.default_state,
-    )
-    saved_outputs = saved.to_value()["outputs"]
-    compiled_outputs = compiled.spec.to_value()["outputs"]
-    if saved_outputs != compiled_outputs:
-        path = _saved_spec_path(snapshot)
-        raise PublicationError(
-            f"The saved export outputs do not match the current view: {path}"
-        )
-    return compiled
-
-
-def _saved_spec_path(snapshot: PresentationSnapshot) -> Path:
-    return snapshot.resolved.views[snapshot.view_name].view.root / _SAVED_SPEC
 
 
 def _project_inputs(
@@ -135,12 +103,6 @@ def _observed_states(
             continue
         states[f"observed-{observation.fingerprint}"] = values
     return states
-
-
-def _portable_states(
-    states: Mapping[str, Mapping[str, object]],
-) -> dict[str, Mapping[str, JsonValue]]:
-    return {name: _portable_object(values) for name, values in states.items()}
 
 
 def _portable_object(values: Mapping[str, object]) -> dict[str, JsonValue]:

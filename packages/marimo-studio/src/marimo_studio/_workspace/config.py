@@ -67,7 +67,7 @@ _COMMON_CONFIG_FIELDS = frozenset(
         "show_cell_logs",
     }
 )
-_SUPPORTED_RUNTIMES = frozenset({"server", "wasm"})
+_SUPPORTED_RUNTIMES = frozenset({"server", "wasm", "zero-python"})
 _NOTEBOOK_STEM_MAX_BYTES = PORTABLE_PATH_COMPONENT_MAX_BYTES - len(".py")
 _WORKSPACE_MATERIALIZATION_LIMIT = 8
 
@@ -119,6 +119,8 @@ def _runtime_id(value: object, field: str) -> str:
 
 def _runtimes(data: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
     default = _runtime_id(data.get("runtime", "server"), "runtime")
+    if default == "zero-python":
+        raise ConfigurationError("runtime must be one of: server, wasm")
     raw = data.get("runtimes", [default])
     if not isinstance(raw, list) or not raw:
         raise ConfigurationError("runtimes must be a non-empty array")

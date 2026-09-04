@@ -59,7 +59,7 @@ def studio_bootstrap_payload(
     file_key: str,
     query: Sequence[tuple[str, str]],
     routing_query: Sequence[tuple[str, str]],
-    runtimes: tuple[RuntimeDescriptor, ...],
+    runtimes: tuple[tuple[str, str], ...],
     client_id: str,
     native_session_id: str,
 ) -> dict[str, object]:
@@ -91,14 +91,13 @@ def studio_bootstrap_payload(
         "defaultView": config.default_view,
         "selectedView": selected,
         "views": list(config.views),
-        "runtimes": [runtime.to_dict() for runtime in runtimes],
-        "availableRuntimes": [runtime.id for runtime in available_runtimes],
-        "sourceRevisions": source_revisions,
-        "presentationRevision": presentation_revision,
+        "runtimes": [
+            {"id": runtime_id, "label": label} for runtime_id, label in runtimes
+        ],
         "defaultRuntime": (
             config.default_runtime
-            if config.default_runtime in {runtime.id for runtime in available_runtimes}
-            else available_runtimes[0].id
+            if config.default_runtime in {runtime_id for runtime_id, _label in runtimes}
+            else runtimes[0][0]
         ),
         "urls": {
             "editor": editor_url(
@@ -231,12 +230,7 @@ def studio_document(
 
     bootstrap: dict[str, object] | None = None
     if state == "ready":
-        assert (
-            config is not None
-            and selected is not None
-            and available_runtimes is not None
-            and source_revisions is not None
-        )
+        assert config is not None and selected is not None
         bootstrap = studio_bootstrap_payload(
             config,
             base_url,

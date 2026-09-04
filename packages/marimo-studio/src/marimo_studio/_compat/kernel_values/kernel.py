@@ -13,7 +13,9 @@ from types import TracebackType
 from typing import Any
 from uuid import uuid4
 
-from marimo_studio._compat.cached_cells import keep_cached_cells_compatible
+from marimo_export.integration import is_owned_session, keep_cached_cells_compatible
+from marimo_export.observations import ObservationLedger, install_observation_ledger
+
 from marimo_studio._compat.kernel_values.authorization import (
     STALE_PROJECTION_BINDING_MESSAGE,
     AuthorizedProjections,
@@ -129,7 +131,7 @@ class _CachedCellCompatibility:
         self._release: Callable[[], None] | None = None
 
     def activate(self) -> None:
-        if self._release is None:
+        if self._release is None and not is_owned_session():
             self._release = keep_cached_cells_compatible()
 
     def close(self) -> None:
@@ -151,10 +153,6 @@ class _EnteredKernelLifespan:
         self._resume = resume
         self._failure: BaseException | None = None
         self._closed = False
-
-    def defer_enter(self, enter: Callable[[], bool]) -> None:
-        if self._deferred_enter is None:
-            self._deferred_enter = enter
 
     def fail(self, error: BaseException) -> None:
         if self._failure is None:
@@ -273,6 +271,8 @@ class _KernelBridgeLifespan:
     ) -> bool:
         if self._output_renderer is not None:
             return True
+        if is_owned_session():
+            return False
         try:
             configured = discover_studio_definition(filename) is not None
         except (OSError, UnicodeError, ConfigurationError):

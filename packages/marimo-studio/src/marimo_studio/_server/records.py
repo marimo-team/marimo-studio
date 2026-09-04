@@ -19,6 +19,7 @@ class ServerLocation:
     mode: ServerMode
     routing_query: tuple[tuple[str, str], ...]
     handle: ServerHandle = field(repr=False)
+    internal_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class ServerContext:
     config_overrides: dict[str, object]
     server_token: str
     handle: ServerHandle = field(repr=False)
+    internal_url: str | None = None
 
 
 @dataclass(frozen=True)

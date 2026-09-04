@@ -10,7 +10,6 @@ from marimo_studio._validation.evidence import (
     RuntimeStatusSnapshot,
     RuntimeStatusTransition,
 )
-from marimo_studio.workspace import ensure_view
 
 
 def ready_runtime_status(
@@ -59,30 +58,6 @@ def replace_app_shell(document: str, content: str) -> str:
         + f'<main id="app-shell">{content}</main>'
         + document[closing + len("</main>") :]
     )
-
-
-def configured_export_view(notebook: Path) -> Path:
-    setup = ensure_view(notebook)
-    template = setup.root / "index.html"
-    template.write_text(
-        replace_app_shell(
-            template.read_text(encoding="utf-8"),
-            """
-            <marimo-cell name="cell-2"></marimo-cell>
-            <output mo-value="doubled"></output>
-            <marimo-output value="doubled"></marimo-output>
-            <button
-              hx-get="./_marimo-studio/views/dashboard/cells/cell-2"
-              hx-target="#lazy-cell"
-            >
-              Load result
-            </button>
-            <div id="lazy-cell"></div>
-            """,
-        ),
-        encoding="utf-8",
-    )
-    return setup.root
 
 
 def empty_notebook_source() -> str:

@@ -72,7 +72,8 @@ _ARTIFACT_PATTERN = re.compile(
 )
 _VIEW_SUPPORT_PATTERN = re.compile(
     rf"{re.escape(SUPPORT_PATH)}/views/(?P<view>{_VIEW_PATTERN})/"
-    r"(?P<route>config|values|outputs|dev/events)"
+    r"(?P<route>config|values|outputs|dev/events|zero-python/(?:current|"
+    r"[0-9a-f]{64}/(?:index\.json|assets/.+)))"
 )
 _RUNTIME_ASSET_PATTERN = re.compile(rf"{re.escape(SUPPORT_PATH)}/assets/.+")
 _NATIVE_READ_PATTERN = re.compile(r"/(?:@file/.+|public/.+|public-files-sw\.js)")
@@ -323,7 +324,10 @@ def presentation_target_allowed(
             or _NATIVE_READ_PATTERN.fullmatch(route.target)
             or (
                 (match := _VIEW_SUPPORT_PATTERN.fullmatch(route.target)) is not None
-                and match.group("route") in {"config", "dev/events"}
+                and (
+                    match.group("route") in {"config", "dev/events"}
+                    or match.group("route").startswith("zero-python/")
+                )
             )
         )
     if method == "POST":

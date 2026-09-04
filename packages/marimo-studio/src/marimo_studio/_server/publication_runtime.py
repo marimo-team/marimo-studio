@@ -2,23 +2,31 @@
 
 from __future__ import annotations
 
-from marimo_studio._capabilities import (
-    PreparedRuntimeState,
-    RuntimeAuthority,
-    ServerContext,
+from dataclasses import dataclass
+from typing import Literal
+
+from marimo_studio._delivery.urls import (
+    STUDIO_CLIENT_QUERY_PARAM,
+    SUPPORT_PATH,
+    with_query,
 )
+from marimo_studio._prepared.state_space import load_state_space_source
 from marimo_studio._server.prepared_views import (
     PreparedViewRegistry,
     PreparedViewRequest,
 )
-from marimo_studio._server.presentation import PresentationSnapshot
-from marimo_studio._urls import (
-    STUDIO_CLIENT_QUERY_PARAM,
-    SUPPORT_PATH,
-    public_url,
-    with_query,
-)
+from marimo_studio._server.presentation.capability import presentation_revision_url
+from marimo_studio._server.presentation.service import PresentationSnapshot
+from marimo_studio._server.records import ServerContext
 from marimo_studio.errors import PublicationUnavailableError
+
+RuntimeAuthority = Literal["read", "edit"]
+
+
+@dataclass(frozen=True)
+class PreparedRuntimeState:
+    instance: str
+    data: dict[str, object]
 
 
 class PublicationRuntimeProjector:
@@ -34,6 +42,7 @@ class PublicationRuntimeProjector:
         authority: RuntimeAuthority,
         session_id: str | None,
         binding_id: str | None,
+        presentation_session_id: str | None = None,
     ) -> PreparedRuntimeState:
         if binding_id is None:
             raise PublicationUnavailableError(
@@ -49,6 +58,9 @@ class PublicationRuntimeProjector:
             selection = await self._publications.prepare(
                 PreparedViewRequest(
                     snapshot=snapshot,
+                    state_space_source=load_state_space_source(
+                        snapshot.resolved.views[snapshot.view_name].view.root
+                    ),
                     server=context.internal_url,
                     server_token=context.server_token,
                     session_id=session_id,
@@ -72,9 +84,9 @@ class PublicationRuntimeProjector:
             data={
                 "manifestUrl": _manifest_url(
                     context,
-                    snapshot.view_name,
+                    snapshot,
                     binding_id,
-                    snapshot.revision,
+                    presentation_session_id,
                 ),
                 "planDigest": selection.plan_digest,
             },
@@ -89,19 +101,25 @@ def publication_runtime_projector(
 
 def _manifest_url(
     context: ServerContext,
-    view_name: str,
+    snapshot: PresentationSnapshot,
     binding_id: str,
-    revision: str,
+    presentation_session_id: str | None,
 ) -> str:
+    if presentation_session_id is None:
+        raise PublicationUnavailableError(
+            "The Zero-Python presentation session is unavailable."
+        )
     return with_query(
-        public_url(
-            context.base_url,
-            f"{SUPPORT_PATH}/views/{view_name}/zero-python/current",
+        presentation_revision_url(
+            context,
+            snapshot,
+            presentation_session_id,
+            f"{SUPPORT_PATH}/views/{snapshot.view_name}/zero-python/current",
         ),
         (
             *context.routing_query,
             (STUDIO_CLIENT_QUERY_PARAM, binding_id),
-            ("revision", revision),
+            ("revision", snapshot.revision),
         ),
     )
 

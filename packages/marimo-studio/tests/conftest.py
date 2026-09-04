@@ -8,10 +8,22 @@ import marimo
 import pytest
 
 import marimo_studio._delivery.assets as assets_module
-from marimo_studio._compat.layout import MARIMO_RELEASE_COMMIT
+from marimo_studio._compat.layout import (
+    MARIMO_FRONTEND_PATCH_SHA256,
+    MARIMO_RELEASE_COMMIT,
+)
 from marimo_studio.view_providers._bundled._deno import runtime as deno_runtime
 
 from .helpers import notebook_source
+
+
+@pytest.fixture(autouse=True, scope="session")
+def export_repository(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
+    repository = tmp_path_factory.mktemp("marimo-export-repository")
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setenv("MARIMO_EXPORT_REPOSITORY", str(repository))
+    yield repository
+    monkeypatch.undo()
 
 
 @pytest.fixture(autouse=True, scope="session")

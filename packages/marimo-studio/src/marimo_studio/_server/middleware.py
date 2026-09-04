@@ -126,6 +126,7 @@ class PresentationMiddleware:
         self._runtimes = create_runtime_registry(
             self._adapters.session_state,
             self._adapters.browser,
+            self._notebooks,
         )
         self._lifecycle_routes = LifecycleRouteHandler(
             app,

@@ -9,7 +9,8 @@ from dataclasses import dataclass, field
 from marimo_export.manifest import prepared_manifest_bytes
 from marimo_export.publication import PreparedPublication
 
-from marimo_studio._server.presentation import PresentationSnapshot
+from marimo_studio._prepared.state_space import StateSpaceSource
+from marimo_studio._server.presentation.service import PresentationSnapshot
 
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 
@@ -17,14 +18,20 @@ _DIGEST = re.compile(r"[0-9a-f]{64}")
 @dataclass(frozen=True, slots=True)
 class PreparedViewRequest:
     snapshot: PresentationSnapshot
+    state_space_source: StateSpaceSource
     server: str
     server_token: str = field(repr=False)
     session_id: str
     binding_id: str
 
     @property
-    def key(self) -> tuple[str, str, str]:
-        return self.snapshot.view_name, self.binding_id, self.snapshot.revision
+    def key(self) -> tuple[str, str, str, str]:
+        return (
+            self.snapshot.view_name,
+            self.binding_id,
+            self.snapshot.revision,
+            self.state_space_source.digest,
+        )
 
     @property
     def binding_key(self) -> tuple[str, str]:
@@ -62,7 +69,7 @@ class PreparedView:
     def __init__(
         self,
         prepared: PreparedPublication[
-            tuple[str, str, str],
+            tuple[str, str, str, str],
             PreparedViewMetadata,
         ],
     ) -> None:

@@ -16,6 +16,7 @@ from marimo_studio._processes.ownership import (
 from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.agent.coordinator import AgentCoordinator
 from marimo_studio._server.development.coordinator import DevelopmentCoordinator
+from marimo_studio._server.prepared_views import PreparedViewRegistry
 from marimo_studio._server.presentation.service import NotebookPresentation
 from marimo_studio._server.presentation.session_ids import SessionIdAllocator
 from marimo_studio._server.workspace_lifecycle import WorkspaceLifecycleResolver
@@ -32,6 +33,11 @@ class NotebookScope:
     presentation: NotebookPresentation
     clients: StudioClientRegistry
     agents: AgentCoordinator
+    publications: PreparedViewRegistry | None = field(
+        default=None,
+        compare=False,
+        repr=False,
+    )
     development: DevelopmentCoordinator = field(default_factory=DevelopmentCoordinator)
     session_ids: SessionIdAllocator = field(
         default_factory=SessionIdAllocator,
@@ -58,6 +64,7 @@ class NotebookScope:
             presentation=NotebookPresentation(notebook, development=development),
             clients=clients,
             agents=AgentCoordinator(clients),
+            publications=PreparedViewRegistry(notebook),
             development=development,
             session_ids=session_ids or SessionIdAllocator(),
         )
@@ -86,6 +93,8 @@ class NotebookScope:
 
         await close_async(self.lifecycle.close)
         await close_async(self.development.close)
+        if self.publications is not None:
+            await close_async(self.publications.close)
         await close_async(lambda: asyncio.to_thread(self.presentation.close))
         for resource in (self.agents, self.clients):
             await close_async(resource.close)

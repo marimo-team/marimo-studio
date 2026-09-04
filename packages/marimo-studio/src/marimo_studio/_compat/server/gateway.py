@@ -14,13 +14,13 @@ from starlette.requests import Request
 from starlette.types import Scope
 from starlette.websockets import WebSocket
 
+from marimo_studio._delivery.urls import public_url
 from marimo_studio._server.records import (
     ServerContext,
     ServerHandle,
     ServerLocation,
     ServerMode,
 )
-from marimo_studio._urls import public_url
 
 
 @dataclass(frozen=True)
@@ -81,6 +81,22 @@ def _server_uses_file_routing(scope: Scope) -> bool:
     state = getattr(app, "state", None)
     manager = getattr(state, "session_manager", None)
     return manager is not None and manager.workspace.get_unique_file_key() is None
+
+
+def _internal_server_url(scope: Scope, base_url: str) -> str | None:
+    server = scope.get("server")
+    if server is None:
+        return None
+    host, port = server
+    if not isinstance(host, str) or not host or not isinstance(port, int) or port <= 0:
+        return None
+    host = host.strip("[]")
+    if host == "0.0.0.0":
+        host = "127.0.0.1"
+    elif host == "::":
+        host = "::1"
+    authority = f"[{host}]" if ":" in host else host
+    return f"http://{authority}:{port}{public_url(base_url, '/')}"
 
 
 async def _server_location(

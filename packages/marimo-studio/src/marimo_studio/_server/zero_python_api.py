@@ -17,10 +17,10 @@ from starlette.background import BackgroundTask
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
+from marimo_studio._delivery.urls import STUDIO_CLIENT_QUERY_PARAM
 from marimo_studio._server.client_identity import parse_studio_client_id
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.prepared_views import PreparedViewRegistry
-from marimo_studio._urls import STUDIO_CLIENT_QUERY_PARAM
 from marimo_studio.errors import PublicationError, PublicationLimitError
 
 _INSTANCE = re.compile(r"[0-9a-f]{64}")

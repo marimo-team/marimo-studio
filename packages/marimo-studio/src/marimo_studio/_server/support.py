@@ -46,6 +46,7 @@ from marimo_studio._server.auth import (
     has_read_access,
 )
 from marimo_studio._server.auth import error_response as auth_error_response
+from marimo_studio._server.control_config_api import control_config_response
 from marimo_studio._server.development.routes import change_events
 from marimo_studio._server.files import file_response
 from marimo_studio._server.headers import NO_STORE
@@ -64,7 +65,11 @@ from marimo_studio._server.presentation.projection_routes import (
 from marimo_studio._server.presentation.query_routes import query_response
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
-from marimo_studio._server.runtime.routes import runtime_config_response
+from marimo_studio._server.runtime.routes import (
+    available_runtime_options,
+    runtime_availability_response,
+    runtime_config_response,
+)
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._server.studio.document import studio_bootstrap_payload
 from marimo_studio._server.studio.editor_capability import (
@@ -88,6 +93,7 @@ from marimo_studio._server.workspace_lifecycle import (
     Unconfigured,
     WorkspaceLifecycle,
 )
+from marimo_studio._server.zero_python_api import zero_python_response
 from marimo_studio._workspace.generation import unconfigured_catalog_generation
 from marimo_studio._workspace.models import StudioWorkspace
 from marimo_studio.errors import MarimoStudioError
@@ -226,10 +232,11 @@ async def support_response(
     if support_path == "/bootstrap" and request.method == "GET":
         if not isinstance(lifecycle, Ready):
             return _workspace_pending_response(lifecycle)
-        return _bootstrap_response(
+        return await _bootstrap_response(
             request,
             context,
             lifecycle.workspace,
+            notebook_scope,
             runtimes,
             session_state,
         )
@@ -439,11 +446,7 @@ async def _bootstrap_response(
     requested = request.query_params.get(ACTIVE_VIEW_QUERY_PARAM)
     selected = requested if requested in studio.views else studio.default_view
     try:
-        (
-            available,
-            source_revisions,
-            presentation_revision,
-        ) = await available_runtime_descriptors(
+        available, _revision = await available_runtime_options(
             context,
             notebook_scope.presentation,
             studio,
@@ -461,7 +464,7 @@ async def _bootstrap_response(
             context.file_key,
             request.query_params.multi_items(),
             context.routing_query,
-            runtimes.descriptors,
+            available,
             client_id,
             native_session_id,
         ),
@@ -539,6 +542,8 @@ async def _view_response(
             notebook_scope.development,
         )
     if route.startswith("zero-python/"):
+        if notebook_scope.publications is None:
+            return Response(status_code=404)
         return await zero_python_response(
             request,
             notebook_scope.publications,
@@ -562,7 +567,6 @@ async def _view_response(
             presentation,
             notebook_scope.clients,
             view_name,
-            services=notebook_scope.runtime_services,
             sessions=session_state,
             attachment=sessions,
             runtimes=runtimes,
@@ -577,7 +581,6 @@ async def _view_response(
                 presentation,
                 notebook_scope.clients,
                 view_name,
-                services=notebook_scope.runtime_services,
                 sessions=session_state,
                 runtimes=runtimes,
             )
