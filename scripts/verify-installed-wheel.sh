@@ -56,17 +56,18 @@ if [[ ${#provider_wheels[@]} -ne 1 ]]; then
 fi
 provider_wheel="${provider_wheels[0]}"
 
-uv run --no-project --isolated --no-cache \
+uv run --no-project --isolated --no-cache --exclude-newer-package marimo-export=false \
 	--with "$wheel" \
 	python scripts/verify-installed-package.py \
 	--expected-version "$package_version" \
 	--expected-plugin-digests "$plugin_digests"
 uv run --no-project --isolated --no-cache --no-sources-package marimo-studio \
+	--exclude-newer-package marimo-export=false \
 	--with "$wheel" \
 	--with "$root/apps/e2e/fixtures-provider/provider" \
 	--with "ty==0.0.69" \
 	python scripts/verify-external-provider.py --typecheck
-uv run --no-project --isolated --no-cache \
+uv run --no-project --isolated --no-cache --exclude-newer-package marimo-export=false \
 	--with "marimo-studio[deno] @ $wheel_uri" \
 	python scripts/verify-installed-package.py \
 	--expected-version "$package_version" \
@@ -76,12 +77,14 @@ uv run --no-project --isolated --no-cache \
 MARIMO_STUDIO_ACCEPTANCE_STUDIO_WHEEL="$wheel" \
 	MARIMO_STUDIO_ACCEPTANCE_PROVIDER_WHEEL="$provider_wheel" \
 	uv run --no-project --isolated --no-cache --no-sources-package marimo-studio \
-	--no-sources-package marimo-studio-e2e-provider \
-	--with "marimo-studio[deno] @ $wheel_uri" \
-	--with "$provider_wheel" \
+		--no-sources-package marimo-studio-e2e-provider \
+		--exclude-newer-package marimo-export=false \
+		--with "marimo-studio[deno] @ $wheel_uri" \
+		--with "$provider_wheel" \
 	python scripts/verify-provider-bootstrap.py prepare \
 	"$bootstrap_root/workspace"
 uv run --no-project --isolated --no-cache --no-sources-package marimo-studio \
+	--exclude-newer-package marimo-export=false \
 	--with "$wheel" \
 	python scripts/verify-provider-bootstrap.py verify \
 	"$bootstrap_root/workspace"

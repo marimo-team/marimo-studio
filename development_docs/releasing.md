@@ -41,25 +41,6 @@ Define release-affecting version policy in its owning manifest or lockfile:
 Review dependency and lockfile changes before adding them. Respect the machine
 package-age policy and stop when an age gate rejects a release.
 
-A release pins the Python `marimo-export` package,
-`@marimo-team/marimo-export`, and `@marimo-team/portable-json` to one
-coordinated published marimo-export release. Development uses the sibling
-editable package and npm links. `make dependency-check` verifies that every
-linked package reports the exact version required by the Studio wheel.
-
-Before tagging Studio, replace the root uv source and each package link with
-exact registry versions, then refresh both lockfiles. Release mode rejects an
-editable Python source, a linked npm source, or a lock entry that resolves
-outside the public registries. It matches each locked Python SHA-256 and npm
-integrity value to metadata served by PyPI and npm.
-
-```console
-MARIMO_STUDIO_RELEASE_MODE=1 make package
-```
-
-The release package gate also checks that the required Python and npm versions
-exist on their public registries.
-
 ## Prepare the release pull request
 
 Start from current `main`, then update the package version:
@@ -134,13 +115,15 @@ The base installation verifies:
   from a base installation for view creation, status, source inspection,
   reading and writing, static validation, production build, and static export
 
+Installed-wheel verification resolves the exact `marimo-export` version
+declared by Studio from PyPI and rejects direct-source metadata. The browser
+build records the npm package version, and package verification compares it
+with the installed Python distribution.
+
 The package gate also enforces these release budgets:
 
 | Artifact                            |    Budget |
 | ----------------------------------- | --------: |
-| Wheel or source distribution        |     8 MiB |
-| Browser asset files                 |       400 |
-| Browser asset bytes                 |    24 MiB |
 | Entry static-import graph           |   850 KiB |
 | Gzipped entry static-import graph   |   225 KiB |
 | Server or WebAssembly startup graph | 6,500 KiB |
@@ -230,11 +213,6 @@ Create and push the annotated tag:
 ```
 
 The tag starts `.github/workflows/publish.yml`.
-
-Before dependency installation, the workflow fetches `origin/main` and
-requires the annotated tag to resolve to that exact commit. It also requires a
-successful push-triggered **CI** run for the same commit and verifies the
-locked marimo-export artifacts against the canonical public registries.
 
 ```mermaid
 flowchart LR

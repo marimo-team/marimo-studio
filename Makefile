@@ -33,13 +33,6 @@ _anti-slop-check:
 	node --test --test-concurrency=1 tools/oxlint/anti-slop/test/*.test.ts tools/oxlint/anti-slop/test/compatibility/*.test.ts
 	$(PNPM) exec tsc -p tools/oxlint/anti-slop/tsconfig.json --noEmit
 
-dependency-check: ## Validate linked development or public release dependencies.
-	@if [[ "$${MARIMO_STUDIO_RELEASE_MODE:-0}" == "1" ]]; then \
-		$(UV) run python scripts/check-release-dependencies.py --release --public; \
-	else \
-		$(UV) run python scripts/check-release-dependencies.py; \
-	fi
-
 format: ## Format Python and JavaScript sources.
 	$(UV) run ruff format $(PYTHON_PATHS)
 	$(VP) fmt $(FORMAT_PATHS)

@@ -45,7 +45,10 @@ export default defineConfig({
   ],
   webServer: {
     command: "node scripts/serve-installed-package.mjs",
-    env: { ...process.env, MARIMO_STUDIO_E2E_WHEEL: installedWheel },
+    env: {
+      ...process.env,
+      MARIMO_STUDIO_E2E_WHEEL: installedWheel,
+    },
     url: installedPackageNetwork.readiness.url,
     reuseExistingServer: false,
     timeout: 240_000,
