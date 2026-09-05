@@ -1,0 +1,48 @@
+name: Find pull request validation
+description: Find a successful pull request workflow run for the merged Git tree.
+
+inputs:
+  workflow:
+    description: Workflow filename to inspect.
+    required: true
+
+outputs:
+  validated:
+    description: Whether the merged Git tree has a successful pull request workflow run.
+    value: ${{ steps.resolve.outputs.validated }}
+
+runs:
+  using: composite
+  steps:
+    - name: Record the tested pull request tree
+      id: tested-tree
+      if: github.event_name == 'pull_request'
+      shell: bash
+      run: |
+        tree="$(git rev-parse 'HEAD^{tree}')"
+        if [[ ! "$tree" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
+          echo "The checked-out Git tree is invalid." >&2
+          exit 1
+        fi
+        path="$RUNNER_TEMP/pr-validation-tree"
+        printf '%s\n' "$tree" > "$path"
+        printf 'path=%s\n' "$path" >> "$GITHUB_OUTPUT"
+
+    - name: Publish the tested pull request tree
+      if: github.event_name == 'pull_request'
+      continue-on-error: true
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: pr-validation-tree
+        path: ${{ steps.tested-tree.outputs.path }}
+        overwrite: true
+        retention-days: 7
+        if-no-files-found: error
+
+    - name: Resolve validation evidence
+      id: resolve
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        VALIDATION_WORKFLOW: ${{ inputs.workflow }}
+      run: "$GITHUB_ACTION_PATH/resolve.sh"

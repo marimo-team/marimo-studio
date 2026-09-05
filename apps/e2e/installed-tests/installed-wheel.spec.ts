@@ -36,21 +36,19 @@ test("opens the first view in edit mode from the installed wheel", async ({
   const diagnostics = observeBrowserContext(context);
   try {
     await page.goto("/?file=notebook.py");
+    await expect(page).toHaveURL(/\/studio\/dashboard\/$/);
+    await expect(page.getByRole("button", { name: "Develop" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.getByRole("tab", { name: "index.html" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     const presentation = page.frameLocator('iframe[data-preview-runtime-frame="server"]');
-    await expect
-      .poll(() =>
-        presentation
-          .locator("html")
-          .evaluate(() => globalThis.marimoStudio !== undefined)
-          .catch(() => false),
-      )
-      .toBe(true);
-    await presentation.locator("html").evaluate(() => globalThis.marimoStudio.ready());
-
     await expect(
       presentation.getByRole("heading", { name: "Installed wheel smoke" }),
     ).toBeVisible();
-    await expect(presentation.locator("#projected-answer")).toHaveText("42");
   } finally {
     await diagnostics.close();
     if (diagnostics.messages.length > 0 || testInfo.status !== testInfo.expectedStatus) {

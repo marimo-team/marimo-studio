@@ -92,6 +92,10 @@ The gates provide different evidence:
 Merge after CI, Browser acceptance, and documentation workflows pass on the
 release commit.
 
+`main` branch protection must require `CI gate`, `Browser acceptance gate`, and
+`Documentation gate`, with the pull request updated against the current base.
+Routine merge actors must follow the same required checks.
+
 ## Validate packaged providers
 
 `make package` builds the wheel, source distribution, and source-rebuilt wheel
@@ -200,6 +204,18 @@ The preflight validates:
 5. The corresponding `vX.Y.Z` tag is available.
 6. Push-triggered CI, Browser acceptance, and documentation passed for the
    exact commit.
+
+Each pull request CI and Browser acceptance run records the Git tree checked out
+for validation. After merge, the main workflows reuse a successful run when its
+recorded tree matches the merged tree and the previous main commit passed the
+same workflow. Missing, expired, ambiguous, failed, or mismatched evidence runs
+the affected jobs again.
+
+Superseded pull request runs are canceled. Every main commit keeps its own CI,
+Browser acceptance, and documentation run so failures remain attributable to an
+exact commit. A documentation run deploys after confirming that its commit is
+still the tip of `main`. Deploy jobs use one ordered queue and confirm the tip
+again immediately before publication.
 
 The command prints the release tag, commit, and all three workflow URLs. The
 publish workflow repeats the exact-commit check before building artifacts.

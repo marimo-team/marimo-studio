@@ -1,20 +1,28 @@
 ci_control: &ci_control
   - ".github/filters.yml"
   - ".github/workflows/ci.yml"
+  - ".github/actions/pr-validation/**"
   - ".github/actions/setup-js/**"
   - ".github/actions/test-python/**"
   - "Makefile"
+  - "scripts/check-workflow-results.sh"
+  - "scripts/check-workflow-results.test.sh"
 
 browser_control: &browser_control
   - ".github/filters.yml"
   - ".github/workflows/e2e.yml"
+  - ".github/actions/pr-validation/**"
   - ".github/actions/setup-js/**"
+  - "scripts/check-workflow-results.sh"
+  - "scripts/check-workflow-results.test.sh"
 
 pages_control: &pages_control
   - ".github/filters.yml"
   - ".github/workflows/pages.yml"
   - ".github/actions/setup-js/**"
   - "Makefile"
+  - "scripts/check-workflow-results.sh"
+  - "scripts/check-workflow-results.test.sh"
 
 python_inputs: &python_inputs
   - *ci_control
@@ -240,8 +248,6 @@ windows_lifecycle:
   - *browser_infra
   - "apps/e2e/fixtures-provider/provider/**"
   - "apps/e2e/tests/forced-interruption.spec.ts"
-  - "apps/e2e/tests/view-authoring.spec.ts"
-  - "apps/e2e/tests/view-cache-performance.spec.ts"
   - "apps/e2e/tests/vanilla-local-sources.spec.ts"
   - "apps/e2e/tests/!(*.spec).ts"
   - "apps/e2e/fixtures/**"

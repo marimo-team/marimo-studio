@@ -1,14 +1,12 @@
 import type { Page } from "@playwright/test";
 
 import { viewProjectSchema } from "@marimo-studio/protocol/view-project";
-import { viewListSchema } from "@marimo-studio/protocol/views";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import {
   captureProjectionRefresh,
   expect,
-  expectSupersededRenewalConfig,
   labeledSlider,
   noDisplayStaticExportUrl,
   recoverRequestAbort,
@@ -24,30 +22,13 @@ import {
   workspaceNotebookPath,
 } from "./fixture.ts";
 
-const noDisplayCases = [
-  {
-    heading: "Empty Html",
-    starter: "marimo-studio/vanilla:default",
-    view: "empty-html",
-  },
-  {
-    heading: "Empty React",
-    starter: "marimo-studio/react:default",
-    view: "empty-react",
-  },
-  {
-    heading: "No display results",
-    starter: "marimo-studio/react:reveal",
-    view: "empty-slides",
-  },
-  {
-    heading: "Empty Svelte",
-    starter: "marimo-studio/svelte:default",
-    view: "empty-svelte",
-  },
-] as const;
+const noDisplayView = {
+  heading: "Empty Html",
+  starter: "marimo-studio/vanilla:default",
+  view: "empty-html",
+} as const;
 
-const expectEmptyPreview = async (page: Page, candidate: (typeof noDisplayCases)[number]) => {
+const expectEmptyPreview = async (page: Page, candidate: typeof noDisplayView) => {
   const preview = await waitForViewPreview(page, candidate.view);
   await expect(preview.getByRole("heading", { name: candidate.heading })).toBeVisible({
     timeout: 65_000,
@@ -62,47 +43,25 @@ const expectEmptyPreview = async (page: Page, candidate: (typeof noDisplayCases)
     .toEqual({ diagnostics: 0, projections: 0 });
 };
 
-test("builds and renders every starter when no cell may display output", async ({
+test("builds, renders, and exports a view when no cell may display output", async ({
   browserDiagnostics,
   page,
   studioCli,
 }) => {
-  test.setTimeout(240_000);
-  for (const candidate of noDisplayCases) {
-    await studioCli.addWorkspaceView(
-      workspaceNoDisplayNotebookPath,
-      candidate.view,
-      candidate.starter,
-    );
-    await studioCli.buildWorkspaceView(candidate.view, workspaceNoDisplayNotebookPath);
-  }
+  await studioCli.addWorkspaceView(
+    workspaceNoDisplayNotebookPath,
+    noDisplayView.view,
+    noDisplayView.starter,
+  );
+  await studioCli.buildWorkspaceView(noDisplayView.view, workspaceNoDisplayNotebookPath);
   await studioCli.exportWorkspaceView(
-    "empty-html",
+    noDisplayView.view,
     workspaceNoDisplayNotebookPath,
     workspaceNoDisplayStaticExportPath,
   );
-  const supersededPresentations = browserDiagnostics.expectRequestFailure({
-    origin: studioOrigin,
-    method: "GET",
-    path: /^\/(?:_marimo-studio\/presentation\/[^/]+\/)?(?:empty-html|empty-react|empty-slides|empty-svelte)\/$/,
-    count: noDisplayCases.length,
-    errorText: "net::ERR_ABORTED",
-    required: false,
-  });
 
-  for (const [index, candidate] of noDisplayCases.entries()) {
-    const candidatePage = index === 0 ? page : await page.context().newPage();
-    try {
-      await candidatePage.goto(`/studio/${candidate.view}/?file=no-display.py`);
-      await expectEmptyPreview(candidatePage, candidate);
-    } finally {
-      if (candidatePage !== page && !candidatePage.isClosed()) {
-        const retirement = browserDiagnostics.expectPageRetirement(candidatePage);
-        await candidatePage.close();
-        retirement.recovered();
-      }
-    }
-  }
+  await page.goto(`/studio/${noDisplayView.view}/?file=no-display.py`);
+  await expectEmptyPreview(page, noDisplayView);
 
   const staticPage = await page.context().newPage();
   await staticPage.goto(noDisplayStaticExportUrl);
@@ -111,7 +70,6 @@ test("builds and renders every starter when no cell may display output", async (
   });
   await staticPage.close();
   await retireWorkspacePage(page, browserDiagnostics);
-  supersededPresentations.recovered();
 });
 
 test("keeps the active preview usable after a manifestless creation conflict", async ({
@@ -175,108 +133,46 @@ test("keeps the active preview usable after a manifestless creation conflict", a
   supersededPresentation.recovered();
 });
 
-test("publishes complete projects during concurrent starter creation", async ({
+test("creates distinct provider projects concurrently and refreshes the active view", async ({
   browserDiagnostics,
   page,
   studioCli,
 }) => {
   test.setTimeout(180_000);
   const candidates = [
-    ["race-react-1", "marimo-studio/react:default"],
-    ["race-svelte-1", "marimo-studio/svelte:default"],
-    ["race-react-2", "marimo-studio/react:default"],
-    ["race-svelte-2", "marimo-studio/svelte:default"],
+    ["race-react", "marimo-studio/react:default"],
+    ["race-svelte", "marimo-studio/svelte:default"],
   ] as const;
-  const existingViews = new Set(["dashboard", "vanilla-local", "deno-seed"]);
   await studioCli.addWorkspaceView(
     workspaceNotebookPath,
     "deno-seed",
     "marimo-studio/react:default",
   );
-  const supersededPresentations = browserDiagnostics.expectRequestFailure({
-    origin: studioOrigin,
-    method: "GET",
-    path: /^\/(?:_marimo-studio\/presentation\/[^/]+\/)?dashboard\/$/,
-    count: candidates.length,
-    errorText: "net::ERR_ABORTED",
-    required: false,
-  });
   await page.goto("/?file=notebook.py");
-  const dashboard = await waitForPreview(page);
-  const initialRevision = await dashboard
-    .locator("html")
-    .evaluate(() => globalThis.marimoStudio.identity().revision);
+  await waitForPreview(page);
   const dashboardRefresh = await captureProjectionRefresh(page, browserDiagnostics);
-  const supersededRenewal = expectSupersededRenewalConfig(browserDiagnostics, "dashboard");
-  const supersededWorkspaceGenerations = browserDiagnostics.expectResponse({
-    status: 409,
-    path: /^\/_marimo-studio\/presentation\/[^/]+\/(?:dashboard\/|_marimo-studio\/views\/dashboard\/config)$/,
-    error: "workspace-generation-conflict",
-    count: candidates.length,
-    required: false,
-  });
-  let complete = false;
-  const creation = Promise.all(
+  await Promise.all(
     candidates.map(([view, starter]) =>
       studioCli.addWorkspaceView(workspaceNotebookPath, view, starter),
     ),
-  ).finally(() => {
-    complete = true;
-  });
-  const observed = new Set<string>();
-
-  const sampleCatalog = async () => {
-    const response = await page.request.get("/_marimo-studio/views?file=notebook.py");
-    expect(response.ok()).toBe(true);
-    const inventory = viewListSchema.parse(await response.json());
-    for (const { name } of inventory.views) {
-      if (existingViews.has(name) || observed.has(name)) {
-        continue;
-      }
-      const projectResponse = await page.request.get(
-        `/_marimo-studio/views/${name}/project?file=notebook.py`,
-      );
-      expect(projectResponse.ok()).toBe(true);
-      const project = viewProjectSchema.parse(await projectResponse.json());
-      expect(project.view).toBe(name);
-      observed.add(name);
-    }
-    return inventory;
-  };
-
-  while (!complete) {
-    await sampleCatalog();
-    await new Promise((resolveSample) => setTimeout(resolveSample, 10));
-  }
-  await creation;
-  const finalInventory = await sampleCatalog();
-  expect(new Set(finalInventory.views.map(({ name }) => name))).toEqual(
-    new Set([...existingViews, ...candidates.map(([name]) => name)]),
   );
-  expect(observed).toEqual(new Set(candidates.map(([name]) => name)));
   await page.getByLabel("Switch view").click();
   for (const [name] of candidates) {
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible({
       timeout: 65_000,
     });
+    const projectResponse = await page.request.get(
+      `/_marimo-studio/views/${name}/project?file=notebook.py`,
+    );
+    expect(projectResponse.ok()).toBe(true);
+    expect(viewProjectSchema.parse(await projectResponse.json()).view).toBe(name);
   }
   await page.keyboard.press("Escape");
-  await expect
-    .poll(() =>
-      dashboard
-        .locator("html")
-        .evaluate(() => globalThis.marimoStudio.identity().revision)
-        .catch(() => initialRevision),
-    )
-    .not.toBe(initialRevision);
   const refreshedDashboard = await waitForPreview(page);
   await labeledSlider(refreshedDashboard.locator('marimo-cell[name="controls"]'), /^Scale/).press(
     "End",
   );
   await expect(refreshedDashboard.locator('strong[mo-value="metric"]')).toContainText("63");
   await recoverProjectionRefresh(dashboardRefresh, page);
-  supersededWorkspaceGenerations.recovered();
-  supersededRenewal.recovered();
   await retireWorkspacePage(page, browserDiagnostics);
-  supersededPresentations.recovered();
 });

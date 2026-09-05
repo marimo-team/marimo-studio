@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -103,6 +103,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      publish: ${{ steps.latest.outputs.publish }}
     env:
       MARIMO_EXPORT_REPOSITORY: ${{ github.workspace }}/.cache/marimo-export-repository
     permissions:
@@ -145,25 +147,101 @@ jobs:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
         run: make docs-build
 
-      - name: Upload GitHub Pages artifact
+      - name: Confirm this commit is still the tip of main
+        id: latest
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          latest_sha="$(git ls-remote "https://github.com/$REPOSITORY.git" refs/heads/main | awk '{print $1}')"
+          if [[ ! "$latest_sha" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
+            echo "The current main commit could not be resolved." >&2
+            exit 1
+          fi
+          if [[ "$latest_sha" == "$COMMIT_SHA" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping deployment because main advanced to $latest_sha."
+          fi
+
+      - name: Upload GitHub Pages artifact
+        if: steps.latest.outputs.publish == 'true'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           include-hidden-files: true
           path: apps/docs/.vitepress/dist
 
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: needs.build.outputs.publish == 'true'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: marimo-studio-pages-deploy
+      cancel-in-progress: false
+      queue: max
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     permissions:
+      contents: read
       pages: write
       id-token: write
     steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Confirm this commit is still the tip of main
+        id: latest
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          latest_sha="$(git ls-remote "https://github.com/$REPOSITORY.git" refs/heads/main | awk '{print $1}')"
+          if [[ ! "$latest_sha" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
+            echo "The current main commit could not be resolved." >&2
+            exit 1
+          fi
+          if [[ "$latest_sha" == "$COMMIT_SHA" ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping deployment because main advanced to $latest_sha."
+          fi
+
       - name: Deploy to GitHub Pages
+        if: steps.latest.outputs.deploy == 'true'
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+
+  gate:
+    name: Documentation gate
+    if: always()
+    needs: [changes, documentation, build, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Confirm documentation results
+        env:
+          BUILD_REQUIRED: ${{ (github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true') && needs.documentation.result == 'success' }}
+          BUILD: ${{ needs.build.result }}
+          CHANGES: ${{ needs.changes.result }}
+          DEPLOY_REQUIRED: ${{ needs.build.outputs.publish == 'true' }}
+          DEPLOY: ${{ needs.deploy.result }}
+          DOCUMENTATION_REQUIRED: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.documentation == 'true' || needs.changes.outputs.pages == 'true' }}
+          DOCUMENTATION: ${{ needs.documentation.result }}
+        run: |
+          scripts/check-workflow-results.sh \
+            Changes true "$CHANGES" \
+            Documentation "$DOCUMENTATION_REQUIRED" "$DOCUMENTATION" \
+            Build "$BUILD_REQUIRED" "$BUILD" \
+            Deploy "$DEPLOY_REQUIRED" "$DEPLOY"

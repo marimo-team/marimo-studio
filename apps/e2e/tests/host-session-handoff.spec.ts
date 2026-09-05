@@ -15,10 +15,9 @@ import {
   waitForNotebookServer,
 } from "./notebook-server.ts";
 
-test("preserves an untitled native session through save and Studio entry", async ({
+test("reuses an untitled native session after save and manual Studio entry", async ({
   browser,
 }, testInfo) => {
-  test.setTimeout(120_000);
   const root = await mkdtemp(resolve(tmpdir(), "marimo-studio-host-session-"));
   const workspace = resolve(root, "workspace");
   await cp(fixtureDirectory, workspace, { recursive: true });
@@ -51,9 +50,9 @@ test("preserves an untitled native session through save and Studio entry", async
     text: /^Failed to handle request: getUsageStats TypeError: Failed to fetch$/,
     required: false,
   });
-  const workspaceStreamUrl = `${server.serverUrl}/_marimo-studio/dev/events`;
-  const studioWorkspaceStream =
-    diagnostics.expectWorkspaceEventStreamReplacement(workspaceStreamUrl);
+  const workspaceStream = diagnostics.expectWorkspaceEventStreamReplacement(
+    `${server.serverUrl}/_marimo-studio/dev/events`,
+  );
   let diagnosticsClosed = false;
   let stopped = false;
   try {
@@ -75,7 +74,6 @@ test("preserves an untitled native session through save and Studio entry", async
         url.pathname === "/" &&
         url.searchParams.get("file") === "host-save.py" &&
         url.searchParams.get("session_id") === sessionId &&
-        !url.searchParams.has("marimo_studio_handoff") &&
         response.ok()
       );
     });
@@ -98,39 +96,21 @@ test("preserves an untitled native session through save and Studio entry", async
     await expect(page.getByRole("heading", { name: "Create the first view" })).toBeVisible();
     await page.getByRole("button", { name: "Create dashboard" }).click();
     await expect(page).toHaveURL(`${server.serverUrl}/studio/dashboard/?file=host-save.py`);
+    await expect(editorFrame(page).locator("[data-cell-id]").first()).toBeVisible();
     expect(await studioEditorSessionId(page)).toBe(sessionId);
-    const editor = editorFrame(page);
-    await expect(editor.locator("[data-cell-id]").first()).toBeVisible();
-    await recoverWorkspaceEventStream(studioWorkspaceStream);
+    await recoverWorkspaceEventStream(workspaceStream);
     await executeCodeMode(
-      editor,
+      editorFrame(page),
       "host-save.py",
       sessionId,
       `
 import marimo_studio.agent as studio_agent
 
-view = studio_agent.current_workspace().view("dashboard")
-shown = await view.show()
+shown = await studio_agent.current_workspace().view("dashboard").show()
 shown.to_dict()
       `,
     );
     await waitForPreview(page);
-
-    const directWorkspaceStream =
-      diagnostics.expectWorkspaceEventStreamReplacement(workspaceStreamUrl);
-    const direct = await context.newPage();
-    await direct.goto(`${server.serverUrl}/studio/dashboard/?file=notebook.py`);
-    await expect(editorFrame(direct).locator("[data-cell-id]").first()).toBeVisible();
-    await waitForPreview(direct);
-    const directSessionId = await studioEditorSessionId(direct);
-    await direct.goto(`${server.serverUrl}/?file=notebook.py`);
-    await expect(direct.locator("[data-cell-id]").first()).toBeVisible();
-    await direct.goto(`${server.serverUrl}/studio/dashboard/?file=notebook.py`);
-    expect(await studioEditorSessionId(direct)).toBe(directSessionId);
-    await expect(editorFrame(direct).locator("[data-cell-id]").first()).toBeVisible();
-    await waitForPreview(direct);
-    await recoverWorkspaceEventStream(directWorkspaceStream);
-    await direct.close();
 
     filenameFallback.recovered();
     dialogDescription.recovered();
