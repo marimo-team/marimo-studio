@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#efefec" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -43,6 +47,8 @@
     }
     a {
       color: inherit;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
     #app-shell {
       width: min(92rem, calc(100% - 2rem));
@@ -62,6 +68,9 @@
       text-transform: uppercase;
     }
     nav a {
+      display: inline-flex;
+      min-height: 2.75rem;
+      align-items: center;
       text-decoration: none;
     }
     nav a:hover,
@@ -296,15 +305,17 @@
         opacity: 0.85;
       }
     }
-    @media (max-width: 800px) {
+    @media (max-width: 52rem) {
       .hero {
+        min-height: 0;
         grid-template-columns: 1fr;
-        padding: 5rem 0;
+        gap: 1.5rem;
+        padding: 2.5rem 0 3rem;
       }
       .story {
         --mobile-visual-height: clamp(18rem, 52vh, 30rem);
         display: block;
-        padding: 3rem 0 5rem;
+        padding: 1.5rem 0 5rem;
       }
       .visual {
         top: 0;
@@ -334,6 +345,12 @@
       .step h2 {
         font-size: clamp(2rem, 10vw, 3rem);
       }
+
+      .visual-footer a {
+        display: inline-flex;
+        min-height: 2.75rem;
+        align-items: center;
+      }
     }
     @media (prefers-reduced-motion: reduce) {
       html {
@@ -362,12 +379,17 @@
       </nav>
       <header class="hero">
         <div>
-          <p class="eyebrow">USGS · Magnitude 2.5+ · Seven days</p>
+          <p class="eyebrow">
+            USGS · Magnitude
+            <span mo-value="weekly_summary.catalog_minimum_magnitude"></span>+
+            · <span mo-value="weekly_summary.days"></span> days
+          </p>
           <h1>One week in motion</h1>
         </div>
         <p class="hero-copy">
           The weekly record covers global activity, high-magnitude events, felt
-          reports, and two tsunami flags.
+          reports, and
+          <span mo-value="weekly_summary.tsunami_flags"></span> tsunami flags.
         </p>
       </header>
       <section class="story" aria-label="Earthquake story">
@@ -405,7 +427,10 @@
           >
             <div class="step-copy">
               <span class="step-number">01 / ALL EVENTS</span>
-              <h2>352 events in one week</h2>
+              <h2>
+                <span mo-value="weekly_summary.source_events"></span> events in
+                one week
+              </h2>
               <p>
                 The weekly feed records hundreds of earthquakes across every
                 major seismic region. Larger circles mark higher magnitudes.
@@ -435,7 +460,10 @@
           <article class="step" data-step="3">
             <div class="step-copy">
               <span class="step-number">04 / TSUNAMI FLAGS</span>
-              <h2>Two tsunami flags</h2>
+              <h2>
+                <span mo-value="weekly_summary.tsunami_flags"></span> tsunami
+                flags
+              </h2>
               <p>
                 These events require coastal response and closer verification of
                 the USGS record.

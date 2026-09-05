@@ -1,5 +1,8 @@
 /// <reference path="./marimo-studio.d.ts" />
 
+// @deno-types="npm:@types/react@19.2.10"
+import { useState } from "react";
+
 import { type ErrorCase, ErrorEvidence } from "./components/ErrorEvidence.tsx";
 import {
   formatRate,
@@ -7,7 +10,6 @@ import {
   type ThresholdMetric,
 } from "./components/ThresholdCurve.tsx";
 import { useMarimoValue } from "./lib/use-marimo-value.ts";
-import { useState } from "react";
 
 const Metric = ({ label, value }: { label: string; value?: string }) => (
   <article className="metric">
@@ -22,13 +24,21 @@ type ScopeSummary = {
   readonly occupied: number;
 };
 
+type EvidenceMetric = ThresholdMetric & {
+  readonly errors: readonly ErrorCase[];
+};
+
 type OccupancyAnalysis = {
   readonly summary: ScopeSummary;
   readonly model: {
+    readonly co2_weight: number;
     readonly default_threshold: number;
-    readonly evidence: readonly (ThresholdMetric & {
-      readonly errors: readonly ErrorCase[];
-    })[];
+    readonly light_weight: number;
+    readonly normalization_quantile: number;
+    readonly threshold_maximum: number;
+    readonly threshold_minimum: number;
+    readonly threshold_step: number;
+    readonly evidence: readonly EvidenceMetric[];
     readonly normalization: {
       readonly light_min: number;
       readonly light_max: number;
@@ -38,27 +48,47 @@ type OccupancyAnalysis = {
   };
 };
 
+const closestThreshold = (
+  metrics: readonly EvidenceMetric[],
+  requested: number,
+): EvidenceMetric | undefined =>
+  metrics.reduce<EvidenceMetric | undefined>((closest, metric) =>
+    closest === undefined ||
+      Math.abs(metric.threshold - requested) <
+        Math.abs(closest.threshold - requested)
+      ? metric
+      : closest, undefined);
+
 const ThresholdControl = ({
+  maximum,
+  minimum,
+  step,
   value,
   onChange,
 }: {
+  maximum: number;
+  minimum: number;
+  step: number;
   value: number;
   onChange: (threshold: number) => void;
 }) => (
-  <label className="threshold-control">
+  <div className="threshold-control">
     <span>
-      <strong>Occupancy threshold</strong>
-      <output>{value.toFixed(2)}</output>
+      <label htmlFor="occupancy-threshold">
+        <strong>Occupancy threshold</strong>
+      </label>
+      <output htmlFor="occupancy-threshold">{value.toFixed(2)}</output>
     </span>
     <input
+      id="occupancy-threshold"
       type="range"
-      min="0.1"
-      max="0.9"
-      step="0.05"
+      min={minimum}
+      max={maximum}
+      step={step}
       value={value}
       onChange={(event) => onChange(event.currentTarget.valueAsNumber)}
     />
-  </label>
+  </div>
 );
 
 const ConfusionCounts = ({ summary }: { summary?: ThresholdMetric }) => (
@@ -111,13 +141,14 @@ const ConfusionCounts = ({ summary }: { summary?: ThresholdMetric }) => (
 
 export const App = () => {
   const analysis = useMarimoValue<OccupancyAnalysis>("occupancy_analysis");
-  const [threshold, setThreshold] = useState(0.5);
+  const [thresholdOverride, setThresholdOverride] = useState<number>();
   const scope = analysis.value?.summary;
   const modelData = analysis.value?.model;
   const curve = modelData?.evidence ?? [];
-  const model = curve.find((row) =>
-    Math.abs(row.threshold - threshold) < 0.001
-  );
+  const requestedThreshold = thresholdOverride ?? modelData?.default_threshold ??
+    curve[0]?.threshold ?? 0;
+  const model = closestThreshold(curve, requestedThreshold);
+  const threshold = model?.threshold ?? requestedThreshold;
   const errorRows = model?.errors ?? [];
   const unavailable = analysis.error;
   const loading = !unavailable && analysis.value === undefined;
@@ -151,8 +182,12 @@ export const App = () => {
             <h1>Threshold behavior and training errors</h1>
           </div>
           <p className="method-note">
-            Each scope uses its own light and CO₂ normalization. The score
-            weights normalized light at 70% and normalized CO₂ at 30%.
+            Each scope uses its own light and CO₂ normalization. The score weights
+            normalized light at {modelData
+              ? `${(modelData.light_weight * 100).toFixed(0)}%`
+              : "…"} and normalized CO₂ at {modelData
+                ? `${(modelData.co2_weight * 100).toFixed(0)}%`
+                : "…"}.
           </p>
         </header>
 
@@ -178,7 +213,13 @@ export const App = () => {
           </div>
           <div className="control-strip-controls">
             <marimo-cell name="analysis_scope_control" />
-            <ThresholdControl value={threshold} onChange={setThreshold} />
+            <ThresholdControl
+              maximum={modelData?.threshold_maximum ?? threshold}
+              minimum={modelData?.threshold_minimum ?? threshold}
+              step={modelData?.threshold_step ?? 1}
+              value={threshold}
+              onChange={setThresholdOverride}
+            />
           </div>
         </section>
 

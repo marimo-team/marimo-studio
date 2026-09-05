@@ -1,4 +1,5 @@
 import { Slide } from "@revealjs/react";
+// @deno-types="npm:@types/react@19.2.10"
 import { useState } from "react";
 import {
   type BriefingModel,
@@ -52,7 +53,10 @@ export const CoverSlide = ({ model }: { model: BriefingModel }) => (
         </ol>
       </div>
       <div className="cover-atlas">
-        <EventAtlas events={model.events} />
+        <EventAtlas
+          events={model.events}
+          minimumMagnitude={model.analysis?.weekly.catalog_minimum_magnitude ?? 0}
+        />
         <dl className="cover-readout" aria-label="Weekly catalog summary">
           <div>
             <dt>Source records</dt>
@@ -70,7 +74,7 @@ export const CoverSlide = ({ model }: { model: BriefingModel }) => (
           </div>
           <div>
             <dt>Time span</dt>
-            <dd>7 days</dd>
+            <dd>{model.analysis?.weekly.days ?? "…"} days</dd>
           </div>
         </dl>
       </div>
@@ -83,6 +87,11 @@ export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
   const belowThreshold = weekly
     ? weekly.source_events - weekly.qualified_events
     : 0;
+  const belowThresholdEvent = weekly
+    ? model.events
+      .filter((event) => event.magnitude < weekly.catalog_minimum_magnitude)
+      .toSorted((left, right) => right.magnitude - left.magnitude)[0]
+    : undefined;
 
   return (
     <Slide
@@ -112,7 +121,10 @@ export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
               <strong>
                 {weekly ? integer.format(weekly.qualified_events) : "…"}
               </strong>
-              <p>records satisfy the computed M2.5+ threshold</p>
+              <p>
+                records satisfy the computed M{weekly?.catalog_minimum_magnitude.toFixed(1) ??
+                  "…"}+ threshold
+              </p>
             </article>
             <article
               className="catalog-step catalog-step-accent fragment"
@@ -123,9 +135,9 @@ export const CatalogSlide = ({ model }: { model: BriefingModel }) => {
               <p>one bounded observation window for linked comparisons</p>
             </article>
             <p className="catalog-footnote fragment" data-fragment-index="1">
-              {belowThreshold === 1
-                ? "One stored value is M2.45, which rounds to the feed’s published M2.5 threshold."
-                : `${belowThreshold} source records sit below the numerical M2.5 cut.`}
+              {belowThreshold === 1 && belowThresholdEvent
+                ? `One stored value is M${belowThresholdEvent.magnitude.toFixed(2)}, which rounds to the feed’s published M${weekly?.catalog_minimum_magnitude.toFixed(1)} threshold.`
+                : `${belowThreshold} source records sit below the numerical M${weekly?.catalog_minimum_magnitude.toFixed(1) ?? "…"} cut.`}
             </p>
           </div>
 
@@ -205,6 +217,7 @@ export const MagnitudeSlide = ({ model }: { model: BriefingModel }) => {
   const scaling = magnitudeScalingAt(comparisons, reference);
   const minimum = comparisons[0]?.reference_magnitude ?? 2.5;
   const maximum = comparisons.at(-1)?.reference_magnitude ?? 7;
+  const step = model.analysis?.weekly.magnitude_step ?? 0.1;
 
   return (
     <Slide>
@@ -225,19 +238,21 @@ export const MagnitudeSlide = ({ model }: { model: BriefingModel }) => {
         <div className="magnitude-layout">
           <div className="notebook-lab">
             <div className="lab-heading">
-              <span>Reference magnitude</span>
+              <label htmlFor="comparison-magnitude">Reference magnitude</label>
               <small>Choose a comparison</small>
             </div>
-            <label className="lesson-range">
-              <output>M{scaling?.reference_magnitude.toFixed(1) ?? "…"}</output>
+            <div className="lesson-range">
+              <output htmlFor="comparison-magnitude">
+                M{scaling?.reference_magnitude.toFixed(1) ?? "…"}
+              </output>
               <input
-                aria-label="Comparison magnitude"
+                id="comparison-magnitude"
                 max={maximum}
                 min={minimum}
                 onChange={(event) =>
                   setReference(Number(event.currentTarget.value))}
                 onKeyDown={(event) => event.stopPropagation()}
-                step={0.1}
+                step={step}
                 type="range"
                 value={reference}
               />
@@ -245,7 +260,7 @@ export const MagnitudeSlide = ({ model }: { model: BriefingModel }) => {
                 <span>M{minimum.toFixed(1)}</span>
                 <span>M{maximum.toFixed(1)}</span>
               </span>
-            </label>
+            </div>
             <div
               className="lesson-equations"
               aria-label="Magnitude scale equations"
@@ -299,6 +314,7 @@ export const FrequencySlide = ({ model }: { model: BriefingModel }) => {
   const selected = frequencyPointAt(curve, magnitude);
   const minimum = fit?.fit_minimum ?? 3;
   const maximum = fit?.fit_maximum ?? 6;
+  const step = model.analysis?.weekly.magnitude_step ?? 0.1;
 
   return (
     <Slide>
@@ -325,19 +341,23 @@ export const FrequencySlide = ({ model }: { model: BriefingModel }) => {
           <aside className="frequency-notes">
             <div className="frequency-control-panel">
               <div className="lab-heading">
-                <span>Choose a magnitude cut</span>
+                <label htmlFor="frequency-threshold">
+                  Choose a magnitude cut
+                </label>
                 <small>Explore the fitted range</small>
               </div>
-              <label className="lesson-range lesson-range-compact">
-                <output>M{selected?.magnitude.toFixed(1) ?? "…"}</output>
+              <div className="lesson-range lesson-range-compact">
+                <output htmlFor="frequency-threshold">
+                  M{selected?.magnitude.toFixed(1) ?? "…"}
+                </output>
                 <input
-                  aria-label="Magnitude threshold"
+                  id="frequency-threshold"
                   max={maximum}
                   min={minimum}
                   onChange={(event) =>
                     setMagnitude(Number(event.currentTarget.value))}
                   onKeyDown={(event) => event.stopPropagation()}
-                  step={0.1}
+                  step={step}
                   type="range"
                   value={magnitude}
                 />
@@ -345,7 +365,7 @@ export const FrequencySlide = ({ model }: { model: BriefingModel }) => {
                   <span>M{minimum.toFixed(1)}</span>
                   <span>M{maximum.toFixed(1)}</span>
                 </span>
-              </label>
+              </div>
               <div className="frequency-cut-summary" aria-live="polite">
                 <span>
                   M{selected?.magnitude.toFixed(1) ?? "…"} and above
@@ -396,7 +416,9 @@ export const FrequencySlide = ({ model }: { model: BriefingModel }) => {
 };
 
 export const SelectionSlide = ({ model }: { model: BriefingModel }) => {
-  const [minimumMagnitude, setMinimumMagnitude] = useState(2.5);
+  const catalogMinimum = model.analysis?.weekly.catalog_minimum_magnitude ?? 0;
+  const magnitudeStep = model.analysis?.weekly.magnitude_step ?? 0.1;
+  const [minimumMagnitude, setMinimumMagnitude] = useState(catalogMinimum);
   const [status, setStatus] = useState("All statuses");
   const selection = model.analysis
     ? selectCatalog(model.analysis.events, minimumMagnitude, status)
@@ -407,7 +429,7 @@ export const SelectionSlide = ({ model }: { model: BriefingModel }) => {
   const maximumMagnitude = model.analysis?.weekly.maximum_magnitude ?? 7;
   const statuses = [
     "All statuses",
-    ...new Set(model.events.map((event) => event.status).sort()),
+    ...new Set(model.events.map((event) => event.status).toSorted()),
   ];
 
   return (
@@ -428,27 +450,29 @@ export const SelectionSlide = ({ model }: { model: BriefingModel }) => {
         <div className="selection-layout">
           <aside className="selection-controls">
             <div className="lab-heading">
-              <span>Define the population</span>
+              <label htmlFor="selection-magnitude">Define the population</label>
               <small>Adjust the threshold</small>
             </div>
-            <label className="lesson-range lesson-range-compact">
-              <output>M{minimumMagnitude.toFixed(1)}</output>
+            <div className="lesson-range lesson-range-compact">
+              <output htmlFor="selection-magnitude">
+                M{minimumMagnitude.toFixed(1)}
+              </output>
               <input
-                aria-label="Minimum magnitude"
+                id="selection-magnitude"
                 max={maximumMagnitude}
-                min={2.5}
+                min={catalogMinimum}
                 onChange={(event) =>
                   setMinimumMagnitude(Number(event.currentTarget.value))}
                 onKeyDown={(event) => event.stopPropagation()}
-                step={0.1}
+                step={magnitudeStep}
                 type="range"
                 value={minimumMagnitude}
               />
               <span className="lesson-range-bounds" aria-hidden="true">
-                <span>M2.5</span>
+                <span>M{catalogMinimum.toFixed(1)}</span>
                 <span>M{maximumMagnitude.toFixed(1)}</span>
               </span>
-            </label>
+            </div>
             <label className="lesson-select">
               <span>Review status</span>
               <select
@@ -494,6 +518,7 @@ export const SelectionSlide = ({ model }: { model: BriefingModel }) => {
           <div className="selection-map">
             <EventAtlas
               events={selection?.events ?? model.events}
+              minimumMagnitude={catalogMinimum}
               variant="selection"
             />
           </div>

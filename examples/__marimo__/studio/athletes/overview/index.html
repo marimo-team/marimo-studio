@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0a0a0a" />
     <title>Rio 2016 athlete report</title>
     <style>
     :root {
@@ -31,6 +35,13 @@
 
     a {
       color: inherit;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    a:focus-visible {
+      outline: 3px solid var(--volt);
+      outline-offset: 4px;
     }
 
     #app-shell {
@@ -58,6 +69,9 @@
     }
 
     nav a {
+      display: inline-flex;
+      min-height: 2.75rem;
+      align-items: center;
       text-decoration: none;
     }
 
@@ -479,33 +493,59 @@
     }
 
     .roster-table {
-      min-height: 28rem;
-      margin-top: 2rem;
+      margin-top: 1rem;
       overflow-x: auto;
+      border-block: 1px solid #d8d5cb;
+      overscroll-behavior-inline: contain;
+      -webkit-overflow-scrolling: touch;
     }
 
     .roster-table table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.9rem;
+      font-size: 0.86rem;
+      table-layout: fixed;
     }
 
     .roster-table th,
     .roster-table td {
-      padding: 0.7rem 0.8rem;
+      padding: 0.62rem 0.7rem;
       border-bottom: 1px solid #d8d5cb;
       text-align: left;
       white-space: nowrap;
     }
 
+    .roster-table tr:last-child td {
+      border-bottom: 0;
+    }
+
     .roster-table th {
-      position: sticky;
-      top: 0;
       background: var(--surface);
       font-family: var(--display-font);
-      font-size: 0.75rem;
-      letter-spacing: 0.08em;
+      font-size: 0.68rem;
+      letter-spacing: 0.07em;
       text-transform: uppercase;
+    }
+
+    .roster-table :is(th, td):nth-child(1) {
+      width: 41%;
+    }
+
+    .roster-table :is(th, td):nth-child(2) {
+      width: 17%;
+    }
+
+    .roster-table :is(th, td):nth-child(3) {
+      width: 24%;
+    }
+
+    .roster-table :is(th, td):nth-child(4) {
+      width: 18%;
+    }
+
+    .roster-table td {
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     :where([mo-value]):is(:not([data-state]), [data-state="connecting"], [data-state="loading"]):empty::before,
@@ -612,24 +652,67 @@
 
     @media (max-width: 460px) {
       nav {
-        align-items: start;
-        flex-direction: column;
-        gap: 0.7rem;
+        min-height: 3.25rem;
+        align-items: center;
+        padding-block: 0.25rem;
       }
 
-      .metrics {
-        grid-template-columns: 1fr;
+      nav > span {
+        display: none;
       }
 
-      .metric,
-      .metric:nth-child(2) {
-        border-top: 0;
-        border-right: 0;
-        border-bottom: 2px solid var(--ink);
+      nav div {
+        width: 100%;
+        gap: 0.5rem;
+        justify-content: space-between;
       }
 
-      .metric:last-child {
-        border-bottom: 0;
+      .hero {
+        min-height: 24rem;
+        gap: 1.5rem;
+        padding: 2rem 1rem;
+      }
+
+      .hero-note p {
+        margin-top: 0.9rem;
+      }
+
+      .content {
+        gap: 2rem;
+        padding: 2.5rem 1rem;
+      }
+
+      .control-frame {
+        margin-top: 1rem;
+      }
+
+      .roster-table {
+        margin-top: 1rem;
+      }
+
+      .roster-table table {
+        font-size: 0.78rem;
+      }
+
+      .roster-table th,
+      .roster-table td {
+        padding: 0.55rem 0.45rem;
+      }
+
+      .controls h2,
+      .table-panel h2,
+      .ranking-panel h2 {
+        max-width: none;
+        font-size: 2.25rem;
+        white-space: nowrap;
+      }
+
+      .metric {
+        padding: 0.9rem 1rem 1rem;
+      }
+
+      .metric strong {
+        font-size: 2.55rem;
       }
 
       footer {
@@ -668,10 +751,11 @@
           <h1>The athlete index.</h1>
         </div>
         <div class="hero-note">
-          <strong>11,538 athletes. 28 sports.</strong>
-          <p>
-            Athletics had the largest field, followed by aquatics and football.
-          </p>
+          <strong
+            ><span mo-value="games_summary.athletes"></span> athletes.
+            <span mo-value="games_summary.sports"></span> sports.</strong
+          >
+          <p id="leading-sports-copy">Loading participation leaders.</p>
         </div>
       </header>
 
@@ -759,40 +843,77 @@
       </section>
 
       <footer>
-        <strong>11,538 ways to compete</strong>
+        <strong
+          ><span mo-value="games_summary.athletes"></span> ways to
+          compete</strong
+        >
         <span>
           Source:
-          <a href="https://datahub.io/core/rio2016">Rio 2016 athlete data</a>
+          <a
+            href="https://datahub.io/core/rio2016"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Rio 2016 athlete data</a
+          >
           ·
-          <a href="https://opendatacommons.org/licenses/pddl/1-0/"
+          <a
+            href="https://opendatacommons.org/licenses/pddl/1-0/"
+            target="_blank"
+            rel="noopener noreferrer"
             >ODC-PDDL 1.0</a
           >
         </span>
       </footer>
+      <span
+        id="leading-sports-data"
+        hidden
+        aria-hidden="true"
+        mo-value="games_summary.leading_sports"
+      ></span>
     </main>
     <script>
     const sportsSource = document.querySelector("#top-sports-data");
     const sportsChart = document.querySelector("#sports-chart");
+    const leadingSportsSource = document.querySelector("#leading-sports-data");
+    const leadingSportsCopy = document.querySelector("#leading-sports-copy");
     const rosterSource = document.querySelector("#roster-data");
     const rosterTable = document.querySelector("#roster-table");
     const countFormat = new Intl.NumberFormat("en-US");
+    const listFormat = new Intl.ListFormat("en-US", {
+      style: "long",
+      type: "conjunction",
+    });
     const chartNode = (tag, className, text) => {
       const node = document.createElement(tag);
       if (className) node.className = className;
       if (text !== undefined) node.textContent = text;
       return node;
     };
+    const renderLeadingSports = (value) => {
+      const leadingSports = Array.isArray(value)
+        ? value.filter((sport) => typeof sport === "string").slice(0, 3)
+        : [];
+      const [leader, ...followers] = leadingSports;
+      if (!leader) {
+        leadingSportsCopy.textContent = "Participation leaders are unavailable.";
+        return;
+      }
+      const leaderLabel = leader.charAt(0).toUpperCase() + leader.slice(1);
+      leadingSportsCopy.textContent = followers.length
+        ? `${leaderLabel} had the largest field, followed by ${
+          listFormat.format(followers)
+        }.`
+        : `${leaderLabel} had the largest field.`;
+    };
     const renderRoster = (value) => {
-      const rows = typeof value?.toArray === "function" ? value.toArray() : [];
+      const rows = typeof value?.toArray === "function"
+        ? value.toArray().slice(0, 8)
+        : [];
       const columns = [
         ["name", "Athlete"],
         ["nationality", "Nation"],
         ["sport", "Sport"],
-        ["sex", "Sex"],
-        ["age", "Age"],
-        ["gold", "Gold"],
-        ["silver", "Silver"],
-        ["bronze", "Bronze"],
+        ["medal_awards", "Medals"],
       ];
       const table = chartNode("table");
       const head = chartNode("thead");
@@ -897,6 +1018,15 @@
     });
     if (sportsSource.marimoValue !== undefined) {
       renderSportsChart(sportsSource.marimoValue);
+    }
+    leadingSportsSource.addEventListener("marimo-value-updated", (event) => {
+      renderLeadingSports(event.detail.value);
+    });
+    leadingSportsSource.addEventListener("marimo-value-error", () => {
+      renderLeadingSports(undefined);
+    });
+    if (leadingSportsSource.marimoValue !== undefined) {
+      renderLeadingSports(leadingSportsSource.marimoValue);
     }
     rosterSource.addEventListener("marimo-value-updated", (event) => {
       renderRoster(event.detail.value);

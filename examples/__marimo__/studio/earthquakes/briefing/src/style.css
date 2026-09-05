@@ -91,8 +91,13 @@ textarea {
   overflow: hidden;
 }
 
-.reveal .slides > section:focus {
+.reveal .slides > section:focus:not(:focus-visible) {
   outline: none;
+}
+
+.reveal .slides > section:focus-visible {
+  outline: 3px solid var(--cobalt);
+  outline-offset: -3px;
 }
 
 .reveal .slides section,
@@ -1334,6 +1339,242 @@ textarea {
   }
   50% {
     opacity: 0.9;
+  }
+}
+
+@media (max-width: 56rem) and (orientation: portrait) {
+  .briefing-reader {
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    background: #e8e7e1;
+    overscroll-behavior-y: contain;
+    scroll-padding-top: calc(3rem + env(safe-area-inset-top));
+    scroll-snap-type: y proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .reader-header {
+    position: sticky;
+    z-index: 10;
+    top: 0;
+    display: flex;
+    min-height: calc(3rem + env(safe-area-inset-top));
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: env(safe-area-inset-top) 0.5rem 0;
+    border-bottom: 1px solid var(--line-dark);
+    background: rgb(232 231 225 / 94%);
+    color: var(--ink-soft);
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .reader-header span {
+    color: var(--muted);
+    font-size: 0.6rem;
+    text-align: right;
+  }
+
+  .briefing-reader > section {
+    display: block;
+    min-height: calc(100svh - 3rem - env(safe-area-inset-top));
+    padding: 0.75rem 0;
+    scroll-margin-top: calc(3rem + env(safe-area-inset-top));
+    scroll-snap-align: start;
+  }
+
+  .briefing-reader .briefing-slide {
+    width: 100%;
+    height: auto;
+    min-height: calc(100svh - 4.5rem - env(safe-area-inset-top));
+    gap: 1rem;
+    padding: 1.5rem 1.25rem 2rem;
+    overflow: visible;
+  }
+
+  .briefing-reader .briefing-slide h1 {
+    font-size: clamp(2.8rem, 13vw, 4rem);
+  }
+
+  .briefing-reader .briefing-slide h2 {
+    max-width: 15ch;
+    font-size: clamp(2.1rem, 9.5vw, 3.2rem);
+  }
+
+  .briefing-reader .briefing-slide h3 {
+    font-size: 1.35rem;
+  }
+
+  .briefing-reader .slide-intro,
+  .briefing-reader .deck-lede,
+  .briefing-reader .cover .deck-lede {
+    font-size: 1rem;
+  }
+
+  .briefing-reader :is(
+      .cover,
+      .slide-header-split,
+      .catalog-layout,
+      .magnitude-layout,
+      .frequency-layout,
+      .selection-layout,
+      .impact-layout
+    ) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .briefing-reader .cover {
+    grid-template-rows: auto;
+    align-content: start;
+  }
+
+  .briefing-reader .cover-copy,
+  .briefing-reader .cover-atlas {
+    align-content: start;
+    justify-content: start;
+  }
+
+  .briefing-reader .cover-readout > div {
+    padding-right: 0.45rem;
+  }
+
+  .briefing-reader .cover-readout dd {
+    font-size: 2rem;
+  }
+
+  .briefing-reader .cover-questions {
+    font-size: 0.9rem;
+  }
+
+  .briefing-reader .catalog-layout,
+  .briefing-reader .magnitude-layout,
+  .briefing-reader .frequency-layout,
+  .briefing-reader .selection-layout,
+  .briefing-reader .impact-layout {
+    flex: 0 0 auto;
+    gap: 1.25rem;
+  }
+
+  .briefing-reader .catalog-tempo-card,
+  .briefing-reader .notebook-lab,
+  .briefing-reader .selection-controls {
+    padding: 1rem;
+  }
+
+  .briefing-reader .activity-chart,
+  .briefing-reader .activity-chart-compact {
+    min-height: 18rem;
+  }
+
+  .briefing-reader .activity-plot {
+    gap: 0.35rem;
+  }
+
+  .briefing-reader .tempo-slide .activity-chart {
+    flex: 0 0 auto;
+    min-height: 21rem;
+    padding-inline: 0;
+  }
+
+  .briefing-reader .tempo-findings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  .briefing-reader .tempo-findings blockquote {
+    grid-column: 1 / -1;
+  }
+
+  .briefing-reader .lesson-range,
+  .briefing-reader .lesson-select {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .briefing-reader .lesson-range input {
+    min-height: 2.75rem;
+    touch-action: manipulation;
+  }
+
+  .briefing-reader .lesson-range-bounds {
+    grid-column: 1;
+  }
+
+  .briefing-reader .lesson-select select {
+    min-height: 2.75rem;
+    touch-action: manipulation;
+  }
+
+  .briefing-reader .ratio-proof {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .briefing-reader .ratio-equation {
+    grid-column: 1 / -1;
+  }
+
+  .briefing-reader .ratio-result strong {
+    font-size: clamp(3rem, 14vw, 4.75rem);
+  }
+
+  .briefing-reader .frequency-figure,
+  .briefing-reader .impact-figure {
+    min-height: 19rem;
+  }
+
+  .briefing-reader .frequency-figure svg,
+  .briefing-reader .impact-figure svg {
+    height: auto;
+    min-height: 17rem;
+  }
+
+  .briefing-reader .frequency-notes {
+    padding-left: 0;
+  }
+
+  .briefing-reader .selection-map .event-atlas svg {
+    max-height: none;
+  }
+
+  .briefing-reader .event-casebook {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto;
+  }
+
+  .briefing-reader .event-casebook article > strong,
+  .briefing-reader .selection-summary > strong {
+    font-size: 3rem;
+  }
+}
+
+@media (min-width: 44rem) and (max-width: 56rem) and (orientation: portrait) {
+  .briefing-reader .briefing-slide {
+    padding: 2.25rem;
+  }
+
+  .briefing-reader .cover {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    align-content: center;
+    align-items: center;
+  }
+
+  .briefing-reader .slide-header-split,
+  .briefing-reader .magnitude-layout,
+  .briefing-reader .frequency-layout,
+  .briefing-reader .selection-layout,
+  .briefing-reader .impact-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .briefing-reader .catalog-layout {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
   }
 }
 

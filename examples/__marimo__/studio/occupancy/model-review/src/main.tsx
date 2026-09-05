@@ -1,3 +1,4 @@
+// @deno-types="npm:@types/react-dom@19.2.3/client.d.ts"
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App.tsx";

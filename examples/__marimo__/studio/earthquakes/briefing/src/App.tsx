@@ -2,7 +2,8 @@
 
 import { Deck } from "@revealjs/react";
 import "reveal.js/reveal.css";
-import { useMemo } from "react";
+// @deno-types="npm:@types/react@19.2.10"
+import { useMemo, useSyncExternalStore } from "react";
 import { createBriefingModel, type SeismicAnalysis } from "./briefing-data.ts";
 import {
   CatalogSlide,
@@ -33,6 +34,28 @@ const deckConfig = {
   width: 1440,
 } as const;
 
+const portraitReaderQuery = "(max-width: 56rem) and (orientation: portrait)";
+const subscribeToPortraitReader = (onChange: () => void) => {
+  const media = globalThis.matchMedia(portraitReaderQuery);
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+};
+const portraitReaderSnapshot = () =>
+  globalThis.matchMedia(portraitReaderQuery).matches;
+const serverPortraitReaderSnapshot = () => false;
+
+const LessonSlides = ({ model }: { model: ReturnType<typeof createBriefingModel> }) => (
+  <>
+    <CoverSlide model={model} />
+    <MagnitudeSlide model={model} />
+    <SelectionSlide model={model} />
+    <CatalogSlide model={model} />
+    <TempoSlide model={model} />
+    <FrequencySlide model={model} />
+    <ImpactSlide model={model} />
+  </>
+);
+
 export const App = () => {
   const analysisProjection = useMarimoValue<SeismicAnalysis>(
     "seismic_analysis",
@@ -43,6 +66,11 @@ export const App = () => {
   );
   const loading = analysisProjection.value === undefined &&
     !analysisProjection.error;
+  const usePortraitReader = useSyncExternalStore(
+    subscribeToPortraitReader,
+    portraitReaderSnapshot,
+    serverPortraitReaderSnapshot,
+  );
 
   return (
     <>
@@ -72,15 +100,23 @@ export const App = () => {
           )
           : null}
 
-        <Deck className="studio-deck" config={deckConfig}>
-          <CoverSlide model={model} />
-          <MagnitudeSlide model={model} />
-          <SelectionSlide model={model} />
-          <CatalogSlide model={model} />
-          <TempoSlide model={model} />
-          <FrequencySlide model={model} />
-          <ImpactSlide model={model} />
-        </Deck>
+        {model.analysis && usePortraitReader
+          ? (
+            <div className="briefing-reader">
+              <header className="reader-header">
+                <strong>Earthquake watch</strong>
+                <span>7-part lesson · Scroll to read</span>
+              </header>
+              <LessonSlides model={model} />
+            </div>
+          )
+          : model.analysis
+          ? (
+            <Deck className="studio-deck" config={deckConfig}>
+              <LessonSlides model={model} />
+            </Deck>
+          )
+          : null}
       </main>
     </>
   );

@@ -41,10 +41,14 @@ export const ThresholdCurve = ({
   current?: number;
   metrics: readonly ThresholdMetric[];
   showRecall?: boolean;
-}) => (
+}) => {
+  const thresholdMinimum = metrics[0]?.threshold ?? 0;
+  const thresholdMaximum = metrics.at(-1)?.threshold ?? thresholdMinimum;
+
+  return (
   <div
     className="chart"
-    role="img"
+    role="group"
     aria-label={showRecall
       ? "In-sample accuracy, precision, and recall by occupancy threshold"
       : "In-sample accuracy and precision by occupancy threshold. Recall is unavailable for this scope."}
@@ -65,7 +69,7 @@ export const ThresholdCurve = ({
             <XAxis
               dataKey="threshold"
               type="number"
-              domain={[0.1, 0.9]}
+              domain={[thresholdMinimum, thresholdMaximum]}
               tickFormatter={(value) => Number(value).toFixed(1)}
             />
             <YAxis
@@ -128,4 +132,5 @@ export const ThresholdCurve = ({
       )
       : <p className="empty-state">No threshold metrics are available.</p>}
   </div>
-);
+  );
+};

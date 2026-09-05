@@ -44,6 +44,7 @@ const selectedKey = ref(example.views[0].key);
 const loaded = ref(false);
 const frameKey = ref(0);
 const frame = ref<HTMLIFrameElement>();
+const tabs = [notebookTab, ...example.views];
 
 const selected = computed(() =>
   selectedKey.value === notebookTab.key
@@ -59,6 +60,8 @@ const notebookSourceHref = computed(
 );
 const viewSourceHref = (key: string): string =>
   `${documentationExampleSource.repository}/tree/${documentationExampleSource.revision}/${documentationExampleSource.viewProjectsRoot}/${example.slug}/${key}`;
+const tabId = (key: string): string => `studio-example-${example.slug}-${key}-tab`;
+const panelId = `studio-example-${example.slug}-panel`;
 
 const select = (key: string): void => {
   if (selectedKey.value === key) {
@@ -67,6 +70,27 @@ const select = (key: string): void => {
   selectedKey.value = key;
   loaded.value = false;
   frameKey.value += 1;
+};
+
+const selectFromKeyboard = (event: KeyboardEvent, key: string): void => {
+  const currentIndex = tabs.findIndex((tab) => tab.key === key);
+  let nextIndex: number | undefined;
+  if (event.key === "ArrowLeft") {
+    nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  } else if (event.key === "ArrowRight") {
+    nextIndex = (currentIndex + 1) % tabs.length;
+  } else if (event.key === "Home") {
+    nextIndex = 0;
+  } else if (event.key === "End") {
+    nextIndex = tabs.length - 1;
+  }
+  if (nextIndex === undefined) {
+    return;
+  }
+  event.preventDefault();
+  const next = tabs[nextIndex];
+  select(next.key);
+  requestAnimationFrame(() => document.getElementById(tabId(next.key))?.focus());
 };
 
 const markLoaded = (): void => {
@@ -124,12 +148,17 @@ const markLoaded = (): void => {
           </a>
         </template>
       </span>
-      <nav aria-label="Switch between the shared notebook and its views">
+      <nav aria-label="Switch between the shared notebook and its views" role="tablist">
         <button
+          :id="tabId(notebookTab.key)"
           type="button"
           class="studio-example__source-tab"
-          :aria-pressed="selected.key === notebookTab.key"
+          role="tab"
+          :aria-controls="panelId"
+          :aria-selected="selected.key === notebookTab.key"
+          :tabindex="selected.key === notebookTab.key ? 0 : -1"
           @click="select(notebookTab.key)"
+          @keydown="selectFromKeyboard($event, notebookTab.key)"
         >
           <Icon :icon="notebookIcon" class="studio-example__icon" :aria-hidden="true" />
           <span>{{ notebookTab.label }}</span>
@@ -137,10 +166,15 @@ const markLoaded = (): void => {
         <span class="studio-example__tab-flow" aria-hidden="true">→</span>
         <button
           v-for="view in example.views"
+          :id="tabId(view.key)"
           :key="view.key"
           type="button"
-          :aria-pressed="view.key === selected.key"
+          role="tab"
+          :aria-controls="panelId"
+          :aria-selected="view.key === selected.key"
+          :tabindex="view.key === selected.key ? 0 : -1"
           @click="select(view.key)"
+          @keydown="selectFromKeyboard($event, view.key)"
         >
           <Icon :icon="viewKindIcons[view.kind]" class="studio-example__icon" :aria-hidden="true" />
           <span>{{ view.label }}</span>
@@ -148,7 +182,14 @@ const markLoaded = (): void => {
       </nav>
     </div>
 
-    <div class="studio-example__viewport" :data-kind="selected.kind" :aria-busy="!loaded">
+    <div
+      :id="panelId"
+      class="studio-example__viewport"
+      :data-kind="selected.kind"
+      :aria-busy="!loaded"
+      :aria-labelledby="tabId(selected.key)"
+      role="tabpanel"
+    >
       <div v-if="!loaded" class="studio-example__loading" role="status">
         Starting {{ selected.label.toLowerCase() }}…
       </div>
@@ -200,6 +241,7 @@ const markLoaded = (): void => {
   display: grid;
   height: calc(100vh - var(--vp-nav-height));
   height: calc(100dvh - var(--vp-nav-height));
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   margin: 2rem 0 3rem;
   scroll-margin-top: var(--vp-nav-height);
@@ -249,11 +291,14 @@ figcaption {
   display: inline-flex;
   gap: 0.35rem;
   align-items: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   margin-top: 0.25rem;
   color: var(--vp-c-text-1);
   font-size: 0.78rem;
   font-weight: 650;
   text-decoration: none;
+  touch-action: manipulation;
 }
 
 .studio-example__header > a:hover {
@@ -318,6 +363,7 @@ figcaption {
   display: inline-flex;
   gap: 0.35rem;
   align-items: center;
+  min-height: 2.75rem;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
@@ -328,6 +374,11 @@ figcaption {
   font: inherit;
   font-size: 0.76rem;
   font-weight: 650;
+  touch-action: manipulation;
+}
+
+.studio-example__switcher button span {
+  white-space: nowrap;
 }
 
 .studio-example__switcher button:hover {
@@ -335,7 +386,7 @@ figcaption {
   color: var(--vp-c-text-1);
 }
 
-.studio-example__switcher button[aria-pressed="true"] {
+.studio-example__switcher button[aria-selected="true"] {
   border-bottom-color: var(--studio-example-accent);
   color: var(--vp-c-text-1);
 }
@@ -348,7 +399,9 @@ figcaption {
 
 .studio-example__viewport {
   position: relative;
+  min-width: 0;
   min-height: 0;
+  overflow: hidden;
   background: #111513;
 }
 
@@ -437,14 +490,24 @@ figcaption {
 }
 
 @media (max-width: 720px) {
+  .studio-example {
+    height: calc(100svh - var(--vp-nav-height));
+    height: calc(100dvh - var(--vp-nav-height));
+    margin-block: 1.5rem 2.5rem;
+    border-radius: 6px;
+  }
+
   .studio-example__header {
+    min-height: 3.5rem;
     column-gap: 0.75rem;
     row-gap: 0.55rem;
+    align-items: center;
+    padding: 0.4rem 0.75rem;
   }
 
   .studio-example__header > a {
-    width: 2rem;
-    height: 2rem;
+    width: 2.75rem;
+    height: 2.75rem;
     justify-content: center;
     margin-top: 0;
   }
@@ -453,13 +516,21 @@ figcaption {
     display: none;
   }
 
+  .studio-example__summary {
+    display: none;
+  }
+
+  .studio-example h3 {
+    font-size: 1.1rem;
+  }
+
   .studio-example__source-label {
     display: none;
   }
 
   .studio-example__switcher {
     display: flex;
-    padding: 0 1rem;
+    padding: 0 0.5rem;
   }
 
   .studio-example__current {
@@ -468,9 +539,14 @@ figcaption {
 
   .studio-example__switcher nav {
     width: 100%;
-    gap: 0.25rem;
+    gap: 0.125rem;
     justify-content: space-between;
     overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .studio-example__switcher nav::-webkit-scrollbar {
+    display: none;
   }
 
   .studio-example__switcher button {
@@ -478,22 +554,30 @@ figcaption {
   }
 
   figcaption {
-    display: grid;
-    padding-inline: 1rem;
+    display: block;
+    min-height: 2.5rem;
+    overflow-x: auto;
+    padding: 0.4rem 0.75rem;
+    scrollbar-width: none;
+  }
+
+  figcaption::-webkit-scrollbar {
+    display: none;
   }
 
   .studio-example__source-links {
+    width: max-content;
+    min-height: 1.7rem;
+    flex-wrap: nowrap;
     justify-content: flex-start;
   }
 
   .studio-example__view-divider {
-    display: none;
+    display: block;
   }
 
   .studio-example__view-sources {
-    width: 100%;
-    padding-top: 0.45rem;
-    border-top: 1px solid var(--vp-c-divider);
+    flex-wrap: nowrap;
   }
 }
 

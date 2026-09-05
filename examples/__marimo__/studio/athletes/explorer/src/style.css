@@ -34,10 +34,13 @@ button,
 input,
 select {
   font: inherit;
+  touch-action: manipulation;
 }
 
 a {
   color: var(--link);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 button:focus-visible,
@@ -65,6 +68,9 @@ nav {
 }
 
 nav a {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
   color: var(--muted);
   text-decoration: none;
 }
@@ -218,7 +224,7 @@ h1 {
 .mosaic-controls input,
 .mosaic-controls select {
   width: 100%;
-  min-height: 2.65rem;
+  min-height: 2.75rem;
   padding: 0.55rem 0.65rem;
   border: 1px solid var(--line-strong);
   border-radius: 4px;
@@ -228,7 +234,7 @@ h1 {
 
 .reset-button {
   width: 100%;
-  min-height: 2.65rem;
+  min-height: 2.75rem;
   margin-top: 1.25rem;
   border: 1px solid var(--signal);
   border-radius: 4px;
@@ -422,6 +428,8 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--surface);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .mosaic-table table {
@@ -527,21 +535,17 @@ code {
 }
 
 @media (max-width: 34rem) {
-  .scoreboard,
   .supporting-grid,
   .mosaic-controls {
     grid-template-columns: 1fr;
   }
 
-  .score,
-  .score:first-child {
-    padding: 1rem 0;
-    border-top: 1px solid var(--line);
-    border-right: 0;
+  .hero {
+    padding-top: 2.5rem;
   }
 
-  .score:first-child {
-    border-top: 0;
+  .score {
+    padding: 1rem 0.75rem 1.1rem;
   }
 }
 

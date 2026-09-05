@@ -1,4 +1,5 @@
 import { Text, View } from "@react-pdf/renderer";
+// @deno-types="npm:@types/react@19.2.10"
 import type { ReactNode } from "react";
 
 import { styles } from "./styles.ts";

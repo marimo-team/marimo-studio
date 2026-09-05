@@ -1,5 +1,6 @@
 import { Document, Font } from "@react-pdf/renderer";
 import type { DocumentProps } from "@react-pdf/renderer";
+// @deno-types="npm:@types/react@19.2.10"
 import type { ReactElement } from "react";
 
 import { reportFontAssets } from "../install-report-fonts.ts";
@@ -40,7 +41,7 @@ export const OccupancyReport = (
   { report }: { report: OccupancyReportData },
 ): ReactElement<DocumentProps> => (
   <Document
-    title="Room 01 Occupancy Field Report"
+    title={`${report.room} Occupancy Field Report`}
     author="Marimo Studio"
     subject="Building occupancy, environmental signals, and model evidence"
     keywords="occupancy, facilities, carbon dioxide, sensors, model review"

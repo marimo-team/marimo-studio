@@ -96,6 +96,22 @@ def load_events(UTC, datetime, json, pl, urllib):
     return events, source_metadata
 
 
+@app.cell
+def analysis_parameters(events):
+    seismic_parameters = {
+        "catalog_minimum_magnitude": 2.5,
+        "comparison_default": 4.0,
+        "frequency_default": 4.5,
+        "frequency_fit_minimum": 3.0,
+        "frequency_fit_minimum_events": 5,
+        "magnitude_step": 0.1,
+        "maximum_magnitude": float(events["magnitude"].max()),
+        "priority_count": 6,
+        "priority_magnitude": 5.0,
+    }
+    return (seismic_parameters,)
+
+
 @app.cell(hide_code=True)
 def filter_context(mo):
     mo.md("""
@@ -109,12 +125,12 @@ def filter_context(mo):
 
 
 @app.cell
-def event_controls(events, mo):
+def event_controls(mo, seismic_parameters):
     minimum_magnitude = mo.ui.slider(
-        start=2.5,
-        stop=float(events["magnitude"].max()),
-        step=0.1,
-        value=2.5,
+        start=seismic_parameters["catalog_minimum_magnitude"],
+        stop=seismic_parameters["maximum_magnitude"],
+        step=seismic_parameters["magnitude_step"],
+        value=seismic_parameters["catalog_minimum_magnitude"],
         label="Minimum magnitude",
         show_value=True,
     )
@@ -132,7 +148,9 @@ def event_controls(events, mo):
 
 
 @app.cell
-def filtered_catalog(events, minimum_magnitude, pl, review_status):
+def filtered_catalog(
+    events, minimum_magnitude, pl, review_status, seismic_parameters
+):
     filtered_events = events.filter(pl.col("magnitude") >= minimum_magnitude.value)
     if review_status.value != "All statuses":
         filtered_events = filtered_events.filter(
@@ -147,6 +165,8 @@ def filtered_catalog(events, minimum_magnitude, pl, review_status):
         ).item(),
         "tsunami_flags": filtered_events.select(pl.col("tsunami").sum()).item(),
         "minimum_magnitude": float(minimum_magnitude.value),
+        "priority_count": seismic_parameters["priority_count"],
+        "priority_magnitude": seismic_parameters["priority_magnitude"],
         "status": review_status.value,
     }
     filtered_events.head(10)
@@ -166,12 +186,12 @@ def magnitude_context(mo):
 
 
 @app.cell
-def magnitude_reference_control(events, mo):
+def magnitude_reference_control(mo, seismic_parameters):
     comparison_magnitude = mo.ui.slider(
-        start=2.5,
-        stop=float(events["magnitude"].max()),
-        step=0.1,
-        value=4.0,
+        start=seismic_parameters["catalog_minimum_magnitude"],
+        stop=seismic_parameters["maximum_magnitude"],
+        step=seismic_parameters["magnitude_step"],
+        value=seismic_parameters["comparison_default"],
         label="Comparison magnitude",
         show_value=True,
     )
@@ -180,13 +200,14 @@ def magnitude_reference_control(events, mo):
 
 
 @app.cell
-def magnitude_reference_values(events):
-    _minimum = 2.5
-    _maximum = float(events["magnitude"].max())
-    _steps = int(round((_maximum - _minimum) * 10))
+def magnitude_reference_values(seismic_parameters):
+    _minimum = seismic_parameters["catalog_minimum_magnitude"]
+    _maximum = seismic_parameters["maximum_magnitude"]
+    _step_size = seismic_parameters["magnitude_step"]
+    _steps = int(round((_maximum - _minimum) / _step_size))
     magnitude_comparisons = []
     for _step in range(_steps + 1):
-        _reference = round(_minimum + 0.1 * _step, 1)
+        _reference = round(_minimum + _step_size * _step, 1)
         _difference = _maximum - _reference
         magnitude_comparisons.append(
             {
@@ -241,15 +262,33 @@ def activity_context(mo):
 
 
 @app.cell
-def analytical_tables(UTC, datetime, events, pl, source_metadata):
+def analytical_tables(
+    UTC, datetime, events, math, pl, seismic_parameters, source_metadata
+):
     _period = events.select(
         pl.col("time").min().dt.strftime("%Y-%m-%d").alias("start"),
         pl.col("time").max().dt.strftime("%Y-%m-%d").alias("end"),
     ).row(0, named=True)
-    _qualified_events = events.filter(pl.col("magnitude") >= 2.5)
+    _qualified_events = events.filter(
+        pl.col("magnitude") >= seismic_parameters["catalog_minimum_magnitude"]
+    )
     weekly_summary = {
         "source_events": events.height,
         "qualified_events": _qualified_events.height,
+        "catalog_minimum_magnitude": seismic_parameters[
+            "catalog_minimum_magnitude"
+        ],
+        "days": max(
+            1,
+            math.ceil(
+                events.select(
+                    (pl.col("time").max() - pl.col("time").min())
+                    .dt.total_seconds()
+                ).item()
+                / 86_400
+            ),
+        ),
+        "magnitude_step": seismic_parameters["magnitude_step"],
         "maximum_magnitude": float(events["magnitude"].max() or 0.0),
         "felt_reports": events.select(pl.col("felt").fill_null(0).sum()).item(),
         "tsunami_flags": events.select(pl.col("tsunami").sum()).item(),
@@ -306,11 +345,14 @@ def frequency_context(mo):
 
 
 @app.cell
-def frequency_magnitude_relation(events, math, mo, pl):
-    _minimum = 2.5
-    _maximum = float(events["magnitude"].max())
-    _steps = int(round((_maximum - _minimum) * 10))
-    _thresholds = [round(_minimum + 0.1 * _step, 1) for _step in range(_steps + 1)]
+def frequency_magnitude_relation(events, math, mo, pl, seismic_parameters):
+    _minimum = seismic_parameters["catalog_minimum_magnitude"]
+    _maximum = seismic_parameters["maximum_magnitude"]
+    _step_size = seismic_parameters["magnitude_step"]
+    _steps = int(round((_maximum - _minimum) / _step_size))
+    _thresholds = [
+        round(_minimum + _step_size * _step, 1) for _step in range(_steps + 1)
+    ]
     _rows = []
     for _threshold in _thresholds:
         _count = events.filter(pl.col("magnitude") >= _threshold).height
@@ -324,7 +366,10 @@ def frequency_magnitude_relation(events, math, mo, pl):
             )
 
     _fit_rows = [
-        _row for _row in _rows if _row["magnitude"] >= 3.0 and _row["events"] >= 5
+        _row
+        for _row in _rows
+        if _row["magnitude"] >= seismic_parameters["frequency_fit_minimum"]
+        and _row["events"] >= seismic_parameters["frequency_fit_minimum_events"]
     ]
     _mean_magnitude = sum(_row["magnitude"] for _row in _fit_rows) / len(_fit_rows)
     _mean_log_count = sum(_row["log10_events"] for _row in _fit_rows) / len(_fit_rows)
@@ -383,12 +428,12 @@ def frequency_magnitude_relation(events, math, mo, pl):
 
 
 @app.cell
-def frequency_threshold_control(frequency_model, mo):
+def frequency_threshold_control(frequency_model, mo, seismic_parameters):
     frequency_threshold = mo.ui.slider(
         start=frequency_model["fit_minimum"],
         stop=frequency_model["fit_maximum"],
-        step=0.1,
-        value=4.5,
+        step=seismic_parameters["magnitude_step"],
+        value=seismic_parameters["frequency_default"],
         label="Magnitude threshold",
         show_value=True,
     )
@@ -425,6 +470,7 @@ def catalog_analysis(
     magnitude_exceedance,
     mo,
     pl,
+    seismic_parameters,
     strongest_events,
     weekly_summary,
 ):
@@ -458,11 +504,11 @@ def catalog_analysis(
         "events": _event_locations.to_dicts(),
         "strongest": _strongest_rows,
         "magnitude": {
-            "default_reference": 4.0,
+            "default_reference": seismic_parameters["comparison_default"],
             "comparisons": magnitude_comparisons,
         },
         "frequency": {
-            "default_magnitude": 4.5,
+            "default_magnitude": seismic_parameters["frequency_default"],
             "model": frequency_model,
             "curve": magnitude_exceedance.to_dicts(),
         },

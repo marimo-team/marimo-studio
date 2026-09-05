@@ -1,5 +1,5 @@
 // @deno-types="npm:@types/react@19.2.10"
-import { useMemo, useState } from "react";
+import { type CSSProperties, useMemo, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import MapView, {
   AttributionControl,
@@ -14,6 +14,7 @@ import { type EarthquakeEvent, formatMagnitude } from "../operations-data.ts";
 interface EventMapProps {
   events: readonly EarthquakeEvent[];
   loading: boolean;
+  priorityMagnitude?: number;
   selectedEvent: EarthquakeEvent | null;
   onSelect: (id: string | null) => void;
 }
@@ -21,6 +22,7 @@ interface EventMapProps {
 export const EventMap = ({
   events,
   loading,
+  priorityMagnitude,
   selectedEvent,
   onSelect,
 }: EventMapProps) => {
@@ -44,7 +46,9 @@ export const EventMap = ({
               <i className="marker-standard" /> Event
             </span>
             <span>
-              <i className="marker-major" /> M5+
+              <i className="marker-major" /> {priorityMagnitude === undefined
+                ? "Priority"
+                : `M${formatMagnitude(priorityMagnitude)}+`}
             </span>
             <span>
               <i className="marker-tsunami" /> Tsunami flag
@@ -102,20 +106,21 @@ export const EventMap = ({
                   className={`event-marker${
                     event.tsunami
                       ? " event-marker-alert"
-                      : event.magnitude >= 5
+                      : priorityMagnitude !== undefined &&
+                          event.magnitude >= priorityMagnitude
                       ? " event-marker-major"
                       : ""
                   }${event.id === selectedEvent?.id ? " is-selected" : ""}`}
-                  aria-label={`Select M ${
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  title={`M ${
                     formatMagnitude(
                       event.magnitude,
                     )
                   }, ${event.place}`}
-                  aria-pressed={event.id === selectedEvent?.id}
                   style={{
-                    width: `${markerSize}px`,
-                    height: `${markerSize}px`,
-                  }}
+                    "--event-marker-size": `${markerSize}px`,
+                  } as CSSProperties}
                   onMouseEnter={() => setHoveredId(event.id)}
                   onMouseLeave={() => setHoveredId(null)}
                   onFocus={() => setHoveredId(event.id)}
@@ -133,8 +138,7 @@ export const EventMap = ({
               <Popup
                 longitude={selectedEvent.longitude}
                 latitude={selectedEvent.latitude}
-                anchor="bottom"
-                offset={12}
+                offset={18}
                 closeOnClick={false}
                 onClose={() => onSelect(null)}
               >

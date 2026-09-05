@@ -152,15 +152,6 @@ def participation(athletes, pl, sport):
         )
         .head(20)
     )
-    top_sports = (
-        athletes.group_by("sport")
-        .agg(
-            pl.len().alias("athletes"),
-            (pl.col("medal_awards") > 0).sum().alias("medalists"),
-        )
-        .sort("athletes", descending=True)
-        .head(10)
-    )
     selected_roster
     return (athlete_summary,)
 
@@ -198,16 +189,20 @@ def analytical_tables(athletes, pl):
         .sum()
         .alias("profile_count"),
     ).row(0, named=True)
-    _largest_sport = (
+    _sport_ranking = (
         athletes.group_by("sport")
-        .len()
-        .sort("len", "sport", descending=[True, False])
-        .row(0, named=True)
+        .agg(
+            pl.len().alias("athletes"),
+            (pl.col("medal_awards") > 0).sum().alias("medalists"),
+        )
+        .sort("athletes", "sport", descending=[True, False])
     )
+    _largest_sport = _sport_ranking.row(0, named=True)
     games_summary = {
         **_summary,
         "largest_sport": str(_largest_sport["sport"]),
-        "largest_count": _largest_sport["len"],
+        "largest_count": _largest_sport["athletes"],
+        "leading_sports": _sport_ranking.head(3)["sport"].cast(str).to_list(),
         "medalist_share_percent": round(
             _summary["medalists"] / _summary["athletes"] * 100,
             1,
@@ -241,6 +236,7 @@ def analytical_tables(athletes, pl):
         "bronze",
         "medal_awards",
     )
+    top_sports = _sport_ranking.head(10)
     sport_profiles.head(12)
     return
 
