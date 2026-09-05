@@ -231,6 +231,14 @@ test("cancels a held old-view request without changing current or cached view st
     required: false,
     status: 204,
   });
+  const supersededValueReads = browserDiagnostics.expectRequestFailure({
+    origin: studioOrigin,
+    method: "POST",
+    path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/(?:slow-report|next-report)\/values$/,
+    errorText: "net::ERR_ABORTED",
+    count: 5,
+    required: false,
+  });
   const selectView = async (view: string, heading: string): Promise<void> => {
     const committed = page.waitForResponse((response) => {
       const url = new URL(response.url());
@@ -255,6 +263,7 @@ test("cancels a held old-view request without changing current or cached view st
   await preview.locator("html").evaluate(() => {
     globalThis.__studioPreviewWindowMarker = "slow-report-window";
   });
+  await expect(preview.locator('[mo-value="slow_metric"]')).toHaveText("7");
   let release!: () => void;
   const released = new Promise<void>((resolve) => {
     release = resolve;
@@ -325,7 +334,9 @@ test("cancels a held old-view request without changing current or cached view st
   await expect
     .poll(() => preview.locator("html").evaluate(() => globalThis.__studioPreviewWindowMarker))
     .toBe("slow-report-window");
+  await expect(preview.locator('[mo-value="slow_metric"]')).toHaveText("7");
   heldRequestAbort.recovered();
   await recoverRequestAbort(completedHandoffs);
+  supersededValueReads.recovered();
   replacedWorkspaceStreams.recovered();
 });
