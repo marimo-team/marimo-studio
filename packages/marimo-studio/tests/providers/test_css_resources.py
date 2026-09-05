@@ -47,3 +47,18 @@ def test_html_css_resources_preserve_positions_across_rules() -> None:
         ("second.png", 3),
         ("third.png", 4),
     ]
+
+
+def test_html_resources_retain_remote_and_file_urls() -> None:
+    parser = HTMLDocumentParser()
+
+    parser.feed(
+        '<link rel="stylesheet" href="https://cdn.example/app.css">'
+        '<script src="file:///tmp/app.js"></script>'
+    )
+
+    assert [resource.value for resource in parser.resources] == [
+        "https://cdn.example/app.css",
+        "file:///tmp/app.js",
+    ]
+    assert parser.local_resources == []

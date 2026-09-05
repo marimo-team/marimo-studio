@@ -48,8 +48,8 @@ class HTMLMountDeclaration:
 
 
 @dataclass(frozen=True)
-class HTMLLocalResource:
-    """One fetched project-local URL declared by an HTML document."""
+class HTMLResource:
+    """One fetched URL declared by an HTML document."""
 
     tag: str
     attribute: str
@@ -213,7 +213,8 @@ class HTMLDocumentParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
         self.mounts: list[HTMLMountDeclaration] = []
-        self.local_resources: list[HTMLLocalResource] = []
+        self.resources: list[HTMLResource] = []
+        self.local_resources: list[HTMLResource] = []
         self.inline_scripts: list[HTMLInlineScript] = []
         self.app_shells = 0
         self.heads = 0
@@ -309,16 +310,11 @@ class HTMLDocumentParser(HTMLParser):
             )
             previous_offset = offset
             position = (resource_line, resource_column)
+            resource = HTMLResource("style", "url", value, position)
+            self.resources.append(resource)
             if not _resource_is_local(value, position):
                 continue
-            self.local_resources.append(
-                HTMLLocalResource(
-                    "style",
-                    "url",
-                    value,
-                    position,
-                )
-            )
+            self.local_resources.append(resource)
 
     def _start(
         self,
@@ -362,23 +358,23 @@ class HTMLDocumentParser(HTMLParser):
         inline_style = attributes.get("style")
         if inline_style is not None:
             for value, _ in css_resource_urls(inline_style):
+                resource = HTMLResource(tag, "style", value, position)
+                self.resources.append(resource)
                 if _resource_is_local(value, position):
-                    self.local_resources.append(
-                        HTMLLocalResource(tag, "style", value, position)
-                    )
+                    self.local_resources.append(resource)
         responsive_attribute = "imagesrcset" if tag == "link" else "srcset"
         responsive = attributes.get(responsive_attribute)
         if responsive is not None:
             for value in _srcset_urls(responsive):
+                resource = HTMLResource(
+                    tag,
+                    responsive_attribute,
+                    value,
+                    position,
+                )
+                self.resources.append(resource)
                 if _resource_is_local(value, position):
-                    self.local_resources.append(
-                        HTMLLocalResource(
-                            tag,
-                            responsive_attribute,
-                            value,
-                            position,
-                        )
-                    )
+                    self.local_resources.append(resource)
         fetched = _FETCHED_ATTRIBUTES.get(tag, ())
         if tag in _FETCHED_SVG_HREF_TAGS:
             fetched = (*fetched, "href", "xlink:href")
@@ -391,21 +387,23 @@ class HTMLDocumentParser(HTMLParser):
                 fetched = ("href",)
         for attribute in fetched:
             value = attributes.get(attribute)
-            if value is not None and _resource_is_local(value, position):
-                self.local_resources.append(
-                    HTMLLocalResource(
-                        tag,
-                        attribute,
-                        value.strip(),
-                        position,
-                        tuple(sorted(relations)),
-                        insertion_offset=(
-                            self._start_tag_insertion_offset(line, column)
-                            if tag == "script" and attribute == "src"
-                            else None
-                        ),
-                    )
-                )
+            if value is None:
+                continue
+            resource = HTMLResource(
+                tag,
+                attribute,
+                value.strip(),
+                position,
+                tuple(sorted(relations)),
+                insertion_offset=(
+                    self._start_tag_insertion_offset(line, column)
+                    if tag == "script" and attribute == "src"
+                    else None
+                ),
+            )
+            self.resources.append(resource)
+            if _resource_is_local(value, position):
+                self.local_resources.append(resource)
         if (
             MOUNT_ATTRIBUTE in attributes
             and self.authored_mount_declaration_position is None
