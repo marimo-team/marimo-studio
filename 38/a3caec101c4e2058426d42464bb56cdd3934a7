@@ -1,0 +1,24 @@
+apps/e2e/tests/stale-results.spec.ts
+  s_88978df6b68700::t_52901ad92ca8c1 234,238-239,340
+  s_88978df6b68700::t_3307609b301179 337
+  s_88978df6b68700::t_7a7faec9115a40 266
+  s_88978df6b68700::t_ac310245f1db1b 235-237,240-241
+apps/e2e/playwright.installed.config.ts
+  s_88978df6b68700::t_76bf4c042935cf 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "38a3caec101c4e2058426d42464bb56cdd3934a7",
+  "prompts": {},
+  "sessions": {
+    "s_88978df6b68700": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06da8-63a4-7542-9810-17ef2bc3ddf2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
