@@ -35,6 +35,18 @@ button,
 input,
 select {
   font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+:is(button, input, select, a):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--moss) 65%, white);
+  outline-offset: 3px;
 }
 
 .review {
@@ -232,6 +244,7 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
 
 .threshold-control input {
   width: 100%;
+  min-height: 2.75rem;
   accent-color: var(--moss);
 }
 
@@ -403,6 +416,8 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
   overflow-x: auto;
   border-top: 2px solid var(--ink);
   border-bottom: 1px solid var(--rule);
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .error-table {
@@ -492,11 +507,15 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
   .review {
     width: 100%;
     margin: 0;
-    padding: 1.25rem;
+    padding: 1rem 1.25rem;
   }
 
-  .metric-grid {
-    grid-template-columns: 1fr;
+  .review-header {
+    padding-bottom: 1.25rem;
+  }
+
+  .control-strip {
+    margin-block: 1rem;
   }
 
   .panel-heading {
@@ -506,6 +525,34 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
 
   .chart {
     height: 18rem;
+  }
+
+  .metric {
+    padding-inline: 0.75rem;
+  }
+
+  .metric span {
+    font-size: 0.58rem;
+    letter-spacing: 0.035em;
+    white-space: nowrap;
+  }
+
+  marimo-dropdown::part(label) {
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  marimo-dropdown::part(control) {
+    width: 10.5rem !important;
+    min-width: 10.5rem !important;
+    max-width: 10.5rem;
+    min-height: 2.75rem;
+  }
+}
+
+@media (max-width: 23rem) {
+  .metric-grid {
+    grid-template-columns: 1fr;
   }
 }
 

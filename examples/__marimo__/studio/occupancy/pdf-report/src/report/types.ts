@@ -72,6 +72,12 @@ export interface ReportError {
 }
 
 export interface ModelReport {
+  readonly co2_weight: number;
+  readonly light_weight: number;
+  readonly normalization_quantile: number;
+  readonly threshold_maximum: number;
+  readonly threshold_minimum: number;
+  readonly threshold_step: number;
   readonly threshold: number;
   readonly accuracy: number;
   readonly precision: number;
@@ -90,10 +96,26 @@ export interface ModelReport {
   readonly errors: readonly ReportError[];
 }
 
-export type ModelEvidence = Omit<ModelReport, "curve" | "normalization">;
+export type ModelEvidence = Omit<
+  ModelReport,
+  | "co2_weight"
+  | "curve"
+  | "light_weight"
+  | "normalization"
+  | "normalization_quantile"
+  | "threshold_maximum"
+  | "threshold_minimum"
+  | "threshold_step"
+>;
 
 export interface PreparedModel {
+  readonly co2_weight: number;
   readonly default_threshold: number;
+  readonly light_weight: number;
+  readonly normalization_quantile: number;
+  readonly threshold_maximum: number;
+  readonly threshold_minimum: number;
+  readonly threshold_step: number;
   readonly normalization: ModelReport["normalization"];
   readonly evidence: readonly ModelEvidence[];
 }

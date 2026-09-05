@@ -37,8 +37,10 @@ body {
 }
 
 button,
-a {
+a,
+select {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 button:focus-visible,
@@ -300,6 +302,7 @@ h2 {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.2rem 0.7rem;
   width: 100%;
+  min-height: 2.75rem;
   padding: 0.75rem 0;
   border: 0;
   background: transparent;
@@ -385,7 +388,7 @@ h2 {
 
 .event-picker select {
   max-width: min(21rem, 42vw);
-  min-height: 2rem;
+  min-height: 2.75rem;
   border: 1px solid var(--basalt-700);
   border-radius: 4px;
   background: var(--basalt-850);
@@ -523,26 +526,37 @@ h2 {
 }
 
 .event-marker {
-  display: block;
-  min-width: 0;
-  min-height: 0;
+  position: relative;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
   padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.event-marker::before {
+  width: var(--event-marker-size);
+  height: var(--event-marker-size);
   border: 1px solid #111719;
   border-radius: 50%;
   background: #d9c9a3;
-  cursor: pointer;
+  content: "";
   opacity: 0.86;
 }
 
-.event-marker-major {
+.event-marker-major::before {
   background: var(--amber);
 }
 
-.event-marker-alert {
+.event-marker-alert::before {
   background: var(--alert);
 }
 
-.event-marker.is-selected {
+.event-marker.is-selected::before {
   outline: 2px solid var(--teal);
   outline-offset: 2px;
 }
@@ -555,6 +569,12 @@ h2 {
 
 .maplibregl-ctrl-group button + button {
   border-top-color: var(--basalt-700);
+}
+
+.maplibregl-ctrl-group button,
+.maplibregl-popup-close-button {
+  width: 2.75rem;
+  height: 2.75rem;
 }
 
 .maplibregl-ctrl button .maplibregl-ctrl-icon {
@@ -580,6 +600,13 @@ h2 {
 .maplibregl-popup-content strong {
   color: var(--amber);
   font-family: var(--mono-font);
+}
+
+.maplibregl-popup-content > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+  padding-right: 1.25rem;
 }
 
 .maplibregl-popup-content span {
@@ -708,11 +735,37 @@ marimo-output {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     column-gap: 1.25rem;
   }
+
+  .map-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .map-actions {
+    width: 100%;
+    justify-items: start;
+  }
+
+  .map-legend {
+    justify-content: flex-start;
+  }
+
+  .event-picker {
+    width: 100%;
+  }
+
+  .event-picker select {
+    width: min(100%, 32rem);
+    max-width: none;
+  }
 }
 
 @media (max-width: 48rem) {
   .operations-shell {
-    padding: 0.8rem;
+    padding: max(0.8rem, env(safe-area-inset-top))
+      max(0.8rem, env(safe-area-inset-right))
+      max(0.8rem, env(safe-area-inset-bottom))
+      max(0.8rem, env(safe-area-inset-left));
   }
 
   .operations-header,
@@ -729,6 +782,12 @@ marimo-output {
 
   .filter-status {
     min-width: 0;
+  }
+
+  h1 {
+    max-width: none;
+    font-size: clamp(1.9rem, 8vw, 2.1rem);
+    white-space: nowrap;
   }
 
   .metric-strip {
@@ -779,6 +838,29 @@ marimo-output {
   .event-picker select {
     width: 100%;
     max-width: none;
+  }
+
+  marimo-slider::part(label),
+  marimo-dropdown::part(label) {
+    white-space: nowrap;
+  }
+
+  marimo-slider::part(control),
+  marimo-dropdown::part(control) {
+    min-height: 2.75rem;
+  }
+
+  .maplibregl-popup {
+    top: 0.75rem !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: 0.75rem !important;
+    max-width: calc(100% - 4.5rem) !important;
+    transform: none !important;
+  }
+
+  .maplibregl-popup-tip {
+    display: none;
   }
 }
 

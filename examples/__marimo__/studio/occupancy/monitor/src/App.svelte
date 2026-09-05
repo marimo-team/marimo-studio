@@ -22,6 +22,7 @@ type SensorRow = {
 };
 
 type OccupancySummary = {
+  room: string;
   scope_label: string;
   observations: number;
   occupied: number;
@@ -30,6 +31,11 @@ type OccupancySummary = {
   estimated_occupied_hours: number;
   metric: string;
   anomalies: number;
+  monitor: {
+    anomaly_quantile: number;
+    anomaly_window: number;
+    baseline_window: number;
+  };
 };
 
 type DailyRoomRow = {
@@ -53,6 +59,7 @@ use([
 
 let chartElement: HTMLDivElement;
 let chart: ECharts | undefined;
+let chartFrame: number | undefined;
 let series = $state.raw<MarimoTable<SensorRow> | undefined>();
 let summary = $state<OccupancySummary | undefined>();
 let daily = $state.raw<MarimoTable<DailyRoomRow> | undefined>();
@@ -81,6 +88,16 @@ const formatDay = new Intl.DateTimeFormat(undefined, {
   month: "short",
   day: "numeric",
 });
+
+const formatPercentile = (quantile: number) => {
+  const percentile = Math.round(quantile * 100);
+  const remainder = percentile % 100;
+  const suffixes: Record<number, string> = { 1: "st", 2: "nd", 3: "rd" };
+  const suffix = remainder >= 11 && remainder <= 13
+    ? "th"
+    : suffixes[percentile % 10] ?? "th";
+  return `${percentile}${suffix}`;
+};
 
 const unitFor = (metric: string) =>
   ({ CO2: "ppm", Light: "lx", Temperature: "°C", Humidity: "%" })[
@@ -184,7 +201,9 @@ const renderChart = () => {
           emphasis: { disabled: true },
         },
         {
-          name: "60-reading baseline",
+          name: summary
+            ? `${summary.monitor.baseline_window}-reading baseline`
+            : "Rolling baseline",
           type: "line",
           data: baseline,
           showSymbol: false,
@@ -209,6 +228,14 @@ const renderChart = () => {
   );
 };
 
+const scheduleChart = () => {
+  if (chartFrame !== undefined) cancelAnimationFrame(chartFrame);
+  chartFrame = requestAnimationFrame(() => {
+    chartFrame = undefined;
+    renderChart();
+  });
+};
+
 onMount(() => {
   chart = init(chartElement, undefined, { renderer: "canvas" });
   const resize = new ResizeObserver(() => chart?.resize());
@@ -216,8 +243,10 @@ onMount(() => {
   renderChart();
 
   return () => {
+    if (chartFrame !== undefined) cancelAnimationFrame(chartFrame);
     resize.disconnect();
     chart?.dispose();
+    chart = undefined;
   };
 });
 </script>
@@ -234,7 +263,7 @@ onMount(() => {
         ? undefined
         : (value.get(value.numRows - 1) ?? undefined);
       seriesError = false;
-      requestAnimationFrame(renderChart);
+      scheduleChart();
     },
     onError: () => {
       seriesError = true;
@@ -252,7 +281,7 @@ onMount(() => {
     onValue: (value: OccupancySummary) => {
       summary = value;
       summaryError = false;
-      requestAnimationFrame(renderChart);
+      scheduleChart();
     },
     onError: () => {
       summaryError = true;
@@ -279,11 +308,12 @@ onMount(() => {
 <main class="monitor-shell" class:is-loading={loading} aria-busy={loading}>
   <header class="monitor-header">
     <div>
-      <p class="eyebrow">Facilities · Room 01</p>
+      <p class="eyebrow">Facilities · {summary?.room ?? "Room"}</p>
       <h1>Environmental monitor</h1>
       <p class="lede">
-        Room 01 sensor history with a 60-reading baseline and flagged
-        deviations.
+        {summary?.room ?? "Room"} sensor history with a
+        {summary ? `${summary.monitor.baseline_window}-reading` : "rolling"}
+        baseline and flagged deviations.
       </p>
     </div>
     <div
@@ -385,7 +415,10 @@ onMount(() => {
         <p class="section-label">Sensor history</p>
         <h2 id="trend-heading">Reading and rolling baseline</h2>
       </div>
-      <p>Baseline window: 60 observations</p>
+      <p>
+        Baseline window:
+        {summary ? `${summary.monitor.baseline_window} observations` : "…"}
+      </p>
     </div>
     <div
       class="chart"
@@ -416,6 +449,12 @@ onMount(() => {
       </a>
       · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>
     </span>
-    <span>Anomalies exceed the rolling 95th-percentile deviation limit.</span>
+    {#if summary}
+      <span>
+        Anomalies exceed the rolling
+        {formatPercentile(summary.monitor.anomaly_quantile)}-percentile
+        deviation limit over {summary.monitor.anomaly_window} observations.
+      </span>
+    {/if}
   </footer>
 </main>

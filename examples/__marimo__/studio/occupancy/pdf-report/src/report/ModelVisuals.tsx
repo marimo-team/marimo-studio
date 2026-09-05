@@ -40,8 +40,8 @@ export const ThresholdChart = (
   const bottom = 88;
   const plotWidth = width - left - right;
   const plotHeight = bottom - top;
-  const thresholdMin = model.curve.at(0)?.threshold ?? 0.1;
-  const thresholdMax = model.curve.at(-1)?.threshold ?? 0.9;
+  const thresholdMin = model.curve.at(0)?.threshold ?? model.threshold;
+  const thresholdMax = model.curve.at(-1)?.threshold ?? model.threshold;
   const thresholdX = (threshold: number) =>
     left + (threshold - thresholdMin) /
       Math.max(thresholdMax - thresholdMin, 0.01) * plotWidth;

@@ -1,6 +1,7 @@
 /// <reference path="./marimo-studio.d.ts" />
 
 import { usePDF } from "@react-pdf/renderer";
+// @deno-types="npm:@types/react@19.2.10"
 import { useMemo } from "react";
 
 import { useMarimoValue } from "./lib/use-marimo-value.ts";
@@ -82,7 +83,7 @@ const ReportWorkbench = ({
     <main className="report-workbench" aria-busy={!ready}>
       <header className="workbench-header">
         <div className="workbench-title">
-          <p>Room 01</p>
+          <p>{report?.room ?? "Room"}</p>
           <h1>Occupancy field report</h1>
         </div>
         <div className="workbench-actions">
@@ -171,7 +172,13 @@ export const App = () => {
       profile_summary: value.profile_summary,
       model: {
         ...selectedModel,
+        co2_weight: value.model.co2_weight,
+        light_weight: value.model.light_weight,
         normalization: value.model.normalization,
+        normalization_quantile: value.model.normalization_quantile,
+        threshold_maximum: value.model.threshold_maximum,
+        threshold_minimum: value.model.threshold_minimum,
+        threshold_step: value.model.threshold_step,
         curve: value.model.evidence,
         errors: selectedModel.errors.slice(0, 6),
       },

@@ -18,6 +18,8 @@ export interface EventSummary {
   felt_reports: number;
   tsunami_flags: number;
   minimum_magnitude: number;
+  priority_count: number;
+  priority_magnitude: number;
   status: string;
 }
 
@@ -56,8 +58,8 @@ export const rankEvents = (
   events: readonly EarthquakeEvent[],
   limit: number,
 ): EarthquakeEvent[] =>
-  [...events]
-    .sort(
+  events
+    .toSorted(
       (left, right) =>
         right.magnitude - left.magnitude ||
         right.significance - left.significance,

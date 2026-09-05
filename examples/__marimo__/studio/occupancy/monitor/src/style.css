@@ -24,6 +24,7 @@
 body {
   min-width: 20rem;
   margin: 0;
+  overflow-x: hidden;
   background: var(--canvas);
   color: var(--forest);
 }
@@ -32,6 +33,18 @@ button,
 input,
 select {
   font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+:is(button, input, select, a):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--forest) 55%, white);
+  outline-offset: 3px;
 }
 
 .monitor-shell {
@@ -470,6 +483,26 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .control-bar,
+  .metrics article,
+  .daily-profile {
+    border-radius: 10px;
+  }
+
+  .chart-panel {
+    border-radius: 16px;
+  }
+
+  marimo-dropdown::part(label) {
+    white-space: nowrap;
+  }
+
+  marimo-dropdown::part(control) {
+    width: 11rem;
+    max-width: 11rem;
+    min-height: 2.75rem;
+  }
 }
 
 @media (max-width: 30rem) {
@@ -477,17 +510,15 @@ marimo-cell:is(:not(:defined), [data-state="connecting"], [data-state="loading"]
     width: min(100% - 1rem, 76rem);
   }
 
-  .metrics {
-    grid-template-columns: 1fr;
-  }
-
-  .daily-strip {
-    grid-template-columns: 1fr;
-  }
-
   .chart-panel {
     padding-inline: 0.65rem;
-    border-radius: 20px;
+  }
+}
+
+@media (max-width: 23rem) {
+  .metrics,
+  .daily-strip {
+    grid-template-columns: 1fr;
   }
 }
 

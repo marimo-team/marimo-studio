@@ -234,7 +234,13 @@ $effect(() => {
           </div>
           <p>Scroll for more records. Select a header to sort.</p>
         </div>
-        <div class="mosaic-table" bind:this={tableHost}></div>
+        <div
+          class="mosaic-table"
+          bind:this={tableHost}
+          aria-label="Scrollable matching athlete roster"
+          role="region"
+          tabindex="0"
+        ></div>
       </article>
     </main>
   </div>

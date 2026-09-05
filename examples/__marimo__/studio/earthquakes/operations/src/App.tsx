@@ -16,7 +16,7 @@ import { type MarimoTable, useMarimoValue } from "./lib/use-marimo-value.ts";
 
 const METRICS = [
   { key: "events", label: "Events" },
-  { key: "maximum_magnitude", label: "Maximum magnitude" },
+  { key: "maximum_magnitude", label: "Max magnitude" },
   { key: "felt_reports", label: "Felt reports" },
   { key: "tsunami_flags", label: "Tsunami flags" },
 ] as const;
@@ -40,7 +40,10 @@ export const App = () => {
     () => filteredEvents?.toArray() ?? [],
     [filteredEvents],
   );
-  const priorityEvents = useMemo(() => rankEvents(events, 6), [events]);
+  const priorityEvents = useMemo(
+    () => rankEvents(events, eventSummary?.priority_count ?? 0),
+    [eventSummary?.priority_count, events],
+  );
   const selectedEvent = selectedId === null
     ? null
     : (events.find((event) => event.id === selectedId) ??
@@ -73,7 +76,11 @@ export const App = () => {
       <main className="operations-shell" aria-busy={isLoading}>
         <header className="operations-header">
           <div>
-            <p className="eyebrow">USGS weekly feed · Global M2.5+</p>
+            <p className="eyebrow">
+              USGS weekly feed · {eventSummary
+                ? `Global M${formatMagnitude(eventSummary.minimum_magnitude)}+`
+                : "Global catalog"}
+            </p>
             <h1>Earthquake operations</h1>
           </div>
           <div
@@ -140,6 +147,7 @@ export const App = () => {
           <EventMap
             events={events}
             loading={isLoading}
+            priorityMagnitude={eventSummary?.priority_magnitude}
             selectedEvent={selectedEvent}
             onSelect={setSelectedId}
           />

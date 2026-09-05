@@ -27,9 +27,11 @@ const regionLabels: Array<{ label: string; coordinates: [number, number] }> = [
 
 export const EventAtlas = ({
   events,
+  minimumMagnitude,
   variant = "overview",
 }: {
   events: EarthquakeEvent[];
+  minimumMagnitude: number;
   variant?: "overview" | "selection";
 }) => {
   const width = 900;
@@ -140,7 +142,7 @@ export const EventAtlas = ({
       </svg>
       <figcaption>
         <span>
-          <i className="atlas-key atlas-key-small" /> M2.5
+          <i className="atlas-key atlas-key-small" /> M{minimumMagnitude.toFixed(1)}
         </span>
         <span>
           <i className="atlas-key atlas-key-large" /> M7.0

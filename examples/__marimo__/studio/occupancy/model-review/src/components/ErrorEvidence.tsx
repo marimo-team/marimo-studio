@@ -46,7 +46,12 @@ export const ErrorEvidence = ({
         {total ?? rows.length} errors.
       </p>
     </div>
-    <div className="table-scroll">
+    <div
+      className="table-scroll"
+      aria-label="Scrollable misclassified training readings"
+      role="region"
+      tabIndex={0}
+    >
       <table className="error-table">
         <thead>
           <tr>

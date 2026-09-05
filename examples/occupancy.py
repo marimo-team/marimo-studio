@@ -45,6 +45,29 @@ def _():
     return io, mo, pl, urllib
 
 
+@app.cell
+def analysis_parameters():
+    occupancy_parameters = {
+        "monitor": {
+            "anomaly_min_samples": 24,
+            "anomaly_quantile": 0.95,
+            "anomaly_window": 120,
+            "baseline_min_samples": 12,
+            "baseline_window": 60,
+        },
+        "model": {
+            "co2_weight": 0.3,
+            "default_threshold": 0.5,
+            "light_weight": 0.7,
+            "normalization_quantile": 0.99,
+            "threshold_maximum": 0.9,
+            "threshold_minimum": 0.1,
+            "threshold_step": 0.05,
+        },
+    }
+    return (occupancy_parameters,)
+
+
 @app.cell(hide_code=True)
 def data_context(mo):
     mo.md("""
@@ -92,7 +115,7 @@ def analysis_scope_control(mo):
             "Off-hours + weekends": "off-hours",
         },
         value="Complete record",
-        label="Observation scope",
+        label="Scope",
     )
     analysis_scope
     return (analysis_scope,)
@@ -163,7 +186,8 @@ def metric_control(mo):
 
 
 @app.cell
-def sensor_analysis(metric, pl, scope_summary, scoped_readings):
+def sensor_analysis(metric, occupancy_parameters, pl, scope_summary, scoped_readings):
+    _monitor = occupancy_parameters["monitor"]
     selected_sensor_series = (
         scoped_readings.select(
             "date",
@@ -173,13 +197,20 @@ def sensor_analysis(metric, pl, scope_summary, scoped_readings):
         )
         .with_columns(
             pl.col("value")
-            .rolling_mean(window_size=60, min_samples=12)
+            .rolling_mean(
+                window_size=_monitor["baseline_window"],
+                min_samples=_monitor["baseline_min_samples"],
+            )
             .alias("baseline")
         )
         .with_columns((pl.col("value") - pl.col("baseline")).abs().alias("deviation"))
         .with_columns(
             pl.col("deviation")
-            .rolling_quantile(0.95, window_size=120, min_samples=24)
+            .rolling_quantile(
+                _monitor["anomaly_quantile"],
+                window_size=_monitor["anomaly_window"],
+                min_samples=_monitor["anomaly_min_samples"],
+            )
             .alias("limit")
         )
         .with_columns(
@@ -192,6 +223,7 @@ def sensor_analysis(metric, pl, scope_summary, scoped_readings):
         **scope_summary,
         "metric": metric.value,
         "anomalies": selected_sensor_series.filter(pl.col("anomaly")).height,
+        "monitor": _monitor,
     }
     current_window.tail(8)
     return occupancy_summary, selected_sensor_series
@@ -308,12 +340,13 @@ def model_context(mo):
 
 
 @app.cell
-def threshold_control(mo):
+def threshold_control(mo, occupancy_parameters):
+    _model = occupancy_parameters["model"]
     threshold = mo.ui.slider(
-        start=0.1,
-        stop=0.9,
-        step=0.05,
-        value=0.5,
+        start=_model["threshold_minimum"],
+        stop=_model["threshold_maximum"],
+        step=_model["threshold_step"],
+        value=_model["default_threshold"],
         label="Occupancy threshold",
         show_value=True,
     )
@@ -322,10 +355,15 @@ def threshold_control(mo):
 
 
 @app.cell
-def model_sweep(pl, scoped_readings):
-    light_max = scoped_readings.select(pl.col("Light").quantile(0.99)).item()
+def model_sweep(occupancy_parameters, pl, scoped_readings):
+    _model = occupancy_parameters["model"]
+    light_max = scoped_readings.select(
+        pl.col("Light").quantile(_model["normalization_quantile"])
+    ).item()
     co2_min = scoped_readings["CO2"].min()
-    co2_max = scoped_readings.select(pl.col("CO2").quantile(0.99)).item()
+    co2_max = scoped_readings.select(
+        pl.col("CO2").quantile(_model["normalization_quantile"])
+    ).item()
     scored = scoped_readings.with_columns(
         pl.col("Light").clip(0, light_max).truediv(light_max).alias("light_score"),
         (
@@ -334,7 +372,10 @@ def model_sweep(pl, scoped_readings):
             )
         ).alias("co2_score"),
     ).with_columns(
-        (0.7 * pl.col("light_score") + 0.3 * pl.col("co2_score"))
+        (
+            _model["light_weight"] * pl.col("light_score")
+            + _model["co2_weight"] * pl.col("co2_score")
+        )
         .cast(pl.Float32)
         .alias("score")
     )
@@ -393,7 +434,19 @@ def model_sweep(pl, scoped_readings):
             .sort("distance", descending=True)
         )
 
-    thresholds = [round(0.1 + 0.05 * index, 2) for index in range(17)]
+    _threshold_steps = int(
+        round(
+            (_model["threshold_maximum"] - _model["threshold_minimum"])
+            / _model["threshold_step"]
+        )
+    )
+    thresholds = [
+        round(
+            _model["threshold_minimum"] + _model["threshold_step"] * index,
+            2,
+        )
+        for index in range(_threshold_steps + 1)
+    ]
     threshold_metrics = pl.DataFrame(
         [evaluate(_threshold) for _threshold in thresholds]
     )
@@ -488,6 +541,7 @@ def occupancy_analysis_snapshot(
     hourly_room_profile,
     model_evidence,
     model_normalization,
+    occupancy_parameters,
     sensor_separation_peak,
     sensor_profiles,
     scope_summary,
@@ -505,7 +559,7 @@ def occupancy_analysis_snapshot(
             "widest_sensor_separation": sensor_separation_peak,
         },
         "model": {
-            "default_threshold": 0.5,
+            **occupancy_parameters["model"],
             "normalization": model_normalization,
             "evidence": model_evidence,
         },

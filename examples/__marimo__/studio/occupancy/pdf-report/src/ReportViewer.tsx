@@ -1,4 +1,6 @@
+// @deno-types="npm:@types/react@19.2.10"
 import { useEffect, useRef, useState } from "react";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/build/pdf.mjs";
 
 export interface PdfInstance {
   readonly blob: Blob | null;
@@ -41,9 +43,6 @@ const CanvasPdfViewer = (
 
     const render = async () => {
       setStatus("loading");
-      const { getDocument, GlobalWorkerOptions } = await import(
-        "pdfjs-dist/build/pdf.mjs"
-      );
       GlobalWorkerOptions.workerSrc = PDF_WORKER;
       const bytes = new Uint8Array(await instance.blob!.arrayBuffer());
       const loadingTask = getDocument({ data: bytes });

@@ -10,9 +10,12 @@ export type EventSummary = {
 };
 
 export type WeeklySummary = {
+  catalog_minimum_magnitude: number;
+  days: number;
   felt_reports: number;
   generated_at: string;
   maximum_magnitude: number;
+  magnitude_step: number;
   period_end: string;
   period_start: string;
   qualified_events: number;

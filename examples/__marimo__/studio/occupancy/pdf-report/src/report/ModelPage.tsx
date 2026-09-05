@@ -10,6 +10,16 @@ import { styles } from "./styles.ts";
 import { formatPercent, formatTimestamp, palette, typefaces } from "./theme.ts";
 import type { OccupancyReportData, ReportError } from "./types.ts";
 
+const formatPercentile = (quantile: number): string => {
+  const percentile = Math.round(quantile * 100);
+  const remainder = percentile % 100;
+  const suffixes: Record<number, string> = { 1: "st", 2: "nd", 3: "rd" };
+  const suffix = remainder >= 11 && remainder <= 13
+    ? "th"
+    : suffixes[percentile % 10] ?? "th";
+  return `${percentile}${suffix}`;
+};
+
 const ErrorTable = ({
   errors,
   threshold,
@@ -92,9 +102,13 @@ export const ModelPage = ({ report }: { report: OccupancyReportData }) => {
         How the occupancy score works.
       </Text>
       <Text style={[styles.pageLead, { width: "100%" }]}>
-        Light is normalized from zero to this scope's 99th percentile. CO2 is
-        normalized from this scope's minimum to its 99th percentile. The score
-        combines them at 70% and 30%. A reading at or above{" "}
+        Light is normalized from zero to this scope's {formatPercentile(
+          model.normalization_quantile,
+        )} percentile. CO2 is normalized from this scope's minimum to its {formatPercentile(
+          model.normalization_quantile,
+        )} percentile. The score combines them at {(
+          model.light_weight * 100
+        ).toFixed(0)}% and {(model.co2_weight * 100).toFixed(0)}%. A reading at or above{" "}
         {model.threshold.toFixed(2)}{" "}
         is classified as occupied, so the threshold is scope-specific.{" "}
         {hasOccupiedReadings
