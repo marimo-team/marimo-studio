@@ -1,4 +1,4 @@
-"""Read JavaScript module dependencies from a bounded syntax tree."""
+"""Read browser JavaScript module dependencies from a bounded syntax tree."""
 
 from __future__ import annotations
 
@@ -65,6 +65,7 @@ _ECMASCRIPT_SPACES = tuple(
 DependencyKind = Literal[
     "dynamic import",
     "import",
+    "import meta URL",
     "parse error",
     "re-export",
     "source import",
@@ -166,6 +167,30 @@ def _dynamic_dependency(node: Node, source: bytes) -> _ByteDependency | None:
     )
 
 
+def _import_meta_url_dependency(
+    node: Node,
+    source: bytes,
+) -> _ByteDependency | None:
+    constructor = node.child_by_field_name("constructor")
+    arguments = node.child_by_field_name("arguments")
+    if (
+        node.type != "new_expression"
+        or constructor is None
+        or source[constructor.start_byte : constructor.end_byte] != b"URL"
+        or arguments is None
+        or len(arguments.named_children) != 2
+    ):
+        return None
+    specifier, base = arguments.named_children
+    if source[base.start_byte : base.end_byte] != b"import.meta.url":
+        return None
+    return _ByteDependency(
+        "import meta URL",
+        _literal(specifier, source),
+        specifier.start_byte,
+    )
+
+
 def _has_asi_boundary(source: bytes, index: int) -> bool:
     while index < len(source):
         space = next(
@@ -252,6 +277,10 @@ def javascript_dependencies(source: str) -> Iterator[JavaScriptDependency]:
                         for child in node.named_children
                         if child.type == "ERROR"
                     )
+        elif node.type == "new_expression":
+            dependency = _import_meta_url_dependency(node, payload)
+            if dependency is not None:
+                dependencies.append(dependency)
         if node.type == "ERROR":
             saw_tree_error = True
             if _known_parser_gap(node, payload):

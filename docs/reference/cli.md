@@ -1,6 +1,6 @@
 ---
 title: CLI
-description: Inspect notebooks and create, edit, build, show, validate, export, and remove Studio views.
+description: Inspect notebooks and create, edit, build, show, preflight, validate, export, and remove Studio views.
 ---
 
 # CLI
@@ -22,17 +22,18 @@ JSON](errors-and-json.md) defines the channel, event, and failure contracts.
 
 ::: warning Provider-backed commands execute trusted code
 Commands such as `doctor`, `starters`, `status`, `view create`, `view inspect`,
-`view read`, `view write`, `view build`, `view export`, and `validate` can invoke
-installed providers. Third-party provider code runs with the current user's
-filesystem, environment, and network authority. Review provider packages before
-running these commands or installing their launch requirements.
+`view read`, `view write`, `view build`, `view preflight`, `view export`, and
+`validate` can invoke installed providers. Third-party provider code runs with
+the current user's filesystem, environment, and network authority. Review
+provider packages before running these commands or installing their launch
+requirements.
 :::
 
 ## Provider environments
 
 `status`, `view create`, `view inspect`, `view read`, `view write`, `view build`,
-`view export`, and `validate` read provider IDs from saved `view.toml` files
-before provider code loads. Studio derives built-in requirements such as
+`view preflight`, `view export`, and `validate` read provider IDs from saved
+`view.toml` files before provider code loads. Studio derives built-in requirements such as
 `marimo-studio[deno]` from those IDs and reads third-party provider requirements
 from the notebook's [PEP 723](https://peps.python.org/pep-0723/) inline script
 metadata or project `pyproject.toml`.
@@ -223,6 +224,37 @@ Remote server URLs must use HTTPS. HTTP is accepted for loopback hosts such as
 `127.0.0.1` and `localhost`. Pass access tokens through
 `MARIMO_STUDIO_ACCESS_TOKEN`, not through the URL.
 
+## `marimo-studio view preflight`
+
+```text
+marimo-studio view preflight VIEW [--target PATH]
+  [--runtime zero-python|wasm] [--prepare-timeout SECONDS] [--json]
+```
+
+Builds the production artifact, prepares the selected static runtime, and
+checks the staged browser files without publishing an output directory.
+Zero-Python verifies each finite projection against every configured input
+state. WebAssembly reports projection support and validates the browser
+artifact without executing notebook code in a browser.
+
+The result includes every projection site, target, source location, runtime,
+and portability status. It also reports the staged file count, inspected
+browser-source count, local reference count, and source-located diagnostics.
+
+Preflight rejects fetched file URLs, machine-local paths, root-absolute URLs,
+missing fetched assets, and unresolved local module paths. It warns when a
+computed module import, URL constructor target, bare module specifier, parser
+limitation, or size bound prevents complete static inspection. A warning
+preserves a successful result and gives the caller the remaining review
+boundary.
+
+Use `--runtime zero-python` to discover projected outputs that retain Python
+callbacks or fail during prepared-state capture. The diagnostic preserves the
+`marimo-export` code and details, identifies the projection when the exporter
+provides enough output identity, and lists candidate projections otherwise.
+
+`--prepare-timeout` has the same Zero-Python behavior as `view export`.
+
 ## `marimo-studio view export`
 
 ```text
@@ -243,17 +275,27 @@ publication retains cell names, IDs, and code hashes as provenance. Projected
 outputs and files under the notebook's `public/` directory are included in the
 static directory.
 
-The result contains the runtime, exact entry file, file count, and Zero-Python
-cache activity. Authored hits and misses come directly from marimo-export's
-observation of Marimo's native cell-cache decisions. `--force` replaces an
-existing output directory after Studio confirms that it still matches the
-directory observed before the build.
+The result contains the runtime, exact entry file, file count, delivery
+warnings, and Zero-Python cache activity. It also contains the complete static
+preflight report. Authored hits and misses come directly from marimo-export's
+observation of Marimo's native cell-cache decisions. `--force` delegates
+replacement identity, rollback, and recovery to marimo-export's staged
+application delivery.
+
+Export progress is written to stderr. It covers the production build,
+Zero-Python plan and state preparation, bundle assembly, delivery preflight,
+and commit. `--json` keeps the terminal result on stdout and writes schema 1
+JSON Lines progress events to stderr. Each progress record includes the view,
+runtime, owning source, and nested event. Events owned by marimo-export retain
+its state counts, cache activity, elapsed time, and message unchanged. Callers
+can stream or discard stderr independently of the result.
 
 Studio rejects a symlink destination, a filesystem root, the user's home
 directory, and any destination that contains, equals, or sits within an export
-source. It stages and verifies the complete directory before an atomic
-replacement. When replacement fails after moving an existing destination,
-the error reports its recovery directory.
+source. Studio assembles and preflights the application in a marimo-export
+`StagedDelivery`. A failed preflight preserves the current destination.
+Marimo-export verifies the nested prepared export and complete directory before
+committing it with destination change detection and rollback.
 
 The Zero-Python directory contains the production artifact, prepared result
 index and assets, runtime configuration, notebook `public/` files, and a

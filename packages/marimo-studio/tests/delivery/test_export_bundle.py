@@ -9,6 +9,7 @@ from typing import cast
 from urllib.parse import urlsplit
 
 import pytest
+from marimo_export import open_export
 
 import marimo_studio._delivery.assets as assets_module
 import marimo_studio._delivery.export as export_module
@@ -21,6 +22,7 @@ from marimo_studio._delivery.browser_ports import (
 )
 from marimo_studio._delivery.export import export_view
 from marimo_studio._delivery.ports import ExportAdapters, StaticRuntimeConfig
+from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._processes.supervisor import ProcessCleanupError
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import (
@@ -129,6 +131,77 @@ def test_export_view_writes_a_complete_static_bundle(
     )
     assert output.joinpath("_marimo-studio/assets/runtime.js").is_file()
     assert output.joinpath(".nojekyll").is_file()
+    assert result.preflight.ok
+    assert result.preflight.files == result.files
+    assert {item.status for item in result.preflight.projections} == {"supported"}
+
+
+def test_export_reports_ordered_progress_without_coupling_to_a_renderer(
+    notebook_path: Path,
+    tmp_path: Path,
+) -> None:
+    configure_export_view(notebook_path)
+    events: list[StaticExportProgress] = []
+
+    result = export_view(
+        notebook_path,
+        tmp_path / "site",
+        runtime="wasm",
+        progress=events.append,
+    )
+
+    assert [progress.event.kind for progress in events] == [
+        "build_started",
+        "build_finished",
+        "bundle_started",
+        "bundle_finished",
+        "preflight_started",
+        "preflight_finished",
+        "commit_started",
+    ]
+    assert all(event.view == "dashboard" for event in events)
+    assert all(event.runtime == "wasm" for event in events)
+    assert events[-2].event.completed == result.preflight.inspected_files
+    assert events[-2].event.total == result.preflight.browser_files
+
+
+def test_export_preflight_rejects_a_provider_emitted_machine_local_import(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    view_root = configure_export_view(notebook_path)
+    script = view_root / "app.js"
+    script.write_text("export const ready = true;\n", encoding="utf-8")
+    document = view_root / "index.html"
+    document.write_text(
+        document.read_text(encoding="utf-8").replace(
+            "</head>",
+            '<script type="module" src="./app.js"></script></head>',
+        ),
+        encoding="utf-8",
+    )
+    project = load_studio(notebook_path).view("dashboard")
+    add_provider_outputs(
+        monkeypatch,
+        project,
+        {
+            PurePosixPath("app.js"): (
+                b'void import("file:///Users/example/.cache/deno/pdf.js");\n'
+            )
+        },
+    )
+    output = tmp_path / "site"
+
+    with pytest.raises(StaticExportError) as raised:
+        export_view(notebook_path, output, runtime="wasm")
+
+    assert raised.value.code == "static-delivery-preflight-failed"
+    report = raised.value.diagnostic_details()["preflight"]
+    assert isinstance(report, dict)
+    assert report["ok"] is False
+    assert report["issues"][0]["code"] == "static-file-url"
+    assert not output.exists()
 
 
 @pytest.mark.native_process
@@ -170,7 +243,11 @@ def test_zero_python_export_combines_view_and_reuses_publication(
     assert result.entrypoint.is_file()
     assert config["runtime"]["id"] == "zero-python"
     assert config["runtime"]["instance"] == instance
-    assert support.joinpath("zero-python", instance, "index.json").is_file()
+    materialized = open_export(support / "zero-python" / instance)
+    assert materialized.identity == instance
+    assert materialized.verify().states > 0
+    assert result.delivery.path == first_output
+    assert result.delivery.files == result.files
     assert first_output.joinpath("_marimo-studio/assets/zero-python.js").is_file()
     assert not first_output.joinpath("_marimo-studio/assets/runtime.js").exists()
     assert repeated_manifest["prepared"]["instance"] == instance

@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, stat } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { documentationExampleFamilies } from "../examples.ts";
 import { publishExamples } from "./example-publication.ts";
+import { selectDocumentationExamples } from "./example-selection.ts";
 
 interface ExportResult {
   entrypoint: string;
@@ -13,11 +14,14 @@ interface ExportResult {
   output: string;
   runtime: string;
   schema: number;
+  preflight: {
+    ok: boolean;
+  };
+  warnings: unknown[];
   view: string;
 }
 
 interface CommandResult {
-  stderr: string;
   stdout: string;
 }
 
@@ -26,10 +30,24 @@ const repositoryRoot = resolve(packageRoot, "../..");
 const publicRoot = join(packageRoot, "public");
 const destinationRoot = join(publicRoot, "examples");
 const cacheRoot = join(packageRoot, ".vitepress", "cache");
+const usage = `Usage: pnpm --filter @marimo-studio/docs examples:build [selectors]
+
+Selectors may be repeated and combined:
+  --family SLUG       Rebuild one notebook and all of its views
+  --notebook SLUG     Rebuild one notebook export
+  --view FAMILY/VIEW  Rebuild one named view export`;
 
 const isFile = async (path: string): Promise<boolean> => {
   try {
     return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+};
+
+const isDirectory = async (path: string): Promise<boolean> => {
+  try {
+    return (await stat(path)).isDirectory();
   } catch {
     return false;
   }
@@ -43,7 +61,6 @@ const run = (command: string, arguments_: readonly string[]): Promise<CommandRes
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
-    let stderr = "";
 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
@@ -51,17 +68,17 @@ const run = (command: string, arguments_: readonly string[]): Promise<CommandRes
       stdout += chunk;
     });
     child.stderr.on("data", (chunk: string) => {
-      stderr += chunk;
+      process.stderr.write(chunk);
     });
     child.on("error", rejectCommand);
     child.on("close", (code) => {
       if (code === 0) {
-        resolveCommand({ stderr, stdout });
+        resolveCommand({ stdout });
         return;
       }
       rejectCommand(
         new Error(
-          `${command} ${arguments_.join(" ")} exited with ${code ?? "no status"}.\n${stderr}${stdout}`,
+          `${command} ${arguments_.join(" ")} exited with ${code ?? "no status"}.\n${stdout}`,
         ),
       );
     });
@@ -74,6 +91,7 @@ const exportView = async (
   view: string,
 ): Promise<void> => {
   const output = join(stagingRoot, slug, view);
+  await rm(output, { force: true, recursive: true });
   console.log(`Exporting ${slug}/${view}`);
   const command = await run("uv", [
     "run",
@@ -95,13 +113,11 @@ const exportView = async (
   const result = JSON.parse(command.stdout) as ExportResult;
   const entrypoint = join(output, "index.html");
 
-  if (command.stderr.trim()) {
-    process.stderr.write(command.stderr);
-  }
-
   if (
     result.schema !== 1 ||
     result.runtime !== "zero-python" ||
+    result.preflight?.ok !== true ||
+    !Array.isArray(result.warnings) ||
     result.view !== view ||
     result.files < 1 ||
     resolve(result.entrypoint) !== resolve(entrypoint) ||
@@ -128,9 +144,10 @@ const exportNotebook = async (
 ): Promise<void> => {
   const output = join(stagingRoot, slug, "notebook");
   const entrypoint = join(output, "index.html");
+  await rm(output, { force: true, recursive: true });
   await mkdir(output, { recursive: true });
   console.log(`Exporting ${slug}/notebook`);
-  const command = await run("uv", [
+  await run("uv", [
     "run",
     "--frozen",
     "marimo",
@@ -141,9 +158,6 @@ const exportNotebook = async (
     "--output",
     entrypoint,
   ]);
-  if (command.stderr.trim()) {
-    process.stderr.write(command.stderr);
-  }
   if (!(await isFile(entrypoint))) {
     throw new Error(`The ${slug} notebook export did not create index.html.`);
   }
@@ -157,41 +171,73 @@ const exportNotebook = async (
   }
 };
 
+const validateExamplePublication = async (root: string): Promise<void> => {
+  for (const family of documentationExampleFamilies) {
+    const notebook = join(root, family.slug, "notebook", "index.html");
+    if (!(await isFile(notebook))) {
+      throw new Error(`The ${family.slug}/notebook export is unavailable.`);
+    }
+    for (const view of family.views) {
+      const entrypoint = join(root, family.slug, view.key, "index.html");
+      if (!(await isFile(entrypoint))) {
+        throw new Error(`The ${family.slug}/${view.key} export is unavailable.`);
+      }
+      const document = await readFile(entrypoint, "utf8");
+      for (const match of document.matchAll(/\bhref="\.\.\/([^/"?#]+)\/index\.html"/g)) {
+        const target = match[1];
+        if (!target || !family.views.some((candidate) => candidate.key === target)) {
+          throw new Error(
+            `${family.slug}/${view.key} links to an unexported sibling view: ${target ?? "unknown"}`,
+          );
+        }
+      }
+    }
+  }
+};
+
 const main = async (): Promise<void> => {
+  const arguments_ = process.argv.slice(2);
+  if (arguments_.some((argument) => argument === "-h" || argument === "--help")) {
+    console.log(usage);
+    return;
+  }
+  const selection = selectDocumentationExamples(documentationExampleFamilies, arguments_);
   await mkdir(cacheRoot, { recursive: true });
   const stagingRoot = await mkdtemp(join(cacheRoot, "docs-examples-"));
   try {
-    for (const family of documentationExampleFamilies) {
-      await exportNotebook(stagingRoot, family.notebook, family.slug);
-      for (const view of family.views) {
+    if (!selection.complete) {
+      if (!(await isDirectory(destinationRoot))) {
+        throw new Error(
+          "Selective example rebuilding requires an existing complete publication. Run the full examples build first.",
+        );
+      }
+      await validateExamplePublication(destinationRoot);
+      await cp(destinationRoot, stagingRoot, {
+        errorOnExist: false,
+        force: true,
+        recursive: true,
+      });
+    }
+    for (const selected of selection.families) {
+      const { family } = selected;
+      if (selected.notebook) {
+        await exportNotebook(stagingRoot, family.notebook, family.slug);
+      }
+      for (const view of selected.views) {
         await exportView(stagingRoot, family.notebook, family.slug, view.key);
       }
     }
 
-    for (const family of documentationExampleFamilies) {
-      for (const view of family.views) {
-        const document = await readFile(
-          join(stagingRoot, family.slug, view.key, "index.html"),
-          "utf8",
-        );
-        for (const match of document.matchAll(/\bhref="\.\.\/([^/"?#]+)\/index\.html"/g)) {
-          const target = match[1];
-          if (!target || !family.views.some((candidate) => candidate.key === target)) {
-            throw new Error(
-              `${family.slug}/${view.key} links to an unexported sibling view: ${target ?? "unknown"}`,
-            );
-          }
-        }
-      }
-    }
+    await validateExamplePublication(stagingRoot);
 
     await publishExamples({
       destination: destinationRoot,
       previous: join(cacheRoot, `docs-examples-previous-${process.pid}`),
       staging: stagingRoot,
     });
+    const action = selection.complete ? "Exported" : "Rebuilt";
     console.log(
-      `Exported ${documentationExampleFamilies.length} static notebooks and ${documentationExampleFamilies.reduce((count, family) => count + family.views.length, 0)} live documentation views.`,
+      `${action} ${selection.notebooks} static notebooks and ${selection.views} live documentation views.`,
     );
   } catch (error) {
     await rm(stagingRoot, { force: true, recursive: true });

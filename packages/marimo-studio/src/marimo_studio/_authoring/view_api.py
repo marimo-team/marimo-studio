@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Literal, TypeVar
@@ -12,6 +13,7 @@ from marimo_studio._authoring.view import (
     build_view,
     export_view,
     inspect_view,
+    preflight_view,
     read_document,
     remove_view,
     write_document,
@@ -21,6 +23,8 @@ from marimo_studio._delivery.export import (
     StaticExportResult,
     StaticRuntime,
 )
+from marimo_studio._delivery.preflight import StaticPreflightReport
+from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._processes.limits import DEFAULT_RUNTIME_TIMEOUT
 from marimo_studio._validation.records import ValidationReport
 from marimo_studio._views.api import ViewRemovalResult
@@ -141,6 +145,7 @@ class View:
         runtime: StaticRuntime = DEFAULT_STATIC_RUNTIME,
         force: bool = False,
         prepare_timeout: float | None = None,
+        progress: Callable[[StaticExportProgress], None] | None = None,
     ) -> StaticExportResult:
         """Export this view through a selected static runtime."""
         return await export_view(
@@ -152,6 +157,25 @@ class View:
             prepare_timeout=prepare_timeout,
             expected_catalog_generation=self.catalog_generation,
             expected_generation=self.generation,
+            progress=progress,
+        )
+
+    async def preflight(
+        self,
+        *,
+        runtime: StaticRuntime = DEFAULT_STATIC_RUNTIME,
+        prepare_timeout: float | None = None,
+        progress: Callable[[StaticExportProgress], None] | None = None,
+    ) -> StaticPreflightReport:
+        """Verify this static view without publishing a destination."""
+        return await preflight_view(
+            self.workspace.notebook,
+            self.name,
+            runtime=runtime,
+            prepare_timeout=prepare_timeout,
+            expected_catalog_generation=self.catalog_generation,
+            expected_generation=self.generation,
+            progress=progress,
         )
 
     async def remove(self) -> ViewRemovalResult:

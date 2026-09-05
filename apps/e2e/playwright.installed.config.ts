@@ -51,7 +51,7 @@ export default defineConfig({
     },
     url: installedPackageNetwork.readiness.url,
     reuseExistingServer: false,
-    timeout: 240_000,
+    timeout: 420_000,
     gracefulShutdown: { signal: "SIGTERM", timeout: 15_000 },
     stdout: "pipe",
     stderr: "pipe",

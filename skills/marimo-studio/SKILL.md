@@ -520,7 +520,21 @@ only provider is the default 0.1.0 Vanilla provider runs with:
 uv run --with marimo-studio==0.1.0 marimo run notebook.py --sandbox
 ```
 
-Export when the notebook and its data can run in Pyodide:
+Preflight the intended static runtime before publishing:
+
+```console
+marimo-studio view preflight dashboard \
+  --target notebook.py \
+  --runtime zero-python \
+  --json
+```
+
+Read every projection portability record and delivery diagnostic. Zero-Python
+must verify finite projection targets across the configured input states. Use
+WebAssembly when visitors must recompute unprepared states and the notebook can
+run through Pyodide.
+
+Export the verified runtime:
 
 ```console
 marimo-studio view export dashboard \
@@ -528,8 +542,16 @@ marimo-studio view export dashboard \
   --output dist/dashboard
 ```
 
-The browser and static export receive the saved notebook source. Review the
-notebook, public files, data URLs, and dependencies before publishing.
+Export runs the same preflight before committing its destination. Progress is
+written to stderr, including marimo-export prepared-state reuse and cache
+activity. Each progress record names its owning source and nests that owner's
+event. With `--json`, stdout remains one terminal result and stderr contains
+JSON Lines progress and diagnostics.
+
+Zero-Python keeps Python source on the build machine and publishes prepared
+outputs. WebAssembly includes saved notebook source for browser execution.
+Review public files, data URLs, authored browser code, and remote dependencies
+before publishing.
 
 ## Report completion
 

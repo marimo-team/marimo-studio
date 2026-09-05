@@ -10,9 +10,14 @@ from typing import cast
 
 import click
 
-from marimo_studio._authoring.view import build_view, export_view, show_view
+from marimo_studio._authoring.view import (
+    build_view,
+    export_view,
+    preflight_view,
+    show_view,
+)
 from marimo_studio._browser_client.transport import studio_server_connection
-from marimo_studio._cli.diagnostics import json_option, run_in_environment
+from marimo_studio._cli.diagnostics import diagnostics, json_option, run_in_environment
 from marimo_studio._cli.environment import provider_bootstrap_required
 from marimo_studio._cli.help import ColoredCommand
 from marimo_studio._cli.options import (
@@ -25,6 +30,7 @@ from marimo_studio._cli.options import (
 from marimo_studio._cli.output import (
     echo_json,
     render_static_export,
+    render_static_preflight,
     render_view_show,
 )
 from marimo_studio._cli.targets import (
@@ -32,9 +38,38 @@ from marimo_studio._cli.targets import (
     resolve_environment_target,
     resolve_notebook,
 )
-from marimo_studio._delivery.export import DEFAULT_STATIC_RUNTIME, StaticRuntime
+from marimo_studio._delivery.export import (
+    DEFAULT_STATIC_RUNTIME,
+    StaticExportResult,
+    StaticRuntime,
+)
+from marimo_studio._delivery.preflight import StaticPreflightReport
 from marimo_studio.errors import ProtocolError
 from marimo_studio.view_providers import BuildProfile
+
+
+def _emit_preflight_issues(result: StaticPreflightReport) -> None:
+    stream = diagnostics()
+    for issue in result.issues:
+        stream.emit(
+            code=issue.code,
+            message=issue.message,
+            severity=issue.severity,
+            status="fail" if issue.severity == "error" else "warn",
+            details=issue.to_dict(),
+        )
+
+
+def _emit_export_warnings(result: StaticExportResult) -> None:
+    stream = diagnostics()
+    for warning in result.warnings:
+        stream.emit(
+            code=warning.code,
+            message=warning.message,
+            severity="warning",
+            status="warn",
+            details=warning.details,
+        )
 
 
 def _bootstrap_provider_environment(target: Path | None, notebook: Path) -> None:
@@ -179,9 +214,73 @@ def export(
             runtime=runtime,
             force=force,
             prepare_timeout=prepare_timeout,
+            progress=diagnostics().emit_progress,
         )
     )
+    _emit_export_warnings(result)
+    _emit_preflight_issues(result.preflight)
     if json_output:
         echo_json(result.to_dict())
         return
     render_static_export(result)
+
+
+@click.command("preflight", cls=ColoredCommand)
+@view_name_argument
+@target_option
+@click.option(
+    "--runtime",
+    type=click.Choice(("zero-python", "wasm")),
+    default=DEFAULT_STATIC_RUNTIME,
+    show_default=True,
+    help=(
+        "zero-python verifies configured prepared states. wasm verifies the "
+        "browser artifact and projection support."
+    ),
+)
+@click.option(
+    "--prepare-timeout",
+    type=click.FloatRange(min=0, min_open=True),
+    callback=finite_timeout,
+    default=None,
+    metavar="SECONDS",
+    help=(
+        "Seconds to wait for Zero-Python notebook preparation. Defaults to 30 "
+        "seconds when omitted."
+    ),
+)
+@json_option
+def preflight(
+    view_name: str,
+    target: Path | None,
+    runtime: StaticRuntime,
+    prepare_timeout: float | None,
+    json_output: bool,
+) -> None:
+    """Verify a static view without publishing an output directory.
+
+    Studio builds the production artifact, prepares the selected runtime, and
+    checks the staged browser references. The temporary bundle is discarded
+    after validation.
+    """
+    if runtime == "wasm" and prepare_timeout is not None:
+        raise click.UsageError(
+            "--prepare-timeout is only valid with --runtime zero-python."
+        )
+    notebook = resolve_notebook(target)
+    _bootstrap_provider_environment(target, notebook)
+    stream = diagnostics()
+    result = asyncio.run(
+        preflight_view(
+            notebook,
+            view_name,
+            runtime=runtime,
+            prepare_timeout=prepare_timeout,
+            progress=stream.emit_progress,
+        )
+    )
+    _emit_preflight_issues(result)
+    if json_output:
+        echo_json(result.to_dict())
+    else:
+        render_static_preflight(result)

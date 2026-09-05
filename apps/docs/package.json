@@ -9,7 +9,7 @@
     "dev:server": "pnpm examples:build && vitepress dev",
     "examples:build": "node scripts/build-examples.ts",
     "preview": "vitepress preview --host 127.0.0.1 --port 4173 --strictPort",
-    "test": "vp test scripts/source-integrity.test.ts scripts/example-publication.test.ts",
+    "test": "vp test scripts/source-integrity.test.ts scripts/example-publication.test.ts scripts/example-selection.test.ts",
     "verify": "node scripts/verify-build.ts"
   },
   "devDependencies": {

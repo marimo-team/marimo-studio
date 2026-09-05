@@ -55,6 +55,13 @@ owning error supplies them. The re-entry protocol accepts trusted events from
 its private diagnostic channel and turns unmatched process output into a
 bounded warning.
 
+Long-running export commands also emit schema 1 `progress` events. Each record
+contains `command` and a `progress` object with the selected view, runtime,
+owning source, and nested event. Marimo-export events retain its complete
+`ProgressEvent` record. Studio events carry a `StaticExportStep`. The terminal
+result remains on stdout. Re-entry relays trusted progress records without
+converting them to warnings.
+
 ## HTTP translation
 
 Structured responses use:

@@ -8,6 +8,22 @@ from marimo_studio._authoring.workspace_api import doctor as doctor
 from marimo_studio._authoring.workspace_api import open_workspace as open_workspace
 from marimo_studio._delivery.export import StaticExportResult as StaticExportResult
 from marimo_studio._delivery.export import StaticRuntime as StaticRuntime
+from marimo_studio._delivery.portability import (
+    ProjectionPortability as ProjectionPortability,
+)
+from marimo_studio._delivery.preflight import (
+    StaticPreflightIssue as StaticPreflightIssue,
+)
+from marimo_studio._delivery.preflight import (
+    StaticPreflightReport as StaticPreflightReport,
+)
+from marimo_studio._delivery.progress import (
+    StaticExportEvent as StaticExportEvent,
+)
+from marimo_studio._delivery.progress import (
+    StaticExportProgress as StaticExportProgress,
+)
+from marimo_studio._delivery.progress import StaticExportStep as StaticExportStep
 from marimo_studio._notebook.records import InspectionResult as InspectionResult
 from marimo_studio._projections.runtime_records import (
     OutputRenderResult as OutputRenderResult,
@@ -36,6 +52,7 @@ __all__ = [
     "BindingResult",
     "InspectionResult",
     "OutputRenderResult",
+    "ProjectionPortability",
     "ProviderDiagnostic",
     "ProviderReport",
     "RenderedOutput",
@@ -43,7 +60,12 @@ __all__ = [
     "RuntimeOutput",
     "RuntimeProbe",
     "Starter",
+    "StaticExportEvent",
+    "StaticExportProgress",
     "StaticExportResult",
+    "StaticExportStep",
+    "StaticPreflightIssue",
+    "StaticPreflightReport",
     "StaticRuntime",
     "StudioDiagnostic",
     "StudioOverview",

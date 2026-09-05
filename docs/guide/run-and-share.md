@@ -75,12 +75,18 @@ Build the production profile and prepare every projected result for the
 default input state:
 
 ```console
+marimo-studio view preflight dashboard \
+  --target analysis.py
+
 marimo-studio view export dashboard \
   --target analysis.py \
   --output dist/dashboard
 ```
 
-Python executes while the command runs.
+Preflight reports projection portability, prepared-state progress, and browser
+artifact references without publishing a destination. Export repeats those
+checks against the exact staged directory before committing it. Python executes
+while either Zero-Python command runs.
 
 ::: tip Publish without sharing Python source
 The Prepared runtime keeps the Python notebook and cell source on the machine

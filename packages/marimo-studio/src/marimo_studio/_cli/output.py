@@ -12,6 +12,7 @@ from marimo_studio._browser_client.records import ShowResult
 from marimo_studio._cli.diagnostics import diagnostics
 from marimo_studio._cli.print import echo, green, light_blue, red, yellow
 from marimo_studio._delivery.export import StaticExportResult
+from marimo_studio._delivery.preflight import StaticPreflightReport
 from marimo_studio._notebook.inspection import InspectionResult
 from marimo_studio._validation.records import ValidationReport
 from marimo_studio._views.api import ViewRemovalResult
@@ -204,6 +205,17 @@ def render_static_export(result: StaticExportResult) -> None:
             f"{activity.authored_hits} authored hits, "
             f"{activity.authored_misses} authored misses"
         )
+    preflight = result.preflight
+    echo(
+        f"  {light_blue('preflight')} "
+        f"{preflight.inspected_files}/{preflight.browser_files} browser sources, "
+        f"{preflight.references} references, "
+        f"{len(preflight.projections)} projections"
+    )
+    for issue in preflight.issues:
+        echo(f"    {issue.severity} {issue.code}: {issue.message}")
+    for warning in result.warnings:
+        echo(f"  {yellow('warning')} {warning.code}: {warning.message}")
     echo(f"  {light_blue('open')} {result.entrypoint}")
     command = _shell_command(
         [
@@ -217,6 +229,29 @@ def render_static_export(result: StaticExportResult) -> None:
         ]
     )
     echo(f"  {light_blue('serve')} {command}")
+
+
+def render_static_preflight(result: StaticPreflightReport) -> None:
+    """Write one completed static delivery preflight."""
+    echo(f"{green('Verified')} {result.view} with {result.runtime}")
+    echo(f"  {light_blue('files')} {result.files}")
+    echo(
+        f"  {light_blue('browser sources')} "
+        f"{result.inspected_files}/{result.browser_files}"
+    )
+    echo(f"  {light_blue('references')} {result.references}")
+    if result.projections:
+        echo(f"  {light_blue('projections')}")
+        for projection in result.projections:
+            target = projection.target or "dynamic target"
+            echo(f"    {projection.status:<21} {projection.projection} {target}")
+    if result.issues:
+        echo(f"  {light_blue('diagnostics')}")
+        for issue in result.issues:
+            echo(
+                f"    {issue.severity} {issue.code}: {issue.message} "
+                f"({issue.source.path}:{issue.source.line}:{issue.source.column})"
+            )
 
 
 def render_binding(result: BindingResult) -> None:

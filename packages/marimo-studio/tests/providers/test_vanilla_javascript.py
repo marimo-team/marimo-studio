@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from marimo_studio.view_providers._bundled.vanilla._javascript import (
+from marimo_studio.view_providers._javascript import (
     JavaScriptDependency,
     javascript_dependencies,
 )
@@ -21,6 +21,11 @@ from marimo_studio.view_providers._bundled.vanilla._javascript import (
         ('void import("./dependency.js");', "dynamic import", "./dependency.js"),
         ('void import("./" + name);', "dynamic import", None),
         ('import.source("./dependency.wasm");', "source import", None),
+        (
+            'new Worker(new URL("./worker.js", import.meta.url));',
+            "import meta URL",
+            "./worker.js",
+        ),
     ),
 )
 def test_javascript_dependencies_reports_module_edges(

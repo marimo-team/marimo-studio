@@ -25,19 +25,19 @@ from marimo_studio.view_providers import (
     ViewProject,
     mount_attribute,
 )
-from marimo_studio.view_providers._bundled.vanilla._javascript import (
-    TRUNCATED_SPECIFIER,
-    JavaScriptDependency,
-    javascript_dependencies,
-)
 from marimo_studio.view_providers._css_resources import css_resource_urls
 from marimo_studio.view_providers._document import (
     HTMLDocumentParser,
     HTMLInlineScript,
-    HTMLLocalResource,
     HTMLLocalResourceError,
+    HTMLResource,
     is_local_resource_url,
     validate_html_document,
+)
+from marimo_studio.view_providers._javascript import (
+    TRUNCATED_SPECIFIER,
+    JavaScriptDependency,
+    javascript_dependencies,
 )
 from marimo_studio.view_providers._validation import validate_relative_path
 
@@ -81,7 +81,7 @@ class _Source:
 
 @dataclass(frozen=True)
 class _ResourceEdge:
-    declaration: HTMLLocalResource
+    declaration: HTMLResource
     document: SourceDocument
 
 
@@ -90,7 +90,7 @@ class _ParsedEntry:
     content: str
     mounts: tuple[MountDeclaration, ...]
     mount_offsets: tuple[int, ...]
-    resources: tuple[HTMLLocalResource, ...]
+    resources: tuple[HTMLResource, ...]
     inline_scripts: tuple[HTMLInlineScript, ...]
 
 
@@ -378,7 +378,7 @@ def _entry_content(project: ViewProject, entry: PurePosixPath) -> str:
 
 def _resource_error(
     entry: PurePosixPath,
-    resource: HTMLLocalResource,
+    resource: HTMLResource,
     message: str,
 ) -> HTMLLocalResourceError:
     line, column = resource.position
@@ -392,7 +392,7 @@ def _resource_error(
 
 def _local_source_document(
     entry: PurePosixPath,
-    resource: HTMLLocalResource,
+    resource: HTMLResource,
 ) -> SourceDocument:
     parsed = urlsplit(resource.value)
     try:
@@ -416,7 +416,7 @@ def _local_source_document(
 
 def _resource_document(
     entry: PurePosixPath,
-    resource: HTMLLocalResource,
+    resource: HTMLResource,
     path: PurePosixPath,
 ) -> SourceDocument:
     suffix = path.suffix.casefold()
