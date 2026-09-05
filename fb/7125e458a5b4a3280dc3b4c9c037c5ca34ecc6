@@ -1,0 +1,163 @@
+examples/__marimo__/studio/occupancy/monitor/src/index.html
+  s_88978df6b68700::t_b07881129d790f 5-9
+examples/__marimo__/studio/earthquakes/operations/src/operations-data.ts
+  s_88978df6b68700::t_0bff64da241611 21-22
+  s_88978df6b68700::t_abedf355e2f8f1 61-62
+apps/docs/.vitepress/theme/components/StudioExample.vue
+  s_88978df6b68700::t_2896e6d3da6c14 497
+  s_88978df6b68700::t_5c697cd53ac810 542
+  s_88978df6b68700::t_2bf56590acb952 47,63-64,75-95,151,153,156-159,161,169,172-175,177,185-192,294-295,301,366,377,389,493-496,498-499,501,504-505,509-510,519-526,533,545-549,557-565,569-571,576,580
+  s_88978df6b68700::t_a2b223c7687020 244
+  s_88978df6b68700::t_abedf355e2f8f1 402,404
+  s_88978df6b68700::t_9d9d73277380db 380-381
+examples/__marimo__/studio/earthquakes/operations/deno.json
+  s_88978df6b68700::t_1af3e819b286ba 11,14-18
+examples/__marimo__/studio/earthquakes/operations/src/App.tsx
+  s_88978df6b68700::t_7386c463751e46 19
+  s_88978df6b68700::t_0bff64da241611 43-46,79-83,150
+examples/__marimo__/studio/occupancy/monitor/src/App.svelte
+  s_88978df6b68700::t_ff8f92feed16be 95,98
+  s_88978df6b68700::t_54e7c10f98b79b 25,34-38,92-94,96-97,99-101,204-206,311,314-316,418-421,452-458
+  s_88978df6b68700::t_abedf355e2f8f1 62,231-238,246,249,266,284
+examples/__marimo__/studio/athletes/explorer/src/style.css
+  s_88978df6b68700::t_58cd7725d22cb2 37,42-43,71-73,431-432,543-544,547-548
+  s_88978df6b68700::t_2896e6d3da6c14 227,237
+examples/__marimo__/studio/occupancy/pdf-report/src/report/ModelVisuals.tsx
+  s_88978df6b68700::t_26db09595fc80b 43-44
+examples/__marimo__/studio/earthquakes/briefing/src/briefing-data.ts
+  s_88978df6b68700::t_8f6940504bb6b7 13-14,18
+examples/__marimo__/studio/occupancy/model-review/src/App.tsx
+  s_88978df6b68700::t_8b2e54bd1a649f 27-30,41,52,54-55
+  s_88978df6b68700::t_9c08c254d4d956 34,36-40,63-65,69-71,85-87,144,149,185-190,216-222
+  s_88978df6b68700::t_b1e0c705f46c83 75,77-80,83,91
+  s_88978df6b68700::t_abedf355e2f8f1 51,53,56-61,148,150-151
+  s_88978df6b68700::t_905ffe9d0c7405 3-5
+examples/__marimo__/studio/occupancy/pdf-report/src/report/OccupancyReport.tsx
+  s_88978df6b68700::t_1d6131f8401641 3
+  s_88978df6b68700::t_3bb99aac5e1f32 44
+examples/__marimo__/studio/earthquakes/operations/src/index.html
+  s_88978df6b68700::t_64eed2e710b99f 5-9
+examples/__marimo__/studio/occupancy/model-review/deno.json
+  s_88978df6b68700::t_1af3e819b286ba 11,14-18
+examples/__marimo__/studio/occupancy/model-review/src/main.tsx
+  s_88978df6b68700::t_5e79326ec45920 1
+examples/__marimo__/studio/athletes/explorer/src/App.svelte
+  s_88978df6b68700::t_abedf355e2f8f1 237-243
+examples/__marimo__/studio/athletes/overview/AGENTS.md
+  s_88978df6b68700::t_abedf355e2f8f1 13-15,19-21
+examples/__marimo__/studio/occupancy/model-review/src/components/ErrorEvidence.tsx
+  s_88978df6b68700::t_abedf355e2f8f1 49-54
+examples/__marimo__/studio/athletes/field/style.css
+  s_88978df6b68700::t_58cd7725d22cb2 37-38,112-114,413-414,511,515,576,578
+examples/athletes.py
+  s_88978df6b68700::t_73219e014aa1b7 192,194-198,200,204-205,239
+examples/__marimo__/studio/earthquakes/story/index.html
+  s_88978df6b68700::t_64eed2e710b99f 5-9,50-51,71-73,348-352
+  s_88978df6b68700::t_2896e6d3da6c14 308,310,312-313,318
+  s_88978df6b68700::t_400fd0cb3abd52 382-386,391-392,430-433,463-466
+examples/__marimo__/studio/earthquakes/briefing/src/components/BriefingSlides.tsx
+  s_88978df6b68700::t_8f6940504bb6b7 56-59,77,90-94,124-127,138-140,220,255,317,360,419-421,463,467,472,521
+  s_88978df6b68700::t_1d6131f8401641 2,432
+  s_88978df6b68700::t_b1e0c705f46c83 241,244-247,249,263,344-346,349-352,354,368,453,456-459,461,475
+examples/__marimo__/studio/earthquakes/operations/src/main.tsx
+  s_88978df6b68700::t_5e79326ec45920 1
+examples/__marimo__/studio/earthquakes/briefing/src/index.html
+  s_88978df6b68700::t_c4e03d8b13f418 5-9
+examples/__marimo__/studio/earthquakes/briefing/src/App.tsx
+  s_88978df6b68700::t_c4e03d8b13f418 6,37-38,40-43,45-58,69-73,104-112,115-117
+  s_88978df6b68700::t_8f6940504bb6b7 103,113-114,118-119
+  s_88978df6b68700::t_1d6131f8401641 5,39,44
+examples/__marimo__/studio/earthquakes/briefing/src/components/BriefingVisuals.tsx
+  s_88978df6b68700::t_8f6940504bb6b7 30,34,145
+examples/__marimo__/studio/occupancy/model-review/src/components/ThresholdCurve.tsx
+  s_88978df6b68700::t_9c08c254d4d956 44-48,72,135-136
+  s_88978df6b68700::t_abedf355e2f8f1 51
+examples/__marimo__/studio/occupancy/pdf-report/src/ReportViewer.tsx
+  s_88978df6b68700::t_1d6131f8401641 1
+  s_88978df6b68700::t_3296c1e0c9386a 3
+examples/__marimo__/studio/occupancy/pdf-report/src/report/ReportFrame.tsx
+  s_88978df6b68700::t_1d6131f8401641 2
+examples/__marimo__/studio/occupancy/monitor/src/style.css
+  s_88978df6b68700::t_7386c463751e46 27,502-503
+  s_88978df6b68700::t_b07881129d790f 36-47,513-514,516,518-519
+  s_88978df6b68700::t_2896e6d3da6c14 486-501,504-505
+examples/__marimo__/studio/occupancy/pdf-report/src/main.tsx
+  s_88978df6b68700::t_5e79326ec45920 1
+examples/__marimo__/studio/occupancy/pdf-report/src/index.html
+  s_88978df6b68700::t_b07881129d790f 5-9
+examples/__marimo__/studio/occupancy/pdf-report/deno.json
+  s_88978df6b68700::t_1af3e819b286ba 11,14-18
+examples/__marimo__/studio/earthquakes/briefing/src/main.tsx
+  s_88978df6b68700::t_5e79326ec45920 1
+examples/__marimo__/studio/occupancy/model-review/src/index.html
+  s_88978df6b68700::t_b07881129d790f 5-9
+examples/__marimo__/studio/earthquakes/operations/src/style.css
+  s_88978df6b68700::t_8cd6c63ebe487f 787-792
+  s_88978df6b68700::t_2896e6d3da6c14 843-852
+  s_88978df6b68700::t_64eed2e710b99f 40-41,43,305,391,529-533,535-543,547,551,555,559,574-579,738-760,765-768
+  s_88978df6b68700::t_926a184e945bc0 605-611,842,853-863
+examples/__marimo__/studio/occupancy/model-review/src/style.css
+  s_88978df6b68700::t_1fc81d9a9c2a3a 530-539
+  s_88978df6b68700::t_2896e6d3da6c14 529,540,542-545,549-550
+  s_88978df6b68700::t_b07881129d790f 38-49,247,419-420,551-555
+  s_88978df6b68700::t_ca6139a4f2a709 546-548
+  s_88978df6b68700::t_7386c463751e46 510,513-518,541
+examples/__marimo__/studio/earthquakes/briefing/deno.json
+  s_88978df6b68700::t_1af3e819b286ba 11,14-18
+examples/__marimo__/studio/occupancy/pdf-report/src/report/types.ts
+  s_88978df6b68700::t_26db09595fc80b 75-80,99-109,112,114-118
+examples/__marimo__/studio/occupancy/pdf-report/src/style.css
+  s_88978df6b68700::t_b07881129d790f 36-37,148,198-201,208
+  s_88978df6b68700::t_a6e572e3beb2e3 60-65
+  s_88978df6b68700::t_546fe3e2752792 345
+  s_88978df6b68700::t_2896e6d3da6c14 368-375
+examples/occupancy.py
+  s_88978df6b68700::t_db8cd6d669c008 48-70,189-190,200-203,209-213,226,343-344,346-349,358-362,364-366,375-378,437-449,544,562
+  s_88978df6b68700::t_a6e572e3beb2e3 118
+examples/__marimo__/studio/athletes/overview/index.html
+  s_88978df6b68700::t_0647a90a4c2d72 496,498-500,506,512,518-521,525-526,691-699,909-911,1030
+  s_88978df6b68700::t_73219e014aa1b7 754-758,846-849,878,882-885
+  s_88978df6b68700::t_09e2843d8eac00 678-686,689-690,708-709
+  s_88978df6b68700::t_58cd7725d22cb2 5-9,38-44,72-74,710
+  s_88978df6b68700::t_adbaf5f314da7c 507,530-550,700-707,916
+  s_88978df6b68700::t_abedf355e2f8f1 852-857,859-862
+  s_88978df6b68700::t_2896e6d3da6c14 655-657,660-661,664-673,676-677,687-688,711-715
+  s_88978df6b68700::t_26cc38a5fee515 867-872,877,892-907,1022-1029
+examples/__marimo__/studio/athletes/explorer/src/index.html
+  s_88978df6b68700::t_58cd7725d22cb2 5-8
+examples/__marimo__/studio/athletes/field/index.html
+  s_88978df6b68700::t_58cd7725d22cb2 5-8
+examples/__marimo__/studio/earthquakes/operations/src/components/EventMap.tsx
+  s_88978df6b68700::t_64eed2e710b99f 2,122-123,141
+  s_88978df6b68700::t_0bff64da241611 17,25,49-51,109-110
+  s_88978df6b68700::t_926a184e945bc0 114-116
+examples/earthquakes.py
+  s_88978df6b68700::t_3296c1e0c9386a 266,281-290
+  s_88978df6b68700::t_be55e0dda46ffc 473
+  s_88978df6b68700::t_24443e88b89bd1 99-114,128,130-133,151-153,168-169,189,191-194,203-207,210,265,267,272-274,278-280,291,348-355,369-372,431,435-436,507,511
+examples/__marimo__/studio/occupancy/pdf-report/src/App.tsx
+  s_88978df6b68700::t_1d6131f8401641 4
+  s_88978df6b68700::t_26db09595fc80b 86,175-176,178-181
+examples/__marimo__/studio/occupancy/pdf-report/src/report/ModelPage.tsx
+  s_88978df6b68700::t_26db09595fc80b 13-22,105-111
+examples/__marimo__/studio/earthquakes/briefing/src/style.css
+  s_88978df6b68700::t_926a184e945bc0 1564
+  s_88978df6b68700::t_c4e03d8b13f418 1345-1563,1565-1580
+  s_88978df6b68700::t_abedf355e2f8f1 94,98-100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "fb7125e458a5b4a3280dc3b4c9c037c5ca34ecc6",
+  "prompts": {},
+  "sessions": {
+    "s_88978df6b68700": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06da8-63a4-7542-9810-17ef2bc3ddf2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
