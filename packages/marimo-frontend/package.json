@@ -11,6 +11,7 @@
     "./embedded-runtime": "./src/embedded-runtime.tsx",
     "./prepared-presentation": "./src/prepared-presentation.tsx",
     "./projected-output": "./src/projected-output.tsx",
+    "./projected-output-function-gate": "./src/projected-output-function-gate.ts",
     "./session-bootstrap": "./src/session-bootstrap.ts",
     "./theme-frame": "./src/theme-frame.ts",
     "./vite": "./src/vite.ts"
@@ -18,7 +19,7 @@
   "scripts": {
     "check:upstream": "node scripts/check.mjs",
     "prepare:upstream": "node scripts/prepare.mjs",
-    "test": "vp test tests/source.test.mjs tests/control-endpoint.test.ts tests/embedded-control-state.test.ts tests/embedded-runtime.test.ts tests/projected-output-state.test.ts tests/radix-compose-refs.test.tsx tests/runtime-logger.test.ts tests/session-bootstrap.test.ts tests/theme-frame.test.ts tests/wasm-worker-owner.test.ts"
+    "test": "vp test tests/source.test.mjs tests/control-endpoint.test.ts tests/embedded-control-state.test.ts tests/embedded-runtime.test.ts tests/projected-output-function-gate.test.ts tests/projected-output-owner.test.ts tests/projected-output-state.test.ts tests/radix-compose-refs.test.tsx tests/runtime-logger.test.ts tests/session-bootstrap.test.ts tests/theme-frame.test.ts tests/wasm-worker-owner.test.ts"
   },
   "dependencies": {
     "@codemirror/state": "catalog:",

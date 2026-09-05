@@ -1,7 +1,9 @@
 import {
   parsePresentationBuild,
+  parsePresentationRefreshBarrierResult,
   parseWorkspaceChange,
   type PresentationBuild,
+  type PresentationRefreshBarrierResult,
 } from "@marimo-studio/protocol/development-events";
 import {
   parsePreviewMessage,
@@ -131,7 +133,12 @@ export const bindViewSwitches = (callback: (request: SwitchViewMessage) => void)
 interface PresentationEventCallbacks {
   readonly changed: () => void;
   readonly refresh: (phase: PresentationRefreshMessage["phase"]) => void;
-  readonly barrier?: (port: MessagePort, generation: number) => void;
+  readonly barrier?: (
+    port: MessagePort,
+    generation: number,
+    signal: AbortSignal,
+    result: Promise<PresentationRefreshBarrierResult>,
+  ) => void;
 }
 
 export const bindPresentationEvents = (callbacks: PresentationEventCallbacks): (() => void) => {
@@ -159,7 +166,45 @@ export const bindPresentationEvents = (callbacks: PresentationEventCallbacks): (
       } else if (request.type === "marimo-studio:presentation-refresh-barrier") {
         const port = event.ports.length === 1 ? event.ports[0] : undefined;
         if (port) {
-          callbacks.barrier?.(port, request.generation);
+          const controller = new AbortController();
+          let finishResult = (_result: PresentationRefreshBarrierResult) => {};
+          const result = new Promise<PresentationRefreshBarrierResult>((resolve) => {
+            finishResult = resolve;
+          });
+          let resultFinished = false;
+          const finish = (outcome: PresentationRefreshBarrierResult) => {
+            if (resultFinished) {
+              return;
+            }
+            resultFinished = true;
+            if (outcome.type === "marimo-studio:presentation-refresh-barrier-failed") {
+              controller.abort(
+                new DOMException("The parent abandoned the document mutation.", "AbortError"),
+              );
+            }
+            finishResult(outcome);
+            port.close();
+          };
+          port.addEventListener("message", (message) => {
+            const outcome = parsePresentationRefreshBarrierResult(message.data);
+            if (outcome?.generation !== request.generation) {
+              return;
+            }
+            finish(outcome);
+          });
+          port.addEventListener("messageerror", () =>
+            finish({
+              schema: 1,
+              type: "marimo-studio:presentation-refresh-barrier-failed",
+              generation: request.generation,
+            }),
+          );
+          port.start();
+          if (callbacks.barrier) {
+            callbacks.barrier(port, request.generation, controller.signal, result);
+          } else {
+            port.close();
+          }
         }
       } else {
         callbacks.refresh(request.phase);

@@ -17,8 +17,10 @@ import {
   prepareOwnedCheckout,
 } from "../scripts/source.mjs";
 import {
+  classifyProjectedOutputFunctionErrors,
   evergreenKaTeXFontCss,
   extendWebSocketConnectionTimeout,
+  scopeProjectedOutputFunctionRequests,
   silenceMissingPresentationCellScroll,
   stabilizeDataTableHeaderRefs,
 } from "../src/vite.ts";
@@ -160,6 +162,7 @@ test("the package exposes capability facades", async () => {
       "./embedded-runtime",
       "./prepared-presentation",
       "./projected-output",
+      "./projected-output-function-gate",
       "./session-bootstrap",
       "./theme-frame",
       "./vite",
@@ -279,6 +282,54 @@ test("browser connections retain the Studio startup window", () => {
   expect(transformed[0]).not.toContain("connectionTimeout: 10_000");
   expect(() => extendWebSocketConnectionTimeout("connectionTimeout: 4_000,")).toThrow(
     "Marimo WebSocket connection timeout no longer matches the Studio adapter",
+  );
+});
+
+test("projected plugin function calls carry their rendering host", () => {
+  const source = `import { Provider } from "jotai";
+async function invoke(hostElement, parsedArgs, key, namespace) {
+          const response = await FUNCTIONS_REGISTRY.request({
+            args: parsedArgs,
+            functionName: key,
+            namespace,
+          });
+  return response;
+}`;
+
+  const transformed = lineEndingVariants(source).map(scopeProjectedOutputFunctionRequests);
+  expect(transformed[0]).toBe(transformed[1]);
+  expect(transformed[0]).toContain(
+    'import { runProjectedOutputFunctionRequest } from "marimo-studio:projected-output-function-gate";',
+  );
+  expect(transformed[0]).toContain("runProjectedOutputFunctionRequest(\n            hostElement,");
+  expect(() => scopeProjectedOutputFunctionRequests('import { Provider } from "jotai";')).toThrow(
+    "Marimo function requests no longer match the projected output adapter",
+  );
+  expect(() => scopeProjectedOutputFunctionRequests(`${source}\n${source}`)).toThrow(
+    "Marimo function requests no longer match the projected output adapter",
+  );
+});
+
+test("projected function cancellations bypass request error reporting", () => {
+  const source = `import { useAtomValue } from "jotai";
+async function request(keyString, handler, args) {
+      try {
+        return await handler(...args);
+      } catch (error) {
+        // Special handling for NoKernelConnectedError error
+        report(error);
+      }
+}`;
+
+  const transformed = lineEndingVariants(source).map(classifyProjectedOutputFunctionErrors);
+  expect(transformed[0]).toBe(transformed[1]);
+  expect(transformed[0]).toContain("classifyProjectedOutputFunctionRequest(operation)");
+  expect(transformed[0]).toContain("if (isProjectedOutputFunctionAbort(error))");
+  expect(() =>
+    classifyProjectedOutputFunctionErrors('import { useAtomValue } from "jotai";'),
+  ).toThrow("Marimo request errors no longer match the projected output adapter");
+  expect(() => classifyProjectedOutputFunctionErrors(`${source}\n${source}`)).toThrow(
+    "Marimo request errors no longer match the projected output adapter",
   );
 });
 

@@ -1,3 +1,5 @@
+import { act, createElement, useLayoutEffect } from "react";
+import { createRoot } from "react-dom/client";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import {
@@ -17,7 +19,10 @@ import {
   setSupportUrl,
   subscribeRuntimeConfig,
 } from "../src/runtime-config/index.ts";
+import { useRuntimeProjectionConfig } from "../src/runtime/use-runtime-config.ts";
 import { runtimeConfig } from "./runtime-fixtures.ts";
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 globalThis.__MARIMO_MOUNT_CONFIG__ = {
   supportUrl: "/support/old",
@@ -199,15 +204,18 @@ test("a failed history push restores document, styles, runtime, and URL identity
 test("an unchanged document revision commits refreshed runtime bindings", async () => {
   const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
   document.body.innerHTML = '<main id="app-shell">Current shell</main>';
+  const runtimeRoot = document.createElement("div");
+  document.body.append(runtimeRoot);
   setSupportUrl("/support/old");
-  commitRuntimeConfig(
-    runtimeConfig({
-      revision: "revision-old",
-      runtimeBindings: { cellRefs: { "cell:v1:result": "old-cell-id" } },
-    }),
-  );
+  const previous = runtimeConfig({
+    revision: "revision-old",
+    projectionRevision: "a".repeat(64),
+    runtimeBindings: { cellRefs: { "cell:v1:result": "old-cell-id" } },
+  });
+  commitRuntimeConfig(previous);
   const refreshed = runtimeConfig({
     revision: "revision-old",
+    projectionRevision: "b".repeat(64),
     runtimeBindings: { cellRefs: { "cell:v1:result": "new-cell-id" } },
   });
   vi.stubGlobal(
@@ -222,12 +230,143 @@ test("an unchanged document revision commits refreshed runtime bindings", async 
       });
     }),
   );
+  const events: string[] = [];
+  const Probe = () => {
+    const revision = useRuntimeProjectionConfig().projectionRevision;
+    useLayoutEffect(() => {
+      events.push(`commit:${revision}`);
+      return () => {
+        events.push(`release:${revision}`);
+      };
+    }, [revision]);
+    return null;
+  };
+  const root = createRoot(runtimeRoot);
+  await act(async () => root.render(createElement(Probe)));
   const adapter = new DocumentRevisionAdapter("s_preview", "s_runtime");
 
-  await adapter.replace(adapter.url, "/support/old", new AbortController().signal, vi.fn());
+  try {
+    await act(async () => {
+      await adapter.replace(adapter.url, "/support/old", new AbortController().signal, vi.fn());
+      events.push("replace:resolved");
+    });
+  } finally {
+    await act(async () => root.unmount());
+  }
 
   expect(getRuntimeConfig().runtimeBindings.cellRefs["cell:v1:result"]).toBe("new-cell-id");
   expect(document.querySelector("#app-shell")?.textContent).toBe("Current shell");
+  expect(events.slice(0, 4)).toEqual([
+    `commit:${previous.projectionRevision}`,
+    `release:${previous.projectionRevision}`,
+    `commit:${refreshed.projectionRevision}`,
+    "replace:resolved",
+  ]);
+});
+
+test("runtime subscribers observe the committed document", async () => {
+  const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
+  document.body.innerHTML = '<main id="app-shell">Old shell</main>';
+  setSupportUrl("/support/old");
+  commitRuntimeConfig(runtimeConfig({ revision: "revision-old" }));
+  const next = runtimeConfig({
+    revision: "revision-new",
+    projectionRevision: "b".repeat(64),
+    supportUrl: "/support/new",
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.includes("/support/new/config")) {
+        return Response.json(next);
+      }
+      return new Response('<html><body><main id="app-shell">New shell</main></body></html>', {
+        headers: {
+          "Marimo-Studio-Revision": "revision-new",
+          "Marimo-Studio-Support-Url": "/support/new",
+        },
+      });
+    }),
+  );
+  const observedShells: Array<string | null | undefined> = [];
+  const unsubscribe = subscribeRuntimeConfig(() => {
+    if (getRuntimeConfig().revision === "revision-new") {
+      observedShells.push(document.querySelector("#app-shell")?.textContent);
+    }
+  });
+  const adapter = new DocumentRevisionAdapter("s_preview", "s_runtime");
+
+  try {
+    await adapter.replace("/next/", "/support/new", new AbortController().signal, vi.fn());
+  } finally {
+    unsubscribe();
+  }
+
+  expect(observedShells).toEqual(["New shell"]);
+});
+
+test("projection owners commit before document replacement resolves", async () => {
+  const { DocumentRevisionAdapter } = await import("../src/document/revision-document.ts");
+  document.body.innerHTML = '<main id="app-shell">Old shell</main>';
+  const runtimeRoot = document.createElement("div");
+  document.body.append(runtimeRoot);
+  setSupportUrl("/support/old");
+  const previous = runtimeConfig({
+    revision: "revision-old",
+    projectionRevision: "a".repeat(64),
+  });
+  const next = runtimeConfig({
+    revision: "revision-new",
+    projectionRevision: "b".repeat(64),
+    supportUrl: "/support/new",
+  });
+  commitRuntimeConfig(previous);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.includes("/support/new/config")) {
+        return Response.json(next);
+      }
+      return new Response('<html><body><main id="app-shell">New shell</main></body></html>', {
+        headers: {
+          "Marimo-Studio-Revision": "revision-new",
+          "Marimo-Studio-Support-Url": "/support/new",
+        },
+      });
+    }),
+  );
+  const events: string[] = [];
+  const Probe = () => {
+    const revision = useRuntimeProjectionConfig().projectionRevision;
+    useLayoutEffect(() => {
+      events.push(`commit:${revision}`);
+      return () => {
+        events.push(`release:${revision}`);
+      };
+    }, [revision]);
+    return null;
+  };
+  const root = createRoot(runtimeRoot);
+  await act(async () => root.render(createElement(Probe)));
+  const adapter = new DocumentRevisionAdapter("s_preview", "s_runtime");
+
+  try {
+    await act(async () => {
+      await adapter.replace("/next/", "/support/new", new AbortController().signal, vi.fn());
+      events.push("replace:resolved");
+    });
+  } finally {
+    await act(async () => root.unmount());
+  }
+
+  expect(events.slice(0, 4)).toEqual([
+    `commit:${previous.projectionRevision}`,
+    `release:${previous.projectionRevision}`,
+    `commit:${next.projectionRevision}`,
+    "replace:resolved",
+  ]);
 });
 
 test("same-revision subscriber failure restores config, support, URL, and history", async () => {

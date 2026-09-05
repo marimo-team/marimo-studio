@@ -60,6 +60,38 @@ test("a notebook mutation pauses new reads and drains active reads without abort
   assert.equal(nextStarted, true);
 });
 
+test("a cancelled mutation barrier reopens reads without aborting the active read", async () => {
+  const gate = new ProjectionReadGate();
+  let finish!: () => void;
+  let activeAborted = false;
+  const active = gate.run(
+    undefined,
+    (signal) =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+        signal.addEventListener("abort", () => {
+          activeAborted = true;
+        });
+      }),
+  );
+  const controller = new AbortController();
+  const pausing = gate.pauseAndDrainCurrent(controller.signal);
+  let nextStarted = false;
+  const next = gate.run(undefined, async () => {
+    nextStarted = true;
+  });
+  await Promise.resolve();
+  assert.equal(nextStarted, false);
+
+  controller.abort(new DOMException("The parent abandoned the mutation.", "AbortError"));
+  await assert.rejects(pausing, { name: "AbortError" });
+  await next;
+  assert.equal(nextStarted, true);
+  assert.equal(activeAborted, false);
+  finish();
+  await active;
+});
+
 test("concurrent mutation pauses share one claim", async () => {
   const gate = new ProjectionReadGate();
   const first = gate.pauseAndDrain();

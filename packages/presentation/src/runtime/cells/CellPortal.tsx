@@ -72,7 +72,12 @@ export const CellPortal = memo(function CellPortal({
   }
 
   return createPortal(
-    <CellOutput cell={cell} projection={projection} onSubmitStdin={onSubmitStdin} />,
+    <CellOutput
+      cell={cell}
+      projectionRevision={binding.projectionRevision}
+      projection={projection}
+      onSubmitStdin={onSubmitStdin}
+    />,
     host,
   );
 });

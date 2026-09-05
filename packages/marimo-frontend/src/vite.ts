@@ -112,6 +112,80 @@ export const extendWebSocketConnectionTimeout = (source: string): string => {
   return normalized.replace(marimoWebSocketConnectionTimeout, studioWebSocketConnectionTimeout);
 };
 
+const functionRequestImportAnchor = 'import { Provider } from "jotai";';
+const functionRequestCallAnchor = `          const response = await FUNCTIONS_REGISTRY.request({
+            args: parsedArgs,
+            functionName: key,
+            namespace,
+          });`;
+
+export const scopeProjectedOutputFunctionRequests = (source: string): string => {
+  const normalized = normalizeLineEndings(source);
+  if (
+    normalized.split(functionRequestImportAnchor).length !== 2 ||
+    normalized.split(functionRequestCallAnchor).length !== 2
+  ) {
+    throw new Error("Marimo function requests no longer match the projected output adapter");
+  }
+  return normalized
+    .replace(
+      functionRequestImportAnchor,
+      `${functionRequestImportAnchor}\nimport { runProjectedOutputFunctionRequest } from "marimo-studio:projected-output-function-gate";`,
+    )
+    .replace(
+      functionRequestCallAnchor,
+      `          const response = await runProjectedOutputFunctionRequest(
+            hostElement,
+            () =>
+              FUNCTIONS_REGISTRY.request({
+                args: parsedArgs,
+                functionName: key,
+                namespace,
+              }),
+          );`,
+    );
+};
+
+const requestToastingImportAnchor = 'import { useAtomValue } from "jotai";';
+const requestToastingOperationAnchor = "        return await handler(...args);";
+const requestToastingCatchAnchor = `      } catch (error) {
+        // Special handling for NoKernelConnectedError error`;
+
+export const classifyProjectedOutputFunctionErrors = (source: string): string => {
+  const normalized = normalizeLineEndings(source);
+  if (
+    normalized.split(requestToastingImportAnchor).length !== 2 ||
+    normalized.split(requestToastingOperationAnchor).length !== 2 ||
+    normalized.split(requestToastingCatchAnchor).length !== 2
+  ) {
+    throw new Error("Marimo request errors no longer match the projected output adapter");
+  }
+  return normalized
+    .replace(
+      requestToastingImportAnchor,
+      `${requestToastingImportAnchor}
+import {
+  classifyProjectedOutputFunctionRequest,
+  isProjectedOutputFunctionAbort,
+} from "marimo-studio:projected-output-function-gate";`,
+    )
+    .replace(
+      requestToastingOperationAnchor,
+      `        const operation = handler(...args);
+        return await (keyString === "sendFunctionRequest"
+          ? classifyProjectedOutputFunctionRequest(operation)
+          : operation);`,
+    )
+    .replace(
+      requestToastingCatchAnchor,
+      `      } catch (error) {
+        if (isProjectedOutputFunctionAbort(error)) {
+          throw error;
+        }
+        // Special handling for NoKernelConnectedError error`,
+    );
+};
+
 const evergreenKaTeXFonts = (): Plugin => ({
   name: "marimo-studio-evergreen-katex-fonts",
   enforce: "pre",
@@ -172,6 +246,25 @@ const studioWebSocketConnectionWindow = (): Plugin => ({
   },
 });
 
+const scopedProjectedOutputFunctions = (adapter: string): Plugin => ({
+  name: "marimo-studio-projected-output-functions",
+  enforce: "pre",
+  resolveId(source) {
+    if (source === "marimo-studio:projected-output-function-gate") {
+      return adapter;
+    }
+  },
+  transform(source, id) {
+    const path = id.split("?", 1)[0]?.replaceAll("\\", "/");
+    if (path?.endsWith("/plugins/core/registerReactComponent.tsx")) {
+      return { code: scopeProjectedOutputFunctionRequests(source), map: null };
+    }
+    if (path?.endsWith("/core/network/requests-toasting.tsx")) {
+      return { code: classifyProjectedOutputFunctionErrors(source), map: null };
+    }
+  },
+});
+
 const opaqueFrameLogger = (frontend: string, logger: string): Plugin => ({
   name: "marimo-studio-opaque-frame-logger",
   enforce: "pre",
@@ -192,6 +285,7 @@ export const createMarimoViteIntegration = () => {
   const logger = join(packageRoot, "src", "runtime-logger.ts");
   const languageData = join(packageRoot, "src", "presentation-language-data.ts");
   const radixComposeRefs = join(packageRoot, "src", "radix-compose-refs.ts");
+  const projectedOutputFunctions = join(packageRoot, "src", "projected-output-function-gate.ts");
   const wasmWorkers = createWasmWorkerViteIntegration(frontend, packageRoot);
 
   return {
@@ -201,6 +295,7 @@ export const createMarimoViteIntegration = () => {
       stableDataTableHeaderRefs(),
       quietPresentationCellScroll(),
       studioWebSocketConnectionWindow(),
+      scopedProjectedOutputFunctions(projectedOutputFunctions),
       ...wasmWorkers.plugins,
     ],
     workerPlugins: wasmWorkers.workerPlugins,

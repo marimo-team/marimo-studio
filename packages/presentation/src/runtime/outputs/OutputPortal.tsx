@@ -79,6 +79,7 @@ export const OutputPortal = ({
     blocked: structuralFailure !== undefined,
     connectionState,
     model,
+    projectionRevision: binding.projectionRevision,
     readOutputs,
     selector,
     sourceCellId,
@@ -112,7 +113,11 @@ export const OutputPortal = ({
   }
   return createPortal(
     <ProjectedOutput
+      activeProjectionRevision={binding.projectionRevision}
+      activeSourceVersion={model.version}
       output={projectionState.projection.output}
+      outputProjectionRevision={projectionState.projection.projectionRevision}
+      outputSourceVersion={projectionState.projection.sourceVersion}
       stale={
         projectionState.pending || model.phase !== "ready" || !projectionState.projectionCurrent
       }

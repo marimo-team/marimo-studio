@@ -1,3 +1,11 @@
+import {
+  beginProjectedOutputFunctionTransition,
+  cancelProjectedOutputFunctionTransitionDrain,
+  cancelProjectedOutputFunctionTransition,
+  completeProjectedOutputFunctionTransition,
+  type ProjectedOutputFunctionTransition,
+} from "@marimo-studio/marimo-frontend/projected-output-function-gate";
+
 import type { PresentationDiagnostic } from "../diagnostics.ts";
 import type { PresentationTarget } from "./presentation-refresh.ts";
 import type { DocumentRevisionCommit } from "./revision-document.ts";
@@ -55,6 +63,8 @@ export class PresentationRevisionController {
   private latestTransition: Promise<DocumentRevisionCommit | undefined> | undefined;
   private operationGeneration = 0;
   private disposed = false;
+  private activeFunctionTransition: ProjectedOutputFunctionTransition | undefined;
+  private heldFunctionTransition: ProjectedOutputFunctionTransition | undefined;
 
   constructor(
     private readonly document: RevisionDocumentPort,
@@ -126,7 +136,7 @@ export class PresentationRevisionController {
     };
     const transition = this.run(
       { kind, target: { documentUrl, supportUrl } },
-      async (signal, updateTarget) => {
+      async (signal, updateTarget, cancelFunctionTransition) => {
         this.document.abort();
         const commit = await this.document.replace(
           documentUrl,
@@ -139,11 +149,13 @@ export class PresentationRevisionController {
         if (commit.reloadDocument) {
           reloadPending = true;
           this.options.reloadDocument(this.sessionReplay.preservedUrl(historyUrl));
+          cancelFunctionTransition();
           return commit;
         }
         if (this.options.applyRuntime() === "reload") {
           reloadPending = true;
           this.options.reloadRuntime();
+          cancelFunctionTransition();
         }
         if (commit.supportChanged && !reloadPending) {
           policy.onSupportChanged?.();
@@ -173,9 +185,12 @@ export class PresentationRevisionController {
 
   cancel(): void {
     this.operationGeneration += 1;
+    cancelProjectedOutputFunctionTransitionDrain(this.activeFunctionTransition);
     this.active?.abort();
     this.active = undefined;
     this.document.abort();
+    completeProjectedOutputFunctionTransition(this.heldFunctionTransition);
+    this.heldFunctionTransition = undefined;
   }
 
   dispose(): void {
@@ -183,6 +198,8 @@ export class PresentationRevisionController {
       return;
     }
     this.disposed = true;
+    cancelProjectedOutputFunctionTransition(this.heldFunctionTransition);
+    this.heldFunctionTransition = undefined;
     this.cancel();
     projectionReadGate.release();
     this.latestTransition = undefined;
@@ -190,7 +207,11 @@ export class PresentationRevisionController {
 
   private async run<T>(
     initialOperation: RevisionOperation,
-    task: (signal: AbortSignal, updateTarget: (target: PresentationTarget) => void) => Promise<T>,
+    task: (
+      signal: AbortSignal,
+      updateTarget: (target: PresentationTarget) => void,
+      cancelFunctionTransition: () => void,
+    ) => Promise<T>,
     policy: PresentationRevisionPolicy,
   ): Promise<T | undefined> {
     if (this.disposed) {
@@ -201,17 +222,37 @@ export class PresentationRevisionController {
     const operationGeneration = ++this.operationGeneration;
     const readinessClaim = beginPresentationRefresh("document");
     const projectionClaim = projectionReadGate.begin();
+    const functionClaim = beginProjectedOutputFunctionTransition();
+    let cancelFunctionTransition = false;
+    let holdFunctionTransition = false;
     let operation = initialOperation;
+    this.activeFunctionTransition = functionClaim;
     this.active = controller;
     try {
-      const result = await task(controller.signal, (target) => {
-        operation = { ...operation, target };
-      });
+      await functionClaim?.drained;
       if (
         this.disposed ||
         controller.signal.aborted ||
         operationGeneration !== this.operationGeneration
       ) {
+        cancelFunctionTransition ||= this.disposed;
+        return undefined;
+      }
+      const result = await task(
+        controller.signal,
+        (target) => {
+          operation = { ...operation, target };
+        },
+        () => {
+          cancelFunctionTransition = true;
+        },
+      );
+      if (
+        this.disposed ||
+        controller.signal.aborted ||
+        operationGeneration !== this.operationGeneration
+      ) {
+        cancelFunctionTransition ||= this.disposed;
         return undefined;
       }
       setPresentationRefreshState(readinessClaim, "ready");
@@ -219,6 +260,7 @@ export class PresentationRevisionController {
       policy.onReady?.(operation);
       return result;
     } catch (error) {
+      cancelFunctionTransition ||= this.disposed;
       if (isAbortError(error) || operationGeneration !== this.operationGeneration) {
         return undefined;
       }
@@ -226,12 +268,24 @@ export class PresentationRevisionController {
       setPresentationRefreshState(readinessClaim, failure.state, failure.diagnostic);
       if (failure.state === "error") {
         projectionReadGate.complete(projectionClaim);
+      } else if (!cancelFunctionTransition) {
+        holdFunctionTransition = true;
       }
       policy.onFailure?.(error, operation, failure);
       throw error;
     } finally {
+      if (cancelFunctionTransition) {
+        cancelProjectedOutputFunctionTransition(functionClaim);
+      } else if (holdFunctionTransition) {
+        this.heldFunctionTransition = functionClaim;
+      } else {
+        completeProjectedOutputFunctionTransition(functionClaim);
+      }
       if (this.active === controller) {
         this.active = undefined;
+      }
+      if (this.activeFunctionTransition === functionClaim) {
+        this.activeFunctionTransition = undefined;
       }
     }
   }

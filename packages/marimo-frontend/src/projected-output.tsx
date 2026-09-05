@@ -17,6 +17,7 @@ import { VirtualFileTracker } from "@marimo-team/frontend/unstable_internal/core
 import { useLayoutEffect } from "react";
 
 import type { EmbeddedJsonValue } from "./embedded-json.ts";
+import type { ProjectedOutputFunctionRequestScope } from "./projected-output-function-gate.ts";
 
 import { suppressReplacedControlValues } from "./embedded-control-state";
 import { reconcileProjectedOutputState } from "./projected-output-state";
@@ -224,10 +225,12 @@ export const useProjectedOutputOwner = (ownerCellIdValue: string, timestamp: num
 
 export const ProjectedOutputArea = ({
   accessibleName,
+  functionRequestScope,
   output,
   stale,
 }: {
   accessibleName?: string;
+  functionRequestScope?: ProjectedOutputFunctionRequestScope;
   output: ProjectedOutputUpdate;
   stale: boolean;
 }) => {
@@ -244,6 +247,9 @@ export const ProjectedOutputArea = ({
       aria-label={accessibleName}
       className="marimo"
       data-marimo-cell-output=""
+      data-marimo-studio-active-projection-owner={functionRequestScope?.activeOwner}
+      data-marimo-studio-output-projection-owner={functionRequestScope?.outputOwner}
+      data-marimo-studio-projected-output={functionRequestScope ? "" : undefined}
       role="group"
       {...cellDomProps(ownerCellId, "_")}
     >

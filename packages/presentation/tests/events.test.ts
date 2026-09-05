@@ -316,14 +316,14 @@ test("wrapper popstate restores a fragment without a presentation transition", (
   dispose();
 });
 
-test("presentation refresh events target the current document lifecycle", () => {
+test("presentation refresh events target the current document lifecycle", async () => {
   globalThis.history.replaceState({}, "", "/?marimo_studio_lifecycle=7");
   commitRuntimeConfig(runtimeConfig());
   const parent = {};
   vi.stubGlobal("parent", parent);
   const changed = vi.fn();
   const refresh = vi.fn();
-  const barrier = vi.fn();
+  const barrier = vi.fn((_port: MessagePort, _generation: number, _signal: AbortSignal) => {});
   const dispose = bindPresentationEvents({ changed, refresh, barrier });
   const dispatch = (data: JsonValue, ports: MessagePort[] = []) => {
     const event = new MessageEvent("message", {
@@ -383,6 +383,14 @@ test("presentation refresh events target the current document lifecycle", () => 
   );
   expect(barrier.mock.calls[0]?.[0]).toBe(port);
   expect(barrier.mock.calls[0]?.[1]).toBe(4);
+  const barrierSignal = barrier.mock.calls[0]?.[2];
+  expect(barrierSignal.aborted).toBe(false);
+  channel.port2.postMessage({
+    schema: 1,
+    type: "marimo-studio:presentation-refresh-barrier-failed",
+    generation: 4,
+  });
+  await vi.waitFor(() => expect(barrierSignal.aborted).toBe(true));
   dispatch({
     type: "marimo-studio:presentation-refresh-barrier",
     runtime: "server",

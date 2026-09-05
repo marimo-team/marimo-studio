@@ -3,6 +3,11 @@ import type {
   ReceiverUnreadyMessage,
 } from "@marimo-studio/protocol/preview-messages";
 
+import {
+  beginProjectedOutputFunctionTransition,
+  cancelProjectedOutputFunctionTransition,
+  completeProjectedOutputFunctionTransition,
+} from "@marimo-studio/marimo-frontend/projected-output-function-gate";
 import { appendUrlPath } from "@marimo-studio/protocol/url";
 
 import type { PresentationDiagnostic } from "./diagnostics.ts";
@@ -20,6 +25,11 @@ import {
   bindViewSwitches,
   DevelopmentEvents,
 } from "./document/events.ts";
+import {
+  ExternalRefreshGate,
+  type ExternalRefreshLease,
+} from "./document/external-refresh-gate.ts";
+import { coordinatePresentationMutationBarrier } from "./document/mutation-barrier.ts";
 import { bindDocumentPresence } from "./document/page-lifecycle.ts";
 import { postToStudioParent } from "./document/parent-bridge.ts";
 import {
@@ -39,7 +49,7 @@ import {
 import { studioOwned } from "./document/studio-ownership.ts";
 import { StylesheetRefreshError } from "./document/styles.ts";
 import { errorMessage } from "./errors.ts";
-import { projectionReadGate, type ProjectionRefreshClaim } from "./projections/read-gate.ts";
+import { projectionReadGate } from "./projections/read-gate.ts";
 import { bindProjectionBindingStale, projectionBindingIsStale } from "./projections/staleness.ts";
 import { announceRenderedViewReady } from "./rendered-view-observer.ts";
 import {
@@ -65,7 +75,12 @@ let presentationRevisions: PresentationRevisionController;
 let viewTransitions: DevelopmentViewTransition;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let announcedReceiverRevision: string | undefined;
-let externalProjectionRefresh: ProjectionRefreshClaim | undefined;
+const externalRefreshGate = new ExternalRefreshGate(projectionReadGate, {
+  begin: beginProjectedOutputFunctionTransition,
+  cancel: cancelProjectedOutputFunctionTransition,
+  complete: completeProjectedOutputFunctionTransition,
+});
+let externalBuildRefresh: ExternalRefreshLease | undefined;
 
 const cancelRetry = (): void => {
   if (retryTimer !== undefined) {
@@ -124,10 +139,12 @@ const connectEvents = (): void => {
     reconcileBaseline,
     () => {
       if (globalThis.__MARIMO_STUDIO_RUNTIME_STATE__ === "failed") {
+        externalRefreshGate.cancel();
+        externalBuildRefresh = undefined;
         globalThis.location.reload();
         return;
       }
-      reload();
+      presentationChanged();
     },
     (build) => {
       if (build.phase === "building") {
@@ -144,22 +161,20 @@ const connectEvents = (): void => {
 };
 
 const beginExternalProjectionRefresh = (): void => {
-  externalProjectionRefresh ??= projectionReadGate.begin();
+  externalBuildRefresh ??= externalRefreshGate.acquire("refresh");
 };
 
 const settleExternalProjectionRefresh = (): void => {
-  if (!externalProjectionRefresh) {
-    return;
-  }
-  projectionReadGate.complete(externalProjectionRefresh);
-  externalProjectionRefresh = undefined;
+  externalBuildRefresh?.release();
+  externalBuildRefresh = undefined;
 };
 
 const presentationChanged = (): void => {
   if (ownedByStudio) {
     receiverRefreshHandshake.begin();
   }
-  externalProjectionRefresh = undefined;
+  externalRefreshGate.presentationChanged();
+  externalBuildRefresh = undefined;
   reload();
 };
 
@@ -308,15 +323,15 @@ const startDevelopmentReload = async (): Promise<void> => {
         settleExternalProjectionRefresh();
       }
     },
-    barrier: (port, generation) => {
-      void projectionReadGate.pauseAndDrainCurrent().then((claim) => {
-        externalProjectionRefresh = claim;
-        port.postMessage({
-          schema: 1,
-          type: "marimo-studio:editor-document-mutation-ready",
-          generation,
-        });
-        port.close();
+    barrier: (port, generation, signal, result) => {
+      const lease = externalRefreshGate.acquire("mutation");
+      void coordinatePresentationMutationBarrier({
+        drained: lease.drained,
+        generation,
+        onFailure: () => lease.release(),
+        port,
+        result,
+        signal,
       });
     },
   });
@@ -347,7 +362,8 @@ const startDevelopmentReload = async (): Promise<void> => {
       presentationRevisions.dispose();
       developmentEvents.close();
       unbindProjectionBindingStale();
-      externalProjectionRefresh = undefined;
+      externalRefreshGate.cancel();
+      externalBuildRefresh = undefined;
       receiverRefreshHandshake.release();
       unbindPresentationEvents();
       unbindViewSwitches();

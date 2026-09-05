@@ -24,17 +24,30 @@ const PROJECTION_REFRESH_ABORT_MESSAGE = "The presentation is refreshing.";
 export const isProjectionRefreshAbort = (error: DOMException): boolean =>
   error.name === "AbortError" && error.message === PROJECTION_REFRESH_ABORT_MESSAGE;
 
-const waitForCaller = (promise: Promise<void>, signal?: AbortSignal): Promise<void> => {
+const waitForCaller = <Result>(promise: Promise<Result>, signal?: AbortSignal): Promise<Result> => {
   if (!signal) {
     return promise;
   }
   if (signal.aborted) {
     return Promise.reject(signal.reason);
   }
-  return new Promise<void>((resolve, reject) => {
-    const abort = () => reject(signal.reason);
+  return new Promise<Result>((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener("abort", abort);
+    const abort = () => {
+      cleanup();
+      reject(signal.reason);
+    };
     signal.addEventListener("abort", abort, { once: true });
-    promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+    promise.then(
+      (result) => {
+        cleanup();
+        resolve(result);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
   });
 };
 
@@ -55,38 +68,48 @@ export class ProjectionReadGate {
     return { generation: this.generation };
   }
 
-  async pauseAndDrain(): Promise<ProjectionRefreshClaim> {
+  async pauseAndDrain(signal?: AbortSignal): Promise<ProjectionRefreshClaim> {
+    if (signal?.aborted) {
+      throw signal.reason;
+    }
     if (this.pause) {
-      return await this.pause.promise;
+      return await waitForCaller(this.pause.promise, signal);
     }
     this.generation += 1;
     this.pending ??= deferred();
     const claim = { generation: this.generation };
     let owner!: PauseOwner;
     const promise = (async () => {
-      if (this.activeReads > 0) {
-        this.drained ??= deferred();
-        await this.drained.promise;
-      }
-      if (!this.current(claim)) {
-        if (this.pending) {
-          await this.pending.promise;
+      try {
+        if (this.activeReads > 0) {
+          this.drained ??= deferred();
+          await waitForCaller(this.drained.promise, signal);
         }
-        if (this.pause === owner) {
-          this.pause = undefined;
+        if (!this.current(claim)) {
+          if (this.pending) {
+            await waitForCaller(this.pending.promise, signal);
+          }
+          if (this.pause === owner) {
+            this.pause = undefined;
+          }
+          return await this.pauseAndDrain(signal);
         }
-        return await this.pauseAndDrain();
+        return claim;
+      } catch (error) {
+        if (this.current(claim)) {
+          this.complete(claim);
+        }
+        throw error;
       }
-      return claim;
     })();
     owner = { promise };
     this.pause = owner;
     return await promise;
   }
 
-  async pauseAndDrainCurrent(): Promise<ProjectionRefreshClaim> {
+  async pauseAndDrainCurrent(signal?: AbortSignal): Promise<ProjectionRefreshClaim> {
     while (true) {
-      const claim = await this.pauseAndDrain();
+      const claim = await this.pauseAndDrain(signal);
       if (this.current(claim)) {
         return claim;
       }
