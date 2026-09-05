@@ -102,7 +102,9 @@ assert callable(marimo_studio.authoring.open_workspace)
 assert marimo_studio.agent.View is not marimo_studio.authoring.View
 assert marimo_studio.agent.Workspace is not marimo_studio.authoring.Workspace
 assert hasattr(marimo_studio.agent.View, "show")
+assert hasattr(marimo_studio.agent.View, "preflight")
 assert not hasattr(marimo_studio.authoring.View, "show")
+assert hasattr(marimo_studio.authoring.View, "preflight")
 assert callable(marimo_studio.asgi.app)
 assert resources.files("marimo_studio").joinpath("py.typed").is_file()
 assert set(marimo_studio.__all__) == {
@@ -115,11 +117,14 @@ assert set(marimo_studio.agent.__all__) == {
 }
 assert set(marimo_studio.authoring.__all__) == {
     "BindingResult", "InspectionResult", "OutputRenderResult", "ProviderDiagnostic",
-    "ProviderReport", "RenderedOutput", "RuntimeCell", "RuntimeOutput", "RuntimeProbe",
-    "Starter", "StaticExportResult", "StaticRuntime", "StudioDiagnostic", "StudioOverview",
-    "ValidationIssue", "ValidationReport", "ValueReadError", "ValueReadResult", "View",
-    "ViewBuild", "ViewDocument", "ViewInspection", "ViewOverview", "ViewRemovalResult",
-    "Workspace", "doctor", "open_workspace",
+    "ProviderReport", "ProjectionPortability", "RenderedOutput", "RuntimeCell",
+    "RuntimeOutput", "RuntimeProbe", "Starter", "StaticExportEvent",
+    "StaticExportProgress", "StaticExportStep",
+    "StaticExportResult", "StaticPreflightIssue", "StaticPreflightReport", "StaticRuntime",
+    "StudioDiagnostic", "StudioOverview", "ValidationIssue", "ValidationReport",
+    "ValueReadError", "ValueReadResult", "View", "ViewBuild", "ViewDocument",
+    "ViewInspection", "ViewOverview", "ViewRemovalResult", "Workspace", "doctor",
+    "open_workspace",
 }
 assert set(get_args(marimo_studio.authoring.StaticRuntime)) == {"zero-python", "wasm"}
 assert set(marimo_studio.view_providers.__all__) == {

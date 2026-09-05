@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path, PurePosixPath
 
@@ -15,6 +16,9 @@ from marimo_studio._delivery.export import (
     StaticRuntime,
 )
 from marimo_studio._delivery.export import export_view as export_view_bundle
+from marimo_studio._delivery.export import preflight_view as preflight_view_bundle
+from marimo_studio._delivery.preflight import StaticPreflightReport
+from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._processes.provider_operation import run_provider_operation
 from marimo_studio._views.api import ViewRemovalResult
 from marimo_studio._views.api import remove_view as remove_view_operation
@@ -233,6 +237,7 @@ async def export_view(
     prepare_timeout: float | None = None,
     expected_catalog_generation: str | None = None,
     expected_generation: str | None = None,
+    progress: Callable[[StaticExportProgress], None] | None = None,
 ) -> StaticExportResult:
     """Export one production view through a selected static runtime."""
     return await run_provider_operation(
@@ -246,6 +251,32 @@ async def export_view(
             prepare_timeout=prepare_timeout,
             expected_catalog_generation=expected_catalog_generation,
             expected_generation=expected_generation,
+            progress=progress,
+        )
+    )
+
+
+async def preflight_view(
+    notebook: Path,
+    view: str,
+    *,
+    runtime: StaticRuntime = DEFAULT_STATIC_RUNTIME,
+    prepare_timeout: float | None = None,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
+    progress: Callable[[StaticExportProgress], None] | None = None,
+) -> StaticPreflightReport:
+    """Verify one production static view without publishing a destination."""
+    return await run_provider_operation(
+        partial(
+            preflight_view_bundle,
+            notebook,
+            view=view,
+            runtime=runtime,
+            prepare_timeout=prepare_timeout,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+            progress=progress,
         )
     )
 

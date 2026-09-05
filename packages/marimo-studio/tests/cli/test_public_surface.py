@@ -24,6 +24,7 @@ PARITY = (
     (studio_agent.View, "show", ("view", "show")),
     (studio_authoring.View, "validate", ("validate",)),
     (studio_authoring.View, "export", ("view", "export")),
+    (studio_authoring.View, "preflight", ("view", "preflight")),
     (studio_authoring.View, "remove", ("view", "remove")),
 )
 
@@ -52,6 +53,7 @@ def test_authoring_exports_public_records_with_resolvable_annotations() -> None:
         "BindingResult",
         "InspectionResult",
         "OutputRenderResult",
+        "ProjectionPortability",
         "ProviderDiagnostic",
         "ProviderReport",
         "RenderedOutput",
@@ -59,7 +61,12 @@ def test_authoring_exports_public_records_with_resolvable_annotations() -> None:
         "RuntimeOutput",
         "RuntimeProbe",
         "Starter",
+        "StaticExportEvent",
+        "StaticExportProgress",
         "StaticExportResult",
+        "StaticExportStep",
+        "StaticPreflightIssue",
+        "StaticPreflightReport",
         "StaticRuntime",
         "StudioDiagnostic",
         "StudioOverview",
@@ -78,7 +85,7 @@ def test_authoring_exports_public_records_with_resolvable_annotations() -> None:
         "open_workspace",
     }
     assert records == set(studio_authoring.__all__)
-    for name in records - {"StaticRuntime"}:
+    for name in records - {"StaticExportEvent", "StaticRuntime"}:
         get_type_hints(getattr(studio_authoring, name))
     assert set(get_args(studio_authoring.StaticRuntime)) == {"zero-python", "wasm"}
 

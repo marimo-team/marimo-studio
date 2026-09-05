@@ -183,7 +183,14 @@ await view.export(
     runtime: StaticRuntime = "zero-python",
     force: bool = False,
     prepare_timeout: float | None = None,
+    progress: Callable[[StaticExportProgress], None] | None = None,
 ) -> StaticExportResult
+await view.preflight(
+    *,
+    runtime: StaticRuntime = "zero-python",
+    prepare_timeout: float | None = None,
+    progress: Callable[[StaticExportProgress], None] | None = None,
+) -> StaticPreflightReport
 await view.remove() -> ViewRemovalResult
 ```
 
@@ -191,18 +198,26 @@ await view.remove() -> ViewRemovalResult
 Studio editor. A stale revision raises `SourceConflictError` and preserves the
 newer file.
 
-`show()`, `write()`, `build()`, `validate()`, and `export()` verify the handle's
-catalog and view generation. A same-name replacement raises
+`show()`, `write()`, `build()`, `validate()`, `preflight()`, and `export()`
+verify the handle's catalog and view generation. A same-name replacement raises
 `ViewGenerationConflictError` before browser activation, source writes, or
 artifact publication. `export()` checks again before replacing its destination,
 including when `force=True`.
 
-`export()` writes one static runtime. `runtime="zero-python"` prepares the
-configured notebook states during export. `runtime="wasm"` packages notebook
-source for execution through Pyodide in each visitor's browser.
+`preflight()` builds, prepares, and inspects the complete static bundle in a
+temporary directory. It returns before publishing a caller-owned destination.
+`export()` runs the same preflight before it writes one static runtime.
+`runtime="zero-python"` prepares the configured notebook states.
+`runtime="wasm"` packages notebook source for execution through Pyodide in each
+visitor's browser.
 `prepare_timeout` bounds Zero-Python preparation and uses 30 seconds when
 omitted. Passing `prepare_timeout` with `runtime="wasm"` raises `ValueError`
 before Studio loads the workspace or builds the provider artifact.
+
+`progress` receives ordered `StaticExportProgress` records from the synchronous
+export worker. Each record wraps either a `marimo_export.ProgressEvent` or a
+Studio-owned `StaticExportStep`. Keep callbacks fast and thread-safe. An
+exception raised by the callback cancels static destination publication.
 
 `build()` returns the artifact revision produced by the selected development or
 production build. The profiles maintain independent publications. A failed
@@ -246,12 +261,59 @@ written into a static export.
 
 ### `StaticExportResult`
 
-Contains `notebook`, `view`, selected `runtime`, `output`, provider artifact
-`document`, `files`, and `cache_activity`. A Zero-Python result carries
-marimo-export's authored and projection cache dispositions. A WebAssembly
-result sets `cache_activity` to `None`. The `entrypoint` property resolves
-`output / document`. `to_dict()` emits the same fields plus the resolved
-`entrypoint` path.
+Contains `notebook`, `view`, selected `runtime`, provider artifact `document`,
+`cache_activity`, `preflight`, and marimo-export's `DeliveryResult`. The
+`output`, `files`, and `warnings` properties expose the committed delivery.
+A Zero-Python result carries marimo-export's authored and projection cache
+dispositions. A WebAssembly result sets `cache_activity` to `None`. The
+`entrypoint` property resolves `output / document`. `to_dict()` emits the
+flattened output path, file count, warnings, and resolved entrypoint.
+
+### `StaticExportProgress`
+
+Contains the selected `view`, `runtime`, event `source`, and nested `event`.
+`source="marimo-export"` preserves an upstream `ProgressEvent` unchanged.
+`source="marimo-studio"` carries a `StaticExportStep` for production build,
+bundle assembly, preflight, or commit. The returned result marks export
+completion.
+
+### `StaticExportStep`
+
+Contains a Studio-owned `kind` and optional `completed`, `total`,
+`elapsed_seconds`, and `message` fields. Import `ProgressEvent` from
+`marimo_export` when code needs to distinguish preparation events from Studio
+steps. `StaticExportEvent` is the union of those two records.
+
+### `StaticExportEvent`
+
+`ProgressEvent | StaticExportStep`. Inspect `StaticExportProgress.source` or
+the concrete `event` type when rendering owner-specific fields.
+
+### `StaticPreflightReport`
+
+Contains the `view`, `runtime`, entry `document`, staged `files`, eligible
+`browser_files`, `inspected_files`, `references`, `projections`, and `issues`.
+`ok` is false when an issue has error severity. `to_dict()` returns the schema 1
+machine record used by the CLI and `StaticExportResult`.
+
+### `ProjectionPortability`
+
+Identifies one projection `site_id`, kind, optional target, static runtime,
+source location, reason, and status:
+
+| Status                  | Meaning                                                               |
+| ----------------------- | --------------------------------------------------------------------- |
+| `supported`             | The runtime accepts the projection model without prepared execution.  |
+| `verification-required` | Zero-Python still needs to capture the target's configured states.    |
+| `verified`              | Zero-Python captured the target through the completed preflight.      |
+| `incompatible`          | The selected runtime cannot represent the authored projection target. |
+
+### `StaticPreflightIssue`
+
+Names one source-located delivery diagnostic with `code`, `severity`,
+`message`, optional `reference`, and `hint`. Errors stop export before the
+destination changes. Warnings identify browser dependencies that require
+caller review.
 
 ### `ViewRemovalResult`
 
@@ -544,7 +606,7 @@ surfaces. Nested notebook records are documented under `NotebookSpec` and
 | `ViewInspection`     | `view`, `provider`, `documents`, `diagnostics`, `freshness`, `build`                                                                                                      |
 | `ViewBuild`          | `view`, `profile`, `revision`, `issues`                                                                                                                                   |
 | `ViewRemovalResult`  | `notebook`, `view`, `default_view`, `views`, `catalog_generation`                                                                                                         |
-| `StaticExportResult` | `notebook`, `view`, `runtime`, `output`, `document`, `files`, `cache_activity` and computed `entrypoint`                                                                  |
+| `StaticExportResult` | `notebook`, `view`, `runtime`, `document`, `cache_activity`, `preflight`, `delivery` and computed `output`, `files`, `warnings`, `entrypoint`                             |
 
 `StudioOverview.state` is `unconfigured`, `needs-view`, or `ready`.
 `ViewInspection.freshness` is `current`, `stale`, `unbuilt`, `building`, or

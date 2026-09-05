@@ -10,7 +10,7 @@ from collections.abc import Iterator, Mapping
 from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import dataclass, field
 from io import StringIO
-from typing import TextIO
+from typing import TYPE_CHECKING, TextIO
 
 import click
 
@@ -22,6 +22,9 @@ from marimo_studio._cli.environment import (
     run_in_notebook_environment,
 )
 from marimo_studio.errors import DependencyError
+
+if TYPE_CHECKING:
+    from marimo_studio._delivery.progress import StaticExportProgress
 
 _MAX_PROCESS_OUTPUT_CHARS = 16 * 1024
 _MAX_DIAGNOSTIC_EVENT_CHARS = 64 * 1024
@@ -106,14 +109,28 @@ class DiagnosticStream:
         self._write(event)
         return True
 
-    def _diagnostic_event(self, line: str) -> dict[str, object] | None:
+    def emit_progress(self, progress: StaticExportProgress) -> None:
+        """Write export progress to stderr without changing result stdout."""
+        if self.format == "jsonl":
+            self._write(
+                {
+                    "schema": 1,
+                    "event": "progress",
+                    "command": self.command,
+                    "progress": progress.to_dict(),
+                }
+            )
+            return
+        click.echo(progress.format_message(), err=True)
+
+    def _trusted_event(self, line: str) -> dict[str, object] | None:
         if len(line) > _MAX_DIAGNOSTIC_EVENT_CHARS:
             return None
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
             return None
-        if (
+        diagnostic = (
             isinstance(event, dict)
             and type(event.get("schema")) is int
             and event.get("schema") == 1
@@ -122,12 +139,30 @@ class DiagnosticStream:
             and isinstance(event.get("code"), str)
             and isinstance(event.get("message"), str)
             and event.get("command") == self.command
-        ):
+        )
+        progress_value = event.get("progress") if isinstance(event, dict) else None
+        progress_event = (
+            progress_value.get("event") if isinstance(progress_value, dict) else None
+        )
+        progress = (
+            isinstance(event, dict)
+            and type(event.get("schema")) is int
+            and event.get("schema") == 1
+            and event.get("event") == "progress"
+            and event.get("command") == self.command
+            and isinstance(progress_value, dict)
+            and progress_value.get("source") in {"marimo-export", "marimo-studio"}
+            and isinstance(progress_value.get("view"), str)
+            and progress_value.get("runtime") in {"zero-python", "wasm"}
+            and isinstance(progress_event, dict)
+            and isinstance(progress_event.get("kind"), str)
+        )
+        if diagnostic or progress:
             return event
         return None
 
     def _relay_event(self, event: dict[str, object]) -> None:
-        if event["severity"] == "error":
+        if event.get("event") == "diagnostic" and event["severity"] == "error":
             self.error_count += 1
         self._write(event)
 
@@ -159,7 +194,7 @@ class DiagnosticStream:
         plain = _PlainOutput()
         for record in output:
             line = record.removesuffix("\n").removesuffix("\r")
-            event = self._diagnostic_event(line)
+            event = self._trusted_event(line)
             if event is None:
                 plain.append(line)
                 continue

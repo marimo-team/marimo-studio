@@ -5,22 +5,26 @@ import os
 import subprocess
 import sys
 from io import StringIO
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import marimo
 import pytest
 from click.testing import CliRunner
+from marimo_export.progress import ProgressEvent
 
 import marimo_studio._cli.environment as environment_module
 from marimo_studio._cli import cli, main
 from marimo_studio._cli.diagnostics import DiagnosticStream
+from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._views.api import prepare_view
 from marimo_studio._views.sources import read_source
 from marimo_studio._workspace import load_studio
 from marimo_studio.errors import AgentRequestError, ConfigurationError
 from marimo_studio.view_providers._host import provider_registry
 
+from ..artifact_test_support import add_provider_outputs
+from ..delivery.export_test_support import configure_export_view
 from ..helpers import replace_app_shell
 
 
@@ -86,6 +90,31 @@ def test_structured_diagnostics_preserve_child_events(
     assert events[1]["code"] == "process-output"
     assert events[1]["message"] == "shutdown warning"
     assert stream.error_count == 1
+
+
+def test_structured_diagnostics_preserve_child_progress(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    stream = DiagnosticStream(format="jsonl", command="view export")
+    event = {
+        "schema": 1,
+        "event": "progress",
+        "command": "view export",
+        "progress": StaticExportProgress.from_export(
+            ProgressEvent(
+                "state_finished",
+                completed=1,
+                total=2,
+                state="baseline",
+            ),
+            view="dashboard",
+            runtime="zero-python",
+        ).to_dict(),
+    }
+
+    stream.relay_trusted_output(json.dumps(event) + "\n")
+
+    assert json.loads(capsys.readouterr().err) == event
 
 
 def test_structured_diagnostics_bound_large_process_output(
@@ -255,6 +284,60 @@ def test_main_structures_configuration_errors(
     assert event["code"] == "configuration-error"
     assert event["severity"] == "error"
     assert event["exit_code"] == 3
+
+
+def test_main_structures_static_preflight_failures(
+    notebook_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    view_root = configure_export_view(notebook_path)
+    view_root.joinpath("app.js").write_text("export {};\n", encoding="utf-8")
+    document = view_root / "index.html"
+    document.write_text(
+        document.read_text(encoding="utf-8").replace(
+            "</head>",
+            '<script type="module" src="./app.js"></script></head>',
+        ),
+        encoding="utf-8",
+    )
+    project = load_studio(notebook_path).view("dashboard")
+    add_provider_outputs(
+        monkeypatch,
+        project,
+        {PurePosixPath("app.js"): b'void import("file:///tmp/local.js");\n'},
+    )
+    output = tmp_path / "site"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "marimo-studio",
+            "view",
+            "export",
+            "dashboard",
+            "--target",
+            str(notebook_path),
+            "--output",
+            str(output),
+            "--runtime",
+            "wasm",
+            "--json",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main()
+
+    captured = capsys.readouterr()
+    events = [json.loads(line) for line in captured.err.splitlines()]
+    failure = events[-1]
+    assert raised.value.code == 3
+    assert captured.out == ""
+    assert failure["code"] == "static-delivery-preflight-failed"
+    assert failure["details"]["preflight"]["issues"][0]["code"] == ("static-file-url")
+    assert not output.exists()
 
 
 @pytest.mark.parametrize(

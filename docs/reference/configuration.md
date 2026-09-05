@@ -150,8 +150,8 @@ command and clickjacking boundary.
 Python `dependencies` are the executable environment contract. For
 `provider = "acme-views/report"`, the notebook or project must declare an active
 `acme-views` dependency. `status`, `view create`, `view inspect`, `view read`,
-`view write`, `view build`, `view export`, and `validate` resolve that metadata
-before importing the provider.
+`view write`, `view build`, `view preflight`, `view export`, and `validate`
+resolve that metadata before importing the provider.
 
 Keep the `uv` executable available. Studio re-enters the target environment
 through `uv` when the current process does not satisfy the resolved Studio and

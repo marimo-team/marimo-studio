@@ -179,12 +179,56 @@ class StaticExportError(ConfigurationError):
 
     code = "static-export-error"
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        details: Mapping[str, object] | None = None,
+        hint: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        if code is not None:
+            if not isinstance(code, str) or not code:
+                raise TypeError("static export error code must be non-empty")
+            self.code = code
+        self.details = dict(details or {})
+        if hint is not None:
+            if not isinstance(hint, str):
+                raise TypeError("static export error hint must be a string")
+            self.public_hint = hint
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return self.details.copy()
+
 
 class PublicationError(MarimoStudioError):
     """A Zero-Python publication could not be prepared."""
 
     code = "zero-python-publication-error"
     status_code = 409
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        details: Mapping[str, object] | None = None,
+        hint: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        if code is not None:
+            if not isinstance(code, str) or not code:
+                raise TypeError("publication error code must be non-empty")
+            self.code = code
+        self.details = dict(details or {})
+        if hint is not None:
+            if not isinstance(hint, str):
+                raise TypeError("publication error hint must be a string")
+            self.public_hint = hint
+
+    def diagnostic_details(self) -> dict[str, object]:
+        return self.details.copy()
 
 
 class PublicationUnavailableError(PublicationError):

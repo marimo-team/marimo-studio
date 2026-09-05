@@ -89,6 +89,14 @@ persistent repository. Exact producer, output-plan, and state-space identities
 therefore reuse one prepared generation across commands and documentation
 builds.
 
+Static delivery uses `marimo_export.delivery.stage()` as the outer transaction.
+Studio writes its provider artifact, runtime configuration, manifest, and
+public files into the staged application directory. `StagedDelivery.materialize()`
+writes the prepared export under its immutable instance path. Studio's guard
+revalidates notebook, catalog, view generation, and prepared publication state
+immediately before `StagedDelivery.commit()` verifies and installs the complete
+directory.
+
 `states.yaml` uses the public `marimo_export.StateSpace` schema. Studio reads
 the file through its secure filesystem boundary, then marimo-export validates
 and expands the state space. Studio infers `OutputSpec` values from the view's

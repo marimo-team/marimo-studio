@@ -23,13 +23,16 @@ import os
 import stat
 import unicodedata
 from collections.abc import Callable
-from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Literal
+from tempfile import TemporaryDirectory
+from time import monotonic
 
+from marimo_export.delivery import DeliveryResult, StagedDelivery, stage
+from marimo_export.errors import MarimoExportError
 from marimo_export.manifest import prepared_manifest_bytes
 from marimo_export.progress import CacheActivity
+from marimo_export.result import ExportWarning
 
 import marimo_studio._delivery.assets as _assets
 from marimo_studio._artifacts.inputs import project_revision
@@ -40,17 +43,22 @@ from marimo_studio._artifacts.limits import (
 from marimo_studio._artifacts.records import ViewArtifact
 from marimo_studio._artifacts.retention import ArtifactLease
 from marimo_studio._composition import create_export_adapters
-from marimo_studio._delivery.export_output import commit_bundle as _commit_bundle
 from marimo_studio._delivery.export_output import (
-    output_filesystem as _output_filesystem,
-)
-from marimo_studio._delivery.export_output import output_target as _target
-from marimo_studio._delivery.export_output import (
-    temporary_directory as _temporary_directory,
+    ensure_output_parent as _ensure_output_parent,
 )
 from marimo_studio._delivery.export_output import validate_output as _validate_output
 from marimo_studio._delivery.html import runtime_document
+from marimo_studio._delivery.portability import (
+    StaticRuntime,
+    projection_portability,
+    verify_projection_portability,
+)
 from marimo_studio._delivery.ports import ExportAdapters
+from marimo_studio._delivery.preflight import (
+    StaticPreflightReport,
+    preflight_static_bundle,
+)
+from marimo_studio._delivery.progress import StaticExportProgress
 from marimo_studio._delivery.runtime_config import (
     RuntimeConfigInputs,
     encode_runtime_config,
@@ -60,7 +68,11 @@ from marimo_studio._filesystem.secure import (
     SecureDirectory,
     secure_directory,
 )
-from marimo_studio._prepared.static import StaticPublication, publication_source
+from marimo_studio._prepared.static import (
+    StaticPublication,
+    StaticPublicationSource,
+    publication_source,
+)
 from marimo_studio._processes.provider_operation import raise_process_cleanup
 from marimo_studio._projections.resolution import (
     projection_policy,
@@ -81,6 +93,7 @@ from marimo_studio._workspace.mutation_lock import (
 )
 from marimo_studio.errors import (
     MarimoStudioError,
+    PublicationError,
     StaticExportError,
     ViewGenerationConflictError,
     ViewNotFoundError,
@@ -89,7 +102,6 @@ from marimo_studio.errors import (
 from marimo_studio.view_providers._host import provider_registry
 
 SUPPORT_ROOT = Path("_marimo-studio")
-StaticRuntime = Literal["zero-python", "wasm"]
 DEFAULT_STATIC_RUNTIME: StaticRuntime = "zero-python"
 DEFAULT_PREPARE_TIMEOUT = 30.0
 
@@ -101,10 +113,25 @@ class StaticExportResult:
     notebook: Path
     view: str
     runtime: StaticRuntime
-    output: Path
     document: PurePosixPath
-    files: int
     cache_activity: CacheActivity | None
+    preflight: StaticPreflightReport
+    delivery: DeliveryResult
+
+    @property
+    def output(self) -> Path:
+        """Return the committed application directory."""
+        return self.delivery.path
+
+    @property
+    def files(self) -> int:
+        """Return the committed regular-file count."""
+        return self.delivery.files
+
+    @property
+    def warnings(self) -> tuple[ExportWarning, ...]:
+        """Return recoverable warnings emitted after publication."""
+        return self.delivery.warnings
 
     @property
     def entrypoint(self) -> Path:
@@ -123,6 +150,8 @@ class StaticExportResult:
             "cache_activity": (
                 None if self.cache_activity is None else self.cache_activity.to_dict()
             ),
+            "preflight": self.preflight.to_dict(),
+            "warnings": [warning.to_dict() for warning in self.warnings],
         }
 
 
@@ -133,6 +162,17 @@ class _AssetCopy:
     sha256: str
     mode: int | None
     artifact_path: PurePosixPath | None = None
+
+
+ExportProgressCallback = Callable[[StaticExportProgress], None]
+
+
+def _emit_progress(
+    callback: ExportProgressCallback | None,
+    event: StaticExportProgress,
+) -> None:
+    if callback is not None:
+        callback(event)
 
 
 def _file_stamp(path: Path) -> tuple[int, int, int, int]:
@@ -482,7 +522,7 @@ def _asset_plan(
     lease: ArtifactLease,
     *,
     closure: _assets.BrowserEntryClosure | None,
-    publication: StaticPublication | None,
+    include_manifest: bool,
     include_config: bool,
     filesystem: SecureDirectory | None = None,
 ) -> tuple[_AssetCopy, ...]:
@@ -498,7 +538,7 @@ def _asset_plan(
     ]
     if include_config:
         generated.append((support / "config", "the generated runtime configuration"))
-    if publication is not None:
+    if include_manifest:
         generated.append(
             (support / "zero-python" / "current", "the prepared runtime manifest")
         )
@@ -547,13 +587,6 @@ def _asset_plan(
                 PurePosixPath(path.relative_to(runtime_root).as_posix())
                 for path in closure_paths
             ),
-        )
-    if publication is not None:
-        _asset_files(
-            publication.path,
-            support / "zero-python" / publication.instance,
-            f"prepared publication {publication.instance!r}",
-            accept,
         )
     for item in artifact.files:
         if item.path == artifact.document:
@@ -626,7 +659,7 @@ def _write_bundle(
         view_name,
         lease,
         closure=closure,
-        publication=publication,
+        include_manifest=manifest is not None,
         include_config=config is not None,
         filesystem=filesystem,
     )
@@ -654,7 +687,7 @@ def _write_bundle(
                 view_name,
                 lease,
                 closure=closure,
-                publication=publication,
+                include_manifest=manifest is not None,
                 include_config=config is not None,
             )
             and artifact.project_revision
@@ -667,7 +700,7 @@ def _write_bundle(
             and notebook_source == studio.notebook.read_text(encoding="utf-8")
             and notebook_stamp == _file_stamp(studio.notebook)
             and config_stamp == _file_stamp(studio.config_path)
-            and (publication is None or _publication_current(publication))
+            and (publication is None or _publication_inputs_current(publication))
         )
     except (OSError, MarimoStudioError) as error:
         raise_process_cleanup(error)
@@ -681,13 +714,88 @@ def _write_bundle(
     return len(assets) + 2 + int(config is not None) + int(manifest is not None)
 
 
-def _publication_current(publication: StaticPublication) -> bool:
+def _publication_inputs_current(publication: StaticPublication) -> bool:
     try:
-        publication.prepared.open().verify()
         publication.state_space_source.require_current()
     except (OSError, RuntimeError, MarimoStudioError):
         return False
     return True
+
+
+def _delivery_error(error: MarimoExportError) -> StaticExportError:
+    message = str(error)
+    hint: str | None = None
+    if error.code == "destination_exists":
+        message = f"{message}. Pass --force to replace it."
+        hint = "Pass --force to replace the existing static export."
+    return StaticExportError(
+        message,
+        code=error.code,
+        details={"marimo_export": error.wire()},
+        hint=hint,
+    )
+
+
+def _open_delivery(destination: Path, *, force: bool) -> StagedDelivery:
+    try:
+        return stage(destination, replace=force)
+    except MarimoExportError as error:
+        raise _delivery_error(error) from error
+
+
+def _materialize_publication(
+    delivery: StagedDelivery,
+    view_name: str,
+    publication: StaticPublication | None,
+) -> int:
+    if publication is None:
+        return 0
+    relative = SUPPORT_ROOT / "views" / view_name / "zero-python" / publication.instance
+    try:
+        result = delivery.materialize(publication.prepared, relative.as_posix())
+    except MarimoExportError as error:
+        raise _delivery_error(error) from error
+    return result.assets + 1
+
+
+def _require_export_current(
+    target: str | Path,
+    studio: StudioWorkspace,
+    view_name: str,
+    *,
+    notebook_stamp: tuple[int, int, int, int],
+    config_stamp: tuple[int, int, int, int],
+    expected_catalog_generation: str | None,
+    expected_generation: str | None,
+    publication: StaticPublication | None,
+) -> None:
+    with (
+        workspace_catalog_lock(studio.view_root),
+        view_mutation_lock(studio.view_root, view_name),
+    ):
+        current = load_studio(target)
+        current_generation = current.view_generations.get(view_name)
+        if (
+            expected_generation is not None
+            and current_generation != expected_generation
+        ):
+            raise ViewGenerationConflictError(view_name, current_generation)
+        if (
+            expected_catalog_generation is not None
+            and current.catalog_generation != expected_catalog_generation
+        ):
+            raise WorkspaceGenerationConflictError()
+        if (
+            notebook_stamp != _file_stamp(current.notebook)
+            or config_stamp != _file_stamp(current.config_path)
+            or (
+                publication is not None and not _publication_inputs_current(publication)
+            )
+        ):
+            raise StaticExportError(
+                "The static export sources changed before publication. "
+                "Run the export again."
+            )
 
 
 def _resolve_prepare_timeout(
@@ -711,47 +819,31 @@ def _resolve_prepare_timeout(
     return float(value)
 
 
-def export_view(
+def _export_to_delivery(
     target: str | Path,
-    output: str | Path,
+    studio: StudioWorkspace,
+    selected: str,
+    runtime: StaticRuntime,
+    resolved_prepare_timeout: float | None,
+    prepared_source: StaticPublicationSource,
+    delivery: StagedDelivery,
     *,
-    view: str | None = None,
-    runtime: StaticRuntime = DEFAULT_STATIC_RUNTIME,
-    force: bool = False,
-    prepare_timeout: float | None = None,
-    expected_catalog_generation: str | None = None,
-    expected_generation: str | None = None,
+    notebook_stamp: tuple[int, int, int, int],
+    config_stamp: tuple[int, int, int, int],
+    expected_catalog_generation: str | None,
+    expected_generation: str | None,
+    progress: ExportProgressCallback | None,
 ) -> StaticExportResult:
-    """Export one configured view through a selected static runtime."""
-    if runtime not in {"zero-python", "wasm"}:
-        raise ValueError("runtime must be 'zero-python' or 'wasm'")
-    resolved_prepare_timeout = _resolve_prepare_timeout(runtime, prepare_timeout)
     adapters = create_export_adapters()
-    prepared_source = publication_source()
-    studio = load_studio(target)
-    notebook_stamp = _file_stamp(studio.notebook)
-    config_stamp = _file_stamp(studio.config_path)
-    selected = view or studio.default_view
-    if selected not in studio.views:
-        raise ViewNotFoundError(selected, available=tuple(studio.views))
-    current_generation = studio.view_generations.get(selected)
-    if expected_generation is not None and current_generation != expected_generation:
-        raise ViewGenerationConflictError(selected, current_generation)
-    if (
-        expected_catalog_generation is not None
-        and studio.catalog_generation != expected_catalog_generation
-    ):
-        raise WorkspaceGenerationConflictError()
-    destination = _validate_output(
-        Path(output),
-        studio,
-        protected_sources=(prepared_source.protected_root(studio.notebook),),
+    build_started = monotonic()
+    _emit_progress(
+        progress,
+        StaticExportProgress.from_step(
+            "build_started",
+            view=selected,
+            runtime=runtime,
+        ),
     )
-    if destination.exists() and not force:
-        raise StaticExportError(
-            f"Output already exists: {destination}. Pass --force to replace it."
-        )
-
     try:
         lease = publish_view(
             studio.views[selected],
@@ -764,7 +856,17 @@ def export_view(
         raise StaticExportError(str(error)) from error
     publication: StaticPublication | None = None
     cache_activity: CacheActivity | None = None
+    preflight: StaticPreflightReport
     with lease:
+        _emit_progress(
+            progress,
+            StaticExportProgress.from_step(
+                "build_finished",
+                view=selected,
+                runtime=runtime,
+                elapsed_seconds=monotonic() - build_started,
+            ),
+        )
         artifact = lease.artifact
         try:
             document = lease.read_text(artifact.document)
@@ -777,6 +879,27 @@ def export_view(
             published_mounts={selected: artifact.mounts},
         )
         _projection_error(resolved, selected)
+        portability = projection_portability(artifact.mounts, runtime)
+        incompatible = next(
+            (item for item in portability if item.status == "incompatible"),
+            None,
+        )
+        if incompatible is not None:
+            raise PublicationError(
+                (
+                    f"Zero-Python cannot prepare dynamic {incompatible.projection} "
+                    f"projection site {incompatible.site_id!r}."
+                ),
+                code="zero-python-projection-dynamic",
+                details={
+                    "runtime": runtime,
+                    "projection": incompatible.to_dict(),
+                },
+                hint=(
+                    "Declare a finite target set in authored view source or select "
+                    "the WebAssembly runtime."
+                ),
+            )
         if runtime == "zero-python" and artifact.mounts:
             from marimo_studio._server.presentation.service import PresentationSnapshot
 
@@ -804,73 +927,127 @@ def export_view(
                 publication = prepared_source.resolve(
                     snapshot,
                     timeout=resolved_prepare_timeout,
+                    progress=lambda event: _emit_progress(
+                        progress,
+                        StaticExportProgress.from_export(
+                            event,
+                            view=selected,
+                            runtime=runtime,
+                        ),
+                    ),
                 )
                 cache_activity = publication.prepared.cache_activity
+                portability = verify_projection_portability(portability)
+            except PublicationError:
+                raise
             except (OSError, RuntimeError, MarimoStudioError) as error:
                 raise StaticExportError(
                     f"Could not prepare the Zero-Python publication: {error}"
                 ) from error
         try:
-            with _output_filesystem(destination) as filesystem:
-                output_target = _target(filesystem, destination, force=force)
-                staging_root = _temporary_directory(
-                    filesystem,
-                    "export",
+            bundle_started = monotonic()
+            _emit_progress(
+                progress,
+                StaticExportProgress.from_step(
+                    "bundle_started",
+                    view=selected,
+                    runtime=runtime,
+                ),
+            )
+            with secure_directory(delivery.path) as bundle_files:
+                files = _write_bundle(
+                    bundle_files,
+                    adapters,
+                    studio,
+                    resolved,
+                    selected,
+                    lease,
+                    document,
+                    notebook_source,
+                    notebook_stamp,
+                    config_stamp,
+                    runtime,
+                    publication,
                 )
-                staged = staging_root / "bundle"
-                filesystem.create_directory(staged)
-                try:
-                    with secure_directory(staged) as bundle_files:
-                        files = _write_bundle(
-                            bundle_files,
-                            adapters,
-                            studio,
-                            resolved,
-                            selected,
-                            lease,
-                            document,
-                            notebook_source,
-                            notebook_stamp,
-                            config_stamp,
-                            runtime,
-                            publication,
-                        )
-                    with (
-                        workspace_catalog_lock(studio.view_root),
-                        view_mutation_lock(studio.view_root, selected),
-                    ):
-                        current = load_studio(target)
-                        current_generation = current.view_generations.get(selected)
-                        if (
-                            expected_generation is not None
-                            and current_generation != expected_generation
-                        ):
-                            raise ViewGenerationConflictError(
-                                selected,
-                                current_generation,
-                            )
-                        if (
-                            expected_catalog_generation is not None
-                            and current.catalog_generation
-                            != expected_catalog_generation
-                        ):
-                            raise WorkspaceGenerationConflictError()
-                        if (
-                            notebook_stamp != _file_stamp(current.notebook)
-                            or config_stamp != _file_stamp(current.config_path)
-                            or (
-                                publication is not None
-                                and not _publication_current(publication)
-                            )
-                        ):
-                            raise StaticExportError(
-                                "The static export sources changed before publication. "
-                                "Run the export again."
-                            )
-                        _commit_bundle(staged, output_target)
-                finally:
-                    with suppress(OSError):
-                        filesystem.remove_tree(staging_root)
+            files += _materialize_publication(delivery, selected, publication)
+            _emit_progress(
+                progress,
+                StaticExportProgress.from_step(
+                    "bundle_finished",
+                    view=selected,
+                    runtime=runtime,
+                    completed=files,
+                    total=files,
+                    elapsed_seconds=monotonic() - bundle_started,
+                ),
+            )
+            preflight_started = monotonic()
+            _emit_progress(
+                progress,
+                StaticExportProgress.from_step(
+                    "preflight_started",
+                    view=selected,
+                    runtime=runtime,
+                ),
+            )
+            with secure_directory(delivery.path) as bundle_files:
+                preflight = preflight_static_bundle(
+                    bundle_files,
+                    view=selected,
+                    runtime=runtime,
+                    document=artifact.document,
+                    projections=portability,
+                )
+            _emit_progress(
+                progress,
+                StaticExportProgress.from_step(
+                    "preflight_finished",
+                    view=selected,
+                    runtime=runtime,
+                    completed=preflight.inspected_files,
+                    total=preflight.browser_files,
+                    elapsed_seconds=monotonic() - preflight_started,
+                    message=(
+                        f"{len(preflight.issues)} diagnostic"
+                        f"{'s' if len(preflight.issues) != 1 else ''}"
+                    ),
+                ),
+            )
+            if not preflight.ok:
+                first = next(
+                    issue for issue in preflight.issues if issue.severity == "error"
+                )
+                raise StaticExportError(
+                    f"Static delivery preflight failed: {first.message}",
+                    code="static-delivery-preflight-failed",
+                    details={"preflight": preflight.to_dict()},
+                    hint=first.hint,
+                )
+            _emit_progress(
+                progress,
+                StaticExportProgress.from_step(
+                    "commit_started",
+                    view=selected,
+                    runtime=runtime,
+                ),
+            )
+
+            def require_current() -> None:
+                _require_export_current(
+                    target,
+                    studio,
+                    selected,
+                    notebook_stamp=notebook_stamp,
+                    config_stamp=config_stamp,
+                    expected_catalog_generation=expected_catalog_generation,
+                    expected_generation=expected_generation,
+                    publication=publication,
+                )
+
+            try:
+                delivered = delivery.commit(guard=require_current)
+            except MarimoExportError as error:
+                raise _delivery_error(error) from error
         finally:
             if publication is not None:
                 publication.close()
@@ -879,8 +1056,96 @@ def export_view(
         notebook=studio.notebook,
         view=selected,
         runtime=runtime,
-        output=destination,
         document=artifact.document,
-        files=files,
         cache_activity=cache_activity,
+        preflight=preflight,
+        delivery=delivered,
     )
+
+
+def export_view(
+    target: str | Path,
+    output: str | Path,
+    *,
+    view: str | None = None,
+    runtime: StaticRuntime = DEFAULT_STATIC_RUNTIME,
+    force: bool = False,
+    prepare_timeout: float | None = None,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
+    progress: ExportProgressCallback | None = None,
+) -> StaticExportResult:
+    """Export one configured view through a selected static runtime."""
+    if runtime not in {"zero-python", "wasm"}:
+        raise ValueError("runtime must be 'zero-python' or 'wasm'")
+    resolved_prepare_timeout = _resolve_prepare_timeout(runtime, prepare_timeout)
+    prepared_source = publication_source()
+    studio = load_studio(target)
+    notebook_stamp = _file_stamp(studio.notebook)
+    config_stamp = _file_stamp(studio.config_path)
+    selected = view or studio.default_view
+    if selected not in studio.views:
+        raise ViewNotFoundError(selected, available=tuple(studio.views))
+    current_generation = studio.view_generations.get(selected)
+    if expected_generation is not None and current_generation != expected_generation:
+        raise ViewGenerationConflictError(selected, current_generation)
+    if (
+        expected_catalog_generation is not None
+        and studio.catalog_generation != expected_catalog_generation
+    ):
+        raise WorkspaceGenerationConflictError()
+    destination = _validate_output(
+        Path(output),
+        studio,
+        protected_sources=(prepared_source.protected_root(studio.notebook),),
+    )
+    _ensure_output_parent(destination)
+    with _open_delivery(destination, force=force) as delivery:
+        return _export_to_delivery(
+            target,
+            studio,
+            selected,
+            runtime,
+            resolved_prepare_timeout,
+            prepared_source,
+            delivery,
+            notebook_stamp=notebook_stamp,
+            config_stamp=config_stamp,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+            progress=progress,
+        )
+
+
+def preflight_view(
+    target: str | Path,
+    *,
+    view: str | None = None,
+    runtime: StaticRuntime = DEFAULT_STATIC_RUNTIME,
+    prepare_timeout: float | None = None,
+    expected_catalog_generation: str | None = None,
+    expected_generation: str | None = None,
+    progress: ExportProgressCallback | None = None,
+) -> StaticPreflightReport:
+    """Build, prepare, and inspect one static view without publishing it."""
+    finished = False
+
+    def relay(event: StaticExportProgress) -> None:
+        nonlocal finished
+        if finished:
+            return
+        _emit_progress(progress, event)
+        finished = event.event.kind == "preflight_finished"
+
+    with TemporaryDirectory(prefix="marimo-studio-preflight-") as temporary:
+        result = export_view(
+            target,
+            Path(temporary) / "bundle",
+            view=view,
+            runtime=runtime,
+            prepare_timeout=prepare_timeout,
+            expected_catalog_generation=expected_catalog_generation,
+            expected_generation=expected_generation,
+            progress=relay,
+        )
+        return result.preflight

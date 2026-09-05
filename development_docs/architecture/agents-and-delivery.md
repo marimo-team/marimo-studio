@@ -38,13 +38,16 @@ The CLI uses the same application services:
 status
 notebook inspect/bind
 starters
-view create/inspect/read/write/build/show/export/remove
+view create/inspect/read/write/build/show/preflight/export/remove
 validate --level static|runtime|browser
 doctor
 ```
 
-JSON data uses stdout. Progress and diagnostics use stderr. Validation failure,
-configuration failure, and live connection failure have distinct exit codes.
+JSON data uses stdout. Progress and diagnostics use stderr. Export progress
+wraps marimo-export preparation events unchanged and adds Studio build,
+preflight, and commit steps. Re-entry relays both event owners. Validation
+failure, configuration failure, and live connection failure have distinct exit
+codes.
 
 Read [Provider environments](provider-environments.md) for CLI re-entry and
 [Errors and diagnostics](errors-and-diagnostics.md) for exit codes, JSON Lines,
@@ -130,10 +133,13 @@ Export:
 3. Adds either a prepared result publication or the WebAssembly runtime and
    notebook source.
 4. Writes the destination through a staging directory.
-5. Atomically installs the completed export.
+5. Checks projection portability and local browser references in that exact
+   staged tree.
+6. Atomically installs the completed export.
 
 The returned entrypoint may be nested. Artifact-relative assets remain beside
-the provider document.
+the provider document. `View.preflight()` runs the same build, preparation, and
+staged-tree checks in a temporary directory.
 
 ## Packaging
 
