@@ -52,10 +52,13 @@ site. Each family names one notebook and every view exported from it.
 
 1. Exports the saved notebook with Marimo source and captured session data.
 2. Exports every named view through `marimo-studio view export --json`.
-3. Validates schema, notebook, view, runtime, output, entrypoint, file count,
-   relative document base, and relative asset URL policy.
-4. Checks links to sibling views against the family allowlist.
-5. Replaces `apps/docs/public/examples` as one directory transaction.
+3. Streams export progress from stderr while retaining stdout for the terminal
+   result.
+4. Validates schema, notebook, view, runtime, output, entrypoint, file count,
+   static delivery preflight, relative document base, and relative asset URL
+   policy.
+5. Checks links to sibling views against the family allowlist.
+6. Replaces `apps/docs/public/examples` as one directory transaction.
 
 The published example tree contains one static notebook and one Browser runtime
 export per named view. Generated example files are build evidence. Change the
@@ -92,6 +95,23 @@ links at desktop and narrow widths.
 
 Run `make docs-examples` when iterating on exported example inputs. Run
 `make build` first when presentation or Browser runtime assets changed.
+
+Rebuild one part of an existing complete example publication with explicit
+selectors:
+
+```console
+pnpm --filter @marimo-studio/docs examples:build -- --family athletes
+pnpm --filter @marimo-studio/docs examples:build -- --notebook earthquakes
+pnpm --filter @marimo-studio/docs examples:build -- --view occupancy/monitor
+```
+
+Selectors may be repeated and combined. `--family` selects its notebook and
+every view. `--notebook` selects one notebook export. `--view` accepts an exact
+`FAMILY/VIEW` identity. A selective run seeds its private staging directory
+from the current complete publication, replaces the selected targets, checks
+the resulting full tree, and publishes it atomically. Run the command without
+selectors to create the initial complete publication and before release or CI
+handoff.
 
 ## Build verification
 
