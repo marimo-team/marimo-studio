@@ -1,0 +1,28 @@
+packages/marimo-studio/src/marimo_studio/view_providers/_bundled/vanilla/_sources.py
+  s_88978df6b68700::t_38ea2ca6632d8e 33,37-41,84,93,381,395,419
+packages/marimo-studio/tests/providers/test_vanilla_javascript.py
+  s_88978df6b68700::t_38ea2ca6632d8e 5,24-28
+packages/marimo-studio/src/marimo_studio/view_providers/_document.py
+  s_88978df6b68700::t_38ea2ca6632d8e 51-52,216-217,313-314,317,361-362,364,369-375,377,390-406
+packages/marimo-studio/tests/providers/test_css_resources.py
+  s_88978df6b68700::t_38ea2ca6632d8e 50-64
+packages/marimo-studio/src/marimo_studio/view_providers/_javascript.py
+  s_88978df6b68700::t_25b3a2c42dceda 1,191-193
+  s_88978df6b68700::t_61946794965387 68,170-190,280-283
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0bce522a8d38a23f068b5740dd2e8f492cccadf1",
+  "prompts": {},
+  "sessions": {
+    "s_88978df6b68700": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06da8-63a4-7542-9810-17ef2bc3ddf2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
