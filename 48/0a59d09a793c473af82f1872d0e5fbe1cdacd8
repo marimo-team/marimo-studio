@@ -1,0 +1,37 @@
+apps/docs/scripts/example-selection.ts
+  s_88978df6b68700::t_dbad8051d5a1e1 29-31
+  s_88978df6b68700::t_81205c4d0e8e5f 1,61,110,116
+  s_88978df6b68700::t_32b0df607d928c 23-24,34
+  s_88978df6b68700::t_91004730af5ba7 53
+  s_88978df6b68700::t_dcd6f310c0d935 45-52
+  s_88978df6b68700::t_9382844fe7af12 2-22,25-28,32-33,35-44,54-60,62-109,111-115,117-127
+apps/docs/package.json
+  s_88978df6b68700::t_38ea2ca6632d8e 12
+development_docs/documentation.md
+  s_88978df6b68700::t_38ea2ca6632d8e 55-61,99-114
+apps/docs/scripts/build-examples.ts
+  s_88978df6b68700::t_38ea2ca6632d8e 2,8,17-19,33-38,48-50,71,76,81,94,119,147,150,174-194,199-204,208-212,214-219,221-227,231-232,238,240
+  s_88978df6b68700::t_771bc22416b332 20,120
+  s_88978df6b68700::t_0fa7b858f59fbd 195-197
+  s_88978df6b68700::t_053d332a595674 51-55
+apps/docs/scripts/example-selection.test.ts
+  s_88978df6b68700::t_9382844fe7af12 1-16,18-52,56-57
+  s_88978df6b68700::t_81205c4d0e8e5f 53-55
+  s_88978df6b68700::t_dbad8051d5a1e1 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "480a59d09a793c473af82f1872d0e5fbe1cdacd8",
+  "prompts": {},
+  "sessions": {
+    "s_88978df6b68700": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06da8-63a4-7542-9810-17ef2bc3ddf2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
