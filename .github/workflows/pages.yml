@@ -152,9 +152,10 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           COMMIT_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          latest_sha="$(git ls-remote "https://github.com/$REPOSITORY.git" refs/heads/main | awk '{print $1}')"
+          latest_sha="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
           if [[ ! "$latest_sha" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
             echo "The current main commit could not be resolved." >&2
             exit 1
@@ -199,9 +200,10 @@ jobs:
         id: latest
         env:
           COMMIT_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          latest_sha="$(git ls-remote "https://github.com/$REPOSITORY.git" refs/heads/main | awk '{print $1}')"
+          latest_sha="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
           if [[ ! "$latest_sha" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; then
             echo "The current main commit could not be resolved." >&2
             exit 1
