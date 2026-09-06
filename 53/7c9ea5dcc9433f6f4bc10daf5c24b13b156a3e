@@ -1,0 +1,19 @@
+.github/workflows/pages.yml
+  s_5927c97a536597::t_8760d194960156 155,158,203,206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "537c9ea5dcc9433f6f4bc10daf5c24b13b156a3e",
+  "prompts": {},
+  "sessions": {
+    "s_5927c97a536597": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07244-b03f-79e0-8bf7-18c09d90e123",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
