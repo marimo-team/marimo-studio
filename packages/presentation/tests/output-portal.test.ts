@@ -91,9 +91,12 @@ const resolvedOutput = (
   };
 };
 
-const outputBinding = (projection: ResolvedProjection): ProjectionHostBinding => ({
+const outputBinding = (
+  projection: ResolvedProjection,
+  projectionRevision = "projection-revision-a",
+): ProjectionHostBinding => ({
   resolution: { ok: true, value: projection },
-  projectionRevision: "projection-revision-a",
+  projectionRevision,
 });
 
 test("retries a preserved output after a presentation refresh aborts its read", async () => {
@@ -234,6 +237,107 @@ test("keeps readiness stale until the requested source version mounts", async ()
   expect(host.dataset.runtimeCellId).toBe("source-cell");
   expect(host.dataset.outputMime).toBe("text/plain");
 
+  await act(async () => root.unmount());
+});
+
+test("keeps retained output stale while its projection revision refreshes", async () => {
+  document.body.innerHTML = '<marimo-output value="report"></marimo-output><div id="root"></div>';
+  const host = document.querySelector<MarimoOutputElement>("marimo-output")!;
+  const root = createRoot(document.querySelector("#root")!);
+  let resolveNext = (_value: OutputReadResponse) => {};
+  const next = new Promise<OutputReadResponse>((resolve) => {
+    resolveNext = resolve;
+  });
+  const readOutputs = vi
+    .fn<OutputReader>()
+    .mockResolvedValueOnce({ outputs: { report: output("previous", 1) }, errors: {} })
+    .mockImplementationOnce(() => next);
+  const props: Omit<ComponentProps<typeof OutputPortal>, "binding"> = {
+    activeProjections: [projectionRequest("report", "output")],
+    cell: runtimeCell(1),
+    connectionState: "OPEN",
+    developer: true,
+    host,
+    readOutputs,
+    runtimeReady: true,
+  };
+
+  await act(async () => {
+    root.render(
+      createElement(OutputPortal, {
+        ...props,
+        binding: outputBinding(resolvedOutput(), "projection-revision-a"),
+      }),
+    );
+  });
+  expect(host.dataset.state).toBe("ready");
+  expect(host.dataset.outputMime).toBe("text/plain");
+
+  await act(async () => {
+    root.render(
+      createElement(OutputPortal, {
+        ...props,
+        binding: outputBinding(resolvedOutput(), "projection-revision-b"),
+      }),
+    );
+  });
+
+  expect(host.dataset.state).toBe("stale");
+  expect(host.dataset.outputMime).toBe("text/plain");
+  expect(readOutputs).toHaveBeenCalledTimes(2);
+
+  await act(async () => {
+    resolveNext({ outputs: { report: output("current", 2) }, errors: {} });
+    await next;
+  });
+  expect(host.dataset.state).toBe("ready");
+  expect(host.dataset.outputMime).toBe("text/plain");
+  await act(async () => root.unmount());
+});
+
+test("restores retained output state when its projection revision rolls back", async () => {
+  document.body.innerHTML = '<marimo-output value="report"></marimo-output><div id="root"></div>';
+  const host = document.querySelector<MarimoOutputElement>("marimo-output")!;
+  const root = createRoot(document.querySelector("#root")!);
+  const replacement = new Promise<OutputReadResponse>(() => {});
+  const rollbackRefresh = new Promise<OutputReadResponse>(() => {});
+  const readOutputs = vi
+    .fn<OutputReader>()
+    .mockResolvedValueOnce({ outputs: { report: output("previous", 1) }, errors: {} })
+    .mockImplementationOnce(() => replacement)
+    .mockImplementationOnce(() => rollbackRefresh);
+  const props: Omit<ComponentProps<typeof OutputPortal>, "binding"> = {
+    activeProjections: [projectionRequest("report", "output")],
+    cell: runtimeCell(1),
+    connectionState: "OPEN",
+    developer: true,
+    host,
+    readOutputs,
+    runtimeReady: true,
+  };
+  const renderRevision = async (projectionRevision: string) => {
+    await act(async () => {
+      root.render(
+        createElement(OutputPortal, {
+          ...props,
+          binding: outputBinding(resolvedOutput(), projectionRevision),
+        }),
+      );
+    });
+  };
+
+  await renderRevision("projection-revision-a");
+  expect(host.dataset.state).toBe("ready");
+  expect(host.dataset.outputMime).toBe("text/plain");
+
+  await renderRevision("projection-revision-b");
+  expect(host.dataset.state).toBe("stale");
+  expect(host.dataset.outputMime).toBe("text/plain");
+
+  await renderRevision("projection-revision-a");
+  expect(host.dataset.state).toBe("stale");
+  expect(host.dataset.outputMime).toBe("text/plain");
+  expect(readOutputs).toHaveBeenCalledTimes(3);
   await act(async () => root.unmount());
 });
 

@@ -161,12 +161,22 @@ it("pauses a connecting presentation before admitting a notebook mutation", asyn
     revision: "revision-1",
   });
   expect(barrierPort).toBeDefined();
+  const accepted = new Promise<unknown>((resolve) => {
+    barrierPort!.onmessage = (event) => resolve(event.data);
+    barrierPort!.start();
+  });
   barrierPort!.postMessage({
     schema: 1,
     type: "marimo-studio:editor-document-mutation-ready",
     generation: 4,
   });
   await pending;
+  await expect(accepted).resolves.toEqual({
+    schema: 1,
+    type: "marimo-studio:presentation-refresh-barrier-accepted",
+    generation: 4,
+  });
+  barrierPort?.close();
   server.dispose();
 });
 
@@ -195,6 +205,54 @@ it("bounds a notebook mutation while a loading presentation has no receiver", as
     "*",
     expect.anything(),
   );
+  server.dispose();
+});
+
+it("notifies a posted presentation when its mutation barrier times out", async () => {
+  vi.useFakeTimers();
+  const preview = frame("complete");
+  let barrierPort: MessagePort | undefined;
+  const previewWindow = {
+    postMessage: vi.fn((message: { type?: string }, _target: string, ports?: MessagePort[]) => {
+      if (message.type === "marimo-studio:presentation-refresh-barrier") {
+        barrierPort = ports?.[0];
+      }
+    }),
+  };
+  Object.defineProperty(preview, "contentWindow", {
+    configurable: true,
+    value: previewWindow,
+  });
+  const server = controller(
+    "server",
+    frame("complete"),
+    preview,
+    (view, runtime) => `/${view}?runtime=${runtime}`,
+  );
+  dispatchPreviewMessage(previewWindow, {
+    type: "marimo-studio:receiver-ready",
+    runtime: "server",
+    lifecycleId: 1,
+    view: "dashboard",
+    revision: "revision-1",
+  });
+
+  const rejected = expect(server.notebookMutationPending(6, true)).rejects.toMatchObject({
+    name: "TimeoutError",
+  });
+  expect(barrierPort).toBeDefined();
+  const cancellation = new Promise<unknown>((resolve) => {
+    barrierPort!.onmessage = (event) => resolve(event.data);
+    barrierPort!.start();
+  });
+  await vi.advanceTimersByTimeAsync(4_000);
+  await rejected;
+  await expect(cancellation).resolves.toEqual({
+    schema: 1,
+    type: "marimo-studio:presentation-refresh-barrier-failed",
+    generation: 6,
+  });
+  barrierPort?.close();
   server.dispose();
 });
 

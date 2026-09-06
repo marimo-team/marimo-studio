@@ -123,9 +123,17 @@ const expectNotebookContent = async (root: Locator, heading: string): Promise<vo
   await expect(root.getByRole("heading", { name: heading, exact: true })).toBeVisible();
   await expect(labeledSlider(root.locator('marimo-cell[name="controls"]'), /^Scale/)).toBeVisible();
   await expect(root.locator('marimo-cell[name="metric"]')).toHaveText("42");
-  await expect(
-    root.locator('marimo-cell[name="records"]').getByRole("button", { name: "Columns" }),
-  ).toBeVisible();
+  const tableCell = root.locator('marimo-cell[name="records"]');
+  await expect(tableCell.getByRole("button", { name: "Columns" })).toBeVisible();
+  const functionOwner = tableCell.locator("[data-marimo-studio-projected-output]");
+  await expect(functionOwner).toHaveAttribute("data-marimo-studio-active-projection-owner");
+  expect(
+    await functionOwner.evaluate(
+      (element) =>
+        element.getAttribute("data-marimo-studio-active-projection-owner") ===
+        element.getAttribute("data-marimo-studio-output-projection-owner"),
+    ),
+  ).toBe(true);
   await expect(root.getByRole("heading", { name: "First projected result" })).toBeVisible();
   await expect(root.getByRole("heading", { name: "Second projected result" })).toBeVisible();
 };

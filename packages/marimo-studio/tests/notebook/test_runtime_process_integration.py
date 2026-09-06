@@ -14,7 +14,7 @@ import pytest
 from marimo_studio._notebook.inspection import inspect_runtime
 from marimo_studio.errors import RuntimeTimeoutError
 
-pytestmark = [pytest.mark.native_process, pytest.mark.supported_python]
+pytestmark = pytest.mark.native_process
 
 
 def _hanging_notebook(notebook: Path, marker: Path) -> None:
@@ -50,6 +50,7 @@ def _read_marker_pid(marker: Path) -> int:
     return int(marker.read_text(encoding="utf-8"))
 
 
+@pytest.mark.supported_python
 def test_public_runtime_inspection_executes_in_a_child_process(
     tmp_path: Path,
 ) -> None:

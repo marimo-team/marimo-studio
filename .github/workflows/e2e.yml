@@ -9,14 +9,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
     name: Changes
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       pull-requests: read
     outputs:
@@ -25,6 +26,7 @@ jobs:
       provider_browser: ${{ steps.filter.outputs.provider_browser }}
       windows_lifecycle: ${{ steps.filter.outputs.windows_lifecycle }}
       windows_unit: ${{ steps.filter.outputs.windows_unit }}
+      validated_pr: ${{ steps.pr-validation.outputs.validated }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,8 +34,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Find validation for the merged tree
+        id: pr-validation
+        uses: ./.github/actions/pr-validation
+        with:
+          workflow: e2e.yml
+
       - name: Classify changed files
         id: filter
+        if: steps.pr-validation.outputs.validated != 'true'
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: .github/filters.yml
@@ -42,7 +51,9 @@ jobs:
   e2e:
     name: Browser suite (${{ matrix.name }})
     needs: changes
-    if: needs.changes.outputs.main_browser == 'true'
+    if: >-
+      needs.changes.outputs.validated_pr != 'true' &&
+      needs.changes.outputs.main_browser == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -107,8 +118,9 @@ jobs:
     name: Provider and installed-package browser contracts
     needs: changes
     if: >-
-      needs.changes.outputs.provider_browser == 'true' ||
-      needs.changes.outputs.installed_browser == 'true'
+      needs.changes.outputs.validated_pr != 'true' &&
+      (needs.changes.outputs.provider_browser == 'true' ||
+      needs.changes.outputs.installed_browser == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -160,7 +172,9 @@ jobs:
   windows-unit:
     name: Windows process unit contracts
     needs: changes
-    if: needs.changes.outputs.windows_unit == 'true'
+    if: >-
+      needs.changes.outputs.validated_pr != 'true' &&
+      needs.changes.outputs.windows_unit == 'true'
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
@@ -187,12 +201,11 @@ jobs:
         run: pnpm --filter @marimo-studio/e2e test
 
   windows-e2e:
-    name: Windows browser contracts
+    name: Windows browser lifecycle contracts
     needs: changes
     if: >-
-      needs.changes.outputs.windows_lifecycle == 'true' ||
-      needs.changes.outputs.provider_browser == 'true' ||
-      needs.changes.outputs.installed_browser == 'true'
+      needs.changes.outputs.validated_pr != 'true' &&
+      needs.changes.outputs.windows_lifecycle == 'true'
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -225,16 +238,7 @@ jobs:
         run: pnpm --filter @marimo-studio/e2e exec playwright install chromium
 
       - name: Test Windows view and shutdown lifecycles
-        if: needs.changes.outputs.windows_lifecycle == 'true'
         run: pnpm --filter @marimo-studio/e2e e2e:windows
-
-      - name: Test Windows provider runtimes
-        if: needs.changes.outputs.provider_browser == 'true'
-        run: pnpm --filter @marimo-studio/e2e e2e:windows:providers
-
-      - name: Test the installed wheel in Chromium
-        if: needs.changes.outputs.installed_browser == 'true'
-        run: pnpm --filter @marimo-studio/e2e e2e:installed
 
       - name: Upload Windows browser report
         if: failure()
@@ -247,3 +251,149 @@ jobs:
             apps/e2e/test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  windows-provider-e2e:
+    name: Windows provider browser contracts
+    needs: changes
+    if: >-
+      needs.changes.outputs.validated_pr != 'true' &&
+      needs.changes.outputs.provider_browser == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          prune-cache: false
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: uv sync --locked --group e2e
+
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+
+      - name: Prepare the pinned Marimo frontend
+        run: pnpm --filter @marimo-studio/marimo-frontend prepare:upstream
+
+      - name: Build browser assets
+        run: pnpm exec vp run --filter @marimo-studio/browser build
+
+      - name: Install Chromium
+        run: pnpm --filter @marimo-studio/e2e exec playwright install chromium
+
+      - name: Test Windows provider runtimes
+        run: pnpm --filter @marimo-studio/e2e e2e:windows:providers
+
+      - name: Upload Windows provider browser report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-provider-playwright-report
+          path: |
+            apps/e2e/playwright-report/
+            apps/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  windows-installed-e2e:
+    name: Windows installed-wheel browser contract
+    needs: changes
+    if: >-
+      needs.changes.outputs.validated_pr != 'true' &&
+      needs.changes.outputs.installed_browser == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          prune-cache: false
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: uv sync --locked --group e2e
+
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+
+      - name: Prepare the pinned Marimo frontend
+        run: pnpm --filter @marimo-studio/marimo-frontend prepare:upstream
+
+      - name: Build browser assets
+        run: pnpm exec vp run --filter @marimo-studio/browser build
+
+      - name: Install Chromium
+        run: pnpm --filter @marimo-studio/e2e exec playwright install chromium
+
+      - name: Test the installed wheel in Chromium
+        run: pnpm --filter @marimo-studio/e2e e2e:installed
+
+      - name: Upload Windows installed-wheel browser report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-installed-playwright-report
+          path: |
+            apps/e2e/playwright-report-installed/
+            apps/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  gate:
+    name: Browser acceptance gate
+    if: always()
+    needs:
+      - changes
+      - e2e
+      - package-e2e
+      - windows-unit
+      - windows-e2e
+      - windows-provider-e2e
+      - windows-installed-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Confirm browser acceptance results
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          E2E_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && needs.changes.outputs.main_browser == 'true' }}
+          E2E: ${{ needs.e2e.result }}
+          PACKAGE_E2E_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && (needs.changes.outputs.provider_browser == 'true' || needs.changes.outputs.installed_browser == 'true') }}
+          PACKAGE_E2E: ${{ needs.package-e2e.result }}
+          WINDOWS_E2E_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && needs.changes.outputs.windows_lifecycle == 'true' }}
+          WINDOWS_E2E: ${{ needs.windows-e2e.result }}
+          WINDOWS_INSTALLED_E2E_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && needs.changes.outputs.installed_browser == 'true' }}
+          WINDOWS_INSTALLED_E2E: ${{ needs.windows-installed-e2e.result }}
+          WINDOWS_PROVIDER_E2E_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && needs.changes.outputs.provider_browser == 'true' }}
+          WINDOWS_PROVIDER_E2E: ${{ needs.windows-provider-e2e.result }}
+          WINDOWS_UNIT_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && needs.changes.outputs.windows_unit == 'true' }}
+          WINDOWS_UNIT: ${{ needs.windows-unit.result }}
+        run: |
+          scripts/check-workflow-results.sh \
+            Changes true "$CHANGES" \
+            Browser "$E2E_REQUIRED" "$E2E" \
+            Package-browser "$PACKAGE_E2E_REQUIRED" "$PACKAGE_E2E" \
+            Windows-lifecycle "$WINDOWS_E2E_REQUIRED" "$WINDOWS_E2E" \
+            Windows-installed "$WINDOWS_INSTALLED_E2E_REQUIRED" "$WINDOWS_INSTALLED_E2E" \
+            Windows-provider "$WINDOWS_PROVIDER_E2E_REQUIRED" "$WINDOWS_PROVIDER_E2E" \
+            Windows-unit "$WINDOWS_UNIT_REQUIRED" "$WINDOWS_UNIT"

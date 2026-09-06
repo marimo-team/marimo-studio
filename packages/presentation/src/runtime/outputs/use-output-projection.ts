@@ -23,6 +23,7 @@ export interface OutputDiagnostic {
 
 export interface OutputProjection {
   output: RenderedOutput;
+  projectionRevision: string;
   sourceVersion: number | null;
 }
 
@@ -31,6 +32,7 @@ interface OutputRequestState {
   identity: string;
   pending: boolean;
   projection?: OutputProjection;
+  retentionIdentity: string;
 }
 
 export interface OutputProjectionState {
@@ -52,6 +54,7 @@ export const useOutputProjection = ({
   blocked,
   connectionState,
   model,
+  projectionRevision,
   readOutputs,
   selector,
   sourceCellId,
@@ -62,6 +65,7 @@ export const useOutputProjection = ({
   blocked: boolean;
   connectionState: RuntimeConnectionState;
   model: ValueCellModel;
+  projectionRevision: string;
   readOutputs: OutputReader;
   selector: string;
   sourceCellId: string | undefined;
@@ -69,7 +73,7 @@ export const useOutputProjection = ({
   const [state, setState] = useState<OutputRequestState>();
   const activeProjectionsRef = useLatest(activeProjections);
   const requestRef = useLatest(request);
-  const requestIdentity =
+  const retentionIdentity =
     projectionIdentity && sourceCellId && request
       ? JSON.stringify([
           request.kind,
@@ -81,11 +85,15 @@ export const useOutputProjection = ({
           sourceCellId,
         ])
       : undefined;
+  const requestIdentity = retentionIdentity
+    ? JSON.stringify([retentionIdentity, projectionRevision])
+    : undefined;
 
   useEffect(() => {
     const currentRequest = requestRef.current;
     if (
       !requestIdentity ||
+      !retentionIdentity ||
       !currentRequest ||
       !sourceCellId ||
       blocked ||
@@ -97,11 +105,16 @@ export const useOutputProjection = ({
     const controller = new AbortController();
     let current = true;
     const sourceVersion = model.version;
-    setState((previous) => ({
-      identity: requestIdentity,
-      pending: true,
-      projection: previous?.identity === requestIdentity ? previous.projection : undefined,
-    }));
+    setState((previous) =>
+      previous?.identity === requestIdentity
+        ? {
+            identity: requestIdentity,
+            pending: true,
+            projection: previous.projection,
+            retentionIdentity,
+          }
+        : previous,
+    );
 
     const release = () => {
       void readOutputs({
@@ -133,7 +146,7 @@ export const useOutputProjection = ({
           ownRecordValue(response.errors, selector) ?? ownRecordValue(response.errors, "*");
         const rendered = ownRecordValue(response.outputs, selector);
         if (failure) {
-          setState({ failure, identity: requestIdentity, pending: false });
+          setState({ failure, identity: requestIdentity, pending: false, retentionIdentity });
           release();
           return;
         }
@@ -145,6 +158,7 @@ export const useOutputProjection = ({
             },
             identity: requestIdentity,
             pending: false,
+            retentionIdentity,
           });
           release();
           return;
@@ -152,7 +166,8 @@ export const useOutputProjection = ({
         setState({
           identity: requestIdentity,
           pending: false,
-          projection: { output: rendered, sourceVersion },
+          projection: { output: rendered, projectionRevision, sourceVersion },
+          retentionIdentity,
         });
       })
       .catch((cause: unknown) => {
@@ -163,6 +178,7 @@ export const useOutputProjection = ({
           failure: requestFailure(cause),
           identity: requestIdentity,
           pending: false,
+          retentionIdentity,
         });
         release();
       });
@@ -176,19 +192,24 @@ export const useOutputProjection = ({
     connectionState,
     model.phase,
     model.version,
+    projectionRevision,
     readOutputs,
     requestIdentity,
     requestRef,
+    retentionIdentity,
     selector,
     sourceCellId,
   ]);
 
-  const currentState = !blocked && state?.identity === requestIdentity ? state : undefined;
+  const retainedState =
+    !blocked && state?.retentionIdentity === retentionIdentity ? state : undefined;
+  const currentState = retainedState?.identity === requestIdentity ? retainedState : undefined;
+  const projection = retainedState?.projection;
   const projectionCurrent = currentState?.projection?.sourceVersion === model.version;
   return {
     failure: currentState?.failure,
-    pending: currentState?.pending ?? false,
-    projection: currentState?.projection,
+    pending: currentState?.pending ?? projection !== undefined,
+    projection,
     projectionCurrent,
   };
 };

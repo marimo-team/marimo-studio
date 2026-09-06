@@ -1,3 +1,5 @@
+import { isProjectedOutputFunctionAbort } from "./projected-output-function-gate.ts";
+
 type LogMethod = (...data: unknown[]) => void;
 
 interface RuntimeLogger {
@@ -55,7 +57,12 @@ const createLogger = (namespace?: string): RuntimeLogger => {
       }
       emit(console.warn, data);
     },
-    error: (...data) => emit(console.error, data),
+    error: (...data) => {
+      if (isProjectedOutputFunctionAbort(data[0])) {
+        return;
+      }
+      emit(console.error, data);
+    },
     trace: (...data) => emit(console.trace, data),
     get: (child) => createLogger(namespace ? `${namespace}:${child}` : `marimo:${child}`),
     disabled: (disabled = true) => (disabled ? DisabledLogger : createLogger(namespace)),

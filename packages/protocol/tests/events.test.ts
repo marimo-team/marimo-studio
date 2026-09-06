@@ -10,6 +10,7 @@ import {
   parseObserveViewRequest,
   parsePresentationBuild,
   parsePresentationChange,
+  parsePresentationRefreshBarrierResult,
   parseWorkspaceChange,
 } from "../src/development-events.ts";
 import { parsePresentationBaseline, parseSourceChanges } from "../src/source-events.ts";
@@ -253,4 +254,22 @@ test("editor document mutations require the exact bounded schema", () => {
   assert.equal(parseEditorDocumentMutation({ ...mutation, generation: 0 }), undefined);
   assert.equal(parseEditorDocumentMutation({ ...mutation, extra: true }), undefined);
   assert.equal(parseEditorDocumentMutation({ ...mutation, type: "unknown" }), undefined);
+});
+
+test("presentation mutation barriers accept one terminal parent result", () => {
+  for (const type of [
+    "marimo-studio:presentation-refresh-barrier-accepted",
+    "marimo-studio:presentation-refresh-barrier-failed",
+  ] as const) {
+    const result = { schema: 1, type, generation: 3 } as const;
+    assert.deepEqual(parsePresentationRefreshBarrierResult(result), result);
+  }
+  assert.equal(
+    parsePresentationRefreshBarrierResult({
+      schema: 1,
+      type: "marimo-studio:presentation-refresh-barrier-accepted",
+      generation: 0,
+    }),
+    undefined,
+  );
 });

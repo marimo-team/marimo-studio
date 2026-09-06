@@ -394,7 +394,20 @@ export class PreviewController {
         this.mutationBarriers.delete(owner);
         complete();
       };
-      const fail = (cause: unknown) => settle(() => reject(cause));
+      const fail = (cause: unknown) => {
+        if (owner.started) {
+          try {
+            channel.port1.postMessage({
+              schema: 1,
+              type: "marimo-studio:presentation-refresh-barrier-failed",
+              generation,
+            });
+          } catch {
+            // Closing the local port below still retires this barrier owner.
+          }
+        }
+        settle(() => reject(cause));
+      };
       const start = () => {
         if (owner.started) {
           return;
@@ -443,7 +456,16 @@ export class PreviewController {
           acknowledgement.type === "marimo-studio:editor-document-mutation-ready" &&
           acknowledgement.generation === generation
         ) {
-          settle(resolve);
+          try {
+            channel.port1.postMessage({
+              schema: 1,
+              type: "marimo-studio:presentation-refresh-barrier-accepted",
+              generation,
+            });
+            settle(resolve);
+          } catch (cause) {
+            fail(cause);
+          }
         } else {
           fail(new DOMException("The presentation returned an invalid barrier.", "DataError"));
         }

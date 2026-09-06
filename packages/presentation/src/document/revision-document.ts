@@ -1,4 +1,5 @@
 import htmx from "htmx.org";
+import { flushSync } from "react-dom";
 
 import { projectionHosts, type StagedHostPreservation } from "../projections/host-runtime.ts";
 import { clearProjectionBindingStale } from "../projections/staleness.ts";
@@ -158,12 +159,12 @@ export class DocumentRevisionAdapter {
         const previousHistoryUrl = globalThis.location.href;
         try {
           setSupportUrl(target.supportUrl);
-          commitRuntimeConfig(nextConfig);
+          flushSync(() => commitRuntimeConfig(nextConfig));
           commitHistory(historyMode, historyUrl);
         } catch (error) {
           setSupportUrl(previousSupportUrl);
           try {
-            commitRuntimeConfig(previousConfig);
+            flushSync(() => commitRuntimeConfig(previousConfig));
           } catch {
             // Runtime config assignment precedes listener notification.
           }
@@ -235,17 +236,21 @@ export class DocumentRevisionAdapter {
       const nextBase = resolveDocumentBase(nextDocument, nextDocumentUrl);
       try {
         setSupportUrl(target.supportUrl);
-        commitRuntimeConfig(nextConfig);
         document.title = nextDocument.title;
         documentBase.set(nextBase);
         stagedStyles.commit();
         stagedViewStyles.commit();
-        if (morphShell) {
-          morphAuthoredShell(current, next);
-          shellMorphed = true;
-        } else if (stagedHosts) {
-          this.swap(current, next, stagedHosts);
-        }
+        // Commit projection owners against the new document before the controller
+        // rotates the capability-bound server transport.
+        flushSync(() => {
+          if (morphShell) {
+            morphAuthoredShell(current, next);
+            shellMorphed = true;
+          } else if (stagedHosts) {
+            this.swap(current, next, stagedHosts);
+          }
+          commitRuntimeConfig(nextConfig);
+        });
         commitHistory(historyMode, historyUrl);
       } catch (error) {
         const rollbackErrors: unknown[] = [];
@@ -256,15 +261,19 @@ export class DocumentRevisionAdapter {
             rollbackErrors.push(rollbackError);
           }
         };
-        if (shellMorphed && previousShell) {
-          const shell = previousShell;
-          restore(() => morphAuthoredShell(current, shell));
-        }
-        restore(() => stagedHosts?.rollback());
-        restore(() => stagedViewStyles?.rollback());
-        restore(() => stagedStyles?.rollback());
-        restore(() => setSupportUrl(previousSupportUrl));
-        restore(() => commitRuntimeConfig(previousConfig));
+        restore(() =>
+          flushSync(() => {
+            if (shellMorphed && previousShell) {
+              const shell = previousShell;
+              restore(() => morphAuthoredShell(current, shell));
+            }
+            restore(() => stagedHosts?.rollback());
+            restore(() => stagedViewStyles?.rollback());
+            restore(() => stagedStyles?.rollback());
+            restore(() => setSupportUrl(previousSupportUrl));
+            restore(() => commitRuntimeConfig(previousConfig));
+          }),
+        );
         restore(() => {
           document.title = previousTitle;
         });

@@ -16,7 +16,7 @@ PYTHON_BUILD_CONSTRAINTS = $(UV) export --frozen --package marimo-studio --only-
 
 .PHONY: help setup format lint typecheck python-test frontend-test test check build
 .PHONY: e2e e2e-ui docs-examples docs-build docs-serve package
-.PHONY: _anti-slop-check _architecture-check _provider-sources-check
+.PHONY: _anti-slop-check _architecture-check _provider-sources-check _workflow-check
 .PHONY: _prepare-frontend _frontend-ready _browser-install _browser-ready
 
 help: ## List development targets.
@@ -45,13 +45,19 @@ _provider-sources-check:
 _architecture-check:
 	$(UV) run python scripts/check_python_architecture.py
 
-lint: _frontend-ready _anti-slop-check _architecture-check _provider-sources-check ## Check formatting, source, workflows, and shell scripts.
+_workflow-check:
+	./scripts/check-workflow-results.test.sh
+	node --test .github/actions/pr-validation/*.test.mjs
+
+lint: _frontend-ready _anti-slop-check _architecture-check _provider-sources-check _workflow-check ## Check formatting, source, workflows, and shell scripts.
 	$(UV) run ruff format --check $(PYTHON_PATHS)
 	$(UV) run ruff check $(PYTHON_PATHS)
 	$(VP) fmt --check $(FORMAT_PATHS)
 	$(VP) lint apps packages vite.config.ts
-	uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
-	shellcheck scripts/*.sh
+	uvx --from actionlint-py==1.7.12.24 actionlint \
+		-ignore 'unexpected key "queue" for "concurrency" section' \
+		.github/workflows/*.yml
+	shellcheck scripts/*.sh .github/actions/pr-validation/*.sh
 
 typecheck: _frontend-ready ## Type-check Python and TypeScript sources.
 	$(UV) run ty check

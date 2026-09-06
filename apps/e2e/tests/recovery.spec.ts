@@ -9,6 +9,7 @@ import {
   previewFrame,
   readWorkspaceFile,
   recoverProjectionRefresh,
+  recoverWorkspaceEventStream,
   restoreWorkspace,
   studioEntryUrl,
   studioOrigin,
@@ -215,24 +216,10 @@ playwrightTest(
   },
 );
 
-test("restores a value host after its notebook value returns", async ({
+test("restores value and function output hosts after their notebook values return", async ({
   browserDiagnostics,
   page,
 }) => {
-  const staleProjectionReads = browserDiagnostics.expectResponse({
-    status: 409,
-    path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/(?:values|outputs)$/,
-    error: "stale-projection-binding",
-    count: 4,
-    required: false,
-  });
-  const pendingRuntimeSync = browserDiagnostics.expectResponse({
-    status: 409,
-    path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/config$/,
-    error: "runtime-sync-pending",
-    count: 4,
-    required: false,
-  });
   await page.goto(studioEntryUrl);
   const preview = await waitForPreview(page);
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
@@ -240,10 +227,12 @@ test("restores a value host after its notebook value returns", async ({
     2,
   );
   const value = preview.locator('[mo-value="metric"]');
+  const peerOutput = preview.locator('marimo-output[value="rich_table"]');
   const currentViewRevision = () =>
     preview.locator("html").evaluate(() => globalThis.marimoStudio.identity().revision);
   const initial = await value.textContent();
   expect(initial).toMatch(/^\d+$/);
+  await expect(peerOutput).toHaveAttribute("data-state", "ready");
   let restored = false;
 
   try {
@@ -253,10 +242,6 @@ test("restores a value host after its notebook value returns", async ({
     await expect.poll(currentViewRevision).not.toBe(initialViewRevision);
 
     await expect(value).toHaveAttribute("data-state", "error");
-    await expect(preview.locator('marimo-cell[name="controls"]')).toHaveAttribute(
-      "data-state",
-      "ready",
-    );
     const diagnostics: readonly unknown[] = await preview
       .locator("html")
       .evaluate(() => globalThis.marimoStudio.diagnostics());
@@ -294,6 +279,7 @@ test("restores a value host after its notebook value returns", async ({
     await expect.poll(currentViewRevision).not.toBe(missingMetricRevision);
     await waitForPreview(page);
     await expect(value).toHaveAttribute("data-state", "ready");
+    await expect(peerOutput).toHaveAttribute("data-state", "ready");
     restored = true;
     await expect(value).toHaveText(initial ?? "");
     await expect(previewFrame(page).locator("html")).toHaveAttribute(
@@ -301,9 +287,7 @@ test("restores a value host after its notebook value returns", async ({
       "ready",
     );
     await recoverProjectionRefresh(restoredMetricRefresh, page);
-    replacedWorkspaceStreams.recovered();
-    staleProjectionReads.recovered();
-    pendingRuntimeSync.recovered();
+    await recoverWorkspaceEventStream(replacedWorkspaceStreams);
   } finally {
     if (!restored) {
       const source = await readWorkspaceFile(workspaceNotebookPath);
@@ -316,8 +300,6 @@ test("restores a value host after its notebook value returns", async ({
       }
       await waitForPreview(page);
       await expect(value).toHaveAttribute("data-state", "ready");
-      staleProjectionReads.recovered();
-      pendingRuntimeSync.recovered();
     }
   }
 });

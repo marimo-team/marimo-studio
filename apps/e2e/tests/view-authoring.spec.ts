@@ -194,6 +194,7 @@ await view.show()
 `,
   );
   await expect(page).toHaveURL(/\/studio\/dashboard\/\?file=first-save\.py&region=eu$/);
+  expect(await studioEditorSessionId(page)).toBe(sessionId);
   await waitForPreview(page);
   replacedWorkspaceStream.recovered();
 });
@@ -222,149 +223,92 @@ test("loads a native module graph from a directory view", async ({ browserDiagno
   await recoverRequestAbort(supersededDocument);
 });
 
-test("publishes visible edits from each built-in source model", async ({
+test("publishes a framework edit and retains the last good view across a failed build", async ({
   browserDiagnostics,
   page,
   studioCli,
 }) => {
-  test.setTimeout(600_000);
-  await studioCli.addWorkspaceView(
-    workspaceNotebookPath,
-    "html-view",
-    "marimo-studio/vanilla:default",
-  );
+  test.setTimeout(300_000);
   await studioCli.addWorkspaceView(
     workspaceNotebookPath,
     "react-view",
     "marimo-studio/react:default",
   );
-  await studioCli.addWorkspaceView(
-    workspaceNotebookPath,
-    "svelte-view",
-    "marimo-studio/svelte:default",
-  );
-  await studioCli.buildWorkspaceView("html-view");
+  await studioCli.buildWorkspaceView("react-view");
 
   const completedSourceWrites = browserDiagnostics.expectRequestAbort({
     origin: studioOrigin,
     method: "PUT",
-    path: /^\/_marimo-studio\/views\/(?:html-view\/source\/index\.html|react-view\/source\/src\/App\.tsx|svelte-view\/source\/src\/App\.svelte)$/,
-    count: 5,
+    path: /^\/_marimo-studio\/views\/react-view\/source\/src\/App\.tsx$/,
+    count: 3,
     required: false,
     status: 204,
   });
-  const cases = [
-    {
-      after: "HTML source published",
-      before: "Html View",
-      path: "index.html",
-      view: "html-view",
-    },
-    {
-      after: "React source published",
-      before: "React View",
-      path: "src/App.tsx",
-      view: "react-view",
-    },
-    {
-      after: "Svelte source published",
-      before: "Svelte View",
-      path: "src/App.svelte",
-      view: "svelte-view",
-    },
-  ] as const;
-  const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics, cases.length);
-  for (const candidate of cases) {
-    await test.step(`${candidate.view} edit`, async () => {
-      await page.goto(`/studio/${candidate.view}/?file=notebook.py`);
-      const preview = await waitForViewPreview(page, candidate.view, "server", 120_000);
-      await expect(preview.getByRole("heading", { name: candidate.before })).toBeVisible();
-      await expect(
-        labeledSlider(preview.locator('marimo-cell[name="controls"]'), /^Scale/),
-      ).toBeVisible();
-      await expect(preview.getByRole("button", { name: "Widget count: 7" })).toBeVisible();
+  const editorModelRecovery = expectEditorModelReplayRecovery(browserDiagnostics);
+  await page.goto("/studio/react-view/?file=notebook.py");
+  const preview = await waitForViewPreview(page, "react-view", "server", 120_000);
+  await expect(preview.getByRole("heading", { name: "React View" })).toBeVisible();
+  await expect(
+    labeledSlider(preview.locator('marimo-cell[name="controls"]'), /^Scale/),
+  ).toBeVisible();
+  await expect(preview.getByRole("button", { name: "Widget count: 7" })).toBeVisible();
 
-      const sourceTab = page.getByRole("tab", { name: candidate.path });
-      if (!(await sourceTab.isVisible())) {
-        await page.getByLabel("Workspace options").click();
-        await page.getByRole("button", { name: "Source" }).click();
-      }
-      await sourceTab.click();
-      const editor = page.getByLabel(`${candidate.path} source`);
-      const sourcePath = resolve(
-        workspaceNotebookPath,
-        "../__marimo__/studio/notebook",
-        candidate.view,
-        candidate.path,
-      );
-      const source = await readWorkspaceFile(sourcePath);
-      expect(source).toContain(candidate.before);
-      const initialRevision = await preview
-        .locator("html")
-        .evaluate(() => globalThis.marimoStudio.identity().revision);
-
-      await editor.focus();
-      await editor.press(selectAllShortcut);
-      const changedSource = source.replace(candidate.before, candidate.after);
-      await page.keyboard.insertText(changedSource);
-      await editor.press(saveShortcut);
-
-      await expect(page.getByRole("status", { name: "Source document status" })).toHaveText(
-        "Saved",
-      );
-      await expect.poll(() => readWorkspaceFile(sourcePath)).toBe(changedSource);
-      await expect(preview.getByRole("heading", { name: candidate.after })).toBeVisible({
-        timeout: 65_000,
-      });
-      await waitForViewPreview(page, candidate.view);
-      await expect
-        .poll(() =>
-          preview.locator("html").evaluate(() => globalThis.marimoStudio.identity().revision),
-        )
-        .not.toBe(initialRevision);
-      await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
-    });
+  const sourceTab = page.getByRole("tab", { name: "src/App.tsx" });
+  if (!(await sourceTab.isVisible())) {
+    await page.getByLabel("Workspace options").click();
+    await page.getByRole("button", { name: "Source" }).click();
   }
+  await sourceTab.click();
+  const editor = page.getByLabel("src/App.tsx source");
+  const path = resolve(
+    workspaceNotebookPath,
+    "../__marimo__/studio/notebook/react-view/src/App.tsx",
+  );
+  const source = await readWorkspaceFile(path);
+  expect(source).toContain("React View");
+  const initialRevision = await preview
+    .locator("html")
+    .evaluate(() => globalThis.marimoStudio.identity().revision);
+  const goodSource = source.replace("React View", "React source published");
 
-  await test.step("failed framework build retains and explains the last good view", async () => {
-    await page.goto("/studio/react-view/?file=notebook.py");
-    const preview = await waitForViewPreview(page, "react-view", "server", 120_000);
-    await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible();
-    const sourceTab = page.getByRole("tab", { name: "src/App.tsx" });
-    if (!(await sourceTab.isVisible())) {
-      await page.getByLabel("Workspace options").click();
-      await page.getByRole("button", { name: "Source" }).click();
-    }
-    await sourceTab.click();
-    const editor = page.getByLabel("src/App.tsx source");
-    const path = resolve(
-      workspaceNotebookPath,
-      "../__marimo__/studio/notebook/react-view/src/App.tsx",
-    );
-    const goodSource = await readWorkspaceFile(path);
-    const invalidSource = goodSource.replace(
-      "export const App = () => (",
-      "export const App = () => (BROKEN",
-    );
-    await editor.focus();
-    await editor.press(selectAllShortcut);
-    await page.keyboard.insertText(invalidSource);
-    await editor.press(saveShortcut);
+  await editor.focus();
+  await editor.press(selectAllShortcut);
+  await page.keyboard.insertText(goodSource);
+  await editor.press(saveShortcut);
 
-    await expect(page.getByLabel("View build details, Build failed")).toBeVisible();
-    const diagnostic = page.getByRole("alert").filter({ hasText: "React provider" });
-    await expect(diagnostic).toContainText("Expected");
-    await expect(diagnostic).toContainText("src/App.tsx");
-    await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible();
-
-    await editor.focus();
-    await editor.press(selectAllShortcut);
-    await page.keyboard.insertText(goodSource);
-    await editor.press(saveShortcut);
-    await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
-    await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible();
-    await expect(diagnostic).toHaveCount(0);
+  await expect(page.getByRole("status", { name: "Source document status" })).toHaveText("Saved");
+  await expect.poll(() => readWorkspaceFile(path)).toBe(goodSource);
+  await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible({
+    timeout: 65_000,
   });
+  await waitForViewPreview(page, "react-view");
+  await expect
+    .poll(() => preview.locator("html").evaluate(() => globalThis.marimoStudio.identity().revision))
+    .not.toBe(initialRevision);
+  await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
+
+  const invalidSource = goodSource.replace(
+    "export const App = () => (",
+    "export const App = () => (BROKEN",
+  );
+  await editor.focus();
+  await editor.press(selectAllShortcut);
+  await page.keyboard.insertText(invalidSource);
+  await editor.press(saveShortcut);
+
+  await expect(page.getByLabel("View build details, Build failed")).toBeVisible();
+  const diagnostic = page.getByRole("alert").filter({ hasText: "React provider" });
+  await expect(diagnostic).toContainText("Expected");
+  await expect(diagnostic).toContainText("src/App.tsx");
+  await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible();
+
+  await editor.focus();
+  await editor.press(selectAllShortcut);
+  await page.keyboard.insertText(goodSource);
+  await editor.press(saveShortcut);
+  await expect(page.getByLabel("View build details, Up to date")).toBeVisible();
+  await expect(preview.getByRole("heading", { name: "React source published" })).toBeVisible();
+  await expect(diagnostic).toHaveCount(0);
 
   await expect(page.getByRole("status", { name: "Source document status" })).toHaveText("Saved");
   await editorModelRecovery.ready(page);

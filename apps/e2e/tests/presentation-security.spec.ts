@@ -201,7 +201,9 @@ test("keeps standalone navigation inside server-authored route authority", async
     ).toBe("server");
     expect(target.hash).toBe("#proof");
   } finally {
+    const retirement = browserDiagnostics.expectPageRetirement(popout);
     await popout.close();
+    retirement.recovered();
     supersededPresentation.recovered();
   }
 });

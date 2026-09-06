@@ -223,6 +223,34 @@ export const parseEditorDocumentMutationAcknowledgement = (
   return result.success ? result.data : undefined;
 };
 
+const presentationRefreshBarrierResultSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      schema: z.literal(1),
+      type: z.literal("marimo-studio:presentation-refresh-barrier-accepted"),
+      generation: z.int().positive().max(Number.MAX_SAFE_INTEGER),
+    })
+    .strict(),
+  z
+    .object({
+      schema: z.literal(1),
+      type: z.literal("marimo-studio:presentation-refresh-barrier-failed"),
+      generation: z.int().positive().max(Number.MAX_SAFE_INTEGER),
+    })
+    .strict(),
+]);
+
+export type PresentationRefreshBarrierResult = z.infer<
+  typeof presentationRefreshBarrierResultSchema
+>;
+
+export const parsePresentationRefreshBarrierResult = (
+  payload: BrowserMessageInput,
+): PresentationRefreshBarrierResult | undefined => {
+  const result = presentationRefreshBarrierResultSchema.safeParse(payload);
+  return result.success ? result.data : undefined;
+};
+
 const observeViewSchema = z
   .object({
     schema: z.literal(1),

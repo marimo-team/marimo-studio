@@ -21,6 +21,12 @@ import {
   createTransportInitializer,
 } from "./embedded-runtime-core.ts";
 import { EmbeddedRuntimeViewComponent } from "./embedded-runtime-view.tsx";
+import {
+  disposeProjectedOutputFunctionGate,
+  type ProjectedOutputFunctionGate,
+  type ProjectedOutputFunctionClient,
+  startProjectedOutputFunctionGate,
+} from "./projected-output-function-gate.ts";
 import { currentSessionId } from "./session-bootstrap.ts";
 import {
   type CellId,
@@ -198,6 +204,15 @@ const EmbeddedRuntimeProviders = ({ children }: { children: ReactNode }) => (
 
 let pluginsInitialized = false;
 let serverRuntimeConfig: { url: string; lazy: false; serverToken: string } | undefined;
+let projectedOutputFunctionGate: ProjectedOutputFunctionGate | undefined;
+let wasmFunctionClient: ProjectedOutputFunctionClient | undefined;
+
+const currentProjectedOutputFunctionGate = (): ProjectedOutputFunctionGate => {
+  if (!projectedOutputFunctionGate) {
+    throw new Error("The projected output function gate has not started.");
+  }
+  return projectedOutputFunctionGate;
+};
 
 const initializeMovablePlugins = (): void => {
   const registry = globalThis.customElements;
@@ -225,6 +240,8 @@ const initializeMovablePlugins = (): void => {
 
 const initializeEmbeddedRuntime = (): void => {
   serverRuntimeConfig = undefined;
+  projectedOutputFunctionGate = startProjectedOutputFunctionGate();
+  wasmFunctionClient = undefined;
   retainUnmountedControlValues(UI_ELEMENT_REGISTRY);
   if (!pluginsInitialized) {
     initializeMovablePlugins();
@@ -291,17 +308,25 @@ const transportHost: EmbeddedTransportHost = {
     const previous = store.get(requestClientAtom);
     const network = createNetworkRequests();
     const modelValues = bindModelValueSenderToPage(network.sendModelValue);
+    const functionClient = currentProjectedOutputFunctionGate().activateClient();
     const requests = createErrorToastingRequests({
       ...network,
       sendModelValue: modelValues.send,
     });
-    store.set(requestClientAtom, requests);
+    try {
+      store.set(requestClientAtom, requests);
+    } catch (error) {
+      functionClient.dispose();
+      modelValues.dispose();
+      throw error;
+    }
     let active = true;
     return () => {
       if (!active) {
         return;
       }
       active = false;
+      functionClient.dispose();
       modelValues.dispose();
       if (store.get(requestClientAtom) === requests) {
         store.set(requestClientAtom, previous);
@@ -335,10 +360,17 @@ const transportHost: EmbeddedTransportHost = {
     store.set(marimoVersionAtom, transport.version);
     store.set(runtimeConfigAtom, { url: transport.url, lazy: false, serverToken: "" });
     const bridge = PyodideBridge.INSTANCE;
+    wasmFunctionClient?.dispose();
+    const functionClient = currentProjectedOutputFunctionGate().activateClient();
+    wasmFunctionClient = functionClient;
     store.set(requestClientAtom, resolveRequestClient());
     return bridge.initialized.promise;
   },
-  releaseWasm: terminatePresentationWasmWorker,
+  releaseWasm() {
+    wasmFunctionClient?.dispose();
+    wasmFunctionClient = undefined;
+    terminatePresentationWasmWorker();
+  },
   async executeWasmCells(cells) {
     const cellIds = cells.map((cell) => {
       // SAFETY: This ID was compiled from the Marimo source loaded into this worker.
@@ -358,6 +390,7 @@ const embeddedRuntimeHost: EmbeddedRuntimeHost = {
   configurePresentation,
   configureTheme,
   createRenderer(element) {
+    const functionGate = currentProjectedOutputFunctionGate();
     const root = createRoot(element);
     const renderer: EmbeddedRuntimeRenderer = {
       render(initialized, renderView, sessionId, autoInstantiate) {
@@ -374,7 +407,14 @@ const embeddedRuntimeHost: EmbeddedRuntimeHost = {
         );
       },
       dispose() {
-        root.unmount();
+        try {
+          root.unmount();
+        } finally {
+          disposeProjectedOutputFunctionGate(functionGate);
+          if (projectedOutputFunctionGate === functionGate) {
+            projectedOutputFunctionGate = undefined;
+          }
+        }
       },
     };
     return renderer;

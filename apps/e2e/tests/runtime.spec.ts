@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 
 import { DOCUMENT_LIFECYCLE_QUERY_PARAM } from "@marimo-studio/protocol/query";
 
+import { studioEditorSessionId } from "./authoring-test-support.ts";
 import {
   dashboardHtmlPath,
   editorFrame,
@@ -10,6 +11,7 @@ import {
   presentationFrame,
   readWorkspaceFile,
   recoverRequestAbort,
+  recoverWorkspaceEventStream,
   staticExportUrl,
   studioEntryUrl,
   studioOrigin,
@@ -75,7 +77,8 @@ test("mounts the Copilot editor extension only while GitHub completion is enable
   const closedCopilotTransport = browserDiagnostics.expectConsole({
     type: "warning",
     text: /^WebSocket transport connection closed Error: WebSocket connection to ws:\/\/[^/]+\/lsp\/copilot closed/,
-    count: 1,
+    count: 2,
+    required: false,
   });
   const replacedWorkspaceStreams = browserDiagnostics.expectWorkspaceEventStreamReplacement(
     new URL("/_marimo-studio/dev/events", studioOrigin).href,
@@ -96,31 +99,41 @@ test("mounts the Copilot editor extension only while GitHub completion is enable
   });
   const editor = editorFrame(page);
   const copilotStatus = editor.locator('[data-testid="footer-copilot-status"]');
-  const saveCopilot = async (copilot: false | "github") => {
+  const saveCopilot = async (copilot: false | "github", targetSessionId = sessionId) => {
     const response = await page.request.post("/_marimo-studio/editor/api/kernel/save_user_config", {
       data: { config: { completion: { copilot } } },
       headers: {
         "Marimo-Server-Token": await studioServerToken(page),
-        "Marimo-Session-Id": sessionId,
+        "Marimo-Session-Id": targetSessionId,
         "x-runtime-url": new URL("/_marimo-studio/editor/", page.url()).href,
       },
     });
     expect(response.ok(), await response.text()).toBe(true);
   };
 
-  await expect(copilotStatus).toHaveCount(0);
-  await saveCopilot("github");
-  sessionId = await loadSession(async () => {
-    await page.reload();
-  });
-  await expect(copilotStatus).toBeVisible();
-  await saveCopilot(false);
-  await loadSession(async () => {
-    await page.reload();
-  });
-  await expect(copilotStatus).toHaveCount(0);
+  let restoreCopilot = false;
+  try {
+    await expect(copilotStatus).toHaveCount(0);
+    await saveCopilot("github");
+    restoreCopilot = true;
+    sessionId = await loadSession(async () => {
+      await page.reload();
+    });
+    await expect(copilotStatus).toBeVisible();
+    await saveCopilot(false);
+    restoreCopilot = false;
+    await loadSession(async () => {
+      await page.reload();
+    });
+    await expect(copilotStatus).toHaveCount(0);
+  } finally {
+    if (restoreCopilot && !page.isClosed()) {
+      const currentSessionId = await studioEditorSessionId(page).catch(() => sessionId);
+      await saveCopilot(false, currentSessionId);
+    }
+  }
+  await recoverWorkspaceEventStream(replacedWorkspaceStreams);
   closedCopilotTransport.recovered();
-  replacedWorkspaceStreams.recovered();
 });
 
 test("static WebAssembly executes the mounted dependency closure", async ({ page }) => {
@@ -509,6 +522,13 @@ test("refreshes a popout view and preserves its public query across reload", asy
       count: 1,
       status: 200,
     });
+    const refreshedProjectionReads = browserDiagnostics.expectRequestAbort({
+      origin: studioOrigin,
+      method: "POST",
+      path: /^\/_marimo-studio\/presentation\/[^/]+\/_marimo-studio\/views\/dashboard\/(?:values|outputs)$/,
+      count: 2,
+      required: false,
+    });
     await writeDashboardSource(page, refreshed);
 
     await expect(rendered.getByRole("heading", { name: "Popout live view" })).toBeVisible();
@@ -546,9 +566,14 @@ test("refreshes a popout view and preserves its public query across reload", asy
     ).toBe("apac");
     await expect(rendered.locator("#popout-region")).toHaveText("apac");
     await expect(rendered.locator('strong[mo-value="metric"]')).toHaveText("42");
+    await recoverRequestAbort(refreshedProjectionReads);
     await recoverRequestAbort(preReloadDocument);
     await recoverRequestAbort(retiredDevelopmentStream);
   } finally {
-    await popout.close();
+    if (!popout.isClosed()) {
+      const retirement = browserDiagnostics.expectPageRetirement(popout);
+      await popout.close();
+      retirement.recovered();
+    }
   }
 });

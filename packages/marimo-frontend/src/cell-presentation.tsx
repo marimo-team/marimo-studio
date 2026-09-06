@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import type { ProjectedOutputFunctionRequestScope } from "./projected-output-function-gate.ts";
 import type { flattenTopLevelNotebookCells } from "./upstream/cells.ts";
 
 import {
@@ -29,6 +30,7 @@ interface ProjectedCellPresentationProps {
   cellName: string;
   consoleOutputs: CellConsoleOutput[];
   interrupted: boolean;
+  functionRequestScope?: ProjectedOutputFunctionRequestScope;
   loading: boolean;
   output: CellOutput | null;
   stale: boolean;
@@ -41,6 +43,7 @@ export const ProjectedCellPresentation = ({
   cellName,
   consoleOutputs,
   interrupted,
+  functionRequestScope,
   loading,
   output,
   stale,
@@ -56,6 +59,9 @@ export const ProjectedCellPresentation = ({
       aria-label={accessibleName ?? cellName}
       className="marimo"
       data-marimo-cell-output=""
+      data-marimo-studio-active-projection-owner={functionRequestScope?.activeOwner}
+      data-marimo-studio-output-projection-owner={functionRequestScope?.outputOwner}
+      data-marimo-studio-projected-output={functionRequestScope ? "" : undefined}
       data-marimo-presentation="projected-cell"
       role="group"
       {...cellDomProps(cellId, cellName)}
@@ -122,6 +128,7 @@ export const CellPresentation = ({
   accessibleName,
   cell,
   consoleOutputs,
+  functionRequestScope,
   loading,
   stale,
   onSubmitStdin,
@@ -129,6 +136,7 @@ export const CellPresentation = ({
   accessibleName?: string;
   cell: RuntimeCell;
   consoleOutputs: CellConsoleOutput[];
+  functionRequestScope: ProjectedOutputFunctionRequestScope;
   loading: boolean;
   stale: boolean;
   onSubmitStdin: (text: string, outputIndex: number) => void;
@@ -138,6 +146,7 @@ export const CellPresentation = ({
     cellId={cell.id}
     cellName={cell.name}
     consoleOutputs={consoleOutputs}
+    functionRequestScope={functionRequestScope}
     interrupted={cell.interrupted}
     loading={loading}
     output={cell.output}
