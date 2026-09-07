@@ -225,6 +225,11 @@ body {
   width: 100%;
 }
 
+.vp-doc td :not(pre) > code,
+.vp-doc td > code {
+  white-space: nowrap;
+}
+
 .vp-doc th {
   background: var(--vp-c-bg-soft);
   font-weight: 600;

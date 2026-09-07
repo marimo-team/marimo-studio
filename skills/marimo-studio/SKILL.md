@@ -246,13 +246,17 @@ project-local CSS and JavaScript directly. Reference `.css` through
 The Vanilla provider resolves each path relative to the entry HTML.
 `view.inspect()` exposes each exact referenced file as one of the provider's
 editable source documents and adds it to the build inputs. The build copies
-those files to the same paths in the browser artifact. Leave `<base href>` out
+those files to the same paths in the browser artifact.
+
+Leave `<base href>` out
 of the entry document so those paths retain the same browser base. HTTP and
 HTTPS dependency URLs need `//` and a host. Keep direct sources as leaf files by
 bundling or inlining local CSS `url()` and `@import` dependencies and local
 JavaScript imports or re-exports. Inspection reports the dependency's source
 location when a direct file can fetch an undeclared local path and fails closed
-when the pinned JavaScript grammar cannot establish that boundary. Choose a
+when the pinned JavaScript grammar cannot establish that boundary.
+
+Choose a
 provider that builds the required source tree when a view needs a local asset
 graph, JavaScript import graph, import map, source-phase import, component
 compilation, or other project files.
@@ -508,6 +512,14 @@ blocked when the environment cannot capture or inspect it.
 
 ## Run or export
 
+Choose the runtime from the visitor's task:
+
+| Runtime                 | Result                                                                     |
+| ----------------------- | -------------------------------------------------------------------------- |
+| Python, `server`        | Live notebook execution with the server's packages, files, and credentials |
+| Browser, `wasm`         | New notebook states computed in the visitor's Pyodide worker               |
+| Prepared, `zero-python` | Finite precomputed states with notebook source retained on the producer    |
+
 Run through marimo when the notebook needs Python packages, local files,
 databases, or server credentials:
 
@@ -537,6 +549,11 @@ must verify finite projection targets across the configured input states. Use
 WebAssembly when visitors must recompute unprepared states and the notebook can
 run through Pyodide.
 
+For Prepared controls, inspect `states.yaml` in the selected view project. Use
+explicit state rows when valid combinations are sparse. Keep browser-only
+filtering of projected data in the view. A matrix prepares every combination
+of its input choices.
+
 Export the verified runtime:
 
 ```console
@@ -555,6 +572,11 @@ Zero-Python keeps Python source on the build machine and publishes prepared
 outputs. WebAssembly includes saved notebook source for browser execution.
 Review public files, data URLs, authored browser code, and remote dependencies
 before publishing.
+
+Serve the completed export over HTTP and exercise its controls and projected
+results. Verify a failed state selection retains the preceding display when
+the view includes recovery behavior. A live preview and an exported view need
+their own runtime evidence.
 
 ## Report completion
 
