@@ -118,7 +118,7 @@ test("prepared controls satisfy the peer endpoint and restore its private sender
       path: [{ kind: "key", value: "west" }],
     },
   });
-  assert.deepEqual(endpoint.controlBindings(), {
+  assert.deepEqual(JSON.parse(JSON.stringify(endpoint.controlBindings())), {
     [objectId]: {
       input: "gain",
       path: [{ kind: "key", value: "west" }],

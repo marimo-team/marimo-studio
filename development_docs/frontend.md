@@ -48,6 +48,10 @@ pnpm --filter @marimo-studio/marimo-frontend test
 pnpm --filter @marimo-studio/browser test
 ```
 
+`make frontend-test` runs the workspace with at most two workers per test
+runner. Set `VITEST_MAX_WORKERS` to change that budget. Package-specific
+commands retain Vitest's own worker selection.
+
 Run browser type and import-boundary checks from the repository root:
 
 ```console
