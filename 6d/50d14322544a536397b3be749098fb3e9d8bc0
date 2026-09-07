@@ -1,0 +1,24 @@
+docs/guide/coding-agents.md
+  s_56e158cb000e90::t_ad0f66869b5ab7 124-137
+skills/marimo-studio/SKILL.md
+  s_56e158cb000e90::t_368b9bac466c77 249-251,257-259
+  s_56e158cb000e90::t_ad0f66869b5ab7 515-522,552-556,576-579
+apps/docs/.vitepress/theme/custom.css
+  s_56e158cb000e90::t_de615b39bbaaef 228-232
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6d50d14322544a536397b3be749098fb3e9d8bc0",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
