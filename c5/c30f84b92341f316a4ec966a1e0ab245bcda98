@@ -1,0 +1,27 @@
+packages/marimo-studio/tests/server/test_presentation_transport.py
+  s_56e158cb000e90::t_df3c7f8a927767 172,195
+packages/studio/src/features/workspace/TrustedFrame.tsx
+  s_56e158cb000e90::t_df3c7f8a927767 14,27,43
+packages/marimo-studio/src/marimo_studio/_server/presentation/isolation.py
+  s_56e158cb000e90::t_df3c7f8a927767 455
+development_docs/architecture/server-routing-and-security.md
+  s_56e158cb000e90::t_df3c7f8a927767 138-140
+packages/studio/tests/trusted-frame.test.tsx
+  s_56e158cb000e90::t_df3c7f8a927767 4-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c5c30f84b92341f316a4ec966a1e0ab245bcda98",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
