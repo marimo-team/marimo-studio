@@ -129,6 +129,12 @@ Each artifact host carries a provider-injected source-site ID. The runtime
 assigns an instance ID when the host connects, resolves its current target,
 and releases ownership when the host disconnects or changes targets.
 
+`ProjectionInventory` captures authored hosts in document order and indexes
+their declarations for resolution and quota checks. Cell, output, and value
+consumers retain their distinct rendering and resource owners. Preservation
+checks the authored ownership of both incoming and retained hosts, including
+composed ancestry across shadow roots.
+
 Host adapters participate in:
 
 - Custom-element registration

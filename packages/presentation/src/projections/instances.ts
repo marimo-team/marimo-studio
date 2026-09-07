@@ -4,12 +4,7 @@ import type { RuntimeConfig } from "../runtime-config";
 import type { ProjectionResolution, ResolvedProjection } from "./resolution";
 
 import { getRuntimeConfig, hasRuntimeConfig } from "../runtime-config";
-import {
-  projectionKindForHost,
-  projectionRequestForHost,
-  projectionTargetForHost,
-} from "./identity";
-import { createProjectionResolutionContext, resolveHostProjection } from "./resolution";
+import { createProjectionInventory } from "./resolution";
 import { notifyProjectionResolutionStale } from "./staleness.ts";
 
 const STATES: readonly ObservedProjectionInstance["phase"][] = [
@@ -66,15 +61,9 @@ export const mountedResolvedProjections = (
   config: RuntimeConfig,
   root: ParentNode = document,
 ): readonly ResolvedProjection[] => {
-  const context = createProjectionResolutionContext(config, root);
-  return context.hosts().flatMap((host) => {
-    const kind = projectionKindForHost(host);
-    const resolution = resolveHostProjection(
-      config,
-      host,
-      projectionRequestForHost(host, kind, projectionTargetForHost(host, kind)),
-      context,
-    );
+  const inventory = createProjectionInventory(config, root);
+  return inventory.hosts.flatMap((host) => {
+    const { resolution } = inventory.resolve(host);
     applyProjectionMetadata(host, resolution, config.projectionRevision);
     return resolution.ok ? [resolution.value] : [];
   });
@@ -114,13 +103,11 @@ export const renderedProjectionInstances = (
     return [];
   }
   const config = getRuntimeConfig();
-  const context = createProjectionResolutionContext(config, root);
-  const hosts = context.hosts().slice(0, config.projectionPolicy.maxActiveInstances + 1);
+  const inventory = createProjectionInventory(config, root);
+  const hosts = inventory.hosts.slice(0, config.projectionPolicy.maxActiveInstances + 1);
   return hosts.map((host) => {
-    const kind = projectionKindForHost(host);
-    const target = projectionTargetForHost(host, kind);
-    const request = projectionRequestForHost(host, kind, target);
-    const resolution = resolveHostProjection(config, host, request, context);
+    const { request, resolution } = inventory.resolve(host);
+    const target = request.target;
     applyProjectionMetadata(host, resolution, config.projectionRevision);
     if (!resolution.ok) {
       return {

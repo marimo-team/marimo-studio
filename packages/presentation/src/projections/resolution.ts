@@ -15,7 +15,11 @@ import { z } from "zod";
 
 import { ownRecordValue } from "../records.ts";
 import { isArtifactProjectionHost } from "./artifact-host.ts";
-import { projectionKindForHost, projectionTargetForHost } from "./identity.ts";
+import {
+  projectionKindForHost,
+  projectionRequestForHost,
+  projectionTargetForHost,
+} from "./identity.ts";
 
 export interface SelectorPathStep {
   readonly kind: "attribute" | "item";
@@ -332,14 +336,14 @@ export const resolveProjection = (
   };
 };
 
-export interface ProjectionResolutionContext {
+interface ProjectionResolutionContext {
   activeIndex(host: Element): number | undefined;
   hosts(): readonly Element[];
   site(id: string): readonly MountDeclaration[];
   targetRank(kind: ProjectionKind, target: string): number | undefined;
 }
 
-export const createProjectionResolutionContext = (
+const createProjectionResolutionContext = (
   config: RuntimeConfig,
   root: ParentNode,
 ): ProjectionResolutionContext => {
@@ -356,15 +360,25 @@ export const createProjectionResolutionContext = (
     output: new Map(),
     value: new Map(),
   };
+  const context: ProjectionResolutionContext = {
+    activeIndex: (host) => activeIndexes.get(host),
+    hosts: () => hosts,
+    site: (id) => sites.get(id) ?? [],
+    targetRank: (kind, target) => ranks[kind].get(target),
+  };
   hosts.forEach((host, index) => {
     const kind = projectionKindForHost(host);
     const target = projectionTargetForHost(host, kind);
-    const resolved = resolveProjection(config, {
-      siteId: host.getAttribute("data-marimo-studio-site")?.trim() ?? "",
-      instanceId: `quota-${index}`,
-      kind,
-      target,
-    });
+    const resolved = resolveProjection(
+      config,
+      {
+        siteId: host.getAttribute("data-marimo-studio-site")?.trim() ?? "",
+        instanceId: `quota-${index}`,
+        kind,
+        target,
+      },
+      context,
+    );
     if (!resolved.ok) {
       return;
     }
@@ -373,22 +387,14 @@ export const createProjectionResolutionContext = (
       selected.set(target, selected.size);
     }
   });
-  return {
-    activeIndex: (host) => activeIndexes.get(host),
-    hosts: () => hosts,
-    site: (id) => sites.get(id) ?? [],
-    targetRank: (kind, target) => ranks[kind].get(target),
-  };
+  return context;
 };
 
-export const resolveHostProjection = (
+const resolveHostProjection = (
   config: RuntimeConfig,
   host: Element,
   request: RuntimeProjectionRequest,
-  context: ProjectionResolutionContext = createProjectionResolutionContext(
-    config,
-    host.ownerDocument,
-  ),
+  context: ProjectionResolutionContext,
 ): ProjectionResolution => {
   const resolved = resolveProjection(config, request, context);
   if (!resolved.ok) {
@@ -427,4 +433,31 @@ export const resolveHostProjection = (
     );
   }
   return resolved;
+};
+
+export interface ProjectionHostResolution {
+  readonly request: RuntimeProjectionRequest;
+  readonly resolution: ProjectionResolution;
+}
+
+export interface ProjectionInventory {
+  readonly hosts: readonly Element[];
+  resolve(host: Element, kind?: ProjectionKind): ProjectionHostResolution;
+}
+
+export const createProjectionInventory = (
+  config: RuntimeConfig,
+  root: ParentNode,
+): ProjectionInventory => {
+  const context = createProjectionResolutionContext(config, root);
+  return {
+    hosts: context.hosts(),
+    resolve(host, kind = projectionKindForHost(host)) {
+      const request = projectionRequestForHost(host, kind, projectionTargetForHost(host, kind));
+      return {
+        request,
+        resolution: resolveHostProjection(config, host, request, context),
+      };
+    },
+  };
 };

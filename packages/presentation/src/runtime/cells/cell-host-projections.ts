@@ -5,11 +5,7 @@ import type { RuntimeConfig } from "../../runtime-config/index";
 import type { RuntimeCell } from "../runtime-cell";
 import type { CellDiagnostic } from "./cell-projection";
 
-import { projectionRequestForHost } from "../../projections/identity";
-import {
-  createProjectionResolutionContext,
-  resolveHostProjection,
-} from "../../projections/resolution";
+import { createProjectionInventory } from "../../projections/resolution";
 
 const hostIds = new WeakMap<MarimoCellElement, number>();
 let nextHostId = 0;
@@ -49,14 +45,9 @@ export const projectCellHosts = (
   cells: CellIndex<RuntimeCell>,
   hosts: readonly MarimoCellElement[],
 ): CellHostProjection[] => {
-  const context = createProjectionResolutionContext(config, document);
+  const inventory = createProjectionInventory(config, document);
   const resolved = hosts.map((host) => {
-    const resolution = resolveHostProjection(
-      config,
-      host,
-      projectionRequestForHost(host, "cell", host.cellName),
-      context,
-    );
+    const { resolution } = inventory.resolve(host, "cell");
     return { host, resolution };
   });
   const primaryHosts = new Map<string, MarimoCellElement>();

@@ -621,6 +621,37 @@ test("value host ownership follows authored DOM reparenting", async () => {
   unsubscribe();
 });
 
+test("a value update listener can retarget a newly connected host", async () => {
+  const dynamic = configWithValues(["alpha", "beta"], "site:dynamic-value");
+  await installConfig(dynamic);
+  document.body.innerHTML = `
+    <span mo-value="alpha" data-marimo-studio-site="site:dynamic-value"></span>
+    <span id="beta" mo-value="beta" data-marimo-studio-site="site:dynamic-value"></span>
+  `;
+  startValueHosts();
+  applyValues(jsonValues({ alpha: 1, beta: 2 }), dynamic.projectionRevision);
+  await settleMutations();
+  const host = document.createElement("span");
+  host.setAttribute("mo-value", "alpha");
+  host.addEventListener("marimo-value-updated", (event) => {
+    if (event.detail.selector === "alpha") {
+      host.setAttribute("mo-value", "beta");
+    }
+  });
+
+  document.body.append(host);
+  host.setAttribute("data-marimo-studio-site", "site:dynamic-value");
+  await settleMutations();
+  document.querySelector("#beta")!.remove();
+  await settleMutations();
+  applyValues(jsonValues({ beta: 22 }), dynamic.projectionRevision);
+
+  assert.ok(isMarimoValueHost(host));
+  assert.equal(host.marimoValue, 22);
+  assert.equal(host.textContent, "22");
+  assert.equal(host.dataset.runtimeCellId, "beta-cell");
+});
+
 test("value host observation leaves other projection hosts intact", async () => {
   await installConfig();
   document.body.innerHTML = `
