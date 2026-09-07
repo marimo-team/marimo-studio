@@ -1,0 +1,182 @@
+vite.config.ts
+  s_56e158cb000e90::t_47ceb25c9935ce 9
+apps/e2e/fixtures-provider/projections.py
+  s_56e158cb000e90::t_8995145c993b6c 9
+apps/e2e/scripts/provider-workspace.mjs
+  s_56e158cb000e90::t_40f02d6b9168e8 4,6,15,24-51,53-55,57-118,121-131,134-135,137,139-143,145-146,148,150-152,154-160
+apps/e2e/playwright.merge.config.ts
+  s_56e158cb000e90::t_fb97fb0d531d24 1-6
+.github/actions/pr-validation/action.yml
+  s_56e158cb000e90::t_a8ae9fc59f82a7 1-2,14-16,52
+  s_56e158cb000e90::t_4a911e4745cb2e 8-11,23,36,53
+apps/e2e/tests/runtime.spec.ts
+  s_56e158cb000e90::t_1582824a95e73d 26
+.github/actions/test-python/action.yml
+  s_56e158cb000e90::t_09cddf3b6fd6fd 33-41
+apps/e2e/tests/provider-reveal.spec.ts
+  s_56e158cb000e90::t_8995145c993b6c 1,6,9
+apps/e2e/unit/server-exit.test.ts
+  s_56e158cb000e90::t_794e9fcb6315ff 15,22,24
+  s_56e158cb000e90::t_54379c9f7b3794 1-14,16-21,23,25-30
+.github/actions/pr-validation/filters.test.mjs
+  s_56e158cb000e90::t_47ceb25c9935ce 76-85
+  s_56e158cb000e90::t_3d6d3e3f517a63 1-25,29-34,38-42,45-46,49-54,56-58,64-68,74-75
+  s_56e158cb000e90::t_374067e1370af0 26-28,35-37,43-44,47-48,59-63,69-73
+  s_56e158cb000e90::t_af89aa4acb845e 55
+apps/e2e/scripts/prepare-pyodide.mjs
+  s_56e158cb000e90::t_cba19af29f9a97 24-38,42-44,62-66,72-80,100-101
+  s_56e158cb000e90::t_ee8b7ad7074048 1,4,6,10-12,14-23,39,41,45-57,60-61,69-71,81-86,88-94,96-99,105,107-110
+  s_56e158cb000e90::t_5920cce14af891 2-3,103-104
+  s_56e158cb000e90::t_560fc4ace945bc 102
+apps/e2e/unit/export-repository.test.ts
+  s_56e158cb000e90::t_dde767a1bc0184 1-25
+apps/e2e/scripts/main-workspace.mjs
+  s_56e158cb000e90::t_1582824a95e73d 21-22,25,27-32,35-41,44-45,47-69,71-73,76-79,90,92-106,110,113-119,121-122,127,129-134,137-141,143-144,146-149,152,157-163
+  s_56e158cb000e90::t_b2ec0faa2b7bcc 6,23,26,46,74,135,153-156
+apps/e2e/tests/fixture.ts
+  s_56e158cb000e90::t_fa5cf0897370cf 527-530,532-535
+  s_56e158cb000e90::t_9a00321993d5ca 426,436,447,518
+  s_56e158cb000e90::t_522c1c64cd624c 483-488
+  s_56e158cb000e90::t_dde767a1bc0184 16,22,564-584
+  s_56e158cb000e90::t_3a29e3617a010b 17,128
+  s_56e158cb000e90::t_1582824a95e73d 18,556-563,585-589
+apps/e2e/tests/pyodide-assets.ts
+  s_56e158cb000e90::t_c60a451f874366 1,3,5-9,11,13-16,18-20,22,26,28,31-43
+apps/e2e/scripts/export-repository.mjs
+  s_56e158cb000e90::t_dde767a1bc0184 1-10
+.gitignore
+  s_56e158cb000e90::t_47ceb25c9935ce 22
+apps/e2e/unit/network.test.ts
+  s_56e158cb000e90::t_94d769b9ef55a1 39-40
+  s_56e158cb000e90::t_54379c9f7b3794 42,46-55
+  s_56e158cb000e90::t_f65cffcbb71e0c 4,69-75
+apps/e2e/scripts/network.mjs
+  s_56e158cb000e90::t_02356f546e65d1 3,47,49-51,54-57,59-61
+  s_56e158cb000e90::t_8995145c993b6c 58
+apps/e2e/package.json
+  s_56e158cb000e90::t_02356f546e65d1 8
+.github/filters.yml
+  s_56e158cb000e90::t_4a911e4745cb2e 26,94-97
+  s_56e158cb000e90::t_af89aa4acb845e 100
+  s_56e158cb000e90::t_47ceb25c9935ce 91
+  s_56e158cb000e90::t_9a6577f3dcc39f 98-99,101-105,223-225,238-240,252,270-272
+apps/e2e/playwright.config.ts
+  s_56e158cb000e90::t_fedc483568d057 20-23
+  s_56e158cb000e90::t_c4fb3e15faec38 9,25
+  s_56e158cb000e90::t_5ac361589d1867 18
+  s_56e158cb000e90::t_02356f546e65d1 2,5-8
+.github/workflows/e2e.yml
+  s_56e158cb000e90::t_bdfe9e6c39d585 56-58,61-83,86-104,116-118,153-154,156-157,170,185-189,192,196-198,200-201,221-222,224-225,238-245,250-252,265-269,272,306-308,332-336,348-349,362-366,368-369,373-375,399-403,415-416,428-432,435,439-441,465-469,478-482,486-488,500-504,506-542,545-551,564-565,577,590-601
+  s_56e158cb000e90::t_f7d49a4e9efb33 190,270,367,433,505
+  s_56e158cb000e90::t_d16d6cd9d6d110 543-544
+  s_56e158cb000e90::t_d5785acb8bdbef 579,582,584,586,588,605-606
+  s_56e158cb000e90::t_1c55e2ec69d606 59-60,84-85,105-111,158-162,226-230,337-341,404-408,470-474
+  s_56e158cb000e90::t_7952ba3f52bca3 112
+  s_56e158cb000e90::t_a8ae9fc59f82a7 24-28,44,49-55,172,580
+apps/e2e/playwright.providers.config.ts
+  s_56e158cb000e90::t_fedc483568d057 20-23
+  s_56e158cb000e90::t_8995145c993b6c 7-8
+  s_56e158cb000e90::t_f65cffcbb71e0c 2
+  s_56e158cb000e90::t_c4fb3e15faec38 9,25
+  s_56e158cb000e90::t_94d769b9ef55a1 5
+apps/e2e/tests/replay.spec.ts
+  s_56e158cb000e90::t_5ae8db71efb720 16-17
+apps/e2e/tests/external-provider.spec.ts
+  s_56e158cb000e90::t_8995145c993b6c 1,6,9
+apps/docs/scripts/build-examples.ts
+  s_56e158cb000e90::t_90d5684a4eb6be 2,33-38,64,87-92,263-267
+  s_56e158cb000e90::t_8d15829209550e 70-71
+Makefile
+  s_56e158cb000e90::t_9b338dd58e1027 22,107-110
+  s_56e158cb000e90::t_47ceb25c9935ce 21,31,87-90,95
+.github/actions/pr-validation/resolve.sh
+  s_56e158cb000e90::t_ebf8323417e532 5,13-44,46
+  s_56e158cb000e90::t_90d5684a4eb6be 45
+  s_56e158cb000e90::t_f43c3097bf21ea 50,62,71,80,90,93,102,116,123,135,143,146,149,152,156
+apps/e2e/scripts/server-exit.mjs
+  s_56e158cb000e90::t_54379c9f7b3794 1-8,12-20
+  s_56e158cb000e90::t_fedc483568d057 9-11
+development_docs/releasing.md
+  s_56e158cb000e90::t_d81b112b07ad0b 103-109,154-158,217-226,230-234
+apps/e2e/scripts/notebook-services.mjs
+  s_56e158cb000e90::t_54379c9f7b3794 9,51,65-69,71
+  s_56e158cb000e90::t_fedc483568d057 10,74-76
+  s_56e158cb000e90::t_0f363e55b9bc4e 14,21,27,58-63
+  s_56e158cb000e90::t_b2ec0faa2b7bcc 1-8,11-13,15-20,22-26,28-50,52-57,64,70,72-73,77-85
+apps/e2e/tests/hosted-mount.spec.ts
+  s_56e158cb000e90::t_1582824a95e73d 20-21
+.github/workflows/pages.yml
+  s_56e158cb000e90::t_4a911e4745cb2e 23,25-26,33-38,46-53,59,74-76,86,103,177-184,187-190,248,251,253-255
+apps/e2e/playwright.installed.config.ts
+  s_56e158cb000e90::t_f65cffcbb71e0c 25,27
+.github/actions/pr-validation/results.test.mjs
+  s_56e158cb000e90::t_2d33ee1c9cad5f 1-56
+  s_56e158cb000e90::t_78ad01c5aa244e 57-60,63-65,71-72,76-80
+  s_56e158cb000e90::t_7952ba3f52bca3 61-62,66-70,73-75
+apps/e2e/unit/pyodide-payload.test.ts
+  s_56e158cb000e90::t_419e7c3c0b37a3 59-61,67-69
+  s_56e158cb000e90::t_cba19af29f9a97 82-85,93-99
+  s_56e158cb000e90::t_0d7fde4507b012 53-56
+  s_56e158cb000e90::t_5ac361589d1867 4,7,46-52,57-58,62-66,70-77
+  s_56e158cb000e90::t_560fc4ace945bc 1-3,5-6,8-45,78-81,86-92,100-104
+apps/e2e/tests/presentation-security.spec.ts
+  s_56e158cb000e90::t_f2e611eab57cfb 28-29
+.github/workflows/ci.yml
+  s_56e158cb000e90::t_a8ae9fc59f82a7 24-28,44,49-55
+  s_56e158cb000e90::t_09cddf3b6fd6fd 150,177-178,180,183,267,275,288,291,296-304,334,344
+  s_56e158cb000e90::t_a7a3eae422a242 273-274
+  s_56e158cb000e90::t_d5785acb8bdbef 330,332,336,338,340,342
+  s_56e158cb000e90::t_d16d6cd9d6d110 139-147
+  s_56e158cb000e90::t_af89aa4acb845e 138
+.github/actions/pr-validation/resolve.test.mjs
+  s_56e158cb000e90::t_b74faf969ea292 208-210
+  s_56e158cb000e90::t_a7a3eae422a242 126-129,132-146
+  s_56e158cb000e90::t_8ce9f731242599 11-12,113-125,130-131,149,185-188,190-205
+  s_56e158cb000e90::t_a8ae9fc59f82a7 89,154,158-161,166,174,184,189,218,232,238,244
+apps/e2e/tests/provider-fixture.ts
+  s_56e158cb000e90::t_dde767a1bc0184 2,4-5,17-36
+  s_56e158cb000e90::t_40f02d6b9168e8 1,3,6-16,37-39
+apps/e2e/scripts/paths.mjs
+  s_56e158cb000e90::t_54379c9f7b3794 13-16
+  s_56e158cb000e90::t_fedc483568d057 29-33
+scripts/verify-installed-wheel.sh
+  s_56e158cb000e90::t_9b338dd58e1027 8-16,68,73,79,88,95
+apps/e2e/tests/provider-runtime.spec.ts
+  s_56e158cb000e90::t_8995145c993b6c 2,7
+apps/e2e/fixtures-provider/external.py
+  s_56e158cb000e90::t_8995145c993b6c 9
+development_docs/README.md
+  s_56e158cb000e90::t_9205af2ca90d78 73-74,237-238,241-245
+  s_56e158cb000e90::t_d81b112b07ad0b 223-227,235-236,239-240,246-251
+  s_56e158cb000e90::t_a3da062cbf872f 214-217
+  s_56e158cb000e90::t_8ad4638ddc91d1 228-234
+apps/e2e/tests/starter-edge-cases.spec.ts
+  s_56e158cb000e90::t_1582824a95e73d 31-32
+apps/e2e/scripts/run-installed-package.mjs
+  s_56e158cb000e90::t_f2e611eab57cfb 48,53,81-92,97,121-126,129
+  s_56e158cb000e90::t_c4fb3e15faec38 11
+  s_56e158cb000e90::t_fedc483568d057 12-23
+.github/actions/pr-validation/select.mjs
+  s_56e158cb000e90::t_a7a3eae422a242 18-19
+  s_56e158cb000e90::t_d2ce7def4e9cfc 1-17,20-26
+.github/actions/pr-validation/select.test.mjs
+  s_56e158cb000e90::t_0f6d71c6adc81f 7,15
+  s_56e158cb000e90::t_a7a3eae422a242 36-39
+  s_56e158cb000e90::t_b74faf969ea292 1-6,8-14,16-35,40-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c809d5fe77c8dd427c36ea0ba317ac640197e7c2",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
