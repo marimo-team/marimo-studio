@@ -25,6 +25,8 @@ import {
   waitForNotebookServer,
 } from "./notebook-server.ts";
 
+test.use({ services: ["studio", "static"] });
+
 test("allows a configured parent origin and blocks an unlisted parent", async ({
   browserDiagnostics,
   context,

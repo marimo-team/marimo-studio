@@ -10,13 +10,10 @@ export const repositoryDirectory = resolve(appDirectory, "../..");
 export const studioPackageDirectory = resolve(repositoryDirectory, "packages/marimo-studio");
 export const fixtureDirectory = resolve(appDirectory, "fixtures");
 
-export const createE2EPaths = (root, portOffset = 0) => {
-  const resultRoot =
-    portOffset === 0
-      ? resolve(root, "test-results")
-      : resolve(root, "test-results", `offset-${portOffset}`);
-  const workspaceDirectory =
-    portOffset === 0 ? resolve(root, ".workspace") : resolve(resultRoot, "workspace");
+export const createE2EPaths = (root, portOffset = 0, suite = "main") => {
+  if (suite !== "main" && suite !== "provider") throw new TypeError(`Unknown E2E suite ${suite}`);
+  const resultRoot = resolve(root, "test-results", suite, `offset-${portOffset}`);
+  const workspaceDirectory = resolve(resultRoot, "workspace");
   const providerWorkspaceRoot = resolve(resultRoot, "workspaces");
   return Object.freeze({
     configDirectory: resolve(resultRoot, "xdg-config"),
@@ -26,19 +23,14 @@ export const createE2EPaths = (root, portOffset = 0) => {
     providerStaticRoot: resolve(providerWorkspaceRoot, "provider-runtime-static"),
     providerConfigDirectory: resolve(providerWorkspaceRoot, "provider-runtime-xdg-config"),
     hostedWorkspaceDirectory: resolve(providerWorkspaceRoot, "hosted"),
-    mainPlaywrightOutputDirectory:
-      portOffset === 0 ? resultRoot : resolve(resultRoot, "playwright-main"),
-    providerPlaywrightOutputDirectory: resolve(resultRoot, "playwright-provider"),
-    mainPlaywrightReportDirectory:
-      portOffset === 0 ? resolve(root, "playwright-report") : resolve(resultRoot, "report-main"),
-    providerPlaywrightReportDirectory:
-      portOffset === 0
-        ? resolve(root, "playwright-report/provider")
-        : resolve(resultRoot, "report-provider"),
   });
 };
 
-const mutable = createE2EPaths(appDirectory, e2eNetwork.portOffset);
+const mutable = createE2EPaths(
+  appDirectory,
+  e2eNetwork.portOffset,
+  process.env.MARIMO_STUDIO_E2E_SUITE,
+);
 
 export const configDirectory = mutable.configDirectory;
 export const workspaceDirectory = mutable.workspaceDirectory;
@@ -71,7 +63,3 @@ export const providerRevealStaticDirectory = resolve(providerStaticRoot, "reveal
 export const hostedFixtureDirectory = resolve(appDirectory, "fixtures-hosted");
 export const hostedWorkspaceDirectory = mutable.hostedWorkspaceDirectory;
 export const hostedNotebookPath = resolve(hostedWorkspaceDirectory, "notebook.py");
-export const mainPlaywrightOutputDirectory = mutable.mainPlaywrightOutputDirectory;
-export const providerPlaywrightOutputDirectory = mutable.providerPlaywrightOutputDirectory;
-export const mainPlaywrightReportDirectory = mutable.mainPlaywrightReportDirectory;
-export const providerPlaywrightReportDirectory = mutable.providerPlaywrightReportDirectory;

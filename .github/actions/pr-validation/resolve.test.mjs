@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 
 const actionDirectory = dirname(fileURLToPath(import.meta.url));
 const resolver = resolve(actionDirectory, "resolve.sh");
+const selector = resolve(actionDirectory, "select.mjs");
+const gate = resolve(actionDirectory, "../../../scripts/check-workflow-results.sh");
 const mergedTree = "a".repeat(40);
 const headSha = "b".repeat(40);
 
@@ -84,6 +86,7 @@ process.stdout.write(process.env.TESTED_TREE + "\\n");
     ...process.env,
     PATH: `${directory}:${process.env.PATH}`,
     GITHUB_EVENT_NAME: "push",
+    VALIDATION_BASE_SHA: "e".repeat(40),
     GITHUB_OUTPUT: output,
     GITHUB_REF: "refs/heads/main",
     GITHUB_REF_NAME: "main",
@@ -107,26 +110,60 @@ process.stdout.write(process.env.TESTED_TREE + "\\n");
   const result = spawnSync("bash", [resolver], { encoding: "utf8", env: environment });
   const validation = await readFile(output, "utf8");
   const explanation = await readFile(summary, "utf8");
+  const selectedOutput = join(directory, "selected");
+  const selected = spawnSync(process.execPath, [selector], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      GITHUB_OUTPUT: selectedOutput,
+      VALIDATION_MODE: validation.trim().split("=")[1],
+      VALIDATION_FILTERS: JSON.stringify(["python", "browser"]),
+      PATH_FILTERS_JSON: JSON.stringify({ python: "false", browser: "false" }),
+    },
+  });
+  assert.equal(selected.status, 0, selected.stderr);
+  const requirements = Object.fromEntries(
+    (await readFile(selectedOutput, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => line.split("=")),
+  );
+  const check = (results) =>
+    spawnSync(
+      "bash",
+      [
+        gate,
+        "changes",
+        "true",
+        "success",
+        ...Object.entries(requirements).flatMap(([name, required]) => [
+          name,
+          required,
+          results[name],
+        ]),
+      ],
+      { encoding: "utf8" },
+    ).status;
   await rm(directory, { force: true, recursive: true });
   assert.equal(result.status, 0, result.stderr);
-  return { explanation, validation };
+  return { check, explanation, requirements, validation };
 };
 
 test("reuses a successful run whose tested tree matches main", async () => {
   const result = await runResolver();
-  assert.equal(result.validation, "validated=true\n");
+  assert.equal(result.validation, "mode=reuse\n");
   assert.match(result.explanation, /passed e2e\.yml for Git tree/);
 });
 
-test("pull request events publish evidence without reusing it", async () => {
-  const result = await runResolver({ GITHUB_EVENT_NAME: "pull_request", FAIL_API: "api" });
-  assert.equal(result.validation, "validated=false\n");
-  assert.match(result.explanation, /pull request run owns validation/);
+test("pull requests validate changed files against a successful base", async () => {
+  const result = await runResolver({ GITHUB_EVENT_NAME: "pull_request", GITHUB_BASE_REF: "main" });
+  assert.equal(result.validation, "mode=changed\n");
+  assert.match(result.explanation, /comparison base passed/);
 });
 
 test("a different tested tree falls back to main validation", async () => {
   const result = await runResolver({ TESTED_TREE: "d".repeat(40) });
-  assert.equal(result.validation, "validated=false\n");
+  assert.equal(result.validation, "mode=changed\n");
   assert.match(result.explanation, /tested a different Git tree/);
 });
 
@@ -134,7 +171,7 @@ test("a failed latest run falls back to main validation", async () => {
   const result = await runResolver({
     RUNS_JSON: JSON.stringify({ workflow_runs: [workflowRun({ conclusion: "failure" })] }),
   });
-  assert.equal(result.validation, "validated=false\n");
+  assert.equal(result.validation, "mode=changed\n");
   assert.match(result.explanation, /no successful e2e\.yml run/);
 });
 
@@ -144,8 +181,33 @@ test("a failed previous main run forces complete validation", async () => {
       workflow_runs: [workflowRun({ head_branch: "main", conclusion: "failure" })],
     }),
   });
-  assert.equal(result.validation, "validated=false\n");
-  assert.match(result.explanation, /previous main commit has no successful e2e\.yml run/);
+  assert.equal(result.validation, "mode=full\n");
+  assert.deepEqual(result.requirements, { python: "true", browser: "true" });
+  assert.equal(result.check({ python: "success", browser: "success" }), 0);
+  assert.notEqual(result.check({ python: "skipped", browser: "skipped" }), 0);
+  assert.notEqual(result.check({ python: "failure", browser: "success" }), 0);
+  assert.match(result.explanation, /comparison base has no successful e2e\.yml run/);
+});
+
+test("an unavailable base requires every contract for an unrelated pull request", async () => {
+  const result = await runResolver({
+    GITHUB_EVENT_NAME: "pull_request",
+    GITHUB_BASE_REF: "main",
+    FAIL_API: "event=push",
+  });
+  assert.equal(result.validation, "mode=full\n");
+  assert.notEqual(result.check({ python: "skipped", browser: "skipped" }), 0);
+});
+
+test("a validated base permits unchanged contracts to be skipped", async () => {
+  const result = await runResolver({ GITHUB_EVENT_NAME: "pull_request", GITHUB_BASE_REF: "main" });
+  assert.deepEqual(result.requirements, { python: "false", browser: "false" });
+  assert.equal(result.check({ python: "skipped", browser: "skipped" }), 0);
+});
+
+test("artifact-producing workflows validate changes after a successful base", async () => {
+  const result = await runResolver({ VALIDATION_REUSE: "false" });
+  assert.equal(result.validation, "mode=changed\n");
 });
 
 test("duplicate head ownership falls back to main validation", async () => {
@@ -153,7 +215,7 @@ test("duplicate head ownership falls back to main validation", async () => {
   const result = await runResolver({
     HEAD_PULLS_JSON: JSON.stringify([selected, pull({ number: 8 })]),
   });
-  assert.equal(result.validation, "validated=false\n");
+  assert.equal(result.validation, "mode=changed\n");
   assert.match(result.explanation, /does not uniquely own its head commit/);
 });
 
@@ -167,18 +229,18 @@ test("fork pull requests fall back to main validation", async () => {
     },
   });
   const result = await runResolver({ PULLS_JSON: JSON.stringify([fork]) });
-  assert.equal(result.validation, "validated=false\n");
+  assert.equal(result.validation, "mode=changed\n");
   assert.match(result.explanation, /comes from another repository/);
 });
 
 test("missing artifacts fall back to main validation", async () => {
   const result = await runResolver({ ARTIFACTS_JSON: JSON.stringify({ artifacts: [] }) });
-  assert.equal(result.validation, "validated=false\n");
+  assert.equal(result.validation, "mode=changed\n");
   assert.match(result.explanation, /no unique tested-tree artifact/);
 });
 
 test("GitHub API failures fall back to main validation", async () => {
   const result = await runResolver({ FAIL_API: "event=pull_request" });
-  assert.equal(result.validation, "validated=false\n");
+  assert.equal(result.validation, "mode=changed\n");
   assert.match(result.explanation, /workflow evidence could not be read/);
 });

@@ -13,6 +13,8 @@ import {
 import { stopNotebookServer, waitForNotebookServer } from "./notebook-server.ts";
 import { runServerToken, runServerUrl, startRunServer } from "./recovery-support.ts";
 
+test.use({ services: [] });
+
 test("preserves run-mode kernel state across a page reload", async ({ page }) => {
   const source = await readWorkspaceFile(workspaceNotebookPath);
   await writeWorkspaceFile(

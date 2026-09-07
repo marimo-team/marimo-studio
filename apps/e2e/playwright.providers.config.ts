@@ -1,11 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
+import { resolve } from "node:path";
 
 import { e2eBrowserUse } from "./scripts/browser.mjs";
-import { e2eNetwork } from "./scripts/network.mjs";
-import {
-  providerPlaywrightOutputDirectory,
-  providerPlaywrightReportDirectory,
-} from "./scripts/paths.mjs";
+import { appDirectory } from "./scripts/paths.mjs";
+
+process.env.MARIMO_STUDIO_E2E_SUITE = "provider";
+
+const outputOffset = `offset-${process.env.MARIMO_STUDIO_E2E_PORT_OFFSET ?? "0"}`;
 
 export default defineConfig({
   testDir: "./tests",
@@ -16,12 +17,14 @@ export default defineConfig({
   retries: 0,
   workers: 1,
   reporter: process.env.CI
-    ? [["list"], ["html", { open: "never", outputFolder: providerPlaywrightReportDirectory }]]
+    ? [
+        ["list"],
+        ["blob", { outputDir: resolve(appDirectory, "test-results/blob-provider", outputOffset) }],
+      ]
     : "list",
-  outputDir: providerPlaywrightOutputDirectory,
+  outputDir: resolve(appDirectory, "test-results/playwright-provider", outputOffset),
   expect: { timeout: 65_000 },
   use: {
-    baseURL: e2eNetwork.provider.live.origin,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
@@ -31,13 +34,4 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], ...e2eBrowserUse },
     },
   ],
-  webServer: {
-    command: "node scripts/serve-providers.mjs",
-    url: `${e2eNetwork.provider.live.origin}/_marimo-studio/status`,
-    reuseExistingServer: false,
-    timeout: 420_000,
-    gracefulShutdown: { signal: "SIGTERM", timeout: 60_000 },
-    stdout: "pipe",
-    stderr: "pipe",
-  },
 });

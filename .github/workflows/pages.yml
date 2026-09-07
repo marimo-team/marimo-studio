@@ -20,15 +20,22 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      actions: read
     outputs:
-      documentation: ${{ steps.filter.outputs.documentation }}
-      pages: ${{ steps.filter.outputs.pages }}
+      documentation: ${{ steps.selection.outputs.documentation }}
+      pages: ${{ steps.selection.outputs.pages }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Select validation from the comparison base
+        id: pr-validation
+        uses: ./.github/actions/pr-validation
+        with:
+          workflow: pages.yml
+          reuse: "false"
 
       - name: Classify changed files
         id: filter
@@ -36,13 +43,20 @@ jobs:
         with:
           filters: .github/filters.yml
           predicate-quantifier: some-with-excludes
+        if: steps.pr-validation.outputs.mode == 'changed'
+      - name: Select required contracts
+        id: selection
+        env:
+          VALIDATION_MODE: ${{ steps.pr-validation.outputs.mode }}
+          VALIDATION_FILTERS: '["documentation","pages"]'
+          PATH_FILTERS_JSON: ${{ toJSON(steps.filter.outputs) }}
+        run: node .github/actions/pr-validation/select.mjs
 
   documentation:
     name: Documentation contracts
     needs: changes
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      needs.changes.outputs.documentation == 'true' ||
+      github.event_name == 'workflow_dispatch' || needs.changes.outputs.documentation == 'true' ||
       needs.changes.outputs.pages == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -57,20 +71,9 @@ jobs:
 
       - name: Check documentation formatting
         run: >-
-          pnpm exec vp fmt --check
-          README.md
-          AGENTS.md
-          CLAUDE.md
-          CONTRIBUTING.md
-          LICENSE
-          SECURITY.md
-          .github/release-notes
-          apps/docs
-          development_docs
-          docs
-          examples
-          packages/marimo-studio/README.md
-          skills/marimo-studio
+          pnpm exec vp fmt --check README.md AGENTS.md CLAUDE.md CONTRIBUTING.md LICENSE SECURITY.md
+          .github/release-notes apps/docs development_docs docs examples
+          packages/marimo-studio/README.md skills/marimo-studio
 
       - name: Lint documentation sources
         run: pnpm exec vp lint apps/docs
@@ -80,9 +83,7 @@ jobs:
 
       - name: Type-check documentation sources
         run: >-
-          pnpm exec vp check --no-fmt --no-lint
-          apps/docs/.vitepress
-          apps/docs/scripts
+          pnpm exec vp check --no-fmt --no-lint apps/docs/.vitepress apps/docs/scripts
 
       - name: Set up uv and Python
         if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true'
@@ -99,7 +100,7 @@ jobs:
           packages/marimo-studio/tests/cli/test_documentation_examples.py
 
   build:
-    needs: [changes, documentation]
+    needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -173,10 +174,20 @@ jobs:
         with:
           include-hidden-files: true
           path: apps/docs/.vitepress/dist
+      - name: Upload example timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: documentation-example-timings
+          path: apps/docs/.vitepress/cache/example-timings.json
+          retention-days: 7
+          if-no-files-found: warn
 
   deploy:
-    if: needs.build.outputs.publish == 'true'
-    needs: build
+    if: needs.build.outputs.publish == 'true' && needs.documentation.result == 'success'
+    needs:
+      - build
+      - documentation
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
@@ -234,12 +245,14 @@ jobs:
 
       - name: Confirm documentation results
         env:
-          BUILD_REQUIRED: ${{ (github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true') && needs.documentation.result == 'success' }}
+          BUILD_REQUIRED: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true' }}
           BUILD: ${{ needs.build.result }}
           CHANGES: ${{ needs.changes.result }}
-          DEPLOY_REQUIRED: ${{ needs.build.outputs.publish == 'true' }}
+          DEPLOY_REQUIRED: ${{ needs.build.outputs.publish == 'true' && needs.documentation.result == 'success' }}
           DEPLOY: ${{ needs.deploy.result }}
-          DOCUMENTATION_REQUIRED: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.documentation == 'true' || needs.changes.outputs.pages == 'true' }}
+          DOCUMENTATION_REQUIRED: ${{ github.event_name == 'workflow_dispatch' ||
+            needs.changes.outputs.documentation == 'true' || needs.changes.outputs.pages == 'true'
+            }}
           DOCUMENTATION: ${{ needs.documentation.result }}
         run: |
           scripts/check-workflow-results.sh \

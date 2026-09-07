@@ -28,6 +28,8 @@ const noDisplayView = {
   view: "empty-html",
 } as const;
 
+test.use({ services: ["studio", "static"] });
+
 const expectEmptyPreview = async (page: Page, candidate: typeof noDisplayView) => {
   const preview = await waitForViewPreview(page, candidate.view);
   await expect(preview.getByRole("heading", { name: candidate.heading })).toBeVisible({

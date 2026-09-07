@@ -6,7 +6,7 @@
 # ]
 #
 # [tool.uv.sources]
-# marimo-studio-e2e-provider = { path = "../../../fixtures-provider/provider" }
+# marimo-studio-e2e-provider = { path = "../fixtures-provider/provider" }
 #
 # [tool.marimo-studio]
 # default = "overview"

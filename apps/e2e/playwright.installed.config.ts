@@ -22,10 +22,9 @@ export default defineConfig({
     ? [
         ["list"],
         [
-          "html",
+          "blob",
           {
-            open: "never",
-            outputFolder: resolve(outputRoot, "report"),
+            outputDir: resolve(outputRoot, "blob"),
           },
         ],
       ]

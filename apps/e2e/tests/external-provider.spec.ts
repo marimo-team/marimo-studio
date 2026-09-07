@@ -1,9 +1,12 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, type Locator } from "@playwright/test";
 
 import { e2eNetwork } from "../scripts/network.mjs";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
 import { presentationFrame } from "./fixture.ts";
+import { test } from "./provider-fixture.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
+
+test.use({ providerViews: ["dashboard", "web"] });
 
 const waitForRuntime = async (root: Locator): Promise<void> => {
   await expect

@@ -6,6 +6,7 @@ const generated = [
   "**/__marimo__/**",
   "apps/docs/.vitepress/cache/**",
   "apps/docs/.vitepress/dist/**",
+  "apps/e2e/.cache/**",
   "dist/**",
   "packages/marimo-frontend/.cache/**",
   "packages/marimo-studio/src/marimo_studio/_static/**",

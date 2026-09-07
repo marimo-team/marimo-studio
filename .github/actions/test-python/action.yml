@@ -30,4 +30,12 @@ runs:
           --profile "${{ inputs.profile }}" \
           --python "${{ inputs.python-version }}" \
           "${parallel[@]}" \
-          -- -rs
+          -- -rs --durations=30 --junitxml="$RUNNER_TEMP/python-results.xml"
+    - name: Upload Python results
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: python-${{ inputs.profile }}-${{ inputs.python-version }}-${{ runner.os }}
+        path: ${{ runner.temp }}/python-results.xml
+        retention-days: 7
+        if-no-files-found: warn

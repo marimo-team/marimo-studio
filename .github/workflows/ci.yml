@@ -21,12 +21,11 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      distribution: ${{ steps.filter.outputs.distribution }}
-      frontend_contracts: ${{ steps.filter.outputs.frontend_contracts }}
-      installed_distribution: ${{ steps.filter.outputs.installed_distribution }}
-      python_contracts: ${{ steps.filter.outputs.python_contracts }}
-      quality: ${{ steps.filter.outputs.quality }}
-      validated_pr: ${{ steps.pr-validation.outputs.validated }}
+      distribution: ${{ steps.selection.outputs.distribution }}
+      frontend_contracts: ${{ steps.selection.outputs.frontend_contracts }}
+      installed_distribution: ${{ steps.selection.outputs.installed_distribution }}
+      python_contracts: ${{ steps.selection.outputs.python_contracts }}
+      quality: ${{ steps.selection.outputs.quality }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,17 +41,23 @@ jobs:
 
       - name: Classify changed files
         id: filter
-        if: steps.pr-validation.outputs.validated != 'true'
+        if: steps.pr-validation.outputs.mode == 'changed'
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: .github/filters.yml
           predicate-quantifier: some-with-excludes
+      - name: Select required contracts
+        id: selection
+        env:
+          VALIDATION_MODE: ${{ steps.pr-validation.outputs.mode }}
+          VALIDATION_FILTERS: '["distribution","frontend_contracts","installed_distribution","python_contracts","quality"]'
+          PATH_FILTERS_JSON: ${{ toJSON(steps.filter.outputs) }}
+        run: node .github/actions/pr-validation/select.mjs
 
   quality:
     name: Quality
     needs: changes
     if: >-
-      needs.changes.outputs.validated_pr != 'true' &&
       needs.changes.outputs.quality == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -87,7 +92,6 @@ jobs:
     name: Standard Python contracts
     needs: changes
     if: >-
-      needs.changes.outputs.validated_pr != 'true' &&
       needs.changes.outputs.python_contracts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -107,7 +111,6 @@ jobs:
     name: Frontend contracts
     needs: changes
     if: >-
-      needs.changes.outputs.validated_pr != 'true' &&
       needs.changes.outputs.frontend_contracts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -132,13 +135,21 @@ jobs:
           prepare-marimo-frontend: "true"
 
       - name: Test frontend
-        run: make frontend-test
+        shell: bash
+        run: make frontend-test 2>&1 | tee "$RUNNER_TEMP/frontend-tests.log"
+      - name: Upload frontend phase timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: frontend-test-timings
+          path: ${{ runner.temp }}/frontend-tests.log
+          retention-days: 7
+          if-no-files-found: warn
 
   package:
-    name: Package
+    name: Package candidate
     needs: changes
     if: >-
-      needs.changes.outputs.validated_pr != 'true' &&
       needs.changes.outputs.distribution == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -163,13 +174,13 @@ jobs:
         with:
           prepare-marimo-frontend: "true"
 
-      - name: Build package
-        run: make package
+      - name: Build and validate package archives
+        run: make _package-build
 
-      - name: Upload the verified wheel for Windows
+      - name: Upload package candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: verified-package
+          name: package-candidate
           path: |
             dist/marimo_studio-*.whl
             dist/agent-plugin-digests.json
@@ -180,7 +191,6 @@ jobs:
     name: Supported Python ${{ matrix.python-version }} (${{ matrix.os }})
     needs: changes
     if: >-
-      needs.changes.outputs.validated_pr != 'true' &&
       needs.changes.outputs.python_contracts == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
@@ -208,7 +218,6 @@ jobs:
     name: Native process ownership (${{ matrix.os }})
     needs: changes
     if: >-
-      needs.changes.outputs.validated_pr != 'true' &&
       needs.changes.outputs.python_contracts == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
@@ -232,7 +241,6 @@ jobs:
     name: Deno providers (${{ matrix.os }})
     needs: changes
     if: >-
-      needs.changes.outputs.validated_pr != 'true' &&
       needs.changes.outputs.python_contracts == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -256,15 +264,15 @@ jobs:
     name: Installed package and provider (${{ matrix.os }})
     needs: [changes, package]
     if: >-
-      needs.changes.outputs.validated_pr != 'true' &&
-      needs.changes.outputs.installed_distribution == 'true' &&
-      needs.package.result == 'success'
+      needs.changes.outputs.distribution == 'true' && needs.package.result == 'success'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os:
+          ${{ fromJSON(needs.changes.outputs.installed_distribution == 'true' && '["ubuntu-latest",
+          "macos-latest", "windows-latest"]' || '["ubuntu-latest"]') }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -277,15 +285,23 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Download the verified wheel
+      - name: Download package candidate
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: verified-package
+          name: package-candidate
           path: dist
 
       - name: Verify installed package and providers
         shell: bash
-        run: ./scripts/verify-installed-wheel.sh
+        run: ./scripts/verify-installed-wheel.sh 2>&1 | tee "$RUNNER_TEMP/installed-verification.log"
+      - name: Upload installed verification timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: installed-verification-${{ matrix.os }}
+          path: ${{ runner.temp }}/installed-verification.log
+          retention-days: 7
+          if-no-files-found: warn
 
   gate:
     name: CI gate
@@ -311,21 +327,21 @@ jobs:
       - name: Confirm CI results
         env:
           CHANGES: ${{ needs.changes.result }}
-          DENO_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && needs.changes.outputs.python_contracts == 'true' }}
+          DENO_REQUIRED: ${{ needs.changes.outputs.python_contracts == 'true' }}
           DENO: ${{ needs.deno.result }}
-          FRONTEND_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && needs.changes.outputs.frontend_contracts == 'true' }}
+          FRONTEND_REQUIRED: ${{ needs.changes.outputs.frontend_contracts == 'true' }}
           FRONTEND: ${{ needs.frontend.result }}
-          INSTALLED_PACKAGE_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && needs.changes.outputs.installed_distribution == 'true' && needs.package.result == 'success' }}
+          INSTALLED_PACKAGE_REQUIRED: ${{ needs.changes.outputs.distribution == 'true' && needs.package.result == 'success' }}
           INSTALLED_PACKAGE: ${{ needs.installed-package.result }}
-          NATIVE_PROCESS_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && needs.changes.outputs.python_contracts == 'true' }}
+          NATIVE_PROCESS_REQUIRED: ${{ needs.changes.outputs.python_contracts == 'true' }}
           NATIVE_PROCESS: ${{ needs.native-process.result }}
-          PACKAGE_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && needs.changes.outputs.distribution == 'true' }}
+          PACKAGE_REQUIRED: ${{ needs.changes.outputs.distribution == 'true' }}
           PACKAGE: ${{ needs.package.result }}
-          PYTHON_COMPAT_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && needs.changes.outputs.python_contracts == 'true' }}
+          PYTHON_COMPAT_REQUIRED: ${{ needs.changes.outputs.python_contracts == 'true' }}
           PYTHON_COMPAT: ${{ needs.python-compat.result }}
-          PYTHON_STANDARD_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && needs.changes.outputs.python_contracts == 'true' }}
+          PYTHON_STANDARD_REQUIRED: ${{ needs.changes.outputs.python_contracts == 'true' }}
           PYTHON_STANDARD: ${{ needs.python-standard.result }}
-          QUALITY_REQUIRED: ${{ needs.changes.outputs.validated_pr != 'true' && needs.changes.outputs.quality == 'true' }}
+          QUALITY_REQUIRED: ${{ needs.changes.outputs.quality == 'true' }}
           QUALITY: ${{ needs.quality.result }}
         run: |
           scripts/check-workflow-results.sh \

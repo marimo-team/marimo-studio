@@ -5,6 +5,15 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 dist_dir="${1:-$root/dist}"
 cd "$root"
 
+verify_phase() {
+	local label="$1" started="$SECONDS" result=0
+	shift
+	printf '\n%s\n' "$label"
+	"$@" || result=$?
+	printf '%s: %ss, exit %s\n' "$label" "$((SECONDS - started))" "$result"
+	return "$result"
+}
+
 if [[ $# -gt 1 ]]; then
 	printf 'Usage: ./scripts/verify-installed-wheel.sh [DIST_DIR]\n' >&2
 	exit 2
@@ -56,18 +65,18 @@ if [[ ${#provider_wheels[@]} -ne 1 ]]; then
 fi
 provider_wheel="${provider_wheels[0]}"
 
-uv run --no-project --isolated --no-cache --exclude-newer-package marimo-export=false \
+verify_phase "Base installation" uv run --no-project --isolated --exclude-newer-package marimo-export=false \
 	--with "$wheel" \
 	python scripts/verify-installed-package.py \
 	--expected-version "$package_version" \
 	--expected-plugin-digests "$plugin_digests"
-uv run --no-project --isolated --no-cache --no-sources-package marimo-studio \
+verify_phase "External provider" uv run --no-project --isolated --no-sources-package marimo-studio \
 	--exclude-newer-package marimo-export=false \
 	--with "$wheel" \
 	--with "$root/apps/e2e/fixtures-provider/provider" \
 	--with "ty==0.0.69" \
 	python scripts/verify-external-provider.py --typecheck
-uv run --no-project --isolated --no-cache --exclude-newer-package marimo-export=false \
+verify_phase "Deno installation" uv run --no-project --isolated --exclude-newer-package marimo-export=false \
 	--with "marimo-studio[deno] @ $wheel_uri" \
 	python scripts/verify-installed-package.py \
 	--expected-version "$package_version" \
@@ -76,14 +85,14 @@ uv run --no-project --isolated --no-cache --exclude-newer-package marimo-export=
 
 MARIMO_STUDIO_ACCEPTANCE_STUDIO_WHEEL="$wheel" \
 	MARIMO_STUDIO_ACCEPTANCE_PROVIDER_WHEEL="$provider_wheel" \
-	uv run --no-project --isolated --no-cache --no-sources-package marimo-studio \
+		verify_phase "Bootstrap preparation" uv run --no-project --isolated --no-sources-package marimo-studio \
 		--no-sources-package marimo-studio-e2e-provider \
 		--exclude-newer-package marimo-export=false \
 		--with "marimo-studio[deno] @ $wheel_uri" \
 		--with "$provider_wheel" \
 	python scripts/verify-provider-bootstrap.py prepare \
 	"$bootstrap_root/workspace"
-uv run --no-project --isolated --no-cache --no-sources-package marimo-studio \
+verify_phase "Bootstrap installation" uv run --no-project --isolated --no-sources-package marimo-studio \
 	--exclude-newer-package marimo-export=false \
 	--with "$wheel" \
 	python scripts/verify-provider-bootstrap.py verify \

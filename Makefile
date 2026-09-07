@@ -18,6 +18,8 @@ PYTHON_BUILD_CONSTRAINTS = $(UV) export --frozen --package marimo-studio --only-
 .PHONY: e2e e2e-ui docs-examples docs-build docs-serve package
 .PHONY: _anti-slop-check _architecture-check _provider-sources-check _workflow-check
 .PHONY: _prepare-frontend _frontend-ready _browser-install _browser-ready
+.PHONY: _prepare-browser-tests
+.PHONY: _package-build
 
 help: ## List development targets.
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -26,6 +28,7 @@ setup: ## Prepare dependencies, browser assets, and Chromium.
 	$(UV) sync --locked --reinstall-package marimo-studio
 	$(PNPM) install --frozen-lockfile
 	$(MAKE) _prepare-frontend
+	$(MAKE) _prepare-browser-tests
 	$(MAKE) build
 	$(MAKE) _browser-install
 
@@ -81,12 +84,15 @@ build: ## Build browser assets into the Python package.
 _browser-install:
 	$(PNPM) --filter @marimo-studio/e2e install-browser
 
-e2e: _browser-ready build ## Test source and installed-package flows in Chromium.
+_prepare-browser-tests: _frontend-ready
+	$(PNPM) --filter @marimo-studio/e2e exec node scripts/prepare-pyodide.mjs
+
+e2e: _browser-ready build _prepare-browser-tests ## Test source and installed-package flows in Chromium.
 	$(PNPM) --filter @marimo-studio/e2e e2e
 	$(PNPM) --filter @marimo-studio/e2e e2e:providers
 	$(PNPM) --filter @marimo-studio/e2e e2e:installed
 
-e2e-ui: _browser-ready build ## Open the browser test runner.
+e2e-ui: _browser-ready build _prepare-browser-tests ## Open the browser test runner.
 	$(PNPM) --filter @marimo-studio/e2e e2e:ui
 
 docs-examples: _frontend-ready build ## Export examples for the documentation site.
@@ -98,7 +104,10 @@ docs-build: _frontend-ready build ## Build the VitePress documentation.
 docs-serve: _frontend-ready build ## Serve documentation through Portless.
 	BASE_PATH= $(VP) run --filter @marimo-studio/docs dev
 
-package: build ## Build and validate the wheel and source distribution.
+package: _package-build ## Build and validate the wheel and source distribution.
+	./scripts/verify-installed-wheel.sh "$(DIST_DIR)"
+
+_package-build: build
 	rm -rf "$(DIST_DIR)"
 	$(UV) build --package marimo-studio \
 		--build-constraints <($(PYTHON_BUILD_CONSTRAINTS)) --require-hashes \

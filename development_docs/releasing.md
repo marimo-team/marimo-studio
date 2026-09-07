@@ -100,7 +100,13 @@ Routine merge actors must follow the same required checks.
 
 `make package` builds the wheel, source distribution, and source-rebuilt wheel
 before checking metadata on all three. `scripts/verify-dist.sh` requires the
-two wheels to be byte-identical, then runs the installed-package matrix once.
+two wheels to be byte-identical and checks packaged resources against source.
+The command then runs installed-package acceptance on the current platform.
+
+CI builds an archive-validated `package-candidate` once. Linux, macOS, and
+Windows consumers validate that candidate independently when platform coverage
+is selected. Distribution changes always run the Linux consumer. `CI gate`
+requires the producer and every selected consumer to pass.
 
 The base installation verifies:
 
@@ -145,8 +151,11 @@ check once. The Deno check creates and builds the React application starter,
 Reveal.js slide deck starter, and Svelte application starter with the published
 package.
 
-Both scripts use isolated, uncached environments while retaining the
-repository dependency-age policy.
+Installed-wheel acceptance uses fresh isolated environments with cached
+dependency downloads. It reports elapsed time for each base, external-provider,
+Deno, and bootstrap phase. Public PyPI verification uses fresh environments
+and cold downloads to check registry availability. Both retain the repository
+dependency-age policy.
 
 ## Validate the pinned Marimo release
 
@@ -205,17 +214,24 @@ The preflight validates:
 6. Push-triggered CI, Browser acceptance, and documentation passed for the
    exact commit.
 
-Each pull request CI and Browser acceptance run records the Git tree checked out
-for validation. After merge, the main workflows reuse a successful run when its
-recorded tree matches the merged tree and the previous main commit passed the
-same workflow. Missing, expired, ambiguous, failed, or mismatched evidence runs
-the affected jobs again.
+Validation first checks the comparison base: the PR base commit or the main
+commit before a push. A base with missing, pending, or failed workflow evidence
+requires the complete workflow. A successful base permits changed-file
+selection. Missing path-filter results fail the Changes job.
+
+Each pull request CI and Browser acceptance run records its tested Git tree.
+After merge, those workflows can reuse a successful same-repository PR run
+when the tree matches and the comparison base passed. Expired, ambiguous,
+failed, or mismatched PR evidence uses changed-file validation against that
+successful base. Documentation always produces the selected site artifact.
 
 Superseded pull request runs are canceled. Every main commit keeps its own CI,
 Browser acceptance, and documentation run so failures remain attributable to an
-exact commit. A documentation run deploys after confirming that its commit is
-still the tip of `main`. Deploy jobs use one ordered queue and confirm the tip
-again immediately before publication.
+exact commit. Documentation checks and artifact production run independently.
+Deployment requires both to pass and confirms that the commit is still the
+tip of `main`. Deploy jobs use one ordered queue and confirm the tip again
+immediately before publication. `Documentation gate` includes the selected
+checks, build, and deployment outcomes.
 
 The command prints the release tag, commit, and all three workflow URLs. The
 publish workflow repeats the exact-commit check before building artifacts.
