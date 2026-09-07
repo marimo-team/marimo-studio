@@ -115,16 +115,17 @@ def test_rewritten_network_module_requires_exact_changed_header(
     cells.write_bytes(_cells_module())
     source = (
         b'import {zr as zj,__tla as Mj}from"./cells-test.js";'
-        b"const st=async()=>{};const r=()=>({});const ve=async value=>value;"
-        b"const t=()=>({POST:(url,options)=>globalThis.__post(url,options)});"
-        b"const network={"
+        b"const st=async()=>{};const ve=async value=>value;"
+        b"function createNetwork(post){let t=()=>({POST:post}),e=()=>({}),"
+        b"r=()=>({header:e()});return{sendComponentValues:()=>{},"
         b'sendSave:n=>t().POST("/api/kernel/save",{body:n,parseAs:"text",params:r()}).then(ve),'
         b"sendDocumentTransaction:async n=>(await st(),t().POST("
         b'"/api/document/transaction",'
         b"{body:n,params:r()}).then(ve)),"
         b'sendRun:async n=>(await st(),t().POST("/api/kernel/run",{body:n,params:r()})'
-        b".then(ve))};export {network};"
+        b".then(ve))}};export {createNetwork};"
     )
+
     index = tmp_path / "index-test.js"
     index.write_bytes(_await_document_transactions_before_network_run(source))
     _run_node(
@@ -142,7 +143,8 @@ globalThis.__post = async (url, options) => {{
   if (changed !== null) headers.set("marimo-studio-document-changed", changed);
   return {{ response: {{ headers }} }};
 }};
-const {{ network }} = await import(pathToFileURL({str(index)!r}).href);
+const {{ createNetwork }} = await import(pathToFileURL({str(index)!r}).href);
+const network = createNetwork(globalThis.__post);
 const operation = "operation-0000001";
 assert.equal(
   await network.sendDocumentTransaction({{
@@ -169,8 +171,62 @@ assert.deepEqual(calls[0], [
   {{
     body: {{ changes: [{{ id: 1 }}] }},
     headers: {{ "Marimo-Studio-Document-Operation": operation }},
-    params: {{}},
+    params: {{ header: {{}} }},
   }},
 ]);
+const peerCalls = [];
+const peer = createNetwork(async (url, options) => {{
+  peerCalls.push([url, options]);
+  const headers = new Headers({{ "marimo-studio-document-changed": "false" }});
+  return {{ response: {{ headers }} }};
+}});
+assert.equal(await peer.sendDocumentTransaction({{
+  changes: [],
+  studioOperationId: "peer-00000000001",
+}}), false);
+assert.equal(peerCalls.length, 1);
+assert.equal(calls.length, 3);
+"""
+    )
+
+
+def test_emitted_queue_closes_both_ports_when_barrier_transfer_fails(
+    tmp_path: Path,
+) -> None:
+    cells = tmp_path / "cells-transfer.js"
+    cells.write_bytes(_cells_module())
+    _run_node(
+        f"""
+import assert from "node:assert/strict";
+import {{ pathToFileURL }} from "node:url";
+const ports = [];
+globalThis.MessageChannel = class {{
+  constructor() {{
+    const port = () => ({{
+      closed: false,
+      close() {{ this.closed = true; }},
+      start() {{}},
+    }});
+    this.port1 = port();
+    this.port2 = port();
+    ports.push(this.port1, this.port2);
+  }}
+}};
+globalThis.frameElement = {{ hasAttribute: () => true }};
+globalThis.location = {{ origin: "https://studio.test" }};
+globalThis.addEventListener = () => {{}};
+globalThis.removeEventListener = () => {{}};
+globalThis.parent = {{
+  postMessage() {{ throw new DOMException("Port transfer failed", "DataCloneError"); }},
+}};
+let requests = 0;
+globalThis.__documentClient = {{
+  async sendDocumentTransaction() {{ requests += 1; return true; }},
+}};
+const module = await import(pathToFileURL({str(cells)!r}).href);
+module.queueChange({{ id: "pending" }});
+await assert.rejects(module.studioFlushDocumentChanges(), /Port transfer failed/);
+assert.deepEqual(ports.map((port) => port.closed), [true, true]);
+assert.equal(requests, 0);
 """
     )

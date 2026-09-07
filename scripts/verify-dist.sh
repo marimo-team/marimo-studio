@@ -53,6 +53,8 @@ license_sources = {
     "LICENSE": package_root / "LICENSE",
 }
 license_bytes = {name: source.read_bytes() for name, source in license_sources.items()}
+editor_document = "marimo_studio/_compat/server/editor_document.js"
+editor_document_bytes = (package_root / "src" / editor_document).read_bytes()
 
 
 def packaged(files, read, archive):
@@ -96,6 +98,8 @@ for path in archives:
     if path.suffix == ".whl":
         with ZipFile(path) as archive:
             names = archive.namelist()
+            if archive.read(editor_document) != editor_document_bytes:
+                raise AssertionError(f"Editor document runtime differs: {path}")
             actual = packaged(names, archive.read, path)
             metadata_name = next(name for name in names if name.endswith(".dist-info/METADATA"))
             metadata_root = metadata_name.removesuffix("METADATA")
@@ -118,6 +122,8 @@ for path in archives:
 
             actual = packaged(names, read, path)
             distribution_root = names[0].split("/", 1)[0]
+            if read(f"{distribution_root}/src/{editor_document}") != editor_document_bytes:
+                raise AssertionError(f"Editor document runtime differs: {path}")
             verify_metadata(read(f"{distribution_root}/PKG-INFO"), path)
             for relative, expected_bytes in license_bytes.items():
                 packaged_bytes = read(f"{distribution_root}/{relative}")
