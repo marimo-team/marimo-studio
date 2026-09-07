@@ -1,0 +1,55 @@
+packages/marimo-studio/tests/views/test_runtime_validation.py
+  s_56e158cb000e90::t_afe43412af9cd5 42-44
+  s_56e158cb000e90::t_1311c0e955d0d0 26,45
+packages/marimo-studio/src/marimo_studio/_validation/service.py
+  s_56e158cb000e90::t_afe43412af9cd5 169-170
+  s_56e158cb000e90::t_3f30cb64413492 35,38,92-93,98,119-126,128,165-168,171-176,184-189
+packages/marimo-studio/tests/artifacts/test_build_lifecycle.py
+  s_56e158cb000e90::t_b39c279f966ea5 47,627-663,667-683
+  s_56e158cb000e90::t_4565cf662d50c6 549-560,564-567
+  s_56e158cb000e90::t_664b01b6fd69bd 561-563
+  s_56e158cb000e90::t_afe43412af9cd5 664-666
+packages/marimo-studio/src/marimo_studio/_artifacts/inputs.py
+  s_56e158cb000e90::t_f0c7601ca02770 39,73-74,177-182,188-190,192-194,196-197,199-202,205,210-212,216,221-225,244,247-248,252-254,265-271,277,297-299,307,311,313,383,412
+  s_56e158cb000e90::t_9dc1da99525907 256-264
+  s_56e158cb000e90::t_3dd1c04c92f8d6 382,384
+  s_56e158cb000e90::t_afe43412af9cd5 183-185,213-215,249-251,272-276
+  s_56e158cb000e90::t_7e1b70bd42bd8e 255
+packages/marimo-studio/src/marimo_studio/_views/revisions.py
+  s_56e158cb000e90::t_3f30cb64413492 112-127,138,153-154,157,162
+development_docs/architecture/view-providers-and-artifacts.md
+  s_56e158cb000e90::t_9dc1da99525907 141-145
+packages/marimo-studio/tests/agent/test_validation_isolation.py
+  s_56e158cb000e90::t_c4e73282cc5318 28-29,219-224,228-238,279-283
+  s_56e158cb000e90::t_664b01b6fd69bd 263-265,267-268
+  s_56e158cb000e90::t_afe43412af9cd5 225-227
+  s_56e158cb000e90::t_4565cf662d50c6 6,239-262,266,269-278
+development_docs/architecture/agents-and-delivery.md
+  s_56e158cb000e90::t_9dc1da99525907 103-108
+packages/marimo-studio/src/marimo_studio/_views/build.py
+  s_56e158cb000e90::t_3f30cb64413492 446-452
+  s_56e158cb000e90::t_f0c7601ca02770 218
+packages/marimo-studio/tests/artifacts/test_build_execution.py
+  s_56e158cb000e90::t_cd38f250e02aa8 7,14,29,42-70
+  s_56e158cb000e90::t_bc1c9bf6eff0c4 30-35
+packages/marimo-studio/tests/agent/test_progressive_validation.py
+  s_56e158cb000e90::t_7e1b70bd42bd8e 39,416-417
+  s_56e158cb000e90::t_6d4bc1a07a32af 406
+  s_56e158cb000e90::t_1df39fbdbfaefd 419
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1d225abf1991b5e81373eb476c4ce2361e9108a2",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
