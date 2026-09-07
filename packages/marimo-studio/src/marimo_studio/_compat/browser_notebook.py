@@ -12,6 +12,10 @@ from pathlib import Path
 from packaging.utils import NormalizedName, canonicalize_name
 
 from marimo_studio._compat.browser_bridge import install_browser_bridge
+from marimo_studio._compat.kernel_values.arrow import (
+    _ArrowMaterializationRequired,
+    _dataframe_ipc,
+)
 from marimo_studio._compat.kernel_values.models import OUTPUT_OWNER_PREFIX
 from marimo_studio._compat.notebook import run_guard_line
 from marimo_studio._delivery.urls import PRIVATE_QUERY_KEYS
@@ -87,7 +91,16 @@ def _bridge_body() -> str:
 
 
 def _value_bridge() -> str:
-    implementation = textwrap.indent(_bridge_body(), "    ")
+    implementation = textwrap.indent(
+        "\n\n".join(
+            (
+                inspect.getsource(_ArrowMaterializationRequired),
+                inspect.getsource(_dataframe_ipc),
+                _bridge_body(),
+            )
+        ),
+        "    ",
+    )
     private_query_keys = tuple(sorted(PRIVATE_QUERY_KEYS))
     return f"""@app.cell(hide_code=True)
 def {BROWSER_BRIDGE_CELL_NAME}():

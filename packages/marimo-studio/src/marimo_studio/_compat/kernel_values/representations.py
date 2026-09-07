@@ -2,25 +2,22 @@
 
 from __future__ import annotations
 
-import io
 import json
-import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
 
-from marimo._plugins.ui._impl.tables.utils import get_table_manager_or_none
 from marimo._runtime.virtual_file import VirtualFile, random_filename
 
+from marimo_studio._compat.kernel_values.arrow import (
+    _ArrowMaterializationRequired,
+    _dataframe_ipc,
+)
 from marimo_studio._projections.runtime_records import ValueReadError
 
 JSON_CODEC = "json-v1"
 ARROW_IPC_CODEC = "arrow-ipc-v1"
-
-
-class _ArrowMaterializationRequired(ValueError):
-    pass
 
 
 @dataclass(frozen=True)
@@ -49,52 +46,6 @@ def inspection_value(payload: object) -> object:
             "byteLength": payload.get("byteLength"),
         }
     return payload
-
-
-def _write_arrow_stream(table: Any, pyarrow: Any) -> bytes:
-    output = io.BytesIO()
-    options = pyarrow.ipc.IpcWriteOptions(compression=None)
-    with pyarrow.ipc.new_stream(output, table.schema, options=options) as writer:
-        writer.write_table(table)
-    return output.getvalue()
-
-
-def _pyarrow_ipc(value: object) -> bytes | None:
-    pyarrow = sys.modules.get("pyarrow")
-    if pyarrow is None:
-        return None
-    table_type = getattr(pyarrow, "Table", ())
-    batch_type = getattr(pyarrow, "RecordBatch", ())
-    if isinstance(value, batch_type):
-        batch: Any = value
-        value = pyarrow.Table.from_batches([batch], schema=batch.schema)
-    if not isinstance(value, table_type):
-        return None
-    table: Any = value
-    return _write_arrow_stream(table, pyarrow)
-
-
-def _dataframe_ipc(value: object) -> bytes | None:
-    manager = get_table_manager_or_none(value)
-    if manager is None or manager.type not in {"pandas", "polars"}:
-        return _pyarrow_ipc(value)
-    if manager.get_num_rows(force=False) is None:
-        raise _ArrowMaterializationRequired
-    if manager.type == "polars":
-        dataframe: Any = value
-        if any(dtype.is_object() for dtype in dataframe.schema.values()):
-            raise TypeError("Polars Object columns cannot be serialized as Arrow IPC")
-        output = io.BytesIO()
-        dataframe.write_ipc_stream(output, compression="uncompressed")
-        return output.getvalue()
-    import pyarrow
-
-    try:
-        table = pyarrow.Table.from_pandas(value)
-    except Exception:
-        source = pyarrow.ipc.open_file(io.BytesIO(manager.to_arrow_ipc())).read_all()
-        return _write_arrow_stream(source, pyarrow)
-    return _write_arrow_stream(table, pyarrow)
 
 
 class ValueEncoder:
