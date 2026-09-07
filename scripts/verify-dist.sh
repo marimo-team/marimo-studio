@@ -139,5 +139,3 @@ for path in archives:
 
 digest_path.write_text(json.dumps(expected, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
-
-./scripts/verify-installed-wheel.sh "$root/dist"

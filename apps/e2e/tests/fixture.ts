@@ -13,9 +13,13 @@ import { resolve } from "node:path";
 import { z } from "zod";
 
 import { prepareCollaborativeWorkspace } from "../scripts/collaborative-workspace.mjs";
+import { withExportRepository } from "../scripts/export-repository.mjs";
+import { copyFixtureProviderPackage } from "../scripts/fixture-provider-package.mjs";
+import { MainWorkspace } from "../scripts/main-workspace.mjs";
 import { e2eNetwork } from "../scripts/network.mjs";
 import {
   collaborativeWorkspaceDirectory,
+  configDirectory,
   fixtureDirectory,
   hostedFixtureDirectory,
   hostedNotebookPath,
@@ -121,6 +125,7 @@ const copyFixtureFile = async (relativePath: string) => {
 };
 
 export const restoreWorkspace = async () => {
+  await copyFixtureProviderPackage(workspaceDirectory);
   await removeTree(resolve(workspaceDirectory, "__marimo__/studio/notebook"));
   await removeTree(resolve(workspaceDirectory, "__marimo__/studio/no-display"));
   await copyFixtureFile("notebook.py");
@@ -418,20 +423,17 @@ export const removeWorkspaceView = async (
   }
 };
 
-const releaseWindowsWorkspaceProjects = async (
+const releaseWorkspaceProjects = async (
   request: APIRequestContext,
   admin: SessionAdmin,
 ): Promise<void> => {
-  if (process.platform !== "win32") {
-    return;
-  }
   const headers = { "Marimo-Server-Token": admin.serverToken };
   const response = await request.get(admin.viewsUrl);
   if (!response.ok()) {
     throw new Error(`Could not inspect Studio views: ${response.status()}`);
   }
   let inventory = viewListSchema.parse(await response.json());
-  const survivor = "windows-cleanup";
+  const survivor = "fixture-cleanup";
   if (!inventory.views.some(({ name }) => name === survivor)) {
     const created = await request.post(admin.viewsUrl, {
       data: {
@@ -442,7 +444,7 @@ const releaseWindowsWorkspaceProjects = async (
       headers,
     });
     if (!created.ok()) {
-      throw new Error(`Could not prepare Windows workspace cleanup: ${created.status()}`);
+      throw new Error(`Could not prepare workspace cleanup: ${created.status()}`);
     }
     const refreshed = await request.get(admin.viewsUrl);
     if (!refreshed.ok()) {
@@ -478,9 +480,12 @@ const releaseWindowsWorkspaceProjects = async (
 const closeNotebookSessions = async (page: Page, preparedAdmin?: SessionAdmin): Promise<void> => {
   const admin = preparedAdmin ?? (await sessionAdmin(page));
   const request = page.request;
-  if (!page.isClosed()) {
-    await page.close();
-  }
+  await Promise.all(
+    page
+      .context()
+      .pages()
+      .map((ownedPage) => ownedPage.close()),
+  );
   if (!admin) {
     return;
   }
@@ -510,7 +515,7 @@ const closeNotebookSessions = async (page: Page, preparedAdmin?: SessionAdmin): 
       return sessionInventorySchema.parse(await response.json()).files.length;
     })
     .toBe(0);
-  await releaseWindowsWorkspaceProjects(request, admin);
+  await releaseWorkspaceProjects(request, admin);
 };
 
 const cleanupBrowserWorkspace = async (
@@ -519,30 +524,15 @@ const cleanupBrowserWorkspace = async (
   managed: boolean,
   hosted: boolean,
 ): Promise<void> => {
-  const cleanupErrors: unknown[] = [];
-  try {
-    if (managed) {
-      await closeNotebookSessions(page, admin);
-    } else if (!page.isClosed()) {
-      await page.close();
-    }
-  } catch (error) {
-    cleanupErrors.push(error);
+  if (managed) {
+    await closeNotebookSessions(page, admin);
+  } else if (!page.isClosed()) {
+    await page.close();
   }
-  try {
-    if (hosted) {
-      await restoreHostedWorkspace();
-    } else {
-      await restoreWorkspace();
-    }
-  } catch (error) {
-    cleanupErrors.push(error);
-  }
-  if (cleanupErrors.length === 1) {
-    throw cleanupErrors[0];
-  }
-  if (cleanupErrors.length > 1) {
-    throw new AggregateError(cleanupErrors, "Browser teardown and workspace restore failed");
+  if (hosted) {
+    await restoreHostedWorkspace();
+  } else {
+    await restoreWorkspace();
   }
 };
 
@@ -557,12 +547,46 @@ export const retireWorkspacePage = async (
   await closeNotebookSessions(page, admin);
 };
 
-export const test = base.extend<{
-  browserDiagnostics: BrowserDiagnosticsScope;
-  collaborativeWorkspace: void;
-  pyodideAssets: void;
-  studioCli: StudioCli;
-}>({
+export const test = base.extend<
+  {
+    browserDiagnostics: BrowserDiagnosticsScope;
+    collaborativeWorkspace: void;
+    pyodideAssets: void;
+    studioCli: StudioCli;
+  },
+  {
+    services: readonly ("studio" | "hosted" | "static")[];
+    mainWorkspace: MainWorkspace;
+  }
+>({
+  services: [["studio"], { option: true, scope: "worker" }],
+  mainWorkspace: [
+    async ({ services }, use) =>
+      withExportRepository(resolve(configDirectory, "export-repository"), async () => {
+        const workspace = new MainWorkspace();
+        const failures: unknown[] = [];
+        try {
+          await workspace.prepare();
+          await workspace.start(services);
+          await use(workspace);
+        } catch (error) {
+          failures.push(error);
+        }
+        try {
+          await workspace.close();
+        } catch (error) {
+          failures.push(error);
+        }
+        if (failures.length === 1) throw failures[0];
+        if (failures.length > 1) {
+          throw new AggregateError(failures, "Browser workspace setup and teardown failed");
+        }
+      }),
+    { scope: "worker", auto: true, timeout: 180_000 },
+  ],
+  baseURL: async ({ mainWorkspace: _mainWorkspace }, use) => {
+    await use(studioOrigin);
+  },
   studioCli: async ({ browserName: _browserName }, use) => {
     const studioCli = new StudioCli();
     try {

@@ -23,6 +23,7 @@ pages_control: &pages_control
   - "Makefile"
   - "scripts/check-workflow-results.sh"
   - "scripts/check-workflow-results.test.sh"
+  - .github/actions/pr-validation/**
 
 python_inputs: &python_inputs
   - *ci_control
@@ -87,8 +88,21 @@ browser_infra: &browser_infra
   - "apps/e2e/scripts/network.mjs"
   - "apps/e2e/scripts/paths.mjs"
   - "apps/e2e/scripts/preparation-process.mjs"
+  - "apps/e2e/scripts/prepare-pyodide.mjs"
   - "apps/e2e/scripts/process-group.mjs"
   - "apps/e2e/scripts/server-process.mjs"
+  - Makefile
+  - scripts/verify-dist.sh
+  - scripts/write-dist-checksums.py
+  - apps/e2e/playwright.merge.config.ts
+notebook_services: &notebook_services
+  - apps/e2e/scripts/notebook-services.mjs
+  - apps/e2e/scripts/server-exit.mjs
+  - apps/e2e/scripts/fixture-provider-package.mjs
+  - apps/e2e/scripts/notebook-process-registry.mjs
+  - apps/e2e/scripts/notebook-process-supervisor.mjs
+  - apps/e2e/scripts/registered-notebook-process.mjs
+  - apps/e2e/scripts/_compat/marimo_edit.py
 
 documentation:
   - "README.md"
@@ -206,11 +220,9 @@ main_browser:
   - "!apps/e2e/tests/provider-reveal.spec.ts"
   - "!apps/e2e/tests/external-provider.spec.ts"
   - "apps/e2e/scripts/collaborative-workspace.mjs"
-  - "apps/e2e/scripts/fixture-provider-package.mjs"
-  - "apps/e2e/scripts/notebook-process-registry.mjs"
-  - "apps/e2e/scripts/notebook-process-supervisor.mjs"
-  - "apps/e2e/scripts/registered-notebook-process.mjs"
-  - "apps/e2e/scripts/serve.mjs"
+  - *notebook_services
+  - apps/e2e/scripts/main-workspace.mjs
+  - "!apps/e2e/tests/provider-fixture.ts"
 
 provider_browser:
   - *browser_product
@@ -223,7 +235,9 @@ provider_browser:
   - "apps/e2e/tests/!(*.spec).ts"
   - "apps/e2e/scripts/cleanup-provider-runtime.mjs"
   - "apps/e2e/scripts/prepare-provider-runtime.mjs"
-  - "apps/e2e/scripts/serve-providers.mjs"
+  - *notebook_services
+  - apps/e2e/scripts/provider-workspace.mjs
+  - apps/e2e/tests/provider-fixture.ts
 
 installed_browser:
   - *browser_product
@@ -235,6 +249,7 @@ installed_browser:
   - "apps/e2e/scripts/run-installed-package.mjs"
   - "apps/e2e/scripts/serve-installed-package.mjs"
   - "apps/e2e/tests/!(*.spec).ts"
+  - "!apps/e2e/tests/provider-fixture.ts"
 
 windows_unit:
   - *browser_infra
@@ -252,8 +267,6 @@ windows_lifecycle:
   - "apps/e2e/tests/!(*.spec).ts"
   - "apps/e2e/fixtures/**"
   - "apps/e2e/scripts/collaborative-workspace.mjs"
-  - "apps/e2e/scripts/fixture-provider-package.mjs"
-  - "apps/e2e/scripts/notebook-process-registry.mjs"
-  - "apps/e2e/scripts/notebook-process-supervisor.mjs"
-  - "apps/e2e/scripts/registered-notebook-process.mjs"
-  - "apps/e2e/scripts/serve.mjs"
+  - *notebook_services
+  - apps/e2e/scripts/main-workspace.mjs
+  - "!apps/e2e/tests/provider-fixture.ts"

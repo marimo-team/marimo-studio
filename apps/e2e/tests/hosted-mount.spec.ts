@@ -17,6 +17,8 @@ import {
 const baseUrl = `${hostedOrigin}/hosted`;
 const accessToken = "studio-e2e-token";
 
+test.use({ services: ["hosted"] });
+
 test("initializes and runs Studio through an authenticated hosted mount", async ({
   browserDiagnostics,
   page,

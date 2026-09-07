@@ -23,6 +23,7 @@ import {
 } from "./fixture.ts";
 
 test.describe.configure({ timeout: 150_000 });
+test.use({ services: ["studio", "static"] });
 
 const expectPreviewInteractive = async (page: Page, runtime: "server" | "wasm") => {
   const frame = page.locator(`iframe[data-preview-runtime-frame="${runtime}"]`);

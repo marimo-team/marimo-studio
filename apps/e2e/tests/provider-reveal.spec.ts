@@ -1,9 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 
 import { e2eNetwork } from "../scripts/network.mjs";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
 import { labeledSlider } from "./fixture.ts";
+import { test } from "./provider-fixture.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
+
+test.use({ providerViews: ["slides"] });
 
 test("the React Reveal starter runs as a narrow static WebAssembly deck", async ({
   context,

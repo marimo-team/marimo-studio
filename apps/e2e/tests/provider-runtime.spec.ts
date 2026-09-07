@@ -1,9 +1,10 @@
 import { mountConfigSchema } from "@marimo-studio/protocol/runtime-config";
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 import { e2eNetwork } from "../scripts/network.mjs";
 import { observeBrowserContext } from "./browser-diagnostics.ts";
 import { labeledSlider, presentationFrame, WASM_PREVIEW_TIMEOUT } from "./fixture.ts";
+import { test } from "./provider-fixture.ts";
 import { installPinnedPyodideAssets } from "./pyodide-assets.ts";
 
 const cases = [

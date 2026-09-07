@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { cp, mkdtemp, mkdir, readFile, rm, stat } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,6 +30,12 @@ const repositoryRoot = resolve(packageRoot, "../..");
 const publicRoot = join(packageRoot, "public");
 const destinationRoot = join(publicRoot, "examples");
 const cacheRoot = join(packageRoot, ".vitepress", "cache");
+const commandTimings: {
+  command: string;
+  arguments: readonly string[];
+  durationMs: number;
+  exitCode: number | null;
+}[] = [];
 const usage = `Usage: pnpm --filter @marimo-studio/docs examples:build [selectors]
 
 Selectors may be repeated and combined:
@@ -55,9 +61,15 @@ const isDirectory = async (path: string): Promise<boolean> => {
 
 const run = (command: string, arguments_: readonly string[]): Promise<CommandResult> =>
   new Promise((resolveCommand, rejectCommand) => {
+    const started = performance.now();
     const child = spawn(command, arguments_, {
       cwd: repositoryRoot,
-      env: { ...process.env, NO_COLOR: "1" },
+      env: {
+        ...process.env,
+        NO_COLOR: "1",
+        MARIMO_EXPORT_REPOSITORY:
+          process.env.MARIMO_EXPORT_REPOSITORY ?? join(cacheRoot, "export-repository"),
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -72,6 +84,12 @@ const run = (command: string, arguments_: readonly string[]): Promise<CommandRes
     });
     child.on("error", rejectCommand);
     child.on("close", (code) => {
+      commandTimings.push({
+        command,
+        arguments: arguments_,
+        durationMs: Math.round(performance.now() - started),
+        exitCode: code,
+      });
       if (code === 0) {
         resolveCommand({ stdout });
         return;
@@ -242,6 +260,11 @@ const main = async (): Promise<void> => {
   } catch (error) {
     await rm(stagingRoot, { force: true, recursive: true });
     throw error;
+  } finally {
+    await writeFile(
+      join(cacheRoot, "example-timings.json"),
+      `${JSON.stringify({ schema: 1, commands: commandTimings }, null, 2)}\n`,
+    );
   }
 };
 

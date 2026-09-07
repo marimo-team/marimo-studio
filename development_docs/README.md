@@ -70,7 +70,8 @@ make setup
 `make setup` installs the Python and [pnpm](https://pnpm.io/) JavaScript
 workspaces, prepares the pinned Marimo
 frontend source, builds Studio's browser assets, and installs Chromium for
-browser acceptance tests. Python tooling runs through `uv`. Browser and
+browser acceptance tests. It also prepares the pinned Pyodide test payload in
+`apps/e2e/.cache/pyodide`. Python tooling runs through `uv`. Browser and
 documentation tooling runs through the pnpm workspace, where
 [Vite Plus](https://viteplus.dev/guide) owns formatting, linting, TypeScript
 checks, tests, builds, and task execution.
@@ -210,10 +211,43 @@ provider-source, and type checks. `make docs-build` owns public example exports
 and VitePress verification. Live browser acceptance remains the evidence for
 cross-document behavior.
 
+Documentation exports reuse prepared states in
+`apps/docs/.vitepress/cache/export-repository`. Each browser worker owns a
+temporary export repository for its full fixture lifetime.
+
 `make typecheck` runs ty, Pyrefly, basedpyright, and the TypeScript checks.
 Basedpyright analyzes the distributed package against Python 3.10 and analyzes
 tests and contributor scripts against Python 3.11. Error diagnostics fail the
 type-check gate.
+
+### Inspect CI evidence
+
+The CI, Browser acceptance, and GitHub Pages workflows retain results for
+seven days:
+
+| Artifact                          | Evidence                                                                      |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| `python-<profile>-<version>-<os>` | JUnit test results, with the longest cases also printed in the job log        |
+| `frontend-test-timings`           | Package test output, including Vitest phase timings                           |
+| `installed-verification-<os>`     | Elapsed time and exit status for each installed-package phase                 |
+| `browser-report`                  | Merged Playwright results across selected suites and platforms                |
+| `documentation-example-timings`   | Export command arguments, duration, and exit status for each selected example |
+
+Browser acceptance builds one browser artifact and package candidate, then
+passes them and the pinned Pyodide test payload to the selected source and
+installed-package consumers. Each
+consumer owns its notebook workspaces and processes. The aggregate gate checks
+artifact production, consumers, and report merging.
+
+`make e2e` refreshes the Pyodide payload from the prepared Marimo dependency.
+For focused Playwright commands after a dependency update, run
+`make _prepare-browser-tests` first. The consumer validates the payload version
+and integrity before routing browser requests to its runtime files.
+
+Compare setup time, test time, queue time, and total runner time separately when
+tuning workers or shards. Use the same selected contracts and record the source
+commit and cache state. The release guide defines
+[validation selection and reuse](releasing.md#verify-the-exact-release-commit).
 
 ## Keep authored and generated files distinct
 

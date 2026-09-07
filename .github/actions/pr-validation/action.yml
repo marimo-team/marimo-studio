@@ -1,22 +1,26 @@
-name: Find pull request validation
-description: Find a successful pull request workflow run for the merged Git tree.
+name: Select validation evidence
+description: Choose complete validation, changed-file validation, or exact-tree reuse.
 
 inputs:
   workflow:
     description: Workflow filename to inspect.
     required: true
+  reuse:
+    description: Reuse successful exact-tree PR evidence after merge.
+    required: false
+    default: "true"
 
 outputs:
-  validated:
-    description: Whether the merged Git tree has a successful pull request workflow run.
-    value: ${{ steps.resolve.outputs.validated }}
+  mode:
+    description: "Validation mode: full, changed, or reuse."
+    value: ${{ steps.resolve.outputs.mode }}
 
 runs:
   using: composite
   steps:
     - name: Record the tested pull request tree
       id: tested-tree
-      if: github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request' && inputs.reuse == 'true'
       shell: bash
       run: |
         tree="$(git rev-parse 'HEAD^{tree}')"
@@ -29,7 +33,7 @@ runs:
         printf 'path=%s\n' "$path" >> "$GITHUB_OUTPUT"
 
     - name: Publish the tested pull request tree
-      if: github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request' && inputs.reuse == 'true'
       continue-on-error: true
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
@@ -45,4 +49,6 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
         VALIDATION_WORKFLOW: ${{ inputs.workflow }}
+        VALIDATION_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        VALIDATION_REUSE: ${{ inputs.reuse }}
       run: "$GITHUB_ACTION_PATH/resolve.sh"

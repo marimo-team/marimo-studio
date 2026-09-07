@@ -1,7 +1,6 @@
 export const E2E_PORT_OFFSET_ENV = "MARIMO_STUDIO_E2E_PORT_OFFSET";
 const MAX_OFFSET = 65_535 - 4_336;
-const MAIN_SHARD_COUNT = 3;
-const MAIN_SHARD_PORT_STRIDE = 100;
+const WORKER_PORT_STRIDE = 100;
 
 const readPortOffset = (source) => {
   if (!/^\d+$/.test(source)) {
@@ -45,13 +44,18 @@ export const createE2ENetwork = (source = "0") => {
   });
 };
 
-export const createMainShardPortOffsets = (source = "0") => {
+export const workerPortOffset = (source = "0", workerIndex) => {
   const base = readPortOffset(source);
-  return Object.freeze(
-    Array.from({ length: MAIN_SHARD_COUNT }, (_, index) =>
-      readPortOffset(String(base + (index + 1) * MAIN_SHARD_PORT_STRIDE)),
-    ),
-  );
+  if (workerIndex === undefined) return base;
+  const index = readPortOffset(workerIndex);
+  return readPortOffset(String(base + (index + 1) * WORKER_PORT_STRIDE));
 };
 
-export const e2eNetwork = createE2ENetwork(process.env[E2E_PORT_OFFSET_ENV]);
+export const e2eNetwork = createE2ENetwork(
+  String(
+    workerPortOffset(
+      process.env[E2E_PORT_OFFSET_ENV],
+      process.env.MARIMO_STUDIO_E2E_SUITE ? process.env.TEST_WORKER_INDEX : undefined,
+    ),
+  ),
+);
