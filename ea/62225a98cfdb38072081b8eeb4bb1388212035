@@ -1,0 +1,224 @@
+packages/presentation/tests/frame-runtime-bridge.test.ts
+  s_7c213792d9b0c7::t_3d6027cb3db4b3 19-29,33-62
+  s_7c213792d9b0c7::t_62b7fab6dd2725 30-32
+  s_7c213792d9b0c7::t_6b9e31a73a560b 388-394,425-427
+packages/marimo-studio/src/marimo_studio/_server/support.py
+  s_7c213792d9b0c7::t_73e45063459bae 53-56,490-498
+  s_7c213792d9b0c7::t_94f81d903aa4b5 71
+  s_7c213792d9b0c7::t_715e7d2f27c068 647
+  s_7c213792d9b0c7::t_683f0eedb16646 488
+  s_7c213792d9b0c7::t_1e559cdce7ad99 20
+packages/presentation/src/runtime-config/progress.ts
+  s_7c213792d9b0c7::t_bc2b6206ebb643 1-2,11-20,22-23,30,33,36-41
+  s_7c213792d9b0c7::t_44c098602e8225 8,24,32,34
+  s_7c213792d9b0c7::t_4500c41aafa6d4 3-5,7,9-10,25,29,31
+  s_7c213792d9b0c7::t_4bcac734c998f5 26-28
+  s_7c213792d9b0c7::t_536fe7e448f54f 6,21
+  s_7c213792d9b0c7::t_cbad7710aa190d 35
+packages/studio/src/features/preview/frames.ts
+  s_7c213792d9b0c7::t_85a6a0d84ac896 36
+  s_7c213792d9b0c7::t_4a5f41a36ac2f8 37
+packages/studio/src/features/preview/control-controller.ts
+  s_7c213792d9b0c7::t_6b9e31a73a560b 178
+  s_7c213792d9b0c7::t_90f909ec485df3 7,12,22,80,103-104,124-125,128-139,142-143,152-158,162,167-168,173-176,180-181,183,210-211
+  s_7c213792d9b0c7::t_59c14844670387 126,140-141,144-151,177,209
+packages/marimo-studio/src/marimo_studio/_server/agent/browser.py
+  s_7c213792d9b0c7::t_683f0eedb16646 96-97,99,345
+  s_7c213792d9b0c7::t_096c3f3c5a8179 85-86
+  s_7c213792d9b0c7::t_54481e417eee9b 87-89,95
+packages/protocol/src/frame-bridge.ts
+  s_7c213792d9b0c7::t_0283799d1af302 24-31,41-51
+  s_7c213792d9b0c7::t_90f909ec485df3 32-40
+  s_7c213792d9b0c7::t_59c14844670387 60
+packages/marimo-studio/src/marimo_studio/_server/prepared_views.py
+  s_7c213792d9b0c7::t_94f81d903aa4b5 25,31,78-83,90,164,168-169
+apps/browser/tests/zero-python-interactions.test.ts
+  s_7c213792d9b0c7::t_4b272e568ae672 42,49,57
+packages/presentation/src/main.ts
+  s_7c213792d9b0c7::t_bb5f72d66789a4 27,404,417-425
+  s_7c213792d9b0c7::t_44c098602e8225 406,413
+  s_7c213792d9b0c7::t_536fe7e448f54f 48,405,407-412,414-416
+packages/presentation/src/runtime-config/index.ts
+  s_7c213792d9b0c7::t_bc2b6206ebb643 5
+packages/marimo-studio/src/marimo_studio/_server/runtime/routes.py
+  s_7c213792d9b0c7::t_683f0eedb16646 195
+  s_7c213792d9b0c7::t_4fa966b6a26858 222-225
+  s_7c213792d9b0c7::t_94f81d903aa4b5 33-37,183-187,189-190,192-194,196,198-221,226-227
+packages/studio/src/features/preview/control-remote.ts
+  s_7c213792d9b0c7::t_1a2f50bb8504a4 1-2,14,16,19-21,30
+packages/marimo-studio/src/marimo_studio/_server/presentation/capability.py
+  s_7c213792d9b0c7::t_73e45063459bae 182,203,454
+packages/marimo-studio/tests/server/test_zero_python_runtime.py
+  s_7c213792d9b0c7::t_e4ae592023b488 10,12,24-26,112-115,117-128,133-176,185-189,191-210,225-235
+  s_7c213792d9b0c7::t_65272e8eaf3884 13-16
+  s_7c213792d9b0c7::t_1e559cdce7ad99 7,116,129-132,177-184,190,211-224
+  s_7c213792d9b0c7::t_4fa966b6a26858 23,37,47-49,60,63-64,90,92-93,97
+  s_7c213792d9b0c7::t_299c43d7d7b154 236-246,248-306
+  s_7c213792d9b0c7::t_cae4dc54e342e7 247
+packages/marimo-studio/src/marimo_studio/_server/runtime/stream.py
+  s_7c213792d9b0c7::t_2030985fba8ef4 75
+  s_7c213792d9b0c7::t_3bc849b081634b 93-95
+  s_7c213792d9b0c7::t_84be18d03bd092 1-24,26-29,31-43,46-55,57-72,78-79,82-86,88-92,96-114,116-119,121-122,125,133-138
+  s_7c213792d9b0c7::t_c8051d54f03516 115,126-132
+  s_7c213792d9b0c7::t_ce3d2ab970b3b5 25,30,44-45,56,73-74,76-77,80-81,87,120,123-124
+packages/studio/src/features/navigation/RuntimeOptions.tsx
+  s_7c213792d9b0c7::t_9344ad8d2b3c1c 3-9,20-21
+packages/marimo-studio/src/marimo_studio/_server/publication_runtime.py
+  s_7c213792d9b0c7::t_683f0eedb16646 48,51,93,110,126
+  s_7c213792d9b0c7::t_6b76ae2808a5d7 21,47,49,72-73
+packages/protocol/src/runtime-progress.ts
+  s_7c213792d9b0c7::t_c9285ccfa68620 9
+  s_7c213792d9b0c7::t_cbad7710aa190d 1-4,10-27
+  s_7c213792d9b0c7::t_deedb2ac8659ec 5-8
+packages/presentation/src/runtime-config/remote.ts
+  s_7c213792d9b0c7::t_bc2b6206ebb643 10,12-13,15
+  s_7c213792d9b0c7::t_536fe7e448f54f 6,66-70,96-101,104-107
+  s_7c213792d9b0c7::t_44c098602e8225 71,115,118
+  s_7c213792d9b0c7::t_4500c41aafa6d4 73-90,92-95,102-103,108-114,116-117
+packages/marimo-studio/tests/server/test_development_event_transport.py
+  s_7c213792d9b0c7::t_715e7d2f27c068 9-10,17,117,137,153
+packages/studio/tests/control-sync.test.ts
+  s_7c213792d9b0c7::t_6b9e31a73a560b 82-87,90-102
+  s_7c213792d9b0c7::t_4b932e946617d8 88-89
+  s_7c213792d9b0c7::t_1929da38eb575b 6,103-119,121-142
+  s_7c213792d9b0c7::t_59c14844670387 120
+  s_7c213792d9b0c7::t_4b272e568ae672 143-172
+packages/presentation/src/document/frame-runtime-bridge.ts
+  s_7c213792d9b0c7::t_fe0c3773b008ca 242
+  s_7c213792d9b0c7::t_c6091e8eb911b3 221
+  s_7c213792d9b0c7::t_1a2eb5a51298ee 225,230-232,241,243,246-247
+  s_7c213792d9b0c7::t_59c14844670387 14,244-245,250,282
+  s_7c213792d9b0c7::t_952231244817bf 237-239
+  s_7c213792d9b0c7::t_5b4d7559bae442 5,118,140,145,220,222,284
+  s_7c213792d9b0c7::t_62b7fab6dd2725 233-236,240
+packages/marimo-studio/src/marimo_studio/_server/streaming.py
+  s_7c213792d9b0c7::t_715e7d2f27c068 1-72
+packages/marimo-studio/src/marimo_studio/_server/presentation/payload.py
+  s_7c213792d9b0c7::t_94f81d903aa4b5 32
+  s_7c213792d9b0c7::t_6b76ae2808a5d7 126,128,146
+  s_7c213792d9b0c7::t_683f0eedb16646 127,145
+packages/studio/src/features/preview/status.ts
+  s_7c213792d9b0c7::t_4a5f41a36ac2f8 15
+packages/studio/src/features/navigation/navigation.css
+  s_7c213792d9b0c7::t_8569a7a6603165 127
+packages/studio/tests/preview-controller.test.ts
+  s_7c213792d9b0c7::t_05f855142fceea 695-709,711-724,734,740,744-807
+  s_7c213792d9b0c7::t_1e94cd876cf549 727,730-731,733
+  s_7c213792d9b0c7::t_44c098602e8225 732
+  s_7c213792d9b0c7::t_536fe7e448f54f 710,725-726,728-729,735-739,741-743
+  s_7c213792d9b0c7::t_91f6db5a432a8f 687
+packages/presentation/src/rendered-view-observer.ts
+  s_7c213792d9b0c7::t_85a6a0d84ac896 184-186
+packages/studio/src/features/workspace/workspace.css
+  s_7c213792d9b0c7::t_4a5f41a36ac2f8 62-68
+  s_7c213792d9b0c7::t_47214cc624c7cc 75-86,89
+  s_7c213792d9b0c7::t_bb5f72d66789a4 47-53,55-56,58-61,70-74,88,90-94
+  s_7c213792d9b0c7::t_e8644da3e31d18 54
+  s_7c213792d9b0c7::t_4500c41aafa6d4 46,57,69,87
+packages/studio/tests/control-remote.test.ts
+  s_7c213792d9b0c7::t_1a2eb5a51298ee 22
+packages/studio/src/features/workspace/Workspace.tsx
+  s_7c213792d9b0c7::t_bb5f72d66789a4 89-91
+  s_7c213792d9b0c7::t_4500c41aafa6d4 6,88
+packages/studio/tests/frame-bridge-test-support.ts
+  s_7c213792d9b0c7::t_1a2eb5a51298ee 5,78,93
+packages/marimo-studio/tests/server/test_runtime_progress.py
+  s_7c213792d9b0c7::t_3bc849b081634b 6,87-90,198,209-212
+  s_7c213792d9b0c7::t_19a02a2d5e8abf 14,215-235
+  s_7c213792d9b0c7::t_2030985fba8ef4 140-143
+  s_7c213792d9b0c7::t_5d0b1c6674f04b 42
+  s_7c213792d9b0c7::t_32f09e513aad41 1-5,7-13,15-41,43-45,48-49,51-56,58-59,64-86,91-139,144-197,199-208,213-214
+  s_7c213792d9b0c7::t_1e94cd876cf549 46-47,50,57,60-63
+packages/studio/src/features/preview/PreviewStatusPanel.tsx
+  s_7c213792d9b0c7::t_58920a01eddb97 16
+  s_7c213792d9b0c7::t_4500c41aafa6d4 1-9,14-15,17,19-21,23-33,47-52
+  s_7c213792d9b0c7::t_47214cc624c7cc 10-13,18,22,34-46
+packages/studio/src/features/navigation/model.ts
+  s_7c213792d9b0c7::t_9344ad8d2b3c1c 58-59
+packages/presentation/src/runtime-config/error.ts
+  s_7c213792d9b0c7::t_bc2b6206ebb643 1-42
+packages/marimo-studio/src/marimo_studio/_server/presentation/isolation.py
+  s_7c213792d9b0c7::t_6b76ae2808a5d7 90
+packages/studio/src/features/workspace/useWorkspace.ts
+  s_7c213792d9b0c7::t_bb5f72d66789a4 25,98,109
+packages/marimo-studio/src/marimo_studio/_server/zero_python_api.py
+  s_7c213792d9b0c7::t_73e45063459bae 39,64,79
+  s_7c213792d9b0c7::t_23f879f735254f 21,37,44-46,48,53-55
+packages/marimo-studio/src/marimo_studio/_server/runtime/catalog.py
+  s_7c213792d9b0c7::t_683f0eedb16646 73,85-86,140,170-171,314,348-349,358,401,416,435-436,445,556,573,588-589,605
+  s_7c213792d9b0c7::t_6b76ae2808a5d7 29,72,74,139,141,144-145,313,315,318-319,400,402,417,555,557,574
+packages/studio/src/features/preview/control-sync.ts
+  s_7c213792d9b0c7::t_5b4d7559bae442 1,7
+  s_7c213792d9b0c7::t_1a2f50bb8504a4 187-189,192,194,198-200,215-217,272,276-279,282-283,287-290,314-315,340,368-370
+  s_7c213792d9b0c7::t_59c14844670387 17,243-247,317,328-330,336
+  s_7c213792d9b0c7::t_90f909ec485df3 2,195-197,218-225,273-275,284-286,334-335,337-339,359-367
+  s_7c213792d9b0c7::t_952231244817bf 201-214,316,318-327,331-333,341-351,354-358
+  s_7c213792d9b0c7::t_cdc24897c51711 352-353
+packages/marimo-studio/src/marimo_studio/_server/runtime/progress.py
+  s_7c213792d9b0c7::t_d3dd8ea9c430dc 1-15,20-24,26-43
+  s_7c213792d9b0c7::t_6b76ae2808a5d7 16-19,25
+packages/studio/src/features/navigation/useToolbar.ts
+  s_7c213792d9b0c7::t_58920a01eddb97 73-80
+packages/studio/tests/frame-bridge.test.ts
+  s_7c213792d9b0c7::t_b97ccba8644cd8 27-33,42-43,47-56,60-65
+  s_7c213792d9b0c7::t_4c86536bad5f2c 34-41,44-46,57-59
+packages/studio/src/features/preview/controller.ts
+  s_7c213792d9b0c7::t_850dea840240f8 568
+  s_7c213792d9b0c7::t_44c098602e8225 572
+  s_7c213792d9b0c7::t_536fe7e448f54f 563-564,567,577
+  s_7c213792d9b0c7::t_47214cc624c7cc 7,570-571,573
+  s_7c213792d9b0c7::t_5e21bdca2dc176 18-21,150-154
+  s_7c213792d9b0c7::t_b6e2d3cb93e3f1 432,437-440,444-448
+  s_7c213792d9b0c7::t_4a5f41a36ac2f8 42,139,574-576,746
+  s_7c213792d9b0c7::t_85a6a0d84ac896 41,138,185,468,866
+  s_7c213792d9b0c7::t_8d035069ab8ec4 565-566,569,867-871
+packages/marimo-studio/src/marimo_studio/_compat/server/session_state.py
+  s_7c213792d9b0c7::t_5f1b10cc446604 620-648
+packages/studio/src/features/preview/frame-bridge.ts
+  s_7c213792d9b0c7::t_59c14844670387 20,186
+  s_7c213792d9b0c7::t_1929da38eb575b 104
+  s_7c213792d9b0c7::t_5b4d7559bae442 6,9,90,114,185,187-188,192,204
+packages/presentation/tests/runtime-config-stream.test.ts
+  s_7c213792d9b0c7::t_c9285ccfa68620 31-32,64
+  s_7c213792d9b0c7::t_50c94dce7812c2 98-104
+  s_7c213792d9b0c7::t_79769f5ad33d02 60-63,151-186
+  s_7c213792d9b0c7::t_536fe7e448f54f 136-147
+packages/protocol/src/preview-messages.ts
+  s_7c213792d9b0c7::t_4a5f41a36ac2f8 15,73-77,79-80,263,326
+  s_7c213792d9b0c7::t_536fe7e448f54f 78
+packages/presentation/src/runtime-config/stream.ts
+  s_7c213792d9b0c7::t_50c94dce7812c2 60
+  s_7c213792d9b0c7::t_58920a01eddb97 15-22,75-80,82,89
+  s_7c213792d9b0c7::t_280ffcf10920e0 1-3,12-13,41-43,48-56,73-74
+  s_7c213792d9b0c7::t_79769f5ad33d02 39-40,58-59,61-70,86-88,90-94,100
+  s_7c213792d9b0c7::t_f88207af928f2c 29-34,102
+  s_7c213792d9b0c7::t_bc2b6206ebb643 4-11,14,23-28,35-38,44-47,57,71-72,81,83-85,95-99,101,103-104
+packages/marimo-studio/src/marimo_studio/_server/control_config_api.py
+  s_7c213792d9b0c7::t_5f1b10cc446604 18,50-62,64
+packages/marimo-studio/src/marimo_studio/_server/prepared_progress.py
+  s_7c213792d9b0c7::t_850dea840240f8 27,36-37,40,43
+  s_7c213792d9b0c7::t_811297dd16ed60 1-25,29-34,38-39,41-42,44-54
+  s_7c213792d9b0c7::t_1e94cd876cf549 26,35
+  s_7c213792d9b0c7::t_5d0b1c6674f04b 28
+packages/marimo-studio/src/marimo_studio/_server/ports.py
+  s_7c213792d9b0c7::t_5f1b10cc446604 164-167
+packages/studio/tests/control-controller.test.ts
+  s_7c213792d9b0c7::t_6b9e31a73a560b 20-24,26-32,35-54
+  s_7c213792d9b0c7::t_4b932e946617d8 25,33-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ea62225a98cfdb38072081b8eeb4bb1388212035",
+  "prompts": {},
+  "sessions": {
+    "s_7c213792d9b0c7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07daf-470a-7392-a650-f138964604c9",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
