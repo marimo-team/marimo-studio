@@ -22,6 +22,7 @@ interface WorkspaceSize {
 }
 
 export interface WorkspaceActions {
+  retryPreview: () => void;
   arrangePane: (result: PaneActionResult) => void;
   cancelResize: () => void;
   commitResize: (tree: LayoutNode) => void;
@@ -94,6 +95,7 @@ export const useWorkspace = (
     (result: PaneActionResult) => controller.applyPaneAction(result),
     [controller],
   );
+  const retryPreview = useCallback(() => preview.reload(), [preview]);
 
   return {
     element,
@@ -104,6 +106,6 @@ export const useWorkspace = (
     preview: previewSnapshot,
     currentView: viewSnapshot.current,
     resizing,
-    actions: { arrangePane, cancelResize, commitResize, previewResize, setResizing },
+    actions: { arrangePane, cancelResize, commitResize, previewResize, setResizing, retryPreview },
   };
 };

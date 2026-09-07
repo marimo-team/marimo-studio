@@ -1,5 +1,3 @@
-import type { Page } from "@playwright/test";
-
 import { DOCUMENT_LIFECYCLE_QUERY_PARAM } from "@marimo-studio/protocol/query";
 
 import { studioEditorSessionId } from "./authoring-test-support.ts";
@@ -8,6 +6,7 @@ import {
   editorFrame,
   editorSlider,
   expect,
+  expectPreviewInteractive,
   presentationFrame,
   readWorkspaceFile,
   recoverRequestAbort,
@@ -24,12 +23,6 @@ import {
 
 test.describe.configure({ timeout: 150_000 });
 test.use({ services: ["studio", "static"] });
-
-const expectPreviewInteractive = async (page: Page, runtime: "server" | "wasm") => {
-  const frame = page.locator(`iframe[data-preview-runtime-frame="${runtime}"]`);
-  await expect(frame).not.toHaveAttribute("inert");
-  await expect(frame).not.toHaveAttribute("aria-busy");
-};
 
 const waitForPresentationRuntime = async (root: ReturnType<typeof presentationFrame>) => {
   await expect
@@ -295,7 +288,10 @@ test("preserves native output state across HTML edits and replaces terminal fail
   await recoverRequestAbort(refreshedOutputs);
 });
 
-test("preserves projected controls across refresh and owner removal", async ({ page }) => {
+test("preserves projected controls across refresh and owner removal", async ({
+  browserDiagnostics,
+  page,
+}) => {
   test.setTimeout(210_000);
   await page.goto(studioEntryUrl);
   const server = await waitForPreview(page);
@@ -317,9 +313,17 @@ test("preserves projected controls across refresh and owner removal", async ({ p
   await expect(wasmFresh).toHaveAttribute("aria-valuenow", "2", { timeout: 45_000 });
   await expect(wasmMixed).toHaveCount(2);
   await expect(wasmSharedOwner).toHaveAttribute("data-state", "ready");
+  const deactivatedControls = browserDiagnostics.expectRequestAbort({
+    origin: studioOrigin,
+    method: "GET",
+    path: /^\/_marimo-studio\/views\/dashboard\/controls$/,
+    count: 1,
+    required: false,
+  });
   await page.getByLabel("Browser preview runtime").click();
   await page.getByRole("button", { name: /Python/ }).click();
   await expectPreviewInteractive(page, "server");
+  await recoverRequestAbort(deactivatedControls);
 
   await serverMixed.nth(1).press("End");
   await expect(serverMixed.nth(1)).toHaveAttribute("aria-valuenow", "3");

@@ -24,6 +24,7 @@ import {
   PresentationDocumentRetiredError,
 } from "./document/session-startup";
 import { supportView } from "./document/status.ts";
+import { studioOwned } from "./document/studio-ownership.ts";
 import {
   setTrustedRuntimeQuery,
   type TrustedRuntimeSelection,
@@ -44,6 +45,7 @@ import {
   runtimeConfigSessionId,
   RuntimeConfigRequestError,
 } from "./runtime-config/index";
+import { runtimeProgress } from "./runtime-config/progress.ts";
 import {
   disposeConfiguredRuntime,
   mountConfiguredRuntime,
@@ -399,5 +401,27 @@ const start = (registry: RuntimeRegistry) => {
 };
 
 export const startPresentation = (registry: RuntimeRegistry): void => {
+  if (studioOwned()) {
+    onFinalPageHide(
+      runtimeProgress.subscribe(({ runtime, supportUrl, revision, progress, configured }) => {
+        postToStudioParent({
+          type: "marimo-studio:view-progress",
+          runtime,
+          ...documentLifecycleEnvelope(),
+          view: supportView(supportUrl),
+          revision,
+          progress: configured ? { message: "Opening preview" } : progress,
+        });
+      }),
+    );
+    // Configuration can prepare notebook states before receiver admission.
+    // Keep this document in charge of startup while that work is pending.
+    postToStudioParent({
+      type: "marimo-studio:receiver-waiting",
+      runtime: getMountConfig().runtime,
+      ...documentLifecycleEnvelope(),
+      view: supportView(),
+    });
+  }
   start(registry);
 };

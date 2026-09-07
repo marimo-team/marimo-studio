@@ -82,15 +82,21 @@ async def browser_observation_response(
             status_code=409,
             headers=NO_STORE,
         )
+    binding_id = observation.session_id
+    if observation.runtime == "zero-python" and observation.client_id is not None:
+        binding_id = await notebook_scope.clients.session_for_client(
+            observation.client_id
+        )
     try:
         runtime = await runtimes.project_evidence(
             snapshot,
             context,
             observation.runtime,
+            binding_id,
+            binding_id,
+            observation.session_id or binding_id,
             observation.session_id,
-            observation.session_id,
-            observation.session_id,
-            observation.session_id,
+            client_id=observation.client_id,
         )
         validate_projection_evidence(observation, snapshot, runtime)
     except (MarimoStudioError, ProtocolError):
@@ -336,6 +342,7 @@ async def observe_views(
                 session_id,
                 session_id,
                 session_id,
+                client_id=target.client_id,
             )
         ).instance
         observation_request = await notebook_scope.agents.request_observation(

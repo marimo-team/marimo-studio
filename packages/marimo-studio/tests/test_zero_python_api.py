@@ -11,6 +11,7 @@ from marimo_export.manifest import PreparedManifestLimitError
 from starlette.requests import Request
 from starlette.responses import FileResponse, Response
 
+from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.prepared_views import PreparedViewRegistry
 from marimo_studio._server.zero_python_api import (
     zero_python_response as _zero_python_response,
@@ -20,7 +21,17 @@ from marimo_studio.errors import PublicationError, PublicationLimitError
 _REVISION = "a" * 64
 
 
+class _Clients:
+    async def session_for_client(self, client_id: str) -> str | None:
+        return {
+            "browser-client-1234": "s_abcdef",
+            "browser-client-first": "s_abcdef",
+            "browser-client-second": "s_ghijkl",
+        }.get(client_id)
+
+
 def zero_python_response(*args: Any, **kwargs: Any) -> Response:
+    kwargs.setdefault("clients", cast(StudioClientRegistry, _Clients()))
     return asyncio.run(_zero_python_response(*args, **kwargs))
 
 
@@ -211,9 +222,7 @@ def test_current_manifest_is_no_store_and_points_at_immutable_export() -> None:
         "http://testserver/parent/base/_marimo-studio/views/dashboard/"
         f"zero-python/{'1' * 64}/?file=analysis.py"
     )
-    assert publications.current_calls == [
-        ("dashboard", "browser-client-1234", _REVISION)
-    ]
+    assert publications.current_calls == [("dashboard", "s_abcdef", _REVISION)]
 
 
 def test_current_manifest_rejects_three_hundred_large_hosts() -> None:
@@ -483,5 +492,5 @@ def test_edit_manifest_poll_uses_refreshing_selection() -> None:
     )
 
     assert response.status_code == 200
-    assert publications.poll_calls == [("dashboard", "browser-client-1234", _REVISION)]
+    assert publications.poll_calls == [("dashboard", "s_abcdef", _REVISION)]
     assert publications.current_calls == []

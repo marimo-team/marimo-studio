@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import {
   type ControlEndpoint,
   type ControlUpdate,
+  type RuntimeCellMap,
   synchronizeControlEndpoints,
 } from "../src/features/preview/control-sync";
 
@@ -78,6 +79,97 @@ class RecoveringEndpoint extends MemoryEndpoint {
 }
 
 describe("control state synchronization", () => {
+  it("keeps editor initialization authoritative over registration changes", async () => {
+    const binding = { input: "scale", path: [] };
+    const editor = new MemoryEndpoint({ objectId: "live-control", value: 3 });
+    const preview = new MemoryEndpoint({ objectId: "prepared-control", value: 2 });
+    const controls = { cells: {}, bindings: { "prepared-control": binding } };
+    const sync = await synchronizeControlEndpoints({
+      editor,
+      preview,
+      editorControls: { cells: {}, bindings: { "live-control": binding } },
+      previewControls: controls,
+      previewBaseline: {
+        metadata: controls,
+        values: [{ objectId: "prepared-control", value: 1 }],
+        touched: new Set(),
+      },
+    });
+    expect(preview.snapshot()).toEqual([{ objectId: "prepared-control", value: 3 }]);
+    expect(editor.snapshot()).toEqual([{ objectId: "live-control", value: 3 }]);
+    sync.dispose();
+  });
+
+  it("preserves a local selection made while editor metadata loads and remaps new aliases", async () => {
+    const binding = { input: "sport", path: [] };
+    const before = "PKri-projection-before-ui-sport";
+    const current = "PKri-projection-current-ui-sport";
+    let metadata: RuntimeCellMap = { cells: {}, bindings: { [current]: binding } };
+    const editor = new MemoryEndpoint({ objectId: "live-PKri-0", value: ["All sports"] });
+    const preview = Object.assign(new MemoryEndpoint({ objectId: current, value: ["aquatics"] }), {
+      metadata: () => metadata,
+    });
+    const sync = await synchronizeControlEndpoints({
+      editor,
+      preview,
+      editorControls: { cells: {}, bindings: { "live-PKri-0": binding } },
+      previewControls: metadata,
+      previewBaseline: {
+        metadata: { cells: {}, bindings: { [before]: binding } },
+        values: [{ objectId: before, value: ["All sports"] }],
+        touched: new Set([before]),
+      },
+    });
+    expect(preview.snapshot()).toEqual([{ objectId: current, value: ["aquatics"] }]);
+    expect(editor.snapshot()).toEqual([{ objectId: "live-PKri-0", value: ["aquatics"] }]);
+
+    const next = "PKri-projection-next-ui-sport";
+    metadata = { cells: {}, bindings: { [next]: binding } };
+    preview.values.clear();
+    preview.emit({ objectId: next, value: ["archery"], origin: "registration" });
+    await Promise.resolve();
+    expect(editor.snapshot()).toEqual([{ objectId: "live-PKri-0", value: ["aquatics"] }]);
+    editor.emit({ objectId: "live-PKri-0", value: ["boxing"] });
+    await vi.waitFor(() =>
+      expect(preview.snapshot()).toEqual([{ objectId: next, value: ["boxing"] }]),
+    );
+    preview.emit({ objectId: next, value: ["archery"], origin: "input" });
+    await vi.waitFor(() =>
+      expect(editor.snapshot()).toEqual([{ objectId: "live-PKri-0", value: ["archery"] }]),
+    );
+    sync.dispose();
+  });
+
+  it("matches prepared aliases to native controls by input and path", async () => {
+    const first = "PKri-projection-first-ui-sport";
+    const second = "PKri-projection-second-ui-sport";
+    const editor = new MemoryEndpoint({ objectId: "live-PKri-0", value: ["aquatics"] });
+    const preview = new MemoryEndpoint(
+      { objectId: first, value: ["All sports"] },
+      { objectId: second, value: ["All sports"] },
+    );
+    const binding = { input: "filters", path: [{ kind: "key" as const, value: "sport" }] };
+    const sync = await synchronizeControlEndpoints({
+      editor,
+      preview,
+      editorControls: { cells: { controls: "live-PKri" }, bindings: { "live-PKri-0": binding } },
+      previewControls: {
+        cells: { controls: "PKri" },
+        bindings: { [first]: binding, [second]: binding },
+      },
+    });
+
+    expect(preview.snapshot()).toEqual([
+      { objectId: first, value: ["aquatics"] },
+      { objectId: second, value: ["aquatics"] },
+    ]);
+    preview.emit({ objectId: second, value: ["archery"] });
+    await vi.waitFor(() =>
+      expect(editor.snapshot()).toEqual([{ objectId: "live-PKri-0", value: ["archery"] }]),
+    );
+    sync.dispose();
+  });
+
   it("translates stable cell identities between independent runtimes", async () => {
     const editor = new MemoryEndpoint({ objectId: "live-control-0", value: ["Growth"] });
     const preview = new MemoryEndpoint({

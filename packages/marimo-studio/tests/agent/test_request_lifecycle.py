@@ -48,7 +48,7 @@ def test_observation_disconnect_clears_the_browser_operation(
     notebook_scope = NotebookScope.create(studio.notebook)
     context = _native_context(studio)
 
-    async def project_runtime(*_args: object) -> object:
+    async def project_runtime(*_args: object, client_id: str | None = None) -> object:
         return SimpleNamespace(instance="runtime-instance")
 
     sessions = cast(

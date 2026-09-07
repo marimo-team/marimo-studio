@@ -1,15 +1,20 @@
+import type { ControlBindings } from "@marimo-studio/protocol/frame-bridge";
+
 import { jsonValueSchema } from "@marimo-studio/protocol/runtime-config";
 
 export interface RuntimeCellMap {
   cells: Readonly<Record<string, string>>;
+  bindings?: ControlBindings;
 }
 
 export interface ControlUpdate {
   objectId: string;
   value: unknown;
+  origin?: "input" | "registration";
 }
 
 export interface ControlEndpoint {
+  metadata?(): RuntimeCellMap | null | undefined;
   snapshot(): readonly ControlUpdate[];
   subscribe(listener: (update: ControlUpdate) => void): () => void;
   apply(updates: readonly ControlUpdate[]): Promise<void>;
@@ -179,23 +184,45 @@ const translate = (
   update: ControlUpdate,
   source: readonly CellIdentity[],
   target: Readonly<Record<string, string>>,
-): ControlUpdate | undefined => {
-  const cell = source.find(({ runtime }) => update.objectId.startsWith(`${runtime}-`));
-  if (!cell) {
-    return undefined;
-  }
-  const targetCell = target[cell.semantic];
-  if (!targetCell) {
-    return undefined;
-  }
+  sourceBindings?: ControlBindings,
+  targetBindings?: ControlBindings,
+): ControlUpdate[] => {
   const value = jsonValueSchema.safeParse(update.value);
   if (!value.success) {
-    return undefined;
+    return [];
   }
-  return {
-    objectId: `${targetCell}${update.objectId.slice(cell.runtime.length)}`,
-    value: value.data,
-  };
+  if (sourceBindings !== undefined && targetBindings !== undefined) {
+    const binding = Object.hasOwn(sourceBindings, update.objectId)
+      ? sourceBindings[update.objectId]
+      : undefined;
+    if (!binding) {
+      return [];
+    }
+    return Object.entries(targetBindings).flatMap(([objectId, candidate]) => {
+      const matches =
+        candidate.input === binding.input &&
+        candidate.path.length === binding.path.length &&
+        candidate.path.every((step, index) => {
+          const expected = binding.path[index]!;
+          return (
+            step.kind === expected.kind &&
+            (step.kind === "element" ||
+              (expected.kind !== "element" && step.value === expected.value))
+          );
+        });
+      return matches ? [{ objectId, value: value.data }] : [];
+    });
+  }
+  const cell = source.find(({ runtime }) => update.objectId.startsWith(`${runtime}-`));
+  const targetCell = cell && target[cell.semantic];
+  return cell && targetCell
+    ? [
+        {
+          objectId: `${targetCell}${update.objectId.slice(cell.runtime.length)}`,
+          value: value.data,
+        },
+      ]
+    : [];
 };
 
 export const synchronizeControlEndpoints = async ({
@@ -205,6 +232,7 @@ export const synchronizeControlEndpoints = async ({
   previewControls,
   signal,
   onStatus,
+  previewBaseline,
 }: {
   editor: ControlEndpoint;
   preview: ControlEndpoint;
@@ -212,6 +240,11 @@ export const synchronizeControlEndpoints = async ({
   previewControls: RuntimeCellMap;
   signal?: AbortSignal;
   onStatus?: (status: ControlSyncStatus) => void;
+  previewBaseline?: {
+    metadata: RuntimeCellMap;
+    values: readonly ControlUpdate[];
+    touched: ReadonlySet<string>;
+  };
 }): Promise<ControlSync> => {
   const editorCells = cellsByRuntimeId(editorControls);
   const previewCells = cellsByRuntimeId(previewControls);
@@ -235,16 +268,26 @@ export const synchronizeControlEndpoints = async ({
   const editorWriter = writer("editor", editor);
   const previewWriter = writer("preview", preview);
   const editorToPreview = (update: ControlUpdate) => {
-    const translated = translate(update, editorCells, previewControls.cells);
-    if (translated) {
-      void previewWriter.write([translated]).catch(() => {});
-    }
+    if (update.origin === "registration") return;
+    const translated = translate(
+      update,
+      editorCells,
+      previewControls.cells,
+      (editor.metadata?.() ?? editorControls).bindings,
+      (preview.metadata?.() ?? previewControls).bindings,
+    );
+    void previewWriter.write(translated).catch(() => {});
   };
   const previewToEditor = (update: ControlUpdate) => {
-    const translated = translate(update, previewCells, editorControls.cells);
-    if (translated) {
-      void editorWriter.write([translated]).catch(() => {});
-    }
+    if (update.origin === "registration") return;
+    const translated = translate(
+      update,
+      previewCells,
+      editorControls.cells,
+      (preview.metadata?.() ?? previewControls).bindings,
+      (editor.metadata?.() ?? editorControls).bindings,
+    );
+    void editorWriter.write(translated).catch(() => {});
   };
 
   const stopEditor = editor.subscribe(editorToPreview);
@@ -268,18 +311,64 @@ export const synchronizeControlEndpoints = async ({
     dispose();
     return sync;
   }
-  const previewSnapshot = new Map(
-    preview.snapshot().map((update) => [update.objectId, update.value]),
+  const currentPreview = preview.snapshot();
+  const currentPreviewMetadata = preview.metadata?.() ?? previewControls;
+  const baseline = new Map<string, unknown>();
+  const touched = new Set<string>();
+  if (previewBaseline) {
+    for (const update of previewBaseline.values) {
+      for (const translated of translate(
+        update,
+        cellsByRuntimeId(previewBaseline.metadata),
+        currentPreviewMetadata.cells,
+        previewBaseline.metadata.bindings,
+        currentPreviewMetadata.bindings,
+      )) {
+        baseline.set(translated.objectId, translated.value);
+        if (previewBaseline.touched.has(update.objectId)) {
+          touched.add(translated.objectId);
+        }
+      }
+    }
+  }
+  const changedPreview = currentPreview.filter(
+    (update) =>
+      (touched.has(update.objectId) || previewBaseline?.touched.has(update.objectId)) &&
+      JSON.stringify(baseline.get(update.objectId)) !== JSON.stringify(update.value),
   );
-  const initial = editor
-    .snapshot()
-    .map((update) => translate(update, editorCells, previewControls.cells))
-    .filter(
-      (update): update is ControlUpdate =>
-        update !== undefined &&
-        JSON.stringify(previewSnapshot.get(update.objectId)) !== JSON.stringify(update.value),
-    );
-  const initialApply = abortable(previewWriter.write(initial), signal);
+  const changedIds = new Set(changedPreview.map((update) => update.objectId));
+  const previewSnapshot = new Map(currentPreview.map((update) => [update.objectId, update.value]));
+  const initial: ControlUpdate[] = [];
+  for (const update of editor.snapshot()) {
+    for (const translated of translate(
+      update,
+      editorCells,
+      previewControls.cells,
+      (editor.metadata?.() ?? editorControls).bindings,
+      currentPreviewMetadata.bindings,
+    )) {
+      if (
+        !changedIds.has(translated.objectId) &&
+        JSON.stringify(previewSnapshot.get(translated.objectId)) !==
+          JSON.stringify(translated.value)
+      ) {
+        initial.push(translated);
+      }
+    }
+  }
+  const initialEditor = changedPreview.flatMap((update) =>
+    translate(
+      update,
+      previewCells,
+      editorControls.cells,
+      currentPreviewMetadata.bindings,
+      (editor.metadata?.() ?? editorControls).bindings,
+    ),
+  );
+  const initialApply = abortable(
+    Promise.all([previewWriter.write(initial), editorWriter.write(initialEditor)]),
+    signal,
+  );
   signal?.addEventListener("abort", dispose, { once: true });
   try {
     await initialApply;

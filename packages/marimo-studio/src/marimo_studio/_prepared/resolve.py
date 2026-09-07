@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Protocol, cast
 
 from marimo_export import ExportPlan, ExportRepository, ExportSpec, StateSpace
+from marimo_export.progress import ProgressEvent
 from marimo_export.wire import JsonValue, portable_json, state_fingerprint
 
 from marimo_studio._prepared.compiler import CompiledExportView, compile_export_view
@@ -21,6 +22,7 @@ class PreparedSession(Protocol):
         *,
         spec: ExportSpec,
         repository: ExportRepository,
+        progress: Callable[[ProgressEvent], None] | None = None,
     ) -> ExportPlan: ...
 
     def observe_inputs(self) -> object: ...
@@ -37,6 +39,8 @@ def resolve_prepared_view(
     state_space_source: StateSpaceSource,
     session: PreparedSession,
     repository: ExportRepository,
+    *,
+    progress: Callable[[ProgressEvent], None] | None = None,
 ) -> ResolvedPreparedView:
     """Resolve configured or observed states for one immutable presentation."""
     state_space = state_space_source.state_space
@@ -46,7 +50,7 @@ def resolve_prepared_view(
         snapshot.mounts,
         state_space=state_space,
     )
-    plan = session.plan(spec=compiled.spec, repository=repository)
+    plan = session.plan(spec=compiled.spec, repository=repository, progress=progress)
     observed = session.observe_inputs()
     values = getattr(observed, "values", None)
     if not isinstance(values, Mapping):

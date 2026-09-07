@@ -1,6 +1,12 @@
 import type { StudioRuntime } from "@marimo-studio/protocol/studio-bootstrap";
 
-import { AppWindowIcon, CircleHelpIcon, ServerIcon, type LucideIcon } from "lucide-react";
+import {
+  AppWindowIcon,
+  CircleHelpIcon,
+  LayersIcon,
+  ServerIcon,
+  type LucideIcon,
+} from "lucide-react";
 
 import { closeParentMenu } from "./menu.ts";
 import { runtimeDescription } from "./model.ts";
@@ -11,6 +17,8 @@ const runtimeIcon = (runtime: string): LucideIcon => {
       return ServerIcon;
     case "wasm":
       return AppWindowIcon;
+    case "zero-python":
+      return LayersIcon;
     default:
       return CircleHelpIcon;
   }

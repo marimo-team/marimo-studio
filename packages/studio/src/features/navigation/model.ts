@@ -55,6 +55,8 @@ export const runtimeDescription = (runtime: string): string => {
       return "Use this editor's Python session for local files, databases, and secrets.";
     case "wasm":
       return "Run a separate notebook in the browser. The browser receives its source.";
+    case "zero-python":
+      return "Precomputed states, zero Python";
     default:
       return "Custom preview runtime";
   }

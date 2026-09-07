@@ -39,12 +39,14 @@ it("selects a pending peer control request after publication refresh", async () 
   const state = new PreparedStateController({ async apply() {}, restore });
   await state.start(publication(first, { scale: 3 }));
   const interactions = new StudioPreparedInteractions(state, () => false);
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
   interactions.controlInput({ objectId: "prepared-scale", value: 1 }, true);
   await vi.waitFor(() => expect(state.snapshot().pendingInputs).toEqual({ scale: 1 }));
 
   expect(state.snapshot().current?.state.inputs).toEqual({ scale: 3 });
   expect(restore).toHaveBeenCalledOnce();
+  expect(warn).not.toHaveBeenCalled();
 
   await state.replacePublication(publication(refreshed, { scale: 3 }));
 
@@ -52,4 +54,5 @@ it("selects a pending peer control request after publication refresh", async () 
   expect(state.snapshot().current?.state.inputs).toEqual({ scale: 1 });
   expect(state.snapshot().pendingInputs).toBeUndefined();
   await state.dispose();
+  warn.mockRestore();
 });

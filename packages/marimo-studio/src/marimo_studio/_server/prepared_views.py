@@ -22,11 +22,13 @@ from marimo_export.wire import canonical_json_sha256
 from marimo_studio._prepared.cleanup import attempt_cleanup
 from marimo_studio._prepared.compiler import CompiledExportView
 from marimo_studio._prepared.resolve import resolve_prepared_view
+from marimo_studio._server.prepared_progress import PreparedProgress
 from marimo_studio._server.prepared_view_models import (
     PreparedView,
     PreparedViewMetadata,
     PreparedViewRequest,
 )
+from marimo_studio._server.runtime.progress import RuntimeProgress, RuntimeProgressSink
 from marimo_studio.errors import PublicationError, PublicationLimitError
 
 _ROUTE_GRACE_SECONDS = 60.0
@@ -73,13 +75,19 @@ class PreparedViewRegistry:
     def active(self) -> bool:
         return self._publications.active
 
-    async def prepare(self, request: PreparedViewRequest) -> PreparedView:
+    async def prepare(
+        self,
+        request: PreparedViewRequest,
+        *,
+        progress: RuntimeProgressSink | None = None,
+    ) -> PreparedView:
         prepared = await self._publications.prepare(
             request.key,
             lambda repository, cancelled: self._prepare(
                 request,
                 repository,
                 cancelled,
+                progress,
             ),
         )
         selected = PreparedView(prepared)
@@ -153,20 +161,27 @@ class PreparedViewRegistry:
         request: PreparedViewRequest,
         repository: ExportRepository,
         cancelled: Callable[[], bool],
+        progress: RuntimeProgressSink | None,
     ) -> PreparedPublicationCandidate[PreparedViewMetadata]:
         prepared: PreparedExport | None = None
         try:
+            if progress is not None:
+                progress(RuntimeProgress("Inspecting notebook states"))
             with self._connector(
                 request.server,
                 server_token=request.server_token,
             ) as client:
                 session = client.session(request.session_id)
                 request.state_space_source.require_current()
+                export_progress = (
+                    PreparedProgress(progress) if progress is not None else None
+                )
                 resolved = resolve_prepared_view(
                     request.snapshot,
                     request.state_space_source,
                     session,
                     repository,
+                    progress=export_progress,
                 )
                 if cancelled():
                     raise asyncio.CancelledError
@@ -174,6 +189,7 @@ class PreparedViewRegistry:
                     spec=resolved.compiled.spec,
                     repository=repository,
                     cancelled=cancelled,
+                    progress=export_progress,
                 )
                 request.state_space_source.require_current()
             metadata = _prepared_view_metadata(

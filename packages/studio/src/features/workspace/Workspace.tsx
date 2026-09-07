@@ -3,6 +3,7 @@ import type { RefCallback } from "react";
 import type { SourceController } from "../source-editor/controller.ts";
 import type { WorkspaceModel } from "./useWorkspace.ts";
 
+import { PreviewStatusPanel } from "../preview/PreviewStatusPanel.tsx";
 import { SourcePane } from "../source-editor/SourcePane.tsx";
 import { Divider } from "./Divider.tsx";
 import { SurfacePane } from "./SurfacePane.tsx";
@@ -84,6 +85,10 @@ export const Workspace = ({ editorFrame, frameRef, source, workspace }: Workspac
                 />
               );
             })}
+            <PreviewStatusPanel
+              state={preview.states[preview.runtime]!}
+              onRetry={actions.retryPreview}
+            />
           </div>
         </SurfacePane>
       </div>

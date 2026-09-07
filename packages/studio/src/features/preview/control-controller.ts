@@ -4,11 +4,12 @@ import type { fetchRuntimeControls } from "./control-remote.ts";
 
 import {
   type ControlFrameConnector,
+  type ControlEndpoint,
   type ControlSync,
   type ControlSyncStatus,
   synchronizeControlEndpoints,
 } from "./control-sync.ts";
-import { connectFrameControlBridge } from "./frame-bridge.ts";
+import { connectFrameControlBridge, type FrameControlEndpoint } from "./frame-bridge.ts";
 
 const RETRY_DELAYS = [100, 250, 500, 1_000, 2_000, 5_000] as const;
 const ATTEMPT_TIMEOUT_MS = 3_000;
@@ -18,6 +19,7 @@ interface ControlControllerOptions {
   editor: HTMLIFrameElement;
   preview: HTMLIFrameElement;
   supportUrl: () => string;
+  clientId: () => string | undefined;
   connect?: ControlFrameConnector;
   connectPreview?: typeof connectFrameControlBridge;
   fetchControls: typeof fetchRuntimeControls;
@@ -32,7 +34,6 @@ interface AttemptSignal {
 interface ControlRequest {
   controller: AbortController;
   editorSessionId: string | undefined;
-  phase: "loading" | "synchronizing";
   previewSessionId: string | undefined;
   revision: string;
 }
@@ -76,9 +77,7 @@ export class PreviewControlController {
   }
 
   stop(): void {
-    if (this.request?.phase === "synchronizing") {
-      this.request.controller.abort();
-    }
+    this.request?.controller.abort();
     this.request = undefined;
     this.sync?.dispose();
     this.sync = undefined;
@@ -101,7 +100,8 @@ export class PreviewControlController {
     if (!this.options.connect || this.sync || this.request) {
       return;
     }
-    if (!editorSessionId) {
+    const clientId = this.options.clientId();
+    if (!editorSessionId || !clientId) {
       this.schedule(
         revision,
         previewSessionId,
@@ -114,7 +114,6 @@ export class PreviewControlController {
     const request: ControlRequest = {
       controller,
       editorSessionId,
-      phase: "loading",
       previewSessionId,
       revision,
     };
@@ -122,47 +121,67 @@ export class PreviewControlController {
     this.request = request;
     let retry = false;
     let failure: Error | undefined;
+    let editor: ControlEndpoint | undefined;
+    let preview: FrameControlEndpoint | undefined;
+    let stopPreviewInputs = () => {};
     try {
-      const supportUrl = this.options.supportUrl();
-      const [editorConfig, previewConfig] = await Promise.all([
-        this.options.fetchControls(supportUrl, DEFAULT_RUNTIME_ID, editorSessionId, attempt.signal),
-        this.options.fetchControls(
-          supportUrl,
-          this.options.runtime,
-          editorSessionId,
-          attempt.signal,
-        ),
-      ]);
-      if (attempt.signal.aborted || this.request !== request) {
-        return;
-      }
-      request.phase = "synchronizing";
-      if (editorConfig.revision !== revision || editorConfig.revision !== previewConfig.revision) {
-        retry = true;
-        failure = new Error("Control configuration revisions have not converged");
-        return;
-      }
-      const editor = this.options.connect(this.options.editor);
-      const preview = (this.options.connectPreview ?? connectFrameControlBridge)(
-        this.options.preview,
-        {
-          revision,
-          runtime: this.options.runtime,
-          sessionId: previewSessionId,
-        },
-      );
-      if (!editor || !preview) {
-        editor?.dispose();
-        preview?.dispose();
+      preview = (this.options.connectPreview ?? connectFrameControlBridge)(this.options.preview, {
+        revision,
+        runtime: this.options.runtime,
+        sessionId: previewSessionId,
+      });
+      if (!preview) {
         retry = true;
         failure = new Error("Marimo control endpoints are still starting");
         return;
       }
+      const previewControls = preview.metadata();
+      if (previewControls === undefined) {
+        retry = true;
+        failure = new Error("Marimo control endpoints are still starting");
+        return;
+      }
+      if (previewControls === null) {
+        return;
+      }
+      const touched = new Set<string>();
+      const previewBaseline = { metadata: previewControls, values: preview.snapshot(), touched };
+      stopPreviewInputs = preview.subscribe((update) => {
+        if (update.origin !== "registration") touched.add(update.objectId);
+      });
+      const editorConfig = await this.options.fetchControls(
+        this.options.supportUrl(),
+        clientId,
+        editorSessionId,
+        revision,
+        attempt.signal,
+      );
+      if (attempt.signal.aborted || this.request !== request) {
+        return;
+      }
+      if (editorConfig.revision !== revision) {
+        retry = true;
+        failure = new Error("Control configuration revisions have not converged");
+        return;
+      }
+      editor = this.options.connect(this.options.editor);
+      if (!editor) {
+        retry = true;
+        failure = new Error("Marimo control endpoints are still starting");
+        return;
+      }
+      const connectedEditor = editor;
+      const connectedPreview = preview;
+      editor = undefined;
+      preview = undefined;
+      stopPreviewInputs();
+      stopPreviewInputs = () => {};
       const sync = await synchronizeControlEndpoints({
-        editor,
-        preview,
+        editor: connectedEditor,
+        preview: connectedPreview,
         editorControls: editorConfig.controls,
-        previewControls: previewConfig.controls,
+        previewControls,
+        previewBaseline,
         signal: attempt.signal,
         onStatus: (status) => {
           if (this.request === request || this.syncRequest === request) {
@@ -187,6 +206,9 @@ export class PreviewControlController {
         failure = controlSetupError(cause);
       }
     } finally {
+      stopPreviewInputs();
+      editor?.dispose();
+      preview?.dispose();
       attempt.dispose();
       const ownsRequest = this.request === request;
       if (ownsRequest) {

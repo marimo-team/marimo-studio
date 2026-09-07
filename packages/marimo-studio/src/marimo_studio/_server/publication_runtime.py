@@ -18,6 +18,7 @@ from marimo_studio._server.prepared_views import (
 from marimo_studio._server.presentation.capability import presentation_revision_url
 from marimo_studio._server.presentation.service import PresentationSnapshot
 from marimo_studio._server.records import ServerContext
+from marimo_studio._server.runtime.progress import RuntimeProgressSink
 from marimo_studio.errors import PublicationUnavailableError
 
 RuntimeAuthority = Literal["read", "edit"]
@@ -43,8 +44,11 @@ class PublicationRuntimeProjector:
         session_id: str | None,
         binding_id: str | None,
         presentation_session_id: str | None = None,
+        *,
+        client_id: str | None = None,
+        progress: RuntimeProgressSink | None = None,
     ) -> PreparedRuntimeState:
-        if binding_id is None:
+        if binding_id is None or client_id is None:
             raise PublicationUnavailableError(
                 "The zero-Python publication for this view is unavailable. "
                 "Open the view in Studio to prepare its current notebook state."
@@ -65,7 +69,8 @@ class PublicationRuntimeProjector:
                     server_token=context.server_token,
                     session_id=session_id,
                     binding_id=binding_id,
-                )
+                ),
+                progress=progress,
             )
         else:
             selection = self._publications.current(
@@ -85,7 +90,7 @@ class PublicationRuntimeProjector:
                 "manifestUrl": _manifest_url(
                     context,
                     snapshot,
-                    binding_id,
+                    client_id,
                     presentation_session_id,
                 ),
                 "planDigest": selection.plan_digest,
@@ -102,7 +107,7 @@ def publication_runtime_projector(
 def _manifest_url(
     context: ServerContext,
     snapshot: PresentationSnapshot,
-    binding_id: str,
+    client_id: str,
     presentation_session_id: str | None,
 ) -> str:
     if presentation_session_id is None:
@@ -118,7 +123,7 @@ def _manifest_url(
         ),
         (
             *context.routing_query,
-            (STUDIO_CLIENT_QUERY_PARAM, binding_id),
+            (STUDIO_CLIENT_QUERY_PARAM, client_id),
             ("revision", snapshot.revision),
         ),
     )

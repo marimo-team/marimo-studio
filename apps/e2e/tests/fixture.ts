@@ -173,7 +173,7 @@ export const labeledSlider = (root: FrameLocator | Locator, label: RegExp | stri
 export const editorSlider = (page: Page, label: RegExp | string = /^Scale/) =>
   labeledSlider(editorFrame(page), label);
 
-const PREVIEW_TIMEOUT = process.platform === "win32" ? 120_000 : 65_000;
+export const PREVIEW_TIMEOUT = process.platform === "win32" ? 120_000 : 65_000;
 
 export const expectEditorModelReplayRecovery = (diagnostics: BrowserDiagnostics, count = 1) => {
   const recovery: BrowserResponseRecovery = diagnostics.expectConsole({
@@ -197,6 +197,12 @@ export const presentationFrame = (page: Page): FrameLocator =>
 
 export const previewFrame = (page: Page, runtime = "server"): FrameLocator =>
   page.frameLocator(`iframe[data-preview-runtime-frame="${runtime}"]`);
+
+export const expectPreviewInteractive = async (page: Page, runtime: "server" | "wasm") => {
+  const frame = page.locator(`iframe[data-preview-runtime-frame="${runtime}"]`);
+  await expect(frame).not.toHaveAttribute("inert");
+  await expect(frame).not.toHaveAttribute("aria-busy");
+};
 
 export const WASM_PREVIEW_TIMEOUT = 125_000;
 

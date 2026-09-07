@@ -26,6 +26,7 @@ from marimo_studio._server.presentation.capability import (
 )
 from marimo_studio._server.publication_runtime import PublicationRuntimeProjector
 from marimo_studio._server.records import ServerContext
+from marimo_studio._server.runtime.progress import RuntimeProgress, RuntimeProgressSink
 from marimo_studio._server.runtime.wasm_work import WasmProjectionWork
 from marimo_studio._server.server_instance import server_instance_id
 from marimo_studio._workspace.models import (
@@ -68,6 +69,9 @@ class RuntimeProvider(Protocol):
         binding_id: str | None = None,
         presentation_session_id: str | None = None,
         runtime_session_id: str | None = None,
+        *,
+        client_id: str | None = None,
+        progress: RuntimeProgressSink | None = None,
     ) -> RuntimeProjection: ...
 
     async def project_evidence(
@@ -78,6 +82,8 @@ class RuntimeProvider(Protocol):
         binding_id: str | None = None,
         presentation_session_id: str | None = None,
         runtime_session_id: str | None = None,
+        *,
+        client_id: str | None = None,
     ) -> RuntimeEvidenceProjection: ...
 
 
@@ -130,8 +136,13 @@ class ServerRuntime:
         binding_id: str | None = None,
         presentation_session_id: str | None = None,
         runtime_session_id: str | None = None,
+        *,
+        client_id: str | None = None,
+        progress: RuntimeProgressSink | None = None,
     ) -> RuntimeProjection:
         self._require_open()
+        if progress is not None:
+            progress(RuntimeProgress("Connecting to Python"))
         bindings, _cells = await self._runtime_bindings(
             snapshot,
             context,
@@ -156,6 +167,8 @@ class ServerRuntime:
         binding_id: str | None = None,
         presentation_session_id: str | None = None,
         runtime_session_id: str | None = None,
+        *,
+        client_id: str | None = None,
     ) -> RuntimeEvidenceProjection:
         self._require_open()
         bindings, cells = await self._runtime_bindings(
@@ -297,8 +310,13 @@ class WasmRuntime:
         binding_id: str | None = None,
         presentation_session_id: str | None = None,
         runtime_session_id: str | None = None,
+        *,
+        client_id: str | None = None,
+        progress: RuntimeProgressSink | None = None,
     ) -> RuntimeProjection:
         del context, binding_id
+        if progress is not None:
+            progress(RuntimeProgress("Preparing browser notebook"))
         notebook = snapshot.resolved.workspace.notebook
         owner_id = (
             presentation_session_id
@@ -327,6 +345,8 @@ class WasmRuntime:
         binding_id: str | None = None,
         presentation_session_id: str | None = None,
         runtime_session_id: str | None = None,
+        *,
+        client_id: str | None = None,
     ) -> RuntimeEvidenceProjection:
         projection = await self.project(
             snapshot,
@@ -335,6 +355,7 @@ class WasmRuntime:
             binding_id,
             presentation_session_id,
             runtime_session_id,
+            client_id=client_id,
         )
         bindings = projection.cell_refs
         return RuntimeEvidenceProjection(
@@ -376,6 +397,9 @@ class ZeroPythonRuntime:
         binding_id: str | None = None,
         presentation_session_id: str | None = None,
         runtime_session_id: str | None = None,
+        *,
+        client_id: str | None = None,
+        progress: RuntimeProgressSink | None = None,
     ) -> RuntimeProjection:
         del runtime_session_id
         self._require_open()
@@ -389,6 +413,8 @@ class ZeroPythonRuntime:
             session_id,
             binding_id,
             presentation_session_id,
+            client_id=client_id,
+            progress=progress,
         )
         self._require_open()
         return RuntimeProjection(
@@ -406,6 +432,8 @@ class ZeroPythonRuntime:
         binding_id: str | None = None,
         presentation_session_id: str | None = None,
         runtime_session_id: str | None = None,
+        *,
+        client_id: str | None = None,
     ) -> RuntimeEvidenceProjection:
         projection = await self.project(
             snapshot,
@@ -414,6 +442,7 @@ class ZeroPythonRuntime:
             binding_id,
             presentation_session_id,
             runtime_session_id,
+            client_id=client_id,
         )
         bindings = projection.cell_refs
         return RuntimeEvidenceProjection(
@@ -523,6 +552,9 @@ class RuntimeRegistry:
         binding_id: str | None = None,
         presentation_session_id: str | None = None,
         runtime_session_id: str | None = None,
+        *,
+        client_id: str | None = None,
+        progress: RuntimeProgressSink | None = None,
     ) -> RuntimeProjection:
         """Capture server state on its owner and offload browser compilation."""
         self._require_open()
@@ -538,6 +570,8 @@ class RuntimeRegistry:
             binding_id,
             presentation_session_id,
             runtime_session_id,
+            client_id=client_id,
+            progress=progress,
         )
         self._require_open()
         return projection
@@ -551,6 +585,8 @@ class RuntimeRegistry:
         binding_id: str | None = None,
         presentation_session_id: str | None = None,
         runtime_session_id: str | None = None,
+        *,
+        client_id: str | None = None,
     ) -> RuntimeEvidenceProjection:
         """Capture server evidence on its owner and offload browser compilation."""
         self._require_open()
@@ -566,6 +602,7 @@ class RuntimeRegistry:
             binding_id,
             presentation_session_id,
             runtime_session_id,
+            client_id=client_id,
         )
         self._require_open()
         return projection

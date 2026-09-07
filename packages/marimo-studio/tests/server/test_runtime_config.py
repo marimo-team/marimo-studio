@@ -105,7 +105,11 @@ def test_studio_runtime_config_binds_without_exposing_its_editor_session(
         binding_id: str | None,
         presentation_session_id: str | None,
         runtime_session_id: str | None,
+        *,
+        client_id: str | None = None,
+        progress: object = None,
     ) -> dict[str, object]:
+        captured["client_id"] = client_id
         captured["runtime_id"] = runtime_id
         captured["session_id"] = session_id
         captured["binding_id"] = binding_id
@@ -389,6 +393,9 @@ def test_studio_runtime_config_resolves_session_after_snapshot(
         binding_id: str | None,
         presentation_session_id: str | None,
         runtime_session_id: str | None,
+        *,
+        client_id: str | None = None,
+        progress: object = None,
     ) -> dict[str, object]:
         captured["session_id"] = session_id
         captured["binding_id"] = binding_id

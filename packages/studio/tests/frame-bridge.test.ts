@@ -24,6 +24,45 @@ const dispatch = (source: Window, data: FrameBridgeMessage) => {
   globalThis.dispatchEvent(event);
 };
 
+test("frame controls retain changing semantic bindings without input echoes", () => {
+  const frame = document.createElement("iframe");
+  frame.dataset.previewFrame = "";
+  frame.dataset.previewLifecycleId = String(identity.lifecycleId);
+  document.body.append(frame);
+  const source = frame.contentWindow!;
+  const binding = { input: "sport", path: [] };
+  const ready = (objectId: string, value: string[]) =>
+    dispatch(source, {
+      type: "marimo-studio:frame-bridge-ready",
+      generation: "generation-a",
+      controls: [{ objectId, value }],
+      controlMetadata: { cells: {}, bindings: { [objectId]: binding } },
+      ...identity,
+    });
+  ready("PKri-projection-first-ui-sport", ["All sports"]);
+  const controls = connectFrameControlBridge(frame, {
+    revision: identity.revision,
+    runtime: identity.runtime,
+    sessionId: identity.sessionId,
+  });
+  const updates = vi.fn();
+  controls?.subscribe(updates);
+  ready("PKri-projection-second-ui-sport", ["aquatics"]);
+  expect(controls?.metadata()?.bindings).toEqual({
+    "PKri-projection-second-ui-sport": binding,
+  });
+  expect(updates).not.toHaveBeenCalled();
+  ready("PKri-projection-second-ui-sport", ["archery"]);
+  expect(updates).toHaveBeenCalledWith({
+    objectId: "PKri-projection-second-ui-sport",
+    value: ["archery"],
+    origin: "registration",
+  });
+  controls?.dispose();
+  releaseFrameBridge(frame);
+  frame.remove();
+});
+
 test("frame bridge binds controls and query replies to the active document", async () => {
   const frame = document.createElement("iframe");
   frame.dataset.previewFrame = "";

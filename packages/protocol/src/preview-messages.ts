@@ -12,6 +12,7 @@ import {
   projectionInstanceIsReady,
 } from "./projections";
 import { runtimeIdSchema } from "./runtime-config";
+import { runtimeProgressSchema } from "./runtime-progress.ts";
 import { viewNameSchema } from "./views.ts";
 
 const OBSERVATION_MESSAGE_BOUNDS = {
@@ -69,6 +70,14 @@ const documentLifecycleField = {
 };
 
 const previewMessageInputSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("marimo-studio:view-progress"),
+    ...runtimeField,
+    ...documentLifecycleField,
+    view: viewNameSchema,
+    revision: revisionSchema,
+    progress: runtimeProgressSchema.nullable(),
+  }),
   z.strictObject({
     type: z.literal("marimo-studio:navigate-view"),
     ...runtimeField,
@@ -251,6 +260,7 @@ export const previewMessageSchema = previewMessageInputSchema.superRefine((messa
 
 export type ViewDiagnostic = BrowserDiagnostic;
 export type PreviewMessage = z.infer<typeof previewMessageSchema>;
+export type ViewProgressMessage = Extract<PreviewMessage, { type: "marimo-studio:view-progress" }>;
 export type NavigateViewMessage = Extract<PreviewMessage, { type: "marimo-studio:navigate-view" }>;
 export type ReplayDocumentMessage = Extract<
   PreviewMessage,
@@ -313,6 +323,7 @@ export type ViewPreviewMessage =
   | ViewErrorMessage
   | ViewObservationMessage;
 export type PresentationToStudioMessage =
+  | ViewProgressMessage
   | NavigateViewMessage
   | QueryChangeMessage
   | ReceiverReadyMessage

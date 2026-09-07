@@ -617,6 +617,35 @@ class PrivateSessionState:
             )
         return snapshot
 
+    async def control_bindings(
+        self, context: ServerContext, session_id: str
+    ) -> dict[str, object]:
+        from marimo_export.errors import MarimoExportError
+        from marimo_export.sessions import connect
+
+        session = current_session(context, session_id)
+        if self._closed or session is None or context.internal_url is None:
+            raise RuntimeSyncError("The notebook control bindings are unavailable.")
+        server = context.internal_url
+
+        def observe() -> dict[str, object]:
+            with connect(server, server_token=context.server_token) as client:
+                observation = client.session(session_id).observe_inputs()
+                return {
+                    object_id: binding.to_value()
+                    for object_id, binding in observation.control_bindings.items()
+                }
+
+        try:
+            bindings = await asyncio.to_thread(observe)
+        except MarimoExportError as error:
+            raise RuntimeSyncError(str(error)) from error
+        if self._closed or current_session(context, session_id) is not session:
+            raise RuntimeSyncError(
+                "The notebook changed while reading control bindings."
+            )
+        return bindings
+
 
 def _single_string(value: object) -> str | None:
     if isinstance(value, str):

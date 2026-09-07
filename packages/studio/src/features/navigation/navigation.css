@@ -124,8 +124,7 @@
 
 .studio-runtime-menu[data-state="loading"] .studio-runtime-dot,
 .studio-runtime-status[data-state="loading"] .studio-runtime-dot {
-  animation: studio-runtime-pulse 1.4s ease-in-out infinite;
-  background: var(--studio-connecting);
+  background: var(--studio-primary);
 }
 
 .studio-runtime-menu[data-state="ready"] .studio-runtime-dot,
@@ -141,27 +140,6 @@
 .studio-runtime-menu[data-state="error"] .studio-runtime-dot,
 .studio-runtime-status[data-state="error"] .studio-runtime-dot {
   background: var(--studio-error);
-}
-
-@keyframes studio-runtime-pulse {
-  0%,
-  100% {
-    opacity: 0.72;
-    transform: scale(0.88);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .studio-runtime-menu[data-state="loading"] .studio-runtime-dot,
-  .studio-runtime-status[data-state="loading"] .studio-runtime-dot {
-    animation: none;
-    opacity: 1;
-  }
 }
 
 .studio-runtime-popover {

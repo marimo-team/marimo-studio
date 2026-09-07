@@ -29,6 +29,7 @@ from marimo_studio._server.presentation.capability import (
 from marimo_studio._server.presentation.service import PresentationSnapshot
 from marimo_studio._server.records import ServerContext
 from marimo_studio._server.runtime.catalog import RuntimeRegistry
+from marimo_studio._server.runtime.progress import RuntimeProgressSink
 from marimo_studio._server.server_instance import server_instance_id
 
 
@@ -122,6 +123,9 @@ async def build_runtime_config(
     binding_id: str | None = None,
     presentation_session_id: str | None = None,
     runtime_session_id: str | None = None,
+    *,
+    client_id: str | None = None,
+    progress: RuntimeProgressSink | None = None,
 ) -> dict[str, object]:
     resolved = snapshot.resolved
     view_name = snapshot.view_name
@@ -138,6 +142,8 @@ async def build_runtime_config(
         binding_id,
         capability_session_id,
         runtime_authority_session_id,
+        client_id=client_id,
+        progress=progress,
     )
     targets = projection_targets(snapshot.symbols, snapshot.mounts)
     mounts = tuple(site.to_dict() for site in snapshot.mounts)

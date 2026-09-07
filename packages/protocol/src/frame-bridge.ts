@@ -16,9 +16,38 @@ const frameIdentityFields = {
 export const frameControlUpdateSchema = z.strictObject({
   objectId: z.string().min(1).max(512),
   value: jsonValueSchema,
+  origin: z.enum(["input", "registration"]).optional(),
 });
 
 export type FrameControlUpdate = z.infer<typeof frameControlUpdateSchema>;
+
+const controlPathStepSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("element") }),
+  z.strictObject({ kind: z.literal("index"), value: z.int().nonnegative() }),
+  z.strictObject({ kind: z.literal("key"), value: z.string().max(512) }),
+]);
+
+export const controlMetadataSchema = z.strictObject({
+  cells: z.record(z.string().max(512), z.string().max(512)),
+  bindings: z
+    .record(
+      z.string().max(512),
+      z.strictObject({
+        input: z.string().min(1).max(512),
+        path: z.array(controlPathStepSchema).max(64),
+      }),
+    )
+    .optional(),
+});
+
+export type ControlMetadata = z.infer<typeof controlMetadataSchema>;
+export type ControlBindings = NonNullable<ControlMetadata["bindings"]>;
+
+export const editorControlsSchema = z.strictObject({
+  schema: z.literal(1),
+  revision: z.string().min(1).max(256),
+  controls: controlMetadataSchema,
+});
 
 export const frameControlUpdatesSchema = z.array(frameControlUpdateSchema).max(1_024);
 
@@ -28,6 +57,7 @@ export const frameBridgeMessageSchema = z.discriminatedUnion("type", [
     ...frameIdentityFields,
     generation: generationSchema,
     controls: z.array(frameControlUpdateSchema).max(1_024),
+    controlMetadata: controlMetadataSchema.nullable().optional(),
   }),
   z.strictObject({
     type: z.literal("marimo-studio:frame-control-update"),

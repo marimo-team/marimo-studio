@@ -181,6 +181,9 @@ export const setRuntimeConnectionState = (
         }
       : undefined,
   );
+  if (stopReadinessChanges === undefined) {
+    publishRuntimeDiagnostic(readiness.snapshot().runtimeDiagnostic);
+  }
   if (state === "ready" && previous !== "ready") {
     document.dispatchEvent(new CustomEvent("marimo-studio:runtime-ready"));
   }

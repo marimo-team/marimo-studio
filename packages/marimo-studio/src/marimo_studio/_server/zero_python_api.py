@@ -18,6 +18,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
 from marimo_studio._delivery.urls import STUDIO_CLIENT_QUERY_PARAM
+from marimo_studio._server.agent.clients import StudioClientRegistry
 from marimo_studio._server.client_identity import parse_studio_client_id
 from marimo_studio._server.headers import NO_STORE
 from marimo_studio._server.prepared_views import PreparedViewRegistry
@@ -33,20 +34,25 @@ async def zero_python_response(
     view: str,
     route: str,
     *,
+    clients: StudioClientRegistry,
     allow_refresh: bool,
+    public_path: str | None = None,
 ) -> Response:
     if request.method not in {"GET", "HEAD"}:
         return Response(status_code=405)
     if route == "current":
-        raw_binding_id = request.query_params.get(STUDIO_CLIENT_QUERY_PARAM)
-        binding_id = parse_studio_client_id(raw_binding_id)
-        if raw_binding_id is not None and binding_id is None:
+        raw_client_id = request.query_params.get(STUDIO_CLIENT_QUERY_PARAM)
+        client_id = parse_studio_client_id(raw_client_id)
+        if raw_client_id is not None and client_id is None:
             return _invalid_binding()
-        if binding_id is None:
+        if client_id is None:
             return _publication_unavailable()
         revision = request.query_params.get("revision")
         if revision is None or _REVISION.fullmatch(revision) is None:
             return _invalid_revision()
+        binding_id = await clients.session_for_client(client_id)
+        if binding_id is None:
+            return _publication_unavailable()
         selection = (
             publications.poll_current(view, binding_id, revision)
             if allow_refresh
@@ -55,6 +61,7 @@ async def zero_python_response(
         if selection is None:
             return _publication_unavailable()
         current = urlsplit(str(request.url))
+        current_path = public_path or current.path
         export_query = urlencode(
             [
                 (name, value)
@@ -69,7 +76,7 @@ async def zero_python_response(
             (
                 current.scheme,
                 current.netloc,
-                f"{current.path.removesuffix('/current')}/{selection.instance}/",
+                f"{current_path.removesuffix('/current')}/{selection.instance}/",
                 export_query,
                 "",
             )

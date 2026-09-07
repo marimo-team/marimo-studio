@@ -3,9 +3,10 @@ import {
   parseFrameBridgeMessage,
   type FrameBridgeMessage,
   type FrameControlUpdate,
+  type ControlMetadata,
 } from "@marimo-studio/protocol/frame-bridge";
 
-import type { ControlEndpoint } from "./control-sync.ts";
+import type { ControlEndpoint, RuntimeCellMap } from "./control-sync.ts";
 
 interface PendingRequest {
   kind: "control" | "query";
@@ -16,6 +17,7 @@ interface PendingRequest {
 
 interface FrameBridgeState {
   controls: Map<string, FrameControlUpdate>;
+  metadata: ControlMetadata | null | undefined;
   generation: string;
   identity: FrameIdentity;
   listeners: Set<(update: FrameControlUpdate) => void>;
@@ -85,6 +87,7 @@ const receive = (event: MessageEvent<unknown>): void => {
       previous.generation === message.generation &&
       sameIdentity(previous.identity, identity)
     ) {
+      previous.metadata = message.controlMetadata;
       const controls = new Map(message.controls.map((update) => [update.objectId, update]));
       previous.controls.forEach((_update, objectId) => {
         if (!controls.has(objectId)) {
@@ -98,7 +101,7 @@ const receive = (event: MessageEvent<unknown>): void => {
           current !== undefined &&
           JSON.stringify(current.value) !== JSON.stringify(update.value)
         ) {
-          previous.listeners.forEach((listener) => listener(update));
+          previous.listeners.forEach((listener) => listener({ ...update, origin: "registration" }));
         }
       });
       return;
@@ -108,6 +111,7 @@ const receive = (event: MessageEvent<unknown>): void => {
     }
     bridges.set(source, {
       controls: new Map(message.controls.map((update) => [update.objectId, update])),
+      metadata: message.controlMetadata,
       generation: message.generation,
       identity,
       listeners: new Set(),
@@ -178,10 +182,14 @@ const request = (
 const requestId = (): string =>
   `bridge_${Date.now().toString(36)}_${(++requestSequence).toString(36)}`;
 
+export interface FrameControlEndpoint extends ControlEndpoint {
+  metadata(): RuntimeCellMap | null | undefined;
+}
+
 export const connectFrameControlBridge = (
   frame: HTMLIFrameElement,
   expected: { revision: string; runtime: string; sessionId?: string },
-): ControlEndpoint | undefined => {
+): FrameControlEndpoint | undefined => {
   const state = stateFor(frame);
   if (
     !state ||
@@ -193,6 +201,7 @@ export const connectFrameControlBridge = (
   }
   const listeners = new Set<(update: FrameControlUpdate) => void>();
   return {
+    metadata: () => state.metadata,
     snapshot: () => Array.from(state.controls.values()),
     subscribe(listener) {
       listeners.add(listener);

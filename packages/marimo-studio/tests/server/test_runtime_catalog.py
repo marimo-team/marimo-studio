@@ -176,13 +176,16 @@ def test_runtime_registry_runs_provider_on_the_event_loop_owner(
         id = "server"
         label = "Python"
 
-        async def project(self, *_args: object) -> RuntimeProjection:
+        async def project(
+            self, *_args: object, client_id: str | None = None, progress: object = None
+        ) -> RuntimeProjection:
             projection_threads.append(threading.get_ident())
             return RuntimeProjection("server", "instance", {}, {})
 
         async def project_evidence(
             self,
             *_args: object,
+            client_id: str | None = None,
         ) -> RuntimeEvidenceProjection:
             evidence_threads.append(threading.get_ident())
             return RuntimeEvidenceProjection("server", "instance", {}, {}, {}, {})

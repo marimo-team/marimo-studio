@@ -12,6 +12,7 @@ export interface PreviewStatus {
 const STARTING_MESSAGES = new Map([
   ["server", "Connecting to Python"],
   ["wasm", "Starting browser notebook"],
+  ["zero-python", "Starting Prepared preview"],
 ]);
 
 export const previewStartingMessage = (runtime: string): string =>

@@ -161,6 +161,10 @@ class SessionState(Protocol):
         include_dependency_closures: bool,
     ) -> LiveCellSnapshot | None: ...
 
+    async def control_bindings(
+        self, context: ServerContext, session_id: str
+    ) -> dict[str, object]: ...
+
 
 class ExistingSessionAttachment(Protocol):
     def claim_editor_lifetime(self, context: ServerContext) -> object | None: ...
