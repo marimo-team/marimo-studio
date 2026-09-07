@@ -69,7 +69,7 @@ python-test: ## Run the complete Python test profile for this environment.
 	./scripts/python-test.sh --profile all --parallel
 
 frontend-test: _frontend-ready ## Run JavaScript and TypeScript tests.
-	$(VP) run -r test
+	VITEST_MAX_WORKERS=$${VITEST_MAX_WORKERS:-2} $(VP) run -r test
 
 test: python-test frontend-test ## Run Python and frontend tests.
 
