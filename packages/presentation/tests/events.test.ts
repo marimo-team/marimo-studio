@@ -10,6 +10,9 @@ import {
   bindPresentationEvents,
   bindViewNavigation,
 } from "../src/document/events.ts";
+import { ExternalRefreshGate } from "../src/document/external-refresh-gate.ts";
+import { coordinatePresentationMutationBarrier } from "../src/document/mutation-barrier.ts";
+import { ProjectionReadGate } from "../src/projections/read-gate.ts";
 import { commitRuntimeConfig } from "../src/runtime-config/index.ts";
 import { runtimeConfig } from "./runtime-fixtures.ts";
 
@@ -402,6 +405,91 @@ test("presentation refresh events target the current document lifecycle", async 
   channel.port1.close();
   channel.port2.close();
   dispose();
+});
+
+test("an unchanged document settlement resumes reads after an accepted mutation barrier", async () => {
+  setActiveDocumentLifecycleId(7);
+  commitRuntimeConfig(runtimeConfig());
+  const parent = {};
+  vi.stubGlobal("parent", parent);
+  const reads = new ProjectionReadGate();
+  const gate = new ExternalRefreshGate(reads, {
+    begin: () => undefined,
+    cancel: () => {},
+    complete: () => {},
+  });
+  let barrier: Promise<void> | undefined;
+  const dispose = bindPresentationEvents({
+    changed: () => gate.presentationChanged(),
+    refresh: (phase) => gate.refresh(phase),
+    barrier: (port, generation, signal, result) => {
+      const lease = gate.acquire("mutation");
+      barrier = coordinatePresentationMutationBarrier({
+        drained: lease.drained,
+        generation,
+        onFailure: () => lease.release(),
+        port,
+        result,
+        signal,
+      });
+    },
+  });
+  const dispatch = (data: JsonValue, ports: MessagePort[] = []) => {
+    const event = new MessageEvent("message", {
+      origin: globalThis.location.origin,
+      data,
+      ports,
+    });
+    Object.defineProperty(event, "source", { value: parent });
+    globalThis.dispatchEvent(event);
+  };
+  const channel = new MessageChannel();
+  const acknowledged = new Promise<unknown>((resolve) => {
+    channel.port2.onmessage = (event) => resolve(event.data);
+    channel.port2.start();
+  });
+  try {
+    dispatch(
+      {
+        type: "marimo-studio:presentation-refresh-barrier",
+        runtime: "server",
+        lifecycleId: 7,
+        view: "dashboard",
+        generation: 1,
+      },
+      [channel.port1],
+    );
+    assert.deepEqual(await acknowledged, {
+      schema: 1,
+      type: "marimo-studio:editor-document-mutation-ready",
+      generation: 1,
+    });
+    const readValue = vi.fn(async () => 42);
+    const value = reads.run(undefined, readValue);
+    channel.port2.postMessage({
+      schema: 1,
+      type: "marimo-studio:presentation-refresh-barrier-accepted",
+      generation: 1,
+    });
+    await barrier;
+    expect(readValue).not.toHaveBeenCalled();
+
+    dispatch({
+      type: "marimo-studio:presentation-refresh",
+      runtime: "server",
+      lifecycleId: 7,
+      view: "dashboard",
+      phase: "settled",
+    });
+
+    await vi.waitFor(() => expect(readValue).toHaveBeenCalledOnce());
+    assert.equal(await value, 42);
+  } finally {
+    gate.cancel();
+    channel.port1.close();
+    channel.port2.close();
+    dispose();
+  }
 });
 
 test("presentation events bound hostile structured-clone data before recursive parsing", () => {

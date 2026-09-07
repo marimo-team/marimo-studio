@@ -105,14 +105,14 @@ test("build settlement cannot release an undrained mutation owner", async () => 
   });
   const functions = functionGate(functionDrain);
   const gate = new ExternalRefreshGate(projections, functions);
-  const refresh = gate.acquire("refresh");
+  gate.refresh("pending");
   const mutation = gate.acquire("mutation");
   let drained = false;
   void mutation.drained.then(() => {
     drained = true;
   });
 
-  refresh.release();
+  gate.refresh("settled");
   await Promise.resolve();
   assert.equal(drained, false);
   assert.equal(projections.complete.mock.calls.length, 0);
@@ -120,7 +120,9 @@ test("build settlement cannot release an undrained mutation owner", async () => 
 
   finishFunctionDrain();
   await mutation.drained;
-  gate.presentationChanged();
+  gate.refresh("settled");
+  assert.equal(projections.complete.mock.calls.length, 1);
+  assert.equal(functions.complete.mock.calls.length, 1);
 });
 
 test("a presentation change rejects an undrained mutation owner", async () => {

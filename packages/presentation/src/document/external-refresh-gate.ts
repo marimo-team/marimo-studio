@@ -21,11 +21,13 @@ export interface ExternalRefreshLease {
 
 interface ExternalRefreshOwner {
   drained: boolean;
+  readonly mode: "refresh" | "mutation";
   readonly reject: (cause: DOMException) => void;
 }
 
 export class ExternalRefreshGate {
   private readonly owners = new Map<symbol, ExternalRefreshOwner>();
+  private build: ExternalRefreshLease | undefined;
   private functionClaim: ProjectedOutputFunctionTransition | undefined;
   private projectionClaim: ProjectionRefreshClaim | undefined;
   private projectionDrain: Promise<void> = Promise.resolve();
@@ -37,6 +39,20 @@ export class ExternalRefreshGate {
     private readonly functions: FunctionTransitions,
   ) {}
 
+  refresh(phase: "pending" | "settled"): void {
+    if (phase === "pending") {
+      this.build ??= this.acquire("refresh");
+      return;
+    }
+    this.build?.release();
+    this.build = undefined;
+    for (const [owner, state] of this.owners) {
+      if (state.mode === "mutation" && state.drained) {
+        this.release(owner, state);
+      }
+    }
+  }
+
   acquire(mode: "refresh" | "mutation"): ExternalRefreshLease {
     const owner = Symbol("external-refresh-owner");
     const first = this.owners.size === 0;
@@ -44,7 +60,7 @@ export class ExternalRefreshGate {
     const ownerCancelled = new Promise<void>((_resolve, reject) => {
       rejectOwner = reject;
     });
-    const state = { drained: false, reject: rejectOwner };
+    const state = { drained: false, mode, reject: rejectOwner };
     this.owners.set(owner, state);
     if (first) {
       this.start(mode);
@@ -140,6 +156,7 @@ export class ExternalRefreshGate {
 
   private finish(cancelFunctions: boolean): void {
     this.owners.clear();
+    this.build = undefined;
     this.projectionOperation = undefined;
     this.projectionDrainController?.abort(
       new DOMException("The external presentation refresh ended.", "AbortError"),
