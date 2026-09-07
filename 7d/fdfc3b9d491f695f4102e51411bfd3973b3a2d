@@ -1,0 +1,58 @@
+packages/marimo-studio/src/marimo_studio/_release_checks/distribution_metadata.py
+  s_56e158cb000e90::t_a62a4001c9c1c1 15
+packages/presentation/tests/prepared-widgets.test.ts
+  s_56e158cb000e90::t_57c5372bf9a1f9 339-340
+  s_56e158cb000e90::t_b9a9b533574e0d 2,232-238,243-244,248-253,265,267-274
+  s_56e158cb000e90::t_3bd2a8c0337a12 239-242,245-247,254-264,266
+  s_56e158cb000e90::t_69b085ee2cc256 231,275-293
+packages/presentation/tests/prepared-projections.test.ts
+  s_56e158cb000e90::t_163247fc1492a2 470,712,720
+packages/marimo-frontend/tests/prepared-models.test.ts
+  s_56e158cb000e90::t_1cc1086ca791bb 146
+  s_56e158cb000e90::t_f8204b3c962f31 197-200
+  s_56e158cb000e90::t_1457c10c70b2cd 161-196,201-208
+packages/marimo-studio/pyproject.toml
+  s_56e158cb000e90::t_a62a4001c9c1c1 15
+apps/browser/src/zero-python/metadata-source.ts
+  s_56e158cb000e90::t_25bdb6e123fb9d 8-9,12,29-33
+development_docs/frontend.md
+  s_56e158cb000e90::t_aaa899c38570e9 256-275
+docs/guide/run-and-share.md
+  s_56e158cb000e90::t_d25382b69c42d7 11-15
+  s_56e158cb000e90::t_ad0f66869b5ab7 17-20,23-24,152-160
+pnpm-workspace.yaml
+  s_56e158cb000e90::t_08c539494658cd 14
+  s_56e158cb000e90::t_4b8facf4bf656e 79
+scripts/verify-installed-package.py
+  s_56e158cb000e90::t_a62a4001c9c1c1 329,331
+packages/presentation/src/prepared/resources.ts
+  s_56e158cb000e90::t_163247fc1492a2 7,81,83-85
+packages/marimo-frontend/src/prepared-models.ts
+  s_56e158cb000e90::t_1cc1086ca791bb 49-53,57,78,143-144,147,159,166-173,183,207,255,258-259,267-275,297,302
+  s_56e158cb000e90::t_57c5372bf9a1f9 158,282
+  s_56e158cb000e90::t_7e9f0cc8995ea0 250-254,257
+packages/presentation/src/prepared/errors.ts
+  s_56e158cb000e90::t_163247fc1492a2 2,4
+packages/marimo-studio/tests/delivery/test_projection_portability.py
+  s_56e158cb000e90::t_ccde1660e9bfc8 123
+scripts/verify-dist.sh
+  s_56e158cb000e90::t_a62a4001c9c1c1 88
+apps/e2e/scripts/serve-installed-package.mjs
+  s_56e158cb000e90::t_a62a4001c9c1c1 165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7dfdfc3b9d491f695f4102e51411bfd3973b3a2d",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
