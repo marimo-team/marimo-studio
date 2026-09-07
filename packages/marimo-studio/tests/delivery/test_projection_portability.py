@@ -120,5 +120,5 @@ if __name__ == "__main__":
     assert sources[0]["line"] > 0
     upstream = details["marimo_export"]
     assert isinstance(upstream, dict)
-    assert upstream["code"] == "output_execution_failed"
+    assert upstream["code"] == "output_not_portable"
     assert upstream["details"]["functions"]

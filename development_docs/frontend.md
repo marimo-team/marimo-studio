@@ -253,6 +253,26 @@ and frame globals inside the facade. Expose the smallest behavior and lifecycle
 the caller needs. A stateful facade returns a handle with an explicit `dispose`
 or `close` boundary.
 
+### Prepared replay ownership
+
+Marimo-export owns bounded manifest reads and composition of captured replay
+resources. Studio owns authored hosts, presentation transactions, and the native
+Marimo rendering adapter. Live and Prepared rendering use the same pinned
+frontend source, React providers, Jotai store, UI registry, and custom-element
+definitions through `createMarimoViteIntegration()`.
+
+Changing runtime identity requests a document reload through the presentation
+runtime update contract. Within a document, Marimo custom elements retain the
+classes registered first. Those classes close over their originating stores
+and registries, so a separately bundled native renderer cannot share ownership
+by matching its Marimo version string alone.
+
+A general native renderer would require a shared frontend distribution covering
+both live and Prepared consumers, its source preparation, styles, registration,
+and exact release identity. Keep this compatibility owner in Studio while
+marimo-export supplies framework-independent capture, decoding, resource
+composition, and state transitions.
+
 Prepare dependencies and the exact Marimo frontend source with:
 
 ```console

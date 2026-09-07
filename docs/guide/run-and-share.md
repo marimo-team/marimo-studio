@@ -8,17 +8,20 @@ description: Run a view with Python or WebAssembly, or export prepared results a
 Runtime chooses where notebook code executes. Delivery chooses how visitors
 receive the view.
 
-| Studio menu         | Config ID | Notebook execution                                                                                                                 |
-| ------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Python runtime**  | `server`  | A Marimo session with server files, databases, credentials, native packages, and [anywidgets](https://anywidget.dev/)              |
-| **Browser runtime** | `wasm`    | A [Pyodide](https://pyodide.org/) worker that runs Python through [WebAssembly](https://webassembly.org/) in the visitor's browser |
+| Runtime                       | Choose it when                                                                                                                    |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Python**<br>`server`        | The notebook needs server files, credentials, native packages, or a live service                                                  |
+| **Browser**<br>`wasm`         | Visitors should compute new states in a [Pyodide](https://pyodide.org/) Python worker, using browser-compatible packages and data |
+| **Prepared**<br>`zero-python` | Visitors should select among precomputed states and receive results while notebook source stays on the producer                   |
 
-`marimo run` serves either configured runtime from a live process. Static
-export defaults to the Prepared runtime, which executes Python during export
-and serves verified notebook results to the view.
+`marimo run` serves Python or Browser from a live process. Studio's editor can
+preview all three. Static export defaults to Prepared and also supports Browser.
+Prepared executes Python during export. Browser executes Python through
+[WebAssembly](https://webassembly.org/) in each visitor's browser.
 
 An [anywidget](https://anywidget.dev/) is a custom browser interface connected
-to a Python model.
+to a Python model. Prepared delivery replays the captured model and browser
+behavior. Preflight reports widget or control behavior that requires live Python.
 
 ## Configure available runtimes
 
@@ -146,6 +149,15 @@ states:
 State keys name notebook inputs that affect the view's finite projection
 targets. Studio rejects dynamic `data-marimo-allow="*"` mounts, non-portable
 input values, duplicate matrix values, and policies larger than 10,000 states.
+Use explicit rows for a sparse set of valid combinations. Browser-side filtering
+of an exported table can stay in view code and does not need a prepared Python
+state for every selection.
+
+A control selects a complete prepared state. Its values and projected results
+commit together. A missing state or failed asset load retains the preceding
+display. Add the intended input combination to `states.yaml`, preflight, and
+export again when visitors need another Python result.
+
 Raise `--prepare-timeout` when preparing a large state set:
 
 ```console
