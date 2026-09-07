@@ -138,6 +138,11 @@ Core validates:
 - the entry document and complete file catalog
 - live input stability before publication
 
+Input capture retains file identities, directory metadata, and absent declared
+paths. The final publication check compares these bounded records, so new input
+files also reject a stale candidate. Recursive discovery and content hashing
+run before the mutation and publication locks.
+
 Providers never receive artifact receipts, pins, presentations, sessions,
 browser clients, or agent requests.
 

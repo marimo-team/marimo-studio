@@ -100,6 +100,12 @@ Validation is cumulative:
   checks the selected projected results.
 - Browser observes the active rendered presentation.
 
+Static validation captures source revisions with their provider inspections,
+uses those inspections for mount checks and build preparation, then compares
+fresh source and inspection records after presentation publication. Builds
+inspect their immutable snapshots before producing candidates. A concurrent
+notebook or view edit returns a stale-source issue at every validation level.
+
 A validation issue includes stage, severity, stable code, message, advice, and
 available view, target, or source evidence. Browser facts are accepted only for
 the requested client, binding and runtime sessions, view, runtime, runtime

@@ -36,6 +36,7 @@ from marimo_studio.view_providers import (
     MountDeclaration,
     SourceLocation,
 )
+from marimo_studio.view_providers._host import provider_registry
 
 from ..async_test_support import wait_for_event
 from ..helpers import ready_runtime_status
@@ -402,6 +403,7 @@ def _analyze_mounts(
 ) -> ValidationEvidence:
     prepare_view(notebook_path)
     studio = load_studio(notebook_path)
+    publish_presentation(studio, "dashboard")
     sites = tuple(
         MountDeclaration(
             id=f"site:value:{index}",
@@ -411,9 +413,10 @@ def _analyze_mounts(
         )
         for index, targets in enumerate(allowed_targets)
     )
+    provider = provider_registry().get(studio.view("dashboard").provider)
+    inspect = provider.inspect
     monkeypatch.setattr(
-        "marimo_studio._views.inspection.inspect_view_mounts",
-        lambda _project: sites,
+        provider, "inspect", lambda request: replace(inspect(request), mounts=sites)
     )
     monkeypatch.setattr(
         validation_service,
