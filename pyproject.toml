@@ -13,7 +13,7 @@ test = [
 test-deno = [{ include-group = "test" }, "deno==2.9.5"]
 dev = [
   { include-group = "test" },
-  "agent-plugins>=0.1.0",
+  "agent-plugins>=0.2",
   "basedpyright==1.39.10",
   "deno==2.9.5",
   "marimo[recommended]==0.24.0",
@@ -23,7 +23,7 @@ dev = [
   "ty>=0.0.64",
 ]
 e2e = ["anywidget", "marimo-studio-e2e-provider"]
-marimo-studio-build = ["agent-plugins>=0.1.0", "uv-build==0.12.2"]
+marimo-studio-build = ["agent-plugins>=0.2", "uv-build==0.12.2"]
 release = ["twine==6.2.0"]
 
 [tool.pytest.ini_options]
