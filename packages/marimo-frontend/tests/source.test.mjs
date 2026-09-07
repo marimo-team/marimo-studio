@@ -575,6 +575,13 @@ test("an owned clone leaves its local source checkout unchanged", async () => {
   const source = await createRepository("source\n");
   const checkout = await temporaryDirectory("marimo-studio-local-clone-");
 
+  await writeFile(join(source.path, "tracked.txt"), "next release\n");
+  await git(source.path, "commit", "-am", "next release");
+  await writeFile(join(source.path, "tracked.txt"), "local edit\n");
+  await writeFile(join(source.path, "untracked.txt"), "local file\n");
+  const sourceHead = await git(source.path, "rev-parse", "HEAD");
+  const sourceStatus = await git(source.path, "status", "--porcelain=v1", "--untracked-files=all");
+
   await prepareOwnedCheckout({
     path: checkout,
     repository: source.path,
@@ -587,17 +594,21 @@ test("an owned clone leaves its local source checkout unchanged", async () => {
     commit: source.commit,
   });
 
-  expect(await git(source.path, "status", "--porcelain=v1", "--untracked-files=all")).toBe("");
-  expect(await readFile(join(source.path, "tracked.txt"), "utf8")).toBe("source\n");
+  expect(await git(source.path, "rev-parse", "HEAD")).toBe(sourceHead);
+  expect(await git(source.path, "status", "--porcelain=v1", "--untracked-files=all")).toBe(
+    sourceStatus,
+  );
+  expect(await readFile(join(source.path, "tracked.txt"), "utf8")).toBe("local edit\n");
+  expect(await readFile(join(source.path, "untracked.txt"), "utf8")).toBe("local file\n");
   expect(await readFile(join(checkout, "tracked.txt"), "utf8")).toBe("source\n");
 });
 
-test("a local source must match the tagged release commit", async () => {
+test("an owned checkout must match the pinned release commit", async () => {
   const source = await createRepository("release\n");
   await expect(assertMarimoCommit(source.path)).rejects.toThrow(expectedCommit);
 });
 
-test("a local source must have a clean worktree", async () => {
+test("patch preparation requires a clean owned checkout", async () => {
   const source = await createRepository("release\n");
 
   await assertCleanCheckout(source.path);
@@ -607,4 +618,16 @@ test("a local source must have a clean worktree", async () => {
   await git(source.path, "checkout", "--", "tracked.txt");
   await writeFile(join(source.path, "untracked.ts"), "export {};\n");
   await expect(assertCleanCheckout(source.path)).rejects.toThrow("local source changes");
+});
+
+test("source acquisition rejects using the source as its owned checkout", async () => {
+  const source = await createRepository("source\n");
+  await expect(
+    prepareOwnedCheckout({
+      path: source.path,
+      repository: source.path,
+      commit: source.commit,
+    }),
+  ).rejects.toThrow("must be outside");
+  expect(await readFile(join(source.path, "tracked.txt"), "utf8")).toBe("source\n");
 });
