@@ -3,14 +3,10 @@ import type {
   RuntimeStatusPhase,
   RuntimeStatusReport,
 } from "@marimo-studio/protocol/browser-observations";
+import type { ObserveViewRequest } from "@marimo-studio/protocol/development-events";
 
 import {
-  parseEditorDocumentMutationAcknowledgement,
-  type ObserveViewRequest,
-} from "@marimo-studio/protocol/development-events";
-import {
   parsePreviewMessage,
-  type PresentationRefreshBarrierMessage,
   type PresentationToStudioMessage,
   type SwitchViewMessage,
   type ViewNavigationIntent,
@@ -30,6 +26,7 @@ import { PreviewAdmission } from "./admission.ts";
 import { PreviewControlController } from "./control-controller.ts";
 import { fetchRuntimeControls } from "./control-remote.ts";
 import { releaseFrameBridge, resizeFrame } from "./frame-bridge.ts";
+import { PreviewMutationBarriers } from "./mutation-barriers.ts";
 import { PreviewObservationController } from "./observation-controller.ts";
 import { PreviewQueryController, type QuerySyncStatus } from "./query-controller.ts";
 import { RetrySchedule } from "./retry-schedule.ts";
@@ -57,18 +54,10 @@ interface PendingViewSwitch {
   readonly abort?: () => void;
 }
 
-interface PendingMutationBarrier {
-  readonly fail: (cause: unknown) => void;
-  readonly start: () => void;
-  readonly timeout: ReturnType<typeof setTimeout>;
-  started: boolean;
-}
-
 let previewDocumentLifecycleSequence = 1;
 // Leave the activation coordinator time to acknowledge the ready document
 // before the server's 120-second request deadline.
 const VIEW_SWITCH_TIMEOUT_MS = 100_000;
-const MUTATION_BARRIER_TIMEOUT_MS = 4_000;
 
 export const nextPreviewDocumentLifecycleId = (): number => ++previewDocumentLifecycleSequence;
 
@@ -79,7 +68,7 @@ export const previewDocumentUrl = (url: string, lifecycleId: number): string => 
 };
 
 export class PreviewController {
-  private view: string;
+  private readonly view: string;
   private state: PreviewFrameState;
   private readonly admission: PreviewAdmission;
   private diagnostics: ViewDiagnostic[] = [];
@@ -95,7 +84,7 @@ export class PreviewController {
   private activeLifecycleId: number;
   private waitingLifecycleId: number | undefined;
   private activeOwner = true;
-  private readonly mutationBarriers = new Set<PendingMutationBarrier>();
+  private readonly mutationBarriers: PreviewMutationBarriers;
   private readonly runtimeDiagnostics: RuntimeDiagnostics;
   private readonly controls: PreviewControlController;
   private readonly observations: PreviewObservationController;
@@ -226,6 +215,19 @@ export class PreviewController {
         this.setRuntimeStatus("failed", [diagnostic], statusIdentity);
       },
     });
+    this.mutationBarriers = new PreviewMutationBarriers({
+      runtime,
+      view: initialView,
+      frame: preview,
+      active: () => this.activeOwner,
+      lifecycleId: () => this.activeLifecycleId,
+      receiver: () => {
+        if (!this.admission.receiverPresent) {
+          return "absent";
+        }
+        return this.admission.receiverReadyForCurrentView ? "ready" : "other";
+      },
+    });
     this.bind();
   }
 
@@ -287,7 +289,9 @@ export class PreviewController {
     if (!this.activeOwner) {
       return;
     }
-    this.failMutationBarriers(new DOMException("The presentation was deactivated.", "AbortError"));
+    this.mutationBarriers.retire(
+      new DOMException("The presentation was deactivated.", "AbortError"),
+    );
     this.activeOwner = false;
     this.completeViewSwitch(false, this.pendingViewSwitch?.lifecycleId);
     this.cancelRetry();
@@ -364,118 +368,12 @@ export class PreviewController {
   }
 
   notebookMutationPending(generation: number, enterAdmission: boolean): Promise<() => boolean> {
-    const target = this.preview.contentWindow;
-    const lifecycleId = this.activeLifecycleId;
-    const view = this.view;
     if (enterAdmission) {
       this.admission.buildStarted(this.admissionOwner(), false);
     }
-    if (
-      !this.activeOwner ||
-      target === null ||
-      this.preview.src === "about:blank" ||
-      (this.admission.receiverPresent && !this.admission.receiverReadyForCurrentView)
-    ) {
-      return Promise.reject(
-        new DOMException("The presentation is not ready to pause.", "InvalidStateError"),
-      );
-    }
-    const channel = new MessageChannel();
-    return new Promise<void>((resolve, reject) => {
-      let owner!: PendingMutationBarrier;
-      const settle = (complete: () => void) => {
-        clearTimeout(owner.timeout);
-        channel.port1.onmessage = null;
-        channel.port1.onmessageerror = null;
-        channel.port1.close();
-        if (!owner.started) {
-          channel.port2.close();
-        }
-        this.mutationBarriers.delete(owner);
-        complete();
-      };
-      const fail = (cause: unknown) => {
-        if (owner.started) {
-          try {
-            channel.port1.postMessage({
-              schema: 1,
-              type: "marimo-studio:presentation-refresh-barrier-failed",
-              generation,
-            });
-          } catch {
-            // Closing the local port below still retires this barrier owner.
-          }
-        }
-        settle(() => reject(cause));
-      };
-      const start = () => {
-        if (owner.started) {
-          return;
-        }
-        if (
-          !this.activeOwner ||
-          lifecycleId !== this.activeLifecycleId ||
-          view !== this.view ||
-          target !== this.preview.contentWindow ||
-          this.preview.src === "about:blank"
-        ) {
-          fail(new DOMException("The presentation document changed.", "AbortError"));
-          return;
-        }
-        if (!this.admission.receiverReadyForCurrentView) {
-          return;
-        }
-        owner.started = true;
-        const message: PresentationRefreshBarrierMessage = {
-          type: "marimo-studio:presentation-refresh-barrier",
-          runtime: this.runtime,
-          lifecycleId,
-          view,
-          generation,
-        };
-        try {
-          target.postMessage(message, "*", [channel.port2]);
-        } catch (cause) {
-          channel.port2.close();
-          fail(cause);
-        }
-      };
-      owner = {
-        fail,
-        start,
-        started: false,
-        timeout: setTimeout(
-          () => fail(new DOMException("The presentation did not pause in time.", "TimeoutError")),
-          MUTATION_BARRIER_TIMEOUT_MS,
-        ),
-      };
-      channel.port1.onmessage = (event) => {
-        const acknowledgement = parseEditorDocumentMutationAcknowledgement(event.data);
-        if (
-          acknowledgement &&
-          acknowledgement.type === "marimo-studio:editor-document-mutation-ready" &&
-          acknowledgement.generation === generation
-        ) {
-          try {
-            channel.port1.postMessage({
-              schema: 1,
-              type: "marimo-studio:presentation-refresh-barrier-accepted",
-              generation,
-            });
-            settle(resolve);
-          } catch (cause) {
-            fail(cause);
-          }
-        } else {
-          fail(new DOMException("The presentation returned an invalid barrier.", "DataError"));
-        }
-      };
-      channel.port1.onmessageerror = () =>
-        fail(new DOMException("The presentation rejected the mutation barrier.", "DataError"));
-      channel.port1.start();
-      this.mutationBarriers.add(owner);
-      owner.start();
-    }).then(() => () => this.admission.buildUnchanged(this.admissionOwner()));
+    return this.mutationBarriers
+      .pause(generation)
+      .then(() => () => this.admission.buildUnchanged(this.admissionOwner()));
   }
 
   notebookMutationSaveFailed(active: boolean): void {
@@ -567,7 +465,7 @@ export class PreviewController {
 
   dispose(): void {
     this.activeOwner = false;
-    this.failMutationBarriers(new DOMException("The presentation was disposed.", "AbortError"));
+    this.mutationBarriers.retire(new DOMException("The presentation was disposed.", "AbortError"));
     this.admission.dispose();
     this.completeViewSwitch(false, this.pendingViewSwitch?.lifecycleId);
     this.cancelRetry();
@@ -644,9 +542,9 @@ export class PreviewController {
       case "marimo-studio:receiver-unready":
         this.waitingLifecycleId = undefined;
         this.controlDiagnostic = undefined;
-        this.failMutationBarriers(
+        this.mutationBarriers.retire(
           new DOMException("The presentation receiver disconnected.", "AbortError"),
-          (barrier) => barrier.started,
+          true,
         );
         this.admission.receiverUnready();
         return;
@@ -665,9 +563,9 @@ export class PreviewController {
           this.admissionOwner(),
         );
         if (message.view === this.view) {
-          this.startMutationBarriers();
+          this.mutationBarriers.receiverReady();
         } else {
-          this.failMutationBarriers(
+          this.mutationBarriers.retire(
             new DOMException("The presentation receiver changed views.", "AbortError"),
           );
         }
@@ -793,7 +691,9 @@ export class PreviewController {
     if (!this.activeOwner) {
       return;
     }
-    this.failMutationBarriers(new DOMException("The presentation document changed.", "AbortError"));
+    this.mutationBarriers.retire(
+      new DOMException("The presentation document changed.", "AbortError"),
+    );
     this.completeViewSwitch(false, this.pendingViewSwitch?.lifecycleId);
     this.setActiveLifecycle(this.nextLifecycleId());
     this.state = { ...this.state, lifecycleId: this.activeLifecycleId };
@@ -968,22 +868,5 @@ export class PreviewController {
     this.activeLifecycleId = lifecycleId;
     this.waitingLifecycleId = undefined;
     this.preview.dataset.previewLifecycleId = String(lifecycleId);
-  }
-
-  private startMutationBarriers(): void {
-    for (const barrier of this.mutationBarriers) {
-      barrier.start();
-    }
-  }
-
-  private failMutationBarriers(
-    cause: unknown,
-    matches: (barrier: PendingMutationBarrier) => boolean = () => true,
-  ): void {
-    for (const barrier of this.mutationBarriers) {
-      if (matches(barrier)) {
-        barrier.fail(cause);
-      }
-    }
   }
 }
