@@ -1,0 +1,34 @@
+packages/marimo-studio/src/marimo_studio/_compat/server/editor_document.js
+  s_56e158cb000e90::t_1cc1086ca791bb 102
+  s_56e158cb000e90::t_ed4d3049e2a51b 1-5,142-178
+packages/marimo-studio/src/marimo_studio/_compat/server/editor_runtime.py
+  s_56e158cb000e90::t_06625b681bc01a 81-94,96-97,100,107,404,426-432
+scripts/verify-installed-package.py
+  s_56e158cb000e90::t_90d5684a4eb6be 346-348
+packages/marimo-studio/tests/marimo_compat/test_editor_runtime_transactions.py
+  s_56e158cb000e90::t_8c924e3deb5c9d 189-230
+  s_56e158cb000e90::t_06625b681bc01a 118-120,126,146-147,174,177-179,182,187-188
+  s_56e158cb000e90::t_1457c10c70b2cd 128
+  s_56e158cb000e90::t_59ecddeec3a55a 180-181,183-186
+scripts/verify-dist.sh
+  s_56e158cb000e90::t_90d5684a4eb6be 56-57,101-102,125
+packages/marimo-studio/tests/server/test_editor_runtime_assets.py
+  s_56e158cb000e90::t_222bf5036a1b10 19-20,248-249,275
+  s_56e158cb000e90::t_92225354c506de 754-755
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4d3fa80ad555f71f11dbeca6de9b40a229ccf2ad",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
