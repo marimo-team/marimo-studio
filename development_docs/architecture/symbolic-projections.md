@@ -65,9 +65,10 @@ and closure. Browser requests cannot widen them.
 
 ## Runtime mounts
 
-One host store tracks declaration ID, instance ID, target, phase, and runtime
-cell ID. Small type-specific adapters own complete cells, rendered outputs, and
-browser values. Value descriptors carry JSON-compatible values directly or
+`ProjectionInventory` resolves an ordered batch of authored hosts against one
+projection revision. Each host retains declaration ID, instance ID, target,
+phase, and runtime cell ID. Type-specific adapters own complete cells, rendered
+outputs, and browser values. Value descriptors carry JSON-compatible values directly or
 [Arrow IPC](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc)
 with a [Flechette](https://github.com/uwdata/flechette) data-source owner. Arrow
 IPC is the columnar transfer format. Flechette owns the decoded browser table.

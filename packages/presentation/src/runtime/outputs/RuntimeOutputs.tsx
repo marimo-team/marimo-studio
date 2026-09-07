@@ -7,11 +7,7 @@ import type { RuntimeConnectionState } from "../cell-state";
 import type { RuntimeCell } from "../runtime-cell";
 
 import { getOutputHosts, subscribeOutputHosts } from "../../outputs/host";
-import { projectionRequestForHost } from "../../projections/identity";
-import {
-  createProjectionResolutionContext,
-  resolveHostProjection,
-} from "../../projections/resolution";
+import { createProjectionInventory } from "../../projections/resolution";
 import { useRuntimeProjectionConfig } from "../use-runtime-config";
 import { DuplicateOutputPortal } from "./DuplicateOutputPortal";
 import { OutputPortal } from "./OutputPortal";
@@ -50,14 +46,9 @@ export const RuntimeOutputs = ({
   const projectionConfig = useRuntimeProjectionConfig();
   const hosts = useSyncExternalStore(subscribeOutputHosts, getOutputHosts, getOutputHosts);
   const { resolvedHosts, primaryHosts, activeProjections } = useMemo(() => {
-    const context = createProjectionResolutionContext(projectionConfig, document);
+    const inventory = createProjectionInventory(projectionConfig, document);
     const resolved = hosts.map((host) => {
-      const resolution = resolveHostProjection(
-        projectionConfig,
-        host,
-        projectionRequestForHost(host, "output", host.valueSelector),
-        context,
-      );
+      const { resolution } = inventory.resolve(host, "output");
       const binding: ProjectionHostBinding = {
         resolution,
         projectionRevision: projectionConfig.projectionRevision,

@@ -7,14 +7,13 @@ import type { DecodedValue, MarimoValue } from "./codecs.ts";
 import { syncProjectionHostAttributes } from "../cells/host.ts";
 import { isArtifactProjectionHost } from "../projections/artifact-host.ts";
 import { notifyProjectionChanged } from "../projections/changes.ts";
-import { PROJECTION_SITE_ATTRIBUTE, projectionRequestForHost } from "../projections/identity.ts";
+import { PROJECTION_SITE_ATTRIBUTE } from "../projections/identity.ts";
 import { applyProjectionMetadata, resetProjectionHostMetadata } from "../projections/instances.ts";
 import {
-  createProjectionResolutionContext,
-  type ProjectionResolutionContext,
+  createProjectionInventory,
+  type ProjectionInventory,
   type ResolvedProjection,
   type RuntimeProjectionRequest as ProjectionRequest,
-  resolveHostProjection,
 } from "../projections/resolution.ts";
 import {
   getRuntimeConfig,
@@ -433,7 +432,7 @@ const renderHost = (
 
 const connectHost = (
   host: HTMLElement,
-  context: ProjectionResolutionContext = createProjectionResolutionContext(
+  inventory: ProjectionInventory = createProjectionInventory(
     getRuntimeProjectionConfig(),
     document,
   ),
@@ -448,8 +447,7 @@ const connectHost = (
   hostSelectors.set(host, selector);
   const config = getRuntimeProjectionConfig();
   synchronizeProjectionRevision(config.projectionRevision);
-  const request = projectionRequestForHost(host, "value", selector);
-  const resolution = resolveHostProjection(config, host, request, context);
+  const { request, resolution } = inventory.resolve(host, "value");
   applyProjectionMetadata(host, resolution, config.projectionRevision);
   if (!resolution.ok) {
     hostProjections.delete(host);
@@ -527,8 +525,8 @@ const reconcileHosts = () => {
       releaseHost(host);
     }
   });
-  const context = createProjectionResolutionContext(getRuntimeProjectionConfig(), document);
-  visit(document.documentElement, (host) => connectHost(host, context));
+  const inventory = createProjectionInventory(getRuntimeProjectionConfig(), document);
+  visit(document.documentElement, (host) => connectHost(host, inventory));
 };
 
 const configure = () => {
@@ -548,7 +546,6 @@ export const startValueHosts = () => {
   reconcileHosts();
   observer?.disconnect();
   observer = new MutationObserver((records) => {
-    const context = createProjectionResolutionContext(getRuntimeProjectionConfig(), document);
     const changedHosts = new Set<HTMLElement>();
     const movedHosts = new Set<HTMLElement>();
     for (const record of records) {
@@ -561,11 +558,15 @@ export const startValueHosts = () => {
       record.removedNodes.forEach((node) => visit(node, (host) => movedHosts.add(host)));
       record.addedNodes.forEach((node) => visit(node, (host) => movedHosts.add(host)));
     }
+    if (changedHosts.size === 0 && movedHosts.size === 0) {
+      return;
+    }
+    const inventory = createProjectionInventory(getRuntimeProjectionConfig(), document);
     movedHosts.forEach((host) => {
       const connected =
         host.isConnected && host.matches(ATTRIBUTE_SELECTOR) && isArtifactProjectionHost(host);
       if (connected && !hosts.has(host)) {
-        connectHost(host, context);
+        connectHost(host, inventory);
       } else if (!connected && hosts.has(host)) {
         releaseHost(host);
       }
@@ -584,7 +585,7 @@ export const startValueHosts = () => {
       }
       releaseHost(host);
       if (nextSelector !== null) {
-        connectHost(host, context);
+        connectHost(host, inventory);
       }
     });
   });
