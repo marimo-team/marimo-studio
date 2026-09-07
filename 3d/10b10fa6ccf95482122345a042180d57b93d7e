@@ -1,0 +1,46 @@
+examples/__marimo__/studio/athletes/explorer/src/lib/athlete-explorer.ts
+  s_56e158cb000e90::t_b23c6578459315 86-89
+  s_56e158cb000e90::t_97a5e2d725b915 294-297,300
+examples/__marimo__/studio/occupancy/model-review/src/index.html
+  s_56e158cb000e90::t_cfdbe542aabcc2 24
+docs/guide/styling.md
+  s_56e158cb000e90::t_77391832694e0c 30-32
+examples/__marimo__/studio/earthquakes/operations/src/App.tsx
+  s_56e158cb000e90::t_408874badea2ba 55-57,117
+examples/__marimo__/studio/occupancy/pdf-report/src/index.html
+  s_56e158cb000e90::t_417ef80218606c 19
+examples/__marimo__/studio/occupancy/monitor/src/style.css
+  s_56e158cb000e90::t_3e674e147577c4 154
+skills/marimo-studio/SKILL.md
+  s_56e158cb000e90::t_77391832694e0c 196-198
+examples/__marimo__/studio/occupancy/pdf-report/src/report/ModelPage.tsx
+  s_56e158cb000e90::t_fcf21629a57e86 107-108,112-113
+examples/__marimo__/studio/earthquakes/briefing/src/index.html
+  s_56e158cb000e90::t_cfdbe542aabcc2 43
+examples/__marimo__/studio/occupancy/pdf-report/src/report/ExecutivePage.tsx
+  ai_agent 135,140
+examples/__marimo__/studio/earthquakes/operations/src/index.html
+  s_56e158cb000e90::t_cfdbe542aabcc2 24
+examples/__marimo__/studio/occupancy/monitor/src/index.html
+  s_56e158cb000e90::t_cfdbe542aabcc2 24
+examples/__marimo__/studio/athletes/explorer/src/index.html
+  s_56e158cb000e90::t_cfdbe542aabcc2 23
+examples/__marimo__/studio/occupancy/pdf-report/src/App.tsx
+  ai_agent 69,74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3d10b10fa6ccf95482122345a042180d57b93d7e",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
