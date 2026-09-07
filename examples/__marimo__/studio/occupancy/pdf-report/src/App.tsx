@@ -66,12 +66,12 @@ const ReportWorkbench = ({
         ? "Environmental profile comparing occupied and vacant carbon dioxide, light, temperature, and humidity readings."
         : "Environmental profile for a scope with no occupied observations. Vacant sensor readings provide the reference profile.",
       report.period.occupied > 0
-        ? `Model evidence at threshold ${
+        ? `Model evidence at the default threshold ${
           report.model.threshold.toFixed(2)
         }, with ${(report.model.accuracy * 100).toFixed(1)}% accuracy and ${
           (report.model.recall * 100).toFixed(1)
         }% recall.`
-        : `Model evidence at threshold ${
+        : `Model evidence at the default threshold ${
           report.model.threshold.toFixed(2)
         }, with ${
           (report.model.accuracy * 100).toFixed(1)

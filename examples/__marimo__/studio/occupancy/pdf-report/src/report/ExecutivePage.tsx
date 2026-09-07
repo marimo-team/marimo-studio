@@ -132,12 +132,12 @@ export const ExecutivePage = ({ report }: { report: OccupancyReportData }) => {
               <Text style={styles.panelLabel}>Score result</Text>
               <Text style={styles.body}>
                 {hasOccupiedReadings
-                  ? `At the selected threshold of ${
+                  ? `At the default threshold of ${
                     report.model.threshold.toFixed(2)
                   }, the light and CO2 score detects ${
                     formatPercent(report.model.recall)
                   } of occupied readings in this same selection.`
-                  : `This scope contains no occupied readings, so recall is unavailable. At the selected threshold of ${
+                  : `This scope contains no occupied readings, so recall is unavailable. At the default threshold of ${
                     report.model.threshold.toFixed(2)
                   }, the score marks ${
                     report.model.false_positive.toLocaleString("en")
