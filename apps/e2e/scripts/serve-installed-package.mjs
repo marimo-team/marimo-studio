@@ -100,6 +100,7 @@ try {
   const configDirectory = resolve(temporaryRoot, "xdg-config");
   const notebookPath = resolve(workspaceDirectory, "notebook.py");
   const staticDirectory = resolve(temporaryRoot, "static");
+  const preparedDirectory = resolve(staticDirectory, "prepared");
   const viewDirectory = resolve(
     workspaceDirectory,
     "__marimo__",
@@ -138,6 +139,7 @@ try {
       "--exclude-newer-package",
       "marimo-export=false",
       wheel,
+      "anywidget==0.9.21",
     ],
     { cwd: temporaryRoot, stdio: "inherit" },
   );
@@ -150,6 +152,7 @@ try {
     PYTHONSAFEPATH: "1",
     PYTHONUNBUFFERED: "1",
     XDG_CONFIG_HOME: configDirectory,
+    MARIMO_EXPORT_REPOSITORY: resolve(temporaryRoot, "export-repository"),
   };
   delete environment.PYTHONHOME;
   delete environment.PYTHONPATH;
@@ -188,6 +191,7 @@ try {
   await cp(resolve(workspaceDirectory, "dashboard.html"), resolve(viewDirectory, "index.html"), {
     force: true,
   });
+  await cp(resolve(workspaceDirectory, "states.yaml"), resolve(viewDirectory, "states.yaml"));
   await preparation.run(
     "build installed Vanilla view",
     studio,
@@ -208,6 +212,27 @@ try {
       staticDirectory,
       "--runtime",
       "wasm",
+      "--json",
+    ],
+    { cwd: workspaceDirectory, env: environment, stdio: "inherit" },
+  );
+  preparation.requireActive();
+
+  await preparation.run(
+    "export installed prepared view",
+    studio,
+    [
+      "view",
+      "export",
+      "dashboard",
+      "--target",
+      notebookPath,
+      "--output",
+      preparedDirectory,
+      "--runtime",
+      "zero-python",
+      "--prepare-timeout",
+      "120",
       "--json",
     ],
     { cwd: workspaceDirectory, env: environment, stdio: "inherit" },
