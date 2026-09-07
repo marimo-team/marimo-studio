@@ -343,6 +343,11 @@ def main() -> None:
     ):
         raise TypeError("Installed Python APIs are unavailable")
     _verify_entry_points()
+    editor_document = resources.files("marimo_studio._compat.server").joinpath(
+        "editor_document.js"
+    )
+    if not editor_document.is_file() or not editor_document.read_bytes():
+        raise AssertionError("Installed editor document runtime is unavailable")
     _verify_agent_plugin(args.expected_plugin_digests)
     verify_distribution_metadata(_DISTRIBUTION)
     release = json.loads(

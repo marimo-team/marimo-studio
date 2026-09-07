@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from importlib.resources import files
 from typing import cast
 from urllib.parse import urlsplit, urlunsplit
 
@@ -37,97 +38,34 @@ _DOCUMENT_CHANGE_QUEUE = (
     b"var _m=[],$P=Sg(()=>{let e=FP(_m);_m=[],e.length!==0&&"
     b"Sr().sendDocumentTransaction({changes:e})},400);"
 )
-_ORDERED_DOCUMENT_CHANGE_QUEUE = (
-    b"var _m=[],marimoStudioDocumentGeneration=0,"
-    b"marimoStudioAdmittedDocumentGeneration=0,"
-    b"marimoStudioDocumentOperationSequence=0,"
-    b"marimoStudioPendingDocumentGeneration=0,marimoStudioPendingDocumentOperation,"
-    b"marimoStudioRetryDocumentChanges,marimoStudioDocumentBarrier,"
-    b"marimoStudioHasDocumentBridge=()=>{try{return globalThis.frameElement!==null"
-    b'&&globalThis.frameElement.hasAttribute("data-marimo-studio-document-'
-    b'mutation-bridge")}catch{return!1}},marimoStudioCurrentDocumentGeneration='
-    b"()=>marimoStudioDocumentGeneration,marimoStudioReportSave=(e,t)=>{"
-    b"if(e!==0&&marimoStudioHasDocumentBridge())try{globalThis.parent.postMessage("
-    b'{schema:1,type:t?"marimo-studio:editor-'
-    b'document-saved":"marimo-studio:editor-document-save-failed",generation:'
-    b"e},globalThis.location.origin)}catch{}},"
-    b"marimoStudioReportDocumentTransactionFailure=e=>{if("
-    b"marimoStudioHasDocumentBridge())try{globalThis.parent.postMessage({schema:1,"
-    b'type:"marimo-studio:editor-document-transaction-failed",generation:e},'
-    b"globalThis.location.origin)}catch{}},"
-    b"marimoStudioReportDocumentTransactionApplied=(e,t)=>{if("
-    b"marimoStudioHasDocumentBridge())try{globalThis.parent.postMessage({schema:1,"
-    b'type:"marimo-studio:editor-document-transaction-applied",generation:e,'
-    b"changed:t},"
-    b"globalThis.location.origin)}catch{}},"
-    b"marimoStudioAnnounceDocumentMutation="
-    b"e=>!marimoStudioHasDocumentBridge()?"
-    b"Promise.resolve():new Promise((t,n)=>{let o=new MessageChannel,i=!1,"
-    b"a=(r,l)=>{i||(i=!0,clearTimeout(c),globalThis.removeEventListener("
-    b'"pagehide",s),o.port1.onmessage=null,o.port1.onmessageerror=null,'
-    b'o.port1.close(),r(l))},s=()=>a(n,new DOMException("The Studio document '
-    b'barrier closed.","AbortError")),c=setTimeout(()=>a(n,new DOMException('
-    b'"Studio did not acknowledge the document change.","TimeoutError")),'
-    b"5e3);o.port1.onmessage=r=>{let l=r.data;l&&l.schema===1&&"
-    b'(l.type==="marimo-studio:editor-document-mutation-ready"&&l.generation===e?'
-    b"a(t):l.type==="
-    b'"marimo-studio:editor-document-mutation-failed"&&a(n,new DOMException('
-    b'"Studio could not pause the presentation.","AbortError")))},'
-    b'o.port1.onmessageerror=()=>a(n,new DOMException("Studio rejected the '
-    b'document change acknowledgement.","DataError")),o.port1.start(),'
-    b'globalThis.addEventListener("pagehide",s,{once:!0});try{globalThis.parent.'
-    b'postMessage({schema:1,type:"marimo-studio:editor-document-mutation",'
-    b"generation:e},globalThis.location.origin,[o.port2])}catch(r){a(n,r)}}),"
-    b"marimoStudioAwaitMutation=()=>{let e=marimoStudioDocumentGeneration;"
-    b"if(e===marimoStudioAdmittedDocumentGeneration)return Promise.resolve();"
-    b"if(marimoStudioDocumentBarrier)return marimoStudioDocumentBarrier;let t="
-    b"marimoStudioAnnounceDocumentMutation(e).then(()=>{e==="
-    b"marimoStudioDocumentGeneration&&(marimoStudioAdmittedDocumentGeneration=e)});"
-    b"marimoStudioDocumentBarrier=t;let n=()=>{marimoStudioDocumentBarrier===t&&"
-    b"(marimoStudioDocumentBarrier=void 0)};return t.then(n,n),t.catch(()=>{}),t},"
-    b"marimoStudioDocumentDrain,"
-    b"marimoStudioDrainDocumentChanges=async()=>{for(;;){let e="
-    b"marimoStudioRetryDocumentChanges??FP(_m);marimoStudioRetryDocumentChanges?"
-    b"marimoStudioRetryDocumentChanges=void 0:_m=[];if(e.length===0)return null;"
-    b"try{marimoStudioPendingDocumentGeneration===0"
-    b"&&(marimoStudioDocumentGeneration+=1,marimoStudioPendingDocumentGeneration="
-    b"marimoStudioDocumentGeneration),marimoStudioPendingDocumentOperation??=Array."
-    b"from(crypto.getRandomValues(new Uint32Array(4)),e=>e.toString(36).padStart(7,"
-    b'"0")).join("")+'
-    b'"-"+(++marimoStudioDocumentOperationSequence).toString(36).padStart(7,"0");'
-    b"await marimoStudioAwaitMutation();let n=await Sr()."
-    b"sendDocumentTransaction({changes:e,studioOperationId:"
-    b"marimoStudioPendingDocumentOperation});if(typeof n!=="
-    b'"boolean")throw new Error("Studio document transaction evidence is '
-    b'unavailable");'
-    b"marimoStudioReportDocumentTransactionApplied("
-    b"marimoStudioPendingDocumentGeneration,n)}catch(t){throw "
-    b"marimoStudioReportDocumentTransactionFailure("
-    b"marimoStudioPendingDocumentGeneration),"
-    b"marimoStudioAdmittedDocumentGeneration=Math.max(0,"
-    b"marimoStudioPendingDocumentGeneration-1),marimoStudioDocumentBarrier=void 0,"
-    b"marimoStudioRetryDocumentChanges=e,t}marimoStudioPendingDocumentGeneration=0,"
-    b"marimoStudioPendingDocumentOperation=void 0}};"
-    b"marimoStudioAwaitDocumentMutation=marimoStudioAwaitMutation;"
-    b"marimoStudioDocumentMutationGeneration=marimoStudioCurrentDocumentGeneration;"
-    b"marimoStudioReportDocumentSave=marimoStudioReportSave;"
-    b"marimoStudioFlushDocumentChanges=()=>{if($P.cancel(),"
-    b"marimoStudioDocumentDrain)return marimoStudioDocumentDrain;let e="
-    b"marimoStudioDrainDocumentChanges();marimoStudioDocumentDrain=e;let t=()=>{"
-    b"marimoStudioDocumentDrain===e&&(marimoStudioDocumentDrain=void 0)};return "
-    b"e.then(t,t),e};var $P=Sg(()=>{marimoStudioFlushDocumentChanges().catch("
-    b"()=>{})},400);"
+_DOCUMENT_RUNTIME = (
+    files("marimo_studio._compat.server").joinpath("editor_document.js").read_bytes()
 )
+_ORDERED_DOCUMENT_CHANGE_QUEUE = b"""
+var _m=[];
+var marimoStudioDocumentTransactions=createStudioDocumentTransactions({
+  takeChanges:()=>{const changes=FP(_m);_m=[];return changes},
+  sendTransaction:request=>Sr().sendDocumentTransaction(request),
+  cancelScheduled:()=>$P.cancel(),
+});
+marimoStudioAwaitDocumentMutation=marimoStudioDocumentTransactions.awaitMutation;
+marimoStudioDocumentMutationGeneration=marimoStudioDocumentTransactions.generation;
+marimoStudioReportDocumentSave=marimoStudioDocumentTransactions.reportSave;
+marimoStudioFlushDocumentChanges=marimoStudioDocumentTransactions.flush;
+var $P=Sg(()=>{marimoStudioFlushDocumentChanges().catch(()=>{})},400);
+"""
 _CELLS_EXPORT = b",CT as zt};"
 _ORDERED_CELLS_EXPORT = (
-    b",CT as zt,marimoStudioAwaitDocumentMutation as studioAwaitDocumentMutation,"
+    b",CT as zt,createStudioDocumentRequests as studioCreateDocumentRequests,"
+    b"marimoStudioAwaitDocumentMutation as studioAwaitDocumentMutation,"
     b"marimoStudioDocumentMutationGeneration as studioDocumentMutationGeneration,"
     b"marimoStudioFlushDocumentChanges as studioFlushDocumentChanges,"
     b"marimoStudioReportDocumentSave as studioReportDocumentSave};"
 )
 _INDEX_CELLS_IMPORT = b'zr as zj,__tla as Mj}from"./cells-'
 _ORDERED_INDEX_CELLS_IMPORT = (
-    b"zr as zj,studioAwaitDocumentMutation,studioFlushDocumentChanges,"
+    b"zr as zj,studioCreateDocumentRequests,studioAwaitDocumentMutation,"
+    b"studioFlushDocumentChanges,"
     b"studioDocumentMutationGeneration,studioReportDocumentSave,"
     b'__tla as Mj}from"./cells-'
 )
@@ -140,31 +78,33 @@ _NETWORK_SEND_DOCUMENT_TRANSACTION = (
     b'"/api/document/transaction",'
     b"{body:n,params:r()}).then(ve))"
 )
+_NETWORK_REQUEST_FACTORY = b"r=()=>({header:e()});return{sendComponentValues:"
+_DOCUMENT_NETWORK_BOOTSTRAP = b"""
+const marimoStudioDocumentRequests=studioCreateDocumentRequests({
+  flush:()=>studioFlushDocumentChanges(),
+  awaitMutation:()=>studioAwaitDocumentMutation(),
+  generation:()=>studioDocumentMutationGeneration(),
+  reportSave:(generation,succeeded)=>studioReportDocumentSave(generation,succeeded),
+}, {
+  post:(...args)=>t().POST(...args),
+  waitForConnection:()=>st(),
+  params:()=>r(),
+  handleResponse:result=>ve(result),
+});
+"""
 _ORDERED_NETWORK_SEND_DOCUMENT_TRANSACTION = (
-    b"sendDocumentTransaction:async n=>(await st(),t().POST("
-    b'"/api/document/transaction",'
-    b'{body:{changes:n.changes},headers:{"Marimo-Studio-Document-Operation":'
-    b"n.studioOperationId},params:r()}).then(async e=>{await ve(e);let o=e.response."
-    b'headers.get("marimo-studio-document-changed");if(o==="true")return!0;'
-    b'if(o==="false")'
-    b'return!1;throw new Error("Studio document transaction evidence is '
-    b'unavailable")}))'
+    b"sendDocumentTransaction:request=>"
+    b"marimoStudioDocumentRequests.sendDocumentTransaction(request)"
 )
 _ORDERED_NETWORK_SEND_SAVE = (
-    b"sendSave:async n=>{await studioFlushDocumentChanges();let o="
-    b"studioDocumentMutationGeneration();try{let i=await "
-    b't().POST("/api/kernel/save",{body:n,parseAs:"text",params:r()}).then(ve);'
-    b"return studioReportDocumentSave(o,!0),i}catch(i){throw "
-    b"studioReportDocumentSave(o,!1),i}}"
+    b"sendSave:request=>marimoStudioDocumentRequests.sendSave(request)"
 )
 _NETWORK_SEND_RUN = (
     b'sendRun:async n=>(await st(),t().POST("/api/kernel/run",{body:n,params:r()})'
     b".then(ve))"
 )
 _ORDERED_NETWORK_SEND_RUN = (
-    b"sendRun:async n=>(await st(),await studioFlushDocumentChanges(),await "
-    b"studioAwaitDocumentMutation(),t().POST("
-    b'"/api/kernel/run",{body:n,params:r()}).then(ve))'
+    b"sendRun:request=>marimoStudioDocumentRequests.sendRun(request)"
 )
 _QUERY_PARAM_HANDLERS = (
     b"const aA={append:t=>{let A=new URL(window.location.href);"
@@ -461,6 +401,7 @@ def _serialize_document_transactions(document: bytes) -> bytes:
             b"var marimoStudioAwaitDocumentMutation,"
             b"marimoStudioDocumentMutationGeneration,"
             b"marimoStudioFlushDocumentChanges,marimoStudioReportDocumentSave;"
+            + _DOCUMENT_RUNTIME
             + document
         ),
         _DOCUMENT_CHANGE_QUEUE,
@@ -481,6 +422,14 @@ def _await_document_transactions_before_network_run(document: bytes) -> bytes:
         _INDEX_CELLS_IMPORT,
         _ORDERED_INDEX_CELLS_IMPORT,
         "editor network cell imports",
+    )
+    rewritten = _replace_pinned_asset(
+        rewritten,
+        _NETWORK_REQUEST_FACTORY,
+        b"r=()=>({header:e()});"
+        + _DOCUMENT_NETWORK_BOOTSTRAP
+        + b"return{sendComponentValues:",
+        "editor network request factory",
     )
     rewritten = _replace_pinned_asset(
         rewritten,

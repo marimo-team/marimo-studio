@@ -16,6 +16,8 @@ from starlette.types import Message
 
 from marimo_studio._compat.server.editor_runtime import (
     _BOUNDED_LSP_RECONNECT,
+    _DOCUMENT_NETWORK_BOOTSTRAP,
+    _DOCUMENT_RUNTIME,
     _ORDERED_NETWORK_SEND_RUN,
     _ORDERED_NETWORK_SEND_SAVE,
     _QUERY_PARAM_HANDLERS,
@@ -243,6 +245,8 @@ def test_native_save_and_run_wait_for_document_flush() -> None:
     run = _ORDERED_NETWORK_SEND_RUN.decode()
     script = f"""
 import assert from "node:assert/strict";
+{_DOCUMENT_RUNTIME.decode()}
+const studioCreateDocumentRequests = createStudioDocumentRequests;
 let generation = 0;
 let flushFailure = false;
 let resolveBarrier;
@@ -268,6 +272,7 @@ const t = () => ({{
       pending.set(options.body, {{ resolve, reject }}));
   }},
 }});
+{_DOCUMENT_NETWORK_BOOTSTRAP.decode()}
 const client = {{ {save}, {run} }};
 
 const running = client.sendRun("run");
@@ -746,11 +751,8 @@ def test_editor_runtime_assets_remain_adapted_across_view_creation(
             assert header not in response.headers
     assert before[0].content.count(b't.copilot==="github"?Ru.of(Rm()):[]') == 1
     assert before[1].content.count(b'"/_marimo-studio/editor/lsp/","/lsp/"') == 1
-    for marker in (
-        b"marimoStudioRetryDocumentChanges",
-        b"this.options.onConnectionFailure",
-    ):
-        assert marker in before[2].content
+    assert _DOCUMENT_RUNTIME in before[2].content
+    assert b"this.options.onConnectionFailure" in before[2].content
     for marker in (
         b"studioAwaitDocumentMutation",
         b"studioFlushDocumentChanges",
